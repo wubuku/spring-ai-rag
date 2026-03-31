@@ -6,7 +6,10 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.validation.BeanPropertyBindingResult;
+import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
@@ -145,5 +148,38 @@ class GlobalExceptionHandlerTest {
         assertEquals("Database Error", response.getBody().get("error"));
         // 不暴露数据库细节
         assertEquals("数据库操作失败", response.getBody().get("message"));
+    }
+
+    @Test
+    void handleValidation_singleFieldError_returns400WithFieldName() throws Exception {
+        BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "request");
+        bindingResult.addError(new FieldError("request", "message", "消息内容不能为空"));
+
+        MethodArgumentNotValidException e = new MethodArgumentNotValidException(null, bindingResult);
+
+        ResponseEntity<Map<String, Object>> response = handler.handleValidation(e);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("Validation Failed", response.getBody().get("error"));
+        assertTrue(response.getBody().get("message").toString().contains("message"));
+        assertTrue(response.getBody().get("message").toString().contains("消息内容不能为空"));
+        assertNotNull(response.getBody().get("timestamp"));
+    }
+
+    @Test
+    void handleValidation_multipleFieldErrors_returns400WithAllMessages() throws Exception {
+        BeanPropertyBindingResult bindingResult = new BeanPropertyBindingResult(new Object(), "request");
+        bindingResult.addError(new FieldError("request", "message", "消息内容不能为空"));
+        bindingResult.addError(new FieldError("request", "sessionId", "会话 ID 不能为空"));
+
+        MethodArgumentNotValidException e = new MethodArgumentNotValidException(null, bindingResult);
+
+        ResponseEntity<Map<String, Object>> response = handler.handleValidation(e);
+
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        String message = response.getBody().get("message").toString();
+        assertTrue(message.contains("message"));
+        assertTrue(message.contains("sessionId"));
+        assertTrue(message.contains("; ")); // 多个错误用分号分隔
     }
 }

@@ -5,6 +5,8 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -70,7 +72,7 @@ public class RagSearchController {
     @Operation(summary = "直接检索（POST）", description = "通过请求体提交检索配置，支持限定文档 ID 等高级参数。")
     @PostMapping
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
-            @RequestBody SearchRequest request) {
+            @Valid @RequestBody SearchRequest request) {
 
         log.info("Direct search with config: query={}, config={}", request.getQuery(), request.getConfig());
 
@@ -92,6 +94,7 @@ public class RagSearchController {
      * 检索请求体
      */
     public static class SearchRequest {
+        @NotBlank(message = "查询文本不能为空")
         private String query;
         private List<Long> documentIds;
         private RetrievalConfig config;

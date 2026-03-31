@@ -6,6 +6,8 @@ import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -44,7 +46,7 @@ public class RagDocumentController {
      */
     @Operation(summary = "创建文档", description = "上传文档内容，嵌入向量需通过 /embed 接口单独生成。")
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createDocument(@RequestBody DocumentRequest request) {
+    public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
 
         String sql = "INSERT INTO rag_documents (title, content, source, document_type, metadata, created_at) " +
@@ -243,7 +245,10 @@ public class RagDocumentController {
      * 文档请求体
      */
     public static class DocumentRequest {
+        @NotBlank(message = "文档标题不能为空")
         private String title;
+
+        @NotBlank(message = "文档内容不能为空")
         private String content;
         private String source;
         private String documentType;

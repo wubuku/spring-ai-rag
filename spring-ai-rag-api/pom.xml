@@ -28,6 +28,12 @@
             <artifactId>spring-ai-client-chat</artifactId>
         </dependency>
 
+        <!-- Jakarta Validation API（@NotBlank / @NotNull 注解） -->
+        <dependency>
+            <groupId>jakarta.validation</groupId>
+            <artifactId>jakarta.validation-api</artifactId>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

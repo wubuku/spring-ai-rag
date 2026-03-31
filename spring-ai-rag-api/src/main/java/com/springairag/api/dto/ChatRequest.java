@@ -1,5 +1,8 @@
 package com.springairag.api.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
@@ -7,7 +10,11 @@ import java.util.Map;
  */
 public class ChatRequest {
 
+    @NotBlank(message = "消息内容不能为空")
+    @Size(max = 10000, message = "消息内容不能超过 10000 字符")
     private String message;
+
+    @NotBlank(message = "会话 ID 不能为空")
     private String sessionId;
     private int maxResults = 5;
     private boolean useHybridSearch = true;

@@ -6,6 +6,7 @@ import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -45,7 +46,7 @@ public class RagChatController {
      */
     @Operation(summary = "RAG 问答（非流式）", description = "发送问题，返回完整回答。支持 domainId 指定领域扩展。")
     @PostMapping("/ask")
-    public ResponseEntity<ChatResponse> ask(@RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
         log.info("RAG ask: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
@@ -59,7 +60,7 @@ public class RagChatController {
      */
     @Operation(summary = "RAG 问答（流式 SSE）", description = "流式返回回答内容，通过 Server-Sent Events 逐块推送。")
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter stream(@RequestBody ChatRequest request) {
+    public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
         log.info("RAG stream: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
