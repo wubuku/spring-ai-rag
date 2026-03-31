@@ -7,8 +7,6 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -80,7 +78,7 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-        String originalQuery = extractUserMessage(request);
+        String originalQuery = AdvisorUtils.extractUserMessage(request);
 
         if (!enabled || originalQuery == null || originalQuery.isBlank()) {
             log.debug("[QueryRewriteAdvisor] 禁用或查询为空，不改写");
@@ -103,29 +101,5 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
     public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
         // 不做任何后处理，直接透传
         return response;
-    }
-
-    /**
-     * 从 ChatClientRequest 中提取 user message 文本
-     */
-    private String extractUserMessage(ChatClientRequest request) {
-        if (request == null || request.prompt() == null) {
-            return null;
-        }
-        List<Message> messages = request.prompt().getInstructions();
-        if (messages == null || messages.isEmpty()) {
-            return null;
-        }
-        // 找到最后一个 UserMessage
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message msg = messages.get(i);
-            if (msg instanceof UserMessage um) {
-                String text = um.getText();
-                if (text != null && !text.isBlank()) {
-                    return text;
-                }
-            }
-        }
-        return null;
     }
 }

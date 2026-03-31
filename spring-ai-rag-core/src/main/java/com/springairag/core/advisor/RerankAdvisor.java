@@ -8,8 +8,6 @@ import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -102,7 +100,7 @@ public class RerankAdvisor implements BaseAdvisor {
             return request;
         }
 
-        String query = extractUserMessage(request);
+        String query = AdvisorUtils.extractUserMessage(request);
 
         // 重排序
         List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);
@@ -133,28 +131,5 @@ public class RerankAdvisor implements BaseAdvisor {
             sb.append(i + 1).append(". ").append(r.getChunkText()).append("\n\n");
         }
         return sb.toString();
-    }
-
-    /**
-     * 从 ChatClientRequest 中提取 user message 文本
-     */
-    private String extractUserMessage(ChatClientRequest request) {
-        if (request == null || request.prompt() == null) {
-            return null;
-        }
-        List<Message> messages = request.prompt().getInstructions();
-        if (messages == null || messages.isEmpty()) {
-            return null;
-        }
-        for (int i = messages.size() - 1; i >= 0; i--) {
-            Message msg = messages.get(i);
-            if (msg instanceof UserMessage um) {
-                String text = um.getText();
-                if (text != null && !text.isBlank()) {
-                    return text;
-                }
-            }
-        }
-        return null;
     }
 }
