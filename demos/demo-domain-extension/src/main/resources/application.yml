@@ -1,0 +1,56 @@
+# ============================================================
+# 领域扩展示例 — 医疗问诊
+# ============================================================
+
+server:
+  port: 8081
+
+spring:
+  # 数据源（PostgreSQL + pgvector）
+  datasource:
+    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
+    username: postgres
+    password: postgres
+
+  # Flyway 自动迁移
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+  # AI 模型配置（OpenAI 兼容，如 DeepSeek）
+  ai:
+    openai:
+      base-url: https://api.deepseek.com/v1
+      api-key: ${DEEPSEEK_API_KEY:sk-xxx}
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
+
+# ============================================================
+# Spring AI RAG 配置
+# ============================================================
+app:
+  llm:
+    provider: openai
+  siliconflow:
+    api-key: ${SILICONFLOW_API_KEY:sk-xxx}
+    embedding:
+      model: BAAI/bge-m3
+      dimensions: 1024
+
+rag:
+  memory:
+    max-messages: 20
+
+# ============================================================
+# 监控配置
+# ============================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,info
+  endpoint:
+    health:
+      show-details: always
