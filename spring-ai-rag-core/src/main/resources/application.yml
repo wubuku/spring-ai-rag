@@ -16,12 +16,20 @@ spring:
     exclude:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
 
-  # 数据源
+  # 数据源 + HikariCP 连接池优化
   datasource:
     url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
     driver-class-name: org.postgresql.Driver
     username: postgres
     password: ${DB_PASSWORD:postgres}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+      minimum-idle: ${DB_POOL_MIN_IDLE:5}
+      idle-timeout: 300000         # 空闲连接 5 分钟回收
+      max-lifetime: 1800000        # 连接最大存活 30 分钟
+      connection-timeout: 10000    # 获取连接超时 10 秒
+      leak-detection-threshold: 60000  # 连接泄漏检测 60 秒
+      pool-name: rag-hikari
 
   # Flyway 数据库迁移
   flyway:

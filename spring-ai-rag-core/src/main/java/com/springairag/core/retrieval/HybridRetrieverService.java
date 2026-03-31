@@ -46,7 +46,7 @@ public class HybridRetrieverService {
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
             JdbcTemplate jdbcTemplate,
-            @Autowired(required = false) Executor taskExecutor) {
+            @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor) {
         this.embeddingModel = embeddingModel;
         this.jdbcTemplate = jdbcTemplate;
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;

@@ -30,6 +30,10 @@ public class EmbeddingModelConfig {
 
     @Bean
     public EmbeddingModel embeddingModel() {
+        org.slf4j.LoggerFactory.getLogger(EmbeddingModelConfig.class)
+                .info("Creating EmbeddingModel: baseUrl={}, model={}, apiKey={}..., dimensions={}",
+                        baseUrl, model, apiKey.substring(0, Math.min(10, apiKey.length())), dimensions);
+
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(baseUrl)
                 .apiKey(apiKey)

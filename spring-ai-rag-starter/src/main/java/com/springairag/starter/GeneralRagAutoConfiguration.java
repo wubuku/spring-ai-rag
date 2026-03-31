@@ -1,7 +1,9 @@
 package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
+import com.springairag.core.config.CacheConfig;
 import com.springairag.core.config.EmbeddingModelConfig;
+import com.springairag.core.config.PerformanceConfig;
 import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.metrics.RagMetricsService;
@@ -34,7 +36,9 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @EnableConfigurationProperties(GeneralRagProperties.class)
 @Import({
         SpringAiConfig.class,
-        EmbeddingModelConfig.class
+        EmbeddingModelConfig.class,
+        CacheConfig.class,
+        PerformanceConfig.class
 })
 public class GeneralRagAutoConfiguration {
 
