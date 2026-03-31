@@ -1,5 +1,8 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.retrieval.EmbeddingBatchService;
+import com.springairag.documents.chunk.HierarchicalTextChunker;
+import com.springairag.documents.chunk.TextChunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -23,9 +26,13 @@ public class RagDocumentController {
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
 
     private final JdbcTemplate jdbcTemplate;
+    private final EmbeddingBatchService embeddingBatchService;
 
-    public RagDocumentController(JdbcTemplate jdbcTemplate) {
+    private static final HierarchicalTextChunker chunker = new HierarchicalTextChunker(1000, 100, 100);
+
+    public RagDocumentController(JdbcTemplate jdbcTemplate, EmbeddingBatchService embeddingBatchService) {
         this.jdbcTemplate = jdbcTemplate;
+        this.embeddingBatchService = embeddingBatchService;
     }
 
     /**
@@ -133,30 +140,94 @@ public class RagDocumentController {
     /**
      * 为文档生成嵌入向量
      *
-     * <p>注意：此接口仅标记文档需要生成嵌入，实际生成由后台任务处理。
-     * 完整实现需要集成 EmbeddingBatchService + HierarchicalTextChunker。
+     * <p>流程：获取文档内容 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
      */
     @PostMapping("/{id}/embed")
-    public ResponseEntity<Map<String, String>> embedDocument(@PathVariable Long id) {
-        log.info("Requesting embedding for document: id={}", id);
+    public ResponseEntity<Map<String, Object>> embedDocument(@PathVariable Long id) {
+        log.info("Generating embeddings for document: id={}", id);
 
-        // 检查文档是否存在
-        Integer count = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rag_documents WHERE id = ?", Integer.class, id);
-        if (count == null || count == 0) {
+        // 1. 获取文档内容
+        List<Map<String, Object>> docs = jdbcTemplate.queryForList(
+                "SELECT id, content FROM rag_documents WHERE id = ?", id);
+        if (docs.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
-        // 更新处理状态
+        String content = (String) docs.get(0).get("content");
+        if (content == null || content.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "文档内容为空",
+                    "documentId", id
+            ));
+        }
+
+        // 2. 分块
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "message", "文档内容太短，无需分块",
+                    "documentId", id,
+                    "chunksCreated", 0
+            ));
+        }
+
+        log.info("Document {} split into {} chunks", id, chunks.size());
+
+        // 3. 更新状态为 PROCESSING
         jdbcTemplate.update(
-                "UPDATE rag_documents SET processing_status = 'PENDING', updated_at = ? WHERE id = ?",
+                "UPDATE rag_documents SET processing_status = 'PROCESSING', updated_at = ? WHERE id = ?",
                 Timestamp.from(Instant.now()), id);
 
+        // 4. 删除旧的嵌入向量（重新生成）
+        jdbcTemplate.update("DELETE FROM rag_embeddings WHERE document_id = ?", id);
+
+        // 5. 生成嵌入并存储
+        List<String> texts = chunks.stream().map(TextChunk::text).toList();
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                embeddingBatchService.createEmbeddingsBatch(texts);
+
+        int stored = 0;
+        for (int i = 0; i < results.size(); i++) {
+            EmbeddingBatchService.EmbeddingResult result = results.get(i);
+            if (result.isSuccess()) {
+                TextChunk chunk = chunks.get(i);
+                // 将 float[] 转为 pgvector 格式 "[f1,f2,...]"
+                String vectorStr = toVectorString(result.getEmbedding());
+                jdbcTemplate.update(
+                        "INSERT INTO rag_embeddings (document_id, chunk_text, chunk_index, embedding, chunk_start_pos, chunk_end_pos, created_at) " +
+                                "VALUES (?, ?, ?, ?::vector, ?, ?, ?)",
+                        id, chunk.text(), i, vectorStr, chunk.startPos(), chunk.endPos(),
+                        Timestamp.from(Instant.now()));
+                stored++;
+            } else {
+                log.warn("Embedding failed for chunk {}: {}", i, result.getError());
+            }
+        }
+
+        // 6. 更新状态为 COMPLETED
+        jdbcTemplate.update(
+                "UPDATE rag_documents SET processing_status = 'COMPLETED', updated_at = ? WHERE id = ?",
+                Timestamp.from(Instant.now()), id);
+
+        log.info("Document {} embedding completed: {}/{} chunks stored", id, stored, chunks.size());
+
         return ResponseEntity.ok(Map.of(
-                "message", "文档已标记为待处理，嵌入向量生成需要通过 EmbeddingBatchService 异步执行",
-                "documentId", String.valueOf(id),
-                "status", "PENDING"
+                "message", "嵌入向量生成完成",
+                "documentId", id,
+                "chunksCreated", chunks.size(),
+                "embeddingsStored", stored,
+                "status", "COMPLETED"
         ));
+    }
+
+    private String toVectorString(float[] embedding) {
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < embedding.length; i++) {
+            if (i > 0) sb.append(",");
+            sb.append(embedding[i]);
+        }
+        sb.append("]");
+        return sb.toString();
     }
 
     /**

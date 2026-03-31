@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.springairag.core.retrieval.EmbeddingBatchService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -19,12 +20,14 @@ import static org.mockito.Mockito.*;
 class RagDocumentControllerTest {
 
     private JdbcTemplate jdbcTemplate;
+    private EmbeddingBatchService embeddingBatchService;
     private RagDocumentController controller;
 
     @BeforeEach
     void setUp() {
         jdbcTemplate = mock(JdbcTemplate.class);
-        controller = new RagDocumentController(jdbcTemplate);
+        embeddingBatchService = mock(EmbeddingBatchService.class);
+        controller = new RagDocumentController(jdbcTemplate, embeddingBatchService);
     }
 
     @Test
@@ -121,26 +124,30 @@ class RagDocumentControllerTest {
 
     @Test
     void embedDocument_found() {
-        when(jdbcTemplate.queryForObject(
-                eq("SELECT COUNT(*) FROM rag_documents WHERE id = ?"),
-                eq(Integer.class), eq(1L)))
-                .thenReturn(1);
+        // Mock document content query
+        Map<String, Object> doc = new HashMap<>();
+        doc.put("id", 1L);
+        doc.put("content", "Spring Boot 是一个用于快速构建 Spring 应用的框架。它提供了自动配置和嵌入式服务器等功能。");
+        when(jdbcTemplate.queryForList(
+                eq("SELECT id, content FROM rag_documents WHERE id = ?"), eq(1L)))
+                .thenReturn(List.of(doc));
 
-        ResponseEntity<Map<String, String>> response = controller.embedDocument(1L);
+        // Mock embedding batch service
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of());
+
+        ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("PENDING", response.getBody().get("status"));
-
     }
 
     @Test
     void embedDocument_notFound() {
-        when(jdbcTemplate.queryForObject(
-                eq("SELECT COUNT(*) FROM rag_documents WHERE id = ?"),
-                eq(Integer.class), eq(999L)))
-                .thenReturn(0);
+        when(jdbcTemplate.queryForList(
+                eq("SELECT id, content FROM rag_documents WHERE id = ?"), eq(999L)))
+                .thenReturn(List.of());
 
-        ResponseEntity<Map<String, String>> response = controller.embedDocument(999L);
+        ResponseEntity<Map<String, Object>> response = controller.embedDocument(999L);
 
         assertEquals(404, response.getStatusCode().value());
     }

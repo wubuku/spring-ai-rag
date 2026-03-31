@@ -23,6 +23,13 @@
             <version>${project.version}</version>
         </dependency>
 
+        <!-- 本项目 Documents 模块（分块器、文本清洗） -->
+        <dependency>
+            <groupId>com.springairag</groupId>
+            <artifactId>spring-ai-rag-documents</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
