@@ -150,9 +150,9 @@
 
 - 模块数：5（parent + api + core + starter + documents）
 - Java 源文件数：73（生产 40 + 测试 33）
-- 测试数：247 全部通过
+- 测试数：249 全部通过
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：28 次（最新 325a71b）
+- Git 提交：29 次（最新 1aabe80）
 - 文档数：3（README.md + docs/DEPLOYMENT.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -165,6 +165,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 04:13 代码质量改进——添加 Bean Validation 输入校验：spring-boot-starter-validation(core) + jakarta.validation-api(api) 依赖。ChatRequest 添加 @NotBlank message/sessionId + @Size(max=10000)。SearchRequest.query、DocumentRequest.title/content 添加 @NotBlank。3 个 Controller 方法添加 @Valid。GlobalExceptionHandler 新增 MethodArgumentNotValidException 处理器（单字段/多字段校验失败返回 400 + 结构化错误信息）。新增 2 个测试，总计 249 个全部通过。commit 1aabe80。已推送。
 - ✅ 2026-04-01 03:49 代码重构 + 测试覆盖深化——提取 RetrievalUtils 工具类（cosineSimilarity/vectorToString/parseVector/fuseResults），消除 HybridRetrieverService 中重复的私有算法代码。新增 RetrievalUtilsTest(26)：余弦相似度边界/高维/零向量、向量解析多格式、分数融合去重/排序/权重。重写 QueryRewritingServiceTest(23)：用 ReflectionTestUtils 注入 enabled，覆盖同义词/限定词/padding/disabled 场景。增强 ReRankingServiceTest(20)：覆盖 enabled/disabled、相关性/多样性评分、文本相似度。总计 247 个测试全部通过。commit 325a71b。已推送。
 - ✅ 2026-04-01 03:19 功能增强——ChatResponse 返回引用来源（sources）：RerankAdvisor 新增 RERANKED_RESULTS_KEY 将重排结果存入 request context（Spring AI ChatModelCallAdvisor 自动复制到 response context），RagChatService 重构为 executeChat() 私有方法，使用 chatClientResponse() 从 context 提取检索结果填充 SourceDocument（含 documentId/chunkText/score）。chat(String) 向后兼容，chat(ChatRequest) 返回完整响应。新增 3 个测试 + RerankAdvisorTest 补充 context 验证。总计 185 测试全部通过。commit 736938c。已推送。
 - ✅ 2026-04-01 02:48 代码质量改进——RagChatController.clearHistory() 实现真实删除（原为 stub），提取 SimpleJsonUtil 消除 RagChatHistoryRepository 和 RagDocumentController 中重复的 toJson/escapeJson，新增 SimpleJsonUtilTest(11)。总计 183 个测试全部通过。commit 42c4ccf。已推送。
