@@ -34,8 +34,26 @@ TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 
+find_psql() {
+    # 优先 libpq（更通用），再尝试本地 postgresql
+    for path in /usr/local/Cellar/libpq/*/bin/psql /usr/local/Cellar/postgresql@*/bin/psql /usr/local/bin/psql; do
+        for p in $path; do
+            if [ -x "$p" ]; then echo "$p"; return 0; fi
+        done
+    done
+    echo ""; return 1
+}
+
+PSQL_CMD=$(find_psql)
+if [ -z "$PSQL_CMD" ]; then
+    echo -e "${YELLOW}⚠️  psql 未找到，数据库测试将跳过${NC}"
+else
+    echo -e "使用 psql: $PSQL_CMD"
+fi
+
 run_psql() {
-    PGPASSWORD=$DB_PASSWORD psql -h localhost -U $DB_USER -d $DB_NAME -t -c "$1" 2>/dev/null
+    if [ -z "$PSQL_CMD" ]; then return 1; fi
+    PGPASSWORD=$DB_PASSWORD $PSQL_CMD -h localhost -U $DB_USER -d $DB_NAME -t -c "$1" 2>/dev/null
 }
 
 check() {
@@ -105,7 +123,8 @@ metadata_type=$(run_psql "SELECT data_type FROM information_schema.columns WHERE
 check "rag_documents.metadata 类型" "$metadata_type" "jsonb"
 
 embedding_type=$(run_psql "SELECT data_type FROM information_schema.columns WHERE table_name='rag_embeddings' AND column_name='embedding';" | tr -d ' ')
-check "rag_embeddings.embedding 类型" "$embedding_type" "vector"
+# PostgreSQL 将 vector 自定义类型报告为 USER-DEFINED
+check "rag_embeddings.embedding 类型" "$embedding_type" "USER-DEFINED"
 
 for ext in vector pg_jieba; do
     count=$(run_psql "SELECT COUNT(*) FROM pg_extension WHERE extname='$ext';" | tr -d ' ')
