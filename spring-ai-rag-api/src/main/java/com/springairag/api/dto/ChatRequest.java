@@ -1,25 +1,38 @@
 package com.springairag.api.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
  * RAG 问答请求
  */
+@Schema(description = "RAG 问答请求")
 public class ChatRequest {
 
     @NotBlank(message = "消息内容不能为空")
     @Size(max = 10000, message = "消息内容不能超过 10000 字符")
+    @Schema(description = "用户消息内容", example = "退货政策是什么？", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
     @NotBlank(message = "会话 ID 不能为空")
+    @Schema(description = "会话 ID，用于多轮对话记忆", example = "conv-123", requiredMode = Schema.RequiredMode.REQUIRED)
     private String sessionId;
+
+    @Schema(description = "最大检索结果数量", example = "5", defaultValue = "5")
     private int maxResults = 5;
+
+    @Schema(description = "是否使用混合检索（向量 + 全文）", example = "true", defaultValue = "true")
     private boolean useHybridSearch = true;
+
+    @Schema(description = "是否使用重排序", example = "true", defaultValue = "true")
     private boolean useRerank = true;
+
+    @Schema(description = "领域扩展标识（可选）", example = "medical")
     private String domainId;
+
+    @Schema(description = "额外元数据（透传给领域扩展）")
     private Map<String, Object> metadata;
 
     public ChatRequest() {}

@@ -34,6 +34,13 @@
             <artifactId>jakarta.validation-api</artifactId>
         </dependency>
 
+        <!-- Swagger Annotations（@Schema 等 OpenAPI 注解） -->
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+            <scope>provided</scope>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

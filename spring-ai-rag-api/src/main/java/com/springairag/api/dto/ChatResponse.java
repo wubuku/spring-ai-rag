@@ -1,15 +1,23 @@
 package com.springairag.api.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 import java.util.Map;
 
 /**
  * RAG 问答响应
  */
+@Schema(description = "RAG 问答响应")
 public class ChatResponse {
 
+    @Schema(description = "LLM 生成的回答文本")
     private String answer;
+
+    @Schema(description = "引用来源文档列表")
     private List<SourceDocument> sources;
+
+    @Schema(description = "响应元数据（包含 sessionId 等）")
     private Map<String, Object> metadata;
 
     public ChatResponse() {}
@@ -41,9 +49,16 @@ public class ChatResponse {
     /**
      * 来源文档片段
      */
+    @Schema(description = "引用来源文档片段")
     public static class SourceDocument {
+
+        @Schema(description = "来源文档 ID", example = "doc-456")
         private String documentId;
+
+        @Schema(description = "匹配的文本片段", example = "退货政策：自收到商品之日起7天内...")
         private String chunkText;
+
+        @Schema(description = "相关性得分 (0-1)", example = "0.92")
         private double score;
 
         public SourceDocument() {}

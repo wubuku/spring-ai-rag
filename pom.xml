@@ -44,6 +44,12 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
+            <!-- Swagger Annotations -->
+            <dependency>
+                <groupId>io.swagger.core.v3</groupId>
+                <artifactId>swagger-annotations-jakarta</artifactId>
+                <version>2.2.22</version>
+            </dependency>
             <!-- 本项目模块版本管理 -->
             <dependency>
                 <groupId>com.springairag</groupId>

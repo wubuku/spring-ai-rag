@@ -1,15 +1,29 @@
 package com.springairag.api.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 /**
  * 检索配置
  */
+@Schema(description = "检索配置参数")
 public class RetrievalConfig {
 
+    @Schema(description = "最大结果数量", example = "10", defaultValue = "10")
     private int maxResults = 10;
+
+    @Schema(description = "最低相关性得分阈值", example = "0.5", defaultValue = "0.5")
     private double minScore = 0.5;
+
+    @Schema(description = "是否使用混合检索", example = "true", defaultValue = "true")
     private boolean useHybridSearch = true;
+
+    @Schema(description = "是否使用重排序", example = "true", defaultValue = "true")
     private boolean useRerank = true;
+
+    @Schema(description = "向量检索权重", example = "0.5", defaultValue = "0.5")
     private double vectorWeight = 0.5;
+
+    @Schema(description = "全文检索权重", example = "0.5", defaultValue = "0.5")
     private double fulltextWeight = 0.5;
 
     public RetrievalConfig() {}
