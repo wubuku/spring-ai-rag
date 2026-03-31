@@ -251,14 +251,23 @@ public class RagDocumentController {
     /**
      * 文档请求体
      */
+    @io.swagger.v3.oas.annotations.media.Schema(description = "文档创建/更新请求")
     public static class DocumentRequest {
         @NotBlank(message = "文档标题不能为空")
+        @io.swagger.v3.oas.annotations.media.Schema(description = "文档标题", example = "产品说明书", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
         private String title;
 
         @NotBlank(message = "文档内容不能为空")
+        @io.swagger.v3.oas.annotations.media.Schema(description = "文档正文内容", example = "本文档介绍产品的使用方法...", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
         private String content;
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "文档来源标识", example = "manual-upload")
         private String source;
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "文档类型", example = "markdown")
         private String documentType;
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "附加元数据（JSON 对象）")
         private Map<String, Object> metadata;
 
         public String getTitle() { return title; }

@@ -100,10 +100,16 @@ public class RagSearchController {
     /**
      * 检索请求体
      */
+    @io.swagger.v3.oas.annotations.media.Schema(description = "检索请求参数")
     public static class SearchRequest {
         @NotBlank(message = "查询文本不能为空")
+        @io.swagger.v3.oas.annotations.media.Schema(description = "查询文本", example = "Spring AI 是什么？", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
         private String query;
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "限定文档 ID 列表（为空则检索全部）", example = "[1, 2, 3]")
         private List<Long> documentIds;
+
+        @io.swagger.v3.oas.annotations.media.Schema(description = "检索配置参数")
         private RetrievalConfig config;
 
         public String getQuery() { return query; }
