@@ -35,16 +35,17 @@
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
 
-        <!-- Spring AI OpenAI（兼容 DeepSeek、智谱等） -->
+        <!-- Spring AI OpenAI 库（不含自动配置，由 SpringAiConfig 手动管理） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-openai</artifactId>
+            <artifactId>spring-ai-openai</artifactId>
         </dependency>
 
-        <!-- Spring AI Anthropic -->
+        <!-- Spring AI Anthropic（可选，需要时取消注释） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-model-anthropic</artifactId>
+            <artifactId>spring-ai-anthropic</artifactId>
+            <optional>true</optional>
         </dependency>
 
         <!-- Spring AI PGVector Store Starter -->
@@ -96,4 +97,13 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
 </project>

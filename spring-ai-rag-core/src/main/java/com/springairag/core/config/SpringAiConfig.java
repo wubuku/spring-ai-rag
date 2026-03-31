@@ -11,11 +11,11 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -24,83 +24,53 @@ import java.util.List;
 /**
  * Spring AI ChatModel 配置
  *
- * <p>工作机制：
- * <ul>
- *   <li>spring.ai.openai.chat.enabled=false 禁止了 Spring Boot 自动配置</li>
- *   <li>由本配置类手动创建 ChatModel Bean</li>
- *   <li>通过 app.llm.provider 切换实际使用的模型</li>
- *   <li>DeepSeek、智谱等国产模型也使用 openAiChatModel Bean（只需修改 base-url）</li>
- * </ul>
- *
- * <p>Bean 注册策略（三 Bean 模式）：
- * <ul>
- *   <li>openAiChatModel: OpenAI/兼容模型，provider=openai 时创建，@Primary</li>
- *   <li>anthropicChatModel: Anthropic 模型，provider=anthropic 时创建，@Primary</li>
- *   <li>chatModel: 主入口 Bean，@ConditionalOnMissingBean，从上面两个中选择可用的</li>
- * </ul>
+ * <p>使用 Environment 读取属性，不依赖 @Value（避免 auto-config 禁用后的属性解析问题）。
+ * 通过 app.llm.provider 切换模型：openai 或 anthropic。
  */
 @Configuration
 public class SpringAiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiConfig.class);
 
-    @Value("${app.llm.provider:openai}")
-    private String provider;
+    private final Environment env;
 
-    @Value("${spring.ai.openai.base-url}")
-    private String openAiBaseUrl;
+    public SpringAiConfig(Environment env) {
+        this.env = env;
+    }
 
-    @Value("${spring.ai.openai.api-key}")
-    private String openAiApiKey;
-
-    @Value("${spring.ai.openai.chat.options.model}")
-    private String openAiModel;
-
-    @Value("${spring.ai.openai.chat.options.temperature}")
-    private Double openAiTemperature;
-
-    @Value("${spring.ai.anthropic.base-url:https://api.anthropic.com}")
-    private String anthropicBaseUrl;
-
-    @Value("${spring.ai.anthropic.api-key:dummy}")
-    private String anthropicApiKey;
-
-    @Value("${spring.ai.anthropic.chat.options.model:claude-3-5-sonnet-20241022}")
-    private String anthropicModel;
-
-    @Value("${spring.ai.anthropic.chat.options.temperature:0.7}")
-    private Double anthropicTemperature;
-
-    @Value("${spring.ai.anthropic.chat.options.max-tokens:4096}")
-    private Integer anthropicMaxTokens;
+    private String getProvider() {
+        return env.getProperty("app.llm.provider", "openai");
+    }
 
     /**
      * OpenAI（或 OpenAI 兼容）ChatModel Bean
-     * 仅在 provider=openai 时创建有效实例，否则返回 null
-     *
-     * <p>DeepSeek、智谱等国产模型也使用此 Bean，
-     * 只需将 spring.ai.openai.base-url 指向对应 API 地址
+     * 仅在 provider=openai 时创建
      */
     @Bean("openAiChatModel")
     @Primary
     public ChatModel openAiChatModel(RestClient.Builder restClientBuilder) {
-        if (!"openai".equals(provider)) {
-            log.debug("OpenAI ChatModel skipped, provider is: {}", provider);
+        if (!"openai".equals(getProvider())) {
+            log.debug("OpenAI ChatModel skipped, provider is: {}", getProvider());
             return null;
         }
 
-        log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", openAiBaseUrl, openAiModel);
+        String baseUrl = env.getProperty("spring.ai.openai.base-url", "https://api.deepseek.com/v1");
+        String apiKey = env.getProperty("spring.ai.openai.api-key", "dummy");
+        String model = env.getProperty("spring.ai.openai.chat.options.model", "deepseek-chat");
+        double temperature = Double.parseDouble(env.getProperty("spring.ai.openai.chat.options.temperature", "0.7"));
+
+        log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", baseUrl, model);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(openAiBaseUrl)
-                .apiKey(openAiApiKey)
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
                 .restClientBuilder(restClientBuilder)
                 .webClientBuilder(WebClient.builder())
                 .build();
 
         OpenAiChatOptions options = OpenAiChatOptions.builder()
-                .model(openAiModel)
-                .temperature(openAiTemperature)
+                .model(model)
+                .temperature(temperature)
                 .build();
 
         return OpenAiChatModel.builder()
@@ -111,28 +81,33 @@ public class SpringAiConfig {
 
     /**
      * Anthropic ChatModel Bean
-     * 仅在 provider=anthropic 时创建有效实例，否则返回 null
+     * 仅在 provider=anthropic 时创建
      */
     @Bean("anthropicChatModel")
     @Primary
     public ChatModel anthropicChatModel() {
-        if (!"anthropic".equals(provider)) {
-            log.debug("Anthropic ChatModel skipped, provider is: {}", provider);
+        if (!"anthropic".equals(getProvider())) {
+            log.debug("Anthropic ChatModel skipped, provider is: {}", getProvider());
             return null;
         }
 
-        log.info("Creating Anthropic ChatModel: baseUrl={}, model={}, maxTokens={}",
-                anthropicBaseUrl, anthropicModel, anthropicMaxTokens);
+        String baseUrl = env.getProperty("spring.ai.anthropic.base-url", "https://api.anthropic.com");
+        String apiKey = env.getProperty("spring.ai.anthropic.api-key", "dummy");
+        String model = env.getProperty("spring.ai.anthropic.chat.options.model", "claude-3-5-sonnet-20241022");
+        double temperature = Double.parseDouble(env.getProperty("spring.ai.anthropic.chat.options.temperature", "0.7"));
+        int maxTokens = Integer.parseInt(env.getProperty("spring.ai.anthropic.chat.options.max-tokens", "4096"));
+
+        log.info("Creating Anthropic ChatModel: baseUrl={}, model={}, maxTokens={}", baseUrl, model, maxTokens);
 
         AnthropicApi anthropicApi = AnthropicApi.builder()
-                .baseUrl(anthropicBaseUrl)
-                .apiKey(anthropicApiKey)
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
                 .build();
 
         AnthropicChatOptions options = AnthropicChatOptions.builder()
-                .model(anthropicModel)
-                .temperature(anthropicTemperature)
-                .maxTokens(anthropicMaxTokens)
+                .model(model)
+                .temperature(temperature)
+                .maxTokens(maxTokens)
                 .build();
 
         return AnthropicChatModel.builder()
@@ -143,32 +118,34 @@ public class SpringAiConfig {
 
     /**
      * 主 ChatModel Bean - 根据 provider 配置动态选择
-     * 使用 @Autowired(required=false) 注入各 provider Bean，
-     * 因为 @Bean 方法返回 null 时 Spring 不会注册该 Bean
+     * 使用 ApplicationContext.getBean 手动查找，避免 @Primary 冲突
      */
     @Bean("chatModel")
     @Primary
     @ConditionalOnMissingBean(name = "chatModel")
-    public ChatModel chatModel(
-            @Autowired(required = false) ChatModel openAiChatModel,
-            @Autowired(required = false) ChatModel anthropicChatModel) {
-        if ("openai".equals(provider) && openAiChatModel != null) {
+    public ChatModel chatModel(org.springframework.context.ApplicationContext ctx) {
+        String provider = getProvider();
+
+        ChatModel openAi = null;
+        ChatModel anthropic = null;
+        try { openAi = ctx.getBean("openAiChatModel", ChatModel.class); } catch (Exception ignored) {}
+        try { anthropic = ctx.getBean("anthropicChatModel", ChatModel.class); } catch (Exception ignored) {}
+
+        if ("openai".equals(provider) && openAi != null) {
             log.info("Using OpenAI ChatModel as primary");
-            return openAiChatModel;
-        } else if ("anthropic".equals(provider) && anthropicChatModel != null) {
+            return openAi;
+        } else if ("anthropic".equals(provider) && anthropic != null) {
             log.info("Using Anthropic ChatModel as primary");
-            return anthropicChatModel;
+            return anthropic;
         }
 
-        // Fallback
-        log.warn("No ChatModel available for provider: {}", provider);
-        if (openAiChatModel != null) {
+        if (openAi != null) {
             log.warn("Fallback to OpenAI ChatModel");
-            return openAiChatModel;
+            return openAi;
         }
-        if (anthropicChatModel != null) {
+        if (anthropic != null) {
             log.warn("Fallback to Anthropic ChatModel");
-            return anthropicChatModel;
+            return anthropic;
         }
         throw new IllegalStateException(
                 "No ChatModel configured. Set app.llm.provider to 'openai' or 'anthropic'.");

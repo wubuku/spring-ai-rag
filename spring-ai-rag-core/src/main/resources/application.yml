@@ -10,15 +10,15 @@ spring:
   main:
     allow-bean-definition-overriding: true
 
-  # 排除 PgVectorStore 自动配置（由 VectorStoreConfig 手动创建 Bean）
-  # PostgreSQL profile 激活时通过 application-postgresql.yml 重新启用
+  # 排除不需要的自动配置
+  # PgVectorStore：由 VectorStoreConfig 手动创建 Bean
   autoconfigure:
     exclude:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
 
   # 数据源
   datasource:
-    url: jdbc:postgresql://localhost:5432/general_rag
+    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
     driver-class-name: org.postgresql.Driver
     username: postgres
     password: ${DB_PASSWORD:postgres}
