@@ -33,7 +33,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleBadRequest(IllegalArgumentException e) {
         return ResponseEntity.badRequest().body(Map.of(
                 "error", "Bad Request",
-                "message", e.getMessage(),
+                "message", e.getMessage() != null ? e.getMessage() : "Invalid argument",
                 "timestamp", Instant.now().toString()
         ));
     }
