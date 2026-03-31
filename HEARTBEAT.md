@@ -144,15 +144,15 @@
 | 轮 A：项目骨架 | 2026-03-31 14:14 | ✅ 5 模块编译通过 |
 | 轮 B：核心配置 | 2026-03-31 14:14 | ✅ SpringAiConfig + EmbeddingModelConfig + VectorStoreConfig |
 | 轮 C：RAG Pipeline | 2026-04-01 03:49 | ✅ RetrievalUtils 提取 + 检索组件测试 247 全通 |
-| 轮 D：API + 测试 + 文档 | 2026-04-01 03:49 | ✅ 247 测试全通，73 源文件 |
+| 轮 D：API + 测试 + 文档 | 2026-04-01 05:50 | ✅ 262 测试全通，DTO @Schema 注解，81 源文件 |
 
 ## 📊 质量基线
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
-- Java 源文件数：84（主项目 75 + demo-basic-rag 3 + demo-domain-extension 6）
+- Java 源文件数：81（主项目 75 + demo-basic-rag 3 + demo-domain-extension 13）
 - 测试数：262（主项目 249 + demo-domain-extension 13）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：32 次（最新 329637f）
+- Git 提交：33 次（最新 04cc548）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -165,6 +165,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 05:50 API 文档完善——DTO 添加 OpenAPI @Schema 注解：ChatRequest(6字段)、ChatResponse+SourceDocument(4)、RetrievalConfig(6)、RetrievalResult(7)，Swagger UI 现在显示完整字段说明。api 模块+父 pom 添加 swagger-annotations-jakarta 依赖。262 测试全通。commit 04cc548。已推送。
 - ✅ 2026-04-01 05:18 新增 demo-domain-extension 领域扩展示例——MedicalRagExtension（专业问诊提示词+高召回检索配置+关键词适用性校验）+ MedicalPromptCustomizer（领域消息格式化）+ MedicalRagController（3 接口：完整问诊/快速问诊/普通问答对比）+ 13 个单元测试全通 + README.md（三步添加新领域指南）。commit 329637f。已推送。
 - ✅ 2026-04-01 04:46 新增 demo-basic-rag 示例项目 + GitHub Actions CI——demo-basic-rag: BasicRagDemoApplication + DemoController（展示 RagChatService 两种调用方式）+ application.yml 完整配置模板 + README.md（前置条件/启动/API 测试/模型切换/领域扩展）。.github/workflows/ci.yml: Maven CI（compile → test → package）。75 源文件 | 249 测试全通。commit 3c2d3cd。已推送。
 - ✅ 2026-04-01 04:13 代码质量改进——添加 Bean Validation 输入校验：spring-boot-starter-validation(core) + jakarta.validation-api(api) 依赖。ChatRequest 添加 @NotBlank message/sessionId + @Size(max=10000)。SearchRequest.query、DocumentRequest.title/content 添加 @NotBlank。3 个 Controller 方法添加 @Valid。GlobalExceptionHandler 新增 MethodArgumentNotValidException 处理器（单字段/多字段校验失败返回 400 + 结构化错误信息）。新增 2 个测试，总计 249 个全部通过。commit 1aabe80。已推送。
