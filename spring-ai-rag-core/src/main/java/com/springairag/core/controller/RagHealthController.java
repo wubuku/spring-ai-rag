@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,6 +17,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/rag")
+@Tag(name = "RAG Health", description = "健康检查与状态监控")
 public class RagHealthController {
 
     private final JdbcTemplate jdbcTemplate;
@@ -26,6 +29,7 @@ public class RagHealthController {
     /**
      * 健康检查
      */
+    @Operation(summary = "健康检查", description = "检查数据库连接状态、文档/嵌入向量统计。")
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, Object> result = new HashMap<>();

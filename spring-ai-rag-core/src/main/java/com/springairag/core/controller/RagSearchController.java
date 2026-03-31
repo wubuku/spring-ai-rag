@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -17,6 +19,7 @@ import java.util.List;
  */
 @RestController
 @RequestMapping("/api/v1/rag/search")
+@Tag(name = "RAG Search", description = "直接检索接口（不经过 LLM，用于调试和预览）")
 public class RagSearchController {
 
     private static final Logger log = LoggerFactory.getLogger(RagSearchController.class);
@@ -37,6 +40,7 @@ public class RagSearchController {
      * @param fulltextWeight 全文权重（默认 0.5）
      * @return 检索结果列表
      */
+    @Operation(summary = "直接检索（GET）", description = "混合检索，不经过 LLM 生成。支持向量/全文权重调节。")
     @GetMapping
     public ResponseEntity<List<RetrievalResult>> search(
             @RequestParam String query,
@@ -63,6 +67,7 @@ public class RagSearchController {
     /**
      * 带请求体的检索（支持更复杂的配置）
      */
+    @Operation(summary = "直接检索（POST）", description = "通过请求体提交检索配置，支持限定文档 ID 等高级参数。")
     @PostMapping
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
             @RequestBody SearchRequest request) {

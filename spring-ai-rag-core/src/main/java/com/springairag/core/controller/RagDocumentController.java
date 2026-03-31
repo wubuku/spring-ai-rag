@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -21,6 +23,7 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/rag/documents")
+@Tag(name = "RAG Documents", description = "文档管理（CRUD + 嵌入向量生成）")
 public class RagDocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
@@ -38,6 +41,7 @@ public class RagDocumentController {
     /**
      * 上传/创建文档
      */
+    @Operation(summary = "创建文档", description = "上传文档内容，嵌入向量需通过 /embed 接口单独生成。")
     @PostMapping
     public ResponseEntity<Map<String, Object>> createDocument(@RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
@@ -68,6 +72,7 @@ public class RagDocumentController {
     /**
      * 获取文档详情
      */
+    @Operation(summary = "获取文档详情", description = "查询文档内容、元数据及嵌入向量数量。")
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
@@ -94,6 +99,7 @@ public class RagDocumentController {
     /**
      * 删除文档（级联删除嵌入向量）
      */
+    @Operation(summary = "删除文档", description = "删除文档及其关联的嵌入向量（级联删除）。")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
         log.info("Deleting document: id={}", id);
@@ -117,6 +123,7 @@ public class RagDocumentController {
     /**
      * 列出文档（分页）
      */
+    @Operation(summary = "列出文档", description = "分页查询文档列表，按创建时间倒序。")
     @GetMapping
     public ResponseEntity<Map<String, Object>> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
@@ -142,6 +149,7 @@ public class RagDocumentController {
      *
      * <p>流程：获取文档内容 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
      */
+    @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。会覆盖旧向量。")
     @PostMapping("/{id}/embed")
     public ResponseEntity<Map<String, Object>> embedDocument(@PathVariable Long id) {
         log.info("Generating embeddings for document: id={}", id);
