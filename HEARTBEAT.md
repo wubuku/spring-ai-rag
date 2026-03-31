@@ -152,7 +152,7 @@
 - Java 源文件数：81（主项目 75 + demo-basic-rag 3 + demo-domain-extension 13）
 - 测试数：269（主项目 256 + demo-domain-extension 13）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：34 次（最新 476e656）
+- Git 提交：35 次（最新 2b6ed96）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -165,6 +165,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 06:19 代码质量改进——展开 wildcard import：7 个源文件的 `java.util.*` / `org.springframework.web.bind.annotation.*` 展开为具体类导入。涉及 3 个 Controller + DomainExtensionRegistry + 4 个 Retrieval 类 + HierarchicalTextChunker。269 测试全通。commit 2b6ed96。已推送。
 - ✅ 2026-04-01 06:15 代码质量改进——SpringAiConfigTest 从 1 个空壳测试扩展为 8 个实质测试：provider 切换验证（openAi 模型在 anthropic 模式下返回 null / 反之）、anthropic 模型创建、chatModel 委托选择、无可用模型异常、回退优先级、chatClientBuilder 空列表异常。269 测试全通。commit 476e656。已推送。
 - ✅ 2026-04-01 05:50 API 文档完善——DTO 添加 OpenAPI @Schema 注解：ChatRequest(6字段)、ChatResponse+SourceDocument(4)、RetrievalConfig(6)、RetrievalResult(7)，Swagger UI 现在显示完整字段说明。api 模块+父 pom 添加 swagger-annotations-jakarta 依赖。262 测试全通。commit 04cc548。已推送。
 - ✅ 2026-04-01 05:18 新增 demo-domain-extension 领域扩展示例——MedicalRagExtension（专业问诊提示词+高召回检索配置+关键词适用性校验）+ MedicalPromptCustomizer（领域消息格式化）+ MedicalRagController（3 接口：完整问诊/快速问诊/普通问答对比）+ 13 个单元测试全通 + README.md（三步添加新领域指南）。commit 329637f。已推送。
