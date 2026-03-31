@@ -133,11 +133,11 @@ public class SpringAiConfig {
     }
 
     @Bean
-    @ConditionalOnMissingBean(ChatClient.class)
-    public ChatClient chatClient(List<ChatModel> chatModels) {
+    @ConditionalOnMissingBean(ChatClient.Builder.class)
+    public ChatClient.Builder chatClientBuilder(List<ChatModel> chatModels) {
         ChatModel model = chatModels.stream().filter(m -> m != null).findFirst()
                 .orElseThrow(() -> new IllegalStateException("No ChatModel available"));
-        log.info("Creating ChatClient with model: {}", model.getClass().getSimpleName());
-        return ChatClient.create(model);
+        log.info("Creating ChatClient.Builder with model: {}", model.getClass().getSimpleName());
+        return ChatClient.builder(model);
     }
 }
