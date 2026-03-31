@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
@@ -12,10 +13,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import reactor.core.publisher.Flux;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -79,6 +82,29 @@ class RagChatServiceTest {
         );
     }
 
+    /**
+     * 创建模拟的 ChatClientResponse，返回指定回答文本和空 context
+     */
+    private ChatClientResponse mockChatClientResponse(String answer) {
+        return mockChatClientResponse(answer, Map.of());
+    }
+
+    /**
+     * 创建模拟的 ChatClientResponse，返回指定回答文本和指定 context
+     */
+    private ChatClientResponse mockChatClientResponse(String answer, Map<String, Object> context) {
+        ChatClientResponse resp = mock(ChatClientResponse.class);
+        org.springframework.ai.chat.model.ChatResponse springResp = mock(org.springframework.ai.chat.model.ChatResponse.class);
+        org.springframework.ai.chat.model.Generation generation = mock(org.springframework.ai.chat.model.Generation.class);
+        org.springframework.ai.chat.messages.AssistantMessage output = new org.springframework.ai.chat.messages.AssistantMessage(answer);
+
+        when(resp.chatResponse()).thenReturn(springResp);
+        when(springResp.getResult()).thenReturn(generation);
+        when(generation.getOutput()).thenReturn(output);
+        when(resp.context()).thenReturn(context);
+        return resp;
+    }
+
     @Test
     @DisplayName("构造函数正确构建 ChatClient")
     void constructor_buildsChatClientWithAdvisors() {
@@ -94,11 +120,13 @@ class RagChatServiceTest {
     void chat_returnsAnswerAndSavesHistory() {
         RagChatService service = createService();
 
+        ChatClientResponse chatClientResponse = mockChatClientResponse("AI 回答");
+
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
         when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
         when(promptSpec.call()).thenReturn(callResponse);
-        when(callResponse.content()).thenReturn("AI 回答");
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
         String result = service.chat("你好", "session-1");
 
@@ -111,12 +139,14 @@ class RagChatServiceTest {
     void chat_withMetadata_savesWithMetadata() {
         RagChatService service = createService();
 
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
+
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
         when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
         when(promptSpec.system(anyString())).thenReturn(promptSpec);
         when(promptSpec.call()).thenReturn(callResponse);
-        when(callResponse.content()).thenReturn("回答");
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
         Map<String, Object> metadata = Map.of("source", "test");
         String result = service.chat("问题", "session-1", null, metadata);
@@ -126,21 +156,66 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 从 ChatRequest 构建返回 ChatResponse")
-    void chat_fromChatRequest_returnsChatResponse() {
+    @DisplayName("chat 从 ChatRequest 构建返回含 sources 的 ChatResponse")
+    void chat_fromChatRequest_returnsChatResponseWithSources() {
         RagChatService service = createService();
+
+        // 模拟重排后的检索结果
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId("doc-1");
+        r1.setChunkText("皮肤类型分类标准");
+        r1.setScore(0.95);
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId("doc-2");
+        r2.setChunkText("干性皮肤护理指南");
+        r2.setScore(0.87);
+
+        Map<String, Object> context = new HashMap<>();
+        context.put(RerankAdvisor.RERANKED_RESULTS_KEY, List.of(r1, r2));
+
+        ChatClientResponse chatClientResponse = mockChatClientResponse("根据参考资料，皮肤类型分为...", context);
 
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
         when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
         when(promptSpec.call()).thenReturn(callResponse);
-        when(callResponse.content()).thenReturn("回答内容");
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
-        ChatRequest request = new ChatRequest("测试问题", "session-2");
+        ChatRequest request = new ChatRequest("皮肤有哪些类型", "session-2");
         ChatResponse response = service.chat(request);
 
-        assertEquals("回答内容", response.getAnswer());
+        assertEquals("根据参考资料，皮肤类型分为...", response.getAnswer());
         assertEquals("session-2", response.getMetadata().get("sessionId"));
+
+        // 验证 sources 被正确填充
+        assertNotNull(response.getSources());
+        assertEquals(2, response.getSources().size());
+        assertEquals("doc-1", response.getSources().get(0).getDocumentId());
+        assertEquals("皮肤类型分类标准", response.getSources().get(0).getChunkText());
+        assertEquals(0.95, response.getSources().get(0).getScore(), 0.001);
+        assertEquals("doc-2", response.getSources().get(1).getDocumentId());
+    }
+
+    @Test
+    @DisplayName("chat 无检索结果时 sources 为 null")
+    void chat_withoutRetrievalResults_sourcesIsNull() {
+        RagChatService service = createService();
+
+        // 空 context（没有 RERANKED_RESULTS_KEY）
+        ChatClientResponse chatClientResponse = mockChatClientResponse("直接回答", Map.of());
+
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatRequest request = new ChatRequest("简单问题", "session-3");
+        ChatResponse response = service.chat(request);
+
+        assertEquals("直接回答", response.getAnswer());
+        assertNull(response.getSources());
     }
 
     @Test
@@ -165,7 +240,7 @@ class RagChatServiceTest {
     @DisplayName("有自定义 RagAdvisorProvider 时也构建成功")
     void constructor_withCustomAdvisors_buildsSuccessfully() {
         com.springairag.api.service.RagAdvisorProvider mockProvider = mock(com.springairag.api.service.RagAdvisorProvider.class);
-        org.springframework.ai.chat.client.advisor.api.BaseAdvisor mockAdvisor = mock(org.springframework.ai.chat.client.advisor.api.BaseAdvisor.class);
+        BaseAdvisor mockAdvisor = mock(BaseAdvisor.class);
         when(mockProvider.getName()).thenReturn("CustomAdvisor");
         when(mockProvider.getOrder()).thenReturn(5);
         when(mockProvider.createAdvisor()).thenReturn(mockAdvisor);
@@ -186,5 +261,21 @@ class RagChatServiceTest {
 
         assertNotNull(service);
         verify(chatClientBuilder).defaultAdvisors(anyList());
+    }
+
+    @Test
+    @DisplayName("chat 异常时记录失败指标")
+    void chat_exception_recordsFailureMetric() {
+        RagChatService service = createService();
+
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenThrow(new RuntimeException("LLM 超时"));
+
+        assertThrows(RuntimeException.class, () -> service.chat("问题", "session-err"));
+        // 不应保存历史
+        verify(historyRepository, never()).save(anyString(), anyString(), anyString(), any(), any());
     }
 }

@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.api.service.RagAdvisorProvider;
 import com.springairag.core.advisor.HybridSearchAdvisor;
@@ -14,6 +15,7 @@ import com.springairag.core.repository.RagChatHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
@@ -153,12 +155,30 @@ public class RagChatService {
      * @return 回答文本
      */
     public String chat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
+        return executeChat(userMessage, sessionId, domainId, metadata).getAnswer();
+    }
+
+    /**
+     * RAG 问答（从 ChatRequest 构建），返回含引用来源的完整响应
+     */
+    public ChatResponse chat(ChatRequest request) {
+        return executeChat(
+                request.getMessage(),
+                request.getSessionId(),
+                request.getDomainId(),
+                request.getMetadata()
+        );
+    }
+
+    /**
+     * 核心聊天执行方法，返回含 sources 的完整响应
+     */
+    private ChatResponse executeChat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
         // 应用领域扩展的系统提示词
         String systemPrompt = null;
         if (domainExtensionRegistry.hasExtensions()) {
             String template = domainExtensionRegistry.getSystemPromptTemplate(domainId);
             if (template != null) {
-                // 领域模板中的 {context} 占位符由 RerankAdvisor 在重排后填充
                 systemPrompt = template;
                 if (promptCustomizerChain.hasCustomizers()) {
                     systemPrompt = promptCustomizerChain.customizeSystemPrompt(
@@ -192,8 +212,25 @@ public class RagChatService {
 
         long startTime = System.currentTimeMillis();
         String answer;
+        List<ChatResponse.SourceDocument> sources = null;
         try {
-            answer = spec.call().content();
+            ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
+            answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
+
+            // 从 advisor context 提取重排后的检索结果作为引用来源
+            @SuppressWarnings("unchecked")
+            List<RetrievalResult> reranked = (List<RetrievalResult>) chatClientResponse.context()
+                    .get(RerankAdvisor.RERANKED_RESULTS_KEY);
+            if (reranked != null && !reranked.isEmpty()) {
+                sources = new ArrayList<>();
+                for (RetrievalResult r : reranked) {
+                    ChatResponse.SourceDocument doc = new ChatResponse.SourceDocument();
+                    doc.setDocumentId(r.getDocumentId());
+                    doc.setChunkText(r.getChunkText());
+                    doc.setScore(r.getScore());
+                    sources.add(doc);
+                }
+            }
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
@@ -209,24 +246,11 @@ public class RagChatService {
         // 保存到业务审计表
         historyRepository.save(sessionId, userMessage, answer, null, metadata);
 
-        return answer;
-    }
-
-    /**
-     * RAG 问答（从 ChatRequest 构建）
-     */
-    public ChatResponse chat(ChatRequest request) {
-        String answer = chat(
-                request.getMessage(),
-                request.getSessionId(),
-                request.getDomainId(),
-                request.getMetadata()
-        );
-
-        return ChatResponse.builder()
-                .answer(answer)
-                .metadata(Map.of("sessionId", request.getSessionId()))
-                .build();
+        // 构建完整响应
+        ChatResponse response = new ChatResponse(answer);
+        response.setSources(sources);
+        response.setMetadata(Map.of("sessionId", sessionId));
+        return response;
     }
 
     /**

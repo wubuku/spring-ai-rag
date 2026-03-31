@@ -40,6 +40,9 @@ public class RerankAdvisor implements BaseAdvisor {
 
     private final ReRankingService rerankingService;
 
+    /** 重排结果在 response context 中的 key，供 RagChatService 提取 sources */
+    public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
+
     /** 注入到系统消息的上下文前缀 */
     private String systemContextPrefix = "基于以下参考资料回答问题：\n\n";
 
@@ -113,11 +116,15 @@ public class RerankAdvisor implements BaseAdvisor {
 
         return request.mutate()
                 .prompt(request.prompt().augmentSystemMessage(augmentedSystem))
+                .context(RERANKED_RESULTS_KEY, reranked)
                 .build();
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
+        // 将 reranked results 从 request context 传递到 response context
+        // 注意：request context 会自动传播到 response，这里确保 key 存在
         return response;
     }
 
