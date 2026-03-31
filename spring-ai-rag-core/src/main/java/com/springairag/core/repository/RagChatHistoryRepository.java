@@ -1,5 +1,6 @@
 package com.springairag.core.repository;
 
+import com.springairag.core.util.SimpleJsonUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,7 +41,7 @@ public class RagChatHistoryRepository {
     public void save(String sessionId, String userMessage, String aiResponse,
                      String relatedDocumentIds, Map<String, Object> metadata) {
         try {
-            String metadataJson = metadata != null ? toJson(metadata) : null;
+            String metadataJson = metadata != null ? SimpleJsonUtil.toJson(metadata) : null;
             jdbcTemplate.update(
                     "INSERT INTO rag_chat_history (session_id, user_message, ai_response, related_document_ids, metadata, created_at) " +
                             "VALUES (?, ?, ?, ?, ?::jsonb, ?)",
@@ -69,34 +70,13 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 简单的 Map → JSON 字符串转换（避免引入 Jackson 依赖）
+     * 删除会话的所有历史记录
+     *
+     * @return 删除的记录数
      */
-    private String toJson(Map<String, Object> map) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"").append(escapeJson(entry.getKey())).append("\":");
-            Object value = entry.getValue();
-            if (value == null) {
-                sb.append("null");
-            } else if (value instanceof Number || value instanceof Boolean) {
-                sb.append(value);
-            } else {
-                sb.append("\"").append(escapeJson(value.toString())).append("\"");
-            }
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+    public int deleteBySessionId(String sessionId) {
+        int deleted = jdbcTemplate.update("DELETE FROM rag_chat_history WHERE session_id = ?", sessionId);
+        log.info("Deleted {} chat history records for session: {}", deleted, sessionId);
+        return deleted;
     }
 }

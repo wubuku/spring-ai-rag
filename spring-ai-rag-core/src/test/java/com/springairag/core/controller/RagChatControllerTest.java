@@ -164,10 +164,24 @@ class RagChatControllerTest {
 
     @Test
     void clearHistory_returnsMessage() {
-        ResponseEntity<Map<String, String>> response = controller.clearHistory("session-001");
+        when(historyRepository.deleteBySessionId("session-001")).thenReturn(5);
+
+        ResponseEntity<Map<String, Object>> response = controller.clearHistory("session-001");
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("session-001", response.getBody().get("sessionId"));
-        assertTrue(response.getBody().get("message").contains("暂不支持删除"));
+        assertEquals("会话历史已清空", response.getBody().get("message"));
+        assertEquals(5, response.getBody().get("deletedCount"));
+        verify(historyRepository).deleteBySessionId("session-001");
+    }
+
+    @Test
+    void clearHistory_emptySession_returnsZero() {
+        when(historyRepository.deleteBySessionId("empty-session")).thenReturn(0);
+
+        ResponseEntity<Map<String, Object>> response = controller.clearHistory("empty-session");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(0, response.getBody().get("deletedCount"));
     }
 }

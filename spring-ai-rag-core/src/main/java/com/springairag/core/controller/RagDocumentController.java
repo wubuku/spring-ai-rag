@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.core.retrieval.EmbeddingBatchService;
+import com.springairag.core.util.SimpleJsonUtil;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,7 +50,7 @@ public class RagDocumentController {
         String sql = "INSERT INTO rag_documents (title, content, source, document_type, metadata, created_at) " +
                 "VALUES (?, ?, ?, ?, ?::jsonb, ?) RETURNING id";
 
-        String metadataJson = request.getMetadata() != null ? toJson(request.getMetadata()) : null;
+        String metadataJson = request.getMetadata() != null ? SimpleJsonUtil.toJson(request.getMetadata()) : null;
 
         Long docId = jdbcTemplate.queryForObject(sql, Long.class,
                 request.getTitle(),
@@ -236,38 +237,6 @@ public class RagDocumentController {
         }
         sb.append("]");
         return sb.toString();
-    }
-
-    /**
-     * 简单的 Map → JSON 字符串转换
-     */
-    private String toJson(Map<String, Object> map) {
-        StringBuilder sb = new StringBuilder("{");
-        boolean first = true;
-        for (Map.Entry<String, Object> entry : map.entrySet()) {
-            if (!first) sb.append(",");
-            first = false;
-            sb.append("\"").append(escapeJson(entry.getKey())).append("\":");
-            Object value = entry.getValue();
-            if (value == null) {
-                sb.append("null");
-            } else if (value instanceof Number || value instanceof Boolean) {
-                sb.append(value);
-            } else {
-                sb.append("\"").append(escapeJson(value.toString())).append("\"");
-            }
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-
-    private String escapeJson(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
     }
 
     /**

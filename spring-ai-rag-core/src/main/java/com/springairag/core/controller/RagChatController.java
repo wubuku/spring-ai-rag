@@ -103,13 +103,18 @@ public class RagChatController {
 
     /**
      * 清空会话历史
+     *
+     * <p>删除 rag_chat_history 表中的记录（业务审计表）。
+     * spring_ai_chat_memory 表由 Spring AI ChatMemory 管理，不受此接口影响。
      */
     @DeleteMapping("/history/{sessionId}")
-    public ResponseEntity<Map<String, String>> clearHistory(@PathVariable String sessionId) {
+    public ResponseEntity<Map<String, Object>> clearHistory(@PathVariable String sessionId) {
         log.info("Clearing chat history for session: {}", sessionId);
+        int deleted = historyRepository.deleteBySessionId(sessionId);
         return ResponseEntity.ok(Map.of(
-                "message", "业务审计历史暂不支持删除。spring_ai_chat_memory 由 Spring AI 管理。",
-                "sessionId", sessionId
+                "message", "会话历史已清空",
+                "sessionId", sessionId,
+                "deletedCount", deleted
         ));
     }
 }

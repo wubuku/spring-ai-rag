@@ -108,4 +108,26 @@ class RagChatHistoryRepositoryTest {
 
         assertTrue(results.isEmpty());
     }
+
+    @Test
+    void deleteBySessionId_callsJdbcTemplateAndReturnsCount() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        doReturn(3).when(jdbcTemplate).update(anyString(), any(Object[].class));
+
+        RagChatHistoryRepository repo = new RagChatHistoryRepository(jdbcTemplate);
+        int deleted = repo.deleteBySessionId("session-1");
+
+        assertEquals(3, deleted);
+    }
+
+    @Test
+    void deleteBySessionId_emptySession_returnsZero() {
+        JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+        doReturn(0).when(jdbcTemplate).update(anyString(), any(Object[].class));
+
+        RagChatHistoryRepository repo = new RagChatHistoryRepository(jdbcTemplate);
+        int deleted = repo.deleteBySessionId("non-existent");
+
+        assertEquals(0, deleted);
+    }
 }
