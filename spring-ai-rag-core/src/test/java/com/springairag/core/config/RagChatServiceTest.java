@@ -74,6 +74,7 @@ class RagChatServiceTest {
                 domainExtensionRegistry,
                 promptCustomizerChain,
                 20,
+                null,
                 null
         );
     }
@@ -179,6 +180,7 @@ class RagChatServiceTest {
                 domainExtensionRegistry,
                 promptCustomizerChain,
                 20,
+                null,
                 List.of(mockProvider)
         );
 

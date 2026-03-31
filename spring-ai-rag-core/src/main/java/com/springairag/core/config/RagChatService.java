@@ -9,6 +9,7 @@ import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,7 @@ public class RagChatService {
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensionRegistry;
     private final PromptCustomizerChain promptCustomizerChain;
+    private final RagMetricsService metricsService; // 可选，未引入 actuator 时为 null
 
     public RagChatService(
             ChatClient.Builder chatClientBuilder,
@@ -76,11 +78,14 @@ public class RagChatService {
             PromptCustomizerChain promptCustomizerChain,
             @Value("${rag.memory.max-messages:20}") int maxMessages,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RagMetricsService metricsService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
             List<RagAdvisorProvider> customAdvisorProviders) {
 
         this.historyRepository = historyRepository;
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
+        this.metricsService = metricsService;
 
         // 使用 JDBC 存储，保留最近 N 条消息的窗口
         ChatMemory chatMemory = MessageWindowChatMemory.builder()
@@ -185,7 +190,21 @@ public class RagChatService {
             }
         });
 
-        String answer = spec.call().content();
+        long startTime = System.currentTimeMillis();
+        String answer;
+        try {
+            answer = spec.call().content();
+        } catch (Exception e) {
+            long elapsed = System.currentTimeMillis() - startTime;
+            if (metricsService != null) {
+                metricsService.recordFailure(elapsed);
+            }
+            throw e;
+        }
+        long elapsed = System.currentTimeMillis() - startTime;
+        if (metricsService != null) {
+            metricsService.recordSuccess(elapsed, 0);
+        }
 
         // 保存到业务审计表
         historyRepository.save(sessionId, userMessage, answer, null, metadata);

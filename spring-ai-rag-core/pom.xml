@@ -90,6 +90,13 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Spring Boot Actuator（监控指标 + 健康检查） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Test -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

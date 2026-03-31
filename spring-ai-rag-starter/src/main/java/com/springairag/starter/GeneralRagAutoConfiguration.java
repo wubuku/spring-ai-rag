@@ -4,6 +4,8 @@ import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.EmbeddingModelConfig;
 import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
+import com.springairag.core.metrics.RagMetricsService;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -11,6 +13,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 通用 RAG 服务自动配置
@@ -42,5 +45,25 @@ public class GeneralRagAutoConfiguration {
     @ConditionalOnMissingBean(DomainRagExtension.class)
     public DefaultDomainRagExtension defaultDomainRagExtension() {
         return new DefaultDomainRagExtension();
+    }
+
+    /**
+     * RAG 指标服务（需要 Micrometer / Actuator 在 classpath）
+     */
+    @Bean
+    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnMissingBean(RagMetricsService.class)
+    public RagMetricsService ragMetricsService(MeterRegistry meterRegistry) {
+        return new RagMetricsService(meterRegistry);
+    }
+
+    /**
+     * RAG 健康检查指示器（需要 Actuator 在 classpath）
+     */
+    @Bean("ragService")
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    @ConditionalOnMissingBean(name = "ragService")
+    public Object ragHealthIndicator(JdbcTemplate jdbcTemplate, RagMetricsService ragMetricsService) {
+        return new com.springairag.core.metrics.RagHealthIndicator(jdbcTemplate, ragMetricsService);
     }
 }
