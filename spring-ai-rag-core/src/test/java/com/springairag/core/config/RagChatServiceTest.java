@@ -60,7 +60,8 @@ class RagChatServiceTest {
                 hybridSearchAdvisor,
                 rerankAdvisor,
                 jdbcChatMemoryRepository,
-                historyRepository
+                historyRepository,
+                20
         );
     }
 

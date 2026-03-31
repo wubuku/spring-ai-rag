@@ -43,25 +43,20 @@ public class RagChatService {
     private final ChatClient chatClient;
     private final RagChatHistoryRepository historyRepository;
 
-    @Value("${rag.memory.max-messages:20}")
-    private int maxMessages;
-
     public RagChatService(
             ChatClient.Builder chatClientBuilder,
             QueryRewriteAdvisor queryRewriteAdvisor,
             HybridSearchAdvisor hybridSearchAdvisor,
             RerankAdvisor rerankAdvisor,
             JdbcChatMemoryRepository jdbcChatMemoryRepository,
-            RagChatHistoryRepository historyRepository) {
+            RagChatHistoryRepository historyRepository,
+            @Value("${rag.memory.max-messages:20}") int maxMessages) {
         this.historyRepository = historyRepository;
-
-        // maxMessages 为 0 时（非 Spring 上下文 / 未配置），默认 20
-        int effectiveMaxMessages = maxMessages > 0 ? maxMessages : 20;
 
         // 使用 JDBC 存储，保留最近 N 条消息的窗口
         ChatMemory chatMemory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(jdbcChatMemoryRepository)
-                .maxMessages(effectiveMaxMessages)
+                .maxMessages(maxMessages)
                 .build();
 
         // 构建 ChatClient，配置完整的 Advisor 链
@@ -75,7 +70,7 @@ public class RagChatService {
                 .build();
 
         log.info("RagChatService initialized with {} max messages, advisors: QueryRewrite → HybridSearch → Rerank → ChatMemory",
-                effectiveMaxMessages);
+                maxMessages);
     }
 
     /**
