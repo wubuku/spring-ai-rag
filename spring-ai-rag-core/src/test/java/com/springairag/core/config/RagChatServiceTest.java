@@ -5,14 +5,18 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
+import com.springairag.core.extension.DomainExtensionRegistry;
+import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import reactor.core.publisher.Flux;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -34,6 +38,8 @@ class RagChatServiceTest {
     private RerankAdvisor rerankAdvisor;
     private JdbcChatMemoryRepository jdbcChatMemoryRepository;
     private RagChatHistoryRepository historyRepository;
+    private DomainExtensionRegistry domainExtensionRegistry;
+    private PromptCustomizerChain promptCustomizerChain;
 
     @BeforeEach
     @SuppressWarnings("unchecked")
@@ -48,9 +54,13 @@ class RagChatServiceTest {
         rerankAdvisor = mock(RerankAdvisor.class);
         jdbcChatMemoryRepository = mock(JdbcChatMemoryRepository.class);
         historyRepository = mock(RagChatHistoryRepository.class);
+        domainExtensionRegistry = mock(DomainExtensionRegistry.class);
+        promptCustomizerChain = mock(PromptCustomizerChain.class);
 
-        when(chatClientBuilder.defaultAdvisors(any(Advisor[].class))).thenReturn(chatClientBuilder);
+        when(chatClientBuilder.defaultAdvisors(anyList())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
+        when(domainExtensionRegistry.hasExtensions()).thenReturn(false);
+        when(promptCustomizerChain.hasCustomizers()).thenReturn(false);
     }
 
     private RagChatService createService() {
@@ -61,20 +71,25 @@ class RagChatServiceTest {
                 rerankAdvisor,
                 jdbcChatMemoryRepository,
                 historyRepository,
-                20
+                domainExtensionRegistry,
+                promptCustomizerChain,
+                20,
+                null
         );
     }
 
     @Test
+    @DisplayName("构造函数正确构建 ChatClient")
     void constructor_buildsChatClientWithAdvisors() {
         RagChatService service = createService();
 
-        verify(chatClientBuilder, times(1)).defaultAdvisors(any(Advisor[].class));
+        verify(chatClientBuilder, times(1)).defaultAdvisors(anyList());
         verify(chatClientBuilder, times(1)).build();
         assertNotNull(service);
     }
 
     @Test
+    @DisplayName("chat 方法返回回答并保存历史")
     void chat_returnsAnswerAndSavesHistory() {
         RagChatService service = createService();
 
@@ -87,27 +102,30 @@ class RagChatServiceTest {
         String result = service.chat("你好", "session-1");
 
         assertEquals("AI 回答", result);
-        verify(historyRepository, times(1)).save("session-1", "你好", "AI 回答");
+        verify(historyRepository, times(1)).save(eq("session-1"), eq("你好"), eq("AI 回答"), any(), any());
     }
 
     @Test
+    @DisplayName("chat 带 metadata 保存时包含元数据")
     void chat_withMetadata_savesWithMetadata() {
         RagChatService service = createService();
 
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
         when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
         when(promptSpec.call()).thenReturn(callResponse);
         when(callResponse.content()).thenReturn("回答");
 
         Map<String, Object> metadata = Map.of("source", "test");
-        String result = service.chat("问题", "session-1", metadata);
+        String result = service.chat("问题", "session-1", null, metadata);
 
         assertEquals("回答", result);
-        verify(historyRepository, times(1)).save("session-1", "问题", "回答", null, metadata);
+        verify(historyRepository).save(eq("session-1"), eq("问题"), eq("回答"), any(), eq(metadata));
     }
 
     @Test
+    @DisplayName("chat 从 ChatRequest 构建返回 ChatResponse")
     void chat_fromChatRequest_returnsChatResponse() {
         RagChatService service = createService();
 
@@ -125,6 +143,7 @@ class RagChatServiceTest {
     }
 
     @Test
+    @DisplayName("chatStream 返回 Flux")
     void chatStream_returnsFlux() {
         RagChatService service = createService();
 
@@ -139,5 +158,31 @@ class RagChatServiceTest {
         assertNotNull(result);
         String joined = result.collectList().block().stream().reduce("", String::concat);
         assertEquals("Hello World", joined);
+    }
+
+    @Test
+    @DisplayName("有自定义 RagAdvisorProvider 时也构建成功")
+    void constructor_withCustomAdvisors_buildsSuccessfully() {
+        com.springairag.api.service.RagAdvisorProvider mockProvider = mock(com.springairag.api.service.RagAdvisorProvider.class);
+        org.springframework.ai.chat.client.advisor.api.BaseAdvisor mockAdvisor = mock(org.springframework.ai.chat.client.advisor.api.BaseAdvisor.class);
+        when(mockProvider.getName()).thenReturn("CustomAdvisor");
+        when(mockProvider.getOrder()).thenReturn(5);
+        when(mockProvider.createAdvisor()).thenReturn(mockAdvisor);
+
+        RagChatService service = new RagChatService(
+                chatClientBuilder,
+                queryRewriteAdvisor,
+                hybridSearchAdvisor,
+                rerankAdvisor,
+                jdbcChatMemoryRepository,
+                historyRepository,
+                domainExtensionRegistry,
+                promptCustomizerChain,
+                20,
+                List.of(mockProvider)
+        );
+
+        assertNotNull(service);
+        verify(chatClientBuilder).defaultAdvisors(anyList());
     }
 }

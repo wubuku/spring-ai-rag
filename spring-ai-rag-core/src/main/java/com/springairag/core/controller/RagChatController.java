@@ -19,6 +19,7 @@ import java.util.Map;
  * RAG 聊天控制器
  *
  * <p>提供非流式和流式（SSE）两种问答接口，以及会话历史管理。
+ * 支持通过 domainId 参数选择领域扩展。
  */
 @RestController
 @RequestMapping("/api/v1/rag/chat")
@@ -36,10 +37,13 @@ public class RagChatController {
 
     /**
      * RAG 问答（非流式）
+     *
+     * <p>请求体中可选 domainId 字段指定领域扩展。
      */
     @PostMapping("/ask")
     public ResponseEntity<ChatResponse> ask(@RequestBody ChatRequest request) {
-        log.info("RAG ask: sessionId={}, message={}", request.getSessionId(),
+        log.info("RAG ask: sessionId={}, domain={}, message={}",
+                request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         ChatResponse response = ragChatService.chat(request);
@@ -51,12 +55,13 @@ public class RagChatController {
      */
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@RequestBody ChatRequest request) {
-        log.info("RAG stream: sessionId={}, message={}", request.getSessionId(),
+        log.info("RAG stream: sessionId={}, domain={}, message={}",
+                request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         SseEmitter emitter = new SseEmitter(0L); // 无超时
 
-        ragChatService.chatStream(request.getMessage(), request.getSessionId())
+        ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
                 .subscribe(
                         chunk -> {
                             try {
@@ -95,9 +100,7 @@ public class RagChatController {
      */
     @DeleteMapping("/history/{sessionId}")
     public ResponseEntity<Map<String, String>> clearHistory(@PathVariable String sessionId) {
-        // 注意：只清理业务审计表，spring_ai_chat_memory 由 Spring AI 管理
         log.info("Clearing chat history for session: {}", sessionId);
-        // RagChatHistoryRepository 暂无 delete 方法，返回提示
         return ResponseEntity.ok(Map.of(
                 "message", "业务审计历史暂不支持删除。spring_ai_chat_memory 由 Spring AI 管理。",
                 "sessionId", sessionId

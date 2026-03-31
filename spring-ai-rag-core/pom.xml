@@ -99,11 +99,6 @@
     </dependencies>
 
     <build>
-        <plugins>
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
+        <!-- Core 是库模块，不用 spring-boot-maven-plugin，否则打包成 fat JAR 其他模块无法引用 -->
     </build>
 </project>
