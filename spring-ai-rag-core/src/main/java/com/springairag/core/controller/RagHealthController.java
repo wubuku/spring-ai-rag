@@ -1,0 +1,58 @@
+package com.springairag.core.controller;
+
+import org.springframework.http.ResponseEntity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 健康检查控制器
+ */
+@RestController
+@RequestMapping("/api/v1/rag")
+public class RagHealthController {
+
+    private final JdbcTemplate jdbcTemplate;
+
+    public RagHealthController(JdbcTemplate jdbcTemplate) {
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    /**
+     * 健康检查
+     */
+    @GetMapping("/health")
+    public ResponseEntity<Map<String, Object>> health() {
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "UP");
+        result.put("timestamp", Instant.now().toString());
+
+        // 检查数据库连接
+        try {
+            jdbcTemplate.queryForObject("SELECT 1", Integer.class);
+            result.put("database", "UP");
+        } catch (Exception e) {
+            result.put("database", "DOWN");
+            result.put("databaseError", e.getMessage());
+        }
+
+        // 检查表数量
+        try {
+            Integer docCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM rag_documents", Integer.class);
+            Integer embCount = jdbcTemplate.queryForObject(
+                    "SELECT COUNT(*) FROM rag_embeddings", Integer.class);
+            result.put("documents", docCount);
+            result.put("embeddings", embCount);
+        } catch (Exception e) {
+            result.put("tablesError", e.getMessage());
+        }
+
+        return ResponseEntity.ok(result);
+    }
+}
