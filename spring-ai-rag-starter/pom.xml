@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>com.springairag</groupId>
+        <artifactId>spring-ai-rag</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>spring-ai-rag-starter</artifactId>
+    <name>Spring AI RAG - Starter</name>
+    <description>Spring Boot Starter 自动配置（引入即可使用完整 RAG 能力）</description>
+
+    <dependencies>
+        <!-- 本项目 Core 模块 -->
+        <dependency>
+            <groupId>com.springairag</groupId>
+            <artifactId>spring-ai-rag-core</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- 本项目 Documents 模块 -->
+        <dependency>
+            <groupId>com.springairag</groupId>
+            <artifactId>spring-ai-rag-documents</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Spring Boot Autoconfigure（提供 @ConditionalOnProperty 等注解） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+
+        <!-- Spring Boot Configuration Processor（生成配置元数据） -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-configuration-processor</artifactId>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+</project>

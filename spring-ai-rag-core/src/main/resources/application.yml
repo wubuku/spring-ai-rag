@@ -1,0 +1,115 @@
+# ============================================
+# Spring AI RAG 服务配置
+# ============================================
+
+spring:
+  application:
+    name: spring-ai-rag
+
+  # 允许 Bean 定义覆盖（自定义配置 Bean 覆盖自动配置）
+  main:
+    allow-bean-definition-overriding: true
+
+  # 排除 PgVectorStore 自动配置（由 VectorStoreConfig 手动创建 Bean）
+  # PostgreSQL profile 激活时通过 application-postgresql.yml 重新启用
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+
+  # 数据源
+  datasource:
+    url: jdbc:postgresql://localhost:5432/general_rag
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: ${DB_PASSWORD:postgres}
+
+  # Flyway 数据库迁移
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # Spring AI OpenAI / OpenAI 兼容模型配置
+  # DeepSeek 示例：base-url=https://api.deepseek.com/v1, model=deepseek-chat
+  # 智谱示例：base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
+  openai:
+    api-key: ${OPENAI_API_KEY:dummy}
+    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+    chat:
+      # 禁用自动配置！由 SpringAiConfig 手动创建 ChatModel Bean
+      enabled: false
+      options:
+        model: ${OPENAI_MODEL:deepseek-chat}
+        temperature: ${OPENAI_TEMPERATURE:0.7}
+
+  # Spring AI Anthropic 模型配置（可选）
+  anthropic:
+    api-key: ${ANTHROPIC_API_KEY:dummy}
+    base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+    chat:
+      enabled: false
+      options:
+        model: ${ANTHROPIC_MODEL:claude-3-5-sonnet-20241022}
+        temperature: ${ANTHROPIC_TEMPERATURE:0.7}
+        max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
+
+  # Spring AI Chat Memory JDBC 配置
+  # 自动创建 spring_ai_chat_memory 表
+  ai:
+    chat:
+      memory:
+        repository:
+          jdbc:
+            initialize-schema: always
+            platform: postgresql
+
+# ============================================
+# 自定义 LLM 提供者开关
+# ============================================
+app:
+  llm:
+    provider: ${LLM_PROVIDER:openai}
+
+# ============================================
+# 嵌入模型配置（独立于 Chat provider，始终生效）
+# ============================================
+rag:
+  embedding:
+    api-key: ${SILICONFLOW_API_KEY:}
+    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn/v1}
+    model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
+    dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+
+  # RAG 检索配置
+  retrieval:
+    default-max-results: 10
+    min-score-threshold: 0.5
+    hybrid-search:
+      enabled: true
+      vector-weight: 0.5
+      fulltext-weight: 0.5
+
+  # 文档分块配置
+  chunk:
+    default-chunk-size: 1000
+    default-chunk-overlap: 100
+
+  # 对话记忆配置
+  memory:
+    enabled: true
+    type: jdbc
+    max-messages: 20
+
+# ============================================
+# 服务器配置
+# ============================================
+server:
+  port: 8081
+
+# ============================================
+# 日志配置
+# ============================================
+logging:
+  level:
+    com.springairag: INFO
+    org.springframework.ai: INFO
