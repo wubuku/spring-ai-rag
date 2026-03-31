@@ -128,7 +128,7 @@ public class HybridRetrieverService {
                         placeholders);
 
                 List<Object> args = new ArrayList<>(documentIds);
-                args.add(vectorToString(queryVector));
+                args.add(RetrievalUtils.vectorToString(queryVector));
                 args.add(limit);
                 rows = jdbcTemplate.queryForList(sql, args.toArray());
             } else {
@@ -136,7 +136,7 @@ public class HybridRetrieverService {
                         "FROM rag_embeddings " +
                         "ORDER BY embedding <=> ?::vector " +
                         "LIMIT ?";
-                rows = jdbcTemplate.queryForList(sql, vectorToString(queryVector), limit);
+                rows = jdbcTemplate.queryForList(sql, RetrievalUtils.vectorToString(queryVector), limit);
             }
 
             final float[] fQueryVector = queryVector;
@@ -147,8 +147,8 @@ public class HybridRetrieverService {
                         return !excludeIds.contains(id);
                     })
                     .map(row -> {
-                        float[] emb = parseVector(row.get("embedding"));
-                        double score = cosineSimilarity(fQueryVector, emb);
+                        float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
+                        double score = RetrievalUtils.cosineSimilarity(fQueryVector, emb);
                         return toRetrievalResult(row, score, score, 0.0);
                     })
                     .collect(Collectors.toList());
@@ -226,57 +226,7 @@ public class HybridRetrieverService {
             List<RetrievalResult> vectorResults,
             List<RetrievalResult> fulltextResults,
             int limit, float vWeight, float fWeight) {
-
-        // 归一化
-        float maxVector = vectorResults.isEmpty() ? 1f :
-                (float) vectorResults.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
-        float maxFulltext = fulltextResults.isEmpty() ? 1f :
-                (float) fulltextResults.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
-
-        // 合并分数（取每个 chunk ID 的最高分）
-        Map<String, MergedEntry> merged = new LinkedHashMap<>();
-
-        for (RetrievalResult r : vectorResults) {
-            String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalizedScore = (float) (r.getScore() / maxVector) * vWeight;
-            MergedEntry entry = merged.get(key);
-            if (entry == null) {
-                entry = new MergedEntry(r);
-                merged.put(key, entry);
-            }
-            entry.fusedScore = Math.max(entry.fusedScore, normalizedScore);
-            entry.vectorScore = Math.max(entry.vectorScore, (float) r.getScore());
-        }
-
-        for (RetrievalResult r : fulltextResults) {
-            String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalizedScore = (float) ((r.getScore() / maxFulltext) * fWeight);
-            MergedEntry entry = merged.get(key);
-            if (entry == null) {
-                entry = new MergedEntry(r);
-                merged.put(key, entry);
-            }
-            entry.fusedScore = Math.max(entry.fusedScore, normalizedScore);
-            entry.fulltextScore = Math.max(entry.fulltextScore, (float) r.getScore());
-        }
-
-        // 按融合分数降序
-        return merged.values().stream()
-                .sorted((a, b) -> Float.compare(b.fusedScore, a.fusedScore))
-                .limit(limit)
-                .map(e -> {
-                    RetrievalResult r = e.original;
-                    RetrievalResult out = new RetrievalResult();
-                    out.setDocumentId(r.getDocumentId());
-                    out.setChunkText(r.getChunkText());
-                    out.setScore(e.fusedScore);
-                    out.setVectorScore(e.vectorScore);
-                    out.setFulltextScore(e.fulltextScore);
-                    out.setChunkIndex(r.getChunkIndex());
-                    out.setMetadata(r.getMetadata());
-                    return out;
-                })
-                .collect(Collectors.toList());
+        return RetrievalUtils.fuseResults(vectorResults, fulltextResults, limit, vWeight, fWeight);
     }
 
     private RetrievalResult toRetrievalResult(Map<String, Object> row, double score,
@@ -295,57 +245,4 @@ public class HybridRetrieverService {
         return r;
     }
 
-    private String vectorToString(float[] vector) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < vector.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(vector[i]);
-        }
-        sb.append("]");
-        return sb.toString();
-    }
-
-    private float[] parseVector(Object vectorObj) {
-        if (vectorObj instanceof float[]) return (float[]) vectorObj;
-        if (vectorObj instanceof double[]) {
-            double[] d = (double[]) vectorObj;
-            float[] f = new float[d.length];
-            for (int i = 0; i < d.length; i++) f[i] = (float) d[i];
-            return f;
-        }
-        if (vectorObj instanceof String) {
-            String s = ((String) vectorObj).replaceAll("[\\[\\] ]", "");
-            String[] parts = s.split(",");
-            float[] f = new float[parts.length];
-            for (int i = 0; i < parts.length; i++) f[i] = Float.parseFloat(parts[i]);
-            return f;
-        }
-        return new float[0];
-    }
-
-    private double cosineSimilarity(float[] a, float[] b) {
-        if (a.length != b.length) return 0.0;
-        double dot = 0.0, normA = 0.0, normB = 0.0;
-        for (int i = 0; i < a.length; i++) {
-            dot += a[i] * b[i];
-            normA += a[i] * a[i];
-            normB += b[i] * b[i];
-        }
-        double denom = Math.sqrt(normA) * Math.sqrt(normB);
-        return denom == 0 ? 0.0 : dot / denom;
-    }
-
-    private static class MergedEntry {
-        final RetrievalResult original;
-        float fusedScore;
-        float vectorScore;
-        float fulltextScore;
-
-        MergedEntry(RetrievalResult r) {
-            this.original = r;
-            this.fusedScore = 0f;
-            this.vectorScore = 0f;
-            this.fulltextScore = 0f;
-        }
-    }
 }
