@@ -2,7 +2,9 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 检索算法工具类
