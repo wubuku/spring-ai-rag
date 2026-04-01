@@ -22,10 +22,10 @@
 | 1 | ✅ API 兼容性适配层 | adapter/ |
 | 2 | ✅ 查询改写同义词 | QueryRewritingService.java |
 | 3 | ✅ 检索日志表 | V3__add_retrieval_logs.sql |
-| 4 | VectorStore.add() 简化嵌入 | RagDocumentController.java |
-| 5 | RagProperties 统一配置 | config/RagProperties.java |
-| 6 | 业务异常类 | exception/ |
-| 7 | 异步异常处理 | config/AsyncConfig.java |
+| 4 | ✅ VectorStore.add() 简化嵌入 | RagDocumentController.java |
+| 5 | ✅ RagProperties 统一配置 | config/RagProperties.java |
+| 6 | ✅ 业务异常类 | exception/ |
+| 7 | ⏳ 异步异常处理 | config/AsyncConfig.java |
 
 ## 铁律
 

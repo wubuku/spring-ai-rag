@@ -47,6 +47,7 @@ public class RagProperties {
     private final Rerank rerank = new Rerank();
     private final Memory memory = new Memory();
     private final Chunk chunk = new Chunk();
+    private final Async async = new Async();
 
     public Embedding getEmbedding() {
         return embedding;
@@ -70,6 +71,10 @@ public class RagProperties {
 
     public Chunk getChunk() {
         return chunk;
+    }
+
+    public Async getAsync() {
+        return async;
     }
 
     /**
@@ -258,6 +263,39 @@ public class RagProperties {
 
         public void setDefaultChunkOverlap(int defaultChunkOverlap) {
             this.defaultChunkOverlap = defaultChunkOverlap;
+        }
+    }
+
+    /**
+     * 异步线程池配置
+     */
+    public static class Async {
+        private int corePoolSize = 4;
+        private int maxPoolSize = 16;
+        private int queueCapacity = 100;
+
+        public int getCorePoolSize() {
+            return corePoolSize;
+        }
+
+        public void setCorePoolSize(int corePoolSize) {
+            this.corePoolSize = corePoolSize;
+        }
+
+        public int getMaxPoolSize() {
+            return maxPoolSize;
+        }
+
+        public void setMaxPoolSize(int maxPoolSize) {
+            this.maxPoolSize = maxPoolSize;
+        }
+
+        public int getQueueCapacity() {
+            return queueCapacity;
+        }
+
+        public void setQueueCapacity(int queueCapacity) {
+            this.queueCapacity = queueCapacity;
         }
     }
 }

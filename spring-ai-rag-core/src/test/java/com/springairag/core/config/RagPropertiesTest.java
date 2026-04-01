@@ -46,6 +46,11 @@ class RagPropertiesTest {
         // Chunk defaults
         assertEquals(1000, props.getChunk().getDefaultChunkSize());
         assertEquals(100, props.getChunk().getDefaultChunkOverlap());
+
+        // Async defaults
+        assertEquals(4, props.getAsync().getCorePoolSize());
+        assertEquals(16, props.getAsync().getMaxPoolSize());
+        assertEquals(100, props.getAsync().getQueueCapacity());
     }
 
     @Test
