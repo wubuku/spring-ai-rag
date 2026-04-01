@@ -110,12 +110,13 @@ public class RerankAdvisor implements BaseAdvisor {
 
         log.info("[RerankAdvisor] 重排完成：{} → {} 条结果", results.size(), reranked.size());
 
-        // 构建上下文并注入系统消息
+        // 构建上下文并注入用户消息（不用 augmentSystemMessage，因为部分 API 不支持多个 system 消息）
         String context = buildContextFromResults(reranked);
-        String augmentedSystem = systemContextPrefix + context;
+        String contextPrefix = systemContextPrefix + context + "\n\n基于以上资料回答以下问题：\n\n";
 
         return request.mutate()
-                .prompt(request.prompt().augmentSystemMessage(augmentedSystem))
+                .prompt(request.prompt().augmentUserMessage(
+                        userMsg -> new org.springframework.ai.chat.messages.UserMessage(contextPrefix + userMsg.getText())))
                 .context(RERANKED_RESULTS_KEY, reranked)
                 .build();
     }

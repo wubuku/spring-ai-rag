@@ -62,7 +62,7 @@ class RerankAdvisorTest {
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasContextMessage = messages.stream()
                 .anyMatch(m -> m.getText().contains("参考资料") || m.getText().contains("Spring AI"));
-        assertTrue(hasContextMessage, "应该注入包含参考资料的系统消息");
+        assertTrue(hasContextMessage, "应该注入包含参考资料的用户消息");
 
         // 验证 RERANKED_RESULTS_KEY 被设置到 context，供 RagChatService 提取 sources
         @SuppressWarnings("unchecked")
