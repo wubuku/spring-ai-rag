@@ -130,3 +130,129 @@
 | P2 | Pipeline 可观测性 | MaxKB4j AbsStep | `advisor/` 各 Advisor |
 | P2 | A/B 实验框架 | dermai-rag-service AbTestService | 新增 |
 | P2 | 用户反馈端点 | dermai-rag-service | 新增 Controller |
+
+---
+
+## 5. 文档处理
+
+### 当前实现
+- **分块**: HierarchicalTextChunker（从 dermai-rag-service 迁移），支持 Markdown 标题/段落/句子三级分块
+- **清洗**: TextCleaner（从 dermai-rag-service 迁移）
+- **嵌入**: EmbeddingBatchService，按 batchSize 分批调用 EmbeddingModel
+- **存储**: 通过 JdbcTemplate INSERT 到 rag_embeddings（vector 列用 `?::vector` 转换）
+
+### 参考实现
+- **dermai-rag-service**: 同样的 HierarchicalTextChunker + TextCleaner + EmbeddingBatchService
+- **spring-ai-skills-demo**: 直接用 Spring AI 的 `VectorStore.add(List<Document>)` 自动处理嵌入和存储
+
+### 差距
+| 差距 | 严重度 |
+|------|--------|
+| 我们手动调用 EmbeddingBatchService + JdbcTemplate INSERT，spring-ai-skills-demo 直接用 VectorStore.add() 一行搞定 | P1 |
+| EmbeddingBatchService 缺少进度回调的实际使用（ProgressCallback 接口存在但 Controller 没传） | P2 |
+| 文档内容哈希去重逻辑缺失（content_hash 字段存在但未使用） | P2 |
+
+### 改进建议
+- **P1**: 参考 spring-ai-skills-demo，用 `PgVectorStore.add(documents)` 替代手动 JdbcTemplate INSERT，简化代码
+- **P2**: 文档上传时计算 content_hash，重复文档跳过嵌入
+- **P2**: Embed 端点暴露 SSE 进度流，前端可实时看到进度
+
+---
+
+## 6. 配置管理
+
+### 当前实现
+- **LLM**: `application.yml` 中 `spring.ai.openai.*` / `spring.ai.anthropic.*`，通过 `app.llm.provider` 切换
+- **嵌入**: `siliconflow.*` 自定义前缀
+- **数据库**: `spring.datasource.*`，环境变量 `${POSTGRES_*}`
+- **业务配置**: `rag.*` 自定义前缀（retrieval/chunk/memory）
+- **Starter**: `GeneralRagProperties` + `@ConfigurationProperties(prefix="general.rag")`
+
+### 参考实现
+- **dermai-rag-service**: `@ConfigurationProperties(prefix="rag.alert.notification")` 用于告警配置，`@Value("${rag.async.*}")` 用于线程池配置，`@Value("${rag.security.api-key}")` 用于 API 认证
+- **spring-ai-skills-demo**: 用 `siliconflow.*` 前缀 + `@Value` 注入，和我们类似
+
+### 差距
+| 差距 | 严重度 |
+|------|--------|
+| 我们的业务配置分散在各处（@Value），没有统一的 ConfigurationProperties 类 | P1 |
+| 没有参考 dermai-rag-service 的 NotificationProperties（告警通知配置） | P2 |
+| 没有 API Key 认证（dermai-rag-service 有 ApiKeyAuthFilter） | P2 |
+
+### 改进建议
+- **P1**: 创建 `RagProperties` ConfigurationProperties 类，统一管理 rag.* 配置
+- **P2**: 参考 dermai-rag-service，添加 API Key 认证过滤器
+- **P2**: 参考 dermai-rag-service 的 AsyncConfig，配置专用线程池参数
+
+---
+
+## 7. 错误处理
+
+### 当前实现
+- **GlobalExceptionHandler**: 处理 6 种异常（400/404/405/500）
+- **Controller**: 用 `ResponseEntity` 返回错误
+- **Service**: try-catch + log.error
+
+### 参考实现
+- **dermai-rag-service**: GlobalExceptionHandler + `CustomAsyncExceptionHandler`（异步异常处理）
+- 具体异常类型：`InvalidRequestException`, `ResourceNotFoundException`, `EmbeddingGenerationException`
+
+### 差距
+| 差距 | 严重度 |
+|------|--------|
+| 缺少业务自定义异常类（全部用通用 RuntimeException） | P1 |
+| 缺少异步异常处理（EmbeddingBatchService 异步调用无异常捕获） | P1 |
+| 错误响应格式不统一（有的返回 Map，有的返回 String） | P2 |
+
+### 改进建议
+- **P1**: 创建业务异常类：`DocumentNotFoundException`, `EmbeddingException`, `RetrievalException`
+- **P1**: 参考 dermai-rag-service 的 `CustomAsyncExceptionHandler`，添加异步异常处理
+- **P2**: 统一错误响应格式 `{"code": "ERROR_CODE", "message": "...", "details": "..."}`
+
+---
+
+## 8. API 设计
+
+### 当前实现
+- 路径：`/api/v1/rag/*`（带版本号）
+- 端点：chat/ask, chat/stream, chat/history, documents CRUD, documents/{id}/embed, search, health
+- 文档：SpringDoc OpenAPI (Swagger UI)
+
+### 参考实现
+- **dermai-rag-service**: 路径 `/api/rag/*`（无版本号），端点更多（alerts, evaluations, ab-experiments）
+- **spring-ai-skills-demo**: 路径 `/api/agent/*`，更简单
+
+### 差距
+| 差距 | 严重度 |
+|------|--------|
+| 缺少 /feedback 端点（用户反馈） | P2 |
+| 缺少 /evaluations 端点（检索质量评估） | P2 |
+| 缺少文档批量操作端点 | P2 |
+
+### 改进建议
+- **P2**: 添加 `POST /api/v1/rag/feedback` 收集用户对回答质量的评分
+- **P2**: 添加 `GET /api/v1/rag/evaluations` 查询检索质量指标
+- **P2**: 添加 `POST /api/v1/rag/documents/batch` 批量上传文档
+
+---
+
+## 完整改进待办清单
+
+| 优先级 | 改进项 | 参考来源 | 文件 |
+|--------|--------|---------|------|
+| P1 | RagEmbedding 添加 chunk_index 字段 | dermai-rag-service | `entity/RagEmbedding.java` |
+| P1 | API 兼容性适配层（多 system 消息） | dermai-rag-service ApiClientService | 新增 adapter/ |
+| P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` |
+| P1 | 添加检索日志表 | dermai-rag-service V3 | `db/migration/V3__add_retrieval_logs.sql` |
+| P1 | 用 VectorStore.add() 简化嵌入存储 | spring-ai-skills-demo | `controller/RagDocumentController.java` |
+| P1 | 创建 RagProperties 统一配置类 | dermai-rag-service | 新增 config/RagProperties.java |
+| P1 | 创建业务异常类 | dermai-rag-service | 新增 exception/ |
+| P1 | 异步异常处理 | dermai-rag-service AsyncConfig | 新增 config/AsyncConfig.java |
+| P2 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 |
+| P2 | Pipeline 可观测性 | MaxKB4j AbsStep | advisor/ 各 Advisor |
+| P2 | A/B 实验框架 | dermai-rag-service | 新增 |
+| P2 | 用户反馈端点 | dermai-rag-service | 新增 Controller |
+| P2 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
+| P2 | 统一错误响应格式 | dermai-rag-service | GlobalExceptionHandler |
+| P2 | 文档内容哈希去重 | dermai-rag-service | controller/RagDocumentController |
+| P2 | 文档批量操作端点 | — | controller/RagDocumentController |
