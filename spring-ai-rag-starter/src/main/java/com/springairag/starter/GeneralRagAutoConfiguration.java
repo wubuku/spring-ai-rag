@@ -6,6 +6,7 @@ import com.springairag.core.config.EmbeddingModelConfig;
 import com.springairag.core.config.PerformanceConfig;
 import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -14,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
@@ -62,6 +64,19 @@ public class GeneralRagAutoConfiguration {
     @ConditionalOnMissingBean(RagMetricsService.class)
     public RagMetricsService ragMetricsService(MeterRegistry meterRegistry) {
         return new RagMetricsService(meterRegistry);
+    }
+
+    /**
+     * API Key 认证过滤器
+     */
+    @Bean
+    public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(RagProperties properties) {
+        RagProperties.Security security = properties.getSecurity();
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(security.getApiKey(), security.isEnabled());
+        FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(1);
+        return registration;
     }
 
     /**

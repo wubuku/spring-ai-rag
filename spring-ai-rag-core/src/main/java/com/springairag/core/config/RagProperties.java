@@ -48,6 +48,7 @@ public class RagProperties {
     private final Memory memory = new Memory();
     private final Chunk chunk = new Chunk();
     private final Async async = new Async();
+    private final Security security = new Security();
 
     public Embedding getEmbedding() {
         return embedding;
@@ -75,6 +76,10 @@ public class RagProperties {
 
     public Async getAsync() {
         return async;
+    }
+
+    public Security getSecurity() {
+        return security;
     }
 
     /**
@@ -296,6 +301,38 @@ public class RagProperties {
 
         public void setQueueCapacity(int queueCapacity) {
             this.queueCapacity = queueCapacity;
+        }
+    }
+
+    /**
+     * 安全认证配置
+     *
+     * <p>配置示例：
+     * <pre>
+     * rag:
+     *   security:
+     *     api-key: ${RAG_API_KEY:}
+     *     enabled: false
+     * </pre>
+     */
+    public static class Security {
+        private String apiKey = "";
+        private boolean enabled = false;
+
+        public String getApiKey() {
+            return apiKey;
+        }
+
+        public void setApiKey(String apiKey) {
+            this.apiKey = apiKey;
+        }
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
         }
     }
 }
