@@ -129,17 +129,23 @@ public class RagDocumentController {
     }
 
     /**
-     * 列出文档（分页）
+     * 列出文档（分页，支持过滤）
      */
-    @Operation(summary = "列出文档", description = "分页查询文档列表，按创建时间倒序。")
+    @Operation(summary = "列出文档", description = "分页查询文档列表，支持按标题/类型/状态过滤，按创建时间倒序。")
     @GetMapping
     public ResponseEntity<Map<String, Object>> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) String documentType,
+            @RequestParam(required = false) String processingStatus,
+            @RequestParam(required = false) Boolean enabled) {
 
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var pageResult = documentRepository.findAll(pageable);
+
+        var pageResult = documentRepository.searchDocuments(
+                title, documentType, processingStatus, enabled, pageable);
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
                 .map(this::documentToMap)
@@ -150,6 +156,28 @@ public class RagDocumentController {
                 "total", pageResult.getTotalElements(),
                 "offset", offset,
                 "limit", limit
+        ));
+    }
+
+    /**
+     * 文档统计信息
+     */
+    @Operation(summary = "文档统计", description = "获取各处理状态的文档数量统计。")
+    @GetMapping("/stats")
+    public ResponseEntity<Map<String, Object>> getDocumentStats() {
+        List<Object[]> statusCounts = documentRepository.countByProcessingStatus();
+        Map<String, Long> counts = new HashMap<>();
+        long total = 0;
+        for (Object[] row : statusCounts) {
+            String status = (String) row[0];
+            long count = (Long) row[1];
+            counts.put(status != null ? status : "UNKNOWN", count);
+            total += count;
+        }
+
+        return ResponseEntity.ok(Map.of(
+                "total", total,
+                "byStatus", counts
         ));
     }
 
