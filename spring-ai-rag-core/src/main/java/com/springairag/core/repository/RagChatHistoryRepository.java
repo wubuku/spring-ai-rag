@@ -1,6 +1,7 @@
 package com.springairag.core.repository;
 
-import com.springairag.core.util.SimpleJsonUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,6 +22,7 @@ import java.util.Map;
 public class RagChatHistoryRepository {
 
     private static final Logger log = LoggerFactory.getLogger(RagChatHistoryRepository.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -41,7 +43,13 @@ public class RagChatHistoryRepository {
     public void save(String sessionId, String userMessage, String aiResponse,
                      String relatedDocumentIds, Map<String, Object> metadata) {
         try {
-            String metadataJson = metadata != null ? SimpleJsonUtil.toJson(metadata) : null;
+            String metadataJson;
+            try {
+                metadataJson = metadata != null ? objectMapper.writeValueAsString(metadata) : null;
+            } catch (JsonProcessingException e) {
+                log.warn("Failed to serialize metadata to JSON, saving as null", e);
+                metadataJson = null;
+            }
             jdbcTemplate.update(
                     "INSERT INTO rag_chat_history (session_id, user_message, ai_response, related_document_ids, metadata, created_at) " +
                             "VALUES (?, ?, ?, ?, ?::jsonb, ?)",

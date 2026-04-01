@@ -48,6 +48,12 @@
             <artifactId>spring-boot-starter-jdbc</artifactId>
         </dependency>
 
+        <!-- Spring Boot JPA -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
         <!-- Spring AI OpenAI 库（不含自动配置，由 SpringAiConfig 手动管理） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

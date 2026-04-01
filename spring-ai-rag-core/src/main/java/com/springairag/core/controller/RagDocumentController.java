@@ -1,13 +1,14 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.retrieval.EmbeddingBatchService;
-import com.springairag.core.util.SimpleJsonUtil;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -37,6 +38,7 @@ import java.util.Map;
 public class RagDocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingBatchService embeddingBatchService;
@@ -59,7 +61,13 @@ public class RagDocumentController {
         String sql = "INSERT INTO rag_documents (title, content, source, document_type, metadata, created_at) " +
                 "VALUES (?, ?, ?, ?, ?::jsonb, ?) RETURNING id";
 
-        String metadataJson = request.getMetadata() != null ? SimpleJsonUtil.toJson(request.getMetadata()) : null;
+        String metadataJson;
+        try {
+            metadataJson = request.getMetadata() != null ? objectMapper.writeValueAsString(request.getMetadata()) : null;
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to serialize metadata to JSON, saving as null", e);
+            metadataJson = null;
+        }
 
         Long docId = jdbcTemplate.queryForObject(sql, Long.class,
                 request.getTitle(),
@@ -248,41 +256,4 @@ public class RagDocumentController {
         return sb.toString();
     }
 
-    /**
-     * 文档请求体
-     */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "文档创建/更新请求")
-    public static class DocumentRequest {
-        @NotBlank(message = "文档标题不能为空")
-        @io.swagger.v3.oas.annotations.media.Schema(description = "文档标题", example = "产品说明书", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
-        private String title;
-
-        @NotBlank(message = "文档内容不能为空")
-        @io.swagger.v3.oas.annotations.media.Schema(description = "文档正文内容", example = "本文档介绍产品的使用方法...", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
-        private String content;
-
-        @io.swagger.v3.oas.annotations.media.Schema(description = "文档来源标识", example = "manual-upload")
-        private String source;
-
-        @io.swagger.v3.oas.annotations.media.Schema(description = "文档类型", example = "markdown")
-        private String documentType;
-
-        @io.swagger.v3.oas.annotations.media.Schema(description = "附加元数据（JSON 对象）")
-        private Map<String, Object> metadata;
-
-        public String getTitle() { return title; }
-        public void setTitle(String title) { this.title = title; }
-
-        public String getContent() { return content; }
-        public void setContent(String content) { this.content = content; }
-
-        public String getSource() { return source; }
-        public void setSource(String source) { this.source = source; }
-
-        public String getDocumentType() { return documentType; }
-        public void setDocumentType(String documentType) { this.documentType = documentType; }
-
-        public Map<String, Object> getMetadata() { return metadata; }
-        public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
-    }
 }

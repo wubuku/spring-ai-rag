@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -79,7 +80,7 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(eq("query"), eq(List.of(1L, 2L)), isNull(), eq(5), any(RetrievalConfig.class)))
                 .thenReturn(List.of(r1));
 
-        RagSearchController.SearchRequest req = new RagSearchController.SearchRequest();
+        SearchRequest req = new SearchRequest();
         req.setQuery("query");
         req.setDocumentIds(List.of(1L, 2L));
         RetrievalConfig config = RetrievalConfig.builder().maxResults(5).build();

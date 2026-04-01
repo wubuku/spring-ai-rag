@@ -2,11 +2,11 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.NotBlank;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -97,28 +97,4 @@ public class RagSearchController {
         return ResponseEntity.ok(results);
     }
 
-    /**
-     * 检索请求体
-     */
-    @io.swagger.v3.oas.annotations.media.Schema(description = "检索请求参数")
-    public static class SearchRequest {
-        @NotBlank(message = "查询文本不能为空")
-        @io.swagger.v3.oas.annotations.media.Schema(description = "查询文本", example = "Spring AI 是什么？", requiredMode = io.swagger.v3.oas.annotations.media.Schema.RequiredMode.REQUIRED)
-        private String query;
-
-        @io.swagger.v3.oas.annotations.media.Schema(description = "限定文档 ID 列表（为空则检索全部）", example = "[1, 2, 3]")
-        private List<Long> documentIds;
-
-        @io.swagger.v3.oas.annotations.media.Schema(description = "检索配置参数")
-        private RetrievalConfig config;
-
-        public String getQuery() { return query; }
-        public void setQuery(String query) { this.query = query; }
-
-        public List<Long> getDocumentIds() { return documentIds; }
-        public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
-
-        public RetrievalConfig getConfig() { return config; }
-        public void setConfig(RetrievalConfig config) { this.config = config; }
-    }
 }

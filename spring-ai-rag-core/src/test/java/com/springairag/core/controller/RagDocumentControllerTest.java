@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.DocumentRequest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.springairag.core.retrieval.EmbeddingBatchService;
@@ -34,7 +35,7 @@ class RagDocumentControllerTest {
     void createDocument_returnsId() {
         doReturn(42L).when(jdbcTemplate).queryForObject(anyString(), eq(Long.class), any(Object[].class));
 
-        RagDocumentController.DocumentRequest req = new RagDocumentController.DocumentRequest();
+        DocumentRequest req = new DocumentRequest();
         req.setTitle("测试文档");
         req.setContent("这是测试内容");
         req.setSource("unit-test");

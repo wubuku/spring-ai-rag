@@ -73,4 +73,62 @@ class ChatDtoTest {
         assertEquals(0.92, result.getScore(), 0.001);
         assertEquals(3, result.getChunkIndex());
     }
+
+    @Test
+    void documentRequest_defaultConstructor() {
+        DocumentRequest req = new DocumentRequest();
+        assertNull(req.getTitle());
+        assertNull(req.getContent());
+        assertNull(req.getSource());
+        assertNull(req.getDocumentType());
+        assertNull(req.getMetadata());
+    }
+
+    @Test
+    void documentRequest_constructorWithFields() {
+        DocumentRequest req = new DocumentRequest("产品手册", "这是产品手册内容");
+        assertEquals("产品手册", req.getTitle());
+        assertEquals("这是产品手册内容", req.getContent());
+    }
+
+    @Test
+    void documentRequest_setters() {
+        DocumentRequest req = new DocumentRequest();
+        req.setTitle("标题");
+        req.setContent("内容");
+        req.setSource("api-upload");
+        req.setDocumentType("markdown");
+        req.setMetadata(Map.of("key", "value"));
+
+        assertEquals("标题", req.getTitle());
+        assertEquals("api-upload", req.getSource());
+        assertEquals("markdown", req.getDocumentType());
+        assertEquals("value", req.getMetadata().get("key"));
+    }
+
+    @Test
+    void searchRequest_defaultConstructor() {
+        SearchRequest req = new SearchRequest();
+        assertNull(req.getQuery());
+        assertNull(req.getDocumentIds());
+        assertNull(req.getConfig());
+    }
+
+    @Test
+    void searchRequest_constructorWithQuery() {
+        SearchRequest req = new SearchRequest("Spring AI");
+        assertEquals("Spring AI", req.getQuery());
+    }
+
+    @Test
+    void searchRequest_setters() {
+        SearchRequest req = new SearchRequest();
+        req.setQuery("测试查询");
+        req.setDocumentIds(java.util.List.of(1L, 2L, 3L));
+        req.setConfig(RetrievalConfig.builder().maxResults(10).build());
+
+        assertEquals("测试查询", req.getQuery());
+        assertEquals(3, req.getDocumentIds().size());
+        assertEquals(10, req.getConfig().getMaxResults());
+    }
 }
