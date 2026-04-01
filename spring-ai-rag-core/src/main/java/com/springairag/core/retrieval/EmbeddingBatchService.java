@@ -7,6 +7,7 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingOptions;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -35,6 +36,7 @@ public class EmbeddingBatchService {
     private final EmbeddingModel embeddingModel;
     private final int batchSize;
 
+    @Autowired
     public EmbeddingBatchService(EmbeddingModel embeddingModel) {
         this(embeddingModel, DEFAULT_BATCH_SIZE);
     }
