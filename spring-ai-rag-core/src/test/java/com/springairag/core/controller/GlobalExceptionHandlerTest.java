@@ -1,5 +1,8 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.exception.EmbeddingException;
+import com.springairag.core.exception.RetrievalException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
@@ -181,5 +184,38 @@ class GlobalExceptionHandlerTest {
         assertTrue(message.contains("message"));
         assertTrue(message.contains("sessionId"));
         assertTrue(message.contains("; ")); // 多个错误用分号分隔
+    }
+
+    @Test
+    void handleDocumentNotFound_returns404() {
+        DocumentNotFoundException e = new DocumentNotFoundException(42L);
+
+        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals("DOCUMENT_NOT_FOUND", response.getBody().get("error"));
+        assertTrue(response.getBody().get("message").toString().contains("42"));
+    }
+
+    @Test
+    void handleEmbeddingException_returns500() {
+        EmbeddingException e = new EmbeddingException(1L, "模型超时");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals("EMBEDDING_FAILED", response.getBody().get("error"));
+        assertTrue(response.getBody().get("message").toString().contains("模型超时"));
+    }
+
+    @Test
+    void handleRetrievalException_returns500() {
+        RetrievalException e = new RetrievalException("Spring Boot", "数据库连接失败");
+
+        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+
+        assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
+        assertEquals("RETRIEVAL_FAILED", response.getBody().get("error"));
+        assertTrue(response.getBody().get("message").toString().contains("Spring Boot"));
     }
 }

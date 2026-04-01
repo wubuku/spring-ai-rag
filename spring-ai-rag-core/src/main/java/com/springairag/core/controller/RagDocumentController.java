@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagEmbedding;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -106,7 +107,7 @@ public class RagDocumentController {
 
                     return ResponseEntity.ok(result);
                 })
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new DocumentNotFoundException(id));
     }
 
     /**
@@ -131,7 +132,7 @@ public class RagDocumentController {
                             "embeddingsRemoved", String.valueOf(embCount)
                     ));
                 })
-                .orElse(ResponseEntity.notFound().build());
+                .orElseThrow(() -> new DocumentNotFoundException(id));
     }
 
     /**
@@ -200,10 +201,8 @@ public class RagDocumentController {
         log.info("Generating embeddings for document: id={}", id);
 
         // 1. 获取文档
-        RagDocument doc = documentRepository.findById(id).orElse(null);
-        if (doc == null) {
-            return ResponseEntity.notFound().build();
-        }
+        RagDocument doc = documentRepository.findById(id)
+                .orElseThrow(() -> new DocumentNotFoundException(id));
 
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
@@ -295,10 +294,8 @@ public class RagDocumentController {
 
         log.info("Generating embeddings via VectorStore for document: id={}", id);
 
-        RagDocument doc = documentRepository.findById(id).orElse(null);
-        if (doc == null) {
-            return ResponseEntity.notFound().build();
-        }
+        RagDocument doc = documentRepository.findById(id)
+                .orElseThrow(() -> new DocumentNotFoundException(id));
 
         String content = doc.getContent();
         if (content == null || content.isBlank()) {

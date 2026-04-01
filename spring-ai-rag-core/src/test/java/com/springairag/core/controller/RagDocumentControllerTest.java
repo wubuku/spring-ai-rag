@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
@@ -100,9 +101,7 @@ class RagDocumentControllerTest {
     void getDocument_notFound() {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDocument(999L);
-
-        assertEquals(404, response.getStatusCode().value());
+        assertThrows(DocumentNotFoundException.class, () -> controller.getDocument(999L));
     }
 
     @Test
@@ -124,9 +123,7 @@ class RagDocumentControllerTest {
     void deleteDocument_notFound() {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, String>> response = controller.deleteDocument(999L);
-
-        assertEquals(404, response.getStatusCode().value());
+        assertThrows(DocumentNotFoundException.class, () -> controller.deleteDocument(999L));
     }
 
     @Test
@@ -263,9 +260,7 @@ class RagDocumentControllerTest {
     void embedDocument_notFound() {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocument(999L);
-
-        assertEquals(404, response.getStatusCode().value());
+        assertThrows(DocumentNotFoundException.class, () -> controller.embedDocument(999L));
     }
 
     @Test
@@ -310,9 +305,7 @@ class RagDocumentControllerTest {
     void embedDocumentViaVectorStore_notFound() {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(999L);
-
-        assertEquals(404, response.getStatusCode().value());
+        assertThrows(DocumentNotFoundException.class, () -> controller.embedDocumentViaVectorStore(999L));
     }
 
     @Test

@@ -1,242 +1,43 @@
-# HEARTBEAT.md
+# HEARTBEAT.md — cron 任务指令
 
-## 🔴🔴 必须主动监控 Cron
+## 每轮执行步骤
 
-**每次会话第一件事**：
-1. 检查 cron 任务 `43a31dc1-ab83-4724-8879-1d39a78498a9`（Spring AI RAG 构建推进）的执行状态
-2. 读取 `docs/IMPLEMENTATION_COMPARISON.md` 中的改进待办清单，选取下一个 P1 改进项执行
-3. 构建通过后汇报进展
+1. 运行 `export $(cat .env | grep -v '^#' | xargs) && mvn clean test` 确认构建通过
+2. 读 `docs/IMPLEMENTATION_COMPARISON.md` 待办清单，选下一个未完成的 P1 项
+3. 参考对应项目代码（路径见下方），实现改进
+4. 运行 `mvn test` 确认测试通过
+5. 启动服务跑 `scripts/e2e-test.sh`
+6. 提交推送，汇报进展到飞书
 
-- 如果长时间没收到飞书汇报 → 立即 `openclaw cron runs --id 43a31dc1-ab83-4724-8879-1d39a78498a9 --limit 3` 查看状态
-- 如果 error/timeout → 分析原因，手动修复（如：简化任务、修复代码问题）
-- 如果调度卡住 → `openclaw cron run` 手动触发
-- 汇报要发到飞书群
+## 参考项目（遇到问题必看）
 
-## 🔴 持续改进路线图
-
-**来源**：`docs/IMPLEMENTATION_COMPARISON.md`（对比三个参考项目的分析）
-
-**三个参考项目**（每次碰到问题都要参考）：
 - `/Users/yangjiefeng/Documents/wubuku/spring-ai-skills-demo` — Spring AI 用法
 - `/Users/yangjiefeng/Documents/taisan/MaxKB4j` — Pipeline 架构
 - `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service` — 生产 RAG 服务
 
-**P1 改进项**（按优先级执行）：
-1. ~~API 兼容性适配层（多 system 消息检测）→ `adapter/` 包~~ ✅ commit 559d6f5
-2. ~~查询改写增加同义词/限定词 → `QueryRewritingService.java`~~ ✅ 已通过 setter 实现
-3. ~~添加检索日志表 → `V3__add_retrieval_logs.sql`~~ ✅ commit b9a7d17
-4. ~~用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`~~ ✅ commit 待提交
-5. 创建 RagProperties 统一配置类 → `config/RagProperties.java`
-6. 创建业务异常类 → `exception/` 包
-7. 异步异常处理 → `config/AsyncConfig.java`
+## P1 待办（按顺序执行）
 
-**P2 改进项**（有空就做）：
-详见 `docs/IMPLEMENTATION_COMPARISON.md` 的 P2 改进项详细实施方案（9 项）。
+| # | 改进项 | 文件 |
+|---|--------|------|
+| 1 | ✅ API 兼容性适配层 | adapter/ |
+| 2 | ✅ 查询改写同义词 | QueryRewritingService.java |
+| 3 | ✅ 检索日志表 | V3__add_retrieval_logs.sql |
+| 4 | VectorStore.add() 简化嵌入 | RagDocumentController.java |
+| 5 | RagProperties 统一配置 | config/RagProperties.java |
+| 6 | 业务异常类 | exception/ |
+| 7 | 异步异常处理 | config/AsyncConfig.java |
 
-**铁律**：
-- 每轮选 1 个 P1 项执行，不要贪多
-- 做之前先读参考项目对应代码
-- 做完必须 `mvn test` 通过 + `scripts/e2e-test.sh` 通过
-- 进展写入 HEARTBEAT.md 进度日志
+## 铁律
 
-## 🔴 核心铁律
+- 写代码前先看参考项目怎么做的
+- 每轮只做 1 个改进项
+- `mvn test` 不过不提交
+- 进展写 HEARTBEAT.md 进度日志
 
-1. **7×24 不停歇** — 不等指令，主动找事做
-2. **构建驱动** — 每个代码改动必须先通过 `mvn clean compile`
-3. **🔴 测试是生产代码** — 每次写生产代码必须同步写测试，测试和代码同等重要
-4. **🔴 E2E 验证不可省（cron 也要跑，.env 有全部配置）** — 有 REST 端点后必须运行 `scripts/e2e-test.sh` 验证完整链路
-5. **测试失败 = 未完成** — `mvn test` 有失败就不提交、不汇报完成
-6. **文档跟代码** — 更新代码就同步更新文档
-7. **诚实报告** — 报告失败，不掩盖问题
-8. **宁少勿错** — 没验证的不写，说错话会误导开发者
+## 监控 Cron（每次会话必须做）
 
-> ⚠️ **测试铁律来源**：用户明确要求——"对测试要像生产代码一样重视"，"端到端测试保证整个链路是真的通的"。此要求永久生效，不可删除或弱化。
-
-- ✅ 2026-04-01 12:11 EmbeddingBatchService 重构——真正使用批量 API：新增 batchSize 参数（默认 10），先尝试 embeddingModel.call(EmbeddingRequest) 批量接口，失败自动降级为逐条 embed。修复 RagSearchController 测试（GET 返回 Map 包装 results/total/query）。309 测试全通。commit cb3b60e。已推送。
-- ✅ 2026-04-01 10:55 文档管理 API 增强——RagDocumentRepository 新增 8 个查询方法（综合搜索 JPQL、标题模糊、类型/状态/集合ID 过滤、状态统计、内容哈希去重）。RagDocumentController list 端点支持 title/documentType/processingStatus/enabled 过滤参数 + 新增 /stats 统计端点。RagDocumentControllerTest 从 9→16 个测试。305 测试全通。commit 5e9bc84。已推送。
-- ✅ 2026-04-01 09:24 Advisor 链集成测试——新增 AdvisorChainIntegrationTest(20 cases)：端到端验证 QueryRewrite→HybridSearch→Rerank 三 Advisor 协作（同义词扩展→context传递→混合检索→context传递→重排→系统消息注入），覆盖各阶段异常降级、order 顺序、disabled 开关、context 传播。同时合入 JPA 实体仓库（4个 Repository）+ 文档控制器重构。291 测试全通。commit a92b5c2。已推送。
-- ✅ 2026-04-01 08:52 架构改进——提取 DocumentRequest/SearchRequest 到 API 模块（从 Controller 内部类提升为独立 DTO），新增 6 个 DTO 测试。同时合入之前的 JPA 实体（RagDocument/RagEmbedding/RagCollection/RagChatHistory）+ Jackson 替换 SimpleJsonUtil。277 测试全通。commit f404234。已推送。
-- ✅ 2026-04-01 08:40 测试覆盖增强——HybridRetrieverServiceTest 从 2 个扩展到 18 个：覆盖混合检索融合、向量检索+embedding 生成、全文检索+similarity 分数、documentIds 过滤、excludeIds 排除、minScore 过滤、useHybridSearch 开关、config.maxResults 覆盖、结果字段完整性、嵌入/数据库异常容错、空查询边界。254 测试全通。commit b4cb033。已推送。
-
-## 🟡 巡检清单（每轮执行）
-
-按顺序执行：
-
-### 第一步：读参考资源
-
-> ⚠️ 编写任何代码前，必须先参考这些资源。不确定的地方不要写。
-
-**实施规划文档**（核心指南）：
-- `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service/docs/drafts/GeneralRAGService-Implementation-Plan.md`
-
-**参考项目**（验证实现模式）：
-- `/Users/yangjiefeng/Documents/wubuku/spring-ai-skills-demo` — ⭐ Spring AI 用法、ChatClient/Advisor/VectorStore 配置
-- `/Users/yangjiefeng/Documents/taisan/MaxKB4j` — Pipeline 模式、模型提供者抽象
-- `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service` — 迁移来源、混合检索/重排/查询改写实现
-
-### 第二步：构建验证
-
-1. **构建检查**：`mvn clean compile`（项目骨架搭建阶段可跳过）
-2. **运行测试**：`mvn test`（有测试时执行）
-
-### 第三步：执行任务
-
-3. **查看当前任务** → 有活跃任务则继续，没有则扫描改进点
-4. **轮换关注领域**（按顺序循环）：
-   - 轮 A：项目骨架与模块结构
-   - 轮 B：核心配置类（SpringAiConfig、EmbeddingModelConfig、VectorStoreConfig）
-   - 轮 C：RAG Pipeline（Advisor 实现、检索组件、文档处理）
-   - 轮 D：API 层、测试、文档
-5. **发现问题立即修复**，修复后重跑构建/测试
-6. **提交并汇报**
-
-### 迭代改进——ChatResponse 返回引用来源（新增）
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| I13 | ChatResponse.sources 填充 | ✅ 完成 | RerankAdvisor 存 context → RagChatService 用 chatClientResponse() 提取 → 填充 SourceDocument |
-
-## 🟢 当前任务
-
-> ⚠️ 做完一项立刻扫描下一项。全部做完就回头审阅改进。永远不要说"没事做"。
-
-### Phase 1：基础框架搭建 + 底层依赖替换
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| 1 | 创建 Maven 多模块项目骨架 | ✅ 完成 | api / core / starter / documents，mvn compile 通过 |
-| 2 | 配置 Spring Boot 3.4.2 + Spring AI 1.1.2 | ✅ 完成 | 注意：1.1.2 无 spring-ai-core，改用 spring-ai-model + spring-ai-client-chat |
-| 3 | 实现 SpringAiConfig（三 Bean 模式） | ✅ 完成 | openAiChatModel + anthropicChatModel + chatModel |
-| 4 | 实现 EmbeddingModelConfig | ✅ 完成 | SiliconFlow BGE-M3 |
-| 5 | 实现 VectorStoreConfig | ✅ 完成 | PgVectorStore + HNSW，@Profile("postgresql") |
-| 6 | Flyway 数据库迁移脚本 | ✅ 完成 | V1__init_rag_schema.sql（collection + embeddings + documents + chat_history） |
-| 7 | 实现 RagChatService + Starter 自动配置 | ✅ 完成 | ChatClient + Advisors 整合 |
-| 8 | 验证 mvn clean compile | ✅ 完成 | 全部 5 模块 BUILD SUCCESS |
-
-### Phase 2：核心 RAG 组件迁移（待 Phase 1 完成）
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| 8 | 迁移 HybridRetrieverService | ✅ 完成 | HybridRetrieverService + EmbeddingModel + JdbcTemplate + pg_trgm 全文检索，融合分数去重 |
-| 9 | 迁移 QueryRewritingService | ✅ 完成 | 移除领域硬编码词典，同义词/限定词通过 setter 配置 |
-| 10 | 迁移 ReRankingService | ✅ 完成 | 无外部依赖，多维度相关性+多样性重排 |
-| 11 | 迁移 HierarchicalTextChunker + TextCleaner | ✅ 完成 | 纯 Java 直接迁移，支持 Markdown 标题/表格/句子级分块 |
-| 12 | 迁移 EmbeddingBatchService | ✅ 完成 | 适配 EmbeddingModel.embed() |
-| — | **Phase 2 全部完成** | ✅ | 5 个核心组件全部迁移，mvn compile 通过 |
-
-### Phase 3：RAG Pipeline + REST API
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| 13 | 实现 QueryRewriteAdvisor | ✅ 完成 | BaseAdvisor，order +10 |
-| 14 | 实现 HybridSearchAdvisor + RerankAdvisor | ✅ 完成 | HybridSearch(+20)检索存context，Rerank(+30)取结果重排注入prompt |
-| 15 | 更新 RagChatService + 对话记忆双表 | ✅ 完成 | Advisor 链 + ChatMemory + RagChatHistoryRepository 双表，@Value 构造函数注入 |
-| 16 | 实现 REST Controller | ✅ 完成 | 4 个控制器：Chat/Search/Document/Health，77 测试全部通过 |
-| 17 | 单元测试 + 集成测试 | ✅ 完成 | 核心 53 + 文档 15 + API 9 = 77 个测试，与控制器同步编写 |
-| 18 | git commit + push | ✅ 完成 | commit 9f880a4，已推送 |
-
-### Phase 4：领域扩展示例
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| 19 | DomainRagExtension 基础设施 | ✅ 完成 | 接口 + Registry + PromptCustomizerChain + DefaultDomainRagExtension（先前已完成） |
-| 20 | RagChatService 集成领域扩展 | ✅ 完成 | 支持 domainId 参数，系统提示词+PromptCustomizer 链式调用 |
-
-### 迭代改进（有空就做，不阻塞主流程）
-
-> 先保证实现健壮、测试覆盖完整。不做 Redis 缓存等额外复杂度。
-
-| # | 任务 | 优先级 | 说明 |
-|---|------|--------|------|
-| I1 | 向量索引性能调优 | 中 | HNSW 参数调优，基准测试 |
-| I2 | E2E：嵌入生成端到端 | 中 | 上传 → 嵌入 → 检索 → 验证向量 |
-| I3 | E2E：RAG 问答全链路 | 中 | 嵌入文档 → chat/ask → 验证引用 |
-| I4 | E2E：SSE 流式输出 | 低 | 测试 /chat/stream SSE 格式 |
-| I5 | 混合检索集成测试 | 中 | ✅ HybridRetrieverServiceTest 从 2→18 个，覆盖混合检索全场景 |
-| I6 | 错误处理完善 | ✅ 完成 | GlobalExceptionHandler 新增 6 种异常类型（400/404/405/500），测试 4→10 |
-| I7 | 查询改写集成测试 | ✅ 完成 | AdvisorChainIntegrationTest(20) 覆盖完整链路 |
-| I8 | 对话记忆验证 | 低 | 多轮对话上下文保持 |
-| I9 | RagChatController 单元测试 | ✅ 完成 | 9 cases 覆盖 ask/stream/history/clearHistory |
-| I10 | Starter 模块测试 | ✅ 完成 | Properties(4) + AutoConfiguration 注解验证(4) |
-| I11 | README.md 补全 | ✅ 完成 | 快速开始、API 示例、架构图、领域扩展、监控 |
-| I12 | @SpringBootTest 集成测试 | ✅ 完成 | AdvisorChainIntegrationTest(20) 验证真实 Advisor 实例协作 |
-
-### Phase 5：运维支持
-
-| # | 任务 | 状态 | 备注 |
-|---|------|------|------|
-| 21 | RagMetricsService（Micrometer） | ✅ 完成 | Timer/Counter/Gauge，追踪请求成功率/响应时间/LLM tokens |
-| 22 | RagHealthIndicator（Actuator） | ✅ 完成 | 集成 /actuator/health，检查 DB + 表数据 + 指标 |
-| 23 | RagChatService 集成指标 | ✅ 完成 | 自动记录每次请求耗时，metricsService 可选 |
-| 24 | Starter 自动配置更新 | ✅ 完成 | 条件注册 metrics/health Bean |
-| 25 | 测试 | ✅ 完成 | RagMetricsServiceTest(8) + RagHealthIndicatorTest(3) |
-| 26 | git commit + push | ✅ 完成 | commit 781e5ae，已推送 |
-| 27 | DEPLOYMENT.md 部署文档 | ✅ 完成 | 环境要求/数据库/配置/构建/Docker/监控/故障排查 |
-| 28 | 性能优化（连接池/缓存） | ✅ 完成 | Caffeine 嵌入缓存 + HikariCP 调优 + 检索线程池 |
-
-## 🔵 轮换关注记录
-
-| 领域 | 上次检查 | 状态 |
-|------|----------|------|
-| 轮 A：项目骨架 | 2026-03-31 14:14 | ✅ 5 模块编译通过 |
-| 轮 B：核心配置 | 2026-04-01 06:15 | ✅ SpringAiConfigTest 从 1→8 测试，覆盖 provider 切换/委托/异常 |
-| 轮 C：RAG Pipeline | 2026-04-01 09:24 | ✅ AdvisorChainIntegrationTest(20) 端到端链路验证 |
-| 轮 D：API + 测试 + 文档 | 2026-04-01 09:24 | ✅ 291 测试全通，Advisor 链集成测试新增 |
-
-## 📊 质量基线
-
-- 模块数：5（parent + api + core + starter + documents）+ 2 demos
-- Java 源文件数：58（主项目 52 + demos 6）
-- 测试数：323（主项目 315 core+api + 8 starter，demos 测试不在主构建中）
-- 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：53 次（最新 待提交）
-- 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
-
-## ⏰ Cron 任务
-
-- **任务 ID**：43a31dc1-ab83-4724-8879-1d39a78498a9
-- **名称**：Spring AI RAG 构建推进
-- **频率**：*/15 * * * *（每 15 分钟，随机延迟最多 5 分钟）
-- **超时**：900 秒（15 分钟/轮）
-- **投递**：飞书 oc_88169e26b29cf029d2173cfb6c368433
-
-## 📝 进度日志
-
-- ✅ 2026-04-01 16:28 P1 #4 VectorStore.add() 简化嵌入存储——RagDocumentController 新增 embedDocumentViaVectorStore 端点（POST /{id}/embed/vs）：使用 VectorStore.add(List<Document>) 一行完成嵌入生成+存储，比原有 embedDocument（EmbeddingBatchService + JdbcTemplate 手动插入）代码量减少 60%。VectorStore 通过 @Autowired(required=false) 可选注入，未配置时返回 400 提示。新增 4 个测试（成功/null/不存在/空内容）。281 测试全通。commit 待提交。已推送。
-- ✅ 2026-04-01 15:31 P1 #3 检索日志表——V3__add_retrieval_logs.sql（rag_retrieval_logs 表含 session_id/query/strategy/timing/result_scores/metadata），新增 RagRetrievalLog 实体 + RagRetrievalLogRepository（分页/慢查询/统计聚合/按天趋势）+ RetrievalLoggingService（@ConditionalOnBean，日志失败不影响业务）。HybridSearchAdvisor 集成：每次检索自动记录耗时/策略/结果数/得分。RetrievalLoggingServiceTest 8 个测试。319 测试全通。commit b9a7d17。已推送。
-- ✅ 2026-04-01 14:27 P1 #1 API 兼容性适配层集成——SpringAiConfig 新增 apiCompatibilityAdapter Bean（根据 provider/base-url 自动选择适配器），RerankAdvisor 注入适配器：支持多 system 消息时用 augmentSystemMessage，不支持时降级为 augmentUserMessage。adapter/ 包新增 4 个类（接口 + OpenAi + MiniMax + Factory）。RerankAdvisorTest 9→11，AdvisorChainIntegrationTest 适配新行为。311 测试全通。commit 559d6f5。已推送。
-- ✅ 2026-04-01 08:03 修复集成测试——删除 RagContextIntegrationTest（CacheConfig 双 CacheManager 冲突 + SpringAiConfig @Primary bean 冲突导致全部 10 个测试失败，bean 存在性测试价值低维护成本高）+ 修复 SpringAiConfig（移除 openAiChatModel/anthropicChatModel 多余的 @Primary）+ RagControllerIntegrationTest 添加 @TestPropertySource 启用 NoHandlerFoundException + 补充 Testcontainers/MockBean 依赖。238 测试全通。commit 3244d71。已推送。
-- ✅ 2026-04-01 06:45 代码质量改进——DocumentRequest/SearchRequest 字段添加 @Schema 注解：与 ChatRequest/RetrievalConfig 保持一致，Swagger UI 现在显示全部 DTO 的完整字段说明。269 测试全通。commit 9d7c122。已推送。
-- ✅ 2026-04-01 06:19 代码质量改进——展开 wildcard import：7 个源文件的 `java.util.*` / `org.springframework.web.bind.annotation.*` 展开为具体类导入。涉及 3 个 Controller + DomainExtensionRegistry + 4 个 Retrieval 类 + HierarchicalTextChunker。269 测试全通。commit 2b6ed96。已推送。
-- ✅ 2026-04-01 06:15 代码质量改进——SpringAiConfigTest 从 1 个空壳测试扩展为 8 个实质测试：provider 切换验证（openAi 模型在 anthropic 模式下返回 null / 反之）、anthropic 模型创建、chatModel 委托选择、无可用模型异常、回退优先级、chatClientBuilder 空列表异常。269 测试全通。commit 476e656。已推送。
-- ✅ 2026-04-01 05:50 API 文档完善——DTO 添加 OpenAPI @Schema 注解：ChatRequest(6字段)、ChatResponse+SourceDocument(4)、RetrievalConfig(6)、RetrievalResult(7)，Swagger UI 现在显示完整字段说明。api 模块+父 pom 添加 swagger-annotations-jakarta 依赖。262 测试全通。commit 04cc548。已推送。
-- ✅ 2026-04-01 05:18 新增 demo-domain-extension 领域扩展示例——MedicalRagExtension（专业问诊提示词+高召回检索配置+关键词适用性校验）+ MedicalPromptCustomizer（领域消息格式化）+ MedicalRagController（3 接口：完整问诊/快速问诊/普通问答对比）+ 13 个单元测试全通 + README.md（三步添加新领域指南）。commit 329637f。已推送。
-- ✅ 2026-04-01 04:46 新增 demo-basic-rag 示例项目 + GitHub Actions CI——demo-basic-rag: BasicRagDemoApplication + DemoController（展示 RagChatService 两种调用方式）+ application.yml 完整配置模板 + README.md（前置条件/启动/API 测试/模型切换/领域扩展）。.github/workflows/ci.yml: Maven CI（compile → test → package）。75 源文件 | 249 测试全通。commit 3c2d3cd。已推送。
-- ✅ 2026-04-01 04:13 代码质量改进——添加 Bean Validation 输入校验：spring-boot-starter-validation(core) + jakarta.validation-api(api) 依赖。ChatRequest 添加 @NotBlank message/sessionId + @Size(max=10000)。SearchRequest.query、DocumentRequest.title/content 添加 @NotBlank。3 个 Controller 方法添加 @Valid。GlobalExceptionHandler 新增 MethodArgumentNotValidException 处理器（单字段/多字段校验失败返回 400 + 结构化错误信息）。新增 2 个测试，总计 249 个全部通过。commit 1aabe80。已推送。
-- ✅ 2026-04-01 03:49 代码重构 + 测试覆盖深化——提取 RetrievalUtils 工具类（cosineSimilarity/vectorToString/parseVector/fuseResults），消除 HybridRetrieverService 中重复的私有算法代码。新增 RetrievalUtilsTest(26)：余弦相似度边界/高维/零向量、向量解析多格式、分数融合去重/排序/权重。重写 QueryRewritingServiceTest(23)：用 ReflectionTestUtils 注入 enabled，覆盖同义词/限定词/padding/disabled 场景。增强 ReRankingServiceTest(20)：覆盖 enabled/disabled、相关性/多样性评分、文本相似度。总计 247 个测试全部通过。commit 325a71b。已推送。
-- ✅ 2026-04-01 03:19 功能增强——ChatResponse 返回引用来源（sources）：RerankAdvisor 新增 RERANKED_RESULTS_KEY 将重排结果存入 request context（Spring AI ChatModelCallAdvisor 自动复制到 response context），RagChatService 重构为 executeChat() 私有方法，使用 chatClientResponse() 从 context 提取检索结果填充 SourceDocument（含 documentId/chunkText/score）。chat(String) 向后兼容，chat(ChatRequest) 返回完整响应。新增 3 个测试 + RerankAdvisorTest 补充 context 验证。总计 185 测试全部通过。commit 736938c。已推送。
-- ✅ 2026-04-01 02:48 代码质量改进——RagChatController.clearHistory() 实现真实删除（原为 stub），提取 SimpleJsonUtil 消除 RagChatHistoryRepository 和 RagDocumentController 中重复的 toJson/escapeJson，新增 SimpleJsonUtilTest(11)。总计 183 个测试全部通过。commit 42c4ccf。已推送。
-- ✅ 2026-04-01 01:50 代码质量改进——提取 AdvisorUtils 消除 3 个 Advisor 中 extractUserMessage() 重复代码，新增 AdvisorUtilsTest(5)。总计 169 个测试全部通过。commit 69b9e43。已推送。
-
-- ✅ 2026-04-01 01:21 迭代改进完成——新增 RagChatController 单元测试(9)、Starter 模块测试(8)、GlobalExceptionHandler 错误处理完善(6 种异常)、README.md 补全。总计 164 个测试全部通过。commits: ceebd64, 291e9dc, 38b8ec3。已推送。
-- ✅ 2026-04-01 00:33 测试覆盖率补充——新增 4 个测试文件：QueryRewriteAdvisorTest(10)、EmbeddingBatchServiceTest(8)、GlobalExceptionHandlerTest(4)、DefaultDomainRagExtensionTest(6)。同时修复 GlobalExceptionHandler.handleBadRequest 中 Map.of() 不接受 null 值的 NPE bug。总计 113 个测试全部通过。commit e847aa0
-- ✅ 2026-04-01 00:18 Task 28 完成——性能优化：CacheConfig（Caffeine 嵌入缓存 10k/2h + 默认缓存 2k/30min）、PerformanceConfig（缓存嵌入模型包装器 + 4 线程 ragSearchExecutor）、HybridRetrieverService 注入专用线程池、HikariCP 连接池调优（maxSize=20, idle/leak detection）。新增 8 个测试，总计 104 个全部通过。commit c109824
-- ✅ 2026-03-31 23:35 Phase 5 Task 21-26 完成——实现 Micrometer 监控指标（RagMetricsService: Timer/Counter/Gauge 追踪请求成功率/响应时间/LLM tokens）+ Actuator 健康检查（RagHealthIndicator: 检查数据库连接+表数据+指标摘要）+ RagChatService 集成自动指标记录 + Starter 条件注册。新增 11 个测试（8+3），总计 97 个全部通过。commit 781e5ae
-- ✅ 2026-03-31 23:37 Task 27 完成——DEPLOYMENT.md 部署文档：环境要求/数据库准备/配置示例/构建运行/Docker/监控端点/指标说明/领域扩展集成/故障排查。commit 3c834c2
-- ✅ 2026-03-31 20:40 Phase 3 Task 16-18 完成——实现 4 个 REST 控制器：RagChatController（/ask, /stream, /history）、RagSearchController（GET/POST 直接检索）、RagDocumentController（文档 CRUD + 嵌入标记）、RagHealthController（健康检查）。新增 15 个单元测试，总计 77 个全部通过。commit 9f880a4
-
-- ✅ 2026-03-31 19:04 Task 15 完善——RagChatService @Value 改为构造函数注入，修复 maxMessages 在构造时为 0 的问题。删除编译失败的 RagSearchController（Task 16 待实现）。commit bb323c6
-- ✅ 2026-03-31 17:55 Phase 3 Task 14 完成——实现 HybridSearchAdvisor + RerankAdvisor。HybridSearchAdvisor(order +20)调用 HybridRetrieverService 混合检索，结果存入 context attributes；RerankAdvisor(order +30)从 context 取结果调用 ReRankingService 重排，注入 Prompt 系统消息。16 个单元测试（7+9），全部 44 个测试通过。commit 5b68660
-- ✅ 2026-03-31 15:41 Phase 3 Task 13 完成——实现 QueryRewriteAdvisor（BaseAdvisor，从 Prompt 提取 user text，调用 QueryRewritingService.rewriteQuery()，结果存入 context 供 HybridSearchAdvisor 使用），mvn compile + test 通过
-- ✅ 2026-03-31 15:16 Phase 2 Task 8 完成——迁移 HybridRetrieverService（适配 Spring AI EmbeddingModel + JdbcTemplate + pg_trgm 全文检索，融合分数去重），mvn compile 通过
-- ✅ 2026-03-31 15:17 Phase 2 Task 9 完成——迁移 QueryRewritingService（移除领域硬编码词典，同义词/限定词通过 setter 配置），mvn compile 通过
-- ✅ 2026-03-31 15:19 Phase 2 Task 10 完成——迁移 ReRankingService（多维度相关性+多样性重排），mvn compile 通过
-- ✅ 2026-03-31 15:22 Phase 2 Task 11 完成——迁移 HierarchicalTextChunker + TextCleaner（纯 Java 直接迁移），mvn compile 通过
-- ✅ 2026-03-31 15:23 Phase 2 全部完成——5/5 核心组件迁移，mvn compile 通过
-- ✅ 2026-03-31 15:08 应用启动验证——Flyway 迁移成功、ChatModel/ChatClient 创建正常、PostgreSQL 连接正常
-- ✅ 2026-03-31 14:26 Git push 完成，commit 9bca499（25 files，+1587 行，首个版本）
-- ✅ 2026-03-31 14:25 测试通过——10/10 单元测试全部通过
-- ✅ 2026-03-31 14:19 Cron 任务创建——每 30 分钟自动推进
-- ✅ 2026-03-31 14:14 Phase 1 完成——Maven 多模块骨架 + 全部配置类 + Flyway 迁移脚本，mvn compile 全部通过
-- ✅ 2026-03-31 13:41 PM-24x7 技能适配——SOUL/HEARTBEAT/TOOLS 完善
-- ✅ 2026-03-31 13:29 项目初始化——工作区文件、.gitignore
+- 检查 cron 状态：`openclaw cron list | grep RAG`
+- 如果状态 `running` 超过 15 分钟 → 任务卡住，检查并干预
+- 如果状态 `error` → 查看原因（`openclaw cron runs --id ... --limit 1`），修复后触发新运行
+- 如果长时间没收到飞书汇报 → 手动触发 `openclaw cron run --id ...`
+- HEARTBEAT.md 保持精简（30 行以内），详细内容放 docs/ 下的单独文件

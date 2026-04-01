@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.exception.RagException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
@@ -123,6 +124,19 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
                 "error", "Database Error",
                 "message", "数据库操作失败",
+                "timestamp", Instant.now().toString()
+        ));
+    }
+
+    /**
+     * RAG 业务异常（统一处理 DocumentNotFoundException / EmbeddingException / RetrievalException）
+     */
+    @ExceptionHandler(RagException.class)
+    public ResponseEntity<Map<String, Object>> handleRagException(RagException e) {
+        log.warn("RAG business error: [{}] {}", e.getErrorCode(), e.getMessage());
+        return ResponseEntity.status(e.getHttpStatus()).body(Map.of(
+                "error", e.getErrorCode(),
+                "message", e.getMessage(),
                 "timestamp", Instant.now().toString()
         ));
     }
