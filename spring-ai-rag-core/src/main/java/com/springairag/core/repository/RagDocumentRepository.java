@@ -65,4 +65,14 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      * 按内容哈希查找（用于去重）
      */
     List<RagDocument> findByContentHash(String contentHash);
+
+    /**
+     * 统计集合中的文档数量
+     */
+    long countByCollectionId(Long collectionId);
+
+    /**
+     * 按集合 ID 查询（不分页）
+     */
+    List<RagDocument> findAllByCollectionId(Long collectionId);
 }
