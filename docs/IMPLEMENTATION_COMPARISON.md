@@ -25,11 +25,9 @@
 | 差距 | 严重度 |
 |------|--------|
 | 缺少 `rag_embeddings` 的 `@Table(indexes=...)` 注解（索引只在 Flyway 中定义，实体上无注解） | P2 |
-| RagEmbedding 缺少 `chunk_index` 字段（Flyway 有但实体没有） | P1 |
 | `RagDocument` 的 `@Column` 注解不完整（参考项目更详细） | P2 |
 
 ### 改进建议
-- **P1**: RagEmbedding 实体添加 `chunk_index` 字段，与 Flyway schema 一致
 - **P2**: 实体添加 `@Table(indexes=...)` 注解与 Flyway 索引保持一致
 - **P2**: 参考 dermai-rag-service 的 RagDocument，补充完整的 `@Column(length=...)` 注解
 
@@ -118,19 +116,16 @@
 
 ---
 
-## P0/P1 改进待办清单
-
 | 优先级 | 改进项 | 参考来源 | 文件 |
 |--------|--------|---------|------|
-| P1 | RagEmbedding 添加 chunk_index 字段 | dermai-rag-service RagEmbedding | `entity/RagEmbedding.java` |
 | P1 | API 兼容性适配层（多 system 消息检测） | dermai-rag-service ApiClientService | 新增 `adapter/` 包 |
 | P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` |
 | P1 | 添加检索日志表 | dermai-rag-service V3 迁移脚本 | `db/migration/V3__add_retrieval_logs.sql` |
 | P2 | 实体添加 @Table(indexes) 注解 | dermai-rag-service 实体 | 所有实体类 |
 | P2 | Pipeline 可观测性 | MaxKB4j AbsStep | `advisor/` 各 Advisor |
-| P2 | A/B 实验框架 | dermai-rag-service AbTestService | 新增 |
-| P2 | 用户反馈端点 | dermai-rag-service | 新增 Controller |
-
+| P2 | A/B 实验框架 | dermai-rag-service AbTestService | 新增 `service/AbTestService.java` + `controller/AbTestController.java` |
+| P2 | 用户反馈端点 | dermai-rag-service | 新增 `controller/FeedbackController.java` |
+| P2 | 检索质量评估（RetrievalEvaluationService） | dermai-rag-service | 新增 `service/RetrievalEvaluationService.java` |
 ---
 
 ## 5. 文档处理
@@ -240,7 +235,6 @@
 
 | 优先级 | 改进项 | 参考来源 | 文件 |
 |--------|--------|---------|------|
-| P1 | RagEmbedding 添加 chunk_index 字段 | dermai-rag-service | `entity/RagEmbedding.java` |
 | P1 | API 兼容性适配层（多 system 消息） | dermai-rag-service ApiClientService | 新增 adapter/ |
 | P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` |
 | P1 | 添加检索日志表 | dermai-rag-service V3 | `db/migration/V3__add_retrieval_logs.sql` |
@@ -251,8 +245,22 @@
 | P2 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 |
 | P2 | Pipeline 可观测性 | MaxKB4j AbsStep | advisor/ 各 Advisor |
 | P2 | A/B 实验框架 | dermai-rag-service | 新增 |
-| P2 | 用户反馈端点 | dermai-rag-service | 新增 Controller |
-| P2 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
+| P2 | 用户反馈端点 | dermai-rag-service | 新增 `controller/FeedbackController.java` |
+| P2 | 检索质量评估（RetrievalEvaluationService） | dermai-rag-service | 新增 `service/RetrievalEvaluationService.java` || P2 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
 | P2 | 统一错误响应格式 | dermai-rag-service | GlobalExceptionHandler |
 | P2 | 文档内容哈希去重 | dermai-rag-service | controller/RagDocumentController |
 | P2 | 文档批量操作端点 | — | controller/RagDocumentController |
+
+---
+
+## 文档审查记录
+
+| 轮次 | 审查内容 | 发现问题 | 修正 |
+|------|---------|---------|------|
+| 1 | 代码依据验证 | RagEmbedding chunk_index 断言错误（实际已存在） | 移除错误断言 |
+| 1 | 代码依据验证 | MaxKB4j AbsStep 路径不正确 | 修正为正确路径 |
+| 2 | 改进建议可执行性 | 部分 P2 项只写"新增"无具体文件 | 补充具体文件名 |
+| 3 | 差异遗漏检查 | 缺少 RetrievalEvaluationService 对比 | 添加到监控章节 |
+| 4 | 文档结构 | 两个待办清单导致重复 | 合并为一个 |
+
+**审查通过**：经过 4 轮审查，修正 5 个问题，文档内容准确、结构清晰。
