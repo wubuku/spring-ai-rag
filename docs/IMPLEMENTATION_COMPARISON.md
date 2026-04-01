@@ -253,6 +253,52 @@
 
 ---
 
+
+---
+
+## P2 改进项详细实施方案
+
+### P2-1: 实体 @Table(indexes) 注解
+**目的**：JPA 实体与数据库索引保持一致。
+**参考**：dermai-rag-service RagDocument.java 的 `@Table(indexes={...})`
+**方案**：修改 4 个实体类，添加索引注解。ddl-auto: none 时不自动创建索引，仅用于文档。
+
+### P2-2: Pipeline 可观测性
+**目的**：记录 RAG Pipeline 每步耗时和结果数量。
+**参考**：MaxKB4j AbsStep.java
+**方案**：在 3 个 Advisor 的 before() 中记录开始时间，结束时存入 request context。
+
+### P2-3: A/B 实验框架
+**目的**：对比不同检索策略效果。
+**参考**：dermai-rag-service AbTestService（实验定义、流量分配 Map<String,Double>、结果收集）
+**方案**：新增 AbTestService 接口+实现+Controller，新增 rag_ab_experiments/rag_ab_results 表。
+
+### P2-4: 用户反馈端点
+**目的**：收集用户对回答质量评分。
+**方案**：新增 FeedbackController + POST /api/v1/rag/feedback（sessionId/query/answer/rating/comment），新增 rag_feedback 表。
+
+### P2-5: 检索质量评估
+**目的**：计算 Precision@K、Recall@K、MRR。
+**参考**：dermai-rag-service RetrievalEvaluationService（EvaluationCase + 指标计算）
+**方案**：新增 RetrievalEvaluationService，可与 A/B 实验结合对比策略效果。
+
+### P2-6: API Key 认证
+**目的**：防止未授权访问。
+**参考**：dermai-rag-service ApiKeyAuthFilter（OncePerRequestFilter + X-API-Key 请求头）
+**方案**：新增 ApiKeyAuthFilter，@Value 配置 api-key，健康检查白名单放行。
+
+### P2-7: 统一错误响应格式
+**目的**：所有 API 错误返回统一格式。
+**方案**：新增 ErrorResponse DTO（code+message+details），修改 GlobalExceptionHandler 统一返回。
+
+### P2-8: 文档内容哈希去重
+**目的**：避免重复上传相同内容。
+**方案**：createDocument 时 SHA-256(content)，查是否存在相同 hash。content_hash 字段和索引已存在，只需加业务逻辑。
+
+### P2-9: 文档批量操作
+**目的**：支持批量上传/删除。
+**方案**：新增 POST/DELETE /api/v1/rag/documents/batch。
+
 ## 文档审查记录
 
 | 轮次 | 审查内容 | 发现问题 | 修正 |
