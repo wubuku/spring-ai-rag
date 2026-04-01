@@ -1,8 +1,8 @@
 package com.springairag.core.retrieval;
 
+import com.springairag.core.config.RagProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,36 +24,33 @@ public class QueryRewritingService {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewritingService.class);
 
-    @Value("${rag.query-rewrite.enabled:true}")
-    private boolean enabled;
-
-    @Value("${rag.query-rewrite.padding-count:2}")
-    private int paddingCount;
+    private final RagProperties.QueryRewrite config;
 
     /**
-     * 同义词词典（key=关键词，value=同义词列表）
-     * 默认空字典，由子类或配置覆盖。
-     * 格式示例：
-     *   皮肤 → [肌肤, 肤质, 皮肤问题]
-     *   护肤 → [护理皮肤, 保养皮肤, 美容]
+     * 运行时可变的同义词词典（优先级高于配置文件）
      */
-    private Map<String, String[]> synonymDictionary = Collections.emptyMap();
+    private Map<String, String[]> synonymDictionary;
 
     /**
-     * 领域限定词列表（追加到查询尾部）
-     * 默认空列表。
+     * 运行时可变的领域限定词（优先级高于配置文件）
      */
-    private List<String> domainQualifiers = Collections.emptyList();
+    private List<String> domainQualifiers;
+
+    public QueryRewritingService(RagProperties ragProperties) {
+        this.config = ragProperties.getQueryRewrite();
+        this.synonymDictionary = config.getSynonymDictionary();
+        this.domainQualifiers = config.getDomainQualifiers();
+    }
 
     /**
-     * 设置同义词词典（供子类或配置类覆盖）
+     * 设置同义词词典（运行时覆盖配置文件值）
      */
     public void setSynonymDictionary(Map<String, String[]> dictionary) {
         this.synonymDictionary = dictionary != null ? dictionary : Collections.emptyMap();
     }
 
     /**
-     * 设置领域限定词列表
+     * 设置领域限定词列表（运行时覆盖配置文件值）
      */
     public void setDomainQualifiers(List<String> qualifiers) {
         this.domainQualifiers = qualifiers != null ? qualifiers : Collections.emptyList();
@@ -66,7 +63,7 @@ public class QueryRewritingService {
      * @return 改写后的查询列表（包含原始查询和扩展查询）
      */
     public List<String> rewriteQuery(String originalQuery) {
-        if (!enabled || originalQuery == null || originalQuery.isBlank()) {
+        if (!config.isEnabled() || originalQuery == null || originalQuery.isBlank()) {
             return List.of(originalQuery);
         }
 
@@ -96,11 +93,9 @@ public class QueryRewritingService {
             if (synonyms == null || synonyms.length == 0) continue;
 
             if (lowerQuery.contains(keyword)) {
-                // 替换为同义词
                 for (String synonym : synonyms) {
                     expanded.add(query.replaceAll("(?i)" + Pattern.quote(keyword), synonym));
                 }
-                // 添加"关键词 + 同义词"组合
                 for (String synonym : synonyms) {
                     expanded.add(query + " " + synonym);
                 }
@@ -134,7 +129,7 @@ public class QueryRewritingService {
     public List<String> generatePaddingQueries(String query) {
         List<String> paddingQueries = new ArrayList<>();
 
-        if (!enabled || query == null || query.isBlank()) {
+        if (!config.isEnabled() || query == null || query.isBlank()) {
             return paddingQueries;
         }
 
@@ -164,7 +159,7 @@ public class QueryRewritingService {
             }
         }
 
-        return paddingQueries.stream().limit(paddingCount).toList();
+        return paddingQueries.stream().limit(config.getPaddingCount()).toList();
     }
 
     /**
@@ -191,9 +186,7 @@ public class QueryRewritingService {
         if (query == null) {
             return "";
         }
-        // 移除多余空格
         String cleaned = query.replaceAll("\\s+", " ").trim();
-        // 移除特殊字符（保留中文、英文、数字）
         cleaned = cleaned.replaceAll("[^\\u4e00-\\u9fa5a-zA-Z0-9\\s]", "");
         return cleaned.trim();
     }

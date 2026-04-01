@@ -1,8 +1,8 @@
 package com.springairag.core.retrieval;
 
+import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Map;
@@ -16,11 +16,16 @@ class QueryRewritingServiceTest {
 
     private QueryRewritingService service;
 
+    private static QueryRewritingService createService(boolean enabled, int paddingCount) {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setEnabled(enabled);
+        props.getQueryRewrite().setPaddingCount(paddingCount);
+        return new QueryRewritingService(props);
+    }
+
     @BeforeEach
     void setUp() {
-        service = new QueryRewritingService();
-        ReflectionTestUtils.setField(service, "enabled", true);
-        ReflectionTestUtils.setField(service, "paddingCount", 2);
+        service = createService(true, 2);
     }
 
     // ========== rewriteQuery ==========
@@ -98,7 +103,7 @@ class QueryRewritingServiceTest {
 
     @Test
     void rewriteQuery_disabled_returnsOriginalOnly() {
-        ReflectionTestUtils.setField(service, "enabled", false);
+        service = createService(false, 2);
         service.setSynonymDictionary(Map.of("test", new String[]{"synonym"}));
 
         List<String> results = service.rewriteQuery("test query");
@@ -124,7 +129,7 @@ class QueryRewritingServiceTest {
 
     @Test
     void generatePaddingQueries_addsPrefixes() {
-        ReflectionTestUtils.setField(service, "paddingCount", 10);
+        service = createService(true, 10);
         List<String> padding = service.generatePaddingQueries("向量检索");
         assertFalse(padding.isEmpty());
         boolean hasPrefix = padding.stream()
@@ -135,7 +140,7 @@ class QueryRewritingServiceTest {
 
     @Test
     void generatePaddingQueries_addsSuffixes() {
-        ReflectionTestUtils.setField(service, "paddingCount", 10);
+        service = createService(true, 10);
         List<String> padding = service.generatePaddingQueries("向量检索");
         boolean hasSuffix = padding.stream()
                 .anyMatch(q -> q.endsWith("怎么办") || q.endsWith("如何解决") || q.endsWith("用什么"));
@@ -144,14 +149,14 @@ class QueryRewritingServiceTest {
 
     @Test
     void generatePaddingQueries_respectsPaddingCount() {
-        ReflectionTestUtils.setField(service, "paddingCount", 2);
+        service = createService(true, 2);
         List<String> padding = service.generatePaddingQueries("Spring Boot 配置");
         assertTrue(padding.size() <= 2, "应受 paddingCount 限制");
     }
 
     @Test
     void generatePaddingQueries_customPaddingCount() {
-        ReflectionTestUtils.setField(service, "paddingCount", 1);
+        service = createService(true, 1);
         List<String> padding = service.generatePaddingQueries("向量检索");
         assertEquals(1, padding.size(), "应受自定义 paddingCount=1 限制");
     }
@@ -170,14 +175,14 @@ class QueryRewritingServiceTest {
 
     @Test
     void generatePaddingQueries_disabled_returnsEmpty() {
-        ReflectionTestUtils.setField(service, "enabled", false);
+        service = createService(false, 2);
         List<String> padding = service.generatePaddingQueries("向量检索");
         assertTrue(padding.isEmpty(), "禁用时不应生成 padding 查询");
     }
 
     @Test
     void generatePaddingQueries_keywordCombination() {
-        ReflectionTestUtils.setField(service, "paddingCount", 10);
+        service = createService(true, 10);
         List<String> padding = service.generatePaddingQueries("向量 数据库 检索");
         boolean hasCombo = padding.stream().anyMatch(q -> q.contains("和"));
         assertTrue(hasCombo, "多关键词应生成组合查询");

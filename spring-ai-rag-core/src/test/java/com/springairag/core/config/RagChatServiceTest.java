@@ -76,7 +76,7 @@ class RagChatServiceTest {
                 historyRepository,
                 domainExtensionRegistry,
                 promptCustomizerChain,
-                20,
+                new com.springairag.core.config.RagProperties(),
                 null,
                 null
         );
@@ -254,7 +254,7 @@ class RagChatServiceTest {
                 historyRepository,
                 domainExtensionRegistry,
                 promptCustomizerChain,
-                20,
+                new com.springairag.core.config.RagProperties(),
                 null,
                 List.of(mockProvider)
         );

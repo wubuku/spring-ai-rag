@@ -5,7 +5,6 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingModel;
 import org.springframework.ai.openai.OpenAiEmbeddingOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -16,30 +15,29 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class EmbeddingModelConfig {
 
-    @Value("${rag.embedding.api-key:}")
-    private String apiKey;
+    private final RagProperties.Embedding embedding;
 
-    @Value("${rag.embedding.base-url:https://api.siliconflow.cn/v1}")
-    private String baseUrl;
-
-    @Value("${rag.embedding.model:BAAI/bge-m3}")
-    private String model;
-
-    @Value("${rag.embedding.dimensions:1024}")
-    private int dimensions;
+    public EmbeddingModelConfig(RagProperties ragProperties) {
+        this.embedding = ragProperties.getEmbedding();
+    }
 
     @Bean
     public EmbeddingModel embeddingModel() {
         org.slf4j.LoggerFactory.getLogger(EmbeddingModelConfig.class)
                 .info("Creating EmbeddingModel: baseUrl={}, model={}, apiKey={}..., dimensions={}",
-                        baseUrl, model, apiKey.substring(0, Math.min(10, apiKey.length())), dimensions);
+                        embedding.getBaseUrl(), embedding.getModel(),
+                        embedding.getApiKey().substring(0, Math.min(10, embedding.getApiKey().length())),
+                        embedding.getDimensions());
 
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(baseUrl)
-                .apiKey(apiKey)
+                .baseUrl(embedding.getBaseUrl())
+                .apiKey(embedding.getApiKey())
                 .build();
 
         return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED,
-                OpenAiEmbeddingOptions.builder().model(model).dimensions(dimensions).build());
+                OpenAiEmbeddingOptions.builder()
+                        .model(embedding.getModel())
+                        .dimensions(embedding.getDimensions())
+                        .build());
     }
 }

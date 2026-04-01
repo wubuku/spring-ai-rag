@@ -97,12 +97,20 @@ rag:
 
   # RAG 检索配置
   retrieval:
-    default-max-results: 10
-    min-score-threshold: 0.5
-    hybrid-search:
-      enabled: true
-      vector-weight: 0.5
-      fulltext-weight: 0.5
+    vector-weight: 0.5
+    fulltext-weight: 0.5
+    default-limit: 10
+    min-score: 0.3
+
+  # 查询改写配置
+  query-rewrite:
+    enabled: true
+    padding-count: 2
+
+  # 重排序配置
+  rerank:
+    enabled: false
+    diversity-weight: 0.2
 
   # 文档分块配置
   chunk:
@@ -111,8 +119,6 @@ rag:
 
   # 对话记忆配置
   memory:
-    enabled: true
-    type: jdbc
     max-messages: 20
 
 # ============================================

@@ -44,6 +44,6 @@ class GeneralRagAutoConfigurationTest {
         EnableConfigurationProperties annotation = GeneralRagAutoConfiguration.class
                 .getAnnotation(EnableConfigurationProperties.class);
         assertNotNull(annotation);
-        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class}, annotation.value());
+        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class, com.springairag.core.config.RagProperties.class}, annotation.value());
     }
 }

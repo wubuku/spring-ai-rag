@@ -1,9 +1,9 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.RagProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -26,11 +26,11 @@ public class ReRankingService {
 
     private static final Logger log = LoggerFactory.getLogger(ReRankingService.class);
 
-    @Value("${rag.rerank.enabled:false}")
-    private boolean enabled;
+    private final RagProperties.Rerank config;
 
-    @Value("${rag.rerank.diversity-weight:0.2}")
-    private float diversityWeight;
+    public ReRankingService(RagProperties ragProperties) {
+        this.config = ragProperties.getRerank();
+    }
 
     /**
      * 对检索结果进行重排序
@@ -41,7 +41,7 @@ public class ReRankingService {
      * @return 重排序后的结果列表（按最终得分降序）
      */
     public List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults) {
-        if (!enabled || results == null || results.isEmpty()) {
+        if (!config.isEnabled() || results == null || results.isEmpty()) {
             return results;
         }
 
@@ -50,9 +50,9 @@ public class ReRankingService {
                 .map(r -> {
                     float relevance = calculateRelevanceScore(query, r.getChunkText());
                     float diversity = calculateDiversityScore(r.getChunkText(), results);
-                    float finalScore = (float) r.getScore() * (1 - diversityWeight)
-                            + relevance * diversityWeight * 0.5f
-                            + diversity * diversityWeight * 0.5f;
+                    float finalScore = (float) r.getScore() * (1 - config.getDiversityWeight())
+                            + relevance * config.getDiversityWeight() * 0.5f
+                            + diversity * config.getDiversityWeight() * 0.5f;
 
                     RetrievalResult out = new RetrievalResult();
                     out.setDocumentId(r.getDocumentId());
@@ -68,7 +68,7 @@ public class ReRankingService {
                 .limit(maxResults)
                 .collect(Collectors.toList());
 
-        log.debug("Reranked {} results (enabled={})", scored.size(), enabled);
+        log.debug("Reranked {} results (enabled={})", scored.size(), config.isEnabled());
         return scored;
     }
 

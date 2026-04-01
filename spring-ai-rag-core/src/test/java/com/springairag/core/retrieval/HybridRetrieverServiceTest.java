@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -9,7 +10,6 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.lang.reflect.Field;
 import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -31,23 +31,8 @@ class HybridRetrieverServiceTest {
     void setUp() {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
-        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, null);
-
-        // 设置 @Value 字段的默认值
-        setField(service, "vectorWeight", 0.5f);
-        setField(service, "fulltextWeight", 0.5f);
-        setField(service, "defaultLimit", 10);
-        setField(service, "minScore", 0.3f);
-    }
-
-    private void setField(Object target, String name, Object value) {
-        try {
-            Field f = target.getClass().getDeclaredField(name);
-            f.setAccessible(true);
-            f.set(target, value);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+        RagProperties ragProperties = new RagProperties();
+        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, ragProperties, null);
     }
 
     private float[] mockEmbedding() {

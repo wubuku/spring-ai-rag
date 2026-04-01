@@ -2,11 +2,11 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.RagProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -34,25 +34,16 @@ public class HybridRetrieverService {
     private final EmbeddingModel embeddingModel;
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
-
-    @Value("${rag.retrieval.vector-weight:0.5}")
-    private float vectorWeight;
-
-    @Value("${rag.retrieval.fulltext-weight:0.5}")
-    private float fulltextWeight;
-
-    @Value("${rag.retrieval.default-limit:10}")
-    private int defaultLimit;
-
-    @Value("${rag.retrieval.min-score:0.3}")
-    private float minScore;
+    private final RagProperties.Retrieval retrieval;
 
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
             JdbcTemplate jdbcTemplate,
+            RagProperties ragProperties,
             @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor) {
         this.embeddingModel = embeddingModel;
         this.jdbcTemplate = jdbcTemplate;
+        this.retrieval = ragProperties.getRetrieval();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
     }
 
@@ -81,8 +72,8 @@ public class HybridRetrieverService {
 
         int effectiveLimit = (config != null && config.getMaxResults() > 0)
                 ? config.getMaxResults() : limit;
-        float vWeight = (config != null) ? (float) config.getVectorWeight() : vectorWeight;
-        float fWeight = (config != null) ? (float) config.getFulltextWeight() : fulltextWeight;
+        float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
+        float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
         boolean useHybrid = config == null || config.isUseHybridSearch();
 
@@ -214,7 +205,7 @@ public class HybridRetrieverService {
                         double sim = ((Number) row.get("sim")).doubleValue();
                         return toRetrievalResult(row, sim, 0.0, sim);
                     })
-                    .filter(r -> r.getScore() >= minScore)
+                    .filter(r -> r.getScore() >= retrieval.getMinScore())
                     .collect(Collectors.toList());
 
         } catch (Exception e) {

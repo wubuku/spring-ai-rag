@@ -1,8 +1,8 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,12 +14,18 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ReRankingServiceTest {
 
-    private final ReRankingService service = new ReRankingService();
+    private static ReRankingService createService(boolean enabled, float diversityWeight) {
+        RagProperties props = new RagProperties();
+        props.getRerank().setEnabled(enabled);
+        props.getRerank().setDiversityWeight(diversityWeight);
+        return new ReRankingService(props);
+    }
+
+    private final ReRankingService service = createService(false, 0.2f);
 
     @Test
     void rerank_disabled_returnsOriginalOrder() {
-        ReflectionTestUtils.setField(service, "enabled", false);
-
+        // service is created with enabled=false
         List<RetrievalResult> results = List.of(
                 createResult("doc-1", "low relevance", 0.3),
                 createResult("doc-2", "high relevance", 0.9)
@@ -31,15 +37,14 @@ class ReRankingServiceTest {
 
     @Test
     void rerank_enabled_reordersByRelevance() {
-        ReflectionTestUtils.setField(service, "enabled", true);
-        ReflectionTestUtils.setField(service, "diversityWeight", 0.2f);
+        ReRankingService enabledService = createService(true, 0.2f);
 
         List<RetrievalResult> results = new ArrayList<>();
         results.add(createResult("doc-1", "Spring 框架是一个 Java 框架", 0.5));
         results.add(createResult("doc-2", "Spring Boot 提供自动配置功能", 0.8));
         results.add(createResult("doc-3", "完全无关的内容", 0.3));
 
-        List<RetrievalResult> reranked = service.rerank("Spring Boot", results, 5);
+        List<RetrievalResult> reranked = enabledService.rerank("Spring Boot", results, 5);
         assertNotNull(reranked);
         assertFalse(reranked.isEmpty());
 
@@ -52,8 +57,8 @@ class ReRankingServiceTest {
 
     @Test
     void rerank_nullResults_returnsNull() {
-        ReflectionTestUtils.setField(service, "enabled", true);
-        assertNull(service.rerank("query", null, 5));
+        ReRankingService enabledService = createService(true, 0.2f);
+        assertNull(enabledService.rerank("query", null, 5));
     }
 
     @Test
@@ -65,26 +70,26 @@ class ReRankingServiceTest {
 
     @Test
     void rerank_singleResult_returnsSame() {
-        ReflectionTestUtils.setField(service, "enabled", true);
+        ReRankingService enabledService = createService(true, 0.2f);
 
         List<RetrievalResult> results = List.of(
                 createResult("doc-1", "测试内容", 0.9));
 
-        List<RetrievalResult> reranked = service.rerank("测试", results, 5);
+        List<RetrievalResult> reranked = enabledService.rerank("测试", results, 5);
         assertEquals(1, reranked.size());
         assertEquals("doc-1", reranked.get(0).getDocumentId());
     }
 
     @Test
     void rerank_respectsMaxResults() {
-        ReflectionTestUtils.setField(service, "enabled", true);
+        ReRankingService enabledService = createService(true, 0.2f);
 
         List<RetrievalResult> results = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             results.add(createResult("doc-" + i, "content " + i, 0.5 + i * 0.05));
         }
 
-        List<RetrievalResult> reranked = service.rerank("query", results, 3);
+        List<RetrievalResult> reranked = enabledService.rerank("query", results, 3);
         assertTrue(reranked.size() <= 3, "应不超过 maxResults");
     }
 

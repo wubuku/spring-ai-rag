@@ -7,6 +7,7 @@ import com.springairag.core.config.PerformanceConfig;
 import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -33,7 +34,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties(GeneralRagProperties.class)
+@EnableConfigurationProperties({GeneralRagProperties.class, RagProperties.class})
 @Import({
         SpringAiConfig.class,
         EmbeddingModelConfig.class,

@@ -22,7 +22,6 @@ import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -78,7 +77,7 @@ public class RagChatService {
             RagChatHistoryRepository historyRepository,
             DomainExtensionRegistry domainExtensionRegistry,
             PromptCustomizerChain promptCustomizerChain,
-            @Value("${rag.memory.max-messages:20}") int maxMessages,
+            RagProperties ragProperties,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RagMetricsService metricsService,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -88,6 +87,8 @@ public class RagChatService {
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
         this.metricsService = metricsService;
+
+        int maxMessages = ragProperties.getMemory().getMaxMessages();
 
         // 使用 JDBC 存储，保留最近 N 条消息的窗口
         ChatMemory chatMemory = MessageWindowChatMemory.builder()
