@@ -64,7 +64,6 @@ public class SpringAiConfig {
     private Integer anthropicMaxTokens;
 
     @Bean("openAiChatModel")
-    @Primary
     public ChatModel openAiChatModel(RestClient.Builder restClientBuilder) {
         if (!"openai".equals(provider)) {
             log.debug("OpenAI ChatModel skipped, provider is: {}", provider);
@@ -89,7 +88,6 @@ public class SpringAiConfig {
     }
 
     @Bean("anthropicChatModel")
-    @Primary
     public ChatModel anthropicChatModel() {
         if (!"anthropic".equals(provider)) {
             log.debug("Anthropic ChatModel skipped, provider is: {}", provider);
