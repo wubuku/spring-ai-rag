@@ -1,8 +1,11 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.EvaluateRequest;
+import com.springairag.api.dto.FeedbackRequest;
 import com.springairag.core.entity.RagRetrievalEvaluation;
+import com.springairag.core.entity.RagUserFeedback;
 import com.springairag.core.service.RetrievalEvaluationService;
+import com.springairag.core.service.UserFeedbackService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,12 +24,14 @@ import static org.mockito.Mockito.*;
 class EvaluationControllerTest {
 
     private RetrievalEvaluationService evaluationService;
+    private UserFeedbackService userFeedbackService;
     private EvaluationController controller;
 
     @BeforeEach
     void setUp() {
         evaluationService = mock(RetrievalEvaluationService.class);
-        controller = new EvaluationController(evaluationService);
+        userFeedbackService = mock(UserFeedbackService.class);
+        controller = new EvaluationController(evaluationService, userFeedbackService);
     }
 
     @Test
@@ -152,5 +157,104 @@ class EvaluationControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(100L, response.getBody().getTotalEvaluations());
         assertEquals(0.85, response.getBody().getAvgMrr());
+    }
+
+    // ==================== 用户反馈 ====================
+
+    @Test
+    @DisplayName("提交反馈返回保存结果")
+    void submitFeedback_returnsSavedFeedback() {
+        RagUserFeedback feedback = new RagUserFeedback();
+        feedback.setSessionId("s1");
+        feedback.setQuery("测试");
+        feedback.setFeedbackType("THUMBS_UP");
+
+        when(userFeedbackService.submitFeedback(
+                eq("s1"), eq("测试"), eq("THUMBS_UP"),
+                isNull(), isNull(), isNull(), isNull(), isNull()
+        )).thenReturn(feedback);
+
+        FeedbackRequest request = new FeedbackRequest();
+        request.setSessionId("s1");
+        request.setQuery("测试");
+        request.setFeedbackType("THUMBS_UP");
+
+        var response = controller.submitFeedback(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("THUMBS_UP", response.getBody().getFeedbackType());
+    }
+
+    @Test
+    @DisplayName("提交评分反馈传递所有字段")
+    void submitFeedback_rating_passesAllFields() {
+        RagUserFeedback feedback = new RagUserFeedback();
+        when(userFeedbackService.submitFeedback(
+                anyString(), anyString(), anyString(),
+                any(), anyString(), anyList(), anyList(), any()
+        )).thenReturn(feedback);
+
+        FeedbackRequest request = new FeedbackRequest();
+        request.setSessionId("s2");
+        request.setQuery("评分测试");
+        request.setFeedbackType("RATING");
+        request.setRating(5);
+        request.setComment("很好");
+        request.setRetrievedDocumentIds(List.of(1L, 2L));
+        request.setSelectedDocumentIds(List.of(1L));
+        request.setDwellTimeMs(3000L);
+
+        controller.submitFeedback(request);
+
+        verify(userFeedbackService).submitFeedback(
+                "s2", "评分测试", "RATING", 5, "很好",
+                List.of(1L, 2L), List.of(1L), 3000L);
+    }
+
+    @Test
+    @DisplayName("获取反馈统计")
+    void getFeedbackStats_returnsStats() {
+        ZonedDateTime start = ZonedDateTime.now().minusDays(7);
+        ZonedDateTime end = ZonedDateTime.now();
+
+        UserFeedbackService.FeedbackStats stats = new UserFeedbackService.FeedbackStats();
+        stats.setTotalFeedbacks(50);
+        stats.setThumbsUp(40);
+        stats.setThumbsDown(10);
+        stats.setSatisfactionRate(0.8);
+
+        when(userFeedbackService.getStats(start, end)).thenReturn(stats);
+
+        var response = controller.getFeedbackStats(start, end);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(50, response.getBody().getTotalFeedbacks());
+        assertEquals(0.8, response.getBody().getSatisfactionRate(), 0.001);
+    }
+
+    @Test
+    @DisplayName("获取反馈历史")
+    void getFeedbackHistory_returnsList() {
+        RagUserFeedback f = new RagUserFeedback();
+        f.setFeedbackType("THUMBS_DOWN");
+        when(userFeedbackService.getHistory(0, 20)).thenReturn(List.of(f));
+
+        var response = controller.getFeedbackHistory(0, 20);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().size());
+    }
+
+    @Test
+    @DisplayName("按类型查询反馈")
+    void getFeedbackByType_filtersCorrectly() {
+        RagUserFeedback f = new RagUserFeedback();
+        f.setFeedbackType("THUMBS_UP");
+        when(userFeedbackService.getByType("THUMBS_UP", 0, 10)).thenReturn(List.of(f));
+
+        var response = controller.getFeedbackByType("THUMBS_UP", 0, 10);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("THUMBS_UP", response.getBody().get(0).getFeedbackType());
     }
 }

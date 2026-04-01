@@ -1,8 +1,11 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.EvaluateRequest;
+import com.springairag.api.dto.FeedbackRequest;
 import com.springairag.core.entity.RagRetrievalEvaluation;
+import com.springairag.core.entity.RagUserFeedback;
 import com.springairag.core.service.RetrievalEvaluationService;
+import com.springairag.core.service.UserFeedbackService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -24,9 +27,12 @@ import java.util.List;
 public class EvaluationController {
 
     private final RetrievalEvaluationService evaluationService;
+    private final UserFeedbackService userFeedbackService;
 
-    public EvaluationController(RetrievalEvaluationService evaluationService) {
+    public EvaluationController(RetrievalEvaluationService evaluationService,
+                                UserFeedbackService userFeedbackService) {
         this.evaluationService = evaluationService;
+        this.userFeedbackService = userFeedbackService;
     }
 
     /**
@@ -102,6 +108,61 @@ public class EvaluationController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime endDate) {
         return ResponseEntity.ok(evaluationService.getAggregatedMetrics(startDate, endDate));
+    }
+
+    // ==================== 用户反馈 ====================
+
+    /**
+     * 提交用户反馈
+     */
+    @Operation(summary = "提交用户反馈", description = "用户对 RAG 检索结果和回答质量的反馈（点赞/点踩/评分）")
+    @PostMapping("/feedback")
+    public ResponseEntity<RagUserFeedback> submitFeedback(@Valid @RequestBody FeedbackRequest request) {
+        RagUserFeedback result = userFeedbackService.submitFeedback(
+                request.getSessionId(),
+                request.getQuery(),
+                request.getFeedbackType(),
+                request.getRating(),
+                request.getComment(),
+                request.getRetrievedDocumentIds(),
+                request.getSelectedDocumentIds(),
+                request.getDwellTimeMs()
+        );
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 获取反馈统计
+     */
+    @Operation(summary = "反馈统计", description = "按时间段统计用户反馈分布（点赞/点踩/评分）")
+    @GetMapping("/feedback/stats")
+    public ResponseEntity<UserFeedbackService.FeedbackStats> getFeedbackStats(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime endDate) {
+        return ResponseEntity.ok(userFeedbackService.getStats(startDate, endDate));
+    }
+
+    /**
+     * 获取反馈历史
+     */
+    @Operation(summary = "反馈历史", description = "分页查询用户反馈记录")
+    @GetMapping("/feedback/history")
+    public ResponseEntity<List<RagUserFeedback>> getFeedbackHistory(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(userFeedbackService.getHistory(page, size));
+    }
+
+    /**
+     * 按类型查询反馈
+     */
+    @Operation(summary = "按类型查询反馈", description = "按反馈类型（THUMBS_UP/THUMBS_DOWN/RATING）分页查询")
+    @GetMapping("/feedback/type/{feedbackType}")
+    public ResponseEntity<List<RagUserFeedback>> getFeedbackByType(
+            @PathVariable String feedbackType,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return ResponseEntity.ok(userFeedbackService.getByType(feedbackType, page, size));
     }
 
     private RetrievalEvaluationService.EvaluationCase toEvaluationCase(EvaluateRequest request) {
