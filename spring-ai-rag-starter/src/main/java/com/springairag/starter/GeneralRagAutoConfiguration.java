@@ -15,6 +15,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -35,6 +36,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({GeneralRagProperties.class, RagProperties.class})
+@ComponentScan(basePackages = "com.springairag")
 @Import({
         SpringAiConfig.class,
         EmbeddingModelConfig.class,

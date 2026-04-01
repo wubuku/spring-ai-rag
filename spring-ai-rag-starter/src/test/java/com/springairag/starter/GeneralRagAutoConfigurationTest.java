@@ -5,6 +5,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.ComponentScan;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -45,5 +46,12 @@ class GeneralRagAutoConfigurationTest {
                 .getAnnotation(EnableConfigurationProperties.class);
         assertNotNull(annotation);
         assertArrayEquals(new Class<?>[]{GeneralRagProperties.class, com.springairag.core.config.RagProperties.class}, annotation.value());
+    }
+
+    @Test
+    void class_hasComponentScan() {
+        ComponentScan annotation = GeneralRagAutoConfiguration.class.getAnnotation(ComponentScan.class);
+        assertNotNull(annotation);
+        assertEquals("com.springairag", annotation.basePackages()[0]);
     }
 }
