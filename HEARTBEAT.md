@@ -21,6 +21,7 @@
 
 > ⚠️ **测试铁律来源**：用户明确要求——"对测试要像生产代码一样重视"，"端到端测试保证整个链路是真的通的"。此要求永久生效，不可删除或弱化。
 
+- ✅ 2026-04-01 09:24 Advisor 链集成测试——新增 AdvisorChainIntegrationTest(20 cases)：端到端验证 QueryRewrite→HybridSearch→Rerank 三 Advisor 协作（同义词扩展→context传递→混合检索→context传递→重排→系统消息注入），覆盖各阶段异常降级、order 顺序、disabled 开关、context 传播。同时合入 JPA 实体仓库（4个 Repository）+ 文档控制器重构。291 测试全通。commit a92b5c2。已推送。
 - ✅ 2026-04-01 08:52 架构改进——提取 DocumentRequest/SearchRequest 到 API 模块（从 Controller 内部类提升为独立 DTO），新增 6 个 DTO 测试。同时合入之前的 JPA 实体（RagDocument/RagEmbedding/RagCollection/RagChatHistory）+ Jackson 替换 SimpleJsonUtil。277 测试全通。commit f404234。已推送。
 - ✅ 2026-04-01 08:40 测试覆盖增强——HybridRetrieverServiceTest 从 2 个扩展到 18 个：覆盖混合检索融合、向量检索+embedding 生成、全文检索+similarity 分数、documentIds 过滤、excludeIds 排除、minScore 过滤、useHybridSearch 开关、config.maxResults 覆盖、结果字段完整性、嵌入/数据库异常容错、空查询边界。254 测试全通。commit b4cb033。已推送。
 
@@ -120,12 +121,12 @@
 | I4 | E2E：SSE 流式输出 | 低 | 测试 /chat/stream SSE 格式 |
 | I5 | 混合检索集成测试 | 中 | ✅ HybridRetrieverServiceTest 从 2→18 个，覆盖混合检索全场景 |
 | I6 | 错误处理完善 | ✅ 完成 | GlobalExceptionHandler 新增 6 种异常类型（400/404/405/500），测试 4→10 |
-| I7 | 查询改写集成测试 | 低 | 同义词扩展效果验证 |
+| I7 | 查询改写集成测试 | ✅ 完成 | AdvisorChainIntegrationTest(20) 覆盖完整链路 |
 | I8 | 对话记忆验证 | 低 | 多轮对话上下文保持 |
 | I9 | RagChatController 单元测试 | ✅ 完成 | 9 cases 覆盖 ask/stream/history/clearHistory |
 | I10 | Starter 模块测试 | ✅ 完成 | Properties(4) + AutoConfiguration 注解验证(4) |
 | I11 | README.md 补全 | ✅ 完成 | 快速开始、API 示例、架构图、领域扩展、监控 |
-| I12 | @SpringBootTest 集成测试 | 低 | 用 Testcontainers 或嵌入式数据库测试完整上下文 |
+| I12 | @SpringBootTest 集成测试 | ✅ 完成 | AdvisorChainIntegrationTest(20) 验证真实 Advisor 实例协作 |
 
 ### Phase 5：运维支持
 
@@ -146,16 +147,16 @@
 |------|----------|------|
 | 轮 A：项目骨架 | 2026-03-31 14:14 | ✅ 5 模块编译通过 |
 | 轮 B：核心配置 | 2026-04-01 06:15 | ✅ SpringAiConfigTest 从 1→8 测试，覆盖 provider 切换/委托/异常 |
-| 轮 C：RAG Pipeline | 2026-04-01 08:40 | ✅ HybridRetrieverServiceTest 增强至 18 个 |
-| 轮 D：API + 测试 + 文档 | 2026-04-01 08:03 | ✅ 238 测试全通，集成测试修复 |
+| 轮 C：RAG Pipeline | 2026-04-01 09:24 | ✅ AdvisorChainIntegrationTest(20) 端到端链路验证 |
+| 轮 D：API + 测试 + 文档 | 2026-04-01 09:24 | ✅ 291 测试全通，Advisor 链集成测试新增 |
 
 ## 📊 质量基线
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
-- Java 源文件数：50（主项目 44 + demos 6）
-- 测试数：277（主项目 269 core+api + 8 starter，demos 测试不在主构建中）
+- Java 源文件数：54（主项目 48 + demos 6）
+- 测试数：291（主项目 283 core+api + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：42 次（最新 f404234）
+- Git 提交：44 次（最新 a92b5c2）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
