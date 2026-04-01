@@ -54,6 +54,12 @@
             <artifactId>spring-boot-starter-data-jpa</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-vector</artifactId>
+            <version>6.6.5.Final</version>
+        </dependency>
+
         <!-- Spring AI OpenAI 库（不含自动配置，由 SpringAiConfig 手动管理） -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

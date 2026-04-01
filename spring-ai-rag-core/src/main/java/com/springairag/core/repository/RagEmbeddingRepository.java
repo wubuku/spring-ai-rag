@@ -20,22 +20,15 @@ import java.util.List;
 public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long> {
 
     /**
-     * 按文档 ID 删除所有嵌入向量（原生 SQL，避免 Hibernate 反序列化 vector 列）
+     * 按文档 ID 删除所有嵌入向量
+     *
+     * <p>注意：hibernate-vector 模块提供 pgvector 正确类型映射，
+     * 派生方法可正常工作（不再需要原生 SQL）。
      */
-    @Modifying
-    @Transactional
-    @Query(value = "DELETE FROM rag_embeddings WHERE document_id = :documentId", nativeQuery = true)
-    void deleteByDocumentId(@Param("documentId") Long documentId);
+    void deleteByDocumentId(Long documentId);
 
     /**
-     * 按文档 ID 统计嵌入向量数量（原生 SQL）
+     * 按文档 ID 统计嵌入向量数量
      */
-    @Query(value = "SELECT COUNT(*) FROM rag_embeddings WHERE document_id = :documentId", nativeQuery = true)
-    long countByDocumentId(@Param("documentId") Long documentId);
-
-    /**
-     * 按文档 ID 查询嵌入向量数量（使用 JPA，不读取 vector 列）
-     */
-    @Query("SELECT COUNT(e) FROM RagEmbedding e WHERE e.documentId = :documentId")
-    long countByDocumentIdJpa(@Param("documentId") Long documentId);
+    long countByDocumentId(Long documentId);
 }
