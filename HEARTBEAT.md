@@ -2,11 +2,42 @@
 
 ## 🔴🔴 必须主动监控 Cron
 
-**每次会话第一件事**：检查 cron 任务 `43a31dc1-ab83-4724-8879-1d39a78498a9`（Spring AI RAG 构建推进）的执行状态。
+**每次会话第一件事**：
+1. 检查 cron 任务 `43a31dc1-ab83-4724-8879-1d39a78498a9`（Spring AI RAG 构建推进）的执行状态
+2. 读取 `docs/IMPLEMENTATION_COMPARISON.md` 中的改进待办清单，选取下一个 P1 改进项执行
+3. 构建通过后汇报进展
+
 - 如果长时间没收到飞书汇报 → 立即 `openclaw cron runs --id 43a31dc1-ab83-4724-8879-1d39a78498a9 --limit 3` 查看状态
 - 如果 error/timeout → 分析原因，手动修复（如：简化任务、修复代码问题）
 - 如果调度卡住 → `openclaw cron run` 手动触发
 - 汇报要发到飞书群
+
+## 🔴 持续改进路线图
+
+**来源**：`docs/IMPLEMENTATION_COMPARISON.md`（对比三个参考项目的分析）
+
+**三个参考项目**（每次碰到问题都要参考）：
+- `/Users/yangjiefeng/Documents/wubuku/spring-ai-skills-demo` — Spring AI 用法
+- `/Users/yangjiefeng/Documents/taisan/MaxKB4j` — Pipeline 架构
+- `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service` — 生产 RAG 服务
+
+**P1 改进项**（按优先级执行）：
+1. API 兼容性适配层（多 system 消息检测）→ `adapter/` 包
+2. 查询改写增加同义词/限定词 → `QueryRewritingService.java`
+3. 添加检索日志表 → `V3__add_retrieval_logs.sql`
+4. 用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`
+5. 创建 RagProperties 统一配置类 → `config/RagProperties.java`
+6. 创建业务异常类 → `exception/` 包
+7. 异步异常处理 → `config/AsyncConfig.java`
+
+**P2 改进项**（有空就做）：
+详见 `docs/IMPLEMENTATION_COMPARISON.md` 的 P2 改进项详细实施方案（9 项）。
+
+**铁律**：
+- 每轮选 1 个 P1 项执行，不要贪多
+- 做之前先读参考项目对应代码
+- 做完必须 `mvn test` 通过 + `scripts/e2e-test.sh` 通过
+- 进展写入 HEARTBEAT.md 进度日志
 
 ## 🔴 核心铁律
 

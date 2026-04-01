@@ -1,5 +1,7 @@
 package com.springairag.core.config;
 
+import com.springairag.core.adapter.ApiAdapterFactory;
+import com.springairag.core.adapter.ApiCompatibilityAdapter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
@@ -137,5 +139,28 @@ public class SpringAiConfig {
                 .orElseThrow(() -> new IllegalStateException("No ChatModel available"));
         log.info("Creating ChatClient.Builder with model: {}", model.getClass().getSimpleName());
         return ChatClient.builder(model);
+    }
+
+    /**
+     * API 兼容性适配器
+     *
+     * <p>根据当前 provider 自动选择适配策略：
+     * - openai → OpenAiCompatibleAdapter（支持多 system 消息）
+     * - 其他 → 根据 base-url 匹配（如 MiniMax）
+     */
+    @Bean
+    public ApiCompatibilityAdapter apiCompatibilityAdapter(ApiAdapterFactory factory) {
+        String baseUrl;
+        if ("openai".equals(provider)) {
+            baseUrl = openAiBaseUrl;
+        } else if ("anthropic".equals(provider)) {
+            baseUrl = anthropicBaseUrl;
+        } else {
+            baseUrl = openAiBaseUrl;
+        }
+        ApiCompatibilityAdapter adapter = factory.getAdapter(baseUrl);
+        log.info("ApiCompatibilityAdapter: {} for provider={}, baseUrl={}",
+                adapter.getClass().getSimpleName(), provider, baseUrl);
+        return adapter;
     }
 }

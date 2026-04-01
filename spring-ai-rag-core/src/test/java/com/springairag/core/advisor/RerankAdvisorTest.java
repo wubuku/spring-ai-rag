@@ -1,11 +1,15 @@
 package com.springairag.core.advisor;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.adapter.ApiCompatibilityAdapter;
+import com.springairag.core.adapter.MiniMaxAdapter;
+import com.springairag.core.adapter.OpenAiCompatibleAdapter;
 import com.springairag.core.retrieval.ReRankingService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
@@ -21,24 +25,100 @@ import static org.mockito.Mockito.*;
 class RerankAdvisorTest {
 
     private ReRankingService rerankingService;
-    private RerankAdvisor advisor;
+    private ApiCompatibilityAdapter openAiAdapter;
+    private ApiCompatibilityAdapter miniMaxAdapter;
 
     @BeforeEach
     void setUp() {
         rerankingService = Mockito.mock(ReRankingService.class);
-        advisor = new RerankAdvisor(rerankingService);
+        openAiAdapter = new OpenAiCompatibleAdapter();
+        miniMaxAdapter = new MiniMaxAdapter();
+    }
+
+    private RerankAdvisor createAdvisor(ApiCompatibilityAdapter adapter) {
+        return new RerankAdvisor(rerankingService, adapter);
+    }
+
+    @Test
+    void before_withOpenAiAdapter_usesAugmentSystemMessage() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
+        List<RetrievalResult> searchResults = Arrays.asList(
+                createResult("doc-1", "Spring Boot 是一个框架", 0.9),
+                createResult("doc-2", "Spring AI 支持 RAG", 0.8)
+        );
+        List<RetrievalResult> rerankedResults = List.of(
+                createResult("doc-2", "Spring AI 支持 RAG", 0.95)
+        );
+        when(rerankingService.rerank(eq("什么是 Spring"), anyList(), eq(5)))
+                .thenReturn(rerankedResults);
+
+        Prompt prompt = new Prompt(new UserMessage("什么是 Spring"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        // OpenAI 适配器支持多 system 消息，应该注入 system 消息
+        List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
+        boolean hasSystemMessage = messages.stream()
+                .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
+        assertTrue(hasSystemMessage, "OpenAI 适配器应该使用 augmentSystemMessage");
+
+        // 验证 RERANKED_RESULTS_KEY
+        @SuppressWarnings("unchecked")
+        List<RetrievalResult> contextResults = (List<RetrievalResult>) result.context()
+                .get(RerankAdvisor.RERANKED_RESULTS_KEY);
+        assertNotNull(contextResults);
+        assertEquals(1, contextResults.size());
+    }
+
+    @Test
+    void before_withMiniMaxAdapter_usesAugmentUserMessage() {
+        RerankAdvisor advisor = createAdvisor(miniMaxAdapter);
+
+        List<RetrievalResult> searchResults = Arrays.asList(
+                createResult("doc-1", "Spring Boot 是一个框架", 0.9)
+        );
+        List<RetrievalResult> rerankedResults = List.of(
+                createResult("doc-1", "Spring Boot 是一个框架", 0.9)
+        );
+        when(rerankingService.rerank(eq("什么是 Spring"), anyList(), eq(5)))
+                .thenReturn(rerankedResults);
+
+        Prompt prompt = new Prompt(new UserMessage("什么是 Spring"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        // MiniMax 适配器不支持多 system 消息，应该只有 user 消息（包含合并后的上下文）
+        List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
+        boolean hasSystemMessage = messages.stream()
+                .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
+        assertFalse(hasSystemMessage, "MiniMax 适配器不应产生 system 消息");
+
+        // 用户消息应包含参考资料
+        boolean hasContextInUserMsg = messages.stream()
+                .filter(m -> m.getMessageType() == MessageType.USER)
+                .anyMatch(m -> m.getText().contains("Spring Boot 是一个框架"));
+        assertTrue(hasContextInUserMsg, "上下文应合并到用户消息中");
     }
 
     @Test
     void before_reranksAndInjectsContext() {
-        // 准备检索结果
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
         List<RetrievalResult> searchResults = Arrays.asList(
                 createResult("doc-1", "Spring Boot 是一个框架", 0.9),
                 createResult("doc-2", "Spring AI 支持 RAG", 0.8),
                 createResult("doc-3", "Java 编程语言", 0.5)
         );
 
-        // 重排后的结果
         List<RetrievalResult> rerankedResults = Arrays.asList(
                 createResult("doc-2", "Spring AI 支持 RAG", 0.95),
                 createResult("doc-1", "Spring Boot 是一个框架", 0.85)
@@ -47,24 +127,20 @@ class RerankAdvisorTest {
         when(rerankingService.rerank(eq("什么是 Spring"), anyList(), eq(5)))
                 .thenReturn(rerankedResults);
 
-        // 构建请求（带检索结果的 context）
         Prompt prompt = new Prompt(new UserMessage("什么是 Spring"));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
                 .build();
 
-        // 执行
         ChatClientRequest result = advisor.before(request, null);
 
-        // 验证系统消息被注入
         assertNotNull(result.prompt());
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasContextMessage = messages.stream()
-                .anyMatch(m -> m.getText().contains("参考资料") || m.getText().contains("Spring AI"));
-        assertTrue(hasContextMessage, "应该注入包含参考资料的用户消息");
+                .anyMatch(m -> m.getText().contains("Spring AI"));
+        assertTrue(hasContextMessage, "应该注入包含参考资料的消息");
 
-        // 验证 RERANKED_RESULTS_KEY 被设置到 context，供 RagChatService 提取 sources
         @SuppressWarnings("unchecked")
         List<RetrievalResult> contextResults = (List<RetrievalResult>) result.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
@@ -75,6 +151,8 @@ class RerankAdvisorTest {
 
     @Test
     void before_noResultsInContext_skipsRerank() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
         Prompt prompt = new Prompt(new UserMessage("test"));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
@@ -83,15 +161,15 @@ class RerankAdvisorTest {
         ChatClientRequest result = advisor.before(request, null);
 
         verifyNoInteractions(rerankingService);
-        // prompt 应该没有被修改（没有系统消息注入）
         assertEquals(1, result.prompt().getInstructions().size());
     }
 
     @Test
     void before_disabled_returnsOriginalRequest() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
         advisor.setEnabled(false);
 
-        List<RetrievalResult> searchResults = Arrays.asList(
+        List<RetrievalResult> searchResults = List.of(
                 createResult("doc-1", "test content", 0.9)
         );
 
@@ -101,26 +179,30 @@ class RerankAdvisorTest {
                 .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
                 .build();
 
-        ChatClientRequest result = advisor.before(request, null);
+        advisor.before(request, null);
 
         verifyNoInteractions(rerankingService);
     }
 
     @Test
     void before_emptyResults_returnsOriginalRequest() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
         Prompt prompt = new Prompt(new UserMessage("test"));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, Collections.emptyList())
                 .build();
 
-        ChatClientRequest result = advisor.before(request, null);
+        advisor.before(request, null);
 
         verifyNoInteractions(rerankingService);
     }
 
     @Test
     void buildContextFromResults_formatsCorrectly() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
         List<RetrievalResult> results = Arrays.asList(
                 createResult("doc-1", "第一段内容", 0.9),
                 createResult("doc-2", "第二段内容", 0.8)
@@ -134,22 +216,26 @@ class RerankAdvisorTest {
 
     @Test
     void after_returnsOriginalResponse() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
         var response = advisor.after(null, null);
         assertNull(response);
     }
 
     @Test
     void order_isCorrect() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
         assertEquals(Integer.MIN_VALUE + 30, advisor.getOrder());
     }
 
     @Test
     void name_isCorrect() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
         assertEquals("RerankAdvisor", advisor.getName());
     }
 
     @Test
     void order_isAfterHybridSearch() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
         HybridSearchAdvisor hybridSearch = new HybridSearchAdvisor(null);
         assertTrue(advisor.getOrder() > hybridSearch.getOrder(),
                 "RerankAdvisor 应在 HybridSearchAdvisor 之后执行");

@@ -64,7 +64,7 @@ class AdvisorChainIntegrationTest {
 
         queryRewriteAdvisor = new QueryRewriteAdvisor(queryRewritingService);
         hybridSearchAdvisor = new HybridSearchAdvisor(hybridRetrieverService);
-        rerankAdvisor = new RerankAdvisor(rerankingService);
+        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.OpenAiCompatibleAdapter());
     }
 
     /**
@@ -225,11 +225,13 @@ class AdvisorChainIntegrationTest {
 
         ChatClientRequest result = rerankAdvisor.before(request, advisorChain);
 
-        // 验证系统消息被注入
-        String systemText = result.prompt().getUserMessage().getText();
-        assertTrue(systemText.contains("参考资料"), "用户消息应包含参考资料提示");
-        assertTrue(systemText.contains("皮肤类型分为干性、油性、混合性"), "应包含重排后的 top-1 结果");
-        assertTrue(systemText.contains("敏感肌护理建议"), "应包含重排后的 top-2 结果");
+        // OpenAi 兼容适配器使用 augmentSystemMessage 注入上下文
+        String allText = result.prompt().getInstructions().stream()
+                .map(org.springframework.ai.chat.messages.Message::getText)
+                .collect(java.util.stream.Collectors.joining("\n"));
+        assertTrue(allText.contains("参考资料"), "消息应包含参考资料提示");
+        assertTrue(allText.contains("皮肤类型分为干性、油性、混合性"), "应包含重排后的 top-1 结果");
+        assertTrue(allText.contains("敏感肌护理建议"), "应包含重排后的 top-2 结果");
 
         // 验证 reranked results 存入 context
         @SuppressWarnings("unchecked")
@@ -336,10 +338,12 @@ class AdvisorChainIntegrationTest {
         // Advisor 3: Rerank
         ChatClientRequest afterRerank = rerankAdvisor.before(afterSearch, advisorChain);
 
-        // 验证最终结果
-        String systemText = afterRerank.prompt().getUserMessage().getText();
-        assertTrue(systemText.contains("过敏性皮肤护理方案"), "重排后 top-1 应注入用户消息");
-        assertTrue(systemText.contains("敏感皮肤应使用无香料护肤品"), "重排后 top-2 应注入用户消息");
+        // 验证最终结果 — OpenAi 适配器使用 augmentSystemMessage 注入上下文
+        String allText = afterRerank.prompt().getInstructions().stream()
+                .map(org.springframework.ai.chat.messages.Message::getText)
+                .collect(java.util.stream.Collectors.joining("\n"));
+        assertTrue(allText.contains("过敏性皮肤护理方案"), "重排后 top-1 应注入消息");
+        assertTrue(allText.contains("敏感皮肤应使用无香料护肤品"), "重排后 top-2 应注入消息");
 
         @SuppressWarnings("unchecked")
         List<RetrievalResult> finalResults = (List<RetrievalResult>) afterRerank.context()
@@ -365,8 +369,11 @@ class AdvisorChainIntegrationTest {
         ChatClientRequest afterSearch = hybridSearchAdvisor.before(afterRewrite, advisorChain);
         ChatClientRequest afterRerank = rerankAdvisor.before(afterSearch, advisorChain);
 
-        String systemText = afterRerank.prompt().getUserMessage().getText();
-        assertTrue(systemText.contains("参考资料"), "用户消息应包含参考资料上下文");
+        // OpenAi 适配器使用 augmentSystemMessage 注入上下文
+        String allText = afterRerank.prompt().getInstructions().stream()
+                .map(org.springframework.ai.chat.messages.Message::getText)
+                .collect(java.util.stream.Collectors.joining("\n"));
+        assertTrue(allText.contains("参考资料"), "消息应包含参考资料上下文");
     }
 
     @Test
