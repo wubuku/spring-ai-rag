@@ -21,6 +21,8 @@
 
 > ⚠️ **测试铁律来源**：用户明确要求——"对测试要像生产代码一样重视"，"端到端测试保证整个链路是真的通的"。此要求永久生效，不可删除或弱化。
 
+- ✅ 2026-04-01 08:40 测试覆盖增强——HybridRetrieverServiceTest 从 2 个扩展到 18 个：覆盖混合检索融合、向量检索+embedding 生成、全文检索+similarity 分数、documentIds 过滤、excludeIds 排除、minScore 过滤、useHybridSearch 开关、config.maxResults 覆盖、结果字段完整性、嵌入/数据库异常容错、空查询边界。254 测试全通。commit b4cb033。已推送。
+
 ## 🟡 巡检清单（每轮执行）
 
 按顺序执行：
@@ -115,7 +117,7 @@
 | I2 | E2E：嵌入生成端到端 | 中 | 上传 → 嵌入 → 检索 → 验证向量 |
 | I3 | E2E：RAG 问答全链路 | 中 | 嵌入文档 → chat/ask → 验证引用 |
 | I4 | E2E：SSE 流式输出 | 低 | 测试 /chat/stream SSE 格式 |
-| I5 | 混合检索集成测试 | 中 | 向量+全文融合验证 |
+| I5 | 混合检索集成测试 | 中 | ✅ HybridRetrieverServiceTest 从 2→18 个，覆盖混合检索全场景 |
 | I6 | 错误处理完善 | ✅ 完成 | GlobalExceptionHandler 新增 6 种异常类型（400/404/405/500），测试 4→10 |
 | I7 | 查询改写集成测试 | 低 | 同义词扩展效果验证 |
 | I8 | 对话记忆验证 | 低 | 多轮对话上下文保持 |
@@ -143,16 +145,16 @@
 |------|----------|------|
 | 轮 A：项目骨架 | 2026-03-31 14:14 | ✅ 5 模块编译通过 |
 | 轮 B：核心配置 | 2026-04-01 06:15 | ✅ SpringAiConfigTest 从 1→8 测试，覆盖 provider 切换/委托/异常 |
-| 轮 C：RAG Pipeline | 2026-04-01 03:49 | ✅ RetrievalUtils 提取 + 检索组件测试 247 全通 |
+| 轮 C：RAG Pipeline | 2026-04-01 08:40 | ✅ HybridRetrieverServiceTest 增强至 18 个 |
 | 轮 D：API + 测试 + 文档 | 2026-04-01 08:03 | ✅ 238 测试全通，集成测试修复 |
 
 ## 📊 质量基线
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
 - Java 源文件数：46（主项目 40 + demos 6）
-- 测试数：238（主项目 230 core + 8 starter，demos 测试不在主构建中）
+- 测试数：254（主项目 246 core + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：39 次（最新 3244d71）
+- Git 提交：40 次（最新 b4cb033）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
