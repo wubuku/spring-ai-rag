@@ -22,7 +22,7 @@
 - `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service` — 生产 RAG 服务
 
 **P1 改进项**（按优先级执行）：
-1. API 兼容性适配层（多 system 消息检测）→ `adapter/` 包
+1. ~~API 兼容性适配层（多 system 消息检测）→ `adapter/` 包~~ ✅ commit 559d6f5
 2. 查询改写增加同义词/限定词 → `QueryRewritingService.java`
 3. 添加检索日志表 → `V3__add_retrieval_logs.sql`
 4. 用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`
@@ -186,10 +186,10 @@
 ## 📊 质量基线
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
-- Java 源文件数：54（主项目 48 + demos 6）
-- 测试数：309（主项目 301 core+api + 8 starter，demos 测试不在主构建中）
+- Java 源文件数：58（主项目 52 + demos 6）
+- 测试数：311（主项目 303 core+api + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：48 次（最新 cb3b60e）
+- Git 提交：50 次（最新 559d6f5）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -202,6 +202,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 14:27 P1 #1 API 兼容性适配层集成——SpringAiConfig 新增 apiCompatibilityAdapter Bean（根据 provider/base-url 自动选择适配器），RerankAdvisor 注入适配器：支持多 system 消息时用 augmentSystemMessage，不支持时降级为 augmentUserMessage。adapter/ 包新增 4 个类（接口 + OpenAi + MiniMax + Factory）。RerankAdvisorTest 9→11，AdvisorChainIntegrationTest 适配新行为。311 测试全通。commit 559d6f5。已推送。
 - ✅ 2026-04-01 08:03 修复集成测试——删除 RagContextIntegrationTest（CacheConfig 双 CacheManager 冲突 + SpringAiConfig @Primary bean 冲突导致全部 10 个测试失败，bean 存在性测试价值低维护成本高）+ 修复 SpringAiConfig（移除 openAiChatModel/anthropicChatModel 多余的 @Primary）+ RagControllerIntegrationTest 添加 @TestPropertySource 启用 NoHandlerFoundException + 补充 Testcontainers/MockBean 依赖。238 测试全通。commit 3244d71。已推送。
 - ✅ 2026-04-01 06:45 代码质量改进——DocumentRequest/SearchRequest 字段添加 @Schema 注解：与 ChatRequest/RetrievalConfig 保持一致，Swagger UI 现在显示全部 DTO 的完整字段说明。269 测试全通。commit 9d7c122。已推送。
 - ✅ 2026-04-01 06:19 代码质量改进——展开 wildcard import：7 个源文件的 `java.util.*` / `org.springframework.web.bind.annotation.*` 展开为具体类导入。涉及 3 个 Controller + DomainExtensionRegistry + 4 个 Retrieval 类 + HierarchicalTextChunker。269 测试全通。commit 2b6ed96。已推送。
