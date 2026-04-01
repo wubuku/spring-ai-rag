@@ -5,6 +5,8 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -52,6 +54,10 @@ public class RagChatController {
      * <p>请求体中可选 domainId 字段指定领域扩展。
      */
     @Operation(summary = "RAG 问答（非流式）", description = "发送问题，返回完整回答。支持 domainId 指定领域扩展。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "问答成功，返回完整回答"),
+            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+    })
     @PostMapping("/ask")
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
         log.info("RAG ask: sessionId={}, domain={}, message={}",
@@ -66,6 +72,10 @@ public class RagChatController {
      * RAG 问答（流式，SSE）
      */
     @Operation(summary = "RAG 问答（流式 SSE）", description = "流式返回回答内容，通过 Server-Sent Events 逐块推送。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SSE 流式响应，逐块推送回答内容"),
+            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+    })
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
         log.info("RAG stream: sessionId={}, domain={}, message={}",
@@ -101,6 +111,7 @@ public class RagChatController {
      * 获取会话历史
      */
     @Operation(summary = "获取会话历史", description = "查询指定会话的聊天记录，按时间倒序返回。")
+    @ApiResponse(responseCode = "200", description = "返回会话历史记录列表")
     @GetMapping("/history/{sessionId}")
     public ResponseEntity<List<Map<String, Object>>> getHistory(
             @PathVariable String sessionId,

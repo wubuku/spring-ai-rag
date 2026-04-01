@@ -12,6 +12,8 @@ import com.springairag.core.retrieval.RetrievalUtils;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -76,6 +78,10 @@ public class RagDocumentController {
      * 如果内容已存在，返回已有文档信息（不重复创建）。
      */
     @Operation(summary = "创建文档", description = "上传文档内容，自动计算内容哈希用于去重。嵌入向量需通过 /embed 接口单独生成。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "创建成功（或检测到重复内容）"),
+            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+    })
     @PostMapping
     public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
@@ -123,6 +129,10 @@ public class RagDocumentController {
      * 获取文档详情
      */
     @Operation(summary = "获取文档详情", description = "查询文档内容、元数据及嵌入向量数量。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回文档详情"),
+            @ApiResponse(responseCode = "404", description = "文档不存在")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
@@ -143,6 +153,7 @@ public class RagDocumentController {
      * 删除文档（级联删除嵌入向量）
      */
     @Operation(summary = "删除文档", description = "删除文档及其关联的嵌入向量（级联删除）。")
+    @ApiResponse(responseCode = "200", description = "删除成功")
     @DeleteMapping("/{id}")
     @Transactional
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
@@ -168,6 +179,7 @@ public class RagDocumentController {
      * 列出文档（分页，支持过滤）
      */
     @Operation(summary = "列出文档", description = "分页查询文档列表，支持按标题/类型/状态过滤，按创建时间倒序。")
+    @ApiResponse(responseCode = "200", description = "返回文档分页列表")
     @GetMapping
     public ResponseEntity<Map<String, Object>> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
@@ -224,6 +236,10 @@ public class RagDocumentController {
      * 保留 JdbcTemplate 写入向量列（pgvector 格式需要特殊处理）。
      */
     @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。会覆盖旧向量。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "嵌入向量生成成功"),
+            @ApiResponse(responseCode = "404", description = "文档不存在")
+    })
     @PostMapping("/{id}/embed")
     @Transactional
     public ResponseEntity<Map<String, Object>> embedDocument(@PathVariable Long id) {

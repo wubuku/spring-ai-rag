@@ -6,6 +6,8 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -51,6 +53,7 @@ public class RagSearchController {
      * @return 检索结果列表
      */
     @Operation(summary = "直接检索（GET）", description = "混合检索，不经过 LLM 生成。支持向量/全文权重调节。")
+    @ApiResponse(responseCode = "200", description = "返回检索结果列表")
     @GetMapping
     public ResponseEntity<Map<String, Object>> search(
             @RequestParam String query,
@@ -82,6 +85,10 @@ public class RagSearchController {
      * 带请求体的检索（支持更复杂的配置）
      */
     @Operation(summary = "直接检索（POST）", description = "通过请求体提交检索配置，支持限定文档 ID 等高级参数。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回检索结果列表"),
+            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+    })
     @PostMapping
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
             @Valid @RequestBody SearchRequest request) {

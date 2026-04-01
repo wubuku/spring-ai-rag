@@ -6,6 +6,8 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -46,6 +48,7 @@ public class RagCollectionController {
      * 创建集合
      */
     @Operation(summary = "创建集合", description = "创建新的文档集合（知识库）。")
+    @ApiResponse(responseCode = "200", description = "创建成功，返回集合信息")
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
         log.info("Creating collection: name={}", request.getName());
@@ -69,6 +72,10 @@ public class RagCollectionController {
      * 获取集合详情
      */
     @Operation(summary = "获取集合详情", description = "查询集合信息及其文档数量。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回集合详情"),
+            @ApiResponse(responseCode = "404", description = "集合不存在")
+    })
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
         log.info("Getting collection: id={}", id);
@@ -148,6 +155,7 @@ public class RagCollectionController {
      * 删除集合
      */
     @Operation(summary = "删除集合", description = "删除集合。关联的文档 collection_id 将被置空（不删除文档）。")
+    @ApiResponse(responseCode = "200", description = "删除成功")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         log.info("Deleting collection: id={}", id);
@@ -221,6 +229,10 @@ public class RagCollectionController {
      * 将文档加入集合
      */
     @Operation(summary = "将文档加入集合", description = "将指定文档关联到集合中。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "添加成功，返回添加详情"),
+            @ApiResponse(responseCode = "404", description = "集合不存在")
+    })
     @PostMapping("/{id}/documents")
     public ResponseEntity<Map<String, Object>> addDocument(
             @PathVariable Long id,
