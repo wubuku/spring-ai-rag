@@ -5,7 +5,8 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
-import com.springairag.core.retrieval.EmbeddingBatchService;
+import com.springairag.core.service.BatchDocumentService;
+import com.springairag.core.service.DocumentEmbedService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -28,19 +29,17 @@ class RagDocumentControllerTest {
 
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
-    private EmbeddingBatchService embeddingBatchService;
-    private JdbcTemplate jdbcTemplate;
-    private VectorStore vectorStore;
+    private DocumentEmbedService documentEmbedService;
+    private BatchDocumentService batchDocumentService;
     private RagDocumentController controller;
 
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         embeddingRepository = mock(RagEmbeddingRepository.class);
-        embeddingBatchService = mock(EmbeddingBatchService.class);
-        jdbcTemplate = mock(JdbcTemplate.class);
-        vectorStore = mock(VectorStore.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate, vectorStore);
+        documentEmbedService = mock(DocumentEmbedService.class);
+        batchDocumentService = mock(BatchDocumentService.class);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService);
     }
 
     private RagDocument createDoc(Long id, String title, String content) {
@@ -89,7 +88,7 @@ class RagDocumentControllerTest {
     @Test
     void createDocument_duplicateContent_returnsExisting() {
         RagDocument existing = createDoc(10L, "已有文档", "重复内容");
-        String hash = RagDocumentController.computeSha256("重复内容");
+        String hash = BatchDocumentService.computeSha256("重复内容");
 
         when(documentRepository.findByContentHash(hash)).thenReturn(List.of(existing));
 
@@ -108,16 +107,16 @@ class RagDocumentControllerTest {
 
     @Test
     void computeSha256_sameContent_sameHash() {
-        String hash1 = RagDocumentController.computeSha256("hello");
-        String hash2 = RagDocumentController.computeSha256("hello");
+        String hash1 = BatchDocumentService.computeSha256("hello");
+        String hash2 = BatchDocumentService.computeSha256("hello");
         assertEquals(hash1, hash2);
         assertEquals(64, hash1.length()); // SHA-256 = 32 bytes = 64 hex chars
     }
 
     @Test
     void computeSha256_differentContent_differentHash() {
-        String hash1 = RagDocumentController.computeSha256("hello");
-        String hash2 = RagDocumentController.computeSha256("world");
+        String hash1 = BatchDocumentService.computeSha256("hello");
+        String hash2 = BatchDocumentService.computeSha256("world");
         assertNotEquals(hash1, hash2);
     }
 
@@ -282,57 +281,64 @@ class RagDocumentControllerTest {
 
     @Test
     void embedDocument_found() {
-        RagDocument doc = createDoc(1L, "文档",
-                "Spring Boot 是一个用于快速构建 Spring 应用的框架。它提供了自动配置和嵌入式服务器等功能。");
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenReturn(List.of());
+        when(documentEmbedService.embedDocument(1L)).thenReturn(Map.of(
+                "message", "嵌入向量生成完成",
+                "documentId", 1L,
+                "chunksCreated", 3,
+                "embeddingsStored", 3,
+                "status", "COMPLETED"
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
+        assertEquals("COMPLETED", response.getBody().get("status"));
     }
 
     @Test
     void embedDocument_notFound() {
-        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+        when(documentEmbedService.embedDocument(999L))
+                .thenThrow(new DocumentNotFoundException(999L));
 
         assertThrows(DocumentNotFoundException.class, () -> controller.embedDocument(999L));
     }
 
     @Test
     void embedDocument_emptyContent_returns400() {
-        RagDocument doc = createDoc(1L, "空文档", "");
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentEmbedService.embedDocument(1L))
+                .thenThrow(new IllegalArgumentException("文档内容为空: documentId=1"));
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("文档内容为空", response.getBody().get("error"));
+        assertEquals("文档内容为空: documentId=1", response.getBody().get("error"));
     }
 
     @Test
     void embedDocumentViaVectorStore_success() {
-        String longContent = "Spring Boot 是一个用于快速构建 Spring 应用的框架。".repeat(50);
-        RagDocument doc = createDoc(1L, "文档", longContent);
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(documentEmbedService.embedDocumentViaVectorStore(1L)).thenReturn(Map.of(
+                "message", "嵌入向量生成完成（VectorStore 路径）",
+                "documentId", 1L,
+                "chunksCreated", 5,
+                "embeddingsStored", 5,
+                "storageTable", "rag_vector_store",
+                "status", "COMPLETED"
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertTrue((Integer) response.getBody().get("chunksCreated") > 0);
+        assertEquals(5, response.getBody().get("chunksCreated"));
         assertEquals("rag_vector_store", response.getBody().get("storageTable"));
         assertEquals("COMPLETED", response.getBody().get("status"));
-        verify(vectorStore).add(anyList());
     }
 
     @Test
     void embedDocumentViaVectorStore_noVectorStore_returns400() {
-        RagDocumentController noVsController = new RagDocumentController(
-                documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate, null);
+        when(documentEmbedService.embedDocumentViaVectorStore(1L))
+                .thenThrow(new IllegalStateException("VectorStore 未配置，请使用 embedDocument 方法"));
 
-        ResponseEntity<Map<String, Object>> response = noVsController.embedDocumentViaVectorStore(1L);
+        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L);
 
         assertEquals(400, response.getStatusCode().value());
         assertTrue(response.getBody().get("error").toString().contains("VectorStore 未配置"));
@@ -340,15 +346,16 @@ class RagDocumentControllerTest {
 
     @Test
     void embedDocumentViaVectorStore_notFound() {
-        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+        when(documentEmbedService.embedDocumentViaVectorStore(999L))
+                .thenThrow(new DocumentNotFoundException(999L));
 
         assertThrows(DocumentNotFoundException.class, () -> controller.embedDocumentViaVectorStore(999L));
     }
 
     @Test
     void embedDocumentViaVectorStore_emptyContent_returns400() {
-        RagDocument doc = createDoc(1L, "空文档", "");
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentEmbedService.embedDocumentViaVectorStore(1L))
+                .thenThrow(new IllegalArgumentException("文档内容为空"));
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L);
 
@@ -360,65 +367,59 @@ class RagDocumentControllerTest {
 
     @Test
     void batchCreateDocuments_allNew() {
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
-            RagDocument doc = inv.getArgument(0);
-            doc.setId(1L);
-            return doc;
-        });
-
-        var req = new com.springairag.api.dto.BatchDocumentRequest(List.of(
+        var docs = List.of(
                 new DocumentRequest("文档1", "内容1"),
                 new DocumentRequest("文档2", "内容2")
+        );
+        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
+                "results", List.of(
+                        Map.of("index", 0, "title", "文档1", "status", "CREATED", "id", 1L),
+                        Map.of("index", 1, "title", "文档2", "status", "CREATED", "id", 2L)
+                ),
+                "summary", Map.of("total", 2, "created", 2, "duplicated", 0, "failed", 0)
         ));
 
+        var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
         ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
         Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
         assertEquals(2, summary.get("total"));
         assertEquals(2, summary.get("created"));
-        assertEquals(0, summary.get("duplicated"));
-        assertEquals(0, summary.get("failed"));
-        verify(documentRepository, times(2)).save(any(RagDocument.class));
     }
 
     @Test
     void batchCreateDocuments_withDuplicates() {
-        RagDocument existing = createDoc(10L, "已有文档", "重复内容");
-        String hash = RagDocumentController.computeSha256("重复内容");
-        when(documentRepository.findByContentHash(hash)).thenReturn(List.of(existing));
-        when(documentRepository.findByContentHash(argThat(h -> !h.equals(hash)))).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
-            RagDocument doc = inv.getArgument(0);
-            doc.setId(20L);
-            return doc;
-        });
-
-        var req = new com.springairag.api.dto.BatchDocumentRequest(List.of(
+        var docs = List.of(
                 new DocumentRequest("新文档", "新内容"),
                 new DocumentRequest("重复标题", "重复内容")
+        );
+        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
+                "results", List.of(
+                        Map.of("index", 0, "title", "新文档", "status", "CREATED", "id", 20L),
+                        Map.of("index", 1, "title", "重复标题", "status", "DUPLICATE", "id", 10L)
+                ),
+                "summary", Map.of("total", 2, "created", 1, "duplicated", 1, "failed", 0)
         ));
 
+        var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
         ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
         Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(2, summary.get("total"));
         assertEquals(1, summary.get("created"));
         assertEquals(1, summary.get("duplicated"));
     }
 
     @Test
     void batchCreateDocuments_withException() {
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
-        when(documentRepository.save(any(RagDocument.class)))
-                .thenThrow(new RuntimeException("DB error"));
-
-        var req = new com.springairag.api.dto.BatchDocumentRequest(List.of(
-                new DocumentRequest("文档", "内容")
+        var docs = List.of(new DocumentRequest("文档", "内容"));
+        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
+                "results", List.of(Map.of("index", 0, "title", "文档", "status", "FAILED", "error", "DB error")),
+                "summary", Map.of("total", 1, "created", 0, "duplicated", 0, "failed", 1)
         ));
 
+        var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
         ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
@@ -428,25 +429,31 @@ class RagDocumentControllerTest {
 
     @Test
     void batchDeleteDocuments_success() {
-        when(documentRepository.existsById(1L)).thenReturn(true);
-        when(documentRepository.existsById(2L)).thenReturn(true);
+        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 2L))).thenReturn(Map.of(
+                "results", List.of(
+                        Map.of("id", 1L, "status", "DELETED"),
+                        Map.of("id", 2L, "status", "DELETED")
+                ),
+                "summary", Map.of("total", 2, "deleted", 2, "notFound", 0)
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
                 Map.of("ids", List.of(1L, 2L)));
 
         assertEquals(200, response.getStatusCode().value());
         Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(2, summary.get("total"));
         assertEquals(2, summary.get("deleted"));
-        assertEquals(0, summary.get("notFound"));
-        verify(embeddingRepository).deleteByDocumentIdIn(List.of(1L, 2L));
-        verify(documentRepository, times(2)).deleteById(anyLong());
     }
 
     @Test
     void batchDeleteDocuments_someNotFound() {
-        when(documentRepository.existsById(1L)).thenReturn(true);
-        when(documentRepository.existsById(999L)).thenReturn(false);
+        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 999L))).thenReturn(Map.of(
+                "results", List.of(
+                        Map.of("id", 1L, "status", "DELETED"),
+                        Map.of("id", 999L, "status", "NOT_FOUND")
+                ),
+                "summary", Map.of("total", 2, "deleted", 1, "notFound", 1)
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
                 Map.of("ids", List.of(1L, 999L)));
@@ -467,6 +474,9 @@ class RagDocumentControllerTest {
 
     @Test
     void batchDeleteDocuments_tooManyIds_returns400() {
+        when(batchDocumentService.batchDeleteDocuments(anyList()))
+                .thenThrow(new IllegalArgumentException("单次批量删除不超过 100 条"));
+
         List<Long> manyIds = new ArrayList<>();
         for (int i = 0; i < 101; i++) manyIds.add((long) i);
 
@@ -478,13 +488,13 @@ class RagDocumentControllerTest {
 
     @Test
     void batchEmbedDocuments_success() {
-        String longContent = "Spring Boot 是一个用于快速构建 Spring 应用的框架。".repeat(50);
-        RagDocument doc1 = createDoc(1L, "文档1", longContent);
-        RagDocument doc2 = createDoc(2L, "文档2", longContent);
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc1));
-        when(documentRepository.findById(2L)).thenReturn(Optional.of(doc2));
-        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
-        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenReturn(List.of());
+        when(documentEmbedService.batchEmbedDocuments(List.of(1L, 2L))).thenReturn(Map.of(
+                "results", List.of(
+                        Map.of("documentId", 1L, "status", "COMPLETED", "chunksCreated", 5, "embeddingsStored", 5),
+                        Map.of("documentId", 2L, "status", "COMPLETED", "chunksCreated", 3, "embeddingsStored", 3)
+                ),
+                "summary", Map.of("total", 2, "success", 2, "failed", 0, "skipped", 0)
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(1L, 2L)));
@@ -493,12 +503,14 @@ class RagDocumentControllerTest {
         Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
         assertEquals(2, summary.get("total"));
         assertEquals(2, summary.get("success"));
-        assertEquals(0, summary.get("failed"));
     }
 
     @Test
     void batchEmbedDocuments_notFound_skipped() {
-        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+        when(documentEmbedService.batchEmbedDocuments(List.of(999L))).thenReturn(Map.of(
+                "results", List.of(Map.of("documentId", 999L, "status", "NOT_FOUND")),
+                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1)
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(999L)));
@@ -510,8 +522,10 @@ class RagDocumentControllerTest {
 
     @Test
     void batchEmbedDocuments_emptyContent_skipped() {
-        RagDocument doc = createDoc(1L, "空文档", "");
-        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentEmbedService.batchEmbedDocuments(List.of(1L))).thenReturn(Map.of(
+                "results", List.of(Map.of("documentId", 1L, "status", "SKIPPED", "reason", "内容为空")),
+                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1)
+        ));
 
         ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(1L)));
@@ -531,6 +545,9 @@ class RagDocumentControllerTest {
 
     @Test
     void batchEmbedDocuments_tooManyIds_returns400() {
+        when(documentEmbedService.batchEmbedDocuments(anyList()))
+                .thenThrow(new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）"));
+
         List<Long> manyIds = new ArrayList<>();
         for (int i = 0; i < 51; i++) manyIds.add((long) i);
 

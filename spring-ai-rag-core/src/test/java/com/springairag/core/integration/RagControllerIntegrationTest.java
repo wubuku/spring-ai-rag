@@ -82,6 +82,8 @@ class RagControllerIntegrationTest {
     @MockBean private EmbeddingBatchService embeddingBatchService;
     @MockBean private JdbcTemplate jdbcTemplate;
     @MockBean private VectorStore vectorStore;
+    @MockBean private com.springairag.core.service.DocumentEmbedService documentEmbedService;
+    @MockBean private com.springairag.core.service.BatchDocumentService batchDocumentService;
 
     // ==================== Collection ====================
     @MockBean private RagCollectionRepository collectionRepository;

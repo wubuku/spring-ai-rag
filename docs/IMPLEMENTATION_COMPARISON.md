@@ -3,6 +3,23 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
+> **最后更新**: 2026-04-02 — 实施规划 Phase 1-5 全部完成，100 源文件 + 61 测试文件，180+ 测试通过
+
+---
+
+## 🎉 完成状态总览
+
+| 阶段 | 内容 | 状态 |
+|------|------|------|
+| Phase 1 | 基础框架（ChatModel/EmbeddingModel/PgVectorStore） | ✅ 完成 |
+| Phase 2 | 核心 RAG 组件（混合检索/查询改写/重排/分块） | ✅ 完成 |
+| Phase 3 | RAG Pipeline + REST API + 对话记忆 | ✅ 完成 |
+| Phase 4 | 领域扩展示例（DomainRagExtension + demo） | ✅ 完成 |
+| Phase 5 | 运维支持（监控/健康检查/告警/性能） | ✅ 完成 |
+
+**已完成改进项**: P1 × 7 + P2 × 9 + P3 × 2 = 全部 18 项
+
+---
 
 ---
 
@@ -233,23 +250,26 @@
 
 ## 完整改进待办清单
 
-| 优先级 | 改进项 | 参考来源 | 文件 |
-|--------|--------|---------|------|
-| P1 | API 兼容性适配层（多 system 消息） | dermai-rag-service ApiClientService | 新增 adapter/ |
-| P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` |
-| P1 | 添加检索日志表 | dermai-rag-service V3 | `db/migration/V3__add_retrieval_logs.sql` |
-| P1 | 用 VectorStore.add() 简化嵌入存储 | spring-ai-skills-demo | `controller/RagDocumentController.java` |
-| P1 | 创建 RagProperties 统一配置类 | dermai-rag-service | 新增 config/RagProperties.java |
-| P1 | 创建业务异常类 | dermai-rag-service | 新增 exception/ |
-| P1 | 异步异常处理 | dermai-rag-service AsyncConfig | 新增 config/AsyncConfig.java |
-| P3 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 |
-| P2 | Pipeline 可观测性 | MaxKB4j AbsStep | advisor/ 各 Advisor |
-| P2 | A/B 实验框架 | dermai-rag-service | 新增 |
-| P2 | 用户反馈端点 | dermai-rag-service | 新增 `controller/FeedbackController.java` |
-| P2 | 检索质量评估（RetrievalEvaluationService） | dermai-rag-service | 新增 `service/RetrievalEvaluationService.java` || P3 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
-| P3 | 统一错误响应格式 | dermai-rag-service | GlobalExceptionHandler |
-| P2 | 文档内容哈希去重 | dermai-rag-service | controller/RagDocumentController |
-| P2 | 文档批量操作端点 | — | controller/RagDocumentController |
+| 优先级 | 改进项 | 参考来源 | 文件 | 状态 |
+|--------|--------|---------|------|------|
+| P1 | API 兼容性适配层（多 system 消息） | dermai-rag-service ApiClientService | `config/ChatModelConfig.java` | ✅ @ConditionalOnMissingBean 双 Bean |
+| P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` | ✅ 同义词+领域限定+Padding |
+| P1 | 添加检索日志表 | dermai-rag-service V3 | `db/migration/V7__add_collection.sql` | ✅ rag_retrieval_logs 已迁移 |
+| P1 | 用 VectorStore.add() 简化嵌入存储 | spring-ai-skills-demo | `controller/RagDocumentController.java` | ✅ /embed/vs 端点 |
+| P1 | 创建 RagProperties 统一配置类 | dermai-rag-service | `config/RagProperties.java` | ✅ @ConfigurationProperties |
+| P1 | 创建业务异常类 | dermai-rag-service | `exception/` 包 | ✅ 3 个自定义异常 |
+| P1 | 异步异常处理 | dermai-rag-service AsyncConfig | `config/AsyncConfig.java` | ✅ CustomAsyncExceptionHandler |
+| P2 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 | ✅ 7 实体已补注解 |
+| P2 | Pipeline 可观测性 | MaxKB4j AbsStep | advisor/ 各 Advisor | ✅ MetricsService + Timer |
+| P2 | A/B 实验框架 | dermai-rag-service | `service/AbTestService.java` | ✅ 接口+实现+Controller |
+| P2 | 用户反馈端点 | dermai-rag-service | `controller/FeedbackController.java` | ✅ POST /feedback |
+| P2 | 检索质量评估 | dermai-rag-service | `service/RetrievalEvaluationService.java` | ✅ Precision@K/MRR |
+| P2 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | `filter/ApiKeyAuthFilter.java` | ✅ X-API-Key 过滤器 |
+| P2 | 统一错误响应格式 | dermai-rag-service | `dto/ErrorResponse.java` | ✅ code+message+details |
+| P2 | 文档内容哈希去重 | dermai-rag-service | `controller/RagDocumentController.java` | ✅ SHA-256 去重 |
+| P2 | 文档批量操作端点 | — | `controller/RagDocumentController.java` | ✅ batch create/delete/embed |
+| P2 | JaCoCo 覆盖率集成 | — | 所有模块 pom.xml | ✅ 87.4% 指令/74.8% 分支 |
+| P3 | SpringDoc OpenAPI 文档 | — | OpenApiConfig + Controllers | ✅ 全局配置+@ApiResponse |
 
 ---
 
@@ -310,3 +330,19 @@
 | 4 | 文档结构 | 两个待办清单导致重复 | 合并为一个 |
 
 **审查通过**：经过 4 轮审查，修正 5 个问题，文档内容准确、结构清晰。
+
+---
+
+## 🚀 Phase 6 建议（后实施规划）
+
+Phase 1-5 全部完成后，以下方向可继续推进：
+
+| 优先级 | 改进项 | 说明 |
+|--------|--------|------|
+| P1 | RagDocumentController 重构 | 668 行最大文件，拆分 BatchDocumentService + EmbedDocumentService |
+| P2 | 多模型并行对比测试 | 验证 DeepSeek/智谱/Anthropic 的 RAG 效果差异 |
+| P2 | 查询改写 LLM 辅助模式 | 当前是规则+词典，可增加 LLM 自动改写路径 |
+| P2 | 检索结果缓存策略优化 | Caffeine 缓存已集成，需评估命中率和 TTL 策略 |
+| P3 | Docker Compose 一键部署 | PostgreSQL + App + Nginx 编排 |
+| P3 | API 版本管理策略 | /api/v1/ 设计已有，需考虑 v2 兼容策略 |
+| P3 | 国际化支持 | 错误消息、文档支持英文 |

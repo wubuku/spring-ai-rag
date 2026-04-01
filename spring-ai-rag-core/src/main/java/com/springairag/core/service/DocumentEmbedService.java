@@ -1,0 +1,308 @@
+package com.springairag.core.service;
+
+import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.repository.RagEmbeddingRepository;
+import com.springairag.core.retrieval.EmbeddingBatchService;
+import com.springairag.core.retrieval.RetrievalUtils;
+import com.springairag.documents.chunk.HierarchicalTextChunker;
+import com.springairag.documents.chunk.TextChunk;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+/**
+ * 文档嵌入服务
+ *
+ * <p>负责将文档内容分块、生成嵌入向量并存储。
+ * 支持两种存储路径：
+ * <ul>
+ *   <li>JdbcTemplate 路径 — 存储到 rag_embeddings，支持 document_id 关联</li>
+ *   <li>VectorStore 路径 — 存储到 rag_vector_store，Spring AI 自动管理</li>
+ * </ul>
+ */
+@Service
+public class DocumentEmbedService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
+    private static final HierarchicalTextChunker chunker = new HierarchicalTextChunker(1000, 100, 100);
+
+    private final RagDocumentRepository documentRepository;
+    private final RagEmbeddingRepository embeddingRepository;
+    private final EmbeddingBatchService embeddingBatchService;
+    private final JdbcTemplate jdbcTemplate;
+    private final VectorStore vectorStore;
+
+    public DocumentEmbedService(RagDocumentRepository documentRepository,
+                                 RagEmbeddingRepository embeddingRepository,
+                                 EmbeddingBatchService embeddingBatchService,
+                                 JdbcTemplate jdbcTemplate,
+                                 @Autowired(required = false) VectorStore vectorStore) {
+        this.documentRepository = documentRepository;
+        this.embeddingRepository = embeddingRepository;
+        this.embeddingBatchService = embeddingBatchService;
+        this.jdbcTemplate = jdbcTemplate;
+        this.vectorStore = vectorStore;
+    }
+
+    /**
+     * 为文档生成嵌入向量（JdbcTemplate 路径）
+     *
+     * <p>流程：获取文档 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
+     *
+     * @param documentId 文档 ID
+     * @return 操作结果（chunksCreated, embeddingsStored, status）
+     */
+    @Transactional
+    public Map<String, Object> embedDocument(Long documentId) {
+        log.info("Generating embeddings for document: id={}", documentId);
+
+        RagDocument doc = findDocument(documentId);
+        String content = validateContent(doc);
+
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            return Map.of(
+                    "message", "文档内容太短，无需分块",
+                    "documentId", documentId,
+                    "chunksCreated", 0
+            );
+        }
+
+        log.info("Document {} split into {} chunks", documentId, chunks.size());
+
+        doc.setProcessingStatus("PROCESSING");
+        documentRepository.save(doc);
+
+        // 删除旧向量
+        embeddingRepository.deleteByDocumentId(documentId);
+
+        // 生成嵌入并存储
+        List<String> texts = chunks.stream().map(TextChunk::text).toList();
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                embeddingBatchService.createEmbeddingsBatch(texts);
+
+        int stored = storeEmbeddings(documentId, chunks, results);
+
+        doc.setProcessingStatus("COMPLETED");
+        documentRepository.save(doc);
+
+        log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
+
+        return Map.of(
+                "message", "嵌入向量生成完成",
+                "documentId", documentId,
+                "chunksCreated", chunks.size(),
+                "embeddingsStored", stored,
+                "status", "COMPLETED"
+        );
+    }
+
+    /**
+     * 为文档生成嵌入向量（VectorStore 简化路径）
+     *
+     * @param documentId 文档 ID
+     * @return 操作结果
+     * @throws IllegalStateException VectorStore 未配置时抛出
+     */
+    @Transactional
+    public Map<String, Object> embedDocumentViaVectorStore(Long documentId) {
+        if (vectorStore == null) {
+            throw new IllegalStateException("VectorStore 未配置，请使用 embedDocument 方法");
+        }
+
+        log.info("Generating embeddings via VectorStore for document: id={}", documentId);
+
+        RagDocument doc = findDocument(documentId);
+        String content = validateContent(doc);
+
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            return Map.of(
+                    "message", "文档内容太短，无需分块",
+                    "documentId", documentId,
+                    "chunksCreated", 0
+            );
+        }
+
+        doc.setProcessingStatus("PROCESSING");
+        documentRepository.save(doc);
+
+        List<Document> documents = buildVectorStoreDocuments(documentId, chunks);
+        vectorStore.add(documents);
+
+        doc.setProcessingStatus("COMPLETED");
+        documentRepository.save(doc);
+
+        log.info("Document {} embedding via VectorStore completed: {} chunks stored", documentId, chunks.size());
+
+        return Map.of(
+                "message", "嵌入向量生成完成（VectorStore 路径）",
+                "documentId", documentId,
+                "chunksCreated", chunks.size(),
+                "embeddingsStored", chunks.size(),
+                "storageTable", "rag_vector_store",
+                "status", "COMPLETED"
+        );
+    }
+
+    /**
+     * 批量为多个文档生成嵌入向量
+     *
+     * @param documentIds 文档 ID 列表
+     * @return 批量操作结果（results + summary）
+     */
+    @Transactional
+    public Map<String, Object> batchEmbedDocuments(List<Long> documentIds) {
+        if (documentIds.size() > 50) {
+            throw new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）");
+        }
+
+        log.info("Batch embedding {} documents", documentIds.size());
+
+        List<Map<String, Object>> results = new java.util.ArrayList<>(documentIds.size());
+        int success = 0, failed = 0, skipped = 0;
+
+        for (Long id : documentIds) {
+            Map<String, Object> itemResult = new HashMap<>();
+            itemResult.put("documentId", id);
+
+            try {
+                RagDocument doc = documentRepository.findById(id).orElse(null);
+                if (doc == null) {
+                    itemResult.put("status", "NOT_FOUND");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                String content = doc.getContent();
+                if (content == null || content.isBlank()) {
+                    itemResult.put("status", "SKIPPED");
+                    itemResult.put("reason", "内容为空");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                List<TextChunk> chunks = chunker.split(content);
+                if (chunks.isEmpty()) {
+                    itemResult.put("status", "SKIPPED");
+                    itemResult.put("reason", "内容太短，无需分块");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                doc.setProcessingStatus("PROCESSING");
+                documentRepository.save(doc);
+
+                embeddingRepository.deleteByDocumentId(id);
+
+                List<String> texts = chunks.stream().map(TextChunk::text).toList();
+                List<EmbeddingBatchService.EmbeddingResult> embResults =
+                        embeddingBatchService.createEmbeddingsBatch(texts);
+
+                int stored = storeEmbeddings(id, chunks, embResults);
+
+                doc.setProcessingStatus("COMPLETED");
+                documentRepository.save(doc);
+
+                itemResult.put("status", "COMPLETED");
+                itemResult.put("chunksCreated", chunks.size());
+                itemResult.put("embeddingsStored", stored);
+                success++;
+
+            } catch (Exception e) {
+                log.error("Failed to embed document {}: {}", id, e.getMessage());
+                itemResult.put("status", "FAILED");
+                itemResult.put("error", e.getMessage());
+                failed++;
+            }
+
+            results.add(itemResult);
+        }
+
+        log.info("Batch embed completed: {} success, {} failed, {} skipped", success, failed, skipped);
+
+        return Map.of(
+                "results", results,
+                "summary", Map.of(
+                        "total", documentIds.size(),
+                        "success", success,
+                        "failed", failed,
+                        "skipped", skipped
+                )
+        );
+    }
+
+    /**
+     * VectorStore 是否可用
+     */
+    public boolean isVectorStoreAvailable() {
+        return vectorStore != null;
+    }
+
+    // ==================== 内部方法 ====================
+
+    private RagDocument findDocument(Long id) {
+        return documentRepository.findById(id)
+                .orElseThrow(() -> new DocumentNotFoundException(id));
+    }
+
+    private String validateContent(RagDocument doc) {
+        String content = doc.getContent();
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("文档内容为空: documentId=" + doc.getId());
+        }
+        return content;
+    }
+
+    private int storeEmbeddings(Long documentId, List<TextChunk> chunks,
+                                 List<EmbeddingBatchService.EmbeddingResult> results) {
+        int stored = 0;
+        for (int i = 0; i < results.size(); i++) {
+            EmbeddingBatchService.EmbeddingResult result = results.get(i);
+            if (result.isSuccess()) {
+                TextChunk chunk = chunks.get(i);
+                String vectorStr = RetrievalUtils.vectorToString(result.getEmbedding());
+                jdbcTemplate.update(
+                        "INSERT INTO rag_embeddings (document_id, chunk_text, chunk_index, embedding, chunk_start_pos, chunk_end_pos, created_at) " +
+                                "VALUES (?, ?, ?, ?::vector, ?, ?, NOW())",
+                        documentId, chunk.text(), i, vectorStr, chunk.startPos(), chunk.endPos());
+                stored++;
+            } else {
+                log.warn("Embedding failed for chunk {} in doc {}: {}", i, documentId, result.getError());
+            }
+        }
+        return stored;
+    }
+
+    private List<Document> buildVectorStoreDocuments(Long documentId, List<TextChunk> chunks) {
+        List<Document> documents = new java.util.ArrayList<>(chunks.size());
+        for (int i = 0; i < chunks.size(); i++) {
+            TextChunk chunk = chunks.get(i);
+            documents.add(Document.builder()
+                    .id(documentId + "-" + i)
+                    .text(chunk.text())
+                    .metadata(Map.of(
+                            "documentId", String.valueOf(documentId),
+                            "chunkIndex", String.valueOf(i),
+                            "chunkStartPos", String.valueOf(chunk.startPos()),
+                            "chunkEndPos", String.valueOf(chunk.endPos())
+                    ))
+                    .build());
+        }
+        return documents;
+    }
+}
