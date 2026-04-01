@@ -25,9 +25,16 @@
 | 11 | JaCoCo 覆盖率集成 + 测试补充 | 质量 | ✅ 2026-04-02 |
 | 12 | 实体 @Table(indexes) + ErrorResponse DTO | 代码质量 | ✅ 2026-04-02 |
 | 13 | API Key 认证过滤器 | 安全 | ✅ 2026-04-02 |
+| 14 | RagDocumentController 重构 | 代码质量 | ✅ 2026-04-02 |
+| 15 | DocumentEmbedService 单元测试 | 测试覆盖 | ⏳ 下一步 |
+| 16 | BatchDocumentService 单元测试 | 测试覆盖 | ⏳ |
+| 17 | 多模型并行对比测试 | 验证 | ⏳ |
+| 18 | 查询改写 LLM 辅助模式 | 功能增强 | ⏳ |
 
 ## 进度日志
 
+- 2026-04-02 07:45 — ✅ RagDocumentController 重构：668→294 行（-56%），拆分 DocumentEmbedService + BatchDocumentService，552 测试通过，commit 4a12402
+- 2026-04-02 07:33 — 📋 HEARTBEAT 待办清单全部完成，Phase 1-5 实施规划落地
 - 2026-04-02 06:56 — ✅ #13 API Key 认证过滤器：ApiKeyAuthFilter + Security 配置 + 10 测试，commit f46e6e4
 - 2026-04-02 06:52 — ✅ #12 实体索引注解+ErrorResponse：7 实体补 @Table(indexes)，ErrorResponse DTO 替代 Map，commit f56ff8d
 - 2026-04-02 03:29 — ✅ #1 demo-basic-rag 补测试：DemoControllerTest 8 个单元测试，commit 94723d4
