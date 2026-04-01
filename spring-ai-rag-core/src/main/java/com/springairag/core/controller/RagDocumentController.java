@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.entity.RagDocument;
@@ -28,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
@@ -373,6 +375,242 @@ public class RagDocumentController {
                 "embeddingsStored", chunks.size(),
                 "storageTable", "rag_vector_store",
                 "status", "COMPLETED"
+        ));
+    }
+
+    // ==================== 批量操作 ====================
+
+    /**
+     * 批量创建文档
+     *
+     * <p>支持一次上传多个文档，自动去重（按内容 SHA-256）。
+     * 单条失败不影响其他文档，结果中报告每条的状态。
+     */
+    @Operation(summary = "批量创建文档", description = "一次上传多个文档（最多 100 条），自动去重。单条失败不影响其他文档。")
+    @PostMapping("/batch")
+    public ResponseEntity<Map<String, Object>> batchCreateDocuments(
+            @Valid @RequestBody BatchDocumentRequest request) {
+        List<DocumentRequest> docs = request.getDocuments();
+        log.info("Batch creating {} documents", docs.size());
+
+        List<Map<String, Object>> results = new ArrayList<>(docs.size());
+        int created = 0, duplicated = 0, failed = 0;
+
+        for (int i = 0; i < docs.size(); i++) {
+            DocumentRequest req = docs.get(i);
+            Map<String, Object> itemResult = new HashMap<>();
+            itemResult.put("index", i);
+            itemResult.put("title", req.getTitle());
+
+            try {
+                String content = req.getContent();
+                String contentHash = computeSha256(content);
+
+                // 去重检查
+                List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
+                if (!existing.isEmpty()) {
+                    RagDocument dup = existing.get(0);
+                    itemResult.put("status", "DUPLICATE");
+                    itemResult.put("id", dup.getId());
+                    itemResult.put("message", "内容已存在");
+                    duplicated++;
+                } else {
+                    RagDocument doc = new RagDocument();
+                    doc.setTitle(req.getTitle());
+                    doc.setContent(content);
+                    doc.setSource(req.getSource());
+                    doc.setDocumentType(req.getDocumentType());
+                    doc.setMetadata(req.getMetadata());
+                    doc.setContentHash(contentHash);
+                    doc = documentRepository.save(doc);
+
+                    itemResult.put("status", "CREATED");
+                    itemResult.put("id", doc.getId());
+                    created++;
+                }
+            } catch (Exception e) {
+                log.error("Failed to create document at index {}: {}", i, e.getMessage());
+                itemResult.put("status", "FAILED");
+                itemResult.put("error", e.getMessage());
+                failed++;
+            }
+
+            results.add(itemResult);
+        }
+
+        log.info("Batch create completed: {} created, {} duplicated, {} failed", created, duplicated, failed);
+
+        return ResponseEntity.ok(Map.of(
+                "results", results,
+                "summary", Map.of(
+                        "total", docs.size(),
+                        "created", created,
+                        "duplicated", duplicated,
+                        "failed", failed
+                )
+        ));
+    }
+
+    /**
+     * 批量删除文档（级联删除嵌入向量）
+     */
+    @Operation(summary = "批量删除文档", description = "按 ID 列表批量删除文档及其嵌入向量。单条不存在不影响其他文档。")
+    @DeleteMapping("/batch")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> batchDeleteDocuments(
+            @RequestBody Map<String, List<Long>> request) {
+        List<Long> ids = request.get("ids");
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ids 列表不能为空"));
+        }
+        if (ids.size() > 100) {
+            return ResponseEntity.badRequest().body(Map.of("error", "单次批量删除不超过 100 条"));
+        }
+
+        log.info("Batch deleting {} documents", ids.size());
+
+        List<Map<String, Object>> results = new ArrayList<>(ids.size());
+        int deleted = 0, notFound = 0;
+
+        // 批量删除嵌入向量
+        embeddingRepository.deleteByDocumentIdIn(ids);
+
+        for (Long id : ids) {
+            Map<String, Object> itemResult = new HashMap<>();
+            itemResult.put("id", id);
+
+            if (documentRepository.existsById(id)) {
+                documentRepository.deleteById(id);
+                itemResult.put("status", "DELETED");
+                deleted++;
+            } else {
+                itemResult.put("status", "NOT_FOUND");
+                notFound++;
+            }
+
+            results.add(itemResult);
+        }
+
+        log.info("Batch delete completed: {} deleted, {} not found", deleted, notFound);
+
+        return ResponseEntity.ok(Map.of(
+                "results", results,
+                "summary", Map.of(
+                        "total", ids.size(),
+                        "deleted", deleted,
+                        "notFound", notFound
+                )
+        ));
+    }
+
+    /**
+     * 批量生成嵌入向量
+     *
+     * <p>对多个文档并行执行分块 + 嵌入生成。使用 JdbcTemplate 路径存储到 rag_embeddings。
+     * 单个文档失败不影响其他文档。
+     */
+    @Operation(summary = "批量生成嵌入向量", description = "对多个文档批量执行分块和嵌入生成。单个文档失败不影响其他文档。")
+    @PostMapping("/batch/embed")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> batchEmbedDocuments(
+            @RequestBody Map<String, List<Long>> request) {
+        List<Long> ids = request.get("ids");
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "ids 列表不能为空"));
+        }
+        if (ids.size() > 50) {
+            return ResponseEntity.badRequest().body(Map.of("error", "单次批量嵌入不超过 50 条（避免 API 限流）"));
+        }
+
+        log.info("Batch embedding {} documents", ids.size());
+
+        List<Map<String, Object>> results = new ArrayList<>(ids.size());
+        int success = 0, failed = 0, skipped = 0;
+
+        for (Long id : ids) {
+            Map<String, Object> itemResult = new HashMap<>();
+            itemResult.put("documentId", id);
+
+            try {
+                RagDocument doc = documentRepository.findById(id).orElse(null);
+                if (doc == null) {
+                    itemResult.put("status", "NOT_FOUND");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                String content = doc.getContent();
+                if (content == null || content.isBlank()) {
+                    itemResult.put("status", "SKIPPED");
+                    itemResult.put("reason", "内容为空");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                List<TextChunk> chunks = chunker.split(content);
+                if (chunks.isEmpty()) {
+                    itemResult.put("status", "SKIPPED");
+                    itemResult.put("reason", "内容太短，无需分块");
+                    skipped++;
+                    results.add(itemResult);
+                    continue;
+                }
+
+                doc.setProcessingStatus("PROCESSING");
+                documentRepository.save(doc);
+
+                // 删除旧向量
+                embeddingRepository.deleteByDocumentId(id);
+
+                // 生成嵌入
+                List<String> texts = chunks.stream().map(TextChunk::text).toList();
+                List<EmbeddingBatchService.EmbeddingResult> embResults =
+                        embeddingBatchService.createEmbeddingsBatch(texts);
+
+                int stored = 0;
+                for (int j = 0; j < embResults.size(); j++) {
+                    EmbeddingBatchService.EmbeddingResult result = embResults.get(j);
+                    if (result.isSuccess()) {
+                        TextChunk chunk = chunks.get(j);
+                        String vectorStr = RetrievalUtils.vectorToString(result.getEmbedding());
+                        jdbcTemplate.update(
+                                "INSERT INTO rag_embeddings (document_id, chunk_text, chunk_index, embedding, chunk_start_pos, chunk_end_pos, created_at) " +
+                                        "VALUES (?, ?, ?, ?::vector, ?, ?, NOW())",
+                                id, chunk.text(), j, vectorStr, chunk.startPos(), chunk.endPos());
+                        stored++;
+                    }
+                }
+
+                doc.setProcessingStatus("COMPLETED");
+                documentRepository.save(doc);
+
+                itemResult.put("status", "COMPLETED");
+                itemResult.put("chunksCreated", chunks.size());
+                itemResult.put("embeddingsStored", stored);
+                success++;
+
+            } catch (Exception e) {
+                log.error("Failed to embed document {}: {}", id, e.getMessage());
+                itemResult.put("status", "FAILED");
+                itemResult.put("error", e.getMessage());
+                failed++;
+            }
+
+            results.add(itemResult);
+        }
+
+        log.info("Batch embed completed: {} success, {} failed, {} skipped", success, failed, skipped);
+
+        return ResponseEntity.ok(Map.of(
+                "results", results,
+                "summary", Map.of(
+                        "total", ids.size(),
+                        "success", success,
+                        "failed", failed,
+                        "skipped", skipped
+                )
         ));
     }
 
