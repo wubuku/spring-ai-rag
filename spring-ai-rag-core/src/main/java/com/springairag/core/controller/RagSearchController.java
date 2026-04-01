@@ -1,4 +1,5 @@
 package com.springairag.core.controller;
+import java.util.Map;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
@@ -51,7 +52,7 @@ public class RagSearchController {
      */
     @Operation(summary = "直接检索（GET）", description = "混合检索，不经过 LLM 生成。支持向量/全文权重调节。")
     @GetMapping
-    public ResponseEntity<List<RetrievalResult>> search(
+    public ResponseEntity<Map<String, Object>> search(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(defaultValue = "true") boolean useHybrid,
@@ -70,7 +71,11 @@ public class RagSearchController {
         List<RetrievalResult> results = hybridRetriever.search(query, null, null, limit, config);
 
         log.info("Direct search returned {} results", results.size());
-        return ResponseEntity.ok(results);
+        return ResponseEntity.ok(Map.of(
+                "results", results,
+                "total", results.size(),
+                "query", query
+        ));
     }
 
     /**

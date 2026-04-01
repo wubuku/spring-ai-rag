@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -30,7 +31,8 @@ class RagSearchControllerTest {
     }
 
     @Test
-    void search_returnsResults() {
+    @DisplayName("GET 检索返回 Map 包含 results/total/query")
+    void search_returnsMapWithResultsTotalQuery() {
         RetrievalResult r1 = new RetrievalResult();
         r1.setDocumentId("doc1");
         r1.setChunkText("测试内容");
@@ -39,31 +41,43 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(eq("测试查询"), isNull(), isNull(), eq(10), any(RetrievalConfig.class)))
                 .thenReturn(List.of(r1));
 
-        ResponseEntity<List<RetrievalResult>> response = controller.search("测试查询", 10, true, 0.5, 0.5);
+        ResponseEntity<Map<String, Object>> response = controller.search("测试查询", 10, true, 0.5, 0.5);
 
         assertEquals(200, response.getStatusCode().value());
-        assertNotNull(response.getBody());
-        assertEquals(1, response.getBody().size());
-        assertEquals("doc1", response.getBody().get(0).getDocumentId());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("测试查询", body.get("query"));
+        assertEquals(1, body.get("total"));
+        @SuppressWarnings("unchecked")
+        List<RetrievalResult> results = (List<RetrievalResult>) body.get("results");
+        assertEquals(1, results.size());
+        assertEquals("doc1", results.get(0).getDocumentId());
     }
 
     @Test
-    void search_emptyResults() {
+    @DisplayName("GET 检索空结果返回空列表")
+    void search_emptyResults_returnsEmptyList() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
 
-        ResponseEntity<List<RetrievalResult>> response = controller.search("不存在的查询", 5, true, 0.5, 0.5);
+        ResponseEntity<Map<String, Object>> response = controller.search("不存在的查询", 5, true, 0.5, 0.5);
 
         assertEquals(200, response.getStatusCode().value());
-        assertTrue(response.getBody().isEmpty());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(0, body.get("total"));
+        @SuppressWarnings("unchecked")
+        List<RetrievalResult> results = (List<RetrievalResult>) body.get("results");
+        assertTrue(results.isEmpty());
     }
 
     @Test
-    void search_withHybridDisabled() {
+    @DisplayName("GET 检索关闭混合检索时传递正确配置")
+    void search_withHybridDisabled_passesConfig() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
 
-        ResponseEntity<List<RetrievalResult>> response = controller.search("查询", 5, false, 0.7, 0.3);
+        ResponseEntity<Map<String, Object>> response = controller.search("查询", 5, false, 0.7, 0.3);
 
         assertEquals(200, response.getStatusCode().value());
         verify(hybridRetriever).search(eq("查询"), isNull(), isNull(), eq(5),
@@ -71,7 +85,8 @@ class RagSearchControllerTest {
     }
 
     @Test
-    void searchWithConfig_passesConfig() {
+    @DisplayName("POST 检索返回结果列表")
+    void searchWithConfig_returnsResults() {
         RetrievalResult r1 = new RetrievalResult();
         r1.setDocumentId("doc1");
         r1.setChunkText("chunk1");
@@ -90,10 +105,12 @@ class RagSearchControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
+        assertEquals("doc1", response.getBody().get(0).getDocumentId());
     }
 
     @Test
-    void search_multipleResults() {
+    @DisplayName("GET 检索多条结果顺序正确")
+    void search_multipleResults_orderCorrect() {
         List<RetrievalResult> results = List.of(
                 createResult("doc1", "chunk1", 0.95),
                 createResult("doc2", "chunk2", 0.85),
@@ -103,11 +120,15 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(results);
 
-        ResponseEntity<List<RetrievalResult>> response = controller.search("multi query", 10, true, 0.5, 0.5);
+        ResponseEntity<Map<String, Object>> response = controller.search("multi query", 10, true, 0.5, 0.5);
 
-        assertEquals(3, response.getBody().size());
-        assertEquals("doc1", response.getBody().get(0).getDocumentId());
-        assertEquals("doc3", response.getBody().get(2).getDocumentId());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(3, body.get("total"));
+        @SuppressWarnings("unchecked")
+        List<RetrievalResult> resultList = (List<RetrievalResult>) body.get("results");
+        assertEquals("doc1", resultList.get(0).getDocumentId());
+        assertEquals("doc3", resultList.get(2).getDocumentId());
     }
 
     private RetrievalResult createResult(String docId, String text, double score) {
