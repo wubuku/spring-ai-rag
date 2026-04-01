@@ -23,8 +23,8 @@
 
 **P1 改进项**（按优先级执行）：
 1. ~~API 兼容性适配层（多 system 消息检测）→ `adapter/` 包~~ ✅ commit 559d6f5
-2. 查询改写增加同义词/限定词 → `QueryRewritingService.java`
-3. 添加检索日志表 → `V3__add_retrieval_logs.sql`
+2. ~~查询改写增加同义词/限定词 → `QueryRewritingService.java`~~ ✅ 已通过 setter 实现
+3. ~~添加检索日志表 → `V3__add_retrieval_logs.sql`~~ ✅ commit b9a7d17
 4. 用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`
 5. 创建 RagProperties 统一配置类 → `config/RagProperties.java`
 6. 创建业务异常类 → `exception/` 包
@@ -187,9 +187,9 @@
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
 - Java 源文件数：58（主项目 52 + demos 6）
-- 测试数：311（主项目 303 core+api + 8 starter，demos 测试不在主构建中）
+- 测试数：319（主项目 311 core+api + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：50 次（最新 559d6f5）
+- Git 提交：52 次（最新 b9a7d17）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -202,6 +202,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 15:31 P1 #3 检索日志表——V3__add_retrieval_logs.sql（rag_retrieval_logs 表含 session_id/query/strategy/timing/result_scores/metadata），新增 RagRetrievalLog 实体 + RagRetrievalLogRepository（分页/慢查询/统计聚合/按天趋势）+ RetrievalLoggingService（@ConditionalOnBean，日志失败不影响业务）。HybridSearchAdvisor 集成：每次检索自动记录耗时/策略/结果数/得分。RetrievalLoggingServiceTest 8 个测试。319 测试全通。commit b9a7d17。已推送。
 - ✅ 2026-04-01 14:27 P1 #1 API 兼容性适配层集成——SpringAiConfig 新增 apiCompatibilityAdapter Bean（根据 provider/base-url 自动选择适配器），RerankAdvisor 注入适配器：支持多 system 消息时用 augmentSystemMessage，不支持时降级为 augmentUserMessage。adapter/ 包新增 4 个类（接口 + OpenAi + MiniMax + Factory）。RerankAdvisorTest 9→11，AdvisorChainIntegrationTest 适配新行为。311 测试全通。commit 559d6f5。已推送。
 - ✅ 2026-04-01 08:03 修复集成测试——删除 RagContextIntegrationTest（CacheConfig 双 CacheManager 冲突 + SpringAiConfig @Primary bean 冲突导致全部 10 个测试失败，bean 存在性测试价值低维护成本高）+ 修复 SpringAiConfig（移除 openAiChatModel/anthropicChatModel 多余的 @Primary）+ RagControllerIntegrationTest 添加 @TestPropertySource 启用 NoHandlerFoundException + 补充 Testcontainers/MockBean 依赖。238 测试全通。commit 3244d71。已推送。
 - ✅ 2026-04-01 06:45 代码质量改进——DocumentRequest/SearchRequest 字段添加 @Schema 注解：与 ChatRequest/RetrievalConfig 保持一致，Swagger UI 现在显示全部 DTO 的完整字段说明。269 测试全通。commit 9d7c122。已推送。
