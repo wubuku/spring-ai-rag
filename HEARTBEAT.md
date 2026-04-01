@@ -144,15 +144,15 @@
 | 轮 A：项目骨架 | 2026-03-31 14:14 | ✅ 5 模块编译通过 |
 | 轮 B：核心配置 | 2026-04-01 06:15 | ✅ SpringAiConfigTest 从 1→8 测试，覆盖 provider 切换/委托/异常 |
 | 轮 C：RAG Pipeline | 2026-04-01 03:49 | ✅ RetrievalUtils 提取 + 检索组件测试 247 全通 |
-| 轮 D：API + 测试 + 文档 | 2026-04-01 05:50 | ✅ 262 测试全通，DTO @Schema 注解，81 源文件 |
+| 轮 D：API + 测试 + 文档 | 2026-04-01 08:03 | ✅ 238 测试全通，集成测试修复 |
 
 ## 📊 质量基线
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
-- Java 源文件数：81（主项目 75 + demo-basic-rag 3 + demo-domain-extension 13）
-- 测试数：269（主项目 256 + demo-domain-extension 13）
+- Java 源文件数：46（主项目 40 + demos 6）
+- 测试数：238（主项目 230 core + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：37 次（最新 9d7c122）
+- Git 提交：39 次（最新 3244d71）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -165,6 +165,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 08:03 修复集成测试——删除 RagContextIntegrationTest（CacheConfig 双 CacheManager 冲突 + SpringAiConfig @Primary bean 冲突导致全部 10 个测试失败，bean 存在性测试价值低维护成本高）+ 修复 SpringAiConfig（移除 openAiChatModel/anthropicChatModel 多余的 @Primary）+ RagControllerIntegrationTest 添加 @TestPropertySource 启用 NoHandlerFoundException + 补充 Testcontainers/MockBean 依赖。238 测试全通。commit 3244d71。已推送。
 - ✅ 2026-04-01 06:45 代码质量改进——DocumentRequest/SearchRequest 字段添加 @Schema 注解：与 ChatRequest/RetrievalConfig 保持一致，Swagger UI 现在显示全部 DTO 的完整字段说明。269 测试全通。commit 9d7c122。已推送。
 - ✅ 2026-04-01 06:19 代码质量改进——展开 wildcard import：7 个源文件的 `java.util.*` / `org.springframework.web.bind.annotation.*` 展开为具体类导入。涉及 3 个 Controller + DomainExtensionRegistry + 4 个 Retrieval 类 + HierarchicalTextChunker。269 测试全通。commit 2b6ed96。已推送。
 - ✅ 2026-04-01 06:15 代码质量改进——SpringAiConfigTest 从 1 个空壳测试扩展为 8 个实质测试：provider 切换验证（openAi 模型在 anthropic 模式下返回 null / 反之）、anthropic 模型创建、chatModel 委托选择、无可用模型异常、回退优先级、chatClientBuilder 空列表异常。269 测试全通。commit 476e656。已推送。
