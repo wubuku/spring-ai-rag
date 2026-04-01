@@ -65,6 +65,7 @@ class RagDocumentControllerTest {
 
     @Test
     void createDocument_returnsId() {
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
             RagDocument doc = inv.getArgument(0);
             doc.setId(42L);
@@ -82,6 +83,42 @@ class RagDocumentControllerTest {
         assertEquals(42L, response.getBody().get("id"));
         assertEquals("测试文档", response.getBody().get("title"));
         assertEquals("CREATED", response.getBody().get("status"));
+        assertNotNull(response.getBody().get("contentHash"));
+    }
+
+    @Test
+    void createDocument_duplicateContent_returnsExisting() {
+        RagDocument existing = createDoc(10L, "已有文档", "重复内容");
+        String hash = RagDocumentController.computeSha256("重复内容");
+
+        when(documentRepository.findByContentHash(hash)).thenReturn(List.of(existing));
+
+        DocumentRequest req = new DocumentRequest();
+        req.setTitle("新标题");
+        req.setContent("重复内容");
+
+        ResponseEntity<Map<String, Object>> response = controller.createDocument(req);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(10L, response.getBody().get("id"));
+        assertEquals("DUPLICATE", response.getBody().get("status"));
+        assertEquals(10L, response.getBody().get("existingDocumentId"));
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void computeSha256_sameContent_sameHash() {
+        String hash1 = RagDocumentController.computeSha256("hello");
+        String hash2 = RagDocumentController.computeSha256("hello");
+        assertEquals(hash1, hash2);
+        assertEquals(64, hash1.length()); // SHA-256 = 32 bytes = 64 hex chars
+    }
+
+    @Test
+    void computeSha256_differentContent_differentHash() {
+        String hash1 = RagDocumentController.computeSha256("hello");
+        String hash2 = RagDocumentController.computeSha256("world");
+        assertNotEquals(hash1, hash2);
     }
 
     @Test

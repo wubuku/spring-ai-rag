@@ -25,7 +25,11 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -65,28 +69,51 @@ public class RagDocumentController {
 
     /**
      * 上传/创建文档
+     *
+     * <p>自动计算内容 SHA-256 哈希值用于去重。
+     * 如果内容已存在，返回已有文档信息（不重复创建）。
      */
-    @Operation(summary = "创建文档", description = "上传文档内容，嵌入向量需通过 /embed 接口单独生成。")
+    @Operation(summary = "创建文档", description = "上传文档内容，自动计算内容哈希用于去重。嵌入向量需通过 /embed 接口单独生成。")
     @PostMapping
     public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
 
+        String content = request.getContent();
+        String contentHash = computeSha256(content);
+
+        // 去重检查：相同内容不重复创建
+        List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
+        if (!existing.isEmpty()) {
+            RagDocument dup = existing.get(0);
+            log.info("Duplicate content detected: existing doc id={}, hash={}", dup.getId(), contentHash);
+            return ResponseEntity.ok(Map.of(
+                    "id", dup.getId(),
+                    "title", dup.getTitle(),
+                    "status", "DUPLICATE",
+                    "message", "内容已存在，文档ID: " + dup.getId(),
+                    "existingDocumentId", dup.getId(),
+                    "contentHash", contentHash
+            ));
+        }
+
         RagDocument doc = new RagDocument();
         doc.setTitle(request.getTitle());
-        doc.setContent(request.getContent());
+        doc.setContent(content);
         doc.setSource(request.getSource());
         doc.setDocumentType(request.getDocumentType());
         doc.setMetadata(request.getMetadata());
+        doc.setContentHash(contentHash);
 
         doc = documentRepository.save(doc);
 
-        log.info("Document created: id={}", doc.getId());
+        log.info("Document created: id={}, hash={}", doc.getId(), contentHash);
 
         return ResponseEntity.ok(Map.of(
                 "id", doc.getId(),
                 "title", doc.getTitle(),
                 "status", "CREATED",
-                "message", "文档已创建，嵌入向量需通过 /api/v1/rag/documents/{id}/embed 生成"
+                "message", "文档已创建，嵌入向量需通过 /api/v1/rag/documents/{id}/embed 生成",
+                "contentHash", contentHash
         ));
     }
 
@@ -347,6 +374,19 @@ public class RagDocumentController {
                 "storageTable", "rag_vector_store",
                 "status", "COMPLETED"
         ));
+    }
+
+    /**
+     * 计算文本的 SHA-256 哈希值
+     */
+    static String computeSha256(String content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(hash);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException("SHA-256 not available", e);
+        }
     }
 
     /**
