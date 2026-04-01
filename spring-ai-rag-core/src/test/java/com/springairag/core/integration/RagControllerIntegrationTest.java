@@ -7,6 +7,8 @@ import com.springairag.core.controller.RagDocumentController;
 import com.springairag.core.controller.RagHealthController;
 import com.springairag.core.controller.RagSearchController;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.Test;
@@ -62,6 +64,12 @@ class RagControllerIntegrationTest {
 
     @MockBean
     private JdbcTemplate jdbcTemplate;
+
+    @MockBean
+    private RagDocumentRepository documentRepository;
+
+    @MockBean
+    private RagEmbeddingRepository embeddingRepository;
 
     @MockBean
     private EmbeddingBatchService embeddingBatchService;

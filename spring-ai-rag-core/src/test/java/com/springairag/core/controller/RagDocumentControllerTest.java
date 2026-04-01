@@ -1,15 +1,18 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.core.entity.RagDocument;
+import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.repository.RagEmbeddingRepository;
+import com.springairag.core.retrieval.EmbeddingBatchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.springairag.core.retrieval.EmbeddingBatchService;
+import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.time.LocalDateTime;
+import java.util.*;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -20,20 +23,41 @@ import static org.mockito.Mockito.*;
  */
 class RagDocumentControllerTest {
 
-    private JdbcTemplate jdbcTemplate;
+    private RagDocumentRepository documentRepository;
+    private RagEmbeddingRepository embeddingRepository;
     private EmbeddingBatchService embeddingBatchService;
+    private JdbcTemplate jdbcTemplate;
     private RagDocumentController controller;
 
     @BeforeEach
     void setUp() {
-        jdbcTemplate = mock(JdbcTemplate.class);
+        documentRepository = mock(RagDocumentRepository.class);
+        embeddingRepository = mock(RagEmbeddingRepository.class);
         embeddingBatchService = mock(EmbeddingBatchService.class);
-        controller = new RagDocumentController(jdbcTemplate, embeddingBatchService);
+        jdbcTemplate = mock(JdbcTemplate.class);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate);
+    }
+
+    private RagDocument createDoc(Long id, String title, String content) {
+        RagDocument doc = new RagDocument();
+        doc.setId(id);
+        doc.setTitle(title);
+        doc.setContent(content);
+        doc.setSource("unit-test");
+        doc.setDocumentType("txt");
+        doc.setEnabled(true);
+        doc.setProcessingStatus("COMPLETED");
+        doc.setCreatedAt(LocalDateTime.now());
+        return doc;
     }
 
     @Test
     void createDocument_returnsId() {
-        doReturn(42L).when(jdbcTemplate).queryForObject(anyString(), eq(Long.class), any(Object[].class));
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
+            RagDocument doc = inv.getArgument(0);
+            doc.setId(42L);
+            return doc;
+        });
 
         DocumentRequest req = new DocumentRequest();
         req.setTitle("测试文档");
@@ -50,29 +74,20 @@ class RagDocumentControllerTest {
 
     @Test
     void getDocument_found() {
-        Map<String, Object> docRow = new HashMap<>();
-        docRow.put("id", 1L);
-        docRow.put("title", "文档标题");
-        docRow.put("content", "内容");
-        docRow.put("processing_status", "COMPLETED");
-
-        when(jdbcTemplate.queryForList(anyString(), eq(1L)))
-                .thenReturn(List.of(docRow));
-        when(jdbcTemplate.queryForObject(
-                eq("SELECT COUNT(*) FROM rag_embeddings WHERE document_id = ?"),
-                eq(Integer.class), eq(1L)))
-                .thenReturn(5);
+        RagDocument doc = createDoc(1L, "文档标题", "内容");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
 
         ResponseEntity<Map<String, Object>> response = controller.getDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(5, response.getBody().get("embeddingCount"));
+        assertEquals(5L, response.getBody().get("embeddingCount"));
+        assertEquals("文档标题", response.getBody().get("title"));
     }
 
     @Test
     void getDocument_notFound() {
-        when(jdbcTemplate.queryForList(anyString(), eq(999L)))
-                .thenReturn(List.of());
+        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.getDocument(999L);
 
@@ -81,22 +96,22 @@ class RagDocumentControllerTest {
 
     @Test
     void deleteDocument_found() {
-        when(jdbcTemplate.update(eq("DELETE FROM rag_embeddings WHERE document_id = ?"), eq(1L)))
-                .thenReturn(3);
-        when(jdbcTemplate.update(eq("DELETE FROM rag_documents WHERE id = ?"), eq(1L)))
-                .thenReturn(1);
+        RagDocument doc = createDoc(1L, "文档", "内容");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(3L);
 
         ResponseEntity<Map<String, String>> response = controller.deleteDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("文档已删除", response.getBody().get("message"));
         assertEquals("3", response.getBody().get("embeddingsRemoved"));
+        verify(embeddingRepository).deleteByDocumentId(1L);
+        verify(documentRepository).deleteById(1L);
     }
 
     @Test
     void deleteDocument_notFound() {
-        // Use doReturn to avoid ambiguous overload between update(String, PSS) and update(String, Object...)
-        doReturn(0).when(jdbcTemplate).update(anyString(), any(Object[].class));
+        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, String>> response = controller.deleteDocument(999L);
 
@@ -105,37 +120,28 @@ class RagDocumentControllerTest {
 
     @Test
     void listDocuments_returnsPaginated() {
-        List<Map<String, Object>> docs = List.of(
-                Map.of("id", 1L, "title", "文档1"),
-                Map.of("id", 2L, "title", "文档2")
+        List<RagDocument> docs = List.of(
+                createDoc(1L, "文档1", "内容1"),
+                createDoc(2L, "文档2", "内容2")
         );
-
-        when(jdbcTemplate.queryForList(anyString(), eq(20), eq(0)))
-                .thenReturn(docs);
-        when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_documents"), eq(Integer.class)))
-                .thenReturn(2);
+        Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 2);
+        when(documentRepository.findAll(any(PageRequest.class))).thenReturn(page);
 
         ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(2, response.getBody().get("total"));
+        assertEquals(2L, response.getBody().get("total"));
         List<?> resultDocs = (List<?>) response.getBody().get("documents");
         assertEquals(2, resultDocs.size());
     }
 
     @Test
     void embedDocument_found() {
-        // Mock document content query
-        Map<String, Object> doc = new HashMap<>();
-        doc.put("id", 1L);
-        doc.put("content", "Spring Boot 是一个用于快速构建 Spring 应用的框架。它提供了自动配置和嵌入式服务器等功能。");
-        when(jdbcTemplate.queryForList(
-                eq("SELECT id, content FROM rag_documents WHERE id = ?"), eq(1L)))
-                .thenReturn(List.of(doc));
-
-        // Mock embedding batch service
-        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
-                .thenReturn(List.of());
+        RagDocument doc = createDoc(1L, "文档",
+                "Spring Boot 是一个用于快速构建 Spring 应用的框架。它提供了自动配置和嵌入式服务器等功能。");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
+        when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenReturn(List.of());
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
 
@@ -144,12 +150,21 @@ class RagDocumentControllerTest {
 
     @Test
     void embedDocument_notFound() {
-        when(jdbcTemplate.queryForList(
-                eq("SELECT id, content FROM rag_documents WHERE id = ?"), eq(999L)))
-                .thenReturn(List.of());
+        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocument(999L);
 
         assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void embedDocument_emptyContent_returns400() {
+        RagDocument doc = createDoc(1L, "空文档", "");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals("文档内容为空", response.getBody().get("error"));
     }
 }

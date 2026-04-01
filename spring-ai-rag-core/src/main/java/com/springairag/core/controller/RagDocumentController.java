@@ -1,9 +1,12 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.core.entity.RagDocument;
+import com.springairag.core.entity.RagEmbedding;
+import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.retrieval.RetrievalUtils;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,26 +14,23 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
 
-import java.sql.Timestamp;
-import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 文档管理控制器
  *
  * <p>提供文档的 CRUD 操作和嵌入向量管理。
+ * CRUD 使用 Spring Data JPA，嵌入向量写入保留 JdbcTemplate（向量列需要特殊处理）。
  */
 @RestController
 @RequestMapping("/api/v1/rag/documents")
@@ -38,16 +38,22 @@ import java.util.Map;
 public class RagDocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final JdbcTemplate jdbcTemplate;
+    private final RagDocumentRepository documentRepository;
+    private final RagEmbeddingRepository embeddingRepository;
     private final EmbeddingBatchService embeddingBatchService;
+    private final JdbcTemplate jdbcTemplate;
 
     private static final HierarchicalTextChunker chunker = new HierarchicalTextChunker(1000, 100, 100);
 
-    public RagDocumentController(JdbcTemplate jdbcTemplate, EmbeddingBatchService embeddingBatchService) {
-        this.jdbcTemplate = jdbcTemplate;
+    public RagDocumentController(RagDocumentRepository documentRepository,
+                                  RagEmbeddingRepository embeddingRepository,
+                                  EmbeddingBatchService embeddingBatchService,
+                                  JdbcTemplate jdbcTemplate) {
+        this.documentRepository = documentRepository;
+        this.embeddingRepository = embeddingRepository;
         this.embeddingBatchService = embeddingBatchService;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
@@ -58,30 +64,20 @@ public class RagDocumentController {
     public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
 
-        String sql = "INSERT INTO rag_documents (title, content, source, document_type, metadata, created_at) " +
-                "VALUES (?, ?, ?, ?, ?::jsonb, ?) RETURNING id";
+        RagDocument doc = new RagDocument();
+        doc.setTitle(request.getTitle());
+        doc.setContent(request.getContent());
+        doc.setSource(request.getSource());
+        doc.setDocumentType(request.getDocumentType());
+        doc.setMetadata(request.getMetadata());
 
-        String metadataJson;
-        try {
-            metadataJson = request.getMetadata() != null ? objectMapper.writeValueAsString(request.getMetadata()) : null;
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize metadata to JSON, saving as null", e);
-            metadataJson = null;
-        }
+        doc = documentRepository.save(doc);
 
-        Long docId = jdbcTemplate.queryForObject(sql, Long.class,
-                request.getTitle(),
-                request.getContent(),
-                request.getSource(),
-                request.getDocumentType(),
-                metadataJson,
-                Timestamp.from(Instant.now()));
-
-        log.info("Document created: id={}", docId);
+        log.info("Document created: id={}", doc.getId());
 
         return ResponseEntity.ok(Map.of(
-                "id", docId,
-                "title", request.getTitle(),
+                "id", doc.getId(),
+                "title", doc.getTitle(),
                 "status", "CREATED",
                 "message", "文档已创建，嵌入向量需通过 /api/v1/rag/documents/{id}/embed 生成"
         ));
@@ -95,23 +91,16 @@ public class RagDocumentController {
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
 
-        List<Map<String, Object>> docs = jdbcTemplate.queryForList(
-                "SELECT id, title, content, source, document_type, metadata, enabled, " +
-                        "created_at, updated_at, processing_status, size " +
-                        "FROM rag_documents WHERE id = ?", id);
+        return documentRepository.findById(id)
+                .map(doc -> {
+                    long embeddingCount = embeddingRepository.countByDocumentId(id);
 
-        if (docs.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
+                    Map<String, Object> result = documentToMap(doc);
+                    result.put("embeddingCount", embeddingCount);
 
-        // 查询嵌入向量数量
-        Integer embeddingCount = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rag_embeddings WHERE document_id = ?", Integer.class, id);
-
-        Map<String, Object> doc = docs.get(0);
-        doc.put("embeddingCount", embeddingCount);
-
-        return ResponseEntity.ok(doc);
+                    return ResponseEntity.ok(result);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     /**
@@ -119,23 +108,24 @@ public class RagDocumentController {
      */
     @Operation(summary = "删除文档", description = "删除文档及其关联的嵌入向量（级联删除）。")
     @DeleteMapping("/{id}")
+    @Transactional
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
         log.info("Deleting document: id={}", id);
 
-        // 先删嵌入向量（外键约束）
-        int embDeleted = jdbcTemplate.update("DELETE FROM rag_embeddings WHERE document_id = ?", id);
-        int docDeleted = jdbcTemplate.update("DELETE FROM rag_documents WHERE id = ?", id);
+        return documentRepository.findById(id)
+                .map(doc -> {
+                    long embCount = embeddingRepository.countByDocumentId(id);
+                    embeddingRepository.deleteByDocumentId(id);
+                    documentRepository.deleteById(id);
 
-        if (docDeleted == 0) {
-            return ResponseEntity.notFound().build();
-        }
-
-        log.info("Document deleted: id={}, embeddings removed: {}", id, embDeleted);
-        return ResponseEntity.ok(Map.of(
-                "message", "文档已删除",
-                "id", String.valueOf(id),
-                "embeddingsRemoved", String.valueOf(embDeleted)
-        ));
+                    log.info("Document deleted: id={}, embeddings removed: {}", id, embCount);
+                    return ResponseEntity.ok(Map.of(
+                            "message", "文档已删除",
+                            "id", String.valueOf(id),
+                            "embeddingsRemoved", String.valueOf(embCount)
+                    ));
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     /**
@@ -147,16 +137,17 @@ public class RagDocumentController {
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit) {
 
-        List<Map<String, Object>> docs = jdbcTemplate.queryForList(
-                "SELECT id, title, source, document_type, enabled, created_at, processing_status, size " +
-                        "FROM rag_documents ORDER BY created_at DESC LIMIT ? OFFSET ?",
-                limit, offset);
+        int page = offset / limit;
+        var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+        var pageResult = documentRepository.findAll(pageable);
 
-        Integer total = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rag_documents", Integer.class);
+        List<Map<String, Object>> docs = pageResult.getContent().stream()
+                .map(this::documentToMap)
+                .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
                 "documents", docs,
-                "total", total != null ? total : 0,
+                "total", pageResult.getTotalElements(),
                 "offset", offset,
                 "limit", limit
         ));
@@ -166,20 +157,21 @@ public class RagDocumentController {
      * 为文档生成嵌入向量
      *
      * <p>流程：获取文档内容 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
+     * 保留 JdbcTemplate 写入向量列（pgvector 格式需要特殊处理）。
      */
     @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。会覆盖旧向量。")
     @PostMapping("/{id}/embed")
+    @Transactional
     public ResponseEntity<Map<String, Object>> embedDocument(@PathVariable Long id) {
         log.info("Generating embeddings for document: id={}", id);
 
-        // 1. 获取文档内容
-        List<Map<String, Object>> docs = jdbcTemplate.queryForList(
-                "SELECT id, content FROM rag_documents WHERE id = ?", id);
-        if (docs.isEmpty()) {
+        // 1. 获取文档
+        RagDocument doc = documentRepository.findById(id).orElse(null);
+        if (doc == null) {
             return ResponseEntity.notFound().build();
         }
 
-        String content = (String) docs.get(0).get("content");
+        String content = doc.getContent();
         if (content == null || content.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "文档内容为空",
@@ -200,14 +192,13 @@ public class RagDocumentController {
         log.info("Document {} split into {} chunks", id, chunks.size());
 
         // 3. 更新状态为 PROCESSING
-        jdbcTemplate.update(
-                "UPDATE rag_documents SET processing_status = 'PROCESSING', updated_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now()), id);
+        doc.setProcessingStatus("PROCESSING");
+        documentRepository.save(doc);
 
         // 4. 删除旧的嵌入向量（重新生成）
-        jdbcTemplate.update("DELETE FROM rag_embeddings WHERE document_id = ?", id);
+        embeddingRepository.deleteByDocumentId(id);
 
-        // 5. 生成嵌入并存储
+        // 5. 生成嵌入并存储（用 JdbcTemplate 写入向量列）
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results =
                 embeddingBatchService.createEmbeddingsBatch(texts);
@@ -217,13 +208,11 @@ public class RagDocumentController {
             EmbeddingBatchService.EmbeddingResult result = results.get(i);
             if (result.isSuccess()) {
                 TextChunk chunk = chunks.get(i);
-                // 将 float[] 转为 pgvector 格式 "[f1,f2,...]"
-                String vectorStr = toVectorString(result.getEmbedding());
+                String vectorStr = RetrievalUtils.vectorToString(result.getEmbedding());
                 jdbcTemplate.update(
                         "INSERT INTO rag_embeddings (document_id, chunk_text, chunk_index, embedding, chunk_start_pos, chunk_end_pos, created_at) " +
-                                "VALUES (?, ?, ?, ?::vector, ?, ?, ?)",
-                        id, chunk.text(), i, vectorStr, chunk.startPos(), chunk.endPos(),
-                        Timestamp.from(Instant.now()));
+                                "VALUES (?, ?, ?, ?::vector, ?, ?, NOW())",
+                        id, chunk.text(), i, vectorStr, chunk.startPos(), chunk.endPos());
                 stored++;
             } else {
                 log.warn("Embedding failed for chunk {}: {}", i, result.getError());
@@ -231,9 +220,8 @@ public class RagDocumentController {
         }
 
         // 6. 更新状态为 COMPLETED
-        jdbcTemplate.update(
-                "UPDATE rag_documents SET processing_status = 'COMPLETED', updated_at = ? WHERE id = ?",
-                Timestamp.from(Instant.now()), id);
+        doc.setProcessingStatus("COMPLETED");
+        documentRepository.save(doc);
 
         log.info("Document {} embedding completed: {}/{} chunks stored", id, stored, chunks.size());
 
@@ -246,14 +234,26 @@ public class RagDocumentController {
         ));
     }
 
-    private String toVectorString(float[] embedding) {
-        StringBuilder sb = new StringBuilder("[");
-        for (int i = 0; i < embedding.length; i++) {
-            if (i > 0) sb.append(",");
-            sb.append(embedding[i]);
+    /**
+     * 将实体转换为 Map（保持 API 兼容）
+     */
+    private Map<String, Object> documentToMap(RagDocument doc) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", doc.getId());
+        map.put("title", doc.getTitle());
+        map.put("source", doc.getSource());
+        map.put("document_type", doc.getDocumentType());
+        map.put("enabled", doc.getEnabled());
+        map.put("created_at", doc.getCreatedAt());
+        map.put("updated_at", doc.getUpdatedAt());
+        map.put("processing_status", doc.getProcessingStatus());
+        map.put("size", doc.getSize());
+        if (doc.getContent() != null) {
+            map.put("content", doc.getContent());
         }
-        sb.append("]");
-        return sb.toString();
+        if (doc.getMetadata() != null) {
+            map.put("metadata", doc.getMetadata());
+        }
+        return map;
     }
-
 }

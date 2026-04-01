@@ -1,33 +1,33 @@
 package com.springairag.core.repository;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.entity.RagChatHistory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.sql.Timestamp;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * RAG 对话历史仓储（业务审计表）
  *
  * <p>写入 rag_chat_history 表，用于业务层查询对话记录。
  * 与 Spring AI 的 spring_ai_chat_memory 表（LLM 上下文用）双表共存。
+ *
+ * <p>内部使用 Spring Data JPA 实现，保持与原 JdbcTemplate 版本相同的公共 API。
  */
 @Repository
 public class RagChatHistoryRepository {
 
     private static final Logger log = LoggerFactory.getLogger(RagChatHistoryRepository.class);
-    private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final JdbcTemplate jdbcTemplate;
+    private final RagChatHistoryJpaRepository jpaRepository;
 
-    public RagChatHistoryRepository(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public RagChatHistoryRepository(RagChatHistoryJpaRepository jpaRepository) {
+        this.jpaRepository = jpaRepository;
     }
 
     /**
@@ -43,17 +43,13 @@ public class RagChatHistoryRepository {
     public void save(String sessionId, String userMessage, String aiResponse,
                      String relatedDocumentIds, Map<String, Object> metadata) {
         try {
-            String metadataJson;
-            try {
-                metadataJson = metadata != null ? objectMapper.writeValueAsString(metadata) : null;
-            } catch (JsonProcessingException e) {
-                log.warn("Failed to serialize metadata to JSON, saving as null", e);
-                metadataJson = null;
-            }
-            jdbcTemplate.update(
-                    "INSERT INTO rag_chat_history (session_id, user_message, ai_response, related_document_ids, metadata, created_at) " +
-                            "VALUES (?, ?, ?, ?, ?::jsonb, ?)",
-                    sessionId, userMessage, aiResponse, relatedDocumentIds, metadataJson, Timestamp.from(Instant.now()));
+            RagChatHistory entity = new RagChatHistory();
+            entity.setSessionId(sessionId);
+            entity.setUserMessage(userMessage);
+            entity.setAiResponse(aiResponse);
+            entity.setRelatedDocumentIds(relatedDocumentIds);
+            entity.setMetadata(metadata);
+            jpaRepository.save(entity);
             log.debug("Saved chat history for session: {}", sessionId);
         } catch (Exception e) {
             log.error("Failed to save chat history for session: {}", sessionId, e);
@@ -64,10 +60,11 @@ public class RagChatHistoryRepository {
      * 查询会话的历史记录
      */
     public List<Map<String, Object>> findBySessionId(String sessionId, int limit) {
-        return jdbcTemplate.queryForList(
-                "SELECT id, session_id, user_message, ai_response, related_document_ids, metadata, created_at " +
-                        "FROM rag_chat_history WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
-                sessionId, limit);
+        List<RagChatHistory> results = jpaRepository.findBySessionIdOrderByCreatedAtDesc(
+                sessionId, PageRequest.of(0, limit));
+        return results.stream()
+                .map(this::toMap)
+                .collect(Collectors.toList());
     }
 
     /**
@@ -82,9 +79,29 @@ public class RagChatHistoryRepository {
      *
      * @return 删除的记录数
      */
+    @Transactional
     public int deleteBySessionId(String sessionId) {
-        int deleted = jdbcTemplate.update("DELETE FROM rag_chat_history WHERE session_id = ?", sessionId);
+        int deleted = jpaRepository.deleteBySessionId(sessionId);
         log.info("Deleted {} chat history records for session: {}", deleted, sessionId);
         return deleted;
+    }
+
+    /**
+     * 将实体转换为 Map（保持向后兼容）
+     */
+    private Map<String, Object> toMap(RagChatHistory entity) {
+        Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id", entity.getId());
+        map.put("session_id", entity.getSessionId());
+        map.put("user_message", entity.getUserMessage());
+        map.put("ai_response", entity.getAiResponse());
+        if (entity.getRelatedDocumentIds() != null) {
+            map.put("related_document_ids", entity.getRelatedDocumentIds());
+        }
+        if (entity.getMetadata() != null) {
+            map.put("metadata", entity.getMetadata());
+        }
+        map.put("created_at", entity.getCreatedAt());
+        return map;
     }
 }

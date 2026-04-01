@@ -18,10 +18,10 @@ spring:
 
   # 数据源 + HikariCP 连接池优化
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
     driver-class-name: org.postgresql.Driver
-    username: postgres
-    password: ${DB_PASSWORD:postgres}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:20}
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
@@ -30,6 +30,13 @@ spring:
       connection-timeout: 10000    # 获取连接超时 10 秒
       leak-detection-threshold: 60000  # 连接泄漏检测 60 秒
       pool-name: rag-hikari
+
+  # JPA / Hibernate 配置（Flyway 管理表结构，Hibernate 不修改 DDL）
+  jpa:
+    hibernate:
+      ddl-auto: none
+    open-in-view: false
+    show-sql: false
 
   # Flyway 数据库迁移
   flyway:
