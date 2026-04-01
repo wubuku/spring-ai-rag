@@ -21,6 +21,7 @@
 
 > ⚠️ **测试铁律来源**：用户明确要求——"对测试要像生产代码一样重视"，"端到端测试保证整个链路是真的通的"。此要求永久生效，不可删除或弱化。
 
+- ✅ 2026-04-01 10:55 文档管理 API 增强——RagDocumentRepository 新增 8 个查询方法（综合搜索 JPQL、标题模糊、类型/状态/集合ID 过滤、状态统计、内容哈希去重）。RagDocumentController list 端点支持 title/documentType/processingStatus/enabled 过滤参数 + 新增 /stats 统计端点。RagDocumentControllerTest 从 9→16 个测试。305 测试全通。commit 5e9bc84。已推送。
 - ✅ 2026-04-01 09:24 Advisor 链集成测试——新增 AdvisorChainIntegrationTest(20 cases)：端到端验证 QueryRewrite→HybridSearch→Rerank 三 Advisor 协作（同义词扩展→context传递→混合检索→context传递→重排→系统消息注入），覆盖各阶段异常降级、order 顺序、disabled 开关、context 传播。同时合入 JPA 实体仓库（4个 Repository）+ 文档控制器重构。291 测试全通。commit a92b5c2。已推送。
 - ✅ 2026-04-01 08:52 架构改进——提取 DocumentRequest/SearchRequest 到 API 模块（从 Controller 内部类提升为独立 DTO），新增 6 个 DTO 测试。同时合入之前的 JPA 实体（RagDocument/RagEmbedding/RagCollection/RagChatHistory）+ Jackson 替换 SimpleJsonUtil。277 测试全通。commit f404234。已推送。
 - ✅ 2026-04-01 08:40 测试覆盖增强——HybridRetrieverServiceTest 从 2 个扩展到 18 个：覆盖混合检索融合、向量检索+embedding 生成、全文检索+similarity 分数、documentIds 过滤、excludeIds 排除、minScore 过滤、useHybridSearch 开关、config.maxResults 覆盖、结果字段完整性、嵌入/数据库异常容错、空查询边界。254 测试全通。commit b4cb033。已推送。
@@ -154,9 +155,9 @@
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
 - Java 源文件数：54（主项目 48 + demos 6）
-- 测试数：291（主项目 283 core+api + 8 starter，demos 测试不在主构建中）
+- 测试数：305（主项目 297 core+api + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：44 次（最新 a92b5c2）
+- Git 提交：45 次（最新 5e9bc84）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
