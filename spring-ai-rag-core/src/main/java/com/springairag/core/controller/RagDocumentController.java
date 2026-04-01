@@ -14,6 +14,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
@@ -43,17 +46,20 @@ public class RagDocumentController {
     private final RagEmbeddingRepository embeddingRepository;
     private final EmbeddingBatchService embeddingBatchService;
     private final JdbcTemplate jdbcTemplate;
+    private final VectorStore vectorStore;
 
     private static final HierarchicalTextChunker chunker = new HierarchicalTextChunker(1000, 100, 100);
 
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
                                   EmbeddingBatchService embeddingBatchService,
-                                  JdbcTemplate jdbcTemplate) {
+                                  JdbcTemplate jdbcTemplate,
+                                  @Autowired(required = false) VectorStore vectorStore) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.embeddingBatchService = embeddingBatchService;
         this.jdbcTemplate = jdbcTemplate;
+        this.vectorStore = vectorStore;
     }
 
     /**
@@ -258,6 +264,90 @@ public class RagDocumentController {
                 "documentId", id,
                 "chunksCreated", chunks.size(),
                 "embeddingsStored", stored,
+                "status", "COMPLETED"
+        ));
+    }
+
+    /**
+     * 通过 VectorStore 生成嵌入向量（简化路径）
+     *
+     * <p>使用 Spring AI {@link VectorStore#add(List)} 自动完成嵌入生成和存储。
+     * 相比 {@link #embedDocument(Long)} 手动调用 EmbeddingBatchService + JdbcTemplate，
+     * 此方法代码更简洁，但存储在 VectorStore 管理的表中（默认 rag_vector_store）。
+     *
+     * <p>两种路径对比：
+     * <ul>
+     *   <li>{@code /embed} — 完全控制，存储到 rag_embeddings（支持 document_id 关联、自定义分块）</li>
+     *   <li>{@code /embed/vs} — 简化路径，存储到 rag_vector_store（VectorStore 自动管理）</li>
+     * </ul>
+     */
+    @Operation(summary = "通过 VectorStore 生成嵌入向量",
+            description = "使用 VectorStore.add() 自动完成嵌入生成和存储，代码更简洁。存储到 rag_vector_store 表。")
+    @PostMapping("/{id}/embed/vs")
+    @Transactional
+    public ResponseEntity<Map<String, Object>> embedDocumentViaVectorStore(@PathVariable Long id) {
+        if (vectorStore == null) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "VectorStore 未配置，请使用 /embed 端点",
+                    "documentId", id
+            ));
+        }
+
+        log.info("Generating embeddings via VectorStore for document: id={}", id);
+
+        RagDocument doc = documentRepository.findById(id).orElse(null);
+        if (doc == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String content = doc.getContent();
+        if (content == null || content.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "文档内容为空",
+                    "documentId", id
+            ));
+        }
+
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "message", "文档内容太短，无需分块",
+                    "documentId", id,
+                    "chunksCreated", 0
+            ));
+        }
+
+        doc.setProcessingStatus("PROCESSING");
+        documentRepository.save(doc);
+
+        List<Document> documents = new java.util.ArrayList<>(chunks.size());
+        for (int i = 0; i < chunks.size(); i++) {
+            TextChunk chunk = chunks.get(i);
+            documents.add(Document.builder()
+                    .id(id + "-" + i)
+                    .text(chunk.text())
+                    .metadata(Map.of(
+                            "documentId", String.valueOf(id),
+                            "chunkIndex", String.valueOf(i),
+                            "chunkStartPos", String.valueOf(chunk.startPos()),
+                            "chunkEndPos", String.valueOf(chunk.endPos())
+                    ))
+                    .build());
+        }
+
+        vectorStore.add(documents);
+
+        doc.setProcessingStatus("COMPLETED");
+        documentRepository.save(doc);
+
+        log.info("Document {} embedding via VectorStore completed: {} chunks stored", id, chunks.size());
+
+        return ResponseEntity.ok(Map.of(
+                "message", "嵌入向量生成完成（VectorStore 路径）",
+                "documentId", id,
+                "chunksCreated", chunks.size(),
+                "embeddingsStored", chunks.size(),
+                "storageTable", "rag_vector_store",
                 "status", "COMPLETED"
         ));
     }

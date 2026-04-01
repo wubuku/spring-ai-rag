@@ -25,7 +25,7 @@
 1. ~~API 兼容性适配层（多 system 消息检测）→ `adapter/` 包~~ ✅ commit 559d6f5
 2. ~~查询改写增加同义词/限定词 → `QueryRewritingService.java`~~ ✅ 已通过 setter 实现
 3. ~~添加检索日志表 → `V3__add_retrieval_logs.sql`~~ ✅ commit b9a7d17
-4. 用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`
+4. ~~用 VectorStore.add() 简化嵌入存储 → `RagDocumentController.java`~~ ✅ commit 待提交
 5. 创建 RagProperties 统一配置类 → `config/RagProperties.java`
 6. 创建业务异常类 → `exception/` 包
 7. 异步异常处理 → `config/AsyncConfig.java`
@@ -44,7 +44,7 @@
 1. **7×24 不停歇** — 不等指令，主动找事做
 2. **构建驱动** — 每个代码改动必须先通过 `mvn clean compile`
 3. **🔴 测试是生产代码** — 每次写生产代码必须同步写测试，测试和代码同等重要
-4. **🔴 E2E 验证不可省** — 有 REST 端点后必须运行 `scripts/e2e-test.sh` 验证完整链路
+4. **🔴 E2E 验证不可省（cron 也要跑，.env 有全部配置）** — 有 REST 端点后必须运行 `scripts/e2e-test.sh` 验证完整链路
 5. **测试失败 = 未完成** — `mvn test` 有失败就不提交、不汇报完成
 6. **文档跟代码** — 更新代码就同步更新文档
 7. **诚实报告** — 报告失败，不掩盖问题
@@ -187,9 +187,9 @@
 
 - 模块数：5（parent + api + core + starter + documents）+ 2 demos
 - Java 源文件数：58（主项目 52 + demos 6）
-- 测试数：319（主项目 311 core+api + 8 starter，demos 测试不在主构建中）
+- 测试数：323（主项目 315 core+api + 8 starter，demos 测试不在主构建中）
 - 构建状态：✅ BUILD SUCCESS（mvn clean compile + test）
-- Git 提交：52 次（最新 b9a7d17）
+- Git 提交：53 次（最新 待提交）
 - 文档数：6（README.md + docs/DEPLOYMENT.md + demos/README.md + demo-basic-rag/README.md + demo-domain-extension/README.md + 实施规划文档）
 
 ## ⏰ Cron 任务
@@ -202,6 +202,7 @@
 
 ## 📝 进度日志
 
+- ✅ 2026-04-01 16:28 P1 #4 VectorStore.add() 简化嵌入存储——RagDocumentController 新增 embedDocumentViaVectorStore 端点（POST /{id}/embed/vs）：使用 VectorStore.add(List<Document>) 一行完成嵌入生成+存储，比原有 embedDocument（EmbeddingBatchService + JdbcTemplate 手动插入）代码量减少 60%。VectorStore 通过 @Autowired(required=false) 可选注入，未配置时返回 400 提示。新增 4 个测试（成功/null/不存在/空内容）。281 测试全通。commit 待提交。已推送。
 - ✅ 2026-04-01 15:31 P1 #3 检索日志表——V3__add_retrieval_logs.sql（rag_retrieval_logs 表含 session_id/query/strategy/timing/result_scores/metadata），新增 RagRetrievalLog 实体 + RagRetrievalLogRepository（分页/慢查询/统计聚合/按天趋势）+ RetrievalLoggingService（@ConditionalOnBean，日志失败不影响业务）。HybridSearchAdvisor 集成：每次检索自动记录耗时/策略/结果数/得分。RetrievalLoggingServiceTest 8 个测试。319 测试全通。commit b9a7d17。已推送。
 - ✅ 2026-04-01 14:27 P1 #1 API 兼容性适配层集成——SpringAiConfig 新增 apiCompatibilityAdapter Bean（根据 provider/base-url 自动选择适配器），RerankAdvisor 注入适配器：支持多 system 消息时用 augmentSystemMessage，不支持时降级为 augmentUserMessage。adapter/ 包新增 4 个类（接口 + OpenAi + MiniMax + Factory）。RerankAdvisorTest 9→11，AdvisorChainIntegrationTest 适配新行为。311 测试全通。commit 559d6f5。已推送。
 - ✅ 2026-04-01 08:03 修复集成测试——删除 RagContextIntegrationTest（CacheConfig 双 CacheManager 冲突 + SpringAiConfig @Primary bean 冲突导致全部 10 个测试失败，bean 存在性测试价值低维护成本高）+ 修复 SpringAiConfig（移除 openAiChatModel/anthropicChatModel 多余的 @Primary）+ RagControllerIntegrationTest 添加 @TestPropertySource 启用 NoHandlerFoundException + 补充 Testcontainers/MockBean 依赖。238 测试全通。commit 3244d71。已推送。

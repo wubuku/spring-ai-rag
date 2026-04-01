@@ -7,6 +7,8 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -27,6 +29,7 @@ class RagDocumentControllerTest {
     private RagEmbeddingRepository embeddingRepository;
     private EmbeddingBatchService embeddingBatchService;
     private JdbcTemplate jdbcTemplate;
+    private VectorStore vectorStore;
     private RagDocumentController controller;
 
     @BeforeEach
@@ -35,7 +38,8 @@ class RagDocumentControllerTest {
         embeddingRepository = mock(RagEmbeddingRepository.class);
         embeddingBatchService = mock(EmbeddingBatchService.class);
         jdbcTemplate = mock(JdbcTemplate.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate);
+        vectorStore = mock(VectorStore.class);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate, vectorStore);
     }
 
     private RagDocument createDoc(Long id, String title, String content) {
@@ -270,6 +274,53 @@ class RagDocumentControllerTest {
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
 
         ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertEquals("文档内容为空", response.getBody().get("error"));
+    }
+
+    @Test
+    void embedDocumentViaVectorStore_success() {
+        String longContent = "Spring Boot 是一个用于快速构建 Spring 应用的框架。".repeat(50);
+        RagDocument doc = createDoc(1L, "文档", longContent);
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue((Integer) response.getBody().get("chunksCreated") > 0);
+        assertEquals("rag_vector_store", response.getBody().get("storageTable"));
+        assertEquals("COMPLETED", response.getBody().get("status"));
+        verify(vectorStore).add(anyList());
+    }
+
+    @Test
+    void embedDocumentViaVectorStore_noVectorStore_returns400() {
+        RagDocumentController noVsController = new RagDocumentController(
+                documentRepository, embeddingRepository, embeddingBatchService, jdbcTemplate, null);
+
+        ResponseEntity<Map<String, Object>> response = noVsController.embedDocumentViaVectorStore(1L);
+
+        assertEquals(400, response.getStatusCode().value());
+        assertTrue(response.getBody().get("error").toString().contains("VectorStore 未配置"));
+    }
+
+    @Test
+    void embedDocumentViaVectorStore_notFound() {
+        when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(999L);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void embedDocumentViaVectorStore_emptyContent_returns400() {
+        RagDocument doc = createDoc(1L, "空文档", "");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L);
 
         assertEquals(400, response.getStatusCode().value());
         assertEquals("文档内容为空", response.getBody().get("error"));
