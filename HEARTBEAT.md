@@ -22,6 +22,7 @@
 | 8 | SSE 流式响应 E2E 测试 | 测试覆盖 | ✅ 2026-04-02 |
 | 9 | 对话记忆多轮验证 | 测试覆盖 | ✅ 2026-04-02 |
 | 10 | SpringDoc OpenAPI 端点文档完善 | 文档 | ✅ 2026-04-02 |
+| 11 | JaCoCo 覆盖率集成 + 测试补充 | 质量 | ✅ 2026-04-02 |
 
 ## 进度日志
 
@@ -32,6 +33,7 @@
 - 2026-04-02 04:49 — ✅ #8 SSE 流式响应 E2E 测试：12 个测试覆盖 chunk 顺序/domainId 传递/异常处理/大量 token，commit 83887e1
 - 2026-04-02 05:10 — ✅ #9 对话记忆多轮验证：14 个测试覆盖多轮 CONVERSATION_ID 传递/会话隔离/双表共存/历史持久化，commit a362cea
 - 2026-04-02 05:50 — ✅ #10 SpringDoc OpenAPI 端点文档：OpenApiConfig 全局配置+自动400/500响应，4 个 Controller 补 @ApiResponse 注解，commit 12f6ed5
+- 2026-04-02 06:29 — ✅ #11 JaCoCo 覆盖率集成+测试补充：4 个模块全部集成 JaCoCo，新增 26 个测试（DTO+HierarchicalTextChunker），覆盖率 87.4% 指令/74.8% 分支，commit d4c1c66
 
 ## 铁律
 
