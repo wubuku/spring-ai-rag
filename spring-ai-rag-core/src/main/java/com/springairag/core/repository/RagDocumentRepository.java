@@ -45,9 +45,9 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      * 综合搜索：标题模糊 + 可选类型/状态过滤
      */
     @Query("SELECT d FROM RagDocument d WHERE " +
-           "(:title IS NULL OR LOWER(d.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
-           "(:documentType IS NULL OR d.documentType = :documentType) AND " +
-           "(:processingStatus IS NULL OR d.processingStatus = :processingStatus) AND " +
+           "(COALESCE(:title, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
+           "(COALESCE(:documentType, '') = '' OR d.documentType = :documentType) AND " +
+           "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus) AND " +
            "(:enabled IS NULL OR d.enabled = :enabled)")
     Page<RagDocument> searchDocuments(@Param("title") String title,
                                        @Param("documentType") String documentType,
