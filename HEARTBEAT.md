@@ -15,9 +15,11 @@
 | 7 | A/B 实验 | 策略对比 | ✅ 完成 |
 | 8 | 测试补充（AbTestController + Adapter） | 质量 | ✅ 完成 |
 | 9 | Collection（知识库）管理 API | 功能 | ✅ 完成 |
+| 10 | 告警服务（AlertService） | 运维 | ✅ 完成 |
 
 ## 进度日志
 
+- 2026-04-02 02:23: 告警服务完成。5 文件 1347 行。455 tests, 0 failures。
 - 2026-04-02 01:55: Collection 管理 API 完成。3 文件 527 行，15 个测试。64 tests。
 - 2026-04-02 01:17: 修复 Starter 自动配置。添加 Boot 3.x 发现文件 + @ComponentScan，50 tests。
 - 2026-04-02 00:54: 测试补充。4 文件 371 行。49 tests, 0 failures。
