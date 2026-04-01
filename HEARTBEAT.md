@@ -23,9 +23,11 @@
 | 9 | 对话记忆多轮验证 | 测试覆盖 | ✅ 2026-04-02 |
 | 10 | SpringDoc OpenAPI 端点文档完善 | 文档 | ✅ 2026-04-02 |
 | 11 | JaCoCo 覆盖率集成 + 测试补充 | 质量 | ✅ 2026-04-02 |
+| 12 | 实体 @Table(indexes) + ErrorResponse DTO | 代码质量 | ✅ 2026-04-02 |
 
 ## 进度日志
 
+- 2026-04-02 06:52 — ✅ #12 实体索引注解+ErrorResponse：7 实体补 @Table(indexes)，ErrorResponse DTO 替代 Map，commit f56ff8d
 - 2026-04-02 03:29 — ✅ #1 demo-basic-rag 补测试：DemoControllerTest 8 个单元测试，commit 94723d4
 - 2026-04-02 03:47 — ✅ #2 Controller 集成测试覆盖率提升：46 个测试覆盖 8 个 Controller，commit 3e16f9b
 - 2026-04-02 04:27 — ✅ #3-#6 已有完整实现（28+8+35+34=105 个测试），验证通过
