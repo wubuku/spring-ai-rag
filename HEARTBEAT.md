@@ -13,7 +13,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 1 | demo-basic-rag 补测试 | 测试覆盖 | ✅ 2026-04-02 |
-| 2 | 集成测试覆盖率提升（Controller 层） | 测试覆盖 | ⏳ |
+| 2 | 集成测试覆盖率提升（Controller 层） | 测试覆盖 | ✅ 2026-04-02 |
 | 3 | 检索质量评估（RetrievalEvaluationService） | 业务功能 | ⏳ |
 | 4 | 用户反馈端点（FeedbackController） | 业务功能 | ⏳ |
 | 5 | 文档批量操作 | 使用效率 | ⏳ |
@@ -26,6 +26,7 @@
 ## 进度日志
 
 - 2026-04-02 03:29 — ✅ #1 demo-basic-rag 补测试：DemoControllerTest 8 个单元测试，commit 94723d4
+- 2026-04-02 03:47 — ✅ #2 Controller 集成测试覆盖率提升：46 个测试覆盖 8 个 Controller，commit 3e16f9b
 
 ## 铁律
 
