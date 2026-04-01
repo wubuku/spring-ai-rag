@@ -2,6 +2,7 @@ package com.springairag.core.advisor;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.service.RetrievalLoggingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -38,11 +39,21 @@ public class HybridSearchAdvisor implements BaseAdvisor {
 
     private final HybridRetrieverService hybridRetriever;
 
+    private RetrievalLoggingService retrievalLoggingService;
+
     private boolean enabled = true;
 
     @Autowired
     public HybridSearchAdvisor(HybridRetrieverService hybridRetriever) {
         this.hybridRetriever = hybridRetriever;
+    }
+
+    /**
+     * 可选注入：检索日志服务（Repository 不可用时为 null）
+     */
+    @Autowired(required = false)
+    public void setRetrievalLoggingService(RetrievalLoggingService retrievalLoggingService) {
+        this.retrievalLoggingService = retrievalLoggingService;
     }
 
     public void setEnabled(boolean enabled) {
@@ -76,10 +87,25 @@ public class HybridSearchAdvisor implements BaseAdvisor {
             return request;
         }
 
+        // 计时
+        long startMs = System.currentTimeMillis();
+
         // 混合检索（向量 + 全文）
         List<RetrievalResult> results = hybridRetriever.search(query, null, null, 10);
 
-        log.info("[HybridSearchAdvisor] 混合检索返回 {} 条结果，查询: \"{}\"", results.size(), query);
+        long elapsedMs = System.currentTimeMillis() - startMs;
+
+        log.info("[HybridSearchAdvisor] 混合检索返回 {} 条结果，耗时 {}ms，查询: \"{}\"",
+                results.size(), elapsedMs, query);
+
+        // 记录检索日志（异步安全，失败不影响业务）
+        if (retrievalLoggingService != null) {
+            String sessionId = request.context().get("sessionId") != null
+                    ? String.valueOf(request.context().get("sessionId")) : null;
+            retrievalLoggingService.logRetrieval(
+                    sessionId, query, "hybrid",
+                    elapsedMs, 0L, 0L, results);
+        }
 
         // 将检索结果存入 context attributes，供后续 RerankAdvisor 使用
         return request.mutate()
