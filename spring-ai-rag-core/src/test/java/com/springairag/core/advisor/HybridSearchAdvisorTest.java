@@ -56,6 +56,31 @@ class HybridSearchAdvisorTest {
     }
 
     @Test
+    void before_recordsPipelineMetrics() {
+        List<RetrievalResult> mockResults = Arrays.asList(
+                createResult("doc-1", "Spring Boot 是一个框架", 0.9),
+                createResult("doc-2", "Spring AI 支持 RAG", 0.8)
+        );
+        when(hybridRetriever.search(eq("什么是 Spring Boot"), isNull(), isNull(), eq(10)))
+                .thenReturn(mockResults);
+
+        Prompt prompt = new Prompt(new UserMessage("什么是 Spring Boot"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        RagPipelineMetrics metrics = RagPipelineMetrics.get(result.context());
+        assertNotNull(metrics);
+        assertEquals(1, metrics.getStepCount());
+        RagPipelineMetrics.StepMetric step = metrics.getSteps().get(0);
+        assertEquals("HybridSearch", step.stepName());
+        assertEquals(2, step.resultCount());
+        assertTrue(step.durationMs() >= 0);
+    }
+
+    @Test
     void before_disabled_returnsOriginalRequest() {
         advisor.setEnabled(false);
 

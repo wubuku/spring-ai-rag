@@ -242,12 +242,12 @@
 | P1 | 创建 RagProperties 统一配置类 | dermai-rag-service | 新增 config/RagProperties.java |
 | P1 | 创建业务异常类 | dermai-rag-service | 新增 exception/ |
 | P1 | 异步异常处理 | dermai-rag-service AsyncConfig | 新增 config/AsyncConfig.java |
-| P2 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 |
+| P3 | 实体 @Table(indexes) 注解 | dermai-rag-service | 所有实体类 |
 | P2 | Pipeline 可观测性 | MaxKB4j AbsStep | advisor/ 各 Advisor |
 | P2 | A/B 实验框架 | dermai-rag-service | 新增 |
 | P2 | 用户反馈端点 | dermai-rag-service | 新增 `controller/FeedbackController.java` |
-| P2 | 检索质量评估（RetrievalEvaluationService） | dermai-rag-service | 新增 `service/RetrievalEvaluationService.java` || P2 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
-| P2 | 统一错误响应格式 | dermai-rag-service | GlobalExceptionHandler |
+| P2 | 检索质量评估（RetrievalEvaluationService） | dermai-rag-service | 新增 `service/RetrievalEvaluationService.java` || P3 | API Key 认证 | dermai-rag-service ApiKeyAuthFilter | 新增 filter/ |
+| P3 | 统一错误响应格式 | dermai-rag-service | GlobalExceptionHandler |
 | P2 | 文档内容哈希去重 | dermai-rag-service | controller/RagDocumentController |
 | P2 | 文档批量操作端点 | — | controller/RagDocumentController |
 

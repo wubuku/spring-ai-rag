@@ -85,10 +85,16 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
             return request;
         }
 
+        long startMs = System.currentTimeMillis();
         List<String> rewrittenQueries = queryRewritingService.rewriteQuery(originalQuery);
+        long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[QueryRewriteAdvisor] 原始查询: \"{}\" → 改写 {} 条: {}",
-                originalQuery, rewrittenQueries.size(), rewrittenQueries);
+        log.info("[QueryRewriteAdvisor] 原始查询: \"{}\" → 改写 {} 条，耗时 {}ms: {}",
+                originalQuery, rewrittenQueries.size(), elapsedMs, rewrittenQueries);
+
+        // 记录 Pipeline 可观测指标
+        RagPipelineMetrics.getOrCreate(request.context())
+                .recordStep("QueryRewrite", elapsedMs, rewrittenQueries.size());
 
         // 将改写结果存入 context，传递给下游 Advisor（HybridSearchAdvisor 等）
         return request.mutate()

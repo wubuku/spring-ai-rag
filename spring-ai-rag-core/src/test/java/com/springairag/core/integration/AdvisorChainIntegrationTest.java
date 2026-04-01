@@ -352,6 +352,16 @@ class AdvisorChainIntegrationTest {
         assertEquals(2, finalResults.size());
         assertEquals("doc-2", finalResults.get(0).getDocumentId(), "重排后 doc-2 应排第一");
         assertEquals("doc-1", finalResults.get(1).getDocumentId());
+
+        // 验证 Pipeline 可观测指标：3 个步骤都应被记录
+        com.springairag.core.advisor.RagPipelineMetrics metrics =
+                com.springairag.core.advisor.RagPipelineMetrics.get(afterRerank.context());
+        assertNotNull(metrics, "Pipeline 指标应存在于 context 中");
+        assertEquals(3, metrics.getStepCount(), "应有 3 个步骤指标");
+        assertEquals("QueryRewrite", metrics.getSteps().get(0).stepName());
+        assertEquals("HybridSearch", metrics.getSteps().get(1).stepName());
+        assertEquals("Rerank", metrics.getSteps().get(2).stepName());
+        assertTrue(metrics.getTotalDurationMs() >= 0, "总耗时应 >= 0");
     }
 
     @Test

@@ -220,6 +220,37 @@ class RerankAdvisorTest {
     }
 
     @Test
+    void before_recordsPipelineMetrics() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+
+        List<RetrievalResult> searchResults = Arrays.asList(
+                createResult("doc-1", "内容1", 0.9),
+                createResult("doc-2", "内容2", 0.8)
+        );
+        List<RetrievalResult> rerankedResults = List.of(
+                createResult("doc-2", "内容2", 0.95)
+        );
+        when(rerankingService.rerank(anyString(), anyList(), eq(5)))
+                .thenReturn(rerankedResults);
+
+        Prompt prompt = new Prompt(new UserMessage("test"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        RagPipelineMetrics metrics = RagPipelineMetrics.get(result.context());
+        assertNotNull(metrics);
+        assertEquals(1, metrics.getStepCount());
+        RagPipelineMetrics.StepMetric step = metrics.getSteps().get(0);
+        assertEquals("Rerank", step.stepName());
+        assertEquals(1, step.resultCount());
+        assertTrue(step.durationMs() >= 0);
+    }
+
+    @Test
     void after_returnsOriginalResponse() {
         RerankAdvisor advisor = createAdvisor(openAiAdapter);
         var response = advisor.after(null, null);

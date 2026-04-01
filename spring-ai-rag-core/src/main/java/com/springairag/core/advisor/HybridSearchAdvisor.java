@@ -98,6 +98,10 @@ public class HybridSearchAdvisor implements BaseAdvisor {
         log.info("[HybridSearchAdvisor] 混合检索返回 {} 条结果，耗时 {}ms，查询: \"{}\"",
                 results.size(), elapsedMs, query);
 
+        // 记录 Pipeline 可观测指标
+        RagPipelineMetrics.getOrCreate(request.context())
+                .recordStep("HybridSearch", elapsedMs, results.size());
+
         // 记录检索日志（异步安全，失败不影响业务）
         if (retrievalLoggingService != null) {
             String sessionId = request.context().get("sessionId") != null

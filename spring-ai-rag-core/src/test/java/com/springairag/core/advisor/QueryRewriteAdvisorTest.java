@@ -117,6 +117,25 @@ class QueryRewriteAdvisorTest {
     }
 
     @Test
+    void before_recordsPipelineMetrics() {
+        String original = "test query";
+        List<String> rewritten = List.of(original, "rewritten");
+        when(queryRewritingService.rewriteQuery(original)).thenReturn(rewritten);
+
+        Prompt prompt = new Prompt(new UserMessage(original));
+        ChatClientRequest request = ChatClientRequest.builder().prompt(prompt).build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        RagPipelineMetrics metrics = RagPipelineMetrics.get(result.context());
+        assertNotNull(metrics);
+        assertEquals(1, metrics.getStepCount());
+        assertEquals("QueryRewrite", metrics.getSteps().get(0).stepName());
+        assertEquals(2, metrics.getSteps().get(0).resultCount());
+        assertTrue(metrics.getTotalDurationMs() >= 0);
+    }
+
+    @Test
     void after_returnsOriginalResponse() {
         var response = advisor.after(null, null);
         assertNull(response);

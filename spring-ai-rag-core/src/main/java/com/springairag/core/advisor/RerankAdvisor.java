@@ -111,9 +111,15 @@ public class RerankAdvisor implements BaseAdvisor {
         String query = AdvisorUtils.extractUserMessage(request);
 
         // 重排序
+        long startMs = System.currentTimeMillis();
         List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);
+        long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[RerankAdvisor] 重排完成：{} → {} 条结果", results.size(), reranked.size());
+        log.info("[RerankAdvisor] 重排完成：{} → {} 条结果，耗时 {}ms", results.size(), reranked.size(), elapsedMs);
+
+        // 记录 Pipeline 可观测指标
+        RagPipelineMetrics.getOrCreate(request.context())
+                .recordStep("Rerank", elapsedMs, reranked.size());
 
         // 构建上下文
         String context = buildContextFromResults(reranked);
