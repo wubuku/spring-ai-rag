@@ -1,6 +1,7 @@
 package com.springairag.core.advisor;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
 import com.springairag.core.adapter.MiniMaxAdapter;
 import com.springairag.core.adapter.OpenAiCompatibleAdapter;
@@ -36,7 +37,11 @@ class RerankAdvisorTest {
     }
 
     private RerankAdvisor createAdvisor(ApiCompatibilityAdapter adapter) {
-        return new RerankAdvisor(rerankingService, adapter);
+        ApiAdapterFactory factory = new ApiAdapterFactory() {
+            @Override
+            public ApiCompatibilityAdapter getAdapter(String baseUrl) { return adapter; }
+        };
+        return new RerankAdvisor(rerankingService, factory, "https://api.example.com");
     }
 
     @Test

@@ -64,7 +64,7 @@ class AdvisorChainIntegrationTest {
 
         queryRewriteAdvisor = new QueryRewriteAdvisor(queryRewritingService);
         hybridSearchAdvisor = new HybridSearchAdvisor(hybridRetrieverService);
-        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.OpenAiCompatibleAdapter());
+        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.ApiAdapterFactory() { public com.springairag.core.adapter.ApiCompatibilityAdapter getAdapter(String u) { return new com.springairag.core.adapter.OpenAiCompatibleAdapter(); } }, "https://api.example.com");
     }
 
     /**

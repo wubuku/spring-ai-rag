@@ -42,7 +42,7 @@ public class RerankAdvisor implements BaseAdvisor {
 
     private final ReRankingService rerankingService;
 
-    private final ApiCompatibilityAdapter apiAdapter;
+    private final ApiCompatibilityAdapter adapter;
 
     /** 重排结果在 response context 中的 key，供 RagChatService 提取 sources */
     public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
@@ -56,9 +56,9 @@ public class RerankAdvisor implements BaseAdvisor {
     private boolean enabled = true;
 
     @Autowired
-    public RerankAdvisor(ReRankingService rerankingService, ApiCompatibilityAdapter apiAdapter) {
+    public RerankAdvisor(ReRankingService rerankingService, ApiAdapterFactory adapterFactory, @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.base-url:}") String baseUrl) {
         this.rerankingService = rerankingService;
-        this.apiAdapter = apiAdapter;
+        this.adapter = adapterFactory.getAdapter(baseUrl);
     }
 
     public void setEnabled(boolean enabled) {
@@ -121,7 +121,7 @@ public class RerankAdvisor implements BaseAdvisor {
         // 根据 API 兼容性适配器选择注入策略
         ChatClientRequest.Builder mutated = request.mutate().context(RERANKED_RESULTS_KEY, reranked);
 
-        if (apiAdapter.supportsMultipleSystemMessages()) {
+        if (adapter.supportsMultipleSystemMessages()) {
             // 支持多 system 消息 → 使用 augmentSystemMessage（语义更清晰）
             String systemContext = systemContextPrefix + context;
             mutated.prompt(request.prompt().augmentSystemMessage(systemContext));
