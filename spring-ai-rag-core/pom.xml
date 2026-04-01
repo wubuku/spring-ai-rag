@@ -163,5 +163,11 @@
 
     <build>
         <!-- Core 是库模块，不用 spring-boot-maven-plugin，否则打包成 fat JAR 其他模块无法引用 -->
+        <plugins>
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
     </build>
 </project>
