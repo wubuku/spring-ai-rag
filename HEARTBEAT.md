@@ -1,42 +1,25 @@
 # HEARTBEAT.md — cron 任务指令
 
-## 每轮执行步骤
+## 每轮步骤
+1. `export $(cat .env | grep -v '^#' | xargs) && mvn clean test`
+2. 选下一个未完成项（见待办清单）
+3. 参考三项目代码（见 AGENTS.md），实现改进
+4. `mvn test` 通过 → 提交推送
 
-1. 运行 `export $(cat .env | grep -v '^#' | xargs) && mvn clean test` 确认构建通过
-2. 读下面待办清单，选下一个未完成项
-3. 参考三个项目代码（见下方），实现改进
-4. `mvn test` + `scripts/e2e-test.sh` 通过
-5. 提交推送，汇报到飞书
-
-## 参考项目
-
-- `/Users/yangjiefeng/Documents/wubuku/spring-ai-skills-demo` — Spring AI 用法
-- `/Users/yangjiefeng/Documents/taisan/MaxKB4j` — Pipeline 架构
-- `/Users/yangjiefeng/Documents/wubuku/RuiChuangQi-AI/src/dermai-rag-service` — 生产 RAG 服务
-
-## 待办（用户指定顺序）
+## 待办
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 1 | VectorStore.add() 简化嵌入 | 开发体验 | ✅ 已有 |
-| 2 | RagProperties 统一配置 | 开发体验 | ✅ 已有 |
-| 3 | 检索质量评估 | 检索效果 | ✅ 已有 |
-| 4 | 用户反馈 | 质量闭环 | ✅ 已有 |
-| 5 | 基础设施（异常类+异步+哈希） | 基础 | ✅ 已有 |
-| 6 | 文档批量操作 | 使用效率 | ✅ 完成 |
-| 7 | A/B 实验 | 策略对比 | ⏳ |
-| 8 | 其他事项 | — | ⏳ |
+| 1-5 | 简化嵌入/统一配置/质量评估/用户反馈/基础设施 | — | ✅ 已有 |
+| 6 | 文档批量操作 | 效率 | ✅ 完成 |
+| 7 | A/B 实验 | 策略对比 | ✅ 完成 |
+| 8 | 测试补充（AbTestController + Adapter） | 质量 | ✅ 完成 |
+
+## 进度日志
+
+- 2026-04-02 00:54: 测试补充。4 文件 371 行。49 tests, 0 failures。
+- 2026-04-01 23:53: A/B 实验完成。9 文件 1195 行。
 
 ## 铁律
-
-- 写代码前先看参考项目
-- 每轮只做 1 项
-- `mvn test` 不过不提交
-- 进展写进度日志
-
-## 监控 Cron
-
-- `openclaw cron list | grep RAG`
-- `running` 超 15 分钟 = 卡住，干预
-- `error` = 查原因修复
+- 每轮只做 1 项，`mvn test` 不过不提交
 - HEARTBEAT.md ≤ 30 行
