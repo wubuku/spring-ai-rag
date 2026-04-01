@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.EmbeddingException;
 import com.springairag.core.exception.RetrievalException;
@@ -16,8 +17,6 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
-
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -37,50 +36,50 @@ class GlobalExceptionHandlerTest {
     void handleException_returns500() {
         Exception e = new RuntimeException("something went wrong");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleException(e);
+        ResponseEntity<ErrorResponse> response = handler.handleException(e);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals("RuntimeException", body.get("error"));
-        assertEquals("something went wrong", body.get("message"));
-        assertNotNull(body.get("timestamp"));
+        assertEquals("INTERNAL_ERROR", body.getError());
+        assertEquals("something went wrong", body.getMessage());
+        assertNotNull(body.getTimestamp());
     }
 
     @Test
     void handleException_nullMessage_usesDefault() {
         Exception e = new RuntimeException((String) null);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleException(e);
+        ResponseEntity<ErrorResponse> response = handler.handleException(e);
 
-        assertEquals("Unknown error", response.getBody().get("message"));
+        assertEquals("Unknown error", response.getBody().getMessage());
     }
 
     @Test
     void handleBadRequest_returns400() {
         IllegalArgumentException e = new IllegalArgumentException("invalid param");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleBadRequest(e);
+        ResponseEntity<ErrorResponse> response = handler.handleBadRequest(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals("Bad Request", body.get("error"));
-        assertEquals("invalid param", body.get("message"));
-        assertNotNull(body.get("timestamp"));
+        assertEquals("BAD_REQUEST", body.getError());
+        assertEquals("invalid param", body.getMessage());
+        assertNotNull(body.getTimestamp());
     }
 
     @Test
     void handleBadRequest_nullMessage_stillReturns400() {
         IllegalArgumentException e = new IllegalArgumentException((String) null);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleBadRequest(e);
+        ResponseEntity<ErrorResponse> response = handler.handleBadRequest(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals("Bad Request", body.get("error"));
-        assertEquals("Invalid argument", body.get("message"));
+        assertEquals("BAD_REQUEST", body.getError());
+        assertEquals("Invalid argument", body.getMessage());
     }
 
     @Test
@@ -88,10 +87,10 @@ class GlobalExceptionHandlerTest {
         MissingServletRequestParameterException e =
                 new MissingServletRequestParameterException("sessionId", "String");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleMissingParam(e);
+        ResponseEntity<ErrorResponse> response = handler.handleMissingParam(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().get("message").toString().contains("sessionId"));
+        assertTrue(response.getBody().getMessage().contains("sessionId"));
     }
 
     @Test
@@ -99,24 +98,22 @@ class GlobalExceptionHandlerTest {
         HttpMessageNotReadableException e =
                 new HttpMessageNotReadableException("parse error");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleUnreadableMessage(e);
+        ResponseEntity<ErrorResponse> response = handler.handleUnreadableMessage(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("Invalid Request Body", response.getBody().get("error"));
-        assertTrue(response.getBody().get("message").toString().contains("JSON"));
+        assertEquals("INVALID_REQUEST_BODY", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("JSON"));
     }
 
     @Test
     void handleTypeMismatch_returns400() {
-        // MethodArgumentTypeMismatchException needs (Class, Parameter, name, type, value)
-        // Simplified: use the handler directly
         MethodArgumentTypeMismatchException e = new MethodArgumentTypeMismatchException(
                 "not-a-number", Integer.class, "limit", null, null);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleTypeMismatch(e);
+        ResponseEntity<ErrorResponse> response = handler.handleTypeMismatch(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertTrue(response.getBody().get("message").toString().contains("limit"));
+        assertTrue(response.getBody().getMessage().contains("limit"));
     }
 
     @Test
@@ -124,10 +121,10 @@ class GlobalExceptionHandlerTest {
         HttpRequestMethodNotSupportedException e =
                 new HttpRequestMethodNotSupportedException("PATCH");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleMethodNotSupported(e);
+        ResponseEntity<ErrorResponse> response = handler.handleMethodNotSupported(e);
 
         assertEquals(HttpStatus.METHOD_NOT_ALLOWED, response.getStatusCode());
-        assertTrue(response.getBody().get("message").toString().contains("PATCH"));
+        assertTrue(response.getBody().getMessage().contains("PATCH"));
     }
 
     @Test
@@ -135,22 +132,21 @@ class GlobalExceptionHandlerTest {
         NoHandlerFoundException e =
                 new NoHandlerFoundException("GET", "/api/unknown", null);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleNotFound(e);
+        ResponseEntity<ErrorResponse> response = handler.handleNotFound(e);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        assertEquals("Not Found", response.getBody().get("error"));
+        assertEquals("NOT_FOUND", response.getBody().getError());
     }
 
     @Test
     void handleDataAccess_returns500() {
         DataAccessException e = new DataAccessException("connection timeout") {};
 
-        ResponseEntity<Map<String, Object>> response = handler.handleDataAccess(e);
+        ResponseEntity<ErrorResponse> response = handler.handleDataAccess(e);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("Database Error", response.getBody().get("error"));
-        // 不暴露数据库细节
-        assertEquals("数据库操作失败", response.getBody().get("message"));
+        assertEquals("DATABASE_ERROR", response.getBody().getError());
+        assertEquals("数据库操作失败", response.getBody().getMessage());
     }
 
     @Test
@@ -160,13 +156,13 @@ class GlobalExceptionHandlerTest {
 
         MethodArgumentNotValidException e = new MethodArgumentNotValidException(null, bindingResult);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleValidation(e);
+        ResponseEntity<ErrorResponse> response = handler.handleValidation(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        assertEquals("Validation Failed", response.getBody().get("error"));
-        assertTrue(response.getBody().get("message").toString().contains("message"));
-        assertTrue(response.getBody().get("message").toString().contains("消息内容不能为空"));
-        assertNotNull(response.getBody().get("timestamp"));
+        assertEquals("VALIDATION_FAILED", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("message"));
+        assertTrue(response.getBody().getMessage().contains("消息内容不能为空"));
+        assertNotNull(response.getBody().getTimestamp());
     }
 
     @Test
@@ -177,45 +173,45 @@ class GlobalExceptionHandlerTest {
 
         MethodArgumentNotValidException e = new MethodArgumentNotValidException(null, bindingResult);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleValidation(e);
+        ResponseEntity<ErrorResponse> response = handler.handleValidation(e);
 
         assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
-        String message = response.getBody().get("message").toString();
+        String message = response.getBody().getMessage();
         assertTrue(message.contains("message"));
         assertTrue(message.contains("sessionId"));
-        assertTrue(message.contains("; ")); // 多个错误用分号分隔
+        assertTrue(message.contains("; "));
     }
 
     @Test
     void handleDocumentNotFound_returns404() {
         DocumentNotFoundException e = new DocumentNotFoundException(42L);
 
-        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(e);
 
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
-        assertEquals("DOCUMENT_NOT_FOUND", response.getBody().get("error"));
-        assertTrue(response.getBody().get("message").toString().contains("42"));
+        assertEquals("DOCUMENT_NOT_FOUND", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("42"));
     }
 
     @Test
     void handleEmbeddingException_returns500() {
         EmbeddingException e = new EmbeddingException(1L, "模型超时");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(e);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("EMBEDDING_FAILED", response.getBody().get("error"));
-        assertTrue(response.getBody().get("message").toString().contains("模型超时"));
+        assertEquals("EMBEDDING_FAILED", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("模型超时"));
     }
 
     @Test
     void handleRetrievalException_returns500() {
         RetrievalException e = new RetrievalException("Spring Boot", "数据库连接失败");
 
-        ResponseEntity<Map<String, Object>> response = handler.handleRagException(e);
+        ResponseEntity<ErrorResponse> response = handler.handleRagException(e);
 
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
-        assertEquals("RETRIEVAL_FAILED", response.getBody().get("error"));
-        assertTrue(response.getBody().get("message").toString().contains("Spring Boot"));
+        assertEquals("RETRIEVAL_FAILED", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("Spring Boot"));
     }
 }

@@ -14,7 +14,10 @@ import java.util.Map;
  * 状态流转：DRAFT → RUNNING → PAUSED → COMPLETED
  */
 @Entity
-@Table(name = "rag_ab_experiments")
+@Table(name = "rag_ab_experiments", indexes = {
+    @Index(name = "idx_rag_ab_exp_status", columnList = "status"),
+    @Index(name = "idx_rag_ab_exp_created", columnList = "created_at")
+})
 public class RagAbExperiment {
 
     @Id

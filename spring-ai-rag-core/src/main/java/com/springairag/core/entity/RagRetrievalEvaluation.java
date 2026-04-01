@@ -14,7 +14,10 @@ import java.util.Map;
  * 用于检索质量的持续监控和优化。
  */
 @Entity
-@Table(name = "rag_retrieval_evaluations")
+@Table(name = "rag_retrieval_evaluations", indexes = {
+    @Index(name = "idx_rag_eval_method", columnList = "evaluation_method"),
+    @Index(name = "idx_rag_eval_created", columnList = "created_at")
+})
 public class RagRetrievalEvaluation {
 
     @Id

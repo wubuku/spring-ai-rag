@@ -14,7 +14,12 @@ import java.util.Map;
  * 避免重复统计。
  */
 @Entity
-@Table(name = "rag_ab_results")
+@Table(name = "rag_ab_results", indexes = {
+    @Index(name = "idx_rag_ab_res_experiment", columnList = "experiment_id"),
+    @Index(name = "idx_rag_ab_res_variant", columnList = "variant_name"),
+    @Index(name = "idx_rag_ab_res_session", columnList = "session_id"),
+    @Index(name = "idx_rag_ab_res_created", columnList = "created_at")
+})
 public class RagAbResult {
 
     @Id

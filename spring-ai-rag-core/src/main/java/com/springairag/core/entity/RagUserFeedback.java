@@ -14,7 +14,11 @@ import java.util.Map;
  * 反馈数据可用于检索质量分析、模型调优依据、知识库补充决策。
  */
 @Entity
-@Table(name = "rag_user_feedback")
+@Table(name = "rag_user_feedback", indexes = {
+    @Index(name = "idx_rag_fb_session", columnList = "session_id"),
+    @Index(name = "idx_rag_fb_type", columnList = "feedback_type"),
+    @Index(name = "idx_rag_fb_created", columnList = "created_at")
+})
 public class RagUserFeedback {
 
     @Id

@@ -1,11 +1,6 @@
 package com.springairag.core.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,7 +14,12 @@ import java.util.Map;
  * 告警类型包括阈值告警、SLO 违约告警等。
  */
 @Entity
-@Table(name = "rag_alerts")
+@Table(name = "rag_alerts", indexes = {
+    @Index(name = "idx_rag_alert_type", columnList = "alert_type"),
+    @Index(name = "idx_rag_alert_severity", columnList = "severity"),
+    @Index(name = "idx_rag_alert_status", columnList = "status"),
+    @Index(name = "idx_rag_alert_fired", columnList = "fired_at")
+})
 public class RagAlert {
 
     @Id

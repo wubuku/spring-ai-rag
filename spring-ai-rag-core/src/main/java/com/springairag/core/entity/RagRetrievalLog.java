@@ -1,11 +1,6 @@
 package com.springairag.core.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,7 +14,11 @@ import java.util.Map;
  * 每次 HybridSearchAdvisor 执行检索时自动创建一条记录。
  */
 @Entity
-@Table(name = "rag_retrieval_logs")
+@Table(name = "rag_retrieval_logs", indexes = {
+    @Index(name = "idx_rag_log_session", columnList = "session_id"),
+    @Index(name = "idx_rag_log_strategy", columnList = "retrieval_strategy"),
+    @Index(name = "idx_rag_log_created", columnList = "created_at")
+})
 public class RagRetrievalLog {
 
     @Id

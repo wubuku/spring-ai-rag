@@ -1,11 +1,6 @@
 package com.springairag.core.entity;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
@@ -19,7 +14,10 @@ import java.util.Map;
  * 支持可用性、延迟、质量等维度的 SLO 配置。
  */
 @Entity
-@Table(name = "rag_slo_configs")
+@Table(name = "rag_slo_configs", indexes = {
+    @Index(name = "idx_rag_slo_type", columnList = "slo_type"),
+    @Index(name = "idx_rag_slo_enabled", columnList = "enabled")
+})
 public class RagSloConfig {
 
     @Id
