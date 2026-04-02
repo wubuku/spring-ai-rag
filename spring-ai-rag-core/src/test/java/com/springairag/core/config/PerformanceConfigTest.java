@@ -1,6 +1,8 @@
 package com.springairag.core.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -10,7 +12,6 @@ import org.springframework.cache.caffeine.CaffeineCacheManager;
 
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -48,8 +49,9 @@ class PerformanceConfigTest {
         when(mockDelegate.embed("world")).thenReturn(new float[]{0.4f, 0.5f, 0.6f});
 
         CacheManager cacheManager = createTestCacheManager();
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
         PerformanceConfig config = new PerformanceConfig();
-        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager);
+        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager, meterRegistry);
 
         // 第一次调用
         float[] result1 = cached.embed("hello");
@@ -78,8 +80,9 @@ class PerformanceConfigTest {
         when(mockDelegate.call(request)).thenReturn(expectedResponse);
 
         CacheManager cacheManager = createTestCacheManager();
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
         PerformanceConfig config = new PerformanceConfig();
-        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager);
+        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager, meterRegistry);
 
         EmbeddingResponse response = cached.call(request);
         assertSame(expectedResponse, response);
@@ -93,8 +96,9 @@ class PerformanceConfigTest {
         when(mockDelegate.dimensions()).thenReturn(1024);
 
         CacheManager cacheManager = createTestCacheManager();
+        MeterRegistry meterRegistry = new SimpleMeterRegistry();
         PerformanceConfig config = new PerformanceConfig();
-        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager);
+        EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager, meterRegistry);
 
         assertEquals(1024, cached.dimensions());
     }

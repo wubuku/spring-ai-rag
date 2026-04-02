@@ -1,6 +1,8 @@
 package com.springairag.core.config;
 
 import com.github.benmanes.caffeine.cache.Caffeine;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
@@ -15,6 +17,7 @@ import org.springframework.context.annotation.Primary;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 性能优化配置
@@ -53,29 +56,42 @@ public class PerformanceConfig {
     @Primary
     public EmbeddingModel cachedEmbeddingModel(
             EmbeddingModel delegate,
-            @Qualifier("embeddingCacheManager") CacheManager embeddingCacheManager) {
+            @Qualifier("embeddingCacheManager") CacheManager embeddingCacheManager,
+            MeterRegistry meterRegistry) {
 
-        return new CachingEmbeddingModel(delegate, embeddingCacheManager);
+        return new CachingEmbeddingModel(delegate, embeddingCacheManager, meterRegistry);
     }
 
     /**
-     * 缓存包装的 EmbeddingModel
+     * 缓存包装的 EmbeddingModel — 带 Micrometer 命中率追踪
      */
     static class CachingEmbeddingModel implements EmbeddingModel {
 
         private final EmbeddingModel delegate;
         private final Cache cache;
+        private final Counter hitCounter;
+        private final Counter missCounter;
+        private final AtomicLong cacheSize;
 
-        CachingEmbeddingModel(EmbeddingModel delegate, CacheManager cacheManager) {
+        CachingEmbeddingModel(EmbeddingModel delegate, CacheManager cacheManager,
+                              MeterRegistry meterRegistry) {
             this.delegate = delegate;
             this.cache = cacheManager.getCache("embeddings");
+            this.hitCounter = Counter.builder("rag.cache.embedding.hit")
+                    .description("嵌入缓存命中次数")
+                    .register(meterRegistry);
+            this.missCounter = Counter.builder("rag.cache.embedding.miss")
+                    .description("嵌入缓存未命中次数")
+                    .register(meterRegistry);
+            this.cacheSize = new AtomicLong(0);
+            meterRegistry.gauge("rag.cache.embedding.size", cacheSize);
         }
 
         @Override
         public float[] embed(String text) {
-            // 单文本缓存
             Float[] cached = cache.get(text, Float[].class);
             if (cached != null) {
+                hitCounter.increment();
                 float[] result = new float[cached.length];
                 for (int i = 0; i < cached.length; i++) {
                     result[i] = cached[i];
@@ -83,13 +99,14 @@ public class PerformanceConfig {
                 return result;
             }
 
+            missCounter.increment();
             float[] vector = delegate.embed(text);
-            // 缓存时转为 Float[]（Caffeine 不支持 primitive 数组）
             Float[] boxed = new Float[vector.length];
             for (int i = 0; i < vector.length; i++) {
                 boxed[i] = vector[i];
             }
             cache.put(text, boxed);
+            cacheSize.incrementAndGet();
             return vector;
         }
 
@@ -100,7 +117,6 @@ public class PerformanceConfig {
 
         @Override
         public EmbeddingResponse call(EmbeddingRequest request) {
-            // 批量请求直接透传，不做逐条缓存（批量场景通常是新数据导入）
             return delegate.call(request);
         }
 
