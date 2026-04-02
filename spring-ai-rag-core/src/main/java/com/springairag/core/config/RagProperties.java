@@ -49,6 +49,7 @@ public class RagProperties {
     private final Chunk chunk = new Chunk();
     private final Async async = new Async();
     private final Security security = new Security();
+    private final RateLimit rateLimit = new RateLimit();
 
     public Embedding getEmbedding() {
         return embedding;
@@ -80,6 +81,10 @@ public class RagProperties {
 
     public Security getSecurity() {
         return security;
+    }
+
+    public RateLimit getRateLimit() {
+        return rateLimit;
     }
 
     /**
@@ -319,6 +324,40 @@ public class RagProperties {
 
         public void setEnabled(boolean enabled) {
             this.enabled = enabled;
+        }
+    }
+
+    /**
+     * API 限流配置
+     *
+     * <p>基于令牌桶算法，按客户端 IP 限流。
+     *
+     * <p>配置示例：
+     * <pre>
+     * rag:
+     *   rate-limit:
+     *     enabled: true
+     *     requests-per-minute: 60
+     * </pre>
+     */
+    public static class RateLimit {
+        private boolean enabled = false;
+        private int requestsPerMinute = 60;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public int getRequestsPerMinute() {
+            return requestsPerMinute;
+        }
+
+        public void setRequestsPerMinute(int requestsPerMinute) {
+            this.requestsPerMinute = requestsPerMinute;
         }
     }
 }

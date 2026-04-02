@@ -7,6 +7,7 @@ import com.springairag.core.config.PerformanceConfig;
 import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -76,6 +77,19 @@ public class GeneralRagAutoConfiguration {
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
         registration.setOrder(1);
+        return registration;
+    }
+
+    /**
+     * API 限流过滤器
+     */
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RagProperties properties) {
+        RagProperties.RateLimit rateLimit = properties.getRateLimit();
+        RateLimitFilter filter = new RateLimitFilter(rateLimit.isEnabled(), rateLimit.getRequestsPerMinute());
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.addUrlPatterns("/api/*");
+        registration.setOrder(0); // 在认证之前执行限流
         return registration;
     }
 

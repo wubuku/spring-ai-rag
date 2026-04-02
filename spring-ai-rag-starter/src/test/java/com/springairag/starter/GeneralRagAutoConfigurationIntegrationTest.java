@@ -134,6 +134,16 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
+        @DisplayName("rateLimitFilterRegistration: 返回 FilterRegistrationBean<RateLimitFilter>")
+        void rateLimitFilterBean() throws Exception {
+            var method = GeneralRagAutoConfiguration.class
+                    .getMethod("rateLimitFilterRegistration",
+                            com.springairag.core.config.RagProperties.class);
+            assertNotNull(method.getAnnotation(Bean.class));
+            assertEquals(FilterRegistrationBean.class, method.getReturnType());
+        }
+
+        @Test
         @DisplayName("ragHealthIndicator: @ConditionalOnClass(HealthIndicator)")
         void healthIndicatorBean() throws Exception {
             var method = GeneralRagAutoConfiguration.class

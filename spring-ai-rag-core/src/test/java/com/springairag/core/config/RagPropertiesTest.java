@@ -161,4 +161,21 @@ class RagPropertiesTest {
 
         assertEquals(100, props.getMemory().getMaxMessages());
     }
+
+    @Test
+    void rateLimit_defaults() {
+        RagProperties props = new RagProperties();
+        assertFalse(props.getRateLimit().isEnabled());
+        assertEquals(60, props.getRateLimit().getRequestsPerMinute());
+    }
+
+    @Test
+    void rateLimit_setters() {
+        RagProperties props = new RagProperties();
+        props.getRateLimit().setEnabled(true);
+        props.getRateLimit().setRequestsPerMinute(120);
+
+        assertTrue(props.getRateLimit().isEnabled());
+        assertEquals(120, props.getRateLimit().getRequestsPerMinute());
+    }
 }
