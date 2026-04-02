@@ -4,36 +4,38 @@
 
 **模型无关 · 领域解耦 · 组件化**
 
-## 特性
+## 为什么选 spring-ai-rag？
 
-- **模型无关**：通过 Spring AI ChatClient 抽象，支持 OpenAI、DeepSeek、Anthropic、智谱等模型，切换模型只改配置
-- **混合检索**：向量检索（pgvector HNSW）+ 全文检索（pg_trgm）融合打分
-- **Advisor 链式 RAG Pipeline**：查询改写 → 混合检索 → 重排序 → 上下文注入
-- **组件独立**：每个 Advisor 和 Service 可独立使用，支持组件级集成
-- **领域解耦**：通过 `DomainRagExtension` 接口支持垂直领域定制
-- **SSE 流式输出**：支持 Server-Sent Events 流式响应
-- **监控可观测**：集成 Micrometer 指标 + Actuator 健康检查
+| 痛点 | spring-ai-rag 方案 |
+|------|-------------------|
+| 换模型要改代码？ | 切换 LLM 只改一行配置，OpenAI/DeepSeek/Anthropic/智谱全兼容 |
+| RAG 效果差？ | 混合检索 + 查询改写 + 重排序，Advisor 链式 Pipeline 逐层优化 |
+| 只能用一个领域？ | DomainRagExtension 接口，一个服务支撑 N 个垂直领域 |
+| 组件太重？ | 每个 Advisor/Service 可独立引入，不捆绑 |
+
+## 功能特性
+
+- **混合检索**：pgvector 向量检索 + PostgreSQL 全文检索融合打分
+- **Advisor 链式 Pipeline**：查询改写 → 混合检索 → 重排序 → 上下文注入
+- **多模型支持**：OpenAI 兼容 + Anthropic，Provider 自动切换
+- **领域扩展**：实现 `DomainRagExtension` 即可注入领域 Prompt 和检索策略
+- **SSE 流式输出**：Server-Sent Events 实时响应
+- **A/B 实验框架**：多模型并行对比，自动收集延迟/token/质量指标
+- **检索评估**：RetrievalEvaluationService + 用户反馈闭环
+- **监控可观测**：Micrometer 指标 + Actuator 健康检查
+- **API Key 认证**：内建安全过滤器
 
 ## 快速开始
 
-### 前置要求
-
-- Java 17+
-- PostgreSQL 15+（需安装 `vector` 和 `pg_trgm` 扩展）
-- Maven 3.9+
-
-### 数据库准备
+### 1. 数据库
 
 ```sql
 CREATE DATABASE spring_ai_rag;
-\c spring_ai_rag;
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-Flyway 会自动创建表结构。
-
-### 集成到项目
+### 2. 添加依赖
 
 ```xml
 <dependency>
@@ -43,26 +45,20 @@ Flyway 会自动创建表结构。
 </dependency>
 ```
 
-### 配置
+### 3. 配置 & 启动
 
 ```yaml
 spring:
   datasource:
     url: jdbc:postgresql://localhost:5432/spring_ai_rag
-    username: postgres
-    password: your-password
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
       base-url: https://api.deepseek.com/v1
-      chat:
-        enabled: false
-        options:
-          model: deepseek-chat
 
 app:
   llm:
-    provider: openai  # openai | anthropic
+    provider: openai
 
 rag:
   embedding:
@@ -72,98 +68,55 @@ rag:
     dimensions: 1024
 ```
 
-## REST API
-
-### RAG 问答
+### 4. 调用
 
 ```bash
-# 非流式问答
+# RAG 问答
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 Spring AI？", "sessionId": "test-001"}'
+  -d '{"message": "什么是 Spring AI？"}'
 
-# 流式问答（SSE）
+# 流式问答
 curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "解释 RAG 的工作原理", "sessionId": "test-001"}'
+  -d '{"message": "解释 RAG 的工作原理"}'
 ```
 
-### 文档管理
-
-```bash
-# 上传文档
-curl -X POST http://localhost:8080/api/v1/rag/documents \
-  -H "Content-Type: application/json" \
-  -d '{"title": "Spring AI 入门", "content": "Spring AI 是...", "source": "manual"}'
-
-# 生成嵌入向量
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
-```
-
-### 混合检索
-
-```bash
-curl -X POST http://localhost:8080/api/v1/rag/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Spring AI", "topK": 5}'
-```
-
-### 健康检查
-
-```bash
-curl http://localhost:8080/api/v1/rag/health
-curl http://localhost:8080/actuator/health
-```
-
-完整 API 文档：启动后访问 `/swagger-ui.html`
-
-## 架构
-
-### RAG Pipeline（Advisor 链）
+## 架构概览
 
 ```
-用户请求
-  │
-  ▼
-QueryRewriteAdvisor (order +10)
-  │  查询改写：同义词扩展、限定词补充
-  ▼
-HybridSearchAdvisor (order +20)
-  │  混合检索：向量 + 全文融合，结果存入 context attributes
-  ▼
-RerankAdvisor (order +30)
-  │  多维重排：相关性 + 多样性，注入 Prompt 上下文
-  ▼
-ChatClient.call() / stream()
-  │
-  ▼
-MessageChatMemoryAdvisor
-  │  对话记忆：spring_ai_chat_memory + rag_chat_history 双表
-  ▼
-响应
+请求 → QueryRewriteAdvisor(+10) → HybridSearchAdvisor(+20)
+     → RerankAdvisor(+30) → ChatClient.call/stream()
+     → MessageChatMemoryAdvisor → 响应
 ```
-
-### 模块结构
 
 ```
 spring-ai-rag/
-├── spring-ai-rag-api/        # API 接口、DTO 定义
-├── spring-ai-rag-core/       # 核心实现
-│   ├── advisor/              #   QueryRewrite / HybridSearch / Rerank Advisor
-│   ├── config/               #   SpringAiConfig / RagChatService / CacheConfig
-│   ├── controller/           #   REST 控制器
-│   ├── extension/            #   DomainRagExtension 领域扩展
-│   ├── metrics/              #   Micrometer 指标 + Actuator 健康检查
-│   ├── repository/           #   数据访问层
-│   └── retrieval/            #   检索服务（混合检索、重排、查询改写、嵌入）
+├── spring-ai-rag-api/        # API 接口、DTO
+├── spring-ai-rag-core/       # 核心：Advisor / Controller / Retrieval / Metrics
 ├── spring-ai-rag-starter/    # Spring Boot 自动配置
 ├── spring-ai-rag-documents/  # 文档处理（分块、清洗）
 └── demos/                    # 示例项目
 ```
 
-## 领域扩展
+## REST API 端点
 
-实现 `DomainRagExtension` 接口，注册到 `DomainExtensionRegistry`：
+| 模块 | 端点 | 说明 |
+|------|------|------|
+| 问答 | `/api/v1/rag/chat/ask` | 非流式 RAG 问答 |
+| 问答 | `/api/v1/rag/chat/stream` | SSE 流式问答 |
+| 检索 | `/api/v1/rag/search` | 混合检索 |
+| 文档 | `/api/v1/rag/documents` | 文档 CRUD + 嵌入 |
+| 集合 | `/api/v1/rag/collections` | 知识库管理 |
+| 评估 | `/api/v1/rag/evaluations` | 检索质量评估 |
+| 反馈 | `/api/v1/rag/feedbacks` | 用户反馈 |
+| A/B | `/api/v1/rag/ab-tests` | 实验管理 |
+| 告警 | `/api/v1/rag/alerts` | 监控告警 |
+| 健康 | `/api/v1/rag/health` | 服务健康检查 |
+
+完整 API 文档：启动后访问 `/swagger-ui.html`
+
+## 领域扩展示例
 
 ```java
 @Component
@@ -174,47 +127,27 @@ public class MedicalDomainExtension implements DomainRagExtension {
 }
 ```
 
-使用时指定 `domainId`：
-
-```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
-  -H "Content-Type: application/json" \
-  -d '{"message": "感冒症状", "sessionId": "s1", "domainId": "medical"}'
-```
-
-## 监控
-
-集成 Micrometer + Actuator：
-
-```bash
-# 健康检查
-curl /actuator/health
-
-# Prometheus 指标
-curl /actuator/prometheus
-```
-
-指标包括：
-- `rag.requests.total` — 请求计数（success/failure 标签）
-- `rag.request.duration` — 请求耗时分布
-- `rag.llm.tokens` — LLM token 消耗
+调用时指定 `domainId` 即可激活领域扩展。
 
 ## 构建与测试
 
 ```bash
-# 编译
-mvn clean compile
-
-# 测试
-mvn test
-
-# 打包
-mvn clean package -DskipTests
+mvn clean compile   # 编译
+mvn test            # 测试（700+ 个）
+mvn clean package   # 打包
 ```
 
-## 详细文档
+## 文档
 
+- [架构设计](docs/architecture.md)
+- [配置参考](docs/configuration.md)
+- [REST API 参考](docs/rest-api.md)
+- [领域扩展指南](docs/extension-guide.md)
+- [测试指南](docs/testing-guide.md)
+- [开发者上手](docs/getting-started.md)
 - [部署指南](docs/DEPLOYMENT.md)
+- [故障排查](docs/troubleshooting.md)
+- [贡献指南](CONTRIBUTING.md)
 
 ## License
 
