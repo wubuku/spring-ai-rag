@@ -39,7 +39,7 @@
 | 20 | IMPLEMENTATION_COMPARISON.md 审查 | 代码质量 | ✅ 2026-04-02 |
 | 21 | 全局 TODO/FIXME 扫描 | 代码质量 | ✅ 2026-04-02（零 TODO/FIXME） |
 | 22 | 测试覆盖率 >90% 提升 | 质量 | ✅ 2026-04-02 |
-| 23 | 长方法重构（>40行方法 11 个） | 代码质量 | ⏳ 下一步 |
+| 23 | 长方法重构（>40行方法 11 个） | 代码质量 | ✅ 2026-04-02 |
 | 24 | IMPLEMENTATION_COMPARISON.md 统计更新 | 文档 | 📋 |
 
 ## 待办（文档体系建设 — 详见 docs/DOCUMENTATION_PLAN.md）
@@ -60,6 +60,7 @@
 
 ## 进度日志
 
+- 2026-04-02 11:57 — ✅ #23 长方法重构：7 个文件重构（DocumentEmbedService + BatchDocumentService + RetrievalEvaluationServiceImpl + AbTestServiceImpl + UserFeedbackServiceImpl + QueryRewritingService + RetrievalLoggingService），提取子方法降低圈复杂度，712+ 测试通过，commit 6ec6e98
 - 2026-04-02 11:04 — ✅ #22 测试覆盖率 >90%：新增 23 测试（RagException 14 + RagEmbedding 1 + RagSloConfig 1 + RagProperties 7），88.9%→90.3% 指令覆盖，712+ 测试全通过
 - 2026-04-02 11:01 — ✅ #20-#21 审查+扫描完成：IMPLEMENTATION_COMPARISON.md 已审查（4 轮已过），TODO/FIXME 零发现，103 源文件 + 65 测试文件，590+ 测试全通过
 - 2026-04-02 10:59 — ✅ #19 Starter 模块完整集成测试：GeneralRagAutoConfigurationIntegrationTest 18 个测试覆盖注解/Bean/Properties，修复 flaky benchmark 阈值，commit d7f02e6
