@@ -50,6 +50,12 @@ class DocumentEmbedServiceTest {
         return doc;
     }
 
+    private RagDocument createDocumentWithHash(Long id, String content, String contentHash) {
+        RagDocument doc = createDocument(id, content);
+        doc.setContentHash(contentHash);
+        return doc;
+    }
+
     // ==================== embedDocument ====================
 
     @Test
@@ -280,5 +286,125 @@ class DocumentEmbedServiceTest {
                 documentRepository, embeddingRepository, embeddingBatchService,
                 jdbcTemplate, null);
         assertFalse(noStoreService.isVectorStoreAvailable());
+    }
+
+    // ==================== 内容哈希缓存 ====================
+
+    @Test
+    @DisplayName("嵌入缓存: 内容未变更(status=COMPLETED, 同哈希, 有嵌入) → 命中缓存")
+    void embedDocument_contentUnchanged_cacheHit() {
+        String hash = "abc123";
+        RagDocument doc = createDocumentWithHash(1L, "固定内容。".repeat(50), hash);
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(hash);
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
+
+        Map<String, Object> output = service.embedDocument(1L);
+
+        assertEquals("CACHED", output.get("status"));
+        assertEquals(true, output.get("cached"));
+        assertEquals(5L, output.get("embeddingsStored"));
+        // 不应调用嵌入 API
+        verifyNoInteractions(embeddingBatchService);
+    }
+
+    @Test
+    @DisplayName("嵌入缓存: 内容已变更 → 重新嵌入")
+    void embedDocument_contentChanged_reEmbeds() {
+        RagDocument doc = createDocumentWithHash(1L, "新内容。".repeat(50), "new_hash");
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash("old_hash");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        float[] vec = new float[3];
+        EmbeddingBatchService.EmbeddingResult result =
+                new EmbeddingBatchService.EmbeddingResult("text", vec, null);
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(result));
+
+        Map<String, Object> output = service.embedDocument(1L);
+
+        assertEquals("COMPLETED", output.get("status"));
+        assertTrue((int) output.get("chunksCreated") > 0);
+        verify(embeddingBatchService).createEmbeddingsBatch(anyList());
+    }
+
+    @Test
+    @DisplayName("嵌入缓存: embeddedContentHash 为 null → 重新嵌入")
+    void embedDocument_nullEmbeddedHash_reEmbeds() {
+        RagDocument doc = createDocumentWithHash(1L, "内容。".repeat(50), "hash");
+        doc.setProcessingStatus("COMPLETED");
+        // embeddedContentHash 未设置
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        float[] vec = new float[3];
+        EmbeddingBatchService.EmbeddingResult result =
+                new EmbeddingBatchService.EmbeddingResult("text", vec, null);
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(result));
+
+        Map<String, Object> output = service.embedDocument(1L);
+
+        assertEquals("COMPLETED", output.get("status"));
+        verify(embeddingBatchService).createEmbeddingsBatch(anyList());
+    }
+
+    @Test
+    @DisplayName("嵌入缓存: 嵌入完成后更新 embeddedContentHash")
+    void embedDocument_updatesEmbeddedHash() {
+        String hash = "test_hash";
+        RagDocument doc = createDocumentWithHash(1L, "测试内容。".repeat(50), hash);
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        float[] vec = new float[3];
+        EmbeddingBatchService.EmbeddingResult result =
+                new EmbeddingBatchService.EmbeddingResult("text", vec, null);
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(result));
+
+        service.embedDocument(1L);
+
+        assertEquals("COMPLETED", doc.getProcessingStatus());
+        assertEquals(hash, doc.getEmbeddedContentHash());
+        verify(documentRepository, atLeastOnce()).save(doc);
+    }
+
+    @Test
+    @DisplayName("嵌入缓存: VectorStore 路径内容未变更 → 命中缓存")
+    void embedDocumentViaVectorStore_contentUnchanged_cacheHit() {
+        String hash = "vs_hash";
+        RagDocument doc = createDocumentWithHash(2L, "内容。".repeat(50), hash);
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(hash);
+        when(documentRepository.findById(2L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(2L)).thenReturn(3L);
+
+        Map<String, Object> output = service.embedDocumentViaVectorStore(2L);
+
+        assertEquals("CACHED", output.get("status"));
+        verifyNoInteractions(vectorStore);
+    }
+
+    @Test
+    @DisplayName("嵌入缓存: force=true 跳过哈希检查，强制重嵌入")
+    void embedDocument_force_skipsCache() {
+        String hash = "same_hash";
+        RagDocument doc = createDocumentWithHash(1L, "内容。".repeat(50), hash);
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(hash);
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
+
+        float[] vec = new float[3];
+        EmbeddingBatchService.EmbeddingResult result =
+                new EmbeddingBatchService.EmbeddingResult("text", vec, null);
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(result));
+
+        Map<String, Object> output = service.embedDocument(1L, true);
+
+        assertEquals("COMPLETED", output.get("status"));
+        verify(embeddingBatchService).createEmbeddingsBatch(anyList());
     }
 }

@@ -69,6 +69,15 @@ public class RagDocument {
     private String contentHash;
 
     /**
+     * 上次嵌入时的内容 SHA-256 哈希值
+     *
+     * <p>用于嵌入缓存：比较当前 contentHash 与 embeddedContentHash，
+     * 如果一致说明内容未变更，跳过重嵌入。
+     */
+    @Column(name = "embedded_content_hash", length = 64)
+    private String embeddedContentHash;
+
+    /**
      * 文档大小（字节）
      */
     private Long size;
@@ -140,6 +149,9 @@ public class RagDocument {
 
     public String getContentHash() { return contentHash; }
     public void setContentHash(String contentHash) { this.contentHash = contentHash; }
+
+    public String getEmbeddedContentHash() { return embeddedContentHash; }
+    public void setEmbeddedContentHash(String embeddedContentHash) { this.embeddedContentHash = embeddedContentHash; }
 
     public Long getSize() { return size; }
     public void setSize(Long size) { this.size = size; }

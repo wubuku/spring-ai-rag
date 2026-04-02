@@ -119,6 +119,7 @@ public class DocumentEmbedService {
         int stored = storeEmbeddings(documentId, chunks, results);
 
         doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(doc.getContentHash());
         documentRepository.save(doc);
 
         log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
@@ -188,6 +189,7 @@ public class DocumentEmbedService {
         vectorStore.add(documents);
 
         doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(doc.getContentHash());
         documentRepository.save(doc);
 
         log.info("Document {} embedding via VectorStore completed: {} chunks stored", documentId, chunks.size());
@@ -292,6 +294,7 @@ public class DocumentEmbedService {
             int stored = storeEmbeddings(id, chunks, embResults);
 
             doc.setProcessingStatus("COMPLETED");
+            doc.setEmbeddedContentHash(doc.getContentHash());
             documentRepository.save(doc);
 
             itemResult.put("status", "COMPLETED");
@@ -315,7 +318,14 @@ public class DocumentEmbedService {
     // ==================== 内部方法 ====================
 
     /**
-     * 检查嵌入缓存 — 文档已有嵌入且状态正常则返回缓存结果
+     * 检查嵌入缓存 — 基于内容哈希判断是否需要重嵌入
+     *
+     * <p>检查策略（三层）：
+     * <ol>
+     *   <li>状态检查：非 COMPLETED 状态不命中缓存</li>
+     *   <li>内容哈希检查：当前内容哈希与已嵌入哈希不一致 → 内容已变更，需重嵌入</li>
+     *   <li>嵌入记录检查：无已有嵌入记录 → 需嵌入</li>
+     * </ol>
      *
      * @return 缓存命中返回结果 Map，未命中返回 null
      */
@@ -323,12 +333,22 @@ public class DocumentEmbedService {
         if (!"COMPLETED".equals(doc.getProcessingStatus())) {
             return null;
         }
+
+        // 内容哈希比对：如果内容已变更，即使有旧嵌入也需重新嵌入
+        String currentHash = doc.getContentHash();
+        String embeddedHash = doc.getEmbeddedContentHash();
+        if (currentHash != null && embeddedHash != null && !currentHash.equals(embeddedHash)) {
+            log.info("Content changed for document {}: currentHash={}, embeddedHash={}, re-embedding needed",
+                    doc.getId(), currentHash, embeddedHash);
+            return null;
+        }
+
         long existingCount = embeddingRepository.countByDocumentId(doc.getId());
         if (existingCount > 0) {
-            log.info("Embedding cache hit for document {}: {} existing embeddings, skipping",
+            log.info("Embedding cache hit for document {}: {} existing embeddings, content unchanged, skipping",
                     doc.getId(), existingCount);
             return Map.of(
-                    "message", "嵌入向量已存在，跳过重嵌入（使用 force=true 强制重嵌入）",
+                    "message", "嵌入向量已存在且内容未变更，跳过重嵌入（使用 force=true 强制重嵌入）",
                     "documentId", doc.getId(),
                     "embeddingsStored", existingCount,
                     "status", "CACHED",
