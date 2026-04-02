@@ -51,8 +51,8 @@
 | 27 | docs/architecture.md（架构设计详解） | 文档 P1 | ✅ 2026-04-02 |
 | 28 | docs/configuration.md（完整配置参考） | 文档 P1 | ✅ 2026-04-02 |
 | 29 | docs/testing-guide.md（测试指南） | 文档 P1 | ✅ 2026-04-02 |
-| 30 | docs/getting-started.md（开发者上手） | 文档 P2 | 📋 |
-| 31 | docs/rest-api.md（REST API 参考） | 文档 P2 | 📋 |
+| 30 | docs/getting-started.md（开发者上手） | 文档 P2 | ✅ 2026-04-02 |
+| 31 | docs/rest-api.md（REST API 参考） | 文档 P2 | ✅ 2026-04-02 |
 | 32 | docs/extension-guide.md（领域扩展指南） | 文档 P2 | 📋 |
 | 33 | docs/troubleshooting.md（故障排查） | 文档 P2 | 📋 |
 | 34 | CHANGELOG.md（变更日志） | 文档 P3 | 📋 |
@@ -60,6 +60,7 @@
 
 ## 进度日志
 
+- 2026-04-02 16:41 — ✅ #30 + #31：docs/getting-started.md（开发者上手，5 分钟跑通 RAG）+ docs/rest-api.md（完整 REST API 参考，覆盖 10 个 Controller 40+ 端点），712 测试全通过，commit 待提交
 - 2026-04-02 15:17 — ✅ #28 + #29：docs/configuration.md（7.4KB，覆盖全部 rag.* 配置项 + LLM 切换 + pgvector + HikariCP + 安全 + 监控）+ docs/testing-guide.md（4.3KB，测试金字塔 + JaCoCo + E2E + 基准测试 + 常见问题），commit 275ef50
 - 2026-04-02 14:30 — ✅ #24 + #27：IMPLEMENTATION_COMPARISON.md 统计更新（103源文件+68测试文件，630测试全通过）+ docs/architecture.md 架构设计详解（8.7KB，含设计理念/模块结构/核心模式/数据流/数据库/配置/监控/决策记录），commit 待提交
 - 2026-04-02 13:44 — ✅ #26 CONTRIBUTING.md：贡献指南，含开发环境搭建/代码规范/测试要求/Conventional Commits/PR 流程/Bug 报告模板，274 行，commit 5063ea6

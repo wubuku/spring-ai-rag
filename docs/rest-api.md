@@ -1,0 +1,545 @@
+# REST API 参考
+
+> 启动后可访问 Swagger UI：`/swagger-ui.html`
+>
+> 基础路径：`/api/v1/rag`
+
+---
+
+## 通用说明
+
+### 认证
+
+启用 API Key 认证时，请求头需携带：
+
+```
+X-API-Key: your-api-key
+```
+
+配置项：`rag.security.api-keys`（逗号分隔多个 key）。
+
+### 错误响应
+
+```json
+{
+  "status": 400,
+  "error": "Bad Request",
+  "message": "消息内容不能为空",
+  "path": "/api/v1/rag/chat/ask",
+  "timestamp": "2026-04-02T16:00:00Z"
+}
+```
+
+---
+
+## Chat — RAG 问答
+
+### `POST /api/v1/rag/chat/ask`
+
+非流式 RAG 问答，返回完整回答。
+
+**请求体：**
+
+```json
+{
+  "message": "什么是 Spring AI？",
+  "sessionId": "session-001",
+  "domainId": "medical",
+  "maxResults": 5,
+  "metadata": {}
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `message` | string | ✅ | 问题内容（≤10000 字符） |
+| `sessionId` | string | ✅ | 会话 ID（用于多轮对话） |
+| `domainId` | string | | 领域扩展 ID |
+| `maxResults` | int | | 检索结果数量，默认 5 |
+| `metadata` | object | | 扩展元数据 |
+
+**响应：**
+
+```json
+{
+  "answer": "Spring AI 是 Spring 生态的 AI 应用框架...",
+  "sessionId": "session-001",
+  "sources": [
+    {
+      "documentId": 1,
+      "title": "Spring AI 介绍",
+      "score": 0.92,
+      "chunk": "Spring AI 提供了 ChatClient..."
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/v1/rag/chat/stream`
+
+SSE 流式问答，逐块返回回答。
+
+**请求体：** 同 `/ask`。
+
+**响应：** `text/event-stream`
+
+```
+data: {"chunk": "Spring AI 是"}
+
+data: {"chunk": "一个 AI 框架"}
+
+event: done
+data: [DONE]
+```
+
+**curl 示例：**
+
+```bash
+curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"message": "RAG 是什么？", "sessionId": "s1"}'
+```
+
+---
+
+### `GET /api/v1/rag/chat/history/{sessionId}`
+
+查询会话历史。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `limit` | int | 50 | 返回条数 |
+
+**响应：** `List<Map<String, Object>>`
+
+```json
+[
+  {
+    "id": 1,
+    "session_id": "s1",
+    "user_message": "什么是 RAG？",
+    "ai_response": "RAG 是检索增强生成...",
+    "created_at": "2026-04-02T16:00:00Z"
+  }
+]
+```
+
+---
+
+### `DELETE /api/v1/rag/chat/history/{sessionId}`
+
+清空会话历史（仅 `rag_chat_history` 表，不影响 `spring_ai_chat_memory`）。
+
+**响应：**
+
+```json
+{
+  "message": "会话历史已清空",
+  "sessionId": "s1",
+  "deletedCount": 10
+}
+```
+
+---
+
+## Search — 直接检索
+
+> 不经过 LLM 生成，用于调试和预览检索效果。
+
+### `GET /api/v1/rag/search`
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `query` | string | ✅ | 查询文本 |
+| `limit` | int | 10 | 返回数量 |
+| `useHybrid` | bool | true | 混合检索 |
+| `vectorWeight` | double | 0.5 | 向量权重 |
+| `fulltextWeight` | double | 0.5 | 全文权重 |
+
+**响应：**
+
+```json
+{
+  "results": [
+    {
+      "documentId": 1,
+      "title": "Spring AI 介绍",
+      "score": 0.92,
+      "chunk": "检索到的文本片段...",
+      "metadata": {}
+    }
+  ],
+  "total": 3,
+  "query": "Spring AI"
+}
+```
+
+---
+
+### `POST /api/v1/rag/search`
+
+通过请求体提交更复杂的检索配置。
+
+**请求体：**
+
+```json
+{
+  "query": "Spring AI",
+  "documentIds": [1, 2, 3],
+  "config": {
+    "maxResults": 10,
+    "useHybridSearch": true,
+    "vectorWeight": 0.6,
+    "fulltextWeight": 0.4,
+    "minScore": 0.3
+  }
+}
+```
+
+---
+
+## Documents — 文档管理
+
+### `POST /api/v1/rag/documents`
+
+创建文档。
+
+```json
+{
+  "title": "Spring AI 介绍",
+  "content": "Spring AI 是...",
+  "source": "manual",
+  "documentType": "text",
+  "metadata": {}
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `title` | string | ✅ | 文档标题 |
+| `content` | string | ✅ | 文档内容 |
+| `source` | string | | 来源标识 |
+| `documentType` | string | | 文档类型 |
+| `metadata` | object | | 扩展元数据 |
+
+---
+
+### `GET /api/v1/rag/documents`
+
+分页查询文档。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `page` | int | 0 | 页码 |
+| `size` | int | 20 | 每页数量 |
+
+---
+
+### `GET /api/v1/rag/documents/{id}`
+
+获取单个文档详情。
+
+---
+
+### `DELETE /api/v1/rag/documents/{id}`
+
+删除文档。
+
+---
+
+### `GET /api/v1/rag/documents/stats`
+
+获取文档统计信息（总数、已嵌入数量等）。
+
+---
+
+### `POST /api/v1/rag/documents/{id}/embed`
+
+为指定文档生成嵌入向量。
+
+---
+
+### `POST /api/v1/rag/documents/{id}/embed/vs`
+
+通过 VectorStore 为指定文档生成嵌入向量。
+
+---
+
+### `POST /api/v1/rag/documents/batch`
+
+批量创建文档。
+
+```json
+{
+  "documents": [
+    { "title": "doc1", "content": "内容1" },
+    { "title": "doc2", "content": "内容2" }
+  ]
+}
+```
+
+---
+
+### `DELETE /api/v1/rag/documents/batch`
+
+批量删除文档。
+
+```json
+{
+  "documentIds": [1, 2, 3]
+}
+```
+
+---
+
+### `POST /api/v1/rag/documents/batch/embed`
+
+批量嵌入文档。
+
+```json
+{
+  "documentIds": [1, 2, 3]
+}
+```
+
+---
+
+## Collections — 知识库管理
+
+### `POST /api/v1/rag/collections`
+
+创建知识库集合。
+
+```json
+{
+  "name": "医疗知识库",
+  "description": "医疗领域文档集合",
+  "embeddingModel": "BAAI/bge-m3",
+  "dimensions": 1024,
+  "enabled": true,
+  "metadata": {}
+}
+```
+
+---
+
+### `GET /api/v1/rag/collections`
+
+分页查询集合。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `page` | int | 0 | 页码 |
+| `size` | int | 20 | 每页数量 |
+| `keyword` | string | | 搜索关键词 |
+
+---
+
+### `GET /api/v1/rag/collections/{id}`
+
+获取集合详情。
+
+---
+
+### `PUT /api/v1/rag/collections/{id}`
+
+更新集合。
+
+---
+
+### `DELETE /api/v1/rag/collections/{id}`
+
+删除集合。
+
+---
+
+### `GET /api/v1/rag/collections/{id}/documents`
+
+获取集合中的文档列表。
+
+---
+
+### `POST /api/v1/rag/collections/{id}/documents`
+
+向集合添加文档。
+
+```json
+{
+  "documentIds": [1, 2, 3]
+}
+```
+
+---
+
+## Evaluation — 检索评估
+
+### `POST /api/v1/rag/evaluation/evaluate`
+
+执行单次检索评估。
+
+---
+
+### `POST /api/v1/rag/evaluation/batch`
+
+批量执行评估。
+
+---
+
+### `GET /api/v1/rag/evaluation/metrics/calculate`
+
+计算检索指标（Precision、Recall、MRR 等）。
+
+---
+
+### `GET /api/v1/rag/evaluation/report`
+
+获取评估报告。
+
+---
+
+### `GET /api/v1/rag/evaluation/history`
+
+获取评估历史。
+
+---
+
+### `GET /api/v1/rag/evaluation/metrics/aggregated`
+
+获取聚合指标。
+
+---
+
+### `POST /api/v1/rag/evaluation/feedback`
+
+提交用户反馈。
+
+```json
+{
+  "query": "什么是 RAG？",
+  "feedbackType": "helpful",
+  "comment": "回答准确",
+  "rating": 5
+}
+```
+
+---
+
+### `GET /api/v1/rag/evaluation/feedback/stats`
+
+获取反馈统计。
+
+---
+
+### `GET /api/v1/rag/evaluation/feedback/history`
+
+获取反馈历史。
+
+---
+
+### `GET /api/v1/rag/evaluation/feedback/type/{feedbackType}`
+
+按类型查询反馈。
+
+---
+
+## A/B Tests — 实验管理
+
+### `POST /api/v1/rag/ab/experiments`
+
+创建 A/B 实验。
+
+### `PUT /api/v1/rag/ab/experiments/{id}`
+
+更新实验。
+
+### `POST /api/v1/rag/ab/experiments/{id}/start`
+
+启动实验。
+
+### `POST /api/v1/rag/ab/experiments/{id}/pause`
+
+暂停实验。
+
+### `POST /api/v1/rag/ab/experiments/{id}/stop`
+
+停止实验。
+
+### `GET /api/v1/rag/ab/experiments/running`
+
+获取正在运行的实验。
+
+### `GET /api/v1/rag/ab/experiments/{id}/variant`
+
+获取实验变体分配。
+
+### `POST /api/v1/rag/ab/experiments/{id}/results`
+
+记录实验结果。
+
+### `GET /api/v1/rag/ab/experiments/{id}/analysis`
+
+获取实验分析报告。
+
+### `GET /api/v1/rag/ab/experiments/{id}/results`
+
+获取实验结果列表。
+
+---
+
+## Alerts — 监控告警
+
+### `GET /api/v1/rag/alerts/active`
+
+获取活跃告警。
+
+### `GET /api/v1/rag/alerts/history`
+
+获取告警历史。
+
+### `GET /api/v1/rag/alerts/stats`
+
+获取告警统计。
+
+### `POST /api/v1/rag/alerts/{alertId}/resolve`
+
+解决告警。
+
+### `POST /api/v1/rag/alerts/silence`
+
+静默告警。
+
+### `POST /api/v1/rag/alerts/fire`
+
+手动触发告警（测试用）。
+
+### `GET /api/v1/rag/alerts/slos`
+
+获取所有 SLO 定义。
+
+### `GET /api/v1/rag/alerts/slos/{sloName}`
+
+获取指定 SLO 详情。
+
+---
+
+## Health — 健康检查
+
+### `GET /api/v1/rag/health`
+
+服务健康检查。
+
+**响应：**
+
+```json
+{
+  "status": "UP",
+  "timestamp": "2026-04-02T16:00:00Z",
+  "components": {
+    "database": "UP",
+    "vectorStore": "UP",
+    "embeddingModel": "UP"
+  }
+}
+```
