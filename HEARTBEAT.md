@@ -84,6 +84,15 @@
 | 47 | 版本历史 REST 端点（GET /documents/{id}/versions） | 业务功能 | ✅ 2026-04-03 |
 | 48 | 限流过滤器集成测试 | 测试覆盖 | ✅ 2026-04-03 |
 
+## 待办（新周期 — 2026-04-03 第二轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 49 | HybridSearchAdvisor.before() 重构（43行） | 代码质量 | ⏳ |
+| 50 | DocumentEmbedService 3 个长方法重构（62+57+60行） | 代码质量 | ⏳ |
+| 51 | HybridRetrieverService 检索方法拆分（53+60行） | 代码质量 | ⏳ |
+| 52 | RetrievalUtils.fuseResults 重构（54行） | 代码质量 | ⏳ |
+
 ## 进度日志
 
 - 2026-04-03 01:47 — ✅ #44-#48 清理收尾：rest-api.md 补版本历史端点文档（GET /documents/{id}/versions + /versions/{versionNumber}），HEARTBEAT.md 状态同步，commit b9c503c 已完成的文档同步确认，全部 744+ 测试通过
