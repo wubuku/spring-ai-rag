@@ -29,10 +29,12 @@
 | 15 | DocumentEmbedService 单元测试 | 测试覆盖 | ✅ 2026-04-02 |
 | 16 | BatchDocumentService 单元测试 | 测试覆盖 | ✅ 2026-04-02 |
 | 17 | 多模型并行对比测试 | 验证 | ✅ 2026-04-02 |
-| 18 | 查询改写 LLM 辅助模式 | 功能增强 | ⏳ 下一步 |
+| 18 | 查询改写 LLM 辅助模式 | 功能增强 | ✅ 2026-04-02 |
+| 19 | Starter 模块完整集成测试 | 测试覆盖 | ⏳ 下一步 |
 
 ## 进度日志
 
+- 2026-04-02 08:49 — ✅ #18 查询改写 LLM 辅助模式：QueryRewritingService 新增 llmRewrite()，支持规则+LLM 混合模式，配置 llmEnabled/llmMaxRewrites，6 个新测试，commit 3173685
 - 2026-04-02 08:43 — ✅ #17 多模型并行对比服务：ModelComparisonService + 8 测试，并行查询多 ChatModel 收集响应/延迟/token，commit a7bb469
 - 2026-04-02 08:40 — ✅ #16 BatchDocumentService 单元测试：11 个测试覆盖批量创建/批量删除/哈希去重，commit 4eea34a
 - 2026-04-02 08:38 — ✅ #15 DocumentEmbedService 单元测试：17 个测试覆盖 embedDocument/embedDocumentViaVectorStore/batchEmbedDocuments/isVectorStoreAvailable，commit b947529
