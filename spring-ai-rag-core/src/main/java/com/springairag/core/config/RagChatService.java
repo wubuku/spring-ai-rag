@@ -175,41 +175,15 @@ public class RagChatService {
      * 核心聊天执行方法，返回含 sources 的完整响应
      */
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
-        // 应用领域扩展的系统提示词
-        String systemPrompt = null;
-        if (domainExtensionRegistry.hasExtensions()) {
-            String template = domainExtensionRegistry.getSystemPromptTemplate(domainId);
-            if (template != null) {
-                systemPrompt = template;
-                if (promptCustomizerChain.hasCustomizers()) {
-                    systemPrompt = promptCustomizerChain.customizeSystemPrompt(
-                            systemPrompt, "", metadata != null ? metadata : Map.of());
-                }
-            }
-        }
+        String systemPrompt = buildSystemPrompt(domainId, metadata);
+        String finalMessage = customizeUserMessage(userMessage, metadata);
 
-        // 应用 PromptCustomizer 对用户消息的定制
-        String finalMessage = userMessage;
-        if (promptCustomizerChain.hasCustomizers()) {
-            finalMessage = promptCustomizerChain.customizeUserMessage(
-                    userMessage, metadata != null ? metadata : Map.of());
-        }
-
-        // 构建请求
         ChatClient.ChatClientRequestSpec spec = chatClient.prompt();
         if (systemPrompt != null) {
             spec.system(systemPrompt);
         }
         spec.user(finalMessage);
-        spec.advisors(a -> {
-            a.param(ChatMemory.CONVERSATION_ID, sessionId);
-            if (metadata != null) {
-                metadata.forEach(a::param);
-            }
-            if (domainId != null) {
-                a.param("domainId", domainId);
-            }
-        });
+        spec.advisors(buildAdvisorParams(sessionId, domainId, metadata));
 
         long startTime = System.currentTimeMillis();
         String answer;
@@ -217,21 +191,7 @@ public class RagChatService {
         try {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
             answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
-
-            // 从 advisor context 提取重排后的检索结果作为引用来源
-            @SuppressWarnings("unchecked")
-            List<RetrievalResult> reranked = (List<RetrievalResult>) chatClientResponse.context()
-                    .get(RerankAdvisor.RERANKED_RESULTS_KEY);
-            if (reranked != null && !reranked.isEmpty()) {
-                sources = new ArrayList<>();
-                for (RetrievalResult r : reranked) {
-                    ChatResponse.SourceDocument doc = new ChatResponse.SourceDocument();
-                    doc.setDocumentId(r.getDocumentId());
-                    doc.setChunkText(r.getChunkText());
-                    doc.setScore(r.getScore());
-                    sources.add(doc);
-                }
-            }
+            sources = extractSources(chatClientResponse);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
@@ -244,14 +204,70 @@ public class RagChatService {
             metricsService.recordSuccess(elapsed, 0);
         }
 
-        // 保存到业务审计表
         historyRepository.save(sessionId, userMessage, answer, null, metadata);
 
-        // 构建完整响应
         ChatResponse response = new ChatResponse(answer);
         response.setSources(sources);
         response.setMetadata(Map.of("sessionId", sessionId));
         return response;
+    }
+
+    /** 构建领域扩展的系统提示词，无扩展返回 null */
+    private String buildSystemPrompt(String domainId, Map<String, Object> metadata) {
+        if (!domainExtensionRegistry.hasExtensions()) {
+            return null;
+        }
+        String template = domainExtensionRegistry.getSystemPromptTemplate(domainId);
+        if (template == null) {
+            return null;
+        }
+        if (promptCustomizerChain.hasCustomizers()) {
+            return promptCustomizerChain.customizeSystemPrompt(
+                    template, "", metadata != null ? metadata : Map.of());
+        }
+        return template;
+    }
+
+    /** 应用 PromptCustomizer 定制用户消息 */
+    private String customizeUserMessage(String userMessage, Map<String, Object> metadata) {
+        if (!promptCustomizerChain.hasCustomizers()) {
+            return userMessage;
+        }
+        return promptCustomizerChain.customizeUserMessage(
+                userMessage, metadata != null ? metadata : Map.of());
+    }
+
+    /** 构建 Advisor 参数（会话 ID、领域、元数据） */
+    private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
+            String sessionId, String domainId, Map<String, Object> metadata) {
+        return a -> {
+            a.param(ChatMemory.CONVERSATION_ID, sessionId);
+            if (metadata != null) {
+                metadata.forEach(a::param);
+            }
+            if (domainId != null) {
+                a.param("domainId", domainId);
+            }
+        };
+    }
+
+    /** 从 advisor context 提取重排后的检索结果作为引用来源 */
+    @SuppressWarnings("unchecked")
+    private List<ChatResponse.SourceDocument> extractSources(ChatClientResponse chatClientResponse) {
+        List<RetrievalResult> reranked = (List<RetrievalResult>) chatClientResponse.context()
+                .get(RerankAdvisor.RERANKED_RESULTS_KEY);
+        if (reranked == null || reranked.isEmpty()) {
+            return null;
+        }
+        List<ChatResponse.SourceDocument> sources = new ArrayList<>();
+        for (RetrievalResult r : reranked) {
+            ChatResponse.SourceDocument doc = new ChatResponse.SourceDocument();
+            doc.setDocumentId(r.getDocumentId());
+            doc.setChunkText(r.getChunkText());
+            doc.setScore(r.getScore());
+            sources.add(doc);
+        }
+        return sources;
     }
 
     /**

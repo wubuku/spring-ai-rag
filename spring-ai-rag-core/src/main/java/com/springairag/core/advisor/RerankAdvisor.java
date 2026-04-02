@@ -88,58 +88,60 @@ public class RerankAdvisor implements BaseAdvisor {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
         if (!enabled) {
             log.debug("[RerankAdvisor] 禁用，不执行重排");
             return request;
         }
 
-        // 从 context attributes 获取 HybridSearchAdvisor 的检索结果
-        Object resultsObj = request.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
-        if (resultsObj == null) {
-            log.warn("[RerankAdvisor] context 中未找到检索结果，跳过重排");
-            return request;
-        }
-
-        List<RetrievalResult> results = (List<RetrievalResult>) resultsObj;
-        if (results.isEmpty()) {
-            log.debug("[RerankAdvisor] 检索结果为空，跳过重排");
+        List<RetrievalResult> results = getRetrievalResults(request);
+        if (results == null) {
             return request;
         }
 
         String query = AdvisorUtils.extractUserMessage(request);
 
-        // 重排序
         long startMs = System.currentTimeMillis();
         List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);
         long elapsedMs = System.currentTimeMillis() - startMs;
 
         log.info("[RerankAdvisor] 重排完成：{} → {} 条结果，耗时 {}ms", results.size(), reranked.size(), elapsedMs);
-
-        // 记录 Pipeline 可观测指标
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("Rerank", elapsedMs, reranked.size());
 
-        // 构建上下文
-        String context = buildContextFromResults(reranked);
+        return injectRerankedContext(request, reranked);
+    }
 
-        // 根据 API 兼容性适配器选择注入策略
+    /** 从 context 获取检索结果，无结果返回 null */
+    @SuppressWarnings("unchecked")
+    private List<RetrievalResult> getRetrievalResults(ChatClientRequest request) {
+        Object resultsObj = request.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
+        if (resultsObj == null) {
+            log.warn("[RerankAdvisor] context 中未找到检索结果，跳过重排");
+            return null;
+        }
+        List<RetrievalResult> results = (List<RetrievalResult>) resultsObj;
+        if (results.isEmpty()) {
+            log.debug("[RerankAdvisor] 检索结果为空，跳过重排");
+            return null;
+        }
+        return results;
+    }
+
+    /** 根据 API 适配器选择策略，将重排结果注入 Prompt 上下文 */
+    private ChatClientRequest injectRerankedContext(ChatClientRequest request, List<RetrievalResult> reranked) {
+        String context = buildContextFromResults(reranked);
         ChatClientRequest.Builder mutated = request.mutate().context(RERANKED_RESULTS_KEY, reranked);
 
         if (adapter.supportsMultipleSystemMessages()) {
-            // 支持多 system 消息 → 使用 augmentSystemMessage（语义更清晰）
-            String systemContext = systemContextPrefix + context;
-            mutated.prompt(request.prompt().augmentSystemMessage(systemContext));
+            mutated.prompt(request.prompt().augmentSystemMessage(systemContextPrefix + context));
             log.debug("[RerankAdvisor] 使用 augmentSystemMessage 注入上下文");
         } else {
-            // 不支持多 system 消息 → 合并到用户消息
             String userPrefix = systemContextPrefix + context + "\n\n基于以上资料回答以下问题：\n\n";
             mutated.prompt(request.prompt().augmentUserMessage(
                     userMsg -> new UserMessage(userPrefix + userMsg.getText())));
             log.debug("[RerankAdvisor] 使用 augmentUserMessage 注入上下文（API 不支持多 system 消息）");
         }
-
         return mutated.build();
     }
 
