@@ -26,13 +26,14 @@
 | 12 | 实体 @Table(indexes) + ErrorResponse DTO | 代码质量 | ✅ 2026-04-02 |
 | 13 | API Key 认证过滤器 | 安全 | ✅ 2026-04-02 |
 | 14 | RagDocumentController 重构 | 代码质量 | ✅ 2026-04-02 |
-| 15 | DocumentEmbedService 单元测试 | 测试覆盖 | ⏳ 下一步 |
-| 16 | BatchDocumentService 单元测试 | 测试覆盖 | ⏳ |
+| 15 | DocumentEmbedService 单元测试 | 测试覆盖 | ✅ 2026-04-02 |
+| 16 | BatchDocumentService 单元测试 | 测试覆盖 | ⏳ 下一步 |
 | 17 | 多模型并行对比测试 | 验证 | ⏳ |
 | 18 | 查询改写 LLM 辅助模式 | 功能增强 | ⏳ |
 
 ## 进度日志
 
+- 2026-04-02 08:38 — ✅ #15 DocumentEmbedService 单元测试：17 个测试覆盖 embedDocument/embedDocumentViaVectorStore/batchEmbedDocuments/isVectorStoreAvailable，commit b947529
 - 2026-04-02 07:45 — ✅ RagDocumentController 重构：668→294 行（-56%），拆分 DocumentEmbedService + BatchDocumentService，552 测试通过，commit 4a12402
 - 2026-04-02 07:33 — 📋 HEARTBEAT 待办清单全部完成，Phase 1-5 实施规划落地
 - 2026-04-02 06:56 — ✅ #13 API Key 认证过滤器：ApiKeyAuthFilter + Security 配置 + 10 测试，commit f46e6e4
