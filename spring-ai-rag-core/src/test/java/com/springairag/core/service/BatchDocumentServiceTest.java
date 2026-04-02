@@ -141,6 +141,33 @@ class BatchDocumentServiceTest {
         assertEquals("CREATED", results.get(1).get("status"));
     }
 
+    // ==================== deleteDocument ====================
+
+    @Test
+    @DisplayName("deleteDocument: 正常删除")
+    void deleteDocument_success() {
+        when(documentRepository.existsById(1L)).thenReturn(true);
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
+
+        Map<String, String> result = service.deleteDocument(1L);
+
+        assertEquals("文档已删除", result.get("message"));
+        assertEquals("1", result.get("id"));
+        assertEquals("5", result.get("embeddingsRemoved"));
+        verify(embeddingRepository).deleteByDocumentId(1L);
+        verify(documentRepository).deleteById(1L);
+    }
+
+    @Test
+    @DisplayName("deleteDocument: 文档不存在抛异常")
+    void deleteDocument_notFound() {
+        when(documentRepository.existsById(99L)).thenReturn(false);
+
+        assertThrows(com.springairag.core.exception.DocumentNotFoundException.class,
+                () -> service.deleteDocument(99L));
+        verify(documentRepository, never()).deleteById(any());
+    }
+
     // ==================== batchDeleteDocuments ====================
 
     @Test

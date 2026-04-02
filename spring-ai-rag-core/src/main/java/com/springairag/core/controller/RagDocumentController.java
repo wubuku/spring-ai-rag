@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
+
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
@@ -131,24 +131,8 @@ public class RagDocumentController {
     @Operation(summary = "删除文档", description = "删除文档及其关联的嵌入向量（级联删除）。")
     @ApiResponse(responseCode = "200", description = "删除成功")
     @DeleteMapping("/{id}")
-    @Transactional
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
-        log.info("Deleting document: id={}", id);
-
-        return documentRepository.findById(id)
-                .map(doc -> {
-                    long embCount = embeddingRepository.countByDocumentId(id);
-                    embeddingRepository.deleteByDocumentId(id);
-                    documentRepository.deleteById(id);
-
-                    log.info("Document deleted: id={}, embeddings removed: {}", id, embCount);
-                    return ResponseEntity.ok(Map.of(
-                            "message", "文档已删除",
-                            "id", String.valueOf(id),
-                            "embeddingsRemoved", String.valueOf(embCount)
-                    ));
-                })
-                .orElseThrow(() -> new DocumentNotFoundException(id));
+        return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
     }
 
     @Operation(summary = "列出文档", description = "分页查询文档列表，支持按标题/类型/状态过滤，按创建时间倒序。")

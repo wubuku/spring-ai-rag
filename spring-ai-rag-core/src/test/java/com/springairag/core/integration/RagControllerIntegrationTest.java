@@ -302,7 +302,8 @@ class RagControllerIntegrationTest {
 
         @Test
         void deleteDocument_notFound_returns404() throws Exception {
-            when(documentRepository.findById(999L)).thenReturn(Optional.empty());
+            when(batchDocumentService.deleteDocument(999L))
+                    .thenThrow(new com.springairag.core.exception.DocumentNotFoundException(999L));
 
             mockMvc.perform(delete("/api/v1/rag/documents/{id}", 999))
                     .andExpect(status().isNotFound());

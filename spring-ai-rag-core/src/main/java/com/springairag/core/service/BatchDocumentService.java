@@ -110,6 +110,33 @@ public class BatchDocumentService {
     }
 
     /**
+     * 删除单个文档（级联删除嵌入向量）
+     *
+     * @param id 文档 ID
+     * @return 删除结果（含嵌入向量删除数量）
+     */
+    @Transactional
+    public Map<String, String> deleteDocument(Long id) {
+        log.info("Deleting document: id={}", id);
+
+        if (!documentRepository.existsById(id)) {
+            throw new com.springairag.core.exception.DocumentNotFoundException(id);
+        }
+
+        long embCount = embeddingRepository.countByDocumentId(id);
+        embeddingRepository.deleteByDocumentId(id);
+        documentRepository.deleteById(id);
+
+        log.info("Document deleted: id={}, embeddings removed: {}", id, embCount);
+
+        return Map.of(
+                "message", "文档已删除",
+                "id", String.valueOf(id),
+                "embeddingsRemoved", String.valueOf(embCount)
+        );
+    }
+
+    /**
      * 批量删除文档（级联删除嵌入向量）
      *
      * @param ids 文档 ID 列表
