@@ -3,6 +3,7 @@ package com.springairag.demo.medical;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
+import com.springairag.core.versioning.ApiVersion;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -17,7 +18,8 @@ import java.util.UUID;
  * 并经过 MedicalPromptCustomizer 处理用户消息。
  */
 @RestController
-@RequestMapping("/api/v1/medical")
+@ApiVersion("v1")
+@RequestMapping("/medical")
 public class MedicalRagController {
 
     private static final String DOMAIN_ID = "medical";

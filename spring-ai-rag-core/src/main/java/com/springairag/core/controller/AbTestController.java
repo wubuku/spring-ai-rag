@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.service.AbTestService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -15,7 +16,8 @@ import java.util.Map;
  * <p>提供实验的 CRUD、生命周期管理、结果记录和统计分析接口。
  */
 @RestController
-@RequestMapping("/api/v1/rag/ab")
+@ApiVersion("v1")
+@RequestMapping("/rag/ab")
 @Tag(name = "A/B Testing", description = "A/B 测试：检索策略对比实验")
 public class AbTestController {
 

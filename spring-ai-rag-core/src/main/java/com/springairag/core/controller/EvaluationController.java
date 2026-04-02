@@ -6,6 +6,7 @@ import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.entity.RagUserFeedback;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -22,7 +23,8 @@ import java.util.List;
  * <p>提供检索质量评估的 REST API，支持单次评估、批量评估、报告查询等操作。
  */
 @RestController
-@RequestMapping("/api/v1/rag/evaluation")
+@ApiVersion("v1")
+@RequestMapping("/rag/evaluation")
 @Tag(name = "RAG Evaluation", description = "检索效果评估（Precision@K, Recall@K, MRR, NDCG）")
 public class EvaluationController {
 

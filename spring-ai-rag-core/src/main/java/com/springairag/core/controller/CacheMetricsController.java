@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,7 +18,8 @@ import java.util.Map;
  * <p>提供嵌入缓存的命中率统计，便于运维监控缓存效果。
  */
 @RestController
-@RequestMapping("/api/v1/cache")
+@ApiVersion("v1")
+@RequestMapping("/cache")
 @Tag(name = "Cache Metrics", description = "嵌入缓存指标监控")
 public class CacheMetricsController {
 

@@ -4,6 +4,7 @@ import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -34,7 +35,8 @@ import java.util.Map;
  * 支持通过 domainId 参数选择领域扩展。
  */
 @RestController
-@RequestMapping("/api/v1/rag/chat")
+@ApiVersion("v1")
+@RequestMapping("/rag/chat")
 @Tag(name = "RAG Chat", description = "RAG 问答接口（非流式 + SSE 流式）")
 public class RagChatController {
 

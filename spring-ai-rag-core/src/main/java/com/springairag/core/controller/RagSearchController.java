@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -30,7 +31,8 @@ import java.util.List;
  * <p>提供直接检索接口（不经过 LLM 生成），用于调试和预览检索效果。
  */
 @RestController
-@RequestMapping("/api/v1/rag/search")
+@ApiVersion("v1")
+@RequestMapping("/rag/search")
 @Tag(name = "RAG Search", description = "直接检索接口（不经过 LLM，用于调试和预览）")
 public class RagSearchController {
 

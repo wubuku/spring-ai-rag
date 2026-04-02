@@ -5,6 +5,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -29,7 +30,8 @@ import java.util.stream.Collectors;
  * 集合用于组织文档，每个文档可归属一个集合。
  */
 @RestController
-@RequestMapping("/api/v1/rag/collections")
+@ApiVersion("v1")
+@RequestMapping("/rag/collections")
 @Tag(name = "RAG Collections", description = "文档集合（知识库）管理")
 public class RagCollectionController {
 

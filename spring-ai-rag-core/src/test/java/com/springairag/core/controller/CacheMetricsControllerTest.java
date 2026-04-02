@@ -1,9 +1,11 @@
 package com.springairag.core.controller;
 
 import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -18,6 +20,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CacheMetricsController 测试
  */
 @WebMvcTest(CacheMetricsController.class)
+@Import(ApiVersionConfig.class)
 class CacheMetricsControllerTest {
 
     @Autowired

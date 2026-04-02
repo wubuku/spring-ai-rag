@@ -10,6 +10,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -36,7 +37,8 @@ import java.util.stream.Collectors;
  * 业务逻辑委托给 {@link DocumentEmbedService} 和 {@link BatchDocumentService}。
  */
 @RestController
-@RequestMapping("/api/v1/rag/documents")
+@ApiVersion("v1")
+@RequestMapping("/rag/documents")
 @Tag(name = "RAG Documents", description = "文档管理（CRUD + 嵌入向量生成）")
 public class RagDocumentController {
 

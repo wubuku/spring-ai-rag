@@ -12,6 +12,7 @@ import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
+import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -59,7 +60,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         EvaluationController.class,
         AlertController.class
 })
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, ApiVersionConfig.class})
 @TestPropertySource(properties = {
         "spring.mvc.throw-exception-if-no-handler-found=true",
         "spring.mvc.static-path-pattern=/static-never-match"

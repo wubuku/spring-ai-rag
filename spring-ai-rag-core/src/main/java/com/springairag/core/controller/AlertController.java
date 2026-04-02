@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.core.service.AlertService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,8 @@ import java.util.Map;
  * <p>提供告警查询、触发、解决、静默，以及 SLO 状态检查接口。
  */
 @RestController
-@RequestMapping("/api/v1/rag/alerts")
+@ApiVersion("v1")
+@RequestMapping("/rag/alerts")
 @Tag(name = "RAG Alerts", description = "告警管理（阈值告警 + SLO 监控）")
 public class AlertController {
 

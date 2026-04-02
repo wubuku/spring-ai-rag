@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -16,7 +17,8 @@ import java.util.Map;
  * 健康检查控制器
  */
 @RestController
-@RequestMapping("/api/v1/rag")
+@ApiVersion("v1")
+@RequestMapping("/rag")
 @Tag(name = "RAG Health", description = "健康检查与状态监控")
 public class RagHealthController {
 
