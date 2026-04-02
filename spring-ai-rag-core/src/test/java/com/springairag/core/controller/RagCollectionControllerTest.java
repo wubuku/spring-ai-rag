@@ -251,4 +251,88 @@ class RagCollectionControllerTest {
 
         assertEquals(404, response.getStatusCode().value());
     }
+
+    // ========== 导出/导入 ==========
+
+    @Test
+    void exportCollection_returnsCollectionAndDocuments() {
+        RagCollection c = createCollection(1L, "知识库A");
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+
+        RagDocument doc = new RagDocument();
+        doc.setTitle("文档1");
+        doc.setSource("test.txt");
+        doc.setContent("内容");
+        doc.setSize(100L);
+        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc));
+
+        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("知识库A", body.get("name"));
+        assertEquals(1, body.get("documentCount"));
+        assertNotNull(body.get("exportedAt"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
+        assertEquals(1, docs.size());
+        assertEquals("文档1", docs.get(0).get("title"));
+    }
+
+    @Test
+    void exportCollection_notFound_returns404() {
+        when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String, Object>> response = controller.exportCollection(999L);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void importCollection_createsCollectionAndDocuments() {
+        RagCollection saved = createCollection(1L, "导入的知识库");
+        when(collectionRepository.save(any(RagCollection.class))).thenReturn(saved);
+
+        RagDocument savedDoc = new RagDocument();
+        savedDoc.setId(10L);
+        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
+
+        Map<String, Object> importData = new HashMap<>();
+        importData.put("name", "导入的知识库");
+        importData.put("description", "测试导入");
+        importData.put("dimensions", 1024);
+
+        List<Map<String, Object>> docs = new ArrayList<>();
+        Map<String, Object> docData = new HashMap<>();
+        docData.put("title", "文档1");
+        docData.put("source", "test.txt");
+        docData.put("content", "内容");
+        docData.put("size", 100);
+        docs.add(docData);
+        importData.put("documents", docs);
+
+        ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(collectionRepository).save(any(RagCollection.class));
+        verify(documentRepository).save(any(RagDocument.class));
+    }
+
+    @Test
+    void importCollection_missingName_returns400() {
+        Map<String, Object> importData = Map.of("description", "no name");
+
+        ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
+
+        assertEquals(400, response.getStatusCode().value());
+    }
+
+    @Test
+    void importCollection_emptyName_returns400() {
+        ResponseEntity<Map<String, Object>> response = controller.importCollection(Map.of("name", "  "));
+
+        assertEquals(400, response.getStatusCode().value());
+    }
 }

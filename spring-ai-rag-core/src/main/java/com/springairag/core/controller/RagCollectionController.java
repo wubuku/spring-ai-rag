@@ -264,6 +264,110 @@ public class RagCollectionController {
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
+    /**
+     * 导出集合（含文档元数据）
+     */
+    @Operation(summary = "导出集合", description = "导出集合信息及其文档元数据为 JSON，用于备份和迁移。")
+    @GetMapping("/{id}/export")
+    public ResponseEntity<Map<String, Object>> exportCollection(@PathVariable Long id) {
+        log.info("Exporting collection: id={}", id);
+
+        return collectionRepository.findById(id)
+                .map(collection -> {
+                    List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
+
+                    List<Map<String, Object>> docList = docs.stream()
+                            .map(doc -> {
+                                Map<String, Object> m = new HashMap<>();
+                                m.put("title", doc.getTitle());
+                                m.put("source", doc.getSource());
+                                m.put("content", doc.getContent());
+                                m.put("documentType", doc.getDocumentType());
+                                m.put("metadata", doc.getMetadata());
+                                m.put("size", doc.getSize());
+                                return m;
+                            })
+                            .collect(Collectors.toList());
+
+                    Map<String, Object> exportData = new HashMap<>();
+                    exportData.put("name", collection.getName());
+                    exportData.put("description", collection.getDescription());
+                    exportData.put("embeddingModel", collection.getEmbeddingModel());
+                    exportData.put("dimensions", collection.getDimensions());
+                    exportData.put("enabled", collection.getEnabled());
+                    exportData.put("metadata", collection.getMetadata());
+                    exportData.put("documents", docList);
+                    exportData.put("exportedAt", java.time.Instant.now().toString());
+                    exportData.put("documentCount", docs.size());
+
+                    log.info("Collection exported: id={}, documents={}", id, docs.size());
+                    return ResponseEntity.ok(exportData);
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 导入集合（从 JSON 创建新集合）
+     */
+    @Operation(summary = "导入集合", description = "从导出的 JSON 数据创建新集合及其文档。")
+    @PostMapping("/import")
+    public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
+        String name = (String) importData.get("name");
+        if (name == null || name.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.<String, Object>of("error", "name 不能为空"));
+        }
+
+        log.info("Importing collection: name={}", name);
+
+        // 创建集合
+        RagCollection collection = new RagCollection();
+        collection.setName(name);
+        collection.setDescription((String) importData.get("description"));
+        collection.setEmbeddingModel((String) importData.get("embeddingModel"));
+        Object dims = importData.get("dimensions");
+        collection.setDimensions(dims != null ? ((Number) dims).intValue() : 1024);
+        Object enabled = importData.get("enabled");
+        collection.setEnabled(enabled != null ? (Boolean) enabled : true);
+        collection.setMetadata(castToMap(importData.get("metadata")));
+        collection = collectionRepository.save(collection);
+
+        // 导入文档
+        int importedDocs = 0;
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> docList = (List<Map<String, Object>>) importData.get("documents");
+        if (docList != null) {
+            for (Map<String, Object> docData : docList) {
+                RagDocument doc = new RagDocument();
+                doc.setTitle((String) docData.get("title"));
+                doc.setSource((String) docData.get("source"));
+                doc.setContent((String) docData.get("content"));
+                doc.setDocumentType((String) docData.get("documentType"));
+                doc.setMetadata(castToMap(docData.get("metadata")));
+                Object size = docData.get("size");
+                doc.setSize(size != null ? ((Number) size).longValue() : 0L);
+                doc.setCollectionId(collection.getId());
+                doc.setProcessingStatus("PENDING");
+                documentRepository.save(doc);
+                importedDocs++;
+            }
+        }
+
+        log.info("Collection imported: id={}, name={}, documents={}",
+                collection.getId(), name, importedDocs);
+
+        Map<String, Object> result = toMap(collection, importedDocs);
+        result.put("importedDocuments", importedDocs);
+        return ResponseEntity.ok(result);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> castToMap(Object obj) {
+        if (obj instanceof Map) {
+            return (Map<String, Object>) obj;
+        }
+        return null;
+    }
+
     private Map<String, Object> toMap(RagCollection c, long documentCount) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", c.getId());
