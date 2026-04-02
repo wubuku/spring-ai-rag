@@ -106,47 +106,44 @@ public final class RetrievalUtils {
         if (vectorResults == null) vectorResults = List.of();
         if (fulltextResults == null) fulltextResults = List.of();
 
-        float maxVector = vectorResults.isEmpty() ? 1f :
-                (float) vectorResults.stream()
-                        .mapToDouble(RetrievalResult::getScore).max().orElse(1f);
-        float maxFulltext = fulltextResults.isEmpty() ? 1f :
-                (float) fulltextResults.stream()
-                        .mapToDouble(RetrievalResult::getScore).max().orElse(1f);
+        Map<String, MergedEntry> merged = buildMergedEntries(
+                vectorResults, fulltextResults, vectorWeight, fulltextWeight);
 
+        return merged.values().stream()
+                .sorted((a, b) -> Float.compare(b.fusedScore, a.fusedScore))
+                .limit(limit)
+                .map(RetrievalUtils::toRetrievalResult)
+                .toList();
+    }
+
+    private static Map<String, MergedEntry> buildMergedEntries(
+            List<RetrievalResult> vectorResults, List<RetrievalResult> fulltextResults,
+            float vectorWeight, float fulltextWeight) {
+        float maxVector = maxScore(vectorResults);
+        float maxFulltext = maxScore(fulltextResults);
         Map<String, MergedEntry> merged = new LinkedHashMap<>();
 
         for (RetrievalResult r : vectorResults) {
             String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalizedScore = (float) (r.getScore() / maxVector) * vectorWeight;
+            float normalized = (float) (r.getScore() / maxVector) * vectorWeight;
             MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = Math.max(entry.fusedScore, normalizedScore);
+            entry.fusedScore = Math.max(entry.fusedScore, normalized);
             entry.vectorScore = Math.max(entry.vectorScore, (float) r.getScore());
         }
 
         for (RetrievalResult r : fulltextResults) {
             String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalizedScore = (float) ((r.getScore() / maxFulltext) * fulltextWeight);
+            float normalized = (float) ((r.getScore() / maxFulltext) * fulltextWeight);
             MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = Math.max(entry.fusedScore, normalizedScore);
+            entry.fusedScore = Math.max(entry.fusedScore, normalized);
             entry.fulltextScore = Math.max(entry.fulltextScore, (float) r.getScore());
         }
+        return merged;
+    }
 
-        return merged.values().stream()
-                .sorted((a, b) -> Float.compare(b.fusedScore, a.fusedScore))
-                .limit(limit)
-                .map(e -> {
-                    RetrievalResult r = e.original;
-                    RetrievalResult out = new RetrievalResult();
-                    out.setDocumentId(r.getDocumentId());
-                    out.setChunkText(r.getChunkText());
-                    out.setScore(e.fusedScore);
-                    out.setVectorScore(e.vectorScore);
-                    out.setFulltextScore(e.fulltextScore);
-                    out.setChunkIndex(r.getChunkIndex());
-                    out.setMetadata(r.getMetadata());
-                    return out;
-                })
-                .toList();
+    private static float maxScore(List<RetrievalResult> results) {
+        return results.isEmpty() ? 1f :
+                (float) results.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
     }
 
     /**
@@ -162,6 +159,19 @@ public final class RetrievalUtils {
         r.setVectorScore(score);
         r.setFulltextScore(score);
         return r;
+    }
+
+    private static RetrievalResult toRetrievalResult(MergedEntry e) {
+        RetrievalResult r = e.original;
+        RetrievalResult out = new RetrievalResult();
+        out.setDocumentId(r.getDocumentId());
+        out.setChunkText(r.getChunkText());
+        out.setScore(e.fusedScore);
+        out.setVectorScore(e.vectorScore);
+        out.setFulltextScore(e.fulltextScore);
+        out.setChunkIndex(r.getChunkIndex());
+        out.setMetadata(r.getMetadata());
+        return out;
     }
 
     private static class MergedEntry {

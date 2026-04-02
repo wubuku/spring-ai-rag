@@ -107,51 +107,47 @@ public class HybridRetrieverService {
     private List<RetrievalResult> vectorSearch(String query, List<Long> documentIds,
                                                List<Long> excludeIds, int limit) {
         try {
-            // 使用 Spring AI EmbeddingModel 生成向量
             float[] queryVector = embeddingModel.embed(query);
-
-            List<Map<String, Object>> rows;
-            if (documentIds != null && !documentIds.isEmpty()) {
-                String placeholders = documentIds.stream()
-                        .map(id -> "?").collect(Collectors.joining(","));
-                String sql = String.format(
-                        "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
-                                "FROM rag_embeddings " +
-                                "WHERE document_id IN (%s) " +
-                                "ORDER BY embedding <=> ?::vector " +
-                                "LIMIT ?",
-                        placeholders);
-
-                List<Object> args = new ArrayList<>(documentIds);
-                args.add(RetrievalUtils.vectorToString(queryVector));
-                args.add(limit);
-                rows = jdbcTemplate.queryForList(sql, args.toArray());
-            } else {
-                String sql = "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
-                        "FROM rag_embeddings " +
-                        "ORDER BY embedding <=> ?::vector " +
-                        "LIMIT ?";
-                rows = jdbcTemplate.queryForList(sql, RetrievalUtils.vectorToString(queryVector), limit);
-            }
-
-            final float[] fQueryVector = queryVector;
-            return rows.stream()
-                    .filter(row -> {
-                        if (excludeIds == null || excludeIds.isEmpty()) return true;
-                        Long id = ((Number) row.get("id")).longValue();
-                        return !excludeIds.contains(id);
-                    })
-                    .map(row -> {
-                        float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
-                        double score = RetrievalUtils.cosineSimilarity(fQueryVector, emb);
-                        return toRetrievalResult(row, score, score, 0.0);
-                    })
-                    .collect(Collectors.toList());
-
+            List<Map<String, Object>> rows = executeVectorQuery(queryVector, documentIds, limit);
+            return mapVectorResults(rows, queryVector, excludeIds);
         } catch (Exception e) {
             log.error("Vector search failed", e);
             return Collections.emptyList();
         }
+    }
+
+    private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
+                                                          List<Long> documentIds, int limit) {
+        String vectorStr = RetrievalUtils.vectorToString(queryVector);
+        if (documentIds != null && !documentIds.isEmpty()) {
+            String placeholders = documentIds.stream()
+                    .map(id -> "?").collect(Collectors.joining(","));
+            String sql = String.format(
+                    "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
+                            "FROM rag_embeddings WHERE document_id IN (%s) " +
+                            "ORDER BY embedding <=> ?::vector LIMIT ?",
+                    placeholders);
+            List<Object> args = new ArrayList<>(documentIds);
+            args.add(vectorStr);
+            args.add(limit);
+            return jdbcTemplate.queryForList(sql, args.toArray());
+        }
+        return jdbcTemplate.queryForList(
+                "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
+                        "FROM rag_embeddings ORDER BY embedding <=> ?::vector LIMIT ?",
+                vectorStr, limit);
+    }
+
+    private List<RetrievalResult> mapVectorResults(List<Map<String, Object>> rows,
+                                                     float[] queryVector, List<Long> excludeIds) {
+        return rows.stream()
+                .filter(row -> isNotExcluded(row, excludeIds))
+                .map(row -> {
+                    float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
+                    double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
+                    return toRetrievalResult(row, score, score, 0.0);
+                })
+                .collect(Collectors.toList());
     }
 
     /**
@@ -161,57 +157,54 @@ public class HybridRetrieverService {
                                                   List<Long> excludeIds, int limit) {
         try {
             String[] keywords = query.trim().split("\\s+");
-            if (keywords.length == 0) {
-                return Collections.emptyList();
-            }
-
-            // 使用 similarity 函数（pg_trgm）做模糊匹配
-            String searchTerm = keywords[0];
-            List<Map<String, Object>> rows;
-
-            if (documentIds != null && !documentIds.isEmpty()) {
-                String placeholders = documentIds.stream()
-                        .map(id -> "?").collect(Collectors.joining(","));
-                String sql = String.format(
-                        "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                                "similarity(chunk_text, ?) as sim " +
-                                "FROM rag_embeddings " +
-                                "WHERE document_id IN (%s) AND similarity(chunk_text, ?) > 0.1 " +
-                                "ORDER BY sim DESC " +
-                                "LIMIT ?",
-                        placeholders);
-                List<Object> args = new ArrayList<>(documentIds);
-                args.add(searchTerm);
-                args.add(searchTerm);
-                args.add(limit);
-                rows = jdbcTemplate.queryForList(sql, args.toArray());
-            } else {
-                String sql = "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                        "similarity(chunk_text, ?) as sim " +
-                        "FROM rag_embeddings " +
-                        "WHERE similarity(chunk_text, ?) > 0.1 " +
-                        "ORDER BY sim DESC " +
-                        "LIMIT ?";
-                rows = jdbcTemplate.queryForList(sql, searchTerm, searchTerm, limit);
-            }
-
-            return rows.stream()
-                    .filter(row -> {
-                        if (excludeIds == null || excludeIds.isEmpty()) return true;
-                        Long id = ((Number) row.get("id")).longValue();
-                        return !excludeIds.contains(id);
-                    })
-                    .map(row -> {
-                        double sim = ((Number) row.get("sim")).doubleValue();
-                        return toRetrievalResult(row, sim, 0.0, sim);
-                    })
-                    .filter(r -> r.getScore() >= retrieval.getMinScore())
-                    .collect(Collectors.toList());
-
+            if (keywords.length == 0) return Collections.emptyList();
+            List<Map<String, Object>> rows = executeFulltextQuery(keywords[0], documentIds, limit);
+            return mapFulltextResults(rows, excludeIds);
         } catch (Exception e) {
             log.error("Fulltext search failed", e);
             return Collections.emptyList();
         }
+    }
+
+    private List<Map<String, Object>> executeFulltextQuery(String searchTerm,
+                                                            List<Long> documentIds, int limit) {
+        if (documentIds != null && !documentIds.isEmpty()) {
+            String placeholders = documentIds.stream()
+                    .map(id -> "?").collect(Collectors.joining(","));
+            String sql = String.format(
+                    "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
+                            "similarity(chunk_text, ?) as sim FROM rag_embeddings " +
+                            "WHERE document_id IN (%s) AND similarity(chunk_text, ?) > 0.1 " +
+                            "ORDER BY sim DESC LIMIT ?",
+                    placeholders);
+            List<Object> args = new ArrayList<>(documentIds);
+            args.add(searchTerm);
+            args.add(searchTerm);
+            args.add(limit);
+            return jdbcTemplate.queryForList(sql, args.toArray());
+        }
+        return jdbcTemplate.queryForList(
+                "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
+                        "similarity(chunk_text, ?) as sim FROM rag_embeddings " +
+                        "WHERE similarity(chunk_text, ?) > 0.1 ORDER BY sim DESC LIMIT ?",
+                searchTerm, searchTerm, limit);
+    }
+
+    private List<RetrievalResult> mapFulltextResults(List<Map<String, Object>> rows,
+                                                       List<Long> excludeIds) {
+        return rows.stream()
+                .filter(row -> isNotExcluded(row, excludeIds))
+                .map(row -> {
+                    double sim = ((Number) row.get("sim")).doubleValue();
+                    return toRetrievalResult(row, sim, 0.0, sim);
+                })
+                .filter(r -> r.getScore() >= retrieval.getMinScore())
+                .collect(Collectors.toList());
+    }
+
+    private boolean isNotExcluded(Map<String, Object> row, List<Long> excludeIds) {
+        if (excludeIds == null || excludeIds.isEmpty()) return true;
+        return !excludeIds.contains(((Number) row.get("id")).longValue());
     }
 
     /**
