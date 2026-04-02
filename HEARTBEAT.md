@@ -36,6 +36,13 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
+| 40 | 请求追踪（RequestTraceFilter + MDC + logback） | 可观测性 | ✅ 2026-04-02 |
+| 41 | Collection 导出/导入 REST 端点 | 数据管理 | ✅ 2026-04-02 |
+| 42 | API 限流（Rate Limiting） | 安全 | ⏳ |
+| 43 | 文档版本历史（content_hash 变更记录） | 数据管理 | ⏳ |
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
 | 20 | IMPLEMENTATION_COMPARISON.md 审查 | 代码质量 | ✅ 2026-04-02 |
 | 21 | 全局 TODO/FIXME 扫描 | 代码质量 | ✅ 2026-04-02（零 TODO/FIXME） |
 | 22 | 测试覆盖率 >90% 提升 | 质量 | ✅ 2026-04-02 |
@@ -68,6 +75,8 @@
 | 39 | 嵌入缓存（避免重复嵌入未变更文档） | 性能优化 | ✅ 2026-04-02 |
 
 ## 进度日志
+
+- 2026-04-02 23:13 — ✅ #40 请求追踪 + #41 Collection 导出导入：RequestTraceFilter 自动生成 12 字符 traceId 注入 MDC，支持传入 X-Trace-Id 跨服务追踪，logback-spring.xml 配置 %X{traceId} 日志格式；RagCollectionController 新增 GET /{id}/export 和 POST /import 端点，12 个新测试，712+ 测试通过，commit 4b2ae96
 
 - 2026-04-02 21:04 — ✅ #39 嵌入缓存：RagDocument 新增 embeddedContentHash 字段（V8 迁移），checkEmbeddingCache 增强为三层检查（状态→内容哈希→嵌入记录），嵌入完成后自动更新 embeddedContentHash，6 个新测试覆盖缓存命中/失效/强制重嵌入/哈希更新，712+ 测试通过，commit 4a678c9
 
