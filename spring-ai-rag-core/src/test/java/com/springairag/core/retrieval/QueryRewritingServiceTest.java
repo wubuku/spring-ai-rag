@@ -3,11 +3,14 @@ package com.springairag.core.retrieval;
 import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 /**
  * QueryRewritingService 测试
@@ -219,5 +222,115 @@ class QueryRewritingServiceTest {
     @Test
     void cleanQuery_emptyString() {
         assertEquals("", service.cleanQuery(""));
+    }
+
+    // ========== LLM 辅助改写 ==========
+
+    @Test
+    void rewriteQuery_llmEnabled_callsLLM() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setEnabled(true);
+        props.getQueryRewrite().setLlmEnabled(true);
+        props.getQueryRewrite().setLlmMaxRewrites(3);
+
+        ChatModel chatModel = mock(ChatModel.class);
+        org.springframework.ai.chat.model.ChatResponse chatResponse = mock(org.springframework.ai.chat.model.ChatResponse.class);
+        org.springframework.ai.chat.model.Generation gen = mock(org.springframework.ai.chat.model.Generation.class);
+        org.springframework.ai.chat.messages.AssistantMessage msg = mock(org.springframework.ai.chat.messages.AssistantMessage.class);
+        when(msg.getText()).thenReturn("如何进行向量检索\n向量搜索的步骤\n检索方法介绍");
+        when(gen.getOutput()).thenReturn(msg);
+        when(chatResponse.getResult()).thenReturn(gen);
+        when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(chatResponse);
+
+        QueryRewritingService llmService = new QueryRewritingService(props, chatModel);
+        List<String> results = llmService.rewriteQuery("向量检索");
+
+        assertTrue(results.size() > 1, "LLM 改写应扩展查询");
+        verify(chatModel, atLeastOnce()).call(any(org.springframework.ai.chat.prompt.Prompt.class));
+    }
+
+    @Test
+    void rewriteQuery_llmDisabled_noLLMCall() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setEnabled(true);
+        props.getQueryRewrite().setLlmEnabled(false);
+
+        ChatModel chatModel = mock(ChatModel.class);
+        QueryRewritingService llmService = new QueryRewritingService(props, chatModel);
+        llmService.rewriteQuery("测试查询");
+
+        verifyNoInteractions(chatModel);
+    }
+
+    @Test
+    void rewriteQuery_llmEnabled_noModel_returnsRulesOnly() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setEnabled(true);
+        props.getQueryRewrite().setLlmEnabled(true);
+
+        QueryRewritingService noModelService = new QueryRewritingService(props, null);
+        List<String> results = noModelService.rewriteQuery("测试查询");
+
+        // 无模型时降级到规则模式，返回原始查询
+        assertEquals(1, results.size());
+    }
+
+    @Test
+    void llmRewrite_modelThrows_returnsEmpty() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setEnabled(true);
+        props.getQueryRewrite().setLlmEnabled(true);
+
+        ChatModel badModel = mock(ChatModel.class);
+        when(badModel.call(any(org.springframework.ai.chat.prompt.Prompt.class)))
+                .thenThrow(new RuntimeException("API error"));
+
+        QueryRewritingService service = new QueryRewritingService(props, badModel);
+        List<String> results = service.llmRewrite("测试");
+
+        assertTrue(results.isEmpty(), "LLM 失败应返回空列表");
+    }
+
+    @Test
+    void llmRewrite_emptyResponse_returnsEmpty() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setLlmEnabled(true);
+
+        ChatModel chatModel = mock(ChatModel.class);
+        org.springframework.ai.chat.model.ChatResponse chatResponse = mock(org.springframework.ai.chat.model.ChatResponse.class);
+        org.springframework.ai.chat.model.Generation gen = mock(org.springframework.ai.chat.model.Generation.class);
+        org.springframework.ai.chat.messages.AssistantMessage msg = mock(org.springframework.ai.chat.messages.AssistantMessage.class);
+        when(msg.getText()).thenReturn("");
+        when(gen.getOutput()).thenReturn(msg);
+        when(chatResponse.getResult()).thenReturn(gen);
+        when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(chatResponse);
+
+        QueryRewritingService service = new QueryRewritingService(props, chatModel);
+        List<String> results = service.llmRewrite("测试");
+
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    void llmRewrite_stripsListMarkers() {
+        RagProperties props = new RagProperties();
+        props.getQueryRewrite().setLlmEnabled(true);
+        props.getQueryRewrite().setLlmMaxRewrites(5);
+
+        ChatModel chatModel = mock(ChatModel.class);
+        org.springframework.ai.chat.model.ChatResponse chatResponse = mock(org.springframework.ai.chat.model.ChatResponse.class);
+        org.springframework.ai.chat.model.Generation gen = mock(org.springframework.ai.chat.model.Generation.class);
+        org.springframework.ai.chat.messages.AssistantMessage msg = mock(org.springframework.ai.chat.messages.AssistantMessage.class);
+        when(msg.getText()).thenReturn("1. 改写一\n- 改写二\n* 改写三\n• 改写四");
+        when(gen.getOutput()).thenReturn(msg);
+        when(chatResponse.getResult()).thenReturn(gen);
+        when(chatModel.call(any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(chatResponse);
+
+        QueryRewritingService service = new QueryRewritingService(props, chatModel);
+        List<String> results = service.llmRewrite("原始查询");
+
+        assertEquals(4, results.size());
+        assertFalse(results.stream().anyMatch(r -> r.startsWith("1.") || r.startsWith("-") || r.startsWith("*") || r.startsWith("•")),
+                "应去除列表标记");
     }
 }
