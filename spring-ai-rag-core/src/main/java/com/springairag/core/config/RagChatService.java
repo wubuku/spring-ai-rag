@@ -89,54 +89,58 @@ public class RagChatService {
         this.metricsService = metricsService;
 
         int maxMessages = ragProperties.getMemory().getMaxMessages();
+        ChatMemory chatMemory = buildChatMemory(jdbcChatMemoryRepository, maxMessages);
+        List<Advisor> sortedAdvisors = buildSortedAdvisors(
+                queryRewriteAdvisor, hybridSearchAdvisor, rerankAdvisor,
+                customAdvisorProviders, chatMemory);
 
-        // 使用 JDBC 存储，保留最近 N 条消息的窗口
-        ChatMemory chatMemory = MessageWindowChatMemory.builder()
-                .chatMemoryRepository(jdbcChatMemoryRepository)
+        this.chatClient = chatClientBuilder.defaultAdvisors(sortedAdvisors).build();
+
+        String advisorNames = sortedAdvisors.stream()
+                .map(a -> a.getClass().getSimpleName())
+                .reduce((a, b) -> a + " → " + b).orElse("none");
+        log.info("RagChatService initialized with {} max messages, advisors: {}", maxMessages, advisorNames);
+    }
+
+    private ChatMemory buildChatMemory(JdbcChatMemoryRepository repo, int maxMessages) {
+        return MessageWindowChatMemory.builder()
+                .chatMemoryRepository(repo)
                 .maxMessages(maxMessages)
                 .build();
+    }
 
-        // 构建 Advisor 列表
+    private List<Advisor> buildSortedAdvisors(
+            QueryRewriteAdvisor queryRewriteAdvisor,
+            HybridSearchAdvisor hybridSearchAdvisor,
+            RerankAdvisor rerankAdvisor,
+            List<RagAdvisorProvider> customProviders,
+            ChatMemory chatMemory) {
+
         List<BaseAdvisor> advisors = new ArrayList<>();
-
-        // 1. 添加默认 Advisor
         advisors.add(queryRewriteAdvisor);
         advisors.add(hybridSearchAdvisor);
         advisors.add(rerankAdvisor);
 
-        // 2. 添加客户自定义 Advisor（通过 RagAdvisorProvider）
-        if (customAdvisorProviders != null && !customAdvisorProviders.isEmpty()) {
-            for (RagAdvisorProvider provider : customAdvisorProviders) {
+        if (customProviders != null) {
+            for (RagAdvisorProvider provider : customProviders) {
                 BaseAdvisor advisor = provider.createAdvisor();
                 if (advisor != null) {
                     advisors.add(advisor);
-                    log.info("Added custom advisor: {} (order={})", provider.getName(), provider.getOrder());
+                    log.info("Added custom advisor: {} (order={})",
+                            provider.getName(), provider.getOrder());
                 }
             }
         }
 
-        // 3. 转换为 Advisor 列表并按 order 排序
-        List<Advisor> sortedAdvisors = new ArrayList<>(advisors);
-        sortedAdvisors.sort(Comparator.comparingInt(a -> {
+        List<Advisor> sorted = new ArrayList<>(advisors);
+        sorted.sort(Comparator.comparingInt(a -> {
             if (a instanceof Ordered) {
                 return ((Ordered) a).getOrder();
             }
             return Ordered.LOWEST_PRECEDENCE;
         }));
-
-        // 4. 添加对话记忆 Advisor（放在最后，不受自定义 Advisor 排序影响）
-        sortedAdvisors.add(MessageChatMemoryAdvisor.builder(chatMemory).build());
-
-        // 5. 构建 ChatClient
-        this.chatClient = chatClientBuilder
-                .defaultAdvisors(sortedAdvisors)
-                .build();
-
-        String advisorNames = sortedAdvisors.stream()
-                .map(a -> a.getClass().getSimpleName())
-                .reduce((a, b) -> a + " → " + b)
-                .orElse("none");
-        log.info("RagChatService initialized with {} max messages, advisors: {}", maxMessages, advisorNames);
+        sorted.add(MessageChatMemoryAdvisor.builder(chatMemory).build());
+        return sorted;
     }
 
     /**
