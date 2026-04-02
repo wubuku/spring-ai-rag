@@ -14,6 +14,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.*;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
@@ -282,6 +286,167 @@ class AbTestServiceImplTest {
 
         assertNotNull(analysis);
         assertTrue(analysis.getVariantStats().isEmpty());
+    }
+
+    // ==================== Get Experiment Results ====================
+
+    @Test
+    void getExperimentResults_returnsPagedResults() {
+        RagAbResult r1 = createResult("control", Map.of("mrr", 0.8));
+        r1.setSessionId("sess-1");
+        r1.setQuery("q1");
+        r1.setIsConverted(true);
+
+        Page<RagAbResult> page = new org.springframework.data.domain.PageImpl<>(List.of(r1));
+        when(resultRepository.findByExperimentIdOrderByCreatedAtDesc(1L, PageRequest.of(0, 10))).thenReturn(page);
+
+        List<AbTestService.ExperimentResult> results = abTestService.getExperimentResults(1L, 0, 10);
+
+        assertEquals(1, results.size());
+        assertEquals("control", results.get(0).getVariantName());
+        assertEquals("sess-1", results.get(0).getSessionId());
+        assertTrue(results.get(0).getIsConverted());
+    }
+
+    // ==================== Record Result Edge Cases ====================
+
+    @Test
+    void recordResult_withNullDocIds() {
+        RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(resultRepository.existsBySessionIdAndExperimentId("sess-2", 1L)).thenReturn(false);
+
+        abTestService.recordResult(1L, "variant_a", "sess-2", "query", null, Map.of("mrr", 0.7));
+
+        verify(resultRepository).save(any(RagAbResult.class));
+    }
+
+    @Test
+    void recordResult_withConversion() {
+        RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(resultRepository.existsBySessionIdAndExperimentId("sess-3", 1L)).thenReturn(false);
+
+        abTestService.recordResult(1L, "control", "sess-3", "q", List.of(1L), Map.of("converted", 1.0));
+
+        verify(resultRepository).save(argThat(r ->
+                Boolean.TRUE.equals(r.getIsConverted())));
+    }
+
+    @Test
+    void recordResult_noConversion() {
+        RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+        when(resultRepository.existsBySessionIdAndExperimentId("sess-4", 1L)).thenReturn(false);
+
+        abTestService.recordResult(1L, "control", "sess-4", "q", null, Map.of("mrr", 0.5));
+
+        verify(resultRepository).save(argThat(r ->
+                !Boolean.TRUE.equals(r.getIsConverted())));
+    }
+
+    @Test
+    void recordResult_experimentNotFound() {
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+        when(resultRepository.existsBySessionIdAndExperimentId(any(), any())).thenReturn(false);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.recordResult(99L, "control", "s1", "q", null, null));
+    }
+
+    // ==================== Analyze Experiment with Winner ====================
+
+    @Test
+    void analyzeExperiment_significantWinner() {
+        RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
+        entity.setTargetMetric("mrr");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        // variant_a consistently outperforms control with variance
+        List<RagAbResult> results = new ArrayList<>();
+        Random rng = new Random(42);
+        for (int i = 0; i < 100; i++) {
+            double controlVal = 0.5 + rng.nextGaussian() * 0.1;
+            double variantVal = 0.9 + rng.nextGaussian() * 0.1;
+            results.add(createResult("control", Map.of("mrr", controlVal)));
+            results.add(createResult("variant_a", Map.of("mrr", variantVal)));
+        }
+        when(resultRepository.findByExperimentId(1L)).thenReturn(results);
+
+        AbTestService.ExperimentAnalysis analysis = abTestService.analyzeExperiment(1L);
+
+        assertTrue(analysis.isIsSignificant());
+        assertEquals("variant_a", analysis.getWinner());
+        assertNotNull(analysis.getRecommendation());
+        assertTrue(analysis.getConfidenceLevel() > 0.5);
+    }
+
+    @Test
+    void analyzeExperiment_conversionRate() {
+        RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
+        entity.setTargetMetric("mrr");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        RagAbResult r1 = createResult("control", Map.of("mrr", 0.8));
+        r1.setIsConverted(true);
+        RagAbResult r2 = createResult("control", Map.of("mrr", 0.7));
+        r2.setIsConverted(false);
+        when(resultRepository.findByExperimentId(1L)).thenReturn(List.of(r1, r2));
+
+        AbTestService.ExperimentAnalysis analysis = abTestService.analyzeExperiment(1L);
+
+        AbTestService.VariantStats stats = analysis.getVariantStats().get("control");
+        assertEquals(0.5, stats.getConversionRate(), 0.01);
+    }
+
+    // ==================== Update Experiment All Fields ====================
+
+    @Test
+    void updateExperiment_allFields() {
+        RagAbExperiment entity = createExperimentEntity(1L, "DRAFT");
+        when(experimentRepository.findById(1L)).thenReturn(Optional.of(entity));
+
+        AbTestService.UpdateExperimentRequest request = new AbTestService.UpdateExperimentRequest();
+        request.setDescription("New desc");
+        request.setTrafficSplit(Map.of("control", 0.3, "variant_a", 0.7));
+        request.setTargetMetric("ndcg");
+        request.setMinSampleSize(200);
+
+        abTestService.updateExperiment(1L, request);
+
+        assertEquals("New desc", entity.getDescription());
+        assertEquals(0.3, entity.getTrafficSplit().get("control"));
+        assertEquals("ndcg", entity.getTargetMetric());
+        assertEquals(200, entity.getMinSampleSize());
+        assertNotNull(entity.getUpdatedAt());
+    }
+
+    @Test
+    void updateExperiment_notFound_throws() {
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.updateExperiment(99L, new AbTestService.UpdateExperimentRequest()));
+    }
+
+    // ==================== Start/Pause/Stop Not Found ====================
+
+    @Test
+    void startExperiment_notFound_throws() {
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> abTestService.startExperiment(99L));
+    }
+
+    @Test
+    void pauseExperiment_notFound_throws() {
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> abTestService.pauseExperiment(99L));
+    }
+
+    @Test
+    void stopExperiment_notFound_throws() {
+        when(experimentRepository.findById(99L)).thenReturn(Optional.empty());
+        assertThrows(IllegalArgumentException.class, () -> abTestService.stopExperiment(99L));
     }
 
     // ==================== Helpers ====================
