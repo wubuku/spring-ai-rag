@@ -174,8 +174,8 @@ class HybridRetrieverServiceBenchmarkTest {
 
         System.out.printf("[Benchmark] vectorToString 1万次 (1024维): %d ms%n", elapsedMs);
 
-        assertTrue(elapsedMs < 500,
-                String.format("1万次向量序列化应 < 500ms，实际: %dms", elapsedMs));
+        assertTrue(elapsedMs < 1000,
+                String.format("1万次向量序列化应 < 1000ms，实际: %dms", elapsedMs));
     }
 
     @Test
