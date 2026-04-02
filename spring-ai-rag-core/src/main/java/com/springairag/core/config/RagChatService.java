@@ -196,7 +196,7 @@ public class RagChatService {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
             answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
             sources = extractSources(chatClientResponse);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: record metrics before rethrow
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
                 metricsService.recordFailure(elapsed);

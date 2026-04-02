@@ -110,7 +110,7 @@ public class HybridRetrieverService {
             float[] queryVector = embeddingModel.embed(query);
             List<Map<String, Object>> rows = executeVectorQuery(queryVector, documentIds, limit);
             return mapVectorResults(rows, queryVector, excludeIds);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: vector search failure, return empty
             log.error("Vector search failed", e);
             return Collections.emptyList();
         }
@@ -160,7 +160,7 @@ public class HybridRetrieverService {
             if (keywords.length == 0) return Collections.emptyList();
             List<Map<String, Object>> rows = executeFulltextQuery(keywords[0], documentIds, limit);
             return mapFulltextResults(rows, excludeIds);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: fulltext search failure, return empty
             log.error("Fulltext search failed", e);
             return Collections.emptyList();
         }

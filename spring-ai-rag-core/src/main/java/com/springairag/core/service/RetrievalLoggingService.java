@@ -62,7 +62,7 @@ public class RetrievalLoggingService {
             repository.save(entry);
             log.debug("[RetrievalLogging] 已记录检索日志: query=\"{}\", strategy={}, total={}ms, results={}",
                     query, strategy, entry.getTotalTimeMs(), entry.getResultCount());
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: retrieval logging is non-critical
             log.warn("[RetrievalLogging] 记录检索日志失败: {}", e.getMessage());
         }
     }

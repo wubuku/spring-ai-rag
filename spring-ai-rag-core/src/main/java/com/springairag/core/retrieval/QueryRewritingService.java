@@ -130,7 +130,7 @@ public class QueryRewritingService {
                     rewritten.size() > 3 ? rewritten.subList(0, 3) + "..." : rewritten);
             return rewritten.stream().limit(config.getLlmMaxRewrites()).toList();
 
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: LLM failure, fallback to rule mode
             log.error("LLM 改写失败，降级到规则模式: {}", e.getMessage());
             return List.of();
         }

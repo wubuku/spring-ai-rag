@@ -101,7 +101,7 @@ public class BatchDocumentService {
                 itemResult.put("status", "CREATED");
                 itemResult.put("id", doc.getId());
             }
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: single item failure, continue batch
             log.error("Failed to create document at index {}: {}", index, e.getMessage());
             itemResult.put("status", "FAILED");
             itemResult.put("error", e.getMessage());

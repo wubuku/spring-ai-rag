@@ -200,7 +200,7 @@ public class DocumentEmbedService {
         result.put("documentId", id);
         try {
             processSingleEmbedding(id, result);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: single document embed failure, record error
             log.error("Failed to embed document {}: {}", id, e.getMessage());
             result.put("status", "FAILED");
             result.put("error", e.getMessage());
