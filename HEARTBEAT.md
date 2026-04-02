@@ -47,7 +47,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 25 | README.md 重写（项目门面，≤200行） | 文档 P0 | ✅ 2026-04-02 |
-| 26 | CONTRIBUTING.md（贡献指南） | 文档 P0 | ⏳ |
+| 26 | CONTRIBUTING.md（贡献指南） | 文档 P0 | ✅ 2026-04-02 |
 | 27 | docs/architecture.md（架构设计详解） | 文档 P1 | 📋 |
 | 28 | docs/configuration.md（完整配置参考） | 文档 P1 | 📋 |
 | 29 | docs/testing-guide.md（测试指南） | 文档 P1 | 📋 |
@@ -60,6 +60,7 @@
 
 ## 进度日志
 
+- 2026-04-02 13:44 — ✅ #26 CONTRIBUTING.md：贡献指南，含开发环境搭建/代码规范/测试要求/Conventional Commits/PR 流程/Bug 报告模板，274 行，commit 5063ea6
 - 2026-04-02 12:32 — ✅ #25 README.md 重写：项目门面版，新增"为什么选"对比表+端点总览表+文档导航链接，221→154 行（-30%），commit 7a71d61
 - 2026-04-02 11:57 — ✅ #23 长方法重构：7 个文件重构（DocumentEmbedService + BatchDocumentService + RetrievalEvaluationServiceImpl + AbTestServiceImpl + UserFeedbackServiceImpl + QueryRewritingService + RetrievalLoggingService），提取子方法降低圈复杂度，712+ 测试通过，commit 6ec6e98
 - 2026-04-02 11:04 — ✅ #22 测试覆盖率 >90%：新增 23 测试（RagException 14 + RagEmbedding 1 + RagSloConfig 1 + RagProperties 7），88.9%→90.3% 指令覆盖，712+ 测试全通过
