@@ -64,26 +64,33 @@ public final class RetrievalUtils {
             return (float[]) vectorObj;
         }
         if (vectorObj instanceof double[]) {
-            double[] d = (double[]) vectorObj;
-            float[] f = new float[d.length];
-            for (int i = 0; i < d.length; i++) {
-                f[i] = (float) d[i];
-            }
-            return f;
+            return toFloatArray((double[]) vectorObj);
         }
         if (vectorObj instanceof String) {
-            String s = ((String) vectorObj).replaceAll("[\\[\\] ]", "");
-            if (s.isEmpty()) {
-                return new float[0];
-            }
-            String[] parts = s.split(",");
-            float[] f = new float[parts.length];
-            for (int i = 0; i < parts.length; i++) {
-                f[i] = Float.parseFloat(parts[i]);
-            }
-            return f;
+            return parseStringVector((String) vectorObj);
         }
         return new float[0];
+    }
+
+    private static float[] toFloatArray(double[] d) {
+        float[] f = new float[d.length];
+        for (int i = 0; i < d.length; i++) {
+            f[i] = (float) d[i];
+        }
+        return f;
+    }
+
+    private static float[] parseStringVector(String s) {
+        s = s.replaceAll("[\\[\\] ]", "");
+        if (s.isEmpty()) {
+            return new float[0];
+        }
+        String[] parts = s.split(",");
+        float[] f = new float[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            f[i] = Float.parseFloat(parts[i]);
+        }
+        return f;
     }
 
     /**

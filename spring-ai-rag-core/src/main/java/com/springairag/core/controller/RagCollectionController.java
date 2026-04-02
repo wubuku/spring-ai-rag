@@ -203,17 +203,7 @@ public class RagCollectionController {
         var pageResult = documentRepository.findByCollectionId(id, pageable);
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(doc -> {
-                    Map<String, Object> m = new HashMap<>();
-                    m.put("id", doc.getId());
-                    m.put("title", doc.getTitle());
-                    m.put("source", doc.getSource());
-                    m.put("document_type", doc.getDocumentType());
-                    m.put("processing_status", doc.getProcessingStatus());
-                    m.put("created_at", doc.getCreatedAt());
-                    m.put("size", doc.getSize());
-                    return m;
-                })
+                .map(this::toDocumentSummary)
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
@@ -223,6 +213,18 @@ public class RagCollectionController {
                 "offset", offset,
                 "limit", limit
         ));
+    }
+
+    private Map<String, Object> toDocumentSummary(RagDocument doc) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", doc.getId());
+        m.put("title", doc.getTitle());
+        m.put("source", doc.getSource());
+        m.put("document_type", doc.getDocumentType());
+        m.put("processing_status", doc.getProcessingStatus());
+        m.put("created_at", doc.getCreatedAt());
+        m.put("size", doc.getSize());
+        return m;
     }
 
     /**

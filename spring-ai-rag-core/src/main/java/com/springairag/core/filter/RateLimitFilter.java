@@ -91,21 +91,26 @@ public class RateLimitFilter extends OncePerRequestFilter {
         response.setHeader(RATE_LIMIT_REMAINING_HEADER, String.valueOf(Math.max(0, remaining)));
 
         if (currentCount > requestsPerMinute) {
-            log.warn("限流触发: {} {} ip={} count={}/{}", request.getMethod(), path, clientIp, currentCount, requestsPerMinute);
-            response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-            response.setHeader(RETRY_AFTER_HEADER, "60");
-            ErrorResponse errorResponse = ErrorResponse.builder()
-                    .error("TOO_MANY_REQUESTS")
-                    .message("Rate limit exceeded. Max " + requestsPerMinute + " requests per minute.")
-                    .path(path)
-                    .build();
-            response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+            writeRateLimitResponse(response, path, clientIp, currentCount);
             return;
         }
 
         log.debug("限流计数: {} {} ip={} {}/{}", request.getMethod(), path, clientIp, currentCount, requestsPerMinute);
         filterChain.doFilter(request, response);
+    }
+
+    private void writeRateLimitResponse(HttpServletResponse response, String path,
+                                        String clientIp, int currentCount) throws IOException {
+        log.warn("限流触发: ip={} path={} count={}/{}", clientIp, path, currentCount, requestsPerMinute);
+        response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        response.setHeader(RETRY_AFTER_HEADER, "60");
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .error("TOO_MANY_REQUESTS")
+                .message("Rate limit exceeded. Max " + requestsPerMinute + " requests per minute.")
+                .path(path)
+                .build();
+        response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
 
     /**

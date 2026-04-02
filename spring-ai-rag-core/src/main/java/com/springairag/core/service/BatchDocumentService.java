@@ -79,27 +79,13 @@ public class BatchDocumentService {
         itemResult.put("title", req.getTitle());
 
         try {
-            String content = req.getContent();
-            String contentHash = computeSha256(content);
-
+            String contentHash = computeSha256(req.getContent());
             List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
-            if (!existing.isEmpty()) {
-                RagDocument dup = existing.get(0);
-                itemResult.put("status", "DUPLICATE");
-                itemResult.put("id", dup.getId());
-                itemResult.put("message", "内容已存在");
-            } else {
-                RagDocument doc = new RagDocument();
-                doc.setTitle(req.getTitle());
-                doc.setContent(content);
-                doc.setSource(req.getSource());
-                doc.setDocumentType(req.getDocumentType());
-                doc.setMetadata(req.getMetadata());
-                doc.setContentHash(contentHash);
-                doc = documentRepository.save(doc);
 
-                itemResult.put("status", "CREATED");
-                itemResult.put("id", doc.getId());
+            if (!existing.isEmpty()) {
+                fillDuplicateResult(itemResult, existing.get(0));
+            } else {
+                fillCreatedResult(itemResult, req, contentHash);
             }
         } catch (Exception e) { // Resilience: single item failure, continue batch
             log.error("Failed to create document at index {}: {}", index, e.getMessage());
@@ -107,6 +93,26 @@ public class BatchDocumentService {
             itemResult.put("error", e.getMessage());
         }
         return itemResult;
+    }
+
+    private void fillDuplicateResult(Map<String, Object> result, RagDocument dup) {
+        result.put("status", "DUPLICATE");
+        result.put("id", dup.getId());
+        result.put("message", "内容已存在");
+    }
+
+    private void fillCreatedResult(Map<String, Object> result, DocumentRequest req, String contentHash) {
+        RagDocument doc = new RagDocument();
+        doc.setTitle(req.getTitle());
+        doc.setContent(req.getContent());
+        doc.setSource(req.getSource());
+        doc.setDocumentType(req.getDocumentType());
+        doc.setMetadata(req.getMetadata());
+        doc.setContentHash(contentHash);
+        doc = documentRepository.save(doc);
+
+        result.put("status", "CREATED");
+        result.put("id", doc.getId());
     }
 
     /**
@@ -151,26 +157,16 @@ public class BatchDocumentService {
         log.info("Batch deleting {} documents", ids.size());
 
         List<Map<String, Object>> results = new ArrayList<>(ids.size());
-        int deleted = 0, notFound = 0;
 
         // 批量删除嵌入向量
         embeddingRepository.deleteByDocumentIdIn(ids);
 
         for (Long id : ids) {
-            Map<String, Object> itemResult = new HashMap<>();
-            itemResult.put("id", id);
-
-            if (documentRepository.existsById(id)) {
-                documentRepository.deleteById(id);
-                itemResult.put("status", "DELETED");
-                deleted++;
-            } else {
-                itemResult.put("status", "NOT_FOUND");
-                notFound++;
-            }
-
-            results.add(itemResult);
+            results.add(deleteSingleDocument(id));
         }
+
+        int deleted = (int) results.stream().filter(r -> "DELETED".equals(r.get("status"))).count();
+        int notFound = results.size() - deleted;
 
         log.info("Batch delete completed: {} deleted, {} not found", deleted, notFound);
 
@@ -182,6 +178,19 @@ public class BatchDocumentService {
                         "notFound", notFound
                 )
         );
+    }
+
+    private Map<String, Object> deleteSingleDocument(Long id) {
+        Map<String, Object> itemResult = new HashMap<>();
+        itemResult.put("id", id);
+
+        if (documentRepository.existsById(id)) {
+            documentRepository.deleteById(id);
+            itemResult.put("status", "DELETED");
+        } else {
+            itemResult.put("status", "NOT_FOUND");
+        }
+        return itemResult;
     }
 
     /**
