@@ -3,6 +3,7 @@ package com.springairag.core.repository;
 import com.springairag.core.entity.RagChatHistory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDateTime;

@@ -12,6 +12,7 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
+import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -117,8 +118,8 @@ public class SpringAiConfig {
             org.springframework.context.ApplicationContext ctx) {
         ChatModel openAi = null;
         ChatModel anthropic = null;
-        try { openAi = ctx.getBean("openAiChatModel", ChatModel.class); } catch (Exception ignored) {}
-        try { anthropic = ctx.getBean("anthropicChatModel", ChatModel.class); } catch (Exception ignored) {}
+        try { openAi = ctx.getBean("openAiChatModel", ChatModel.class); } catch (BeansException ignored) {}
+        try { anthropic = ctx.getBean("anthropicChatModel", ChatModel.class); } catch (BeansException ignored) {}
 
         if ("openai".equals(provider) && openAi != null) {
             log.info("Using OpenAI ChatModel as primary");

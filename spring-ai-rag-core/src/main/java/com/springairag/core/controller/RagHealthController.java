@@ -40,7 +40,7 @@ public class RagHealthController {
         try {
             jdbcTemplate.queryForObject("SELECT 1", Integer.class);
             result.put("database", "UP");
-        } catch (Exception e) {
+        } catch (Exception e) { // Health endpoint: must not throw
             result.put("database", "DOWN");
             result.put("databaseError", e.getMessage());
         }
@@ -53,7 +53,7 @@ public class RagHealthController {
                     "SELECT COUNT(*) FROM rag_embeddings", Integer.class);
             result.put("documents", docCount);
             result.put("embeddings", embCount);
-        } catch (Exception e) {
+        } catch (Exception e) { // Health endpoint: tables may not exist
             result.put("tablesError", e.getMessage());
         }
 

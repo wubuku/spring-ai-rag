@@ -72,7 +72,7 @@ public class RagHealthIndicator implements HealthIndicator {
             jdbcTemplate.queryForObject("SELECT 1", Integer.class);
             builder.withDetail("database", "UP");
             return true;
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw
             log.warn("Database health check failed: {}", e.getMessage());
             builder.withDetail("database", "DOWN");
             builder.withDetail("databaseError", e.getMessage());
@@ -88,7 +88,7 @@ public class RagHealthIndicator implements HealthIndicator {
                     "SELECT COUNT(*) FROM rag_embeddings", Integer.class);
             builder.withDetail("documents", docCount != null ? docCount : 0);
             builder.withDetail("embeddings", embCount != null ? embCount : 0);
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: tables may not exist yet
             log.debug("Table count check failed (tables may not exist yet): {}", e.getMessage());
             builder.withDetail("tables", "not_initialized");
         }

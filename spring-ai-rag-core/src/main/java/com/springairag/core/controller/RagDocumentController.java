@@ -9,6 +9,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -190,15 +191,18 @@ public class RagDocumentController {
 
     // ==================== 嵌入向量 ====================
 
-    @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。会覆盖旧向量。")
+    @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。已有嵌入时默认跳过，传入 force=true 强制重嵌入。")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "嵌入向量生成成功"),
             @ApiResponse(responseCode = "404", description = "文档不存在")
     })
     @PostMapping("/{id}/embed")
-    public ResponseEntity<Map<String, Object>> embedDocument(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> embedDocument(
+            @PathVariable Long id,
+            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @RequestParam(defaultValue = "false") boolean force) {
         try {
-            Map<String, Object> result = documentEmbedService.embedDocument(id);
+            Map<String, Object> result = documentEmbedService.embedDocument(id, force);
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -209,11 +213,14 @@ public class RagDocumentController {
     }
 
     @Operation(summary = "通过 VectorStore 生成嵌入向量",
-            description = "使用 VectorStore.add() 自动完成嵌入生成和存储，代码更简洁。存储到 rag_vector_store 表。")
+            description = "使用 VectorStore.add() 自动完成嵌入生成和存储，代码更简洁。存储到 rag_vector_store 表。已有嵌入时默认跳过，传入 force=true 强制重嵌入。")
     @PostMapping("/{id}/embed/vs")
-    public ResponseEntity<Map<String, Object>> embedDocumentViaVectorStore(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> embedDocumentViaVectorStore(
+            @PathVariable Long id,
+            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @RequestParam(defaultValue = "false") boolean force) {
         try {
-            Map<String, Object> result = documentEmbedService.embedDocumentViaVectorStore(id);
+            Map<String, Object> result = documentEmbedService.embedDocumentViaVectorStore(id, force);
             return ResponseEntity.ok(result);
         } catch (IllegalStateException e) {
             return ResponseEntity.badRequest().body(Map.of(

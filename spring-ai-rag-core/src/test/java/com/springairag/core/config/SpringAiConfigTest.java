@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
@@ -86,7 +87,7 @@ class SpringAiConfigTest {
 
         org.springframework.context.ApplicationContext ctx = mock(org.springframework.context.ApplicationContext.class);
         when(ctx.getBean("openAiChatModel", ChatModel.class))
-                .thenThrow(new RuntimeException("not found"));
+                .thenThrow(new NoSuchBeanDefinitionException("openAiChatModel"));
         when(ctx.getBean("anthropicChatModel", ChatModel.class)).thenReturn(anthropic);
 
         ChatModel selected = config.chatModel(ctx);
@@ -100,9 +101,9 @@ class SpringAiConfigTest {
 
         org.springframework.context.ApplicationContext ctx = mock(org.springframework.context.ApplicationContext.class);
         when(ctx.getBean("openAiChatModel", ChatModel.class))
-                .thenThrow(new RuntimeException("not found"));
+                .thenThrow(new NoSuchBeanDefinitionException("openAiChatModel"));
         when(ctx.getBean("anthropicChatModel", ChatModel.class))
-                .thenThrow(new RuntimeException("not found"));
+                .thenThrow(new NoSuchBeanDefinitionException("openAiChatModel"));
 
         assertThrows(IllegalStateException.class, () -> config.chatModel(ctx));
     }

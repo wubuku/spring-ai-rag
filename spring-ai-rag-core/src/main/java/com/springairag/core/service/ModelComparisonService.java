@@ -16,10 +16,12 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * 多模型并行对比服务
@@ -63,7 +65,7 @@ public class ModelComparisonService {
             for (Map.Entry<String, Future<ModelComparisonResult>> entry : futures.entrySet()) {
                 try {
                     results.add(entry.getValue().get(timeoutSeconds, TimeUnit.SECONDS));
-                } catch (Exception e) {
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
                     log.error("Model {} failed: {}", entry.getKey(), e.getMessage());
                     results.add(ModelComparisonResult.failure(entry.getKey(), e.getMessage()));
                 }
@@ -103,7 +105,7 @@ public class ModelComparisonService {
             return new ModelComparisonResult(
                     modelName, true, content, elapsed.toMillis(),
                     promptTokens, completionTokens, totalTokens, null);
-        } catch (Exception e) {
+        } catch (Exception e) { // Intentional: LLM failures shouldn't crash comparison
             Duration elapsed = Duration.between(start, Instant.now());
             log.error("Model {} failed after {}ms: {}", modelName, elapsed.toMillis(), e.getMessage());
             return new ModelComparisonResult(

@@ -51,7 +51,7 @@ public class RagChatHistoryRepository {
             entity.setMetadata(metadata);
             jpaRepository.save(entity);
             log.debug("Saved chat history for session: {}", sessionId);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: chat history is non-critical
             log.error("Failed to save chat history for session: {}", sessionId, e);
         }
     }

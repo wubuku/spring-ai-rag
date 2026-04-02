@@ -60,14 +60,38 @@ public class DocumentEmbedService {
      *
      * <p>流程：获取文档 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
      *
+     * <p>嵌入缓存：如果文档已有嵌入且状态为 COMPLETED，跳过重嵌入。
+     * 传入 {@code force=true} 可强制重嵌入（例如嵌入模型变更后）。
+     *
      * @param documentId 文档 ID
      * @return 操作结果（chunksCreated, embeddingsStored, status）
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId) {
-        log.info("Generating embeddings for document: id={}", documentId);
+        return embedDocument(documentId, false);
+    }
+
+    /**
+     * 为文档生成嵌入向量（JdbcTemplate 路径，支持强制重嵌入）
+     *
+     * @param documentId 文档 ID
+     * @param force 是否强制重嵌入（跳过缓存检查）
+     * @return 操作结果（chunksCreated, embeddingsStored, status）
+     */
+    @Transactional
+    public Map<String, Object> embedDocument(Long documentId, boolean force) {
+        log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
         RagDocument doc = findDocument(documentId);
+
+        // 嵌入缓存：已有嵌入且状态正常则跳过
+        if (!force) {
+            Map<String, Object> cached = checkEmbeddingCache(doc);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
         String content = validateContent(doc);
 
         List<TextChunk> chunks = chunker.split(content);
@@ -117,13 +141,35 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId) {
+        return embedDocumentViaVectorStore(documentId, false);
+    }
+
+    /**
+     * 为文档生成嵌入向量（VectorStore 简化路径，支持强制重嵌入）
+     *
+     * @param documentId 文档 ID
+     * @param force 是否强制重嵌入（跳过缓存检查）
+     * @return 操作结果
+     * @throws IllegalStateException VectorStore 未配置时抛出
+     */
+    @Transactional
+    public Map<String, Object> embedDocumentViaVectorStore(Long documentId, boolean force) {
         if (vectorStore == null) {
             throw new IllegalStateException("VectorStore 未配置，请使用 embedDocument 方法");
         }
 
-        log.info("Generating embeddings via VectorStore for document: id={}", documentId);
+        log.info("Generating embeddings via VectorStore for document: id={}, force={}", documentId, force);
 
         RagDocument doc = findDocument(documentId);
+
+        // 嵌入缓存：已有嵌入且状态正常则跳过
+        if (!force) {
+            Map<String, Object> cached = checkEmbeddingCache(doc);
+            if (cached != null) {
+                return cached;
+            }
+        }
+
         String content = validateContent(doc);
 
         List<TextChunk> chunks = chunker.split(content);
@@ -171,7 +217,7 @@ public class DocumentEmbedService {
         log.info("Batch embedding {} documents", documentIds.size());
 
         List<Map<String, Object>> results = new java.util.ArrayList<>(documentIds.size());
-        int success = 0, failed = 0, skipped = 0;
+        int success = 0, failed = 0, skipped = 0, cached = 0;
 
         for (Long id : documentIds) {
             Map<String, Object> itemResult = embedSingleDocument(id);
@@ -179,18 +225,21 @@ public class DocumentEmbedService {
             switch (status) {
                 case "COMPLETED" -> success++;
                 case "FAILED" -> failed++;
+                case "CACHED" -> cached++;
                 default -> skipped++;
             }
             results.add(itemResult);
         }
 
-        log.info("Batch embed completed: {} success, {} failed, {} skipped", success, failed, skipped);
+        log.info("Batch embed completed: {} success, {} cached, {} failed, {} skipped",
+                success, cached, failed, skipped);
 
         return Map.of(
                 "results", results,
                 "summary", Map.of(
                         "total", documentIds.size(),
                         "success", success,
+                        "cached", cached,
                         "failed", failed,
                         "skipped", skipped
                 )
@@ -208,6 +257,14 @@ public class DocumentEmbedService {
             RagDocument doc = documentRepository.findById(id).orElse(null);
             if (doc == null) {
                 itemResult.put("status", "NOT_FOUND");
+                return itemResult;
+            }
+
+            // 嵌入缓存：已有嵌入且状态正常则跳过
+            Map<String, Object> cached = checkEmbeddingCache(doc);
+            if (cached != null) {
+                itemResult.put("status", "CACHED");
+                itemResult.put("embeddingsStored", cached.get("embeddingsStored"));
                 return itemResult;
             }
 
@@ -256,6 +313,30 @@ public class DocumentEmbedService {
     }
 
     // ==================== 内部方法 ====================
+
+    /**
+     * 检查嵌入缓存 — 文档已有嵌入且状态正常则返回缓存结果
+     *
+     * @return 缓存命中返回结果 Map，未命中返回 null
+     */
+    private Map<String, Object> checkEmbeddingCache(RagDocument doc) {
+        if (!"COMPLETED".equals(doc.getProcessingStatus())) {
+            return null;
+        }
+        long existingCount = embeddingRepository.countByDocumentId(doc.getId());
+        if (existingCount > 0) {
+            log.info("Embedding cache hit for document {}: {} existing embeddings, skipping",
+                    doc.getId(), existingCount);
+            return Map.of(
+                    "message", "嵌入向量已存在，跳过重嵌入（使用 force=true 强制重嵌入）",
+                    "documentId", doc.getId(),
+                    "embeddingsStored", existingCount,
+                    "status", "CACHED",
+                    "cached", true
+            );
+        }
+        return null;
+    }
 
     private RagDocument findDocument(Long id) {
         return documentRepository.findById(id)

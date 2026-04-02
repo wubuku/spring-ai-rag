@@ -111,14 +111,14 @@ public class EmbeddingBatchService {
                     results.add(new EmbeddingResult(batch.get(j), null, "Batch response missing embedding at index " + j));
                 }
             }
-        } catch (Exception batchError) {
+        } catch (Exception batchError) { // Resilience: batch → sequential fallback
             log.warn("Batch embedding failed, falling back to sequential: {}", batchError.getMessage());
             // 批量失败，逐条降级
             for (String text : batch) {
                 try {
                     float[] embedding = embeddingModel.embed(text);
                     results.add(new EmbeddingResult(text, embedding, null));
-                } catch (Exception e) {
+                } catch (Exception e) { // Individual item failure, continue batch
                     log.error("Failed to generate embedding: {}", e.getMessage());
                     results.add(new EmbeddingResult(text, null, e.getMessage()));
                 }
