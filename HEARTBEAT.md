@@ -92,8 +92,15 @@
 | 54 | CollectionController.importCollection 50→18 行拆分 | 代码质量 | ✅ 2026-04-03 |
 | 55 | IMPLEMENTATION_COMPARISON.md 统计更新（767 测试） | 文档 | ✅ 2026-04-03 |
 
+## 待办（主动巡检 — 2026-04-03 第四轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 56 | AbstractRagAdvisor 基类提取（3 Advisor 消除重复） | 代码质量 | ✅ 2026-04-03 |
+
 ## 进度日志
 
+- 2026-04-03 04:34 — ✅ 主动巡检（cron）：提取 AbstractRagAdvisor 基类消除 3 个 Advisor 的 enabled/setEnabled/after 重复代码，QueryRewriteAdvisor 108→77 行（-29%）、HybridSearchAdvisor 103→82 行（-20%）、RerankAdvisor 127→111 行（-13%），新增 8 个基类测试，全部 767+ 测试通过，commit 8f5e77a
 - 2026-04-03 02:37 — ✅ #51+#52 长方法重构（第三轮，全部待办清空）：#51 HybridRetrieverService vectorSearch 43→13 行（提取 executeVectorQuery/mapVectorResults）、fullTextSearch 48→12 行（提取 executeFulltextQuery/mapFulltextResults）、新增 isNotExcluded 统一过滤；#52 RetrievalUtils.fuseResults 58→19 行（提取 buildMergedEntries/maxScore/toRetrievalResult），767 测试全部通过，commit c5ec4dd
 - 2026-04-03 02:40 — ✅ 主动巡检：RagChatService 构造函数 70→30 行（提取 buildChatMemory/buildSortedAdvisors），767 测试通过，commit 479aac0
 - 2026-04-03 03:58 — ✅ 主动巡检（cron）：长方法扫描发现 2 个 41 行方法，重构拆分：processSingleEmbedding 41→15 行（提取 findAndValidateDocument + prepareChunks）、HybridSearchAdvisor.before 41→20 行（提取 recordMetricsAndLog），全部 767 测试通过，零超 40 行方法，commit 4198fd2
