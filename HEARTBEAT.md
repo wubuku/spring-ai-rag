@@ -84,18 +84,18 @@
 | 47 | 版本历史 REST 端点（GET /documents/{id}/versions） | 业务功能 | ✅ 2026-04-03 |
 | 48 | 限流过滤器集成测试 | 测试覆盖 | ✅ 2026-04-03 |
 
-## 待办（新周期 — 2026-04-03 第二轮）
+## 待办（新周期 — 2026-04-03 第三轮）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 49 | HybridSearchAdvisor.before() 重构（实际 35 行，已在限制内） | 代码质量 | ✅ 2026-04-03（跳过，已合规） |
-| 50 | DocumentEmbedService 长方法重构（46+45+47 行 → 32+29+13+35 行） | 代码质量 | ✅ 2026-04-03 |
-| 51 | HybridRetrieverService 检索方法拆分（vectorSearch 49+fullTextSearch 56 行） | 代码质量 | ✅ 2026-04-03 |
-| 52 | RetrievalUtils.fuseResults 重构（50 行） | 代码质量 | ✅ 2026-04-03 |
+| 53 | RagChatService 构造函数重构（70→30 行） | 代码质量 | ✅ 2026-04-03 |
+| 54 | CollectionController.importCollection 48 行拆分 | 代码质量 | ⏳ |
+| 55 | IMPLEMENTATION_COMPARISON.md 统计更新（767 测试） | 文档 | ⏳ |
 
 ## 进度日志
 
 - 2026-04-03 02:37 — ✅ #51+#52 长方法重构（第三轮，全部待办清空）：#51 HybridRetrieverService vectorSearch 43→13 行（提取 executeVectorQuery/mapVectorResults）、fullTextSearch 48→12 行（提取 executeFulltextQuery/mapFulltextResults）、新增 isNotExcluded 统一过滤；#52 RetrievalUtils.fuseResults 58→19 行（提取 buildMergedEntries/maxScore/toRetrievalResult），767 测试全部通过，commit c5ec4dd
+- 2026-04-03 02:40 — ✅ 主动巡检：RagChatService 构造函数 70→30 行（提取 buildChatMemory/buildSortedAdvisors），767 测试通过，commit 479aac0
 
 - 2026-04-03 02:10 — ✅ #49+#50 长方法重构（第二轮）：#49 HybridSearchAdvisor.before() 实际 35 行已在限制内；#50 DocumentEmbedService 提取 prepareForEmbedding/processSingleEmbedding/completeEmbedding/buildSuccessResult 4 个子方法，embedDocument 46→32 行、embedDocumentViaVectorStore 45→29 行、embedSingleDocument 47→13+35 行拆分，全部 744+ 测试通过，commit 636be84
 
