@@ -127,7 +127,7 @@ public class GlobalExceptionHandler {
         log.warn("RAG business error: [{}] {}", e.getErrorCode(), e.getMessage());
         return ResponseEntity.status(e.getHttpStatus()).body(ErrorResponse.builder()
                 .error(e.getErrorCode())
-                .status(e.getHttpStatus().value())
+                .status(e.getHttpStatus())
                 .message(e.getMessage())
                 .path(request.getRequestURI())
                 .build());
