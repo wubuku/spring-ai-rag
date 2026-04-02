@@ -6,9 +6,7 @@ import com.springairag.core.service.RetrievalLoggingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -30,7 +28,7 @@ import java.util.List;
  * </ul>
  */
 @Component
-public class HybridSearchAdvisor implements BaseAdvisor {
+public class HybridSearchAdvisor extends AbstractRagAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(HybridSearchAdvisor.class);
 
@@ -40,8 +38,6 @@ public class HybridSearchAdvisor implements BaseAdvisor {
     private final HybridRetrieverService hybridRetriever;
 
     private RetrievalLoggingService retrievalLoggingService;
-
-    private boolean enabled = true;
 
     @Autowired
     public HybridSearchAdvisor(HybridRetrieverService hybridRetriever) {
@@ -54,10 +50,6 @@ public class HybridSearchAdvisor implements BaseAdvisor {
     @Autowired(required = false)
     public void setRetrievalLoggingService(RetrievalLoggingService retrievalLoggingService) {
         this.retrievalLoggingService = retrievalLoggingService;
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
     }
 
     @Override
@@ -76,8 +68,7 @@ public class HybridSearchAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-        if (!enabled) {
-            log.debug("[HybridSearchAdvisor] 禁用，不执行检索");
+        if (shouldSkip(log)) {
             return request;
         }
 
@@ -114,10 +105,5 @@ public class HybridSearchAdvisor implements BaseAdvisor {
                     sessionId, query, "hybrid",
                     elapsedMs, 0L, 0L, results);
         }
-    }
-
-    @Override
-    public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-        return response;
     }
 }

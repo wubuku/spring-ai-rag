@@ -7,9 +7,7 @@ import com.springairag.core.retrieval.ReRankingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
@@ -36,7 +34,7 @@ import java.util.List;
  * </ul>
  */
 @Component
-public class RerankAdvisor implements BaseAdvisor {
+public class RerankAdvisor extends AbstractRagAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(RerankAdvisor.class);
 
@@ -53,16 +51,10 @@ public class RerankAdvisor implements BaseAdvisor {
     /** 返回的最大结果数 */
     private int maxResults = 5;
 
-    private boolean enabled = true;
-
     @Autowired
     public RerankAdvisor(ReRankingService rerankingService, ApiAdapterFactory adapterFactory, @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.base-url:}") String baseUrl) {
         this.rerankingService = rerankingService;
         this.adapter = adapterFactory.getAdapter(baseUrl);
-    }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
     }
 
     public void setSystemContextPrefix(String systemContextPrefix) {
@@ -89,8 +81,7 @@ public class RerankAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-        if (!enabled) {
-            log.debug("[RerankAdvisor] 禁用，不执行重排");
+        if (shouldSkip(log)) {
             return request;
         }
 
@@ -143,12 +134,6 @@ public class RerankAdvisor implements BaseAdvisor {
             log.debug("[RerankAdvisor] 使用 augmentUserMessage 注入上下文（API 不支持多 system 消息）");
         }
         return mutated.build();
-    }
-
-    @Override
-    @SuppressWarnings("unchecked")
-    public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-        return response;
     }
 
     /**

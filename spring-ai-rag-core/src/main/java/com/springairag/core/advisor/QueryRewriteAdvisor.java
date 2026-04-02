@@ -4,9 +4,7 @@ import com.springairag.core.retrieval.QueryRewritingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
-import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
@@ -25,7 +23,7 @@ import java.util.List;
  *   <li>before() → 读取原始 user query，调用 QueryRewritingService.rewriteQuery()，
  *      将 List&lt;String&gt; 改写结果存入 context</li>
  *   <li>adviseCall()（框架调用）→ 依次执行 before() → chain.nextCall() → after()</li>
- *   <li>after() → 原样透传响应</li>
+ *   <li>after() → 原样透传响应（继承自 AbstractRagAdvisor）</li>
  * </ol>
  *
  * <p>Context Keys:
@@ -35,7 +33,7 @@ import java.util.List;
  * </ul>
  */
 @Component
-public class QueryRewriteAdvisor implements BaseAdvisor {
+public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewriteAdvisor.class);
 
@@ -47,19 +45,9 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
 
     private final QueryRewritingService queryRewritingService;
 
-    /** 查询改写开关，可通过配置或 setter 覆盖 */
-    private boolean enabled = true;
-
     @Autowired
     public QueryRewriteAdvisor(QueryRewritingService queryRewritingService) {
         this.queryRewritingService = queryRewritingService;
-    }
-
-    /**
-     * 设置是否启用查询改写（供 Starter 配置类覆盖）
-     */
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
     }
 
     @Override
@@ -78,10 +66,13 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
 
     @Override
     public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-        String originalQuery = AdvisorUtils.extractUserMessage(request);
+        if (shouldSkip(log)) {
+            return request;
+        }
 
-        if (!enabled || originalQuery == null || originalQuery.isBlank()) {
-            log.debug("[QueryRewriteAdvisor] 禁用或查询为空，不改写");
+        String originalQuery = AdvisorUtils.extractUserMessage(request);
+        if (originalQuery == null || originalQuery.isBlank()) {
+            log.debug("[QueryRewriteAdvisor] 查询为空，不改写");
             return request;
         }
 
@@ -101,11 +92,5 @@ public class QueryRewriteAdvisor implements BaseAdvisor {
                 .context(CTX_ORIGINAL_QUERY, originalQuery)
                 .context(CTX_REWRITE_QUERIES, rewrittenQueries)
                 .build();
-    }
-
-    @Override
-    public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
-        // 不做任何后处理，直接透传
-        return response;
     }
 }
