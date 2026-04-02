@@ -319,38 +319,10 @@ public class RagCollectionController {
 
         log.info("Importing collection: name={}", name);
 
-        // 创建集合
-        RagCollection collection = new RagCollection();
-        collection.setName(name);
-        collection.setDescription((String) importData.get("description"));
-        collection.setEmbeddingModel((String) importData.get("embeddingModel"));
-        Object dims = importData.get("dimensions");
-        collection.setDimensions(dims != null ? ((Number) dims).intValue() : 1024);
-        Object enabled = importData.get("enabled");
-        collection.setEnabled(enabled != null ? (Boolean) enabled : true);
-        collection.setMetadata(castToMap(importData.get("metadata")));
+        RagCollection collection = buildCollectionFromImport(importData);
         collection = collectionRepository.save(collection);
 
-        // 导入文档
-        int importedDocs = 0;
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> docList = (List<Map<String, Object>>) importData.get("documents");
-        if (docList != null) {
-            for (Map<String, Object> docData : docList) {
-                RagDocument doc = new RagDocument();
-                doc.setTitle((String) docData.get("title"));
-                doc.setSource((String) docData.get("source"));
-                doc.setContent((String) docData.get("content"));
-                doc.setDocumentType((String) docData.get("documentType"));
-                doc.setMetadata(castToMap(docData.get("metadata")));
-                Object size = docData.get("size");
-                doc.setSize(size != null ? ((Number) size).longValue() : 0L);
-                doc.setCollectionId(collection.getId());
-                doc.setProcessingStatus("PENDING");
-                documentRepository.save(doc);
-                importedDocs++;
-            }
-        }
+        int importedDocs = importDocuments(collection.getId(), importData);
 
         log.info("Collection imported: id={}, name={}, documents={}",
                 collection.getId(), name, importedDocs);
@@ -358,6 +330,46 @@ public class RagCollectionController {
         Map<String, Object> result = toMap(collection, importedDocs);
         result.put("importedDocuments", importedDocs);
         return ResponseEntity.ok(result);
+    }
+
+    private RagCollection buildCollectionFromImport(Map<String, Object> importData) {
+        RagCollection collection = new RagCollection();
+        collection.setName((String) importData.get("name"));
+        collection.setDescription((String) importData.get("description"));
+        collection.setEmbeddingModel((String) importData.get("embeddingModel"));
+        Object dims = importData.get("dimensions");
+        collection.setDimensions(dims != null ? ((Number) dims).intValue() : 1024);
+        Object enabled = importData.get("enabled");
+        collection.setEnabled(enabled != null ? (Boolean) enabled : true);
+        collection.setMetadata(castToMap(importData.get("metadata")));
+        return collection;
+    }
+
+    @SuppressWarnings("unchecked")
+    private int importDocuments(Long collectionId, Map<String, Object> importData) {
+        int count = 0;
+        List<Map<String, Object>> docList = (List<Map<String, Object>>) importData.get("documents");
+        if (docList != null) {
+            for (Map<String, Object> docData : docList) {
+                documentRepository.save(buildDocumentFromImport(docData, collectionId));
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private RagDocument buildDocumentFromImport(Map<String, Object> docData, Long collectionId) {
+        RagDocument doc = new RagDocument();
+        doc.setTitle((String) docData.get("title"));
+        doc.setSource((String) docData.get("source"));
+        doc.setContent((String) docData.get("content"));
+        doc.setDocumentType((String) docData.get("documentType"));
+        doc.setMetadata(castToMap(docData.get("metadata")));
+        Object size = docData.get("size");
+        doc.setSize(size != null ? ((Number) size).longValue() : 0L);
+        doc.setCollectionId(collectionId);
+        doc.setProcessingStatus("PENDING");
+        return doc;
     }
 
     @SuppressWarnings("unchecked")
