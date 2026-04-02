@@ -7,6 +7,7 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
@@ -31,6 +32,7 @@ class RagDocumentControllerTest {
     private RagEmbeddingRepository embeddingRepository;
     private DocumentEmbedService documentEmbedService;
     private BatchDocumentService batchDocumentService;
+    private DocumentVersionService documentVersionService;
     private RagDocumentController controller;
 
     @BeforeEach
@@ -39,7 +41,8 @@ class RagDocumentControllerTest {
         embeddingRepository = mock(RagEmbeddingRepository.class);
         documentEmbedService = mock(DocumentEmbedService.class);
         batchDocumentService = mock(BatchDocumentService.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService);
+        documentVersionService = mock(DocumentVersionService.class);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService, documentVersionService);
     }
 
     private RagDocument createDoc(Long id, String title, String content) {
@@ -555,5 +558,70 @@ class RagDocumentControllerTest {
                 Map.of("ids", manyIds));
 
         assertEquals(400, response.getStatusCode().value());
+    }
+
+    // ==================== 版本历史 ====================
+
+    @Test
+    void getVersionHistory_documentNotFound_returns404() {
+        when(documentRepository.existsById(999L)).thenReturn(false);
+
+        ResponseEntity<Map<String, Object>> response = controller.getVersionHistory(999L, 0, 20);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void getVersionHistory_returnsPaginatedVersions() {
+        when(documentRepository.existsById(1L)).thenReturn(true);
+        com.springairag.core.entity.RagDocumentVersion v1 = new com.springairag.core.entity.RagDocumentVersion();
+        v1.setId(1L);
+        v1.setDocumentId(1L);
+        v1.setVersionNumber(1);
+        v1.setContentHash("abc123");
+        v1.setChangeType("CREATE");
+        v1.setSize(100L);
+        Page<com.springairag.core.entity.RagDocumentVersion> page = new PageImpl<>(List.of(v1));
+        when(documentVersionService.getVersionHistory(eq(1L), any(PageRequest.class))).thenReturn(page);
+
+        ResponseEntity<Map<String, Object>> response = controller.getVersionHistory(1L, 0, 20);
+
+        assertEquals(200, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(1L, body.get("documentId"));
+        assertEquals(1L, body.get("totalVersions"));
+        List<?> versions = (List<?>) body.get("versions");
+        assertEquals(1, versions.size());
+    }
+
+    @Test
+    void getVersion_found_returnsVersion() {
+        com.springairag.core.entity.RagDocumentVersion v1 = new com.springairag.core.entity.RagDocumentVersion();
+        v1.setId(1L);
+        v1.setDocumentId(1L);
+        v1.setVersionNumber(2);
+        v1.setContentHash("def456");
+        v1.setContentSnapshot("内容快照");
+        v1.setChangeType("UPDATE");
+        v1.setSize(200L);
+        when(documentVersionService.getVersion(1L, 2)).thenReturn(Optional.of(v1));
+
+        ResponseEntity<Map<String, Object>> response = controller.getVersion(1L, 2);
+
+        assertEquals(200, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.get("versionNumber"));
+        assertEquals("内容快照", body.get("contentSnapshot"));
+    }
+
+    @Test
+    void getVersion_notFound_returns404() {
+        when(documentVersionService.getVersion(1L, 99)).thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String, Object>> response = controller.getVersion(1L, 99);
+
+        assertEquals(404, response.getStatusCode().value());
     }
 }

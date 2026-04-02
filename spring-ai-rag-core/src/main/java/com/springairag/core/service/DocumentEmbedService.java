@@ -82,55 +82,26 @@ public class DocumentEmbedService {
     public Map<String, Object> embedDocument(Long documentId, boolean force) {
         log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
-        RagDocument doc = findDocument(documentId);
+        EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
+        if (prep.cached() != null) return prep.cached();
 
-        // 嵌入缓存：已有嵌入且状态正常则跳过
-        if (!force) {
-            Map<String, Object> cached = checkEmbeddingCache(doc);
-            if (cached != null) {
-                return cached;
-            }
-        }
+        List<TextChunk> chunks = prep.chunks();
 
-        String content = validateContent(doc);
-
-        List<TextChunk> chunks = chunker.split(content);
-        if (chunks.isEmpty()) {
-            return Map.of(
-                    "message", "文档内容太短，无需分块",
-                    "documentId", documentId,
-                    "chunksCreated", 0
-            );
-        }
-
-        log.info("Document {} split into {} chunks", documentId, chunks.size());
-
+        RagDocument doc = prep.doc();
         doc.setProcessingStatus("PROCESSING");
         documentRepository.save(doc);
 
-        // 删除旧向量
+        // 删除旧向量 → 生成嵌入 → 存储
         embeddingRepository.deleteByDocumentId(documentId);
-
-        // 生成嵌入并存储
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results =
                 embeddingBatchService.createEmbeddingsBatch(texts);
-
         int stored = storeEmbeddings(documentId, chunks, results);
 
-        doc.setProcessingStatus("COMPLETED");
-        doc.setEmbeddedContentHash(doc.getContentHash());
-        documentRepository.save(doc);
+        completeEmbedding(doc, chunks.size());
 
         log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
-
-        return Map.of(
-                "message", "嵌入向量生成完成",
-                "documentId", documentId,
-                "chunksCreated", chunks.size(),
-                "embeddingsStored", stored,
-                "status", "COMPLETED"
-        );
+        return buildSuccessResult(documentId, chunks.size(), stored, "COMPLETED");
     }
 
     /**
@@ -161,47 +132,20 @@ public class DocumentEmbedService {
 
         log.info("Generating embeddings via VectorStore for document: id={}, force={}", documentId, force);
 
-        RagDocument doc = findDocument(documentId);
+        EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
+        if (prep.cached() != null) return prep.cached();
 
-        // 嵌入缓存：已有嵌入且状态正常则跳过
-        if (!force) {
-            Map<String, Object> cached = checkEmbeddingCache(doc);
-            if (cached != null) {
-                return cached;
-            }
-        }
-
-        String content = validateContent(doc);
-
-        List<TextChunk> chunks = chunker.split(content);
-        if (chunks.isEmpty()) {
-            return Map.of(
-                    "message", "文档内容太短，无需分块",
-                    "documentId", documentId,
-                    "chunksCreated", 0
-            );
-        }
-
+        List<TextChunk> chunks = prep.chunks();
+        RagDocument doc = prep.doc();
         doc.setProcessingStatus("PROCESSING");
         documentRepository.save(doc);
 
-        List<Document> documents = buildVectorStoreDocuments(documentId, chunks);
-        vectorStore.add(documents);
-
-        doc.setProcessingStatus("COMPLETED");
-        doc.setEmbeddedContentHash(doc.getContentHash());
-        documentRepository.save(doc);
+        vectorStore.add(buildVectorStoreDocuments(documentId, chunks));
+        completeEmbedding(doc, chunks.size());
 
         log.info("Document {} embedding via VectorStore completed: {} chunks stored", documentId, chunks.size());
-
-        return Map.of(
-                "message", "嵌入向量生成完成（VectorStore 路径）",
-                "documentId", documentId,
-                "chunksCreated", chunks.size(),
-                "embeddingsStored", chunks.size(),
-                "storageTable", "rag_vector_store",
-                "status", "COMPLETED"
-        );
+        return buildSuccessResult(documentId, chunks.size(), chunks.size(), "COMPLETED",
+                "storageTable", "rag_vector_store");
     }
 
     /**
@@ -252,60 +196,59 @@ public class DocumentEmbedService {
      * 单文档嵌入处理（供 batchEmbedDocuments 调用）
      */
     private Map<String, Object> embedSingleDocument(Long id) {
-        Map<String, Object> itemResult = new HashMap<>();
-        itemResult.put("documentId", id);
-
+        Map<String, Object> result = new HashMap<>();
+        result.put("documentId", id);
         try {
-            RagDocument doc = documentRepository.findById(id).orElse(null);
-            if (doc == null) {
-                itemResult.put("status", "NOT_FOUND");
-                return itemResult;
-            }
-
-            // 嵌入缓存：已有嵌入且状态正常则跳过
-            Map<String, Object> cached = checkEmbeddingCache(doc);
-            if (cached != null) {
-                itemResult.put("status", "CACHED");
-                itemResult.put("embeddingsStored", cached.get("embeddingsStored"));
-                return itemResult;
-            }
-
-            String content = doc.getContent();
-            if (content == null || content.isBlank()) {
-                itemResult.put("status", "SKIPPED");
-                itemResult.put("reason", "内容为空");
-                return itemResult;
-            }
-
-            List<TextChunk> chunks = chunker.split(content);
-            if (chunks.isEmpty()) {
-                itemResult.put("status", "SKIPPED");
-                itemResult.put("reason", "内容太短，无需分块");
-                return itemResult;
-            }
-
-            doc.setProcessingStatus("PROCESSING");
-            documentRepository.save(doc);
-            embeddingRepository.deleteByDocumentId(id);
-
-            List<String> texts = chunks.stream().map(TextChunk::text).toList();
-            List<EmbeddingBatchService.EmbeddingResult> embResults =
-                    embeddingBatchService.createEmbeddingsBatch(texts);
-            int stored = storeEmbeddings(id, chunks, embResults);
-
-            doc.setProcessingStatus("COMPLETED");
-            doc.setEmbeddedContentHash(doc.getContentHash());
-            documentRepository.save(doc);
-
-            itemResult.put("status", "COMPLETED");
-            itemResult.put("chunksCreated", chunks.size());
-            itemResult.put("embeddingsStored", stored);
+            processSingleEmbedding(id, result);
         } catch (Exception e) {
             log.error("Failed to embed document {}: {}", id, e.getMessage());
-            itemResult.put("status", "FAILED");
-            itemResult.put("error", e.getMessage());
+            result.put("status", "FAILED");
+            result.put("error", e.getMessage());
         }
-        return itemResult;
+        return result;
+    }
+
+    /** 执行单文档嵌入的核心逻辑，结果写入 result Map */
+    private void processSingleEmbedding(Long id, Map<String, Object> result) {
+        RagDocument doc = documentRepository.findById(id).orElse(null);
+        if (doc == null) {
+            result.put("status", "NOT_FOUND");
+            return;
+        }
+
+        Map<String, Object> cached = checkEmbeddingCache(doc);
+        if (cached != null) {
+            result.put("status", "CACHED");
+            result.put("embeddingsStored", cached.get("embeddingsStored"));
+            return;
+        }
+
+        String content = doc.getContent();
+        if (content == null || content.isBlank()) {
+            result.put("status", "SKIPPED");
+            result.put("reason", "内容为空");
+            return;
+        }
+
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            result.put("status", "SKIPPED");
+            result.put("reason", "内容太短，无需分块");
+            return;
+        }
+
+        doc.setProcessingStatus("PROCESSING");
+        documentRepository.save(doc);
+        embeddingRepository.deleteByDocumentId(id);
+
+        int stored = storeEmbeddings(id, chunks,
+                embeddingBatchService.createEmbeddingsBatch(
+                        chunks.stream().map(TextChunk::text).toList()));
+        completeEmbedding(doc, chunks.size());
+
+        result.put("status", "COMPLETED");
+        result.put("chunksCreated", chunks.size());
+        result.put("embeddingsStored", stored);
     }
 
     /**
@@ -407,5 +350,59 @@ public class DocumentEmbedService {
                     .build());
         }
         return documents;
+    }
+
+    // ==================== 提取的共享逻辑 ====================
+
+    /** 嵌入准备结果：文档 + 缓存检查 + 分块结果 */
+    private record EmbedPrepareResult(RagDocument doc, Map<String, Object> cached, List<TextChunk> chunks) {}
+
+    /**
+     * 统一的嵌入准备流程：查找文档 → 检查缓存 → 验证内容 → 分块
+     * @return 准备结果；cached 非 null 表示缓存命中直接返回
+     */
+    private EmbedPrepareResult prepareForEmbedding(Long documentId, boolean force) {
+        RagDocument doc = findDocument(documentId);
+
+        if (!force) {
+            Map<String, Object> cached = checkEmbeddingCache(doc);
+            if (cached != null) {
+                return new EmbedPrepareResult(doc, cached, null);
+            }
+        }
+
+        String content = validateContent(doc);
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            return new EmbedPrepareResult(doc, Map.of(
+                    "message", "文档内容太短，无需分块",
+                    "documentId", documentId,
+                    "chunksCreated", 0
+            ), null);
+        }
+        log.info("Document {} split into {} chunks", documentId, chunks.size());
+        return new EmbedPrepareResult(doc, null, chunks);
+    }
+
+    /** 标记嵌入完成：COMPLETED + 更新内容哈希 */
+    private void completeEmbedding(RagDocument doc, int chunkCount) {
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash(doc.getContentHash());
+        documentRepository.save(doc);
+    }
+
+    /** 构建成功响应 Map */
+    private Map<String, Object> buildSuccessResult(Long docId, int chunks, int stored, String status,
+                                                     String... extraEntries) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "嵌入向量生成完成");
+        result.put("documentId", docId);
+        result.put("chunksCreated", chunks);
+        result.put("embeddingsStored", stored);
+        result.put("status", status);
+        for (int i = 0; i < extraEntries.length; i += 2) {
+            result.put(extraEntries[i], extraEntries[i + 1]);
+        }
+        return result;
     }
 }

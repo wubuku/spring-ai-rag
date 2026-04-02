@@ -3,11 +3,13 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentVersionService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -44,15 +46,18 @@ public class RagDocumentController {
     private final RagEmbeddingRepository embeddingRepository;
     private final DocumentEmbedService documentEmbedService;
     private final BatchDocumentService batchDocumentService;
+    private final DocumentVersionService documentVersionService;
 
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
                                   DocumentEmbedService documentEmbedService,
-                                  BatchDocumentService batchDocumentService) {
+                                  BatchDocumentService batchDocumentService,
+                                  DocumentVersionService documentVersionService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.documentEmbedService = documentEmbedService;
         this.batchDocumentService = batchDocumentService;
+        this.documentVersionService = documentVersionService;
     }
 
     // ==================== CRUD ====================
@@ -277,6 +282,48 @@ public class RagDocumentController {
         }
     }
 
+    // ==================== 版本历史 ====================
+
+    @Operation(summary = "获取文档版本历史", description = "分页查询文档的内容变更版本记录，最新在前。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回版本历史"),
+            @ApiResponse(responseCode = "404", description = "文档不存在")
+    })
+    @GetMapping("/{id}/versions")
+    public ResponseEntity<Map<String, Object>> getVersionHistory(
+            @Parameter(description = "文档 ID") @PathVariable Long id,
+            @Parameter(description = "页码") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
+
+        if (!documentRepository.existsById(id)) {
+            return ResponseEntity.notFound().build();
+        }
+
+        var versions = documentVersionService.getVersionHistory(id, PageRequest.of(page, size));
+        Map<String, Object> result = new HashMap<>();
+        result.put("documentId", id);
+        result.put("totalVersions", versions.getTotalElements());
+        result.put("page", page);
+        result.put("size", size);
+        result.put("versions", versions.getContent().stream().map(this::versionToMap).collect(Collectors.toList()));
+        return ResponseEntity.ok(result);
+    }
+
+    @Operation(summary = "获取指定版本", description = "查询文档的指定版本详情（含内容快照）。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回版本详情"),
+            @ApiResponse(responseCode = "404", description = "版本不存在")
+    })
+    @GetMapping("/{id}/versions/{versionNumber}")
+    public ResponseEntity<Map<String, Object>> getVersion(
+            @Parameter(description = "文档 ID") @PathVariable Long id,
+            @Parameter(description = "版本号") @PathVariable int versionNumber) {
+
+        return documentVersionService.getVersion(id, versionNumber)
+                .map(v -> ResponseEntity.ok(versionToMap(v)))
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     // ==================== 辅助方法 ====================
 
     private Map<String, Object> documentToMap(RagDocument doc) {
@@ -295,6 +342,23 @@ public class RagDocumentController {
         }
         if (doc.getMetadata() != null) {
             map.put("metadata", doc.getMetadata());
+        }
+        return map;
+    }
+
+    private Map<String, Object> versionToMap(RagDocumentVersion v) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", v.getId());
+        map.put("documentId", v.getDocumentId());
+        map.put("versionNumber", v.getVersionNumber());
+        map.put("contentHash", v.getContentHash());
+        map.put("size", v.getSize());
+        map.put("changeType", v.getChangeType());
+        map.put("changeDescription", v.getChangeDescription());
+        map.put("createdAt", v.getCreatedAt());
+        // 仅在单版本详情中返回内容快照，列表中省略以节省带宽
+        if (v.getContentSnapshot() != null) {
+            map.put("contentSnapshot", v.getContentSnapshot());
         }
         return map;
     }
