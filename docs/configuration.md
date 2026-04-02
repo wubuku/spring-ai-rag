@@ -230,6 +230,22 @@ rag:
 
 启用后，所有 `/api/v1/**` 请求需携带 `X-API-Key` 头。
 
+## API 限流配置
+
+```yaml
+rag:
+  rate-limit:
+    enabled: true
+    requests-per-minute: 100
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.rate-limit.enabled` | `true` | 启用 API 限流 |
+| `rag.rate-limit.requests-per-minute` | `100` | 每 IP 每分钟最大请求数 |
+
+限流使用滑动窗口算法，按客户端 IP 独立计数。超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
+
 ## 数据库配置
 
 ```yaml

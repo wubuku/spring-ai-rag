@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [1.0.0-SNAPSHOT] - 2026-04-02
+## [1.0.0-SNAPSHOT] - 2026-04-03
 
 ### Added
 
@@ -13,11 +13,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - 查询改写（规则模式 + LLM 辅助模式）
 - 重排序服务（Cross-Encoder 模式）
 - Advisor 链式 Pipeline（QueryRewrite → HybridSearch → Rerank → ChatMemory）
+- 内容哈希嵌入缓存（避免重复嵌入未变更文档）
+- 文档版本历史（content_hash 变更自动记录）
 
 #### 模型支持
 - OpenAI 兼容模型（DeepSeek、智谱等）
 - Anthropic 模型
 - 三 Bean 模式自动切换（`app.llm.provider` 配置）
+- 多模型并行对比服务
 - 硅基流动 BGE-M3 嵌入模型（1024 维）
 
 #### 领域扩展
@@ -28,40 +31,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 #### REST API
 - RAG 问答（非流式 + SSE 流式）
 - 文档管理（CRUD + 嵌入 + 批量操作）
-- 知识库集合管理
+- 知识库集合管理（含导出/导入）
 - 检索评估 + 用户反馈
 - A/B 实验框架
 - 监控告警 + SLO
 - 健康检查
 - API Key 认证过滤器
+- API 限流（滑动窗口按 IP 限流，429 + Retry-After）
 
 #### 可观测性
 - Micrometer 指标（检索延迟、Token 用量、命中率）
 - Actuator 健康检查
 - 检索日志 + 性能基准测试
+- 请求追踪（RequestTraceFilter + MDC traceId + logback 格式化）
+- 异常处理统一（窄化具体异常类型）
 
 #### 基础设施
-- Flyway 数据库迁移
+- Flyway 数据库迁移（V1-V9）
 - HikariCP 连接池优化
 - 异步处理配置
 - 响应缓存
+- Docker 支持（多阶段构建 + docker-compose）
+- GitHub Actions CI（PostgreSQL 服务 + JaCoCo 覆盖率上报）
 
 #### 文档
 - README.md（项目门面）
 - CONTRIBUTING.md（贡献指南）
 - docs/architecture.md（架构设计详解）
-- docs/configuration.md（完整配置参考）
+- docs/configuration.md（完整配置参考，含限流配置）
 - docs/testing-guide.md（测试指南）
 - docs/getting-started.md（开发者上手）
-- docs/rest-api.md（REST API 参考）
+- docs/rest-api.md（REST API 参考，含导出/导入 + 限流说明）
 - docs/extension-guide.md（领域扩展指南）
 - docs/troubleshooting.md（故障排查）
 
 #### 测试
-- 712 个单元/集成测试
+- 744+ 个单元/集成测试
 - JaCoCo 覆盖率集成（>90% 指令覆盖）
 - E2E 测试脚本
 - 性能基准测试（单次检索 <500ms）
+- SSE 流式 E2E 测试 + 对话记忆多轮验证
 
 ### Technical Stack
 

@@ -74,6 +74,16 @@
 | 38 | 全局异常处理统一（10 处 catch Exception） | 代码质量 | ✅ 2026-04-02 |
 | 39 | 嵌入缓存（避免重复嵌入未变更文档） | 性能优化 | ✅ 2026-04-02 |
 
+## 待办（新周期 — 2026-04-03）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 44 | REST API 文档同步（新端点+限流+版本历史） | 文档 | ⏳ |
+| 45 | Configuration 文档同步（rate-limit 配置项） | 文档 | ⏳ |
+| 46 | CHANGELOG 更新（最近 2 轮功能） | 文档 | ⏳ |
+| 47 | 版本历史 REST 端点（GET /documents/{id}/versions） | 业务功能 | ⏳ |
+| 48 | 限流过滤器集成测试 | 测试覆盖 | ⏳ |
+
 ## 进度日志
 
 - 2026-04-03 00:27 — ✅ 长方法重构（第二轮）：RagChatService.executeChat() 79→35 行（提取 buildSystemPrompt/customizeUserMessage/buildAdvisorParams/extractSources 4 个子方法），RerankAdvisor.before() 53→20 行（提取 getRetrievalResults/injectRerankedContext），全部测试通过，commit 待提交

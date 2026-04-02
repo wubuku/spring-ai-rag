@@ -18,6 +18,26 @@ X-API-Key: your-api-key
 
 配置项：`rag.security.api-keys`（逗号分隔多个 key）。
 
+### 限流
+
+启用 `rag.rate-limit.enabled` 后，所有 API 请求受滑动窗口限流（按 IP）。
+
+**限流响应头（正常请求）：**
+
+| 响应头 | 说明 |
+|--------|------|
+| `X-RateLimit-Limit` | 每分钟最大请求数 |
+| `X-RateLimit-Remaining` | 当前窗口剩余配额 |
+
+**超限响应：**
+
+```
+HTTP/1.1 429 Too Many Requests
+Retry-After: 60
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 0
+```
+
 ### 错误响应
 
 ```json
@@ -368,6 +388,56 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 ```json
 {
   "documentIds": [1, 2, 3]
+}
+```
+
+---
+
+### `GET /api/v1/rag/collections/{id}/export`
+
+导出集合及其文档为 JSON。
+
+**响应：**
+
+```json
+{
+  "name": "医疗知识库",
+  "description": "医疗领域文档集合",
+  "embeddingModel": "BAAI/bge-m3",
+  "dimensions": 1024,
+  "enabled": true,
+  "metadata": {},
+  "documents": [
+    {
+      "title": "doc1",
+      "content": "...",
+      "source": "manual",
+      "documentType": "text",
+      "metadata": {},
+      "size": 1024
+    }
+  ],
+  "exportedAt": "2026-04-03T00:00:00Z",
+  "documentCount": 10
+}
+```
+
+---
+
+### `POST /api/v1/rag/collections/import`
+
+从导出的 JSON 数据导入创建新集合及其文档。
+
+**请求体：** 使用 `/export` 端点返回的 JSON 数据。
+
+**响应：**
+
+```json
+{
+  "id": 5,
+  "name": "医疗知识库",
+  "importedDocuments": 10,
+  "message": "集合导入成功"
 }
 ```
 
