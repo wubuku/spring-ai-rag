@@ -58,8 +58,18 @@
 | 34 | CHANGELOG.md（变更日志） | 文档 P3 | ✅ 2026-04-02 |
 | 35 | GitHub templates（PR/Issue 模板） | 文档 P3 | ✅ 2026-04-02 |
 
+## 待办（新一轮改进）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 36 | Docker 支持（Dockerfile + docker-compose.yml） | 部署 | ✅ 2026-04-02 |
+| 37 | CI 增强（PostgreSQL 服务 + JaCoCo 覆盖率上报） | CI/CD | ⏳ 下一步 |
+| 38 | 全局异常处理统一（10 处 catch Exception） | 代码质量 | 📋 |
+| 39 | 嵌入缓存（避免重复嵌入未变更文档） | 性能优化 | 📋 |
+
 ## 进度日志
 
+- 2026-04-02 17:58 — ✅ #36 Docker 支持：多阶段构建 Dockerfile + docker-compose（pgvector:pg16）+ .env.example + 部署文档，712 测试通过，commit 80a71d6
 - 2026-04-02 16:45 — ✅ #34 + #35：CHANGELOG.md（项目首个变更日志）+ GitHub templates（bug_report.md + feature_request.md + PR template），commit 待提交
 - 2026-04-02 16:41 — ✅ #32 + #33：docs/extension-guide.md（领域扩展指南，3 步接入+接口详解+多领域并存+Pipeline 协作+最佳实践）+ docs/troubleshooting.md（故障排查，按症状分类覆盖启动/嵌入/检索/LLM/API/监控/性能 7 大类），commit b8217d3
 - 2026-04-02 16:41 — ✅ #30 + #31：docs/getting-started.md（开发者上手，5 分钟跑通 RAG）+ docs/rest-api.md（完整 REST API 参考，覆盖 10 个 Controller 40+ 端点），712 测试全通过，commit 1eb2df6
