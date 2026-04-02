@@ -88,12 +88,14 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 49 | HybridSearchAdvisor.before() 重构（43行） | 代码质量 | ⏳ |
-| 50 | DocumentEmbedService 3 个长方法重构（62+57+60行） | 代码质量 | ⏳ |
-| 51 | HybridRetrieverService 检索方法拆分（53+60行） | 代码质量 | ⏳ |
-| 52 | RetrievalUtils.fuseResults 重构（54行） | 代码质量 | ⏳ |
+| 49 | HybridSearchAdvisor.before() 重构（实际 35 行，已在限制内） | 代码质量 | ✅ 2026-04-03（跳过，已合规） |
+| 50 | DocumentEmbedService 长方法重构（46+45+47 行 → 32+29+13+35 行） | 代码质量 | ✅ 2026-04-03 |
+| 51 | HybridRetrieverService 检索方法拆分（vectorSearch 49+fullTextSearch 56 行） | 代码质量 | ⏳ |
+| 52 | RetrievalUtils.fuseResults 重构（50 行） | 代码质量 | ⏳ |
 
 ## 进度日志
+
+- 2026-04-03 02:10 — ✅ #49+#50 长方法重构（第二轮）：#49 HybridSearchAdvisor.before() 实际 35 行已在限制内；#50 DocumentEmbedService 提取 prepareForEmbedding/processSingleEmbedding/completeEmbedding/buildSuccessResult 4 个子方法，embedDocument 46→32 行、embedDocumentViaVectorStore 45→29 行、embedSingleDocument 47→13+35 行拆分，全部 744+ 测试通过，commit 636be84
 
 - 2026-04-03 01:47 — ✅ #44-#48 清理收尾：rest-api.md 补版本历史端点文档（GET /documents/{id}/versions + /versions/{versionNumber}），HEARTBEAT.md 状态同步，commit b9c503c 已完成的文档同步确认，全部 744+ 测试通过
 - 2026-04-03 00:27 — ✅ 长方法重构（第二轮）：RagChatService.executeChat() 79→35 行（提取 buildSystemPrompt/customizeUserMessage/buildAdvisorParams/extractSources 4 个子方法），RerankAdvisor.before() 53→20 行（提取 getRetrievalResults/injectRerankedContext），全部测试通过，commit 待提交
