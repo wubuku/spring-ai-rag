@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -35,8 +36,8 @@ import java.util.Map;
 public class DocumentEmbedService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
-    private static final HierarchicalTextChunker chunker = new HierarchicalTextChunker(1000, 100, 100);
 
+    private final HierarchicalTextChunker chunker;
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
     private final EmbeddingBatchService embeddingBatchService;
@@ -47,12 +48,17 @@ public class DocumentEmbedService {
                                  RagEmbeddingRepository embeddingRepository,
                                  EmbeddingBatchService embeddingBatchService,
                                  JdbcTemplate jdbcTemplate,
-                                 @Autowired(required = false) VectorStore vectorStore) {
+                                 @Autowired(required = false) VectorStore vectorStore,
+                                 RagProperties ragProperties) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.embeddingBatchService = embeddingBatchService;
         this.jdbcTemplate = jdbcTemplate;
         this.vectorStore = vectorStore;
+        this.chunker = new HierarchicalTextChunker(
+                ragProperties.getChunk().getDefaultChunkSize(),
+                ragProperties.getChunk().getMinChunkSize(),
+                ragProperties.getChunk().getDefaultChunkOverlap());
     }
 
     /**

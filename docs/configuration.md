@@ -166,12 +166,14 @@ rag:
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100
+    min-chunk-size: 100
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
 | `rag.chunk.default-chunk-size` | `1000` | 默认分块大小（字符） |
 | `rag.chunk.default-chunk-overlap` | `100` | 分块重叠大小（字符） |
+| `rag.chunk.min-chunk-size` | `100` | 最小分块大小（字符） |
 
 ## 对话记忆配置
 

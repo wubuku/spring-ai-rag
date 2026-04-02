@@ -244,6 +244,7 @@ public class RagProperties {
     public static class Chunk {
         private int defaultChunkSize = 1000;
         private int defaultChunkOverlap = 100;
+        private int minChunkSize = 100;
 
         public int getDefaultChunkSize() {
             return defaultChunkSize;
@@ -259,6 +260,14 @@ public class RagProperties {
 
         public void setDefaultChunkOverlap(int defaultChunkOverlap) {
             this.defaultChunkOverlap = defaultChunkOverlap;
+        }
+
+        public int getMinChunkSize() {
+            return minChunkSize;
+        }
+
+        public void setMinChunkSize(int minChunkSize) {
+            this.minChunkSize = minChunkSize;
         }
     }
 

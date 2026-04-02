@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -40,7 +41,7 @@ class DocumentEmbedServiceTest {
         vectorStore = mock(VectorStore.class);
         service = new DocumentEmbedService(
                 documentRepository, embeddingRepository, embeddingBatchService,
-                jdbcTemplate, vectorStore);
+                jdbcTemplate, vectorStore, new RagProperties());
     }
 
     private RagDocument createDocument(Long id, String content) {
@@ -135,7 +136,7 @@ class DocumentEmbedServiceTest {
     void embedDocumentViaVectorStore_noVectorStore_throws() {
         DocumentEmbedService noStoreService = new DocumentEmbedService(
                 documentRepository, embeddingRepository, embeddingBatchService,
-                jdbcTemplate, null);
+                jdbcTemplate, null, new RagProperties());
         assertThrows(IllegalStateException.class,
                 () -> noStoreService.embedDocumentViaVectorStore(1L));
     }
@@ -284,7 +285,7 @@ class DocumentEmbedServiceTest {
     void isVectorStoreAvailable_withoutStore() {
         DocumentEmbedService noStoreService = new DocumentEmbedService(
                 documentRepository, embeddingRepository, embeddingBatchService,
-                jdbcTemplate, null);
+                jdbcTemplate, null, new RagProperties());
         assertFalse(noStoreService.isVectorStoreAvailable());
     }
 

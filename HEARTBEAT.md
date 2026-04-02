@@ -117,7 +117,15 @@
 |---|--------|------|------|
 | 62 | ApiCompatibilityAdapter 默认方法测试（6 个） | 测试覆盖 | ✅ 2026-04-03 |
 
+## 待办（主动巡检 — 2026-04-03 第十轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 63 | HierarchicalTextChunker 使用 RagProperties 配置（消除硬编码） | 代码质量 | ✅ 2026-04-03 |
+| 64 | CacheMetricsController 补 Swagger 注解 | 文档 | ✅ 2026-04-03 |
+
 - 2026-04-03 06:39 — ✅ 主动巡检（cron）：ApiCompatibilityAdapter.normalizeMessages() 默认方法补 6 个单元测试（单 system 合并/不变/无 system/空列表、多 system 模式透传、ChatMessage record），825 测试全通过
+- 2026-04-03 06:55 — ✅ 主动巡检（cron）：消除硬编码——DocumentEmbedService 的 HierarchicalTextChunker 从 static(1000,100,100) 改为实例字段，使用 RagProperties.Chunk 配置注入（新增 minChunkSize 配置项），CacheMetricsController 补 @Tag/@Operation/@ApiResponse 注解，825 测试全通过
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
