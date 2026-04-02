@@ -326,6 +326,58 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 
 ---
 
+### `GET /api/v1/rag/documents/{id}/versions`
+
+获取文档版本历史（content_hash 变更自动记录，最新在前）。
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `page` | int | 0 | 页码 |
+| `size` | int | 20 | 每页数量 |
+
+**响应：**
+
+```json
+{
+  "documentId": 1,
+  "totalVersions": 5,
+  "page": 0,
+  "size": 20,
+  "versions": [
+    {
+      "versionNumber": 5,
+      "contentHash": "a1b2c3...",
+      "title": "Spring AI 介绍",
+      "size": 2048,
+      "changeType": "CONTENT_CHANGED",
+      "createdAt": "2026-04-03T00:30:00Z"
+    }
+  ]
+}
+```
+
+---
+
+### `GET /api/v1/rag/documents/{id}/versions/{versionNumber}`
+
+获取文档指定版本详情（含内容快照）。
+
+**响应：**
+
+```json
+{
+  "versionNumber": 3,
+  "contentHash": "d4e5f6...",
+  "title": "Spring AI 介绍",
+  "content": "版本 3 的完整内容...",
+  "size": 1024,
+  "changeType": "INITIAL",
+  "createdAt": "2026-04-02T10:00:00Z"
+}
+```
+
+---
+
 ## Collections — 知识库管理
 
 ### `POST /api/v1/rag/collections`

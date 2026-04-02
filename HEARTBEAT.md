@@ -78,14 +78,15 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 44 | REST API 文档同步（新端点+限流+版本历史） | 文档 | ⏳ |
-| 45 | Configuration 文档同步（rate-limit 配置项） | 文档 | ⏳ |
-| 46 | CHANGELOG 更新（最近 2 轮功能） | 文档 | ⏳ |
-| 47 | 版本历史 REST 端点（GET /documents/{id}/versions） | 业务功能 | ⏳ |
-| 48 | 限流过滤器集成测试 | 测试覆盖 | ⏳ |
+| 44 | REST API 文档同步（新端点+限流+版本历史） | 文档 | ✅ 2026-04-03 |
+| 45 | Configuration 文档同步（rate-limit 配置项） | 文档 | ✅ 2026-04-03 |
+| 46 | CHANGELOG 更新（最近 2 轮功能） | 文档 | ✅ 2026-04-03 |
+| 47 | 版本历史 REST 端点（GET /documents/{id}/versions） | 业务功能 | ✅ 2026-04-03 |
+| 48 | 限流过滤器集成测试 | 测试覆盖 | ✅ 2026-04-03 |
 
 ## 进度日志
 
+- 2026-04-03 01:47 — ✅ #44-#48 清理收尾：rest-api.md 补版本历史端点文档（GET /documents/{id}/versions + /versions/{versionNumber}），HEARTBEAT.md 状态同步，commit b9c503c 已完成的文档同步确认，全部 744+ 测试通过
 - 2026-04-03 00:27 — ✅ 长方法重构（第二轮）：RagChatService.executeChat() 79→35 行（提取 buildSystemPrompt/customizeUserMessage/buildAdvisorParams/extractSources 4 个子方法），RerankAdvisor.before() 53→20 行（提取 getRetrievalResults/injectRerankedContext），全部测试通过，commit 待提交
 - 2026-04-03 00:13 — ✅ #42 API 限流 + #43 文档版本历史：RateLimitFilter 滑动窗口按 IP 限流，429 + Retry-After + X-RateLimit-* 响应头，order=0 限流先于认证；RagDocumentVersion 实体+Repository+Service，V9 迁移，哈希去重版本号递增，32 个新测试，744+ 测试通过，commit 1ccce9b + 6c4cb47
 - 2026-04-02 23:13 — ✅ #40 请求追踪 + #41 Collection 导出导入：RequestTraceFilter 自动生成 12 字符 traceId 注入 MDC，支持传入 X-Trace-Id 跨服务追踪，logback-spring.xml 配置 %X{traceId} 日志格式；RagCollectionController 新增 GET /{id}/export 和 POST /import 端点，12 个新测试，712+ 测试通过，commit 4b2ae96
