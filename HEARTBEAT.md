@@ -65,9 +65,11 @@
 | 36 | Docker 支持（Dockerfile + docker-compose.yml） | 部署 | ✅ 2026-04-02 |
 | 37 | CI 增强（PostgreSQL 服务 + JaCoCo 覆盖率上报） | CI/CD | ✅ 2026-04-02 |
 | 38 | 全局异常处理统一（10 处 catch Exception） | 代码质量 | ✅ 2026-04-02 |
-| 39 | 嵌入缓存（避免重复嵌入未变更文档） | 性能优化 | 📋 |
+| 39 | 嵌入缓存（避免重复嵌入未变更文档） | 性能优化 | ✅ 2026-04-02 |
 
 ## 进度日志
+
+- 2026-04-02 21:04 — ✅ #39 嵌入缓存：RagDocument 新增 embeddedContentHash 字段（V8 迁移），checkEmbeddingCache 增强为三层检查（状态→内容哈希→嵌入记录），嵌入完成后自动更新 embeddedContentHash，6 个新测试覆盖缓存命中/失效/强制重嵌入/哈希更新，712+ 测试通过，commit 4a678c9
 
 - 2026-04-02 20:30 — ✅ #38 全局异常处理统一：SpringAiConfig 收窄为 BeansException、ModelComparisonService 收窄为 InterruptedException|ExecutionException|TimeoutException，12 处 catch(Exception) 加注释说明意图，顺带修复 RagDocumentControllerTest force 参数和 SpringAiConfigTest 异常类型，712 测试通过，commit 7b82ec4
 - 2026-04-02 18:48 — ✅ #37 CI 增强：GitHub Actions 添加 pgvector 服务容器+测试环境变量+JaCoCo 覆盖率报告上传+测试结果归档，712 测试通过，commit 7acb8c7
