@@ -50,43 +50,13 @@ public class BatchDocumentService {
         int created = 0, duplicated = 0, failed = 0;
 
         for (int i = 0; i < requests.size(); i++) {
-            DocumentRequest req = requests.get(i);
-            Map<String, Object> itemResult = new HashMap<>();
-            itemResult.put("index", i);
-            itemResult.put("title", req.getTitle());
-
-            try {
-                String content = req.getContent();
-                String contentHash = computeSha256(content);
-
-                List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
-                if (!existing.isEmpty()) {
-                    RagDocument dup = existing.get(0);
-                    itemResult.put("status", "DUPLICATE");
-                    itemResult.put("id", dup.getId());
-                    itemResult.put("message", "内容已存在");
-                    duplicated++;
-                } else {
-                    RagDocument doc = new RagDocument();
-                    doc.setTitle(req.getTitle());
-                    doc.setContent(content);
-                    doc.setSource(req.getSource());
-                    doc.setDocumentType(req.getDocumentType());
-                    doc.setMetadata(req.getMetadata());
-                    doc.setContentHash(contentHash);
-                    doc = documentRepository.save(doc);
-
-                    itemResult.put("status", "CREATED");
-                    itemResult.put("id", doc.getId());
-                    created++;
-                }
-            } catch (Exception e) {
-                log.error("Failed to create document at index {}: {}", i, e.getMessage());
-                itemResult.put("status", "FAILED");
-                itemResult.put("error", e.getMessage());
-                failed++;
+            Map<String, Object> itemResult = createSingleDocument(requests.get(i), i);
+            String status = (String) itemResult.get("status");
+            switch (status) {
+                case "CREATED" -> created++;
+                case "DUPLICATE" -> duplicated++;
+                default -> failed++;
             }
-
             results.add(itemResult);
         }
 
@@ -101,6 +71,42 @@ public class BatchDocumentService {
                         "failed", failed
                 )
         );
+    }
+
+    private Map<String, Object> createSingleDocument(DocumentRequest req, int index) {
+        Map<String, Object> itemResult = new HashMap<>();
+        itemResult.put("index", index);
+        itemResult.put("title", req.getTitle());
+
+        try {
+            String content = req.getContent();
+            String contentHash = computeSha256(content);
+
+            List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
+            if (!existing.isEmpty()) {
+                RagDocument dup = existing.get(0);
+                itemResult.put("status", "DUPLICATE");
+                itemResult.put("id", dup.getId());
+                itemResult.put("message", "内容已存在");
+            } else {
+                RagDocument doc = new RagDocument();
+                doc.setTitle(req.getTitle());
+                doc.setContent(content);
+                doc.setSource(req.getSource());
+                doc.setDocumentType(req.getDocumentType());
+                doc.setMetadata(req.getMetadata());
+                doc.setContentHash(contentHash);
+                doc = documentRepository.save(doc);
+
+                itemResult.put("status", "CREATED");
+                itemResult.put("id", doc.getId());
+            }
+        } catch (Exception e) {
+            log.error("Failed to create document at index {}: {}", index, e.getMessage());
+            itemResult.put("status", "FAILED");
+            itemResult.put("error", e.getMessage());
+        }
+        return itemResult;
     }
 
     /**

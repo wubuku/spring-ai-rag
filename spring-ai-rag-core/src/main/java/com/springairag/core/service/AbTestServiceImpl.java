@@ -192,43 +192,12 @@ public class AbTestServiceImpl implements AbTestService {
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
 
         List<RagAbResult> results = resultRepository.findByExperimentId(experimentId);
-
         Map<String, List<RagAbResult>> resultsByVariant = results.stream()
                 .collect(Collectors.groupingBy(RagAbResult::getVariantName));
 
         Map<String, VariantStats> variantStatsMap = new HashMap<>();
-
-        for (Map.Entry<String, List<RagAbResult>> entry : resultsByVariant.entrySet()) {
-            String variantName = entry.getKey();
-            List<RagAbResult> variantResults = entry.getValue();
-
-            List<Double> metricValues = new ArrayList<>();
-            int converted = 0;
-
-            for (RagAbResult r : variantResults) {
-                if (r.getMetrics() != null && experiment.getTargetMetric() != null) {
-                    Double value = r.getMetrics().get(experiment.getTargetMetric());
-                    if (value != null) {
-                        metricValues.add(value);
-                    }
-                }
-                if (Boolean.TRUE.equals(r.getIsConverted())) {
-                    converted++;
-                }
-            }
-
-            double mean = metricValues.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
-            double variance = calculateVariance(metricValues, mean);
-
-            VariantStats stats = new VariantStats();
-            stats.setVariantName(variantName);
-            stats.setSampleSize(variantResults.size());
-            stats.setMeanMetric(mean);
-            stats.setVariance(variance);
-            stats.setStdDev(Math.sqrt(variance));
-            stats.setConversionRate(variantResults.isEmpty() ? 0 : (double) converted / variantResults.size());
-
-            variantStatsMap.put(variantName, stats);
+        for (var entry : resultsByVariant.entrySet()) {
+            variantStatsMap.put(entry.getKey(), calculateVariantStats(entry.getKey(), entry.getValue(), experiment));
         }
 
         ExperimentAnalysis analysis = new ExperimentAnalysis();
@@ -240,8 +209,33 @@ public class AbTestServiceImpl implements AbTestService {
         if (variantStatsMap.size() >= 2) {
             determineWinner(analysis);
         }
-
         return analysis;
+    }
+
+    private VariantStats calculateVariantStats(String variantName, List<RagAbResult> variantResults,
+                                                RagAbExperiment experiment) {
+        List<Double> metricValues = new ArrayList<>();
+        int converted = 0;
+
+        for (RagAbResult r : variantResults) {
+            if (r.getMetrics() != null && experiment.getTargetMetric() != null) {
+                Double value = r.getMetrics().get(experiment.getTargetMetric());
+                if (value != null) metricValues.add(value);
+            }
+            if (Boolean.TRUE.equals(r.getIsConverted())) converted++;
+        }
+
+        double mean = metricValues.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double variance = calculateVariance(metricValues, mean);
+
+        VariantStats stats = new VariantStats();
+        stats.setVariantName(variantName);
+        stats.setSampleSize(variantResults.size());
+        stats.setMeanMetric(mean);
+        stats.setVariance(variance);
+        stats.setStdDev(Math.sqrt(variance));
+        stats.setConversionRate(variantResults.isEmpty() ? 0 : (double) converted / variantResults.size());
+        return stats;
     }
 
     @Override

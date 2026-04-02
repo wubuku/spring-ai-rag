@@ -117,45 +117,48 @@ public class QueryRewritingService {
         }
 
         try {
-            int maxRewrites = config.getLlmMaxRewrites();
-            String prompt = String.format(
-                    "你是一个查询改写助手。将用户查询改写为 %d 个不同的表述，用于提升搜索召回率。" +
-                    "要求：\n" +
-                    "1. 每行一条改写结果\n" +
-                    "2. 保持原始意图不变\n" +
-                    "3. 使用不同的表达方式、同义词或句式\n" +
-                    "4. 不要编号，不要解释\n\n" +
-                    "原始查询：%s",
-                    maxRewrites, originalQuery);
-
-            ChatClient client = ChatClient.builder(chatModel).build();
-            String response = client.prompt(prompt).call().content();
-
+            String prompt = buildRewritePrompt(originalQuery);
+            String response = callLlm(prompt);
             if (response == null || response.isBlank()) {
                 log.warn("LLM 返回空响应");
                 return List.of();
             }
 
-            List<String> rewritten = new ArrayList<>();
-            for (String line : response.split("\n")) {
-                String cleaned = line.trim()
-                        .replaceAll("^[-*•\\d.]+\\s*", "")  // 去除列表标记
-                        .trim();
-                if (!cleaned.isEmpty() && !cleaned.equals(originalQuery)) {
-                    rewritten.add(cleaned);
-                }
-            }
-
+            List<String> rewritten = parseRewriteResponse(response, originalQuery);
             log.info("LLM 改写: \"{}\" → {} 条: {}",
                     originalQuery, rewritten.size(),
                     rewritten.size() > 3 ? rewritten.subList(0, 3) + "..." : rewritten);
-
-            return rewritten.stream().limit(maxRewrites).toList();
+            return rewritten.stream().limit(config.getLlmMaxRewrites()).toList();
 
         } catch (Exception e) {
             log.error("LLM 改写失败，降级到规则模式: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    private String buildRewritePrompt(String originalQuery) {
+        return String.format(
+                "你是一个查询改写助手。将用户查询改写为 %d 个不同的表述，用于提升搜索召回率。" +
+                "要求：\n1. 每行一条改写结果\n2. 保持原始意图不变\n" +
+                "3. 使用不同的表达方式、同义词或句式\n4. 不要编号，不要解释\n\n" +
+                "原始查询：%s",
+                config.getLlmMaxRewrites(), originalQuery);
+    }
+
+    private String callLlm(String prompt) {
+        ChatClient client = ChatClient.builder(chatModel).build();
+        return client.prompt(prompt).call().content();
+    }
+
+    private List<String> parseRewriteResponse(String response, String originalQuery) {
+        List<String> rewritten = new ArrayList<>();
+        for (String line : response.split("\n")) {
+            String cleaned = line.trim().replaceAll("^[-*•\\d.]+\\s*", "").trim();
+            if (!cleaned.isEmpty() && !cleaned.equals(originalQuery)) {
+                rewritten.add(cleaned);
+            }
+        }
+        return rewritten;
     }
 
     /**

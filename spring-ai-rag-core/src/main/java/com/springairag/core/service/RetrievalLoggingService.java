@@ -57,25 +57,25 @@ public class RetrievalLoggingService {
             entry.setRerankTimeMs(rerankTimeMs);
             entry.setTotalTimeMs(vectorSearchTimeMs + fulltextSearchTimeMs + rerankTimeMs);
             entry.setResultCount(results != null ? results.size() : 0);
-
-            // 提取结果得分
-            if (results != null && !results.isEmpty()) {
-                Map<String, Object> scores = new LinkedHashMap<>();
-                for (int i = 0; i < results.size(); i++) {
-                    RetrievalResult r = results.get(i);
-                    String key = r.getDocumentId() != null ? r.getDocumentId() : "idx_" + i;
-                    scores.put(key, r.getScore());
-                }
-                entry.setResultScores(scores);
-            }
+            entry.setResultScores(extractResultScores(results));
 
             repository.save(entry);
             log.debug("[RetrievalLogging] 已记录检索日志: query=\"{}\", strategy={}, total={}ms, results={}",
                     query, strategy, entry.getTotalTimeMs(), entry.getResultCount());
         } catch (Exception e) {
-            // 日志记录失败不应影响正常业务流程
             log.warn("[RetrievalLogging] 记录检索日志失败: {}", e.getMessage());
         }
+    }
+
+    private Map<String, Object> extractResultScores(List<RetrievalResult> results) {
+        if (results == null || results.isEmpty()) return null;
+        Map<String, Object> scores = new LinkedHashMap<>();
+        for (int i = 0; i < results.size(); i++) {
+            RetrievalResult r = results.get(i);
+            String key = r.getDocumentId() != null ? r.getDocumentId() : "idx_" + i;
+            scores.put(key, r.getScore());
+        }
+        return scores;
     }
 
     /**

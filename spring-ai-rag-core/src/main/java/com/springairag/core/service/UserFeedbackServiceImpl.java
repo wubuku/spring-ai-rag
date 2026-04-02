@@ -55,50 +55,41 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
     @Override
     @Transactional(readOnly = true)
     public FeedbackStats getStats(ZonedDateTime startDate, ZonedDateTime endDate) {
-        FeedbackStats stats = new FeedbackStats();
-
         long thumbsUp = feedbackRepository.countByFeedbackTypeAndCreatedAtBetween("THUMBS_UP", startDate, endDate);
         long thumbsDown = feedbackRepository.countByFeedbackTypeAndCreatedAtBetween("THUMBS_DOWN", startDate, endDate);
         long total = thumbsUp + thumbsDown;
 
+        List<RagUserFeedback> allFeedbacks = feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+
         // 统计 RATING 类型
-        List<RagUserFeedback> ratings = feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate)
-                .stream()
+        List<RagUserFeedback> ratings = allFeedbacks.stream()
                 .filter(f -> "RATING".equals(f.getFeedbackType()) && f.getRating() != null)
                 .toList();
 
-        double avgRating = 0.0;
-        double avgDwellTime = 0.0;
-        long dwellCount = 0;
+        double avgRating = ratings.stream().mapToInt(RagUserFeedback::getRating).average().orElse(0.0);
+        double[] dwellStats = calculateDwellStats(allFeedbacks);
 
-        for (RagUserFeedback f : ratings) {
-            avgRating += f.getRating();
-            if (f.getDwellTimeMs() != null) {
-                avgDwellTime += f.getDwellTimeMs();
-                dwellCount++;
-            }
-        }
-
-        // 也统计 thumbs up/down 的停留时间
-        List<RagUserFeedback> allFeedbacks = feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-        double totalDwellTime = 0;
-        long totalDwellCount = 0;
-        for (RagUserFeedback f : allFeedbacks) {
-            if (f.getDwellTimeMs() != null) {
-                totalDwellTime += f.getDwellTimeMs();
-                totalDwellCount++;
-            }
-        }
-
+        FeedbackStats stats = new FeedbackStats();
         stats.setTotalFeedbacks(total + ratings.size());
         stats.setThumbsUp(thumbsUp);
         stats.setThumbsDown(thumbsDown);
         stats.setRatings(ratings.size());
-        stats.setAvgRating(ratings.size() > 0 ? avgRating / ratings.size() : 0.0);
+        stats.setAvgRating(avgRating);
         stats.setSatisfactionRate(total > 0 ? (double) thumbsUp / total : 0.0);
-        stats.setAvgDwellTimeMs(totalDwellCount > 0 ? totalDwellTime / totalDwellCount : 0.0);
-
+        stats.setAvgDwellTimeMs(dwellStats[0]);
         return stats;
+    }
+
+    private double[] calculateDwellStats(List<RagUserFeedback> feedbacks) {
+        double totalDwellTime = 0;
+        long count = 0;
+        for (RagUserFeedback f : feedbacks) {
+            if (f.getDwellTimeMs() != null) {
+                totalDwellTime += f.getDwellTimeMs();
+                count++;
+            }
+        }
+        return new double[]{count > 0 ? totalDwellTime / count : 0.0, count};
     }
 
     @Override

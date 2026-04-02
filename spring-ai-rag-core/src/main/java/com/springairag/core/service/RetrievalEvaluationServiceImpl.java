@@ -84,46 +84,43 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         }
 
         Set<Long> relevantSet = new HashSet<>(relevant);
+        int relevantCount = relevantSet.size();
 
-        // Precision@K 和 Recall@K
+        // 累计命中计数，计算 Precision@K / Recall@K
         Map<Integer, Double> precisionAtK = new LinkedHashMap<>();
         Map<Integer, Double> recallAtK = new LinkedHashMap<>();
-
         int hitCount = 0;
-        int relevantCount = relevantSet.size();
 
         for (int i = 0; i < Math.min(k, retrieved.size()); i++) {
             if (relevantSet.contains(retrieved.get(i))) {
                 hitCount++;
             }
-            int position = i + 1;
-            precisionAtK.put(position, (double) hitCount / position);
-            recallAtK.put(position, (double) hitCount / relevantCount);
+            int pos = i + 1;
+            precisionAtK.put(pos, (double) hitCount / pos);
+            recallAtK.put(pos, (double) hitCount / relevantCount);
         }
 
         // 补齐未达到 K 的位置
         for (int i = retrieved.size(); i < k; i++) {
-            int position = i + 1;
-            precisionAtK.putIfAbsent(position, precisionAtK.getOrDefault(i, 0.0));
-            recallAtK.putIfAbsent(position, recallAtK.getOrDefault(i, (double) hitCount / relevantCount));
+            int pos = i + 1;
+            precisionAtK.putIfAbsent(pos, precisionAtK.getOrDefault(i, 0.0));
+            recallAtK.putIfAbsent(pos, recallAtK.getOrDefault(i, (double) hitCount / relevantCount));
         }
 
-        // MRR: 第一个相关结果的排名倒数
-        double mrr = 0.0;
-        for (int i = 0; i < retrieved.size(); i++) {
-            if (relevantSet.contains(retrieved.get(i))) {
-                mrr = 1.0 / (i + 1);
-                break;
-            }
-        }
-
-        // NDCG
+        double mrr = calculateMRR(retrieved, relevantSet);
         double ndcg = calculateNDCG(retrieved, relevantSet, k);
-
-        // Hit Rate
         double hitRate = hitCount > 0 ? 1.0 : 0.0;
 
         return new EvaluationMetrics(precisionAtK, recallAtK, mrr, ndcg, hitRate);
+    }
+
+    private double calculateMRR(List<Long> retrieved, Set<Long> relevantSet) {
+        for (int i = 0; i < retrieved.size(); i++) {
+            if (relevantSet.contains(retrieved.get(i))) {
+                return 1.0 / (i + 1);
+            }
+        }
+        return 0.0;
     }
 
     /**
@@ -208,49 +205,54 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
             return metrics;
         }
 
+        int count = evaluations.size();
+        Accumulator acc = accumulateMetrics(evaluations);
+        applyAverages(metrics, acc, count);
+        return metrics;
+    }
+
+    private record Accumulator(
+            double sumMrr, double sumNdcg, double sumHitRate,
+            Map<Integer, Double> sumPrecisionAtK, Map<Integer, Double> sumRecallAtK
+    ) {}
+
+    private Accumulator accumulateMetrics(List<RagRetrievalEvaluation> evaluations) {
         double sumMrr = 0, sumNdcg = 0, sumHitRate = 0;
         Map<Integer, Double> sumPrecisionAtK = new HashMap<>();
         Map<Integer, Double> sumRecallAtK = new HashMap<>();
-        int count = 0;
 
         for (RagRetrievalEvaluation e : evaluations) {
             if (e.getMrr() != null) sumMrr += e.getMrr();
             if (e.getNdcg() != null) sumNdcg += e.getNdcg();
             if (e.getHitRate() != null) sumHitRate += e.getHitRate();
-            count++;
 
             if (e.getPrecisionAtK() != null) {
-                for (Map.Entry<Integer, Double> entry : e.getPrecisionAtK().entrySet()) {
+                for (var entry : e.getPrecisionAtK().entrySet()) {
                     sumPrecisionAtK.merge(entry.getKey(), entry.getValue(), Double::sum);
                 }
             }
             if (e.getRecallAtK() != null) {
-                for (Map.Entry<Integer, Double> entry : e.getRecallAtK().entrySet()) {
+                for (var entry : e.getRecallAtK().entrySet()) {
                     sumRecallAtK.merge(entry.getKey(), entry.getValue(), Double::sum);
                 }
             }
         }
+        return new Accumulator(sumMrr, sumNdcg, sumHitRate, sumPrecisionAtK, sumRecallAtK);
+    }
 
-        if (count > 0) {
-            double c = count;
-            metrics.setAvgMrr(sumMrr / c);
-            metrics.setAvgNdcg(sumNdcg / c);
-            metrics.setAvgHitRate(sumHitRate / c);
+    private void applyAverages(AggregatedMetrics metrics, Accumulator acc, int count) {
+        double c = count;
+        metrics.setAvgMrr(acc.sumMrr() / c);
+        metrics.setAvgNdcg(acc.sumNdcg() / c);
+        metrics.setAvgHitRate(acc.sumHitRate() / c);
 
-            Map<Integer, Double> avgPrecisionAtK = new HashMap<>();
-            for (Map.Entry<Integer, Double> entry : sumPrecisionAtK.entrySet()) {
-                avgPrecisionAtK.put(entry.getKey(), entry.getValue() / c);
-            }
-            metrics.setAvgPrecisionAtK(avgPrecisionAtK);
+        Map<Integer, Double> avgPrecision = new HashMap<>();
+        acc.sumPrecisionAtK().forEach((k, v) -> avgPrecision.put(k, v / c));
+        metrics.setAvgPrecisionAtK(avgPrecision);
 
-            Map<Integer, Double> avgRecallAtK = new HashMap<>();
-            for (Map.Entry<Integer, Double> entry : sumRecallAtK.entrySet()) {
-                avgRecallAtK.put(entry.getKey(), entry.getValue() / c);
-            }
-            metrics.setAvgRecallAtK(avgRecallAtK);
-        }
-
-        return metrics;
+        Map<Integer, Double> avgRecall = new HashMap<>();
+        acc.sumRecallAtK().forEach((k, v) -> avgRecall.put(k, v / c));
+        metrics.setAvgRecallAtK(avgRecall);
     }
 
     private String toJson(List<Long> list) {

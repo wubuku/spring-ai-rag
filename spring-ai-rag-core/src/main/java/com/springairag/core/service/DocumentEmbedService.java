@@ -174,62 +174,13 @@ public class DocumentEmbedService {
         int success = 0, failed = 0, skipped = 0;
 
         for (Long id : documentIds) {
-            Map<String, Object> itemResult = new HashMap<>();
-            itemResult.put("documentId", id);
-
-            try {
-                RagDocument doc = documentRepository.findById(id).orElse(null);
-                if (doc == null) {
-                    itemResult.put("status", "NOT_FOUND");
-                    skipped++;
-                    results.add(itemResult);
-                    continue;
-                }
-
-                String content = doc.getContent();
-                if (content == null || content.isBlank()) {
-                    itemResult.put("status", "SKIPPED");
-                    itemResult.put("reason", "内容为空");
-                    skipped++;
-                    results.add(itemResult);
-                    continue;
-                }
-
-                List<TextChunk> chunks = chunker.split(content);
-                if (chunks.isEmpty()) {
-                    itemResult.put("status", "SKIPPED");
-                    itemResult.put("reason", "内容太短，无需分块");
-                    skipped++;
-                    results.add(itemResult);
-                    continue;
-                }
-
-                doc.setProcessingStatus("PROCESSING");
-                documentRepository.save(doc);
-
-                embeddingRepository.deleteByDocumentId(id);
-
-                List<String> texts = chunks.stream().map(TextChunk::text).toList();
-                List<EmbeddingBatchService.EmbeddingResult> embResults =
-                        embeddingBatchService.createEmbeddingsBatch(texts);
-
-                int stored = storeEmbeddings(id, chunks, embResults);
-
-                doc.setProcessingStatus("COMPLETED");
-                documentRepository.save(doc);
-
-                itemResult.put("status", "COMPLETED");
-                itemResult.put("chunksCreated", chunks.size());
-                itemResult.put("embeddingsStored", stored);
-                success++;
-
-            } catch (Exception e) {
-                log.error("Failed to embed document {}: {}", id, e.getMessage());
-                itemResult.put("status", "FAILED");
-                itemResult.put("error", e.getMessage());
-                failed++;
+            Map<String, Object> itemResult = embedSingleDocument(id);
+            String status = (String) itemResult.get("status");
+            switch (status) {
+                case "COMPLETED" -> success++;
+                case "FAILED" -> failed++;
+                default -> skipped++;
             }
-
             results.add(itemResult);
         }
 
@@ -244,6 +195,57 @@ public class DocumentEmbedService {
                         "skipped", skipped
                 )
         );
+    }
+
+    /**
+     * 单文档嵌入处理（供 batchEmbedDocuments 调用）
+     */
+    private Map<String, Object> embedSingleDocument(Long id) {
+        Map<String, Object> itemResult = new HashMap<>();
+        itemResult.put("documentId", id);
+
+        try {
+            RagDocument doc = documentRepository.findById(id).orElse(null);
+            if (doc == null) {
+                itemResult.put("status", "NOT_FOUND");
+                return itemResult;
+            }
+
+            String content = doc.getContent();
+            if (content == null || content.isBlank()) {
+                itemResult.put("status", "SKIPPED");
+                itemResult.put("reason", "内容为空");
+                return itemResult;
+            }
+
+            List<TextChunk> chunks = chunker.split(content);
+            if (chunks.isEmpty()) {
+                itemResult.put("status", "SKIPPED");
+                itemResult.put("reason", "内容太短，无需分块");
+                return itemResult;
+            }
+
+            doc.setProcessingStatus("PROCESSING");
+            documentRepository.save(doc);
+            embeddingRepository.deleteByDocumentId(id);
+
+            List<String> texts = chunks.stream().map(TextChunk::text).toList();
+            List<EmbeddingBatchService.EmbeddingResult> embResults =
+                    embeddingBatchService.createEmbeddingsBatch(texts);
+            int stored = storeEmbeddings(id, chunks, embResults);
+
+            doc.setProcessingStatus("COMPLETED");
+            documentRepository.save(doc);
+
+            itemResult.put("status", "COMPLETED");
+            itemResult.put("chunksCreated", chunks.size());
+            itemResult.put("embeddingsStored", stored);
+        } catch (Exception e) {
+            log.error("Failed to embed document {}: {}", id, e.getMessage());
+            itemResult.put("status", "FAILED");
+            itemResult.put("error", e.getMessage());
+        }
+        return itemResult;
     }
 
     /**
