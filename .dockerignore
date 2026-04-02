@@ -1,0 +1,34 @@
+# 构建产物
+**/target/
+**/*.jar
+**/*.class
+
+# IDE 文件
+.idea/
+*.iml
+.vscode/
+.project
+.classpath
+
+# 版本控制
+.git/
+.gitignore
+
+# Docker 文件本身
+docker/
+
+# 文档
+docs/
+*.md
+!**/pom.xml
+
+# 测试
+**/src/test/
+
+# 环境文件
+.env
+.env.*
+
+# OS 文件
+.DS_Store
+Thumbs.db
