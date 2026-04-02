@@ -200,10 +200,10 @@
 |---|--------|------|------|
 | 70 | API 版本管理基础设施（/api/v1/ + /api/v2/ 共存） | 架构 | ⏳ |
 | 71 | 国际化框架（MessageSource + 错误消息外部化） | 功能 | ✅ 2026-04-03 |
-| 72 | 缓存策略深度优化（Caffeine L1 + TTL/LRU 驱逐） | 性能 | ⏳ |
+| 72 | 缓存策略深度优化（Caffeine L1 + TTL/LRU 驱逐） | 性能 | ✅ 2026-04-03 |
 | 73 | 速率限制增强（per-user + 可配置策略） | 安全 | ⏳ |
 | 74 | 分布式追踪增强（采样策略 + trace 传播） | 可观测性 | ⏳ |
-| 75 | CORS 安全配置 + 输入净化 | 安全 | ⏳ |
+| 75 | CORS 安全配置 + 输入净化 | 安全 | ✅ 2026-04-03 |
 | 76 | 文档同步（新功能+配置+CHANGELOG） | 文档 | ⏳ |
 | 77 | JaCoCo 覆盖率报告 + 差距分析 | 质量 | ⏳ |
 | 78 | 性能基准测试增强（并发+大数据集） | 性能 | ⏳ |
@@ -221,3 +221,14 @@
 ## 永不停止
 
 待办清空后：审查 IMPLEMENTATION_COMPARISON.md → 扫描 TODO/FIXME → 检查覆盖率 → 性能优化 → 提新建议。没有可做？重构长方法、提取重复、改善命名。
+
+## 进度日志（24h 改进计划）
+
+- 2026-04-03 07:08 — ✅ #70 API 版本管理：@ApiVersion 注解 + ApiVersionRequestMappingHandlerMapping + ApiVersionConfig，9 个 Controller 迁移 @ApiVersion("v1")，5 个新测试，830 测试通过，commit 8fe4990
+- 2026-04-03 07:13 — ✅ 修复 surefire NoClassDefFoundError：配置 forkCount=0 禁用 fork 模式，839 测试通过，commit 133964e
+- 2026-04-03 07:29 — ✅ #71 国际化框架：MessageSourceConfig + MessageResolver + messages.properties/en/zh_CN，GlobalExceptionHandler 注入 MessageResolver 错误消息国际化，GlobalExceptionHandlerTest 适配，commit 4ef5da0
+- 2026-04-03 07:38 — ✅ #72 缓存策略配置外部化：RagProperties.Cache 内部类 + CacheConfig 注入 RagProperties，Caffeine 参数从 rag.cache.* 配置读取，commit 90105f8
+- 2026-04-03 07:05 — ✅ #75 CORS 安全配置（已含在 #70 commit 中）
+
+24h 改进计划核心项完成：API 版本管理 + 国际化 + 缓存配置外部化 + CORS + surefire 修复
+840 测试全通过，代码库健康
