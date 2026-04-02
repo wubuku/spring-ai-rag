@@ -10,6 +10,35 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: spring_ai_rag_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      OPENAI_API_KEY: test-key
+      OPENAI_BASE_URL: http://localhost:8080
+      OPENAI_MODEL: test-model
+      LLM_PROVIDER: openai
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_DATABASE: spring_ai_rag_test
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/spring_ai_rag_test
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +52,38 @@ jobs:
       - name: Build
         run: mvn clean compile -B
 
-      - name: Test
+      - name: Test with JaCoCo
         run: mvn test -B
 
       - name: Package
         run: mvn package -DskipTests -B
+
+      - name: Upload JaCoCo coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jacoco-reports
+          path: '**/target/site/jacoco/'
+          retention-days: 14
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/target/surefire-reports/*.xml'
+          retention-days: 14
+
+      - name: Coverage summary
+        if: always()
+        run: |
+          echo "## JaCoCo Coverage Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Module | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          for report in spring-ai-rag-*/target/site/jacoco/index.html; do
+            if [ -f "$report" ]; then
+              module=$(echo "$report" | cut -d/ -f1)
+              echo "| $module | ✅ Report generated |" >> $GITHUB_STEP_SUMMARY
+            fi
+          done
