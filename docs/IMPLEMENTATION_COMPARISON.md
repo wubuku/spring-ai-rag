@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-02 — 实施规划 Phase 1-5 全部完成，100 源文件 + 61 测试文件，180+ 测试通过
+> **最后更新**: 2026-04-02 14:30 — 103 源文件 + 68 测试文件，630 测试全通过，Phase 1-5 + 改进周期全部完成
 
 ---
 
@@ -17,7 +17,7 @@
 | Phase 4 | 领域扩展示例（DomainRagExtension + demo） | ✅ 完成 |
 | Phase 5 | 运维支持（监控/健康检查/告警/性能） | ✅ 完成 |
 
-**已完成改进项**: P1 × 7 + P2 × 9 + P3 × 2 = 全部 18 项
+**已完成改进项**: P1 × 7 + P2 × 9 + P3 × 2 = 全部 18 项 + 改进周期（重构/覆盖率/文档）6 项
 
 ---
 
@@ -333,16 +333,16 @@
 
 ---
 
-## 🚀 Phase 6 建议（后实施规划）
+## 🚀 Phase 6 进展
 
-Phase 1-5 全部完成后，以下方向可继续推进：
+Phase 1-5 + 改进周期全部完成后，Phase 6 建议已推进：
 
-| 优先级 | 改进项 | 说明 |
+| 优先级 | 改进项 | 状态 |
 |--------|--------|------|
-| P1 | RagDocumentController 重构 | 668 行最大文件，拆分 BatchDocumentService + EmbedDocumentService |
-| P2 | 多模型并行对比测试 | 验证 DeepSeek/智谱/Anthropic 的 RAG 效果差异 |
-| P2 | 查询改写 LLM 辅助模式 | 当前是规则+词典，可增加 LLM 自动改写路径 |
-| P2 | 检索结果缓存策略优化 | Caffeine 缓存已集成，需评估命中率和 TTL 策略 |
-| P3 | Docker Compose 一键部署 | PostgreSQL + App + Nginx 编排 |
-| P3 | API 版本管理策略 | /api/v1/ 设计已有，需考虑 v2 兼容策略 |
-| P3 | 国际化支持 | 错误消息、文档支持英文 |
+| P1 | RagDocumentController 重构 | ✅ 668→294 行（-56%），拆分 DocumentEmbedService + BatchDocumentService |
+| P2 | 多模型并行对比测试 | ✅ ModelComparisonService + 8 测试 |
+| P2 | 查询改写 LLM 辅助模式 | ✅ llmRewrite() 规则+LLM 混合模式 |
+| P2 | 检索结果缓存策略优化 | 📋 Caffeine 已集成，需评估命中率 |
+| P3 | Docker Compose 一键部署 | 📋 |
+| P3 | API 版本管理策略 | 📋 |
+| P3 | 国际化支持 | 📋 |

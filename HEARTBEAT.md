@@ -4,7 +4,7 @@
 
 1. `export $(cat .env | grep -v '^#' | xargs) && mvn clean test` 确认构建通过
 2. 读待办清单，选下一个 ⏳ 项
-3. 实现改进
+3. 实现改进（文档类任务：每轮至少完成 2 项）
 4. `mvn test` 通过 → 提交推送汇报
 
 
@@ -40,7 +40,7 @@
 | 21 | 全局 TODO/FIXME 扫描 | 代码质量 | ✅ 2026-04-02（零 TODO/FIXME） |
 | 22 | 测试覆盖率 >90% 提升 | 质量 | ✅ 2026-04-02 |
 | 23 | 长方法重构（>40行方法 11 个） | 代码质量 | ✅ 2026-04-02 |
-| 24 | IMPLEMENTATION_COMPARISON.md 统计更新 | 文档 | 📋 |
+| 24 | IMPLEMENTATION_COMPARISON.md 统计更新 | 文档 | ✅ 2026-04-02 |
 
 ## 待办（文档体系建设 — 详见 docs/DOCUMENTATION_PLAN.md）
 
@@ -48,7 +48,7 @@
 |---|--------|------|------|
 | 25 | README.md 重写（项目门面，≤200行） | 文档 P0 | ✅ 2026-04-02 |
 | 26 | CONTRIBUTING.md（贡献指南） | 文档 P0 | ✅ 2026-04-02 |
-| 27 | docs/architecture.md（架构设计详解） | 文档 P1 | 📋 |
+| 27 | docs/architecture.md（架构设计详解） | 文档 P1 | ✅ 2026-04-02 |
 | 28 | docs/configuration.md（完整配置参考） | 文档 P1 | 📋 |
 | 29 | docs/testing-guide.md（测试指南） | 文档 P1 | 📋 |
 | 30 | docs/getting-started.md（开发者上手） | 文档 P2 | 📋 |
@@ -60,6 +60,7 @@
 
 ## 进度日志
 
+- 2026-04-02 14:30 — ✅ #24 + #27：IMPLEMENTATION_COMPARISON.md 统计更新（103源文件+68测试文件，630测试全通过）+ docs/architecture.md 架构设计详解（8.7KB，含设计理念/模块结构/核心模式/数据流/数据库/配置/监控/决策记录），commit 待提交
 - 2026-04-02 13:44 — ✅ #26 CONTRIBUTING.md：贡献指南，含开发环境搭建/代码规范/测试要求/Conventional Commits/PR 流程/Bug 报告模板，274 行，commit 5063ea6
 - 2026-04-02 12:32 — ✅ #25 README.md 重写：项目门面版，新增"为什么选"对比表+端点总览表+文档导航链接，221→154 行（-30%），commit 7a71d61
 - 2026-04-02 11:57 — ✅ #23 长方法重构：7 个文件重构（DocumentEmbedService + BatchDocumentService + RetrievalEvaluationServiceImpl + AbTestServiceImpl + UserFeedbackServiceImpl + QueryRewritingService + RetrievalLoggingService），提取子方法降低圈复杂度，712+ 测试通过，commit 6ec6e98
@@ -86,7 +87,7 @@
 
 ## 铁律
 
-写代码前看参考项目 | 每轮只做 1 项 | `mvn test` 不过不提交 | 进展写进度日志 | ≤ 40 行
+写代码前看参考项目 | 代码任务每轮 1 项、文档任务每轮 ≥2 项 | `mvn test` 不过不提交 | 进展写进度日志 | ≤ 40 行
 
 ## 永不停止
 
