@@ -18,23 +18,32 @@ import java.util.concurrent.TimeUnit;
  *   <li>embeddings — 嵌入向量缓存（文本 → 向量），避免重复 API 调用</li>
  *   <li>retrieval — 检索结果缓存（查询 → 结果），减少数据库压力</li>
  * </ul>
+ *
+ * <p>缓存参数通过 rag.cache.* 配置，支持运行时调整。
  */
 @Configuration
 @EnableCaching
 public class CacheConfig {
 
+    private final RagProperties ragProperties;
+
+    public CacheConfig(RagProperties ragProperties) {
+        this.ragProperties = ragProperties;
+    }
+
     /**
-     * Caffeine 缓存管理器
+     * Caffeine 缓存管理器（通用缓存）
      *
-     * <p>默认策略：最多 2000 条，写入后 30 分钟过期，记录统计信息
+     * <p>使用 rag.cache.maximum-size 和 rag.cache.expire-after-write-minutes 配置
      */
     @Bean
     @Primary
     public CacheManager cacheManager() {
+        RagProperties.Cache cache = ragProperties.getCache();
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCaffeine(Caffeine.newBuilder()
-                .maximumSize(2000)
-                .expireAfterWrite(30, TimeUnit.MINUTES)
+                .maximumSize(cache.getMaximumSize())
+                .expireAfterWrite(cache.getExpireAfterWriteMinutes(), TimeUnit.MINUTES)
                 .recordStats());
         return manager;
     }
@@ -42,14 +51,16 @@ public class CacheConfig {
     /**
      * 嵌入向量专用缓存管理器 — 更大容量、更长过期时间
      *
-     * <p>嵌入向量是无状态的（同一文本始终产生相同向量），可以长时间缓存
+     * <p>嵌入向量是无状态的（同一文本始终产生相同向量），可以长时间缓存。
+     * 使用 rag.cache.embedding-maximum-size 和 rag.cache.embedding-expire-after-write-hours 配置
      */
     @Bean("embeddingCacheManager")
     public CacheManager embeddingCacheManager() {
+        RagProperties.Cache cache = ragProperties.getCache();
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCaffeine(Caffeine.newBuilder()
-                .maximumSize(10000)
-                .expireAfterWrite(2, TimeUnit.HOURS)
+                .maximumSize(cache.getEmbeddingMaximumSize())
+                .expireAfterWrite(cache.getEmbeddingExpireAfterWriteHours(), TimeUnit.HOURS)
                 .recordStats());
         return manager;
     }
