@@ -210,30 +210,13 @@ public class DocumentEmbedService {
 
     /** 执行单文档嵌入的核心逻辑，结果写入 result Map */
     private void processSingleEmbedding(Long id, Map<String, Object> result) {
-        RagDocument doc = documentRepository.findById(id).orElse(null);
+        RagDocument doc = findAndValidateDocument(id, result);
         if (doc == null) {
-            result.put("status", "NOT_FOUND");
             return;
         }
 
-        Map<String, Object> cached = checkEmbeddingCache(doc);
-        if (cached != null) {
-            result.put("status", "CACHED");
-            result.put("embeddingsStored", cached.get("embeddingsStored"));
-            return;
-        }
-
-        String content = doc.getContent();
-        if (content == null || content.isBlank()) {
-            result.put("status", "SKIPPED");
-            result.put("reason", "内容为空");
-            return;
-        }
-
-        List<TextChunk> chunks = chunker.split(content);
-        if (chunks.isEmpty()) {
-            result.put("status", "SKIPPED");
-            result.put("reason", "内容太短，无需分块");
+        List<TextChunk> chunks = prepareChunks(doc, result);
+        if (chunks == null) {
             return;
         }
 
@@ -249,6 +232,39 @@ public class DocumentEmbedService {
         result.put("status", "COMPLETED");
         result.put("chunksCreated", chunks.size());
         result.put("embeddingsStored", stored);
+    }
+
+    /** 查找文档并检查缓存，返回 null 表示已在 result 中写入状态 */
+    private RagDocument findAndValidateDocument(Long id, Map<String, Object> result) {
+        RagDocument doc = documentRepository.findById(id).orElse(null);
+        if (doc == null) {
+            result.put("status", "NOT_FOUND");
+            return null;
+        }
+        Map<String, Object> cached = checkEmbeddingCache(doc);
+        if (cached != null) {
+            result.put("status", "CACHED");
+            result.put("embeddingsStored", cached.get("embeddingsStored"));
+            return null;
+        }
+        return doc;
+    }
+
+    /** 分块处理，返回 null 表示无需嵌入（已在 result 中写入原因） */
+    private List<TextChunk> prepareChunks(RagDocument doc, Map<String, Object> result) {
+        String content = doc.getContent();
+        if (content == null || content.isBlank()) {
+            result.put("status", "SKIPPED");
+            result.put("reason", "内容为空");
+            return null;
+        }
+        List<TextChunk> chunks = chunker.split(content);
+        if (chunks.isEmpty()) {
+            result.put("status", "SKIPPED");
+            result.put("reason", "内容太短，无需分块");
+            return null;
+        }
+        return chunks;
     }
 
     /**

@@ -87,22 +87,26 @@ public class HybridSearchAdvisor implements BaseAdvisor {
             return request;
         }
 
-        // 计时
         long startMs = System.currentTimeMillis();
-
-        // 混合检索（向量 + 全文）
         List<RetrievalResult> results = hybridRetriever.search(query, null, null, 10);
-
         long elapsedMs = System.currentTimeMillis() - startMs;
 
         log.info("[HybridSearchAdvisor] 混合检索返回 {} 条结果，耗时 {}ms，查询: \"{}\"",
                 results.size(), elapsedMs, query);
 
-        // 记录 Pipeline 可观测指标
+        recordMetricsAndLog(request, query, elapsedMs, results);
+
+        return request.mutate()
+                .context(RETRIEVAL_RESULTS_KEY, results)
+                .build();
+    }
+
+    /** 记录 Pipeline 指标和检索日志 */
+    private void recordMetricsAndLog(ChatClientRequest request, String query,
+                                      long elapsedMs, List<RetrievalResult> results) {
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("HybridSearch", elapsedMs, results.size());
 
-        // 记录检索日志（异步安全，失败不影响业务）
         if (retrievalLoggingService != null) {
             String sessionId = request.context().get("sessionId") != null
                     ? String.valueOf(request.context().get("sessionId")) : null;
@@ -110,11 +114,6 @@ public class HybridSearchAdvisor implements BaseAdvisor {
                     sessionId, query, "hybrid",
                     elapsedMs, 0L, 0L, results);
         }
-
-        // 将检索结果存入 context attributes，供后续 RerankAdvisor 使用
-        return request.mutate()
-                .context(RETRIEVAL_RESULTS_KEY, results)
-                .build();
     }
 
     @Override
