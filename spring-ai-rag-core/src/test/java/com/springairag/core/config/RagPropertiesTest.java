@@ -104,4 +104,61 @@ class RagPropertiesTest {
         assertEquals(50, props.getMemory().getMaxMessages());
         assertEquals(20, props2.getMemory().getMaxMessages(), "不同实例应独立");
     }
+
+    @Test
+    void security_defaults() {
+        RagProperties props = new RagProperties();
+        assertEquals("", props.getSecurity().getApiKey());
+        assertFalse(props.getSecurity().isEnabled());
+    }
+
+    @Test
+    void security_setters() {
+        RagProperties props = new RagProperties();
+        props.getSecurity().setApiKey("sk-test-key");
+        props.getSecurity().setEnabled(true);
+
+        assertEquals("sk-test-key", props.getSecurity().getApiKey());
+        assertTrue(props.getSecurity().isEnabled());
+    }
+
+    @Test
+    void rerank_setters() {
+        RagProperties props = new RagProperties();
+        props.getRerank().setEnabled(true);
+        props.getRerank().setDiversityWeight(0.5f);
+
+        assertTrue(props.getRerank().isEnabled());
+        assertEquals(0.5f, props.getRerank().getDiversityWeight());
+    }
+
+    @Test
+    void chunk_setters() {
+        RagProperties props = new RagProperties();
+        props.getChunk().setDefaultChunkSize(500);
+        props.getChunk().setDefaultChunkOverlap(50);
+
+        assertEquals(500, props.getChunk().getDefaultChunkSize());
+        assertEquals(50, props.getChunk().getDefaultChunkOverlap());
+    }
+
+    @Test
+    void async_setters() {
+        RagProperties props = new RagProperties();
+        props.getAsync().setCorePoolSize(8);
+        props.getAsync().setMaxPoolSize(32);
+        props.getAsync().setQueueCapacity(200);
+
+        assertEquals(8, props.getAsync().getCorePoolSize());
+        assertEquals(32, props.getAsync().getMaxPoolSize());
+        assertEquals(200, props.getAsync().getQueueCapacity());
+    }
+
+    @Test
+    void memory_setters() {
+        RagProperties props = new RagProperties();
+        props.getMemory().setMaxMessages(100);
+
+        assertEquals(100, props.getMemory().getMaxMessages());
+    }
 }
