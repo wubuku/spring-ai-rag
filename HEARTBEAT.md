@@ -98,6 +98,7 @@
 - 2026-04-03 02:40 — ✅ 主动巡检：RagChatService 构造函数 70→30 行（提取 buildChatMemory/buildSortedAdvisors），767 测试通过，commit 479aac0
 - 2026-04-03 02:57 — ✅ #54+#55 清理收尾：importCollection 50→18 行（提取 buildCollectionFromImport/importDocuments/buildDocumentFromImport 3 个子方法），IMPLEMENTATION_COMPARISON.md 统计更新（105 源文件+72 测试文件，1534 测试全通过），1534 测试通过，commit 38501a8
 
+- 2026-04-03 03:33 — 🔍 主动巡检（cron）：mvn clean compile ✅，1534 测试全部通过，扫描 3 方法 41 行（超 1 行可忽略），11 处 catch(Exception) 已注释（#38 处理过），代码质量良好无待办
 - 2026-04-03 02:10 — ✅ #49+#50 长方法重构（第二轮）：#49 HybridSearchAdvisor.before() 实际 35 行已在限制内；#50 DocumentEmbedService 提取 prepareForEmbedding/processSingleEmbedding/completeEmbedding/buildSuccessResult 4 个子方法，embedDocument 46→32 行、embedDocumentViaVectorStore 45→29 行、embedSingleDocument 47→13+35 行拆分，全部 744+ 测试通过，commit 636be84
 
 - 2026-04-03 01:47 — ✅ #44-#48 清理收尾：rest-api.md 补版本历史端点文档（GET /documents/{id}/versions + /versions/{versionNumber}），HEARTBEAT.md 状态同步，commit b9c503c 已完成的文档同步确认，全部 744+ 测试通过
