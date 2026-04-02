@@ -111,12 +111,19 @@
 |---|--------|------|------|
 | 59 | 嵌入缓存命中率指标追踪（CacheMetricsService + REST 端点） | 可观测性 | ✅ 2026-04-03 |
 
+## 待办（主动巡检 — 2026-04-03 第八轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 61 | 长方法重构（第五轮，零超 40 行方法） | 代码质量 | ✅ 2026-04-03 |
+
 ## 待办（主动巡检 — 2026-04-03 第七轮）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 60 | Controller 层 @Transactional 下沉到 Service 层 | 代码质量 | ✅ 2026-04-03 |
 
+- 2026-04-03 06:22 — ✅ 主动巡检（cron）：长方法重构第五轮——扫描 5 个 42-45 行方法全部拆分至 ≤35 行（RagCollectionController.toDocumentSummary、RetrievalUtils.toFloatArray/parseStringVector、RateLimitFilter.writeRateLimitResponse、BatchDocumentService.fillDuplicateResult/fillCreatedResult/deleteSingleDocument），819 测试全通过，commit cbf739e
 - 2026-04-03 06:09 — ✅ 主动巡检（cron）：Controller 层 @Transactional 违反分层原则修复——RagDocumentController.deleteDocument() 移除 @Transactional，事务逻辑下沉至 BatchDocumentService.deleteDocument()，新增 2 个单元测试，集成测试适配新委托模式，819 测试全通过，commit eb62117
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
