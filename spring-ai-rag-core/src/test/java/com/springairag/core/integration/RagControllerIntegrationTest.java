@@ -100,6 +100,9 @@ class RagControllerIntegrationTest {
     // ==================== Alert ====================
     @MockBean private AlertService alertService;
 
+    // ==================== Health ====================
+    @MockBean private com.springairag.core.metrics.ComponentHealthService componentHealthService;
+
     // ========================================================================
     // Chat Controller Tests
     // ========================================================================
@@ -469,24 +472,33 @@ class RagControllerIntegrationTest {
 
         @Test
         void health_dbOk_returnsHealthy() throws Exception {
-            when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
+            when(componentHealthService.checkAll()).thenReturn(Map.of(
+                    "database", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("UP", Map.of("latencyMs", 3L), null),
+                    "pgvector", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("UP", Map.of("version", "0.7.4"), null),
+                    "tables", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("UP", Map.of("rag_documents", 10), null),
+                    "cache", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("UP", Map.of("hitRate", "80.0%"), null)
+            ));
+            when(componentHealthService.overallStatus(any())).thenReturn("UP");
 
             mockMvc.perform(get("/api/v1/rag/health"))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.status").value("UP"));
+                    .andExpect(jsonPath("$.status").value("UP"))
+                    .andExpect(jsonPath("$.database").value("UP"));
         }
 
         @Test
         void health_dbDown_reportsDatabaseDown() throws Exception {
-            when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
-                    .thenThrow(new RuntimeException("Connection refused"));
-            when(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rag_documents", Integer.class))
-                    .thenThrow(new RuntimeException("Connection refused"));
-            when(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM rag_embeddings", Integer.class))
-                    .thenThrow(new RuntimeException("Connection refused"));
+            when(componentHealthService.checkAll()).thenReturn(Map.of(
+                    "database", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("DOWN", Map.of(), "Connection refused"),
+                    "pgvector", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("DOWN", Map.of(), "Connection refused"),
+                    "tables", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("DEGRADED", Map.of(), null),
+                    "cache", new com.springairag.core.metrics.ComponentHealthService.ComponentStatus("UP", Map.of("enabled", false), null)
+            ));
+            when(componentHealthService.overallStatus(any())).thenReturn("DOWN");
 
             mockMvc.perform(get("/api/v1/rag/health"))
                     .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("DOWN"))
                     .andExpect(jsonPath("$.database").value("DOWN"));
         }
     }

@@ -148,7 +148,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         void healthIndicatorBean() throws Exception {
             var method = GeneralRagAutoConfiguration.class
                     .getMethod("ragHealthIndicator",
-                            org.springframework.jdbc.core.JdbcTemplate.class,
+                            com.springairag.core.metrics.ComponentHealthService.class,
                             com.springairag.core.metrics.RagMetricsService.class);
             assertNotNull(method.getAnnotation(Bean.class));
             var onClass = method.getAnnotation(

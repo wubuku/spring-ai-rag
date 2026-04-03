@@ -1,20 +1,26 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Instant;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 健康检查控制器
+ * 健康检查控制器（增强版 — 多组件探针）
+ *
+ * <p>提供细粒度的组件级健康状态，支持：
+ * <ul>
+ *   <li>GET /rag/health — 整体状态 + 各组件摘要</li>
+ *   <li>GET /rag/health/components — 各组件详细状态</li>
+ * </ul>
  */
 @RestController
 @ApiVersion("v1")
@@ -22,42 +28,52 @@ import java.util.Map;
 @Tag(name = "RAG Health", description = "健康检查与状态监控")
 public class RagHealthController {
 
-    private final JdbcTemplate jdbcTemplate;
+    private final ComponentHealthService componentHealth;
 
-    public RagHealthController(JdbcTemplate jdbcTemplate) {
-        this.jdbcTemplate = jdbcTemplate;
+    public RagHealthController(ComponentHealthService componentHealth) {
+        this.componentHealth = componentHealth;
     }
 
     /**
-     * 健康检查
+     * 整体健康检查
      */
-    @Operation(summary = "健康检查", description = "检查数据库连接状态、文档/嵌入向量统计。")
+    @Operation(summary = "健康检查", description = "返回整体状态和各组件摘要。")
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
-        Map<String, Object> result = new HashMap<>();
-        result.put("status", "UP");
+        Map<String, ComponentHealthService.ComponentStatus> components =
+                componentHealth.checkAll();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("status", componentHealth.overallStatus(components));
         result.put("timestamp", Instant.now().toString());
 
-        // 检查数据库连接
-        try {
-            jdbcTemplate.queryForObject("SELECT 1", Integer.class);
-            result.put("database", "UP");
-        } catch (Exception e) { // Health endpoint: must not throw
-            result.put("database", "DOWN");
-            result.put("databaseError", e.getMessage());
+        // 简化输出：每个组件只返回 status
+        for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
+            result.put(entry.getKey(), entry.getValue().status());
         }
 
-        // 检查表数量
-        try {
-            Integer docCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM rag_documents", Integer.class);
-            Integer embCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM rag_embeddings", Integer.class);
-            result.put("documents", docCount);
-            result.put("embeddings", embCount);
-        } catch (Exception e) { // Health endpoint: tables may not exist
-            result.put("tablesError", e.getMessage());
+        return ResponseEntity.ok(result);
+    }
+
+    /**
+     * 组件级详细健康检查
+     */
+    @Operation(summary = "组件详细状态", description = "返回每个组件的详细健康信息，包括延迟、版本、表计数等。")
+    @GetMapping("/health/components")
+    public ResponseEntity<Map<String, Object>> healthComponents() {
+        Map<String, ComponentHealthService.ComponentStatus> components =
+                componentHealth.checkAll();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("status", componentHealth.overallStatus(components));
+        result.put("timestamp", Instant.now().toString());
+
+        // 详细输出：每个组件的完整信息
+        Map<String, Object> componentDetails = new LinkedHashMap<>();
+        for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
+            componentDetails.put(entry.getKey(), entry.getValue().toMap());
         }
+        result.put("components", componentDetails);
 
         return ResponseEntity.ok(result);
     }

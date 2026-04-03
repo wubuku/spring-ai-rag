@@ -9,9 +9,12 @@ import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.RequestTraceFilter;
+import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -110,12 +113,23 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
+     * 组件级健康检查服务
+     */
+    @Bean
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    public ComponentHealthService componentHealthService(JdbcTemplate jdbcTemplate,
+                                                          @Autowired(required = false) CacheMetricsService cacheMetricsService) {
+        return new ComponentHealthService(jdbcTemplate, cacheMetricsService);
+    }
+
+    /**
      * RAG 健康检查指示器（需要 Actuator 在 classpath）
      */
     @Bean("ragService")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
     @ConditionalOnMissingBean(name = "ragService")
-    public Object ragHealthIndicator(JdbcTemplate jdbcTemplate, RagMetricsService ragMetricsService) {
-        return new com.springairag.core.metrics.RagHealthIndicator(jdbcTemplate, ragMetricsService);
+    public Object ragHealthIndicator(ComponentHealthService componentHealth,
+                                      RagMetricsService ragMetricsService) {
+        return new com.springairag.core.metrics.RagHealthIndicator(componentHealth, ragMetricsService);
     }
 }

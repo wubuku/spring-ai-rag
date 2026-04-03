@@ -35,6 +35,7 @@ public class HybridRetrieverService {
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private final RagProperties.Retrieval retrieval;
+    private final boolean pgTrgmAvailable;
 
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
@@ -45,6 +46,35 @@ public class HybridRetrieverService {
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
+        this.pgTrgmAvailable = detectPgTrgm();
+        if (!pgTrgmAvailable && retrieval.isFulltextEnabled()) {
+            log.warn("pg_trgm extension not available — hybrid search will fall back to vector-only search. " +
+                    "Install pg_trgm for full-text search support, or set rag.retrieval.fulltext-enabled=false to suppress this warning.");
+        }
+    }
+
+    /**
+     * 检测 pg_trgm 扩展是否可用
+     */
+    private boolean detectPgTrgm() {
+        try {
+            jdbcTemplate.queryForObject(
+                    "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'", Integer.class);
+            log.info("pg_trgm extension detected — hybrid search enabled");
+            return true;
+        } catch (Exception e) {
+            log.info("pg_trgm extension not found — full-text search disabled, vector-only mode");
+            return false;
+        }
+    }
+
+    /**
+     * 是否应使用全文检索
+     */
+    private boolean isFulltextAvailable(RetrievalConfig config) {
+        if (!retrieval.isFulltextEnabled()) return false;
+        if (!pgTrgmAvailable) return false;
+        return config == null || config.isUseHybridSearch();
     }
 
     /**
@@ -75,7 +105,7 @@ public class HybridRetrieverService {
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
-        boolean useHybrid = config == null || config.isUseHybridSearch();
+        boolean useHybrid = isFulltextAvailable(config);
 
         if (!useHybrid) {
             return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
@@ -152,6 +182,8 @@ public class HybridRetrieverService {
 
     /**
      * 全文检索（使用 pg_trgm 扩展，支持中文/英文模糊匹配）
+     *
+     * <p>pg_trgm 不可用时返回空列表，调用方会降级为纯向量检索。
      */
     private List<RetrievalResult> fullTextSearch(String query, List<Long> documentIds,
                                                   List<Long> excludeIds, int limit) {
@@ -160,8 +192,8 @@ public class HybridRetrieverService {
             if (keywords.length == 0) return Collections.emptyList();
             List<Map<String, Object>> rows = executeFulltextQuery(keywords[0], documentIds, limit);
             return mapFulltextResults(rows, excludeIds);
-        } catch (Exception e) { // Resilience: fulltext search failure, return empty
-            log.error("Fulltext search failed", e);
+        } catch (Exception e) { // Resilience: fulltext search failure, return empty for vector-only fallback
+            log.warn("Full-text search failed (pg_trgm may be unavailable): {}. Falling back to vector-only.", e.getMessage());
             return Collections.emptyList();
         }
     }

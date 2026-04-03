@@ -155,6 +155,8 @@ public class RagProperties {
         private float fulltextWeight = 0.5f;
         private int defaultLimit = 10;
         private float minScore = 0.3f;
+        /** 是否启用全文检索（需要 pg_trgm 扩展，不可用时自动降级为纯向量检索） */
+        private boolean fulltextEnabled = true;
 
         public float getVectorWeight() {
             return vectorWeight;
@@ -170,6 +172,14 @@ public class RagProperties {
 
         public void setFulltextWeight(float fulltextWeight) {
             this.fulltextWeight = fulltextWeight;
+        }
+
+        public boolean isFulltextEnabled() {
+            return fulltextEnabled;
+        }
+
+        public void setFulltextEnabled(boolean fulltextEnabled) {
+            this.fulltextEnabled = fulltextEnabled;
         }
 
         public int getDefaultLimit() {

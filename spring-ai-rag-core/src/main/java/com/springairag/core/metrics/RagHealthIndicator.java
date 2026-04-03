@@ -4,14 +4,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.HealthIndicator;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.stereotype.Component;
+
+import java.util.Map;
 
 /**
- * RAG 服务健康检查指示器
+ * RAG 服务健康检查指示器（增强版 — 多组件探针）
  *
  * <p>集成 Spring Boot Actuator，通过 `/actuator/health` 端点暴露 RAG 服务健康状态。
- * 检查项包括：数据库连接、嵌入模型可用性。
+ * 基于 {@link ComponentHealthService} 检查每个组件的独立状态。
  *
  * <p>健康检查结果示例：
  * <pre>
@@ -21,76 +21,46 @@ import org.springframework.stereotype.Component;
  *     "ragService": {
  *       "status": "UP",
  *       "details": {
- *         "database": "UP",
- *         "documents": 150,
- *         "embeddings": 3200
+ *         "database": { "status": "UP", "latencyMs": 3 },
+ *         "pgvector": { "status": "UP", "version": "0.7.4" },
+ *         "tables":   { "status": "UP", "rag_documents": 150 },
+ *         "cache":    { "status": "UP", "hitRate": "82.3%" }
  *       }
  *     }
  *   }
  * }
  * </pre>
  */
-@Component("ragService")
 public class RagHealthIndicator implements HealthIndicator {
 
     private static final Logger log = LoggerFactory.getLogger(RagHealthIndicator.class);
 
-    private final JdbcTemplate jdbcTemplate;
+    private final ComponentHealthService componentHealth;
     private final RagMetricsService metricsService;
 
-    public RagHealthIndicator(JdbcTemplate jdbcTemplate, RagMetricsService metricsService) {
-        this.jdbcTemplate = jdbcTemplate;
+    public RagHealthIndicator(ComponentHealthService componentHealth,
+                               RagMetricsService metricsService) {
+        this.componentHealth = componentHealth;
         this.metricsService = metricsService;
     }
 
     @Override
     public Health health() {
-        Health.Builder builder = Health.up();
+        Map<String, ComponentHealthService.ComponentStatus> components =
+                componentHealth.checkAll();
 
-        // 检查数据库连接
-        boolean dbUp = checkDatabase(builder);
+        String overallStatus = componentHealth.overallStatus(components);
+        Health.Builder builder = "UP".equals(overallStatus) ? Health.up() : Health.down();
 
-        // 检查表数据
-        if (dbUp) {
-            checkTableCounts(builder);
+        // 每个组件的详细状态
+        for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
+            builder.withDetail(entry.getKey(), entry.getValue().toMap());
         }
 
-        // 指标摘要
+        // 业务指标
         builder.withDetail("totalRequests", metricsService.getTotalRequests());
         builder.withDetail("successRate", String.format("%.1f%%", metricsService.getSuccessRate()));
 
-        // 如果数据库不可用，标记为 DOWN
-        if (!dbUp) {
-            builder.down();
-        }
-
         return builder.build();
-    }
-
-    private boolean checkDatabase(Health.Builder builder) {
-        try {
-            jdbcTemplate.queryForObject("SELECT 1", Integer.class);
-            builder.withDetail("database", "UP");
-            return true;
-        } catch (Exception e) { // Health probe: must never throw
-            log.warn("Database health check failed: {}", e.getMessage());
-            builder.withDetail("database", "DOWN");
-            builder.withDetail("databaseError", e.getMessage());
-            return false;
-        }
-    }
-
-    private void checkTableCounts(Health.Builder builder) {
-        try {
-            Integer docCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM rag_documents", Integer.class);
-            Integer embCount = jdbcTemplate.queryForObject(
-                    "SELECT COUNT(*) FROM rag_embeddings", Integer.class);
-            builder.withDetail("documents", docCount != null ? docCount : 0);
-            builder.withDetail("embeddings", embCount != null ? embCount : 0);
-        } catch (Exception e) { // Health probe: tables may not exist yet
-            log.debug("Table count check failed (tables may not exist yet): {}", e.getMessage());
-            builder.withDetail("tables", "not_initialized");
-        }
     }
 }

@@ -2,23 +2,35 @@
 -- V1：初始化通用 RAG 服务数据库结构
 -- ============================================================
 
--- 1. 扩展（pg_trgm 可选，如未安装则跳过全文检索功能）
+-- 1. 扩展
+-- vector：向量检索核心依赖（必需）
+-- pg_trgm：全文检索模糊匹配（可选，未安装则自动降级为纯向量检索）
+-- pg_jieba：中文分词（可选，当前未在查询中使用，为未来全文索引预留）
 CREATE EXTENSION IF NOT EXISTS vector;
-CREATE EXTENSION IF NOT EXISTS pg_jieba;
 
 DO $$
 BEGIN
     CREATE EXTENSION IF NOT EXISTS pg_trgm;
 EXCEPTION WHEN OTHERS THEN
-    RAISE NOTICE 'pg_trgm extension not available, full-text search will be limited';
+    RAISE NOTICE 'pg_trgm extension not available, full-text search will fall back to vector-only';
 END
 $$;
 
--- 2. 中文全文检索配置
 DO $$
 BEGIN
-    IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg') THEN
-        CREATE TEXT SEARCH CONFIGURATION jiebacfg (parser = jieba);
+    CREATE EXTENSION IF NOT EXISTS pg_jieba;
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'pg_jieba extension not available, Chinese segmentation disabled';
+END
+$$;
+
+-- 2. 中文全文检索配置（pg_jieba 可用时创建，为未来全文索引预留）
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_jieba') THEN
+        IF NOT EXISTS (SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg') THEN
+            CREATE TEXT SEARCH CONFIGURATION jiebacfg (parser = jieba);
+        END IF;
     END IF;
 END
 $$;
