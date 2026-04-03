@@ -344,3 +344,11 @@
 - E2E 脚本扩展：新增 GET /metrics/overview（RAG 指标概览）
 - 测试分段从 10 增至 14，覆盖 Collection 全生命周期 + 可观测性端点
 - mvn test ✅（988 测试全通过），commit e62afc0
+
+### 2026-04-04 01:21 — 并发性能基准测试
+- mvn clean compile ✅ / mvn test ✅（1090 测试全通过，零失败零错误）
+- 新增 RagSearchControllerBenchmarkTest：验证成功标准"支持 100 并发请求"
+  - 100 并发搜索请求全部成功
+  - 50 并发搜索请求吞吐量 < 1s（50+ ops/s）
+- 附带：LlmCircuitBreaker（熔断器基础设施）+ LlmCircuitOpenException
+- commit 3bb7191 已推送
