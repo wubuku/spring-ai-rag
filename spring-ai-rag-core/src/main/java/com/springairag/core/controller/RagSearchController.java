@@ -6,6 +6,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;

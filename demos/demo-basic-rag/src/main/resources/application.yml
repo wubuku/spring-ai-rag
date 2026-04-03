@@ -1,84 +1,122 @@
 server:
   port: 8080
 
-# ============================================
-# RAG 服务配置
-# ============================================
-general:
-  rag:
-    enabled: true
-    memory:
-      enabled: true
-      max-messages: 20
-
-# ============================================
-# Spring AI 配置（LLM 提供商）
-# ============================================
 spring:
-  ai:
-    openai:
-      # DeepSeek（OpenAI 兼容接口）
-      api-key: ${DEEPSEEK_API_KEY:sk-your-key-here}
-      base-url: https://api.deepseek.com/v1
-      chat:
-        enabled: true
-        options:
-          model: deepseek-chat
+  application:
+    name: customer-service-bot
 
-    # Anthropic（可选，取消注释切换）
-    # anthropic:
-    #   api-key: ${ANTHROPIC_API_KEY}
-    #   chat:
-    #     options:
-    #       model: claude-sonnet-4-20250514
-
-  # ============================================
-  # 数据库配置
-  # ============================================
+  # ================================================================
+  # 数据库配置（必需）
+  # ================================================================
   datasource:
     url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
-    username: ${DB_USERNAME:postgres}
+    username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
+      minimum-idle: 2
 
-  # Flyway 自动迁移
+  # Flyway 数据库迁移（自动建表）
   flyway:
     enabled: true
     locations: classpath:db/migration
+    baseline-on-migrate: true
 
-# ============================================
-# 嵌入模型（SiliconFlow BGE-M3）
-# ============================================
-siliconflow:
-  api-key: ${SILICONFLOW_API_KEY:sk-your-key-here}
-  base-url: https://api.siliconflow.cn/v1
-  embedding:
-    model: BAAI/bge-m3
+# ================================================================
+# LLM 配置（必需，至少配置一个）
+# ================================================================
 
-# ============================================
-# LLM 提供商切换
-# ============================================
+# 方案一：DeepSeek（默认，推荐）
 app:
   llm:
-    provider: openai  # 可选: openai | anthropic
+    provider: openai
+  ai:
+    openai:
+      api-key: ${DEEPSEEK_API_KEY:your-deepseek-key}
+      base-url: https://api.deepseek.com/v1
+      chat:
+        options:
+          model: deepseek-chat
+          temperature: 0.7
 
-# ============================================
-# Actuator 监控
-# ============================================
+# 方案二：智谱 GLM（取消注释并注释掉方案一）
+# app:
+#   llm:
+#     provider: openai
+#   ai:
+#     openai:
+#       api-key: ${ZHIPU_API_KEY:your-zhipu-key}
+#       base-url: https://open.bigmodel.cn/paas/v4
+#       chat:
+#         options:
+#           model: glm-4
+#           temperature: 0.7
+
+# 方案三：Anthropic（取消注释并注释掉方案一）
+# app:
+#   llm:
+#     provider: anthropic
+#   ai:
+#     anthropic:
+#       api-key: ${ANTHROPIC_API_KEY:your-anthropic-key}
+
+# ================================================================
+# 嵌入模型配置（必需）
+# ================================================================
+siliconflow:
+  api-key: ${SILICONFLOW_API_KEY:your-siliconflow-key}
+  embedding:
+    model: BAAI/bge-m3
+    dimensions: 1024
+
+# ================================================================
+# RAG 配置（可选，有默认值）
+# ================================================================
+rag:
+  # 检索配置
+  retrieval:
+    # 总开关：是否启用全文检索（pg_trgm/pg_jieba）
+    fulltext-enabled: true
+    # 策略：auto（自动检测）/ pg_jieba / pg_trgm / none
+    fulltext-strategy: auto
+    # 混合检索权重
+    vector-weight: 0.5
+    fulltext-weight: 0.5
+    # 默认返回数量
+    default-limit: 10
+    # 最低相关分数
+    min-score: 0.3
+
+  # 对话记忆配置
+  chat-memory:
+    # Spring AI Chat Memory 表名
+    table-name: spring_ai_chat_memory
+    # 业务审计表（rag_chat_history）保留消息数
+    history-size: 100
+
+  # API Key 认证（生产环境开启）
+  security:
+    api-key:
+      enabled: false
+      header-name: X-API-Key
+      keys:
+        - ${API_KEY_1:key1}
+        - ${API_KEY_2:key2}
+
+# ================================================================
+# Actuator 监控端点（可选）
+# ================================================================
 management:
   endpoints:
     web:
       exposure:
-        include: health,metrics,info
+        include: health,info,metrics,prometheus
   endpoint:
     health:
       show-details: always
 
-# ============================================
-# 日志
-# ============================================
 logging:
   level:
-    com.springairag: DEBUG
+    com.springairag: INFO
     org.springframework.ai: INFO

@@ -5,6 +5,7 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -61,6 +62,7 @@ public class RagChatController {
             @ApiResponse(responseCode = "400", description = "请求参数校验失败")
     })
     @PostMapping("/ask")
+    @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
         log.info("RAG ask: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
@@ -79,6 +81,7 @@ public class RagChatController {
             @ApiResponse(responseCode = "400", description = "请求参数校验失败")
     })
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
         log.info("RAG stream: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),

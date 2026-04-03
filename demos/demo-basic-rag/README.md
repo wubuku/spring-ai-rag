@@ -1,147 +1,114 @@
-# Demo: Basic RAG
+# Customer Service Bot — RAG 集成演示
 
-最简单的 spring-ai-rag 集成示例，5 分钟跑通 RAG 问答。
+> 场景：已有 Spring Boot 应用，通过引入 `spring-ai-rag-starter` 一行依赖获得完整 RAG 能力。
 
-## 前置条件
+## 快速开始
 
-| 依赖 | 说明 |
-|------|------|
-| Java 17+ | 运行时 |
-| PostgreSQL + pgvector | 向量数据库 |
-| DeepSeek API Key | LLM（可换其他 OpenAI 兼容模型） |
-| SiliconFlow API Key | 嵌入模型 BGE-M3 |
-
-### 数据库准备
+### 1. 安装 spring-ai-rag-starter 到本地仓库
 
 ```bash
-# 创建数据库
-createdb spring_ai_rag_dev
-
-# 启用扩展（应用启动时 Flyway 自动建表）
-psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
-psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-```
-
-## 快速启动
-
-```bash
-# 1. 在项目根目录先安装框架
+# 在 spring-ai-rag 项目根目录
 cd ../..
 mvn clean install -DskipTests
+```
 
-# 2. 启动 Demo
+### 2. 启动本 Demo
+
+```bash
 cd demos/demo-basic-rag
-export DEEPSEEK_API_KEY=sk-your-key
-export SILICONFLOW_API_KEY=sk-your-key
+export DEEPSEEK_API_KEY=sk-xxx
+export SILICONFLOW_API_KEY=sk-xxx
 mvn spring-boot:run
 ```
 
-## 测试接口
-
-### 方式一：快速问答（GET）
+### 3. 测试
 
 ```bash
-curl "http://localhost:8080/demo/ask?q=什么是RAG？"
-```
-
-### 方式二：完整问答（POST）
-
-```bash
-curl -X POST http://localhost:8080/demo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "spring-ai-rag 支持哪些模型？", "sessionId": "test-001"}'
-```
-
-### 方式三：使用框架内置 API
-
-框架自动注册了完整的 REST API，可直接使用：
-
-```bash
-# RAG 问答（非流式）
+# 客服问答
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是混合检索？", "sessionId": "session-1"}'
+  -d '{"message": "你们的退换货政策是什么？", "sessionId": "customer-001"}'
 
-# RAG 问答（流式 SSE）
-curl -X POST http://localhost:8080/api/v1/rag/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"message": "详细解释向量检索", "sessionId": "session-1"}'
-
-# 上传文档
+# 上传知识库文档
 curl -X POST http://localhost:8080/api/v1/rag/documents \
   -H "Content-Type: application/json" \
-  -d '{"title": "RAG 简介", "content": "RAG 是检索增强生成...", "source": "manual"}'
-
-# 为文档生成嵌入向量
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
-
-# 直接检索（不经过 LLM）
-curl "http://localhost:8080/api/v1/rag/search?query=向量检索&limit=5"
-
-# 查看会话历史
-curl http://localhost:8080/api/v1/rag/chat/history/session-1
-
-# 健康检查
-curl http://localhost:8080/actuator/health
+  -d '{"title": "退换货政策", "content": "自收到商品之日起7天内可申请退换货...", "source": "policy"}'
 ```
 
-### Swagger UI
+---
 
-启动后访问：http://localhost:8080/swagger-ui.html
+## 如何集成到现有项目
 
-## 代码说明
+### Step 1：添加 Maven 依赖
 
-**核心就一行**：
+```xml
+<dependency>
+    <groupId>com.springairag</groupId>
+    <artifactId>spring-ai-rag-starter</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
+</dependency>
+```
+
+### Step 2：配置 application.yml
+
+参考 `src/main/resources/application.yml`，
+只需配置：
+- `spring.datasource.*`（PostgreSQL + pgvector）
+- `app.llm.*`（LLM Provider）
+- `siliconflow.*`（嵌入模型）
+
+### Step 3：直接使用
 
 ```java
-@Autowired
-private RagChatService ragChatService;
+@RestController
+public class CustomerServiceController {
 
-String answer = ragChatService.chat("你的问题", "会话ID");
-```
+    @Autowired
+    private RagChatService ragChatService;
 
-`RagChatService` 自动完成：
-1. 查询改写（QueryRewriteAdvisor）
-2. 混合检索（HybridSearchAdvisor：向量 + 全文）
-3. 结果重排（RerankAdvisor）
-4. LLM 生成回答
-5. 对话记忆管理
-
-## 切换模型
-
-修改 `application.yml` 中的 `app.llm.provider`：
-
-```yaml
-# DeepSeek（默认）
-app.llm.provider: openai
-spring.ai.openai.base-url: https://api.deepseek.com/v1
-
-# Anthropic
-app.llm.provider: anthropic
-spring.ai.anthropic.api-key: ${ANTHROPIC_API_KEY}
-```
-
-## 领域扩展
-
-实现 `DomainRagExtension` 接口并注册为 Bean，即可为特定领域定制 Prompt 和检索策略：
-
-```java
-@Component
-public class SkinRagExtension extends DefaultDomainRagExtension {
-    @Override
-    public String getDomainId() { return "skin-care"; }
-
-    @Override
-    public String getSystemPrompt() {
-        return "你是皮肤护理专家，基于提供的知识库回答问题...";
+    @PostMapping("/chat")
+    public Map<String, String> chat(@RequestBody ChatRequest req) {
+        String answer = ragChatService.chat(req.getMessage(), req.getSessionId());
+        return Map.of("answer", answer, "sessionId", req.getSessionId());
     }
 }
 ```
 
-使用时指定 domainId：
+---
+
+## 只需一行代码即可获得的能力
+
+| 功能 | 原本工作量 | 引入 starter 后 |
+|------|-----------|----------------|
+| 向量检索 | 写 JDBC SQL + HNSW | ✅ 自动 |
+| 全文检索 | 写分词 + 相似度 SQL | ✅ 自动 |
+| 查询改写 | 调用 LLM 改写 Query | ✅ 自动 |
+| 结果重排 | 自己实现 ReRank | ✅ 自动 |
+| 对话记忆 | 写表 + CRUD | ✅ 自动 |
+| REST API | 自己写 Controller | ✅ 40+ 端点 |
+| 健康检查 | 写 Probe | ✅ Actuator 自动 |
+| 文档嵌入 | 写嵌入逻辑 | ✅ 自动 |
+
+## 数据库准备
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
-  -H "Content-Type: application/json" \
-  -d '{"message": "敏感肌怎么护理？", "sessionId": "s1", "domainId": "skin-care"}'
+createdb spring_ai_rag_dev
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+```
+
+应用启动时 Flyway 会自动创建所有表（HNSW 索引、全文检索配置等）。
+
+## 切换 LLM Provider
+
+```yaml
+# DeepSeek（默认）
+app.llm.provider: openai
+
+# 智谱 GLM
+app.llm.provider: openai
+spring.ai.openai.base-url: https://open.bigmodel.cn/paas/v4
+
+# Anthropic
+app.llm.provider: anthropic
 ```

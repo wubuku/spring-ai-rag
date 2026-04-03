@@ -128,4 +128,18 @@ public class RagMetricsService {
         long total = getTotalRequests();
         return total > 0 ? (double) getSuccessfulRequests() / total * 100 : 100.0;
     }
+
+    /**
+     * 获取检索结果总数（从 Micrometer gauge 读取）
+     */
+    public long getTotalRetrievalResults() {
+        return totalRetrievalResults.get();
+    }
+
+    /**
+     * 获取 LLM Token 消耗总数（从 Micrometer gauge 读取）
+     */
+    public long getTotalLlmTokens() {
+        return totalLlmTokens.get();
+    }
 }
