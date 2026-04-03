@@ -90,3 +90,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 | Spring AI | 1.1.2 |
 | PostgreSQL + pgvector | 15+ / 0.7.x |
 | Maven | 3.9+ |
+
+---
+
+## [1.1.0-SNAPSHOT] - 2026-04-03 Evening
+
+### Added
+- SSE 流式嵌入进度端点 `POST /documents/{id}/embed/stream`（实时推送 PREPARING→CHUNKING→EMBEDDING→STORING→COMPLETED）
+- RAG 指标 REST 端点 `GET /api/v1/rag/metrics`（totalRequests/successRate/tokens 等关键指标）
+- Demo E2E Shell 脚本 `scripts/demo-e2e.sh`（启动+健康等待+10项验证+彩色输出）
+- MiniMax API 兼容性修复：role:system 自动转为 user 消息（防止脏数据报错）
+
+### Fixed
+- SpringAiConfig 缺少 @EnableConfigurationProperties 导致 RagProperties 无法注入
+- demo-component-level @ComponentHealthService 缺少 @Service 注解
+- pom.xml GraalVM profile 注释中的 `--` 导致 XML 解析错误
+- .env 变量缺少 export 前缀导致 Maven subprocess 无法继承环境变量
