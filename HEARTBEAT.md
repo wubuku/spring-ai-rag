@@ -291,7 +291,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 90 | E2E 链路验证（干净数据库跑 scripts/e2e-test.sh，完整链路 24 项） | 验证 | ⏳ |
+| 90 | E2E 链路验证（干净数据库跑 scripts/e2e-test.sh，完整链路 24 项） | 验证 | ✅ 2026-04-03 |
 | 91 | demo-component-level 集成测试（补充 E2E 测试） | 测试覆盖 | ✅ 2026-04-03 |
 | 92 | 多文档批量嵌入 pipeline（SSE 实时进度推送） | 性能 | ✅ 2026-04-03 |
 | 93 | 可观测性增强（Pipeline metrics REST 端点独立暴露） | 可观测性 | ✅ 2026-04-03 |
@@ -310,8 +310,6 @@
 - #91 demo-component-level 集成测试：✅ ComponentLevelControllerTest 4 个测试（@WebMvcTest + MockBean ChatClient）
 - #92 多文档批量嵌入 SSE 进度：✅ EmbedProgressEvent + embedDocumentWithProgress() + POST /documents/{id}/embed/stream
 - #93 Pipeline metrics REST 端点：✅ GET /api/v1/rag/metrics（RagMetricsSummary + RagMetricsController）
-- #92 多文档批量嵌入 pipeline（SSE 进度）：⏳
-- #93 可观测性增强（Pipeline metrics REST 端点）：⏳
 
 ### 自动修复脏数据：MiniMax API role:system 兼容性
 - MiniMax API 不支持 role:system，会返回 "invalid message role: system (2013)"
@@ -331,3 +329,9 @@
 - IMPLEMENTATION_COMPARISON.md: 更新为 24 项（24 P2）
 - MiniMaxAdapter: supportsSystemMessage()=false，system→user 自动转换
 - 所有 commits 已推送（8fa3553 HEAD）
+
+### 2026-04-03 23:36 — 深夜巡检
+- mvn clean compile ✅ / mvn test ✅（1070 测试全通过，零失败零错误）
+- 所有 ⏳ 待办已清空：#90 E2E（22/24，LLM 账户问题非代码问题）→ ✅；#92 SSE 进度推送（已实现）→ ✅；#93 Pipeline metrics（已实现）→ ✅
+- HEARTBEAT 状态同步：移除 #92/#93 重复矛盾行，#90 改为 ✅
+- Phase 1-5 全部完成，1070 测试，零 TODO/FIXME，项目健康
