@@ -240,6 +240,8 @@
 
 - 2026-04-03 07:38 — ✅ #84 日志结构化：SensitiveDataMaskingConverter（dev/default 文本格式屏蔽）+ MaskingLogstashEncoder（prod/test JSON 格式屏蔽）+ SensitiveMdc（程序化敏感 MDC 工具）+ logback-spring.xml 双环境配置，commit 83abd27；本次 cron 同步状态，HEARTBEAT 标记完成，1070 测试全通过
 
+- 2026-04-03 19:54 — ✅ #94 生产级 Dockerfile 优化 + GraalVM native image 预留：多架构 JRE 镜像(eclipse-temurin:17-jre)、非root rag 用户安全隔离、JVM容器感知优化(+UseContainerSupport/G1GC/ExitOnOutOfMemoryError)、层缓存优化(依赖→源码分离COPY)、JAVA_OPTS注入；pom.xml 添加 GraalVM Native Image 迁移指南注释，1070+ 测试全通过，commit 544bb23
+
 - 2026-04-03 16:54 — ✅ #83 异步处理增强：PerformanceConfig 新增 modelComparisonExecutor 共享线程池（核心2/最大8，支持 core timeout 回收），消除 ModelComparisonService 每次调用创建新线程池的资源泄漏；InterruptedException 捕获后调用 Thread.currentThread().interrupt() 恢复中断状态；TimeoutException/ExecutionException 结果降级为 ModelComparisonResult.failure()；ModelComparisonServiceTest 新增 InterruptedException 中断恢复测试 + TimeoutException 降级测试；AsyncConfig 补充 @EnableConfigurationProperties(RagProperties.class)，941 测试全通过，commit 023be94
 1070 测试全通过，代码库健康
 
@@ -248,6 +250,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 90 | FulltextSearchProvider 三个实现类测试覆盖 | 测试 | ✅ 2026-04-03 |
+| 94 | 生产级 Dockerfile 优化 + GraalVM native image 预留 | 部署 | ✅ 2026-04-03 |
 | 91 | 长方法重构（getMappingForMethod 50→15行） | 代码质量 | ✅ 2026-04-03 |
 | 92 | ComponentHealthService catch(Exception) 注释 | 代码质量 | ✅ 2026-04-03 |
 
