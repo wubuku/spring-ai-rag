@@ -161,6 +161,44 @@ class DtoTest {
         assertEquals(0.95, doc.getScore());
     }
 
+    @Test
+    void chatResponse_stepMetrics_setterGetter() {
+        ChatResponse response = new ChatResponse();
+        List<ChatResponse.StepMetricRecord> metrics = List.of(
+                new ChatResponse.StepMetricRecord("HybridSearch", 23, 12),
+                new ChatResponse.StepMetricRecord("Rerank", 5, 8)
+        );
+        response.setStepMetrics(metrics);
+
+        assertEquals(2, response.getStepMetrics().size());
+        assertEquals("HybridSearch", response.getStepMetrics().get(0).getStepName());
+        assertEquals(23, response.getStepMetrics().get(0).getDurationMs());
+        assertEquals(12, response.getStepMetrics().get(0).getResultCount());
+        assertEquals("Rerank", response.getStepMetrics().get(1).getStepName());
+        assertEquals(5, response.getStepMetrics().get(1).getDurationMs());
+        assertEquals(8, response.getStepMetrics().get(1).getResultCount());
+    }
+
+    @Test
+    void stepMetricRecord_constructorAndGetters() {
+        ChatResponse.StepMetricRecord record = new ChatResponse.StepMetricRecord("QueryRewrite", 15, 5);
+        assertEquals("QueryRewrite", record.getStepName());
+        assertEquals(15, record.getDurationMs());
+        assertEquals(5, record.getResultCount());
+    }
+
+    @Test
+    void stepMetricRecord_defaultConstructorAndSetters() {
+        ChatResponse.StepMetricRecord record = new ChatResponse.StepMetricRecord();
+        record.setStepName("Embedding");
+        record.setDurationMs(120);
+        record.setResultCount(10);
+
+        assertEquals("Embedding", record.getStepName());
+        assertEquals(120, record.getDurationMs());
+        assertEquals(10, record.getResultCount());
+    }
+
     // ========== SearchRequest ==========
 
     @Test
