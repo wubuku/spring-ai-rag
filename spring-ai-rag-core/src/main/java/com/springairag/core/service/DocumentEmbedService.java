@@ -103,27 +103,20 @@ public class DocumentEmbedService {
             java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
         log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
-        if (progressCallback != null) {
-            progressCallback.accept(EmbedProgressEvent.preparing(documentId));
-        }
+        maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
 
         EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
         if (prep.cached() != null) {
-            if (progressCallback != null) {
-                progressCallback.accept(EmbedProgressEvent.completed(documentId, prep.chunks().size()));
-            }
+            maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, 0));
             return prep.cached();
         }
 
         List<TextChunk> chunks = prep.chunks();
-
         RagDocument doc = prep.doc();
         doc.setProcessingStatus("PROCESSING");
         documentRepository.save(doc);
 
-        if (progressCallback != null) {
-            progressCallback.accept(EmbedProgressEvent.chunking(documentId, chunks.size()));
-        }
+        maybeEmit(progressCallback, EmbedProgressEvent.chunking(documentId, chunks.size()));
 
         // 删除旧向量 → 生成嵌入 → 存储
         embeddingRepository.deleteByDocumentId(documentId);
@@ -131,26 +124,29 @@ public class DocumentEmbedService {
         List<EmbeddingBatchService.EmbeddingResult> results =
                 embeddingBatchService.createEmbeddingsBatch(texts);
 
-        if (progressCallback != null) {
-            for (int i = 0; i < results.size(); i++) {
-                progressCallback.accept(EmbedProgressEvent.embedding(documentId, i + 1, results.size()));
-            }
-        }
-
+        emitEmbeddingProgress(progressCallback, documentId, results.size());
         int stored = storeEmbeddings(documentId, chunks, results);
 
-        if (progressCallback != null) {
-            progressCallback.accept(EmbedProgressEvent.storing(documentId, stored, chunks.size()));
-        }
-
+        maybeEmit(progressCallback, EmbedProgressEvent.storing(documentId, stored, chunks.size()));
         completeEmbedding(doc, chunks.size());
-
-        if (progressCallback != null) {
-            progressCallback.accept(EmbedProgressEvent.completed(documentId, chunks.size()));
-        }
+        maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, chunks.size()));
 
         log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
         return buildSuccessResult(documentId, chunks.size(), stored, "COMPLETED");
+    }
+
+    /** 安全触发进度回调（null-safe） */
+    private void maybeEmit(java.util.function.Consumer<EmbedProgressEvent> cb, EmbedProgressEvent event) {
+        if (cb != null) cb.accept(event);
+    }
+
+    /** 批量触发嵌入进度（逐条通知） */
+    private void emitEmbeddingProgress(java.util.function.Consumer<EmbedProgressEvent> cb,
+                                       Long documentId, int total) {
+        if (cb == null) return;
+        for (int i = 0; i < total; i++) {
+            cb.accept(EmbedProgressEvent.embedding(documentId, i + 1, total));
+        }
     }
 
     /**

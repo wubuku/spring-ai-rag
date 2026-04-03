@@ -408,4 +408,70 @@ class DocumentEmbedServiceTest {
         assertEquals("COMPLETED", output.get("status"));
         verify(embeddingBatchService).createEmbeddingsBatch(anyList());
     }
+
+    // ==================== embedDocumentWithProgress ====================
+
+    @Test
+    @DisplayName("embedDocumentWithProgress: null callback 不抛异常（maybeEmit null-safe）")
+    void embedDocumentWithProgress_nullCallback_noException() {
+        RagDocument doc = createDocument(1L, "这是第一段内容。这是第二段内容。".repeat(50));
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+
+        float[] vec = new float[3];
+        EmbeddingBatchService.EmbeddingResult result =
+                new EmbeddingBatchService.EmbeddingResult("text", vec, null);
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(result));
+
+        // null callback should not throw NPE
+        Map<String, Object> output = service.embedDocumentWithProgress(1L, false, null);
+
+        assertEquals("COMPLETED", output.get("status"));
+    }
+
+    @Test
+    @DisplayName("embedDocumentWithProgress: 缓存命中时 chunks=null 不抛异常（maybeEmit null-safe）")
+    void embedDocumentWithProgress_cacheHit_chunksNull_noException() {
+        RagDocument doc = createDocumentWithHash(1L, "短内容", "hash123");
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash("hash123");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(2L);
+
+        // Cache hit: embeddedContentHash matches contentHash, returns early (chunks=null)
+        java.util.List<String> phases = new java.util.ArrayList<>();
+        Map<String, Object> output = service.embedDocumentWithProgress(1L, false, event -> phases.add(event.phase()));
+
+        assertEquals("CACHED", output.get("status"));
+        assertEquals(List.of("PREPARING", "COMPLETED"), phases,
+                "缓存命中应触发 PREPARING + COMPLETED: " + phases);
+    }
+
+    @Test
+    @DisplayName("embedDocumentWithProgress: 进度回调正确触发各阶段（emitEmbeddingProgress）")
+    void embedDocumentWithProgress_progressCallback_allPhases() {
+        // 强制重嵌入（force=true），用 force=true 让内容哈希不匹配缓存
+        RagDocument doc = createDocumentWithHash(1L, "这是一段很长的文档内容，用于测试嵌入进度回调是否正确触发各个阶段。".repeat(10), "forcehash");
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash("otherhash"); // 不匹配，强制重嵌入
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(documentRepository.save(any())).thenReturn(doc);
+
+        float[] vec = new float[1024]; // BGE-M3 维度
+        // mock 返回 1 个 embedding，chunker 产生的 chunk 数也会是 1
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(new EmbeddingBatchService.EmbeddingResult("chunk1", vec, null)));
+
+        java.util.List<String> phases = new java.util.ArrayList<>();
+        service.embedDocumentWithProgress(1L, true, event -> phases.add(event.phase()));
+
+        assertTrue(phases.contains("PREPARING"), "应包含 PREPARING: " + phases);
+        assertTrue(phases.contains("CHUNKING"), "应包含 CHUNKING: " + phases);
+        assertTrue(phases.contains("EMBEDDING"), "应包含 EMBEDDING: " + phases);
+        assertTrue(phases.contains("STORING"), "应包含 STORING: " + phases);
+        assertTrue(phases.contains("COMPLETED"), "应包含 COMPLETED: " + phases);
+        // EMBEDDING 阶段应触发 1 次（1 个 chunk）
+        assertEquals(1, phases.stream().filter(p -> p.equals("EMBEDDING")).count(),
+                "EMBEDDING 应触发 1 次: " + phases);
+    }
 }
