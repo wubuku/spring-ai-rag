@@ -150,4 +150,23 @@
             </plugins>
         </pluginManagement>
     </build>
+
+    <!--
+      ============================================================
+      GraalVM Native Image 支持（预留，待 GraalVM 工具链安装后启用）
+      ============================================================
+      使用方式:
+        1. 安装 GraalVM 24+ (含 native-image 工具)
+        2. 添加 spring-native 依赖到 spring-ai-rag-starter/pom.xml:
+           <dependency>
+             <groupId>org.springframework.experimental</groupId>
+             <artifactId>spring-native</artifactId>
+             <version>${spring-native.version}</version>
+           </dependency>
+        3. 在 spring-ai-rag-core/src/main/resources/META-INF/native-image/
+           添加 reflect-config.json + resource-config.json
+        4. 执行: mvn -Pnative clean package -DskipTests
+      参考: https://docs.spring.io/spring-boot/reference/native-image/index.html
+      ============================================================
+    -->
 </project>

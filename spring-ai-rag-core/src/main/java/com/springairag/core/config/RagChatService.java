@@ -2,11 +2,13 @@ package com.springairag.core.config;
 
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ChatResponse.StepMetricRecord;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.api.service.RagAdvisorProvider;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
+import com.springairag.core.advisor.RagPipelineMetrics;
 import com.springairag.core.advisor.RerankAdvisor;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
@@ -192,10 +194,12 @@ public class RagChatService {
         long startTime = System.currentTimeMillis();
         String answer;
         List<ChatResponse.SourceDocument> sources = null;
+        List<StepMetricRecord> pipelineMetrics = null;
         try {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
             answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
             sources = extractSources(chatClientResponse);
+            pipelineMetrics = extractPipelineMetrics(chatClientResponse);
         } catch (Exception e) { // Resilience: record metrics before rethrow
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
@@ -213,6 +217,7 @@ public class RagChatService {
         ChatResponse response = new ChatResponse(answer);
         response.setSources(sources);
         response.setMetadata(Map.of("sessionId", sessionId));
+        response.setStepMetrics(pipelineMetrics);
         return response;
     }
 
@@ -272,6 +277,17 @@ public class RagChatService {
             sources.add(doc);
         }
         return sources;
+    }
+
+    /** 从 advisor response context 提取 Pipeline 步骤指标 */
+    private List<StepMetricRecord> extractPipelineMetrics(ChatClientResponse chatClientResponse) {
+        RagPipelineMetrics pipelineMetrics = RagPipelineMetrics.get(chatClientResponse.context());
+        if (pipelineMetrics == null || pipelineMetrics.getSteps().isEmpty()) {
+            return null;
+        }
+        return pipelineMetrics.getSteps().stream()
+                .map(s -> new StepMetricRecord(s.stepName(), s.durationMs(), s.resultCount()))
+                .toList();
     }
 
     /**

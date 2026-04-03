@@ -26,9 +26,6 @@ jobs:
           --health-retries 5
 
     env:
-      OPENAI_API_KEY: test-key
-      OPENAI_BASE_URL: http://localhost:8080
-      OPENAI_MODEL: test-model
       LLM_PROVIDER: openai
       POSTGRES_HOST: localhost
       POSTGRES_PORT: 5432
@@ -38,6 +35,12 @@ jobs:
       SPRING_DATASOURCE_URL: jdbc:postgresql://localhost:5432/spring_ai_rag_test
       SPRING_DATASOURCE_USERNAME: postgres
       SPRING_DATASOURCE_PASSWORD: postgres
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY || 'test-key' }}
+      OPENAI_BASE_URL: https://api.minimaxi.com
+      OPENAI_MODEL: MiniMax-M2.7
+      SILICONFLOW_API_KEY: ${{ secrets.SILICONFLOW_API_KEY || 'test-key' }}
+      SILICONFLOW_BASE_URL: https://api.siliconflow.cn
+      SILICONFLOW_EMBEDDING_MODEL: BAAI/bge-m3
 
     steps:
       - uses: actions/checkout@v4
@@ -49,10 +52,58 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build
-        run: mvn clean compile -B
+      - name: Wait for PostgreSQL
+        run: |
+          echo "Waiting for PostgreSQL to be ready..."
+          for i in {1..30}; do
+            if pg_isready -h localhost -p 5432 > /dev/null 2>&1; then
+              echo "PostgreSQL is ready!"
+              break
+            fi
+            echo "Waiting... ($i/30)"
+            sleep 2
+          done
 
-      - name: Test with JaCoCo
+      - name: Create test database and extensions
+        run: |
+          psql -h localhost -U postgres -c "CREATE DATABASE spring_ai_rag_test" 2>/dev/null || true
+          psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS vector"
+          psql -h localhost -U postgres -d spring_ai_rag_test -c "CREATE EXTENSION IF NOT EXISTS pg_jieba"
+
+      - name: Install modules (skip tests, install to local Maven repo)
+        run: mvn install -DskipTests -B -q
+
+      - name: Run database migrations (manual V1 schema)
+        run: |
+          psql -h localhost -U postgres -d spring_ai_rag_test << 'EOF'
+          CREATE TABLE IF NOT EXISTS rag_collection (
+            id BIGSERIAL PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          );
+          CREATE TABLE IF NOT EXISTS rag_documents (
+            id BIGSERIAL PRIMARY KEY,
+            collection_id BIGINT,
+            title VARCHAR(500),
+            content TEXT,
+            metadata JSONB,
+            content_hash VARCHAR(64),
+            embedded_content_hash VARCHAR(64),
+            status VARCHAR(50) DEFAULT 'PENDING',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            CONSTRAINT fk_collection FOREIGN KEY (collection_id) REFERENCES rag_collection(id) ON DELETE CASCADE
+          );
+          CREATE INDEX IF NOT EXISTS idx_documents_collection ON rag_documents(collection_id);
+          CREATE INDEX IF NOT EXISTS idx_documents_status ON rag_documents(status);
+          CREATE INDEX IF NOT EXISTS idx_documents_hash ON rag_documents(content_hash);
+          CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON rag_embeddings USING hnsw (embedding vector_cosine_ops);
+          CREATE INDEX IF NOT EXISTS idx_documents_fts ON rag_documents USING gin (to_tsvector('jiebacfg', content));
+          EOF
+
+      - name: Build & Test with JaCoCo
         run: mvn test -B
 
       - name: Package
@@ -78,7 +129,6 @@ jobs:
         if: always()
         run: |
           echo "## JaCoCo Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Module | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|--------|--------|" >> $GITHUB_STEP_SUMMARY
           for report in spring-ai-rag-*/target/site/jacoco/index.html; do

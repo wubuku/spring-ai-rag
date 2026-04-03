@@ -20,6 +20,9 @@ public class ChatResponse {
     @Schema(description = "响应元数据（包含 sessionId 等）")
     private Map<String, Object> metadata;
 
+    @Schema(description = "RAG Pipeline 步骤指标（每步耗时ms + 结果数量）")
+    private List<StepMetricRecord> stepMetrics;
+
     public ChatResponse() {}
 
     public ChatResponse(String answer) {
@@ -35,6 +38,9 @@ public class ChatResponse {
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
+    public List<StepMetricRecord> getStepMetrics() { return stepMetrics; }
+    public void setStepMetrics(List<StepMetricRecord> stepMetrics) { this.stepMetrics = stepMetrics; }
+
     public static ChatResponseBuilder builder() { return new ChatResponseBuilder(); }
 
     public static class ChatResponseBuilder {
@@ -43,7 +49,39 @@ public class ChatResponse {
         public ChatResponseBuilder answer(String answer) { response.setAnswer(answer); return this; }
         public ChatResponseBuilder sources(List<SourceDocument> sources) { response.setSources(sources); return this; }
         public ChatResponseBuilder metadata(Map<String, Object> metadata) { response.setMetadata(metadata); return this; }
+        public ChatResponseBuilder stepMetrics(List<StepMetricRecord> stepMetrics) { response.setStepMetrics(stepMetrics); return this; }
         public ChatResponse build() { return response; }
+    }
+
+    /**
+     * RAG Pipeline 单个步骤的执行指标
+     */
+    @Schema(description = "Pipeline 单个步骤的执行指标")
+    public static class StepMetricRecord {
+
+        @Schema(description = "步骤名称", example = "HybridSearch")
+        private String stepName;
+
+        @Schema(description = "执行耗时（毫秒）", example = "23")
+        private long durationMs;
+
+        @Schema(description = "输出结果数量", example = "12")
+        private int resultCount;
+
+        public StepMetricRecord() {}
+
+        public StepMetricRecord(String stepName, long durationMs, int resultCount) {
+            this.stepName = stepName;
+            this.durationMs = durationMs;
+            this.resultCount = resultCount;
+        }
+
+        public String getStepName() { return stepName; }
+        public void setStepName(String stepName) { this.stepName = stepName; }
+        public long getDurationMs() { return durationMs; }
+        public void setDurationMs(long durationMs) { this.durationMs = durationMs; }
+        public int getResultCount() { return resultCount; }
+        public void setResultCount(int resultCount) { this.resultCount = resultCount; }
     }
 
     /**
