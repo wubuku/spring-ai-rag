@@ -15,10 +15,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -34,13 +32,23 @@ public class ModelComparisonService {
 
     private static final Logger log = LoggerFactory.getLogger(ModelComparisonService.class);
 
+    private final ExecutorService modelComparisonExecutor;
+
+    public ModelComparisonService(
+            @org.springframework.beans.factory.annotation.Qualifier("modelComparisonExecutor") ExecutorService modelComparisonExecutor) {
+        this.modelComparisonExecutor = modelComparisonExecutor;
+    }
+
     /**
      * 并行对比多个模型
+     *
+     * <p>使用共享线程池，避免每次调用创建新 ExecutorService。
+     * 单个模型超时或异常时不影响其他模型，结果降级为失败记录。
      *
      * @param query   查询文本
      * @param models  模型名称 → ChatModel 映射
      * @param timeoutSeconds 单个模型超时（秒）
-     * @return 对比结果列表（按完成顺序）
+     * @return 对比结果列表（按提交顺序）
      */
     public List<ModelComparisonResult> compareModels(String query,
                                                       Map<String, ChatModel> models,
@@ -51,30 +59,33 @@ public class ModelComparisonService {
         log.info("Comparing {} models with query: {}", models.size(),
                 query.length() > 50 ? query.substring(0, 50) + "..." : query);
 
-        ExecutorService executor = Executors.newFixedThreadPool(models.size());
-        try {
-            Map<String, Future<ModelComparisonResult>> futures = new LinkedHashMap<>();
+        Map<String, Future<ModelComparisonResult>> futures = new LinkedHashMap<>();
 
-            for (Map.Entry<String, ChatModel> entry : models.entrySet()) {
-                String modelName = entry.getKey();
-                ChatModel model = entry.getValue();
-                futures.put(modelName, executor.submit(() -> queryModel(modelName, model, query)));
-            }
-
-            List<ModelComparisonResult> results = new ArrayList<>(futures.size());
-            for (Map.Entry<String, Future<ModelComparisonResult>> entry : futures.entrySet()) {
-                try {
-                    results.add(entry.getValue().get(timeoutSeconds, TimeUnit.SECONDS));
-                } catch (InterruptedException | ExecutionException | TimeoutException e) {
-                    log.error("Model {} failed: {}", entry.getKey(), e.getMessage());
-                    results.add(ModelComparisonResult.failure(entry.getKey(), e.getMessage()));
-                }
-            }
-
-            return results;
-        } finally {
-            executor.shutdown();
+        for (Map.Entry<String, ChatModel> entry : models.entrySet()) {
+            String modelName = entry.getKey();
+            ChatModel model = entry.getValue();
+            futures.put(modelName, submitQuery(modelName, model, query));
         }
+
+        List<ModelComparisonResult> results = new ArrayList<>(futures.size());
+        for (Map.Entry<String, Future<ModelComparisonResult>> entry : futures.entrySet()) {
+            try {
+                results.add(entry.getValue().get(timeoutSeconds, TimeUnit.SECONDS));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt(); // Restore interrupt status
+                log.error("Model {} comparison interrupted: {}", entry.getKey(), e.getMessage());
+                results.add(ModelComparisonResult.failure(entry.getKey(), "Interrupted: " + e.getMessage()));
+            } catch (ExecutionException | TimeoutException e) {
+                log.error("Model {} failed: {}", entry.getKey(), e.getMessage());
+                results.add(ModelComparisonResult.failure(entry.getKey(), e.getMessage()));
+            }
+        }
+
+        return results;
+    }
+
+    private Future<ModelComparisonResult> submitQuery(String modelName, ChatModel model, String query) {
+        return modelComparisonExecutor.submit(() -> queryModel(modelName, model, query));
     }
 
     private ModelComparisonResult queryModel(String modelName, ChatModel model, String query) {

@@ -15,7 +15,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -44,6 +46,26 @@ public class PerformanceConfig {
             t.setDaemon(true);
             return t;
         });
+    }
+
+    /**
+     * 模型对比专用线程池
+     *
+     * <p>核心 2 线程、最大 8 线程，支持模型对比场景的动态扩展。
+     * 复用线程避免每次对比创建新 ExecutorService（资源泄漏）。
+     */
+    @Bean("modelComparisonExecutor")
+    public ExecutorService modelComparisonExecutor() {
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(
+                2, 8, 60L, TimeUnit.SECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>(16),
+                r -> {
+                    Thread t = new Thread(r, "model-compare");
+                    t.setDaemon(true);
+                    return t;
+                });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     /**

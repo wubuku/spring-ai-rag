@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -11,10 +12,18 @@ import org.springframework.ai.chat.prompt.Prompt;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.*;
 
 /**
@@ -23,10 +32,17 @@ import static org.mockito.Mockito.*;
 class ModelComparisonServiceTest {
 
     private ModelComparisonService service;
+    private ExecutorService executor;
 
     @BeforeEach
     void setUp() {
-        service = new ModelComparisonService();
+        executor = Executors.newSingleThreadExecutor();
+        service = new ModelComparisonService(executor);
+    }
+
+    @AfterEach
+    void tearDown() {
+        executor.shutdownNow();
     }
 
     private ChatModel mockModel(String responseText, long simulateDelayMs) {
@@ -196,5 +212,60 @@ class ModelComparisonServiceTest {
         assertEquals("超时", r.getError());
         assertNull(r.getResponse());
         assertEquals(0, r.getLatencyMs());
+    }
+
+    @Test
+    @DisplayName("InterruptedException 时中断状态被恢复且结果降级为失败")
+    void compareModels_interruptedException_restoresInterruptAndFails() {
+        // 使用会立即抛出 InterruptedException 的 Callable
+        ExecutorService interruptingExecutor = mock(ExecutorService.class);
+        Future<ModelComparisonService.ModelComparisonResult> future = mock(Future.class);
+        try {
+            doThrow(new InterruptedException("线程被中断"))
+                    .when(future).get(anyLong(), any(TimeUnit.class));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        doReturn(future).when(interruptingExecutor).submit(any(Callable.class));
+
+        ModelComparisonService svc = new ModelComparisonService(interruptingExecutor);
+
+        // 在调用前检查中断状态
+        boolean beforeInterrupt = Thread.currentThread().isInterrupted();
+        List<ModelComparisonService.ModelComparisonResult> results =
+                svc.compareModels("测试", Map.of("model-a", mock(ChatModel.class)), 5);
+
+        assertEquals(1, results.size());
+        assertFalse(results.get(0).isSuccess());
+        assertTrue(results.get(0).getError().contains("Interrupted"));
+        // InterruptedException 被 catch 后，interrupt() 被调用恢复中断状态
+        // 即便调用前未中断，catch 后也会设置为 true
+        assertTrue(Thread.currentThread().isInterrupted() || beforeInterrupt,
+                "中断状态应在处理后被恢复（设置为 true）");
+        // 清理：恢复中断状态以便后续测试
+        Thread.interrupted();
+    }
+
+    @Test
+    @DisplayName("TimeoutException 时结果降级为失败")
+    void compareModels_timeoutException_returnsFailureResult() {
+        ExecutorService timeoutExecutor = mock(ExecutorService.class);
+        Future<ModelComparisonService.ModelComparisonResult> future = mock(Future.class);
+        try {
+            doThrow(new TimeoutException("模型响应超时"))
+                    .when(future).get(anyLong(), any(TimeUnit.class));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        doReturn(future).when(timeoutExecutor).submit(any(Callable.class));
+
+        ModelComparisonService svc = new ModelComparisonService(timeoutExecutor);
+
+        List<ModelComparisonService.ModelComparisonResult> results =
+                svc.compareModels("测试", Map.of("model-x", mock(ChatModel.class)), 2);
+
+        assertEquals(1, results.size());
+        assertFalse(results.get(0).isSuccess());
+        assertEquals("模型响应超时", results.get(0).getError());
     }
 }
