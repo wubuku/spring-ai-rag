@@ -30,41 +30,57 @@ spring-ai-rag 依赖 PostgreSQL 扩展实现检索能力。本文档分析各扩
 
 **结论：** 不可省略。向量检索是 RAG 的核心能力。
 
-### 2. pg_trgm — 全文检索（可选）
+### 2. pg_trgm — 全文检索（可选，降级方案）
 
 **用途：**
 - `similarity(text, text)` 函数计算文本相似度
-- 用于 `HybridRetrieverService.fullTextSearch()` 做模糊匹配
+- 用于 `PgTrgmFulltextProvider` 做多词模糊匹配（每个关键词取最高相似度）
 - 阈值 `> 0.1` 过滤低相关结果
 
+**原理：** 把文本切成连续 3 个字符的片段（三元组），通过重叠度计算相似度。
+- "搜索文档" → 字符级三元组切分
+- "苹果手机" 和 "苹果电脑" 的三元组重叠度很高（都含"苹""果""手""机/电""脑"）
+
+**适用场景：** 英文模糊纠错、拼写近似匹配
+
+**中文局限：** 字符级匹配，无法理解词边界，精度远低于分词方案。
+
 **代码位置：**
-- 迁移：`V1__init_rag_schema.sql` — `DO $$ EXCEPTION` 块（可选安装）
-- 查询：`HybridRetrieverService.executeFulltextQuery()` — `similarity(chunk_text, ?)`
-- 配置：`rag.retrieval.fulltext-enabled` 开关
+- Provider：`core/retrieval/fulltext/PgTrgmFulltextProvider.java`
+- 配置：`rag.retrieval.fulltext-strategy=pg_trgm` 或 `auto`（降级方案）
 
-**行为：**
-```
-启动时检测 → pg_trgm 可用？
-  ├─ 是 → 混合检索（向量 + 全文融合）
-  └─ 否 → 自动降级为纯向量检索 + warn 日志
-```
-
-**注意事项：**
-- `pg_trgm` 对中文支持有限（按字符三元组切分，非语义分词）
-- 当前实现只取查询的第一个空格分隔词做 `similarity()`，多词查询能力有限
-- 纯向量检索对中文场景可能效果更好（语义匹配 vs 字符匹配）
-
-### 3. pg_jieba — 预留（未使用）
+### 3. pg_jieba — 全文检索（可选，中文首选）
 
 **用途：**
-- V1 迁移创建 `jiebacfg` 文本搜索配置（基于 jieba 分词器）
-- **但 Java 代码中没有任何地方使用 `ts_vector`、`plainto_tsquery` 或 `jiebacfg`**
+- `to_tsvector('jiebacfg', text)` + `plainto_tsquery('jiebacfg', query)` 实现中文分词全文检索
+- `ts_rank()` 计算相关度排序
+
+**原理：** 用 jieba 分词器把文本切成词语，基于词语匹配而非字符匹配。
+- "搜索文档" → `搜索` `文档`（正确识别词边界）
+- "苹果手机" → `苹果` `手机`（不会误匹配"苹果电脑"）
+
+**适用场景：** 中文全文检索，精度显著高于 pg_trgm
+
+**安装要求：** 需要额外编译安装（C 扩展），不是所有 PostgreSQL 环境都支持（如云 RDS）。
 
 **代码位置：**
-- 迁移：`V1__init_rag_schema.sql` — `DO $$ EXCEPTION` 块（可选安装）
-- 配置创建：`CREATE TEXT SEARCH CONFIGURATION jiebacfg (parser = jieba)`（仅在 pg_jieba 可用时）
+- Provider：`core/retrieval/fulltext/PgJiebaFulltextProvider.java`
+- 配置：`rag.retrieval.fulltext-strategy=pg_jieba` 或 `auto`（首选方案）
 
-**结论：** 纯预留。当前全文检索用的是 `pg_trgm.similarity()`，不是 PostgreSQL 全文检索引擎。
+### pg_trgm vs pg_jieba 对比
+
+| 维度 | pg_trgm（三元组） | pg_jieba（分词） |
+|------|------------------|-----------------|
+| 中文精度 | 差——字符级匹配，无法区分词边界 | 好——词语级匹配，正确识别中文分词 |
+| 英文精度 | 中——适合拼写纠错 | 好——同样适用 |
+| 安装难度 | 低——PostgreSQL 自带扩展 | 高——需编译 C 扩展 |
+| 查询性能 | 快（简单字符串运算） | 稍慢（分词 + 倒排索引） |
+| 云数据库 | 通常可用 | 受限（AWS RDS、阿里云 RDS 多数不支持） |
+| 推荐场景 | 英文为主 / 降级兜底 | 中文为主（首选） |
+
+**结论：对中文场景，pg_jieba 是正确选择，pg_trgm 是降级兜底。**
+
+两者共存的原因：不是所有环境都能安装 pg_jieba（如云数据库），pg_trgm 保证最低限度的全文检索能力。当前 `auto` 策略优先选 pg_jieba，不可用时降级 pg_trgm。
 
 ## 架构图
 
@@ -74,17 +90,23 @@ spring-ai-rag 依赖 PostgreSQL 扩展实现检索能力。本文档分析各扩
     ▼
 HybridRetrieverService.search()
     │
-    ├─ 检查：fulltextEnabled && pgTrgmAvailable？
+    ├─ 检查：fulltextEnabled && fulltextProvider.isAvailable()？
     │
-    ├─ 是（混合模式）              否（纯向量模式）
-    │   │                           │
-    │   ├─ CompletableFuture 1      └─ vectorSearch()
-    │   │   └─ vectorSearch()           │
-    │   ├─ CompletableFuture 2          └─ pgvector HNSW 索引
-    │   │   └─ fullTextSearch()              ORDER BY embedding <=> ?::vector
+    ├─ 是（混合模式）                     否（纯向量模式）
+    │   │                                  │
+    │   ├─ CompletableFuture 1             └─ vectorSearch()
+    │   │   └─ vectorSearch()                  │
+    │   ├─ CompletableFuture 2                 └─ pgvector HNSW 索引
+    │   │   └─ fulltextProvider.search()           ORDER BY embedding <=> ?::vector
     │   │       │
-    │   │       └─ pg_trgm.similarity()
-    │   │           WHERE similarity(chunk_text, ?) > 0.1
+    │   │       ├─ PgJiebaFulltextProvider (首选)
+    │   │       │   └─ to_tsvector('jiebacfg') @@ plainto_tsquery('jiebacfg', ?)
+    │   │       │
+    │   │       ├─ PgTrgmFulltextProvider (降级)
+    │   │       │   └─ similarity(chunk_text, ?) > 0.1（多词取最高分）
+    │   │       │
+    │   │       └─ NoOpFulltextSearchProvider (禁用)
+    │   │           └─ 返回空列表
     │   │
     │   └─ fuseResults(vector, fulltext)
     │       └─ RRF 融合 + 去重
@@ -93,34 +115,65 @@ HybridRetrieverService.search()
 返回 List<RetrievalResult>
 ```
 
+### 策略选择流程
+
+```
+rag.retrieval.fulltext-strategy = ?
+    │
+    ├─ "none"  ──→ NoOpFulltextSearchProvider（纯向量）
+    │
+    ├─ "pg_jieba" ──→ pg_jieba 扩展可用？
+    │                    ├─ 是 → PgJiebaFulltextProvider
+    │                    └─ 否 → IllegalStateException（启动失败）
+    │
+    ├─ "pg_trgm" ──→ pg_trgm 扩展可用？
+    │                   ├─ 是 → PgTrgmFulltextProvider
+    │                   └─ 否 → IllegalStateException（启动失败）
+    │
+    └─ "auto"（默认）──→ pg_jieba 可用？
+                           ├─ 是 → PgJiebaFulltextProvider
+                           └─ 否 → pg_trgm 可用？
+                                      ├─ 是 → PgTrgmFulltextProvider
+                                      └─ 否 → NoOp（纯向量，warn 日志）
+```
+
 ## 配置参考
 
 ```yaml
 rag:
   retrieval:
-    fulltext-enabled: true    # 是否启用全文检索（默认 true，不可用时自动降级）
-    vector-weight: 0.5        # 向量检索权重
-    fulltext-weight: 0.5      # 全文检索权重
-    default-limit: 10         # 默认返回数量
-    min-score: 0.3            # 最低相关分数
+    fulltext-enabled: true          # 总开关（默认 true）
+    fulltext-strategy: auto         # 策略：auto / pg_jieba / pg_trgm / none
+    vector-weight: 0.5              # 向量检索权重
+    fulltext-weight: 0.5            # 全文检索权重
+    default-limit: 10               # 默认返回数量
+    min-score: 0.3                  # 最低相关分数
 ```
+
+| 策略值 | 行为 |
+|--------|------|
+| `auto`（默认） | 自动检测：pg_jieba → pg_trgm → 纯向量（降级时 warn 日志） |
+| `pg_jieba` | 强制使用 jieba 分词，扩展不可用时**启动失败** |
+| `pg_trgm` | 强制使用三元组匹配，扩展不可用时**启动失败** |
+| `none` | 纯向量检索，不检测任何扩展 |
 
 ## 建议
 
-### 短期（已完成）
+### 已完成
 - ✅ pg_trgm / pg_jieba 改为可选安装
 - ✅ 自动检测 + 优雅降级 + 明确日志
-- ✅ `fulltext-enabled` 配置开关
+- ✅ `fulltext-enabled` 配置总开关
+- ✅ `fulltext-strategy` 策略配置（auto / pg_jieba / pg_trgm / none）
+- ✅ FulltextSearchProvider 策略接口抽象
+- ✅ pg_jieba 中文分词全文检索实现
+- ✅ pg_trgm 多词检索支持（每个关键词取最高相似度）
 - ✅ 降级行为测试覆盖
+- ✅ 策略配置测试覆盖
 
-### 中期（可考虑）
-- [ ] **多词全文检索**：当前 `fullTextSearch()` 只用第一个词，可改用 `pg_trgm.word_similarity()` 或拼接多个 `similarity()` 条件
-- [ ] **利用 pg_jieba**：如果安装了 pg_jieba，可使用 `to_tsvector('jiebacfg', chunk_text)` 做真正的中文分词全文检索，效果远优于 pg_trgm 的字符三元组
-- [ ] **全文检索策略抽象**：定义 `FulltextSearchProvider` 接口，支持 pg_trgm / pg_jieba / Elasticsearch 等多种后端
-
-### 长期
+### 可选优化
+- [ ] **全文检索 GIN 索引**：对 rag_embeddings.chunk_text 预建 `to_tsvector('jiebacfg')` 索引列，避免运行时计算（大数据集必做）
+- [ ] **检索策略 A/B 测试**：利用已有的 AbTestService 对比 pg_jieba vs pg_trgm vs 纯向量效果
 - [ ] **混合检索权重自适应**：根据查询语言（中文/英文）自动调整 vector/fulltext 权重
-- [ ] **检索策略 A/B 测试**：利用已有的 AbTestService 对比不同检索策略效果
 
 ## 相关文件
 
