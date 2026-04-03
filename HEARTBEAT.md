@@ -318,3 +318,15 @@
 - 修复：`ApiCompatibilityAdapter.supportsSystemMessage()` 默认 true，MiniMaxAdapter 返回 false
 - `normalizeMessages()` 自动将 system 消息转为 user 消息（加 [System] 前缀）
 - 13 个测试全通过，950 测试全通过
+
+### 2026-04-03 Evening — Demo E2E 脚本
+- `scripts/demo-e2e.sh`: 完整 E2E 测试脚本（启动服务器+等待就绪+curl 验证+颜色输出）
+  - 自动加载 .env 环境变量
+  - 等待服务器启动（最多60s）
+  - 10 项核心端点验证
+  - 彩色输出 + 退出码
+
+### 2026-04-03 Evening — 持续改进
+- IMPLEMENTATION_COMPARISON.md: 更新为 24 项（24 P2）
+- MiniMaxAdapter: supportsSystemMessage()=false，system→user 自动转换
+- 所有 commits 已推送（8fa3553 HEAD）
