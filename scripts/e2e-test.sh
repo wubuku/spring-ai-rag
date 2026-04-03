@@ -11,6 +11,7 @@ API="${BASE_URL}/api/v1/rag"
 PASS=0
 FAIL=0
 DOC_ID=""
+COLLECTION_ID=""
 
 # 颜色
 GREEN='\033[0;32m'
@@ -59,9 +60,70 @@ assert_contains "返回 database=UP" "$BODY" '"database":"UP"'
 echo ""
 
 # ────────────────────────────────────────
-# 2. 创建文档（含 JSONB metadata）
+# 2. Collection CRUD
 # ────────────────────────────────────────
-echo "2️⃣  创建文档"
+echo "2️⃣  Collection CRUD"
+# 2a. 创建 Collection
+RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"e2e-test-collection","description":"E2E自动化测试Collection","domainId":"default"}')
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "POST /collections" "200" "$CODE"
+assert_contains "返回 collection ID" "$BODY" '"id"'
+assert_contains "返回 name" "$BODY" '"name"'
+COLLECTION_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
+echo "  📦 创建的 Collection ID: $COLLECTION_ID"
+
+# 2b. 列出 Collections
+RESP=$(curl -s -w "\n%{http_code}" "$API/collections?offset=0&limit=10")
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "GET /collections" "200" "$CODE"
+assert_contains "返回 collections 数组" "$BODY" '"collections"'
+assert_contains "返回 total" "$BODY" '"total"'
+
+# 2c. 获取单个 Collection
+if [ -n "$COLLECTION_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/$COLLECTION_ID")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "GET /collections/{id}" "200" "$CODE"
+    assert_contains "返回正确 name" "$BODY" '"name"'
+    assert_contains "返回 description" "$BODY" '"description"'
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+fi
+
+# 2d. 更新 Collection
+if [ -n "$COLLECTION_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X PUT "$API/collections/$COLLECTION_ID" \
+        -H "Content-Type: application/json" \
+        -d '{"name":"e2e-updated-collection","description":"E2E 自动化测试 Collection（已更新）","domainId":"default"}')
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "PUT /collections/{id}" "200" "$CODE"
+    assert_contains "返回更新后的 name" "$BODY" "e2e-updated-collection"
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+fi
+
+# 2e. 获取 Collection 内的文档列表
+if [ -n "$COLLECTION_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/$COLLECTION_ID/documents?offset=0&limit=10")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "GET /collections/{id}/documents" "200" "$CODE"
+    assert_contains "返回 documents 数组" "$BODY" '"documents"'
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+fi
+echo ""
+
+# ────────────────────────────────────────
+# 3. 创建文档（含 JSONB metadata）
+# ────────────────────────────────────────
+echo "3️⃣  创建文档"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/documents" \
     -H "Content-Type: application/json" \
     -d '{"title":"E2E自动化测试文档","content":"这是端到端测试创建的文档，用于验证CRUD和嵌入向量生成。Spring AI RAG 提供混合检索、查询改写和结果重排能力。向量存储使用PostgreSQL的pgvector扩展，支持HNSW索引实现高效的相似度搜索。嵌入模型使用BGE-M3，输出1024维向量。对话记忆通过Spring AI的MessageChatMemoryAdvisor实现，支持短期和长期记忆。领域扩展通过DomainRagExtension接口实现，支持自定义Prompt模板和检索配置。文档分块使用HierarchicalTextChunker，支持Markdown标题和段落级别的智能分块。","source":"e2e-test","documentType":"text","metadata":{"author":"e2e-script","priority":"high"}}')
@@ -72,12 +134,25 @@ assert_contains "返回文档ID" "$BODY" '"id"'
 assert_contains "返回CREATED状态" "$BODY" '"CREATED"'
 DOC_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 echo "  📄 创建的文档ID: $DOC_ID"
+
+# 3f. 将文档添加到 Collection
+if [ -n "$DOC_ID" ] && [ -n "$COLLECTION_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections/$COLLECTION_ID/documents" \
+        -H "Content-Type: application/json" \
+        -d "{\"documentId\":$DOC_ID}")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "POST /collections/{id}/documents (关联)" "200" "$CODE"
+    assert_contains "返回 documentId" "$BODY" '"documentId"'
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 document ID 或 collection ID"
+fi
 echo ""
 
 # ────────────────────────────────────────
 # 3. 获取文档详情
 # ────────────────────────────────────────
-echo "3️⃣  获取文档详情"
+echo "4️⃣  获取文档详情"
 RESP=$(curl -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -90,7 +165,7 @@ echo ""
 # ────────────────────────────────────────
 # 4. 文档列表（分页）
 # ────────────────────────────────────────
-echo "4️⃣  文档列表"
+echo "5️⃣  文档列表"
 RESP=$(curl -s -w "\n%{http_code}" "$API/documents?offset=0&limit=5")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -102,7 +177,7 @@ echo ""
 # ────────────────────────────────────────
 # 5. 生成嵌入向量
 # ────────────────────────────────────────
-echo "5️⃣  生成嵌入向量"
+echo "6️⃣  生成嵌入向量"
 if [ -n "$DOC_ID" ]; then
     RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/documents/$DOC_ID/embed")
     CODE=$(echo "$RESP" | tail -1)
@@ -118,7 +193,7 @@ echo ""
 # ────────────────────────────────────────
 # 6. 直接检索
 # ────────────────────────────────────────
-echo "6️⃣  直接检索"
+echo "7️⃣  直接检索"
 RESP=$(curl -s -w "\n%{http_code}" "$API/search?query=Spring%20AI&maxResults=3")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -129,7 +204,7 @@ echo ""
 # ────────────────────────────────────────
 # 7. RAG 问答
 # ────────────────────────────────────────
-echo "7️⃣  RAG 问答 (非流式)"
+echo "8️⃣  RAG 问答 (非流式)"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/chat/ask" \
     -H "Content-Type: application/json" \
     -d '{"message":"Spring AI是什么？","sessionId":"e2e-test-session","maxResults":3}')
@@ -147,7 +222,7 @@ echo ""
 # ────────────────────────────────────────
 # 8. 流式响应
 # ────────────────────────────────────────
-echo "8️⃣  流式响应 (SSE)"
+echo "9️⃣  流式响应 (SSE)"
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/chat/stream" \
     -H "Content-Type: application/json" \
     -H "Accept: text/event-stream" \
@@ -158,7 +233,7 @@ echo ""
 # ────────────────────────────────────────
 # 9. 对话历史
 # ────────────────────────────────────────
-echo "9️⃣  对话历史"
+echo "🔟 对话历史"
 RESP=$(curl -s -w "\n%{http_code}" "$API/chat/history/e2e-test-session?limit=10")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
@@ -168,7 +243,7 @@ echo ""
 # ────────────────────────────────────────
 # 10. 删除文档
 # ────────────────────────────────────────
-echo "🔟 删除文档"
+echo "1️⃣1️⃣ 删除文档"
 if [ -n "$DOC_ID" ]; then
     RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/documents/$DOC_ID")
     CODE=$(echo "$RESP" | tail -1)
@@ -182,6 +257,43 @@ if [ -n "$DOC_ID" ]; then
     assert_status "GET 已删除文档返回404" "404" "$CODE2"
 else
     echo -e "  ${YELLOW}⚠️ SKIP${NC} 无文档ID"
+fi
+echo ""
+
+# ────────────────────────────────────────
+# 1️⃣2️⃣ 缓存统计
+# ────────────────────────────────────────
+echo "1️⃣2️⃣ 缓存统计"
+RESP=$(curl -s -w "\n%{http_code}" "$API/cache/stats")
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "GET /cache/stats" "200" "$CODE"
+assert_contains "返回 cacheStats 或 hitRate" "$BODY" '"cacheStats"'
+echo ""
+
+# ────────────────────────────────────────
+# 1️⃣3️⃣ RAG 指标概览
+# ────────────────────────────────────────
+echo "1️⃣3️⃣ RAG 指标概览"
+RESP=$(curl -s -w "\n%{http_code}" "$API/metrics/overview")
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "GET /metrics/overview" "200" "$CODE"
+assert_contains "返回指标数据" "$BODY" '"totalRequests"'
+echo ""
+
+# ────────────────────────────────────────
+# 1️⃣4️⃣ 清理 Collection
+# ────────────────────────────────────────
+echo "1️⃣4️⃣ 清理 Collection"
+if [ -n "$COLLECTION_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/collections/$COLLECTION_ID")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "DELETE /collections/{id}" "200" "$CODE"
+    assert_contains "确认删除" "$BODY" "Collection 已删除"
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
 fi
 echo ""
 
