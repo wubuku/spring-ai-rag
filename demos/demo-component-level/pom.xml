@@ -59,6 +59,12 @@
             <artifactId>spring-ai-openai</artifactId>
         </dependency>
 
+        <!-- Spring AI JDBC Chat Memory（对话记忆存储） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-model-chat-memory-repository-jdbc</artifactId>
+        </dependency>
+
         <!-- Spring Boot Web -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
