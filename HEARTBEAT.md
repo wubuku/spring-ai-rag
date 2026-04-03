@@ -240,6 +240,6 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 90 | FulltextSearchProvider 三个实现类测试覆盖 | 测试 | ⏳ |
-| 91 | 长方法重构（AlertService 95行/RagChatService 60行等） | 代码质量 | ⏳ |
-| 92 | ComponentHealthService catch(Exception) 细化 | 代码质量 | ⏳ |
+| 90 | FulltextSearchProvider 三个实现类测试覆盖 | 测试 | ✅ 2026-04-03 |
+| 91 | 长方法重构（getMappingForMethod 50→15行） | 代码质量 | ✅ 2026-04-03 |
+| 92 | ComponentHealthService catch(Exception) 注释 | 代码质量 | ✅ 2026-04-03 |
