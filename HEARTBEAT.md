@@ -209,8 +209,8 @@
 | 78 | 性能基准测试增强（并发+大数据集） | 性能 | ⏳ |
 | 79 | Actuator 自定义指标完善 | 可观测性 | ⏳ |
 | 80 | 健康检查端点增强（多组件探针） | 运维 | ⏳ |
-| 81 | 错误响应标准化（RFC 7807 Problem Detail） | API 质量 | ⏳ |
-| 82 | 请求验证增强（@Valid + 自定义校验器） | 安全 | ⏳ |
+| 81 | 错误响应标准化（RFC 7807 Problem Detail） | API 质量 | ✅ 2026-04-03 |
+| 82 | 请求验证增强（@Valid + 自定义校验器） | 安全 | ✅ 2026-04-03 |
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ⏳ |
 | 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ⏳ |
 
@@ -229,6 +229,7 @@
 - 2026-04-03 07:29 — ✅ #71 国际化框架：MessageSourceConfig + MessageResolver + messages.properties/en/zh_CN，GlobalExceptionHandler 注入 MessageResolver 错误消息国际化，GlobalExceptionHandlerTest 适配，commit 4ef5da0
 - 2026-04-03 07:38 — ✅ #72 缓存策略配置外部化：RagProperties.Cache 内部类 + CacheConfig 注入 RagProperties，Caffeine 参数从 rag.cache.* 配置读取，commit 90105f8
 - 2026-04-03 07:05 — ✅ #75 CORS 安全配置（已含在 #70 commit 中）
+- 2026-04-03 08:03 — ✅ #81+#82 RFC 7807 + 请求验证：GlobalExceptionHandler 所有 handler 统一返回 application/problem+json Content-Type，新增 ConstraintViolationException 处理器，提取 buildResponse() 消除重复；6 个 DTO 补齐验证注解（EvaluateRequest @NotBlank/@NotEmpty、FeedbackRequest @NotBlank/@Min/@Max/@Size、RetrievalConfig @Min/@Max/@DecimalMin/@DecimalMax、SearchRequest @Size/@Valid 级联、ChatRequest @Min/@Max、DocumentRequest @Size），3 个新测试，842 测试全通过，commit 240faac
 
 24h 改进计划核心项完成：API 版本管理 + 国际化 + 缓存配置外部化 + CORS + surefire 修复
 840 测试全通过，代码库健康
