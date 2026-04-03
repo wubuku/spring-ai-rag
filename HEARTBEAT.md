@@ -400,9 +400,3 @@
 - rest-api.md 新增 ## Metrics — RAG 指标监控 章节，文档化 GET /api/v1/rag/metrics（含响应字段说明）
 - 零 TODO/FIXME，项目健康
 - commit f33f88d 已推送
-
-### 2026-04-04 04:40 — 巡检 + CHANGELOG 更新
-- mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
-- 所有 HEARTBEAT 待办已完成；零 TODO/FIXME
-- CHANGELOG 新增 2026-04-04 条目：Pipeline IntegrationTest(22 测试) + BenchmarkTest(100 并发) + E2E 扩展(14 项) + LLM 熔断器 + NPE 修复
-- commit 093e9f0 已推送
