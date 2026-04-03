@@ -381,7 +381,12 @@
 - 新增 3 个测试：`null callback 不抛异常`、`缓存命中 chunks=null`、`完整进度链路 5 阶段`
 - 零 TODO/FIXME，990+ 测试全通过，commit 282b5c6
 
-### 2026-04-04 03:38 — 主动巡检：demo-domain-extension 测试修复
+### 2026-04-04 05:13 — 主动巡检：catch 注释规范化 + IMPLEMENTATION_COMPARISON 更新
+- 5 个 bare `catch(Exception)` 补注释：PgJiebaFulltextProvider（health probe + search failure resilience）、PgTrgmFulltextProvider（availability detection + search resilience）、HybridRetrieverService（vector search failure）
+- IMPLEMENTATION_COMPARISON.md 统计更新：136 源文件 + 104 测试文件
+- mvn test ✅（全通过），零 TODO/FIXME，commit 08f3f37 已推送
+
+### 2026-04-04 04:40 — 巡检 + CHANGELOG 更新
 - mvn clean compile ✅ / mvn test ✅（1162+ 测试全通过，零失败零错误）
 - demo-domain-extension MedicalRagControllerTest 编译失败：Java 24 严格类型推断导致 `(ChatRequest) any()` 无法解析重载方法
 - 修复：改用 `any(ChatRequest.class)` + `anyString()` + `isNull()` 替代原始类型 cast
