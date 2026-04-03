@@ -342,7 +342,7 @@ Phase 1-5 + 改进周期全部完成后，Phase 6 建议已推进：
 | P1 | RagDocumentController 重构 | ✅ 668→294 行（-56%），拆分 DocumentEmbedService + BatchDocumentService |
 | P2 | 多模型并行对比测试 | ✅ ModelComparisonService + 8 测试 |
 | P2 | 查询改写 LLM 辅助模式 | ✅ llmRewrite() 规则+LLM 混合模式 |
-| P2 | 检索结果缓存策略优化 | 📋 Caffeine 已集成，需评估命中率 |
-| P3 | Docker Compose 一键部署 | 📋 |
-| P3 | API 版本管理策略 | 📋 |
-| P3 | 国际化支持 | 📋 |
+| P2 | 检索结果缓存策略优化 | ✅ #72 Caffeine L1 缓存 + rag.cache.* 配置外部化 |
+| P3 | Docker Compose 一键部署 | ✅ #36 多阶段 Dockerfile + docker-compose.yml + 非 root 用户 |
+| P3 | API 版本管理策略 | ✅ #70 @ApiVersion 注解 + ApiVersionRequestMappingHandlerMapping |
+| P3 | 国际化支持 | ✅ #71 MessageSource + messages.properties/en/zh_CN + ConstraintViolationException |
