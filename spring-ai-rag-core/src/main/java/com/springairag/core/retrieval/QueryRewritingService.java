@@ -1,11 +1,13 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.core.config.RagProperties;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -27,33 +29,73 @@ import java.util.regex.Pattern;
  * <p>同义词词典和领域限定词可通过配置自定义（默认空，不含领域硬编码）。
  */
 @Service
+@Lazy
 public class QueryRewritingService {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewritingService.class);
 
-    private final RagProperties.QueryRewrite config;
-    private final ChatModel chatModel;
+    @Autowired(required = false)
+    private RagProperties ragProperties;
+
+    @Autowired(required = false)
+    private ChatModel chatModel;
+
+    private RagProperties.QueryRewrite config;
 
     /**
      * 运行时可变的同义词词典（优先级高于配置文件）
      */
-    private Map<String, String[]> synonymDictionary;
+    private Map<String, String[]> synonymDictionary = Collections.emptyMap();
 
     /**
      * 运行时可变的领域限定词（优先级高于配置文件）
      */
-    private List<String> domainQualifiers;
+    private List<String> domainQualifiers = Collections.emptyList();
 
-    public QueryRewritingService(RagProperties ragProperties) {
-        this(ragProperties, null);
+    /**
+     * 无参构造器（兼容 Spring 框架）
+     */
+    public QueryRewritingService() {
     }
 
-    public QueryRewritingService(RagProperties ragProperties,
-                                  @Autowired(required = false) ChatModel chatModel) {
-        this.config = ragProperties.getQueryRewrite();
-        this.synonymDictionary = config.getSynonymDictionary();
-        this.domainQualifiers = config.getDomainQualifiers();
+    /**
+     * 单参数构造器（用于测试和手动装配）。
+     * 注意：生产代码中请使用字段注入 + @PostConstruct 方式。
+     */
+    public QueryRewritingService(RagProperties ragProperties) {
+        this.ragProperties = ragProperties;
+        this.chatModel = null;
+        init();
+    }
+
+    /**
+     * 双参数构造器（用于测试）。
+     * 注意：生产代码中请使用字段注入 + @PostConstruct 方式。
+     */
+    public QueryRewritingService(RagProperties ragProperties, ChatModel chatModel) {
+        this.ragProperties = ragProperties;
         this.chatModel = chatModel;
+        init();
+    }
+
+    /**
+     * 初始化配置（在字段注入后由 Spring 调用，或由单参数构造器直接调用）。
+     * 即使 ragProperties 为 null 也使用默认配置，保证服务可正常降级运行。
+     */
+    @PostConstruct
+    public void init() {
+        if (ragProperties != null) {
+            this.config = ragProperties.getQueryRewrite();
+            if (this.config == null) {
+                this.config = new RagProperties.QueryRewrite();
+            }
+            this.synonymDictionary = config.getSynonymDictionary() != null
+                    ? config.getSynonymDictionary() : Collections.emptyMap();
+            this.domainQualifiers = config.getDomainQualifiers() != null
+                    ? config.getDomainQualifiers() : Collections.emptyList();
+        } else {
+            this.config = new RagProperties.QueryRewrite();
+        }
     }
 
     /**
@@ -79,7 +121,7 @@ public class QueryRewritingService {
      * @return 改写后的查询列表（包含原始查询和扩展查询）
      */
     public List<String> rewriteQuery(String originalQuery) {
-        if (!config.isEnabled() || originalQuery == null || originalQuery.isBlank()) {
+        if (config == null || !config.isEnabled() || originalQuery == null || originalQuery.isBlank()) {
             return List.of(originalQuery);
         }
 
@@ -210,7 +252,7 @@ public class QueryRewritingService {
     public List<String> generatePaddingQueries(String query) {
         List<String> paddingQueries = new ArrayList<>();
 
-        if (!config.isEnabled() || query == null || query.isBlank()) {
+        if (config == null || !config.isEnabled() || query == null || query.isBlank()) {
             return paddingQueries;
         }
 

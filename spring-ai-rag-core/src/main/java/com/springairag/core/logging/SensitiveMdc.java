@@ -93,8 +93,11 @@ public final class SensitiveMdc {
 
     /**
      * Check if a key is automatically treated as sensitive.
-     * Detection is based on whether the key name contains any known
-     * sensitive field name (case-insensitive substring match).
+     * Supports two matching modes (case-insensitive):
+     * <ol>
+     *   <li>Substring match: {@code api_key} in {@code x_api_key_token} matches</li>
+     *   <li>Underscore↔camelCase swap: {@code privateKey} matches {@code private_key}</li>
+     * </ol>
      *
      * @param key the MDC key
      * @return true if the key should be masked
@@ -102,7 +105,45 @@ public final class SensitiveMdc {
     public static boolean isSensitiveKey(String key) {
         if (key == null) return false;
         String lower = key.toLowerCase();
-        // Check if any sensitive key name is contained in the lowercased key
-        return SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s));
+        // Exact match: "private_key" == "private_key", "credit_card" == "credit_card", etc.
+        if (lower.equals("private_key") || lower.equals("credit_card")
+                || lower.equals("access_token") || lower.equals("refresh_token")
+                || lower.equals("secret_key") || lower.equals("api_key")
+                || SENSITIVE_KEYS.stream().anyMatch(s -> lower.equals(s))) {
+            return true;
+        }
+        // Substring match: "api_key" in "x_api_key_token"
+        if (SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s))) {
+            return true;
+        }
+        // Underscore <-> camelCase cross-match: "privateKey" matches "private_key" (and vice versa)
+        for (String s : SENSITIVE_KEYS) {
+            String swapped = swapUnderscoreCamel(s);
+            if (!swapped.equals(s) && lower.contains(swapped)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Swap underscore and camelCase: "private_key" → "privateKey", "access_token" → "accessToken"
+     */
+    private static String swapUnderscoreCamel(String s) {
+        if (!s.contains("_")) return s;
+        // snake_case → camelCase: "private_key" → "privateKey"
+        StringBuilder sb = new StringBuilder();
+        boolean afterUnderscore = false;
+        for (char c : s.toCharArray()) {
+            if (c == '_') {
+                afterUnderscore = true;
+            } else if (afterUnderscore) {
+                sb.append(Character.toUpperCase(c));
+                afterUnderscore = false;
+            } else {
+                sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }

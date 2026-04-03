@@ -1,7 +1,7 @@
 package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
-
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
@@ -22,16 +22,25 @@ import org.springframework.context.annotation.Bean;
 /**
  * 通用 RAG 服务自动配置
  *
- * <p>通过 Spring Boot 的 {@link AutoConfiguration} + {@code spring.factories} 自动加载。
- * demo-basic-rag 通过 {@code @SpringBootApplication(scanBasePackages = "com.springairag")}
- * 扫描所有 {@code com.springairag.*} 包，注册所有 {@link org.springframework.stereotype.Component} /
- * {@link org.springframework.context.annotation.Configuration} 类。
+ * <p>通过 Spring Boot 的 {@link AutoConfiguration} + {@code AutoConfiguration.imports} 自动加载。
+ * {@code RagProperties} 和 {@code GeneralRagProperties} 通过 {@link @EnableConfigurationProperties}
+ * 显式注册为 Bean，确保在任何 {@code @Service} 之前可用。
  */
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({GeneralRagProperties.class})
 public class GeneralRagAutoConfiguration {
+
+    /**
+     * 显式注册 RagProperties Bean，确保在任何 @Service 之前就绪。
+     * 使用 @Bean 方法而非 @EnableConfigurationProperties(RagProperties.class)，
+     * 避免 Spring Boot 的 @ConfigurationProperties 后处理器时序问题。
+     */
+    @Bean
+    public RagProperties ragProperties() {
+        return new RagProperties();
+    }
 
     /**
      * 默认领域扩展（当用户未注册任何 DomainRagExtension 时生效）
@@ -57,10 +66,10 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
-            @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
-        com.springairag.core.config.RagProperties.Security security =
+            @Autowired(required = false) RagProperties properties) {
+        RagProperties.Security security =
                 properties != null ? properties.getSecurity()
-                        : new com.springairag.core.config.RagProperties.Security();
+                        : new RagProperties.Security();
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter(security.getApiKey(), security.isEnabled());
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
@@ -73,10 +82,10 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
-            @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
-        com.springairag.core.config.RagProperties.RateLimit rateLimit =
+            @Autowired(required = false) RagProperties properties) {
+        RagProperties.RateLimit rateLimit =
                 properties != null ? properties.getRateLimit()
-                        : new com.springairag.core.config.RagProperties.RateLimit();
+                        : new RagProperties.RateLimit();
         RateLimitFilter filter = new RateLimitFilter(
                 rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
                 rateLimit.getStrategy(), rateLimit.getKeyLimits());
@@ -91,9 +100,9 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     public Object tracingConfigurer(RequestTraceFilter traceFilter,
-                                   @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
+                                   @Autowired(required = false) RagProperties properties) {
         if (properties != null) {
-            com.springairag.core.config.RagProperties.Tracing tracing = properties.getTracing();
+            RagProperties.Tracing tracing = properties.getTracing();
             traceFilter.configure(tracing.isEnabled(), tracing.getSamplingRate(),
                     tracing.isW3cFormat(), tracing.isSpanIdEnabled());
         }

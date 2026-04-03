@@ -87,7 +87,7 @@ public class SensitiveDataMaskingConverter extends MessageConverter {
             // Generic "key" patterns at end of strings (key=value without known prefix)
             Pattern.compile("\\b(key|private_key)\\s*[:=]\\s*[\"']?[A-Za-z0-9\\+/=\\-_]{20,}[\"']?", Pattern.CASE_INSENSITIVE),
             // Generic key=VALUE where VALUE contains sensitive-looking patterns (API keys, tokens)
-            Pattern.compile("\\b(key|private_key)\\s*=\\s*(sk-|ak-|token-|bearer-|eyJ)[A-Za-z0-9\\-_\\.+=/]{10,}", Pattern.CASE_INSENSITIVE)
+            Pattern.compile("\\b(key|private_key)\\s*=\\s*(sk-|ak-|token-|bearer-|eyJ)[A-Za-z0-9\\-_\\.+=/]{9,}", Pattern.CASE_INSENSITIVE)
     );
 
     @Override
