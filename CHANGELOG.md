@@ -106,3 +106,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - demo-component-level @ComponentHealthService 缺少 @Service 注解
 - pom.xml GraalVM profile 注释中的 `--` 导致 XML 解析错误
 - .env 变量缺少 export 前缀导致 Maven subprocess 无法继承环境变量
+
+## [1.1.0-SNAPSHOT] - 2026-04-04 Early Morning
+
+### Added
+- `LlmCircuitBreaker` + `LlmCircuitOpenException`（LLM 熔断器基础设施）
+- `RagSearchControllerBenchmarkTest`（100 并发/50 并发吞吐量验证）
+- E2E 脚本扩展至 14 项（Collection CRUD + cache/stats + metrics/overview）
+- `DomainExtensionPipelineIntegrationTest`（22 个测试，DomainExtensionRegistry + 医疗/法律领域扩展管道验证）
+- API 版本共存（@ApiVersion 注解支持 /api/v1/ + /api/v2/ 同时存在）
