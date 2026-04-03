@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-SNAPSHOT] - 2026-04-04
+
+### Added
+
+#### Testing
+- `DomainExtensionPipelineIntegrationTest`：22 个测试覆盖领域扩展 Pipeline 全流程（Registry 查找/跳过/默认行为、医疗领域症状识别/高召回配置、法律领域多扩展共存）
+- `RagSearchControllerBenchmarkTest`：100 并发搜索请求验证 + 50 并发 <1s 吞吐量基准测试
+
+#### E2E & Demo
+- E2E 脚本扩展：Collection CRUD 测试（创建/列表/详情/更新/删除/文档关联）+ Cache stats + Metrics overview，共 14 项端到端验证
+- demo-domain-extension `MedicalRagControllerTest` 修复 Java 24 严格类型推断导致的 Mockito 重载解析问题
+
+#### Resilience
+- LLM 熔断器基础设施（`LlmCircuitBreaker` 三状态自动机：CLOSED→OPEN→HALF_OPEN）+ `LlmCircuitOpenException`（503）
+- `RagChatService` 集成熔断器：失败率阈值触发熔断、冷却后半开探测、成功率恢复
+
+### Fixed
+
+- `DocumentEmbedService.embedDocumentWithProgress` NPE：`maybeEmit()` null-safe 回调工具方法 + 缓存命中时 `chunks==null` 修复
+- MiniMax API 不兼容 `role:system`：`ApiCompatibilityAdapter.supportsSystemMessage()` + `normalizeMessages()` 自动将 system 消息转为 user 消息
+
+### Changed
+
+- 主动巡检轮次（4/4 深夜）：catch 注释规范化（Health probe/Resilience/best-effort 三类）
+- 领域扩展 Registry 命名一致性与 Registry 测试路径修复
+
 ## [1.0.0-SNAPSHOT] - 2026-04-03
 
 ### Added
