@@ -238,6 +238,8 @@ class SensitiveDataMaskingConverterTest {
     void maskSensitiveData_multipleSensitiveFieldsSameLine() {
         String input = "Login attempt: user=admin, pass=secret, key=api-key-123, token=bearer-token-456";
         String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        System.out.println("ACTUAL RESULT: [" + result + "]");
+        System.out.println("contains 'secret': " + result.contains("secret"));
         // Should mask at least the clearly sensitive fields
         assertFalse(result.contains("secret"));
         assertFalse(result.contains("api-key-123"));

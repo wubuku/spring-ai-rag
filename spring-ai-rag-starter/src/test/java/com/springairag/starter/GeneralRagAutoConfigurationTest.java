@@ -45,13 +45,13 @@ class GeneralRagAutoConfigurationTest {
         EnableConfigurationProperties annotation = GeneralRagAutoConfiguration.class
                 .getAnnotation(EnableConfigurationProperties.class);
         assertNotNull(annotation);
-        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class, com.springairag.core.config.RagProperties.class}, annotation.value());
+        // RagProperties 通过 @Bean ragProperties() 注册，@EnableConfigurationProperties 只绑定 GeneralRagProperties
+        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class}, annotation.value());
     }
 
     @Test
-    void class_hasComponentScan() {
+    void class_hasNoComponentScan() {
         ComponentScan annotation = GeneralRagAutoConfiguration.class.getAnnotation(ComponentScan.class);
-        assertNotNull(annotation);
-        assertEquals("com.springairag", annotation.basePackages()[0]);
+        assertNull(annotation);
     }
 }

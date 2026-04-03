@@ -92,12 +92,7 @@ public final class SensitiveMdc {
     }
 
     /**
-     * Check if a key is automatically treated as sensitive.
-     * Supports two matching modes (case-insensitive):
-     * <ol>
-     *   <li>Substring match: {@code api_key} in {@code x_api_key_token} matches</li>
-     *   <li>Underscore↔camelCase swap: {@code privateKey} matches {@code private_key}</li>
-     * </ol>
+     * Check if a key is automatically treated as sensitive (case-insensitive).
      *
      * @param key the MDC key
      * @return true if the key should be masked
@@ -105,44 +100,44 @@ public final class SensitiveMdc {
     public static boolean isSensitiveKey(String key) {
         if (key == null) return false;
         String lower = key.toLowerCase();
-        // Exact match: "private_key" == "private_key", "credit_card" == "credit_card", etc.
-        if (lower.equals("private_key") || lower.equals("credit_card")
-                || lower.equals("access_token") || lower.equals("refresh_token")
-                || lower.equals("secret_key") || lower.equals("api_key")
-                || SENSITIVE_KEYS.stream().anyMatch(s -> lower.equals(s))) {
-            return true;
-        }
-        // Substring match: "api_key" in "x_api_key_token"
-        if (SENSITIVE_KEYS.stream().anyMatch(s -> lower.contains(s))) {
-            return true;
-        }
-        // Underscore <-> camelCase cross-match: "privateKey" matches "private_key" (and vice versa)
+        // Case 1: exact match in SENSITIVE_KEYS
+        if (SENSITIVE_KEYS.contains(lower)) return true;
+        // Case 2: substring match (key is a substring of a sensitive name, case-insensitive)
         for (String s : SENSITIVE_KEYS) {
-            String swapped = swapUnderscoreCamel(s);
-            if (!swapped.equals(s) && lower.contains(swapped)) {
-                return true;
-            }
+            if (s.toLowerCase().contains(lower)) return true;
+        }
+        // Case 3: underscore ↔ camelCase bidirectional swap
+        if (lower.contains("_")) {
+            // underscore key → camelCase variant
+            String camel = swapUnderscoreCamel(lower);
+            if (SENSITIVE_KEYS.contains(camel)) return true;
+        } else {
+            // camelCase key → underscore variant
+            String snake = swapCamelToUnderscore(lower);
+            if (!snake.equals(lower) && SENSITIVE_KEYS.contains(snake)) return true;
         }
         return false;
     }
 
-    /**
-     * Swap underscore and camelCase: "private_key" → "privateKey", "access_token" → "accessToken"
-     */
+    /** snake_case → camelCase: "private_key" → "privatekey" */
     private static String swapUnderscoreCamel(String s) {
-        if (!s.contains("_")) return s;
-        // snake_case → camelCase: "private_key" → "privateKey"
         StringBuilder sb = new StringBuilder();
-        boolean afterUnderscore = false;
+        boolean nextUpper = false;
         for (char c : s.toCharArray()) {
-            if (c == '_') {
-                afterUnderscore = true;
-            } else if (afterUnderscore) {
-                sb.append(Character.toUpperCase(c));
-                afterUnderscore = false;
-            } else {
-                sb.append(c);
-            }
+            if (c == '_') { nextUpper = true; }
+            else if (nextUpper) { sb.append(Character.toUpperCase(c)); nextUpper = false; }
+            else { sb.append(c); }
+        }
+        return sb.toString();
+    }
+
+    /** camelCase → snake_case: "privateKey" → "private_key" */
+    private static String swapCamelToUnderscore(String s) {
+        if (!s.matches(".*[A-Z].*")) return s;
+        StringBuilder sb = new StringBuilder();
+        for (char c : s.toCharArray()) {
+            if (Character.isUpperCase(c)) { sb.append('_').append(Character.toLowerCase(c)); }
+            else { sb.append(c); }
         }
         return sb.toString();
     }

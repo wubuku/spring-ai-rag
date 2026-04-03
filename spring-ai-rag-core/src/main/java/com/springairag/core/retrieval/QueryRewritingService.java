@@ -29,7 +29,6 @@ import java.util.regex.Pattern;
  * <p>同义词词典和领域限定词可通过配置自定义（默认空，不含领域硬编码）。
  */
 @Service
-@Lazy
 public class QueryRewritingService {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewritingService.class);

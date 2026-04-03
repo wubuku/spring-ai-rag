@@ -60,37 +60,31 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@EnableConfigurationProperties 绑定两个配置类")
+        @DisplayName("@EnableConfigurationProperties 绑定 GeneralRagProperties")
         void enableConfigurationProperties() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(EnableConfigurationProperties.class);
             assertNotNull(ann);
+            // RagProperties 通过 @Bean ragProperties() 注册，不再通过 @EnableConfigurationProperties
             assertArrayEquals(
-                    new Class<?>[]{GeneralRagProperties.class, com.springairag.core.config.RagProperties.class},
+                    new Class<?>[]{GeneralRagProperties.class},
                     ann.value());
         }
 
         @Test
-        @DisplayName("@ComponentScan 扫描 com.springairag")
+        @DisplayName("@ComponentScan 不再使用（由 Spring Boot 主扫描处理）")
         void componentScan() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(ComponentScan.class);
-            assertNotNull(ann);
-            assertEquals("com.springairag", ann.basePackages()[0]);
+            assertNull(ann);
         }
 
         @Test
-        @DisplayName("@Import 导入 4 个配置类")
+        @DisplayName("@Import 不再使用（配置类通过 Spring Boot 主扫描加载）")
         void importsConfigs() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(Import.class);
-            assertNotNull(ann);
-            Class<?>[] classes = ann.value();
-            assertEquals(4, classes.length);
-            assertEquals("SpringAiConfig", classes[0].getSimpleName());
-            assertEquals("EmbeddingModelConfig", classes[1].getSimpleName());
-            assertEquals("CacheConfig", classes[2].getSimpleName());
-            assertEquals("PerformanceConfig", classes[3].getSimpleName());
+            assertNull(ann);
         }
     }
 
