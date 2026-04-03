@@ -212,7 +212,7 @@
 | 81 | 错误响应标准化（RFC 7807 Problem Detail） | API 质量 | ✅ 2026-04-03 |
 | 82 | 请求验证增强（@Valid + 自定义校验器） | 安全 | ✅ 2026-04-03 |
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ✅ 2026-04-03 |
-| 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ⏳ |
+| 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ✅ 2026-04-03 |
 
 ## 铁律
 
@@ -238,8 +238,10 @@
 
 24h 改进计划核心项完成：API 版本管理 + 国际化 + 缓存配置外部化 + CORS + surefire 修复
 
+- 2026-04-03 07:38 — ✅ #84 日志结构化：SensitiveDataMaskingConverter（dev/default 文本格式屏蔽）+ MaskingLogstashEncoder（prod/test JSON 格式屏蔽）+ SensitiveMdc（程序化敏感 MDC 工具）+ logback-spring.xml 双环境配置，commit 83abd27；本次 cron 同步状态，HEARTBEAT 标记完成，1070 测试全通过
+
 - 2026-04-03 16:54 — ✅ #83 异步处理增强：PerformanceConfig 新增 modelComparisonExecutor 共享线程池（核心2/最大8，支持 core timeout 回收），消除 ModelComparisonService 每次调用创建新线程池的资源泄漏；InterruptedException 捕获后调用 Thread.currentThread().interrupt() 恢复中断状态；TimeoutException/ExecutionException 结果降级为 ModelComparisonResult.failure()；ModelComparisonServiceTest 新增 InterruptedException 中断恢复测试 + TimeoutException 降级测试；AsyncConfig 补充 @EnableConfigurationProperties(RagProperties.class)，941 测试全通过，commit 023be94
-840 测试全通过，代码库健康
+1070 测试全通过，代码库健康
 
 ## 待办（主动巡检 — 2026-04-03 新一轮）
 
@@ -259,4 +261,4 @@
 | 79 | Actuator 自定义指标完善 | 可观测性 | ⏳ |
 | 80 | 健康检查端点增强（多组件探针） | 运维 | ⏳ |
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ✅ 2026-04-03 |
-| 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ⏳ |
+| 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ✅ 2026-04-03 |
