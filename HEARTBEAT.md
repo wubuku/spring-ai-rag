@@ -235,3 +235,11 @@
 
 24h 改进计划核心项完成：API 版本管理 + 国际化 + 缓存配置外部化 + CORS + surefire 修复
 840 测试全通过，代码库健康
+
+## 待办（主动巡检 — 2026-04-03 新一轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 90 | FulltextSearchProvider 三个实现类测试覆盖 | 测试 | ⏳ |
+| 91 | 长方法重构（AlertService 95行/RagChatService 60行等） | 代码质量 | ⏳ |
+| 92 | ComponentHealthService catch(Exception) 细化 | 代码质量 | ⏳ |
