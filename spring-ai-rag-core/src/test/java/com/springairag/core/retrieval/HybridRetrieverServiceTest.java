@@ -5,9 +5,11 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
@@ -413,5 +415,111 @@ class HybridRetrieverServiceTest {
         assertNull(r.getMetadata());
         // 不应抛异常
         assertEquals("doc-1", r.getDocumentId());
+    }
+
+    // ========== pg_trgm 可选化测试 ==========
+
+    @Nested
+    @DisplayName("pg_trgm 可选化与优雅降级")
+    class PgTrgmFallbackTests {
+
+        private Map<String, Object> embeddingRow(long id, String text) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("chunk_text", text);
+            row.put("embedding", "[0.1,0.2,0.3]");
+            row.put("document_id", 1L);
+            row.put("chunk_index", 0);
+            row.put("metadata", null);
+            return row;
+        }
+
+        private Map<String, Object> fulltextRow(long id, String text, double sim) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("chunk_text", text);
+            row.put("embedding", "[0.4,0.5,0.6]");
+            row.put("document_id", 1L);
+            row.put("chunk_index", 1);
+            row.put("metadata", null);
+            row.put("sim", sim);
+            return row;
+        }
+
+        @Test
+        @DisplayName("pg_trgm 不可用时自动降级为纯向量检索")
+        void pgTrgmUnavailable_fallsBackToVectorOnly() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenThrow(new DataAccessResourceFailureException("not found"));
+            when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
+            when(jdbc.queryForList(anyString(), any(Object[].class)))
+                    .thenReturn(List.of(embeddingRow(1L, "test")));
+
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+
+            List<RetrievalResult> results = svc.search("test query", null, null, 5);
+
+            assertNotNull(results);
+            verify(jdbc, atLeastOnce()).queryForList(contains("ORDER BY embedding <=>"), any(Object[].class));
+            verify(jdbc, never()).queryForList(contains("similarity"), any(Object[].class));
+        }
+
+        @Test
+        @DisplayName("pg_trgm 可用时执行混合检索")
+        void pgTrgmAvailable_performsHybridSearch() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
+            when(jdbc.queryForList(contains("ORDER BY embedding <=>"), any(Object[].class)))
+                    .thenReturn(List.of(embeddingRow(1L, "vector result")));
+            when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
+                    .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
+
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+
+            List<RetrievalResult> results = svc.search("test query", null, null, 5);
+
+            assertNotNull(results);
+            assertFalse(results.isEmpty());
+        }
+
+        @Test
+        @DisplayName("fulltextEnabled=false 时即使 pg_trgm 可用也走纯向量")
+        void fulltextDisabled_alwaysVectorOnly() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
+            when(jdbc.queryForList(anyString(), any(Object[].class)))
+                    .thenReturn(List.of(embeddingRow(1L, "test")));
+
+            RagProperties props = new RagProperties();
+            props.getRetrieval().setFulltextEnabled(false);
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, props, null);
+
+            svc.search("test query", null, null, 5);
+
+            verify(jdbc, never()).queryForList(contains("similarity"), any(Object[].class));
+        }
+
+        @Test
+        @DisplayName("RetrievalConfig.useHybridSearch=false 时走纯向量")
+        void configHybridDisabled_vectorOnly() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
+            when(jdbc.queryForList(anyString(), any(Object[].class)))
+                    .thenReturn(List.of(embeddingRow(1L, "test")));
+
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+
+            RetrievalConfig config = RetrievalConfig.builder().useHybridSearch(false).build();
+            svc.search("test", null, null, 5, config);
+
+            verify(jdbc, never()).queryForList(contains("similarity"), any(Object[].class));
+        }
     }
 }
