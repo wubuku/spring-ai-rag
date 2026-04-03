@@ -1,122 +1,75 @@
-server:
-  port: 8080
+# ============================================
+# Demo-basic-rag：独立 Spring Boot 应用配置
+# 使用 .env 中的真实 key 和数据库连接
+# ============================================
 
 spring:
   application:
     name: customer-service-bot
 
-  # ================================================================
-  # 数据库配置（必需）
-  # ================================================================
+  main:
+    allow-bean-definition-overriding: true
+
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+
   datasource:
-    url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
-    username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
     driver-class-name: org.postgresql.Driver
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
     hikari:
       maximum-pool-size: 10
       minimum-idle: 2
 
-  # Flyway 数据库迁移（自动建表）
   flyway:
-    enabled: true
-    locations: classpath:db/migration
-    baseline-on-migrate: true
+    enabled: false   # V1-V10 已手动执行，无需重复迁移
 
-# ================================================================
-# LLM 配置（必需，至少配置一个）
-# ================================================================
-
-# 方案一：DeepSeek（默认，推荐）
-app:
-  llm:
-    provider: openai
   ai:
     openai:
-      api-key: ${DEEPSEEK_API_KEY:your-deepseek-key}
-      base-url: https://api.deepseek.com/v1
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:}
       chat:
         options:
-          model: deepseek-chat
+          model: ${OPENAI_MODEL:}
           temperature: 0.7
 
-# 方案二：智谱 GLM（取消注释并注释掉方案一）
-# app:
-#   llm:
-#     provider: openai
-#   ai:
-#     openai:
-#       api-key: ${ZHIPU_API_KEY:your-zhipu-key}
-#       base-url: https://open.bigmodel.cn/paas/v4
-#       chat:
-#         options:
-#           model: glm-4
-#           temperature: 0.7
+app:
+  llm:
+    provider: ${LLM_PROVIDER:openai}
 
-# 方案三：Anthropic（取消注释并注释掉方案一）
-# app:
-#   llm:
-#     provider: anthropic
-#   ai:
-#     anthropic:
-#       api-key: ${ANTHROPIC_API_KEY:your-anthropic-key}
-
-# ================================================================
-# 嵌入模型配置（必需）
-# ================================================================
 siliconflow:
-  api-key: ${SILICONFLOW_API_KEY:your-siliconflow-key}
+  api-key: ${SILICONFLOW_API_KEY:}
   embedding:
-    model: BAAI/bge-m3
-    dimensions: 1024
+    model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
+    dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 
-# ================================================================
-# RAG 配置（可选，有默认值）
-# ================================================================
 rag:
-  # 检索配置
   retrieval:
-    # 总开关：是否启用全文检索（pg_trgm/pg_jieba）
     fulltext-enabled: true
-    # 策略：auto（自动检测）/ pg_jieba / pg_trgm / none
     fulltext-strategy: auto
-    # 混合检索权重
     vector-weight: 0.5
     fulltext-weight: 0.5
-    # 默认返回数量
     default-limit: 10
-    # 最低相关分数
     min-score: 0.3
-
-  # 对话记忆配置
   chat-memory:
-    # Spring AI Chat Memory 表名
     table-name: spring_ai_chat_memory
-    # 业务审计表（rag_chat_history）保留消息数
     history-size: 100
-
-  # API Key 认证（生产环境开启）
   security:
     api-key:
       enabled: false
-      header-name: X-API-Key
-      keys:
-        - ${API_KEY_1:key1}
-        - ${API_KEY_2:key2}
 
-# ================================================================
-# Actuator 监控端点（可选）
-# ================================================================
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus
+        include: health,info,metrics
   endpoint:
     health:
       show-details: always
 
 logging:
   level:
-    com.springairag: INFO
+    com.springairag: DEBUG
     org.springframework.ai: INFO

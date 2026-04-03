@@ -159,6 +159,13 @@
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+
+        <!-- Logstash Logback Encoder：JSON 结构化日志 + 敏感信息脱敏 -->
+        <dependency>
+            <groupId>net.logstash.logback</groupId>
+            <artifactId>logstash-logback-encoder</artifactId>
+            <version>7.4</version>
+        </dependency>
     </dependencies>
 
     <build>

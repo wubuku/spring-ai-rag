@@ -1,10 +1,7 @@
 package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
-import com.springairag.core.config.CacheConfig;
-import com.springairag.core.config.EmbeddingModelConfig;
-import com.springairag.core.config.PerformanceConfig;
-import com.springairag.core.config.SpringAiConfig;
+
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
@@ -12,7 +9,6 @@ import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.metrics.RagMetricsService;
-import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -22,34 +18,19 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.ComponentScan;
-import org.springframework.context.annotation.Import;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * 通用 RAG 服务自动配置
  *
- * <p>引入 spring-ai-rag-starter 依赖后自动生效。
- * 通过 general.rag.enabled=true|false 控制开关（默认 true）。
- *
- * <p>扩展点：
- * <ul>
- *   <li>实现 {@link DomainRagExtension} 并注册为 Bean → 自动替换 DefaultDomainRagExtension</li>
- *   <li>实现 {@link com.springairag.api.service.RagAdvisorProvider} 并注册为 Bean → 自动注入 Advisor 链</li>
- *   <li>实现 {@link com.springairag.api.service.PromptCustomizer} 并注册为 Bean → 自动链式调用</li>
- * </ul>
+ * <p>通过 Spring Boot 的 {@link AutoConfiguration} + {@code spring.factories} 自动加载。
+ * demo-basic-rag 通过 {@code @SpringBootApplication(scanBasePackages = "com.springairag")}
+ * 扫描所有 {@code com.springairag.*} 包，注册所有 {@link org.springframework.stereotype.Component} /
+ * {@link org.springframework.context.annotation.Configuration} 类。
  */
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties({GeneralRagProperties.class, RagProperties.class})
-@ComponentScan(basePackages = "com.springairag")
-@Import({
-        SpringAiConfig.class,
-        EmbeddingModelConfig.class,
-        CacheConfig.class,
-        PerformanceConfig.class
-})
+@EnableConfigurationProperties({GeneralRagProperties.class})
 public class GeneralRagAutoConfiguration {
 
     /**
@@ -75,8 +56,11 @@ public class GeneralRagAutoConfiguration {
      * API Key 认证过滤器
      */
     @Bean
-    public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(RagProperties properties) {
-        RagProperties.Security security = properties.getSecurity();
+    public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
+            @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
+        com.springairag.core.config.RagProperties.Security security =
+                properties != null ? properties.getSecurity()
+                        : new com.springairag.core.config.RagProperties.Security();
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter(security.getApiKey(), security.isEnabled());
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
@@ -88,28 +72,32 @@ public class GeneralRagAutoConfiguration {
      * API 限流过滤器
      */
     @Bean
-    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RagProperties properties) {
-        RagProperties.RateLimit rateLimit = properties.getRateLimit();
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
+            @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
+        com.springairag.core.config.RagProperties.RateLimit rateLimit =
+                properties != null ? properties.getRateLimit()
+                        : new com.springairag.core.config.RagProperties.RateLimit();
         RateLimitFilter filter = new RateLimitFilter(
                 rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
                 rateLimit.getStrategy(), rateLimit.getKeyLimits());
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
-        registration.setOrder(0); // 在认证之前执行限流
+        registration.setOrder(0);
         return registration;
     }
 
     /**
      * 分布式追踪配置刷新
-     *
-     * <p>将 rag.tracing.* 配置注入 RequestTraceFilter（@Component 自动扫描）。
      */
     @Bean
-    public Object tracingConfigurer(RequestTraceFilter traceFilter, RagProperties properties) {
-        RagProperties.Tracing tracing = properties.getTracing();
-        traceFilter.configure(tracing.isEnabled(), tracing.getSamplingRate(),
-                tracing.isW3cFormat(), tracing.isSpanIdEnabled());
-        return new Object(); // 配置刷新，返回值无意义
+    public Object tracingConfigurer(RequestTraceFilter traceFilter,
+                                   @Autowired(required = false) com.springairag.core.config.RagProperties properties) {
+        if (properties != null) {
+            com.springairag.core.config.RagProperties.Tracing tracing = properties.getTracing();
+            traceFilter.configure(tracing.isEnabled(), tracing.getSamplingRate(),
+                    tracing.isW3cFormat(), tracing.isSpanIdEnabled());
+        }
+        return new Object();
     }
 
     /**
@@ -117,46 +105,47 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
-    public ComponentHealthService componentHealthService(JdbcTemplate jdbcTemplate,
-                                                          @Autowired(required = false) CacheMetricsService cacheMetricsService) {
+    public ComponentHealthService componentHealthService(
+            org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
+            @Autowired(required = false) CacheMetricsService cacheMetricsService) {
         return new ComponentHealthService(jdbcTemplate, cacheMetricsService);
     }
 
     /**
-     * RAG 健康检查指示器（需要 Actuator 在 classpath）
+     * RAG 健康检查指示器
      */
     @Bean("ragService")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
     @ConditionalOnMissingBean(name = "ragService")
-    public Object ragHealthIndicator(ComponentHealthService componentHealth,
-                                      RagMetricsService ragMetricsService) {
-        return new com.springairag.core.metrics.RagHealthIndicator(componentHealth, ragMetricsService);
+    public Object ragHealthIndicator(
+            ComponentHealthService componentHealth,
+            @Autowired(required = false) RagMetricsService ragMetricsService) {
+        return new com.springairag.core.metrics.RagHealthIndicator(
+                componentHealth,
+                ragMetricsService != null ? ragMetricsService : null);
     }
 
     /**
-     * RAG Liveness 健康探针（Kubernetes LivenessProbe）
-     *
-     * <p>仅检查数据库连接是否可达，用于判断容器是否需要重启。
-     * 配置在 management.endpoint.health.group.liveness.include 中。
+     * RAG Liveness 健康探针
      */
-    @Bean
+    @Bean("ragLiveness")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
     @ConditionalOnMissingBean(name = "ragLiveness")
-    public Object ragLivenessIndicator(JdbcTemplate jdbcTemplate) {
+    public Object ragLivenessIndicator(org.springframework.jdbc.core.JdbcTemplate jdbcTemplate) {
         return new com.springairag.core.metrics.RagLivenessIndicator(jdbcTemplate);
     }
 
     /**
-     * RAG Readiness 健康探针（Kubernetes ReadinessProbe）
-     *
-     * <p>检查完整组件健康状态，用于判断是否接收流量。
-     * 配置在 management.endpoint.health.group.readiness.include 中。
+     * RAG Readiness 健康探针
      */
-    @Bean
+    @Bean("ragReadiness")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
     @ConditionalOnMissingBean(name = "ragReadiness")
-    public Object ragReadinessIndicator(ComponentHealthService componentHealth,
-                                        RagMetricsService ragMetricsService) {
-        return new com.springairag.core.metrics.RagReadinessIndicator(componentHealth, ragMetricsService);
+    public Object ragReadinessIndicator(
+            ComponentHealthService componentHealth,
+            @Autowired(required = false) RagMetricsService ragMetricsService) {
+        return new com.springairag.core.metrics.RagReadinessIndicator(
+                componentHealth,
+                ragMetricsService != null ? ragMetricsService : null);
     }
 }
