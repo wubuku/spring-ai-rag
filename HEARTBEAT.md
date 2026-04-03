@@ -353,6 +353,12 @@
 - 附带：LlmCircuitBreaker（熔断器基础设施）+ LlmCircuitOpenException
 - commit 3bb7191 已推送
 
+### 2026-04-04 02:27 — catch 注释规范化
+- mvn clean compile ✅ / mvn test ✅（1128 测试全通过，零失败零错误）
+- RagLivenessIndicator catch 添加"Health probe: must never throw"注释
+- RagDocumentController `/* ignore */` 改为"best-effort: error already sent via completeWithError"
+- commit 2097041 已推送
+
 ### 2026-04-04 01:46 — 领域扩展管道集成测试
 - mvn clean compile ✅ / mvn test ✅（1121 测试全通过，零失败零错误）
 - 新增 DomainExtensionPipelineIntegrationTest：22 个测试覆盖 DomainExtensionRegistry + DefaultDomainRagExtension + 模拟医疗扩展
