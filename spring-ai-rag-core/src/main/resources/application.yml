@@ -140,3 +140,29 @@ logging:
   level:
     com.springairag: INFO
     org.springframework.ai: INFO
+
+# ============================================
+# Actuator 端点配置
+# ============================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+  health:
+    defaults:
+      enabled: true
+  metrics:
+    tags:
+      application: spring-ai-rag
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99

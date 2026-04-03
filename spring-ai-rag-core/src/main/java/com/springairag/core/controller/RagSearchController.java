@@ -58,6 +58,7 @@ public class RagSearchController {
     @Operation(summary = "直接检索（GET）", description = "混合检索，不经过 LLM 生成。支持向量/全文权重调节。")
     @ApiResponse(responseCode = "200", description = "返回检索结果列表")
     @GetMapping
+    @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> search(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit,
@@ -93,6 +94,7 @@ public class RagSearchController {
             @ApiResponse(responseCode = "400", description = "请求参数校验失败")
     })
     @PostMapping
+    @Timed(value = "rag.search.post", description = "RAG direct search (POST)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
             @Valid @RequestBody SearchRequest request) {
 
