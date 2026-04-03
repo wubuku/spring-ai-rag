@@ -411,3 +411,16 @@
 - StepMetricRecord 构造函数/ setter 测试（stepName/durationMs/resultCount）
 - DtoTest: 21→25 测试（+4）
 - commit 2bf91b8 已推送
+
+## 待办（主动巡检 — 2026-04-04 第十一轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 65 | RagProperties inner class 提取为独立文件（12 个） | 代码质量 | ✅ 2026-04-04 |
+
+### 2026-04-04 07:42 — 主动巡检：RagProperties inner class 提取重构
+- mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
+- RagProperties 567→120 行（-79%）：12 个 inner static class 提取为独立文件
+- 新增 Rag*Properties 13 个类（RagCircuitBreakerProperties + 其余 12 个核心配置类）
+- 14 处引用点更新（AsyncConfig/CacheConfig/CorsConfig/EmbeddingModelConfig/QueryRewritingService/HybridRetrieverService/ReRankingService/LlmCircuitBreaker/GeneralRagAutoConfiguration/CorsConfigTest/LlmCircuitBreakerTest）
+- commit 9bab961 已推送
