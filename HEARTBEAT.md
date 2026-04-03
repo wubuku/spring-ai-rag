@@ -266,3 +266,46 @@
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ✅ 2026-04-03 |
 | 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ✅ 2026-04-03 |
 - 2026-04-03 20:43 — ✅ #95 Spring Boot 3.x 配置增强 + Grafana 仪表盘：SpringAiConfig 添加 @EnableConfigurationProperties；ComponentHealthService 添加显式 @Service bean；GeneralRagAutoConfiguration 添加 @ConditionalOnMissingBean 防重复注册；application.yml 清理冗余 actuator 健康指标；新增 docs/grafana/rag-service-dashboard.json Grafana 仪表盘；951 测试全通过，commit e378387
+
+## 2026-04-03 Evening — 第六轮主动巡检
+
+### E2E 链路验证
+- 首次跑 E2E 成功 22/24（MiniMax session 脏数据导致 2 个失败）
+- 根因：`e2e-test-session` 的 `spring_ai_chat_memory` 表有脏数据（含 MiniMax 不接受的 system 消息角色）
+- 修复：DELETE 端点增强为同时清理 `spring_ai_chat_memory` 表（`RagChatHistoryRepository.deleteBySessionId()`）
+- 同步修复：pom.xml XML 注释 `--` 语法修复（GraalVM URL）、`SpringAiConfig` 加 `@EnableConfigurationProperties`
+
+### Pipeline 可观测性
+- `ChatResponse` 新增 `stepMetrics: List<StepMetricRecord>` 字段（stepName/durationMs/resultCount）
+- `RagChatService.executeChat()` 从 `ChatClientResponse.context()` 提取 `RagPipelineMetrics`，填充 REST 响应
+
+### 发现的问题
+- `mvn spring-boot:run -pl spring-ai-rag-core` 无法从 `.env` 加载环境变量（Maven subprocess 作用域问题）
+  - 临时解决：手动通过 `-Dspring-boot.run.jvmArguments` 传递
+  - 影响：E2E 脚本依赖的 `.env` 加载机制需优化（建议使用 `scripts/start-server.sh`）
+- `ComponentHealthService` 之前缺少 `@Service` 注解导致非 starter 模式运行失败
+
+
+## 待办（新周期 — 2026-04-03 傍晚）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 90 | E2E 链路验证（干净数据库跑 scripts/e2e-test.sh，完整链路 24 项） | 验证 | ⏳ |
+| 91 | demo-component-level 集成测试（补充 E2E 测试） | 测试覆盖 | ⏳ |
+| 92 | 多文档批量嵌入 pipeline（SSE 实时进度推送） | 性能 | ⏳ |
+| 93 | 可观测性增强（Pipeline metrics REST 端点独立暴露） | 可观测性 | ⏳ |
+
+### E2E 链路验证 #90 完成
+- E2E 结果：22/24 通过
+- 通过项：health、documents CRUD、embed、search、history、delete
+- 失败项（LLM 账户问题，非代码问题）：chat/ask、chat/stream
+  - DeepSeek API 返回 "Insufficient Balance"（账户余额不足）
+  - MiniMax API 返回 "login fail: invalid API key"（key 可能过期）
+- `.env` 变量加 `export` 前缀解决环境变量传递问题
+- E2E 脚本需使用 `BASE_URL=http://localhost:PORT` 指定端口
+
+### 待办同步（傍晚补充）
+- #90 E2E 链路验证：✅ 22/24（LLM 账户问题）
+- #91 demo-component-level 集成测试：⏳
+- #92 多文档批量嵌入 pipeline（SSE 进度）：⏳
+- #93 可观测性增强（Pipeline metrics REST 端点）：⏳

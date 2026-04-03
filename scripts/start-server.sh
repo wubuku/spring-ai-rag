@@ -1,29 +1,41 @@
 #!/bin/bash
-# 启动 spring-ai-rag 服务
-# 用法：bash scripts/start-server.sh [port]
+# scripts/start-server.sh — 启动 spring-ai-rag-core 服务器
+# 用法: ./scripts/start-server.sh [module]
+# 示例: ./scripts/start-server.sh spring-ai-rag-core
+#
+# 自动从 .env 加载环境变量，启动后 health check 等待服务就绪
+
 set -e
-cd "$(dirname "$0")/.."
-export $(cat .env | grep -v '^#' | xargs)
-PORT="${1:-8081}"
 
-echo "构建所有模块..."
-mvn -q clean compile -DskipTests 2>/dev/null
+# 项目根目录
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+MODULE="${1:-spring-ai-rag-core}"
+PORT="${SERVER_PORT:-8081}"
 
-# 收集所有模块的 classpath
-CP=""
-for mod in spring-ai-rag-api spring-ai-rag-documents spring-ai-rag-core; do
-    CP="$CP:$mod/target/classes"
+cd "$PROJECT_DIR"
+
+# 加载 .env 环境变量
+if [ -f "$PROJECT_DIR/.env" ]; then
+    set -a
+    source "$PROJECT_DIR/.env"
+    set +a
+    echo "[start-server] Loaded environment from .env"
+else
+    echo "[start-server] WARNING: .env file not found"
+fi
+
+# 确保 PostgreSQL 可用
+echo "[start-server] Waiting for PostgreSQL..."
+for i in $(seq 1 30); do
+    if PGPASSWORD="${POSTGRES_PASSWORD:-123456}" psql -h "${POSTGRES_HOST:-localhost}" -U "${POSTGRES_USER:-postgres}" -d "${POSTGRES_DB:-spring_ai_rag_dev}" -c "SELECT 1" > /dev/null 2>&1; then
+        echo "[start-server] PostgreSQL is ready"
+        break
+    fi
+    echo "[start-server] Waiting for PostgreSQL... ($i/30)"
+    sleep 1
 done
-# 添加 Maven 依赖
-CORE_CP=$(mvn -q dependency:build-classpath -Dmdep.outputFile=/dev/stdout -pl spring-ai-rag-core 2>/dev/null)
-CP="${CP}:${CORE_CP}"
 
-echo "启动服务 (port=$PORT)..."
-exec java \
-    -Dspring.ai.openai.base-url="$OPENAI_BASE_URL" \
-    -Dspring.ai.openai.api-key="$OPENAI_API_KEY" \
-    -Dspring.ai.openai.chat.options.model="$OPENAI_MODEL" \
-    -Dspring.ai.openai.chat.enabled=false \
-    -Dserver.port=$PORT \
-    -cp "$CP" \
-    com.springairag.core.SpringAiRagApplication
+# 启动服务器
+echo "[start-server] Starting $MODULE on port $PORT..."
+mvn spring-boot:run -pl "$MODULE" -Dserver.port="$PORT"
