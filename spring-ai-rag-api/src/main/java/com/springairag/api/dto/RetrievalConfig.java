@@ -1,6 +1,10 @@
 package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 
 /**
  * 检索配置
@@ -8,9 +12,13 @@ import io.swagger.v3.oas.annotations.media.Schema;
 @Schema(description = "检索配置参数")
 public class RetrievalConfig {
 
+    @Min(value = 1, message = "最大结果数量最小为 1")
+    @Max(value = 100, message = "最大结果数量不超过 100")
     @Schema(description = "最大结果数量", example = "10", defaultValue = "10")
     private int maxResults = 10;
 
+    @DecimalMin(value = "0.0", message = "最低相关性得分最小为 0.0")
+    @DecimalMax(value = "1.0", message = "最低相关性得分最大为 1.0")
     @Schema(description = "最低相关性得分阈值", example = "0.5", defaultValue = "0.5")
     private double minScore = 0.5;
 

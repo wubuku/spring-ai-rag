@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
 
@@ -20,6 +22,8 @@ public class ChatRequest {
     @Schema(description = "会话 ID，用于多轮对话记忆", example = "conv-123", requiredMode = Schema.RequiredMode.REQUIRED)
     private String sessionId;
 
+    @Min(value = 1, message = "最大检索结果数量最小为 1")
+    @Max(value = 50, message = "最大检索结果数量不超过 50")
     @Schema(description = "最大检索结果数量", example = "5", defaultValue = "5")
     private int maxResults = 5;
 

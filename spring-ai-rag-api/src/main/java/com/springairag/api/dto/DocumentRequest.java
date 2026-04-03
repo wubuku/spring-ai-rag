@@ -2,6 +2,7 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
@@ -11,16 +12,20 @@ import java.util.Map;
 public class DocumentRequest {
 
     @NotBlank(message = "文档标题不能为空")
+    @Size(max = 500, message = "文档标题不能超过 500 字符")
     @Schema(description = "文档标题", example = "产品说明书", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
     @NotBlank(message = "文档内容不能为空")
+    @Size(max = 1_000_000, message = "文档内容不能超过 100 万字符")
     @Schema(description = "文档正文内容", example = "本文档介绍产品的使用方法...", requiredMode = Schema.RequiredMode.REQUIRED)
     private String content;
 
+    @Size(max = 255, message = "文档来源标识不能超过 255 字符")
     @Schema(description = "文档来源标识", example = "manual-upload")
     private String source;
 
+    @Size(max = 50, message = "文档类型不能超过 50 字符")
     @Schema(description = "文档类型", example = "markdown")
     private String documentType;
 

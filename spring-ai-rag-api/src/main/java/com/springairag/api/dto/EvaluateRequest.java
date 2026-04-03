@@ -1,7 +1,9 @@
 package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
-
+import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -10,12 +12,16 @@ import java.util.List;
 @Schema(description = "检索效果评估请求")
 public class EvaluateRequest {
 
+    @NotBlank(message = "查询文本不能为空")
+    @Size(max = 10000, message = "查询文本不能超过 10000 字符")
     @Schema(description = "查询文本", example = "如何配置 Spring AI？", requiredMode = Schema.RequiredMode.REQUIRED)
     private String query;
 
+    @NotEmpty(message = "检索到的文档 ID 列表不能为空")
     @Schema(description = "检索到的文档 ID 列表（按排名顺序）", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Long> retrievedDocIds;
 
+    @NotEmpty(message = "相关文档 ID 列表不能为空")
     @Schema(description = "相关文档 ID 列表（Ground Truth）", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Long> relevantDocIds;
 

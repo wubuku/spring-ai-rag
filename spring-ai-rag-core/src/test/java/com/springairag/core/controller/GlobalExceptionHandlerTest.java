@@ -5,10 +5,13 @@ import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.EmbeddingException;
 import com.springairag.core.exception.RetrievalException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.mock.web.MockHttpServletRequest;
@@ -19,6 +22,8 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -238,5 +243,55 @@ class GlobalExceptionHandlerTest {
         assertEquals("TEST_ERROR", response.getTitle());
         assertEquals("测试错误", response.getDetail());
         assertEquals("/path", response.getInstance());
+    }
+
+    // ==================== ConstraintViolationException 测试 ====================
+
+    @Test
+    void handleConstraintViolation_returns400WithMessages() {
+        @SuppressWarnings("unchecked")
+        ConstraintViolation<Object> violation = org.mockito.Mockito.mock(ConstraintViolation.class);
+        org.mockito.Mockito.when(violation.getMessage()).thenReturn("消息内容不能为空");
+        Set<ConstraintViolation<?>> violations = Set.of(violation);
+        ConstraintViolationException e = new ConstraintViolationException(violations);
+        ResponseEntity<ErrorResponse> response = handler.handleConstraintViolation(e, request);
+        assertEquals(HttpStatus.BAD_REQUEST, response.getStatusCode());
+        assertEquals("VALIDATION_FAILED", response.getBody().getError());
+        assertTrue(response.getBody().getMessage().contains("消息内容不能为空"));
+    }
+
+    @Test
+    void handleConstraintViolation_multipleViolations_joined() {
+        @SuppressWarnings("unchecked")
+        ConstraintViolation<Object> v1 = org.mockito.Mockito.mock(ConstraintViolation.class);
+        @SuppressWarnings("unchecked")
+        ConstraintViolation<Object> v2 = org.mockito.Mockito.mock(ConstraintViolation.class);
+        org.mockito.Mockito.when(v1.getMessage()).thenReturn("名称不能为空");
+        org.mockito.Mockito.when(v2.getMessage()).thenReturn("长度不超过 255");
+        Set<ConstraintViolation<?>> violations = Set.of(v1, v2);
+        ConstraintViolationException e = new ConstraintViolationException(violations);
+        ResponseEntity<ErrorResponse> response = handler.handleConstraintViolation(e, request);
+        String message = response.getBody().getMessage();
+        assertTrue(message.contains("名称不能为空"));
+        assertTrue(message.contains("长度不超过 255"));
+    }
+
+    // ==================== Content-Type 验证 ====================
+
+    @Test
+    void allHandlers_returnProblemJsonContentType() {
+        ResponseEntity<ErrorResponse> r1 = handler.handleException(new RuntimeException("x"), request);
+        assertEquals("application/problem+json", r1.getHeaders().getContentType().toString());
+
+        ResponseEntity<ErrorResponse> r2 = handler.handleBadRequest(new IllegalArgumentException("x"), request);
+        assertEquals("application/problem+json", r2.getHeaders().getContentType().toString());
+
+        MissingServletRequestParameterException e3 = new MissingServletRequestParameterException("q", "String");
+        ResponseEntity<ErrorResponse> r3 = handler.handleMissingParam(e3, request);
+        assertEquals("application/problem+json", r3.getHeaders().getContentType().toString());
+
+        DataAccessException e4 = new DataAccessException("x") {};
+        ResponseEntity<ErrorResponse> r4 = handler.handleDataAccess(e4, request);
+        assertEquals("application/problem+json", r4.getHeaders().getContentType().toString());
     }
 }

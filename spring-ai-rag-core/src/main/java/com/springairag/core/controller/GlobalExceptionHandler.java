@@ -3,10 +3,14 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.exception.RagException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -17,131 +21,145 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
 
+import java.util.List;
+
 /**
- * 全局异常处理 — RFC 7807 Problem Detail 兼容
+ * 全局异常处理 — RFC 7807 Problem Detail
  *
- * <p>所有异常统一返回 {@link ErrorResponse} 格式，包含 RFC 7807 标准字段：
+ * <p>所有异常统一返回 {@link ErrorResponse} 格式，遵循 RFC 7807 标准字段：
  * type / title / status / detail / instance。
+ *
+ * <p>响应 Content-Type 设为 {@code application/problem+json}（RFC 7807 §3）。
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    /** RFC 7807 标准 Content-Type */
+    private static final MediaType PROBLEM_JSON = MediaType.parseMediaType("application/problem+json");
+
+    // ==================== 400 Bad Request ====================
+
     @ExceptionHandler(MissingServletRequestParameterException.class)
     public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e,
                                                             HttpServletRequest request) {
-        return ResponseEntity.badRequest().body(ErrorResponse.builder()
-                .error("MISSING_PARAMETER")
-                .status(400)
-                .message("缺少必需参数: " + e.getParameterName())
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER",
+                "缺少必需参数: " + e.getParameterName(), request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableMessage(HttpMessageNotReadableException e,
                                                                  HttpServletRequest request) {
-        return ResponseEntity.badRequest().body(ErrorResponse.builder()
-                .error("INVALID_REQUEST_BODY")
-                .status(400)
-                .message("请求体格式错误，请检查 JSON 格式")
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_BODY",
+                "请求体格式错误，请检查 JSON 格式", request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ResponseEntity<ErrorResponse> handleValidation(MethodArgumentNotValidException e,
                                                           HttpServletRequest request) {
-        String message = e.getBindingResult().getFieldErrors().stream()
+        List<String> violations = e.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + ": " + fe.getDefaultMessage())
-                .reduce((a, b) -> a + "; " + b)
-                .orElse("参数校验失败");
-        return ResponseEntity.badRequest().body(ErrorResponse.builder()
+                .toList();
+        String detail = String.join("; ", violations);
+
+        ErrorResponse body = ErrorResponse.builder()
                 .error("VALIDATION_FAILED")
                 .status(400)
-                .message(message)
+                .message(detail)
                 .path(request.getRequestURI())
-                .build());
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                .contentType(PROBLEM_JSON)
+                .body(body);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException e,
+                                                                   HttpServletRequest request) {
+        List<String> violations = e.getConstraintViolations().stream()
+                .map(ConstraintViolation::getMessage)
+                .toList();
+        String detail = String.join("; ", violations);
+
+        return buildResponse(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", detail, request);
     }
 
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e,
                                                             HttpServletRequest request) {
-        return ResponseEntity.badRequest().body(ErrorResponse.builder()
-                .error("TYPE_MISMATCH")
-                .status(400)
-                .message("参数 '" + e.getName() + "' 类型不正确")
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.BAD_REQUEST, "TYPE_MISMATCH",
+                "参数 '" + e.getName() + "' 类型不正确", request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<ErrorResponse> handleBadRequest(IllegalArgumentException e,
                                                           HttpServletRequest request) {
-        return ResponseEntity.badRequest().body(ErrorResponse.builder()
-                .error("BAD_REQUEST")
-                .status(400)
-                .message(e.getMessage() != null ? e.getMessage() : "Invalid argument")
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.BAD_REQUEST, "BAD_REQUEST",
+                e.getMessage() != null ? e.getMessage() : "Invalid argument", request);
     }
 
-    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
-    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
-                                                                  HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ErrorResponse.builder()
-                .error("METHOD_NOT_ALLOWED")
-                .status(405)
-                .message("不支持的请求方法: " + e.getMethod())
-                .path(request.getRequestURI())
-                .build());
-    }
+    // ==================== 404 Not Found ====================
 
     @ExceptionHandler(NoHandlerFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(NoHandlerFoundException e,
                                                         HttpServletRequest request) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ErrorResponse.builder()
-                .error("NOT_FOUND")
-                .status(404)
-                .message("接口不存在: " + e.getRequestURL())
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.NOT_FOUND, "NOT_FOUND",
+                "接口不存在: " + e.getRequestURL(), request);
     }
+
+    // ==================== 405 Method Not Allowed ====================
+
+    @ExceptionHandler(HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
+                                                                  HttpServletRequest request) {
+        return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
+                "不支持的请求方法: " + e.getMethod(), request);
+    }
+
+    // ==================== 500 Internal Server Error ====================
 
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ErrorResponse> handleDataAccess(DataAccessException e,
                                                           HttpServletRequest request) {
         log.error("Database error: {}", e.getMessage(), e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse.builder()
-                .error("DATABASE_ERROR")
-                .status(500)
-                .message("数据库操作失败")
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
+                "数据库操作失败", request);
     }
 
     @ExceptionHandler(RagException.class)
     public ResponseEntity<ErrorResponse> handleRagException(RagException e,
                                                             HttpServletRequest request) {
         log.warn("RAG business error: [{}] {}", e.getErrorCode(), e.getMessage());
-        return ResponseEntity.status(e.getHttpStatus()).body(ErrorResponse.builder()
-                .error(e.getErrorCode())
-                .status(e.getHttpStatus())
-                .message(e.getMessage())
-                .path(request.getRequestURI())
-                .build());
+        return buildResponse(HttpStatus.valueOf(e.getHttpStatus()), e.getErrorCode(),
+                e.getMessage(), request);
     }
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e,
                                                          HttpServletRequest request) {
         log.error("Request failed: {}", e.getMessage(), e);
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ErrorResponse.builder()
-                .error("INTERNAL_ERROR")
-                .status(500)
-                .message(e.getMessage() != null ? e.getMessage() : "Unknown error")
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
+                e.getMessage() != null ? e.getMessage() : "Unknown error", request);
+    }
+
+    // ==================== Helper ====================
+
+    /**
+     * 构建 RFC 7807 Problem Detail 响应，Content-Type 设为 application/problem+json。
+     */
+    private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String error,
+                                                         String detail, HttpServletRequest request) {
+        ErrorResponse body = ErrorResponse.builder()
+                .error(error)
+                .status(status.value())
+                .message(detail)
                 .path(request.getRequestURI())
-                .build());
+                .build();
+
+        return ResponseEntity.status(status)
+                .contentType(PROBLEM_JSON)
+                .body(body);
     }
 }
