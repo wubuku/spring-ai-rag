@@ -394,6 +394,13 @@
 - demo-domain-extension 19 测试全部通过（9 MedicalRagExtensionTest + 6 MedicalRagControllerTest + 4 MedicalPromptCustomizerTest）
 - commit 4b16e35 已推送
 
+### 2026-04-04 05:41 — 主动巡检：E2E 脚本 bug 修复 + rest-api.md 补充
+- mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
+- E2E 脚本 bug：GET /metrics/overview 端点不存在（实际为 GET /metrics），修复 e2e-test.sh
+- rest-api.md 新增 ## Metrics — RAG 指标监控 章节，文档化 GET /api/v1/rag/metrics（含响应字段说明）
+- 零 TODO/FIXME，项目健康
+- commit f33f88d 已推送
+
 ### 2026-04-04 04:40 — 巡检 + CHANGELOG 更新
 - mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
 - 所有 HEARTBEAT 待办已完成；零 TODO/FIXME
