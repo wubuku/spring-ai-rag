@@ -206,9 +206,9 @@
 | 75 | CORS 安全配置 + 输入净化 | 安全 | ✅ 2026-04-03 |
 | 76 | 文档同步（新功能+配置+CHANGELOG） | 文档 | ✅ 2026-04-03 |
 | 77 | JaCoCo 覆盖率报告 + 差距分析 | 质量 | ✅ 2026-04-03 |
-| 78 | 性能基准测试增强（并发+大数据集） | 性能 | ⏳ |
-| 79 | Actuator 自定义指标完善 | 可观测性 | ⏳ |
-| 80 | 健康检查端点增强（多组件探针） | 运维 | ⏳ |
+| 78 | 性能基准测试增强（并发+大数据集） | 性能 | ✅ 2026-04-03 |
+| 79 | Actuator 自定义指标完善 | 可观测性 | ✅ 2026-04-03 |
+| 80 | 健康检查端点增强（多组件探针） | 运维 | ✅ 2026-04-03 |
 | 81 | 错误响应标准化（RFC 7807 Problem Detail） | API 质量 | ✅ 2026-04-03 |
 | 82 | 请求验证增强（@Valid + 自定义校验器） | 安全 | ✅ 2026-04-03 |
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ⏳ |
@@ -224,6 +224,9 @@
 
 ## 进度日志（24h 改进计划）
 
+- 2026-04-03 12:44 — ✅ #78 性能基准测试增强：新增 7 个并发+大数据集 benchmark 测试（concurrentSearch 709ops/s、fuseResults 10k+10k 融合 9ms、concurrentCosine 8线程×25k、parseVector 1万次、concurrentHybrid 5线程、largeDataset 5k融合、concurrentFuseResults 4线程×5k），956+7 测试全通过，commit 2c36734
+- 2026-04-03 12:43 — ✅ #79 Actuator 自定义指标完善：新增 RagMetricsController（GET /metrics/rag + GET /metrics/overview 双视图）、RagMetricsService 新增 getTotalRetrievalResults/getTotalLlmTokens、@Timed 注解覆盖 rag.chat.ask/stream、rag.search.get/post、application.yml 新增 management.* 配置（probes + percentile-histogram），3 个新测试，959 测试全通过，commit 8c7b011
+- 2026-04-03 12:50 — ✅ #80 健康检查端点增强：新增 RagLivenessIndicator（数据库可达性，K8s LivenessProbe）+ RagReadinessIndicator（完整组件健康，K8s ReadinessProbe），application.yml 配置 liveness/readiness 健康组，GeneralRagAutoConfiguration 注册两个新 Bean，RagLivenessIndicatorTest（3 测试）+ RagReadinessIndicatorTest（5 测试），962 测试全通过，commit 0b6e9d8
 - 2026-04-03 08:48 — ✅ #74 分布式追踪增强：RequestTraceFilter 新增可配置采样率（0.0~1.0）、W3C traceparent 格式支持（自动 32 字符 traceId）、可选 spanId 嵌套追踪，外部传入的 traceId 即使未采样也保留，21 个新测试，全部通过，commit 419a454
 - 2026-04-03 08:43 — ✅ #73 速率限制增强：RagProperties.RateLimit 新增 strategy（ip|api-key）和 keyLimits 分级限额 map，RateLimitFilter 支持按 API Key 限流（无 Key 回退 IP），VIP/Basic 不同限额，CLIENT_ID_ATTRIBUTE 便于追踪，13 个新测试，全部通过，commit 0142e80
 - 2026-04-03 07:08 — ✅ #70 API 版本管理：@ApiVersion 注解 + ApiVersionRequestMappingHandlerMapping + ApiVersionConfig，9 个 Controller 迁移 @ApiVersion("v1")，5 个新测试，830 测试通过，commit 8fe4990
