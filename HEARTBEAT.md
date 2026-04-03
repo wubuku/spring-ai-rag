@@ -337,3 +337,10 @@
 - 所有 ⏳ 待办已清空：#90 E2E（22/24，LLM 账户问题非代码问题）→ ✅；#92 SSE 进度推送（已实现）→ ✅；#93 Pipeline metrics（已实现）→ ✅
 - HEARTBEAT 状态同步：移除 #92/#93 重复矛盾行，#90 改为 ✅
 - Phase 1-5 全部完成，1070 测试，零 TODO/FIXME，项目健康
+
+### 2026-04-04 00:20 — E2E 测试链路增强
+- E2E 脚本扩展：新增 Collection CRUD 测试（创建/列表/详情/更新/删除/文档关联）
+- E2E 脚本扩展：新增 GET /cache/stats（嵌入缓存命中率）
+- E2E 脚本扩展：新增 GET /metrics/overview（RAG 指标概览）
+- 测试分段从 10 增至 14，覆盖 Collection 全生命周期 + 可观测性端点
+- mvn test ✅（988 测试全通过），commit e62afc0
