@@ -8,7 +8,8 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
-import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -17,9 +18,6 @@ import static org.mockito.Mockito.*;
 
 /**
  * MedicalRagController 单元测试（直接调用 Controller，无需 Spring 上下文）
- *
- * <p>使用 AtomicReference 捕获请求参数，避免 Java 24 下 any(ChatRequest.class)
- * 和 any() 的 Mockito 类型推断问题。
  */
 class MedicalRagControllerTest {
 
@@ -39,32 +37,23 @@ class MedicalRagControllerTest {
         return req;
     }
 
-    @SuppressWarnings("unchecked")
-    private void stub4ArgChat(Object returnValue) {
-        // Use null instead of any() to avoid Java 24 overload resolution issue
-        doReturn(returnValue).when(ragChatService).chat(
-                anyString(), anyString(), anyString(), (Map<String, Object>) any());
-    }
-
-    @SuppressWarnings("unchecked")
-    private void stubChatRequest(ChatResponse returnValue, AtomicReference<ChatRequest> captured) {
-        doAnswer(invocation -> {
-            captured.set(invocation.getArgument(0));
-            return returnValue;
-        }).when(ragChatService).chat(
-                (ChatRequest) any());
-    }
-
     @Test
     @DisplayName("POST /consult - 设置 domainId=medical")
     void consult_setsDomainIdToMedical() {
         ChatResponse mockResponse = new ChatResponse("这是医疗问诊回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
-        stub4ArgChat(mockResponse);
-        stubChatRequest(mockResponse, captured);
+
+        // Stub the ChatRequest overload
+        doAnswer(invocation -> {
+            captured.set(invocation.getArgument(0));
+            return mockResponse;
+        }).when(ragChatService).chat(any(ChatRequest.class));
+
+        // Stub the simple 2-arg overload (used as fallback)
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
-        ResponseEntity<ChatResponse> result = controller.consult(chatRequest("头疼怎么办", "sess-001"));
+        Map<String, String> body = Map.of("message", "头疼怎么办", "sessionId", "sess-001");
+        ResponseEntity<ChatResponse> result = controller.consult(body);
 
         assertEquals(200, result.getStatusCode().value());
         assertEquals("这是医疗问诊回答", result.getBody().getAnswer());
@@ -77,11 +66,15 @@ class MedicalRagControllerTest {
     void consult_generatesSessionId() {
         ChatResponse mockResponse = new ChatResponse("回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
-        stub4ArgChat(mockResponse);
-        stubChatRequest(mockResponse, captured);
+
+        doAnswer(invocation -> {
+            captured.set(invocation.getArgument(0));
+            return mockResponse;
+        }).when(ragChatService).chat(any(ChatRequest.class));
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
-        ResponseEntity<ChatResponse> result = controller.consult(chatRequest("发烧38度", null));
+        Map<String, String> body = Map.of("message", "发烧38度");
+        ResponseEntity<ChatResponse> result = controller.consult(body);
 
         assertEquals(200, result.getStatusCode().value());
         assertEquals("发烧38度", captured.get().getMessage());
@@ -90,14 +83,9 @@ class MedicalRagControllerTest {
     @Test
     @DisplayName("GET /quick - 返回纯文本")
     void quickConsult_returnsPlainText() {
-        @SuppressWarnings("unchecked")
-        var mockCall = mock(RagChatService.class);
-        when(mockCall.chat(anyString(), anyString(), anyString(), (Map<String, Object>) any()))
+        // Stub the 4-arg overload used by quickConsult
+        when(ragChatService.chat(anyString(), anyString(), eq("medical"), isNull()))
                 .thenReturn("快速问诊回答");
-
-        // Directly verify the controller's behavior
-        doReturn("快速问诊回答").when(ragChatService).chat(
-                anyString(), anyString(), anyString(), (Map<String, Object>) any());
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
         ResponseEntity<String> result = controller.quickConsult("头疼怎么办");
@@ -117,11 +105,15 @@ class MedicalRagControllerTest {
     void generalAsk_usesDefaultDomain() {
         ChatResponse mockResponse = new ChatResponse("通用回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
-        stub4ArgChat(mockResponse);
-        stubChatRequest(mockResponse, captured);
+
+        doAnswer(invocation -> {
+            captured.set(invocation.getArgument(0));
+            return mockResponse;
+        }).when(ragChatService).chat(any(ChatRequest.class));
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
-        ResponseEntity<ChatResponse> result = controller.generalAsk(chatRequest("今天吃什么好", "sess-general"));
+        Map<String, String> body = Map.of("message", "今天吃什么好", "sessionId", "sess-general");
+        ResponseEntity<ChatResponse> result = controller.generalAsk(body);
 
         assertEquals(200, result.getStatusCode().value());
         assertEquals("通用回答", result.getBody().getAnswer());
@@ -133,11 +125,16 @@ class MedicalRagControllerTest {
     @DisplayName("POST /consult - ChatResponse 包含 answer")
     void consult_includesAnswer() {
         ChatResponse mockResponse = new ChatResponse("回答内容");
-        stub4ArgChat(mockResponse);
-        stubChatRequest(mockResponse, new AtomicReference<>());
+        AtomicReference<ChatRequest> captured = new AtomicReference<>();
+
+        doAnswer(invocation -> {
+            captured.set(invocation.getArgument(0));
+            return mockResponse;
+        }).when(ragChatService).chat(any(ChatRequest.class));
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
-        ResponseEntity<ChatResponse> result = controller.consult(chatRequest("咳嗽有痰", null));
+        Map<String, String> body = Map.of("message", "咳嗽有痰");
+        ResponseEntity<ChatResponse> result = controller.consult(body);
 
         assertNotNull(result.getBody());
         assertEquals("回答内容", result.getBody().getAnswer());
@@ -146,14 +143,8 @@ class MedicalRagControllerTest {
     @Test
     @DisplayName("GET /quick - 不同的医学问题都能正确路由")
     void quickConsult_variousSymptoms() {
-        @SuppressWarnings("unchecked")
-        var mockCall = mock(RagChatService.class);
-        when(mockCall.chat(anyString(), anyString(), eq("medical"), (Map<String, Object>) any()))
+        when(ragChatService.chat(anyString(), anyString(), eq("medical"), isNull()))
                 .thenReturn("医学建议");
-
-        // Directly on ragChatService
-        doReturn("医学建议").when(ragChatService).chat(
-                anyString(), anyString(), eq("medical"), (Map<String, Object>) any());
         doReturn("ignore").when(ragChatService).chat(anyString(), anyString());
 
         String[] symptoms = {"发烧38度", "过敏症状", "需要手术吗"};
