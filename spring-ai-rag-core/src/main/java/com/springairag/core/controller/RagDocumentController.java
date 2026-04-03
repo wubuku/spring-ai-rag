@@ -235,7 +235,7 @@ public class RagDocumentController {
                         "error", e.getMessage(),
                         "documentId", id
                 )));
-            } catch (Exception ex) { /* ignore */ }
+            } catch (Exception ex) { /* best-effort: error already sent via completeWithError */ }
             emitter.completeWithError(e);
         } catch (Exception e) {
             emitter.completeWithError(e);

@@ -41,7 +41,7 @@ public class RagLivenessIndicator implements HealthIndicator {
                     .withDetail("database", "reachable")
                     .withDetail("latencyMs", latencyMs)
                     .build();
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw, degrade gracefully
             log.error("Liveness probe failed: database unreachable - {}", e.getMessage());
             return Health.down()
                     .withDetail("database", "unreachable")
