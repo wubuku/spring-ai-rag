@@ -49,7 +49,7 @@ class HybridRetrieverServiceBenchmarkTest {
                 .thenReturn(1);
 
         RagProperties props = new RagProperties();
-        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate);
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate, props);
         Executor directExecutor = Runnable::run;
         service = new HybridRetrieverService(embeddingModel, jdbcTemplate, props, factory, directExecutor);
     }

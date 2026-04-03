@@ -43,7 +43,7 @@ class HybridRetrieverServiceTest {
         when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
                 .thenReturn(1);
         RagProperties ragProperties = new RagProperties();
-        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate);
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate, ragProperties);
         service = new HybridRetrieverService(embeddingModel, jdbcTemplate, ragProperties, factory, null);
     }
 
@@ -466,7 +466,7 @@ class HybridRetrieverServiceTest {
             when(jdbc.queryForList(anyString(), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "test")));
 
-            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, new RagProperties());
             HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             List<RetrievalResult> results = svc.search("test query", null, null, 5);
@@ -490,7 +490,7 @@ class HybridRetrieverServiceTest {
             when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
                     .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
 
-            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, new RagProperties());
             HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             List<RetrievalResult> results = svc.search("test query", null, null, 5);
@@ -511,7 +511,7 @@ class HybridRetrieverServiceTest {
 
             RagProperties props = new RagProperties();
             props.getRetrieval().setFulltextEnabled(false);
-            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, new RagProperties());
             HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, props, factory, null);
 
             svc.search("test query", null, null, 5);
@@ -529,7 +529,7 @@ class HybridRetrieverServiceTest {
             when(jdbc.queryForList(anyString(), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "test")));
 
-            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, new RagProperties());
             HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             RetrievalConfig config = RetrievalConfig.builder().useHybridSearch(false).build();
@@ -539,3 +539,79 @@ class HybridRetrieverServiceTest {
         }
     }
 }
+
+    // ========== 全文检索策略配置测试 ==========
+
+    @Nested
+    @DisplayName("全文检索策略配置（rag.retrieval.fulltext-strategy）")
+    class FulltextStrategyConfigTests {
+
+        @Test
+        @DisplayName("strategy=none 时使用 NoOp 策略")
+        void strategyNone_usesNoOp() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            RagProperties props = new RagProperties();
+            props.getRetrieval().setFulltextStrategy("none");
+
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            assertEquals("none", factory.getProvider().getName());
+        }
+
+        @Test
+        @DisplayName("strategy=pg_trgm 且扩展可用时使用 pg_trgm")
+        void strategyTrgm_available_usesTrgm() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new RuntimeException("not found"));
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+
+            RagProperties props = new RagProperties();
+            props.getRetrieval().setFulltextStrategy("pg_trgm");
+
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            assertEquals("pg_trgm", factory.getProvider().getName());
+        }
+
+        @Test
+        @DisplayName("strategy=pg_trgm 但扩展不可用时启动失败")
+        void strategyTrgm_unavailable_throws() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new RuntimeException("not found"));
+
+            RagProperties props = new RagProperties();
+            props.getRetrieval().setFulltextStrategy("pg_trgm");
+
+            assertThrows(IllegalStateException.class,
+                    () -> new FulltextSearchProviderFactory(jdbc, props));
+        }
+
+        @Test
+        @DisplayName("strategy=auto 自动选择最佳可用策略")
+        void strategyAuto_selectsBestAvailable() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            // pg_jieba 不可用，pg_trgm 可用
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new RuntimeException("not found"));
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+
+            RagProperties props = new RagProperties();
+            // default strategy is "auto"
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            assertEquals("pg_trgm", factory.getProvider().getName());
+        }
+
+        @Test
+        @DisplayName("strategy=auto 全部不可用时降级为 NoOp")
+        void strategyAuto_allUnavailable_fallsBackToNoOp() {
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new RuntimeException("not found"));
+
+            RagProperties props = new RagProperties();
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            assertEquals("none", factory.getProvider().getName());
+        }
+    }

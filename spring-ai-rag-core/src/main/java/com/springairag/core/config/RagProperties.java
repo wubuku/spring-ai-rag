@@ -155,8 +155,10 @@ public class RagProperties {
         private float fulltextWeight = 0.5f;
         private int defaultLimit = 10;
         private float minScore = 0.3f;
-        /** 是否启用全文检索（需要 pg_trgm 扩展，不可用时自动降级为纯向量检索） */
+        /** 是否启用全文检索（不可用时自动降级为纯向量检索） */
         private boolean fulltextEnabled = true;
+        /** 全文检索策略：auto（自动检测）/ pg_jieba / pg_trgm / none */
+        private String fulltextStrategy = "auto";
 
         public float getVectorWeight() {
             return vectorWeight;
@@ -180,6 +182,14 @@ public class RagProperties {
 
         public void setFulltextEnabled(boolean fulltextEnabled) {
             this.fulltextEnabled = fulltextEnabled;
+        }
+
+        public String getFulltextStrategy() {
+            return fulltextStrategy;
+        }
+
+        public void setFulltextStrategy(String fulltextStrategy) {
+            this.fulltextStrategy = fulltextStrategy;
         }
 
         public int getDefaultLimit() {
