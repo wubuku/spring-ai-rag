@@ -38,7 +38,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'", Integer.class);
             return true;
-        } catch (Exception e) {
+        } catch (Exception e) { // Availability detection: return false gracefully
             return false;
         }
     }
@@ -92,7 +92,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                         return toResult(row, sim);
                     })
                     .collect(Collectors.toList());
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: return empty on search failure
             log.warn("pg_trgm search failed: {}", e.getMessage());
             return Collections.emptyList();
         }

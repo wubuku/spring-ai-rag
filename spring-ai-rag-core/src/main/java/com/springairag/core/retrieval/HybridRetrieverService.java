@@ -135,7 +135,7 @@ public class HybridRetrieverService {
             float[] queryVector = embeddingModel.embed(query);
             List<Map<String, Object>> rows = executeVectorQuery(queryVector, documentIds, limit);
             return mapVectorResults(rows, queryVector, excludeIds);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
             log.error("Vector search failed", e);
             return Collections.emptyList();
         }

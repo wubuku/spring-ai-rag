@@ -53,7 +53,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg'", Integer.class);
             return true;
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw, graceful degradation
             log.debug("pg_jieba not available: {}", e.getMessage());
             return false;
         }
@@ -86,7 +86,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     .filter(r -> r.getScore() >= minScore)
                     .limit(limit)
                     .collect(Collectors.toList());
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: return empty on search failure
             log.warn("pg_jieba search failed: {}", e.getMessage());
             return Collections.emptyList();
         }
