@@ -275,10 +275,10 @@ echo ""
 # 1️⃣3️⃣ RAG 指标概览
 # ────────────────────────────────────────
 echo "1️⃣3️⃣ RAG 指标概览"
-RESP=$(curl -s -w "\n%{http_code}" "$API/metrics/overview")
+RESP=$(curl -s -w "\n%{http_code}" "$API/metrics")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
-assert_status "GET /metrics/overview" "200" "$CODE"
+assert_status "GET /metrics" "200" "$CODE"
 assert_contains "返回指标数据" "$BODY" '"totalRequests"'
 echo ""
 

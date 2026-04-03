@@ -712,3 +712,35 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
   "timestamp": "2026-04-03T10:00:00Z"
 }
 ```
+
+---
+
+## Metrics — RAG 指标监控
+
+### `GET /api/v1/rag/metrics`
+
+获取 RAG 服务关键指标汇总（请求数、成功率、检索结果数、Token 消耗）。
+
+**响应：**
+
+```json
+{
+  "totalRequests": 1523,
+  "successfulRequests": 1498,
+  "failedRequests": 25,
+  "successRate": 0.984,
+  "totalRetrievalResults": 8764,
+  "totalLlmTokens": 245321
+}
+```
+
+**字段说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `totalRequests` | long | 自服务启动以来的总请求数 |
+| `successfulRequests` | long | 成功请求数（LLM 正常返回） |
+| `failedRequests` | long | 失败请求数（LLM 调用异常） |
+| `successRate` | double | 成功率（successful/total） |
+| `totalRetrievalResults` | long | 累计返回的检索结果数量 |
+| `totalLlmTokens` | long | 累计 LLM 消耗 Token 数 |
