@@ -373,3 +373,10 @@
   - 医疗领域高召回配置、后处理就医提醒
   - 法律领域扩展多扩展共存
 - 所有 Phase 1-6 + P1/P2/P3 全部完成，零 TODO/FIXME，1121 测试
+
+### 2026-04-04 03:25 — 主动巡检：DocumentEmbedService 进度回调重构
+- mvn clean compile ✅ / mvn test ✅（990+ 测试全通过，零失败零错误）
+- `embedDocumentWithProgress` 62→42 行（-32%）：提取 `maybeEmit()` null-safe 回调工具方法 + `emitEmbeddingProgress()` 批量触发 EMBEDDING 进度
+- 修复 NPE：缓存命中时 `prep.chunks()==null`，`prep.chunks().size()` 改为 `0`
+- 新增 3 个测试：`null callback 不抛异常`、`缓存命中 chunks=null`、`完整进度链路 5 阶段`
+- 零 TODO/FIXME，990+ 测试全通过，commit 282b5c6
