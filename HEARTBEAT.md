@@ -198,11 +198,11 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| 70 | API 版本管理基础设施（/api/v1/ + /api/v2/ 共存） | 架构 | ⏳ |
+| 70 | API 版本管理基础设施（/api/v1/ + /api/v2/ 共存） | 架构 | ✅ 2026-04-03 |
 | 71 | 国际化框架（MessageSource + 错误消息外部化） | 功能 | ✅ 2026-04-03 |
 | 72 | 缓存策略深度优化（Caffeine L1 + TTL/LRU 驱逐） | 性能 | ✅ 2026-04-03 |
-| 73 | 速率限制增强（per-user + 可配置策略） | 安全 | ⏳ |
-| 74 | 分布式追踪增强（采样策略 + trace 传播） | 可观测性 | ⏳ |
+| 73 | 速率限制增强（per-user + 可配置策略） | 安全 | ✅ 2026-04-03 |
+| 74 | 分布式追踪增强（采样策略 + trace 传播） | 可观测性 | ✅ 2026-04-03 |
 | 75 | CORS 安全配置 + 输入净化 | 安全 | ✅ 2026-04-03 |
 | 76 | 文档同步（新功能+配置+CHANGELOG） | 文档 | ⏳ |
 | 77 | JaCoCo 覆盖率报告 + 差距分析 | 质量 | ⏳ |
@@ -224,6 +224,8 @@
 
 ## 进度日志（24h 改进计划）
 
+- 2026-04-03 08:48 — ✅ #74 分布式追踪增强：RequestTraceFilter 新增可配置采样率（0.0~1.0）、W3C traceparent 格式支持（自动 32 字符 traceId）、可选 spanId 嵌套追踪，外部传入的 traceId 即使未采样也保留，21 个新测试，全部通过，commit 419a454
+- 2026-04-03 08:43 — ✅ #73 速率限制增强：RagProperties.RateLimit 新增 strategy（ip|api-key）和 keyLimits 分级限额 map，RateLimitFilter 支持按 API Key 限流（无 Key 回退 IP），VIP/Basic 不同限额，CLIENT_ID_ATTRIBUTE 便于追踪，13 个新测试，全部通过，commit 0142e80
 - 2026-04-03 07:08 — ✅ #70 API 版本管理：@ApiVersion 注解 + ApiVersionRequestMappingHandlerMapping + ApiVersionConfig，9 个 Controller 迁移 @ApiVersion("v1")，5 个新测试，830 测试通过，commit 8fe4990
 - 2026-04-03 07:13 — ✅ 修复 surefire NoClassDefFoundError：配置 forkCount=0 禁用 fork 模式，839 测试通过，commit 133964e
 - 2026-04-03 07:29 — ✅ #71 国际化框架：MessageSourceConfig + MessageResolver + messages.properties/en/zh_CN，GlobalExceptionHandler 注入 MessageResolver 错误消息国际化，GlobalExceptionHandlerTest 适配，commit 4ef5da0
