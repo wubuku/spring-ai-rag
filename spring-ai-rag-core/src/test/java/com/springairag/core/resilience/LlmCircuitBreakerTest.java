@@ -1,6 +1,6 @@
 package com.springairag.core.resilience;
 
-import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagCircuitBreakerProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -15,9 +15,9 @@ class LlmCircuitBreakerTest {
 
     private LlmCircuitBreaker breaker;
 
-    private static RagProperties.CircuitBreaker buildConfig(
+    private static RagCircuitBreakerProperties buildConfig(
             int failureRate, int minCalls, int waitSeconds, int windowSize) {
-        RagProperties.CircuitBreaker config = new RagProperties.CircuitBreaker();
+        RagCircuitBreakerProperties config = new RagCircuitBreakerProperties();
         config.setFailureRateThreshold(failureRate);
         config.setMinimumNumberOfCalls(minCalls);
         config.setWaitDurationInOpenStateSeconds(waitSeconds);
@@ -68,7 +68,7 @@ class LlmCircuitBreakerTest {
         @DisplayName("失败率刚好低于阈值时不会熔断")
         void noTripBelowExactThreshold() {
             // Use a fresh breaker with 51% threshold so 50% is below it
-            RagProperties.CircuitBreaker config = buildConfig(51, 10, 1, 20);
+            RagCircuitBreakerProperties config = buildConfig(51, 10, 1, 20);
             LlmCircuitBreaker freshBreaker = new LlmCircuitBreaker(config);
             // 10S + 10F = 50% < 51% threshold, should stay CLOSED
             for (int i = 0; i < 10; i++) {
@@ -204,7 +204,7 @@ class LlmCircuitBreakerTest {
         @Test
         @DisplayName("大窗口内重置计数防止溢出")
         void largeWindowResetPreventsOverflow() {
-            RagProperties.CircuitBreaker config = buildConfig(50, 100, 1, 20);
+            RagCircuitBreakerProperties config = buildConfig(50, 100, 1, 20);
             LlmCircuitBreaker smallWindow = new LlmCircuitBreaker(config);
             // Add many more failures than window size
             for (int i = 0; i < 30; i++) {

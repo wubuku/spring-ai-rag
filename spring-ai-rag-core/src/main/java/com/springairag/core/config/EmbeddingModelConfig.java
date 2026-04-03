@@ -15,7 +15,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class EmbeddingModelConfig {
 
-    private final RagProperties.Embedding embedding;
+    private final RagEmbeddingProperties embedding;
 
     public EmbeddingModelConfig(RagProperties ragProperties) {
         this.embedding = ragProperties.getEmbedding();

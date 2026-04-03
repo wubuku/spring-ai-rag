@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagQueryRewriteProperties;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,7 +40,7 @@ public class QueryRewritingService {
     @Autowired(required = false)
     private ChatModel chatModel;
 
-    private RagProperties.QueryRewrite config;
+    private RagQueryRewriteProperties config;
 
     /**
      * 运行时可变的同义词词典（优先级高于配置文件）
@@ -86,14 +87,14 @@ public class QueryRewritingService {
         if (ragProperties != null) {
             this.config = ragProperties.getQueryRewrite();
             if (this.config == null) {
-                this.config = new RagProperties.QueryRewrite();
+                this.config = new RagQueryRewriteProperties();
             }
             this.synonymDictionary = config.getSynonymDictionary() != null
                     ? config.getSynonymDictionary() : Collections.emptyMap();
             this.domainQualifiers = config.getDomainQualifiers() != null
                     ? config.getDomainQualifiers() : Collections.emptyList();
         } else {
-            this.config = new RagProperties.QueryRewrite();
+            this.config = new RagQueryRewriteProperties();
         }
     }
 

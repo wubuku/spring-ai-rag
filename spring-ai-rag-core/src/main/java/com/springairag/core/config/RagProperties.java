@@ -2,10 +2,6 @@ package com.springairag.core.config;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
-
 /**
  * RAG 统一配置类
  *
@@ -41,527 +37,69 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "rag")
 public class RagProperties {
 
-    private final Embedding embedding = new Embedding();
-    private final Retrieval retrieval = new Retrieval();
-    private final QueryRewrite queryRewrite = new QueryRewrite();
-    private final Rerank rerank = new Rerank();
-    private final Memory memory = new Memory();
-    private final Chunk chunk = new Chunk();
-    private final Async async = new Async();
-    private final Security security = new Security();
-    private final RateLimit rateLimit = new RateLimit();
-    private final Cors cors = new Cors();
-    private final Tracing tracing = new Tracing();
-    private final CircuitBreaker circuitBreaker = new CircuitBreaker();
+    private final RagEmbeddingProperties embedding = new RagEmbeddingProperties();
+    private final RagRetrievalProperties retrieval = new RagRetrievalProperties();
+    private final RagQueryRewriteProperties queryRewrite = new RagQueryRewriteProperties();
+    private final RagRerankProperties rerank = new RagRerankProperties();
+    private final RagMemoryProperties memory = new RagMemoryProperties();
+    private final RagChunkProperties chunk = new RagChunkProperties();
+    private final RagAsyncProperties async = new RagAsyncProperties();
+    private final RagSecurityProperties security = new RagSecurityProperties();
+    private final RagRateLimitProperties rateLimit = new RagRateLimitProperties();
+    private final RagCorsProperties cors = new RagCorsProperties();
+    private final RagCacheProperties cache = new RagCacheProperties();
+    private final RagTracingProperties tracing = new RagTracingProperties();
+    private final RagCircuitBreakerProperties circuitBreaker = new RagCircuitBreakerProperties();
 
-    public Embedding getEmbedding() {
+    public RagEmbeddingProperties getEmbedding() {
         return embedding;
     }
 
-    public Retrieval getRetrieval() {
+    public RagRetrievalProperties getRetrieval() {
         return retrieval;
     }
 
-    public QueryRewrite getQueryRewrite() {
+    public RagQueryRewriteProperties getQueryRewrite() {
         return queryRewrite;
     }
 
-    public Rerank getRerank() {
+    public RagRerankProperties getRerank() {
         return rerank;
     }
 
-    public Memory getMemory() {
+    public RagMemoryProperties getMemory() {
         return memory;
     }
 
-    public Chunk getChunk() {
+    public RagChunkProperties getChunk() {
         return chunk;
     }
 
-    public Async getAsync() {
+    public RagAsyncProperties getAsync() {
         return async;
     }
 
-    public Security getSecurity() {
+    public RagSecurityProperties getSecurity() {
         return security;
     }
 
-    public RateLimit getRateLimit() {
+    public RagRateLimitProperties getRateLimit() {
         return rateLimit;
     }
 
-    public Cors getCors() {
+    public RagCorsProperties getCors() {
         return cors;
     }
 
-    public Tracing getTracing() {
-        return tracing;
-    }
-
-    public CircuitBreaker getCircuitBreaker() {
-        return circuitBreaker;
-    }
-
-    // ==================== 缓存配置 ====================
-
-    private final Cache cache = new Cache();
-
-    public Cache getCache() {
+    public RagCacheProperties getCache() {
         return cache;
     }
 
-    /**
-     * 嵌入模型配置
-     */
-    public static class Embedding {
-        private String apiKey = "";
-        private String baseUrl = "https://api.siliconflow.cn/v1";
-        private String model = "BAAI/bge-m3";
-        private int dimensions = 1024;
-
-        public String getApiKey() {
-            return apiKey;
-        }
-
-        public void setApiKey(String apiKey) {
-            this.apiKey = apiKey;
-        }
-
-        public String getBaseUrl() {
-            return baseUrl;
-        }
-
-        public void setBaseUrl(String baseUrl) {
-            this.baseUrl = baseUrl;
-        }
-
-        public String getModel() {
-            return model;
-        }
-
-        public void setModel(String model) {
-            this.model = model;
-        }
-
-        public int getDimensions() {
-            return dimensions;
-        }
-
-        public void setDimensions(int dimensions) {
-            this.dimensions = dimensions;
-        }
+    public RagTracingProperties getTracing() {
+        return tracing;
     }
 
-    /**
-     * 检索配置
-     */
-    public static class Retrieval {
-        private float vectorWeight = 0.5f;
-        private float fulltextWeight = 0.5f;
-        private int defaultLimit = 10;
-        private float minScore = 0.3f;
-        /** 是否启用全文检索（不可用时自动降级为纯向量检索） */
-        private boolean fulltextEnabled = true;
-        /** 全文检索策略：auto（自动检测）/ pg_jieba / pg_trgm / none */
-        private String fulltextStrategy = "auto";
-
-        public float getVectorWeight() {
-            return vectorWeight;
-        }
-
-        public void setVectorWeight(float vectorWeight) {
-            this.vectorWeight = vectorWeight;
-        }
-
-        public float getFulltextWeight() {
-            return fulltextWeight;
-        }
-
-        public void setFulltextWeight(float fulltextWeight) {
-            this.fulltextWeight = fulltextWeight;
-        }
-
-        public boolean isFulltextEnabled() {
-            return fulltextEnabled;
-        }
-
-        public void setFulltextEnabled(boolean fulltextEnabled) {
-            this.fulltextEnabled = fulltextEnabled;
-        }
-
-        public String getFulltextStrategy() {
-            return fulltextStrategy;
-        }
-
-        public void setFulltextStrategy(String fulltextStrategy) {
-            this.fulltextStrategy = fulltextStrategy;
-        }
-
-        public int getDefaultLimit() {
-            return defaultLimit;
-        }
-
-        public void setDefaultLimit(int defaultLimit) {
-            this.defaultLimit = defaultLimit;
-        }
-
-        public float getMinScore() {
-            return minScore;
-        }
-
-        public void setMinScore(float minScore) {
-            this.minScore = minScore;
-        }
-    }
-
-    /**
-     * 查询改写配置
-     */
-    public static class QueryRewrite {
-        private boolean enabled = true;
-        private int paddingCount = 2;
-        private Map<String, String[]> synonymDictionary = Collections.emptyMap();
-        private List<String> domainQualifiers = Collections.emptyList();
-        private boolean llmEnabled = false;
-        private int llmMaxRewrites = 3;
-
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public int getPaddingCount() { return paddingCount; }
-        public void setPaddingCount(int paddingCount) { this.paddingCount = paddingCount; }
-        public Map<String, String[]> getSynonymDictionary() { return synonymDictionary; }
-        public void setSynonymDictionary(Map<String, String[]> synonymDictionary) { this.synonymDictionary = synonymDictionary; }
-        public List<String> domainQualifiers() { return domainQualifiers; }
-        public void setDomainQualifiers(List<String> domainQualifiers) { this.domainQualifiers = domainQualifiers; }
-        public boolean isLlmEnabled() { return llmEnabled; }
-        public void setLlmEnabled(boolean llmEnabled) { this.llmEnabled = llmEnabled; }
-        public int getLlmMaxRewrites() { return llmMaxRewrites; }
-        public void setLlmMaxRewrites(int llmMaxRewrites) { this.llmMaxRewrites = llmMaxRewrites; }
-
-        // 保持向后兼容的 getter 名
-        public List<String> getDomainQualifiers() { return domainQualifiers; }
-    }
-
-    /**
-     * 重排序配置
-     */
-    public static class Rerank {
-        private boolean enabled = false;
-        private float diversityWeight = 0.2f;
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public float getDiversityWeight() {
-            return diversityWeight;
-        }
-
-        public void setDiversityWeight(float diversityWeight) {
-            this.diversityWeight = diversityWeight;
-        }
-    }
-
-    /**
-     * 对话记忆配置
-     */
-    public static class Memory {
-        private int maxMessages = 20;
-
-        public int getMaxMessages() {
-            return maxMessages;
-        }
-
-        public void setMaxMessages(int maxMessages) {
-            this.maxMessages = maxMessages;
-        }
-    }
-
-    /**
-     * 文档分块配置
-     */
-    public static class Chunk {
-        private int defaultChunkSize = 1000;
-        private int defaultChunkOverlap = 100;
-        private int minChunkSize = 100;
-
-        public int getDefaultChunkSize() {
-            return defaultChunkSize;
-        }
-
-        public void setDefaultChunkSize(int defaultChunkSize) {
-            this.defaultChunkSize = defaultChunkSize;
-        }
-
-        public int getDefaultChunkOverlap() {
-            return defaultChunkOverlap;
-        }
-
-        public void setDefaultChunkOverlap(int defaultChunkOverlap) {
-            this.defaultChunkOverlap = defaultChunkOverlap;
-        }
-
-        public int getMinChunkSize() {
-            return minChunkSize;
-        }
-
-        public void setMinChunkSize(int minChunkSize) {
-            this.minChunkSize = minChunkSize;
-        }
-    }
-
-    /**
-     * 异步线程池配置
-     */
-    public static class Async {
-        private int corePoolSize = 4;
-        private int maxPoolSize = 16;
-        private int queueCapacity = 100;
-        /** 并行检索超时秒数（向量/全文并行执行时） */
-        private int retrievalTimeoutSeconds = 5;
-
-        public int getCorePoolSize() {
-            return corePoolSize;
-        }
-
-        public void setCorePoolSize(int corePoolSize) {
-            this.corePoolSize = corePoolSize;
-        }
-
-        public int getMaxPoolSize() {
-            return maxPoolSize;
-        }
-
-        public void setMaxPoolSize(int maxPoolSize) {
-            this.maxPoolSize = maxPoolSize;
-        }
-
-        public int getQueueCapacity() {
-            return queueCapacity;
-        }
-
-        public void setQueueCapacity(int queueCapacity) {
-            this.queueCapacity = queueCapacity;
-        }
-
-        public int getRetrievalTimeoutSeconds() {
-            return retrievalTimeoutSeconds;
-        }
-
-        public void setRetrievalTimeoutSeconds(int retrievalTimeoutSeconds) {
-            this.retrievalTimeoutSeconds = retrievalTimeoutSeconds;
-        }
-    }
-
-    /**
-     * 安全认证配置
-     *
-     * <p>配置示例：
-     * <pre>
-     * rag:
-     *   security:
-     *     api-key: ${RAG_API_KEY:}
-     *     enabled: false
-     * </pre>
-     */
-    public static class Security {
-        private String apiKey = "";
-        private boolean enabled = false;
-
-        public String getApiKey() {
-            return apiKey;
-        }
-
-        public void setApiKey(String apiKey) {
-            this.apiKey = apiKey;
-        }
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-    }
-
-    /**
-     * API 限流配置
-     *
-     * <p>支持两种策略：
-     * <ul>
-     *   <li>{@code ip} — 按客户端 IP 限流（默认，向后兼容）</li>
-     *   <li>{@code api-key} — 按 API Key 限流，未携带 Key 时回退到 IP</li>
-     * </ul>
-     *
-     * <p>配置示例：
-     * <pre>
-     * rag:
-     *   rate-limit:
-     *     enabled: true
-     *     requests-per-minute: 60
-     *     strategy: ip                # ip | api-key
-     *     key-limits:                 # 仅 strategy=api-key 时生效
-     *       sk-premium-key: 300       # 高级用户 300 次/分钟
-     *       sk-basic-key: 100         # 基础用户 100 次/分钟
-     * </pre>
-     */
-    public static class RateLimit {
-        private boolean enabled = false;
-        private int requestsPerMinute = 60;
-        private String strategy = "ip";
-        private Map<String, Integer> keyLimits = new java.util.HashMap<>();
-
-        public boolean isEnabled() {
-            return enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public int getRequestsPerMinute() {
-            return requestsPerMinute;
-        }
-
-        public void setRequestsPerMinute(int requestsPerMinute) {
-            this.requestsPerMinute = requestsPerMinute;
-        }
-
-        public String getStrategy() {
-            return strategy;
-        }
-
-        public void setStrategy(String strategy) {
-            this.strategy = strategy;
-        }
-
-        public Map<String, Integer> getKeyLimits() {
-            return keyLimits;
-        }
-
-        public void setKeyLimits(Map<String, Integer> keyLimits) {
-            this.keyLimits = keyLimits;
-        }
-    }
-
-    /**
-     * CORS 跨域配置
-     *
-     * <p>配置示例：
-     * <pre>
-     * rag:
-     *   cors:
-     *     enabled: true
-     *     allowed-origins:
-     *       - "https://example.com"
-     *       - "http://localhost:3000"
-     *     allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
-     *     allowed-headers: "*"
-     *     max-age: 3600
-     * </pre>
-     */
-    public static class Cors {
-        private boolean enabled = false;
-        private List<String> allowedOrigins = List.of("*");
-        private String allowedMethods = "GET,POST,PUT,DELETE,OPTIONS";
-        private String allowedHeaders = "*";
-        private long maxAge = 3600;
-
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public List<String> getAllowedOrigins() { return allowedOrigins; }
-        public void setAllowedOrigins(List<String> allowedOrigins) { this.allowedOrigins = allowedOrigins; }
-        public String getAllowedMethods() { return allowedMethods; }
-        public void setAllowedMethods(String allowedMethods) { this.allowedMethods = allowedMethods; }
-        public String getAllowedHeaders() { return allowedHeaders; }
-        public void setAllowedHeaders(String allowedHeaders) { this.allowedHeaders = allowedHeaders; }
-        public long getMaxAge() { return maxAge; }
-        public void setMaxAge(long maxAge) { this.maxAge = maxAge; }
-    }
-
-    /**
-     * 缓存配置
-     */
-    public static class Cache {
-        private long maximumSize = 2000;
-        private int expireAfterWriteMinutes = 30;
-        private long embeddingMaximumSize = 10000;
-        private int embeddingExpireAfterWriteHours = 2;
-
-        public long getMaximumSize() { return maximumSize; }
-        public void setMaximumSize(long maximumSize) { this.maximumSize = maximumSize; }
-        public int getExpireAfterWriteMinutes() { return expireAfterWriteMinutes; }
-        public void setExpireAfterWriteMinutes(int expireAfterWriteMinutes) { this.expireAfterWriteMinutes = expireAfterWriteMinutes; }
-        public long getEmbeddingMaximumSize() { return embeddingMaximumSize; }
-        public void setEmbeddingMaximumSize(long embeddingMaximumSize) { this.embeddingMaximumSize = embeddingMaximumSize; }
-        public int getEmbeddingExpireAfterWriteHours() { return embeddingExpireAfterWriteHours; }
-        public void setEmbeddingExpireAfterWriteHours(int embeddingExpireAfterWriteHours) { this.embeddingExpireAfterWriteHours = embeddingExpireAfterWriteHours; }
-    }
-
-    /**
-     * 分布式追踪配置
-     *
-     * <p>配置示例：
-     * <pre>
-     * rag:
-     *   tracing:
-     *     enabled: true
-     *     sampling-rate: 1.0           # 0.0~1.0，1.0=全量追踪
-     *     w3c-format: true             # 输出 W3C traceparent 格式
-     *     span-id-enabled: true        # 生成 spanId 支持嵌套追踪
-     * </pre>
-     */
-    public static class Tracing {
-        private boolean enabled = true;
-        private double samplingRate = 1.0;
-        private boolean w3cFormat = false;
-        private boolean spanIdEnabled = false;
-
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public double getSamplingRate() { return samplingRate; }
-        public void setSamplingRate(double samplingRate) { this.samplingRate = samplingRate; }
-        public boolean isW3cFormat() { return w3cFormat; }
-        public void setW3cFormat(boolean w3cFormat) { this.w3cFormat = w3cFormat; }
-        public boolean isSpanIdEnabled() { return spanIdEnabled; }
-        public void setSpanIdEnabled(boolean spanIdEnabled) { this.spanIdEnabled = spanIdEnabled; }
-    }
-
-    /**
-     * LLM 熔断器配置
-     *
-     * <p>配置示例：
-     * <pre>
-     * rag:
-     *   circuit-breaker:
-     *     enabled: true
-     *     failure-rate-threshold: 50       # 失败率阈值（%），超过则熔断
-     *     minimum-number-of-calls: 10      # 滑动窗口内最小调用数
-     *     wait-duration-in-open-state: 30  # OPEN 状态持续秒数
-     *     sliding-window-size: 20          # 滑动窗口大小
-     * </pre>
-     */
-    public static class CircuitBreaker {
-        private boolean enabled = false;
-        private int failureRateThreshold = 50;
-        private int minimumNumberOfCalls = 10;
-        private int waitDurationInOpenStateSeconds = 30;
-        private int slidingWindowSize = 20;
-
-        public boolean isEnabled() { return enabled; }
-        public void setEnabled(boolean enabled) { this.enabled = enabled; }
-        public int getFailureRateThreshold() { return failureRateThreshold; }
-        public void setFailureRateThreshold(int failureRateThreshold) { this.failureRateThreshold = failureRateThreshold; }
-        public int getMinimumNumberOfCalls() { return minimumNumberOfCalls; }
-        public void setMinimumNumberOfCalls(int minimumNumberOfCalls) { this.minimumNumberOfCalls = minimumNumberOfCalls; }
-        public int getWaitDurationInOpenStateSeconds() { return waitDurationInOpenStateSeconds; }
-        public void setWaitDurationInOpenStateSeconds(int waitDurationInOpenStateSeconds) { this.waitDurationInOpenStateSeconds = waitDurationInOpenStateSeconds; }
-        public int getSlidingWindowSize() { return slidingWindowSize; }
-        public void setSlidingWindowSize(int slidingWindowSize) { this.slidingWindowSize = slidingWindowSize; }
+    public RagCircuitBreakerProperties getCircuitBreaker() {
+        return circuitBreaker;
     }
 }

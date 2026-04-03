@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagRerankProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,7 @@ public class ReRankingService {
 
     private static final Logger log = LoggerFactory.getLogger(ReRankingService.class);
 
-    private final RagProperties.Rerank config;
+    private final RagRerankProperties config;
 
     public ReRankingService(RagProperties ragProperties) {
         this.config = ragProperties.getRerank();

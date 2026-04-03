@@ -13,7 +13,7 @@ class CorsConfigTest {
 
     @Test
     void corsProperties_defaults() {
-        RagProperties.Cors cors = new RagProperties.Cors();
+        RagCorsProperties cors = new RagCorsProperties();
 
         assertFalse(cors.isEnabled());
         assertEquals(List.of("*"), cors.getAllowedOrigins());
@@ -24,7 +24,7 @@ class CorsConfigTest {
 
     @Test
     void corsProperties_settersWork() {
-        RagProperties.Cors cors = new RagProperties.Cors();
+        RagCorsProperties cors = new RagCorsProperties();
         cors.setEnabled(true);
         cors.setAllowedOrigins(List.of("https://example.com", "http://localhost:3000"));
         cors.setAllowedMethods("GET,POST");

@@ -35,7 +35,7 @@ public class CorsConfig implements WebMvcConfigurer {
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        RagProperties.Cors cors = properties.getCors();
+        RagCorsProperties cors = properties.getCors();
         String[] origins = cors.getAllowedOrigins().toArray(new String[0]);
 
         registry.addMapping("/api/**")

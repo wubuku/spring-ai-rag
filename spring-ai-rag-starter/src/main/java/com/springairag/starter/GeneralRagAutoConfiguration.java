@@ -2,6 +2,9 @@ package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagSecurityProperties;
+import com.springairag.core.config.RagRateLimitProperties;
+import com.springairag.core.config.RagTracingProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
@@ -67,9 +70,9 @@ public class GeneralRagAutoConfiguration {
     @Bean
     public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
             @Autowired(required = false) RagProperties properties) {
-        RagProperties.Security security =
+        RagSecurityProperties security =
                 properties != null ? properties.getSecurity()
-                        : new RagProperties.Security();
+                        : new RagSecurityProperties();
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter(security.getApiKey(), security.isEnabled());
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
@@ -83,9 +86,9 @@ public class GeneralRagAutoConfiguration {
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
             @Autowired(required = false) RagProperties properties) {
-        RagProperties.RateLimit rateLimit =
+        RagRateLimitProperties rateLimit =
                 properties != null ? properties.getRateLimit()
-                        : new RagProperties.RateLimit();
+                        : new RagRateLimitProperties();
         RateLimitFilter filter = new RateLimitFilter(
                 rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
                 rateLimit.getStrategy(), rateLimit.getKeyLimits());
@@ -102,7 +105,7 @@ public class GeneralRagAutoConfiguration {
     public Object tracingConfigurer(RequestTraceFilter traceFilter,
                                    @Autowired(required = false) RagProperties properties) {
         if (properties != null) {
-            RagProperties.Tracing tracing = properties.getTracing();
+            RagTracingProperties tracing = properties.getTracing();
             traceFilter.configure(tracing.isEnabled(), tracing.getSamplingRate(),
                     tracing.isW3cFormat(), tracing.isSpanIdEnabled());
         }

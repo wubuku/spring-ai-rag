@@ -39,7 +39,7 @@ public class CacheConfig {
     @Bean
     @Primary
     public CacheManager cacheManager() {
-        RagProperties.Cache cache = ragProperties.getCache();
+        RagCacheProperties cache = ragProperties.getCache();
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(cache.getMaximumSize())
@@ -56,7 +56,7 @@ public class CacheConfig {
      */
     @Bean("embeddingCacheManager")
     public CacheManager embeddingCacheManager() {
-        RagProperties.Cache cache = ragProperties.getCache();
+        RagCacheProperties cache = ragProperties.getCache();
         CaffeineCacheManager manager = new CaffeineCacheManager();
         manager.setCaffeine(Caffeine.newBuilder()
                 .maximumSize(cache.getEmbeddingMaximumSize())

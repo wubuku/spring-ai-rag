@@ -1,6 +1,6 @@
 package com.springairag.core.resilience;
 
-import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagCircuitBreakerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,7 +45,7 @@ public class LlmCircuitBreaker {
     private final long waitDurationInOpenStateMillis;
     private final int windowSize;
 
-    public LlmCircuitBreaker(RagProperties.CircuitBreaker config) {
+    public LlmCircuitBreaker(RagCircuitBreakerProperties config) {
         this.windowSize = config.getSlidingWindowSize() > 0 ? config.getSlidingWindowSize() : 20;
         this.results = new boolean[windowSize];
         this.failureRateThreshold = config.getFailureRateThreshold();

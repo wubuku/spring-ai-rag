@@ -40,7 +40,7 @@ public class AsyncConfig implements AsyncConfigurer {
     @Override
     @Bean(name = "taskExecutor")
     public Executor getAsyncExecutor() {
-        RagProperties.Async asyncConfig = ragProperties.getAsync();
+        RagAsyncProperties asyncConfig = ragProperties.getAsync();
 
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(asyncConfig.getCorePoolSize());

@@ -3,6 +3,7 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagRetrievalProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
@@ -39,7 +40,7 @@ public class HybridRetrieverService {
     private final EmbeddingModel embeddingModel;
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
-    private final RagProperties.Retrieval retrieval;
+    private final RagRetrievalProperties retrieval;
     private final FulltextSearchProvider fulltextProvider;
 
     private final int retrievalTimeoutSeconds;
