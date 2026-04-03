@@ -402,3 +402,10 @@
 - rest-api.md 新增 ## Metrics — RAG 指标监控 章节，文档化 GET /api/v1/rag/metrics（含响应字段说明）
 - 零 TODO/FIXME，项目健康
 - commit f33f88d 已推送
+
+### 2026-04-04 06:44 — 主动巡检：ChatResponse.stepMetrics 单元测试补全
+- mvn clean compile ✅ / mvn test ✅（1116 测试全通过，零失败零错误）
+- ChatResponse.setStepMetrics/getStepMetrics 测试（List of StepMetricRecord）
+- StepMetricRecord 构造函数/ setter 测试（stepName/durationMs/resultCount）
+- DtoTest: 21→25 测试（+4）
+- commit 2bf91b8 已推送
