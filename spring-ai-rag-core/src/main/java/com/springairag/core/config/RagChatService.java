@@ -10,10 +10,12 @@ import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RagPipelineMetrics;
 import com.springairag.core.advisor.RerankAdvisor;
+import com.springairag.core.exception.LlmCircuitOpenException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -69,6 +71,7 @@ public class RagChatService {
     private final DomainExtensionRegistry domainExtensionRegistry;
     private final PromptCustomizerChain promptCustomizerChain;
     private final RagMetricsService metricsService; // 可选，未引入 actuator 时为 null
+    private final LlmCircuitBreaker circuitBreaker; // 可选，未启用时为 null
 
     public RagChatService(
             ChatClient.Builder chatClientBuilder,
@@ -89,6 +92,17 @@ public class RagChatService {
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
         this.metricsService = metricsService;
+
+        if (ragProperties.getCircuitBreaker().isEnabled()) {
+            this.circuitBreaker = new LlmCircuitBreaker(ragProperties.getCircuitBreaker());
+            log.info("LLM circuit breaker enabled: failureRateThreshold={}%, minimumCalls={}, waitDuration={}s, windowSize={}",
+                    ragProperties.getCircuitBreaker().getFailureRateThreshold(),
+                    ragProperties.getCircuitBreaker().getMinimumNumberOfCalls(),
+                    ragProperties.getCircuitBreaker().getWaitDurationInOpenStateSeconds(),
+                    ragProperties.getCircuitBreaker().getSlidingWindowSize());
+        } else {
+            this.circuitBreaker = null;
+        }
 
         int maxMessages = ragProperties.getMemory().getMaxMessages();
         ChatMemory chatMemory = buildChatMemory(jdbcChatMemoryRepository, maxMessages);
@@ -181,6 +195,12 @@ public class RagChatService {
      * 核心聊天执行方法，返回含 sources 的完整响应
      */
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
+        // Circuit breaker check (fast-fail if OPEN)
+        if (circuitBreaker != null && !circuitBreaker.allowCall()) {
+            log.warn("LLM circuit breaker is OPEN, rejecting request");
+            throw new LlmCircuitOpenException();
+        }
+
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
 
@@ -200,10 +220,16 @@ public class RagChatService {
             answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
             sources = extractSources(chatClientResponse);
             pipelineMetrics = extractPipelineMetrics(chatClientResponse);
-        } catch (Exception e) { // Resilience: record metrics before rethrow
+            if (circuitBreaker != null) {
+                circuitBreaker.recordSuccess();
+            }
+        } catch (Exception e) { // Resilience: record metrics + circuit breaker before rethrow
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
                 metricsService.recordFailure(elapsed);
+            }
+            if (circuitBreaker != null) {
+                circuitBreaker.recordFailure();
             }
             throw e;
         }

@@ -127,6 +127,15 @@ rag:
     max-pool-size: 16
     queue-capacity: 100
 
+  # LLM 熔断器配置（默认禁用）
+  # 启用后可防止 LLM API 故障时请求堆积
+  # circuit-breaker:
+  #   enabled: true
+  #   failure-rate-threshold: 50      # 失败率阈值（%），超过则熔断
+  #   minimum-number-of-calls: 10     # 滑动窗口内最小调用数
+  #   wait-duration-in-open-state: 30 # OPEN 状态持续秒数
+  #   sliding-window-size: 20         # 滑动窗口大小
+
 # ============================================
 # 服务器配置
 # ============================================
