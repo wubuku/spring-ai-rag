@@ -3,6 +3,8 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
+import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -22,6 +24,7 @@ import static org.mockito.Mockito.*;
  * HybridRetrieverService 单元测试
  *
  * <p>通过 mock EmbeddingModel 和 JdbcTemplate 测试混合检索逻辑。
+ * 全文检索通过 PgTrgmFulltextProvider（mocked jdbcTemplate）实现。
  */
 class HybridRetrieverServiceTest {
 
@@ -33,8 +36,15 @@ class HybridRetrieverServiceTest {
     void setUp() {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
+        // 模拟 pg_trgm 可用，pg_jieba 不可用
+        // anyString() 先设置默认行为，eq() 后设置覆盖特定查询
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
+                .thenThrow(new DataAccessResourceFailureException("not found"));
+        when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                .thenReturn(1);
         RagProperties ragProperties = new RagProperties();
-        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, ragProperties, null);
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate);
+        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, ragProperties, factory, null);
     }
 
     private float[] mockEmbedding() {
@@ -450,13 +460,14 @@ class HybridRetrieverServiceTest {
         @DisplayName("pg_trgm 不可用时自动降级为纯向量检索")
         void pgTrgmUnavailable_fallsBackToVectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenThrow(new DataAccessResourceFailureException("not found"));
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
             when(jdbc.queryForList(anyString(), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "test")));
 
-            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             List<RetrievalResult> results = svc.search("test query", null, null, 5);
 
@@ -471,13 +482,16 @@ class HybridRetrieverServiceTest {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
                     .thenReturn(1);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new DataAccessResourceFailureException("jieba not found"));
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
             when(jdbc.queryForList(contains("ORDER BY embedding <=>"), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "vector result")));
             when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
                     .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
 
-            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             List<RetrievalResult> results = svc.search("test query", null, null, 5);
 
@@ -489,7 +503,7 @@ class HybridRetrieverServiceTest {
         @DisplayName("fulltextEnabled=false 时即使 pg_trgm 可用也走纯向量")
         void fulltextDisabled_alwaysVectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenReturn(1);
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
             when(jdbc.queryForList(anyString(), any(Object[].class)))
@@ -497,7 +511,8 @@ class HybridRetrieverServiceTest {
 
             RagProperties props = new RagProperties();
             props.getRetrieval().setFulltextEnabled(false);
-            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, props, null);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, props, factory, null);
 
             svc.search("test query", null, null, 5);
 
@@ -508,13 +523,14 @@ class HybridRetrieverServiceTest {
         @DisplayName("RetrievalConfig.useHybridSearch=false 时走纯向量")
         void configHybridDisabled_vectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenReturn(1);
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
             when(jdbc.queryForList(anyString(), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "test")));
 
-            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), null);
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc);
+            HybridRetrieverService svc = new HybridRetrieverService(embeddingModel, jdbc, new RagProperties(), factory, null);
 
             RetrievalConfig config = RetrievalConfig.builder().useHybridSearch(false).build();
             svc.search("test", null, null, 5, config);

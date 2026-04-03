@@ -3,6 +3,9 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
+import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
+import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -22,9 +25,9 @@ import java.util.stream.Collectors;
 /**
  * 混合检索服务
  *
- * <p>结合向量检索和全文检索（pg_trgm），通过结果融合提升召回质量。
- * 参考 dermai-rag-service HybridRetrieverService 实现，
- * 适配 Spring AI EmbeddingModel 接口。
+ * <p>结合向量检索和全文检索，通过结果融合提升召回质量。
+ * 全文检索策略由 {@link FulltextSearchProviderFactory} 自动选择：
+ * pg_jieba（中文分词优先）→ pg_trgm（降级）→ 无（纯向量）。
  */
 @Service
 public class HybridRetrieverService {
@@ -35,37 +38,22 @@ public class HybridRetrieverService {
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private final RagProperties.Retrieval retrieval;
-    private final boolean pgTrgmAvailable;
+    private final FulltextSearchProvider fulltextProvider;
 
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
             JdbcTemplate jdbcTemplate,
             RagProperties ragProperties,
+            @Autowired(required = false) FulltextSearchProviderFactory fulltextProviderFactory,
             @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor) {
         this.embeddingModel = embeddingModel;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
-        this.pgTrgmAvailable = detectPgTrgm();
-        if (!pgTrgmAvailable && retrieval.isFulltextEnabled()) {
-            log.warn("pg_trgm extension not available — hybrid search will fall back to vector-only search. " +
-                    "Install pg_trgm for full-text search support, or set rag.retrieval.fulltext-enabled=false to suppress this warning.");
-        }
-    }
-
-    /**
-     * 检测 pg_trgm 扩展是否可用
-     */
-    private boolean detectPgTrgm() {
-        try {
-            jdbcTemplate.queryForObject(
-                    "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'", Integer.class);
-            log.info("pg_trgm extension detected — hybrid search enabled");
-            return true;
-        } catch (Exception e) {
-            log.info("pg_trgm extension not found — full-text search disabled, vector-only mode");
-            return false;
-        }
+        this.fulltextProvider = fulltextProviderFactory != null
+                ? fulltextProviderFactory.getProvider()
+                : new NoOpFulltextSearchProvider();
+        log.info("HybridRetrieverService initialized with full-text provider: {}", fulltextProvider.getName());
     }
 
     /**
@@ -73,18 +61,12 @@ public class HybridRetrieverService {
      */
     private boolean isFulltextAvailable(RetrievalConfig config) {
         if (!retrieval.isFulltextEnabled()) return false;
-        if (!pgTrgmAvailable) return false;
+        if (!fulltextProvider.isAvailable()) return false;
         return config == null || config.isUseHybridSearch();
     }
 
     /**
      * 混合检索入口
-     *
-     * @param query 查询文本
-     * @param documentIds 限定文档ID（null表示搜索全部）
-     * @param excludeIds 排除的嵌入ID
-     * @param limit 返回结果数量
-     * @return 融合后的检索结果
      */
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                          List<Long> excludeIds, int limit) {
@@ -105,9 +87,7 @@ public class HybridRetrieverService {
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
-        boolean useHybrid = isFulltextAvailable(config);
-
-        if (!useHybrid) {
+        if (!isFulltextAvailable(config)) {
             return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
         }
 
@@ -117,22 +97,22 @@ public class HybridRetrieverService {
                         () -> vectorSearch(query, documentIds, excludeIds, effectiveLimit * 2),
                         taskExecutor),
                 CompletableFuture.supplyAsync(
-                        () -> fullTextSearch(query, documentIds, excludeIds, effectiveLimit * 2),
+                        () -> fulltextProvider.search(query, documentIds, excludeIds,
+                                effectiveLimit * 2, retrieval.getMinScore()),
                         taskExecutor)
         );
 
         List<RetrievalResult> vectorResults = futures.get(0).join();
         List<RetrievalResult> fulltextResults = futures.get(1).join();
 
-        log.debug("Vector search returned: {}, Fulltext search returned: {}",
-                vectorResults.size(), fulltextResults.size());
+        log.debug("Vector search returned: {}, Fulltext({}) search returned: {}",
+                vectorResults.size(), fulltextProvider.getName(), fulltextResults.size());
 
-        // 分数融合与去重
-        return fuseAndDeduplicate(vectorResults, fulltextResults, effectiveLimit, vWeight, fWeight);
+        return RetrievalUtils.fuseResults(vectorResults, fulltextResults, effectiveLimit, vWeight, fWeight);
     }
 
     /**
-     * 向量检索 — 使用 EmbeddingModel 生成查询向量，直接查询 rag_embeddings 表
+     * 向量检索
      */
     private List<RetrievalResult> vectorSearch(String query, List<Long> documentIds,
                                                List<Long> excludeIds, int limit) {
@@ -140,7 +120,7 @@ public class HybridRetrieverService {
             float[] queryVector = embeddingModel.embed(query);
             List<Map<String, Object>> rows = executeVectorQuery(queryVector, documentIds, limit);
             return mapVectorResults(rows, queryVector, excludeIds);
-        } catch (Exception e) { // Resilience: vector search failure, return empty
+        } catch (Exception e) {
             log.error("Vector search failed", e);
             return Collections.emptyList();
         }
@@ -180,73 +160,9 @@ public class HybridRetrieverService {
                 .collect(Collectors.toList());
     }
 
-    /**
-     * 全文检索（使用 pg_trgm 扩展，支持中文/英文模糊匹配）
-     *
-     * <p>pg_trgm 不可用时返回空列表，调用方会降级为纯向量检索。
-     */
-    private List<RetrievalResult> fullTextSearch(String query, List<Long> documentIds,
-                                                  List<Long> excludeIds, int limit) {
-        try {
-            String[] keywords = query.trim().split("\\s+");
-            if (keywords.length == 0) return Collections.emptyList();
-            List<Map<String, Object>> rows = executeFulltextQuery(keywords[0], documentIds, limit);
-            return mapFulltextResults(rows, excludeIds);
-        } catch (Exception e) { // Resilience: fulltext search failure, return empty for vector-only fallback
-            log.warn("Full-text search failed (pg_trgm may be unavailable): {}. Falling back to vector-only.", e.getMessage());
-            return Collections.emptyList();
-        }
-    }
-
-    private List<Map<String, Object>> executeFulltextQuery(String searchTerm,
-                                                            List<Long> documentIds, int limit) {
-        if (documentIds != null && !documentIds.isEmpty()) {
-            String placeholders = documentIds.stream()
-                    .map(id -> "?").collect(Collectors.joining(","));
-            String sql = String.format(
-                    "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                            "similarity(chunk_text, ?) as sim FROM rag_embeddings " +
-                            "WHERE document_id IN (%s) AND similarity(chunk_text, ?) > 0.1 " +
-                            "ORDER BY sim DESC LIMIT ?",
-                    placeholders);
-            List<Object> args = new ArrayList<>(documentIds);
-            args.add(searchTerm);
-            args.add(searchTerm);
-            args.add(limit);
-            return jdbcTemplate.queryForList(sql, args.toArray());
-        }
-        return jdbcTemplate.queryForList(
-                "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                        "similarity(chunk_text, ?) as sim FROM rag_embeddings " +
-                        "WHERE similarity(chunk_text, ?) > 0.1 ORDER BY sim DESC LIMIT ?",
-                searchTerm, searchTerm, limit);
-    }
-
-    private List<RetrievalResult> mapFulltextResults(List<Map<String, Object>> rows,
-                                                       List<Long> excludeIds) {
-        return rows.stream()
-                .filter(row -> isNotExcluded(row, excludeIds))
-                .map(row -> {
-                    double sim = ((Number) row.get("sim")).doubleValue();
-                    return toRetrievalResult(row, sim, 0.0, sim);
-                })
-                .filter(r -> r.getScore() >= retrieval.getMinScore())
-                .collect(Collectors.toList());
-    }
-
     private boolean isNotExcluded(Map<String, Object> row, List<Long> excludeIds) {
         if (excludeIds == null || excludeIds.isEmpty()) return true;
         return !excludeIds.contains(((Number) row.get("id")).longValue());
-    }
-
-    /**
-     * 分数融合与去重
-     */
-    private List<RetrievalResult> fuseAndDeduplicate(
-            List<RetrievalResult> vectorResults,
-            List<RetrievalResult> fulltextResults,
-            int limit, float vWeight, float fWeight) {
-        return RetrievalUtils.fuseResults(vectorResults, fulltextResults, limit, vWeight, fWeight);
     }
 
     private RetrievalResult toRetrievalResult(Map<String, Object> row, double score,
@@ -264,5 +180,4 @@ public class HybridRetrieverService {
         }
         return r;
     }
-
 }

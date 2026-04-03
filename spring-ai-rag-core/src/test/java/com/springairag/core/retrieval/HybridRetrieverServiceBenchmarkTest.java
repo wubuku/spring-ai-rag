@@ -3,10 +3,12 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
@@ -40,11 +42,16 @@ class HybridRetrieverServiceBenchmarkTest {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
 
-        RagProperties props = new RagProperties();
-        // RagProperties.Retrieval 字段有默认值，直接使用默认配置
+        // 模拟 pg_trgm 可用（更具体的 matcher 放在后面才能覆盖 anyString）
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
+                .thenThrow(new DataAccessResourceFailureException("not found"));
+        when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                .thenReturn(1);
 
+        RagProperties props = new RagProperties();
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate);
         Executor directExecutor = Runnable::run;
-        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, props, directExecutor);
+        service = new HybridRetrieverService(embeddingModel, jdbcTemplate, props, factory, directExecutor);
     }
 
     @Test
@@ -88,10 +95,14 @@ class HybridRetrieverServiceBenchmarkTest {
         List<Map<String, Object>> vectorRows = createFakeRows(20);
         List<Map<String, Object>> fulltextRows = createFakeFulltextRows(20);
 
+        // pg_trgm 可用性检测
+        when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class)))
+                .thenReturn(1);
+
         // 第一次调用是向量搜索（ORDER BY embedding <=>），第二次是全文搜索（similarity）
         when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
                 .thenReturn(vectorRows);
-        when(jdbcTemplate.queryForList(contains("similarity"), anyString(), anyString(), anyInt()))
+        when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);
 
         // 预热
