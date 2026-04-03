@@ -26,42 +26,38 @@ public class ApiVersionRequestMappingHandlerMapping extends RequestMappingHandle
     @Override
     protected RequestMappingInfo getMappingForMethod(Method method, Class<?> handlerType) {
         RequestMappingInfo info = super.getMappingForMethod(method, handlerType);
-        if (info == null) {
-            return null;
-        }
+        if (info == null) return null;
 
-        // 直接用 Java 原生反射查找 @ApiVersion（最可靠）
-        ApiVersion version = handlerType.getAnnotation(ApiVersion.class);
-        ApiVersion methodVersion = method.getAnnotation(ApiVersion.class);
+        ApiVersion version = resolveVersion(method, handlerType);
+        if (version == null) return info;
 
-        // 方法级注解优先于类级
-        if (methodVersion != null) {
-            version = methodVersion;
-        }
-
-        if (version == null) {
-            return info;
-        }
-
-        // 使用 getPatternValues() 获取路径（getPatternsCondition() 可能为 null）
         Set<String> originalPatterns = info.getPatternValues();
-        if (originalPatterns.isEmpty()) {
-            return info;
-        }
+        if (originalPatterns.isEmpty()) return info;
 
-        // 为每个版本生成完整的路径集
-        String[] versions = version.value();
-        String[] allVersionedPaths = new String[versions.length * originalPatterns.size()];
+        String[] allVersionedPaths = buildVersionedPaths(version.value(), originalPatterns);
+        return rebuildWithPaths(info, allVersionedPaths);
+    }
+
+    private ApiVersion resolveVersion(Method method, Class<?> handlerType) {
+        ApiVersion methodVersion = method.getAnnotation(ApiVersion.class);
+        if (methodVersion != null) return methodVersion;
+        return handlerType.getAnnotation(ApiVersion.class);
+    }
+
+    private String[] buildVersionedPaths(String[] versions, Set<String> patterns) {
+        String[] allVersionedPaths = new String[versions.length * patterns.size()];
         int idx = 0;
         for (String ver : versions) {
-            for (String pattern : originalPatterns) {
+            for (String pattern : patterns) {
                 allVersionedPaths[idx++] = API_PREFIX + ver + pattern;
             }
         }
+        return allVersionedPaths;
+    }
 
-        // 用版本化路径替换原始路径，保留其他条件
+    private RequestMappingInfo rebuildWithPaths(RequestMappingInfo info, String[] paths) {
         return RequestMappingInfo
-                .paths(allVersionedPaths)
+                .paths(paths)
                 .customCondition(info.getCustomCondition())
                 .methods(info.getMethodsCondition().getMethods()
                         .toArray(new org.springframework.web.bind.annotation.RequestMethod[0]))

@@ -71,7 +71,7 @@ public class ComponentHealthService {
             }
 
             return new ComponentStatus(status, details, null);
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw
             log.error("数据库健康检查失败: {}", e.getMessage());
             return new ComponentStatus("DOWN", Map.of(), e.getMessage());
         }
@@ -88,7 +88,7 @@ public class ComponentHealthService {
             Map<String, Object> details = new LinkedHashMap<>();
             details.put("version", version != null ? version : "unknown");
             return new ComponentStatus("UP", details, null);
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw
             log.debug("pgvector 扩展检查失败: {}", e.getMessage());
             return new ComponentStatus("DOWN", Map.of(),
                     "pgvector extension not found: " + e.getMessage());
@@ -108,7 +108,7 @@ public class ComponentHealthService {
                 Integer count = jdbcTemplate.queryForObject(
                         "SELECT COUNT(*) FROM " + table, Integer.class);
                 details.put(table, count != null ? count : 0);
-            } catch (Exception e) {
+            } catch (Exception e) { // Health probe: must never throw
                 details.put(table, "missing");
                 allExist = false;
             }
@@ -132,7 +132,7 @@ public class ComponentHealthService {
                 details.put("enabled", false);
             }
             return new ComponentStatus("UP", details, null);
-        } catch (Exception e) {
+        } catch (Exception e) { // Health probe: must never throw
             return new ComponentStatus("UP", Map.of("enabled", false), null);
         }
     }
