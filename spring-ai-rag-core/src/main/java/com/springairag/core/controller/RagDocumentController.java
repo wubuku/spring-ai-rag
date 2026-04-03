@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -24,6 +25,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.List;
@@ -201,6 +203,44 @@ public class RagDocumentController {
                     "documentId", id
             ));
         }
+    }
+
+    @Operation(summary = "生成嵌入向量（SSE 流式进度）",
+            description = "与 POST /embed 类似，但通过 Server-Sent Events 实时推送处理进度。客户端可监听 progress 事件获取当前阶段、已处理数量和总数量。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SSE 流已建立，进度事件将陆续推送"),
+            @ApiResponse(responseCode = "404", description = "文档不存在")
+    })
+    @PostMapping("/{id}/embed/stream")
+    public SseEmitter embedDocumentStream(
+            @PathVariable Long id,
+            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @RequestParam(defaultValue = "false") boolean force) {
+        SseEmitter emitter = new SseEmitter(0L); // 无超时
+        try {
+            documentEmbedService.embedDocumentWithProgress(id, force, event -> {
+                try {
+                    emitter.send(SseEmitter.event()
+                            .name("progress")
+                            .data(event));
+                } catch (Exception ex) {
+                    log.warn("SSE send failed for document {}: {}", id, ex.getMessage());
+                }
+            });
+            emitter.send(SseEmitter.event().name("done").data(Map.of("documentId", id)));
+            emitter.complete();
+        } catch (IllegalArgumentException e) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of(
+                        "error", e.getMessage(),
+                        "documentId", id
+                )));
+            } catch (Exception ex) { /* ignore */ }
+            emitter.completeWithError(e);
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+        return emitter;
     }
 
     @Operation(summary = "通过 VectorStore 生成嵌入向量",

@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -86,10 +87,33 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId, boolean force) {
+        return embedDocumentWithProgress(documentId, force, null);
+    }
+
+    /**
+     * 为文档生成嵌入向量，支持进度回调（用于 SSE 流式推送）
+     *
+     * @param documentId 文档 ID
+     * @param force 是否强制重嵌入
+     * @param progressCallback 进度回调，可为 null
+     * @return 操作结果
+     */
+    @Transactional
+    public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
+            java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
         log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
+        if (progressCallback != null) {
+            progressCallback.accept(EmbedProgressEvent.preparing(documentId));
+        }
+
         EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
-        if (prep.cached() != null) return prep.cached();
+        if (prep.cached() != null) {
+            if (progressCallback != null) {
+                progressCallback.accept(EmbedProgressEvent.completed(documentId, prep.chunks().size()));
+            }
+            return prep.cached();
+        }
 
         List<TextChunk> chunks = prep.chunks();
 
@@ -97,14 +121,33 @@ public class DocumentEmbedService {
         doc.setProcessingStatus("PROCESSING");
         documentRepository.save(doc);
 
+        if (progressCallback != null) {
+            progressCallback.accept(EmbedProgressEvent.chunking(documentId, chunks.size()));
+        }
+
         // 删除旧向量 → 生成嵌入 → 存储
         embeddingRepository.deleteByDocumentId(documentId);
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results =
                 embeddingBatchService.createEmbeddingsBatch(texts);
+
+        if (progressCallback != null) {
+            for (int i = 0; i < results.size(); i++) {
+                progressCallback.accept(EmbedProgressEvent.embedding(documentId, i + 1, results.size()));
+            }
+        }
+
         int stored = storeEmbeddings(documentId, chunks, results);
 
+        if (progressCallback != null) {
+            progressCallback.accept(EmbedProgressEvent.storing(documentId, stored, chunks.size()));
+        }
+
         completeEmbedding(doc, chunks.size());
+
+        if (progressCallback != null) {
+            progressCallback.accept(EmbedProgressEvent.completed(documentId, chunks.size()));
+        }
 
         log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
         return buildSuccessResult(documentId, chunks.size(), stored, "COMPLETED");
