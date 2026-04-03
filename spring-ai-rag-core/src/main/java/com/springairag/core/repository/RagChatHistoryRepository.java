@@ -4,6 +4,7 @@ import com.springairag.core.entity.RagChatHistory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,9 +26,12 @@ public class RagChatHistoryRepository {
     private static final Logger log = LoggerFactory.getLogger(RagChatHistoryRepository.class);
 
     private final RagChatHistoryJpaRepository jpaRepository;
+    private final JdbcTemplate jdbcTemplate;
 
-    public RagChatHistoryRepository(RagChatHistoryJpaRepository jpaRepository) {
+    public RagChatHistoryRepository(RagChatHistoryJpaRepository jpaRepository,
+                                   JdbcTemplate jdbcTemplate) {
         this.jpaRepository = jpaRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
@@ -75,14 +79,22 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 删除会话的所有历史记录
+     * 删除会话的所有历史记录（同时清理 Spring AI ChatMemory）
      *
-     * @return 删除的记录数
+     * @return 删除的记录数（仅 rag_chat_history）
      */
     @Transactional
     public int deleteBySessionId(String sessionId) {
         int deleted = jpaRepository.deleteBySessionId(sessionId);
         log.info("Deleted {} chat history records for session: {}", deleted, sessionId);
+        try {
+            jdbcTemplate.update(
+                    "DELETE FROM spring_ai_chat_memory WHERE conversation_id = ?",
+                    sessionId);
+            log.info("Cleared Spring AI ChatMemory for session: {}", sessionId);
+        } catch (Exception e) { // Resilience: non-critical cleanup (table might not exist in test)
+            log.debug("Failed to clear Spring AI ChatMemory for session {}: {}", sessionId, e.getMessage());
+        }
         return deleted;
     }
 

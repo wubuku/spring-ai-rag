@@ -3,8 +3,8 @@ package com.springairag.core.repository;
 import com.springairag.core.entity.RagChatHistory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.dao.DataAccessException;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -18,17 +18,19 @@ import static org.mockito.Mockito.*;
 /**
  * RagChatHistoryRepository 单元测试
  *
- * <p>测试 JPA 封装层的行为，mock RagChatHistoryJpaRepository。
+ * <p>测试 JPA 封装层的行为，mock RagChatHistoryJpaRepository 和 JdbcTemplate。
  */
 class RagChatHistoryRepositoryTest {
 
     private RagChatHistoryJpaRepository jpaRepository;
+    private JdbcTemplate jdbcTemplate;
     private RagChatHistoryRepository repository;
 
     @BeforeEach
     void setUp() {
         jpaRepository = mock(RagChatHistoryJpaRepository.class);
-        repository = new RagChatHistoryRepository(jpaRepository);
+        jdbcTemplate = mock(JdbcTemplate.class);
+        repository = new RagChatHistoryRepository(jpaRepository, jdbcTemplate);
     }
 
     @Test
@@ -75,7 +77,7 @@ class RagChatHistoryRepositoryTest {
         when(jpaRepository.save(any(RagChatHistory.class)))
                 .thenThrow(new RuntimeException("DB error"));
 
-        // 不应抛出异常
+        // Resilience: chat history is non-critical, should not throw
         assertDoesNotThrow(() -> repository.save("session-1", "test", "response"));
     }
 
@@ -111,20 +113,39 @@ class RagChatHistoryRepositoryTest {
     }
 
     @Test
-    void deleteBySessionId_returnsCount() {
+    void deleteBySessionId_returnsCountAndClearsChatMemory() {
         when(jpaRepository.deleteBySessionId("session-1")).thenReturn(3);
+        when(jdbcTemplate.update(contains("DELETE FROM spring_ai_chat_memory"), eq("session-1")))
+                .thenReturn(1);
 
         int deleted = repository.deleteBySessionId("session-1");
 
         assertEquals(3, deleted);
+        verify(jdbcTemplate).update(contains("DELETE FROM spring_ai_chat_memory"), eq("session-1"));
     }
 
     @Test
     void deleteBySessionId_emptySession_returnsZero() {
         when(jpaRepository.deleteBySessionId("non-existent")).thenReturn(0);
+        when(jdbcTemplate.update(contains("DELETE FROM spring_ai_chat_memory"), eq("non-existent")))
+                .thenReturn(0);
 
         int deleted = repository.deleteBySessionId("non-existent");
 
         assertEquals(0, deleted);
+    }
+
+    @Test
+    void deleteBySessionId_chatMemoryFails_stillReturnsJpaCount() {
+        // JPA 删除成功
+        when(jpaRepository.deleteBySessionId("session-1")).thenReturn(5);
+        // ChatMemory SQL 执行失败（弹性策略：表不存在等）
+        when(jdbcTemplate.update(contains("DELETE FROM spring_ai_chat_memory"), eq("session-1")))
+                .thenThrow(new RuntimeException("Table not found"));
+
+        int deleted = repository.deleteBySessionId("session-1");
+
+        // Resilience: 即使 ChatMemory 清理失败，仍返回 JPA 删除数量
+        assertEquals(5, deleted);
     }
 }

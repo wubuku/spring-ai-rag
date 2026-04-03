@@ -2,7 +2,9 @@ package com.springairag.core.metrics;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -25,6 +27,7 @@ import java.util.Map;
  *
  * <p>嵌入模型和 LLM 检查是可选的（外部 API 调用），仅在显式启用时执行。
  */
+@Service // Spring bean (also created by GeneralRagAutoConfiguration.componentHealthService)
 public class ComponentHealthService {
 
     private static final Logger log = LoggerFactory.getLogger(ComponentHealthService.class);

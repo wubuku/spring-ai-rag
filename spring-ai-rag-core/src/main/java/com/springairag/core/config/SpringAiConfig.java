@@ -15,6 +15,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -32,6 +33,7 @@ import java.util.List;
  * - chatModel：主入口，从上述两个中选择可用的
  */
 @Configuration
+@EnableConfigurationProperties(RagProperties.class)
 public class SpringAiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiConfig.class);

@@ -114,6 +114,7 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    @ConditionalOnMissingBean(ComponentHealthService.class)
     public ComponentHealthService componentHealthService(
             org.springframework.jdbc.core.JdbcTemplate jdbcTemplate,
             @Autowired(required = false) CacheMetricsService cacheMetricsService) {
