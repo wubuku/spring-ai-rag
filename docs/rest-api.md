@@ -20,7 +20,11 @@ X-API-Key: your-api-key
 
 ### 限流
 
-启用 `rag.rate-limit.enabled` 后，所有 API 请求受滑动窗口限流（按 IP）。
+启用 `rag.rate-limit.enabled` 后，所有 API 请求受滑动窗口限流。
+
+支持两种策略（`rag.rate-limit.strategy`）：
+- `ip`：按客户端 IP 限流
+- `api-key`：按 API Key 限流（无 Key 回退 IP）；`rag.rate-limit.key-limits` 可配置不同 Key 的分级限额
 
 **限流响应头（正常请求）：**
 
@@ -38,15 +42,37 @@ X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
 ```
 
-### 错误响应
+### 错误响应（RFC 7807 Problem Detail）
+
+所有错误响应遵循 [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) `application/problem+json` 格式：
 
 ```json
 {
+  "type": "about:blank",
+  "title": "Bad Request",
   "status": 400,
-  "error": "Bad Request",
-  "message": "消息内容不能为空",
-  "path": "/api/v1/rag/chat/ask",
-  "timestamp": "2026-04-02T16:00:00Z"
+  "detail": "消息内容不能为空",
+  "instance": "/api/v1/rag/chat/ask"
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `type` | 问题类型 URI（默认 `about:blank`） |
+| `title` | HTTP 状态文本 |
+| `status` | HTTP 状态码 |
+| `detail` | 具体错误描述 |
+| `instance` | 出错的请求路径 |
+
+**参数校验错误**（400）会合并多个字段错误：
+
+```json
+{
+  "type": "about:blank",
+  "title": "Bad Request",
+  "status": 400,
+  "detail": "message: 消息内容不能为空; sessionId: 会话ID不能为空",
+  "instance": "/api/v1/rag/chat/ask"
 }
 ```
 
@@ -663,5 +689,26 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
     "vectorStore": "UP",
     "embeddingModel": "UP"
   }
+}
+```
+
+---
+
+## Cache — 缓存监控
+
+### `GET /api/v1/rag/cache/stats`
+
+获取嵌入缓存统计信息。
+
+**响应：**
+
+```json
+{
+  "hitCount": 1523,
+  "missCount": 478,
+  "hitRate": 0.761,
+  "totalRequests": 2001,
+  "cacheSize": 342,
+  "timestamp": "2026-04-03T10:00:00Z"
 }
 ```

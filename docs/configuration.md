@@ -116,10 +116,23 @@ rag:
 |------|--------|------|
 | `rag.retrieval.vector-weight` | `0.5` | 向量检索融合权重 |
 | `rag.retrieval.fulltext-weight` | `0.5` | 全文检索融合权重 |
+| `rag.retrieval.fulltext-enabled` | `true` | 启用全文检索（不可用时自动降级为纯向量检索） |
+| `rag.retrieval.fulltext-strategy` | `auto` | 全文检索策略（见下表） |
 | `rag.retrieval.default-limit` | `10` | 默认返回结果数 |
 | `rag.retrieval.min-score` | `0.3` | 最低相似度阈值（低于此分数的结果被过滤） |
 
 > 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`，系统会自动归一化。
+
+**全文检索策略（`fulltext-strategy`）：**
+
+| 策略 | 说明 | 依赖 |
+|------|------|------|
+| `auto` | 自动检测：优先 pg_jieba → pg_trgm → 纯向量 | — |
+| `pg_jieba` | PostgreSQL 中文分词（推荐中文场景） | `pg_jieba` 扩展 |
+| `pg_trgm` | 三元组模糊匹配 | `pg_trgm` 扩展 |
+| `none` | 禁用全文检索，纯向量检索 | — |
+
+详见 [PostgreSQL 扩展文档](postgresql-extensions.md)。
 
 ## 查询改写配置
 
@@ -238,15 +251,103 @@ rag:
 rag:
   rate-limit:
     enabled: true
-    requests-per-minute: 100
+    requests-per-minute: 60
+    strategy: ip
+    key-limits:
+      vip-key: 200
+      basic-key: 60
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
 | `rag.rate-limit.enabled` | `true` | 启用 API 限流 |
-| `rag.rate-limit.requests-per-minute` | `100` | 每 IP 每分钟最大请求数 |
+| `rag.rate-limit.requests-per-minute` | `60` | 默认每分钟最大请求数 |
+| `rag.rate-limit.strategy` | `ip` | 限流策略：`ip`（按 IP）/ `api-key`（按 API Key，无 Key 回退 IP） |
+| `rag.rate-limit.key-limits` | `{}` | 按 API Key 分级限额（key → requests-per-minute） |
 
-限流使用滑动窗口算法，按客户端 IP 独立计数。超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
+**限流策略选择：**
+- `ip`：按客户端 IP 独立计数，适合无认证场景
+- `api-key`：按 API Key 限流（无 Key 回退 IP），适合多租户场景；`key-limits` 中未配置的 Key 使用默认 `requests-per-minute`
+
+超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
+
+## CORS 跨域配置
+
+```yaml
+rag:
+  cors:
+    enabled: true
+    allowed-origins:
+      - "https://example.com"
+      - "http://localhost:3000"
+    allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    allowed-headers: "*"
+    max-age: 3600
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.cors.enabled` | `false` | 启用 CORS 配置 |
+| `rag.cors.allowed-origins` | `["*"]` | 允许的源（生产环境应指定具体域名） |
+| `rag.cors.allowed-methods` | `GET,POST,PUT,DELETE,OPTIONS` | 允许的 HTTP 方法 |
+| `rag.cors.allowed-headers` | `*` | 允许的请求头 |
+| `rag.cors.max-age` | `3600` | 预检请求缓存时间（秒） |
+
+## 缓存配置
+
+```yaml
+rag:
+  cache:
+    maximum-size: 2000
+    expire-after-write-minutes: 30
+    embedding-maximum-size: 10000
+    embedding-expire-after-write-hours: 2
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.cache.maximum-size` | `2000` | 检索结果 L1 缓存最大条目数 |
+| `rag.cache.expire-after-write-minutes` | `30` | 检索结果缓存写入后过期时间（分钟） |
+| `rag.cache.embedding-maximum-size` | `10000` | 嵌入缓存最大条目数 |
+| `rag.cache.embedding-expire-after-write-hours` | `2` | 嵌入缓存写入后过期时间（小时） |
+
+缓存使用 Caffeine 实现 L1 内存缓存，支持 LRU 驱逐。嵌入缓存基于内容哈希避免重复嵌入未变更文档。
+
+## 分布式追踪配置
+
+```yaml
+rag:
+  tracing:
+    enabled: true
+    sampling-rate: 1.0
+    w3c-format: false
+    span-id-enabled: false
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.tracing.enabled` | `true` | 启用请求追踪 |
+| `rag.tracing.sampling-rate` | `1.0` | 采样率（0.0~1.0，1.0=全量追踪） |
+| `rag.tracing.w3c-format` | `false` | 使用 W3C traceparent 格式输出（32 字符 traceId） |
+| `rag.tracing.span-id-enabled` | `false` | 生成 spanId 支持嵌套追踪 |
+
+追踪信息通过 `X-Trace-Id` 响应头传递，MDC 注入 traceId 写入日志。支持外部传入 `X-Trace-Id` 头实现跨服务链路追踪。
+
+## API 版本管理
+
+系统通过 `@ApiVersion("v1")` 注解支持 API 版本共存。当前所有端点标注为 `v1`，基础路径为 `/api/v1/rag`。
+
+新增版本时，使用 `@ApiVersion("v2")` 标注新 Controller，即可实现 `/api/v1/rag` 和 `/api/v2/rag` 共存。
+
+## 国际化
+
+错误消息通过 Spring `MessageSource` 实现国际化，按 `Accept-Language` 请求头自动选择语言：
+
+| 语言文件 | 语言 |
+|----------|------|
+| `messages.properties` | 默认（中文） |
+| `messages_en.properties` | 英文 |
+| `messages_zh_CN.properties` | 中文（简体） |
 
 ## 数据库配置
 

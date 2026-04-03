@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-03 06:39 — 111 源文件 + 76 测试文件，825 测试全通过，ApiCompatibilityAdapter 默认方法补测试
+> **最后更新**: 2026-04-03 10:20 — 120 源文件 + 83 测试文件，890 测试全通过，文档同步（配置+API+CHANGELOG）
 
 ---
 
