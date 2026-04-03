@@ -8,6 +8,7 @@ import com.springairag.core.config.SpringAiConfig;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -93,6 +94,19 @@ public class GeneralRagAutoConfiguration {
         registration.addUrlPatterns("/api/*");
         registration.setOrder(0); // 在认证之前执行限流
         return registration;
+    }
+
+    /**
+     * 分布式追踪配置刷新
+     *
+     * <p>将 rag.tracing.* 配置注入 RequestTraceFilter（@Component 自动扫描）。
+     */
+    @Bean
+    public Object tracingConfigurer(RequestTraceFilter traceFilter, RagProperties properties) {
+        RagProperties.Tracing tracing = properties.getTracing();
+        traceFilter.configure(tracing.isEnabled(), tracing.getSamplingRate(),
+                tracing.isW3cFormat(), tracing.isSpanIdEnabled());
+        return new Object(); // 配置刷新，返回值无意义
     }
 
     /**
