@@ -12,10 +12,15 @@ import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -218,6 +223,238 @@ class HybridRetrieverServiceBenchmarkTest {
 
         assertTrue(avgMs < 150,
                 String.format("端到端服务层应 < 150ms，实际: %.2fms", avgMs));
+    }
+
+    @Test
+    @DisplayName("并发检索：10 线程 × 10 次，总吞吐量 > 50 ops/s")
+    void concurrentSearch_throughput_above50ops() throws Exception {
+        float[] fakeVector = new float[1024];
+        for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
+        when(embeddingModel.embed(anyString())).thenReturn(fakeVector);
+
+        List<Map<String, Object>> rows = createFakeRows(10);
+        when(jdbcTemplate.queryForList(anyString(), (Object[]) any())).thenReturn(rows);
+
+        // 预热
+        service.search("warmup", null, null, 10);
+
+        int threadCount = 10;
+        int opsPerThread = 10;
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        AtomicInteger queryId = new AtomicInteger(0);
+
+        long start = System.nanoTime();
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (int t = 0; t < threadCount; t++) {
+            futures.add(CompletableFuture.runAsync(() -> {
+                for (int i = 0; i < opsPerThread; i++) {
+                    service.search("并发查询 " + queryId.incrementAndGet(), null, null, 10);
+                }
+            }, pool));
+        }
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        pool.shutdown();
+
+        int totalOps = threadCount * opsPerThread;
+        double opsPerSec = totalOps * 1000.0 / elapsedMs;
+        System.out.printf("[Benchmark] 并发检索 %d 线程 × %d 次: %d ms, %.0f ops/s%n",
+                threadCount, opsPerThread, elapsedMs, opsPerSec);
+
+        assertTrue(opsPerSec > 50,
+                String.format("并发吞吐量应 > 50 ops/s，实际: %.0f ops/s", opsPerSec));
+    }
+
+    @Test
+    @DisplayName("fuseResults 大数据集：10000+10000 → 100 < 2s")
+    void fuseResults_10kItems_under2s() {
+        List<RetrievalResult> vectorResults = createFakeResults(10_000, "v");
+        List<RetrievalResult> fulltextResults = createFakeResults(10_000, "f");
+
+        // 预热
+        RetrievalUtils.fuseResults(vectorResults, fulltextResults, 10, 0.7f, 0.3f);
+
+        long start = System.nanoTime();
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                vectorResults, fulltextResults, 100, 0.7f, 0.3f);
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        System.out.printf("[Benchmark] fuseResults(10k+10k → 100): %d ms%n", elapsedMs);
+
+        assertTrue(elapsedMs < 2000,
+                String.format("融合 10000 条结果应 < 2s，实际: %dms", elapsedMs));
+        assertEquals(100, fused.size());
+    }
+
+    @Test
+    @DisplayName("并发 cosineSimilarity：8 线程 × 25000 次 < 3s")
+    void concurrentCosineSimilarity_under3s() throws Exception {
+        float[][] vectors = new float[8][];
+        for (int t = 0; t < 8; t++) {
+            vectors[t] = new float[1024];
+            for (int i = 0; i < 1024; i++) vectors[t][i] = (float) Math.random();
+        }
+
+        // 预热
+        for (int i = 0; i < 1000; i++) {
+            RetrievalUtils.cosineSimilarity(vectors[0], vectors[1]);
+        }
+
+        ExecutorService pool = Executors.newFixedThreadPool(8);
+        long start = System.nanoTime();
+        List<CompletableFuture<Double>> futures = new ArrayList<>();
+        for (int t = 0; t < 8; t++) {
+            final float[] a = vectors[t];
+            final float[] b = vectors[(t + 1) % 8];
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                double sum = 0;
+                for (int i = 0; i < 25_000; i++) {
+                    b[0] = (float) i / 25_000;
+                    sum += RetrievalUtils.cosineSimilarity(a, b);
+                }
+                return sum;
+            }, pool));
+        }
+        double totalSum = futures.stream().mapToDouble(CompletableFuture::join).sum();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        pool.shutdown();
+
+        System.out.printf("[Benchmark] 并发 cosineSimilarity 8×25000 (1024维): %d ms, sum=%.4f%n",
+                elapsedMs, totalSum);
+
+        assertTrue(elapsedMs < 3000,
+                String.format("8线程×25000次余弦相似度应 < 3s，实际: %dms", elapsedMs));
+    }
+
+    @Test
+    @DisplayName("parseVector 解析 1024 维字符串向量 10000 次 < 3s")
+    void parseVector_10k_under3s() {
+        String vectorStr = createFakeVectorString();
+
+        // 预热
+        for (int i = 0; i < 100; i++) {
+            RetrievalUtils.parseVector(vectorStr);
+        }
+
+        long start = System.nanoTime();
+        float[] lastResult = null;
+        for (int i = 0; i < 10_000; i++) {
+            lastResult = RetrievalUtils.parseVector(vectorStr);
+        }
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        System.out.printf("[Benchmark] parseVector 1万次 (1024维字符串): %d ms, 维度=%d%n",
+                elapsedMs, lastResult != null ? lastResult.length : 0);
+
+        assertTrue(elapsedMs < 3000,
+                String.format("1万次向量解析应 < 3s，实际: %dms", elapsedMs));
+        assertEquals(1024, lastResult.length);
+    }
+
+    @Test
+    @DisplayName("并发混合检索：5 线程同时向量+全文 < 500ms 总耗时")
+    void concurrentHybridSearch_under500ms() throws Exception {
+        float[] fakeVector = new float[1024];
+        for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
+        when(embeddingModel.embed(anyString())).thenReturn(fakeVector);
+
+        List<Map<String, Object>> vectorRows = createFakeRows(20);
+        List<Map<String, Object>> fulltextRows = createFakeFulltextRows(20);
+
+        when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
+        when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
+                .thenReturn(vectorRows);
+        when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
+                .thenReturn(fulltextRows);
+
+        // 预热
+        service.search("warmup", null, null, 10);
+
+        int threadCount = 5;
+        ExecutorService pool = Executors.newFixedThreadPool(threadCount);
+        AtomicInteger queryId = new AtomicInteger(0);
+
+        long start = System.nanoTime();
+        List<CompletableFuture<List<RetrievalResult>>> futures = new ArrayList<>();
+        for (int t = 0; t < threadCount; t++) {
+            futures.add(CompletableFuture.supplyAsync(() ->
+                    service.search("混合并发 " + queryId.incrementAndGet(), null, null, 10), pool));
+        }
+        List<List<RetrievalResult>> allResults = futures.stream()
+                .map(CompletableFuture::join).toList();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        pool.shutdown();
+
+        System.out.printf("[Benchmark] 并发混合检索 %d 线程: %d ms%n", threadCount, elapsedMs);
+
+        assertTrue(elapsedMs < 500,
+                String.format("5线程并发混合检索应 < 500ms，实际: %dms", elapsedMs));
+        assertEquals(threadCount, allResults.size());
+        allResults.forEach(r -> assertFalse(r.isEmpty()));
+    }
+
+    @Test
+    @DisplayName("大数据集端到端：5000 结果融合+排序 < 1s")
+    void largeDatasetEndToEnd_under1s() {
+        List<RetrievalResult> vectorResults = createFakeResults(5_000, "v");
+        List<RetrievalResult> fulltextResults = createFakeResults(5_000, "f");
+
+        // 预热
+        RetrievalUtils.fuseResults(vectorResults, fulltextResults, 20, 0.7f, 0.3f);
+
+        // 多轮测试取平均
+        int iterations = 5;
+        long totalNs = 0;
+        List<RetrievalResult> fused = null;
+        for (int i = 0; i < iterations; i++) {
+            long start = System.nanoTime();
+            fused = RetrievalUtils.fuseResults(
+                    vectorResults, fulltextResults, 50, 0.6f, 0.4f);
+            totalNs += System.nanoTime() - start;
+        }
+        double avgMs = (totalNs / (double) iterations) / 1_000_000;
+
+        System.out.printf("[Benchmark] 大数据集端到端 5k+5k → 50: %.2f ms (平均%d次)%n",
+                avgMs, iterations);
+
+        assertTrue(avgMs < 1000,
+                String.format("5000条数据融合应 < 1s，实际: %.2fms", avgMs));
+        assertEquals(50, fused.size());
+    }
+
+    @Test
+    @DisplayName("并发 fuseResults：4 线程 × 5000 条 < 3s")
+    void concurrentFuseResults_under3s() throws Exception {
+        // 预热
+        List<RetrievalResult> warmup = createFakeResults(1000, "w");
+        RetrievalUtils.fuseResults(warmup, warmup, 10, 0.7f, 0.3f);
+
+        ExecutorService pool = Executors.newFixedThreadPool(4);
+        long start = System.nanoTime();
+        List<CompletableFuture<List<RetrievalResult>>> futures = new ArrayList<>();
+        for (int t = 0; t < 4; t++) {
+            final String prefix = "t" + t;
+            futures.add(CompletableFuture.supplyAsync(() -> {
+                List<RetrievalResult> v = createFakeResults(5_000, prefix + "-v");
+                List<RetrievalResult> f = createFakeResults(5_000, prefix + "-f");
+                return RetrievalUtils.fuseResults(v, f, 50, 0.7f, 0.3f);
+            }, pool));
+        }
+        List<List<RetrievalResult>> allResults = futures.stream()
+                .map(CompletableFuture::join).toList();
+        long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+        pool.shutdown();
+
+        System.out.printf("[Benchmark] 并发 fuseResults 4×(5k+5k → 50): %d ms%n", elapsedMs);
+
+        assertTrue(elapsedMs < 3000,
+                String.format("4线程并发融合应 < 3s，实际: %dms", elapsedMs));
+        assertEquals(4, allResults.size());
+        allResults.forEach(r -> assertEquals(50, r.size()));
     }
 
     // ==================== Helper Methods ====================
