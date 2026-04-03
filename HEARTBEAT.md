@@ -142,6 +142,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-03 23:26 — ✅ 主动巡检（cron）：mvn clean compile ✅，1070 测试全通过（零失败零错误）；零 TODO/FIXME；IMPLEMENTATION_COMPARISON.md 统计同步更新（125 源文件/90 测试/1070 测试全通过）；所有 Phase 1-5 + 24 项 P1/P2 改进全部落地；commit 653c070
 
 - 2026-04-03 05:13 — ✅ 主动巡检（cron）：测试覆盖率补强——AlertServiceImpl 新增 23 个测试覆盖 checkAllSlos/getAlertHistory/checkAvailabilitySlo/checkQualitySlo/checkLatencySlo（p50/p99）等全部分支，覆盖率 63%/43% → 99%/92%；AbTestServiceImpl 新增 14 个测试覆盖 getExperimentResults/recordResult 转换/analyzeExperiment 显著性/全字段更新/异常路径，覆盖率 84%/67% → 95%/82%，802 测试全通过
 
