@@ -132,4 +132,31 @@ public class GeneralRagAutoConfiguration {
                                       RagMetricsService ragMetricsService) {
         return new com.springairag.core.metrics.RagHealthIndicator(componentHealth, ragMetricsService);
     }
+
+    /**
+     * RAG Liveness 健康探针（Kubernetes LivenessProbe）
+     *
+     * <p>仅检查数据库连接是否可达，用于判断容器是否需要重启。
+     * 配置在 management.endpoint.health.group.liveness.include 中。
+     */
+    @Bean
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    @ConditionalOnMissingBean(name = "ragLiveness")
+    public Object ragLivenessIndicator(JdbcTemplate jdbcTemplate) {
+        return new com.springairag.core.metrics.RagLivenessIndicator(jdbcTemplate);
+    }
+
+    /**
+     * RAG Readiness 健康探针（Kubernetes ReadinessProbe）
+     *
+     * <p>检查完整组件健康状态，用于判断是否接收流量。
+     * 配置在 management.endpoint.health.group.readiness.include 中。
+     */
+    @Bean
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    @ConditionalOnMissingBean(name = "ragReadiness")
+    public Object ragReadinessIndicator(ComponentHealthService componentHealth,
+                                        RagMetricsService ragMetricsService) {
+        return new com.springairag.core.metrics.RagReadinessIndicator(componentHealth, ragMetricsService);
+    }
 }

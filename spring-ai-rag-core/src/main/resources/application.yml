@@ -155,8 +155,19 @@ management:
       show-details: always
       probes:
         enabled: true
+      group:
+        liveness:
+          include: livenessState,ragLiveness
+          show-details: always
+        readiness:
+          include: readinessState,db,ragReadiness
+          show-details: always
   health:
     defaults:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
       enabled: true
   metrics:
     tags:
