@@ -86,7 +86,9 @@ public class GeneralRagAutoConfiguration {
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RagProperties properties) {
         RagProperties.RateLimit rateLimit = properties.getRateLimit();
-        RateLimitFilter filter = new RateLimitFilter(rateLimit.isEnabled(), rateLimit.getRequestsPerMinute());
+        RateLimitFilter filter = new RateLimitFilter(
+                rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
+                rateLimit.getStrategy(), rateLimit.getKeyLimits());
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
         registration.setOrder(0); // 在认证之前执行限流
