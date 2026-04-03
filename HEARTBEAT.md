@@ -265,3 +265,4 @@
 | 80 | 健康检查端点增强（多组件探针） | 运维 | ✅ 2026-04-03 |
 | 83 | 异步处理增强（CompletableFuture 超时+降级） | 韧性 | ✅ 2026-04-03 |
 | 84 | 日志结构化（JSON 格式 + 敏感信息脱敏） | 运维 | ✅ 2026-04-03 |
+- 2026-04-03 20:43 — ✅ #95 Spring Boot 3.x 配置增强 + Grafana 仪表盘：SpringAiConfig 添加 @EnableConfigurationProperties；ComponentHealthService 添加显式 @Service bean；GeneralRagAutoConfiguration 添加 @ConditionalOnMissingBean 防重复注册；application.yml 清理冗余 actuator 健康指标；新增 docs/grafana/rag-service-dashboard.json Grafana 仪表盘；951 测试全通过，commit e378387
