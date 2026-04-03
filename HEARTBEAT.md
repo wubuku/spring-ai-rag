@@ -292,7 +292,7 @@
 |---|--------|------|------|
 | 90 | E2E 链路验证（干净数据库跑 scripts/e2e-test.sh，完整链路 24 项） | 验证 | ⏳ |
 | 91 | demo-component-level 集成测试（补充 E2E 测试） | 测试覆盖 | ✅ 2026-04-03 |
-| 92 | 多文档批量嵌入 pipeline（SSE 实时进度推送） | 性能 | ⏳ |
+| 92 | 多文档批量嵌入 pipeline（SSE 实时进度推送） | 性能 | ✅ 2026-04-03 |
 | 93 | 可观测性增强（Pipeline metrics REST 端点独立暴露） | 可观测性 | ⏳ |
 
 ### E2E 链路验证 #90 完成
@@ -307,5 +307,6 @@
 ### 待办同步（傍晚补充）
 - #90 E2E 链路验证：✅ 22/24（LLM 账户问题）
 - #91 demo-component-level 集成测试：✅ ComponentLevelControllerTest 4 个测试（@WebMvcTest + MockBean ChatClient）
+- #92 多文档批量嵌入 SSE 进度：✅ EmbedProgressEvent + embedDocumentWithProgress() + POST /documents/{id}/embed/stream
 - #92 多文档批量嵌入 pipeline（SSE 进度）：⏳
 - #93 可观测性增强（Pipeline metrics REST 端点）：⏳
