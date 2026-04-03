@@ -20,6 +20,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -40,6 +42,8 @@ public class HybridRetrieverService {
     private final RagProperties.Retrieval retrieval;
     private final FulltextSearchProvider fulltextProvider;
 
+    private final int retrievalTimeoutSeconds;
+
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
             JdbcTemplate jdbcTemplate,
@@ -49,11 +53,13 @@ public class HybridRetrieverService {
         this.embeddingModel = embeddingModel;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
+        this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
         this.fulltextProvider = fulltextProviderFactory != null
                 ? fulltextProviderFactory.getProvider()
                 : new NoOpFulltextSearchProvider();
-        log.info("HybridRetrieverService initialized with full-text provider: {}", fulltextProvider.getName());
+        log.info("HybridRetrieverService initialized with full-text provider: {}, retrievalTimeout={}s",
+                fulltextProvider.getName(), retrievalTimeoutSeconds);
     }
 
     /**
@@ -91,19 +97,28 @@ public class HybridRetrieverService {
             return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
         }
 
-        // 并行执行向量检索和全文检索
-        List<CompletableFuture<List<RetrievalResult>>> futures = Arrays.asList(
-                CompletableFuture.supplyAsync(
-                        () -> vectorSearch(query, documentIds, excludeIds, effectiveLimit * 2),
-                        taskExecutor),
-                CompletableFuture.supplyAsync(
-                        () -> fulltextProvider.search(query, documentIds, excludeIds,
-                                effectiveLimit * 2, retrieval.getMinScore()),
-                        taskExecutor)
-        );
+        // 并行执行向量检索和全文检索（各自带超时，超时则降级为空结果）
+        CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
+                .supplyAsync(() -> vectorSearch(query, documentIds, excludeIds, effectiveLimit * 2), taskExecutor)
+                .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
+                .exceptionallyCompose(ex -> {
+                    log.warn("Vector search timed out after {}s, falling back to empty result: {}",
+                            retrievalTimeoutSeconds, ex.getMessage());
+                    return CompletableFuture.completedFuture(Collections.emptyList());
+                });
 
-        List<RetrievalResult> vectorResults = futures.get(0).join();
-        List<RetrievalResult> fulltextResults = futures.get(1).join();
+        CompletableFuture<List<RetrievalResult>> fulltextFuture = CompletableFuture
+                .supplyAsync(() -> fulltextProvider.search(query, documentIds, excludeIds,
+                        effectiveLimit * 2, retrieval.getMinScore()), taskExecutor)
+                .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
+                .exceptionallyCompose(ex -> {
+                    log.warn("Fulltext search [{}] timed out after {}s, falling back to empty result: {}",
+                            fulltextProvider.getName(), retrievalTimeoutSeconds, ex.getMessage());
+                    return CompletableFuture.completedFuture(Collections.emptyList());
+                });
+
+        List<RetrievalResult> vectorResults = vectorFuture.join();
+        List<RetrievalResult> fulltextResults = fulltextFuture.join();
 
         log.debug("Vector search returned: {}, Fulltext({}) search returned: {}",
                 vectorResults.size(), fulltextProvider.getName(), fulltextResults.size());

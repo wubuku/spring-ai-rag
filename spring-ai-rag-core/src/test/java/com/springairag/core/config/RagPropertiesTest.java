@@ -52,6 +52,7 @@ class RagPropertiesTest {
         assertEquals(4, props.getAsync().getCorePoolSize());
         assertEquals(16, props.getAsync().getMaxPoolSize());
         assertEquals(100, props.getAsync().getQueueCapacity());
+        assertEquals(5, props.getAsync().getRetrievalTimeoutSeconds());
     }
 
     @Test
@@ -151,10 +152,12 @@ class RagPropertiesTest {
         props.getAsync().setCorePoolSize(8);
         props.getAsync().setMaxPoolSize(32);
         props.getAsync().setQueueCapacity(200);
+        props.getAsync().setRetrievalTimeoutSeconds(10);
 
         assertEquals(8, props.getAsync().getCorePoolSize());
         assertEquals(32, props.getAsync().getMaxPoolSize());
         assertEquals(200, props.getAsync().getQueueCapacity());
+        assertEquals(10, props.getAsync().getRetrievalTimeoutSeconds());
     }
 
     @Test

@@ -316,6 +316,8 @@ public class RagProperties {
         private int corePoolSize = 4;
         private int maxPoolSize = 16;
         private int queueCapacity = 100;
+        /** 并行检索超时秒数（向量/全文并行执行时） */
+        private int retrievalTimeoutSeconds = 5;
 
         public int getCorePoolSize() {
             return corePoolSize;
@@ -339,6 +341,14 @@ public class RagProperties {
 
         public void setQueueCapacity(int queueCapacity) {
             this.queueCapacity = queueCapacity;
+        }
+
+        public int getRetrievalTimeoutSeconds() {
+            return retrievalTimeoutSeconds;
+        }
+
+        public void setRetrievalTimeoutSeconds(int retrievalTimeoutSeconds) {
+            this.retrievalTimeoutSeconds = retrievalTimeoutSeconds;
         }
     }
 

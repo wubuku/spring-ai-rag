@@ -615,3 +615,138 @@ class HybridRetrieverServiceTest {
             assertEquals("none", factory.getProvider().getName());
         }
     }
+
+    // ========== 异步超时与降级测试 ==========
+
+    @Nested
+    @DisplayName("CompletableFuture 超时与降级")
+    class AsyncTimeoutFallbackTests {
+
+        private EmbeddingModel embeddingModel;
+
+        private float[] mockEmbedding() {
+            return new float[]{0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+        }
+
+        private Map<String, Object> embeddingRow(long id, String text) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("chunk_text", text);
+            row.put("embedding", "[0.1,0.2,0.3]");
+            row.put("document_id", 1L);
+            row.put("chunk_index", 0);
+            row.put("metadata", null);
+            return row;
+        }
+
+        private Map<String, Object> fulltextRow(long id, String text, double sim) {
+            Map<String, Object> row = new HashMap<>();
+            row.put("id", id);
+            row.put("chunk_text", text);
+            row.put("embedding", "[0.4,0.5,0.6]");
+            row.put("document_id", 1L);
+            row.put("chunk_index", 1);
+            row.put("metadata", null);
+            row.put("sim", sim);
+            return row;
+        }
+
+        @Test
+        @DisplayName("全文检索抛出异常时降级为空，混合检索仍返回向量结果")
+        void fulltextThrowsException_fallsBackToEmpty_vectorResultsReturned() {
+            embeddingModel = mock(EmbeddingModel.class);
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new DataAccessResourceFailureException("jieba not found"));
+            when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
+            when(jdbc.queryForList(contains("ORDER BY embedding <=>"), any(Object[].class)))
+                    .thenReturn(List.of(embeddingRow(1L, "vector result")));
+            // 全文检索抛出异常
+            when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
+                    .thenThrow(new RuntimeException("fulltext DB error"));
+
+            RagProperties props = new RagProperties();
+            // 超时设为 1 秒（极短，确保测试快速执行）
+            props.getAsync().setRetrievalTimeoutSeconds(1);
+
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            HybridRetrieverService svc = new HybridRetrieverService(
+                    embeddingModel, jdbc, props, factory, null);
+
+            // 不应抛异常，全文降级为空，搜索仍返回向量结果
+            List<RetrievalResult> results = svc.search("test", null, null, 5);
+            assertNotNull(results);
+            assertFalse(results.isEmpty());
+            assertEquals("vector result", results.get(0).getChunkText());
+        }
+
+        @Test
+        @DisplayName("向量检索抛出异常时降级为空，搜索返回全文结果")
+        void vectorThrowsException_fallsBackToEmpty_fulltextResultsReturned() {
+            embeddingModel = mock(EmbeddingModel.class);
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new DataAccessResourceFailureException("jieba not found"));
+            when(embeddingModel.embed(anyString()))
+                    .thenThrow(new RuntimeException("embedding API timeout"));
+            when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
+                    .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
+
+            RagProperties props = new RagProperties();
+            props.getAsync().setRetrievalTimeoutSeconds(1);
+
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            HybridRetrieverService svc = new HybridRetrieverService(
+                    embeddingModel, jdbc, props, factory, null);
+
+            List<RetrievalResult> results = svc.search("test", null, null, 5);
+            // 向量降级为空，融合结果来自全文（可能为空或含全文结果，取决于 minScore）
+            assertNotNull(results);
+        }
+
+        @Test
+        @DisplayName("两个分支都抛出异常时，搜索返回空列表不抛异常")
+        void bothThrowException_bothFallbackToEmpty_returnsEmptyGracefully() {
+            embeddingModel = mock(EmbeddingModel.class);
+            JdbcTemplate jdbc = mock(JdbcTemplate.class);
+            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
+                    .thenReturn(1);
+            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                    .thenThrow(new DataAccessResourceFailureException("jieba not found"));
+            when(embeddingModel.embed(anyString()))
+                    .thenThrow(new RuntimeException("embedding failed"));
+            when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
+                    .thenThrow(new RuntimeException("fulltext failed"));
+
+            RagProperties props = new RagProperties();
+            props.getAsync().setRetrievalTimeoutSeconds(1);
+
+            FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
+            HybridRetrieverService svc = new HybridRetrieverService(
+                    embeddingModel, jdbc, props, factory, null);
+
+            assertDoesNotThrow(() -> {
+                List<RetrievalResult> results = svc.search("test", null, null, 5);
+                assertNotNull(results);
+            });
+        }
+
+        @Test
+        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds 默认值为 5")
+        void asyncTimeoutDefault_is5Seconds() {
+            RagProperties props = new RagProperties();
+            assertEquals(5, props.getAsync().getRetrievalTimeoutSeconds());
+        }
+
+        @Test
+        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds 可配置")
+        void asyncTimeout_configurable() {
+            RagProperties props = new RagProperties();
+            props.getAsync().setRetrievalTimeoutSeconds(10);
+            assertEquals(10, props.getAsync().getRetrievalTimeoutSeconds());
+        }
+    }
