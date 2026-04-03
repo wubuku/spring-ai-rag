@@ -311,3 +311,10 @@
 - #93 Pipeline metrics REST 端点：✅ GET /api/v1/rag/metrics（RagMetricsSummary + RagMetricsController）
 - #92 多文档批量嵌入 pipeline（SSE 进度）：⏳
 - #93 可观测性增强（Pipeline metrics REST 端点）：⏳
+
+### 自动修复脏数据：MiniMax API role:system 兼容性
+- MiniMax API 不支持 role:system，会返回 "invalid message role: system (2013)"
+- 根因：`spring_ai_chat_memory` 中存在 role:system 消息（来自之前会话的脏数据）
+- 修复：`ApiCompatibilityAdapter.supportsSystemMessage()` 默认 true，MiniMaxAdapter 返回 false
+- `normalizeMessages()` 自动将 system 消息转为 user 消息（加 [System] 前缀）
+- 13 个测试全通过，950 测试全通过
