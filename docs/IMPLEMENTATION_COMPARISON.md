@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-04 17:10 — 156 源文件 + 107 测试文件 + 全测试通过；零 TODO/FIXME；项目处于生产级成熟状态
+> **最后更新**: 2026-04-04 17:21 — Phase 7（多模型支持）文档补充；156 源文件 + 107 测试文件 + 全测试通过；零 TODO/FIXME；项目处于生产级成熟状态
 
 ---
 
@@ -346,3 +346,19 @@ Phase 1-5 + 改进周期全部完成后，Phase 6 建议已推进：
 | P3 | Docker Compose 一键部署 | ✅ #36 多阶段 Dockerfile + docker-compose.yml + 非 root 用户 |
 | P3 | API 版本管理策略 | ✅ #70 @ApiVersion 注解 + ApiVersionRequestMappingHandlerMapping |
 | P3 | 国际化支持 | ✅ #71 MessageSource + messages.properties/en/zh_CN + ConstraintViolationException |
+
+## 🚀 Phase 7 进展（多模型支持）
+
+多 Provider 统一接入：OpenAI/DeepSeek + Anthropic + MiniMax，模型无关架构：
+
+| 优先级 | 改进项 | 状态 |
+|--------|--------|------|
+| P1 | MiniMax ChatModel 支持 | ✅ Spring AI 1.1.2→1.1.4，spring-ai-starter-model-minimax，miniMaxChatModel Bean，.env.example 配置 |
+| P1 | ModelRegistry 模型注册中心 | ✅ 自动收集 openai/anthropic/minimax Bean，统一访问接口，10 个单元测试 |
+| P2 | ChatModelRouter 请求级动态路由 | ✅ FallbackChain 降级链，9 个单元测试 |
+| P2 | 模型对比 REST 端点 | ✅ GET /api/v1/rag/models、/models/{provider}、POST /models/compare |
+| P2 | 模型级指标体系 | ✅ ModelMetricsService（Micrometer），GET /api/v1/rag/metrics/models |
+| P2 | ModelComparisonService 与 ModelRegistry 对接 | ✅ compareProviders/compareAllProviders 并行多模型查询 |
+| P3 | demo-multi-model 集成测试 | ✅ 9 个单元测试覆盖 list/get/compare/chatWithProvider |
+| P3 | CircuitBreaker LLM 熔断器 | ✅ LlmCircuitBreaker + CircuitBreakerHealthIndicator，CLOSED/HALF_OPEN/OPEN 状态机 |
+| P3 | MiniMax Adapter system 消息兼容 | ✅ MiniMaxAdapter.supportsSystemMessage()=false，system→user 自动转换 |
