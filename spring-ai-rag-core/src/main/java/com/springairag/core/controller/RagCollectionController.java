@@ -247,9 +247,7 @@ public class RagCollectionController {
 
         Long documentId = request.get("documentId");
         if (documentId == null) {
-            Map<String, Object> error = new HashMap<>();
-            error.put("error", "documentId 不能为空");
-            return ResponseEntity.badRequest().body(error);
+            throw new IllegalArgumentException("documentId 不能为空");
         }
 
         if (!collectionRepository.existsById(id)) {
@@ -324,7 +322,7 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
         String name = (String) importData.get("name");
         if (name == null || name.isBlank()) {
-            return ResponseEntity.badRequest().body(Map.<String, Object>of("error", "name 不能为空"));
+            throw new IllegalArgumentException("name 不能为空");
         }
 
         log.info("Importing collection: name={}", name);

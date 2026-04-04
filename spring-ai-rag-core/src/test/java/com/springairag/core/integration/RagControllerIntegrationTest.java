@@ -446,7 +446,7 @@ class RagControllerIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("{}"))
                     .andExpect(status().isBadRequest())
-                    .andExpect(jsonPath("$.error").value("documentId 不能为空"));
+                    .andExpect(jsonPath("$.message").value("documentId 不能为空"));
         }
 
         @Test

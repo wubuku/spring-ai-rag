@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -139,9 +140,11 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e,
                                                          HttpServletRequest request) {
-        log.error("Request failed: {}", e.getMessage(), e);
-        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR",
-                e.getMessage() != null ? e.getMessage() : "Unknown error", request);
+        // 异常消息可能包含内部路径、SQL 错误等，先脱敏再返回给用户
+        String rawMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
+        String safeMessage = SensitiveDataMaskingConverter.maskSensitiveData(rawMessage);
+        log.error("Request failed: {}", safeMessage, e);
+        return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", safeMessage, request);
     }
 
     // ==================== Helper ====================

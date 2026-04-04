@@ -471,10 +471,8 @@ class RagDocumentControllerTest {
 
     @Test
     void batchDeleteDocuments_emptyIds_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
-                Map.of("ids", List.of()));
-
-        assertEquals(400, response.getStatusCode().value());
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.batchDeleteDocuments(Map.of("ids", List.of())));
     }
 
     @Test
@@ -542,24 +540,20 @@ class RagDocumentControllerTest {
 
     @Test
     void batchEmbedDocuments_emptyIds_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
-                Map.of("ids", List.of()));
-
-        assertEquals(400, response.getStatusCode().value());
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.batchEmbedDocuments(Map.of("ids", List.of())));
     }
 
     @Test
     void batchEmbedDocuments_tooManyIds_returns400() {
-        when(documentEmbedService.batchEmbedDocuments(anyList()))
-                .thenThrow(new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）"));
-
+        // Controller 限制 50 条，超过则抛 IllegalArgumentException（服务层不再单独处理）
         List<Long> manyIds = new ArrayList<>();
         for (int i = 0; i < 51; i++) manyIds.add((long) i);
 
-        ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
-                Map.of("ids", manyIds));
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> controller.batchEmbedDocuments(Map.of("ids", manyIds)));
 
-        assertEquals(400, response.getStatusCode().value());
+        assertEquals("单次批量嵌入不超过 50 条（避免 API 限流）", thrown.getMessage());
     }
 
     // ==================== 版本历史 ====================

@@ -238,9 +238,8 @@ class RagCollectionControllerTest {
 
     @Test
     void addDocument_missingDocumentId_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of());
-
-        assertEquals(400, response.getStatusCode().value());
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.addDocument(1L, Map.of()));
     }
 
     @Test
@@ -371,15 +370,13 @@ class RagCollectionControllerTest {
     void importCollection_missingName_returns400() {
         Map<String, Object> importData = Map.of("description", "no name");
 
-        ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
-
-        assertEquals(400, response.getStatusCode().value());
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.importCollection(importData));
     }
 
     @Test
     void importCollection_emptyName_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.importCollection(Map.of("name", "  "));
-
-        assertEquals(400, response.getStatusCode().value());
+        assertThrows(IllegalArgumentException.class,
+                () -> controller.importCollection(Map.of("name", "  ")));
     }
 }

@@ -4,6 +4,7 @@ import com.springairag.api.dto.BatchCreateAndEmbedRequest;
 import com.springairag.api.dto.BatchCreateAndEmbedResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -24,9 +25,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
@@ -284,14 +287,10 @@ public class RagDocumentController {
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "ids 列表不能为空"));
+            throw new IllegalArgumentException("ids 列表不能为空");
         }
-        try {
-            Map<String, Object> result = batchDocumentService.batchDeleteDocuments(ids);
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
-        }
+        Map<String, Object> result = batchDocumentService.batchDeleteDocuments(ids);
+        return ResponseEntity.ok(result);
     }
 
     @Operation(summary = "批量生成嵌入向量", description = "对多个文档批量执行分块和嵌入生成。单个文档失败不影响其他文档。")
@@ -300,14 +299,13 @@ public class RagDocumentController {
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
-            return ResponseEntity.badRequest().body(Map.of("error", "ids 列表不能为空"));
+            throw new IllegalArgumentException("ids 列表不能为空");
         }
-        try {
-            Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
-            return ResponseEntity.ok(result);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        if (ids.size() > 50) {
+            throw new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）");
         }
+        Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
+        return ResponseEntity.ok(result);
     }
 
     // ==================== 批量创建并嵌入 ====================
@@ -397,6 +395,126 @@ public class RagDocumentController {
             log.error("Failed to create and embed document '{}': {}", docReq.getTitle(), e.getMessage());
             return new BatchCreateAndEmbedResponse.DocumentResult(
                     null, docReq.getTitle(), false, 0, e.getMessage());
+        }
+    }
+
+    // ==================== 文件上传并嵌入 ====================
+
+    @Operation(summary = "上传文件并嵌入", description = "上传文本文件（txt/md 等），自动创建文档并生成嵌入向量。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "文件处理完成"),
+            @ApiResponse(responseCode = "400", description = "无文件或文件格式不支持")
+    })
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<FileUploadResponse> uploadAndEmbed(
+            @RequestParam("files") MultipartFile[] files,
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "force", defaultValue = "false") boolean force) {
+
+        log.info("File upload request: {} files, collectionId={}", files.length, collectionId);
+
+        if (files == null || files.length == 0) {
+            return ResponseEntity.badRequest().body(
+                    new FileUploadResponse(0, 0, 0, List.of(
+                            new FileUploadResponse.FileResult("N/A", null, null, false, 0, "无文件上传"))));
+        }
+
+        List<FileUploadResponse.FileResult> results = new java.util.ArrayList<>();
+        int success = 0, failed = 0;
+
+        for (MultipartFile file : files) {
+            FileUploadResponse.FileResult result = processUploadedFile(file, collectionId, force);
+            results.add(result);
+            if (result.error() == null) {
+                success++;
+            } else {
+                failed++;
+            }
+        }
+
+        log.info("File upload completed: {} success, {} failed", success, failed);
+        return ResponseEntity.ok(new FileUploadResponse(files.length, success, failed, results));
+    }
+
+    private FileUploadResponse.FileResult processUploadedFile(
+            MultipartFile file, Long collectionId, boolean force) {
+        String filename = file.getOriginalFilename();
+        if (filename == null || filename.isBlank()) {
+            filename = "unnamed";
+        }
+
+        try {
+            // 提取文件扩展名
+            String originalFilename = file.getOriginalFilename();
+            String extension = "";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                extension = originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase();
+            }
+
+            // 检查是否为支持的文本类型
+            String contentType = file.getContentType();
+            boolean isText = contentType != null && (
+                    contentType.startsWith("text/") ||
+                    contentType.equals("application/json") ||
+                    contentType.equals("application/xml") ||
+                    contentType.equals("application/javascript") ||
+                    extension.equals("txt") || extension.equals("md") ||
+                    extension.equals("markdown") || extension.equals("json") ||
+                    extension.equals("xml") || extension.equals("html") ||
+                    extension.equals("csv") || extension.equals("log")
+            );
+
+            if (!isText && !file.isEmpty()) {
+                // 尝试作为文本读取
+                try {
+                    file.getBytes(); // 触发检查
+                } catch (Exception e) {
+                    return new FileUploadResponse.FileResult(
+                            filename, null, null, false, 0,
+                            "不支持的文件类型: " + contentType + "，仅支持文本文件（txt/md/json/xml/html/csv/log）");
+                }
+            }
+
+            // 读取文件内容
+            String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            if (content.isBlank()) {
+                return new FileUploadResponse.FileResult(
+                        filename, null, null, false, 0, "文件内容为空");
+            }
+
+            // 构建文档标题（使用文件名）
+            String title = filename;
+            if (title.toLowerCase().endsWith(".txt") || title.toLowerCase().endsWith(".md")) {
+                title = title.substring(0, title.lastIndexOf('.'));
+            }
+
+            // 创建文档请求
+            DocumentRequest docReq = new DocumentRequest(title, content);
+            if (collectionId != null) {
+                docReq.setCollectionId(collectionId);
+            }
+
+            // 调用已有的创建并嵌入逻辑
+            BatchCreateAndEmbedResponse.DocumentResult createResult =
+                    createAndEmbedSingle(collectionId, docReq, force);
+
+            int chunks = createResult.chunks();
+            boolean embedded = createResult.embedded();
+            Long docId = createResult.documentId();
+
+            if (docId != null) {
+                return new FileUploadResponse.FileResult(filename, docId, title, embedded, chunks, null);
+            } else {
+                return new FileUploadResponse.FileResult(
+                        filename, null, title, false, 0,
+                        createResult.error() != null ? createResult.error() : "创建失败");
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
+            return new FileUploadResponse.FileResult(
+                    filename, null, null, false, 0,
+                    "处理失败: " + e.getMessage());
         }
     }
 
