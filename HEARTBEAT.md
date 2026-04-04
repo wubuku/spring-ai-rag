@@ -457,3 +457,24 @@
 - RagMetricsController: /metrics 端点补全 @ApiResponses 注解
 - 与 RagDocumentController 等其他 Controller 的 Swagger 注解风格保持一致
 - commit 099e8de 已推送
+
+### 2026-04-04 11:50 — ✅ 多模型支持 Phase 1-7 全部完成
+- mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
+- 153 源文件 + 105 测试文件；零 TODO/FIXME
+
+**Phase 1** — MiniMax ChatModel 支持：Spring AI 1.1.2→1.1.4，spring-ai-starter-model-minimax，miniMaxChatModel Bean，`.env.example` 配置，commit 9e00f29
+
+**Phase 2** — ModelRegistry：自动收集 openai/anthropic/minimax Bean，统一访问接口，10个单元测试，commit f1974f8
+
+**Phase 4** — ChatModelRouter：请求级动态模型选择，FallbackChain，9个单元测试，commit 53f6d09
+
+**Phase 5** — REST端点：GET /api/v1/rag/models、/models/{provider}，3个测试，commit a37ae43
+
+**Phase 6** — 模型级指标：ModelMetricsService（Micrometer），GET /api/v1/rag/metrics/models，commit b85bf80
+
+**Phase 7** — A/B整合：ModelComparisonService + ModelRegistry 对接，compareProviders/compareAllProviders，commit b524b62
+
+**额外** — POST /models/compare 模型对比端点，ModelMetricsServiceTest 6个单元测试，rest-api.md 补充文档，commit eb33b0f + 1fdd656
+
+**规划文档**：`docs/multi-model-enhancement-plan.md`
+**MiniMax API Key**：`/Users/yangjiefeng/.openclaw/agents/english-learning/agent/models.json`
