@@ -1,10 +1,12 @@
-# 配置参考
+# Configuration Reference
 
-完整的 Spring AI RAG 配置项说明。所有业务配置通过 `rag.*` 前缀统一管理。
+> 📖 English | 📖 中文
 
-## 快速配置
+Complete reference for all Spring AI RAG configuration items. All business configurations are managed uniformly under the `rag.*` prefix.
 
-### 最小启动配置
+## Quick Configuration
+
+### Minimum Startup Configuration
 
 ```yaml
 # application.yml
@@ -29,21 +31,21 @@ rag:
     api-key: ${SILICONFLOW_API_KEY}
 ```
 
-## LLM 配置
+## LLM Configuration
 
-### 提供者切换
+### Provider Switching
 
-通过 `app.llm.provider` 切换 LLM 提供者：
+Switch LLM providers via `app.llm.provider`:
 
-| 提供者 | `app.llm.provider` | 配置前缀 | 说明 |
-|--------|-------------------|---------|------|
-| DeepSeek | `openai` | `spring.ai.openai.*` | OpenAI 兼容接口 |
-| 智谱 GLM | `openai` | `spring.ai.openai.*` | OpenAI 兼容接口 |
-| Anthropic | `anthropic` | `spring.ai.anthropic.*` | 独立 starter |
+| Provider | `app.llm.provider` | Config Prefix | Notes |
+|----------|-------------------|---------------|-------|
+| DeepSeek | `openai` | `spring.ai.openai.*` | OpenAI-compatible interface |
+| Zhipu GLM | `openai` | `spring.ai.openai.*` | OpenAI-compatible interface |
+| Anthropic | `anthropic` | `spring.ai.anthropic.*` | Separate starter |
 
-**重要**：`spring.ai.openai.chat.enabled` 和 `spring.ai.anthropic.chat.enabled` 必须设为 `false`，由 `SpringAiConfig` 手动创建 Bean。
+**Important**: `spring.ai.openai.chat.enabled` and `spring.ai.anthropic.chat.enabled` must be set to `false`; Beans are created manually by `SpringAiConfig`.
 
-### OpenAI / DeepSeek 配置
+### OpenAI / DeepSeek Configuration
 
 ```yaml
 spring:
@@ -57,14 +59,14 @@ spring:
         temperature: ${OPENAI_TEMPERATURE:0.7}
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `spring.openai.api-key` | (必填) | API Key |
-| `spring.openai.base-url` | `https://api.deepseek.com/v1` | API 端点 |
-| `spring.openai.chat.options.model` | `deepseek-chat` | 模型名称 |
-| `spring.openai.chat.options.temperature` | `0.7` | 生成温度 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `spring.openai.api-key` | (required) | API Key |
+| `spring.openai.base-url` | `https://api.deepseek.com/v1` | API endpoint |
+| `spring.openai.chat.options.model` | `deepseek-chat` | Model name |
+| `spring.openai.chat.options.temperature` | `0.7` | Generation temperature |
 
-### Anthropic 配置
+### Anthropic Configuration
 
 ```yaml
 spring:
@@ -79,9 +81,9 @@ spring:
         max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 ```
 
-## 嵌入模型配置
+## Embedding Model Configuration
 
-嵌入模型配置独立于 Chat 提供者，始终生效。
+Embedding model configuration is independent of the Chat provider and is always active.
 
 ```yaml
 rag:
@@ -92,16 +94,16 @@ rag:
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
+| Property | Default | Description |
+|----------|---------|-------------|
 | `rag.embedding.api-key` | `""` | SiliconFlow API Key |
-| `rag.embedding.base-url` | `https://api.siliconflow.cn/v1` | API 端点 |
-| `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
-| `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
+| `rag.embedding.base-url` | `https://api.siliconflow.cn/v1` | API endpoint |
+| `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
+| `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
 
-> ⚠️ 更换嵌入模型时，`dimensions` 必须同步修改，且需重建 pgvector 表索引。
+> ⚠️ When changing embedding models, `dimensions` must be updated synchronously, and pgvector table indexes must be rebuilt.
 
-## 检索配置
+## Retrieval Configuration
 
 ```yaml
 rag:
@@ -112,29 +114,29 @@ rag:
     min-score: 0.3
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.retrieval.vector-weight` | `0.5` | 向量检索融合权重 |
-| `rag.retrieval.fulltext-weight` | `0.5` | 全文检索融合权重 |
-| `rag.retrieval.fulltext-enabled` | `true` | 启用全文检索（不可用时自动降级为纯向量检索） |
-| `rag.retrieval.fulltext-strategy` | `auto` | 全文检索策略（见下表） |
-| `rag.retrieval.default-limit` | `10` | 默认返回结果数 |
-| `rag.retrieval.min-score` | `0.3` | 最低相似度阈值（低于此分数的结果被过滤） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.retrieval.vector-weight` | `0.5` | Vector retrieval fusion weight |
+| `rag.retrieval.fulltext-weight` | `0.5` | Full-text retrieval fusion weight |
+| `rag.retrieval.fulltext-enabled` | `true` | Enable full-text retrieval (auto-degrades to pure vector if unavailable) |
+| `rag.retrieval.fulltext-strategy` | `auto` | Full-text strategy (see table below) |
+| `rag.retrieval.default-limit` | `10` | Default number of results to return |
+| `rag.retrieval.min-score` | `0.3` | Minimum similarity threshold |
 
-> 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`，系统会自动归一化。
+> 💡 `vector-weight + fulltext-weight` is recommended to sum to `1.0`; the system auto-normalizes.
 
-**全文检索策略（`fulltext-strategy`）：**
+**Full-text search strategy (`fulltext-strategy`):**
 
-| 策略 | 说明 | 依赖 |
-|------|------|------|
-| `auto` | 自动检测：优先 pg_jieba → pg_trgm → 纯向量 | — |
-| `pg_jieba` | PostgreSQL 中文分词（推荐中文场景） | `pg_jieba` 扩展 |
-| `pg_trgm` | 三元组模糊匹配 | `pg_trgm` 扩展 |
-| `none` | 禁用全文检索，纯向量检索 | — |
+| Strategy | Description | Dependency |
+|----------|-------------|------------|
+| `auto` | Auto-detect: pg_jieba → pg_trgm → pure vector | — |
+| `pg_jieba` | PostgreSQL Chinese tokenizer (recommended for Chinese) | `pg_jieba` extension |
+| `pg_trgm` | Trigram fuzzy matching | `pg_trgm` extension |
+| `none` | Disable full-text, pure vector only | — |
 
-详见 [PostgreSQL 扩展文档](postgresql-extensions.md)。
+See [PostgreSQL Extensions Documentation](postgresql-extensions.md).
 
-## 查询改写配置
+## Query Rewrite Configuration
 
 ```yaml
 rag:
@@ -149,16 +151,16 @@ rag:
     llm-max-rewrites: 3
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.query-rewrite.enabled` | `true` | 启用查询改写 |
-| `rag.query-rewrite.padding-count` | `2` | 扩展查询数 |
-| `rag.query-rewrite.synonym-dictionary` | `{}` | 同义词词典 |
-| `rag.query-rewrite.domain-qualifiers` | `[]` | 领域限定词 |
-| `rag.query-rewrite.llm-enabled` | `false` | 启用 LLM 辅助改写 |
-| `rag.query-rewrite.llm-max-rewrites` | `3` | LLM 改写最大数 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.query-rewrite.enabled` | `true` | Enable query rewriting |
+| `rag.query-rewrite.padding-count` | `2` | Number of expanded queries |
+| `rag.query-rewrite.synonym-dictionary` | `{}` | Synonym dictionary |
+| `rag.query-rewrite.domain-qualifiers` | `[]` | Domain qualifier terms |
+| `rag.query-rewrite.llm-enabled` | `false` | Enable LLM-assisted rewriting |
+| `rag.query-rewrite.llm-max-rewrites` | `3` | Max LLM rewrites per query |
 
-## 重排序配置
+## Reranking Configuration
 
 ```yaml
 rag:
@@ -167,12 +169,12 @@ rag:
     diversity-weight: 0.2
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.rerank.enabled` | `false` | 启用重排序 |
-| `rag.rerank.diversity-weight` | `0.2` | 结果多样性权重（避免相似结果堆叠） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.rerank.enabled` | `false` | Enable reranking |
+| `rag.rerank.diversity-weight` | `0.2` | Result diversity weight (prevents similar results stacking) |
 
-## 文档分块配置
+## Document Chunking Configuration
 
 ```yaml
 rag:
@@ -182,13 +184,13 @@ rag:
     min-chunk-size: 100
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.chunk.default-chunk-size` | `1000` | 默认分块大小（字符） |
-| `rag.chunk.default-chunk-overlap` | `100` | 分块重叠大小（字符） |
-| `rag.chunk.min-chunk-size` | `100` | 最小分块大小（字符） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.chunk.default-chunk-size` | `1000` | Default chunk size (characters) |
+| `rag.chunk.default-chunk-overlap` | `100` | Chunk overlap size (characters) |
+| `rag.chunk.min-chunk-size` | `100` | Minimum chunk size (characters) |
 
-## 对话记忆配置
+## Conversation Memory Configuration
 
 ```yaml
 spring:
@@ -203,21 +205,21 @@ spring:
 rag:
   memory:
     max-messages: 20
-    message-ttl-days: 30        # 0=不过期，非0=超过天数的历史记录被清理
-    cleanup-cron: "0 0 3 * * *" # 每日凌晨3点执行清理（Asia/Shanghai时区）
+    message-ttl-days: 30        # 0=no expiry, non-zero=history older than N days is cleaned
+    cleanup-cron: "0 0 3 * * *" # Daily cleanup at 3 AM (Asia/Shanghai timezone)
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.memory.max-messages` | `20` | 单会话最大消息保留数 |
-| `rag.memory.message-ttl-days` | `30` | 聊天历史保留天数（0=不过期） |
-| `rag.memory.cleanup-cron` | `0 0 3 * * *` | 历史清理 cron 表达式（每日凌晨3点） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.memory.max-messages` | `20` | Max messages retained per session |
+| `rag.memory.message-ttl-days` | `30` | Chat history retention days (0=never expire) |
+| `rag.memory.cleanup-cron` | `0 0 3 * * *` | History cleanup cron expression (3 AM daily) |
 
-系统维护双表：
-- `spring_ai_chat_memory`：Spring AI 自动管理，给 LLM 上下文用
-- `rag_chat_history`：业务审计表，保留完整 `user_message` + `ai_response`，按 TTL 自动清理
+System maintains dual tables:
+- `spring_ai_chat_memory`: Spring AI auto-management, for LLM context
+- `rag_chat_history`: Business audit table, retains complete `user_message` + `ai_response`, auto-cleaned by TTL
 
-## 异步线程池配置
+## Async Thread Pool Configuration
 
 ```yaml
 rag:
@@ -227,13 +229,13 @@ rag:
     queue-capacity: 100
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.async.core-pool-size` | `4` | 核心线程数 |
-| `rag.async.max-pool-size` | `16` | 最大线程数 |
-| `rag.async.queue-capacity` | `100` | 队列容量 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.async.core-pool-size` | `4` | Core thread count |
+| `rag.async.max-pool-size` | `16` | Max thread count |
+| `rag.async.queue-capacity` | `100` | Queue capacity |
 
-## 安全认证配置
+## Security Authentication Configuration
 
 ```yaml
 rag:
@@ -242,14 +244,14 @@ rag:
     enabled: false
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.security.enabled` | `false` | 启用 API Key 认证 |
-| `rag.security.api-key` | `""` | API Key 值 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.security.enabled` | `false` | Enable API Key authentication |
+| `rag.security.api-key` | `""` | API Key value |
 
-启用后，所有 `/api/v1/**` 请求需携带 `X-API-Key` 头。
+When enabled, all `/api/v1/**` requests must carry the `X-API-Key` header.
 
-## API 限流配置
+## API Rate Limiting Configuration
 
 ```yaml
 rag:
@@ -262,20 +264,20 @@ rag:
       basic-key: 60
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.rate-limit.enabled` | `true` | 启用 API 限流 |
-| `rag.rate-limit.requests-per-minute` | `60` | 默认每分钟最大请求数 |
-| `rag.rate-limit.strategy` | `ip` | 限流策略：`ip`（按 IP）/ `api-key`（按 API Key，无 Key 回退 IP） |
-| `rag.rate-limit.key-limits` | `{}` | 按 API Key 分级限额（key → requests-per-minute） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.rate-limit.enabled` | `true` | Enable API rate limiting |
+| `rag.rate-limit.requests-per-minute` | `60` | Default max requests per minute |
+| `rag.rate-limit.strategy` | `ip` | Rate limit strategy: `ip` (by IP) / `api-key` (by API Key, falls back to IP if no key) |
+| `rag.rate-limit.key-limits` | `{}` | Per-API-Key tiered limits (key → requests-per-minute) |
 
-**限流策略选择：**
-- `ip`：按客户端 IP 独立计数，适合无认证场景
-- `api-key`：按 API Key 限流（无 Key 回退 IP），适合多租户场景；`key-limits` 中未配置的 Key 使用默认 `requests-per-minute`
+**Rate limit strategy selection:**
+- `ip`: Count per client IP independently, suitable for unauthenticated scenarios
+- `api-key`: Rate limit by API Key (falls back to IP if no key), suitable for multi-tenant; unconfigured keys use default `requests-per-minute`
 
-超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
+Returns `429 Too Many Requests` when exceeded, with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` response headers.
 
-## CORS 跨域配置
+## CORS Configuration
 
 ```yaml
 rag:
@@ -289,15 +291,15 @@ rag:
     max-age: 3600
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.cors.enabled` | `false` | 启用 CORS 配置 |
-| `rag.cors.allowed-origins` | `["*"]` | 允许的源（生产环境应指定具体域名） |
-| `rag.cors.allowed-methods` | `GET,POST,PUT,DELETE,OPTIONS` | 允许的 HTTP 方法 |
-| `rag.cors.allowed-headers` | `*` | 允许的请求头 |
-| `rag.cors.max-age` | `3600` | 预检请求缓存时间（秒） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.cors.enabled` | `false` | Enable CORS configuration |
+| `rag.cors.allowed-origins` | `["*"]` | Allowed origins (production should specify concrete domains) |
+| `rag.cors.allowed-methods` | `GET,POST,PUT,DELETE,OPTIONS` | Allowed HTTP methods |
+| `rag.cors.allowed-headers` | `*` | Allowed request headers |
+| `rag.cors.max-age` | `3600` | Preflight request cache time (seconds) |
 
-## 缓存配置
+## Cache Configuration
 
 ```yaml
 rag:
@@ -308,16 +310,16 @@ rag:
     embedding-expire-after-write-hours: 2
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.cache.maximum-size` | `2000` | 检索结果 L1 缓存最大条目数 |
-| `rag.cache.expire-after-write-minutes` | `30` | 检索结果缓存写入后过期时间（分钟） |
-| `rag.cache.embedding-maximum-size` | `10000` | 嵌入缓存最大条目数 |
-| `rag.cache.embedding-expire-after-write-hours` | `2` | 嵌入缓存写入后过期时间（小时） |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.cache.maximum-size` | `2000` | Retrieval result L1 cache max entries |
+| `rag.cache.expire-after-write-minutes` | `30` | Retrieval result cache expiry after write (minutes) |
+| `rag.cache.embedding-maximum-size` | `10000` | Embedding cache max entries |
+| `rag.cache.embedding-expire-after-write-hours` | `2` | Embedding cache expiry after write (hours) |
 
-缓存使用 Caffeine 实现 L1 内存缓存，支持 LRU 驱逐。嵌入缓存基于内容哈希避免重复嵌入未变更文档。
+Cache uses Caffeine for L1 in-memory cache with LRU eviction. Embedding cache avoids re-embedding unchanged documents based on content hash.
 
-## 分布式追踪配置
+## Distributed Tracing Configuration
 
 ```yaml
 rag:
@@ -328,32 +330,32 @@ rag:
     span-id-enabled: false
 ```
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `rag.tracing.enabled` | `true` | 启用请求追踪 |
-| `rag.tracing.sampling-rate` | `1.0` | 采样率（0.0~1.0，1.0=全量追踪） |
-| `rag.tracing.w3c-format` | `false` | 使用 W3C traceparent 格式输出（32 字符 traceId） |
-| `rag.tracing.span-id-enabled` | `false` | 生成 spanId 支持嵌套追踪 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.tracing.enabled` | `true` | Enable request tracing |
+| `rag.tracing.sampling-rate` | `1.0` | Sampling rate (0.0~1.0, 1.0=full tracing) |
+| `rag.tracing.w3c-format` | `false` | Use W3C traceparent format output (32-char traceId) |
+| `rag.tracing.span-id-enabled` | `false` | Generate spanId for nested tracing |
 
-追踪信息通过 `X-Trace-Id` 响应头传递，MDC 注入 traceId 写入日志。支持外部传入 `X-Trace-Id` 头实现跨服务链路追踪。
+Trace info is passed via `X-Trace-Id` response header, MDC injects traceId into logs. Supports external `X-Trace-Id` header for cross-service trace propagation.
 
-## API 版本管理
+## API Versioning
 
-系统通过 `@ApiVersion("v1")` 注解支持 API 版本共存。当前所有端点标注为 `v1`，基础路径为 `/api/v1/rag`。
+The system supports API version coexistence via `@ApiVersion("v1")` annotation. All current endpoints are annotated `v1`, with base path `/api/v1/rag`.
 
-新增版本时，使用 `@ApiVersion("v2")` 标注新 Controller，即可实现 `/api/v1/rag` 和 `/api/v2/rag` 共存。
+For new versions, annotate new Controllers with `@ApiVersion("v2")` to coexist `/api/v1/rag` and `/api/v2/rag`.
 
-## 国际化
+## Internationalization
 
-错误消息通过 Spring `MessageSource` 实现国际化，按 `Accept-Language` 请求头自动选择语言：
+Error messages are internationalized via Spring `MessageSource`, auto-selecting language by `Accept-Language` request header:
 
-| 语言文件 | 语言 |
-|----------|------|
-| `messages.properties` | 默认（中文） |
-| `messages_en.properties` | 英文 |
-| `messages_zh_CN.properties` | 中文（简体） |
+| Language File | Language |
+|---------------|----------|
+| `messages.properties` | Default (Chinese) |
+| `messages_en.properties` | English |
+| `messages_zh_CN.properties` | Chinese (Simplified) |
 
-## 数据库配置
+## Database Configuration
 
 ```yaml
 spring:
@@ -376,19 +378,19 @@ spring:
     baseline-on-migrate: true
 ```
 
-| HikariCP 属性 | 默认值 | 说明 |
-|---------------|--------|------|
-| `maximum-pool-size` | `20` | 最大连接数 |
-| `minimum-idle` | `5` | 最小空闲连接 |
-| `idle-timeout` | `300000` | 空闲连接回收时间（ms） |
-| `max-lifetime` | `1800000` | 连接最大存活时间（ms） |
-| `connection-timeout` | `10000` | 获取连接超时（ms） |
-| `leak-detection-threshold` | `60000` | 连接泄漏检测时间（ms） |
+| HikariCP Property | Default | Description |
+|-------------------|---------|-------------|
+| `maximum-pool-size` | `20` | Max connections |
+| `minimum-idle` | `5` | Min idle connections |
+| `idle-timeout` | `300000` | Idle connection回收 time (ms) |
+| `max-lifetime` | `1800000` | Connection max lifetime (ms) |
+| `connection-timeout` | `10000` | Connection acquisition timeout (ms) |
+| `leak-detection-threshold` | `60000` | Connection leak detection time (ms) |
 
-## pgvector 向量存储配置
+## pgvector Vector Store Configuration
 
 ```yaml
-# 通过 postgresql profile 激活
+# Activated via postgresql profile
 spring:
   ai:
     vectorstore:
@@ -400,30 +402,30 @@ spring:
         dimensions: 1024
 ```
 
-激活方式：`--spring.profiles.active=postgresql`
+Activation: `--spring.profiles.active=postgresql`
 
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `vector-table-name` | `rag_vector_store` | 向量表名 |
-| `distance-type` | `COSINE_DISTANCE` | 距离算法（COSINE_DISTANCE / EUCLIDEAN_DISTANCE / NEGATIVE_INNER_PRODUCT） |
-| `index-type` | `HNSW` | 索引类型（HNSW / IVFFlat） |
-| `dimensions` | `1024` | 向量维度 |
+| Property | Default | Description |
+|----------|---------|-------------|
+| `vector-table-name` | `rag_vector_store` | Vector table name |
+| `distance-type` | `COSINE_DISTANCE` | Distance algorithm (COSINE_DISTANCE / EUCLIDEAN_DISTANCE / NEGATIVE_INNER_PRODUCT) |
+| `index-type` | `HNSW` | Index type (HNSW / IVFFlat) |
+| `dimensions` | `1024` | Vector dimensions |
 
-## Profile 一览
+## Profile Overview
 
-| Profile | 用途 |
-|---------|------|
-| `local` | 本地开发，从 `.env` 加载密钥 |
-| `postgresql` | 启用 pgvector 自动配置 |
+| Profile | Purpose |
+|---------|---------|
+| `local` | Local development, load keys from `.env` |
+| `postgresql` | Enable pgvector auto-configuration |
 
-## 服务器配置
+## Server Configuration
 
 ```yaml
 server:
   port: 8081
 ```
 
-## 监控配置
+## Monitoring Configuration
 
 ```yaml
 management:
@@ -436,12 +438,12 @@ management:
       show-details: always
 ```
 
-Actuator 端点：
-- `GET /actuator/health` — 健康检查（含数据库、向量存储、嵌入模型）
-- `GET /actuator/metrics` — 指标（检索延迟、Token 用量等）
-- `GET /actuator/info` — 应用信息
+Actuator endpoints:
+- `GET /actuator/health` — Health check (DB, vector store, embedding model)
+- `GET /actuator/metrics` — Metrics (retrieval latency, token usage, etc.)
+- `GET /actuator/info` — Application info
 
-## 日志配置
+## Logging Configuration
 
 ```yaml
 logging:
@@ -450,13 +452,13 @@ logging:
     org.springframework.ai: INFO
 ```
 
-建议生产环境将 `com.springairag` 设为 `INFO`，调试时改 `DEBUG` 可查看完整 RAG Pipeline 日志（查询改写 → 混合检索 → 重排 → Prompt 组装）。
+Production recommends `INFO` for `com.springairag`; switch to `DEBUG` for full RAG Pipeline logs (query rewrite → hybrid search → rerank → prompt assembly).
 
-## 配置继承
+## Configuration Inheritance
 
-Starter 模块使用者只需配置：
-1. 数据源（`spring.datasource.*`）
-2. LLM 提供者（`spring.ai.openai.*` 或 `spring.ai.anthropic.*` + `app.llm.provider`）
-3. 嵌入模型（`rag.embedding.*`）
+Starter module users only need to configure:
+1. Datasource (`spring.datasource.*`)
+2. LLM provider (`spring.ai.openai.*` or `spring.ai.anthropic.*` + `app.llm.provider`)
+3. Embedding model (`rag.embedding.*`)
 
-其余配置项均有合理默认值，按需覆盖即可。
+All other configuration items have sensible defaults, override as needed.
