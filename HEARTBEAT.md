@@ -666,7 +666,22 @@
   - commit 9cb104c 已推送
 
 **Cron 后续任务**：
-  - 日志审计完善（创建/更新/删除操作审计日志）
+  - 安全检查（敏感信息脱敏验证）
+  - Spring Boot 3.5 新特性检查（如有）
+  - 数据库连接池调优（HikariCP 配置审查）
+
+## 2026-04-05 00:22 — ✅ 日志审计完善
+
+- RagAuditLog 实体 + RagAuditLogRepository（JPA，8 个查询方法）
+- AuditLogService（@ConditionalOnBean 韧性注册，CREATE/UPDATE/DELETE 操作）
+- V10 Flyway 迁移：rag_audit_log 表 + 4 索引（entity_type_id/operation/session/created_at）
+- RagCollectionController: create/update/delete/import 操作已添加审计日志
+- AuditLogService 为可选依赖（@Autowired required=false），无数据库时降级
+- RagCollectionControllerTest: DTO 化 + AuditLogService mock 更新
+- mvn clean compile ✅ / mvn test ✅（全通过）
+- commit 587ccfd 已推送
+
+**Cron 后续任务**：
   - 安全检查（敏感信息脱敏验证）
   - Spring Boot 3.5 新特性检查（如有）
   - 数据库连接池调优（HikariCP 配置审查）
