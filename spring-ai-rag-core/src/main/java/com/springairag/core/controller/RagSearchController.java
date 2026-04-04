@@ -68,6 +68,17 @@ public class RagSearchController {
 
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
 
+        if (vectorWeight < 0.0 || vectorWeight > 1.0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "vectorWeight must be between 0.0 and 1.0",
+                    "received", vectorWeight));
+        }
+        if (fulltextWeight < 0.0 || fulltextWeight > 1.0) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "fulltextWeight must be between 0.0 and 1.0",
+                    "received", fulltextWeight));
+        }
+
         RetrievalConfig config = RetrievalConfig.builder()
                 .maxResults(limit)
                 .useHybridSearch(useHybrid)

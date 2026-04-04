@@ -131,6 +131,67 @@ class RagSearchControllerTest {
         assertEquals("doc3", resultList.get(2).getDocumentId());
     }
 
+    // ========== 权重边界验证 ==========
+
+    @Test
+    @DisplayName("vectorWeight > 1.0 返回 400")
+    void search_vectorWeightTooHigh_returns400() {
+        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 1.5, 0.5);
+        assertEquals(400, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("vectorWeight must be between 0.0 and 1.0", body.get("error"));
+        assertEquals(1.5, body.get("received"));
+    }
+
+    @Test
+    @DisplayName("vectorWeight < 0.0 返回 400")
+    void search_vectorWeightTooLow_returns400() {
+        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, -0.1, 0.5);
+        assertEquals(400, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("vectorWeight must be between 0.0 and 1.0", body.get("error"));
+        assertEquals(-0.1, body.get("received"));
+    }
+
+    @Test
+    @DisplayName("fulltextWeight > 1.0 返回 400")
+    void search_fulltextWeightTooHigh_returns400() {
+        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 0.5, 2.0);
+        assertEquals(400, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("fulltextWeight must be between 0.0 and 1.0", body.get("error"));
+        assertEquals(2.0, body.get("received"));
+    }
+
+    @Test
+    @DisplayName("fulltextWeight < 0.0 返回 400")
+    void search_fulltextWeightTooLow_returns400() {
+        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 0.5, -0.5);
+        assertEquals(400, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals("fulltextWeight must be between 0.0 and 1.0", body.get("error"));
+        assertEquals(-0.5, body.get("received"));
+    }
+
+    @Test
+    @DisplayName("边界值 0.0 和 1.0 均合法")
+    void search_weightBoundaryValues_valid() {
+        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+
+        // 全部由向量承担
+        ResponseEntity<Map<String, Object>> r1 = controller.search("q", 5, true, 1.0, 0.0);
+        assertEquals(200, r1.getStatusCode().value());
+
+        // 全部由全文承担
+        ResponseEntity<Map<String, Object>> r2 = controller.search("q", 5, true, 0.0, 1.0);
+        assertEquals(200, r2.getStatusCode().value());
+    }
+
     private RetrievalResult createResult(String docId, String text, double score) {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId(docId);

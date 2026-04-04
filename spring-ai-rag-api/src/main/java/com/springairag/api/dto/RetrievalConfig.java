@@ -28,9 +28,13 @@ public class RetrievalConfig {
     @Schema(description = "是否使用重排序", example = "true", defaultValue = "true")
     private boolean useRerank = true;
 
+    @DecimalMin(value = "0.0", message = "向量检索权重最小为 0.0")
+    @DecimalMax(value = "1.0", message = "向量检索权重最大为 1.0")
     @Schema(description = "向量检索权重", example = "0.5", defaultValue = "0.5")
     private double vectorWeight = 0.5;
 
+    @DecimalMin(value = "0.0", message = "全文检索权重最小为 0.0")
+    @DecimalMax(value = "1.0", message = "全文检索权重最大为 1.0")
     @Schema(description = "全文检索权重", example = "0.5", defaultValue = "0.5")
     private double fulltextWeight = 0.5;
 
