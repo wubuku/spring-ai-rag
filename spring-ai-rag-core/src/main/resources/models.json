@@ -4,6 +4,7 @@
       "displayName": "DeepSeek",
       "enabled": true,
       "priority": 1,
+      "apiKey": "${OPENAI_API_KEY:dummy}",
       "chatModel": {
         "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-chat",
@@ -20,6 +21,7 @@
       "displayName": "Claude 3.5",
       "enabled": false,
       "priority": 2,
+      "apiKey": "${ANTHROPIC_API_KEY:dummy}",
       "chatModel": {
         "baseUrl": "https://api.anthropic.com",
         "model": "claude-3-5-sonnet-20241022",
@@ -31,6 +33,7 @@
       "displayName": "MiniMax",
       "enabled": false,
       "priority": 3,
+      "apiKey": "${MINIMAX_API_KEY:dummy}",
       "chatModel": {
         "baseUrl": "https://api.minimaxi.com",
         "model": "MiniMax-Text-01",

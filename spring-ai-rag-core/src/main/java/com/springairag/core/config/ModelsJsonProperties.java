@@ -1,28 +1,33 @@
 package com.springairag.core.config;
 
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.util.StringUtils;
+
 import java.io.InputStream;
 import java.util.Map;
 import java.util.LinkedHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * External JSON-based model configuration.
  * Loaded from models.json in classpath.
  *
- * Phase 3: External models.json configuration center
+ * <p>Phase 3: External models.json configuration center
  * - No restart needed to add/update models
- * - Supports hot-reload via @RefreshScope
- * - Priority lower than application.yml (yml overrides json)
+ * - API keys support ${ENV_VAR} placeholders resolved from environment variables
+ * - Priority: environment variables > models.json > defaults
  */
 @Component
-@ConfigurationProperties(prefix = "app.models-json")
 public class ModelsJsonProperties {
 
     private static final Logger log = LoggerFactory.getLogger(ModelsJsonProperties.class);
+
+    /** Pattern to match ${ENV_VAR} placeholders */
+    private static final Pattern ENV_VAR_PATTERN = Pattern.compile("\\$\\{([^}]+)}");
 
     private Map<String, ProviderConfig> providers = new LinkedHashMap<>();
     private RoutingConfig routing = new RoutingConfig();
@@ -50,6 +55,13 @@ public class ModelsJsonProperties {
                     ProviderConfig config = new ProviderConfig();
                     config.setDisplayName(providerNode.has("displayName") ? providerNode.get("displayName").asText() : name);
                     config.setEnabled(providerNode.has("enabled") && providerNode.get("enabled").asBoolean());
+
+                    // Parse apiKey (may contain ${ENV_VAR} placeholder)
+                    if (providerNode.has("apiKey")) {
+                        String apiKeyRaw = providerNode.get("apiKey").asText();
+                        config.setApiKey(resolveEnvVar(apiKeyRaw));
+                    }
+
                     config.setPriority(providerNode.has("priority") ? providerNode.get("priority").asInt() : 99);
 
                     if (providerNode.has("chatModel")) {
@@ -82,9 +94,7 @@ public class ModelsJsonProperties {
                     routing.setDefaultProvider(routingNode.get("defaultProvider").asText());
                 }
                 if (routingNode.has("fallbackChain")) {
-                    routing.setFallbackChain(
-                        new java.util.ArrayList<String>()
-                    );
+                    routing.setFallbackChain(new java.util.ArrayList<String>());
                     routingNode.get("fallbackChain").forEach(n ->
                         routing.getFallbackChain().add(n.asText())
                     );
@@ -97,6 +107,39 @@ public class ModelsJsonProperties {
         } catch (Exception e) {
             log.error("Failed to load models.json: {}", e.getMessage());
         }
+    }
+
+    /**
+     * Resolve ${ENV_VAR} placeholders from environment variables.
+     * Supports patterns like: ${OPENAI_API_KEY}, ${ANTHROPIC_API_KEY:dummy}
+     */
+    private String resolveEnvVar(String value) {
+        if (value == null || value.isEmpty()) {
+            return value;
+        }
+        Matcher matcher = ENV_VAR_PATTERN.matcher(value);
+        if (!matcher.find()) {
+            // No placeholder, return as-is
+            return value;
+        }
+        // Reset and process
+        StringBuffer sb = new StringBuffer();
+        matcher.reset();
+        while (matcher.find()) {
+            String envVar = matcher.group(1);
+            String defaultValue = "";
+            // Support default value syntax: ${ENV_VAR:default}
+            int colonIdx = envVar.indexOf(':');
+            if (colonIdx > 0) {
+                defaultValue = envVar.substring(colonIdx + 1);
+                envVar = envVar.substring(0, colonIdx);
+            }
+            String envValue = System.getenv(envVar);
+            String replacement = StringUtils.hasText(envValue) ? envValue : defaultValue;
+            matcher.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        matcher.appendTail(sb);
+        return sb.toString();
     }
 
     public Map<String, ProviderConfig> getProviders() {
@@ -115,10 +158,15 @@ public class ModelsJsonProperties {
         return providers.containsKey(name);
     }
 
+    // ========================================================================
+    // Nested config classes
+    // ========================================================================
+
     public static class ProviderConfig {
         private String displayName;
         private boolean enabled;
         private int priority = 99;
+        private String apiKey;  // May contain ${ENV_VAR} or resolved value
         private ChatModelConfig chatModel;
         private EmbeddingModelConfig embeddingModel;
 
@@ -128,6 +176,8 @@ public class ModelsJsonProperties {
         public void setEnabled(boolean v) { this.enabled = v; }
         public int getPriority() { return priority; }
         public void setPriority(int v) { this.priority = v; }
+        public String getApiKey() { return apiKey; }
+        public void setApiKey(String v) { this.apiKey = v; }
         public ChatModelConfig getChatModel() { return chatModel; }
         public void setChatModel(ChatModelConfig v) { this.chatModel = v; }
         public EmbeddingModelConfig getEmbeddingModel() { return embeddingModel; }
