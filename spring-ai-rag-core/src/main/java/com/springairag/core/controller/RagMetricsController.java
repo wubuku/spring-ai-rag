@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.core.metrics.RagMetricsService;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,6 +31,9 @@ public class RagMetricsController {
 
     @Operation(summary = "获取 RAG 指标汇总",
             description = "返回总请求数、成功率、检索结果总数、Token 消耗等关键指标。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回 RAG 指标汇总数据"),
+    })
     @GetMapping(value = "/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
     public RagMetricsSummary getMetrics() {
         return RagMetricsSummary.of(

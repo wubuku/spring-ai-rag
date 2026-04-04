@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -38,6 +40,9 @@ public class RagHealthController {
      * 整体健康检查
      */
     @Operation(summary = "健康检查", description = "返回整体状态和各组件摘要。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回健康状态（UP/DEGRADED/DOWN）和各组件状态"),
+    })
     @GetMapping("/health")
     public ResponseEntity<Map<String, Object>> health() {
         Map<String, ComponentHealthService.ComponentStatus> components =
@@ -59,6 +64,9 @@ public class RagHealthController {
      * 组件级详细健康检查
      */
     @Operation(summary = "组件详细状态", description = "返回每个组件的详细健康信息，包括延迟、版本、表计数等。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回各组件的详细状态信息（database/pgvector/tables/cache）"),
+    })
     @GetMapping("/health/components")
     public ResponseEntity<Map<String, Object>> healthComponents() {
         Map<String, ComponentHealthService.ComponentStatus> components =
