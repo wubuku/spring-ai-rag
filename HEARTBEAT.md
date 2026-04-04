@@ -746,3 +746,27 @@
 
 每个文档顶部添加链接：
 > 📖 English | 📖 中文
+
+**代码国际化任务（高优先级）**：
+所有代码注释/Swagger注解/日志消息使用英文，API 响应消息保持中文（面向用户）。
+
+扫描范围：
+- Controller @Operation/@ApiResponse/@Tag 注解
+- Service/Repository 方法 Javadoc
+- log.info/error/warn 消息
+- @Schema description
+
+规则：
+- 用户可见消息（API 响应/错误码/日志）→ 中文
+- 内部日志/代码注释/Swagger 描述 → 英文
+- 枚举值/常量 → 英文 key
+
+分批执行（按模块）：
+| 批次 | 模块 | 状态 |
+|------|------|------|
+| c1 | core/controller/* | 📋 待做 |
+| c2 | core/service/* | 📋 待做 |
+| c3 | core/repository/* + core/entity/* | 📋 待做 |
+| c4 | core/retrieval/* + core/advisor/* | 📋 待做 |
+| c5 | api/dto/* + core/config/* | 📋 待做 |
+| c6 | core/filter/* + core/exception/* | 📋 待做 |
