@@ -1,0 +1,93 @@
+# ============================================
+# Spring AI RAG — 多模型演示配置
+# ============================================
+# 用法：
+#   1. 复制 .env.example 为 .env，填入真实 API Key
+#   2. mvn spring-boot:run -pl demos/demo-multi-model
+#   3. curl http://localhost:8080/demo/models
+# ============================================
+
+server:
+  port: 8080
+
+spring:
+  application:
+    name: spring-ai-rag-multi-model-demo
+
+  # PostgreSQL 配置
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:spring_ai_rag_dev}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+
+  # Flyway 数据库迁移
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+  # OpenAI 兼容配置（DeepSeek / SiliconFlow 等）
+  # 切换 provider：修改 app.llm.provider
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:dummy}
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+      chat:
+        enabled: false   # 由 SpringAiConfig 手动创建 ChatModel Bean
+        options:
+          model: ${OPENAI_MODEL:deepseek-chat}
+          temperature: 0.7
+          maxTokens: 8192
+
+# ============================================
+# Spring AI RAG 核心配置
+# ============================================
+app:
+  # 默认 LLM 提供者：openai | anthropic | minimax
+  # 运行时可通过 /demo/chat?provider=xxx 动态切换
+  llm:
+    provider: ${LLM_PROVIDER:openai}
+
+  # 向量嵌入配置（SiliconFlow BGE-M3）
+  embedding:
+    provider: siliconflow
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY:dummy}
+      base-url: https://api.siliconflow.cn/v1
+      model: BAAI/bge-m3
+      dimension: 1024
+
+  # RAG 检索配置
+  retrieval:
+    defaultTopK: 5
+    rerank:
+      enabled: true
+      topN: 3
+    hybrid:
+      vectorWeight: 0.7
+      fulltextWeight: 0.3
+      minScore: 0.3
+
+# ============================================
+# Actuator 健康检查
+# ============================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+# ============================================
+# 日志配置
+# ============================================
+logging:
+  level:
+    com.springairag: DEBUG
+    org.springframework.ai: INFO
