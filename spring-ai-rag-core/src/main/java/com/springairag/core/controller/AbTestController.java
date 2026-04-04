@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,7 +37,7 @@ public class AbTestController {
     })
     @PostMapping("/experiments")
     public ResponseEntity<AbTestService.Experiment> createExperiment(
-            @RequestBody AbTestService.CreateExperimentRequest request) {
+            @Valid @RequestBody AbTestService.CreateExperimentRequest request) {
         AbTestService.Experiment experiment = abTestService.createExperiment(request);
         return ResponseEntity.ok(experiment);
     }
@@ -50,7 +51,7 @@ public class AbTestController {
     @PutMapping("/experiments/{id}")
     public ResponseEntity<Void> updateExperiment(
             @PathVariable Long id,
-            @RequestBody AbTestService.UpdateExperimentRequest request) {
+            @Valid @RequestBody AbTestService.UpdateExperimentRequest request) {
         abTestService.updateExperiment(id, request);
         return ResponseEntity.ok().build();
     }
