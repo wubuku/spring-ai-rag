@@ -421,8 +421,6 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 65 | RagProperties inner class 提取为独立文件（12 个） | 代码质量 | ✅ 2026-04-04 |
-| 66 | RagChatService.executeChat 长方法重构（53→30行） | 代码质量 | ✅ 2026-04-04 |
-| 67 | RagHealthController + RagMetricsController Swagger @ApiResponses 补全 | 文档 | ✅ 2026-04-04 |
 
 ### 2026-04-04 07:42 — 主动巡检：RagProperties inner class 提取重构
 - mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
@@ -534,3 +532,5 @@
 - 2026-04-04 15:48 — 主动巡检：SpringAiConfig 强制 DeepSeek API 不走本地代理——设置 `Proxy.NO_PROXY` 避免 dev 环境代理干扰 LLM API 调用；mvn clean compile ✅ / mvn test ✅（零失败零错误）；零 TODO/FIXME；commit a508cff 已推送
 
 - 2026-04-04 17:23 — 主动巡检：mvn clean compile ✅（5 模块，8.0s）/ mvn test ✅（1081 测试全通过，零失败零错误）；156 源文件 + 107 测试文件；零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；IMPEMENTATION_COMPARISON.md 新增 Phase 7 多模型支持文档（9 项：MiniMax/ModelRegistry/ChatModelRouter/指标/CircuitBreaker/兼容适配）；git 已推送
+
+- 2026-04-04 17:50 — Swagger @ApiResponses 注解补全：AbTestController 11 端点 + AlertController 9 端点 + EvaluationController 11 端点 + ModelController 3 端点（listModels/getModel/compareModels）；12 个 Controller @ApiResponse 覆盖率 100%；1081 测试全通过，commit ee9c749
