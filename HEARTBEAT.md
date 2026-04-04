@@ -465,6 +465,16 @@
 - git 工作区干净，HEAD 与 origin/main 同步
 - 提交改进：application.yml 新增 `spring.config.import: optional:file:./.env`（Spring Boot 3.x .env 自动加载），commit 9e9cb79
 
+### 2026-04-04 12:50 — CircuitBreakerHealthIndicator 实现
+- mvn clean compile ✅ / mvn test ✅（1072 测试全通过，零失败零错误）
+- CircuitBreakerHealthIndicator：`/actuator/health/llmCircuitBreaker` 端点，CLOSED=HALF_OPEN=UP/OPEN=DOWN/NOT_CONFIGURED=UNKNOWN
+- RagChatService 新增 `getCircuitBreaker()` getter 供健康探针注入
+- LlmCircuitBreaker 新增 `getLastFailureTimeMillis()` 补充 health details
+- GeneralRagAutoConfiguration 注册 `llmCircuitBreaker` Bean（@ConditionalOnClass HealthIndicator）
+- CircuitBreakerHealthIndicatorTest：6 个测试覆盖全部状态（null/CLOSED/OPEN/HALF_OPEN/failureRate/lastFailureAge）
+- 安全修复：revert application.yml 中的 sk-xxx API key（不提交真实密钥）
+- commit aa31308 已推送
+
 ## 待办（主动巡检 — 2026-04-04 第十一轮）
 
 | # | 改进项 | 类型 | 状态 |
