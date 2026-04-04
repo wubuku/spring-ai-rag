@@ -1,9 +1,10 @@
 package com.springairag.core.controller;
-import java.util.Map;
 
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
+import com.springairag.api.dto.SearchResponse;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -59,7 +60,7 @@ public class RagSearchController {
     @ApiResponse(responseCode = "200", description = "返回检索结果列表")
     @GetMapping
     @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<Map<String, Object>> search(
+    public ResponseEntity<?> search(
             @RequestParam String query,
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(defaultValue = "true") boolean useHybrid,
@@ -69,14 +70,12 @@ public class RagSearchController {
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
 
         if (vectorWeight < 0.0 || vectorWeight > 1.0) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", "vectorWeight must be between 0.0 and 1.0",
-                    "received", vectorWeight));
+            return ResponseEntity.badRequest().body(
+                    ErrorResponse.builder().detail("vectorWeight must be between 0.0 and 1.0, got " + vectorWeight).build());
         }
         if (fulltextWeight < 0.0 || fulltextWeight > 1.0) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", "fulltextWeight must be between 0.0 and 1.0",
-                    "received", fulltextWeight));
+            return ResponseEntity.badRequest().body(
+                    ErrorResponse.builder().detail("fulltextWeight must be between 0.0 and 1.0, got " + fulltextWeight).build());
         }
 
         RetrievalConfig config = RetrievalConfig.builder()
@@ -89,11 +88,7 @@ public class RagSearchController {
         List<RetrievalResult> results = hybridRetriever.search(query, null, null, limit, config);
 
         log.info("Direct search returned {} results", results.size());
-        return ResponseEntity.ok(Map.of(
-                "results", results,
-                "total", results.size(),
-                "query", query
-        ));
+        return ResponseEntity.ok(SearchResponse.of(results, query));
     }
 
     /**

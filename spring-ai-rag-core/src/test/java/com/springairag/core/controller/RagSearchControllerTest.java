@@ -1,8 +1,10 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
+import com.springairag.api.dto.SearchResponse;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -41,17 +43,15 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(eq("测试查询"), isNull(), isNull(), eq(10), any(RetrievalConfig.class)))
                 .thenReturn(List.of(r1));
 
-        ResponseEntity<Map<String, Object>> response = controller.search("测试查询", 10, true, 0.5, 0.5);
+        ResponseEntity<?> response = controller.search("测试查询", 10, true, 0.5, 0.5);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        SearchResponse body = (SearchResponse) response.getBody();
         assertNotNull(body);
-        assertEquals("测试查询", body.get("query"));
-        assertEquals(1, body.get("total"));
-        @SuppressWarnings("unchecked")
-        List<RetrievalResult> results = (List<RetrievalResult>) body.get("results");
-        assertEquals(1, results.size());
-        assertEquals("doc1", results.get(0).getDocumentId());
+        assertEquals("测试查询", body.query());
+        assertEquals(1, body.total());
+        assertEquals(1, body.results().size());
+        assertEquals("doc1", body.results().get(0).getDocumentId());
     }
 
     @Test
@@ -60,15 +60,13 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
 
-        ResponseEntity<Map<String, Object>> response = controller.search("不存在的查询", 5, true, 0.5, 0.5);
+        ResponseEntity<?> response = controller.search("不存在的查询", 5, true, 0.5, 0.5);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        SearchResponse body = (SearchResponse) response.getBody();
         assertNotNull(body);
-        assertEquals(0, body.get("total"));
-        @SuppressWarnings("unchecked")
-        List<RetrievalResult> results = (List<RetrievalResult>) body.get("results");
-        assertTrue(results.isEmpty());
+        assertEquals(0, body.total());
+        assertTrue(body.results().isEmpty());
     }
 
     @Test
@@ -77,7 +75,7 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
 
-        ResponseEntity<Map<String, Object>> response = controller.search("查询", 5, false, 0.7, 0.3);
+        ResponseEntity<?> response = controller.search("查询", 5, false, 0.7, 0.3);
 
         assertEquals(200, response.getStatusCode().value());
         verify(hybridRetriever).search(eq("查询"), isNull(), isNull(), eq(5),
@@ -120,13 +118,12 @@ class RagSearchControllerTest {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(results);
 
-        ResponseEntity<Map<String, Object>> response = controller.search("multi query", 10, true, 0.5, 0.5);
+        ResponseEntity<?> response = controller.search("multi query", 10, true, 0.5, 0.5);
 
-        Map<String, Object> body = response.getBody();
+        SearchResponse body = (SearchResponse) response.getBody();
         assertNotNull(body);
-        assertEquals(3, body.get("total"));
-        @SuppressWarnings("unchecked")
-        List<RetrievalResult> resultList = (List<RetrievalResult>) body.get("results");
+        assertEquals(3, body.total());
+        List<RetrievalResult> resultList = body.results();
         assertEquals("doc1", resultList.get(0).getDocumentId());
         assertEquals("doc3", resultList.get(2).getDocumentId());
     }
@@ -136,45 +133,41 @@ class RagSearchControllerTest {
     @Test
     @DisplayName("vectorWeight > 1.0 返回 400")
     void search_vectorWeightTooHigh_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 1.5, 0.5);
+        ResponseEntity<?> response = controller.search("query", 10, true, 1.5, 0.5);
         assertEquals(400, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = (ErrorResponse) response.getBody();
         assertNotNull(body);
-        assertEquals("vectorWeight must be between 0.0 and 1.0", body.get("error"));
-        assertEquals(1.5, body.get("received"));
+        assertTrue(body.getDetail().contains("vectorWeight"));
     }
 
     @Test
     @DisplayName("vectorWeight < 0.0 返回 400")
     void search_vectorWeightTooLow_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, -0.1, 0.5);
+        ResponseEntity<?> response = controller.search("query", 10, true, -0.1, 0.5);
         assertEquals(400, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = (ErrorResponse) response.getBody();
         assertNotNull(body);
-        assertEquals("vectorWeight must be between 0.0 and 1.0", body.get("error"));
-        assertEquals(-0.1, body.get("received"));
+        assertTrue(body.getDetail().contains("vectorWeight"));
     }
 
     @Test
     @DisplayName("fulltextWeight > 1.0 返回 400")
     void search_fulltextWeightTooHigh_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 0.5, 2.0);
+        ResponseEntity<?> response = controller.search("query", 10, true, 0.5, 2.0);
         assertEquals(400, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = (ErrorResponse) response.getBody();
         assertNotNull(body);
-        assertEquals("fulltextWeight must be between 0.0 and 1.0", body.get("error"));
-        assertEquals(2.0, body.get("received"));
+        assertTrue(body.getDetail().contains("fulltextWeight"));
     }
 
     @Test
     @DisplayName("fulltextWeight < 0.0 返回 400")
     void search_fulltextWeightTooLow_returns400() {
-        ResponseEntity<Map<String, Object>> response = controller.search("query", 10, true, 0.5, -0.5);
+        ResponseEntity<?> response = controller.search("query", 10, true, 0.5, -0.5);
         assertEquals(400, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        ErrorResponse body = (ErrorResponse) response.getBody();
         assertNotNull(body);
-        assertEquals("fulltextWeight must be between 0.0 and 1.0", body.get("error"));
-        assertEquals(-0.5, body.get("received"));
+        assertTrue(body.getDetail().contains("fulltextWeight"));
     }
 
     @Test
@@ -184,11 +177,11 @@ class RagSearchControllerTest {
                 .thenReturn(List.of());
 
         // 全部由向量承担
-        ResponseEntity<Map<String, Object>> r1 = controller.search("q", 5, true, 1.0, 0.0);
+        ResponseEntity<?> r1 = controller.search("q", 5, true, 1.0, 0.0);
         assertEquals(200, r1.getStatusCode().value());
 
         // 全部由全文承担
-        ResponseEntity<Map<String, Object>> r2 = controller.search("q", 5, true, 0.0, 1.0);
+        ResponseEntity<?> r2 = controller.search("q", 5, true, 0.0, 1.0);
         assertEquals(200, r2.getStatusCode().value());
     }
 

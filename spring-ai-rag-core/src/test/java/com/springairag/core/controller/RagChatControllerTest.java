@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -166,12 +167,12 @@ class RagChatControllerTest {
     void clearHistory_returnsMessage() {
         when(historyRepository.deleteBySessionId("session-001")).thenReturn(5);
 
-        ResponseEntity<Map<String, Object>> response = controller.clearHistory("session-001");
+        ResponseEntity<ClearHistoryResponse> response = controller.clearHistory("session-001");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("session-001", response.getBody().get("sessionId"));
-        assertEquals("会话历史已清空", response.getBody().get("message"));
-        assertEquals(5, response.getBody().get("deletedCount"));
+        assertEquals("session-001", response.getBody().sessionId());
+        assertEquals("会话历史已清空", response.getBody().message());
+        assertEquals(5, response.getBody().deletedCount());
         verify(historyRepository).deleteBySessionId("session-001");
     }
 
@@ -179,9 +180,9 @@ class RagChatControllerTest {
     void clearHistory_emptySession_returnsZero() {
         when(historyRepository.deleteBySessionId("empty-session")).thenReturn(0);
 
-        ResponseEntity<Map<String, Object>> response = controller.clearHistory("empty-session");
+        ResponseEntity<ClearHistoryResponse> response = controller.clearHistory("empty-session");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(0, response.getBody().get("deletedCount"));
+        assertEquals(0, response.getBody().deletedCount());
     }
 }

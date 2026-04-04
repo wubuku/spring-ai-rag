@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.ChatRequest;
+import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
@@ -132,13 +133,9 @@ public class RagChatController {
      * spring_ai_chat_memory 表由 Spring AI ChatMemory 管理，不受此接口影响。
      */
     @DeleteMapping("/history/{sessionId}")
-    public ResponseEntity<Map<String, Object>> clearHistory(@PathVariable String sessionId) {
+    public ResponseEntity<ClearHistoryResponse> clearHistory(@PathVariable String sessionId) {
         log.info("Clearing chat history for session: {}", sessionId);
         int deleted = historyRepository.deleteBySessionId(sessionId);
-        return ResponseEntity.ok(Map.of(
-                "message", "会话历史已清空",
-                "sessionId", sessionId,
-                "deletedCount", deleted
-        ));
+        return ResponseEntity.ok(ClearHistoryResponse.of(sessionId, deleted));
     }
 }

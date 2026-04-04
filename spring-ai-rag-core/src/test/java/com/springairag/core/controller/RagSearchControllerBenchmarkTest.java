@@ -63,7 +63,7 @@ class RagSearchControllerBenchmarkTest {
             pool.submit(() -> {
                 try {
                     startLatch.await(); // 等待所有线程同时开始
-                    ResponseEntity<Map<String, Object>> response = controller.search(
+                    ResponseEntity<?>  response = controller.search(
                             "concurrent query " + index,
                             10,
                             true,
@@ -109,7 +109,7 @@ class RagSearchControllerBenchmarkTest {
             pool.submit(() -> {
                 try {
                     startLatch.await();
-                    ResponseEntity<Map<String, Object>> response = controller.search(
+                    ResponseEntity<?>  response = controller.search(
                             "throughput query " + System.currentTimeMillis(),
                             10, true, 0.5, 0.5
                     );
