@@ -788,3 +788,21 @@
 - 2026-04-05 01:50 — ✅ i3 CONTRIBUTING 国际化：CONTRIBUTING.md 英文版（7571字符，完整翻译所有章节）+ CONTRIBUTING-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅（全通过）；commit ae4ab4b 已推送
 
 - 2026-04-05 01:40 — ✅ i2 CHANGELOG 国际化：CHANGELOG.md 英文版（8075字符，完整翻译所有版本）+ CHANGELOG-zh-CN.md 中文原版（添加双向链接头）；commit 2a003f6 已推送
+
+**WebUI 实现任务（高优先级）**：
+详细规划文档：`docs/drafts/WEBUI_IMPLEMENTATION_PLAN.md`
+
+技术选型（青出于蓝）：
+- React 19 + TypeScript + Vite（解决 claude-mem esbuild 无 HMR 问题）
+- CSS Modules（解决 Vanilla CSS 全局污染问题）
+- TanStack Query（解决手写 Hooks 缺重试/缓存问题）
+- 生产 Source Map 开启
+- Vitest + Playwright 测试
+- ESLint + Prettier 规范
+
+分阶段实施：
+- W1: 项目初始化（Vite + 路由 + 布局 + SSE 端点新增）
+- W2: 核心页面（Dashboard + 文档管理 + 文件上传）
+- W3: 高级功能（RAG 对话 + 实时检索）
+- W4: 监控与配置（指标 + 告警 + 设置）
+- W5: 工程化收尾（测试 + 性能优化）
