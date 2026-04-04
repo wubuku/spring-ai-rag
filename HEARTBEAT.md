@@ -593,3 +593,16 @@
   - Demo E2E 脚本创建（demo-basic-rag / demo-multi-model / demo-domain-extension 各需自己的 curl E2E）
   - 或：API 压测基准测试（验证虚拟线程高并发性能）
   - 或：Spring AI 1.1.4 新特性使用检查（如有）
+
+- 2026-04-04 21:00 — Demo pom.xml BOM type 修复：
+  - demo-basic-rag/pom.xml: `<type>poml</type>` → `<type>pom</type>` (Maven BOM import 必须用 type=pom)
+  - 修复后 demo-basic-rag 编译警告消失，BUILD SUCCESS
+  - commit dbd6d7d（未 push）
+  - 3 个 commits 待 push：09c16dd / e571ba2 / dbd6d7d
+
+**待推进任务**：
+  1. Demo E2E 脚本：demo-basic-rag 无法启动（SIGKILL），可能需要 investigation
+  2. 虚拟线程性能压测（验证高并发性能）
+  3. Spring AI 1.1.4 新特性检查（新增 API 可用）
+  4. 实现 ChatMemoryAdvisor 的内存上限保护（防止对话记忆无限增长）
+  5. 支持 ChatMemory 的 TTL 过期策略
