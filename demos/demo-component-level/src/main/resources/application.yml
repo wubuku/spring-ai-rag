@@ -26,7 +26,7 @@ app:
   ai:
     openai:
       api-key: ${DEEPSEEK_API_KEY:your-deepseek-key}
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       chat:
         options:
           model: deepseek-chat

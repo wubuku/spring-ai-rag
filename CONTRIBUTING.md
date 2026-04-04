@@ -98,7 +98,7 @@ com.springairag.core
 
 ### Java 基本约定
 
-- **Java 17+**，不使用 Lombok（手写 getter/setter/constructor）
+- **Java 21+ (LTS, 虚拟线程)**，不使用 Lombok（手写 getter/setter/constructor）
 - 包名：`com.springairag.*`
 - 类名：PascalCase，接口不加 `I` 前缀
 - 方法名：camelCase，布尔方法用 `is`/`has`/`can` 前缀

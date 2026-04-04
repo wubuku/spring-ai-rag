@@ -35,7 +35,7 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:dummy}
-      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
       chat:
         enabled: false   # 由 SpringAiConfig 手动创建 ChatModel Bean
         options:

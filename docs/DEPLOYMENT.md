@@ -4,7 +4,7 @@
 
 | 组件 | 最低版本 | 说明 |
 |------|---------|------|
-| Java | 17+ | 推荐 21 |
+| Java | 21+ (LTS, 虚拟线程) | 必选 |
 | PostgreSQL | 15+ | 需要 `vector` 和 `pg_trgm` 扩展 |
 | Maven | 3.9+ | 构建工具 |
 | LLM API | — | OpenAI / DeepSeek / Anthropic 等兼容 API |

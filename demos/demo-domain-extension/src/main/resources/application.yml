@@ -20,7 +20,7 @@ spring:
   # AI 模型配置（OpenAI 兼容，如 DeepSeek）
   ai:
     openai:
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       api-key: ${DEEPSEEK_API_KEY:sk-xxx}
       chat:
         options:

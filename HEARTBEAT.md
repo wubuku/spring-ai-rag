@@ -560,3 +560,14 @@
   - 新增 `delete_existingCollectionNoDocuments_doesNotCallClearCollectionId` 测试
   - mvn clean compile ✅ / mvn test ✅（1083 测试全通过，零失败零错误）
   - git 已推送（commit f6bf868）
+
+- 2026-04-04 19:40 — Demo 模块版本统一 + 文档同步：
+  - 所有 demo 模块升级：Spring Boot 3.5.3 / Spring AI 1.1.4 / Java 21
+    - demo-basic-rag: 14 测试 ✅
+    - demo-multi-model: 9 测试 ✅
+    - demo-component-level: 7 测试 ✅
+    - demo-domain-extension: 19 测试 ✅
+  - 修复 demo base-url /v1 后缀问题
+  - 文档更新：CONTRIBUTING.md / DEPLOYMENT.md / getting-started.md Java 版本要求 → 21+ (LTS)
+  - Core + demos 全量测试通过
+  - commit 09c16dd（未 push）
