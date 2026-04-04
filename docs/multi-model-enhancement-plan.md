@@ -271,6 +271,10 @@ app:
 
 ## 进度日志
 
-| 时间 | 内容 |
-|------|------|
-| 2026-04-04 11:05 | 方案创建，开始 Phase 1 |
+| 时间 | 阶段 | 内容 |
+|------|------|------|
+| 2026-04-04 11:05 | - | 方案创建 |
+| 2026-04-04 11:09 | Phase 1 ✅ | MiniMax ChatModel 支持：Spring AI 1.1.2→1.1.4，添加 spring-ai-starter-model-minimax，miniMaxChatModel Bean |
+| 2026-04-04 11:14 | Phase 2 ✅ | ModelRegistry 模型注册中心：自动收集所有 ChatModel Bean，提供统一访问接口，10 个单元测试 |
+| 2026-04-04 11:24 | Phase 4 ✅ | ChatModelRouter 动态路由：请求级模型选择，FallbackChain，9 个单元测试 |
+| 2026-04-04 11:27 | 🚧 推进中 | Phase 5：REST 端点（GET /models）|
