@@ -1,10 +1,15 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CollectionCreatedResponse;
+import com.springairag.api.dto.CollectionDeleteResponse;
+import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -13,6 +18,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
