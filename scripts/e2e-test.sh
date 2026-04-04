@@ -6,7 +6,7 @@
 
 set -e
 
-BASE_URL="${BASE_URL:-http://localhost:8080}"
+BASE_URL="${BASE_URL:-http://localhost:8081}"
 API="${BASE_URL}/api/v1/rag"
 PASS=0
 FAIL=0
