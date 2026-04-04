@@ -154,7 +154,16 @@ spring-ai-rag-api/src/main/java/com/springairag/api/dto/
 
 ---
 
-### Phase 7：与 A/B Test 框架整合 ⏳ 待实施
+### Phase 7：与 A/B Test 框架整合 ✅
+**目标**：利用现有 `AbTestService` 实现多模型对比实验
+
+**工作内容**：
+1. ✅ `ModelComparisonService` 构造函数新增 `ModelRegistry` 依赖
+2. ✅ `compareProviders(query, providers, timeoutSeconds)` - 对比指定 providers
+3. ✅ `compareAllProviders(query, timeoutSeconds)` - 对比所有已注册 provider
+4. ✅ `ModelController` 集成 `ModelComparisonService`
+
+**状态**：✅ 2026-04-04 11:42 完成
 **目标**：利用现有 `AbTestService` 实现多模型对比实验
 
 **工作内容**：
@@ -231,4 +240,4 @@ app:
 | 2026-04-04 11:24 | Phase 4 ✅ | ChatModelRouter 动态路由：请求级模型选择，FallbackChain，9 个单元测试 |
 | 2026-04-04 11:28 | Phase 5 ✅ | REST 端点（GET /models）：ModelController + ModelControllerTest 3个测试 |
 | 2026-04-04 11:35 | Phase 6 ✅ | 模型级指标埋点：ModelMetricsService + /metrics/models 端点 + RagMetricsControllerTest 补测 |
-| 2026-04-04 11:37 | 🚧 推进中 | Phase 7：A/B Test 框架整合 |
+| 2026-04-04 11:42 | Phase 7 ✅ | A/B Test 整合：ModelComparisonService + ModelRegistry 对接，compareProviders / compareAllProviders |
