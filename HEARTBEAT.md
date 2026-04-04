@@ -580,3 +580,16 @@
   - git 已推送（commit 5e90703）
 
 - 2026-04-04 20:35 — 主动巡检：mvn clean compile ✅，mvn test ✅（1041 测试全通过，零失败零错误）；156 源文件 + 107 测试文件；零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；项目处于生产级成熟状态；commit 662a748 已推送
+
+- 2026-04-04 20:50 — 主动巡检：Demo E2E 确认 + starter 模块验证
+  - E2E 脚本运行：46/46 通过（Health/Collection/文档/嵌入/检索/Chat/流式/历史/缓存/指标）
+  - Starter 模块 Spring Boot 3.5.3 测试：42 测试全通过 ✅
+  - Demo 单元测试全部通过（demo-basic-rag:14 / demo-multi-model:9 / demo-component-level:7 / demo-domain-extension:19）
+  - rest-api.md 端点覆盖完整（Models/Collections/Documents/Chat/Evaluation/A/B/Alert 全覆盖）
+  - 零 TODO/FIXME；项目处于生产级成熟状态
+  - git 全部同步，无待提交变更
+
+**Cron 下一步规划**：
+  - Demo E2E 脚本创建（demo-basic-rag / demo-multi-model / demo-domain-extension 各需自己的 curl E2E）
+  - 或：API 压测基准测试（验证虚拟线程高并发性能）
+  - 或：Spring AI 1.1.4 新特性使用检查（如有）
