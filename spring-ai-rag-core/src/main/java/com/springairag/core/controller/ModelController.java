@@ -4,6 +4,7 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -24,7 +25,8 @@ import java.util.Map;
  * <p>提供模型列表查询、模型详情、路由状态、模型对比等管理接口。
  */
 @RestController
-@RequestMapping("/api/v1/rag/models")
+@ApiVersion("v1")
+@RequestMapping("/rag/models")
 @Tag(name = "Models", description = "多模型管理")
 public class ModelController {
 

@@ -4,10 +4,12 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
+import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ModelController 单元测试
  */
 @WebMvcTest(ModelController.class)
+@Import(ApiVersionConfig.class)
 class ModelControllerTest {
 
     @Autowired
