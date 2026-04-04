@@ -11,6 +11,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -75,5 +79,84 @@ class RagMetricsControllerTest {
         assertNotNull(result);
         assertEquals(0L, result.totalRequests());
         assertEquals(100.0, result.successRate());
+    }
+
+    @Test
+    void getModelMetrics_multiModelEnabled_returnsProvidersWithStats() {
+        when(modelRouter.isMultiModelEnabled()).thenReturn(true);
+        when(modelRouter.getAvailableProviders()).thenReturn(List.of("openai", "minimax"));
+
+        when(modelMetricsService.getCallCount("openai")).thenReturn(50L);
+        when(modelMetricsService.getErrorCount("openai")).thenReturn(2L);
+        when(modelMetricsService.getErrorRate("openai")).thenReturn(4.0);
+        when(modelRegistry.getDisplayName("openai")).thenReturn("DeepSeek V3");
+
+        when(modelMetricsService.getCallCount("minimax")).thenReturn(30L);
+        when(modelMetricsService.getErrorCount("minimax")).thenReturn(1L);
+        when(modelMetricsService.getErrorRate("minimax")).thenReturn(3.23);
+        when(modelRegistry.getDisplayName("minimax")).thenReturn("MiniMax M2");
+
+        Map<String, Object> result = controller.getModelMetrics();
+
+        assertNotNull(result);
+        assertEquals(true, result.get("multiModelEnabled"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> models = (List<Map<String, Object>>) result.get("models");
+        assertEquals(2, models.size());
+
+        Map<String, Object> openaiStats = models.get(0);
+        assertEquals("openai", openaiStats.get("provider"));
+        assertEquals(50L, openaiStats.get("calls"));
+        assertEquals(2L, openaiStats.get("errors"));
+        assertEquals(4.0, openaiStats.get("errorRate"));
+        assertEquals("DeepSeek V3", openaiStats.get("displayName"));
+
+        Map<String, Object> minimaxStats = models.get(1);
+        assertEquals("minimax", minimaxStats.get("provider"));
+        assertEquals(30L, minimaxStats.get("calls"));
+        assertEquals(1L, minimaxStats.get("errors"));
+    }
+
+    @Test
+    void getModelMetrics_emptyProviders_returnsEmptyList() {
+        when(modelRouter.isMultiModelEnabled()).thenReturn(false);
+        when(modelRouter.getAvailableProviders()).thenReturn(Collections.emptyList());
+
+        Map<String, Object> result = controller.getModelMetrics();
+
+        assertNotNull(result);
+        assertEquals(false, result.get("multiModelEnabled"));
+
+        @SuppressWarnings("unchecked")
+        List<?> models = (List<?>) result.get("models");
+        assertTrue(models.isEmpty());
+    }
+
+    @Test
+    void getModelMetrics_singleProvider_mapsAllFields() {
+        when(modelRouter.isMultiModelEnabled()).thenReturn(true);
+        when(modelRouter.getAvailableProviders()).thenReturn(List.of("anthropic"));
+
+        when(modelMetricsService.getCallCount("anthropic")).thenReturn(0L);
+        when(modelMetricsService.getErrorCount("anthropic")).thenReturn(0L);
+        when(modelMetricsService.getErrorRate("anthropic")).thenReturn(0.0);
+        when(modelRegistry.getDisplayName("anthropic")).thenReturn("Claude 3.5 Sonnet");
+
+        Map<String, Object> result = controller.getModelMetrics();
+
+        assertNotNull(result);
+        assertEquals(true, result.get("multiModelEnabled"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> models = (List<Map<String, Object>>) result.get("models");
+        assertEquals(1, models.size());
+
+        Map<String, Object> stats = models.get(0);
+        assertEquals("anthropic", stats.get("provider"));
+        assertEquals(0L, stats.get("calls"));
+        assertEquals(0L, stats.get("errors"));
+        assertEquals(0.0, stats.get("errorRate"));
+        assertEquals("Claude 3.5 Sonnet", stats.get("displayName"));
     }
 }
