@@ -1,16 +1,20 @@
 package com.springairag.starter;
 
+import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.metrics.CircuitBreakerHealthIndicator;
 import com.springairag.core.metrics.ComponentHealthService;
+import com.springairag.core.metrics.RagLivenessIndicator;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.metrics.RagReadinessIndicator;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -185,6 +189,66 @@ class GeneralRagAutoConfigurationBeanTest {
 
             assertNotNull(indicator);
             assertInstanceOf(com.springairag.core.metrics.RagHealthIndicator.class, indicator);
+        }
+    }
+
+    @Nested
+    @DisplayName("ragLivenessIndicator()")
+    class RagLivenessIndicatorTest {
+
+        @Test
+        @DisplayName("返回 RagLivenessIndicator 实例")
+        void returnsLivenessIndicator() {
+            JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
+
+            Object indicator = config.ragLivenessIndicator(jdbcTemplate);
+
+            assertNotNull(indicator);
+            assertInstanceOf(RagLivenessIndicator.class, indicator);
+        }
+    }
+
+    @Nested
+    @DisplayName("ragReadinessIndicator()")
+    class RagReadinessIndicatorTest {
+
+        @Test
+        @DisplayName("RagMetricsService 为 null 时仍可创建")
+        void createsWithNullMetricsService() {
+            ComponentHealthService healthService = mock(ComponentHealthService.class);
+
+            Object indicator = config.ragReadinessIndicator(healthService, null);
+
+            assertNotNull(indicator);
+            assertInstanceOf(RagReadinessIndicator.class, indicator);
+        }
+
+        @Test
+        @DisplayName("RagMetricsService 非 null 时仍可创建")
+        void createsWithNonNullMetricsService() {
+            ComponentHealthService healthService = mock(ComponentHealthService.class);
+            RagMetricsService metricsService = mock(RagMetricsService.class);
+
+            Object indicator = config.ragReadinessIndicator(healthService, metricsService);
+
+            assertNotNull(indicator);
+            assertInstanceOf(RagReadinessIndicator.class, indicator);
+        }
+    }
+
+    @Nested
+    @DisplayName("llmCircuitBreakerIndicator()")
+    class LlmCircuitBreakerIndicatorTest {
+
+        @Test
+        @DisplayName("返回 CircuitBreakerHealthIndicator 实例")
+        void returnsCircuitBreakerIndicator() {
+            RagChatService ragChatService = mock(RagChatService.class);
+
+            Object indicator = config.llmCircuitBreakerIndicator(ragChatService);
+
+            assertNotNull(indicator);
+            assertInstanceOf(CircuitBreakerHealthIndicator.class, indicator);
         }
     }
 }
