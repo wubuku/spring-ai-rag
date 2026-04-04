@@ -525,3 +525,5 @@
 - `RagSearchControllerTest`: 新增 5 个测试覆盖权重越界（>1.0 / <0.0）和边界值（0.0 / 1.0）
 - 零 TODO/FIXME；项目处于生产级成熟状态
 - commit 643f657 已推送
+
+- 2026-04-04 15:20 — 文档补全：demo-multi-model README（3039字符，缺失补充）；CHANGELOG.md 同步最近 3 项（CircuitBreakerHealthIndicator + weight validation + multi-model）；mvn test ✅（全通过，零失败零错误）；154 源文件 + 110 测试文件；零 TODO/FIXME；commit 1429f4b 已推送
