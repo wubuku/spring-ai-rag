@@ -1,9 +1,12 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.dto.ModelCompareResponse;
+import com.springairag.api.dto.ModelDetailResponse;
+import com.springairag.api.dto.ModelListResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.service.ModelComparisonService;
-import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -15,7 +18,6 @@ import jakarta.validation.constraints.Size;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -45,14 +47,15 @@ public class ModelController {
     @GetMapping
     @Operation(summary = "获取所有已注册模型列表")
     @ApiResponse(responseCode = "200", description = "返回所有已注册模型及其状态")
-    public ResponseEntity<Map<String, Object>> listModels() {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("multiModelEnabled", modelRouter.isMultiModelEnabled());
-        response.put("defaultProvider", getDefaultProvider());
-        response.put("availableProviders", modelRouter.getAvailableProviders());
-        response.put("fallbackChain", modelRouter.getFallbackChain());
-        response.put("models", modelRegistry.getAllModelsInfo());
-        return ResponseEntity.ok(response);
+    public ResponseEntity<ModelListResponse> listModels() {
+        List<String> availableProviders = modelRouter.getAvailableProviders();
+        return ResponseEntity.ok(ModelListResponse.of(
+                modelRouter.isMultiModelEnabled(),
+                resolveDefaultProvider(),
+                availableProviders,
+                modelRouter.getFallbackChain(),
+                modelRegistry.getAllModelsInfo()
+        ));
     }
 
     @GetMapping("/{provider}")
@@ -61,14 +64,12 @@ public class ModelController {
         @ApiResponse(responseCode = "200", description = "返回模型详情"),
         @ApiResponse(responseCode = "404", description = "provider 不存在或不可用")
     })
-    public ResponseEntity<Map<String, Object>> getModel(@PathVariable String provider) {
+    public ResponseEntity<ModelDetailResponse> getModel(@PathVariable String provider) {
         if (!modelRouter.isProviderAvailable(provider)) {
             return ResponseEntity.notFound().build();
         }
-        Map<String, Object> baseInfo = modelRegistry.getModelInfo(provider);
-        Map<String, Object> response = new LinkedHashMap<>(baseInfo);
-        response.put("available", true);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(ModelDetailResponse.of(
+                true, modelRegistry.getModelInfo(provider)));
     }
 
     @PostMapping("/compare")
@@ -78,49 +79,40 @@ public class ModelController {
         @ApiResponse(responseCode = "200", description = "返回各模型的对比结果"),
         @ApiResponse(responseCode = "400", description = "providers 列表为空或无效")
     })
-    public ResponseEntity<Map<String, Object>> compareModels(
-            @Valid @RequestBody CompareModelsRequest request) {
+    public ResponseEntity<?> compareModels(@Valid @RequestBody CompareModelsRequest request) {
         if (request.providers == null || request.providers.isEmpty()) {
             return ResponseEntity.badRequest()
-                    .body(Map.of("error", "providers cannot be empty"));
+                    .body(ErrorResponse.of("providers cannot be empty"));
         }
-        List<ModelComparisonResult> results = modelComparisonService.compareProviders(
-                request.query, request.providers,
-                request.timeoutSeconds != null ? request.timeoutSeconds : 30);
+        List<ModelComparisonService.ModelComparisonResult> results =
+                modelComparisonService.compareProviders(
+                        request.query, request.providers,
+                        request.timeoutSeconds != null ? request.timeoutSeconds : 30);
 
-        List<Map<String, Object>> resultList = results.stream()
-                .map(r -> {
-                    Map<String, Object> m = new LinkedHashMap<>();
-                    m.put("modelName", r.getModelName());
-                    m.put("success", r.isSuccess());
-                    m.put("response", r.getResponse());
-                    m.put("latencyMs", r.getLatencyMs());
-                    m.put("promptTokens", r.getPromptTokens());
-                    m.put("completionTokens", r.getCompletionTokens());
-                    m.put("totalTokens", r.getTotalTokens());
-                    m.put("error", r.getError());
-                    return m;
-                })
+        List<ModelCompareResponse.ModelCompareResult> resultList = results.stream()
+                .map(r -> new ModelCompareResponse.ModelCompareResult(
+                        r.getModelName(),
+                        r.isSuccess(),
+                        r.getResponse(),
+                        r.getLatencyMs(),
+                        r.getPromptTokens(),
+                        r.getCompletionTokens(),
+                        r.getTotalTokens(),
+                        r.getError()))
                 .toList();
 
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("query", request.query);
-        response.put("providers", request.providers);
-        response.put("results", resultList);
-        return ResponseEntity.ok(response);
+        return ResponseEntity.ok(new ModelCompareResponse(
+                request.query, request.providers, resultList));
     }
 
-    private String getDefaultProvider() {
-        var providers = modelRouter.getAvailableProviders();
-        if (providers.isEmpty()) {
-            return "none";
-        }
+    private String resolveDefaultProvider() {
         var allInfo = modelRegistry.getAllModelsInfo();
         for (var info : allInfo) {
             if (Boolean.TRUE.equals(info.get("available"))) {
                 return (String) info.get("provider");
             }
         }
+        var providers = modelRouter.getAvailableProviders();
         return providers.isEmpty() ? "none" : providers.get(0);
     }
 

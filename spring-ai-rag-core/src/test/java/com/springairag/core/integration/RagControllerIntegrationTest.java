@@ -483,7 +483,7 @@ class RagControllerIntegrationTest {
             mockMvc.perform(get("/api/v1/rag/health"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("UP"))
-                    .andExpect(jsonPath("$.database").value("UP"));
+                    .andExpect(jsonPath("$.components.database").value("UP"));
         }
 
         @Test
@@ -499,7 +499,7 @@ class RagControllerIntegrationTest {
             mockMvc.perform(get("/api/v1/rag/health"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.status").value("DOWN"))
-                    .andExpect(jsonPath("$.database").value("DOWN"));
+                    .andExpect(jsonPath("$.components.database").value("DOWN"));
         }
     }
 

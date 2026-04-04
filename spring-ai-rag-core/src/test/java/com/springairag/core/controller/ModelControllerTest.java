@@ -65,7 +65,7 @@ class ModelControllerTest {
 
         mockMvc.perform(get("/api/v1/rag/models/openai"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.provider").value("openai"))
+                .andExpect(jsonPath("$.details.provider").value("openai"))
                 .andExpect(jsonPath("$.available").value(true));
     }
 

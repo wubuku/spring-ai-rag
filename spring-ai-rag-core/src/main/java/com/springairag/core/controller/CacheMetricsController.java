@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CacheStatsResponse;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -9,8 +10,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import java.util.Map;
 
 /**
  * 缓存指标 REST 端点
@@ -37,7 +36,7 @@ public class CacheMetricsController {
     @Operation(summary = "获取缓存统计", description = "返回嵌入缓存的命中/未命中次数及命中率")
     @ApiResponse(responseCode = "200", description = "返回缓存统计信息")
     @GetMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getCacheStats() {
-        return ResponseEntity.ok(cacheMetricsService.getStats());
+    public ResponseEntity<CacheStatsResponse> getCacheStats() {
+        return ResponseEntity.ok(CacheStatsResponse.from(cacheMetricsService.getStats()));
     }
 }

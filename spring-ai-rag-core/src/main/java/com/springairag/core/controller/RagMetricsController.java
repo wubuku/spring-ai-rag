@@ -1,23 +1,22 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * RAG 指标监控控制器
@@ -70,24 +69,18 @@ public class RagMetricsController {
             @ApiResponse(responseCode = "200", description = "返回模型级指标数据"),
     })
     @GetMapping(value = "/metrics/models", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Map<String, Object> getModelMetrics() {
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("multiModelEnabled", modelRouter.isMultiModelEnabled());
-
+    public ModelMetricsResponse getModelMetrics() {
         List<String> providers = modelRouter.getAvailableProviders();
-        List<Map<String, Object>> modelStats = providers.stream()
-                .map(p -> {
-                    Map<String, Object> stats = new LinkedHashMap<>();
-                    stats.put("provider", p);
-                    stats.put("calls", modelMetricsService.getCallCount(p));
-                    stats.put("errors", modelMetricsService.getErrorCount(p));
-                    stats.put("errorRate", modelMetricsService.getErrorRate(p));
-                    stats.put("displayName", modelRegistry.getDisplayName(p));
-                    return stats;
-                })
+
+        List<ModelMetricsResponse.ModelMetric> modelStats = providers.stream()
+                .map(p -> new ModelMetricsResponse.ModelMetric(
+                        p,
+                        modelMetricsService.getCallCount(p),
+                        modelMetricsService.getErrorCount(p),
+                        modelMetricsService.getErrorRate(p),
+                        modelRegistry.getDisplayName(p)))
                 .toList();
 
-        response.put("models", modelStats);
-        return response;
+        return new ModelMetricsResponse(modelRouter.isMultiModelEnabled(), modelStats);
     }
 }

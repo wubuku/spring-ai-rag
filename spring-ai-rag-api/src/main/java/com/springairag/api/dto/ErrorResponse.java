@@ -78,6 +78,16 @@ public class ErrorResponse {
 
     // ==================== Builder ====================
 
+    /** 简单错误消息工厂方法 */
+    public static ErrorResponse of(String detail) {
+        return builder()
+                .detail(detail)
+                .title("Bad Request")
+                .status(400)
+                .type(PROBLEM_TYPE_PREFIX + "bad-request")
+                .build();
+    }
+
     public static Builder builder() {
         return new Builder();
     }

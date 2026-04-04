@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ComponentHealthResponse;
+import com.springairag.api.dto.HealthResponse;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,7 +13,6 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -44,20 +45,18 @@ public class RagHealthController {
             @ApiResponse(responseCode = "200", description = "返回健康状态（UP/DEGRADED/DOWN）和各组件状态"),
     })
     @GetMapping("/health")
-    public ResponseEntity<Map<String, Object>> health() {
+    public ResponseEntity<HealthResponse> health() {
         Map<String, ComponentHealthService.ComponentStatus> components =
                 componentHealth.checkAll();
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", componentHealth.overallStatus(components));
-        result.put("timestamp", Instant.now().toString());
-
         // 简化输出：每个组件只返回 status
+        Map<String, String> componentStatuses = new LinkedHashMap<>();
         for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
-            result.put(entry.getKey(), entry.getValue().status());
+            componentStatuses.put(entry.getKey(), entry.getValue().status());
         }
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(HealthResponse.of(
+                componentHealth.overallStatus(components), componentStatuses));
     }
 
     /**
@@ -68,21 +67,17 @@ public class RagHealthController {
             @ApiResponse(responseCode = "200", description = "返回各组件的详细状态信息（database/pgvector/tables/cache）"),
     })
     @GetMapping("/health/components")
-    public ResponseEntity<Map<String, Object>> healthComponents() {
+    public ResponseEntity<ComponentHealthResponse> healthComponents() {
         Map<String, ComponentHealthService.ComponentStatus> components =
                 componentHealth.checkAll();
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", componentHealth.overallStatus(components));
-        result.put("timestamp", Instant.now().toString());
-
         // 详细输出：每个组件的完整信息
-        Map<String, Object> componentDetails = new LinkedHashMap<>();
+        Map<String, Map<String, Object>> componentDetails = new LinkedHashMap<>();
         for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
             componentDetails.put(entry.getKey(), entry.getValue().toMap());
         }
-        result.put("components", componentDetails);
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(ComponentHealthResponse.of(
+                componentHealth.overallStatus(components), componentDetails));
     }
 }

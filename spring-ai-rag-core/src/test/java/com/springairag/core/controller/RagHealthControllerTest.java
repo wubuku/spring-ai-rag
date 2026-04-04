@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ComponentHealthResponse;
+import com.springairag.api.dto.HealthResponse;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.metrics.ComponentHealthService;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,13 +43,13 @@ class RagHealthControllerTest {
         when(cacheMetricsService.getStats()).thenReturn(Map.of(
                 "hitCount", 80L, "missCount", 20L, "totalCount", 100L, "hitRate", "80.0%"));
 
-        ResponseEntity<Map<String, Object>> response = controller.health();
+        ResponseEntity<HealthResponse> response = controller.health();
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("UP", response.getBody().get("status"));
-        assertEquals("UP", response.getBody().get("database"));
-        assertEquals("UP", response.getBody().get("pgvector"));
-        assertNotNull(response.getBody().get("timestamp"));
+        assertEquals("UP", response.getBody().status());
+        assertEquals("UP", response.getBody().components().get("database"));
+        assertEquals("UP", response.getBody().components().get("pgvector"));
+        assertNotNull(response.getBody().timestamp());
     }
 
     @Test
@@ -56,10 +58,10 @@ class RagHealthControllerTest {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                 .thenThrow(new RuntimeException("Connection refused"));
 
-        ResponseEntity<Map<String, Object>> response = controller.health();
+        ResponseEntity<HealthResponse> response = controller.health();
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("DOWN", response.getBody().get("status"));
+        assertEquals("DOWN", response.getBody().status());
     }
 
     @Test
@@ -71,15 +73,14 @@ class RagHealthControllerTest {
         when(cacheMetricsService.getStats()).thenReturn(Map.of(
                 "hitCount", 80L, "missCount", 20L, "totalCount", 100L, "hitRate", "80.0%"));
 
-        ResponseEntity<Map<String, Object>> response = controller.healthComponents();
+        ResponseEntity<ComponentHealthResponse> response = controller.healthComponents();
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("UP", response.getBody().get("status"));
-        assertNotNull(response.getBody().get("components"));
-        Map<String, Object> components = (Map<String, Object>) response.getBody().get("components");
-        assertTrue(components.containsKey("database"));
-        assertTrue(components.containsKey("pgvector"));
-        assertTrue(components.containsKey("tables"));
-        assertTrue(components.containsKey("cache"));
+        assertEquals("UP", response.getBody().status());
+        assertNotNull(response.getBody().components());
+        assertTrue(response.getBody().components().containsKey("database"));
+        assertTrue(response.getBody().components().containsKey("pgvector"));
+        assertTrue(response.getBody().components().containsKey("tables"));
+        assertTrue(response.getBody().components().containsKey("cache"));
     }
 }

@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
@@ -13,7 +14,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -96,26 +96,25 @@ class RagMetricsControllerTest {
         when(modelMetricsService.getErrorRate("minimax")).thenReturn(3.23);
         when(modelRegistry.getDisplayName("minimax")).thenReturn("MiniMax M2");
 
-        Map<String, Object> result = controller.getModelMetrics();
+        ModelMetricsResponse result = controller.getModelMetrics();
 
         assertNotNull(result);
-        assertEquals(true, result.get("multiModelEnabled"));
+        assertEquals(true, result.multiModelEnabled());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> models = (List<Map<String, Object>>) result.get("models");
+        List<ModelMetricsResponse.ModelMetric> models = result.models();
         assertEquals(2, models.size());
 
-        Map<String, Object> openaiStats = models.get(0);
-        assertEquals("openai", openaiStats.get("provider"));
-        assertEquals(50L, openaiStats.get("calls"));
-        assertEquals(2L, openaiStats.get("errors"));
-        assertEquals(4.0, openaiStats.get("errorRate"));
-        assertEquals("DeepSeek V3", openaiStats.get("displayName"));
+        ModelMetricsResponse.ModelMetric openaiStats = models.get(0);
+        assertEquals("openai", openaiStats.provider());
+        assertEquals(50L, openaiStats.calls());
+        assertEquals(2L, openaiStats.errors());
+        assertEquals(4.0, openaiStats.errorRate());
+        assertEquals("DeepSeek V3", openaiStats.displayName());
 
-        Map<String, Object> minimaxStats = models.get(1);
-        assertEquals("minimax", minimaxStats.get("provider"));
-        assertEquals(30L, minimaxStats.get("calls"));
-        assertEquals(1L, minimaxStats.get("errors"));
+        ModelMetricsResponse.ModelMetric minimaxStats = models.get(1);
+        assertEquals("minimax", minimaxStats.provider());
+        assertEquals(30L, minimaxStats.calls());
+        assertEquals(1L, minimaxStats.errors());
     }
 
     @Test
@@ -123,14 +122,11 @@ class RagMetricsControllerTest {
         when(modelRouter.isMultiModelEnabled()).thenReturn(false);
         when(modelRouter.getAvailableProviders()).thenReturn(Collections.emptyList());
 
-        Map<String, Object> result = controller.getModelMetrics();
+        ModelMetricsResponse result = controller.getModelMetrics();
 
         assertNotNull(result);
-        assertEquals(false, result.get("multiModelEnabled"));
-
-        @SuppressWarnings("unchecked")
-        List<?> models = (List<?>) result.get("models");
-        assertTrue(models.isEmpty());
+        assertEquals(false, result.multiModelEnabled());
+        assertTrue(result.models().isEmpty());
     }
 
     @Test
@@ -143,20 +139,19 @@ class RagMetricsControllerTest {
         when(modelMetricsService.getErrorRate("anthropic")).thenReturn(0.0);
         when(modelRegistry.getDisplayName("anthropic")).thenReturn("Claude 3.5 Sonnet");
 
-        Map<String, Object> result = controller.getModelMetrics();
+        ModelMetricsResponse result = controller.getModelMetrics();
 
         assertNotNull(result);
-        assertEquals(true, result.get("multiModelEnabled"));
+        assertEquals(true, result.multiModelEnabled());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> models = (List<Map<String, Object>>) result.get("models");
+        List<ModelMetricsResponse.ModelMetric> models = result.models();
         assertEquals(1, models.size());
 
-        Map<String, Object> stats = models.get(0);
-        assertEquals("anthropic", stats.get("provider"));
-        assertEquals(0L, stats.get("calls"));
-        assertEquals(0L, stats.get("errors"));
-        assertEquals(0.0, stats.get("errorRate"));
-        assertEquals("Claude 3.5 Sonnet", stats.get("displayName"));
+        ModelMetricsResponse.ModelMetric stats = models.get(0);
+        assertEquals("anthropic", stats.provider());
+        assertEquals(0L, stats.calls());
+        assertEquals(0L, stats.errors());
+        assertEquals(0.0, stats.errorRate());
+        assertEquals("Claude 3.5 Sonnet", stats.displayName());
     }
 }
