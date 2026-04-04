@@ -544,4 +544,11 @@
   - 1039 单元测试全通过
   - 回滚 models.json 外部化配置（保持纯 application.yml + @Value）
   - 文档同步：AGENTS.md/architecture.md/MEMORY.md 版本信息更新
-  - commit ce5053b（未 push，等待捷锋批准）
+  - commit 09c16dd 已推送
+
+- 2026-04-04 18:50 — 主动巡检：exportCollection 重构 + 测试补强
+  - `exportCollection()` 41→24行：提取 `buildExportData()` 私有方法（消除超 40 行方法）
+  - `exportCollection_multipleDocuments_exportsAllCorrectly` 测试覆盖多文档导出 + documentType/metadata 字段映射
+  - mvn clean compile ✅ / mvn test ✅（1082 测试全通过，零失败零错误）
+  - 零 TODO/FIXME；156 源文件 + 108 测试文件；全部 Phase 1-7 + P1/P2/P3 完成
+  - git 已推送（commit d25276f）
