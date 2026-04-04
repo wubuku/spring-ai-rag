@@ -499,3 +499,13 @@
 
 **规划文档**：`docs/multi-model-enhancement-plan.md`
 **MiniMax API Key**：`/Users/yangjiefeng/.openclaw/agents/english-learning/agent/models.json`
+
+### 2026-04-04 14:00 — demo-multi-model 集成提交
+- mvn clean compile ✅ / mvn test ✅（全通过）
+- 发现并修复 demo `MultiModelController.chatWithProvider()` 调用不存在的 `ChatModelRouter.chat()` 方法
+- 重构为使用 `ModelRegistry.isAvailable()` / `availableProviders()` + `ModelComparisonService.compareProviders()`
+- `GlobalExceptionHandler` 通过 `@Import` 引入 `@WebMvcTest`，使 IllegalArgumentException → 400 响应正确处理
+- 9 个单元测试全部通过（listModels/getModel/chatWithProvider/compareModels）
+- `application.yml` 中意外暴露真实 API key 已 revert（安全修复）
+- commit 844d197 已推送
+
