@@ -1,48 +1,52 @@
 # spring-ai-rag
 
-基于 [Spring AI](https://docs.spring.io/spring-ai/reference/) 的通用 RAG（检索增强生成）服务框架。
+📖 [English](README.md) · 📖 [中文](README-zh-CN.md)
 
-**模型无关 · 领域解耦 · 组件化**
+---
 
-## 为什么选 spring-ai-rag？
+A general-purpose RAG (Retrieval-Augmented Generation) service framework built on [Spring AI](https://docs.spring.io/spring-ai/reference/).
 
-| 痛点 | spring-ai-rag 方案 |
-|------|-------------------|
-| 换模型要改代码？ | 切换 LLM 只改配置，OpenAI/DeepSeek/Anthropic/智谱全兼容 |
-| RAG 效果差？ | 混合检索（向量+全文）+ 查询改写 + 重排序，逐层优化 |
-| 只能用一个领域？ | `DomainRagExtension` 接口，一个服务支撑 N 个垂直领域 |
-| 组件太重？ | 每个 Advisor/Service 可独立引入，不捆绑 |
+**Model-Agnostic · Domain-Decoupled · Component-Based**
 
-## 功能特性
+## Why spring-ai-rag?
 
-- **混合检索**：向量检索（pgvector HNSW）+ 全文检索（pg_jieba 分词 / pg_trgm 三元组）
-- **全文检索策略**：可配置 `auto`（自动检测）/ `pg_jieba` / `pg_trgm` / `none`
-- **Advisor 链式 Pipeline**：查询改写 → 混合检索 → 重排序 → 上下文注入
-- **多模型支持**：OpenAI 兼容 + Anthropic，Provider 一行配置切换
-- **领域扩展**：实现 `DomainRagExtension` 注入领域 Prompt 和检索策略
-- **SSE 流式输出**：Server-Send Events 实时响应
-- **A/B 实验框架**：多模型并行对比，自动收集延迟/token/质量指标
-- **检索评估**：Precision@K / MRR / NDCG 评估 + 用户反馈闭环
-- **缓存策略**：嵌入结果缓存 + Caffeine 本地缓存，配置可外部化
-- **监控可观测**：Micrometer 指标 + Actuator 健康检查 + 请求追踪（traceId）
-- **API Key 认证**：内建安全过滤器 + per-user 限流（滑动窗口）
-- **API 版本管理**：`@ApiVersion` 注解支持 `/api/v1/` 路径自动映射
+| Pain Point | spring-ai-rag Solution |
+|------------|------------------------|
+| Switching models requires code changes? | Configure the LLM in one line — OpenAI / DeepSeek / Anthropic / Zhipu all supported |
+| Poor RAG quality? | Hybrid search (vector + fulltext) + query rewriting + reranking, layer-by-layer optimization |
+| Only works for one domain? | Implement `DomainRagExtension` to support N vertical domains in one service |
+| Too heavy to integrate? | Every Advisor / Service can be used independently — no bundling required |
 
-## 快速开始
+## Features
 
-### 1. 数据库
+- **Hybrid Search**: Vector search (pgvector HNSW) + fulltext search (pg_jieba tokenizer / pg_trgm trigram)
+- **Fulltext Strategy**: Configurable `auto` (auto-detect) / `pg_jieba` / `pg_trgm` / `none`
+- **Advisor Chain Pipeline**: QueryRewrite → HybridSearch → Rerank → Context Injection
+- **Multi-Model Support**: OpenAI-compatible + Anthropic, switch providers with a single config change
+- **Domain Extension**: Implement `DomainRagExtension` to inject domain prompts and retrieval strategies
+- **SSE Streaming**: Server-Sent Events for real-time responses
+- **A/B Experiment Framework**: Parallel multi-model comparison with automatic latency / token / quality metrics
+- **Retrieval Evaluation**: Precision@K / MRR / NDCG evaluation + user feedback loop
+- **Caching**: Embedding result cache + Caffeine L1 cache, externally configurable
+- **Observability**: Micrometer metrics + Actuator health checks + request tracing (traceId)
+- **API Key Auth**: Built-in security filter + per-user rate limiting (sliding window)
+- **API Versioning**: `@ApiVersion` annotation for automatic `/api/v1/` path mapping
+
+## Quick Start
+
+### 1. Database
 
 ```bash
 createdb spring_ai_rag_dev
 psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
 psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
-# 可选（中文分词，效果优于 pg_trgm）：
+# Optional (better for Chinese text):
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V10 迁移（建表 + HNSW 索引 + 全文检索 GIN 索引）。
+Flyway runs V1–V10 migrations automatically on startup (tables + HNSW indexes + fulltext GIN indexes).
 
-### 2. 添加依赖
+### 2. Add Dependency
 
 ```xml
 <dependency>
@@ -52,7 +56,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 </dependency>
 ```
 
-### 3. 配置
+### 3. Configure
 
 ```yaml
 spring:
@@ -61,7 +65,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V10）
+  # Flyway auto-migration (V1–V10)
   flyway:
     enabled: true
 
@@ -92,133 +96,133 @@ rag:
     min-score: 0.3
 ```
 
-### 4. 调用
+### 4. Use
 
 ```bash
-# RAG 问答
+# RAG Q&A
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 RAG？"}'
+  -d '{"message": "What is RAG?"}'
 
-# 流式问答
+# Streaming Q&A
 curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "详细解释 RAG 工作原理"}'
+  -d '{"message": "Explain how RAG works in detail"}'
 
-# 上传文档
+# Upload document
 curl -X POST http://localhost:8080/api/v1/rag/documents \
   -H "Content-Type: application/json" \
-  -d '{"title": "RAG 简介", "content": "RAG 是检索增强生成..."}'
+  -d '{"title": "RAG Introduction", "content": "RAG stands for Retrieval-Augmented Generation..."}'
 
-# 文档嵌入
+# Embed document
 curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
 
-# 检索（不经过 LLM）
+# Search (no LLM)
 curl "http://localhost:8080/api/v1/rag/search?query=RAG&limit=5"
 ```
 
-启动后访问 `http://localhost:8080/swagger-ui.html` 查看完整 API 文档。
+After starting, visit `http://localhost:8080/swagger-ui.html` for the full API reference.
 
-## 架构概览
+## Architecture
 
 ```
-请求
+Request
   │
   ▼
-QueryRewriteAdvisor(+10)  — 查询改写，提升召回
+QueryRewriteAdvisor (+10)  — Query rewriting for better recall
   │
   ▼
-HybridSearchAdvisor(+20)  — 向量 + 全文混合检索
-  │   ├─ pgvector HNSW（向量）
-  │   └─ pg_jieba / pg_trgm（全文，Gin 索引加速）
+HybridSearchAdvisor (+20)  — Vector + fulltext hybrid retrieval
+  │   ├─ pgvector HNSW (vector)
+  │   └─ pg_jieba / pg_trgm (fulltext, GIN-indexed)
   │
   ▼
-RerankAdvisor(+30)        — 结果重排序
+RerankAdvisor (+30)        — Result reranking
   │
   ▼
-ChatClient.call()          — LLM 生成回答
+ChatClient.call()          — LLM response generation
   │
   ▼
-MessageChatMemoryAdvisor  — 对话记忆
+MessageChatMemoryAdvisor  — Conversation memory
   │
   ▼
-响应
+Response
 ```
 
 ```
 spring-ai-rag/
-├── spring-ai-rag-api/        # API 接口、DTO
-├── spring-ai-rag-core/       # 核心实现
-│   ├── advisor/              # QueryRewrite / HybridSearch / Rerank Advisors
-│   ├── retrieval/           # 检索服务 + 全文检索策略
-│   ├── retrieval/fulltext/  # pg_jieba / pg_trgm / no-op Provider
-│   ├── controller/         # REST 控制器
-│   ├── service/            # 业务服务
-│   ├── config/             # RagChatService / RagProperties
-│   └── metrics/            # Micrometer 指标
-├── spring-ai-rag-starter/  # Spring Boot 自动配置
-├── spring-ai-rag-documents/  # 文档处理（HierarchicalTextChunker）
-└── demos/                   # 集成演示项目
+├── spring-ai-rag-api/          # API interfaces, DTOs
+├── spring-ai-rag-core/         # Core implementation
+│   ├── advisor/                # QueryRewrite / HybridSearch / Rerank Advisors
+│   ├── retrieval/              # Retrieval service + fulltext strategies
+│   ├── retrieval/fulltext/     # pg_jieba / pg_trgm / no-op Providers
+│   ├── controller/             # REST controllers
+│   ├── service/                # Business services
+│   ├── config/                 # RagChatService / RagProperties
+│   └── metrics/                # Micrometer metrics
+├── spring-ai-rag-starter/      # Spring Boot auto-configuration
+├── spring-ai-rag-documents/    # Document processing (HierarchicalTextChunker)
+└── demos/                      # Integration demo projects
 ```
 
-## REST API 端点（40+ 个）
+## REST API Endpoints (40+)
 
-| 模块 | 端点 | 说明 |
-|------|------|------|
-| 问答 | `POST /api/v1/rag/chat/ask` | 非流式 RAG 问答 |
-| 问答 | `POST /api/v1/rag/chat/stream` | SSE 流式问答 |
-| 问答 | `GET /api/v1/rag/chat/history/{sessionId}` | 会话历史 |
-| 检索 | `GET /api/v1/rag/search` | 混合检索（不经过 LLM） |
-| 文档 | `POST /api/v1/rag/documents` | 创建文档 |
-| 文档 | `GET /api/v1/rag/documents/{id}` | 获取文档 |
-| 文档 | `POST /api/v1/rag/documents/{id}/embed` | 生成嵌入向量 |
-| 文档 | `GET /api/v1/rag/documents/{id}/versions` | 版本历史 |
-| 集合 | `/api/v1/rag/collections` | 知识库管理 |
-| 评估 | `/api/v1/rag/evaluations` | 检索质量评估 |
-| 反馈 | `/api/v1/rag/feedbacks` | 用户反馈 |
-| A/B | `/api/v1/rag/ab-tests` | 实验管理 |
-| 告警 | `/api/v1/rag/alerts` | 监控告警 |
-| 缓存 | `GET /api/v1/rag/cache/stats` | 嵌入缓存命中率 |
-| 健康 | `/actuator/health` | Actuator 健康检查 |
+| Module | Endpoint | Description |
+|--------|----------|-------------|
+| Chat | `POST /api/v1/rag/chat/ask` | Non-streaming RAG Q&A |
+| Chat | `POST /api/v1/rag/chat/stream` | SSE streaming Q&A |
+| Chat | `GET /api/v1/rag/chat/history/{sessionId}` | Session history |
+| Search | `GET /api/v1/rag/search` | Hybrid search (no LLM) |
+| Document | `POST /api/v1/rag/documents` | Create document |
+| Document | `GET /api/v1/rag/documents/{id}` | Get document |
+| Document | `POST /api/v1/rag/documents/{id}/embed` | Generate embedding |
+| Document | `GET /api/v1/rag/documents/{id}/versions` | Version history |
+| Collection | `/api/v1/rag/collections` | Knowledge base management |
+| Evaluation | `/api/v1/rag/evaluations` | Retrieval quality evaluation |
+| Feedback | `/api/v1/rag/feedbacks` | User feedback |
+| A/B | `/api/v1/rag/ab-tests` | Experiment management |
+| Alert | `/api/v1/rag/alerts` | Monitoring alerts |
+| Cache | `GET /api/v1/rag/cache/stats` | Embedding cache hit rate |
+| Health | `/actuator/health` | Actuator health check |
 
-## 两种集成方式
+## Two Integration Modes
 
-参考 `demos/README.md`：
+See `demos/README.md`:
 
-| 方式 | Demo | 适用场景 |
-|------|------|---------|
-| 完整 Starter | `demo-basic-rag` | 快速集成，引入一个依赖即可 |
-| 组件级 | `demo-component-level` | 已有 Spring AI 项目，选择性引入 Advisor |
+| Mode | Demo | Use Case |
+|------|------|----------|
+| Full Starter | `demo-basic-rag` | Quick integration, one dependency |
+| Component-level | `demo-component-level` | Existing Spring AI project, selective Advisor use |
 
-## 构建与测试
+## Build & Test
 
 ```bash
-# 编译
+# Compile
 mvn clean compile
 
-# 测试（真实数据库，964 个测试）
+# Test (real database, 1000+ tests)
 export $(cat .env | grep -v '^#' | xargs)
 mvn test
 
-# 打包
+# Package
 mvn clean package -DskipTests
 
-# 单独测试 demo
+# Run demo tests
 cd demos/demo-basic-rag && mvn test
 ```
 
-## 文档
+## Documentation
 
-- [架构设计](docs/architecture.md)
-- [配置参考](docs/configuration.md)
-- [REST API 参考](docs/rest-api.md)
-- [PostgreSQL 扩展说明](docs/postgresql-extensions.md)（pg_jieba / pg_trgm / pgvector）
-- [领域扩展指南](docs/extension-guide.md)
-- [测试指南](docs/testing-guide.md)
-- [开发者上手](docs/getting-started.md)
-- [故障排查](docs/troubleshooting.md)
+- [Architecture](docs/architecture.md)
+- [Configuration Reference](docs/configuration.md)
+- [REST API Reference](docs/rest-api.md)
+- [PostgreSQL Extensions](docs/postgresql-extensions.md) (pg_jieba / pg_trgm / pgvector)
+- [Domain Extension Guide](docs/extension-guide.md)
+- [Testing Guide](docs/testing-guide.md)
+- [Getting Started](docs/getting-started.md)
+- [Troubleshooting](docs/troubleshooting.md)
 - [CHANGELOG](CHANGELOG.md)
-- [贡献指南](CONTRIBUTING.md)
+- [Contributing](CONTRIBUTING.md)
 
 ## License
 
