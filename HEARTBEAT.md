@@ -517,3 +517,11 @@
 - git 工作区干净，HEAD 与 origin/main 同步
 - 项目处于生产级成熟状态
 
+
+### 2026-04-04 14:55 — 主动巡检：检索权重边界验证增强
+- mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
+- `RetrievalConfig`: `vectorWeight` 和 `fulltextWeight` 添加 `@DecimalMin(0.0)` / `@DecimalMax(1.0)` 验证注解
+- `RagSearchController` GET `/search`: 手动边界检查，超出 [0.0, 1.0] 范围返回 400 + error+received
+- `RagSearchControllerTest`: 新增 5 个测试覆盖权重越界（>1.0 / <0.0）和边界值（0.0 / 1.0）
+- 零 TODO/FIXME；项目处于生产级成熟状态
+- commit 643f657 已推送
