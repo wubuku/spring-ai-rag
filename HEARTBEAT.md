@@ -727,3 +727,22 @@
   - 文档搜索（按 collection/keyword/fulltext）
 
 - 2026-04-05 01:27 — ✅ 批量 API 端点合并：`/batch` + `embed=true` 替代 `/batch/create-and-embed`；新增 `BatchCreateResponse` DTO；`BatchDocumentService` 支持 `batchCreateDocuments(requests, embed, collectionId, force)`；`/upload` 改用统一服务层；`batchCreateAndEmbed` 标记 `@Deprecated`；1056 测试全通过，零失败零错误；commit b57f3b4 已推送
+
+**文档国际化任务（高优先级）**：
+所有"主文档"统一改为英文版，中文版添加 -zh-CN 后缀，双向链接。
+
+分批执行（每次 cron 完成 1-2 个）：
+
+| 批次 | 文档 | 状态 |
+|------|------|------|
+| i1 | README.md → README.md (英) + README-zh-CN.md (中) | 📋 待做 |
+| i2 | CHANGELOG.md → CHANGELOG.md (英) + CHANGELOG-zh-CN.md (中) | 📋 待做 |
+| i3 | CONTRIBUTING.md → CONTRIBUTING.md (英) + CONTRIBUTING-zh-CN.md (中) | 📋 待做 |
+| i4 | docs/rest-api.md → rest-api.md (英) + rest-api-zh-CN.md (中) | 📋 待做 |
+| i5 | docs/architecture.md → architecture.md (英) + architecture-zh-CN.md (中) | 📋 待做 |
+| i6 | docs/configuration.md → configuration.md (英) + configuration-zh-CN.md (中) | 📋 待做 |
+| i7 | docs/getting-started.md + docs/extension-guide.md | 📋 待做 |
+| i8 | docs/testing-guide.md + docs/troubleshooting.md + docs/DEPLOYMENT.md | 📋 待做 |
+
+每个文档顶部添加链接：
+> 📖 English | 📖 中文
