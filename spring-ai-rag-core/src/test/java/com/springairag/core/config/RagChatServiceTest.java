@@ -278,4 +278,79 @@ class RagChatServiceTest {
         // 不应保存历史
         verify(historyRepository, never()).save(anyString(), anyString(), anyString(), any(), any());
     }
+
+    @Test
+    @DisplayName("buildSystemPrompt 有扩展无定制器时使用模板作为系统提示词")
+    void buildSystemPrompt_withExtensionButNoCustomizer_setsSystemPrompt() {
+        // 覆盖 BeforeEach 的默认值
+        when(domainExtensionRegistry.hasExtensions()).thenReturn(true);
+        when(domainExtensionRegistry.getSystemPromptTemplate(isNull())).thenReturn("领域系统提示词模板");
+        when(promptCustomizerChain.hasCustomizers()).thenReturn(false);
+
+        RagChatService service = createService();
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
+
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatRequest request = new ChatRequest("皮肤类型有哪些", "session-ext");
+        ChatResponse response = service.chat(request);
+
+        assertEquals("回答", response.getAnswer());
+        // 验证 spec.system() 被调用，传入了领域模板
+        verify(promptSpec).system(eq("领域系统提示词模板"));
+    }
+
+    @Test
+    @DisplayName("buildSystemPrompt 有扩展且有定制器时使用定制后的系统提示词")
+    void buildSystemPrompt_withExtensionAndCustomizer_setsCustomizedSystemPrompt() {
+        when(domainExtensionRegistry.hasExtensions()).thenReturn(true);
+        when(domainExtensionRegistry.getSystemPromptTemplate(isNull())).thenReturn("原始模板");
+        when(promptCustomizerChain.hasCustomizers()).thenReturn(true);
+        when(promptCustomizerChain.customizeSystemPrompt(eq("原始模板"), eq(""), any())).thenReturn("定制后的系统提示词");
+
+        RagChatService service = createService();
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
+
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.system(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatResponse response = service.chat(new ChatRequest("问题", "session-custom"));
+
+        assertEquals("回答", response.getAnswer());
+        // 验证 spec.system() 被调用，传入的是定制后的提示词
+        verify(promptSpec).system(eq("定制后的系统提示词"));
+        // 验证定制器被调用
+        verify(promptCustomizerChain).customizeSystemPrompt(eq("原始模板"), eq(""), any());
+    }
+
+    @Test
+    @DisplayName("customizeUserMessage 有定制器时使用定制后的用户消息")
+    void customizeUserMessage_withCustomizer_setsCustomizedUserMessage() {
+        when(promptCustomizerChain.hasCustomizers()).thenReturn(true);
+        when(promptCustomizerChain.customizeUserMessage(eq("原始用户消息"), any())).thenReturn("【定制】原始用户消息");
+
+        RagChatService service = createService();
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
+
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatResponse response = service.chat(new ChatRequest("原始用户消息", "session-user-custom"));
+
+        assertEquals("回答", response.getAnswer());
+        // 验证 spec.user() 被调用，传入的是定制后的用户消息
+        verify(promptSpec).user(eq("【定制】原始用户消息"));
+    }
 }
