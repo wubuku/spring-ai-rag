@@ -527,3 +527,5 @@
 - commit 643f657 已推送
 
 - 2026-04-04 15:20 — 文档补全：demo-multi-model README（3039字符，缺失补充）；CHANGELOG.md 同步最近 3 项（CircuitBreakerHealthIndicator + weight validation + multi-model）；mvn test ✅（全通过，零失败零错误）；154 源文件 + 110 测试文件；零 TODO/FIXME；commit 1429f4b 已推送
+
+- 2026-04-04 15:45 — 主动巡检：Starter 模块健康指示器 Bean 覆盖率补强——新增 4 个测试覆盖 ragReadinessIndicator/ragLivenessIndicator/llmCircuitBreakerIndicator（0%→100%）；mvn test ✅（全通过）；Starter 模块：94% 指令/60% 分支（+9pp/+20pp）；GeneralRagAutoConfiguration：92% 指令/60% 分支（+13pp/+20pp）；零 TODO/FIXME；commit 3dd7960 已推送
