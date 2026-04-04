@@ -735,7 +735,7 @@
 
 | 批次 | 文档 | 状态 |
 |------|------|------|
-| i1 | README.md → README.md (英) + README-zh-CN.md (中) | 📋 待做 |
+| i1 | README.md → README.md (英) + README-zh-CN.md (中) | ✅ 2026-04-05 |
 | i2 | CHANGELOG.md → CHANGELOG.md (英) + CHANGELOG-zh-CN.md (中) | 📋 待做 |
 | i3 | CONTRIBUTING.md → CONTRIBUTING.md (英) + CONTRIBUTING-zh-CN.md (中) | 📋 待做 |
 | i4 | docs/rest-api.md → rest-api.md (英) + rest-api-zh-CN.md (中) | 📋 待做 |
@@ -748,9 +748,15 @@
 > 📖 English | 📖 中文
 
 **代码国际化任务（高优先级）**：
-所有代码注释/Swagger注解/日志消息使用英文，API 响应消息保持中文（面向用户）。
+用户可见消息必须为英文，或支持国际化（i18n 多语言）。
 
-扫描范围：
+当前问题：大量 API 错误消息/响应是中文 hardcoded，需要改为英文或引入 i18n 框架。
+
+建议方案：
+1. 短期：直接改为英文消息（简单直接）
+2. 长期：引入 Spring i18n，支持多语言切换
+
+本次采用方案1，API 响应消息统一改为英文。扫描范围：
 - Controller @Operation/@ApiResponse/@Tag 注解
 - Service/Repository 方法 Javadoc
 - log.info/error/warn 消息
@@ -775,3 +781,7 @@
 - HEARTBEAT 已规划的任务**永久保留，只增不减**
 - 不论优先级高低，所有任务最终都会完成
 - 24/7 不间断推进，cron 永不空闲
+
+## 进度日志（国际化任务）
+
+- 2026-04-05 01:37 — ✅ i1 README 国际化：README.md 英文版（7474字符，含完整架构/API端点/快速开始）+ README-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅；commit 69cba3d 已推送
