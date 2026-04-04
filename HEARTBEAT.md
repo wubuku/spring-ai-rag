@@ -441,6 +441,7 @@
 ### 2026-04-04 09:53 — ✅ 月度巡检确认
 - mvn clean compile ✅（5 模块，9.6s）/ mvn test ✅（1116 测试全通过，零失败零错误）
 - 149 源文件 + 101 测试文件；零 TODO/FIXME；全部 Phase 1-5 + P1/P2/P3 完成
+- 2026-04-04 10:20 — ✅ demo-component-level 测试补强：ComponentLevelControllerTest 从 4 个弱测试（仅检查非空）升级为 7 个完整 MockMvc 测试，覆盖 ask/chat/compare-memory 端点和参数校验，commit 5e0d4c9
 - IMPLEMENTATION_COMPARISON.md 统计同步，commit e0c46db 已推送
 
 ### 2026-04-04 08:40 — 主动巡检：生产级成熟状态确认
