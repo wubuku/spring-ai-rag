@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-SNAPSHOT] - 2026-04-04 (Afternoon)
+
+### Added
+- `CircuitBreakerHealthIndicator`：`/actuator/health/llmCircuitBreaker` 端点，CLOSED/HALF_OPEN=UP，OPEN=DOWN，NOT_CONFIGURED=UNKNOWN
+- `POST /models/compare` 模型对比端点 + `ModelMetricsService` + `rest-api.md` 文档补充
+
+#### Multi-Model
+- demo-multi-model：`MultiModelController` + `MiniMaxAdapter` + `OpenAiCompatibleAdapter`（支持 system 消息/不支持自动转换）
+- `ApiCompatibilityAdapter` 接口：`supportsSystemMessage()` + `normalizeMessages()` 默认方法
+- `ChatModelRouter.getModelForRequest()`：请求级动态模型选择 + FallbackChain
+
+### Fixed
+- `RetrievalConfig`：`vectorWeight`/`fulltextWeight` 添加 `@DecimalMin(0.0)` / `@DecimalMax(1.0)` 验证
+- `RagSearchController` GET `/search`：权重越界 [0.0, 1.0] 返回 400 + error+received
+- 删除遗留 `TestController.java` + revert application.yml 硬编码 API key（安全修复）
+
 ## [1.0.0-SNAPSHOT] - 2026-04-04
 
 ### Added
