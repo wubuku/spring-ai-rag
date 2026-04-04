@@ -164,14 +164,11 @@ public class RagCollectionController {
 
         return collectionRepository.findById(id)
                 .map(collection -> {
-                    // 将关联文档的 collection_id 置空
-                    List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
-                    for (RagDocument doc : docs) {
-                        doc.setCollectionId(null);
-                    }
-                    if (!docs.isEmpty()) {
-                        documentRepository.saveAll(docs);
-                        log.info("Unlinked {} documents from collection {}", docs.size(), id);
+                    // 批量清空关联文档的 collection_id（避免逐个加载）
+                    long count = documentRepository.countByCollectionId(id);
+                    if (count > 0) {
+                        documentRepository.clearCollectionIdByCollectionId(id);
+                        log.info("Unlinked {} documents from collection {}", count, id);
                     }
 
                     collectionRepository.deleteById(id);
@@ -180,7 +177,7 @@ public class RagCollectionController {
                     return ResponseEntity.ok(Map.of(
                             "message", "集合已删除",
                             "id", String.valueOf(id),
-                            "documentsUnlinked", String.valueOf(docs.size())
+                            "documentsUnlinked", String.valueOf(count)
                     ));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());

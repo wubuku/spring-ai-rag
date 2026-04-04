@@ -157,18 +157,14 @@ class RagCollectionControllerTest {
     void delete_existingCollection_unlinksDocumentsAndDeletes() {
         RagCollection c = createCollection(1L, "待删除集合");
         when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
-
-        RagDocument doc = new RagDocument();
-        doc.setId(10L);
-        doc.setCollectionId(1L);
-        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("集合已删除", response.getBody().get("message"));
         assertEquals("1", response.getBody().get("documentsUnlinked"));
-        verify(documentRepository).saveAll(anyList());
+        verify(documentRepository).clearCollectionIdByCollectionId(1L);
         verify(collectionRepository).deleteById(1L);
     }
 
@@ -179,6 +175,20 @@ class RagCollectionControllerTest {
         ResponseEntity<Map<String, String>> response = controller.delete(999L);
 
         assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void delete_existingCollectionNoDocuments_doesNotCallClearCollectionId() {
+        RagCollection c = createCollection(1L, "空集合");
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+
+        ResponseEntity<Map<String, String>> response = controller.delete(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("0", response.getBody().get("documentsUnlinked"));
+        verify(documentRepository, org.mockito.Mockito.never()).clearCollectionIdByCollectionId(anyLong());
+        verify(collectionRepository).deleteById(1L);
     }
 
     @Test

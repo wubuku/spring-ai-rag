@@ -75,4 +75,11 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      * 按集合 ID 查询（不分页）
      */
     List<RagDocument> findAllByCollectionId(Long collectionId);
+
+    /**
+     * 将指定集合的所有文档的 collectionId 置空（批量操作，避免逐个加载）
+     */
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE RagDocument d SET d.collectionId = NULL WHERE d.collectionId = :collectionId")
+    void clearCollectionIdByCollectionId(@Param("collectionId") Long collectionId);
 }
