@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.VariantResponse;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -103,11 +104,11 @@ public class AbTestController {
         @ApiResponse(responseCode = "404", description = "实验不存在")
     })
     @GetMapping("/experiments/{id}/variant")
-    public ResponseEntity<Map<String, String>> getVariant(
+    public ResponseEntity<VariantResponse> getVariant(
             @PathVariable Long id,
             @RequestParam String sessionId) {
         String variant = abTestService.getVariantForSession(sessionId, id);
-        return ResponseEntity.ok(Map.of("variant", variant));
+        return ResponseEntity.ok(VariantResponse.of(variant));
     }
 
     @Operation(summary = "记录实验结果")

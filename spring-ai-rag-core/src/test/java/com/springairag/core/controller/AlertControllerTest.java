@@ -1,5 +1,10 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.AlertActionResponse;
+import com.springairag.api.dto.FireAlertRequest;
+import com.springairag.api.dto.FireAlertResponse;
+import com.springairag.api.dto.ResolveAlertRequest;
+import com.springairag.api.dto.SilenceAlertRequest;
 import com.springairag.core.service.AlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -112,18 +117,18 @@ class AlertControllerTest {
 
     @Test
     void resolveAlert_returnsOk() {
-        ResponseEntity<Map<String, String>> response = controller.resolveAlert(
-                1L, Map.of("resolution", "已修复"));
+        ResponseEntity<AlertActionResponse> response = controller.resolveAlert(
+                1L, new ResolveAlertRequest("已修复"));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("告警已解决", response.getBody().get("message"));
-        assertEquals("1", response.getBody().get("alertId"));
+        assertTrue(response.getBody().success());
+        assertEquals("告警已解决", response.getBody().message());
         verify(alertService).resolveAlert(1L, "已修复");
     }
 
     @Test
     void resolveAlert_noResolution_usesDefault() {
-        ResponseEntity<Map<String, String>> response = controller.resolveAlert(5L, Map.of());
+        ResponseEntity<AlertActionResponse> response = controller.resolveAlert(5L, new ResolveAlertRequest(null));
 
         assertEquals(200, response.getStatusCode().value());
         verify(alertService).resolveAlert(5L, "");
@@ -133,22 +138,22 @@ class AlertControllerTest {
 
     @Test
     void silenceAlert_returnsOk() {
-        ResponseEntity<Map<String, String>> response = controller.silenceAlert(
-                Map.of("alertKey", "latency-high", "durationMinutes", 30));
+        ResponseEntity<AlertActionResponse> response = controller.silenceAlert(
+                new SilenceAlertRequest("latency-high", 30));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("告警已静默", response.getBody().get("message"));
-        assertEquals("latency-high", response.getBody().get("alertKey"));
+        assertTrue(response.getBody().success());
+        assertTrue(response.getBody().message().contains("latency-high"));
         verify(alertService).silenceAlert("latency-high", 30);
     }
 
     @Test
     void silenceAlert_defaultDuration() {
-        ResponseEntity<Map<String, String>> response = controller.silenceAlert(
-                Map.of("alertKey", "test-key"));
+        ResponseEntity<AlertActionResponse> response = controller.silenceAlert(
+                new SilenceAlertRequest("test-key", null));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("60", response.getBody().get("durationMinutes"));
+        assertTrue(response.getBody().success());
         verify(alertService).silenceAlert("test-key", 60);
     }
 
@@ -159,17 +164,12 @@ class AlertControllerTest {
         when(alertService.fireAlert(eq("latency"), eq("延迟告警"), eq("检索延迟超过阈值"),
                 eq("WARNING"), any())).thenReturn(42L);
 
-        ResponseEntity<Map<String, Object>> response = controller.fireAlert(Map.of(
-                "alertType", "latency",
-                "alertName", "延迟告警",
-                "message", "检索延迟超过阈值",
-                "severity", "WARNING",
-                "metrics", Map.of("p99", 800)
-        ));
+        ResponseEntity<FireAlertResponse> response = controller.fireAlert(
+                new FireAlertRequest("latency", "延迟告警", "检索延迟超过阈值",
+                        "WARNING", Map.of("p99", 800)));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(42L, response.getBody().get("alertId"));
-        assertEquals("ACTIVE", response.getBody().get("status"));
+        assertEquals(42L, response.getBody().alertId());
     }
 
     @Test
@@ -177,11 +177,8 @@ class AlertControllerTest {
         when(alertService.fireAlert(eq("test"), eq("测试"), eq("测试告警"),
                 eq("WARNING"), any())).thenReturn(1L);
 
-        ResponseEntity<Map<String, Object>> response = controller.fireAlert(Map.of(
-                "alertType", "test",
-                "alertName", "测试",
-                "message", "测试告警"
-        ));
+        ResponseEntity<FireAlertResponse> response = controller.fireAlert(
+                new FireAlertRequest("test", "测试", "测试告警", null, null));
 
         assertEquals(200, response.getStatusCode().value());
         verify(alertService).fireAlert("test", "测试", "测试告警", "WARNING", Map.of());

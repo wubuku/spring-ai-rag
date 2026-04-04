@@ -1,11 +1,17 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.AlertActionResponse;
+import com.springairag.api.dto.FireAlertRequest;
+import com.springairag.api.dto.FireAlertResponse;
+import com.springairag.api.dto.ResolveAlertRequest;
+import com.springairag.api.dto.SilenceAlertRequest;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -83,11 +89,11 @@ public class AlertController {
         @ApiResponse(responseCode = "404", description = "告警不存在")
     })
     @PostMapping("/{alertId}/resolve")
-    public ResponseEntity<Map<String, String>> resolveAlert(
+    public ResponseEntity<AlertActionResponse> resolveAlert(
             @PathVariable Long alertId,
-            @RequestBody Map<String, String> body) {
-        alertService.resolveAlert(alertId, body.getOrDefault("resolution", ""));
-        return ResponseEntity.ok(Map.of("message", "告警已解决", "alertId", String.valueOf(alertId)));
+            @Valid @RequestBody ResolveAlertRequest body) {
+        alertService.resolveAlert(alertId, body.resolution() != null ? body.resolution() : "");
+        return ResponseEntity.ok(AlertActionResponse.ok("告警已解决"));
     }
 
     /**
@@ -99,14 +105,12 @@ public class AlertController {
         @ApiResponse(responseCode = "400", description = "请求参数无效")
     })
     @PostMapping("/silence")
-    public ResponseEntity<Map<String, String>> silenceAlert(@RequestBody Map<String, Object> body) {
-        String alertKey = (String) body.get("alertKey");
-        int durationMinutes = (int) body.getOrDefault("durationMinutes", 60);
-        alertService.silenceAlert(alertKey, durationMinutes);
-        return ResponseEntity.ok(Map.of(
-                "message", "告警已静默",
-                "alertKey", alertKey,
-                "durationMinutes", String.valueOf(durationMinutes)));
+    public ResponseEntity<AlertActionResponse> silenceAlert(
+            @Valid @RequestBody SilenceAlertRequest body) {
+        int duration = body.durationMinutes() != null ? body.durationMinutes() : 60;
+        alertService.silenceAlert(body.alertKey(), duration);
+        return ResponseEntity.ok(AlertActionResponse.ok(
+                "告警已静默: " + body.alertKey() + " (" + duration + " 分钟)"));
     }
 
     /**
@@ -118,16 +122,14 @@ public class AlertController {
         @ApiResponse(responseCode = "400", description = "请求参数无效")
     })
     @PostMapping("/fire")
-    public ResponseEntity<Map<String, Object>> fireAlert(@RequestBody Map<String, Object> body) {
-        String alertType = (String) body.get("alertType");
-        String alertName = (String) body.get("alertName");
-        String message = (String) body.get("message");
-        String severity = (String) body.getOrDefault("severity", "WARNING");
-        @SuppressWarnings("unchecked")
-        Map<String, Object> metrics = (Map<String, Object>) body.getOrDefault("metrics", Map.of());
-
-        Long alertId = alertService.fireAlert(alertType, alertName, message, severity, metrics);
-        return ResponseEntity.ok(Map.of("alertId", alertId, "status", "ACTIVE"));
+    public ResponseEntity<FireAlertResponse> fireAlert(
+            @Valid @RequestBody FireAlertRequest body) {
+        String severity = body.severity() != null ? body.severity() : "WARNING";
+        Map<String, Object> metrics = body.metrics() != null ? body.metrics() : Map.of();
+        Long alertId = alertService.fireAlert(
+                body.alertType(), body.alertName(), body.message(),
+                severity, metrics);
+        return ResponseEntity.ok(FireAlertResponse.of(alertId));
     }
 
     /**

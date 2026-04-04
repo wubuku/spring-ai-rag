@@ -718,7 +718,7 @@ class RagControllerIntegrationTest {
                                     """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.alertId").value(42))
-                    .andExpect(jsonPath("$.status").value("ACTIVE"));
+                    .andExpect(jsonPath("$.message").value("告警已触发"));
         }
 
         @Test
@@ -745,8 +745,8 @@ class RagControllerIntegrationTest {
                                     }
                                     """))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.alertKey").value("latency_high"))
-                    .andExpect(jsonPath("$.durationMinutes").value("30"));
+                    .andExpect(jsonPath("$.success").value(true))
+                    .andExpect(jsonPath("$.message").value("告警已静默: latency_high (30 分钟)"));
 
             verify(alertService).silenceAlert("latency_high", 30);
         }

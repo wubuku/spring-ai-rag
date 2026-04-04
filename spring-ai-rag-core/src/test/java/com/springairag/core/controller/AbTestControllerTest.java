@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.VariantResponse;
 import com.springairag.api.service.AbTestService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -131,19 +132,19 @@ class AbTestControllerTest {
     void getVariant_returnsVariantMap() {
         when(abTestService.getVariantForSession("sess-001", 1L)).thenReturn("variant_a");
 
-        ResponseEntity<Map<String, String>> response = controller.getVariant(1L, "sess-001");
+        ResponseEntity<VariantResponse> response = controller.getVariant(1L, "sess-001");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("variant_a", response.getBody().get("variant"));
+        assertEquals("variant_a", response.getBody().variant());
     }
 
     @Test
     void getVariant_differentSession_mayReturnDifferentVariant() {
         when(abTestService.getVariantForSession("sess-002", 1L)).thenReturn("variant_b");
 
-        ResponseEntity<Map<String, String>> response = controller.getVariant(1L, "sess-002");
+        ResponseEntity<VariantResponse> response = controller.getVariant(1L, "sess-002");
 
-        assertEquals("variant_b", response.getBody().get("variant"));
+        assertEquals("variant_b", response.getBody().variant());
     }
 
     // ==================== recordResult ====================
