@@ -19,7 +19,7 @@ import java.util.Map;
  */
 @RestController
 @ApiVersion("v1")
-@RequestMapping("/cache")
+@RequestMapping("/rag/cache")
 @Tag(name = "Cache Metrics", description = "嵌入缓存指标监控")
 public class CacheMetricsController {
 

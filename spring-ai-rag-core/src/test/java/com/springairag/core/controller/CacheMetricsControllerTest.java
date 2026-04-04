@@ -39,7 +39,7 @@ class CacheMetricsControllerTest {
 
         when(cacheMetricsService.getStats()).thenReturn(stats);
 
-        mockMvc.perform(get("/api/v1/cache/stats"))
+        mockMvc.perform(get("/api/v1/rag/cache/stats"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hitCount").value(100))
                 .andExpect(jsonPath("$.missCount").value(20))
@@ -57,7 +57,7 @@ class CacheMetricsControllerTest {
 
         when(cacheMetricsService.getStats()).thenReturn(stats);
 
-        mockMvc.perform(get("/api/v1/cache/stats"))
+        mockMvc.perform(get("/api/v1/rag/cache/stats"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.hitCount").value(0))
                 .andExpect(jsonPath("$.totalCount").value(0))

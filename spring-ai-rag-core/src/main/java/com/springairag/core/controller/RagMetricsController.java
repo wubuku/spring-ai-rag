@@ -8,6 +8,7 @@ import com.springairag.core.metrics.RagMetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,7 +27,8 @@ import java.util.Map;
  * 此端点聚合关键数据，避免客户端直接查询 Actuator。
  */
 @RestController
-@RequestMapping("/api/v1/rag")
+@ApiVersion("v1")
+@RequestMapping("/rag")
 @Tag(name = "RAG Metrics", description = "RAG 服务指标监控")
 public class RagMetricsController {
 
