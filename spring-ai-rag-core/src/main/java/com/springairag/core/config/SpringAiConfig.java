@@ -92,17 +92,10 @@ public class SpringAiConfig {
         }
         log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", openAiBaseUrl, openAiModel);
 
-        // Force no proxy for DeepSeek API calls (avoid local proxy interference)
-        var requestFactory = new org.springframework.http.client.SimpleClientHttpRequestFactory();
-        requestFactory.setProxy(java.net.Proxy.NO_PROXY);
-
-        var noProxyRestClientBuilder = RestClient.builder()
-                .requestFactory(requestFactory);
-
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(openAiBaseUrl)
                 .apiKey(openAiApiKey)
-                .restClientBuilder(noProxyRestClientBuilder)
+                .restClientBuilder(restClientBuilder)
                 .webClientBuilder(WebClient.builder())
                 .build();
 

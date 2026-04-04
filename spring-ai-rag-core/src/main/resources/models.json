@@ -5,13 +5,13 @@
       "enabled": true,
       "priority": 1,
       "chatModel": {
-        "baseUrl": "https://api.deepseek.com/v1",
+        "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-chat",
         "temperature": 0.7,
         "maxTokens": 8192
       },
       "embeddingModel": {
-        "baseUrl": "https://api.deepseek.com/v1",
+        "baseUrl": "https://api.deepseek.com",
         "model": "deepseek-text-embedding",
         "dimension": 1024
       }

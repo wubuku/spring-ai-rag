@@ -27,7 +27,7 @@ class ModelsJsonPropertiesTest {
         assertEquals(1, openai.getPriority());
 
         assertNotNull(openai.getChatModel());
-        assertEquals("https://api.deepseek.com/v1", openai.getChatModel().getBaseUrl());
+        assertEquals("https://api.deepseek.com", openai.getChatModel().getBaseUrl());
         assertEquals("deepseek-chat", openai.getChatModel().getModel());
         assertEquals(0.7, openai.getChatModel().getTemperature());
         assertEquals(8192, openai.getChatModel().getMaxTokens());
