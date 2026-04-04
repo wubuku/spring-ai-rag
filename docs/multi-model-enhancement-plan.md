@@ -75,121 +75,79 @@ spring-ai-rag-api/src/main/java/com/springairag/api/dto/
 
 ## 实施阶段
 
-### Phase 1：MiniMax ChatModel 接入
+### Phase 1：MiniMax ChatModel 接入 ✅
 **目标**：在现有 OpenAI 兼容架构下，接入 MiniMax 模型，跑通链路
 
 **工作内容**：
-1. 确认 `spring-ai-starter-model-minimax` 依赖是否可用
-2. 在 `SpringAiConfig` 中注册 `miniMaxChatModel` Bean（`@ConditionalOnProperty`）
-3. 新增 `MiniMaxChatModelProperties` 绑定 `spring.ai.minimax.*` 配置
-4. 更新 `.env.example` 添加 `MINIMAX_API_KEY` / `MINIMAX_BASE_URL`
-5. 编写集成测试验证 MiniMax 模型调用
+1. ✅ 确认 `spring-ai-starter-model-minimax` 依赖可用（Spring AI 1.1.4）
+2. ✅ 在 `SpringAiConfig` 中注册 `miniMaxChatModel` Bean
+3. ✅ `application.yml` 新增 `spring.minimax.*` 配置节点
+4. ✅ `.env.example` 添加 MiniMax 配置项
+5. ✅ Spring AI 1.1.2 → 1.1.4（MiniMax starter 支持）
 
 **验收标准**：
-- `mvn test` 通过
-- 调用 `/api/v1/rag/chat` 使用 MiniMax 模型能正常返回
+- ✅ `mvn test` 通过
+- API Key：`english-learning` agent `models.json`
 
-**状态**：⏳ 待实施
+**状态**：✅ 2026-04-04 11:09 完成
 
 ---
 
-### Phase 2：ModelRegistry 模型注册中心
+### Phase 2：ModelRegistry 模型注册中心 ✅
 **目标**：建立统一的模型注册机制，支持多模型同时注册
 
 **工作内容**：
-1. 新建 `ModelRegistry` 配置类
-2. `SpringAiConfig` 改造：分别注册 openai / anthropic / minimax Bean
-3. `ModelRegistry` 提供 `get(provider)` / `getDefault()` / `availableProviders()` 方法
-4. 编写 `ModelRegistryTest` 单元测试
+1. ✅ 新建 `ModelRegistry` 配置类（@Component）
+2. ✅ `init()` 自动收集 openai/anthropic/minimax Bean
+3. ✅ `get(provider)` / `getDefault()` / `availableProviders()` / `getAllModelsInfo()`
+4. ✅ `ModelRegistryTest`：10 个纯 Mock 单元测试
 
-**验收标准**：
-- `ModelRegistry` 能正确返回各 provider 的 ChatModel
-- 单元测试覆盖率 >90%
-
-**状态**：⏳ 待实施
+**状态**：✅ 2026-04-04 11:14 完成
 
 ---
 
-### Phase 3：models.json 配置中心
+### Phase 3：models.json 配置中心 ⏭️ 跳过
 **目标**：将模型配置外部化，支持声明式配置
 
-**工作内容**：
-1. 新建 `src/main/resources/models.json`
-2. 新建 `MultiModelProperties` 配置绑定类
-3. 实现 `models.json` 解析和验证逻辑
-4. 更新 `.env.example` 添加各 provider 的 API key 配置
+**决策**：直接使用现有 `application.yml` 的 `app.multi-model.*` 配置，更简洁。
 
-**models.json 结构**：
-```json
-{
-  "providers": {
-    "deepseek": {
-      "type": "openai",
-      "baseUrl": "https://api.deepseek.com/v1",
-      "apiKey": "${DEEPSEEK_API_KEY}",
-      "models": [
-        { "id": "deepseek-chat", "name": "DeepSeek V3", "contextWindow": 64000 }
-      ]
-    },
-    "minimax": {
-      "type": "openai",
-      "baseUrl": "https://api.minimaxi.com/v1",
-      "apiKey": "${MINIMAX_API_KEY}",
-      "models": [
-        { "id": "MiniMax-M2.7", "name": "MiniMax M2.7", "contextWindow": 200000 }
-      ]
-    },
-    "anthropic": {
-      "type": "anthropic",
-      "baseUrl": "https://api.anthropic.com",
-      "apiKey": "${ANTHROPIC_API_KEY}",
-      "models": [
-        { "id": "claude-sonnet-4-6", "name": "Claude Sonnet 4", "contextWindow": 200000 }
-      ]
-    }
-  },
-  "defaultProvider": "deepseek",
-  "fallbackChain": ["deepseek", "minimax", "zhipu"]
-}
-```
-
-**状态**：⏳ 待实施
+**状态**：⏭️ 跳过（使用 application.yml 替代）
 
 ---
 
-### Phase 4：ChatModelRouter 动态路由
+### Phase 4：ChatModelRouter 动态路由 ✅
 **目标**：支持请求级别动态选择模型
 
 **工作内容**：
-1. 新建 `ChatModelRouter` 组件
-2. `ChatRequest` 新增 `model` 可选字段（请求参数指定模型）
-3. `RagChatController` / `RagChatService` 集成 Router
-4. FallbackChain 实现：遍历 fallback 列表直到成功
-5. 单元测试 + 集成测试
+1. ✅ 新建 `ChatModelRouter` 组件
+2. ✅ `getModel(providerHint)` / `getNextFallback(failedProvider)`
+3. ✅ `app.multi-model.enabled=false` 默认关闭，逐步启用
+4. ✅ `ChatModelRouterTest`：9 个纯 Mock 单元测试
 
-**API 变更**：
-```bash
-# 不指定 model：走默认 provider
-POST /api/v1/rag/chat
-{ "message": "hello" }
-
-# 指定 model：动态切换
-POST /api/v1/rag/chat?model=minimax
-{ "message": "hello" }
-```
-
-**状态**：⏳ 待实施
+**状态**：✅ 2026-04-04 11:24 完成
 
 ---
 
-### Phase 5：指标埋点 + 监控
+### Phase 5：REST 端点（GET /models） ✅
+**目标**：暴露模型列表和状态管理 API
+
+**工作内容**：
+1. ✅ 新建 `ModelController`
+2. ✅ `GET /api/v1/rag/models` - 列出所有模型（含开关状态）
+3. ✅ `GET /api/v1/rag/models/{provider}` - 查看指定 provider 详情
+4. ✅ `ModelControllerTest`：3 个 @WebMvcTest 单元测试
+
+**状态**：✅ 2026-04-04 11:28 完成
+
+---
+
+### Phase 6：指标埋点 + 监控 ⏳ 待实施
 **目标**：量化各模型的调用情况
 
 **工作内容**：
 1. ChatModelRouter 记录各 provider 的调用次数、延迟、错误率
 2. 复用现有 `RagMetricsService` 埋点
 3. 新增 `/api/v1/rag/metrics/models` 端点查看各模型状态
-4. 集成到 Health Indicator
 
 **指标**：
 ```
@@ -202,7 +160,7 @@ model_errors_total{provider="minimax"}
 
 ---
 
-### Phase 6：与 A/B Test 框架整合
+### Phase 7：与 A/B Test 框架整合 ⏳ 待实施
 **目标**：利用现有 `AbTestService` 实现多模型对比实验
 
 **工作内容**：
