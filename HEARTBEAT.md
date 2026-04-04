@@ -737,7 +737,7 @@
 |------|------|------|
 | i1 | README.md → README.md (英) + README-zh-CN.md (中) | ✅ 2026-04-05 |
 | i2 | CHANGELOG.md → CHANGELOG.md (英) + CHANGELOG-zh-CN.md (中) | ✅ 2026-04-05 |
-| i3 | CONTRIBUTING.md → CONTRIBUTING.md (英) + CONTRIBUTING-zh-CN.md (中) | 📋 待做 |
+| i3 | CONTRIBUTING.md → CONTRIBUTING.md (英) + CONTRIBUTING-zh-CN.md (中) | ✅ 2026-04-05 |
 | i4 | docs/rest-api.md → rest-api.md (英) + rest-api-zh-CN.md (中) | 📋 待做 |
 | i5 | docs/architecture.md → architecture.md (英) + architecture-zh-CN.md (中) | 📋 待做 |
 | i6 | docs/configuration.md → configuration.md (英) + configuration-zh-CN.md (中) | 📋 待做 |
@@ -785,4 +785,6 @@
 ## 进度日志（国际化任务）
 
 - 2026-04-05 01:37 — ✅ i1 README 国际化：README.md 英文版（7474字符，含完整架构/API端点/快速开始）+ README-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅；commit 69cba3d 已推送
+- 2026-04-05 01:50 — ✅ i3 CONTRIBUTING 国际化：CONTRIBUTING.md 英文版（7571字符，完整翻译所有章节）+ CONTRIBUTING-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅（全通过）；commit ae4ab4b 已推送
+
 - 2026-04-05 01:40 — ✅ i2 CHANGELOG 国际化：CHANGELOG.md 英文版（8075字符，完整翻译所有版本）+ CHANGELOG-zh-CN.md 中文原版（添加双向链接头）；commit 2a003f6 已推送
