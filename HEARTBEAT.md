@@ -715,14 +715,15 @@
   - API response DTO 一致性审查
 
 **API 端点梳理结果（2026-04-05）**：
-  - `POST /documents/batch`: 仅创建文档（需另调 /batch/embed 才嵌入）
+  - `POST /documents/batch`: 创建文档（embed=true 时自动嵌入向量）
   - `POST /documents/batch/embed`: 仅嵌入（需文档已存在）
-  - `POST /documents/batch/create-and-embed`: 一步创建+嵌入（新加，JSON）
-  - `POST /documents/upload`: 一步文件上传+嵌入（新加，multipart）
-  - `/batch/create-and-embed` 与 `/batch`+`/batch/embed` 功能重叠，可考虑合并
+  - `POST /documents/batch/create-and-embed`: @Deprecated，使用 `POST /batch + embed=true` 代替
+  - `POST /documents/upload`: 一步文件上传+嵌入（multipart）
 
 **用户体验改进项（高优先级）**：
-  - 合并 `/batch/create-and-embed` 到 `/batch?embed=true`（减少端点数量）
+  - ✅ 合并 `/batch/create-and-embed` 到 `/batch?embed=true`（减少端点数量）— 2026-04-05
   - 批量操作 SSE 进度追踪
   - 文档去重 API（content hash 查询）
   - 文档搜索（按 collection/keyword/fulltext）
+
+- 2026-04-05 01:27 — ✅ 批量 API 端点合并：`/batch` + `embed=true` 替代 `/batch/create-and-embed`；新增 `BatchCreateResponse` DTO；`BatchDocumentService` 支持 `batchCreateDocuments(requests, embed, collectionId, force)`；`/upload` 改用统一服务层；`batchCreateAndEmbed` 标记 `@Deprecated`；1056 测试全通过，零失败零错误；commit b57f3b4 已推送
