@@ -26,4 +26,11 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
     @Modifying
     @Query("DELETE FROM RagChatHistory h WHERE h.sessionId = :sessionId")
     int deleteBySessionId(@Param("sessionId") String sessionId);
+
+    /**
+     * 删除指定时间之前的聊天历史（TTL 清理）
+     */
+    @Modifying
+    @Query("DELETE FROM RagChatHistory h WHERE h.createdAt < :cutoff")
+    int deleteOlderThan(@Param("cutoff") java.time.LocalDateTime cutoff);
 }

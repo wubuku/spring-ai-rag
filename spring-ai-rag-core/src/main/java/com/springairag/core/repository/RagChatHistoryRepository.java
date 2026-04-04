@@ -99,6 +99,21 @@ public class RagChatHistoryRepository {
     }
 
     /**
+     * 删除指定时间之前的聊天历史（TTL 清理）
+     *
+     * @return 删除的记录数
+     */
+    @Transactional
+    public int deleteOlderThan(java.time.LocalDateTime cutoff) {
+        if (cutoff == null) {
+            return 0;
+        }
+        int deleted = jpaRepository.deleteOlderThan(cutoff);
+        log.info("TTL cleanup: deleted {} chat history records older than {}", deleted, cutoff);
+        return deleted;
+    }
+
+    /**
      * 将实体转换为 Map（保持向后兼容）
      */
     private Map<String, Object> toMap(RagChatHistory entity) {
