@@ -12,9 +12,12 @@ spring:
 
   # 排除不需要的自动配置
   # PgVectorStore：由 VectorStoreConfig 手动创建 Bean
+  # MiniMax Chat/Embedding：由 SpringAiConfig / EmbeddingModelConfig 手动管理（避免与 SiliconFlow 冲突）
   autoconfigure:
     exclude:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
+      - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
 
   # 数据源 + HikariCP 连接池优化
   datasource:
