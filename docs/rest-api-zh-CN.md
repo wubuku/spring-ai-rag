@@ -1,3 +1,7 @@
+📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)
+
+---
+
 # REST API Reference
 
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)
