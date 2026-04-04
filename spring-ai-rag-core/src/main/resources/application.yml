@@ -8,6 +8,12 @@ spring:
   application:
     name: spring-ai-rag
 
+  # 启用虚拟线程（Java 21+）
+  # 虚拟线程优势：大幅降低内存占用、提高并发连接处理能力、无需池化
+  threads:
+    virtual:
+      enabled: true
+
   # 允许 Bean 定义覆盖（自定义配置 Bean 覆盖自动配置）
   main:
     allow-bean-definition-overriding: true
@@ -54,7 +60,7 @@ spring:
   # 智谱示例：base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
   openai:
     api-key: ${OPENAI_API_KEY:dummy}
-    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
     chat:
       # 禁用自动配置！由 SpringAiConfig 手动创建 ChatModel Bean
       enabled: false
