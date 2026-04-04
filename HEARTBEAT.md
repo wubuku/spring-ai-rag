@@ -685,3 +685,22 @@
   - 安全检查（敏感信息脱敏验证）
   - Spring Boot 3.5 新特性检查（如有）
   - 数据库连接池调优（HikariCP 配置审查）
+
+- 2026-04-05 00:30 — ✅ 批量创建并嵌入文档端点（优先级最高任务）
+  - 新端点: POST /api/v1/rag/documents/batch/create-and-embed
+  - 一步到位：创建文档 + 分块 + 嵌入向量
+  - 支持指定 collectionId（批量关联知识库）
+  - 支持 force=true 强制重嵌入
+  - DocumentRequest 新增 collectionId 字段
+  - 新 DTO: BatchCreateAndEmbedRequest, BatchCreateAndEmbedResponse
+  - commit ffb05a3 已推送
+
+**剩余 8h 任务清单**：
+  - RagCollectionController DTO 化（9方法，构造函数含 AuditLogService）
+  - RagDocumentController DTO 化（12方法）
+  - GlobalExceptionHandler 增强（请求追踪）
+  - 测试覆盖率提升（薄弱点）
+  - 长方法重构 + 代码质量
+  - 文档同步（rest-api.md 补充新端点）
+  - E2E 验证
+  - API response DTO 一致性审查
