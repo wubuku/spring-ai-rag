@@ -37,7 +37,7 @@ import java.util.List;
  * - chatModel：主入口，从上述三个中选择可用的
  */
 @Configuration
-@EnableConfigurationProperties(RagProperties.class)
+@EnableConfigurationProperties({RagProperties.class, RagMemoryProperties.class})
 public class SpringAiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiConfig.class);

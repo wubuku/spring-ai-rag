@@ -24,6 +24,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
@@ -58,10 +59,23 @@ public class RagDocumentController {
     private final BatchDocumentService batchDocumentService;
     private final DocumentVersionService documentVersionService;
 
+    // SHA256 utility for content hashing (breaks circular dependency)
+    private static String computeSha256(String content) {
+        try {
+            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (byte b : hash) hex.append(String.format("%02x", b));
+            return hex.toString();
+        } catch (Exception e) {
+            throw new RuntimeException("SHA-256 compute failed", e);
+        }
+    }
+
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
-                                  DocumentEmbedService documentEmbedService,
-                                  BatchDocumentService batchDocumentService,
+                                  @Lazy DocumentEmbedService documentEmbedService,
+                                  @Lazy BatchDocumentService batchDocumentService,
                                   DocumentVersionService documentVersionService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
@@ -82,7 +96,7 @@ public class RagDocumentController {
         log.info("Creating document: title={}", request.getTitle());
 
         String content = request.getContent();
-        String contentHash = BatchDocumentService.computeSha256(content);
+        String contentHash = computeSha256(content);
 
         // 去重检查
         List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
