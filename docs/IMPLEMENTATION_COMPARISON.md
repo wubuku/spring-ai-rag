@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-04 16:20 — 157 源文件 + 108 测试文件 + 1047 测试全通过；mvn clean compile + mvn test 全部通过；零 TODO/FIXME；项目处于生产级成熟状态
+> **最后更新**: 2026-04-04 17:10 — 156 源文件 + 107 测试文件 + 全测试通过；零 TODO/FIXME；项目处于生产级成熟状态
 
 ---
 
