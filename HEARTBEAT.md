@@ -634,3 +634,9 @@
   - mvn clean compile ✅ / mvn test ✅（1092 测试全通过，零失败零错误）
   - 零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；项目处于生产级成熟状态
   - git 已推送（commit 5eae427）
+
+- 2026-04-04 23:27 — ModelController @ApiVersion 风格统一 + 测试修复：
+  - ModelController 注解与其他 Controller 保持一致：@ApiVersion("v1") + @RequestMapping("/rag/models")
+  - ModelControllerTest 补 @Import(ApiVersionConfig.class) + URL 保持 /api/v1/rag/models
+  - mvn clean compile ✅ / mvn test ✅（1093 测试全通过，零失败零错误）
+  - 零 TODO/FIXME；commit 4924c5a 已推送
