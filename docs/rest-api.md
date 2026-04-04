@@ -744,3 +744,138 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 | `successRate` | double | 成功率（successful/total） |
 | `totalRetrievalResults` | long | 累计返回的检索结果数量 |
 | `totalLlmTokens` | long | 累计 LLM 消耗 Token 数 |
+
+---
+
+## Models — 多模型管理
+
+### `GET /api/v1/rag/models`
+
+获取所有已注册模型列表及路由状态。
+
+**响应：**
+
+```json
+{
+  "multiModelEnabled": true,
+  "defaultProvider": "openai",
+  "availableProviders": ["openai", "minimax"],
+  "fallbackChain": ["openai", "minimax"],
+  "models": [
+    {
+      "provider": "openai",
+      "available": true,
+      "displayName": "OpenAI (DeepSeek/兼容)",
+      "className": "OpenAiChatModel"
+    },
+    {
+      "provider": "minimax",
+      "available": true,
+      "displayName": "MiniMax",
+      "className": "MiniMaxChatModel"
+    }
+  ]
+}
+```
+
+### `GET /api/v1/rag/models/{provider}`
+
+获取指定 provider 的模型详情。
+
+**路径参数：**
+
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `provider` | string | Provider 标识（openai / anthropic / minimax） |
+
+**响应（provider 存在）：**
+
+```json
+{
+  "provider": "openai",
+  "available": true,
+  "displayName": "OpenAI (DeepSeek/兼容)",
+  "className": "OpenAiChatModel"
+}
+```
+
+**响应（provider 不存在）：** `404 Not Found`
+
+### `POST /api/v1/rag/models/compare`
+
+并行对比多个模型的响应，用于模型效果对比。
+
+**请求体：**
+
+```json
+{
+  "query": "解释量子计算的基本原理",
+  "providers": ["openai", "minimax"],
+  "timeoutSeconds": 30
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | ✅ | 查询文本 |
+| `providers` | string[] | ✅ | 要对比的 provider 列表 |
+| `timeoutSeconds` | int | ❌ | 单模型超时秒数（默认 30） |
+
+**响应：**
+
+```json
+{
+  "query": "解释量子计算的基本原理",
+  "providers": ["openai", "minimax"],
+  "results": [
+    {
+      "modelName": "openai",
+      "success": true,
+      "response": "量子计算是一种...",
+      "latencyMs": 1200,
+      "promptTokens": 50,
+      "completionTokens": 180,
+      "totalTokens": 230,
+      "error": null
+    },
+    {
+      "modelName": "minimax",
+      "success": true,
+      "response": "量子计算的核心是...",
+      "latencyMs": 950,
+      "promptTokens": 50,
+      "completionTokens": 165,
+      "totalTokens": 215,
+      "error": null
+    }
+  ]
+}
+```
+
+### `GET /api/v1/rag/metrics/models`
+
+获取各模型的调用指标（调用量、错误率）。
+
+**响应：**
+
+```json
+{
+  "multiModelEnabled": true,
+  "models": [
+    {
+      "provider": "openai",
+      "calls": 1523,
+      "errors": 25,
+      "errorRate": 0.016,
+      "displayName": "OpenAI (DeepSeek/兼容)"
+    },
+    {
+      "provider": "minimax",
+      "calls": 234,
+      "errors": 3,
+      "errorRate": 0.013,
+      "displayName": "MiniMax"
+    }
+  ]
+}
+```
