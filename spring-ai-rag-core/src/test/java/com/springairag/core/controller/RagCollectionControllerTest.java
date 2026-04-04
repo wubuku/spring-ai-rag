@@ -282,6 +282,43 @@ class RagCollectionControllerTest {
     }
 
     @Test
+    void exportCollection_multipleDocuments_exportsAllCorrectly() {
+        RagCollection c = createCollection(1L, "多文档知识库");
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+
+        RagDocument doc1 = new RagDocument();
+        doc1.setTitle("文档A");
+        doc1.setSource("a.txt");
+        doc1.setContent("内容A");
+        doc1.setDocumentType("PDF");
+        doc1.setMetadata(Map.of("author", "Alice"));
+        doc1.setSize(200L);
+
+        RagDocument doc2 = new RagDocument();
+        doc2.setTitle("文档B");
+        doc2.setSource("b.txt");
+        doc2.setContent("内容B");
+        doc2.setSize(150L);
+
+        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
+
+        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        Map<String, Object> body = response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.get("documentCount"));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
+        assertEquals(2, docs.size());
+        assertEquals("文档A", docs.get(0).get("title"));
+        assertEquals("PDF", docs.get(0).get("documentType"));
+        assertEquals("Alice", ((Map<?, ?>) docs.get(0).get("metadata")).get("author"));
+        assertEquals("文档B", docs.get(1).get("title"));
+    }
+
+    @Test
     void exportCollection_notFound_returns404() {
         when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
 

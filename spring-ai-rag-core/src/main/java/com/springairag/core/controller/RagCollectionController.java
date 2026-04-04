@@ -279,35 +279,38 @@ public class RagCollectionController {
         return collectionRepository.findById(id)
                 .map(collection -> {
                     List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
-
-                    List<Map<String, Object>> docList = docs.stream()
-                            .map(doc -> {
-                                Map<String, Object> m = new HashMap<>();
-                                m.put("title", doc.getTitle());
-                                m.put("source", doc.getSource());
-                                m.put("content", doc.getContent());
-                                m.put("documentType", doc.getDocumentType());
-                                m.put("metadata", doc.getMetadata());
-                                m.put("size", doc.getSize());
-                                return m;
-                            })
-                            .collect(Collectors.toList());
-
-                    Map<String, Object> exportData = new HashMap<>();
-                    exportData.put("name", collection.getName());
-                    exportData.put("description", collection.getDescription());
-                    exportData.put("embeddingModel", collection.getEmbeddingModel());
-                    exportData.put("dimensions", collection.getDimensions());
-                    exportData.put("enabled", collection.getEnabled());
-                    exportData.put("metadata", collection.getMetadata());
-                    exportData.put("documents", docList);
-                    exportData.put("exportedAt", java.time.Instant.now().toString());
-                    exportData.put("documentCount", docs.size());
-
+                    Map<String, Object> exportData = buildExportData(collection, docs);
                     log.info("Collection exported: id={}, documents={}", id, docs.size());
                     return ResponseEntity.ok(exportData);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private Map<String, Object> buildExportData(RagCollection collection, List<RagDocument> docs) {
+        List<Map<String, Object>> docList = docs.stream()
+                .map(doc -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("title", doc.getTitle());
+                    m.put("source", doc.getSource());
+                    m.put("content", doc.getContent());
+                    m.put("documentType", doc.getDocumentType());
+                    m.put("metadata", doc.getMetadata());
+                    m.put("size", doc.getSize());
+                    return m;
+                })
+                .collect(Collectors.toList());
+
+        Map<String, Object> exportData = new HashMap<>();
+        exportData.put("name", collection.getName());
+        exportData.put("description", collection.getDescription());
+        exportData.put("embeddingModel", collection.getEmbeddingModel());
+        exportData.put("dimensions", collection.getDimensions());
+        exportData.put("enabled", collection.getEnabled());
+        exportData.put("metadata", collection.getMetadata());
+        exportData.put("documents", docList);
+        exportData.put("exportedAt", java.time.Instant.now().toString());
+        exportData.put("documentCount", docs.size());
+        return exportData;
     }
 
     /**
