@@ -176,4 +176,13 @@ public class LlmCircuitBreaker {
                 state.get(), successes.get(), failures.get(), filledSlots.get(),
                 state.get() == State.CLOSED ? 0 : System.currentTimeMillis() - lastFailureTime.get());
     }
+
+    /**
+     * 获取最近一次失败的时间戳（毫秒）
+     *
+     * @return 最近失败时间戳，如果从未失败则返回 0
+     */
+    public long getLastFailureTimeMillis() {
+        return lastFailureTime.get();
+    }
 }

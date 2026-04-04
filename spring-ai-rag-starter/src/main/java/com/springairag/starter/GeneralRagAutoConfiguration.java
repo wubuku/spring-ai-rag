@@ -161,4 +161,15 @@ public class GeneralRagAutoConfiguration {
                 componentHealth,
                 ragMetricsService != null ? ragMetricsService : null);
     }
+
+    /**
+     * LLM 熔断器健康探针
+     */
+    @Bean("llmCircuitBreaker")
+    @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
+    @ConditionalOnMissingBean(name = "llmCircuitBreaker")
+    public Object llmCircuitBreakerIndicator(
+            com.springairag.core.config.RagChatService ragChatService) {
+        return new com.springairag.core.metrics.CircuitBreakerHealthIndicator(ragChatService);
+    }
 }

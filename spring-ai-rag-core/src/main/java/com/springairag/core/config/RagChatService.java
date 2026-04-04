@@ -73,6 +73,13 @@ public class RagChatService {
     private final RagMetricsService metricsService; // 可选，未引入 actuator 时为 null
     private final LlmCircuitBreaker circuitBreaker; // 可选，未启用时为 null
 
+    /**
+     * 获取 LLM 熔断器实例（可能为 null，当未启用时）
+     */
+    public LlmCircuitBreaker getCircuitBreaker() {
+        return circuitBreaker;
+    }
+
     public RagChatService(
             ChatClient.Builder chatClientBuilder,
             QueryRewriteAdvisor queryRewriteAdvisor,
