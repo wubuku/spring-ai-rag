@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0-SNAPSHOT] - 2026-04-05
+
+### Added
+- `ChatHistoryCleanupService`：`messageTtlDays` 配置（默认30天）+ 每日凌晨3点自动清理过期聊天历史记录（cron 可配置）
+- `ChatHistoryCleanupServiceTest`：6 个测试覆盖 TTL 禁用/异常/正常路径/null cutoff
+- `rag.memory.message-ttl-days` / `rag.memory.cleanup-cron` 配置项（`docs/configuration.md` 同步更新）
+
 ## [1.0.0-SNAPSHOT] - 2026-04-04 (Afternoon)
 
 ### Added

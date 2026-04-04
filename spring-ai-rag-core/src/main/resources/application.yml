@@ -143,6 +143,8 @@ rag:
   # 对话记忆配置
   memory:
     max-messages: 20
+    message-ttl-days: 30        # 0=不过期，非0=超过天数的历史记录被清理
+    cleanup-cron: "0 0 3 * * *" # 每日凌晨3点执行（Asia/Shanghai时区）
 
   # 异步线程池配置
   async:

@@ -203,15 +203,19 @@ spring:
 rag:
   memory:
     max-messages: 20
+    message-ttl-days: 30        # 0=不过期，非0=超过天数的历史记录被清理
+    cleanup-cron: "0 0 3 * * *" # 每日凌晨3点执行清理（Asia/Shanghai时区）
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
 | `rag.memory.max-messages` | `20` | 单会话最大消息保留数 |
+| `rag.memory.message-ttl-days` | `30` | 聊天历史保留天数（0=不过期） |
+| `rag.memory.cleanup-cron` | `0 0 3 * * *` | 历史清理 cron 表达式（每日凌晨3点） |
 
 系统维护双表：
 - `spring_ai_chat_memory`：Spring AI 自动管理，给 LLM 上下文用
-- `rag_chat_history`：业务审计表，保留完整 `user_message` + `ai_response`
+- `rag_chat_history`：业务审计表，保留完整 `user_message` + `ai_response`，按 TTL 自动清理
 
 ## 异步线程池配置
 
