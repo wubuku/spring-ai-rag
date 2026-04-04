@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-04 11:50 — 153 源文件 + 105 测试文件，多模型增强 Phase 1-7 全部完成（MiniMax接入 + ModelRegistry + ChatModelRouter + REST端点 + 指标埋点 + A/B整合 + 模型对比API）
+> **最后更新**: 2026-04-04 12:50 — 154 源文件 + 106 测试文件 + 1072 测试全通过；CircuitBreakerHealthIndicator 实现（`/actuator/health/llmCircuitBreaker`）+ LLM 熔断器健康探针；多模型增强 Phase 1-7 全部完成
 
 ---
 
