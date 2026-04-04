@@ -1,33 +1,35 @@
-# 领域扩展指南
+# Domain Extension Guide
 
-> spring-ai-rag 的核心设计理念：**领域解耦**。一个通用 RAG 引擎支撑 N 个垂直领域。
+> 📖 English | 📖 中文
 
----
-
-## 扩展机制概览
-
-```
-用户请求(domainId=medical)
-    ↓
-DomainExtensionRegistry → 找到 MedicalDomainExtension
-    ↓
-注入领域 System Prompt + 领域检索配置
-    ↓
-RAG Pipeline 正常执行
-```
-
-扩展点：
-
-| 接口 | 用途 | 必须实现 |
-|------|------|---------|
-| `DomainRagExtension` | 领域 Prompt + 检索配置 + 答案后处理 | ✅ |
-| `PromptCustomizer` | 细粒度 Prompt 定制（链式调用） | 可选 |
+> Core design philosophy of spring-ai-rag: **Domain Decoupling**. One general-purpose RAG engine supports N vertical domains.
 
 ---
 
-## 快速开始：3 步接入领域
+## Extension Mechanism Overview
 
-### 1. 实现 DomainRagExtension
+```
+User Request (domainId=medical)
+    ↓
+DomainExtensionRegistry → finds MedicalDomainExtension
+    ↓
+Inject domain System Prompt + domain retrieval config
+    ↓
+RAG Pipeline executes normally
+```
+
+Extension points:
+
+| Interface | Purpose | Required |
+|-----------|---------|----------|
+| `DomainRagExtension` | Domain Prompt + retrieval config + answer post-processing | ✅ |
+| `PromptCustomizer` | Fine-grained Prompt control (chainable) | Optional |
+
+---
+
+## Quick Start: 3 Steps to Plug in a Domain
+
+### 1. Implement DomainRagExtension
 
 ```java
 @Component
@@ -40,20 +42,20 @@ public class MedicalDomainExtension implements DomainRagExtension {
 
     @Override
     public String getDomainName() {
-        return "医疗健康";
+        return "Healthcare";
     }
 
     @Override
     public String getSystemPromptTemplate() {
         return """
-                你是医疗健康知识助手。请基于检索到的医学文献回答用户问题。
-                
-                规则：
-                1. 严格依据参考资料，不编造医学信息
-                2. 明确标注"仅供参考，不构成医疗建议"
-                3. 涉及用药建议时，提醒用户咨询专业医生
-                
-                参考资料：
+                You are a medical health knowledge assistant. Answer the user's question based on the retrieved medical literature.
+
+                Rules:
+                1. Strictly base on reference materials; do not fabricate medical information
+                2. Clearly mark "For reference only, not medical advice"
+                3. When medication advice is involved, remind users to consult a professional doctor
+
+                References:
                 {context}
                 """;
     }
@@ -61,49 +63,49 @@ public class MedicalDomainExtension implements DomainRagExtension {
     @Override
     public RetrievalConfig getRetrievalConfig() {
         return RetrievalConfig.builder()
-                .maxResults(15)        // 医疗领域需要更多上下文
-                .minScore(0.6)         // 更高的相似度阈值
+                .maxResults(15)        // Medical domain needs more context
+                .minScore(0.6)         // Higher similarity threshold
                 .useHybridSearch(true)
                 .useRerank(true)
-                .vectorWeight(0.7)     // 偏向语义检索
+                .vectorWeight(0.7)      // Favor semantic retrieval
                 .fulltextWeight(0.3)
                 .build();
     }
 
     @Override
     public String postProcessAnswer(String answer) {
-        // 自动追加免责声明
-        if (!answer.contains("免责声明")) {
-            return answer + "\n\n---\n⚠️ 免责声明：以上内容仅供参考，不构成医疗建议。"
-                    + "如有健康问题，请咨询专业医生。";
+        // Auto-append disclaimer
+        if (!answer.contains("disclaimer")) {
+            return answer + "\n\n---\n⚠️ Disclaimer: The above is for reference only and does not constitute medical advice."
+                    + " For health concerns, please consult a professional doctor.";
         }
         return answer;
     }
 
     @Override
     public boolean isApplicable(String query) {
-        // 简单关键词判断（生产环境可用 NLP 分类器）
+        // Simple keyword check (use NLP classifier in production)
         String lower = query.toLowerCase();
-        return lower.contains("病") || lower.contains("症状")
-                || lower.contains("药") || lower.contains("治疗")
-                || lower.contains("医") || lower.contains("健康");
+        return lower.contains("disease") || lower.contains("symptom")
+                || lower.contains("medicine") || lower.contains("treatment")
+                || lower.contains("doctor") || lower.contains("health");
     }
 }
 ```
 
-### 2. 注册即生效
+### 2. Registration is Automatic
 
-`@Component` 注解 → Spring Boot 自动发现 → `DomainExtensionRegistry` 自动注册。
+`@Component` annotation → Spring Boot auto-discovery → `DomainExtensionRegistry` auto-registers.
 
-无需额外配置。
+No extra configuration needed.
 
-### 3. 调用时指定 domainId
+### 3. Specify domainId When Calling
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{
-    "message": "高血压有什么症状？",
+    "message": "What are the symptoms of hypertension?",
     "sessionId": "s1",
     "domainId": "medical"
   }'
@@ -111,22 +113,22 @@ curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
 
 ---
 
-## 接口详解
+## Interface Details
 
 ### DomainRagExtension
 
-| 方法 | 必须 | 说明 |
-|------|------|------|
-| `getDomainId()` | ✅ | 领域唯一标识（英文，如 `medical`、`legal`） |
-| `getDomainName()` | ✅ | 领域显示名称（如"医疗健康"） |
-| `getSystemPromptTemplate()` | ✅ | 系统提示词模板，`{context}` 占位符会被替换为检索结果 |
-| `getRetrievalConfig()` | | 检索配置（默认：10 结果，0.5 阈值，混合检索） |
-| `postProcessAnswer()` | | 答案后处理（默认：原样返回） |
-| `isApplicable()` | | 查询领域判断（默认：全部接受） |
+| Method | Required | Description |
+|--------|----------|-------------|
+| `getDomainId()` | ✅ | Unique domain identifier (English, e.g., `medical`, `legal`) |
+| `getDomainName()` | ✅ | Domain display name (e.g., "Healthcare") |
+| `getSystemPromptTemplate()` | ✅ | System prompt template; `{context}` placeholder is replaced by retrieved documents |
+| `getRetrievalConfig()` | | Retrieval config (default: 10 results, 0.5 threshold, hybrid search) |
+| `postProcessAnswer()` | | Answer post-processing (default: return as-is) |
+| `isApplicable()` | | Query domain detection (default: accept all) |
 
 ### PromptCustomizer
 
-用于更细粒度的 Prompt 控制，多个实现按 `getOrder()` 排序链式调用。
+For finer-grained Prompt control; multiple implementations are sorted by `getOrder()` and called in chain.
 
 ```java
 @Component
@@ -136,21 +138,21 @@ public class SafetyPromptCustomizer implements PromptCustomizer {
     public String customizeSystemPrompt(String originalSystemPrompt,
                                          String context,
                                          Map<String, Object> metadata) {
-        return originalSystemPrompt + "\n\n请确保回答符合安全准则，不包含有害内容。";
+        return originalSystemPrompt + "\n\nPlease ensure answers comply with safety guidelines and contain no harmful content.";
     }
 
     @Override
     public int getOrder() {
-        return 100; // 最后执行
+        return 100; // Execute last
     }
 }
 ```
 
 ---
 
-## 多领域并存
+## Multiple Domains Coexist
 
-一个服务可以注册多个领域扩展：
+One service can register multiple domain extensions:
 
 ```java
 @Configuration
@@ -173,54 +175,54 @@ public class DomainConfig {
 }
 ```
 
-请求时通过 `domainId` 选择，未指定时使用第一个注册的扩展。
+Requests select via `domainId`; unspecified uses the first registered extension.
 
 ---
 
-## 扩展与 RAG Pipeline 的协作
+## Extension and RAG Pipeline Collaboration
 
 ```
-请求 → QueryRewriteAdvisor（查询改写，不感知领域）
-    → HybridSearchAdvisor（混合检索，使用领域 RetrievalConfig）
-    → RerankAdvisor（重排序，使用领域 RetrievalConfig）
-    → 组装 Prompt（领域 System Prompt + 检索上下文）
-    → PromptCustomizer 链（细粒度定制）
+Request → QueryRewriteAdvisor (query rewrite, domain-agnostic)
+    → HybridSearchAdvisor (hybrid retrieval, uses domain RetrievalConfig)
+    → RerankAdvisor (reranking, uses domain RetrievalConfig)
+    → Assemble Prompt (domain System Prompt + retrieval context)
+    → PromptCustomizer chain (fine-grained customization)
     → ChatClient.call/stream()
     → DomainRagExtension.postProcessAnswer()
-    → 响应
+    → Response
 ```
 
-领域扩展影响 3 个环节：
-1. **检索阶段**：`getRetrievalConfig()` 控制检索参数
-2. **Prompt 组装**：`getSystemPromptTemplate()` 提供领域 Prompt
-3. **结果处理**：`postProcessAnswer()` 后处理答案
+Domain extensions affect 3 stages:
+1. **Retrieval stage**: `getRetrievalConfig()` controls retrieval parameters
+2. **Prompt assembly**: `getSystemPromptTemplate()` provides domain Prompt
+3. **Result processing**: `postProcessAnswer()` post-processes the answer
 
 ---
 
-## 最佳实践
+## Best Practices
 
-### Prompt 模板
+### Prompt Templates
 
-- 包含 `{context}` 占位符，RAG 会替换为检索到的文档片段
-- 明确角色定义和回答规则
-- 控制在 20 行以内，复杂逻辑放 `postProcessAnswer()`
+- Include `{context}` placeholder, which RAG replaces with retrieved document fragments
+- Clearly define role and answer rules
+- Keep under 20 lines; complex logic belongs in `postProcessAnswer()`
 
-### 检索配置
+### Retrieval Config
 
-- 医疗/法律等专业领域：提高 `minScore`（0.6+）确保准确性
-- 客服/FAQ 场景：降低 `minScore`（0.3）提高召回率
-- 长文档领域：增加 `maxResults`（15+）提供更完整上下文
+- Medical/legal/professional domains: increase `minScore` (0.6+) for accuracy
+- Customer service/FAQ scenarios: lower `minScore` (0.3) for higher recall
+- Long-document domains: increase `maxResults` (15+) for more complete context
 
-### 答案后处理
+### Answer Post-Processing
 
-- 追加免责声明（医疗、法律领域）
-- 格式化输出（添加 Markdown 结构）
-- 质量校验（检查关键信息是否缺失）
+- Append disclaimers (medical, legal domains)
+- Format output (add Markdown structure)
+- Quality check (verify key information is not missing)
 
 ---
 
-## 更多信息
+## Further Reading
 
-- [架构设计](architecture.md) — RAG Pipeline 和模块结构
-- [配置参考](configuration.md) — 检索参数配置
-- [REST API 参考](rest-api.md) — API 端点文档
+- [Architecture Design](architecture.md) — RAG Pipeline and module structure
+- [Configuration Reference](configuration.md) — Retrieval parameter configuration
+- [REST API Reference](rest-api.md) — API endpoint documentation

@@ -1,69 +1,71 @@
-# 开发者上手指南
+# Getting Started Guide
 
-> 从零开始运行 spring-ai-rag，5 分钟跑通第一个 RAG 问答。
+> 📖 English | 📖 中文
 
----
-
-## 前置条件
-
-| 依赖 | 版本 | 说明 |
-|------|------|------|
-| JDK | 21+ (LTS, 虚拟线程) | 必选 |
-| Maven | 3.9+ | 构建工具 |
-| PostgreSQL | 15+ | 需安装 `vector` 和 `pg_trgm` 扩展 |
-| API Key | LLM + Embedding | DeepSeek/OpenAI + SiliconFlow |
+> Get spring-ai-rag running from scratch — first RAG Q&A in 5 minutes.
 
 ---
 
-## 1. 克隆项目
+## Prerequisites
+
+| Dependency | Version | Notes |
+|------------|---------|-------|
+| JDK | 21+ (LTS, Virtual Threads) | Required |
+| Maven | 3.9+ | Build tool |
+| PostgreSQL | 15+ | Requires `vector` and `pg_trgm` extensions |
+| API Keys | LLM + Embedding | DeepSeek/OpenAI + SiliconFlow |
+
+---
+
+## 1. Clone the Project
 
 ```bash
 git clone https://github.com/your-org/spring-ai-rag.git
 cd spring-ai-rag
 ```
 
-## 2. 数据库准备
+## 2. Prepare the Database
 
 ```sql
 CREATE DATABASE spring_ai_rag;
 
--- 连接到新数据库后执行
+-- After connecting to the new database, execute:
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-Flyway 会自动创建表结构（首次启动时）。
+Flyway automatically creates the schema on first startup.
 
-## 3. 配置环境变量
+## 3. Configure Environment Variables
 
-在项目根目录创建 `.env`：
+Create `.env` in the project root:
 
 ```bash
-# LLM（默认 DeepSeek，OpenAI 兼容）
+# LLM (default: DeepSeek, OpenAI-compatible)
 OPENAI_API_KEY=sk-xxx
 OPENAI_BASE_URL=https://api.deepseek.com/v1
 
-# 嵌入模型（SiliconFlow BGE-M3）
+# Embedding model (SiliconFlow BGE-M3)
 SILICONFLOW_API_KEY=sk-xxx
 
-# 数据库
+# Database
 DB_URL=jdbc:postgresql://localhost:5432/spring_ai_rag
 DB_USERNAME=postgres
 DB_PASSWORD=yourpassword
 ```
 
-## 4. 编译 & 测试
+## 4. Build & Test
 
 ```bash
-# 加载环境变量并编译
+# Load env vars and compile
 export $(cat .env | grep -v '^#' | xargs)
 mvn clean compile
 
-# 运行全部测试（700+ 个）
+# Run all tests (700+)
 mvn test
 ```
 
-## 5. 启动 Demo
+## 5. Start a Demo
 
 ```bash
 cd demos/demo-basic-rag
@@ -71,71 +73,74 @@ export $(cat ../../.env | grep -v '^#' | xargs)
 mvn spring-boot:run
 ```
 
-服务启动在 `http://localhost:8080`。
+Service starts at `http://localhost:8080`.
 
-## 6. 第一次 RAG 问答
+## 6. First RAG Q&A
 
-### 导入文档
+### Import a Document
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Spring AI 介绍",
-    "content": "Spring AI 是 Spring 生态的 AI 应用框架，提供 ChatClient、VectorStore、Advisor 等抽象。",
+    "title": "Introduction to Spring AI",
+    "content": "Spring AI is Spring's AI application framework, providing ChatClient, VectorStore, Advisor, and other abstractions.",
     "source": "manual"
   }'
 ```
 
-### 嵌入向量
+### Embed the Document
 
 ```bash
-# 假设文档 ID 是 1
+# Assuming document ID is 1
 curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
 ```
 
-### RAG 问答
+### RAG Q&A
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 Spring AI？"}'
+  -d '{"message": "What is Spring AI?"}'
 ```
 
-### 流式问答
+### Streaming Q&A
 
 ```bash
 curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "解释 RAG 的工作原理"}'
+  -d '{"message": "Explain how RAG works"}'
 ```
 
 ---
 
-## 项目结构
+## Project Structure
 
 ```
 spring-ai-rag/
-├── spring-ai-rag-api/              # 接口定义、DTO
-├── spring-ai-rag-core/             # 核心实现
+├── spring-ai-rag-api/              # Interfaces, DTOs
+├── spring-ai-rag-core/             # Core implementation
 │   ├── advisor/                    # RAG Pipeline Advisors
-│   ├── controller/                 # REST 端点
-│   ├── config/                     # 配置类
-│   ├── retrieval/                  # 混合检索、查询改写
-│   ├── service/                    # 业务服务
-│   └── entity/                     # JPA 实体
-├── spring-ai-rag-starter/          # Spring Boot 自动配置
-├── spring-ai-rag-documents/        # 文档处理
-│   └── chunk/                      # 分块策略
+│   ├── controller/                 # REST endpoints
+│   ├── config/                     # Configuration classes
+│   ├── retrieval/                  # Hybrid retrieval, query rewriting
+│   ├── service/                    # Business services
+│   └── entity/                     # JPA entities
+├── spring-ai-rag-starter/          # Spring Boot auto-configuration
+├── spring-ai-rag-documents/        # Document processing
+│   └── chunk/                      # Chunking strategies
 └── demos/
-    └── demo-basic-rag/             # 示例项目
+    ├── demo-basic-rag/             # Basic RAG demo
+    ├── demo-multi-model/           # Multi-model demo
+    ├── demo-component-level/       # Component-level demo
+    └── demo-domain-extension/      # Domain extension demo
 ```
 
 ---
 
-## 切换 LLM 提供者
+## Switching LLM Providers
 
-### 使用 Anthropic
+### Using Anthropic
 
 ```yaml
 app:
@@ -148,7 +153,7 @@ spring:
       api-key: ${ANTHROPIC_API_KEY}
 ```
 
-### 使用智谱
+### Using Zhipu
 
 ```yaml
 app:
@@ -162,62 +167,62 @@ spring:
       base-url: https://open.bigmodel.cn/paas/v4
 ```
 
-更多配置选项见 [配置参考](configuration.md)。
+More configuration options in [Configuration Reference](configuration.md).
 
 ---
 
-## 开发模式
+## Development Mode
 
-### 热重载
+### Hot Reload
 
 ```bash
-# 使用 spring-boot:run 的 devtools 支持
+# spring-boot:run with devtools support
 cd demos/demo-basic-rag
 mvn spring-boot:run -Dspring-boot.run.jvmArguments="-Dspring.devtools.restart.enabled=true"
 ```
 
-### 单元测试
+### Unit Tests
 
 ```bash
-# 只跑核心模块测试
+# Run core module tests only
 mvn test -pl spring-ai-rag-core
 
-# 跑特定测试类
+# Run specific test class
 mvn test -pl spring-ai-rag-core -Dtest=RagChatControllerTest
 ```
 
-### JaCoCo 覆盖率
+### JaCoCo Coverage
 
 ```bash
 mvn test jacoco:report
-# 报告在各模块的 target/site/jacoco/index.html
+# Reports in each module's target/site/jacoco/index.html
 ```
 
 ---
 
-## 常见问题
+## FAQ
 
-**Q: Flyway 迁移失败？**
+**Q: Flyway migration fails?**
 
-确保 PostgreSQL 已安装 `vector` 扩展。连接到数据库执行：
+Ensure PostgreSQL has the `vector` extension installed. Execute in the database:
 
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-**Q: 嵌入请求超时？**
+**Q: Embedding request timeout?**
 
-SiliconFlow 免费 API 有限流。检查 `rag.embedding.batch-size`（默认 10）和 `rag.embedding.timeout-ms`。
+SiliconFlow free API has rate limits. Check `rag.embedding.batch-size` (default 10) and `rag.embedding.timeout-ms`.
 
-**Q: 如何自定义分块策略？**
+**Q: How to customize chunking strategy?**
 
-实现 `TextChunker` 接口或使用 `HierarchicalTextChunker`，配置 `rag.chunking.*` 参数。详见 [架构设计](architecture.md#文档处理)。
+Implement `TextChunker` interface or configure `HierarchicalTextChunker` with `rag.chunking.*` parameters. See [Architecture](architecture.md#document-processing) for details.
 
 ---
 
-## 下一步
+## Next Steps
 
-- [架构设计](architecture.md) — 理解 RAG Pipeline 和扩展机制
-- [配置参考](configuration.md) — 全部配置项详解
-- [领域扩展指南](extension-guide.md) — 接入你的业务领域
-- [REST API 参考](rest-api.md) — 完整端点文档
+- [Architecture Design](architecture.md) — Understand the RAG Pipeline and extension mechanism
+- [Configuration Reference](configuration.md) — All configuration items explained
+- [Domain Extension Guide](extension-guide.md) — Plug in your business domain
+- [REST API Reference](rest-api.md) — Complete endpoint documentation
