@@ -212,17 +212,31 @@ public class RagChatService {
         spec.advisors(buildAdvisorParams(sessionId, domainId, metadata));
 
         long startTime = System.currentTimeMillis();
-        String answer;
-        List<ChatResponse.SourceDocument> sources = null;
-        List<StepMetricRecord> pipelineMetrics = null;
+        LlmCallResult callResult = invokeChatClient(spec, startTime);
+
+        if (metricsService != null) {
+            metricsService.recordSuccess(callResult.elapsedMs, 0);
+        }
+        historyRepository.save(sessionId, userMessage, callResult.answer, null, metadata);
+
+        ChatResponse response = new ChatResponse(callResult.answer);
+        response.setSources(callResult.sources);
+        response.setMetadata(Map.of("sessionId", sessionId));
+        response.setStepMetrics(callResult.pipelineMetrics);
+        return response;
+    }
+
+    /** LLM 调用 + 响应提取，异常时记录熔断器/指标后上抛 */
+    private LlmCallResult invokeChatClient(ChatClient.ChatClientRequestSpec spec, long startTime) {
         try {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
-            answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
-            sources = extractSources(chatClientResponse);
-            pipelineMetrics = extractPipelineMetrics(chatClientResponse);
+            String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
+            List<ChatResponse.SourceDocument> sources = extractSources(chatClientResponse);
+            List<StepMetricRecord> pipelineMetrics = extractPipelineMetrics(chatClientResponse);
             if (circuitBreaker != null) {
                 circuitBreaker.recordSuccess();
             }
+            return new LlmCallResult(answer, sources, pipelineMetrics, System.currentTimeMillis() - startTime);
         } catch (Exception e) { // Resilience: record metrics + circuit breaker before rethrow
             long elapsed = System.currentTimeMillis() - startTime;
             if (metricsService != null) {
@@ -233,19 +247,11 @@ public class RagChatService {
             }
             throw e;
         }
-        long elapsed = System.currentTimeMillis() - startTime;
-        if (metricsService != null) {
-            metricsService.recordSuccess(elapsed, 0);
-        }
-
-        historyRepository.save(sessionId, userMessage, answer, null, metadata);
-
-        ChatResponse response = new ChatResponse(answer);
-        response.setSources(sources);
-        response.setMetadata(Map.of("sessionId", sessionId));
-        response.setStepMetrics(pipelineMetrics);
-        return response;
     }
+
+    /** LLM 调用结果 record */
+    private record LlmCallResult(String answer, List<ChatResponse.SourceDocument> sources,
+            List<StepMetricRecord> pipelineMetrics, long elapsedMs) {}
 
     /** 构建领域扩展的系统提示词，无扩展返回 null */
     private String buildSystemPrompt(String domainId, Map<String, Object> metadata) {
