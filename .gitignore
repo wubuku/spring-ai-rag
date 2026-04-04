@@ -50,3 +50,8 @@ Thumbs.db
 .env.local
 application-local.yml
 **/application-local.yml
+
+# E2E 测试临时文件
+.mvn/
+e2e-start.sh
+e2e-test.properties
