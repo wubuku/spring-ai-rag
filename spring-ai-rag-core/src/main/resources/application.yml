@@ -3,6 +3,8 @@
 # ============================================
 
 spring:
+  # 加载项目根目录的 .env 文件（Spring Boot 3.x）
+  config.import: optional:file:./.env
   application:
     name: spring-ai-rag
 
