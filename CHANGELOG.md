@@ -1,5 +1,9 @@
 # Changelog
 
+📖 [English](CHANGELOG.md) · 📖 [中文](CHANGELOG-zh-CN.md)
+
+---
+
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
@@ -7,133 +11,131 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.0.0-SNAPSHOT] - 2026-04-05
 
 ### Added
-- `ChatHistoryCleanupService`：`messageTtlDays` 配置（默认30天）+ 每日凌晨3点自动清理过期聊天历史记录（cron 可配置）
-- `ChatHistoryCleanupServiceTest`：6 个测试覆盖 TTL 禁用/异常/正常路径/null cutoff
-- `rag.memory.message-ttl-days` / `rag.memory.cleanup-cron` 配置项（`docs/configuration.md` 同步更新）
+- `ChatHistoryCleanupService`: `messageTtlDays` config (default 30 days) + daily 3 AM auto-cleanup of expired chat history (cron-configurable)
+- `ChatHistoryCleanupServiceTest`: 6 tests covering TTL disabled / exception / normal path / null cutoff
+- `rag.memory.message-ttl-days` / `rag.memory.cleanup-cron` config items (docs/configuration.md synced)
 
 ## [1.0.0-SNAPSHOT] - 2026-04-04 (Afternoon)
 
 ### Added
-- `CircuitBreakerHealthIndicator`：`/actuator/health/llmCircuitBreaker` 端点，CLOSED/HALF_OPEN=UP，OPEN=DOWN，NOT_CONFIGURED=UNKNOWN
-- `POST /models/compare` 模型对比端点 + `ModelMetricsService` + `rest-api.md` 文档补充
+- `CircuitBreakerHealthIndicator`: `/actuator/health/llmCircuitBreaker` endpoint — CLOSED/HALF_OPEN=UP, OPEN=DOWN, NOT_CONFIGURED=UNKNOWN
+- `POST /models/compare` model comparison endpoint + `ModelMetricsService` + rest-api.md supplement
 
 #### Multi-Model
-- demo-multi-model：`MultiModelController` + `MiniMaxAdapter` + `OpenAiCompatibleAdapter`（支持 system 消息/不支持自动转换）
-- `ApiCompatibilityAdapter` 接口：`supportsSystemMessage()` + `normalizeMessages()` 默认方法
-- `ChatModelRouter.getModelForRequest()`：请求级动态模型选择 + FallbackChain
+- demo-multi-model: `MultiModelController` + `MiniMaxAdapter` + `OpenAiCompatibleAdapter` (system message support configurable)
+- `ApiCompatibilityAdapter` interface: `supportsSystemMessage()` + `normalizeMessages()` default methods
+- `ChatModelRouter.getModelForRequest()`: request-level dynamic model selection + FallbackChain
 
 ### Fixed
-- `RetrievalConfig`：`vectorWeight`/`fulltextWeight` 添加 `@DecimalMin(0.0)` / `@DecimalMax(1.0)` 验证
-- `RagSearchController` GET `/search`：权重越界 [0.0, 1.0] 返回 400 + error+received
-- 删除遗留 `TestController.java` + revert application.yml 硬编码 API key（安全修复）
+- `RetrievalConfig`: `vectorWeight`/`fulltextWeight` added `@DecimalMin(0.0)` / `@DecimalMax(1.0)` validation
+- `RagSearchController` GET `/search`: out-of-range weights [0.0, 1.0] return 400 + error+received
+- Removed leftover `TestController.java` + reverted hardcoded API keys in application.yml (security fix)
 
 ## [1.0.0-SNAPSHOT] - 2026-04-04
 
 ### Added
 
 #### Testing
-- `DomainExtensionPipelineIntegrationTest`：22 个测试覆盖领域扩展 Pipeline 全流程（Registry 查找/跳过/默认行为、医疗领域症状识别/高召回配置、法律领域多扩展共存）
-- `RagSearchControllerBenchmarkTest`：100 并发搜索请求验证 + 50 并发 <1s 吞吐量基准测试
+- `DomainExtensionPipelineIntegrationTest`: 22 tests covering domain extension pipeline full flow (Registry lookup/skip/default, medical domain symptom recognition/high-recall config, legal domain multi-extension coexistence)
+- `RagSearchControllerBenchmarkTest`: 100 concurrent search requests + 50 concurrent <1s throughput benchmark
 
 #### E2E & Demo
-- E2E 脚本扩展：Collection CRUD 测试（创建/列表/详情/更新/删除/文档关联）+ Cache stats + Metrics overview，共 14 项端到端验证
-- demo-domain-extension `MedicalRagControllerTest` 修复 Java 24 严格类型推断导致的 Mockito 重载解析问题
+- E2E script expanded: Collection CRUD tests (create/list/detail/update/delete/document association) + Cache stats + Metrics overview, 14 end-to-end items total
+- demo-domain-extension `MedicalRagControllerTest` fixed Java 24 strict type inference causing Mockito overload resolution failure
 
 #### Resilience
-- LLM 熔断器基础设施（`LlmCircuitBreaker` 三状态自动机：CLOSED→OPEN→HALF_OPEN）+ `LlmCircuitOpenException`（503）
-- `RagChatService` 集成熔断器：失败率阈值触发熔断、冷却后半开探测、成功率恢复
+- LLM circuit breaker infrastructure (`LlmCircuitBreaker` three-state automaton: CLOSED→OPEN→HALF_OPEN) + `LlmCircuitOpenException` (503)
+- `RagChatService` integrates circuit breaker: failure rate triggers open, cool-down probes half-open, success rate recovers
 
 ### Fixed
-
-- `DocumentEmbedService.embedDocumentWithProgress` NPE：`maybeEmit()` null-safe 回调工具方法 + 缓存命中时 `chunks==null` 修复
-- MiniMax API 不兼容 `role:system`：`ApiCompatibilityAdapter.supportsSystemMessage()` + `normalizeMessages()` 自动将 system 消息转为 user 消息
+- `DocumentEmbedService.embedDocumentWithProgress` NPE: `maybeEmit()` null-safe callback utility + chunks==null fix on cache hit
+- MiniMax API incompatible with `role:system`: `ApiCompatibilityAdapter.supportsSystemMessage()` + `normalizeMessages()` auto-convert system → user messages
 
 ### Changed
-
-- 主动巡检轮次（4/4 深夜）：catch 注释规范化（Health probe/Resilience/best-effort 三类）
-- 领域扩展 Registry 命名一致性与 Registry 测试路径修复
+- Proactive inspection (Round 4 late night): catch comment standardization (Health probe / Resilience / best-effort three categories)
+- Domain extension Registry naming consistency and test path fixes
 
 ## [1.0.0-SNAPSHOT] - 2026-04-03
 
 ### Added
 
 #### Core RAG
-- 混合检索（pgvector 向量 + PostgreSQL 全文检索融合）
-- 全文检索策略可配置化（auto/pg_jieba/pg_trgm/none，支持 pg_jieba 中文分词）
-- 查询改写（规则模式 + LLM 辅助模式）
-- 重排序服务（Cross-Encoder 模式）
-- Advisor 链式 Pipeline（QueryRewrite → HybridSearch → Rerank → ChatMemory）
-- 内容哈希嵌入缓存（避免重复嵌入未变更文档，Caffeine L1 缓存）
-- 文档版本历史（content_hash 变更自动记录）
+- Hybrid search (pgvector vector + PostgreSQL fulltext retrieval fusion)
+- Configurable fulltext strategy (auto/pg_jieba/pg_trgm/none, supports Chinese tokenization via pg_jieba)
+- Query rewriting (rule mode + LLM-assisted mode)
+- Reranking service (Cross-Encoder mode)
+- Advisor chain pipeline (QueryRewrite → HybridSearch → Rerank → ChatMemory)
+- Content-hash embedding cache (avoids re-embedding unchanged documents, Caffeine L1 cache)
+- Document version history (content_hash changes auto-recorded)
 
-#### 模型支持
-- OpenAI 兼容模型（DeepSeek、智谱等）
-- Anthropic 模型
-- 三 Bean 模式自动切换（`app.llm.provider` 配置）
-- 多模型并行对比服务
-- 硅基流动 BGE-M3 嵌入模型（1024 维）
+#### Model Support
+- OpenAI-compatible models (DeepSeek, Zhipu, etc.)
+- Anthropic models
+- Three-Bean mode auto-switching (`app.llm.provider` config)
+- Multi-model parallel comparison service
+- SiliconFlow BGE-M3 embedding model (1024 dimensions)
 
-#### 领域扩展
-- `DomainRagExtension` 接口（领域 Prompt + 检索配置 + 答案后处理）
-- `PromptCustomizer` 链式定制
-- `DomainExtensionRegistry` 自动注册
+#### Domain Extension
+- `DomainRagExtension` interface (domain prompts + retrieval config + answer post-processing)
+- `PromptCustomizer` chain customization
+- `DomainExtensionRegistry` auto-registration
 
 #### REST API
-- RAG 问答（非流式 + SSE 流式）
-- 文档管理（CRUD + 嵌入 + 批量操作）
-- 知识库集合管理（含导出/导入）
-- 检索评估 + 用户反馈
-- A/B 实验框架
-- 监控告警 + SLO
-- 健康检查
-- 缓存统计端点（GET /api/v1/rag/cache/stats）
-- API Key 认证过滤器
-- API 限流（滑动窗口 + per-user 分级限额，429 + Retry-After）
-- API 版本管理（@ApiVersion 注解，支持 /api/v1/ + /api/v2/ 共存）
-- RFC 7807 Problem Detail 错误响应格式
-- 请求验证增强（@Valid + ConstraintViolationException 统一处理）
+- RAG Q&A (non-streaming + SSE streaming)
+- Document management (CRUD + embed + batch operations)
+- Knowledge base collection management (export/import)
+- Retrieval evaluation + user feedback
+- A/B experiment framework
+- Monitoring alerts + SLO
+- Health checks
+- Cache statistics endpoint (GET /api/v1/rag/cache/stats)
+- API Key authentication filter
+- API rate limiting (sliding window + per-user tiered limits, 429 + Retry-After)
+- API versioning (@ApiVersion annotation, supports /api/v1/ + /api/v2/ coexistence)
+- RFC 7807 Problem Detail error response format
+- Enhanced request validation (@Valid + ConstraintViolationException unified handling)
 
-#### 可观测性
-- Micrometer 指标（检索延迟、Token 用量、命中率）
-- Actuator 健康检查
-- 检索日志 + 性能基准测试
-- 请求追踪（RequestTraceFilter + MDC traceId + logback 格式化）
-- 分布式追踪增强（可配置采样率 + W3C traceparent 格式 + spanId 嵌套追踪）
-- 异常处理统一（窄化具体异常类型）
+#### Observability
+- Micrometer metrics (retrieval latency, token usage, hit rate)
+- Actuator health checks
+- Retrieval logging + performance benchmarks
+- Request tracing (RequestTraceFilter + MDC traceId + logback formatting)
+- Distributed tracing enhancement (configurable sampling rate + W3C traceparent format + spanId nested tracing)
+- Unified exception handling (narrowed to specific exception types)
 
-#### 基础设施
-- Flyway 数据库迁移（V1-V10，含 pg_trgm/pg_jieba 索引）
-- HikariCP 连接池优化
-- 异步处理配置
-- 响应缓存（Caffeine L1，可配置 TTL/LRU）
-- CORS 安全配置
-- 国际化框架（MessageSource + 中/英双语错误消息）
-- Docker 支持（多阶段构建 + docker-compose）
-- GitHub Actions CI（PostgreSQL 服务 + JaCoCo 覆盖率上报）
+#### Infrastructure
+- Flyway database migrations (V1–V10, includes pg_trgm/pg_jieba indexes)
+- HikariCP connection pool optimization
+- Async processing configuration
+- Response caching (Caffeine L1, configurable TTL/LRU)
+- CORS security configuration
+- i18n framework (MessageSource + Chinese/English bilingual error messages)
+- Docker support (multi-stage build + docker-compose)
+- GitHub Actions CI (PostgreSQL service + JaCoCo coverage reporting)
 
-#### 文档
-- README.md（项目门面）
-- CONTRIBUTING.md（贡献指南）
-- docs/architecture.md（架构设计详解）
-- docs/configuration.md（完整配置参考，含限流/CORS/缓存/追踪配置）
-- docs/testing-guide.md（测试指南）
-- docs/getting-started.md（开发者上手）
-- docs/rest-api.md（REST API 参考，含 RFC 7807 + 缓存统计端点）
-- docs/extension-guide.md（领域扩展指南）
-- docs/troubleshooting.md（故障排查）
-- docs/postgresql-extensions.md（PostgreSQL 扩展依赖分析）
+#### Documentation
+- README.md (project front page)
+- CONTRIBUTING.md (contribution guide)
+- docs/architecture.md (architecture design details)
+- docs/configuration.md (complete configuration reference, includes rate-limit/CORS/cache/tracing config)
+- docs/testing-guide.md (testing guide)
+- docs/getting-started.md (developer getting started)
+- docs/rest-api.md (REST API reference, includes RFC 7807 + cache stats endpoint)
+- docs/extension-guide.md (domain extension guide)
+- docs/troubleshooting.md (troubleshooting)
+- docs/postgresql-extensions.md (PostgreSQL extension dependency analysis)
 
-#### 测试
-- 890 个单元/集成测试
-- JaCoCo 覆盖率集成（>90% 指令覆盖）
-- E2E 测试脚本
-- 性能基准测试（单次检索 <500ms）
-- SSE 流式 E2E 测试 + 对话记忆多轮验证
+#### Testing
+- 890 unit/integration tests
+- JaCoCo coverage integration (>90% instruction coverage)
+- E2E test script
+- Performance benchmark (single retrieval <500ms)
+- SSE streaming E2E tests + multi-turn conversation memory verification
 
 ### Technical Stack
 
-| 组件 | 版本 |
-|------|------|
+| Component | Version |
+|-----------|---------|
 | Java | 17+ |
 | Spring Boot | 3.4.x |
 | Spring AI | 1.1.2 |
@@ -145,22 +147,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [1.1.0-SNAPSHOT] - 2026-04-03 Evening
 
 ### Added
-- SSE 流式嵌入进度端点 `POST /documents/{id}/embed/stream`（实时推送 PREPARING→CHUNKING→EMBEDDING→STORING→COMPLETED）
-- RAG 指标 REST 端点 `GET /api/v1/rag/metrics`（totalRequests/successRate/tokens 等关键指标）
-- Demo E2E Shell 脚本 `scripts/demo-e2e.sh`（启动+健康等待+10项验证+彩色输出）
-- MiniMax API 兼容性修复：role:system 自动转为 user 消息（防止脏数据报错）
+- SSE streaming embed progress endpoint `POST /documents/{id}/embed/stream` (real-time push: PREPARING→CHUNKING→EMBEDDING→STORING→COMPLETED)
+- RAG metrics REST endpoint `GET /api/v1/rag/metrics` (totalRequests/successRate/tokens key metrics)
+- Demo E2E shell script `scripts/demo-e2e.sh` (startup + health wait + 10-item verification + color output)
+- MiniMax API compatibility fix: role:system auto-converted to user message (prevents dirty data errors)
 
 ### Fixed
-- SpringAiConfig 缺少 @EnableConfigurationProperties 导致 RagProperties 无法注入
-- demo-component-level @ComponentHealthService 缺少 @Service 注解
-- pom.xml GraalVM profile 注释中的 `--` 导致 XML 解析错误
-- .env 变量缺少 export 前缀导致 Maven subprocess 无法继承环境变量
+- SpringAiConfig missing @EnableConfigurationProperties causing RagProperties injection failure
+- demo-component-level @ComponentHealthService missing @Service annotation
+- pom.xml GraalVM profile comment `--` causing XML parsing error
+- .env variables missing export prefix causing Maven subprocess to not inherit environment variables
 
 ## [1.1.0-SNAPSHOT] - 2026-04-04 Early Morning
 
 ### Added
-- `LlmCircuitBreaker` + `LlmCircuitOpenException`（LLM 熔断器基础设施）
-- `RagSearchControllerBenchmarkTest`（100 并发/50 并发吞吐量验证）
-- E2E 脚本扩展至 14 项（Collection CRUD + cache/stats + metrics/overview）
-- `DomainExtensionPipelineIntegrationTest`（22 个测试，DomainExtensionRegistry + 医疗/法律领域扩展管道验证）
-- API 版本共存（@ApiVersion 注解支持 /api/v1/ + /api/v2/ 同时存在）
+- `LlmCircuitBreaker` + `LlmCircuitOpenException` (LLM circuit breaker infrastructure)
+- `RagSearchControllerBenchmarkTest` (100 concurrent / 50 concurrent throughput verification)
+- E2E script expanded to 14 items (Collection CRUD + cache/stats + metrics/overview)
+- `DomainExtensionPipelineIntegrationTest` (22 tests, DomainExtensionRegistry + medical/legal domain extension pipeline verification)
+- API version coexistence (@ApiVersion annotation supports /api/v1/ + /api/v2/ simultaneous existence)
