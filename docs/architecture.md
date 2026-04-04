@@ -338,8 +338,8 @@ rag:
 
 | 组件 | 技术 | 版本 |
 |------|------|------|
-| 运行时 | Java | 17+ |
-| 框架 | Spring Boot | 3.4.x |
+| 运行时 | Java | 21+ (LTS, 虚拟线程) |
+| 框架 | Spring Boot | 3.5.x |
 | AI 框架 | Spring AI | 1.1.x |
 | 主数据库 | PostgreSQL + pgvector | 42.7.x / 0.7.x |
 | ORM | Spring Data JPA | 3.3.x |

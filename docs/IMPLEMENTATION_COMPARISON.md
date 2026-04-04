@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-04 17:21 — Phase 7（多模型支持）文档补充；156 源文件 + 107 测试文件 + 全测试通过；零 TODO/FIXME；项目处于生产级成熟状态
+> **最后更新**: 2026-04-04 18:10 — 升级依赖版本：Spring Boot 3.5.3 + Java 21 + Maven 3.9.14 + Spring AI 1.1.4；启用虚拟线程；E2E 46/46 通过；零 TODO/FIXME
 
 ---
 

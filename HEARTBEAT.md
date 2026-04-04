@@ -534,3 +534,14 @@
 - 2026-04-04 17:23 — 主动巡检：mvn clean compile ✅（5 模块，8.0s）/ mvn test ✅（1081 测试全通过，零失败零错误）；156 源文件 + 107 测试文件；零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；IMPEMENTATION_COMPARISON.md 新增 Phase 7 多模型支持文档（9 项：MiniMax/ModelRegistry/ChatModelRouter/指标/CircuitBreaker/兼容适配）；git 已推送
 
 - 2026-04-04 17:50 — Swagger @ApiResponses 注解补全：AbTestController 11 端点 + AlertController 9 端点 + EvaluationController 11 端点 + ModelController 3 端点（listModels/getModel/compareModels）；12 个 Controller @ApiResponse 覆盖率 100%；1081 测试全通过，commit ee9c749
+
+- 2026-04-04 18:10 — 依赖版本升级 + E2E 全量回归测试通过：
+  - 升级：Spring Boot 3.5.3 / Java 21 (LTS) / Maven 3.9.14 / Spring AI 1.1.4
+  - 启用虚拟线程：`spring.threads.virtual.enabled=true`
+  - 安装 Homebrew openjdk@21 (Java 21.0.10 arm64)
+  - 安装 Homebrew maven (3.9.14)
+  - E2E 脚本：46/46 全部通过（Health/Collection CRUD/文档/嵌入/检索/Chat/流式/历史/缓存/指标）
+  - 1039 单元测试全通过
+  - 回滚 models.json 外部化配置（保持纯 application.yml + @Value）
+  - 文档同步：AGENTS.md/architecture.md/MEMORY.md 版本信息更新
+  - commit ce5053b（未 push，等待捷锋批准）
