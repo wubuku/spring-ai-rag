@@ -3,15 +3,16 @@ package com.springairag.core.controller;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.service.ModelComparisonService;
+import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -40,10 +41,6 @@ class ModelControllerTest {
         when(modelRouter.isMultiModelEnabled()).thenReturn(true);
         when(modelRouter.getAvailableProviders()).thenReturn(List.of("openai", "minimax"));
         when(modelRouter.getFallbackChain()).thenReturn(List.of("openai", "minimax"));
-        when(modelRegistry.getAllModelsInfo()).thenReturn(List.of(
-                Map.of("provider", "openai", "available", true, "displayName", "OpenAI"),
-                Map.of("provider", "minimax", "available", true, "displayName", "MiniMax")
-        ));
         when(modelRegistry.getAllModelsInfo()).thenReturn(List.of(
                 Map.of("provider", "openai", "available", true, "displayName", "OpenAI (DeepSeek/兼容)"),
                 Map.of("provider", "minimax", "available", true, "displayName", "MiniMax")
@@ -75,5 +72,40 @@ class ModelControllerTest {
 
         mockMvc.perform(get("/api/v1/rag/models/unknown"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testCompareModels_success() throws Exception {
+        when(modelComparisonService.compareProviders(anyString(), anyList(), anyInt()))
+                .thenReturn(List.of(
+                        new ModelComparisonResult("openai", true, "OpenAI response", 100, 50, 30, 80, null),
+                        new ModelComparisonResult("minimax", true, "MiniMax response", 80, 50, 25, 75, null)
+                ));
+
+        String body = """
+                {"query": "hello", "providers": ["openai", "minimax"], "timeoutSeconds": 30}
+                """;
+
+        mockMvc.perform(post("/api/v1/rag/models/compare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.query").value("hello"))
+                .andExpect(jsonPath("$.providers[0]").value("openai"))
+                .andExpect(jsonPath("$.results").isArray())
+                .andExpect(jsonPath("$.results[0].modelName").value("openai"))
+                .andExpect(jsonPath("$.results[0].success").value(true));
+    }
+
+    @Test
+    void testCompareModels_emptyProviders() throws Exception {
+        String body = """
+                {"query": "hello", "providers": []}
+                """;
+
+        mockMvc.perform(post("/api/v1/rag/models/compare")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
     }
 }
