@@ -640,3 +640,19 @@
   - ModelControllerTest 补 @Import(ApiVersionConfig.class) + URL 保持 /api/v1/rag/models
   - mvn clean compile ✅ / mvn test ✅（1093 测试全通过，零失败零错误）
   - 零 TODO/FIXME；commit 4924c5a 已推送
+
+- 2026-04-04 22:00-23:30 — 主动巡检 + 持续改进：
+  - ModelController: @RequestMapping(\"/api/v1/rag/models\") → @ApiVersion + /rag/models 风格统一
+  - AbTestController: 添加 @Valid 验证 CreateExperimentRequest / UpdateExperimentRequest
+  - 添加自定义 startup banner (banner.txt)
+  - CacheMetricsController: /cache → /rag/cache（与 rest-api.md 一致）
+  - RagMetricsController: @RequestMapping(\"/api/v1/rag\") → @ApiVersion + /rag 风格统一
+  - 5 commits 已推送 (c4f06c7 等)
+  - mvn clean compile ✅ / mvn test ✅
+
+**Cron 后续任务**：
+  - API response DTO 一致性检查（ErrorResponse vs Map）
+  - 日志审计完善（创建/更新/删除操作审计日志）
+  - 安全检查（敏感信息脱敏验证）
+  - Spring Boot 3.5 新特性检查（如有）
+  - 数据库连接池调优（HikariCP 配置审查）
