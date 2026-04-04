@@ -656,3 +656,17 @@
   - 安全检查（敏感信息脱敏验证）
   - Spring Boot 3.5 新特性检查（如有）
   - 数据库连接池调优（HikariCP 配置审查）
+
+- 2026-04-05 00:00 — ✅ API response DTO 一致性改造：
+  - 新增 7 个 DTO（spring-ai-rag-api）：ModelListResponse / ModelDetailResponse / ModelCompareResponse / ModelMetricsResponse / CacheStatsResponse / HealthResponse / ComponentHealthResponse
+  - 更新 4 个 Controller：ModelController / RagMetricsController / CacheMetricsController / RagHealthController（Map → 强类型 DTO）
+  - ErrorResponse 新增 of(String detail) 工厂方法
+  - 测试同步更新：RagHealthControllerTest / RagMetricsControllerTest / RagControllerIntegrationTest
+  - mvn clean compile ✅ / mvn test ✅（42 测试全通过，零失败零错误）
+  - commit 9cb104c 已推送
+
+**Cron 后续任务**：
+  - 日志审计完善（创建/更新/删除操作审计日志）
+  - 安全检查（敏感信息脱敏验证）
+  - Spring Boot 3.5 新特性检查（如有）
+  - 数据库连接池调优（HikariCP 配置审查）
