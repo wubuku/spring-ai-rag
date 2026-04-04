@@ -604,8 +604,18 @@
   1. Demo E2E 脚本：demo-basic-rag 无法启动（SIGKILL），可能需要 investigation
   2. 虚拟线程性能压测（验证高并发性能）
   3. Spring AI 1.1.4 新特性检查（新增 API 可用）
-  4. 实现 ChatMemoryAdvisor 的内存上限保护（防止对话记忆无限增长）
-  5. 支持 ChatMemory 的 TTL 过期策略
+  4. 实现 ChatMemoryAdvisor 的内存上限保护（防止对话记忆无限增长） ✅ 2026-04-04
+  5. 支持 ChatMemory 的 TTL 过期策略 ✅ 2026-04-04
+
+- 2026-04-04 21:55 — Chat History TTL 过期清理服务实现：
+  - RagMemoryProperties 新增 messageTtlDays 配置项（默认30天，0=不过期）
+  - ChatHistoryCleanupService @Scheduled 每日凌晨3点执行 TTL 清理（cron 可配置）
+  - AsyncConfig 添加 @EnableScheduling 启用定时任务
+  - RagChatHistoryJpaRepository 新增 deleteOlderThan(cutoff) @Query
+  - RagChatHistoryRepository 新增 deleteOlderThan(cutoff) 委托方法
+  - ChatHistoryCleanupServiceTest 6 个测试（TTL禁用/异常/正常路径/null cutoff）
+  - mvn clean compile ✅ / mvn test ✅（1047 测试全通过，零失败零错误）
+  - 零 TODO/FIXME；commit 77b8595 已推送
 
 - 2026-04-04 20:55 — JaCoCo 覆盖率补强：RagMetricsController getModelMetrics() 新增 3 个测试（multiModelEnabled 多提供商/空提供商/单提供商），指令覆盖率 31%→100%，方法覆盖率 2/4→4/4；mvn test ✅（1044 测试全通过）；零 TODO/FIXME；commit ff62e7b 已推送
 
