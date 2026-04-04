@@ -627,3 +627,10 @@
   - Demo 启动 SIGKILL 问题：Mac Java 21 系统级限制，core 服务同受影响
   - 5 个 commits 待 push
   - mvn clean compile ✅ / mvn test ✅
+
+- 2026-04-04 22:50 — Demo 模块独立 E2E 脚本：
+  - 新增 4 个独立 E2E 脚本：demo-basic-rag-e2e.sh (8082) / demo-multi-model-e2e.sh (8083) / demo-component-level-e2e.sh (8084) / demo-domain-extension-e2e.sh (8085)
+  - 每个脚本独立启动对应 Demo 模块、自动加载 .env、彩色输出、异常退出码
+  - mvn clean compile ✅ / mvn test ✅（1092 测试全通过，零失败零错误）
+  - 零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；项目处于生产级成熟状态
+  - git 已推送（commit 5eae427）
