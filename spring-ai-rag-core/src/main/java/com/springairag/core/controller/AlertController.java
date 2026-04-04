@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -32,6 +34,7 @@ public class AlertController {
      * 获取活跃告警
      */
     @Operation(summary = "获取活跃告警", description = "查询所有未解决的告警记录，按触发时间倒序。")
+    @ApiResponse(responseCode = "200", description = "返回活跃告警列表")
     @GetMapping("/active")
     public ResponseEntity<List<AlertService.AlertRecord>> getActiveAlerts() {
         return ResponseEntity.ok(alertService.getActiveAlerts());
@@ -41,6 +44,10 @@ public class AlertController {
      * 获取告警历史
      */
     @Operation(summary = "获取告警历史", description = "按时间范围查询告警记录，支持按严重程度和类型过滤。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回告警历史列表"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/history")
     public ResponseEntity<List<AlertService.AlertRecord>> getAlertHistory(
             @RequestParam String startDate,
@@ -55,6 +62,10 @@ public class AlertController {
      * 获取告警统计
      */
     @Operation(summary = "获取告警统计", description = "统计指定时间范围内的告警总数、各严重程度数量和告警频率。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回告警统计"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/stats")
     public ResponseEntity<AlertService.AlertStats> getAlertStats(
             @RequestParam String startDate,
@@ -67,6 +78,10 @@ public class AlertController {
      * 解决告警
      */
     @Operation(summary = "解决告警", description = "将告警标记为已解决。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "告警已解决"),
+        @ApiResponse(responseCode = "404", description = "告警不存在")
+    })
     @PostMapping("/{alertId}/resolve")
     public ResponseEntity<Map<String, String>> resolveAlert(
             @PathVariable Long alertId,
@@ -79,6 +94,10 @@ public class AlertController {
      * 静默告警
      */
     @Operation(summary = "静默告警", description = "临时屏蔽指定告警，指定时间内不再触发同类型告警。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "告警已静默"),
+        @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
     @PostMapping("/silence")
     public ResponseEntity<Map<String, String>> silenceAlert(@RequestBody Map<String, Object> body) {
         String alertKey = (String) body.get("alertKey");
@@ -94,6 +113,10 @@ public class AlertController {
      * 手动触发告警
      */
     @Operation(summary = "手动触发告警", description = "手动创建一条告警记录（用于外部系统集成）。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "告警已触发"),
+        @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
     @PostMapping("/fire")
     public ResponseEntity<Map<String, Object>> fireAlert(@RequestBody Map<String, Object> body) {
         String alertType = (String) body.get("alertType");
@@ -111,6 +134,10 @@ public class AlertController {
      * 检查所有 SLO 状态
      */
     @Operation(summary = "检查所有 SLO", description = "检查所有 SLO（可用性、延迟、质量）的达标状态。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回所有 SLO 状态"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/slos")
     public ResponseEntity<Map<String, AlertService.SloStatus>> checkAllSlos(
             @RequestParam String startDate,
@@ -123,6 +150,10 @@ public class AlertController {
      * 检查单个 SLO
      */
     @Operation(summary = "检查单个 SLO", description = "检查指定 SLO 的达标状态。")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回 SLO 状态"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/slos/{sloName}")
     public ResponseEntity<AlertService.SloStatus> checkSlo(
             @PathVariable String sloName,

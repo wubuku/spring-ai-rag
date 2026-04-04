@@ -8,6 +8,8 @@ import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -41,6 +43,10 @@ public class EvaluationController {
      * 单次评估
      */
     @Operation(summary = "单次检索评估", description = "提交查询和检索结果进行效果评估，计算 Precision@K、MRR、NDCG 等指标")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "评估成功"),
+        @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
     @PostMapping("/evaluate")
     public ResponseEntity<RagRetrievalEvaluation> evaluate(@Valid @RequestBody EvaluateRequest request) {
         RagRetrievalEvaluation result = evaluationService.evaluate(
@@ -57,6 +63,10 @@ public class EvaluationController {
      * 批量评估
      */
     @Operation(summary = "批量检索评估", description = "提交多组评估用例进行批量评估")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "批量评估成功"),
+        @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
     @PostMapping("/batch")
     public ResponseEntity<List<RagRetrievalEvaluation>> batchEvaluate(
             @Valid @RequestBody List<EvaluateRequest> requests) {
@@ -71,6 +81,7 @@ public class EvaluationController {
      * 计算指标（不持久化）
      */
     @Operation(summary = "计算评估指标", description = "纯计算，不写入数据库。用于快速预览指标。")
+    @ApiResponse(responseCode = "200", description = "返回计算结果")
     @GetMapping("/metrics/calculate")
     public ResponseEntity<RetrievalEvaluationService.EvaluationMetrics> calculateMetrics(
             @RequestParam List<Long> retrieved,
@@ -83,6 +94,10 @@ public class EvaluationController {
      * 获取评估报告
      */
     @Operation(summary = "评估报告", description = "按时间段聚合的评估报告，包含平均指标")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回评估报告"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/report")
     public ResponseEntity<RetrievalEvaluationService.EvaluationReport> getReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -94,6 +109,7 @@ public class EvaluationController {
      * 获取评估历史
      */
     @Operation(summary = "评估历史", description = "分页查询评估记录")
+    @ApiResponse(responseCode = "200", description = "返回评估历史分页列表")
     @GetMapping("/history")
     public ResponseEntity<List<RagRetrievalEvaluation>> getHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -105,6 +121,10 @@ public class EvaluationController {
      * 获取聚合指标
      */
     @Operation(summary = "聚合指标", description = "按时间段聚合的 IR 指标（平均 MRR、NDCG、Hit Rate 等）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回聚合指标"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/metrics/aggregated")
     public ResponseEntity<RetrievalEvaluationService.AggregatedMetrics> getAggregatedMetrics(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -118,6 +138,10 @@ public class EvaluationController {
      * 提交用户反馈
      */
     @Operation(summary = "提交用户反馈", description = "用户对 RAG 检索结果和回答质量的反馈（点赞/点踩/评分）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "反馈提交成功"),
+        @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
     @PostMapping("/feedback")
     public ResponseEntity<RagUserFeedback> submitFeedback(@Valid @RequestBody FeedbackRequest request) {
         RagUserFeedback result = userFeedbackService.submitFeedback(
@@ -137,6 +161,10 @@ public class EvaluationController {
      * 获取反馈统计
      */
     @Operation(summary = "反馈统计", description = "按时间段统计用户反馈分布（点赞/点踩/评分）")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回反馈统计"),
+        @ApiResponse(responseCode = "400", description = "日期格式无效")
+    })
     @GetMapping("/feedback/stats")
     public ResponseEntity<UserFeedbackService.FeedbackStats> getFeedbackStats(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -148,6 +176,7 @@ public class EvaluationController {
      * 获取反馈历史
      */
     @Operation(summary = "反馈历史", description = "分页查询用户反馈记录")
+    @ApiResponse(responseCode = "200", description = "返回反馈历史分页列表")
     @GetMapping("/feedback/history")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -159,6 +188,7 @@ public class EvaluationController {
      * 按类型查询反馈
      */
     @Operation(summary = "按类型查询反馈", description = "按反馈类型（THUMBS_UP/THUMBS_DOWN/RATING）分页查询")
+    @ApiResponse(responseCode = "200", description = "返回该类型反馈分页列表")
     @GetMapping("/feedback/type/{feedbackType}")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackByType(
             @PathVariable String feedbackType,

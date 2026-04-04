@@ -6,6 +6,7 @@ import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -41,6 +42,7 @@ public class ModelController {
 
     @GetMapping
     @Operation(summary = "获取所有已注册模型列表")
+    @ApiResponse(responseCode = "200", description = "返回所有已注册模型及其状态")
     public ResponseEntity<Map<String, Object>> listModels() {
         Map<String, Object> response = new LinkedHashMap<>();
         response.put("multiModelEnabled", modelRouter.isMultiModelEnabled());
@@ -53,6 +55,10 @@ public class ModelController {
 
     @GetMapping("/{provider}")
     @Operation(summary = "获取指定 provider 的模型详情")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回模型详情"),
+        @ApiResponse(responseCode = "404", description = "provider 不存在或不可用")
+    })
     public ResponseEntity<Map<String, Object>> getModel(@PathVariable String provider) {
         if (!modelRouter.isProviderAvailable(provider)) {
             return ResponseEntity.notFound().build();
@@ -66,7 +72,10 @@ public class ModelController {
     @PostMapping("/compare")
     @Operation(summary = "并行对比多个模型的响应",
             description = "将同一查询发送给多个模型，并行收集响应内容和延迟数据。用于模型效果对比。")
-    @ApiResponse(responseCode = "200", description = "返回各模型的对比结果")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "返回各模型的对比结果"),
+        @ApiResponse(responseCode = "400", description = "providers 列表为空或无效")
+    })
     public ResponseEntity<Map<String, Object>> compareModels(
             @Valid @RequestBody CompareModelsRequest request) {
         if (request.providers == null || request.providers.isEmpty()) {
