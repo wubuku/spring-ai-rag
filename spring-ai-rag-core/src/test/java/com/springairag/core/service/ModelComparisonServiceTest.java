@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.ModelRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -33,11 +34,13 @@ class ModelComparisonServiceTest {
 
     private ModelComparisonService service;
     private ExecutorService executor;
+    private ModelRegistry modelRegistry;
 
     @BeforeEach
     void setUp() {
         executor = Executors.newSingleThreadExecutor();
-        service = new ModelComparisonService(executor);
+        modelRegistry = mock(ModelRegistry.class);
+        service = new ModelComparisonService(executor, modelRegistry);
     }
 
     @AfterEach
@@ -228,7 +231,7 @@ class ModelComparisonServiceTest {
         }
         doReturn(future).when(interruptingExecutor).submit(any(Callable.class));
 
-        ModelComparisonService svc = new ModelComparisonService(interruptingExecutor);
+        ModelComparisonService svc = new ModelComparisonService(interruptingExecutor, modelRegistry);
 
         // 在调用前检查中断状态
         boolean beforeInterrupt = Thread.currentThread().isInterrupted();
@@ -259,7 +262,7 @@ class ModelComparisonServiceTest {
         }
         doReturn(future).when(timeoutExecutor).submit(any(Callable.class));
 
-        ModelComparisonService svc = new ModelComparisonService(timeoutExecutor);
+        ModelComparisonService svc = new ModelComparisonService(timeoutExecutor, modelRegistry);
 
         List<ModelComparisonService.ModelComparisonResult> results =
                 svc.compareModels("测试", Map.of("model-x", mock(ChatModel.class)), 2);

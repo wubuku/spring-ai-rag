@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.service.ModelComparisonService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -30,6 +31,9 @@ class ModelControllerTest {
 
     @MockBean
     private ChatModelRouter modelRouter;
+
+    @MockBean
+    private ModelComparisonService modelComparisonService;
 
     @Test
     void testListModels() throws Exception {

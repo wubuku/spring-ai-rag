@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.ModelRegistry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -10,7 +11,6 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -33,10 +33,13 @@ public class ModelComparisonService {
     private static final Logger log = LoggerFactory.getLogger(ModelComparisonService.class);
 
     private final ExecutorService modelComparisonExecutor;
+    private final ModelRegistry modelRegistry;
 
     public ModelComparisonService(
-            @org.springframework.beans.factory.annotation.Qualifier("modelComparisonExecutor") ExecutorService modelComparisonExecutor) {
+            @org.springframework.beans.factory.annotation.Qualifier("modelComparisonExecutor") ExecutorService modelComparisonExecutor,
+            ModelRegistry modelRegistry) {
         this.modelComparisonExecutor = modelComparisonExecutor;
+        this.modelRegistry = modelRegistry;
     }
 
     /**
@@ -82,6 +85,39 @@ public class ModelComparisonService {
         }
 
         return results;
+    }
+
+    /**
+     * 并行对比多个 provider（通过 ModelRegistry 解析）
+     *
+     * @param query 查询文本
+     * @param providers 要对比的 provider 列表（如 ["openai", "minimax"]）
+     * @param timeoutSeconds 单个模型超时（秒）
+     * @return 对比结果列表（按提交顺序）
+     */
+    public List<ModelComparisonResult> compareProviders(String query,
+                                                       List<String> providers,
+                                                       int timeoutSeconds) {
+        Map<String, ChatModel> models = new LinkedHashMap<>();
+        for (String p : providers) {
+            try {
+                models.put(p, modelRegistry.get(p));
+            } catch (IllegalArgumentException e) {
+                log.warn("Provider not available for comparison: {}", p);
+            }
+        }
+        return compareModels(query, models, timeoutSeconds);
+    }
+
+    /**
+     * 对比所有已注册的 provider
+     */
+    public List<ModelComparisonResult> compareAllProviders(String query, int timeoutSeconds) {
+        Map<String, ChatModel> models = new LinkedHashMap<>();
+        for (String p : modelRegistry.availableProviders()) {
+            models.put(p, modelRegistry.get(p));
+        }
+        return compareModels(query, models, timeoutSeconds);
     }
 
     private Future<ModelComparisonResult> submitQuery(String modelName, ChatModel model, String query) {

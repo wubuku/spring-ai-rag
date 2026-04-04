@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.service.ModelComparisonService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
@@ -23,10 +24,14 @@ public class ModelController {
 
     private final ModelRegistry modelRegistry;
     private final ChatModelRouter modelRouter;
+    private final ModelComparisonService modelComparisonService;
 
-    public ModelController(ModelRegistry modelRegistry, ChatModelRouter modelRouter) {
+    public ModelController(ModelRegistry modelRegistry,
+                          ChatModelRouter modelRouter,
+                          ModelComparisonService modelComparisonService) {
         this.modelRegistry = modelRegistry;
         this.modelRouter = modelRouter;
+        this.modelComparisonService = modelComparisonService;
     }
 
     @GetMapping
