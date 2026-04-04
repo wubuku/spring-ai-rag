@@ -68,6 +68,16 @@ spring:
         temperature: ${ANTHROPIC_TEMPERATURE:0.7}
         max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 
+  # Spring AI MiniMax 模型配置（可选，provider=minimax 时启用）
+  minimax:
+    api-key: ${MINIMAX_API_KEY:dummy}
+    base-url: ${MINIMAX_BASE_URL:https://api.minimaxi.com}
+    chat:
+      enabled: false
+      options:
+        model: ${MINIMAX_MODEL:MiniMax-M2.7}
+        temperature: ${MINIMAX_TEMPERATURE:0.7}
+
   # Spring AI Chat Memory JDBC 配置
   # 自动创建 spring_ai_chat_memory 表
   ai:

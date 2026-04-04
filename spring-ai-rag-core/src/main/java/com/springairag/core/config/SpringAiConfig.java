@@ -9,6 +9,9 @@ import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.minimax.MiniMaxChatModel;
+import org.springframework.ai.minimax.MiniMaxChatOptions;
+import org.springframework.ai.minimax.api.MiniMaxApi;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
@@ -27,10 +30,11 @@ import java.util.List;
 /**
  * Spring AI ChatModel 配置
  *
- * 三 Bean 模式：
+ * 四 Bean 模式：
  * - openAiChatModel：OpenAI/兼容模型，provider=openai 时创建
  * - anthropicChatModel：Anthropic 模型，provider=anthropic 时创建
- * - chatModel：主入口，从上述两个中选择可用的
+ * - miniMaxChatModel：MiniMax 模型，provider=minimax 时创建
+ * - chatModel：主入口，从上述三个中选择可用的
  */
 @Configuration
 @EnableConfigurationProperties(RagProperties.class)
@@ -67,6 +71,18 @@ public class SpringAiConfig {
 
     @Value("${spring.ai.anthropic.chat.options.max-tokens:4096}")
     private Integer anthropicMaxTokens;
+
+    @Value("${spring.ai.minimax.base-url:https://api.minimaxi.com}")
+    private String minimaxBaseUrl;
+
+    @Value("${spring.ai.minimax.api-key:dummy}")
+    private String minimaxApiKey;
+
+    @Value("${spring.ai.minimax.chat.options.model:MiniMax-M2.7}")
+    private String minimaxModel;
+
+    @Value("${spring.ai.minimax.chat.options.temperature:0.7}")
+    private Double minimaxTemperature;
 
     @Bean("openAiChatModel")
     public ChatModel openAiChatModel(RestClient.Builder restClientBuilder) {
@@ -113,6 +129,24 @@ public class SpringAiConfig {
                 .build();
     }
 
+    @Bean("miniMaxChatModel")
+    public ChatModel miniMaxChatModel(RestClient.Builder restClientBuilder) {
+        if (!"minimax".equals(provider)) {
+            log.debug("MiniMax ChatModel skipped, provider is: {}", provider);
+            return null;
+        }
+        log.info("Creating MiniMax ChatModel: baseUrl={}, model={}", minimaxBaseUrl, minimaxModel);
+
+        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder);
+
+        MiniMaxChatOptions options = MiniMaxChatOptions.builder()
+                .model(minimaxModel)
+                .temperature(minimaxTemperature)
+                .build();
+
+        return new MiniMaxChatModel(miniMaxApi, options);
+    }
+
     @Bean("chatModel")
     @Primary
     @ConditionalOnMissingBean(name = "chatModel")
@@ -120,8 +154,10 @@ public class SpringAiConfig {
             org.springframework.context.ApplicationContext ctx) {
         ChatModel openAi = null;
         ChatModel anthropic = null;
+        ChatModel miniMax = null;
         try { openAi = ctx.getBean("openAiChatModel", ChatModel.class); } catch (BeansException ignored) {}
         try { anthropic = ctx.getBean("anthropicChatModel", ChatModel.class); } catch (BeansException ignored) {}
+        try { miniMax = ctx.getBean("miniMaxChatModel", ChatModel.class); } catch (BeansException ignored) {}
 
         if ("openai".equals(provider) && openAi != null) {
             log.info("Using OpenAI ChatModel as primary");
@@ -129,10 +165,14 @@ public class SpringAiConfig {
         } else if ("anthropic".equals(provider) && anthropic != null) {
             log.info("Using Anthropic ChatModel as primary");
             return anthropic;
+        } else if ("minimax".equals(provider) && miniMax != null) {
+            log.info("Using MiniMax ChatModel as primary");
+            return miniMax;
         }
         if (openAi != null) { return openAi; }
         if (anthropic != null) { return anthropic; }
-        throw new IllegalStateException("No ChatModel configured. Set app.llm.provider to 'openai' or 'anthropic'.");
+        if (miniMax != null) { return miniMax; }
+        throw new IllegalStateException("No ChatModel configured. Set app.llm.provider to 'openai', 'anthropic', or 'minimax'.");
     }
 
     @Bean
@@ -149,7 +189,8 @@ public class SpringAiConfig {
      *
      * <p>根据当前 provider 自动选择适配策略：
      * - openai → OpenAiCompatibleAdapter（支持多 system 消息）
-     * - 其他 → 根据 base-url 匹配（如 MiniMax）
+     * - minimax → MiniMax 专用适配器
+     * - anthropic → 透传
      */
     @Bean
     public ApiCompatibilityAdapter apiCompatibilityAdapter(ApiAdapterFactory factory) {
@@ -158,6 +199,8 @@ public class SpringAiConfig {
             baseUrl = openAiBaseUrl;
         } else if ("anthropic".equals(provider)) {
             baseUrl = anthropicBaseUrl;
+        } else if ("minimax".equals(provider)) {
+            baseUrl = minimaxBaseUrl;
         } else {
             baseUrl = openAiBaseUrl;
         }

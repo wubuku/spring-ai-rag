@@ -73,6 +73,13 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring AI MiniMax（可选，支持 MiniMax 系列模型） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-minimax</artifactId>
+            <optional>true</optional>
+        </dependency>
+
         <!-- Spring AI PGVector Store Starter -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
