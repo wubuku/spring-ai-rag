@@ -141,22 +141,16 @@ spring-ai-rag-api/src/main/java/com/springairag/api/dto/
 
 ---
 
-### Phase 6：指标埋点 + 监控 ⏳ 待实施
+### Phase 6：指标埋点 + 监控 ✅
 **目标**：量化各模型的调用情况
 
 **工作内容**：
-1. ChatModelRouter 记录各 provider 的调用次数、延迟、错误率
-2. 复用现有 `RagMetricsService` 埋点
-3. 新增 `/api/v1/rag/metrics/models` 端点查看各模型状态
+1. ✅ 新建 `ModelMetricsService`（Micrometer）
+2. ✅ `recordSuccess(provider, durationMs)` / `recordError(provider, durationMs)`
+3. ✅ Micrometer 指标：`rag.model.calls.total` / `rag.model.errors.total` / `rag.model.latency`
+4. ✅ `GET /api/v1/rag/metrics/models` - 模型级指标 REST 端点
 
-**指标**：
-```
-model_calls_total{provider="minimax"}
-model_latency_seconds{provider="minimax"}
-model_errors_total{provider="minimax"}
-```
-
-**状态**：⏳ 待实施
+**状态**：✅ 2026-04-04 11:35 完成
 
 ---
 
@@ -235,4 +229,6 @@ app:
 | 2026-04-04 11:09 | Phase 1 ✅ | MiniMax ChatModel 支持：Spring AI 1.1.2→1.1.4，添加 spring-ai-starter-model-minimax，miniMaxChatModel Bean |
 | 2026-04-04 11:14 | Phase 2 ✅ | ModelRegistry 模型注册中心：自动收集所有 ChatModel Bean，提供统一访问接口，10 个单元测试 |
 | 2026-04-04 11:24 | Phase 4 ✅ | ChatModelRouter 动态路由：请求级模型选择，FallbackChain，9 个单元测试 |
-| 2026-04-04 11:27 | 🚧 推进中 | Phase 5：REST 端点（GET /models）|
+| 2026-04-04 11:28 | Phase 5 ✅ | REST 端点（GET /models）：ModelController + ModelControllerTest 3个测试 |
+| 2026-04-04 11:35 | Phase 6 ✅ | 模型级指标埋点：ModelMetricsService + /metrics/models 端点 + RagMetricsControllerTest 补测 |
+| 2026-04-04 11:37 | 🚧 推进中 | Phase 7：A/B Test 框架整合 |
