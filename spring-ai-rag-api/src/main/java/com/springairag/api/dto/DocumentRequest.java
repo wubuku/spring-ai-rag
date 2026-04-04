@@ -32,6 +32,9 @@ public class DocumentRequest {
     @Schema(description = "附加元数据（JSON 对象）")
     private Map<String, Object> metadata;
 
+    @Schema(description = "所属知识库 ID（可选，创建时指定）", example = "1")
+    private Long collectionId;
+
     public DocumentRequest() {}
 
     public DocumentRequest(String title, String content) {
@@ -53,4 +56,7 @@ public class DocumentRequest {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    public Long getCollectionId() { return collectionId; }
+    public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
 }

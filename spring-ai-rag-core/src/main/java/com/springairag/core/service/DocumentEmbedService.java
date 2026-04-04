@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.BatchCreateAndEmbedRequest;
+import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;

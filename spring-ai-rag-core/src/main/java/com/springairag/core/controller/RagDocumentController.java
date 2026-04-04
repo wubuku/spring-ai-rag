@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.BatchCreateAndEmbedRequest;
+import com.springairag.api.dto.BatchCreateAndEmbedResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.EmbedProgressEvent;
@@ -305,6 +307,96 @@ public class RagDocumentController {
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+        }
+    }
+
+    // ==================== 批量创建并嵌入 ====================
+
+    @Operation(summary = "批量创建并嵌入文档", description = "一步到位：创建文档 + 分块 + 嵌入向量。单文档失败不影响其他文档。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回创建和嵌入结果"),
+            @ApiResponse(responseCode = "400", description = "请求参数无效")
+    })
+    @PostMapping("/batch/create-and-embed")
+    public ResponseEntity<BatchCreateAndEmbedResponse> batchCreateAndEmbed(
+            @Valid @RequestBody BatchCreateAndEmbedRequest request) {
+        log.info("Batch create and embed: collectionId={}, docs={}, force={}",
+                request.getCollectionId(), request.getDocuments().size(), request.isForce());
+
+        List<BatchCreateAndEmbedResponse.DocumentResult> results = new java.util.ArrayList<>();
+        int created = 0, embedded = 0, skipped = 0, failed = 0;
+
+        for (DocumentRequest docReq : request.getDocuments()) {
+            BatchCreateAndEmbedResponse.DocumentResult itemResult = createAndEmbedSingle(
+                    request.getCollectionId(), docReq, request.isForce());
+            results.add(itemResult);
+            if (itemResult.documentId() != null && itemResult.embedded()) {
+                embedded++;
+                created++; // if embedded, it was created
+            } else if (itemResult.documentId() != null && !itemResult.embedded() && itemResult.error() == null) {
+                // created but not embedded
+                created++;
+            } else if (itemResult.error() != null) {
+                failed++;
+            } else {
+                skipped++;
+            }
+        }
+
+        log.info("Batch create and embed completed: created={}, embedded={}, skipped={}, failed={}",
+                created, embedded, skipped, failed);
+
+        return ResponseEntity.ok(new BatchCreateAndEmbedResponse(created, embedded, skipped, failed, results));
+    }
+
+    private BatchCreateAndEmbedResponse.DocumentResult createAndEmbedSingle(
+            Long collectionId, DocumentRequest docReq, boolean force) {
+        try {
+            // 1. 创建文档
+            String contentHash = BatchDocumentService.computeSha256(docReq.getContent());
+            List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
+
+            RagDocument doc;
+            boolean newlyCreated = false;
+            if (!existing.isEmpty()) {
+                doc = existing.get(0);
+                log.info("Duplicate content detected, using existing doc id={}", doc.getId());
+            } else {
+                doc = new RagDocument();
+                doc.setTitle(docReq.getTitle());
+                doc.setContent(docReq.getContent());
+                doc.setSource(docReq.getSource());
+                doc.setDocumentType(docReq.getDocumentType());
+                doc.setMetadata(docReq.getMetadata());
+                doc.setContentHash(contentHash);
+                if (docReq.getCollectionId() != null) {
+                    doc.setCollectionId(docReq.getCollectionId());
+                } else {
+                    doc.setCollectionId(collectionId);
+                }
+                doc = documentRepository.save(doc);
+                newlyCreated = true;
+                log.info("Document created: id={}", doc.getId());
+            }
+
+            // 2. 嵌入文档
+            if (newlyCreated || force) {
+                Map<String, Object> embedResult = documentEmbedService.embedDocument(doc.getId(), force);
+                String status = (String) embedResult.get("status");
+                int chunks = (Integer) embedResult.getOrDefault("chunksCreated", 0);
+                boolean embedded = "COMPLETED".equals(status) || "CACHED".equals(status);
+                return new BatchCreateAndEmbedResponse.DocumentResult(
+                        doc.getId(), doc.getTitle(), embedded, chunks, null);
+            } else {
+                // 已有嵌入，跳过
+                return new BatchCreateAndEmbedResponse.DocumentResult(
+                        doc.getId(), doc.getTitle(), true, 0, null);
+            }
+
+        } catch (Exception e) {
+            log.error("Failed to create and embed document '{}': {}", docReq.getTitle(), e.getMessage());
+            return new BatchCreateAndEmbedResponse.DocumentResult(
+                    null, docReq.getTitle(), false, 0, e.getMessage());
         }
     }
 
