@@ -682,11 +682,20 @@
 - commit 587ccfd 已推送
 
 **Cron 后续任务**：
-  - 安全检查（敏感信息脱敏验证）
+  - 安全检查（敏感信息脱敏验证） ✅ 2026-04-05
   - Spring Boot 3.5 新特性检查（如有）
   - 数据库连接池调优（HikariCP 配置审查）
 
-- 2026-04-05 00:30 — ✅ 批量创建并嵌入文档端点（优先级最高任务）
+- 2026-04-05 00:45 — ✅ 安全检查：异常消息敏感数据脱敏 + RFC 7807 统一
+  - GlobalExceptionHandler.handleException() 新增 SensitiveDataMaskingConverter.maskSensitiveData()，
+    API Key/Token/JWT 等出现在异常消息中时先脱敏再返回给用户
+  - GlobalExceptionHandler.handleException() 日志同步使用脱敏后消息（safeMessage）
+  - 消除全部 Map.of("error", ...) 不一致响应，统一改为抛 IllegalArgumentException
+    → GlobalExceptionHandler.handleBadRequest() 统一返回 RFC 7807 ErrorResponse
+  - 受影响端点：addDocument（docId 空值）、importCollection（name 空值/空白）、
+    batchDeleteDocuments（ids 空值/超限）、batchEmbedDocuments（ids 空值/超限）
+  - 新增 2 个敏感数据脱敏测试（GlobalExceptionHandlerTest）
+  - 1052 测试全通过，commit b49f961 已推送
   - 新端点: POST /api/v1/rag/documents/batch/create-and-embed
   - 一步到位：创建文档 + 分块 + 嵌入向量
   - 支持指定 collectionId（批量关联知识库）
