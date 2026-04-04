@@ -606,3 +606,5 @@
   3. Spring AI 1.1.4 新特性检查（新增 API 可用）
   4. 实现 ChatMemoryAdvisor 的内存上限保护（防止对话记忆无限增长）
   5. 支持 ChatMemory 的 TTL 过期策略
+
+- 2026-04-04 20:55 — JaCoCo 覆盖率补强：RagMetricsController getModelMetrics() 新增 3 个测试（multiModelEnabled 多提供商/空提供商/单提供商），指令覆盖率 31%→100%，方法覆盖率 2/4→4/4；mvn test ✅（1044 测试全通过）；零 TODO/FIXME；commit ff62e7b 已推送
