@@ -106,12 +106,13 @@ spring-ai-rag-api/src/main/java/com/springairag/api/dto/
 
 ---
 
-### Phase 3：models.json 配置中心 ⏭️ 跳过
+### Phase 3：models.json 配置中心 ⏭️ 跳过（见「后续改进」）
 **目标**：将模型配置外部化，支持声明式配置
 
-**决策**：直接使用现有 `application.yml` 的 `app.multi-model.*` 配置，更简洁。
+**决策**：直接使用现有 `application.yml` 的 `app.multi-model.*` 配置，更简洁，无需额外依赖。
 
-**状态**：⏭️ 跳过（使用 application.yml 替代）
+**状态**：⏭️ 跳过
+> 📋 外部 JSON 配置方案已移至「后续改进」章节，作为未来优化方向。
 
 ---
 
@@ -217,6 +218,96 @@ app:
 | 单元测试 | JUnit 5 | ModelRegistry / ChatModelRouter / MultiModelProperties |
 | 集成测试 | @SpringBootTest | 真实数据库 + Mock ChatModel |
 | E2E 测试 | Shell + curl | 各 provider 完整调用链路 |
+
+---
+
+---
+
+## 📋 后续改进
+
+### 外部化 models.json 配置中心
+
+**背景**：Phase 3 原计划使用外部 JSON 文件存储模型配置，参考 OpenClaw `models.json` 架构。当前实现已使用 `application.yml` 的 `app.multi-model.*` 配置替代。
+
+**适用场景**：
+- 无需修改代码和重启服务，即可添加新模型
+- 支持在运行时动态更新模型配置（结合配置中心如 Apollo / Nacos）
+- 与 OpenClaw `models.json` 架构保持一致
+
+**设计草案**：
+
+`models.json` 放在 `spring-ai-rag-core/src/main/resources/` 或外部挂载路径：
+
+```json
+{
+  "providers": {
+    "openai": {
+      "displayName": "DeepSeek",
+      "chatModel": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-chat",
+        "apiKey": "${DEEPSEEK_API_KEY}",
+        "temperature": 0.7,
+        "maxTokens": 8192
+      },
+      "embeddingModel": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "model": "deepseek-text-embedding",
+        "apiKey": "${DEEPSEEK_API_KEY}",
+        "dimension": 1024
+      },
+      "enabled": true,
+      "priority": 1
+    },
+    "anthropic": {
+      "displayName": "Claude 3.5",
+      "chatModel": {
+        "baseUrl": "https://api.anthropic.com",
+        "model": "claude-3-5-sonnet-20241022",
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "temperature": 0.7,
+        "maxTokens": 8192
+      },
+      "enabled": false,
+      "priority": 2
+    },
+    "minimax": {
+      "displayName": "MiniMax",
+      "chatModel": {
+        "baseUrl": "https://api.minimaxi.com",
+        "model": "MiniMax-Text-01",
+        "apiKey": "${MINIMAX_API_KEY}",
+        "temperature": 0.7,
+        "maxTokens": 8192
+      },
+      "embeddingModel": {
+        "baseUrl": "https://api.minimaxi.com",
+        "model": "embo-01",
+        "apiKey": "${MINIMAX_API_KEY}",
+        "dimension": 1024
+      },
+      "enabled": false,
+      "priority": 3
+    }
+  },
+  "routing": {
+    "defaultProvider": "openai",
+    "fallbackChain": ["openai", "anthropic", "minimax"],
+    "retryPolicy": {
+      "maxRetries": 2,
+      "retryOn": ["rate_limit", "server_error"]
+    }
+  }
+}
+```
+
+**实现路径**：
+1. 新建 `ModelsJsonConfigLoader` 类，使用 `@ConfigurationProperties` 或 Jackson 加载 `models.json`
+2. 改造 `ModelRegistry` 从 JSON 而非 Spring Bean 收集模型信息
+3. 支持热更新：使用 `@RefreshScope` 或文件系统监听实现无需重启的配置更新
+4. 优先级低于 `application.yml`（允许 yml 覆盖 json）
+
+**工作量**：约 2-3 小时
 
 ---
 
