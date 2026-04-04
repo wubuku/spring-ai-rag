@@ -552,3 +552,11 @@
   - mvn clean compile ✅ / mvn test ✅（1082 测试全通过，零失败零错误）
   - 零 TODO/FIXME；156 源文件 + 108 测试文件；全部 Phase 1-7 + P1/P2/P3 完成
   - git 已推送（commit d25276f）
+
+- 2026-04-04 19:26 — 性能优化：集合删除批量清空文档关联
+  - `RagCollectionController.delete()`: `findAllByCollectionId()`+`saveAll()` → `countByCollectionId()`+`clearCollectionIdByCollectionId()` 批量 UPDATE query
+  - `RagDocumentRepository`: 新增 `clearCollectionIdByCollectionId()` @Modifying @Query
+  - 大集合删除 O(1) DB 操作，避免逐个加载到内存
+  - 新增 `delete_existingCollectionNoDocuments_doesNotCallClearCollectionId` 测试
+  - mvn clean compile ✅ / mvn test ✅（1083 测试全通过，零失败零错误）
+  - git 已推送（commit f6bf868）
