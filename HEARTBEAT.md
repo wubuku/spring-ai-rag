@@ -770,3 +770,8 @@
 | c4 | core/retrieval/* + core/advisor/* | 📋 待做 |
 | c5 | api/dto/* + core/config/* | 📋 待做 |
 | c6 | core/filter/* + core/exception/* | 📋 待做 |
+
+**⚠️ 重要规则**：
+- HEARTBEAT 已规划的任务**永久保留，只增不减**
+- 不论优先级高低，所有任务最终都会完成
+- 24/7 不间断推进，cron 永不空闲
