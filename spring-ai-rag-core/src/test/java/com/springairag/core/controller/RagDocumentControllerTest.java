@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -376,21 +377,20 @@ class RagDocumentControllerTest {
                 new DocumentRequest("文档1", "内容1"),
                 new DocumentRequest("文档2", "内容2")
         );
-        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
-                "results", List.of(
-                        Map.of("index", 0, "title", "文档1", "status", "CREATED", "id", 1L),
-                        Map.of("index", 1, "title", "文档2", "status", "CREATED", "id", 2L)
-                ),
-                "summary", Map.of("total", 2, "created", 2, "duplicated", 0, "failed", 0)
+        var svcResponse = new BatchCreateResponse(2, 0, 0, List.of(
+                new BatchCreateResponse.DocumentResult(1L, "文档1", true, null),
+                new BatchCreateResponse.DocumentResult(2L, "文档2", true, null)
         ));
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+                .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(2, summary.get("total"));
-        assertEquals(2, summary.get("created"));
+        assertEquals(2, response.getBody().created());
+        assertEquals(0, response.getBody().skipped());
+        assertEquals(0, response.getBody().failed());
     }
 
     @Test
@@ -399,37 +399,36 @@ class RagDocumentControllerTest {
                 new DocumentRequest("新文档", "新内容"),
                 new DocumentRequest("重复标题", "重复内容")
         );
-        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
-                "results", List.of(
-                        Map.of("index", 0, "title", "新文档", "status", "CREATED", "id", 20L),
-                        Map.of("index", 1, "title", "重复标题", "status", "DUPLICATE", "id", 10L)
-                ),
-                "summary", Map.of("total", 2, "created", 1, "duplicated", 1, "failed", 0)
+        var svcResponse = new BatchCreateResponse(1, 1, 0, List.of(
+                new BatchCreateResponse.DocumentResult(20L, "新文档", true, null),
+                new BatchCreateResponse.DocumentResult(10L, "重复标题", false, null)
         ));
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+                .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(1, summary.get("created"));
-        assertEquals(1, summary.get("duplicated"));
+        assertEquals(1, response.getBody().created());
+        assertEquals(1, response.getBody().skipped());
+        assertEquals(0, response.getBody().failed());
     }
 
     @Test
     void batchCreateDocuments_withException() {
         var docs = List.of(new DocumentRequest("文档", "内容"));
-        when(batchDocumentService.batchCreateDocuments(docs)).thenReturn(Map.of(
-                "results", List.of(Map.of("index", 0, "title", "文档", "status", "FAILED", "error", "DB error")),
-                "summary", Map.of("total", 1, "created", 0, "duplicated", 0, "failed", 1)
+        var svcResponse = new BatchCreateResponse(0, 0, 1, List.of(
+                new BatchCreateResponse.DocumentResult(null, "文档", false, "DB error")
         ));
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+                .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
-        ResponseEntity<Map<String, Object>> response = controller.batchCreateDocuments(req);
+        ResponseEntity<BatchCreateResponse> response = controller.batchCreateDocuments(req);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(1, summary.get("failed"));
+        assertEquals(1, response.getBody().failed());
     }
 
     @Test

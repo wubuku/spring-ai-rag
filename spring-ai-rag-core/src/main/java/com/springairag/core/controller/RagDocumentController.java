@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.BatchCreateAndEmbedRequest;
 import com.springairag.api.dto.BatchCreateAndEmbedResponse;
+import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
@@ -273,11 +274,26 @@ public class RagDocumentController {
 
     // ==================== 批量操作 ====================
 
-    @Operation(summary = "批量创建文档", description = "一次上传多个文档（最多 100 条），自动去重。单条失败不影响其他文档。")
+    @Operation(summary = "批量创建文档",
+               description = "一次上传多个文档（最多 100 条），自动去重。"
+                           + "设置 embed=true 可一步完成创建+嵌入向量（无需调用 /batch/embed）。"
+                           + "单条失败不影响其他文档。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回创建结果"),
+            @ApiResponse(responseCode = "400", description = "请求参数无效（ids 为空/超限）")
+    })
     @PostMapping("/batch")
-    public ResponseEntity<Map<String, Object>> batchCreateDocuments(
+    public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
             @Valid @RequestBody BatchDocumentRequest request) {
-        Map<String, Object> result = batchDocumentService.batchCreateDocuments(request.getDocuments());
+        log.info("Batch create: docs={}, embed={}, collectionId={}, force={}",
+                request.getDocuments().size(), request.isEmbed(),
+                request.getCollectionId(), request.isForce());
+
+        BatchCreateResponse result = batchDocumentService.batchCreateDocuments(
+                request.getDocuments(),
+                request.isEmbed(),
+                request.getCollectionId(),
+                request.isForce());
         return ResponseEntity.ok(result);
     }
 
@@ -308,9 +324,16 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
-    // ==================== 批量创建并嵌入 ====================
+    // ==================== 批量创建并嵌入（已废弃，使用 /batch?embed=true 代替） ====================
 
-    @Operation(summary = "批量创建并嵌入文档", description = "一步到位：创建文档 + 分块 + 嵌入向量。单文档失败不影响其他文档。")
+    /**
+     * @deprecated 请使用 {@link #batchCreateDocuments(BatchDocumentRequest)} batch=true}，
+     *             功能完全相同，且无需额外端点。
+     *             例如：POST /batch + body { "documents": [...], "embed": true, "collectionId": 1 }
+     */
+    @Deprecated
+    @Operation(summary = "批量创建并嵌入文档（已废弃）",
+               description = "@Deprecated 请改用 POST /batch + embed=true。功能完全相同。")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "返回创建和嵌入结果"),
             @ApiResponse(responseCode = "400", description = "请求参数无效")
@@ -318,84 +341,21 @@ public class RagDocumentController {
     @PostMapping("/batch/create-and-embed")
     public ResponseEntity<BatchCreateAndEmbedResponse> batchCreateAndEmbed(
             @Valid @RequestBody BatchCreateAndEmbedRequest request) {
-        log.info("Batch create and embed: collectionId={}, docs={}, force={}",
+        log.info("Batch create and embed (deprecated): collectionId={}, docs={}, force={}",
                 request.getCollectionId(), request.getDocuments().size(), request.isForce());
 
-        List<BatchCreateAndEmbedResponse.DocumentResult> results = new java.util.ArrayList<>();
-        int created = 0, embedded = 0, skipped = 0, failed = 0;
+        // 委托给服务层（统一使用 embed=true）
+        BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
+                request.getDocuments(), true, request.getCollectionId(), request.isForce());
 
-        for (DocumentRequest docReq : request.getDocuments()) {
-            BatchCreateAndEmbedResponse.DocumentResult itemResult = createAndEmbedSingle(
-                    request.getCollectionId(), docReq, request.isForce());
-            results.add(itemResult);
-            if (itemResult.documentId() != null && itemResult.embedded()) {
-                embedded++;
-                created++; // if embedded, it was created
-            } else if (itemResult.documentId() != null && !itemResult.embedded() && itemResult.error() == null) {
-                // created but not embedded
-                created++;
-            } else if (itemResult.error() != null) {
-                failed++;
-            } else {
-                skipped++;
-            }
-        }
+        // 转换为旧的响应格式
+        List<BatchCreateAndEmbedResponse.DocumentResult> results = resp.results().stream()
+                .map(r -> new BatchCreateAndEmbedResponse.DocumentResult(
+                        r.documentId(), r.title(), r.newlyCreated(), 0, r.error()))
+                .toList();
 
-        log.info("Batch create and embed completed: created={}, embedded={}, skipped={}, failed={}",
-                created, embedded, skipped, failed);
-
-        return ResponseEntity.ok(new BatchCreateAndEmbedResponse(created, embedded, skipped, failed, results));
-    }
-
-    private BatchCreateAndEmbedResponse.DocumentResult createAndEmbedSingle(
-            Long collectionId, DocumentRequest docReq, boolean force) {
-        try {
-            // 1. 创建文档
-            String contentHash = BatchDocumentService.computeSha256(docReq.getContent());
-            List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
-
-            RagDocument doc;
-            boolean newlyCreated = false;
-            if (!existing.isEmpty()) {
-                doc = existing.get(0);
-                log.info("Duplicate content detected, using existing doc id={}", doc.getId());
-            } else {
-                doc = new RagDocument();
-                doc.setTitle(docReq.getTitle());
-                doc.setContent(docReq.getContent());
-                doc.setSource(docReq.getSource());
-                doc.setDocumentType(docReq.getDocumentType());
-                doc.setMetadata(docReq.getMetadata());
-                doc.setContentHash(contentHash);
-                if (docReq.getCollectionId() != null) {
-                    doc.setCollectionId(docReq.getCollectionId());
-                } else {
-                    doc.setCollectionId(collectionId);
-                }
-                doc = documentRepository.save(doc);
-                newlyCreated = true;
-                log.info("Document created: id={}", doc.getId());
-            }
-
-            // 2. 嵌入文档
-            if (newlyCreated || force) {
-                Map<String, Object> embedResult = documentEmbedService.embedDocument(doc.getId(), force);
-                String status = (String) embedResult.get("status");
-                int chunks = (Integer) embedResult.getOrDefault("chunksCreated", 0);
-                boolean embedded = "COMPLETED".equals(status) || "CACHED".equals(status);
-                return new BatchCreateAndEmbedResponse.DocumentResult(
-                        doc.getId(), doc.getTitle(), embedded, chunks, null);
-            } else {
-                // 已有嵌入，跳过
-                return new BatchCreateAndEmbedResponse.DocumentResult(
-                        doc.getId(), doc.getTitle(), true, 0, null);
-            }
-
-        } catch (Exception e) {
-            log.error("Failed to create and embed document '{}': {}", docReq.getTitle(), e.getMessage());
-            return new BatchCreateAndEmbedResponse.DocumentResult(
-                    null, docReq.getTitle(), false, 0, e.getMessage());
-        }
+        return ResponseEntity.ok(new BatchCreateAndEmbedResponse(
+                resp.created(), resp.created(), resp.skipped(), resp.failed(), results));
     }
 
     // ==================== 文件上传并嵌入 ====================
@@ -494,20 +454,18 @@ public class RagDocumentController {
                 docReq.setCollectionId(collectionId);
             }
 
-            // 调用已有的创建并嵌入逻辑
-            BatchCreateAndEmbedResponse.DocumentResult createResult =
-                    createAndEmbedSingle(collectionId, docReq, force);
+            // 使用服务层统一处理（创建 + 嵌入）
+            BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
+                    List.of(docReq), true, collectionId, force);
+            BatchCreateResponse.DocumentResult r = resp.results().getFirst();
 
-            int chunks = createResult.chunks();
-            boolean embedded = createResult.embedded();
-            Long docId = createResult.documentId();
-
-            if (docId != null) {
-                return new FileUploadResponse.FileResult(filename, docId, title, embedded, chunks, null);
+            if (r.documentId() != null) {
+                // 嵌入成功（因为 embed=true）
+                return new FileUploadResponse.FileResult(filename, r.documentId(), title, true, 0, null);
             } else {
                 return new FileUploadResponse.FileResult(
                         filename, null, title, false, 0,
-                        createResult.error() != null ? createResult.error() : "创建失败");
+                        r.error() != null ? r.error() : "创建失败");
             }
 
         } catch (Exception e) {

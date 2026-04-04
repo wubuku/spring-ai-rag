@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.BatchCreateResponse;
+import com.springairag.api.dto.BatchCreateResponse.DocumentResult;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -13,7 +15,6 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
@@ -22,6 +23,7 @@ import java.util.Map;
  * 批量文档操作服务
  *
  * <p>负责批量创建、删除文档，支持按内容 SHA-256 哈希去重。
+ * 批量创建支持可选嵌入向量生成（embed=true）。
  */
 @Service
 public class BatchDocumentService {
@@ -30,89 +32,113 @@ public class BatchDocumentService {
 
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
+    private final DocumentEmbedService documentEmbedService;
 
     public BatchDocumentService(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository) {
+                                 RagEmbeddingRepository embeddingRepository,
+                                 DocumentEmbedService documentEmbedService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
+        this.documentEmbedService = documentEmbedService;
     }
 
     /**
      * 批量创建文档（自动去重）
      *
+     * <p>默认不嵌入向量。如需创建后自动嵌入，请使用
+     * {@link #batchCreateDocuments(List, boolean, Long, boolean)} 并传入 embed=true。
+     *
      * @param requests 文档请求列表
-     * @return 批量操作结果（results + summary）
+     * @return 批量创建结果
      */
-    public Map<String, Object> batchCreateDocuments(List<DocumentRequest> requests) {
-        log.info("Batch creating {} documents", requests.size());
-
-        List<Map<String, Object>> results = new ArrayList<>(requests.size());
-        int created = 0, duplicated = 0, failed = 0;
-
-        for (int i = 0; i < requests.size(); i++) {
-            Map<String, Object> itemResult = createSingleDocument(requests.get(i), i);
-            String status = (String) itemResult.get("status");
-            switch (status) {
-                case "CREATED" -> created++;
-                case "DUPLICATE" -> duplicated++;
-                default -> failed++;
-            }
-            results.add(itemResult);
-        }
-
-        log.info("Batch create completed: {} created, {} duplicated, {} failed", created, duplicated, failed);
-
-        return Map.of(
-                "results", results,
-                "summary", Map.of(
-                        "total", requests.size(),
-                        "created", created,
-                        "duplicated", duplicated,
-                        "failed", failed
-                )
-        );
+    public BatchCreateResponse batchCreateDocuments(List<DocumentRequest> requests) {
+        return batchCreateDocuments(requests, false, null, false);
     }
 
-    private Map<String, Object> createSingleDocument(DocumentRequest req, int index) {
-        Map<String, Object> itemResult = new HashMap<>();
-        itemResult.put("index", index);
-        itemResult.put("title", req.getTitle());
+    /**
+     * 批量创建文档（支持创建后自动嵌入向量）
+     *
+     * @param requests     文档请求列表
+     * @param embed        是否在创建后自动嵌入向量
+     * @param collectionId 关联的知识库 ID（仅 embed=true 时生效，可为 null）
+     * @param force        是否强制重嵌入（仅 embed=true 时生效）
+     * @return 批量创建结果
+     */
+    public BatchCreateResponse batchCreateDocuments(List<DocumentRequest> requests,
+                                                     boolean embed,
+                                                     Long collectionId,
+                                                     boolean force) {
+        log.info("Batch creating {} documents (embed={}, collectionId={}, force={})",
+                requests.size(), embed, collectionId, force);
 
+        List<DocumentResult> results = new ArrayList<>(requests.size());
+        int created = 0, skipped = 0, failed = 0;
+
+        for (int i = 0; i < requests.size(); i++) {
+            DocumentResult itemResult = createSingleDocument(requests.get(i), i, embed, collectionId, force);
+            results.add(itemResult);
+            if (itemResult.error() != null) {
+                failed++;
+            } else if (!itemResult.newlyCreated()) {
+                skipped++;
+            } else {
+                created++;
+            }
+        }
+
+        log.info("Batch create completed: created={}, skipped={}, failed={}", created, skipped, failed);
+        return new BatchCreateResponse(created, skipped, failed, results);
+    }
+
+    private DocumentResult createSingleDocument(DocumentRequest req, int index,
+                                                boolean embed, Long collectionId, boolean force) {
         try {
             String contentHash = computeSha256(req.getContent());
             List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
 
+            RagDocument doc;
+            boolean newlyCreated;
+
             if (!existing.isEmpty()) {
-                fillDuplicateResult(itemResult, existing.get(0));
+                doc = existing.get(0);
+                newlyCreated = false;
+                log.info("Duplicate content detected, using existing doc id={}", doc.getId());
             } else {
-                fillCreatedResult(itemResult, req, contentHash);
+                doc = new RagDocument();
+                doc.setTitle(req.getTitle());
+                doc.setContent(req.getContent());
+                doc.setSource(req.getSource());
+                doc.setDocumentType(req.getDocumentType());
+                doc.setMetadata(req.getMetadata());
+                doc.setContentHash(contentHash);
+                // 优先使用 per-doc 的 collectionId，否则使用 batch 级别的 collectionId
+                if (req.getCollectionId() != null) {
+                    doc.setCollectionId(req.getCollectionId());
+                } else {
+                    doc.setCollectionId(collectionId);
+                }
+                doc = documentRepository.save(doc);
+                newlyCreated = true;
+                log.info("Document created: id={}", doc.getId());
             }
-        } catch (Exception e) { // Resilience: single item failure, continue batch
+
+            // 嵌入向量（仅针对新建的或 force=true 的文档）
+            if (embed && (newlyCreated || force)) {
+                Map<String, Object> embedResult = documentEmbedService.embedDocument(doc.getId(), force);
+                String status = (String) embedResult.get("status");
+                if (!"COMPLETED".equals(status) && !"CACHED".equals(status)) {
+                    String error = (String) embedResult.get("error");
+                    return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated,
+                            "Embedding failed: " + (error != null ? error : status));
+                }
+            }
+
+            return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated, null);
+
+        } catch (Exception e) {
             log.error("Failed to create document at index {}: {}", index, e.getMessage());
-            itemResult.put("status", "FAILED");
-            itemResult.put("error", e.getMessage());
+            return new DocumentResult(null, req.getTitle(), false, e.getMessage());
         }
-        return itemResult;
-    }
-
-    private void fillDuplicateResult(Map<String, Object> result, RagDocument dup) {
-        result.put("status", "DUPLICATE");
-        result.put("id", dup.getId());
-        result.put("message", "内容已存在");
-    }
-
-    private void fillCreatedResult(Map<String, Object> result, DocumentRequest req, String contentHash) {
-        RagDocument doc = new RagDocument();
-        doc.setTitle(req.getTitle());
-        doc.setContent(req.getContent());
-        doc.setSource(req.getSource());
-        doc.setDocumentType(req.getDocumentType());
-        doc.setMetadata(req.getMetadata());
-        doc.setContentHash(contentHash);
-        doc = documentRepository.save(doc);
-
-        result.put("status", "CREATED");
-        result.put("id", doc.getId());
     }
 
     /**
@@ -181,7 +207,7 @@ public class BatchDocumentService {
     }
 
     private Map<String, Object> deleteSingleDocument(Long id) {
-        Map<String, Object> itemResult = new HashMap<>();
+        Map<String, Object> itemResult = new java.util.HashMap<>();
         itemResult.put("id", id);
 
         if (documentRepository.existsById(id)) {

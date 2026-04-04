@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -22,13 +23,15 @@ class BatchDocumentServiceTest {
 
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
+    private DocumentEmbedService documentEmbedService;
     private BatchDocumentService service;
 
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         embeddingRepository = mock(RagEmbeddingRepository.class);
-        service = new BatchDocumentService(documentRepository, embeddingRepository);
+        documentEmbedService = mock(DocumentEmbedService.class);
+        service = new BatchDocumentService(documentRepository, embeddingRepository, documentEmbedService);
     }
 
     private DocumentRequest createRequest(String title, String content) {
@@ -47,24 +50,24 @@ class BatchDocumentServiceTest {
         return doc;
     }
 
-    // ==================== batchCreateDocuments ====================
+    // ==================== batchCreateDocuments (embed=false) ====================
 
     @Test
-    @DisplayName("batchCreateDocuments: 正常创建文档")
+    @DisplayName("batchCreateDocuments: 正常创建文档（不嵌入）")
     void batchCreateDocuments_created() {
         DocumentRequest req = createRequest("标题1", "内容1");
         RagDocument savedDoc = createSavedDoc(1L, "标题1", null);
         when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
         when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
 
-        Map<String, Object> output = service.batchCreateDocuments(List.of(req));
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(1, summary.get("total"));
-        assertEquals(1, summary.get("created"));
-        assertEquals(0, summary.get("duplicated"));
-        assertEquals(0, summary.get("failed"));
+        assertEquals(1, output.created());
+        assertEquals(0, output.skipped());
+        assertEquals(0, output.failed());
+        assertEquals(1, output.results().size());
+        assertEquals(1L, output.results().getFirst().documentId());
+        assertTrue(output.results().getFirst().newlyCreated());
 
         verify(documentRepository).save(any(RagDocument.class));
     }
@@ -77,12 +80,13 @@ class BatchDocumentServiceTest {
         RagDocument existing = createSavedDoc(99L, "原标题", BatchDocumentService.computeSha256(content));
         when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
 
-        Map<String, Object> output = service.batchCreateDocuments(List.of(req));
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(1, summary.get("duplicated"));
-        assertEquals(0, summary.get("created"));
+        assertEquals(0, output.created());
+        assertEquals(1, output.skipped());
+        assertEquals(0, output.failed());
+        assertEquals(99L, output.results().getFirst().documentId());
+        assertFalse(output.results().getFirst().newlyCreated());
 
         verify(documentRepository, never()).save(any());
     }
@@ -102,18 +106,19 @@ class BatchDocumentServiceTest {
                 .thenReturn(List.of(existing));
         when(documentRepository.save(any(RagDocument.class))).thenReturn(saved);
 
-        Map<String, Object> output = service.batchCreateDocuments(List.of(req1, req2));
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req1, req2));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(2, summary.get("total"));
-        assertEquals(1, summary.get("created"));
-        assertEquals(1, summary.get("duplicated"));
+        assertEquals(1, output.created());
+        assertEquals(1, output.skipped());
+        assertEquals(0, output.failed());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> results = (List<Map<String, Object>>) output.get("results");
-        assertEquals("CREATED", results.get(0).get("status"));
-        assertEquals("DUPLICATE", results.get(1).get("status"));
+        BatchCreateResponse.DocumentResult r1 = output.results().get(0);
+        assertTrue(r1.newlyCreated());
+        assertNull(r1.error());
+
+        BatchCreateResponse.DocumentResult r2 = output.results().get(1);
+        assertFalse(r2.newlyCreated());
+        assertNull(r2.error());
     }
 
     @Test
@@ -128,17 +133,93 @@ class BatchDocumentServiceTest {
                 .thenReturn(List.of());
         when(documentRepository.save(any(RagDocument.class))).thenReturn(saved);
 
-        Map<String, Object> output = service.batchCreateDocuments(List.of(req1, req2));
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req1, req2));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(1, summary.get("failed"));
-        assertEquals(1, summary.get("created"));
+        assertEquals(1, output.created());
+        assertEquals(0, output.skipped());
+        assertEquals(1, output.failed());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> results = (List<Map<String, Object>>) output.get("results");
-        assertEquals("FAILED", results.get(0).get("status"));
-        assertEquals("CREATED", results.get(1).get("status"));
+        BatchCreateResponse.DocumentResult r1 = output.results().get(0);
+        assertNull(r1.documentId());
+        assertNotNull(r1.error());
+
+        BatchCreateResponse.DocumentResult r2 = output.results().get(1);
+        assertEquals(2L, r2.documentId());
+        assertNull(r2.error());
+    }
+
+    // ==================== batchCreateDocuments (embed=true) ====================
+
+    @Test
+    @DisplayName("batchCreateDocuments: embed=true 时创建后自动嵌入")
+    void batchCreateDocuments_withEmbed_success() {
+        DocumentRequest req = createRequest("标题", "内容");
+        RagDocument savedDoc = createSavedDoc(1L, "标题", null);
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
+        when(documentEmbedService.embedDocument(1L, false))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 3));
+
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
+
+        assertEquals(1, output.created());
+        assertEquals(0, output.failed());
+        assertEquals(1L, output.results().getFirst().documentId());
+        verify(documentEmbedService).embedDocument(1L, false);
+    }
+
+    @Test
+    @DisplayName("batchCreateDocuments: embed=true 时已存在文档跳过嵌入")
+    void batchCreateDocuments_withEmbed_existingSkipped() {
+        String content = "已有内容";
+        DocumentRequest req = createRequest("标题", content);
+        RagDocument existing = createSavedDoc(99L, "标题", BatchDocumentService.computeSha256(content));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+
+        // embed=true 但文档已存在（newlyCreated=false）→ 跳过嵌入
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
+
+        assertEquals(0, output.created());
+        assertEquals(1, output.skipped());
+        verify(documentEmbedService, never()).embedDocument(anyLong(), anyBoolean());
+    }
+
+    @Test
+    @DisplayName("batchCreateDocuments: embed=true + force=true 时强制重嵌入")
+    void batchCreateDocuments_withEmbedAndForce() {
+        String content = "已有内容";
+        DocumentRequest req = createRequest("标题", content);
+        RagDocument existing = createSavedDoc(99L, "标题", BatchDocumentService.computeSha256(content));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentEmbedService.embedDocument(99L, true))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 2));
+
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, true);
+
+        // newlyCreated=false 但 force=true → embed 仍执行，结果算 skipped（已存在但被处理）
+        assertEquals(0, output.created());
+        assertEquals(1, output.skipped());
+        assertEquals(0, output.failed());
+        verify(documentEmbedService).embedDocument(99L, true);
+    }
+
+    @Test
+    @DisplayName("batchCreateDocuments: embed=true 时嵌入失败算 failed")
+    void batchCreateDocuments_withEmbed_embedFails() {
+        DocumentRequest req = createRequest("标题", "内容");
+        RagDocument savedDoc = createSavedDoc(1L, "标题", null);
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
+        when(documentEmbedService.embedDocument(1L, false))
+                .thenReturn(Map.of("status", "FAILED", "error", "API timeout"));
+
+        BatchCreateResponse output = service.batchCreateDocuments(List.of(req), true, null, false);
+
+        assertEquals(0, output.created());
+        assertEquals(0, output.skipped());
+        assertEquals(1, output.failed());
+        assertNotNull(output.results().getFirst().error());
+        assertTrue(output.results().getFirst().error().contains("Embedding failed"));
     }
 
     // ==================== deleteDocument ====================
