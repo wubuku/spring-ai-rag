@@ -315,7 +315,7 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 
 ### `POST /api/v1/rag/documents/batch`
 
-批量创建文档。
+批量创建文档（仅保存，不嵌入）。需要再调用 `/batch/embed` 向量化。
 
 ```json
 {
@@ -342,11 +342,94 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 
 ### `POST /api/v1/rag/documents/batch/embed`
 
-批量嵌入文档。
+批量嵌入文档（需要文档已存在）。
 
 ```json
 {
   "documentIds": [1, 2, 3]
+}
+```
+
+---
+
+### `POST /api/v1/rag/documents/batch/create-and-embed`
+
+批量创建并嵌入文档（一步到位）。适合 API to API 调用场景。
+
+```json
+{
+  "collectionId": 1,
+  "documents": [
+    { "title": "doc1", "content": "内容1", "collectionId": 1 },
+    { "title": "doc2", "content": "内容2" }
+  ],
+  "force": false
+}
+```
+
+**响应：**
+
+```json
+{
+  "created": 10,
+  "embedded": 10,
+  "skipped": 2,
+  "failed": 0,
+  "results": [
+    {
+      "documentId": 1,
+      "title": "doc1",
+      "embedded": true,
+      "chunks": 5,
+      "error": null
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `collectionId` | 目标知识库 ID（可选，文档级别会覆盖） |
+| `documents` | 文档列表（最多 100 条） |
+| `force` | `true`=强制重嵌入，`false`=跳过已有嵌入 |
+| `created` | 成功创建（含嵌入）的文档数 |
+| `embedded` | 成功嵌入的文档数 |
+| `skipped` | 跳过的文档数（内容未变更） |
+| `failed` | 失败的文档数 |
+
+---
+
+### `POST /api/v1/rag/documents/upload`
+
+上传文本文件并嵌入（一步到位）。适合前端直接提交文件。
+
+**Content-Type:** `multipart/form-data`
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `files` | MultipartFile[] | ✅ | 文件列表（最多 100 个） |
+| `collectionId` | Long | 否 | 目标知识库 ID |
+| `force` | boolean | 否 | `true`=强制重嵌入 |
+
+**支持的文件类型：** txt / md / json / xml / html / csv / log
+
+**响应：**
+
+```json
+{
+  "processed": 10,
+  "success": 10,
+  "failed": 0,
+  "results": [
+    {
+      "filename": "产品说明书.txt",
+      "documentId": 1,
+      "title": "产品说明书",
+      "embedded": true,
+      "chunks": 5,
+      "error": null
+    }
+  ]
 }
 ```
 

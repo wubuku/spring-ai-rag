@@ -713,3 +713,16 @@
   - 文档同步（rest-api.md 补充新端点）
   - E2E 验证
   - API response DTO 一致性审查
+
+**API 端点梳理结果（2026-04-05）**：
+  - `POST /documents/batch`: 仅创建文档（需另调 /batch/embed 才嵌入）
+  - `POST /documents/batch/embed`: 仅嵌入（需文档已存在）
+  - `POST /documents/batch/create-and-embed`: 一步创建+嵌入（新加，JSON）
+  - `POST /documents/upload`: 一步文件上传+嵌入（新加，multipart）
+  - `/batch/create-and-embed` 与 `/batch`+`/batch/embed` 功能重叠，可考虑合并
+
+**用户体验改进项（高优先级）**：
+  - 合并 `/batch/create-and-embed` 到 `/batch?embed=true`（减少端点数量）
+  - 批量操作 SSE 进度追踪
+  - 文档去重 API（content hash 查询）
+  - 文档搜索（按 collection/keyword/fulltext）
