@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-04-04 09:53 — 149 源文件 + 101 测试文件，1116 测试全通过（56 API + 29 Documents + 993 Core + 38 Starter），零 TODO/FIXME，Phase 1-5 + P1/P2/P3 全部完成
+> **最后更新**: 2026-04-04 11:50 — 153 源文件 + 105 测试文件，多模型增强 Phase 1-7 全部完成（MiniMax接入 + ModelRegistry + ChatModelRouter + REST端点 + 指标埋点 + A/B整合 + 模型对比API）
 
 ---
 
