@@ -741,7 +741,7 @@
 | i4 | docs/rest-api.md → rest-api.md (英) + rest-api-zh-CN.md (中) | ✅ 2026-04-05 |
 | i5 | docs/architecture.md → architecture.md (英) + architecture-zh-CN.md (中) | ✅ 2026-04-05 |
 | i6 | docs/configuration.md → configuration.md (英) + configuration-zh-CN.md (中) | ✅ 2026-04-05 |
-| i7 | docs/getting-started.md + docs/extension-guide.md | 📋 待做 |
+| i7 | docs/getting-started.md + docs/extension-guide.md | ✅ 2026-04-05 |
 | i8 | docs/testing-guide.md + docs/troubleshooting.md + docs/DEPLOYMENT.md | 📋 待做 |
 
 每个文档顶部添加链接：
@@ -791,6 +791,7 @@
 - 2026-04-05 02:25 — ✅ i4 rest-api 国际化：rest-api.md 英文版（964行完整翻译）+ rest-api-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅（1093测试全通过）；commit ee81f2e 已推送
 - 2026-04-05 02:38 — ✅ i5 architecture 国际化：architecture.md 英文版（12825字符，完整翻译所有章节）+ architecture-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅（全通过）；commit 58ce39a 已推送
 - 2026-04-05 02:50 — ✅ i6 configuration 国际化：configuration.md 英文版（14558字符，完整翻译所有章节）+ configuration-zh-CN.md 中文原版（添加双向链接头）；mvn test ✅（全通过）；commit 2019b08 已推送
+- 2026-04-05 03:05 — ✅ i7 getting-started + extension-guide 国际化：各英文版（含完整翻译）+ 中文归档版（getting-started-zh-CN.md + extension-guide-zh-CN.md，添加双向链接头）；commit 805c0e7 已推送
 
 **WebUI 实现任务（高优先级）**：
 详细规划文档：`docs/drafts/WEBUI_IMPLEMENTATION_PLAN.md`
