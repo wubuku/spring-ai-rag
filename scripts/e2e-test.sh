@@ -264,11 +264,11 @@ echo ""
 # 1️⃣2️⃣ 缓存统计
 # ────────────────────────────────────────
 echo "1️⃣2️⃣ 缓存统计"
-RESP=$(curl -s -w "\n%{http_code}" "$API/cache/stats")
+RESP=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/v1/cache/stats")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /cache/stats" "200" "$CODE"
-assert_contains "返回 cacheStats 或 hitRate" "$BODY" '"cacheStats"'
+assert_contains "返回 hitCount" "$BODY" '"hitCount"'
 echo ""
 
 # ────────────────────────────────────────
@@ -291,7 +291,7 @@ if [ -n "$COLLECTION_ID" ]; then
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "DELETE /collections/{id}" "200" "$CODE"
-    assert_contains "确认删除" "$BODY" "Collection 已删除"
+    assert_contains "确认删除" "$BODY" "集合已删除"
 else
     echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
 fi
