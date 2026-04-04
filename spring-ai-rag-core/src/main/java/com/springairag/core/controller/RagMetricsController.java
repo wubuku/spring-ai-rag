@@ -1,6 +1,9 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.RagMetricsSummary;
+import com.springairag.core.config.ChatModelRouter;
+import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -10,6 +13,10 @@ import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * RAG 指标监控控制器
@@ -24,9 +31,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class RagMetricsController {
 
     private final RagMetricsService metricsService;
+    private final ModelMetricsService modelMetricsService;
+    private final ModelRegistry modelRegistry;
+    private final ChatModelRouter modelRouter;
 
-    public RagMetricsController(RagMetricsService metricsService) {
+    public RagMetricsController(RagMetricsService metricsService,
+                                ModelMetricsService modelMetricsService,
+                                ModelRegistry modelRegistry,
+                                ChatModelRouter modelRouter) {
         this.metricsService = metricsService;
+        this.modelMetricsService = modelMetricsService;
+        this.modelRegistry = modelRegistry;
+        this.modelRouter = modelRouter;
     }
 
     @Operation(summary = "获取 RAG 指标汇总",
@@ -44,5 +60,32 @@ public class RagMetricsController {
                 metricsService.getTotalRetrievalResults(),
                 metricsService.getTotalLlmTokens()
         );
+    }
+
+    @Operation(summary = "获取各模型指标",
+            description = "返回各 provider 的调用量、错误率、延迟等模型级指标。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "返回模型级指标数据"),
+    })
+    @GetMapping(value = "/metrics/models", produces = MediaType.APPLICATION_JSON_VALUE)
+    public Map<String, Object> getModelMetrics() {
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("multiModelEnabled", modelRouter.isMultiModelEnabled());
+
+        List<String> providers = modelRouter.getAvailableProviders();
+        List<Map<String, Object>> modelStats = providers.stream()
+                .map(p -> {
+                    Map<String, Object> stats = new LinkedHashMap<>();
+                    stats.put("provider", p);
+                    stats.put("calls", modelMetricsService.getCallCount(p));
+                    stats.put("errors", modelMetricsService.getErrorCount(p));
+                    stats.put("errorRate", modelMetricsService.getErrorRate(p));
+                    stats.put("displayName", modelRegistry.getDisplayName(p));
+                    return stats;
+                })
+                .toList();
+
+        response.put("models", modelStats);
+        return response;
     }
 }

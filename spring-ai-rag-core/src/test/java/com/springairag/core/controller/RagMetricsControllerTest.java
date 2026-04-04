@@ -1,6 +1,9 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.RagMetricsSummary;
+import com.springairag.core.config.ChatModelRouter;
+import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -20,11 +23,21 @@ class RagMetricsControllerTest {
     @Mock
     private RagMetricsService metricsService;
 
+    @Mock
+    private ModelMetricsService modelMetricsService;
+
+    @Mock
+    private ModelRegistry modelRegistry;
+
+    @Mock
+    private ChatModelRouter modelRouter;
+
     private RagMetricsController controller;
 
     @BeforeEach
     void setUp() {
-        controller = new RagMetricsController(metricsService);
+        controller = new RagMetricsController(
+                metricsService, modelMetricsService, modelRegistry, modelRouter);
     }
 
     @Test
