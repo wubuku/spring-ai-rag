@@ -458,7 +458,18 @@
 - 与 RagDocumentController 等其他 Controller 的 Swagger 注解风格保持一致
 - commit 099e8de 已推送
 
-### 2026-04-04 11:50 — ✅ 多模型支持 Phase 1-7 全部完成
+### 2026-04-04 12:09 — 主动巡检：生产级成熟确认
+- mvn clean compile ✅（5 模块，9.1s）/ mvn test ✅（零失败零错误）
+- 153 源文件 + 105 测试文件；零 TODO/FIXME；全部 Phase 1-7 + 24 项 P1/P2/P3 完成
+- JaCoCo Core：90% 指令/78% 分支（config 76%/60% 已知，logging 76%/43% 正则分支正常）
+- git 工作区干净，HEAD 与 origin/main 同步
+- 提交改进：application.yml 新增 `spring.config.import: optional:file:./.env`（Spring Boot 3.x .env 自动加载），commit 9e9cb79
+
+## 待办（主动巡检 — 2026-04-04 第十一轮）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 65 | RagProperties inner class 提取为独立文件（12 个） | 代码质量 | ✅ 2026-04-04 |
 - mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
 - 153 源文件 + 105 测试文件；零 TODO/FIXME
 
