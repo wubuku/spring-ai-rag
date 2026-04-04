@@ -509,3 +509,11 @@
 - `application.yml` 中意外暴露真实 API key 已 revert（安全修复）
 - commit 844d197 已推送
 
+### 2026-04-04 14:35 — 主动巡检：安全修复 + 项目健康确认
+- mvn clean compile ✅（5 模块，11.5s）/ mvn test ✅（零失败零错误）
+- 扫描发现遗留 `TestController.java`（直接调用 DeepSeek API 的测试端点）+ application.yml 硬编码 API key
+- 已删除 `TestController.java` + revert application.yml，确保 API key 通过环境变量注入
+- 零 TODO/FIXME；154 源文件 + 110 测试文件；全部 Phase 1-6 + 24 项 P1/P2/P3 完成
+- git 工作区干净，HEAD 与 origin/main 同步
+- 项目处于生产级成熟状态
+
