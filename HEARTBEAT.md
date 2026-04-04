@@ -572,3 +572,9 @@
   - 文档更新：CONTRIBUTING.md / DEPLOYMENT.md / getting-started.md Java 版本要求 → 21+ (LTS)
   - Core + demos 全量测试通过
   - commit 09c16dd（未 push）
+
+- 2026-04-04 20:18 — E2E 脚本端口修复 + application.yml 清理：
+  - `e2e-test.sh`: 默认 BASE_URL 端口 8080 → 8081（与 application.yml 一致）
+  - `application.yml`: 删除无效的 `spring.config.import: optional:file:./.env`（Spring Boot 不原生解析 .env 格式，.env 加载依赖 shell 脚本 source，spring.config.import 无效）
+  - mvn clean compile ✅ / mvn test ✅（1041 测试全通过，零失败零错误）
+  - git 已推送（commit 5e90703）
