@@ -483,10 +483,10 @@ class RagDocumentControllerTest {
         List<Long> manyIds = new ArrayList<>();
         for (int i = 0; i < 101; i++) manyIds.add((long) i);
 
-        ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
-                Map.of("ids", manyIds));
+        IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
+                () -> controller.batchDeleteDocuments(Map.of("ids", manyIds)));
 
-        assertEquals(400, response.getStatusCode().value());
+        assertEquals("单次批量删除不超过 100 条", thrown.getMessage());
     }
 
     @Test

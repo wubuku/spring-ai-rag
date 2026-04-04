@@ -294,4 +294,30 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ErrorResponse> r4 = handler.handleDataAccess(e4, request);
         assertEquals("application/problem+json", r4.getHeaders().getContentType().toString());
     }
+
+    // ==================== 敏感数据脱敏验证 ====================
+
+    @Test
+    void handleException_sensitiveDataInMessage_maskedInResponse() {
+        // 异常消息含 API Key/Token 时，handleException 应脱敏后再返回
+        RuntimeException e = new RuntimeException("Request failed: apiKey=sk-12345678 and token=eyJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL3NvbWV0aGluZy5jb20ifQ.sig");
+        ResponseEntity<ErrorResponse> response = handler.handleException(e, request);
+
+        String message = response.getBody().getMessage();
+        assertFalse(message.contains("sk-12345678"), "API Key should be masked");
+        assertFalse(message.contains("eyJ"), "JWT token should be masked");
+        assertTrue(message.contains("***REDACTED***"), "Message should contain redaction markers");
+        assertEquals(500, response.getStatusCode().value());
+    }
+
+    @Test
+    void handleException_sensitiveDataInMessage_maskedInLog() {
+        // 异常消息脱敏同时，verify 日志调用的也是脱敏后的消息（间接验证）
+        RuntimeException e = new RuntimeException("Password=super-secret and Bearer token=abc123xyz");
+        ResponseEntity<ErrorResponse> response = handler.handleException(e, request);
+
+        assertFalse(response.getBody().getMessage().contains("super-secret"));
+        assertFalse(response.getBody().getMessage().contains("abc123xyz"));
+        assertTrue(response.getBody().getMessage().contains("***REDACTED***"));
+    }
 }
