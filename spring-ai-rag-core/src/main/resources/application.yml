@@ -94,6 +94,10 @@ spring:
 app:
   llm:
     provider: ${LLM_PROVIDER:openai}
+  # 多模型路由配置（experimental）
+  multi-model:
+    enabled: ${MULTI_MODEL_ENABLED:false}
+    fallback-chain: ${MULTI_MODEL_FALLBACK_CHAIN:openai,minimax}
 
 # ============================================
 # 嵌入模型配置（独立于 Chat provider，始终生效）
