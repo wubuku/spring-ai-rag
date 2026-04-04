@@ -419,6 +419,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | 65 | RagProperties inner class 提取为独立文件（12 个） | 代码质量 | ✅ 2026-04-04 |
+| 66 | RagChatService.executeChat 长方法重构（53→30行） | 代码质量 | ✅ 2026-04-04 |
 
 ### 2026-04-04 07:42 — 主动巡检：RagProperties inner class 提取重构
 - mvn clean compile ✅ / mvn test ✅（全通过，零失败零错误）
@@ -433,8 +434,11 @@
 - IMPLEMENTATION_COMPARISON.md 统计更新：149 源文件 + 101 测试文件 + 1116 测试全通过
 - commit 8fc9aa4 已推送
 
+### 2026-04-04 08:50 — ✅ #66 RagChatService 长方法重构
+- executeChat 53→30行（-43%），提取 invokeChatClient() + LlmCallResult record
+- 全测试通过，commit b76dc87
+
 ### 2026-04-04 08:40 — 主动巡检：生产级成熟状态确认
 - mvn clean compile ✅（5 模块，8.3s）/ mvn test ✅（全通过，零失败零错误）
 - 零 TODO/FIXME；149 源文件 + 101 测试文件；全部 Phase 1-6 + P1/P2/P3 全部完成
 - git 工作区干净，HEAD 与 origin/main 同步
-- 项目处于生产级成熟状态，无需任何改进
