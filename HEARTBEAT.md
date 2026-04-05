@@ -958,8 +958,8 @@
 |---|--------|------|------|
 | D1-1 | WebUI 大块告警：构建警告 chunk>500KB，优化路由级代码分割 | 性能 | ✅ 2026-04-05（721KB→243KB初始，React.lazy路由分割） |
 | D1-2 | WebUI Vitest 覆盖率提升（当前仅 hooks/components/api 覆盖） | 测试覆盖 | ✅ 2026-04-05（D1-2 完成，79 tests，ChatSidebar/CreateCollectionModal/Layout/ThemeToggle 测试） |
-| D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ⏳ 待推进 |
-| D1-4 | DocumentVersionService 单元测试 | 测试覆盖 | ⏳ 待推进 |
+| D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ⏳ WebUI cron |
+| D1-4 | DocumentVersionService 单元测试（13 tests） | 测试覆盖 | ✅ 2026-04-05 |
 
 ## 待办（D2 — 运维增强）
 
@@ -967,15 +967,15 @@
 |---|--------|------|------|
 | D2-1 | B8-2 Grafana Dashboard JSON 面板（推广使用） | 可观测性 | ✅ 2026-04-05 |
 | D2-2 | B8-3 Prometheus Alerting Rules（RAG 专属规则） | 可观测性 | ✅ 2026-04-05 |
-| D2-3 | 版本兼容性：升级到 Spring Boot 3.5.x + Spring AI 1.1.x | 依赖升级 | ⏳ 待推进 |
+| D2-3 | 版本兼容性：升级到 Spring Boot 3.5.x + Spring AI 1.1.x | 依赖升级 | ✅ 2026-04-04 |
 | D2-4 | CI 改进：上传 JaCoCo 覆盖率到 Codecov / Coveralls | CI/CD | ✅ 2026-04-05（codecov-action@v4，jacoco.xml 全模块上传） |
 
 ## 待办（测试 B9 — 测试增强）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ⏳ 待推进 |
-| B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ⏳ 待推进 |
+| B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ✅ 2026-04-05（22 tests: RFC 7807 + request field + spec completeness） |
+| B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ⏳ WebUI cron |
 
 ## 待办（Metrics C1 — 可观测性补全）
 
