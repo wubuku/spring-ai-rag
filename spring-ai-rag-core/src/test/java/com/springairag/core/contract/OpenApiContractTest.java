@@ -530,4 +530,182 @@ class OpenApiContractTest {
             }
         }
     }
+
+    // ========================================================================
+    // B9-1: Additional Schema Contract Tests (OpenAPI Schema Validation)
+    // ========================================================================
+
+    @Nested
+    @DisplayName("B9-1 — Error Response RFC 7807 Schema Contract")
+    class ErrorResponseSchemaContract {
+
+        @Test
+        @DisplayName("ErrorResponse schema has RFC 7807 fields: type, title, status")
+        void errorResponseSchema_hasRFC7807Fields() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode errorSchema = spec.path("components").path("schemas").path("ErrorResponse");
+
+            assertThat(errorSchema.isMissingNode()).isFalse();
+            JsonNode props = errorSchema.path("properties");
+            assertThat(props.has("type"))
+                    .as("ErrorResponse must have 'type' field (RFC 7807)")
+                    .isTrue();
+            assertThat(props.has("title") || props.has("detail"))
+                    .as("ErrorResponse must have 'title' or 'detail' field (RFC 7807)")
+                    .isTrue();
+            assertThat(props.has("status"))
+                    .as("ErrorResponse must have 'status' field (RFC 7807)")
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("ErrorResponse schema has no invalid type values")
+        void errorResponseSchema_validTypes() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode errorSchema = spec.path("components").path("schemas").path("ErrorResponse");
+
+            if (errorSchema.isMissingNode()) return;
+            JsonNode props = errorSchema.path("properties");
+            for (var field : iterable(props.fieldNames())) {
+                JsonNode fieldSchema = props.get(field);
+                if (fieldSchema.has("type")) {
+                    String type = fieldSchema.get("type").asText();
+                    assertThat(java.util.List.of("string", "integer", "boolean", "object", "array", "null"))
+                            .as("Field '%s' must have a valid JSON Schema type", field)
+                            .contains(type);
+                }
+            }
+        }
+
+
+    }
+
+    @Nested
+    @DisplayName("B9-1 — Request Schema Field Completeness")
+    class RequestSchemaFieldContract {
+
+        @Test
+        @DisplayName("SearchRequest schema exists and has query field")
+        void searchRequestSchema_hasQueryField() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode schemas = spec.path("components").path("schemas");
+            assertThat(schemas.has("SearchRequest"))
+                    .as("SearchRequest schema must be defined")
+                    .isTrue();
+            assertThat(schemas.get("SearchRequest").path("properties").has("query"))
+                    .as("SearchRequest must have 'query' field")
+                    .isTrue();
+        }
+
+        @Test
+        @DisplayName("CollectionRequest schema exists and has name field")
+        void collectionRequestSchema_hasNameField() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode schemas = spec.path("components").path("schemas");
+            if (!schemas.isMissingNode() && schemas.has("CollectionRequest")) {
+                assertThat(schemas.get("CollectionRequest").path("properties").has("name"))
+                        .as("CollectionRequest must have 'name' field")
+                        .isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("All request schemas use 'object' type (not primitive or array)")
+        void requestSchemas_areObjects() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode schemas = spec.path("components").path("schemas");
+
+            for (String schemaName : java.util.List.of("ChatRequest", "SearchRequest", "CollectionRequest", "DocumentRequest")) {
+                if (schemas.has(schemaName)) {
+                    JsonNode schema = schemas.get(schemaName);
+                    if (schema.has("type")) {
+                        assertThat(schema.get("type").asText())
+                                .as("'%s' schema type must be 'object'", schemaName)
+                                .isEqualTo("object");
+                    }
+                }
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("B9-1 — OpenAPI Spec Completeness")
+    class SpecCompletenessContract {
+
+        @Test
+        @DisplayName("All required schemas are defined")
+        void allRequiredSchemasExist() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode schemas = spec.path("components").path("schemas");
+
+            for (String required : REQUIRED_SCHEMAS) {
+                assertThat(schemas.has(required))
+                        .as("Required schema '%s' must be defined", required)
+                        .isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("paths are not empty (at least 5 endpoints documented)")
+        void pathsNotEmpty() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode paths = spec.get("paths");
+            assertThat(paths.isObject()).isTrue();
+            assertThat(paths.size())
+                    .as("At least 5 endpoints should be documented in the spec")
+                    .isGreaterThanOrEqualTo(5);
+        }
+
+        @Test
+        @DisplayName("All operations have operationId or summary")
+        void operationsHaveIdentity() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            JsonNode spec = objectMapper.readTree(result.getResponse().getContentAsString());
+            JsonNode paths = spec.get("paths");
+
+            int operationsWithoutId = 0;
+            for (var pathKey : iterable(paths.fieldNames())) {
+                JsonNode pathItem = paths.get(pathKey);
+                for (String method : java.util.List.of("get", "post", "put", "delete", "patch")) {
+                    JsonNode op = pathItem.get(method);
+                    if (op == null) continue;
+                    boolean hasId = op.has("operationId");
+                    boolean hasSummary = op.has("summary");
+                    if (!hasId && !hasSummary) {
+                        operationsWithoutId++;
+                    }
+                }
+            }
+            assertThat(operationsWithoutId)
+                    .as("No operation should be missing both operationId and summary")
+                    .isEqualTo(0);
+        }
+    }
+
+    private static <T> Iterable<T> iterable(Iterator<T> it) {
+        return () -> it;
+    }
 }

@@ -110,6 +110,13 @@
                 <artifactId>spring-ai-advisors-vector-store</artifactId>
                 <version>${spring-ai.version}</version>
             </dependency>
+            <!-- REST Assured (for OpenAPI contract testing) -->
+            <dependency>
+                <groupId>io.rest-assured</groupId>
+                <artifactId>rest-assured</artifactId>
+                <version>5.4.0</version>
+                <scope>test</scope>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 
