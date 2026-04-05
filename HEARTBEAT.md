@@ -698,6 +698,17 @@
 | N5 | B9 Testing：Playwright E2E SSE 流式响应 + 文件上传 | 测试 | ✅ 2026-04-05（N5 完成，streaming-upload.spec.ts 4 tests，chat page + documents upload） |
 | N6 | D1-4：DocumentVersionService 单元测试补强 | 测试 | ✅ 2026-04-05（N6 完成，13 tests 覆盖 recordVersion/forceRecordVersion/getVersionHistory 等全部方法） |
 
+## 待办（新一波改进 N7-N12）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N7 | API 响应压缩（gzip）+ 请求限流优化 | 性能 | ✅ 2026-04-05（N7 完成，server.compression.enabled，1141 tests） |
+| N8 | HikariCP 连接池监控指标暴露（Actuator） | 可观测性 | ⏳ 待推进 |
+| N9 | WebUI 主题持久化（深色模式 + 语言偏好） | UX | ⏳ 待推进 |
+| N10 | 数据库连接池调优（production values） | 性能 | ⏳ 待推进 |
+| N11 | API 文档增强（SpringDoc operation description 补全） | 文档 | ⏳ 待推进 |
+| N12 | CI 自动 Changelog 生成（Conventional Commits） | DevOps | ⏳ 待推进 |
+
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
 - RagAuditLog 实体 + RagAuditLogRepository（JPA，8 个查询方法）
