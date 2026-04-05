@@ -677,6 +677,16 @@
   - Spring Boot 3.5 新特性检查（如有）
   - 数据库连接池调优（HikariCP 配置审查）
 
+## 待办（Cron 后续扫描）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| R1 | 安全检查（敏感信息脱敏验证 + API Key 过滤） | 安全 | ⏳ 待推进 |
+| R2 | Spring Boot 3.5 新特性检查（WebClient Builder / Virtual Threads 默认启用） | 技术升级 | ⏳ 待推进 |
+| R3 | HikariCP 连接池参数调优（最大连接数/空闲超时/连接超时审查） | 性能 | ⏳ 待推进 |
+| R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ⏳ 待推进 |
+| R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ⏳ 待推进 |
+
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
 - RagAuditLog 实体 + RagAuditLogRepository（JPA，8 个查询方法）
