@@ -153,6 +153,7 @@
 ## 进度日志
 - 2026-04-06 05:50 — ✅ C19 API per-endpoint 超时配置化：RagTimeoutProperties（7 项配置：connect/read/chat-ask/chat-stream/search/embed/model-compare）+ SpringAiConfig 重构（RestClient 层级注入超时）+ application.yml rag.timeout.* 配置节；SpringAiConfigTest 适配构造函数注入（8 tests）；RagTimeoutPropertiesTest（4 tests）；docs/configuration.md + configuration-zh-CN.md 添加 LLM API 超时配置章节；12 tests ✅；mvn clean compile ✅；commit cdfe91c 已推送
 - 2026-04-04 19:45 — ✅ CI JDK 版本对齐：GitHub Actions workflow Java 17 → Java 21（LTS），与项目运行时版本同步；mvn clean compile ✅，mvn test ✅（全通过）；commit 62da699 已推送
+- 2026-04-06 07:28 — ✅ C36 API 重试策略：spring-retry + RagRetryProperties（指数退避+抖动，429/503/超时可配置），RagChatService + QueryRewritingService 集成 RetryTemplate；RagRetryPropertiesTest + RetryConfigTest（10 tests）；1175+ 测试全通过；commit 1562ed1
 - 2026-04-04 17:10 — ✅ 主动巡检（cron）：mvn clean compile ✅，mvn test ✅（零失败零错误）；零 TODO/FIXME；156 源文件 + 107 测试文件；全部 Phase 1-6 + P1/P2/P3 完成；HEARTBEAT.md 全部 ⏳ 待办已清空；IMPLEMENTATION_COMPARISON.md 统计同步更新；git 已推送
 - 2026-04-04 11:53 — ✅ 主动巡检（cron）：`mvn clean compile` ✅，`mvn test` ✅（996 测试全通过，+3 新测试）；RagChatServiceTest 新增 3 个测试覆盖 `buildSystemPrompt`（有扩展无定制器/有扩展有定制器）和 `customizeUserMessage`（有定制器）分支路径；JaCoCo 扫描确认零 TODO/FIXME，153 源/107 测试文件，项目处于生产级成熟状态
 - 2026-04-04 08:20 — ✅ E2E 测试脚本 bug 修复（cron）：mvn clean compile ✅，mvn test ✅（993 测试全通过）；E2E 43/45（2 LLM 失败是环境 API key 问题，非代码 bug）；修复 /cache/stats 路径（应为 /api/v1/cache/stats 而非 /api/v1/rag/cache/stats）+ collection 删除断言字符串（应为"集合已删除"而非"Collection 已删除"），commit 0d8e21c
@@ -1174,7 +1175,7 @@
 | C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ⏳ | P2 |
 | C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ⏳ | P3 |
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ⏳ | P3 |
-| C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ⏳ | P2 |
+| C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
 | C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ⏳ | P2 |
 | C39 | 第三方 LLM API Mock Server：测试环境下模拟各 provider 响应 | 测试 | ⏳ | P2 |
