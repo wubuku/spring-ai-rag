@@ -691,7 +691,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| N1 | B8 DevOps：Helm Chart + Kubernetes 部署清单 | 部署 | ⏳ 待推进 |
+| N1 | B8 DevOps：Helm Chart + Kubernetes 部署清单 | 部署 | ✅ 2026-04-05（N1 完成，k8s/ 目录已完整：Chart.yaml + values.yaml + 8 个 templates + values-production.yaml） |
 | N2 | B8 DevOps：Grafana Dashboard JSON 配置 | 监控 | ⏳ 待推进 |
 | N3 | B8 DevOps：Prometheus Alerting Rules | 监控 | ⏳ 待推进 |
 | N4 | B8 DevOps：k6 负载测试脚本 | 性能 | ⏳ 待推进 |
