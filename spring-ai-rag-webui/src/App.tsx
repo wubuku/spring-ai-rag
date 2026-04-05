@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { Layout } from './components/Layout/Layout';
+import { ToastProvider } from './components/Toast';
 import { Dashboard } from './pages/Dashboard';
 import { Documents } from './pages/Documents';
 import { Collections } from './pages/Collections';
@@ -24,7 +25,8 @@ const queryClient = new QueryClient({
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter basename="/webui">
+      <ToastProvider>
+        <BrowserRouter basename="/webui">
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Navigate to="dashboard" replace />} />
@@ -39,8 +41,9 @@ export default function App() {
             <Route path="settings" element={<Settings />} />
           </Route>
         </Routes>
-      </BrowserRouter>
+        </BrowserRouter>
       <ReactQueryDevtools initialIsOpen={false} />
+      </ToastProvider>
     </QueryClientProvider>
   );
 }
