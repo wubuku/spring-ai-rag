@@ -1134,3 +1134,38 @@
 - 每次 cron 触发：优先执行 P1 任务，完成后扫描 P2
 - P1 全完成后自动推进 P2，以此类推
 - 任何时候 HEARTBEAT 必须保持 ≥10 个 ⏳ 待办
+
+## 待办（Cron 长队列 — 30+ 任务永不枯竭）
+
+| # | 改进项 | 类型 | 状态 | 优先级 |
+|---|--------|------|------|--------|
+| C13 | C1 per-user 限流：ApiKeyAuthFilter 提取用户身份 → RateLimitFilter 支持 per-user | 安全 | ⏳ | P1 |
+| C14 | N17 WebUI搜索历史：搜索记录 localStorage 持久化 + 展示历史列表 | UX | ⏳ | P1 |
+| C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ⏳ | P1 |
+| C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
+| C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ⏳ | P2 |
+| C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ⏳ | P2 |
+| C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ⏳ | P2 |
+| C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ⏳ | P2 |
+| C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
+| C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
+| C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ⏳ | P2 |
+| C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ⏳ | P2 |
+| C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ⏳ | P3 |
+| C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
+| C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
+| C28 |SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ⏳ | P1 |
+| C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ⏳ | P3 |
+| C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ⏳ | P2 |
+| C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
+| C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
+| C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ⏳ | P2 |
+| C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ⏳ | P3 |
+| C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ⏳ | P3 |
+| C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ⏳ | P2 |
+| C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
+| C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ⏳ | P2 |
+| C39 | 第三方 LLM API Mock Server：测试环境下模拟各 provider 响应 | 测试 | ⏳ | P2 |
+| C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
+
+**Cron 执行保证**：每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前，cron 永不停止。
