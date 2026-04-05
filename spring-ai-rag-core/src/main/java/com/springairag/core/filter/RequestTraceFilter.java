@@ -167,7 +167,7 @@ public class RequestTraceFilter implements Filter {
                 return new TraceContext(traceId, spanId, true);
             }
         } catch (Exception e) {
-            log.debug("解析 traceparent 失败: {}", traceparent);
+            log.debug("Failed to parse traceparent: {}", traceparent);
         }
         // 解析失败，生成新的
         return new TraceContext(generateTraceId(), spanIdEnabled ? generateHexId(16) : null, false);

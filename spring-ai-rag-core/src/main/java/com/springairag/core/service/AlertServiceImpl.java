@@ -91,7 +91,7 @@ public class AlertServiceImpl implements AlertService {
     @Transactional
     public Long fireAlert(String alertType, String alertName, String message,
                           String severity, Map<String, Object> metrics) {
-        log.warn("告警触发: {} - {} - {}", alertName, severity, message);
+        log.warn("Alert triggered: {} - {} - {}", alertName, severity, message);
 
         RagAlert alert = new RagAlert();
         alert.setAlertType(alertType);
@@ -129,14 +129,14 @@ public class AlertServiceImpl implements AlertService {
             alert.setResolution(resolution);
             alert.setResolvedAt(ZonedDateTime.now());
             alertRepository.save(alert);
-            log.info("告警已解决: {} - {}", alertId, resolution);
+            log.info("Alert resolved: {} - {}", alertId, resolution);
         });
     }
 
     @Override
     public void silenceAlert(String alertKey, int durationMinutes) {
         silencedAlerts.put(alertKey, ZonedDateTime.now().plusMinutes(durationMinutes));
-        log.info("告警已静默: {} - {} 分钟", alertKey, durationMinutes);
+        log.info("Alert silenced: {} - {} minutes", alertKey, durationMinutes);
     }
 
     @Override

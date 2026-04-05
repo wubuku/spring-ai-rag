@@ -100,7 +100,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocument: 内容太短无需分块返回提示")
+    @DisplayName("embedDocument: content too short returns skip message")
     void embedDocument_contentTooShort_returnsSkipped() {
         RagDocument doc = createDocument(1L, "太短");
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -108,7 +108,7 @@ class DocumentEmbedServiceTest {
         Map<String, Object> output = service.embedDocument(1L);
 
         assertEquals(0, output.get("chunksCreated"));
-        assertTrue(((String) output.get("message")).contains("太短"));
+        assertTrue(((String) output.get("message")).toLowerCase().contains("short"));
         verifyNoInteractions(embeddingBatchService, jdbcTemplate);
     }
 

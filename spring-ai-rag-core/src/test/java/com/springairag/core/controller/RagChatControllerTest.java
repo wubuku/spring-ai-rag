@@ -171,7 +171,7 @@ class RagChatControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("session-001", response.getBody().sessionId());
-        assertEquals("会话历史已清空", response.getBody().message());
+        assertEquals("Session history cleared", response.getBody().message());
         assertEquals(5, response.getBody().deletedCount());
         verify(historyRepository).deleteBySessionId("session-001");
     }

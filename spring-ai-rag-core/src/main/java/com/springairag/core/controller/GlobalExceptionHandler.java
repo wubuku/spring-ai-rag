@@ -46,14 +46,14 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMissingParam(MissingServletRequestParameterException e,
                                                             HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER",
-                "缺少必需参数: " + e.getParameterName(), request);
+                "Missing required parameter: " + e.getParameterName(), request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<ErrorResponse> handleUnreadableMessage(HttpMessageNotReadableException e,
                                                                  HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "INVALID_REQUEST_BODY",
-                "请求体格式错误，请检查 JSON 格式", request);
+                "Invalid request body, please check JSON format", request);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -91,7 +91,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException e,
                                                             HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "TYPE_MISMATCH",
-                "参数 '" + e.getName() + "' 类型不正确", request);
+                "Parameter '" + e.getName() + "' has wrong type", request);
     }
 
     @ExceptionHandler(IllegalArgumentException.class)
@@ -107,7 +107,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleNotFound(NoHandlerFoundException e,
                                                         HttpServletRequest request) {
         return buildResponse(HttpStatus.NOT_FOUND, "NOT_FOUND",
-                "接口不存在: " + e.getRequestURL(), request);
+                "Endpoint not found: " + e.getRequestURL(), request);
     }
 
     // ==================== 405 Method Not Allowed ====================
@@ -116,7 +116,7 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleMethodNotSupported(HttpRequestMethodNotSupportedException e,
                                                                   HttpServletRequest request) {
         return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
-                "不支持的请求方法: " + e.getMethod(), request);
+                "HTTP method not supported: " + e.getMethod(), request);
     }
 
     // ==================== 500 Internal Server Error ====================
@@ -126,7 +126,7 @@ public class GlobalExceptionHandler {
                                                           HttpServletRequest request) {
         log.error("Database error: {}", e.getMessage(), e);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
-                "数据库操作失败", request);
+                "Database operation failed", request);
     }
 
     @ExceptionHandler(RagException.class)

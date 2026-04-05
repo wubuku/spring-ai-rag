@@ -131,7 +131,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        log.debug("限流计数: {} {} id={} {}/{}", request.getMethod(), path,
+        log.debug("Rate limit count: {} {} id={} {}/{}", request.getMethod(), path,
                 clientId.identifier, currentCount, limit);
         filterChain.doFilter(request, response);
     }
@@ -166,7 +166,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private void writeRateLimitResponse(HttpServletResponse response, String path,
                                         ClientId clientId, int currentCount,
                                         int limit) throws IOException {
-        log.warn("限流触发: {}={} path={} count={}/{}",
+        log.warn("Rate limit triggered: {}={} path={} count={}/{}",
                 clientId.type, clientId.identifier, path, currentCount, limit);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);

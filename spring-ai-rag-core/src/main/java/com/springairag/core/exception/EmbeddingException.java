@@ -8,7 +8,7 @@ package com.springairag.core.exception;
 public class EmbeddingException extends RagException {
 
     public EmbeddingException(Long documentId, String detail) {
-        super("EMBEDDING_FAILED", "嵌入向量生成失败: documentId=" + documentId + ", " + detail, 500);
+        super("EMBEDDING_FAILED", "Embedding failed: documentId=" + documentId + ", " + detail, 500);
     }
 
     public EmbeddingException(String message) {

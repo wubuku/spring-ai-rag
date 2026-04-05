@@ -148,7 +148,7 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ErrorResponse> response = handler.handleDataAccess(e, request);
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("DATABASE_ERROR", response.getBody().getError());
-        assertEquals("数据库操作失败", response.getBody().getMessage());
+        assertEquals("Database operation failed", response.getBody().getMessage());
     }
 
     @Test

@@ -181,7 +181,7 @@ public class RagCollectionController {
 
                     log.info("Collection deleted: id={}", id);
                     return ResponseEntity.ok(Map.of(
-                            "message", "集合已删除",
+                            "message", "Collection deleted",
                             "id", String.valueOf(id),
                             "documentsUnlinked", String.valueOf(count)
                     ));
@@ -261,7 +261,7 @@ public class RagCollectionController {
 
                     log.info("Document {} added to collection {}", documentId, id);
                     Map<String, Object> result = new HashMap<>();
-                    result.put("message", "文档已加入集合");
+                    result.put("message", "Document added to collection");
                     result.put("collectionId", id);
                     result.put("documentId", documentId);
                     return ResponseEntity.ok(result);

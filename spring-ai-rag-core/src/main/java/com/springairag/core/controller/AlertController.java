@@ -93,7 +93,7 @@ public class AlertController {
             @PathVariable Long alertId,
             @Valid @RequestBody ResolveAlertRequest body) {
         alertService.resolveAlert(alertId, body.resolution() != null ? body.resolution() : "");
-        return ResponseEntity.ok(AlertActionResponse.ok("告警已解决"));
+        return ResponseEntity.ok(AlertActionResponse.ok("Alert resolved"));
     }
 
     /**
@@ -110,7 +110,7 @@ public class AlertController {
         int duration = body.durationMinutes() != null ? body.durationMinutes() : 60;
         alertService.silenceAlert(body.alertKey(), duration);
         return ResponseEntity.ok(AlertActionResponse.ok(
-                "告警已静默: " + body.alertKey() + " (" + duration + " 分钟)"));
+                "Alert silenced: " + body.alertKey() + " (" + duration + " minutes)"));
     }
 
     /**

@@ -107,7 +107,7 @@ public class RagDocumentController {
                     "id", dup.getId(),
                     "title", dup.getTitle(),
                     "status", "DUPLICATE",
-                    "message", "内容已存在，文档ID: " + dup.getId(),
+                    "message", "Content already exists, documentId: " + dup.getId(),
                     "existingDocumentId", dup.getId(),
                     "contentHash", contentHash
             ));
@@ -128,7 +128,7 @@ public class RagDocumentController {
                 "id", doc.getId(),
                 "title", doc.getTitle(),
                 "status", "CREATED",
-                "message", "文档已创建，嵌入向量需通过 /api/v1/rag/documents/{id}/embed 生成",
+                "message", "Document created, to generate embedding call POST /api/v1/rag/documents/{id}/embed",
                 "contentHash", contentHash
         ));
     }
@@ -288,10 +288,10 @@ public class RagDocumentController {
 
     // ==================== 批量操作 ====================
 
-    @Operation(summary = "批量创建文档",
-               description = "一次上传多个文档（最多 100 条），自动去重。"
-                           + "设置 embed=true 可一步完成创建+嵌入向量（无需调用 /batch/embed）。"
-                           + "单条失败不影响其他文档。")
+    @Operation(summary = "Batch create documents",
+               description = "Upload multiple documents at once (up to 100), auto-deduplication."
+                           + " Set embed=true to create and embed in one step (no need to call /batch/embed)."
+                           + " Single document failure does not affect other documents.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "返回创建结果"),
             @ApiResponse(responseCode = "400", description = "请求参数无效（ids 为空/超限）")
@@ -332,7 +332,7 @@ public class RagDocumentController {
             throw new IllegalArgumentException("ids 列表不能为空");
         }
         if (ids.size() > 50) {
-            throw new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）");
+            throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
         Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
         return ResponseEntity.ok(result);
@@ -390,7 +390,7 @@ public class RagDocumentController {
         if (files == null || files.length == 0) {
             return ResponseEntity.badRequest().body(
                     new FileUploadResponse(0, 0, 0, List.of(
-                            new FileUploadResponse.FileResult("N/A", null, null, false, 0, "无文件上传"))));
+                            new FileUploadResponse.FileResult("N/A", null, null, false, 0, "No file uploaded"))));
         }
 
         List<FileUploadResponse.FileResult> results = new java.util.ArrayList<>();
@@ -445,7 +445,7 @@ public class RagDocumentController {
                 } catch (Exception e) {
                     return new FileUploadResponse.FileResult(
                             filename, null, null, false, 0,
-                            "不支持的文件类型: " + contentType + "，仅支持文本文件（txt/md/json/xml/html/csv/log）");
+                            "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
                 }
             }
 
@@ -453,7 +453,7 @@ public class RagDocumentController {
             String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
             if (content.isBlank()) {
                 return new FileUploadResponse.FileResult(
-                        filename, null, null, false, 0, "文件内容为空");
+                        filename, null, null, false, 0, "File content is empty");
             }
 
             // 构建文档标题（使用文件名）
@@ -479,14 +479,14 @@ public class RagDocumentController {
             } else {
                 return new FileUploadResponse.FileResult(
                         filename, null, title, false, 0,
-                        r.error() != null ? r.error() : "创建失败");
+                        r.error() != null ? r.error() : "Creation failed");
             }
 
         } catch (Exception e) {
             log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
             return new FileUploadResponse.FileResult(
                     filename, null, null, false, 0,
-                    "处理失败: " + e.getMessage());
+                    "Processing failed: " + e.getMessage());
         }
     }
 

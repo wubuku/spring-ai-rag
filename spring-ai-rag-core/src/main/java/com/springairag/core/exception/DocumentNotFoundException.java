@@ -8,7 +8,7 @@ package com.springairag.core.exception;
 public class DocumentNotFoundException extends RagException {
 
     public DocumentNotFoundException(Long documentId) {
-        super("DOCUMENT_NOT_FOUND", "文档不存在: id=" + documentId, 404);
+        super("DOCUMENT_NOT_FOUND", "Document not found: id=" + documentId, 404);
     }
 
     public DocumentNotFoundException(String message) {

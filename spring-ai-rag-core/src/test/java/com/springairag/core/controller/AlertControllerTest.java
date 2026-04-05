@@ -122,7 +122,7 @@ class AlertControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().success());
-        assertEquals("告警已解决", response.getBody().message());
+        assertEquals("Alert resolved", response.getBody().message());
         verify(alertService).resolveAlert(1L, "已修复");
     }
 

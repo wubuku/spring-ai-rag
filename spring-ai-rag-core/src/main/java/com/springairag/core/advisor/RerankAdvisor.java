@@ -46,7 +46,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
     public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
 
     /** 注入到系统消息的上下文前缀 */
-    private String systemContextPrefix = "基于以下参考资料回答问题：\n\n";
+    private String systemContextPrefix = "Answer the question based on the following references:\n\n";
 
     /** 返回的最大结果数 */
     private int maxResults = 5;

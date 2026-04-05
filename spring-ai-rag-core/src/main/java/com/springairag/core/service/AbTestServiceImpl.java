@@ -269,8 +269,8 @@ public class AbTestServiceImpl implements AbTestService {
         analysis.setIsSignificant(confidence >= 0.95);
         analysis.setWinner(analysis.isIsSignificant() ? bestVariant : null);
         analysis.setRecommendation(analysis.isIsSignificant()
-                ? "实验结果显著，建议将获胜变体 '" + bestVariant + "' 推广至全量流量"
-                : "样本量不足或差异不显著，建议增加流量或延长测试周期");
+                ? "Experiment results significant, recommend promoting winning variant '" + bestVariant + "' to full traffic"
+                : "Sample size insufficient or difference not significant, recommend increasing traffic or extending test duration");
     }
 
     private double calculateVariance(List<Double> values, double mean) {

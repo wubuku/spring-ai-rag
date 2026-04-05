@@ -414,7 +414,7 @@ class RagControllerIntegrationTest {
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 1))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.message").value("集合已删除"));
+                    .andExpect(jsonPath("$.message").value("Collection deleted"));
         }
 
         @Test
@@ -718,7 +718,7 @@ class RagControllerIntegrationTest {
                                     """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.alertId").value(42))
-                    .andExpect(jsonPath("$.message").value("告警已触发"));
+                    .andExpect(jsonPath("$.message").value("Alert triggered"));
         }
 
         @Test
@@ -729,7 +729,7 @@ class RagControllerIntegrationTest {
                                     {"resolution": "已修复"}
                                     """))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.message").value("告警已解决"));
+                    .andExpect(jsonPath("$.message").value("Alert resolved"));
 
             verify(alertService).resolveAlert(1L, "已修复");
         }
@@ -746,7 +746,7 @@ class RagControllerIntegrationTest {
                                     """))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.success").value(true))
-                    .andExpect(jsonPath("$.message").value("告警已静默: latency_high (30 分钟)"));
+                    .andExpect(jsonPath("$.message").value("Alert silenced: latency_high (30 minutes)"));
 
             verify(alertService).silenceAlert("latency_high", 30);
         }

@@ -17,6 +17,6 @@ public record CollectionCreatedResponse(
         String name
 ) {
     public static CollectionCreatedResponse of(Long collectionId, String name) {
-        return new CollectionCreatedResponse("知识库已创建", collectionId, name);
+        return new CollectionCreatedResponse("Collection created", collectionId, name);
     }
 }

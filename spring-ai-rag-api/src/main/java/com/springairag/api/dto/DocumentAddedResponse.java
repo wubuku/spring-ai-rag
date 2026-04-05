@@ -17,6 +17,6 @@ public record DocumentAddedResponse(
         Long documentId
 ) {
     public static DocumentAddedResponse of(Long collectionId, Long documentId) {
-        return new DocumentAddedResponse("文档已添加到知识库", collectionId, documentId);
+        return new DocumentAddedResponse("Document added to collection", collectionId, documentId);
     }
 }

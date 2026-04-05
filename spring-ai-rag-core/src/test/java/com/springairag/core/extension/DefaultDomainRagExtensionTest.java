@@ -25,7 +25,7 @@ class DefaultDomainRagExtensionTest {
 
     @Test
     void domainName_isGeneralRag() {
-        assertEquals("通用 RAG", extension.getDomainName());
+        assertEquals("General RAG", extension.getDomainName());
     }
 
     @Test

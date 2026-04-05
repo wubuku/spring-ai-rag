@@ -232,7 +232,7 @@ class BatchDocumentServiceTest {
 
         Map<String, String> result = service.deleteDocument(1L);
 
-        assertEquals("文档已删除", result.get("message"));
+        assertEquals("Document deleted", result.get("message"));
         assertEquals("1", result.get("id"));
         assertEquals("5", result.get("embeddingsRemoved"));
         verify(embeddingRepository).deleteByDocumentId(1L);

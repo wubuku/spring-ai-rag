@@ -14,6 +14,6 @@ public record FireAlertResponse(
         String message
 ) {
     public static FireAlertResponse of(Long alertId) {
-        return new FireAlertResponse(alertId, "告警已触发");
+        return new FireAlertResponse(alertId, "Alert triggered");
     }
 }

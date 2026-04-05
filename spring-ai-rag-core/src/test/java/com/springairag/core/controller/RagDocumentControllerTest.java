@@ -147,7 +147,7 @@ class RagDocumentControllerTest {
     @Test
     void deleteDocument_found() {
         when(batchDocumentService.deleteDocument(1L)).thenReturn(Map.of(
-                "message", "文档已删除",
+                "message", "Document deleted",
                 "id", "1",
                 "embeddingsRemoved", "3"
         ));
@@ -155,7 +155,7 @@ class RagDocumentControllerTest {
         ResponseEntity<Map<String, String>> response = controller.deleteDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("文档已删除", response.getBody().get("message"));
+        assertEquals("Document deleted", response.getBody().get("message"));
         assertEquals("3", response.getBody().get("embeddingsRemoved"));
         verify(batchDocumentService).deleteDocument(1L);
     }
@@ -552,7 +552,7 @@ class RagDocumentControllerTest {
         IllegalArgumentException thrown = assertThrows(IllegalArgumentException.class,
                 () -> controller.batchEmbedDocuments(Map.of("ids", manyIds)));
 
-        assertEquals("单次批量嵌入不超过 50 条（避免 API 限流）", thrown.getMessage());
+        assertEquals("Batch embedding limited to 50 documents per request (API rate limit)", thrown.getMessage());
     }
 
     // ==================== 版本历史 ====================

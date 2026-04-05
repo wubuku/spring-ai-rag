@@ -17,6 +17,6 @@ public record CollectionDeleteResponse(
         long documentsUnlinked
 ) {
     public static CollectionDeleteResponse of(Long id, long documentsUnlinked) {
-        return new CollectionDeleteResponse("集合已删除", id, documentsUnlinked);
+        return new CollectionDeleteResponse("Collection deleted", id, documentsUnlinked);
     }
 }

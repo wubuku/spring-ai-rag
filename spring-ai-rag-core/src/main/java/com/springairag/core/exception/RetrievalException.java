@@ -8,7 +8,7 @@ package com.springairag.core.exception;
 public class RetrievalException extends RagException {
 
     public RetrievalException(String query, String detail) {
-        super("RETRIEVAL_FAILED", "检索失败: query=" + query + ", " + detail, 500);
+        super("RETRIEVAL_FAILED", "Retrieval failed: query=" + query + ", " + detail, 500);
     }
 
     public RetrievalException(String message) {

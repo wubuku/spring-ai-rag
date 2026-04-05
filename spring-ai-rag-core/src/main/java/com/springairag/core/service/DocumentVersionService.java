@@ -49,7 +49,7 @@ public class DocumentVersionService {
     @Transactional
     public Optional<RagDocumentVersion> recordVersion(RagDocument doc, String changeType, String description) {
         if (doc.getId() == null || doc.getContentHash() == null) {
-            log.warn("文档缺少 ID 或 contentHash，跳过版本记录");
+            log.warn("Document missing ID or contentHash, skipping version record");
             return Optional.empty();
         }
 
@@ -57,7 +57,7 @@ public class DocumentVersionService {
         List<RagDocumentVersion> existing = versionRepository
                 .findByDocumentIdAndContentHash(doc.getId(), doc.getContentHash());
         if (!existing.isEmpty()) {
-            log.debug("文档 {} 哈希 {} 已有版本记录，跳过", doc.getId(), doc.getContentHash());
+            log.debug("Document {} hash {} already has a version record, skipping", doc.getId(), doc.getContentHash());
             return Optional.empty();
         }
 
@@ -68,7 +68,7 @@ public class DocumentVersionService {
         version.setVersionNumber(nextVersion);
 
         RagDocumentVersion saved = versionRepository.save(version);
-        log.info("文档 {} 记录版本 v{}（{}）哈希={}", doc.getId(), nextVersion, changeType, doc.getContentHash());
+        log.info("Document {} recorded version v{} ({}) hash={}", doc.getId(), nextVersion, changeType, doc.getContentHash());
         return Optional.of(saved);
     }
 
@@ -83,7 +83,7 @@ public class DocumentVersionService {
         version.setVersionNumber(nextVersion);
 
         RagDocumentVersion saved = versionRepository.save(version);
-        log.info("文档 {} 强制记录版本 v{}（{}）", doc.getId(), nextVersion, changeType);
+        log.info("Document {} force-recorded version v{} ({})", doc.getId(), nextVersion, changeType);
         return saved;
     }
 
@@ -128,7 +128,7 @@ public class DocumentVersionService {
     @Transactional
     public void deleteVersions(Long documentId) {
         versionRepository.deleteByDocumentId(documentId);
-        log.info("文档 {} 的所有版本记录已删除", documentId);
+        log.info("All version records for document {} deleted", documentId);
     }
 
     /**

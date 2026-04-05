@@ -229,7 +229,7 @@ class AdvisorChainIntegrationTest {
         String allText = result.prompt().getInstructions().stream()
                 .map(org.springframework.ai.chat.messages.Message::getText)
                 .collect(java.util.stream.Collectors.joining("\n"));
-        assertTrue(allText.contains("参考资料"), "消息应包含参考资料提示");
+        assertTrue(allText.contains("references"), "Message should contain references hint");
         assertTrue(allText.contains("皮肤类型分为干性、油性、混合性"), "应包含重排后的 top-1 结果");
         assertTrue(allText.contains("敏感肌护理建议"), "应包含重排后的 top-2 结果");
 
@@ -383,7 +383,7 @@ class AdvisorChainIntegrationTest {
         String allText = afterRerank.prompt().getInstructions().stream()
                 .map(org.springframework.ai.chat.messages.Message::getText)
                 .collect(java.util.stream.Collectors.joining("\n"));
-        assertTrue(allText.contains("参考资料"), "消息应包含参考资料上下文");
+        assertTrue(allText.contains("references"), "Message should contain references context");
     }
 
     @Test

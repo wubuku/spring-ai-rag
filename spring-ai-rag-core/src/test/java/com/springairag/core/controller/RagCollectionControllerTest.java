@@ -162,7 +162,7 @@ class RagCollectionControllerTest {
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("集合已删除", response.getBody().get("message"));
+        assertEquals("Collection deleted", response.getBody().get("message"));
         assertEquals("1", response.getBody().get("documentsUnlinked"));
         verify(documentRepository).clearCollectionIdByCollectionId(1L);
         verify(collectionRepository).deleteById(1L);
@@ -231,7 +231,7 @@ class RagCollectionControllerTest {
         ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of("documentId", 10L));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("文档已加入集合", response.getBody().get("message"));
+        assertEquals("Document added to collection", response.getBody().get("message"));
         assertEquals(1L, response.getBody().get("collectionId"));
         assertEquals(10L, response.getBody().get("documentId"));
     }

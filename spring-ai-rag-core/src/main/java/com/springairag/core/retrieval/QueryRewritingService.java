@@ -180,10 +180,10 @@ public class QueryRewritingService {
 
     private String buildRewritePrompt(String originalQuery) {
         return String.format(
-                "你是一个查询改写助手。将用户查询改写为 %d 个不同的表述，用于提升搜索召回率。" +
-                "要求：\n1. 每行一条改写结果\n2. 保持原始意图不变\n" +
-                "3. 使用不同的表达方式、同义词或句式\n4. 不要编号，不要解释\n\n" +
-                "原始查询：%s",
+                "You are a query rewriting assistant. Rewrite the user query into %d different expressions to improve search recall." +
+                "Requirements:\n1. One rewritten query per line\n2. Preserve original intent\n" +
+                "3. Use different expressions, synonyms, or sentence structures\n4. No numbering, no explanations\n\n" +
+                "Original query: %s",
                 config.getLlmMaxRewrites(), originalQuery);
     }
 

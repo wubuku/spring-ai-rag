@@ -174,7 +174,7 @@ public class DocumentEmbedService {
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId, boolean force) {
         if (vectorStore == null) {
-            throw new IllegalStateException("VectorStore 未配置，请使用 embedDocument 方法");
+            throw new IllegalStateException("VectorStore not configured, use embedDocument method instead");
         }
 
         log.info("Generating embeddings via VectorStore for document: id={}, force={}", documentId, force);
@@ -204,7 +204,7 @@ public class DocumentEmbedService {
     @Transactional
     public Map<String, Object> batchEmbedDocuments(List<Long> documentIds) {
         if (documentIds.size() > 50) {
-            throw new IllegalArgumentException("单次批量嵌入不超过 50 条（避免 API 限流）");
+            throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
 
         log.info("Batch embedding {} documents", documentIds.size());
@@ -302,13 +302,13 @@ public class DocumentEmbedService {
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
             result.put("status", "SKIPPED");
-            result.put("reason", "内容为空");
+            result.put("reason", "Content is empty");
             return null;
         }
         List<TextChunk> chunks = chunker.split(content);
         if (chunks.isEmpty()) {
             result.put("status", "SKIPPED");
-            result.put("reason", "内容太短，无需分块");
+            result.put("reason", "Content too short, no chunking needed");
             return null;
         }
         return chunks;
@@ -354,7 +354,7 @@ public class DocumentEmbedService {
             log.info("Embedding cache hit for document {}: {} existing embeddings, content unchanged, skipping",
                     doc.getId(), existingCount);
             return Map.of(
-                    "message", "嵌入向量已存在且内容未变更，跳过重嵌入（使用 force=true 强制重嵌入）",
+                    "message", "Embedding already exists and content unchanged, skipping (use force=true to re-embed)",
                     "documentId", doc.getId(),
                     "embeddingsStored", existingCount,
                     "status", "CACHED",
@@ -372,7 +372,7 @@ public class DocumentEmbedService {
     private String validateContent(RagDocument doc) {
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException("文档内容为空: documentId=" + doc.getId());
+            throw new IllegalArgumentException("Document content is empty: documentId=" + doc.getId());
         }
         return content;
     }
@@ -438,7 +438,7 @@ public class DocumentEmbedService {
         List<TextChunk> chunks = chunker.split(content);
         if (chunks.isEmpty()) {
             return new EmbedPrepareResult(doc, Map.of(
-                    "message", "文档内容太短，无需分块",
+                    "message", "Document content too short, no chunking needed",
                     "documentId", documentId,
                     "chunksCreated", 0
             ), null);
@@ -458,7 +458,7 @@ public class DocumentEmbedService {
     private Map<String, Object> buildSuccessResult(Long docId, int chunks, int stored, String status,
                                                      String... extraEntries) {
         Map<String, Object> result = new HashMap<>();
-        result.put("message", "嵌入向量生成完成");
+        result.put("message", "Embedding generation completed");
         result.put("documentId", docId);
         result.put("chunksCreated", chunks);
         result.put("embeddingsStored", stored);

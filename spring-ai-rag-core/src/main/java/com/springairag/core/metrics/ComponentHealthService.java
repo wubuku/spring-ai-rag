@@ -70,12 +70,12 @@ public class ComponentHealthService {
             details.put("latencyMs", latencyMs);
 
             if (latencyMs > DB_SLOW_THRESHOLD_MS) {
-                log.warn("数据库响应缓慢: {}ms (阈值 {}ms)", latencyMs, DB_SLOW_THRESHOLD_MS);
+                log.warn("Database response slow: {}ms (threshold {}ms)", latencyMs, DB_SLOW_THRESHOLD_MS);
             }
 
             return new ComponentStatus(status, details, null);
         } catch (Exception e) { // Health probe: must never throw
-            log.error("数据库健康检查失败: {}", e.getMessage());
+            log.error("Database health check failed: {}", e.getMessage());
             return new ComponentStatus("DOWN", Map.of(), e.getMessage());
         }
     }
@@ -92,7 +92,7 @@ public class ComponentHealthService {
             details.put("version", version != null ? version : "unknown");
             return new ComponentStatus("UP", details, null);
         } catch (Exception e) { // Health probe: must never throw
-            log.debug("pgvector 扩展检查失败: {}", e.getMessage());
+            log.debug("pgvector extension check failed: {}", e.getMessage());
             return new ComponentStatus("DOWN", Map.of(),
                     "pgvector extension not found: " + e.getMessage());
         }

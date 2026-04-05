@@ -162,7 +162,7 @@ public class BatchDocumentService {
         log.info("Document deleted: id={}, embeddings removed: {}", id, embCount);
 
         return Map.of(
-                "message", "文档已删除",
+                "message", "Document deleted",
                 "id", String.valueOf(id),
                 "embeddingsRemoved", String.valueOf(embCount)
         );
@@ -177,7 +177,7 @@ public class BatchDocumentService {
     @Transactional
     public Map<String, Object> batchDeleteDocuments(List<Long> ids) {
         if (ids.size() > 100) {
-            throw new IllegalArgumentException("单次批量删除不超过 100 条");
+            throw new IllegalArgumentException("Batch delete limited to 100 documents per request");
         }
 
         log.info("Batch deleting {} documents", ids.size());

@@ -17,6 +17,6 @@ public record ClearHistoryResponse(
         int deletedCount
 ) {
     public static ClearHistoryResponse of(String sessionId, int deletedCount) {
-        return new ClearHistoryResponse("会话历史已清空", sessionId, deletedCount);
+        return new ClearHistoryResponse("Session history cleared", sessionId, deletedCount);
     }
 }

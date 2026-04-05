@@ -20,7 +20,7 @@ public class DefaultDomainRagExtension implements DomainRagExtension {
 
     @Override
     public String getDomainName() {
-        return "通用 RAG";
+        return "General RAG";
     }
 
     @Override

@@ -32,29 +32,29 @@ public record EmbedProgressEvent(
 ) implements Serializable {
 
     public static EmbedProgressEvent preparing(Long docId) {
-        return new EmbedProgressEvent("PREPARING", 0, 0, "正在准备文档...", docId);
+        return new EmbedProgressEvent("PREPARING", 0, 0, "Preparing document...", docId);
     }
 
     public static EmbedProgressEvent chunking(Long docId, int total) {
-        return new EmbedProgressEvent("CHUNKING", 0, total, "正在分块，共 " + total + " 个块", docId);
+        return new EmbedProgressEvent("CHUNKING", 0, total, "Chunking, " + total + " chunks total", docId);
     }
 
     public static EmbedProgressEvent embedding(Long docId, int current, int total) {
         return new EmbedProgressEvent("EMBEDDING", current, total,
-                "正在生成第 " + current + "/" + total + " 个块的嵌入向量", docId);
+                "Generating embedding for chunk " + current + "/" + total, docId);
     }
 
     public static EmbedProgressEvent storing(Long docId, int current, int total) {
         return new EmbedProgressEvent("STORING", current, total,
-                "正在存储第 " + current + "/" + total + " 个嵌入向量", docId);
+                "Storing embedding " + current + "/" + total, docId);
     }
 
     public static EmbedProgressEvent completed(Long docId, int total) {
         return new EmbedProgressEvent("COMPLETED", total, total,
-                "嵌入生成完成，共 " + total + " 个块", docId);
+                "Embedding completed, " + total + " chunks stored", docId);
     }
 
     public static EmbedProgressEvent failed(Long docId, String reason) {
-        return new EmbedProgressEvent("FAILED", 0, 0, "嵌入失败: " + reason, docId);
+        return new EmbedProgressEvent("FAILED", 0, 0, "Embedding failed: " + reason, docId);
     }
 }
