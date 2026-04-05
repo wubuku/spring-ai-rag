@@ -19,8 +19,9 @@
 
 ```json
 {
-  "providers": {
-    "openrouter": {
+  "models": {
+    "providers": {
+      "openrouter": {
       "displayName": "OpenRouter",
       "baseUrl": "https://openrouter.ai/api/v1",
       "apiKey": "${OPENROUTER_API_KEY}",
@@ -123,6 +124,7 @@
   "embeddingModel": {
     "primary": "siliconflow/BGE-M3",
     "fallbacks": ["minimax/embo-01"]
+  }
   }
 }
 ```
