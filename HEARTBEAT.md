@@ -151,6 +151,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-06 05:50 — ✅ C19 API per-endpoint 超时配置化：RagTimeoutProperties（7 项配置：connect/read/chat-ask/chat-stream/search/embed/model-compare）+ SpringAiConfig 重构（RestClient 层级注入超时）+ application.yml rag.timeout.* 配置节；SpringAiConfigTest 适配构造函数注入（8 tests）；RagTimeoutPropertiesTest（4 tests）；docs/configuration.md + configuration-zh-CN.md 添加 LLM API 超时配置章节；12 tests ✅；mvn clean compile ✅；commit cdfe91c 已推送
 - 2026-04-04 19:45 — ✅ CI JDK 版本对齐：GitHub Actions workflow Java 17 → Java 21（LTS），与项目运行时版本同步；mvn clean compile ✅，mvn test ✅（全通过）；commit 62da699 已推送
 - 2026-04-04 17:10 — ✅ 主动巡检（cron）：mvn clean compile ✅，mvn test ✅（零失败零错误）；零 TODO/FIXME；156 源文件 + 107 测试文件；全部 Phase 1-6 + P1/P2/P3 完成；HEARTBEAT.md 全部 ⏳ 待办已清空；IMPLEMENTATION_COMPARISON.md 统计同步更新；git 已推送
 - 2026-04-04 11:53 — ✅ 主动巡检（cron）：`mvn clean compile` ✅，`mvn test` ✅（996 测试全通过，+3 新测试）；RagChatServiceTest 新增 3 个测试覆盖 `buildSystemPrompt`（有扩展无定制器/有扩展有定制器）和 `customizeUserMessage`（有定制器）分支路径；JaCoCo 扫描确认零 TODO/FIXME，153 源/107 测试文件，项目处于生产级成熟状态
@@ -1156,7 +1157,7 @@
 | C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ✅ 2026-04-06 | P2 |
 | C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ⏳ | P2 |
-| C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ⏳ | P2 |
+| C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
 | C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ⏳ | P2 |
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
