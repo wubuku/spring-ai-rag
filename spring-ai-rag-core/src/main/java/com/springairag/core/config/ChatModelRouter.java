@@ -9,6 +9,7 @@ import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -115,6 +116,29 @@ public class ChatModelRouter {
      */
     public List<String> getAvailableProviders() {
         return List.copyOf(chatModelsByProvider.keySet());
+    }
+
+    /**
+     * 检查 MultiModel 模式是否启用。
+     */
+    public boolean isMultiModelEnabled() {
+        return modelRegistry.getAllProviders() != null
+                && !modelRegistry.getAllProviders().isEmpty();
+    }
+
+    /**
+     * 获取 Fallback Chain 列表。
+     */
+    public List<String> getFallbackChain() {
+        List<String> fallbacks = modelRegistry.getFallbackChatModelNames();
+        return fallbacks != null ? fallbacks : Collections.emptyList();
+    }
+
+    /**
+     * 检查指定 provider 是否可用。
+     */
+    public boolean isProviderAvailable(String provider) {
+        return provider != null && chatModelsByProvider.containsKey(provider.toLowerCase());
     }
 
     // ─── 内部方法 ─────────────────────────────────────────────────

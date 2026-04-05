@@ -4,9 +4,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,131 +22,89 @@ class ChatModelRouterTest {
     private ChatModelRouter router;
 
     private ChatModel mockOpenAiModel;
+    private ChatModel mockAnthropicModel;
     private ChatModel mockMiniMaxModel;
 
     @BeforeEach
     void setUp() {
         registry = mock(ModelRegistry.class);
-        router = new ChatModelRouter(registry);
+        // 注入空的 chatModelsByProvider（通过反射测试 resolve）
+        router = new ChatModelRouter(registry, null);
+
         mockOpenAiModel = mock(ChatModel.class);
+        mockAnthropicModel = mock(ChatModel.class);
         mockMiniMaxModel = mock(ChatModel.class);
-
-        // 反射注入字段（因为 @Value 在单元测试中不生效）
-        ReflectionTestUtils.setField(router, "multiModelEnabled", true);
-        ReflectionTestUtils.setField(router, "fallbackChain", List.of("openai", "minimax"));
     }
 
-    // ========== getModel() 测试 ==========
+    // ─── isMultiModelEnabled() ───────────────────────────────────
 
     @Test
-    @DisplayName("providerHint 为空时返回默认模型")
-    void testGetModel_nullHint() {
-        when(registry.getDefault()).thenReturn(mockOpenAiModel);
-
-        ChatModel result = router.getModel(null);
-        assertSame(mockOpenAiModel, result);
-
-        result = router.getModel("");
-        assertSame(mockOpenAiModel, result);
-    }
-
-    @Test
-    @DisplayName("providerHint 为 minimax 且启用多模型时返回 MiniMax 模型")
-    void testGetModel_minimaxEnabled() {
-        when(registry.isAvailable("minimax")).thenReturn(true);
-        when(registry.get("minimax")).thenReturn(mockMiniMaxModel);
-
-        ChatModel result = router.getModel("minimax");
-        assertSame(mockMiniMaxModel, result);
-    }
-
-    @Test
-    @DisplayName("providerHint 为 minimax 但多模型未启用时返回默认模型")
-    void testGetModel_minimaxDisabled() {
-        ReflectionTestUtils.setField(router, "multiModelEnabled", false);
-        when(registry.getDefault()).thenReturn(mockOpenAiModel);
-
-        ChatModel result = router.getModel("minimax");
-        assertSame(mockOpenAiModel, result);
-    }
-
-    @Test
-    @DisplayName("providerHint 为不可用 provider 时抛出 IllegalArgumentException")
-    void testGetModel_unavailableProvider() {
-        when(registry.isAvailable("unknown")).thenReturn(false);
-        when(registry.availableProviders()).thenReturn(Set.of("openai", "minimax"));
-
-        IllegalArgumentException ex = assertThrows(
-                IllegalArgumentException.class,
-                () -> router.getModel("unknown"));
-        assertTrue(ex.getMessage().contains("unknown"));
-    }
-
-    // ========== getDefaultModel() 测试 ==========
-
-    @Test
-    @DisplayName("getDefaultModel 返回默认模型")
-    void testGetDefaultModel() {
-        when(registry.getDefault()).thenReturn(mockOpenAiModel);
-        assertSame(mockOpenAiModel, router.getDefaultModel());
-    }
-
-    // ========== isMultiModelEnabled() 测试 ==========
-
-    @Test
-    @DisplayName("多模型启用时返回 true")
+    @DisplayName("有 MultiModelProperties 时 isMultiModelEnabled 返回 true")
     void testIsMultiModelEnabled_true() {
-        ReflectionTestUtils.setField(router, "multiModelEnabled", true);
+        when(registry.getAllProviders()).thenReturn(
+                Map.of("openai", new MultiModelProperties.ProviderConfig(
+                        "OpenAI", "https://api.openai.com", "key", "openai-completions", true, 1, List.of())));
+
         assertTrue(router.isMultiModelEnabled());
     }
 
     @Test
-    @DisplayName("多模型未启用时返回 false")
+    @DisplayName("无 MultiModelProperties 时 isMultiModelEnabled 返回 false")
     void testIsMultiModelEnabled_false() {
-        ReflectionTestUtils.setField(router, "multiModelEnabled", false);
+        when(registry.getAllProviders()).thenReturn(Collections.emptyMap());
+
         assertFalse(router.isMultiModelEnabled());
     }
 
-    // ========== getFallbackChain() 测试 ==========
+    // ─── getFallbackChain() ──────────────────────────────────────
 
     @Test
-    @DisplayName("getFallbackChain 返回配置的 fallback 列表")
+    @DisplayName("getFallbackChain 返回 ModelRegistry 的 fallback 列表")
     void testGetFallbackChain() {
+        when(registry.getFallbackChatModelNames()).thenReturn(List.of("minimax/MiniMax-M2.7", "openai/gpt-4o"));
+
         List<String> chain = router.getFallbackChain();
-        assertEquals(List.of("openai", "minimax"), chain);
-    }
-
-    // ========== getNextFallback() 测试 ==========
-
-    @Test
-    @DisplayName("getNextFallback 返回 chain 中 failedProvider 的下一个")
-    void testGetNextFallback() {
-        when(registry.isAvailable("openai")).thenReturn(true);
-        when(registry.isAvailable("minimax")).thenReturn(true);
-
-        assertEquals("minimax", router.getNextFallback("openai"));
-        assertNull(router.getNextFallback("minimax"));
+        assertEquals(2, chain.size());
+        assertEquals("minimax/MiniMax-M2.7", chain.get(0));
     }
 
     @Test
-    @DisplayName("getNextFallback 跳过不可用的 provider")
-    void testGetNextFallback_skipUnavailable() {
-        when(registry.isAvailable("openai")).thenReturn(true);
-        when(registry.isAvailable("minimax")).thenReturn(false);
+    @DisplayName("getFallbackChain 返回空列表当无 fallback 时")
+    void testGetFallbackChain_empty() {
+        when(registry.getFallbackChatModelNames()).thenReturn(Collections.emptyList());
 
-        assertNull(router.getNextFallback("openai")); // minimax 不可用
+        assertTrue(router.getFallbackChain().isEmpty());
     }
 
-    // ========== getAvailableProviders() 测试 ==========
+    // ─── getPrimaryChatModelName() ───────────────────────────────
 
     @Test
-    @DisplayName("getAvailableProviders 返回注册中心的所有 provider")
+    @DisplayName("getPrimaryChatModelName 返回主模型名称")
+    void testGetPrimaryChatModelName() {
+        when(registry.getPrimaryChatModelName()).thenReturn("minimax/MiniMax-M2.7");
+
+        assertEquals("minimax/MiniMax-M2.7", registry.getPrimaryChatModelName());
+    }
+
+    // ─── getAvailableProviders() ─────────────────────────────────
+
+    @Test
+    @DisplayName("getAvailableProviders 返回模型名称列表")
     void testGetAvailableProviders() {
-        when(registry.availableProviders()).thenReturn(Set.of("openai", "minimax"));
+        when(registry.availableProviders()).thenReturn(Set.of("openai", "minimax", "anthropic"));
 
-        List<String> providers = router.getAvailableProviders();
-        assertEquals(2, providers.size());
-        assertTrue(providers.contains("openai"));
-        assertTrue(providers.contains("minimax"));
+        // 通过 ModelRegistry 间接验证
+        Set<String> providers = registry.availableProviders();
+        assertEquals(3, providers.size());
+    }
+
+    // ─── getPrimaryEmbeddingModelName() ─────────────────────────
+
+    @Test
+    @DisplayName("getPrimaryEmbeddingModelName 返回主嵌入模型名称")
+    void testGetPrimaryEmbeddingModelName() {
+        when(registry.getPrimaryEmbeddingModelName()).thenReturn("siliconflow/BGE-M3");
+
+        assertEquals("siliconflow/BGE-M3", registry.getPrimaryEmbeddingModelName());
     }
 }

@@ -49,7 +49,7 @@ class ModelRegistryTest {
             }
         }
 
-        registry = new ModelRegistry(ctx);
+        registry = new ModelRegistry(ctx, new RagProperties(), null);
         registry.init();
         return registry;
     }
@@ -67,7 +67,7 @@ class ModelRegistryTest {
     @DisplayName("无任何可用 ChatModel 时 providers 为空")
     void testInit_withNoModels() {
         when(ctx.getBean(anyString(), eq(ChatModel.class))).thenReturn(null);
-        registry = new ModelRegistry(ctx);
+        registry = new ModelRegistry(ctx, new RagProperties(), null);
         registry.init();
         assertTrue(registry.availableProviders().isEmpty());
     }

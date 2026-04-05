@@ -5,6 +5,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Component;
 
@@ -24,6 +26,9 @@ import java.util.*;
  *   <li>anthropic - Anthropic Claude 系列</li>
  *   <li>minimax - MiniMax 系列</li>
  * </ul>
+ *
+ * <p>M2 增强：支持 {@link MultiModelProperties} 外部配置。
+ * 当 MultiModelProperties 可用时，路由方法优先使用其配置。
  */
 @Component
 public class ModelRegistry {
@@ -31,11 +36,23 @@ public class ModelRegistry {
     private static final Logger log = LoggerFactory.getLogger(ModelRegistry.class);
 
     private final ApplicationContext ctx;
+    private final RagProperties ragProperties;
+    private final MultiModelProperties multiModelProperties;
     private final Map<String, ChatModel> models = new LinkedHashMap<>();
     private final Map<String, String> modelNames = new LinkedHashMap<>();
 
-    public ModelRegistry(ApplicationContext ctx) {
+    @Value("${app.llm.provider:openai}")
+    private String llmProvider;
+
+    public ModelRegistry(
+            ApplicationContext ctx,
+            RagProperties ragProperties,
+            @Autowired(required = false) MultiModelProperties multiModelProperties) {
         this.ctx = ctx;
+        this.ragProperties = ragProperties;
+        this.multiModelProperties = multiModelProperties;
+        log.info("ModelRegistry initialized (MultiModelProperties: {})",
+                multiModelProperties != null ? "available" : "not configured");
     }
 
     @PostConstruct
@@ -136,5 +153,110 @@ public class ModelRegistry {
             result.add(getModelInfo(provider));
         }
         return result;
+    }
+
+    // ─── M2: MultiModelProperties 集成 ──────────────────────────────────────
+
+    /**
+     * 获取主 ChatModel 名称。
+     * 优先使用 MultiModelProperties.chatModel.primary，否则回退到 app.llm.provider。
+     */
+    public String getPrimaryChatModelName() {
+        if (multiModelProperties != null && multiModelProperties.getChatModel() != null
+                && multiModelProperties.getChatModel().primary() != null) {
+            return multiModelProperties.getChatModel().primary();
+        }
+        return llmProvider != null ? llmProvider : "openai";
+    }
+
+    /**
+     * 获取 Fallback ChatModel 名称列表。
+     * 优先使用 MultiModelProperties.chatModel.fallbacks。
+     */
+    public List<String> getFallbackChatModelNames() {
+        if (multiModelProperties != null && multiModelProperties.getChatModel() != null
+                && multiModelProperties.getChatModel().fallbacks() != null) {
+            return multiModelProperties.getChatModel().fallbacks();
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 获取主 EmbeddingModel 名称。
+     * 优先使用 MultiModelProperties.embeddingModel.primary。
+     */
+    public String getPrimaryEmbeddingModelName() {
+        if (multiModelProperties != null && multiModelProperties.getEmbeddingModel() != null
+                && multiModelProperties.getEmbeddingModel().primary() != null) {
+            return multiModelProperties.getEmbeddingModel().primary();
+        }
+        if (ragProperties != null && ragProperties.getEmbedding() != null) {
+            return ragProperties.getEmbedding().getModel();
+        }
+        return "BGE-M3";
+    }
+
+    /**
+     * 获取 Fallback EmbeddingModel 名称列表。
+     */
+    public List<String> getFallbackEmbeddingModelNames() {
+        if (multiModelProperties != null && multiModelProperties.getEmbeddingModel() != null
+                && multiModelProperties.getEmbeddingModel().fallbacks() != null) {
+            return multiModelProperties.getEmbeddingModel().fallbacks();
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 根据名称查找 Provider ID。
+     * 优先从 MultiModelProperties.providers 匹配（忽略大小写）。
+     */
+    public String getProviderByName(String providerName) {
+        if (multiModelProperties != null && multiModelProperties.getProviders() != null
+                && providerName != null) {
+            String found = multiModelProperties.getProviders().keySet().stream()
+                    .filter(k -> k.equalsIgnoreCase(providerName))
+                    .findFirst()
+                    .orElse(null);
+            if (found != null) {
+                return found;
+            }
+        }
+        // 兼容旧架构：硬编码 provider 名称
+        if (providerName == null) {
+            return null;
+        }
+        String upper = providerName.toUpperCase(Locale.ROOT);
+        return switch (upper) {
+            case "OPENAI", "OPENROUTER", "API4AILAB", "DEEPSEEK", "ZHIPU", "MINIMAX", "ANTHROPIC", "SILICONFLOW", "VOLCES" -> upper;
+            default -> null;
+        };
+    }
+
+    /**
+     * 获取所有已注册的 Provider 配置。
+     */
+    public Map<String, MultiModelProperties.ProviderConfig> getAllProviders() {
+        return multiModelProperties != null
+                ? multiModelProperties.getProviders()
+                : Collections.emptyMap();
+    }
+
+    /**
+     * 根据模型引用（providerId/modelId）获取 ProviderConfig。
+     */
+    public MultiModelProperties.ProviderConfig getProviderByModelRef(String modelRef) {
+        return multiModelProperties != null
+                ? multiModelProperties.getProviderByModelRef(modelRef)
+                : null;
+    }
+
+    /**
+     * 根据模型引用（providerId/modelId）获取 ModelItem。
+     */
+    public MultiModelProperties.ModelItem getModelItem(String modelRef) {
+        return multiModelProperties != null
+                ? multiModelProperties.getModelItem(modelRef)
+                : null;
     }
 }
