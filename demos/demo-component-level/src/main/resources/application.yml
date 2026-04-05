@@ -11,14 +11,14 @@ spring:
     password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
-  # 手动管理 Flyway（不走 Starter 自动配置）
+  # Manually manage Flyway (not via Starter auto-configuration)
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
 # ================================================================
-# LLM 配置（必需）
+# LLM Configuration (required)
 # ================================================================
 app:
   llm:
@@ -33,7 +33,7 @@ app:
           temperature: 0.7
 
 # ================================================================
-# 嵌入模型（SiliconFlow）
+# Embedding Model (SiliconFlow)
 # ================================================================
 siliconflow:
   api-key: ${SILICONFLOW_API_KEY:your-siliconflow-key}
@@ -42,7 +42,7 @@ siliconflow:
     dimensions: 1024
 
 # ================================================================
-# RAG 配置
+# RAG Configuration
 # ================================================================
 rag:
   retrieval:

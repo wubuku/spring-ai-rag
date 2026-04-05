@@ -1,10 +1,10 @@
 # ============================================
 # Spring AI RAG - docker-compose
-# PostgreSQL + pgvector + RAG 服务
+# PostgreSQL + pgvector + RAG service
 # ============================================
 
 services:
-  # PostgreSQL + pgvector 向量数据库
+  # PostgreSQL + pgvector vector database
   postgres:
     image: pgvector/pgvector:pg16
     container_name: spring-ai-rag-db
@@ -23,7 +23,7 @@ services:
       timeout: 5s
       retries: 5
 
-  # Spring AI RAG 服务
+  # Spring AI RAG service
   rag-service:
     build:
       context: ..
@@ -36,19 +36,19 @@ services:
     ports:
       - "${APP_PORT:-8080}:8080"
     environment:
-      # 数据库连接
+      # Database connection
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
       POSTGRES_DATABASE: ${POSTGRES_DB:-spring_ai_rag}
       POSTGRES_USER: ${POSTGRES_USER:-postgres}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      # LLM 配置（DeepSeek 示例，按需修改）
+      # LLM configuration (DeepSeek example, modify as needed)
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-sk-your-key-here}
-      # 通用 OpenAI 兼容配置
+      # General OpenAI-compatible configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${DEEPSEEK_API_KEY:-sk-your-key-here}}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-deepseek-chat}
-      # 嵌入模型（SiliconFlow BGE-M3）
+      # Embedding model (SiliconFlow BGE-M3)
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-sk-your-key-here}
 
 volumes:

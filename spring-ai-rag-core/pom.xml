@@ -13,17 +13,17 @@
 
     <artifactId>spring-ai-rag-core</artifactId>
     <name>Spring AI RAG - Core</name>
-    <description>通用 RAG 服务核心实现（Advisor、检索、分块、记忆、模型配置）</description>
+    <description>General-purpose RAG service core implementation (Advisors, retrieval, chunking, memory, model config)</description>
 
     <dependencies>
-        <!-- 本项目 API 模块 -->
+        <!-- Project API module -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-api</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- 本项目 Documents 模块（分块器、文本清洗） -->
+        <!-- Project Documents module (chunkers, text cleaning) -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-documents</artifactId>
@@ -60,20 +60,20 @@
             <version>6.6.5.Final</version>
         </dependency>
 
-        <!-- Spring AI OpenAI 库（不含自动配置，由 SpringAiConfig 手动管理） -->
+        <!-- Spring AI OpenAI library (no auto-config, manually managed by SpringAiConfig) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-openai</artifactId>
         </dependency>
 
-        <!-- Spring AI Anthropic（可选，需要时取消注释） -->
+        <!-- Spring AI Anthropic (optional, uncomment when needed) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-anthropic</artifactId>
             <optional>true</optional>
         </dependency>
 
-        <!-- Spring AI MiniMax（可选，支持 MiniMax 系列模型） -->
+        <!-- Spring AI MiniMax (optional, supports MiniMax series models) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-model-minimax</artifactId>
@@ -92,7 +92,7 @@
             <artifactId>spring-ai-starter-model-chat-memory-repository-jdbc</artifactId>
         </dependency>
 
-        <!-- Spring AI Advisors Vector Store（含 VectorStoreChatMemoryAdvisor） -->
+        <!-- Spring AI Advisors Vector Store (includes VectorStoreChatMemoryAdvisor) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-advisors-vector-store</artifactId>
@@ -122,20 +122,20 @@
             <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- Spring Boot Actuator（监控指标 + 健康检查） -->
+        <!-- Spring Boot Actuator (metrics + health checks) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
             <optional>true</optional>
         </dependency>
 
-        <!-- Caffeine 本地缓存 -->
+        <!-- Caffeine local cache -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
 
-        <!-- Spring Boot Cache（@Cacheable / @CacheEvict 支持） -->
+        <!-- Spring Boot Cache (@Cacheable / @CacheEvict support) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-cache</artifactId>
@@ -148,7 +148,7 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Testcontainers PostgreSQL（集成测试用真实数据库） -->
+        <!-- Testcontainers PostgreSQL (real database for integration tests) -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
@@ -160,14 +160,14 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Spring Boot Testcontainers（@ServiceConnection 自动配置） -->
+        <!-- Spring Boot Testcontainers (@ServiceConnection auto-configuration) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
 
-        <!-- Logstash Logback Encoder：JSON 结构化日志 + 敏感信息脱敏 -->
+        <!-- Logstash Logback Encoder: JSON structured logs + sensitive data masking -->
         <dependency>
             <groupId>net.logstash.logback</groupId>
             <artifactId>logstash-logback-encoder</artifactId>
@@ -176,7 +176,7 @@
     </dependencies>
 
     <build>
-        <!-- Core 是库模块，不用 spring-boot-maven-plugin，否则打包成 fat JAR 其他模块无法引用 -->
+        <!-- Core is a library module: do NOT add spring-boot-maven-plugin, otherwise it creates a fat JAR that other modules cannot depend on -->
         <plugins>
             <plugin>
                 <groupId>org.jacoco</groupId>

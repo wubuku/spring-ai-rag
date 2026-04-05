@@ -4,21 +4,21 @@
     <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="spring-ai-rag"/>
 
     <!--
-        日志输出模式：
-        - default/dev: 人类可读文本格式（彩色控制台）
-        - prod/test:   JSON 结构化格式（便于 ELK/Loki 等日志聚合系统解析）
+        Log output modes:
+        - default/dev: Human-readable text format (colored console)
+        - prod/test:   JSON structured format (for ELK/Loki log aggregation systems)
 
-        敏感数据脱敏：
-        - SensitiveDataMaskingConverter 自动扫描日志消息，屏蔽密码/API Key/Token 等敏感字段
-        - SensitiveMdc.put(key, value) 用于程序化设置敏感 MDC 值（自动屏蔽）
-        - 支持模式：JSON字段、URL查询参数、Key-Value对、Authorization请求头
+        Sensitive data masking:
+        - SensitiveDataMaskingConverter automatically scans log messages and masks passwords/API keys/tokens
+        - SensitiveMdc.put(key, value) for programmatic sensitive MDC values (auto-masked)
+        - Supported patterns: JSON fields, URL query params, Key-Value pairs, Authorization headers
     -->
 
-    <!-- 注册全局敏感数据屏蔽转换器（适用于 dev/default 的明文格式） -->
+    <!-- Register global sensitive data masking converter (for dev/default plain-text format) -->
     <conversionRule conversionWord="maskedMsg"
                     converterClass="com.springairag.core.logging.SensitiveDataMaskingConverter"/>
 
-    <!-- ====== 开发环境：人类可读的彩色控制台输出 ====== -->
+    <!-- ====== Development: Human-readable colored console output ====== -->
     <springProfile name="default,dev">
         <property name="LOG_PATTERN"
                   value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-no-trace}] %-5level %logger{36} - %maskedMsg%n"/>
@@ -39,23 +39,23 @@
         <logger name="com.springairag" level="INFO"/>
     </springProfile>
 
-    <!-- ====== 生产/测试环境：JSON 结构化日志（敏感数据自动屏蔽） ====== -->
+    <!-- ====== Production/Test: JSON structured logs (with auto sensitive data masking) ====== -->
     <springProfile name="prod,test">
         <!--
-            Logstash JSON Encoder 配置 + 敏感数据屏蔽
-            输出字段：
-              @timestamp  - ISO8601 时间戳
-              msg         - 日志消息（敏感数据已屏蔽）
-              level       - 日志级别
-              logger      - Logger 名称
-              thread      - 线程名
-              stack_trace - 堆栈（可选）
-              traceId     - 请求追踪 ID（MDC）
-              domainId    - 知识库 ID（MDC）
-              userId      - 用户 ID（MDC）
-              application - 应用名（customFields）
+            Logstash JSON Encoder + sensitive data masking
+            Output fields:
+              @timestamp  - ISO8601 timestamp
+              msg         - Log message (already masked for sensitive data)
+              level       - Log level
+              logger      - Logger name
+              thread      - Thread name
+              stack_trace - Stack trace (optional)
+              traceId     - Request trace ID (MDC)
+              domainId    - Collection ID (MDC)
+              userId      - User ID (MDC)
+              application - Application name (customFields)
 
-            敏感数据屏蔽模式（自动处理）：
+            Sensitive data masking patterns (auto-processed):
               - JSON: "password":"xxx", "apiKey":"xxx", "token":"xxx", "secret":"xxx"
               - URL:  ?password=xxx, ?apiKey=xxx, ?token=xxx
               - KV:   password=xxx, apiKey=xxx, token=xxx
@@ -63,7 +63,7 @@
               - AWS: AKIAIOSFODNN7EXAMPLE
         -->
         <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
-            <!-- MaskingLogstashEncoder 在 JSON 编码前对消息应用敏感数据屏蔽 -->
+            <!-- MaskingLogstashEncoder applies sensitive data masking before JSON encoding -->
             <encoder class="com.springairag.core.logging.MaskingLogstashEncoder">
                 <includeMdcKeyName>traceId</includeMdcKeyName>
                 <includeMdcKeyName>domainId</includeMdcKeyName>
@@ -78,7 +78,7 @@
                     <level>level</level>
                     <stackTrace>stack_trace</stackTrace>
                 </fieldNames>
-                <!-- 栈 trace 限制 20 行，防止日志爆炸 -->
+                <!-- Limit stack trace to 20 lines to prevent log explosion -->
                 <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
                     <maxDepthPerThrowable>20</maxDepthPerThrowable>
                     <maxLength>4096</maxLength>
@@ -92,10 +92,10 @@
             <appender-ref ref="JSON"/>
         </root>
 
-        <!-- Spring/JPA 框架日志降噪（只输出 WARN 及以上） -->
+        <!-- Spring/JPA framework log noise reduction (WARN and above only) -->
         <logger name="org.springframework" level="WARN"/>
         <logger name="org.hibernate" level="WARN"/>
-        <!-- RAG 业务日志 INFO 级别 -->
+        <!-- RAG business logs at INFO level -->
         <logger name="com.springairag" level="INFO"/>
     </springProfile>
 

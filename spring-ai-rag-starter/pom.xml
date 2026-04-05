@@ -13,30 +13,30 @@
 
     <artifactId>spring-ai-rag-starter</artifactId>
     <name>Spring AI RAG - Starter</name>
-    <description>Spring Boot Starter 自动配置（引入即可使用完整 RAG 能力）</description>
+    <description>Spring Boot Starter auto-configuration (import to get full RAG capability)</description>
 
     <dependencies>
-        <!-- 本项目 Core 模块 -->
+        <!-- Project Core module -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-core</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- 本项目 Documents 模块 -->
+        <!-- Project Documents module -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-documents</artifactId>
             <version>${project.version}</version>
         </dependency>
 
-        <!-- Spring Boot Autoconfigure（提供 @ConditionalOnProperty 等注解） -->
+        <!-- Spring Boot Autoconfigure (provides @ConditionalOnProperty and other annotations) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-autoconfigure</artifactId>
         </dependency>
 
-        <!-- Spring Boot Configuration Processor（生成配置元数据） -->
+        <!-- Spring Boot Configuration Processor (generates configuration metadata) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-configuration-processor</artifactId>

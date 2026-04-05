@@ -1,23 +1,23 @@
 # ============================================================
-# 领域扩展示例 — 医疗问诊
+# Domain Extension Example — Medical Consultation
 # ============================================================
 
 server:
   port: 8081
 
 spring:
-  # 数据源（PostgreSQL + pgvector）
+  # DataSource (PostgreSQL + pgvector)
   datasource:
     url: jdbc:postgresql://localhost:5432/spring_ai_rag_dev
     username: postgres
     password: postgres
 
-  # Flyway 自动迁移
+  # Flyway auto-migration
   flyway:
     enabled: true
     locations: classpath:db/migration
 
-  # AI 模型配置（OpenAI 兼容，如 DeepSeek）
+  # AI model configuration (OpenAI-compatible, e.g. DeepSeek)
   ai:
     openai:
       base-url: https://api.deepseek.com
@@ -28,7 +28,7 @@ spring:
           temperature: 0.7
 
 # ============================================================
-# Spring AI RAG 配置
+# Spring AI RAG Configuration
 # ============================================================
 app:
   llm:
@@ -44,7 +44,7 @@ rag:
     max-messages: 20
 
 # ============================================================
-# 监控配置
+# Monitoring Configuration
 # ============================================================
 management:
   endpoints:

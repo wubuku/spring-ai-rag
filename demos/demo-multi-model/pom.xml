@@ -6,8 +6,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!-- ================================================================
-         多模型演示项目：展示 ModelRegistry + ChatModelRouter + 模型对比
-         适用场景：需要动态选择模型、对比不同模型效果的 RAG 应用
+         Multi-Model Demo: demonstrates ModelRegistry + ChatModelRouter + Model Comparison
+         Use case: RAG applications requiring dynamic model selection and comparison
     ================================================================ -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -23,9 +23,9 @@
 
     <name>Spring AI RAG - Multi-Model Demo</name>
     <description>
-        多模型演示：展示如何同时接入多个 LLM（DeepSeek / MiniMax / Anthropic），
-        通过 ModelRegistry 注册中心统一管理，ChatModelRouter 动态路由，
-        以及模型效果对比（Model Comparison）。
+        Multi-model demo: demonstrates connecting multiple LLMs simultaneously (DeepSeek / MiniMax / Anthropic),
+        unified management via ModelRegistry, dynamic routing via ChatModelRouter,
+        and model effect comparison (Model Comparison).
     </description>
 
     <properties>

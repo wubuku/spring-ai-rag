@@ -1,31 +1,31 @@
 # ============================================
-# Spring AI RAG 服务配置
+# Spring AI RAG Service Configuration
 # ============================================
 
 spring:
   application:
     name: spring-ai-rag
 
-  # 启用虚拟线程（Java 21+）
-  # 虚拟线程优势：大幅降低内存占用、提高并发连接处理能力、无需池化
+  # Enable Virtual Threads (Java 21+)
+  # Virtual threads: dramatically reduced memory footprint, higher concurrency, no pooling needed
   threads:
     virtual:
       enabled: true
 
-  # 允许 Bean 定义覆盖（自定义配置 Bean 覆盖自动配置）
+  # Allow bean definition overriding (custom config beans override auto-config)
   main:
     allow-bean-definition-overriding: true
 
-  # 排除不需要的自动配置
-  # PgVectorStore：由 VectorStoreConfig 手动创建 Bean
-  # MiniMax Chat/Embedding：由 SpringAiConfig / EmbeddingModelConfig 手动管理（避免与 SiliconFlow 冲突）
+  # Exclude unwanted auto-configurations
+  # PgVectorStore: manually created by VectorStoreConfig
+  # MiniMax Chat/Embedding: manually managed by SpringAiConfig / EmbeddingModelConfig (avoid conflict with SiliconFlow)
   autoconfigure:
     exclude:
       - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
 
-  # 数据源 + HikariCP 连接池优化
+  # DataSource + HikariCP connection pool tuning
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
     driver-class-name: org.postgresql.Driver
@@ -34,39 +34,39 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:20}
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
-      idle-timeout: 300000         # 空闲连接 5 分钟回收
-      max-lifetime: 1800000        # 连接最大存活 30 分钟
-      connection-timeout: 10000    # 获取连接超时 10 秒
-      leak-detection-threshold: 60000  # 连接泄漏检测 60 秒
+      idle-timeout: 300000         # Idle connections evicted after 5 minutes
+      max-lifetime: 1800000        # Connection max lifetime 30 minutes
+      connection-timeout: 10000     # Connection acquisition timeout 10 seconds
+      leak-detection-threshold: 60000  # Leak detection after 60 seconds
       pool-name: rag-hikari
 
-  # JPA / Hibernate 配置（Flyway 管理表结构，Hibernate 不修改 DDL）
+  # JPA / Hibernate configuration (Flyway manages schema, Hibernate does not modify DDL)
   jpa:
     hibernate:
       ddl-auto: none
     open-in-view: false
     show-sql: false
 
-  # Flyway 数据库迁移
+  # Flyway database migrations
   flyway:
     enabled: true
     locations: classpath:db/migration
     baseline-on-migrate: true
 
-  # Spring AI OpenAI / OpenAI 兼容模型配置
-  # DeepSeek 示例：base-url=https://api.deepseek.com/v1, model=deepseek-chat
-  # 智谱示例：base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
+  # Spring AI OpenAI / OpenAI-compatible model configuration
+  # DeepSeek example: base-url=https://api.deepseek.com/v1, model=deepseek-chat
+  # Zhipu example: base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
   openai:
     api-key: ${OPENAI_API_KEY:dummy}
     base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
     chat:
-      # 禁用自动配置！由 SpringAiConfig 手动创建 ChatModel Bean
+      # DISABLED — ChatModel beans are manually created by SpringAiConfig
       enabled: false
       options:
         model: ${OPENAI_MODEL:deepseek-chat}
         temperature: ${OPENAI_TEMPERATURE:0.7}
 
-  # Spring AI Anthropic 模型配置（可选）
+  # Spring AI Anthropic model configuration (optional)
   anthropic:
     api-key: ${ANTHROPIC_API_KEY:dummy}
     base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
@@ -77,7 +77,7 @@ spring:
         temperature: ${ANTHROPIC_TEMPERATURE:0.7}
         max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 
-  # Spring AI MiniMax 模型配置（可选，provider=minimax 时启用）
+  # Spring AI MiniMax model configuration (optional, enabled when provider=minimax)
   minimax:
     api-key: ${MINIMAX_API_KEY:dummy}
     base-url: ${MINIMAX_BASE_URL:https://api.minimaxi.com}
@@ -87,8 +87,8 @@ spring:
         model: ${MINIMAX_MODEL:MiniMax-M2.7}
         temperature: ${MINIMAX_TEMPERATURE:0.7}
 
-  # Spring AI Chat Memory JDBC 配置
-  # 自动创建 spring_ai_chat_memory 表
+  # Spring AI Chat Memory JDBC configuration
+  # Automatically creates spring_ai_chat_memory table
   ai:
     chat:
       memory:
@@ -98,18 +98,18 @@ spring:
             platform: postgresql
 
 # ============================================
-# 自定义 LLM 提供者开关
+# Custom LLM Provider Switch
 # ============================================
 app:
   llm:
     provider: ${LLM_PROVIDER:openai}
-  # 多模型路由配置（experimental）
+  # Multi-model routing configuration (experimental)
   multi-model:
     enabled: ${MULTI_MODEL_ENABLED:false}
     fallback-chain: ${MULTI_MODEL_FALLBACK_CHAIN:openai,minimax}
 
 # ============================================
-# 嵌入模型配置（独立于 Chat provider，始终生效）
+# Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
   embedding:
@@ -118,51 +118,51 @@ rag:
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 
-  # RAG 检索配置
+  # RAG retrieval configuration
   retrieval:
     vector-weight: 0.5
     fulltext-weight: 0.5
     default-limit: 10
     min-score: 0.3
 
-  # 查询改写配置
+  # Query rewriting configuration
   query-rewrite:
     enabled: true
     padding-count: 2
 
-  # 重排序配置
+  # Re-ranking configuration
   rerank:
     enabled: false
     diversity-weight: 0.2
 
-  # 文档分块配置
+  # Document chunking configuration
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100
 
-  # 对话记忆配置
+  # Chat memory configuration
   memory:
     max-messages: 20
-    message-ttl-days: 30        # 0=不过期，非0=超过天数的历史记录被清理
-    cleanup-cron: "0 0 3 * * *" # 每日凌晨3点执行（Asia/Shanghai时区）
+    message-ttl-days: 30        # 0=never expire, >0=records older than N days are purged
+    cleanup-cron: "0 0 3 * * *" # Daily at 3:00 AM (Asia/Shanghai timezone)
 
-  # 异步线程池配置
+  # Async thread pool configuration
   async:
     core-pool-size: 4
     max-pool-size: 16
     queue-capacity: 100
 
-  # LLM 熔断器配置（默认禁用）
-  # 启用后可防止 LLM API 故障时请求堆积
+  # LLM circuit breaker configuration (disabled by default)
+  # When enabled, prevents request pile-up during LLM API outages
   # circuit-breaker:
   #   enabled: true
-  #   failure-rate-threshold: 50      # 失败率阈值（%），超过则熔断
-  #   minimum-number-of-calls: 10     # 滑动窗口内最小调用数
-  #   wait-duration-in-open-state: 30 # OPEN 状态持续秒数
-  #   sliding-window-size: 20         # 滑动窗口大小
+  #   failure-rate-threshold: 50      # Failure rate threshold (%), trip when exceeded
+  #   minimum-number-of-calls: 10     # Min calls in sliding window
+  #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
+  #   sliding-window-size: 20         # Sliding window size
 
 # ============================================
-# 服务器配置
+# Server Configuration
 # ============================================
 server:
   port: 8081
@@ -170,7 +170,7 @@ server:
     protocol-handler: NIO
 
 # ============================================
-# 日志配置
+# Logging Configuration
 # ============================================
 logging:
   level:
@@ -178,7 +178,7 @@ logging:
     org.springframework.ai: INFO
 
 # ============================================
-# Actuator 端点配置
+# Actuator Endpoint Configuration
 # ============================================
 management:
   endpoints:

@@ -6,7 +6,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!-- ============================================================ -->
-    <!-- 独立演示项目：通过 Maven 依赖方式集成 spring-ai-rag-starter -->
+    <!-- Standalone demo project: integrate spring-ai-rag-starter via Maven -->
     <!-- ============================================================ -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -17,20 +17,20 @@
 
     <groupId>com.springairag.demo</groupId>
     <artifactId>demo-basic-rag</artifactId>
-    <!-- 与 spring-ai-rag 项目发布的版本号保持一致 -->
+    <!-- Keep version in sync with spring-ai-rag project release version -->
     <version>1.0.0-SNAPSHOT</version>
     <packaging>jar</packaging>
 
     <name>Spring AI RAG - Basic Demo</name>
     <description>
-        基础 RAG 演示：5 分钟将 spring-ai-rag-starter 集成到任意 Spring Boot 应用。
-        场景：企业知识库问答机器人。
+        Basic RAG demo: integrate spring-ai-rag-starter into any Spring Boot app in 5 minutes.
+        Use case: enterprise knowledge base Q&amp;A chatbot.
     </description>
 
     <properties>
         <java.version>21</java.version>
         <spring-ai.version>1.1.4</spring-ai.version>
-        <!-- TODO: 发布到 Maven Central 或私有仓库后，改为正式版本号如 1.0.0 -->
+        <!-- TODO: After publishing to Maven Central or a private repo, change to a release version like 1.0.0 -->
         <spring-ai-rag.version>1.0.0-SNAPSHOT</spring-ai-rag.version>
     </properties>
 
@@ -48,13 +48,13 @@
 
     <dependencies>
         <!-- ============================================ -->
-        <!-- 核心依赖：Spring AI RAG Starter              -->
-        <!-- 只需这一个依赖，即获得完整 RAG 能力：        -->
-        <!--   - 向量检索（pgvector + HNSW）            -->
-        <!--   - 全文检索（pg_jieba / pg_trgm）          -->
-        <!--   - 查询改写 + 混合检索 + 重排             -->
-        <!--   - 对话记忆                               -->
-        <!--   - 完整 REST API                          -->
+        <!-- Core dependency: Spring AI RAG Starter -->
+        <!-- One dependency gives you full RAG capability: -->
+        <!--   - Vector search (pgvector + HNSW)          -->
+        <!--   - Full-text search (pg_jieba / pg_trgm)    -->
+        <!--   - Query rewriting + hybrid search + rerank  -->
+        <!--   - Chat memory                              -->
+        <!--   - Full REST API                            -->
         <!-- ============================================ -->
         <dependency>
             <groupId>com.springairag</groupId>
@@ -62,20 +62,20 @@
             <version>${spring-ai-rag.version}</version>
         </dependency>
 
-        <!-- Spring Boot Web（MVC，用于自定义 Controller） -->
+        <!-- Spring Boot Web (MVC, for custom Controllers) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
-        <!-- PostgreSQL 驱动（RAG Starter 自动管理连接池） -->
+        <!-- PostgreSQL driver (RAG Starter manages connection pool) -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Spring Boot Actuator（健康检查 + 监控端点） -->
+        <!-- Spring Boot Actuator (health checks + monitoring endpoints) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
@@ -87,7 +87,7 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- H2 内存数据库（用于 E2E 测试） -->
+        <!-- H2 in-memory database (for E2E tests) -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
@@ -106,27 +106,27 @@
 
     <!--
     ================================================================
-    使用说明（复制到你的 Spring Boot 项目）
+    Usage Guide (copy to your Spring Boot project)
     ================================================================
 
-    1. 将 spring-ai-rag-starter 安装到本地 Maven 仓库：
+    1. Install spring-ai-rag-starter to your local Maven repo:
        cd /path/to/spring-ai-rag
        mvn clean install -DskipTests
 
-    2. 在你的 Spring Boot 项目的 pom.xml 中添加依赖：
+    2. Add dependency to your Spring Boot pom.xml:
        <dependency>
            <groupId>com.springairag</groupId>
            <artifactId>spring-ai-rag-starter</artifactId>
            <version>1.0.0-SNAPSHOT</version>
        </dependency>
 
-    3. 配置 application.yml（参考下方完整配置）
+    3. Configure application.yml (see complete config below)
 
-    4. 直接注入 RagChatService 使用：
+    4. Inject and use RagChatService directly:
        @Autowired
        private RagChatService ragChatService;
 
-       String answer = ragChatService.chat("你好", "session-001");
+       String answer = ragChatService.chat("Hello", "session-001");
     ================================================================
     -->
 </project>

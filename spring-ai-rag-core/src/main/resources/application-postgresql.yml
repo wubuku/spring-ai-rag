@@ -1,14 +1,14 @@
 # ============================================
-# PostgreSQL Profile 配置
-# 激活方式：--spring.profiles.active=postgresql
-# 作用：重新启用 PgVectorStore 自动配置（覆盖主配置的 exclude）
+# PostgreSQL Profile Configuration
+# Activation: --spring.profiles.active=postgresql
+# Purpose: Re-enable PgVectorStore auto-configuration (overrides main config exclude)
 # ============================================
 
 spring:
   autoconfigure:
     exclude:
 
-# 启用 pgvector 向量存储
+# Enable pgvector vector store
   ai:
     vectorstore:
       pgvector:

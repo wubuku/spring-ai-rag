@@ -1,6 +1,6 @@
 # ============================================
-# Demo-basic-rag：独立 Spring Boot 应用配置
-# 使用 .env 中的真实 key 和数据库连接
+# Demo-basic-rag: Standalone Spring Boot Application Config
+# Uses real keys and DB connection from .env
 # ============================================
 
 spring:
@@ -24,7 +24,7 @@ spring:
       minimum-idle: 2
 
   flyway:
-    enabled: false   # V1-V10 已手动执行，无需重复迁移
+    enabled: false   # V1-V10 already applied manually, no repeat migration needed
 
   ai:
     openai:

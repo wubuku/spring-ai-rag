@@ -16,7 +16,7 @@
     <artifactId>demo-domain-extension</artifactId>
     <version>1.0.0-SNAPSHOT</version>
     <name>Spring AI RAG - Domain Extension Demo</name>
-    <description>领域扩展示例：展示如何通过 DomainRagExtension + PromptCustomizer 添加新领域</description>
+    <description>Domain extension example: demonstrates adding new domains via DomainRagExtension + PromptCustomizer</description>
 
     <properties>
         <java.version>21</java.version>
@@ -62,7 +62,7 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- 测试 -->
+        <!-- Tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

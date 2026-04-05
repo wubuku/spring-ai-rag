@@ -13,10 +13,10 @@
 
     <artifactId>spring-ai-rag-documents</artifactId>
     <name>Spring AI RAG - Documents</name>
-    <description>文档处理组件（解析器、分块策略、文本清洗）</description>
+    <description>Document processing components (parsers, chunking strategies, text cleaning)</description>
 
     <dependencies>
-        <!-- 本项目 API 模块 -->
+        <!-- Project API module -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-api</artifactId>
@@ -29,7 +29,7 @@
             <artifactId>spring-ai-model</artifactId>
         </dependency>
 
-        <!-- Spring Boot（提供 @Service 等注解支持） -->
+        <!-- Spring Boot (provides @Service and other annotation support) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter</artifactId>

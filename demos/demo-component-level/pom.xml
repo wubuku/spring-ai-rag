@@ -6,8 +6,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!-- ================================================================
-         组件级集成演示：选择性地将 RAG Advisor 挂载到现有 ChatClient
-         适用场景：已有 Spring AI 应用，只想增强 RAG 能力
+         Component-Level Integration Demo: selectively mount RAG Advisors to existing ChatClient
+         Use case: existing Spring AI apps that only want to enhance RAG capability
     ================================================================ -->
     <parent>
         <groupId>org.springframework.boot</groupId>
@@ -23,8 +23,8 @@
 
     <name>Spring AI RAG - Component-Level Demo</name>
     <description>
-        组件级集成演示：选择性引入 RAG Advisor，增强现有 ChatClient。
-        适合已有 Spring AI 应用，只想加 RAG 检索能力。
+        Component-level integration demo: selectively introduce RAG Advisors to enhance existing ChatClient.
+        Ideal for existing Spring AI apps that only need RAG retrieval capability.
     </description>
 
     <properties>
@@ -46,7 +46,7 @@
     </dependencyManagement>
 
     <dependencies>
-        <!-- 只引入 spring-ai-rag-core（不是 starter） -->
+        <!-- Only include spring-ai-rag-core (not the starter) -->
         <dependency>
             <groupId>com.springairag</groupId>
             <artifactId>spring-ai-rag-core</artifactId>
@@ -59,7 +59,7 @@
             <artifactId>spring-ai-openai</artifactId>
         </dependency>
 
-        <!-- Spring AI JDBC Chat Memory（对话记忆存储） -->
+        <!-- Spring AI JDBC Chat Memory (conversation memory storage) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-model-chat-memory-repository-jdbc</artifactId>
@@ -94,13 +94,13 @@
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
 
-        <!-- 测试 -->
+        <!-- Tests -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- Testcontainers（用于 E2E 测试的 PostgreSQL） -->
+        <!-- Testcontainers (PostgreSQL for E2E tests) -->
         <dependency>
             <groupId>org.testcontainers</groupId>
             <artifactId>postgresql</artifactId>
