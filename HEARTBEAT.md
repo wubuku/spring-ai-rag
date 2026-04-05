@@ -1074,7 +1074,7 @@
 |---|--------|------|------|
 | N13 | API 版本管理（v1 → v2 端点规划文档） | 架构 | ✅ 2026-04-05（N13 完成，docs/api-versioning.md 包含 v2 breaking changes 清单） |
 | N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ✅ 2026-04-05（N14 完成，POST /batch/embed/stream + POST /{id}/embed/stream + BatchEmbedProgressEvent） |
-| N15 | 缓存失效管理 API（Admin 端点清除缓存） | 可观测性 | ⏳ 待推进 |
+| N15 | ~~缓存失效管理 API（Admin 端点清除缓存）~~ → 已由 N19 实现 | 可观测性 | ✅ → N19 |
 | N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
 | N17 | WebUI 搜索历史记录 | UX | ⏳ 待推进 |
 | N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ⏳ 待推进 |
