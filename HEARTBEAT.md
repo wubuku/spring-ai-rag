@@ -1063,6 +1063,10 @@
 
 - 2026-04-06 00:26 — ✅ N38 API 统一错误码规范：spring-ai-rag-api 新增 ErrorCode enum（26 个标准化错误码，含 HTTP status/title/problemTypeUri）；RagException 重构为 ErrorCode enum（getErrorCode() String 保留向后兼容 + 新增 getErrorCodeEnum()）；DocumentNotFoundException/RetrievalException/EmbeddingException/LlmCircuitOpenException 更新；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error(code) 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 迁移；mvn clean compile ✅ / mvn test ✅（1155 tests 全通过）；commit 6a3c6c4 已推送
 
+## 进度日志（2026-04-06 凌晨）
+
+- 2026-04-06 03:40 — WebUI 常规发布：npm test ✅（88/88）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist/ 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
 ## 进度日志（2026-04-05 晚间）
 
 - 2026-04-05 22:13 — 🔧 修复构建中断：删除 2 个未集成的 partial 文件（MultiModelConfigLoader.java + MultiModelProperties.java）—— 它们是 `@Component` 依赖未注册的 bean（MultiModelProperties 无 `@EnableConfigurationProperties`），导致 OpenApiContractTest 等 17 个测试 context load 失败；删除后 mvn test ✅（1129 Core + 42 Starter = 1171 测试全通过，零失败零错误）；commit aa87888 已推送
