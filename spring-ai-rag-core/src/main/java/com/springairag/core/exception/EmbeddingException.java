@@ -1,21 +1,23 @@
 package com.springairag.core.exception;
 
+import com.springairag.api.enums.ErrorCode;
+
 /**
- * 嵌入向量生成异常
- *
- * <p>嵌入模型调用失败、向量存储异常等场景抛出。GlobalExceptionHandler 返回 500。
+ * Embedding exception — thrown when embedding model invocation fails or vector store
+ * operations fail. GlobalExceptionHandler returns 500.
  */
 public class EmbeddingException extends RagException {
 
     public EmbeddingException(Long documentId, String detail) {
-        super("EMBEDDING_FAILED", "Embedding failed: documentId=" + documentId + ", " + detail, 500);
+        super(ErrorCode.EMBEDDING_FAILED,
+                "Embedding failed: documentId=" + documentId + ", " + detail);
     }
 
     public EmbeddingException(String message) {
-        super("EMBEDDING_FAILED", message, 500);
+        super(ErrorCode.EMBEDDING_FAILED, message);
     }
 
     public EmbeddingException(String message, Throwable cause) {
-        super("EMBEDDING_FAILED", message, 500, cause);
+        super(ErrorCode.EMBEDDING_FAILED, message, cause);
     }
 }

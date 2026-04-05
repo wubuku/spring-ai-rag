@@ -1,144 +1,166 @@
 package com.springairag.core.exception;
 
+import com.springairag.api.enums.ErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 业务异常类完整测试
+ * Business exception class tests — fully migrated to typed {@link ErrorCode} enum.
  */
 class RagExceptionTest {
 
     @Test
-    @DisplayName("RagException 基类构造和 getter")
+    @DisplayName("RagException base class: constructor and getters")
     void baseException() {
-        var ex = new RagException("TEST_CODE", "测试消息", 400);
+        var ex = new RagException(ErrorCode.BAD_REQUEST, "test message");
 
-        assertEquals("TEST_CODE", ex.getErrorCode());
-        assertEquals("测试消息", ex.getMessage());
+        assertEquals("BAD_REQUEST", ex.getErrorCode());
+        assertEquals(ErrorCode.BAD_REQUEST, ex.getErrorCodeEnum());
+        assertEquals("test message", ex.getMessage());
         assertEquals(400, ex.getHttpStatus());
     }
 
     @Test
-    @DisplayName("RagException 带 cause 构造")
+    @DisplayName("RagException with cause")
     void baseExceptionWithCause() {
-        var cause = new RuntimeException("原始异常");
-        var ex = new RagException("TEST_CODE", "测试消息", 500, cause);
+        var cause = new RuntimeException("original");
+        var ex = new RagException(ErrorCode.INTERNAL_ERROR, "test", cause);
 
         assertSame(cause, ex.getCause());
-        assertEquals("TEST_CODE", ex.getErrorCode());
+        assertEquals("INTERNAL_ERROR", ex.getErrorCode());
+        assertEquals(ErrorCode.INTERNAL_ERROR, ex.getErrorCodeEnum());
         assertEquals(500, ex.getHttpStatus());
     }
 
     @Test
-    @DisplayName("DocumentNotFoundException 通过 documentId 构造")
+    @DisplayName("DocumentNotFoundException via documentId")
     void documentNotFoundById() {
         var ex = new DocumentNotFoundException(42L);
 
         assertEquals("DOCUMENT_NOT_FOUND", ex.getErrorCode());
+        assertEquals(ErrorCode.DOCUMENT_NOT_FOUND, ex.getErrorCodeEnum());
         assertEquals(404, ex.getHttpStatus());
         assertTrue(ex.getMessage().contains("42"));
     }
 
     @Test
-    @DisplayName("DocumentNotFoundException 通过 message 构造")
+    @DisplayName("DocumentNotFoundException via message")
     void documentNotFoundByMessage() {
-        var ex = new DocumentNotFoundException("自定义消息");
+        var ex = new DocumentNotFoundException("custom message");
 
         assertEquals("DOCUMENT_NOT_FOUND", ex.getErrorCode());
+        assertEquals(ErrorCode.DOCUMENT_NOT_FOUND, ex.getErrorCodeEnum());
         assertEquals(404, ex.getHttpStatus());
-        assertEquals("自定义消息", ex.getMessage());
+        assertEquals("custom message", ex.getMessage());
     }
 
     @Test
-    @DisplayName("DocumentNotFoundException 是 RagException 子类")
+    @DisplayName("DocumentNotFoundException is RagException subclass")
     void documentNotFoundInheritance() {
         var ex = new DocumentNotFoundException(1L);
         assertInstanceOf(RagException.class, ex);
     }
 
     @Test
-    @DisplayName("EmbeddingException 通过 documentId + detail 构造")
+    @DisplayName("EmbeddingException via documentId + detail")
     void embeddingExceptionWithDetail() {
-        var ex = new EmbeddingException(100L, "超时");
+        var ex = new EmbeddingException(100L, "timeout");
 
         assertEquals("EMBEDDING_FAILED", ex.getErrorCode());
+        assertEquals(ErrorCode.EMBEDDING_FAILED, ex.getErrorCodeEnum());
         assertEquals(500, ex.getHttpStatus());
         assertTrue(ex.getMessage().contains("100"));
-        assertTrue(ex.getMessage().contains("超时"));
+        assertTrue(ex.getMessage().contains("timeout"));
     }
 
     @Test
-    @DisplayName("EmbeddingException 通过 message 构造")
+    @DisplayName("EmbeddingException via message")
     void embeddingExceptionWithMessage() {
-        var ex = new EmbeddingException("嵌入失败");
+        var ex = new EmbeddingException("embedding failed");
 
         assertEquals("EMBEDDING_FAILED", ex.getErrorCode());
+        assertEquals(ErrorCode.EMBEDDING_FAILED, ex.getErrorCodeEnum());
         assertEquals(500, ex.getHttpStatus());
-        assertEquals("嵌入失败", ex.getMessage());
+        assertEquals("embedding failed", ex.getMessage());
     }
 
     @Test
-    @DisplayName("EmbeddingException 带 cause 构造")
+    @DisplayName("EmbeddingException with cause")
     void embeddingExceptionWithCause() {
-        var cause = new RuntimeException("底层异常");
-        var ex = new EmbeddingException("嵌入失败", cause);
+        var cause = new RuntimeException("underlying");
+        var ex = new EmbeddingException("embedding failed", cause);
 
         assertEquals("EMBEDDING_FAILED", ex.getErrorCode());
+        assertEquals(ErrorCode.EMBEDDING_FAILED, ex.getErrorCodeEnum());
         assertEquals(500, ex.getHttpStatus());
         assertSame(cause, ex.getCause());
     }
 
     @Test
-    @DisplayName("EmbeddingException 是 RagException 子类")
+    @DisplayName("EmbeddingException is RagException subclass")
     void embeddingExceptionInheritance() {
         var ex = new EmbeddingException("test");
         assertInstanceOf(RagException.class, ex);
     }
 
     @Test
-    @DisplayName("RetrievalException 通过 query + detail 构造")
+    @DisplayName("RetrievalException via query + detail")
     void retrievalExceptionWithDetail() {
-        var ex = new RetrievalException("测试查询", "向量库连接失败");
+        var ex = new RetrievalException("test query", "vector DB connection failed");
 
         assertEquals("RETRIEVAL_FAILED", ex.getErrorCode());
+        assertEquals(ErrorCode.RETRIEVAL_FAILED, ex.getErrorCodeEnum());
         assertEquals(500, ex.getHttpStatus());
-        assertTrue(ex.getMessage().contains("测试查询"));
-        assertTrue(ex.getMessage().contains("向量库连接失败"));
+        assertTrue(ex.getMessage().contains("test query"));
+        assertTrue(ex.getMessage().contains("vector DB connection failed"));
     }
 
     @Test
-    @DisplayName("RetrievalException 通过 message 构造")
+    @DisplayName("RetrievalException via message")
     void retrievalExceptionWithMessage() {
-        var ex = new RetrievalException("检索异常");
+        var ex = new RetrievalException("retrieval error");
 
         assertEquals("RETRIEVAL_FAILED", ex.getErrorCode());
-        assertEquals("检索异常", ex.getMessage());
+        assertEquals(ErrorCode.RETRIEVAL_FAILED, ex.getErrorCodeEnum());
+        assertEquals("retrieval error", ex.getMessage());
     }
 
     @Test
-    @DisplayName("RetrievalException 带 cause 构造")
+    @DisplayName("RetrievalException with cause")
     void retrievalExceptionWithCause() {
-        var cause = new RuntimeException("DB异常");
-        var ex = new RetrievalException("检索失败", cause);
+        var cause = new RuntimeException("DB error");
+        var ex = new RetrievalException("retrieval failed", cause);
 
         assertSame(cause, ex.getCause());
     }
 
     @Test
-    @DisplayName("RetrievalException 是 RagException 子类")
+    @DisplayName("RetrievalException is RagException subclass")
     void retrievalExceptionInheritance() {
         var ex = new RetrievalException("test");
         assertInstanceOf(RagException.class, ex);
     }
 
     @Test
-    @DisplayName("异常类都继承 RuntimeException")
+    @DisplayName("All exceptions extend RuntimeException")
     void allExtendRuntimeException() {
-        assertInstanceOf(RuntimeException.class, new RagException("C", "M", 500));
+        assertInstanceOf(RuntimeException.class, new RagException(ErrorCode.BAD_REQUEST, "m"));
         assertInstanceOf(RuntimeException.class, new DocumentNotFoundException(1L));
-        assertInstanceOf(RuntimeException.class, new EmbeddingException("M"));
-        assertInstanceOf(RuntimeException.class, new RetrievalException("M"));
+        assertInstanceOf(RuntimeException.class, new EmbeddingException("m"));
+        assertInstanceOf(RuntimeException.class, new RetrievalException("m"));
+        assertInstanceOf(RuntimeException.class, new LlmCircuitOpenException());
+    }
+
+    @Test
+    @DisplayName("LlmCircuitOpenException returns correct error code and status")
+    void llmCircuitOpenException() {
+        var ex = new LlmCircuitOpenException();
+
+        assertEquals("LLM_CIRCUIT_OPEN", ex.getErrorCode());
+        assertEquals(ErrorCode.LLM_CIRCUIT_OPEN, ex.getErrorCodeEnum());
+        assertEquals(503, ex.getHttpStatus());
+        assertTrue(ex.getMessage().contains("retry later"));
     }
 }

@@ -23,7 +23,7 @@ class CacheMetricsServiceTest {
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
-        cacheMetricsService = new CacheMetricsService(meterRegistry);
+        cacheMetricsService = new CacheMetricsService(meterRegistry, null);
     }
 
     @Test
@@ -130,7 +130,7 @@ class CacheMetricsServiceTest {
     @Test
     @DisplayName("Multiple service instances should have independent counters")
     void independentInstances() {
-        CacheMetricsService another = new CacheMetricsService(meterRegistry);
+        CacheMetricsService another = new CacheMetricsService(meterRegistry, null);
 
         Counter hitCounter = meterRegistry.find("rag.cache.embedding.hit").counter();
         hitCounter.increment(5);

@@ -7,6 +7,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
+
+import java.util.Map;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -38,5 +41,23 @@ public class CacheMetricsController {
     @GetMapping("/stats")
     public ResponseEntity<CacheStatsResponse> getCacheStats() {
         return ResponseEntity.ok(CacheStatsResponse.from(cacheMetricsService.getStats()));
+    }
+
+    /**
+     * 清除嵌入缓存
+     *
+     * <p>Admin 端点：清除 Caffeine 本地缓存，强制后续嵌入请求重新调用 API。
+     *
+     * @return 清除的缓存条目数量
+     */
+    @Operation(summary = "清除嵌入缓存", description = "Admin 端点：清除 Caffeine 本地嵌入缓存，强制重新嵌入。返回清除的条目数量。")
+    @ApiResponse(responseCode = "200", description = "返回清除的缓存条目数量")
+    @DeleteMapping("/invalidate")
+    public ResponseEntity<Map<String, Object>> invalidateCache() {
+        int cleared = cacheMetricsService.clearCache();
+        return ResponseEntity.ok(Map.of(
+                "cleared", cleared,
+                "message", cleared > 0 ? "Cache invalidated" : "No entries to clear"
+        ));
     }
 }

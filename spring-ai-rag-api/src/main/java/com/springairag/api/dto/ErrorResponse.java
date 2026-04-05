@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import com.springairag.api.enums.ErrorCode;
+
 import java.time.Instant;
 
 /**
@@ -85,6 +87,22 @@ public class ErrorResponse {
                 .title("Bad Request")
                 .status(400)
                 .type(PROBLEM_TYPE_PREFIX + "bad-request")
+                .build();
+    }
+
+    /**
+     * Creates an ErrorResponse from a typed {@link ErrorCode} enum.
+     *
+     * @param code   the standardized error code (determines status, title, type)
+     * @param detail human-readable error detail message
+     */
+    public static ErrorResponse of(ErrorCode code, String detail) {
+        return builder()
+                .error(code.getCode())
+                .title(code.getTitle())
+                .status(code.getHttpStatus())
+                .type(code.getProblemTypeUri())
+                .detail(detail)
                 .build();
     }
 

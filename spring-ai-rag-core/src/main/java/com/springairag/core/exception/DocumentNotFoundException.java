@@ -1,17 +1,18 @@
 package com.springairag.core.exception;
 
+import com.springairag.api.enums.ErrorCode;
+
 /**
- * 文档未找到异常
- *
- * <p>当请求的文档 ID 不存在时抛出。GlobalExceptionHandler 返回 404。
+ * Document not found exception — thrown when a requested document ID does not exist.
+ * GlobalExceptionHandler returns 404.
  */
 public class DocumentNotFoundException extends RagException {
 
     public DocumentNotFoundException(Long documentId) {
-        super("DOCUMENT_NOT_FOUND", "Document not found: id=" + documentId, 404);
+        super(ErrorCode.DOCUMENT_NOT_FOUND, "Document not found: id=" + documentId);
     }
 
     public DocumentNotFoundException(String message) {
-        super("DOCUMENT_NOT_FOUND", message, 404);
+        super(ErrorCode.DOCUMENT_NOT_FOUND, message);
     }
 }

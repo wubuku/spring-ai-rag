@@ -1,21 +1,22 @@
 package com.springairag.core.exception;
 
+import com.springairag.api.enums.ErrorCode;
+
 /**
- * 检索异常
- *
- * <p>混合检索、向量搜索、全文搜索失败时抛出。GlobalExceptionHandler 返回 500。
+ * Retrieval exception — thrown when hybrid search, vector search, or full-text
+ * search fails. GlobalExceptionHandler returns the HTTP status from the enum.
  */
 public class RetrievalException extends RagException {
 
     public RetrievalException(String query, String detail) {
-        super("RETRIEVAL_FAILED", "Retrieval failed: query=" + query + ", " + detail, 500);
+        super(ErrorCode.RETRIEVAL_FAILED, "Retrieval failed: query=" + query + ", " + detail);
     }
 
     public RetrievalException(String message) {
-        super("RETRIEVAL_FAILED", message, 500);
+        super(ErrorCode.RETRIEVAL_FAILED, message);
     }
 
     public RetrievalException(String message, Throwable cause) {
-        super("RETRIEVAL_FAILED", message, 500, cause);
+        super(ErrorCode.RETRIEVAL_FAILED, message, cause);
     }
 }

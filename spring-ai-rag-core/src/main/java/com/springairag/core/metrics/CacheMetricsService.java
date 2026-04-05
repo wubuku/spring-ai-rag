@@ -2,6 +2,10 @@ package com.springairag.core.metrics;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.cache.CacheManager;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -19,16 +23,24 @@ import java.util.Map;
 @Service
 public class CacheMetricsService {
 
+    private static final Logger log = LoggerFactory.getLogger(CacheMetricsService.class);
+    private static final String EMBEDDINGS_CACHE = "embeddings";
+
     private final Counter hitCounter;
     private final Counter missCounter;
+    private final CacheManager cacheManager;
 
-    public CacheMetricsService(MeterRegistry meterRegistry) {
+    public CacheMetricsService(MeterRegistry meterRegistry,
+                              @Autowired(required = false) CacheManager cacheManager) {
         this.hitCounter = Counter.builder("rag.cache.embedding.hit")
                 .description("嵌入缓存命中次数")
                 .register(meterRegistry);
         this.missCounter = Counter.builder("rag.cache.embedding.miss")
                 .description("嵌入缓存未命中次数")
                 .register(meterRegistry);
+        this.cacheManager = cacheManager;
+        log.info("CacheMetricsService initialized (cacheManager: {})",
+                cacheManager != null ? "available" : "not configured");
     }
 
     /**
@@ -73,5 +85,28 @@ public class CacheMetricsService {
         stats.put("totalCount", total);
         stats.put("hitRate", total > 0 ? String.format("%.1f%%", (double) hits / total * 100) : "N/A");
         return stats;
+    }
+
+    /**
+     * 清除嵌入缓存。
+     *
+     * <p>清除后，所有后续嵌入请求将重新调用嵌入模型，
+     * 缓存命中率将重置为 0%。
+     *
+     * @return 清除的缓存条目数量（估算）
+     */
+    public int clearCache() {
+        if (cacheManager == null) {
+            log.warn("CacheManager not available, cannot clear cache");
+            return 0;
+        }
+        var cache = cacheManager.getCache(EMBEDDINGS_CACHE);
+        if (cache == null) {
+            log.info("Embeddings cache not found");
+            return 0;
+        }
+        cache.clear();
+        log.info("Embeddings cache cleared successfully");
+        return 1;
     }
 }

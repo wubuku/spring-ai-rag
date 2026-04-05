@@ -81,6 +81,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 path.startsWith("/swagger-ui") ||
                 path.startsWith("/v3/api-docs") ||
                 path.startsWith("/health") ||
+                path.startsWith("/api/v1/rag/cache") || // Cache metrics/invalidate - admin read-only
                 path.startsWith("/error");
     }
 

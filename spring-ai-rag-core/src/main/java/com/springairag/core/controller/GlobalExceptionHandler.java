@@ -132,9 +132,20 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RagException.class)
     public ResponseEntity<ErrorResponse> handleRagException(RagException e,
                                                             HttpServletRequest request) {
-        log.warn("RAG business error: [{}] {}", e.getErrorCode(), e.getMessage());
-        return buildResponse(HttpStatus.valueOf(e.getHttpStatus()), e.getErrorCode(),
-                e.getMessage(), request);
+        var code = e.getErrorCodeEnum();
+        log.warn("RAG business error: [{}] {}", code.getCode(), e.getMessage());
+        ErrorResponse body = ErrorResponse.builder()
+                .error(code.getCode())
+                .status(code.getHttpStatus())
+                .type(code.getProblemTypeUri())
+                .detail(e.getMessage())
+                .instance(request.getRequestURI())
+                .build();
+        // Set human-readable title without triggering the builder's title() side effect
+        body.setTitle(code.getTitle());
+        return ResponseEntity.status(code.getHttpStatus())
+                .contentType(PROBLEM_JSON)
+                .body(body);
     }
 
     @ExceptionHandler(Exception.class)

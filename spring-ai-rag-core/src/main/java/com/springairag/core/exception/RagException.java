@@ -1,50 +1,63 @@
 package com.springairag.core.exception;
 
+import com.springairag.api.enums.ErrorCode;
+
 /**
- * RAG 业务异常基类
+ * Base RAG business exception with a typed {@link ErrorCode}.
  *
- * <p>所有 RAG 相关业务异常的公共父类，提供统一的错误码和 HTTP 状态码。
- * 子类只需关注具体业务语义，GlobalExceptionHandler 统一处理。
+ * <p>All RAG-related business exceptions extend this class.
+ * Subclasses only need to specify the {@link ErrorCode};
+ * HTTP status is derived from the enum.
  *
- * <p>使用示例：
+ * <p>Example:
  * <pre>
  * throw new DocumentNotFoundException(42L);
- * throw new EmbeddingException(42L, "嵌入模型超时");
+ * throw new EmbeddingException(42L, "embedding model timeout");
  * </pre>
  */
 public class RagException extends RuntimeException {
 
-    private final String errorCode;
-    private final int httpStatus;
+    private final ErrorCode errorCode;
 
     /**
-     * @param errorCode  业务错误码（如 DOCUMENT_NOT_FOUND）
-     * @param message    用户友好的错误描述
-     * @param httpStatus HTTP 状态码
+     * @param errorCode typed error code (must not be null)
+     * @param message   user-friendly error description
      */
-    public RagException(String errorCode, String message, int httpStatus) {
+    public RagException(ErrorCode errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
-        this.httpStatus = httpStatus;
     }
 
     /**
-     * @param errorCode  业务错误码
-     * @param message    错误描述
-     * @param httpStatus HTTP 状态码
-     * @param cause      原始异常
+     * @param errorCode typed error code
+     * @param message   error description
+     * @param cause     original exception
      */
-    public RagException(String errorCode, String message, int httpStatus, Throwable cause) {
+    public RagException(ErrorCode errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
-        this.httpStatus = httpStatus;
     }
 
-    public String getErrorCode() {
+    /**
+     * Returns the typed error code enum.
+     */
+    public ErrorCode getErrorCodeEnum() {
         return errorCode;
     }
 
+    /**
+     * Returns the error code name as a String (e.g., {@code "DOCUMENT_NOT_FOUND"}).
+     * Kept for backward compatibility.
+     */
+    public String getErrorCode() {
+        return errorCode.getCode();
+    }
+
+    /**
+     * @deprecated use {@link #getErrorCodeEnum()} and {@link ErrorCode#getHttpStatus()}
+     */
+    @Deprecated
     public int getHttpStatus() {
-        return httpStatus;
+        return errorCode.getHttpStatus();
     }
 }
