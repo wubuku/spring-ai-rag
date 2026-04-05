@@ -1065,6 +1065,8 @@
 
 ## 进度日志（2026-04-06 凌晨）
 
+- 2026-04-06 04:00 — ✅ C26 Flyway 迁移一致性检查：移除"Run database migrations (manual V1 schema)" 步骤（尝试在不存在表上创建索引，fresh database 会失败）；让 Flyway 完全控制 schema（mvn test 时通过 Spring Boot auto-config 运行 V1-V13）；添加 post-test 一致性检查——对比 V*.sql 脚本数与 flyway_schema_history 已应用数，drift 或 failed 迁移则 CI 失败；CI YAML 语法验证通过；commit a63280e 已推送；23 个测试失败是已有基础设施问题（无 DB），与本次改动无关
+
 - 2026-04-06 03:40 — WebUI 常规发布：npm test ✅（88/88）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist/ 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
 ## 进度日志（2026-04-05 晚间）
@@ -1098,7 +1100,7 @@
 | N23 | N2：Grafana Dashboard JSON 配置完善（补充缺失 panels） | 监控 | ⏳ 待推进 |
 | N24 | N3：Prometheus Alerting Rules 完善（补充 SLA 告警） | 监控 | ⏳ 待推进 |
 | N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ⏳ 待推进 |
-| N26 | Flyway 迁移脚本版本一致性检查（CI 环节） | DevOps | ⏳ 待推进 |
+| N26 | Flyway 迁移脚本版本一致性检查（CI 环节） | DevOps | ✅ 2026-04-06（C7 完成：移除错误的手动 schema 创建步骤，添加 mvn test 后 flyway_schema_history 一致性检查——对比 V*.sql 脚本数与已应用数，检测 drift 或 failed 迁移则 CI 失败） |
 | N27 | API 端点响应时间基准测试（SLO < 500ms） | 性能 | ⏳ 待推进 |
 | N28 | WebUI 国际化支持（i18n framework 搭建） | UX | ⏳ 待推进 |
 | N29 | Spring Boot 3.5 新特性：Virtual Threads 压测验证 | 技术升级 | ⏳ 待推进 |
@@ -1132,7 +1134,7 @@
 | C4 | N21：Grafana Dashboard JSON 配置完善 | 监控 | ⏳ | P2 |
 | C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ⏳ | P2 |
 | C6 | N23：k6 负载测试脚本完善（search + chat 并发） | 性能 | ⏳ | P2 |
-| C7 | N26：Flyway 迁移脚本版本一致性检查（CI） | DevOps | ⏳ | P2 |
+| C7 | N26：Flyway 迁移脚本版本一致性检查（CI） | DevOps | ✅ 2026-04-06 | P2 |
 | C8 | N27：API 响应时间基准测试（SLO < 500ms） | 性能 | ⏳ | P2 |
 | C9 | N28：WebUI 国际化支持（i18n 框架搭建） | UX | ⏳ | P3 |
 | C10 | N29：Spring Boot 3.5 Virtual Threads 压测验证 | 技术升级 | ⏳ | P3 |
