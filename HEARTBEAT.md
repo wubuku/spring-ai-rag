@@ -151,6 +151,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-06 07:40 — ✅ HTTP 代理配置化：RagProxyProperties（enabled/host/port/noProxyHosts）+ SpringAiConfig.initProxySettings() 重构（替代硬编码 disableProxyForMiniMax）；proxy.enabled=false 时使用 NO_PROXY selector，enabled=true 时使用配置的代理；application.yml 添加 rag.proxy.* 配置节；RagProxyPropertiesTest（2 tests）；mvn clean compile ✅，mvn test ✅；commit d63437c 已推送
 - 2026-04-06 05:50 — ✅ C19 API per-endpoint 超时配置化：RagTimeoutProperties（7 项配置：connect/read/chat-ask/chat-stream/search/embed/model-compare）+ SpringAiConfig 重构（RestClient 层级注入超时）+ application.yml rag.timeout.* 配置节；SpringAiConfigTest 适配构造函数注入（8 tests）；RagTimeoutPropertiesTest（4 tests）；docs/configuration.md + configuration-zh-CN.md 添加 LLM API 超时配置章节；12 tests ✅；mvn clean compile ✅；commit cdfe91c 已推送
 - 2026-04-04 19:45 — ✅ CI JDK 版本对齐：GitHub Actions workflow Java 17 → Java 21（LTS），与项目运行时版本同步；mvn clean compile ✅，mvn test ✅（全通过）；commit 62da699 已推送
 - 2026-04-06 07:28 — ✅ C36 API 重试策略：spring-retry + RagRetryProperties（指数退避+抖动，429/503/超时可配置），RagChatService + QueryRewritingService 集成 RetryTemplate；RagRetryPropertiesTest + RetryConfigTest（10 tests）；1175+ 测试全通过；commit 1562ed1
