@@ -192,6 +192,46 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
 
 ---
 
+### `GET /api/v1/rag/chat/export/{sessionId}`
+
+Export chat conversation history as a downloadable file.
+
+| Parameter | Type | Location | Description |
+|-----------|------|---------|-------------|
+| `format` | string | query | `json` or `md` (default: `json`) |
+| `limit` | int | query | Max messages to export (default: 50) |
+
+**Response:** Binary file download with `Content-Type: application/octet-stream` and `Content-Disposition: attachment; filename="conversation-{sessionId}.{format}"`
+
+**JSON format response body:**
+```json
+{
+  "conversationId": "s1",
+  "exportedAt": "2026-04-05T12:00:00Z",
+  "messageCount": 10,
+  "messages": [
+    { "role": "user", "content": "Hello", "timestamp": "..." },
+    { "role": "assistant", "content": "Hi!", "sources": [], "timestamp": "..." }
+  ]
+}
+```
+
+**Markdown format response body:**
+```markdown
+# Conversation: s1
+Exported: 2026-04-05
+
+---
+
+## User (2026-04-05T10:00:00)
+Hello
+
+## Assistant (2026-04-05T10:00:01)
+Hi!
+```
+
+---
+
 ## Search — Direct Retrieval
 
 > Does not go through LLM generation; used for debugging and previewing retrieval results.
@@ -351,6 +391,38 @@ Batch embed documents (documents must already exist).
 ```json
 {
   "documentIds": [1, 2, 3]
+}
+```
+
+### `POST /api/v1/rag/documents/batch/embed/stream`
+
+Batch embed documents via SSE streaming with real-time progress events.
+
+**SSE Events:**
+- `progress` — `BatchEmbedProgressEvent` with current document index, total docs, phase (PREPARING/CHUNKING/EMBEDDING/STORING/COMPLETED/FAILED), success/cached/failed counts
+- `done` — Final confirmation with total count and status
+- `error` — Error details (on validation failure)
+
+**Request body:**
+```json
+{
+  "ids": [1, 2, 3]
+}
+```
+
+**Example SSE progress event:**
+```json
+{
+  "currentDocIndex": 2,
+  "totalDocs": 10,
+  "currentDocId": 42,
+  "phase": "EMBEDDING",
+  "current": 5,
+  "total": 10,
+  "message": "Document 3/10: Generating embedding for chunk 5/10",
+  "successCount": 1,
+  "failedCount": 0,
+  "cachedCount": 1
 }
 ```
 
@@ -709,6 +781,81 @@ Get all SLO definitions.
 ### `GET /api/v1/rag/alerts/slos/{sloName}`
 
 Get details of a specific SLO.
+
+### `POST /api/v1/rag/alerts/slos`
+
+Create a new SLO configuration.
+
+**Request body:**
+```json
+{
+  "sloName": "latency_p99",
+  "sloType": "LATENCY",
+  "targetValue": 200.0,
+  "unit": "ms",
+  "description": "P99 latency should be under 200ms",
+  "enabled": true
+}
+```
+
+**Response:** `201 Created` with created SLO config.
+
+### `PUT /api/v1/rag/alerts/slos/configs/{sloName}`
+
+Update an existing SLO configuration.
+
+**Request body:** Same as POST.
+
+**Response:** `200 OK` with updated SLO config, or `404 Not Found`.
+
+### `DELETE /api/v1/rag/alerts/slos/configs/{sloName}`
+
+Delete an SLO configuration.
+
+**Response:** `204 No Content`, or `404 Not Found`.
+
+### `GET /api/v1/rag/alerts/slos/configs`
+
+List all SLO configurations.
+
+**Response:** Array of SLO config objects.
+
+### `GET /api/v1/rag/alerts/silence-schedules`
+
+List all silence schedules.
+
+### `POST /api/v1/rag/alerts/silence-schedules`
+
+Create a new silence schedule.
+
+**Request body:**
+```json
+{
+  "name": "weekend-maintenance",
+  "alertKey": "high-latency",
+  "silenceType": "RECURRING",
+  "startTime": "2026-04-10T02:00:00+08:00",
+  "endTime": "2026-04-10T04:00:00+08:00",
+  "description": "Scheduled maintenance window",
+  "enabled": true
+}
+```
+
+**Response:** `201 Created` with created schedule.
+
+### `GET /api/v1/rag/alerts/silence-schedules/{name}`
+
+Get a specific silence schedule.
+
+### `PUT /api/v1/rag/alerts/silence-schedules/{name}`
+
+Update a silence schedule.
+
+### `DELETE /api/v1/rag/alerts/silence-schedules/{name}`
+
+Delete a silence schedule.
+
+**Response:** `204 No Content`.
 
 ---
 
