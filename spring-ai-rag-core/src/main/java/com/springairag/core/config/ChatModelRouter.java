@@ -2,124 +2,175 @@ package com.springairag.core.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.anthropic.AnthropicChatModel;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
- * ChatModel 动态路由器
+ * ChatModel 路由器：支持主模型 + Fallback 链。
  *
- * <p>支持请求级别的模型动态切换：
+ * <p>根据模型引用（{@code providerId/modelId}）解析到对应的 ChatModel 实例。
+ * 当主模型调用抛出异常时，自动切换到备选模型。
+ *
+ * <p>支持的 ChatModel 类型：
  * <ul>
- *   <li>根据 provider hint 选择目标 ChatModel</li>
- *   <li>主模型失败时自动切换 fallback chain</li>
+ *   <li>{@link OpenAiChatModel} — OpenAI / OpenAI-Compatible API</li>
+ *   <li>{@link AnthropicChatModel} — Anthropic API</li>
+ *   <li>其他实现了 {@link ChatModel} 的 bean</li>
  * </ul>
- *
- * <p>使用方式：
- * <pre>
- * // 获取指定 provider 的 ChatModel
- * ChatModel model = router.getModel("minimax");
- *
- * // 获取带 fallback 的 ChatModel
- * ChatModel model = router.getModelWithFallback("minimax");
- * </pre>
  */
 @Component
 public class ChatModelRouter {
 
     private static final Logger log = LoggerFactory.getLogger(ChatModelRouter.class);
 
-    private final ModelRegistry registry;
+    private final ModelRegistry modelRegistry;
+    private final Map<String, ChatModel> chatModelsByProvider = new ConcurrentHashMap<>();
 
-    @Value("${app.multi-model.fallback-chain:openai,minimax}")
-    private List<String> fallbackChain = new ArrayList<>();
-
-    @Value("${app.multi-model.enabled:false}")
-    private boolean multiModelEnabled;
-
-    public ChatModelRouter(ModelRegistry registry) {
-        this.registry = registry;
-    }
-
-    /**
-     * 根据 provider hint 获取 ChatModel
-     *
-     * @param providerHint 请求指定的 provider（可为空，默认自动选择）
-     * @return ChatModel 实例
-     * @throws IllegalArgumentException 当 provider 不可用时
-     */
-    public ChatModel getModel(String providerHint) {
-        if (!StringUtils.hasText(providerHint)) {
-            return registry.getDefault();
-        }
-        if (!multiModelEnabled) {
-            log.warn("Multi-model routing disabled, ignoring provider hint: {}", providerHint);
-            return registry.getDefault();
-        }
-        if (!registry.isAvailable(providerHint)) {
-            throw new IllegalArgumentException(
-                    "Provider not available: " + providerHint +
-                    ". Available: " + registry.availableProviders());
-        }
-        return registry.get(providerHint);
-    }
-
-    /**
-     * 获取默认 ChatModel
-     */
-    public ChatModel getDefaultModel() {
-        return registry.getDefault();
-    }
-
-    /**
-     * 检查是否支持多模型路由
-     */
-    public boolean isMultiModelEnabled() {
-        return multiModelEnabled;
-    }
-
-    /**
-     * 获取 fallback chain 配置
-     */
-    public List<String> getFallbackChain() {
-        return List.copyOf(fallbackChain);
-    }
-
-    /**
-     * 获取 fallback chain 中的下一个可用 provider
-     *
-     * @param failedProvider 当前失败的 provider
-     * @return 下一个可用的 provider，如果没有了返回 null
-     */
-    public String getNextFallback(String failedProvider) {
-        boolean useNext = false;
-        for (String p : fallbackChain) {
-            if (p.equals(failedProvider)) {
-                useNext = true;
-                continue;
-            }
-            if (useNext && registry.isAvailable(p)) {
-                return p;
+    @Autowired
+    public ChatModelRouter(
+            ModelRegistry modelRegistry,
+            @Autowired(required = false) List<ChatModel> chatModels) {
+        this.modelRegistry = modelRegistry;
+        if (chatModels != null) {
+            for (ChatModel model : chatModels) {
+                String provider = resolveProvider(model);
+                if (provider != null) {
+                    chatModelsByProvider.put(provider.toLowerCase(), model);
+                }
             }
         }
-        return null;
+        log.info("ChatModelRouter initialized with {} providers: {}",
+                chatModelsByProvider.size(), chatModelsByProvider.keySet());
     }
 
     /**
-     * 判断指定 provider 是否可用
+     * 解析模型引用（providerId/modelId）获取 ChatModel 实例。
+     * 如果引用只包含 providerId（如 "minimax"），返回该 provider 的默认 ChatModel。
      */
-    public boolean isProviderAvailable(String provider) {
-        return registry.isAvailable(provider);
+    public ChatModel resolve(String modelRef) {
+        if (modelRef == null || modelRef.isBlank()) {
+            return null;
+        }
+
+        String providerId = extractProviderId(modelRef);
+        String modelId = extractModelId(modelRef);
+
+        ChatModel model = chatModelsByProvider.get(providerId.toLowerCase());
+        if (model != null) {
+            log.debug("Resolved {} -> provider={}, model={}", modelRef, providerId, modelId);
+        } else {
+            log.warn("No ChatModel found for provider '{}' (modelRef={})", providerId, modelRef);
+        }
+        return model;
     }
 
     /**
-     * 获取所有已注册的 provider 列表
+     * 获取主 ChatModel。
+     */
+    public ChatModel getPrimary() {
+        String primary = modelRegistry.getPrimaryChatModelName();
+        return resolve(primary);
+    }
+
+    /**
+     * 获取 Fallback ChatModel 列表。
+     */
+    public List<ChatModel> getFallbacks() {
+        List<String> fallbackNames = modelRegistry.getFallbackChatModelNames();
+        return fallbackNames.stream()
+                .map(this::resolve)
+                .filter(m -> m != null)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 按优先级获取所有可用的 ChatModel（主模型在前，fallback 在后）。
+     */
+    public List<ChatModel> getAllOrdered() {
+        List<ChatModel> result = new ArrayList<>();
+        ChatModel primary = getPrimary();
+        if (primary != null) {
+            result.add(primary);
+        }
+        for (ChatModel fallback : getFallbacks()) {
+            if (!result.contains(fallback)) {
+                result.add(fallback);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取所有已注册的 ChatModel provider 名称。
      */
     public List<String> getAvailableProviders() {
-        return new ArrayList<>(registry.availableProviders());
+        return List.copyOf(chatModelsByProvider.keySet());
+    }
+
+    // ─── 内部方法 ─────────────────────────────────────────────────
+
+    private String extractProviderId(String modelRef) {
+        if (modelRef.contains("/")) {
+            String[] parts = modelRef.split("/", 2);
+            return parts[0];
+        }
+        // 只有 modelId，没有 provider 前缀
+        // 尝试从 modelRef 推断 provider
+        return inferProviderFromModelId(modelRef);
+    }
+
+    private String extractModelId(String modelRef) {
+        if (modelRef.contains("/")) {
+            return modelRef.split("/", 2)[1];
+        }
+        return modelRef;
+    }
+
+    private String inferProviderFromModelId(String modelId) {
+        // 根据模型 ID 推断 provider
+        // 这是一个简单的回退策略
+        if (modelId.contains("-")) {
+            // 如 "MiniMax-M2.7" -> "minimax"
+            String lower = modelId.toLowerCase();
+            if (lower.contains("gpt")) return "openai";
+            if (lower.contains("claude")) return "anthropic";
+            if (lower.contains("glm")) return "zhipu";
+            if (lower.contains("minimax")) return "minimax";
+            if (lower.contains("deepseek")) return "deepseek";
+        }
+        // 最后一个 fallback：返回第一个可用的
+        return chatModelsByProvider.keySet().stream()
+                .findFirst()
+                .orElse(null);
+    }
+
+    private String resolveProvider(ChatModel model) {
+        // 根据 ChatModel bean 的类型推断 provider
+        if (model instanceof OpenAiChatModel) {
+            return "openai";
+        }
+        if (model instanceof AnthropicChatModel) {
+            return "anthropic";
+        }
+        // 从 bean 名称推断
+        String name = model.getClass().getSimpleName().toLowerCase();
+        if (name.contains("openai")) return "openai";
+        if (name.contains("anthropic")) return "anthropic";
+        if (name.contains("deepseek")) return "deepseek";
+        if (name.contains("minimax")) return "minimax";
+        if (name.contains("zhipu")) return "zhipu";
+        if (name.contains("siliconflow")) return "siliconflow";
+        if (name.contains("volces")) return "volces";
+        return null;
     }
 }
