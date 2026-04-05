@@ -8,6 +8,7 @@ import styles from './Documents.module.css';
 
 export function Documents() {
   const [page, setPage] = useState(0);
+  const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -57,6 +58,10 @@ export function Documents() {
     e.preventDefault();
     e.currentTarget.classList.remove(styles.dragOver);
     handleFiles(e.dataTransfer.files);
+  };
+
+  const handlePreview = (doc: { id: number; title: string; content: string }) => {
+    setPreviewDoc(doc);
   };
 
   return (
@@ -111,7 +116,11 @@ export function Documents() {
                 {data?.data?.documents?.map(doc => (
                   <tr key={doc.id}>
                     <td className={styles.id}>{doc.id}</td>
-                    <td className={styles.title}>{doc.title}</td>
+                    <td>
+                      <button className={styles.previewBtn} onClick={() => handlePreview(doc)}>
+                        {doc.title}
+                      </button>
+                    </td>
                     <td>{doc.documentType ?? '—'}</td>
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
@@ -159,6 +168,23 @@ export function Documents() {
             </button>
           </div>
         </>
+      )}
+
+      {/* Preview Modal */}
+      {previewDoc && (
+        <div className={styles.modalOverlay} onClick={() => setPreviewDoc(null)}>
+          <div className={styles.modal} onClick={e => e.stopPropagation()}>
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>{previewDoc.title}</h2>
+              <button className={styles.modalClose} onClick={() => setPreviewDoc(null)}>
+                ×
+              </button>
+            </div>
+            <div className={styles.modalContent}>
+              <pre className={styles.previewContent}>{previewDoc.content}</pre>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
