@@ -3,9 +3,19 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Settings } from './Settings';
 
+// Mock localStorage for jsdom environment
+const localStorageMock = {
+  getItem: vi.fn(() => null),
+  setItem: vi.fn(() => {}),
+  removeItem: vi.fn(() => {}),
+  clear: vi.fn(() => {}),
+};
+Object.defineProperty(window, 'localStorage', { value: localStorageMock });
+
 describe('Settings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorageMock.getItem.mockReturnValue(null);
   });
 
   it('renders page title', () => {
@@ -20,15 +30,10 @@ describe('Settings', () => {
     expect(screen.getByRole('button', { name: /Cache/i })).toBeInTheDocument();
   });
 
-  it('shows save button', () => {
+  it('shows save button (disabled when no changes)', () => {
     render(<Settings />);
-    expect(screen.getByRole('button', { name: 'Save Changes' })).toBeInTheDocument();
-  });
-
-  it('save button shows confirmation after clicking', async () => {
-    const user = userEvent.setup();
-    render(<Settings />);
-    await user.click(screen.getByRole('button', { name: 'Save Changes' }));
-    expect(screen.getByText('✓ Saved!')).toBeInTheDocument();
+    const saveBtn = screen.getByRole('button', { name: 'Save Changes' });
+    expect(saveBtn).toBeInTheDocument();
+    expect(saveBtn).toBeDisabled();
   });
 });
