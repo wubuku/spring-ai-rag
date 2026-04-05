@@ -39,6 +39,8 @@ spring:
       connection-timeout: 10000     # Connection acquisition timeout 10 seconds
       leak-detection-threshold: 60000  # Leak detection after 60 seconds
       pool-name: rag-hikari
+      metrics:
+        enable: true               # Enable HikariCP metrics for Micrometer
 
   # JPA / Hibernate configuration (Flyway manages schema, Hibernate does not modify DDL)
   jpa:
