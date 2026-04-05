@@ -1055,6 +1055,10 @@
 | C4-1 | AuditLogService 单元测试（22 tests） | 测试覆盖 | ✅ 2026-04-05（C4-1 完成，22 个测试，0 失败） |
 
 
+## 进度日志（2026-04-06 凌晨）
+
+- 2026-04-06 00:26 — ✅ N38 API 统一错误码规范：spring-ai-rag-api 新增 ErrorCode enum（26 个标准化错误码，含 HTTP status/title/problemTypeUri）；RagException 重构为 ErrorCode enum（getErrorCode() String 保留向后兼容 + 新增 getErrorCodeEnum()）；DocumentNotFoundException/RetrievalException/EmbeddingException/LlmCircuitOpenException 更新；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error(code) 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 迁移；mvn clean compile ✅ / mvn test ✅（1155 tests 全通过）；commit 6a3c6c4 已推送
+
 ## 进度日志（2026-04-05 晚间）
 
 - 2026-04-05 22:13 — 🔧 修复构建中断：删除 2 个未集成的 partial 文件（MultiModelConfigLoader.java + MultiModelProperties.java）—— 它们是 `@Component` 依赖未注册的 bean（MultiModelProperties 无 `@EnableConfigurationProperties`），导致 OpenApiContractTest 等 17 个测试 context load 失败；删除后 mvn test ✅（1129 Core + 42 Starter = 1171 测试全通过，零失败零错误）；commit aa87888 已推送
@@ -1103,7 +1107,7 @@
 | N35 | API 请求超时配置化（per-endpoint timeout） | 韧性 | ⏳ 待推进 |
 | N36 | Dockerfile 多阶段构建优化（减小镜像体积） | 部署 | ⏳ 待推进 |
 | N37 | WebUI 错误边界（React ErrorBoundary 增强） | UX | ⏳ 待推进 |
-| N38 | API 统一错误码规范（ErrorCode enum） | 代码质量 | ⏳ 待推进 |
+| N38 | API 统一错误码规范（ErrorCode enum） | 代码质量 | ✅ 2026-04-06（N38 完成：spring-ai-rag-api 新增 ErrorCode enum，26 个标准化错误码含 HTTP status/title/problemTypeUri；RagException 重构为 ErrorCode enum + backward-compatible getErrorCode() String；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error/code 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 更新；1155 tests 全通过，commit 6a3c6c4） |
 | N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ⏳ 待推进 |
 | N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
 | N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ⏳ 待推进 |
