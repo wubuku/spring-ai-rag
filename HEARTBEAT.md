@@ -1145,7 +1145,7 @@
 | # | 改进项 | 类型 | 状态 | 优先级 |
 |---|--------|------|------|--------|
 | C13 | C1 per-user 限流：ApiKeyAuthFilter 提取用户身份 → RateLimitFilter 支持 per-user | 安全 | ✅ 2026-04-06 | P1 |
-| C14 | N17 WebUI搜索历史：搜索记录 localStorage 持久化 + 展示历史列表 | UX | ⏳ | P1 |
+| C14 | N17 WebUI搜索历史：搜索记录 localStorage 持久化 + 展示历史列表 | UX | ✅ 2026-04-06（C14 完成，useSearchHistory hook + Search 页面集成 + 9 tests，88 webui tests 全通过，E2E 11/11 ✅） | P1 |
 | C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ✅ 2026-04-06 | P1 |
 | C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ⏳ | P2 |
