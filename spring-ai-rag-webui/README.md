@@ -1,73 +1,106 @@
-# React + TypeScript + Vite
+# spring-ai-rag WebUI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Built-in administrative web interface for the spring-ai-rag RAG service framework.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Dashboard** — System health overview, document counts, active sessions
+- **Documents** — Upload, browse, delete documents with chunk preview
+- **Collections** — Create and manage knowledge bases
+- **Chat** — RAG-powered conversational AI with SSE streaming
+- **Search** — Real-time hybrid search (vector + full-text)
+- **Metrics** — RAG system metrics and LLM performance
+- **Alerts** — SLO monitoring and alert management
+- **Settings** — Configure LLM, retrieval, and cache parameters
 
-## React Compiler
+## Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+| Category | Technology |
+|----------|-----------|
+| Framework | React 19 |
+| Language | TypeScript 5.9 |
+| Build Tool | Vite 8 |
+| Styling | CSS Modules |
+| Server State | TanStack Query 5 |
+| Real-time | Server-Sent Events (SSE) |
+| HTTP Client | Axios |
+| Routing | React Router 7 |
 
-## Expanding the ESLint configuration
+## Setup
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+```bash
+# Install dependencies
+npm install
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+# Development server (proxies /api/* to localhost:8081)
+npm run dev
+# Frontend: http://localhost:5173/webui/
+# API calls automatically forwarded to http://localhost:8081/
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Backend must be running separately:
+# mvn spring-boot:run -pl spring-ai-rag-core
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+# Production build
+npm run build
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+# Lint
+npm run lint
 ```
+
+## API Integration
+
+The WebUI expects the backend to be running at `http://localhost:8081`. Configure the base URL in `src/api/client.ts`.
+
+### Key API Endpoints
+
+| Feature | Endpoint |
+|---------|----------|
+| Health | `GET /api/v1/health` |
+| Documents | `GET/POST /api/v1/rag/documents` |
+| Collections | `GET/POST /api/v1/rag/collections` |
+| Chat | `POST /api/v1/rag/chat/stream` |
+| Search | `POST /api/v1/rag/search` |
+| Metrics | `GET /api/v1/rag/metrics/overview` |
+| Alerts | `GET /api/v1/rag/alerts` |
+| SSE Progress | `POST /api/v1/rag/documents/{id}/embed/stream` |
+
+## Architecture
+
+```
+src/
+├── api/           # API client modules (documents, chat, collections, etc.)
+├── components/    # Shared components (Layout)
+├── hooks/         # Custom hooks (useSSE, useFileUpload)
+├── pages/         # Route-level page components
+├── styles/        # Global CSS and CSS variables
+└── types/         # TypeScript type definitions (api.ts)
+```
+
+### SSE Streaming
+
+Chat streaming uses the `useSSE` hook:
+
+```typescript
+const { messages, sendMessage, isStreaming } = useSSE({
+  endpoint: '/api/v1/rag/chat/stream',
+  sessionId,
+});
+```
+
+### File Upload
+
+Document upload with progress tracking via `useFileUpload`:
+
+```typescript
+const { upload, progress, isUploading } = useFileUpload({
+  endpoint: '/api/v1/rag/documents/upload',
+});
+```
+
+## Development Notes
+
+- CSS Modules prevent style leakage — each component/page has its own `.module.css`
+- TanStack Query handles caching, retries, and loading states
+- API responses follow RFC 7807 Problem Details format for errors
+- SSE events: `CHUNK` | `METRICS` | `SOURCE` | `ERROR` | `DONE`
