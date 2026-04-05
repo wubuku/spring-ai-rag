@@ -899,7 +899,7 @@
 - 依赖：playwright（已在 spring-ai-rag-webui 安装）
 
 - 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成
-- 2026-04-05 14:06 — ✅ B-1 SSE emitter 注释完善：embedDocumentStream 添加完整 Javadoc（事件类型/错误策略/best-effort 回调/0L 超时含义），@Operation/@ApiResponse/@Parameter 翻译为英文，1 文件 +30/-6 行；mvn test ✅；commit 5d0d1bf 已推送
+- 2026-04-05 16:50 — ✅ B8-3 Prometheus Alerting Rules：创建 docs/prometheus/ 目录，含 rag-alerts.yml（35+ 告警规则，覆盖服务健康/延迟/缓存/LLM/检索质量/JVM/数据库连接池/限流/SLO）+ README.md（安装指南+告警参考表+调优说明+Recording Rules）；mvn test ✅（零失败零错误）；commit 72e7c99 已推送
 
 - 2026-04-05 13:00 — 🔍 主动巡检：识别 WebUI 改进空间（Vitest 覆盖率低/无 Error Boundary/无 dark mode toggle/无 ESLint）
 
@@ -947,8 +947,8 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | B8-1 | Helm Chart：Kubernetes 部署清单 | 部署 | ✅ 2026-04-05（B8-1 完成，k8s/ Helm Chart 含 deployment/svc/ingress/HPA/PDB） |
-| B8-2 | Grafana Dashboard：JSON 监控面板 | 可观测性 | ⏳ 待推进 |
-| B8-3 | Prometheus Alerting Rules：RAG 专属告警规则 | 可观测性 | ⏳ 待推进 |
+| B8-2 | Grafana Dashboard：JSON 监控面板（推广使用） | 可观测性 | ✅ 2026-04-05 |
+| B8-3 | Prometheus Alerting Rules：RAG 专属告警规则 | 可观测性 | ✅ 2026-04-05 |
 | B8-4 | k6 负载测试脚本：关键 API 性能基准 | 性能 | ✅ 2026-04-05（B8-4 完成，scripts/k6-load-test.js 含 smoke/load/stress 3 档 + run-k6-test.sh helper；覆盖 health/search/chat/document CRUD/SSE/metrics 全部关键端点） |
 
 ## 待办（D1 — WebUI 工程化）
@@ -964,8 +964,8 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| D2-1 | B8-2 Grafana Dashboard JSON 面板（推广使用） | 可观测性 | ⏳ 待推进 |
-| D2-2 | B8-3 Prometheus Alerting Rules（RAG 专属规则） | 可观测性 | ⏳ 待推进 |
+| D2-1 | B8-2 Grafana Dashboard JSON 面板（推广使用） | 可观测性 | ✅ 2026-04-05 |
+| D2-2 | B8-3 Prometheus Alerting Rules（RAG 专属规则） | 可观测性 | ✅ 2026-04-05 |
 | D2-3 | 版本兼容性：升级到 Spring Boot 3.5.x + Spring AI 1.1.x | 依赖升级 | ⏳ 待推进 |
 | D2-4 | CI 改进：上传 JaCoCo 覆盖率到 Codecov / Coveralls | CI/CD | ⏳ 待推进 |
 
