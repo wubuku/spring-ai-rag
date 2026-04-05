@@ -1,0 +1,147 @@
+import { describe, it, expect, beforeEach } from 'vitest';
+import { renderHook, act, waitFor } from '@testing-library/react';
+import { useSearchHistory } from './useSearchHistory';
+
+const STORAGE_KEY = 'rag_search_history';
+
+const fakeLocalStorage = {
+  data: {} as Record<string, string>,
+  getItem(key: string) {
+    return this.data[key] ?? null;
+  },
+  setItem(key: string, value: string) {
+    this.data[key] = value;
+  },
+  removeItem(key: string) {
+    delete this.data[key];
+  },
+};
+
+Object.defineProperty(window, 'localStorage', { value: fakeLocalStorage });
+
+describe('useSearchHistory', () => {
+  beforeEach(() => {
+    fakeLocalStorage.data = {};
+  });
+
+  const setup = () => renderHook(() => useSearchHistory());
+
+  it('initializes with empty history', () => {
+    const { result } = setup();
+    expect(result.current.history).toEqual([]);
+  });
+
+  it('loads history from localStorage', () => {
+    fakeLocalStorage.data[STORAGE_KEY] = JSON.stringify([
+      { query: 'test query', useHybrid: true, timestamp: 1000 },
+    ]);
+    const { result } = setup();
+    expect(result.current.history).toHaveLength(1);
+    expect(result.current.history[0].query).toBe('test query');
+  });
+
+  it('adds a query to history', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.addQuery('hello world', true);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(1);
+    });
+    expect(result.current.history[0].query).toBe('hello world');
+    expect(result.current.history[0].useHybrid).toBe(true);
+  });
+
+  it('deduplicates by query + useHybrid combination', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.addQuery('hello', true);
+      result.current.addQuery('hello', true);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(1);
+    });
+    expect(result.current.history[0].query).toBe('hello');
+  });
+
+  it('keeps separate entries for different useHybrid values', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.addQuery('hello', true);
+      result.current.addQuery('hello', false);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(2);
+    });
+  });
+
+  it('caps history at MAX_HISTORY items', async () => {
+    const { result } = setup();
+    act(() => {
+      for (let i = 0; i < 25; i++) {
+        result.current.addQuery(`query ${i}`, true);
+      }
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(20);
+    });
+  });
+
+  it('removes item by timestamp', async () => {
+    const { result } = setup();
+
+    // Add first item
+    act(() => {
+      result.current.addQuery('to remove', true);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(1);
+    });
+    const tsToRemove = result.current.history[0].timestamp;
+
+    // Add second item
+    act(() => {
+      result.current.addQuery('to keep', true);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(2);
+    });
+    expect(result.current.history[0].query).toBe('to keep');
+    expect(result.current.history[1].query).toBe('to remove');
+
+    // Remove first item
+    act(() => {
+      result.current.removeItem(tsToRemove);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(1);
+    });
+    expect(result.current.history[0].query).toBe('to keep');
+  });
+
+  it('clears all history', async () => {
+    const { result } = setup();
+    act(() => {
+      result.current.addQuery('one', true);
+      result.current.addQuery('two', true);
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(2);
+    });
+    act(() => {
+      result.current.clearHistory();
+    });
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(0);
+    });
+  });
+
+  it('toggles showHistory', () => {
+    const { result } = setup();
+    expect(result.current.showHistory).toBe(false);
+    act(() => {
+      result.current.setShowHistory(true);
+    });
+    expect(result.current.showHistory).toBe(true);
+  });
+});
