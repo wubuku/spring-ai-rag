@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsApi } from '../api/documents';
 import { useFileUpload } from '../hooks/useFileUpload';
+import { useToast } from '../components/Toast';
+import { Skeleton } from '../components/Skeleton';
 import styles from './Documents.module.css';
 
 export function Documents() {
   const [page, setPage] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
+  const { showToast } = useToast();
 
   const { data, isPending, error } = useQuery({
     queryKey: ['documents', page],
@@ -18,18 +20,22 @@ export function Documents() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => documentsApi.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['documents'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast('Document deleted', 'success');
+    },
+    onError: () => {
+      showToast('Failed to delete document', 'error');
+    },
   });
 
-  const { uploads, uploadFiles, isUploading } = useFileUpload({
+  const { uploadFiles, isUploading } = useFileUpload({
     onComplete: fileName => {
-      setUploadStatus(`✓ ${fileName} uploaded successfully`);
+      showToast(`${fileName} uploaded successfully`, 'success');
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      setTimeout(() => setUploadStatus(null), 3000);
     },
     onError: (fileName, errorMsg) => {
-      setUploadStatus(`✗ ${fileName}: ${errorMsg}`);
-      setTimeout(() => setUploadStatus(null), 5000);
+      showToast(`${fileName}: ${errorMsg}`, 'error');
     },
   });
 
@@ -79,41 +85,10 @@ export function Documents() {
         </label>
       </div>
 
-      {uploadStatus && (
-        <div
-          className={`${styles.uploadStatus} ${
-            uploadStatus.startsWith('✓') ? styles.success : styles.error
-          }`}
-        >
-          {uploadStatus}
-        </div>
-      )}
-
-      {uploads.length > 0 && (
-        <div className={styles.uploadProgress}>
-          {uploads.map(u => (
-            <div key={u.fileName} className={styles.uploadItem}>
-              <span className={styles.fileName}>{u.fileName}</span>
-              <div className={styles.progressBar}>
-                <div
-                  className={styles.progressFill}
-                  style={{ width: `${u.progress}%` }}
-                  data-status={u.status}
-                />
-              </div>
-              <span className={styles.progressText}>
-                {u.status === 'completed' && '✓'}
-                {u.status === 'failed' && '✗'}
-                {u.status === 'uploading' && `${u.progress}%`}
-                {u.status === 'pending' && '...'}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
-
       {isPending ? (
-        <div className={styles.loading}>Loading documents...</div>
+        <div className={styles.tableWrapper}>
+          <Skeleton width="100%" height="400px" borderRadius="8px" />
+        </div>
       ) : error ? (
         <div className={styles.error}>
           Failed to load documents: {error instanceof Error ? error.message : 'Unknown error'}
