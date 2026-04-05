@@ -1086,7 +1086,7 @@
 | N19 | N15：缓存失效管理 API（DELETE /cache/invalidate 端点） | 可观测性 | ✅ 2026-04-06（N19 完成，DELETE /api/v1/rag/cache/invalidate + CacheMetricsService.clearCache()） |
 | N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
 | N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ 待推进 |
-| N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ⏳ 待推进 |
+| N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ✅ 2026-04-06 — commit 20cecc6 |
 | N23 | N2：Grafana Dashboard JSON 配置完善（补充缺失 panels） | 监控 | ⏳ 待推进 |
 | N24 | N3：Prometheus Alerting Rules 完善（补充 SLA 告警） | 监控 | ⏳ 待推进 |
 | N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ⏳ 待推进 |
