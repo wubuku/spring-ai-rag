@@ -1210,3 +1210,24 @@
 |---|--------|------|------|
 | C41 | OpenAiApi.class 是 Spring AI 内部类，无需修改 | 调研 | ✅ 已确认 |
 | C42 | demo-* 符号链接结构已正确（demos/demo-basic-rag → demo-basic-rag symlink） | 代码质量 | ✅ 已确认 |
+
+## 待办（WebUI 组件测试补强 W8-W11）
+
+| # | 改进项 | 类型 | 状态 | 优先级 |
+|---|--------|------|------|--------|
+| W8 | ErrorBoundary 组件测试（错误捕获 + fallback 渲染） | 测试覆盖 | ⏳ | P2 |
+| W9 | Card/Modal/Table 组件测试 | 测试覆盖 | ⏳ | P2 |
+| W10 | Upload 组件测试（进度回调 + 错误处理） | 测试覆盖 | ⏳ | P2 |
+| W11 | MetricsCharts 组件测试（Recharts 图表渲染） | 测试覆盖 | ⏳ | P2 |
+
+## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
+
+- 2026-04-06 06:52 — ✅ WebUI 维护修复 + SearchResults 测试补强：
+  - 修复 useSearchHistory.test.ts 'removes item by timestamp' 测试稳定性问题：改为不同 query 字符串（'first query' vs 'second query'）+ 不同 useHybrid 值，避免相同 useHybrid 时去重逻辑干扰
+  - 修复 scripts/webui-e2e-test.js Search Page selector case-sensitivity：CSS attribute selector 区分大小写，placeholder="Search documents…" 不匹配 `placeholder*="search"`，改为 `placeholder*="earch"`
+  - npm test ✅（93 tests: 88 原 + 5 新 SearchResults.test.tsx）
+  - npm run build ✅（243KB index gzipped）
+  - E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - 新增 SearchResults 组件测试（5 tests：空状态/结果数量/单数/标题+分数/内容片段）
+  - dist 已同步到 static/webui/
+  - commits e5d7273 + e94a4c0 已推送
