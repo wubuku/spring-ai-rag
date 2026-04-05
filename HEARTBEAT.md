@@ -962,10 +962,10 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| C1-1 | CacheMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
-| C1-2 | RagMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
-| C1-3 | ModelMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
-| C1-4 | SilenceScheduleRepository 单元测试 | 测试覆盖 | ⏳ 待推进 |
+| C1-1 | CacheMetricsService 单元测试 | 测试覆盖 | ✅ 2026-04-05（C1-1 完成，11 个测试，0 失败） |
+| C1-2 | RagMetricsService 单元测试 | 测试覆盖 | ✅ 2026-04-05（C1-2 完成，15 个测试，0 失败） |
+| C1-3 | ModelMetricsService 单元测试 | 测试覆盖 | ✅ 2026-04-05（C1-3 完成，12 个测试，0 失败） |
+| C1-4 | SilenceScheduleRepository 单元测试 | 测试覆盖 | ✅ 2026-04-05（C1-4 完成，8 个测试，0 失败） |
 
 ## 待办（WebUI C2 — SLO & 静默计划 UI）
 
@@ -980,7 +980,6 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| C3-1 | RagChatControllerTest：补充 ChatExportService MockBean | 测试修复 | ⏳ 待推进 |
-| C3-2 | SseStreamE2ETest：补充 ChatExportService MockBean | 测试修复 | ⏳ 待推进 |
+| C3-1 | AlertControllerTest：补充 SloConfigRepository + RagSilenceScheduleRepository | 测试修复 | ✅ 2026-04-05（C3-1 完成，AlertController 构造器变更适配） |
 | C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ⏳ 待推进 |
 
