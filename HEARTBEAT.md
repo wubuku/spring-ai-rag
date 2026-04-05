@@ -951,6 +951,24 @@
 | B8-3 | Prometheus Alerting Rules：RAG 专属告警规则 | 可观测性 | ⏳ 待推进 |
 | B8-4 | k6 负载测试脚本：关键 API 性能基准 | 性能 | ⏳ 待推进 |
 
+## 待办（D1 — WebUI 工程化）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| D1-1 | WebUI 大块告警：构建警告 chunk>500KB，优化路由级代码分割 | 性能 | ⏳ 待推进 |
+| D1-2 | WebUI Vitest 覆盖率提升（当前仅 hooks/components/api 覆盖） | 测试覆盖 | ⏳ 待推进 |
+| D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ⏳ 待推进 |
+| D1-4 | DocumentVersionService 单元测试 | 测试覆盖 | ⏳ 待推进 |
+
+## 待办（D2 — 运维增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| D2-1 | B8-2 Grafana Dashboard JSON 面板（推广使用） | 可观测性 | ⏳ 待推进 |
+| D2-2 | B8-3 Prometheus Alerting Rules（RAG 专属规则） | 可观测性 | ⏳ 待推进 |
+| D2-3 | 版本兼容性：升级到 Spring Boot 3.5.x + Spring AI 1.1.x | 依赖升级 | ⏳ 待推进 |
+| D2-4 | CI 改进：上传 JaCoCo 覆盖率到 Codecov / Coveralls | CI/CD | ⏳ 待推进 |
+
 ## 待办（测试 B9 — 测试增强）
 
 | # | 改进项 | 类型 | 状态 |
@@ -983,5 +1001,4 @@
 | C3-1 | AlertControllerTest：补充 SloConfigRepository + RagSilenceScheduleRepository | 测试修复 | ✅ 2026-04-05（C3-1 完成，AlertController 构造器变更适配） |
 | C3-2 | RagChatControllerTest/SseStreamE2ETest：已有 ChatExportService，无需修改 | 测试修复 | ✅ 2026-04-05（C3-2 已确认，无需修改） |
 | C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ✅ 2026-04-05（C3-3 完成，+147 行文档） |
-| C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ⏳ 待推进 |
 
