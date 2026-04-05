@@ -14,6 +14,9 @@ public class ChatResponse {
     @Schema(description = "LLM 生成的回答文本")
     private String answer;
 
+    @Schema(description = "请求追踪 ID（全链路可溯源）", example = "a1b2c3d4e5f6")
+    private String traceId;
+
     @Schema(description = "引用来源文档列表")
     private List<SourceDocument> sources;
 
@@ -32,6 +35,9 @@ public class ChatResponse {
     public String getAnswer() { return answer; }
     public void setAnswer(String answer) { this.answer = answer; }
 
+    public String getTraceId() { return traceId; }
+    public void setTraceId(String traceId) { this.traceId = traceId; }
+
     public List<SourceDocument> getSources() { return sources; }
     public void setSources(List<SourceDocument> sources) { this.sources = sources; }
 
@@ -47,6 +53,7 @@ public class ChatResponse {
         private final ChatResponse response = new ChatResponse();
 
         public ChatResponseBuilder answer(String answer) { response.setAnswer(answer); return this; }
+        public ChatResponseBuilder traceId(String traceId) { response.setTraceId(traceId); return this; }
         public ChatResponseBuilder sources(List<SourceDocument> sources) { response.setSources(sources); return this; }
         public ChatResponseBuilder metadata(Map<String, Object> metadata) { response.setMetadata(metadata); return this; }
         public ChatResponseBuilder stepMetrics(List<StepMetricRecord> stepMetrics) { response.setStepMetrics(stepMetrics); return this; }

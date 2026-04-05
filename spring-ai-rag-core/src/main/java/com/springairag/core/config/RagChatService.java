@@ -13,11 +13,13 @@ import com.springairag.core.advisor.RerankAdvisor;
 import com.springairag.core.exception.LlmCircuitOpenException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -252,6 +254,7 @@ public class RagChatService {
         historyRepository.save(sessionId, userMessage, callResult.answer, null, metadata);
 
         ChatResponse response = new ChatResponse(callResult.answer);
+        response.setTraceId(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
         response.setSources(callResult.sources);
         response.setMetadata(Map.of("sessionId", sessionId));
         response.setStepMetrics(callResult.pipelineMetrics);

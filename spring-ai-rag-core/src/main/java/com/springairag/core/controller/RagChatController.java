@@ -28,6 +28,9 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import com.springairag.core.filter.RequestTraceFilter;
+
+import org.slf4j.MDC;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
@@ -100,7 +103,16 @@ public class RagChatController {
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
+        String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         SseEmitter emitter = new SseEmitter(0L); // 无超时
+
+        // 发送 traceId 事件，使流式响应可全链路追踪
+        try {
+            emitter.send(SseEmitter.event().name("trace").data(traceId != null ? traceId : ""));
+        } catch (IOException e) {
+            emitter.completeWithError(e);
+            return emitter;
+        }
 
         ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
                 .subscribe(
@@ -114,7 +126,7 @@ public class RagChatController {
                         emitter::completeWithError,
                         () -> {
                             try {
-                                emitter.send(SseEmitter.event().name("done").data("[DONE]"));
+                                emitter.send(SseEmitter.event().name("done").data("{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}"));
                                 emitter.complete();
                             } catch (IOException e) {
                                 emitter.completeWithError(e);

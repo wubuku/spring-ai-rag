@@ -8,10 +8,13 @@ import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
@@ -83,6 +86,11 @@ class RagChatServiceTest {
                 null,
                 null
         );
+    }
+
+    @AfterEach
+    void tearDown() {
+        MDC.remove(RequestTraceFilter.TRACE_ID_KEY);
     }
 
     /**
@@ -219,6 +227,47 @@ class RagChatServiceTest {
 
         assertEquals("直接回答", response.getAnswer());
         assertNull(response.getSources());
+    }
+
+    @Test
+    @DisplayName("chat 设置 MDC traceId 时，响应包含 traceId")
+    void chat_withMdcTraceId_setsTraceIdInResponse() {
+        RagChatService service = createService();
+
+        String expectedTraceId = "abc123def456";
+        MDC.put(RequestTraceFilter.TRACE_ID_KEY, expectedTraceId);
+
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答内容", Map.of());
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatRequest request = new ChatRequest("测试消息", "session-trace");
+        ChatResponse response = service.chat(request);
+
+        assertEquals("回答内容", response.getAnswer());
+        assertEquals(expectedTraceId, response.getTraceId());
+    }
+
+    @Test
+    @DisplayName("chat MDC 无 traceId 时，响应 traceId 为 null")
+    void chat_withoutMdcTraceId_traceIdIsNull() {
+        RagChatService service = createService();
+        MDC.remove(RequestTraceFilter.TRACE_ID_KEY);
+
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答内容", Map.of());
+        when(chatClient.prompt()).thenReturn(promptSpec);
+        when(promptSpec.user(anyString())).thenReturn(promptSpec);
+        when(promptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(promptSpec);
+        when(promptSpec.call()).thenReturn(callResponse);
+        when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
+
+        ChatRequest request = new ChatRequest("测试消息", "session-notrace");
+        ChatResponse response = service.chat(request);
+
+        assertNull(response.getTraceId());
     }
 
     @Test
