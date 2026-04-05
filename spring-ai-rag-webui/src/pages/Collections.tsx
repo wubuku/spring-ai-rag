@@ -24,10 +24,12 @@ export function Collections() {
         <div className={styles.loading}>Loading collections...</div>
       ) : (
         <div className={styles.grid}>
-          {data?.data?.collections?.map((col) => (
+          {data?.data?.collections?.map(col => (
             <div key={col.id} className={styles.card}>
               <div className={styles.name}>{col.name}</div>
-              <div className={styles.meta}>{col.embeddingModel} · {col.dimensions}D</div>
+              <div className={styles.meta}>
+                {col.embeddingModel} · {col.dimensions}D
+              </div>
               <div className={styles.meta}>{col.documentCount} docs</div>
               <div className={styles.actions}>
                 <button onClick={() => deleteMutation.mutate(col.id)} className={styles.deleteBtn}>

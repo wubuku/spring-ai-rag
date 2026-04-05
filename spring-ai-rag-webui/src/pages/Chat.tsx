@@ -24,18 +24,16 @@ export function Chat() {
     },
     onSources: (sources, convId) => {
       setConversationId(convId);
-      setMessages((prev) => {
+      setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
-          return prev.map((msg) =>
-            msg.id === lastMsg.id ? { ...msg, sources } : msg
-          );
+          return prev.map(msg => (msg.id === lastMsg.id ? { ...msg, sources } : msg));
         }
         return prev;
       });
     },
-    onError: (error) => {
-      setMessages((prev) => {
+    onError: error => {
+      setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
           return [
@@ -47,8 +45,8 @@ export function Chat() {
       });
     },
     onDone: () => {
-      setMessages((prev) =>
-        prev.map((msg) => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+      setMessages(prev =>
+        prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
       );
     },
   });
@@ -62,7 +60,7 @@ export function Chat() {
     const userMsg = input.trim();
     setInput('');
     const newId = crypto.randomUUID();
-    setMessages((prev) => [
+    setMessages(prev => [
       ...prev,
       { id: newId, role: 'user', content: userMsg },
       { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
@@ -111,7 +109,7 @@ export function Chat() {
           </div>
         )}
 
-        {messages.map((msg) => (
+        {messages.map(msg => (
           <div
             key={msg.id}
             className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}

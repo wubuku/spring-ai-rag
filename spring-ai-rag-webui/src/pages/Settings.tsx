@@ -61,7 +61,7 @@ export function Settings() {
       <h1 className="page-title">Settings</h1>
 
       <div className={styles.tabs}>
-        {tabs.map((tab) => (
+        {tabs.map(tab => (
           <button
             key={tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
@@ -92,21 +92,14 @@ export function Settings() {
 
             <div className={styles.field}>
               <label className={styles.label}>Model</label>
-              <input
-                type="text"
-                className={styles.input}
-                value={llmConfig.model}
-                disabled
-              />
+              <input type="text" className={styles.input} value={llmConfig.model} disabled />
             </div>
 
             <div className={styles.field}>
               <label className={styles.label}>API Key</label>
               <div className={styles.apiKeyStatus}>
                 <span className={styles.statusDot} data-ok={llmConfig.apiKeyConfigured} />
-                <span>
-                  {llmConfig.apiKeyConfigured ? 'Configured' : 'Not configured'}
-                </span>
+                <span>{llmConfig.apiKeyConfigured ? 'Configured' : 'Not configured'}</span>
               </div>
               <span className={styles.hint}>
                 API key is managed via environment variables for security
@@ -130,8 +123,8 @@ export function Settings() {
                 max="1"
                 step="0.1"
                 value={retrievalConfig.vectorWeight}
-                onChange={(e) =>
-                  setRetrievalConfig((c) => ({
+                onChange={e =>
+                  setRetrievalConfig(c => ({
                     ...c,
                     vectorWeight: parseFloat(e.target.value),
                   }))
@@ -149,8 +142,8 @@ export function Settings() {
                 max="1"
                 step="0.1"
                 value={retrievalConfig.fulltextWeight}
-                onChange={(e) =>
-                  setRetrievalConfig((c) => ({
+                onChange={e =>
+                  setRetrievalConfig(c => ({
                     ...c,
                     fulltextWeight: parseFloat(e.target.value),
                   }))
@@ -166,8 +159,8 @@ export function Settings() {
                 type="number"
                 className={styles.input}
                 value={retrievalConfig.topK}
-                onChange={(e) =>
-                  setRetrievalConfig((c) => ({
+                onChange={e =>
+                  setRetrievalConfig(c => ({
                     ...c,
                     topK: parseInt(e.target.value) || 10,
                   }))
@@ -183,8 +176,8 @@ export function Settings() {
                 type="number"
                 className={styles.input}
                 value={retrievalConfig.rerankTopK}
-                onChange={(e) =>
-                  setRetrievalConfig((c) => ({
+                onChange={e =>
+                  setRetrievalConfig(c => ({
                     ...c,
                     rerankTopK: parseInt(e.target.value) || 5,
                   }))
@@ -200,18 +193,14 @@ export function Settings() {
         {activeTab === 'cache' && (
           <div className={styles.section}>
             <h2 className={styles.sectionTitle}>Cache Configuration</h2>
-            <p className={styles.sectionDesc}>
-              Configure embedding and query result caching.
-            </p>
+            <p className={styles.sectionDesc}>Configure embedding and query result caching.</p>
 
             <div className={styles.field}>
               <label className={styles.checkboxLabel}>
                 <input
                   type="checkbox"
                   checked={cacheConfig.enabled}
-                  onChange={(e) =>
-                    setCacheConfig((c) => ({ ...c, enabled: e.target.checked }))
-                  }
+                  onChange={e => setCacheConfig(c => ({ ...c, enabled: e.target.checked }))}
                   className={styles.checkbox}
                 />
                 <span>Enable caching</span>
@@ -224,8 +213,8 @@ export function Settings() {
                 type="number"
                 className={styles.input}
                 value={cacheConfig.ttlMinutes}
-                onChange={(e) =>
-                  setCacheConfig((c) => ({
+                onChange={e =>
+                  setCacheConfig(c => ({
                     ...c,
                     ttlMinutes: parseInt(e.target.value) || 60,
                   }))
@@ -242,8 +231,8 @@ export function Settings() {
                 type="number"
                 className={styles.input}
                 value={cacheConfig.maxSize}
-                onChange={(e) =>
-                  setCacheConfig((c) => ({
+                onChange={e =>
+                  setCacheConfig(c => ({
                     ...c,
                     maxSize: parseInt(e.target.value) || 1000,
                   }))

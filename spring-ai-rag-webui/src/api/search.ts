@@ -21,6 +21,5 @@ export const searchApi = {
     useHybrid?: boolean;
     vectorWeight?: number;
     fulltextWeight?: number;
-  }) =>
-    apiClient.get<SearchResponse>('/search', { params }),
+  }) => apiClient.get<SearchResponse>('/search', { params }),
 };

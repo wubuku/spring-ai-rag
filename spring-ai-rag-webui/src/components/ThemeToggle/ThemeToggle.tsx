@@ -15,7 +15,7 @@ export function ThemeToggle() {
     localStorage.setItem('theme', theme);
   }, [theme]);
 
-  const toggle = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));
+  const toggle = () => setTheme(t => (t === 'light' ? 'dark' : 'light'));
 
   return (
     <button

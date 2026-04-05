@@ -25,7 +25,7 @@ export function Search() {
       <form onSubmit={handleSearch} className={styles.form}>
         <input
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={e => setQuery(e.target.value)}
           placeholder="Enter your search query..."
           className={styles.searchInput}
         />
@@ -33,7 +33,7 @@ export function Search() {
           <input
             type="checkbox"
             checked={useHybrid}
-            onChange={(e) => setUseHybrid(e.target.checked)}
+            onChange={e => setUseHybrid(e.target.checked)}
           />
           Hybrid
         </label>
@@ -46,7 +46,9 @@ export function Search() {
 
       {data?.data && (
         <div className={styles.results}>
-          <div className={styles.resultCount}>{data.data.total} results for "{data.data.query}"</div>
+          <div className={styles.resultCount}>
+            {data.data.total} results for "{data.data.query}"
+          </div>
           {data.data.results.map((r, i) => (
             <div key={i} className={styles.result}>
               <div className={styles.resultHeader}>

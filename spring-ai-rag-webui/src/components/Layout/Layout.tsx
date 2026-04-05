@@ -23,13 +23,11 @@ export function Layout() {
           <ThemeToggle />
         </div>
         <nav>
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.map(item => (
             <NavLink
               key={item.to}
               to={item.to}
-              className={({ isActive }) =>
-                `${styles.navItem} ${isActive ? styles.active : ''}`
-              }
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.active : ''}`}
             >
               <span className={styles.icon}>{item.icon}</span>
               {item.label}

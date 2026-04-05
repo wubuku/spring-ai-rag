@@ -12,8 +12,7 @@ export interface Alert {
 }
 
 export const alertsApi = {
-  listActive: () =>
-    apiClient.get<Alert[]>('/alerts/active'),
+  listActive: () => apiClient.get<Alert[]>('/alerts/active'),
 
   listHistory: (params?: { limit?: number }) =>
     apiClient.get<Alert[]>('/alerts/history', { params }),
@@ -24,8 +23,7 @@ export const alertsApi = {
     message: string;
     severity?: string;
     metrics?: Record<string, unknown>;
-  }) =>
-    apiClient.post<{ alertId: number; message: string }>('/alerts/fire', data),
+  }) => apiClient.post<{ alertId: number; message: string }>('/alerts/fire', data),
 
   resolve: (id: number, resolution: string) =>
     apiClient.post(`/alerts/${id}/resolve`, { resolution }),

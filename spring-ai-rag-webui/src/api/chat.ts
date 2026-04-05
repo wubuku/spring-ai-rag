@@ -20,7 +20,10 @@ export interface ChatRequest {
 
 export const chatApi = {
   ask: (data: ChatRequest) =>
-    apiClient.post<{ response: string; conversationId: string; sources?: unknown[] }>('/chat', data),
+    apiClient.post<{ response: string; conversationId: string; sources?: unknown[] }>(
+      '/chat',
+      data
+    ),
 
   stream: (data: ChatRequest): EventSource =>
     new EventSource(
@@ -30,6 +33,5 @@ export const chatApi = {
   getHistory: (conversationId: string, limit = 50) =>
     apiClient.get<{ messages: ChatMessage[] }>(`/chat/history/${conversationId}?limit=${limit}`),
 
-  clearHistory: (conversationId: string) =>
-    apiClient.delete(`/chat/history/${conversationId}`),
+  clearHistory: (conversationId: string) => apiClient.delete(`/chat/history/${conversationId}`),
 };

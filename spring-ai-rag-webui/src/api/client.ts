@@ -9,8 +9,8 @@ export const apiClient = axios.create({
 
 // Response interceptor for error handling
 apiClient.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  response => response,
+  error => {
     const message = error.response?.data?.detail ?? error.message;
     return Promise.reject(new Error(message));
   }

@@ -50,7 +50,9 @@ export function Dashboard() {
           <div className={styles.label}>Cache</div>
         </div>
         <div className={styles.card}>
-          <div className={styles.metric}>{health?.data?.timestamp ? new Date(health.data.timestamp).toLocaleString() : '—'}</div>
+          <div className={styles.metric}>
+            {health?.data?.timestamp ? new Date(health.data.timestamp).toLocaleString() : '—'}
+          </div>
           <div className={styles.label}>Last Check</div>
         </div>
       </div>

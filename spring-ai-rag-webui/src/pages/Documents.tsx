@@ -22,7 +22,7 @@ export function Documents() {
   });
 
   const { uploads, uploadFiles, isUploading } = useFileUpload({
-    onComplete: (fileName) => {
+    onComplete: fileName => {
       setUploadStatus(`✓ ${fileName} uploaded successfully`);
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       setTimeout(() => setUploadStatus(null), 3000);
@@ -67,21 +67,15 @@ export function Documents() {
           type="file"
           multiple
           accept=".txt,.md,.json,.xml,.html,.csv,.log"
-          onChange={(e) => handleFiles(e.target.files)}
+          onChange={e => handleFiles(e.target.files)}
           className={styles.fileInput}
           disabled={isUploading}
           id="file-upload"
         />
         <label htmlFor="file-upload" className={styles.uploadLabel}>
           <span className={styles.uploadIcon}>📁</span>
-          <span>
-            {isUploading
-              ? 'Uploading...'
-              : 'Drop files here or click to upload'}
-          </span>
-          <span className={styles.uploadHint}>
-            Supports: txt, md, json, xml, html, csv, log
-          </span>
+          <span>{isUploading ? 'Uploading...' : 'Drop files here or click to upload'}</span>
+          <span className={styles.uploadHint}>Supports: txt, md, json, xml, html, csv, log</span>
         </label>
       </div>
 
@@ -97,7 +91,7 @@ export function Documents() {
 
       {uploads.length > 0 && (
         <div className={styles.uploadProgress}>
-          {uploads.map((u) => (
+          {uploads.map(u => (
             <div key={u.fileName} className={styles.uploadItem}>
               <span className={styles.fileName}>{u.fileName}</span>
               <div className={styles.progressBar}>
@@ -139,7 +133,7 @@ export function Documents() {
                 </tr>
               </thead>
               <tbody>
-                {data?.data?.documents?.map((doc) => (
+                {data?.data?.documents?.map(doc => (
                   <tr key={doc.id}>
                     <td className={styles.id}>{doc.id}</td>
                     <td className={styles.title}>{doc.title}</td>
@@ -170,7 +164,7 @@ export function Documents() {
 
           <div className={styles.pagination}>
             <button
-              onClick={() => setPage((p) => p - 1)}
+              onClick={() => setPage(p => p - 1)}
               disabled={page === 0}
               className={styles.pageBtn}
             >
@@ -180,10 +174,9 @@ export function Documents() {
               Page {page + 1} — Total: {data?.data?.total ?? 0}
             </span>
             <button
-              onClick={() => setPage((p) => p + 1)}
+              onClick={() => setPage(p => p + 1)}
               disabled={
-                !data?.data?.documents?.length ||
-                (page + 1) * PAGE_SIZE >= (data?.data?.total ?? 0)
+                !data?.data?.documents?.length || (page + 1) * PAGE_SIZE >= (data?.data?.total ?? 0)
               }
               className={styles.pageBtn}
             >

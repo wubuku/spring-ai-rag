@@ -12,7 +12,9 @@ export function Metrics() {
   return (
     <div>
       <h1 className="page-title">Metrics</h1>
-      {isPending ? <div>Loading...</div> : (
+      {isPending ? (
+        <div>Loading...</div>
+      ) : (
         <pre className={styles.pre}>{JSON.stringify(data?.data, null, 2)}</pre>
       )}
     </div>

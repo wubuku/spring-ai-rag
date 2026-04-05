@@ -12,10 +12,12 @@ export function Alerts() {
   return (
     <div>
       <h1 className="page-title">Alerts</h1>
-      {isPending ? <div>Loading...</div> : (
+      {isPending ? (
+        <div>Loading...</div>
+      ) : (
         <div className={styles.list}>
           {data?.data?.length === 0 && <div>No active alerts</div>}
-          {data?.data?.map((alert) => (
+          {data?.data?.map(alert => (
             <div key={alert.id} className={styles.item} data-severity={alert.severity}>
               <div className={styles.header}>
                 <span className={styles.name}>{alert.alertName}</span>

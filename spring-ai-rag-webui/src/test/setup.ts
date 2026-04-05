@@ -117,7 +117,8 @@ class MockEventSource {
     const listeners = this._listeners.get('message') ?? [];
     listeners.forEach(l => {
       if (typeof l === 'function') l(event);
-      else if (typeof l === 'object' && 'handleEvent' in l) (l as EventListenerObject).handleEvent(event);
+      else if (typeof l === 'object' && 'handleEvent' in l)
+        (l as EventListenerObject).handleEvent(event);
     });
   }
 
@@ -127,7 +128,8 @@ class MockEventSource {
     listeners.forEach(l => {
       const event = new Event('done');
       if (typeof l === 'function') l(event);
-      else if (typeof l === 'object' && 'handleEvent' in l) (l as EventListenerObject).handleEvent(event);
+      else if (typeof l === 'object' && 'handleEvent' in l)
+        (l as EventListenerObject).handleEvent(event);
     });
   }
 
@@ -140,7 +142,8 @@ class MockEventSource {
     const listeners = this._listeners.get('error') ?? [];
     listeners.forEach(l => {
       if (typeof l === 'function') l(event);
-      else if (typeof l === 'object' && 'handleEvent' in l) (l as EventListenerObject).handleEvent(event);
+      else if (typeof l === 'object' && 'handleEvent' in l)
+        (l as EventListenerObject).handleEvent(event);
     });
   }
 }

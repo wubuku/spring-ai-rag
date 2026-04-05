@@ -26,10 +26,22 @@ test.describe('Documents', () => {
     mockAllApiCalls(page);
     await page.goto('/documents');
     // Should show either table or loading or empty state
-    const hasContent = await page.locator('table').isVisible().catch(() => false);
-    const hasEmpty = await page.getByText('No documents found').isVisible().catch(() => false);
-    const hasLoading = await page.getByText('Loading documents').isVisible().catch(() => false);
-    const hasError = await page.getByText('Failed to load').isVisible().catch(() => false);
+    const hasContent = await page
+      .locator('table')
+      .isVisible()
+      .catch(() => false);
+    const hasEmpty = await page
+      .getByText('No documents found')
+      .isVisible()
+      .catch(() => false);
+    const hasLoading = await page
+      .getByText('Loading documents')
+      .isVisible()
+      .catch(() => false);
+    const hasError = await page
+      .getByText('Failed to load')
+      .isVisible()
+      .catch(() => false);
     expect(hasContent || hasEmpty || hasLoading || hasError).toBeTruthy();
   });
 });

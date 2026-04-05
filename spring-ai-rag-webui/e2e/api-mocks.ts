@@ -1,9 +1,9 @@
-import { test, expect } from '@playwright/test';
+import type { Page } from '@playwright/test';
 
 // Shared API mocks for all tests
-export function mockAllApiCalls(page: import('@playwright/test').Page) {
+export function mockAllApiCalls(page: Page) {
   // Mock health endpoint
-  page.route('/api/v1/rag/health', (route) => {
+  page.route('/api/v1/rag/health', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -20,7 +20,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock documents list
-  page.route(/\/api\/v1\/rag\/documents.*/, (route) => {
+  page.route(/\/api\/v1\/rag\/documents.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -44,7 +44,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock collections list
-  page.route(/\/api\/v1\/rag\/collections.*/, (route) => {
+  page.route(/\/api\/v1\/rag\/collections.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -68,7 +68,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock search endpoint
-  page.route('/api/v1/rag/search', (route) => {
+  page.route('/api/v1/rag/search', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -83,7 +83,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock metrics endpoint
-  page.route('/api/v1/rag/metrics', (route) => {
+  page.route('/api/v1/rag/metrics', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -97,7 +97,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock alerts endpoint
-  page.route('/api/v1/rag/alerts', (route) => {
+  page.route('/api/v1/rag/alerts', route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -106,7 +106,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Mock chat SSE endpoint
-  page.route('/api/v1/rag/chat/stream', (route) => {
+  page.route('/api/v1/rag/chat/stream', route => {
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
@@ -115,7 +115,7 @@ export function mockAllApiCalls(page: import('@playwright/test').Page) {
   });
 
   // Default: allow any other requests to pass through (e.g. static assets)
-  page.route('**', (route) => {
+  page.route('**', route => {
     if (
       route.request().url().startsWith('http://localhost:5173') ||
       route.request().url().startsWith('https://localhost:5173')
