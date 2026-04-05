@@ -152,8 +152,9 @@ podDisruptionBudget:
 
 # ── JVM / container tuning ────────────────────────────────────────────────
 jvm:
-  # Heap: 75% of container memory limit (leave room for metaspace / off-heap)
-  heapPercent: 0.75
+  # Max heap for -Xmx. Default: 1536m (75% of 2Gi container limit).
+  # Production profile sets this to 3072m (75% of 4Gi limit).
+  maxHeap: "1536m"
   extraOptions: >-
     -XX:+UseG1GC
     -XX:+ExitOnOutOfMemoryError

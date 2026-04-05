@@ -103,9 +103,11 @@ spec:
                 optional: true
 
           # ── JVM options ────────────────────────────────────────────────────
+          # Max heap from jvm.maxHeap (e.g. "1536m"). Default: 1536m (75% of 2Gi limit).
+          # Override: --set jvm.maxHeap=3Gi
           env:
             - name: JAVA_OPTS
-              value: "-Xms512m -Xmx{{ include "spring-ai-rag.jvm-heap" . }} -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
+              value: {{ printf "-Xms512m -Xmx%s -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" (.Values.jvm.maxHeap | default "1536m") | quote }}
             - name: SERVER_PORT
               value: "8080"
 

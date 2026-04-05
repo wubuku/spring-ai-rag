@@ -64,7 +64,7 @@ securityContext:
       - ALL
 
 jvm:
-  heapPercent: 0.80
+  maxHeap: "3g"
   extraOptions: >-
     -XX:+UseG1GC
     -XX:+ExitOnOutOfMemoryError

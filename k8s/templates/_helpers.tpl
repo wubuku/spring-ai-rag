@@ -60,23 +60,22 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-JVM heap size in MB derived from container memory limit and heapPercent.
-Usage: -Xmx{{ include "spring-ai-rag.jvm-heap" . }}
-Returns e.g. "1536m" for a 2Gi limit at 75% heapPercent.
+JVM max heap in MB. Converts container memory limit (e.g. "2Gi") to heap MB
+at jvm.heapPercent (default 75%).
+Returns e.g. "1536m".
 */}}
 {{- define "spring-ai-rag.jvm-heap" -}}
-{{- $memLimit := default "2Gi" .Values.resources.limits.memory }}
-{{- $heapPct  := default 75 .Values.jvm.heapPercent }}
-{{- $memMi    := "" }}
-{{- if hasSuffix "Gi" $memLimit }}
-{{-   $memMi = trimSuffix "Gi" $memLimit | int | mul 1024 | print }}
-{{- else if hasSuffix "Mi" $memLimit }}
-{{-   $memMi = trimSuffix "Mi" $memLimit | print }}
-{{- else }}
-{{-   $memMi = "2048" }}
+{{- $raw := include "spring-ai-rag.jvm-raw" . }}
+{{- $mb  := div (mul (int $raw) (int (default 75 .Values.jvm.heapPercent))) 100 }}
+{{- printf "%dm" $mb }}
 {{- end }}
-{{- $heapMi := div (mul (int $memMi) (int $heapPct)) 100 }}
-{{- print $heapMi "m" }}
+
+{{- define "spring-ai-rag.jvm-raw" -}}
+{{- $v := toString .Values.resources.limits.memory }}
+{{- if hasSuffix "Gi" $v }}{{ trimSuffix "Gi" $v | int | mul 1024 }}{{- end }}
+{{- if hasSuffix "gi" $v }}{{ trimSuffix "gi" $v | int | mul 1024 }}{{- end }}
+{{- if hasSuffix "Mi" $v }}{{ trimSuffix "Mi" $v | int }}{{- end }}
+{{- if hasSuffix "mi" $v }}{{ trimSuffix "mi" $v | int }}{{- end }}
 {{- end }}
 
 {{/*
