@@ -824,3 +824,19 @@
 
 - 2026-04-05 10:27 — ✅ 代码国际化 c1-c6（用户可见消息全面英文化）：Exception(RetrievalException/DocumentNotFoundException/EmbeddingException/GlobalExceptionHandler 8个handler)/Controller响应(AlertController/RagCollectionController/RagDocumentController/RagChatController)/Service日志(AlertServiceImpl/DocumentVersionService/DocumentEmbedService/BatchDocumentService/AbTestServiceImpl/ComponentHealthService)/Filter日志(RequestTraceFilter/RateLimitFilter)/SystemPrompt(QueryRewritingService/RerankAdvisor)/API DTO(EmbedProgressEvent SSE进度消息/FireAlertResponse/DocumentAddedResponse/CollectionDeleteResponse/CollectionCreatedResponse/ClearHistoryResponse)/DefaultDomainRagExtension，1183测试全通过，commit fcfb0d4 已推送
 - 2026-04-05 02:08 — ✅ 代码国际化 c5（配置 + pom）：application.yml 5份 / logback-spring.xml / docker-compose.yml / pom.xml 6份 / demo pom 4份，全部中文注释翻译为英文，零中文残留，mvn test ✅，commit 6a2390d 已推送
+
+- 2026-04-05 10:50 — ✅ WebUI README 完善 + Vite 开发服务器代理配置：
+  - 替换 webui 默认 Vite README 为项目专用文档（功能列表/技术栈/API集成/架构说明）
+  - vite.config.ts 新增 dev server proxy：`/api` → `http://localhost:8081`（解决前端独立运行时 API 调用失败问题）
+  - README 补充 SSE streaming 和 useFileUpload hook 使用说明
+  - mvn clean compile ✅ / mvn test ✅（1183 测试全通过，零失败零错误）
+  - git 已推送（commit e3775a8）
+
+## 待办（WebUI W5 — 工程化收尾）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| W5-1 | Vitest 单元测试（组件 + Hooks） | 测试 | ⏳ 待推进 |
+| W5-2 | Playwright E2E 测试（核心用户流程） | 测试 | ⏳ 待推进 |
+| W5-3 | 前端生产构建验证（dist 完整性） | 质量 | ⏳ 待推进 |
+
