@@ -874,5 +874,20 @@
 - 标题：`font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;`
 - 加载状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
 - 空状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
-| W5-4 | Playwright E2E 测试（核心用户流程） | 测试 | ⏳ 待推进 |
+| W5-4 | Playwright E2E 测试（核心用户流程） | 测试 | ✅ 2026-04-05（11 tests 全通过） |
+
+**WebUI 测试发布流程（重要！）**：
+```
+1. cd spring-ai-rag-webui && npm run build
+2. cp dist/* ../spring-ai-rag-core/src/main/resources/static/webui/
+3. pkill -f "spring-boot:run" && mvn spring-boot:run -pl spring-ai-rag-core  # 重启生效！
+4. node scripts/webui-e2e-test.js  # 运行 E2E 测试
+```
+
+**E2E 测试脚本**：`scripts/webui-e2e-test.js`
+- 11 个自动化测试（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings + Navigation + Backend Health + SPA Routing）
+- 前置检查：backend health API
+- 失败时截图保存到 `test-results/`
+- 运行：`node scripts/webui-e2e-test.js`
+- 依赖：playwright（已在 spring-ai-rag-webui 安装）
 
