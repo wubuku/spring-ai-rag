@@ -5,6 +5,8 @@ import com.springairag.api.dto.FireAlertRequest;
 import com.springairag.api.dto.FireAlertResponse;
 import com.springairag.api.dto.ResolveAlertRequest;
 import com.springairag.api.dto.SilenceAlertRequest;
+import com.springairag.core.repository.RagSilenceScheduleRepository;
+import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,12 +26,16 @@ import static org.mockito.Mockito.*;
 class AlertControllerTest {
 
     private AlertService alertService;
+    private SloConfigRepository sloConfigRepository;
+    private RagSilenceScheduleRepository silenceScheduleRepository;
     private AlertController controller;
 
     @BeforeEach
     void setUp() {
         alertService = mock(AlertService.class);
-        controller = new AlertController(alertService);
+        sloConfigRepository = mock(SloConfigRepository.class);
+        silenceScheduleRepository = mock(RagSilenceScheduleRepository.class);
+        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository);
     }
 
     // ==================== getActiveAlerts ====================
