@@ -1112,3 +1112,25 @@
 | N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
 | N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ⏳ 待推进 |
 | N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ⏳ 待推进 |
+
+## 待办（Cron 持续推进 — 永不空转）
+
+| # | 改进项 | 类型 | 状态 | Cron 执行优先级 |
+|---|--------|------|------|----------------|
+| C1 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ | P1 |
+| C2 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ | P1 |
+| C3 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ⏳ | P1 |
+| C4 | N21：Grafana Dashboard JSON 配置完善 | 监控 | ⏳ | P2 |
+| C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ⏳ | P2 |
+| C6 | N23：k6 负载测试脚本完善（search + chat 并发） | 性能 | ⏳ | P2 |
+| C7 | N26：Flyway 迁移脚本版本一致性检查（CI） | DevOps | ⏳ | P2 |
+| C8 | N27：API 响应时间基准测试（SLO < 500ms） | 性能 | ⏳ | P2 |
+| C9 | N28：WebUI 国际化支持（i18n 框架搭建） | UX | ⏳ | P3 |
+| C10 | N29：Spring Boot 3.5 Virtual Threads 压测验证 | 技术升级 | ⏳ | P3 |
+| C11 | N30：敏感日志脱敏（用户查询内容脱敏） | 安全 | ⏳ | P3 |
+| C12 | N31：ChatMemory 表数据膨胀治理（TTL + 归档） | 数据管理 | ⏳ | P3 |
+
+**Cron 执行规则**：
+- 每次 cron 触发：优先执行 P1 任务，完成后扫描 P2
+- P1 全完成后自动推进 P2，以此类推
+- 任何时候 HEARTBEAT 必须保持 ≥10 个 ⏳ 待办
