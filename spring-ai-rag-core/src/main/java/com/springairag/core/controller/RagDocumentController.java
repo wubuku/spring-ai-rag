@@ -225,18 +225,41 @@ public class RagDocumentController {
         }
     }
 
-    @Operation(summary = "生成嵌入向量（SSE 流式进度）",
-            description = "与 POST /embed 类似，但通过 Server-Sent Events 实时推送处理进度。客户端可监听 progress 事件获取当前阶段、已处理数量和总数量。")
+    /**
+     * SSE streaming endpoint for embedding progress.
+     *
+     * <p>Clients can listen for the following SSE events:
+     * <ul>
+     *   <li>"progress" — EmbeddingProgressEvent with current stage, processed count, total count</li>
+     *   <li>"done"     — Final confirmation with documentId when embedding completes successfully</li>
+     *   <li>"error"    — Error details (only sent before completeWithError, not after)</li>
+     * </ul>
+     *
+     * <p>Error handling strategy:
+     * <ul>
+     *   <li>IllegalArgumentException (e.g., document not found): send "error" event then completeWithError</li>
+     *   <li>Other exceptions: only completeWithError (no "error" event, to avoid duplicate payloads)</li>
+     *   <li>Callback exceptions during progress: best-effort log (client disconnected, not a real error)</li>
+     * </ul>
+     *
+     * @param id    document ID to embed
+     * @param force skip embedding cache and re-embed from scratch
+     * @return SSE emitter bound to the request lifecycle
+     */
+    @Operation(summary = "Generate embeddings via SSE streaming with progress events",
+            description = "Similar to POST /embed, but pushes real-time progress via Server-Sent Events. "
+                    + "Clients listen for 'progress' events to track current stage, processed count, and total count.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "SSE 流已建立，进度事件将陆续推送"),
-            @ApiResponse(responseCode = "404", description = "文档不存在")
+            @ApiResponse(responseCode = "200", description = "SSE stream established; progress events will follow"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @PostMapping("/{id}/embed/stream")
     public SseEmitter embedDocumentStream(
             @PathVariable Long id,
-            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
-        SseEmitter emitter = new SseEmitter(0L); // 无超时
+        // 0L = no timeout; client disconnection is detected via IOException in async callback
+        SseEmitter emitter = new SseEmitter(0L);
         try {
             documentEmbedService.embedDocumentWithProgress(id, force, event -> {
                 try {
@@ -244,6 +267,7 @@ public class RagDocumentController {
                             .name("progress")
                             .data(event));
                 } catch (Exception ex) {
+                    // Best-effort: client likely disconnected mid-stream
                     log.warn("SSE send failed for document {}: {}", id, ex.getMessage());
                 }
             });
