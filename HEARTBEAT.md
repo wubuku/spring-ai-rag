@@ -696,7 +696,7 @@
 | N3 | B8 DevOps：Prometheus Alerting Rules | 监控 | ⏳ 待推进 |
 | N4 | B8 DevOps：k6 负载测试脚本 | 性能 | ⏳ 待推进 |
 | N5 | B9 Testing：Playwright E2E SSE 流式响应 + 文件上传 | 测试 | ✅ 2026-04-05（N5 完成，streaming-upload.spec.ts 4 tests，chat page + documents upload） |
-| N6 | D1-4：DocumentVersionService 单元测试补强 | 测试 | ⏳ 待推进 |
+| N6 | D1-4：DocumentVersionService 单元测试补强 | 测试 | ✅ 2026-04-05（N6 完成，13 tests 覆盖 recordVersion/forceRecordVersion/getVersionHistory 等全部方法） |
 
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
