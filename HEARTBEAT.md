@@ -903,6 +903,8 @@
 
 - 2026-04-05 17:35 — ✅ D1-1 WebUI 路由级代码分割（D2-4 CI Codecov 同步完成）：App.tsx React.lazy() 替代静态导入，初始包 721KB→243KB（-66%），Metrics/recharts 365KB 按需加载，9个路由各自独立 chunk（0.4KB–11KB）；ci.yml 新增 codecov-action@v4 上传 jacoco.xml（需 CODECOV_TOKEN secret 配置）；1127 测试全通过；commit ee4cad8 + a2d6320 已推送
 
+- 2026-04-05 20:43 — ✅ WebUI 巡检：D1-3/B9-2 Playwright E2E 补强（SSE 流式 + 嵌入进度 + Settings）；npm run test ✅（79 tests 全通过）；npm run build ✅（243KB index gzipped）；E2E 11/11 全部通过（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist/ 已复制到 spring-ai-rag-core/static/webui/；git 工作区干净（dist gitignored）；后端服务运行正常（8081 UP）；D1-3 + B9-2 → ✅
+
 
 ## 待办（WebUI 精益求精）
 
@@ -958,7 +960,7 @@
 |---|--------|------|------|
 | D1-1 | WebUI 大块告警：构建警告 chunk>500KB，优化路由级代码分割 | 性能 | ✅ 2026-04-05（721KB→243KB初始，React.lazy路由分割） |
 | D1-2 | WebUI Vitest 覆盖率提升（当前仅 hooks/components/api 覆盖） | 测试覆盖 | ✅ 2026-04-05（D1-2 完成，79 tests，ChatSidebar/CreateCollectionModal/Layout/ThemeToggle 测试） |
-| D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ⏳ WebUI cron |
+| D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ✅ 2026-04-05（11 E2E 全通过） |
 | D1-4 | DocumentVersionService 单元测试（13 tests） | 测试覆盖 | ✅ 2026-04-05 |
 
 ## 待办（D2 — 运维增强）
@@ -975,7 +977,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ✅ 2026-04-05（22 tests: RFC 7807 + request field + spec completeness） |
-| B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ⏳ WebUI cron |
+| B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ✅ 2026-04-05（11 E2E 全通过） |
 
 ## 待办（Metrics C1 — 可观测性补全）
 
