@@ -949,7 +949,7 @@
 | B8-1 | Helm Chart：Kubernetes 部署清单 | 部署 | ✅ 2026-04-05（B8-1 完成，k8s/ Helm Chart 含 deployment/svc/ingress/HPA/PDB） |
 | B8-2 | Grafana Dashboard：JSON 监控面板 | 可观测性 | ⏳ 待推进 |
 | B8-3 | Prometheus Alerting Rules：RAG 专属告警规则 | 可观测性 | ⏳ 待推进 |
-| B8-4 | k6 负载测试脚本：关键 API 性能基准 | 性能 | ⏳ 待推进 |
+| B8-4 | k6 负载测试脚本：关键 API 性能基准 | 性能 | ✅ 2026-04-05（B8-4 完成，scripts/k6-load-test.js 含 smoke/load/stress 3 档 + run-k6-test.sh helper；覆盖 health/search/chat/document CRUD/SSE/metrics 全部关键端点） |
 
 ## 待办（D1 — WebUI 工程化）
 
