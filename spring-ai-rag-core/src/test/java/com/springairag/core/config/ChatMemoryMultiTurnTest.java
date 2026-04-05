@@ -127,6 +127,7 @@ class ChatMemoryMultiTurnTest {
                 mock(PromptCustomizerChain.class),
                 new RagProperties(),
                 null,
+                null,
                 null
         );
     }

@@ -30,10 +30,13 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.core.Ordered;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.concurrent.Callable;
+import java.util.function.Supplier;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +81,7 @@ public class RagChatService {
     private final PromptCustomizerChain promptCustomizerChain;
     private final RagMetricsService metricsService; // 可选，未引入 actuator 时为 null
     private final LlmCircuitBreaker circuitBreaker; // 可选，未启用时为 null
+    private final RetryTemplate retryTemplate; // LLM 调用重试模板，可选
 
     /**
      * 获取 LLM 熔断器实例（可能为 null，当未启用时）
@@ -101,10 +105,13 @@ public class RagChatService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RagMetricsService metricsService,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            List<RagAdvisorProvider> customAdvisorProviders) {
+            List<RagAdvisorProvider> customAdvisorProviders,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RetryTemplate retryTemplate) {
 
         this.chatClientBuilder = chatClientBuilder;
         this.chatModelRouter = chatModelRouter;
+        this.retryTemplate = retryTemplate;
         this.historyRepository = historyRepository;
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
@@ -238,15 +245,21 @@ public class RagChatService {
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
 
-        ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();
-        if (systemPrompt != null) {
-            spec.system(systemPrompt);
-        }
-        spec.user(finalMessage);
-        spec.advisors(buildAdvisorParams(sessionId, domainId, metadata));
+        // Capture in final variable for lambda (effectiveClient may be reassigned above)
+        final ChatClient finalEffectiveClient = effectiveClient;
 
         long startTime = System.currentTimeMillis();
-        LlmCallResult callResult = invokeChatClient(spec, startTime);
+        // Retryable LLM call: rebuild spec from captured parameters on each retry
+        Supplier<LlmCallResult> llmCall = () -> {
+            ChatClient.ChatClientRequestSpec s = finalEffectiveClient.prompt();
+            if (systemPrompt != null) {
+                s.system(systemPrompt);
+            }
+            s.user(finalMessage);
+            s.advisors(buildAdvisorParams(sessionId, domainId, metadata));
+            return invokeChatClient(s, System.currentTimeMillis());
+        };
+        LlmCallResult callResult = invokeWithRetry(llmCall);
 
         if (metricsService != null) {
             metricsService.recordSuccess(callResult.elapsedMs, 0);
@@ -259,6 +272,29 @@ public class RagChatService {
         response.setMetadata(Map.of("sessionId", sessionId));
         response.setStepMetrics(callResult.pipelineMetrics);
         return response;
+    }
+
+    /**
+     * Execute the LLM call with retry if configured.
+     * Falls back to direct call if RetryTemplate is not available.
+     */
+    private LlmCallResult invokeWithRetry(Supplier<LlmCallResult> llmCall) {
+        if (retryTemplate != null) {
+            try {
+                return retryTemplate.execute(status -> {
+                    int attempt = status.getRetryCount() + 1;
+                    if (attempt > 1) {
+                        log.info("LLM call retry attempt {}", attempt);
+                    }
+                    return llmCall.get();
+                });
+            } catch (Exception e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log.error("LLM call failed after all retry attempts: {}", cause.getMessage());
+                throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(cause);
+            }
+        }
+        return llmCall.get();
     }
 
     /** LLM 调用 + 响应提取，异常时记录熔断器/指标后上抛 */

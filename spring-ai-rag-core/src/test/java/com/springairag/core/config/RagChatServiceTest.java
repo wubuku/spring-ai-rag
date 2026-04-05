@@ -84,6 +84,7 @@ class RagChatServiceTest {
                 promptCustomizerChain,
                 new com.springairag.core.config.RagProperties(),
                 null,
+                null,
                 null
         );
     }
@@ -309,7 +310,8 @@ class RagChatServiceTest {
                 promptCustomizerChain,
                 new com.springairag.core.config.RagProperties(),
                 null,
-                List.of(mockProvider)
+                List.of(mockProvider),
+                null
         );
 
         assertNotNull(service);

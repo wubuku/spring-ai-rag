@@ -9,12 +9,14 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -39,6 +41,9 @@ public class QueryRewritingService {
 
     @Autowired(required = false)
     private ChatModel chatModel;
+
+    @Autowired(required = false)
+    private RetryTemplate retryTemplate;
 
     private RagQueryRewriteProperties config;
 
@@ -189,7 +194,22 @@ public class QueryRewritingService {
 
     private String callLlm(String prompt) {
         ChatClient client = ChatClient.builder(chatModel).build();
-        return client.prompt(prompt).call().content();
+        Supplier<String> llmCall = () -> client.prompt(prompt).call().content();
+        if (retryTemplate != null) {
+            try {
+                return retryTemplate.execute(status -> {
+                    if (status.getRetryCount() > 0) {
+                        log.debug("LLM rewrite retry attempt {}", status.getRetryCount() + 1);
+                    }
+                    return llmCall.get();
+                });
+            } catch (Exception e) {
+                Throwable cause = e.getCause() != null ? e.getCause() : e;
+                log.warn("LLM rewrite failed after retries: {}", cause.getMessage());
+                throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(cause);
+            }
+        }
+        return llmCall.get();
     }
 
     private List<String> parseRewriteResponse(String response, String originalQuery) {

@@ -136,6 +136,16 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Spring Retry: declarative retry with exponential backoff -->
+        <dependency>
+            <groupId>org.springframework.retry</groupId>
+            <artifactId>spring-retry</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-aspects</artifactId>
+        </dependency>
+
         <!-- Caffeine local cache -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>

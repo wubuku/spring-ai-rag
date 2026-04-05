@@ -275,6 +275,21 @@ rag:
   #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
   #   sliding-window-size: 20         # Sliding window size
 
+  # LLM API retry configuration
+  # Retry with exponential backoff for transient failures (timeouts, 429, 503)
+  # Note: streaming (SSE) responses cannot be retried — only non-streaming calls
+  retry:
+    enabled: true
+    max-attempts: 3              # Total attempts (1 = disabled)
+    initial-backoff-ms: 1000     # Initial backoff delay
+    max-backoff-ms: 10000        # Maximum backoff cap
+    backoff-multiplier: 2.0      # Exponential multiplier
+    retry-on-rate-limit: true    # Retry on HTTP 429
+    retry-on-service-unavailable: true  # Retry on HTTP 503
+    retry-on-connect-timeout: true
+    retry-on-read-timeout: true
+    jitter-factor: 0.2          # Random jitter factor (0.0 to 1.0)
+
 # ============================================
 # Server Configuration
 # ============================================
