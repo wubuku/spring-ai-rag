@@ -52,6 +52,8 @@ describe('Documents', () => {
 
   it('renders page title', () => {
     mockUseQuery.mockReturnValue({
+      // TanStack Query wraps axios response: { data: AxiosResponse<DocumentListResponse> }
+      // AxiosResponse.data = { offset, documents, total }
       data: { data: { documents: [], total: 0 } },
       isPending: false,
       error: null,
@@ -60,7 +62,7 @@ describe('Documents', () => {
     render(<Documents />);
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('Documents');
+    expect(h1).toHaveTextContent('documents.title');
   });
 
   it('shows upload zone', () => {
@@ -71,7 +73,7 @@ describe('Documents', () => {
     });
 
     render(<Documents />);
-    expect(screen.getByText(/Drop files here or click to upload/)).toBeInTheDocument();
+    expect(screen.getByText(/documents.uploadHint/)).toBeInTheDocument();
   });
 
   it('shows table when documents exist', () => {
@@ -108,7 +110,7 @@ describe('Documents', () => {
     });
 
     render(<Documents />);
-    expect(screen.getByText(/No documents found/)).toBeInTheDocument();
+    expect(screen.getByText(/documents.noDocuments/)).toBeInTheDocument();
   });
 
   it('shows pagination controls', () => {
@@ -119,9 +121,9 @@ describe('Documents', () => {
     });
 
     render(<Documents />);
-    expect(screen.getByText('Page 1 — Total: 50')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
+    expect(screen.getByText(/Page 1 — documents\.totalDocuments: 50/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /common.previous/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /common.next/ })).toBeInTheDocument();
   });
 
   it('Previous button is disabled on first page', () => {
@@ -132,6 +134,6 @@ describe('Documents', () => {
     });
 
     render(<Documents />);
-    expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /common.previous/ })).toBeDisabled();
   });
 });

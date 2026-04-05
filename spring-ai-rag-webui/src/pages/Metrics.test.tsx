@@ -22,7 +22,7 @@ describe('Metrics', () => {
     render(<Metrics />);
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('Metrics');
+    expect(h1).toHaveTextContent('metrics.title');
   });
 
   it('shows loading state when pending', () => {
@@ -32,7 +32,7 @@ describe('Metrics', () => {
     });
 
     render(<Metrics />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('common.loading')).toBeInTheDocument();
   });
 
   it('shows metrics data when loaded', () => {

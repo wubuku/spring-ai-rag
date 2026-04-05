@@ -34,7 +34,7 @@ describe('Dashboard', () => {
     render(<Dashboard />);
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('Dashboard');
+    expect(h1).toHaveTextContent('dashboard.title');
   });
 
   it('shows loading skeleton when pending', () => {
@@ -44,7 +44,7 @@ describe('Dashboard', () => {
     });
 
     render(<Dashboard />);
-    // Should render without crashing when loading
+    // Should Render without crashing when loading
     expect(document.querySelector('h1')).toBeInTheDocument();
   });
 

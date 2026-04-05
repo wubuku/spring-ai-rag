@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
 import { healthApi } from '../api/health';
@@ -6,6 +7,8 @@ import { Skeleton } from '../components/Skeleton';
 import styles from './Dashboard.module.css';
 
 export function Dashboard() {
+  const { t } = useTranslation();
+
   const { data: health, isPending: healthPending } = useQuery({
     queryKey: ['health'],
     queryFn: () => healthApi.get(),
@@ -26,17 +29,20 @@ export function Dashboard() {
 
   return (
     <div>
-      <h1 className="page-title">Dashboard</h1>
+      <h1 className="page-title">{t('dashboard.title')}</h1>
 
       <div className={styles.statusBanner} data-healthy={isHealthy}>
         {healthPending ? (
           <Skeleton width="200px" height="1.5rem" />
         ) : (
           <>
-            <span>{isHealthy ? '✅ System Healthy' : '❌ System Unhealthy'}</span>
+            <span>
+              {isHealthy ? t('dashboard.systemHealthy') : t('dashboard.systemUnhealthy')}
+            </span>
             {health?.data && (
               <span className={styles.components}>
-                DB: {health.data.components?.database} | Vector: {health.data.components?.pgvector}
+                {t('dashboard.db')}: {health.data.components?.database} | {t('dashboard.vector')}:{' '}
+                {health.data.components?.pgvector}
               </span>
             )}
           </>
@@ -50,7 +56,7 @@ export function Dashboard() {
           ) : (
             <div className={styles.metric}>{docs?.data?.total ?? '—'}</div>
           )}
-          <div className={styles.label}>Documents</div>
+          <div className={styles.label}>{t('dashboard.documents')}</div>
         </div>
         <div className={styles.card}>
           {collectionsPending ? (
@@ -58,7 +64,7 @@ export function Dashboard() {
           ) : (
             <div className={styles.metric}>{collections?.data?.total ?? '—'}</div>
           )}
-          <div className={styles.label}>Collections</div>
+          <div className={styles.label}>{t('dashboard.collections')}</div>
         </div>
         <div className={styles.card}>
           {healthPending ? (
@@ -66,7 +72,7 @@ export function Dashboard() {
           ) : (
             <div className={styles.metric}>{health?.data?.components?.cache ?? '—'}</div>
           )}
-          <div className={styles.label}>Cache</div>
+          <div className={styles.label}>{t('dashboard.cache')}</div>
         </div>
         <div className={styles.card}>
           {healthPending ? (
@@ -76,7 +82,7 @@ export function Dashboard() {
               {health?.data?.timestamp ? new Date(health.data.timestamp).toLocaleString() : '—'}
             </div>
           )}
-          <div className={styles.label}>Last Check</div>
+          <div className={styles.label}>{t('dashboard.lastCheck')}</div>
         </div>
       </div>
     </div>

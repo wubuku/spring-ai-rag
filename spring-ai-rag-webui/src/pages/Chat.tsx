@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { chatApi } from '../api/chat';
@@ -14,6 +15,7 @@ interface Message {
 }
 
 export function Chat() {
+  const { t } = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
@@ -151,23 +153,23 @@ export function Chat() {
             >
               ☰
             </button>
-            <h1 className="page-title">RAG Chat</h1>
+            <h1 className="page-title">{t('chat.title')}</h1>
           </div>
           {messages.length > 0 && (
             <>
               <div className={styles.exportWrapper}>
                 <button onClick={() => setShowExportMenu(!showExportMenu)} className={styles.exportBtn}>
-                  Export ▾
+                  {t('chat.export')} ▾
                 </button>
                 {showExportMenu && (
                   <div className={styles.exportMenu}>
-                    <button onClick={() => handleExport('json')}>JSON</button>
-                    <button onClick={() => handleExport('md')}>Markdown</button>
+                    <button onClick={() => handleExport('json')}>{t('chat.exportJson')}</button>
+                    <button onClick={() => handleExport('md')}>{t('chat.exportMarkdown')}</button>
                   </div>
                 )}
               </div>
               <button onClick={handleNewChat} className={styles.newChatBtn}>
-                New Chat
+                {t('chat.newChat')}
               </button>
             </>
           )}
@@ -176,9 +178,9 @@ export function Chat() {
         <div className={styles.messages}>
           {messages.length === 0 && (
             <div className={styles.emptyState}>
-              <p>Ask me anything about your documents!</p>
+              <p>{t('chat.noMessages')}</p>
               <p className={styles.hint}>
-                I will search through your knowledge base to find the most relevant information.
+                {t('chat.hint') || 'I will search through your knowledge base to find the most relevant information.'}
               </p>
             </div>
           )}
@@ -195,7 +197,7 @@ export function Chat() {
               </div>
               {msg.sources && msg.sources.length > 0 && (
                 <div className={styles.sources}>
-                  <strong>Sources:</strong>
+                  <strong>{t('chat.sources')}:</strong>
                   {msg.sources.map((s, i) => (
                     <span key={i} className={styles.source}>
                       [{s.title} ({(s.score * 100).toFixed(0)}%)]
@@ -214,7 +216,7 @@ export function Chat() {
             value={input}
             onChange={handleInput}
             onKeyDown={handleKeyDown}
-            placeholder="Ask a question... (Enter to send, Shift+Enter for new line)"
+            placeholder={t('chat.placeholder')}
             disabled={isConnected}
             className={styles.input}
             rows={1}
@@ -224,7 +226,7 @@ export function Chat() {
             disabled={isConnected || !input.trim()}
             className={styles.sendBtn}
           >
-            {isConnected ? '...' : 'Send'}
+            {isConnected ? '...' : t('chat.send')}
           </button>
         </div>
       </div>

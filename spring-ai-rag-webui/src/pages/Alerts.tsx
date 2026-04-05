@@ -1,37 +1,39 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { alertsApi, type SloConfig, type SilenceSchedule } from '../api/alerts';
 import styles from './Alerts.module.css';
 
 type Tab = 'alerts' | 'slo-configs' | 'silence-schedules';
 
 export function Alerts() {
+  const { t } = useTranslation();
   const [tab, setTab] = useState<Tab>('alerts');
   const [showSloForm, setShowSloForm] = useState(false);
   const [showSilenceForm, setShowSilenceForm] = useState(false);
 
   return (
     <div>
-      <h1 className="page-title">Alerts</h1>
+      <h1 className="page-title">{t('alerts.title')}</h1>
 
       <div className={styles.tabs}>
         <button
           className={`${styles.tab} ${tab === 'alerts' ? styles.tabActive : ''}`}
           onClick={() => setTab('alerts')}
         >
-          Active Alerts
+          {t('alerts.active')}
         </button>
         <button
           className={`${styles.tab} ${tab === 'slo-configs' ? styles.tabActive : ''}`}
           onClick={() => setTab('slo-configs')}
         >
-          SLO Configs
+          {t('alerts.sloConfig')}
         </button>
         <button
           className={`${styles.tab} ${tab === 'silence-schedules' ? styles.tabActive : ''}`}
           onClick={() => setTab('silence-schedules')}
         >
-          Silence Schedules
+          {t('alerts.silencePlans')}
         </button>
       </div>
 
@@ -57,16 +59,17 @@ export function Alerts() {
 // ==================== Active Alerts Tab ====================
 
 function AlertsTab() {
+  const { t } = useTranslation();
   const { data, isPending } = useQuery({
     queryKey: ['alerts'],
     queryFn: () => alertsApi.listActive(),
     refetchInterval: 30_000,
   });
 
-  if (isPending) return <div className={styles.loading}>Loading...</div>;
+  if (isPending) return <div className={styles.loading}>{t('common.loading')}</div>;
 
   if (!data?.data?.length) {
-    return <div className={styles.empty}>No active alerts</div>;
+    return <div className={styles.empty}>{t('alerts.noActiveAlerts')}</div>;
   }
 
   return (
@@ -79,7 +82,7 @@ function AlertsTab() {
           </div>
           <div className={styles.message}>{alert.message}</div>
           <div className={styles.time}>
-            Triggered: {new Date(alert.triggeredAt).toLocaleString()}
+            {t('alerts.triggeredAt')}: {new Date(alert.triggeredAt).toLocaleString()}
           </div>
         </div>
       ))}
@@ -99,6 +102,7 @@ interface SloFormData {
 }
 
 function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery({
     queryKey: ['slo-configs'],
@@ -140,15 +144,15 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
   return (
     <div>
       <div className={styles.toolbar}>
-        <button className={styles.addBtn} onClick={onShowForm}>+ Add SLO Config</button>
+        <button className={styles.addBtn} onClick={onShowForm}>+ {t('alerts.sloConfig')}</button>
       </div>
 
       {showForm && (
         <div className={styles.formCard}>
-          <h3>New SLO Config</h3>
+          <h3>{t('alerts.sloConfig')}</h3>
           <form onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
-              <label className={styles.label}>Name</label>
+              <label className={styles.label}>{t('alerts.sloConfig')}</label>
               <input
                 className={styles.input}
                 value={form.sloName}
@@ -158,11 +162,11 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Type</label>
+              <label className={styles.label}>{t('alerts.alertType')}</label>
               <select className={styles.select} value={form.sloType} onChange={e => setForm({ ...form, sloType: e.target.value })}>
-                <option value="LATENCY">LATENCY</option>
-                <option value="AVAILABILITY">AVAILABILITY</option>
-                <option value="QUALITY">QUALITY</option>
+                <option value="LATENCY">{t('alerts.latency')}</option>
+                <option value="AVAILABILITY">{t('alerts.availability')}</option>
+                <option value="QUALITY">{t('alerts.quality')}</option>
                 <option value="ERROR_RATE">ERROR_RATE</option>
               </select>
             </div>
@@ -183,37 +187,37 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Description</label>
+              <label className={styles.label}>{t('collections.description')}</label>
               <input
                 className={styles.input}
                 value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })}
-                placeholder="Optional description"
+                placeholder={t('collections.descriptionPlaceholder')}
               />
             </div>
             <div className={styles.formActions}>
               <button type="submit" className={styles.saveBtn} disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Creating...' : 'Create'}
+                {createMutation.isPending ? t('common.loading') : t('common.create')}
               </button>
-              <button type="button" className={styles.cancelBtn} onClick={onHideForm}>Cancel</button>
+              <button type="button" className={styles.cancelBtn} onClick={onHideForm}>{t('common.cancel')}</button>
             </div>
           </form>
         </div>
       )}
 
       {isPending ? (
-        <div className={styles.loading}>Loading...</div>
+        <div className={styles.loading}>{t('common.loading')}</div>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>No SLO configs defined</div>
+        <div className={styles.empty}>{t('common.noData')}</div>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHeader}>
-            <span>Name</span>
-            <span>Type</span>
+            <span>{t('alerts.sloConfig')}</span>
+            <span>{t('alerts.alertType')}</span>
             <span>Target</span>
             <span>Unit</span>
-            <span>Enabled</span>
-            <span>Action</span>
+            <span>{t('alerts.status')}</span>
+            <span>{t('alerts.actions')}</span>
           </div>
           {data.data.map((slo: SloConfig) => (
             <div key={slo.id} className={styles.tableRow}>
@@ -229,7 +233,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
                 onClick={() => deleteMutation.mutate(slo.sloName)}
                 disabled={deleteMutation.isPending}
               >
-                Delete
+                {t('alerts.deleteSilence')}
               </button>
             </div>
           ))}
@@ -252,6 +256,7 @@ interface SilenceFormData {
 }
 
 function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: boolean; onShowForm: () => void; onHideForm: () => void }) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data, isPending } = useQuery({
     queryKey: ['silence-schedules'],
@@ -294,15 +299,15 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
   return (
     <div>
       <div className={styles.toolbar}>
-        <button className={styles.addBtn} onClick={onShowForm}>+ Add Silence Schedule</button>
+        <button className={styles.addBtn} onClick={onShowForm}>+ {t('alerts.createSilence')}</button>
       </div>
 
       {showForm && (
         <div className={styles.formCard}>
-          <h3>New Silence Schedule</h3>
+          <h3>{t('alerts.createSilence')}</h3>
           <form onSubmit={handleSubmit} className={styles.form}>
             <div className={styles.formRow}>
-              <label className={styles.label}>Name</label>
+              <label className={styles.label}>{t('alerts.silencePlans')}</label>
               <input
                 className={styles.input}
                 value={form.name}
@@ -321,14 +326,14 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Type</label>
+              <label className={styles.label}>{t('alerts.alertType')}</label>
               <select className={styles.select} value={form.silenceType} onChange={e => setForm({ ...form, silenceType: e.target.value })}>
                 <option value="ONE_TIME">ONE_TIME</option>
                 <option value="RECURRING">RECURRING</option>
               </select>
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Start Time</label>
+              <label className={styles.label}>{t('alerts.triggeredAt')}</label>
               <input
                 className={styles.input}
                 type="datetime-local"
@@ -338,7 +343,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>End Time</label>
+              <label className={styles.label}>{t('alerts.resolvedAt')}</label>
               <input
                 className={styles.input}
                 type="datetime-local"
@@ -348,38 +353,38 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
               />
             </div>
             <div className={styles.formRow}>
-              <label className={styles.label}>Description</label>
+              <label className={styles.label}>{t('collections.description')}</label>
               <input
                 className={styles.input}
                 value={form.description}
                 onChange={e => setForm({ ...form, description: e.target.value })}
-                placeholder="Optional"
+                placeholder={t('collections.descriptionPlaceholder')}
               />
             </div>
             <div className={styles.formActions}>
               <button type="submit" className={styles.saveBtn} disabled={createMutation.isPending}>
-                {createMutation.isPending ? 'Creating...' : 'Create'}
+                {createMutation.isPending ? t('common.loading') : t('common.create')}
               </button>
-              <button type="button" className={styles.cancelBtn} onClick={onHideForm}>Cancel</button>
+              <button type="button" className={styles.cancelBtn} onClick={onHideForm}>{t('common.cancel')}</button>
             </div>
           </form>
         </div>
       )}
 
       {isPending ? (
-        <div className={styles.loading}>Loading...</div>
+        <div className={styles.loading}>{t('common.loading')}</div>
       ) : !data?.data?.length ? (
-        <div className={styles.empty}>No silence schedules defined</div>
+        <div className={styles.empty}>{t('alerts.noSilencePlans')}</div>
       ) : (
         <div className={styles.table}>
           <div className={styles.tableHeader}>
-            <span>Name</span>
+            <span>{t('alerts.silencePlans')}</span>
             <span>Alert Key</span>
-            <span>Type</span>
-            <span>Start</span>
-            <span>End</span>
-            <span>Enabled</span>
-            <span>Action</span>
+            <span>{t('alerts.alertType')}</span>
+            <span>{t('alerts.triggeredAt')}</span>
+            <span>{t('alerts.resolvedAt')}</span>
+            <span>{t('alerts.status')}</span>
+            <span>{t('alerts.actions')}</span>
           </div>
           {data.data.map((schedule: SilenceSchedule) => (
             <div key={schedule.id} className={styles.tableRow}>
@@ -396,7 +401,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
                 onClick={() => deleteMutation.mutate(schedule.name)}
                 disabled={deleteMutation.isPending}
               >
-                Delete
+                {t('alerts.deleteSilence')}
               </button>
             </div>
           ))}

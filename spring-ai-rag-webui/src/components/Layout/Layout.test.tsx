@@ -22,13 +22,14 @@ describe('Layout', () => {
     );
 
     expect(screen.getByText('spring-ai-rag')).toBeInTheDocument();
-    expect(screen.getByText('Dashboard')).toBeInTheDocument();
-    expect(screen.getByText('Documents')).toBeInTheDocument();
-    expect(screen.getByText('Chat')).toBeInTheDocument();
-    expect(screen.getByText('Search')).toBeInTheDocument();
-    expect(screen.getByText('Metrics')).toBeInTheDocument();
-    expect(screen.getByText('Alerts')).toBeInTheDocument();
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    // Mock i18n returns translation keys
+    expect(screen.getByText('nav.dashboard')).toBeInTheDocument();
+    expect(screen.getByText('nav.documents')).toBeInTheDocument();
+    expect(screen.getByText('nav.chat')).toBeInTheDocument();
+    expect(screen.getByText('nav.search')).toBeInTheDocument();
+    expect(screen.getByText('nav.metrics')).toBeInTheDocument();
+    expect(screen.getByText('nav.alerts')).toBeInTheDocument();
+    expect(screen.getByText('nav.settings')).toBeInTheDocument();
   });
 
   it('renders ThemeToggle', () => {

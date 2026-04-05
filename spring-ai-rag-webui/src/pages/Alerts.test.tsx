@@ -22,7 +22,7 @@ describe('Alerts', () => {
     render(<Alerts />);
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('Alerts');
+    expect(h1).toHaveTextContent('alerts.title');
   });
 
   it('shows loading state when pending', () => {
@@ -32,7 +32,7 @@ describe('Alerts', () => {
     });
 
     render(<Alerts />);
-    expect(screen.getByText('Loading...')).toBeInTheDocument();
+    expect(screen.getByText('common.loading')).toBeInTheDocument();
   });
 
   it('shows empty state when no alerts', () => {
@@ -42,7 +42,7 @@ describe('Alerts', () => {
     });
 
     render(<Alerts />);
-    expect(screen.getByText('No active alerts')).toBeInTheDocument();
+    expect(screen.getByText('alerts.noActiveAlerts')).toBeInTheDocument();
   });
 
   it('shows alert items when alerts exist', () => {

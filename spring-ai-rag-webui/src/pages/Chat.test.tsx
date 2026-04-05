@@ -28,37 +28,37 @@ describe('Chat', () => {
 
   it('renders page title', () => {
     render(<Chat />);
-    expect(screen.getByText('RAG Chat')).toBeInTheDocument();
+    expect(screen.getByText('chat.title')).toBeInTheDocument();
   });
 
   it('renders empty state message when no messages', () => {
     render(<Chat />);
-    expect(screen.getByText(/Ask me anything about your documents/)).toBeInTheDocument();
+    expect(screen.getByText(/chat.noMessages/)).toBeInTheDocument();
   });
 
   it('renders textarea and send button', () => {
     render(<Chat />);
-    expect(screen.getByPlaceholderText(/Ask a question/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Send/i })).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/chat.placeholder/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /chat.send/ })).toBeInTheDocument();
   });
 
   it('send button is disabled when input is empty', () => {
     render(<Chat />);
-    const sendBtn = screen.getByRole('button', { name: /Send/i });
+    const sendBtn = screen.getByRole('button', { name: /chat.send/ });
     expect(sendBtn).toBeDisabled();
   });
 
   it('send button is enabled when input has text', () => {
     render(<Chat />);
-    const textarea = screen.getByPlaceholderText(/Ask a question/);
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
     fireEvent.change(textarea, { target: { value: 'Hello world' } });
-    const sendBtn = screen.getByRole('button', { name: /Send/i });
+    const sendBtn = screen.getByRole('button', { name: /chat.send/ });
     expect(sendBtn).not.toBeDisabled();
   });
 
   it('pressing Enter submits the message', async () => {
     render(<Chat />);
-    const textarea = screen.getByPlaceholderText(/Ask a question/);
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
     fireEvent.change(textarea, { target: { value: 'Hello' } });
     await act(async () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
@@ -68,7 +68,7 @@ describe('Chat', () => {
 
   it('Shift+Enter does not submit', async () => {
     render(<Chat />);
-    const textarea = screen.getByPlaceholderText(/Ask a question/);
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
     fireEvent.change(textarea, { target: { value: 'Hello' } });
     await act(async () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true });
@@ -78,14 +78,14 @@ describe('Chat', () => {
 
   it('New Chat button is not visible when no messages', () => {
     render(<Chat />);
-    expect(screen.queryByRole('button', { name: /New Chat/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /chat.newChat/ })).not.toBeInTheDocument();
   });
 
   it('clicking send button submits message', async () => {
     render(<Chat />);
-    const textarea = screen.getByPlaceholderText(/Ask a question/);
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
     fireEvent.change(textarea, { target: { value: 'Test query' } });
-    const sendBtn = screen.getByRole('button', { name: /Send/i });
+    const sendBtn = screen.getByRole('button', { name: /chat.send/ });
     await act(async () => {
       fireEvent.click(sendBtn);
     });

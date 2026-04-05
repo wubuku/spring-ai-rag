@@ -1,6 +1,20 @@
 import '@testing-library/jest-dom';
 
+// ---------------------------------------------------------------------------
+// i18next mock — provides a no-op translation function for unit tests
+// ---------------------------------------------------------------------------
+vi.mock('react-i18next', () => ({
+  default: vi.fn(),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en', changeLanguage: vi.fn() },
+  }),
+}));
+
+// ---------------------------------------------------------------------------
 // Mock window.matchMedia
+// ---------------------------------------------------------------------------
+
 Object.defineProperty(window, 'matchMedia', {
   writable: true,
   value: vi.fn().mockImplementation((query: string) => ({

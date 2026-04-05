@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { Settings } from './Settings';
 
 // Mock localStorage for jsdom environment
@@ -20,19 +19,21 @@ describe('Settings', () => {
 
   it('renders page title', () => {
     render(<Settings />);
-    expect(screen.getByText('Settings')).toBeInTheDocument();
+    // Mock i18n returns 'settings.title' key, which contains 'Settings'
+    expect(screen.getByText(/settings\.title/i)).toBeInTheDocument();
   });
 
-  it('renders all three tabs', () => {
+  it('renders all four tabs', () => {
     render(<Settings />);
-    expect(screen.getByRole('button', { name: /LLM Provider/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Retrieval/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Cache/i })).toBeInTheDocument();
+    // Mock returns keys: settings.llmProvider, settings.retrieval, settings.cache, language label
+    expect(screen.getByRole('button', { name: /settings\.llmProvider/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /settings\.retrieval/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /settings\.cache/i })).toBeInTheDocument();
   });
 
-  it('shows save button (disabled when no changes)', () => {
+  it('shows save button disabled when no changes', () => {
     render(<Settings />);
-    const saveBtn = screen.getByRole('button', { name: 'Save Changes' });
+    const saveBtn = screen.getByRole('button', { name: /settings\.save/i });
     expect(saveBtn).toBeInTheDocument();
     expect(saveBtn).toBeDisabled();
   });

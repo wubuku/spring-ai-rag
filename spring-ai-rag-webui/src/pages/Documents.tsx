@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/documents';
 import { useFileUpload } from '../hooks/useFileUpload';
 import { useToast } from '../components/Toast';
@@ -7,6 +8,7 @@ import { Skeleton } from '../components/Skeleton';
 import styles from './Documents.module.css';
 
 export function Documents() {
+  const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState('');
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
@@ -24,16 +26,16 @@ export function Documents() {
     mutationFn: (id: number) => documentsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      showToast('Document deleted', 'success');
+      showToast(t('documents.deleted'), 'success');
     },
     onError: () => {
-      showToast('Failed to delete document', 'error');
+      showToast(t('documents.deleteError'), 'error');
     },
   });
 
   const { uploadFiles, isUploading } = useFileUpload({
     onComplete: fileName => {
-      showToast(`${fileName} uploaded successfully`, 'success');
+      showToast(`${fileName} ${t('documents.uploaded')}`, 'success');
       queryClient.invalidateQueries({ queryKey: ['documents'] });
     },
     onError: (fileName, errorMsg) => {
@@ -72,7 +74,7 @@ export function Documents() {
 
   return (
     <div>
-      <h1 className="page-title">Documents</h1>
+      <h1 className="page-title">{t('documents.title')}</h1>
 
       <div
         className={styles.uploadZone}
@@ -91,7 +93,9 @@ export function Documents() {
         />
         <label htmlFor="file-upload" className={styles.uploadLabel}>
           <span className={styles.uploadIcon}>📁</span>
-          <span>{isUploading ? 'Uploading...' : 'Drop files here or click to upload'}</span>
+          <span>
+            {isUploading ? t('common.loading') : t('documents.uploadHint')}
+          </span>
           <span className={styles.uploadHint}>Supports: txt, md, json, xml, html, csv, log</span>
         </label>
       </div>
@@ -99,7 +103,7 @@ export function Documents() {
       <div className={styles.searchRow}>
         <input
           type="text"
-          placeholder="Search documents by title..."
+          placeholder={t('documents.searchPlaceholder') || t('common.search')}
           value={keyword}
           onChange={handleKeywordChange}
           className={styles.searchInput}
@@ -117,7 +121,7 @@ export function Documents() {
         </div>
       ) : error ? (
         <div className={styles.error}>
-          Failed to load documents: {error instanceof Error ? error.message : 'Unknown error'}
+          {t('documents.loadError') || t('common.error')}: {error instanceof Error ? error.message : 'Unknown error'}
         </div>
       ) : (
         <>
@@ -125,12 +129,12 @@ export function Documents() {
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Type</th>
-                  <th>Created</th>
-                  <th>Hash</th>
-                  <th>Actions</th>
+                  <th>{t('documents.documentId')}</th>
+                  <th>{t('documents.title') || 'Title'}</th>
+                  <th>{t('documents.documentType')}</th>
+                  <th>{t('documents.createdAt')}</th>
+                  <th>{t('documents.contentHash')}</th>
+                  <th>{t('documents.actions')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -151,7 +155,7 @@ export function Documents() {
                         className={styles.deleteBtn}
                         disabled={deleteMutation.isPending}
                       >
-                        Delete
+                        {t('documents.delete')}
                       </button>
                     </td>
                   </tr>
@@ -159,7 +163,7 @@ export function Documents() {
                 {data?.data?.documents?.length === 0 && (
                   <tr>
                     <td colSpan={6} className={styles.empty}>
-                      No documents found. Upload your first document above.
+                      {t('documents.noDocuments')}
                     </td>
                   </tr>
                 )}
@@ -173,10 +177,10 @@ export function Documents() {
               disabled={page === 0}
               className={styles.pageBtn}
             >
-              Previous
+              {t('common.previous') || 'Previous'}
             </button>
             <span className={styles.pageInfo}>
-              Page {page + 1} — Total: {data?.data?.total ?? 0}
+              Page {page + 1} — {t('documents.totalDocuments')}: {data?.data?.total ?? 0}
             </span>
             <button
               onClick={() => setPage(p => p + 1)}
@@ -185,7 +189,7 @@ export function Documents() {
               }
               className={styles.pageBtn}
             >
-              Next
+              {t('common.next') || 'Next'}
             </button>
           </div>
         </>

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
@@ -7,6 +8,7 @@ import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import styles from './Collections.module.css';
 
 export function Collections() {
+  const { t } = useTranslation();
   const [page] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const queryClient = useQueryClient();
@@ -21,22 +23,22 @@ export function Collections() {
     mutationFn: (id: number) => collectionsApi.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections'] });
-      showToast('Collection deleted', 'success');
+      showToast(t('collections.deleteSuccess'), 'success');
     },
     onError: () => {
-      showToast('Failed to delete collection', 'error');
+      showToast(t('collections.deleteError'), 'error');
     },
   });
 
   return (
     <div>
       <div className={styles.header}>
-        <h1 className="page-title">Collections</h1>
+        <h1 className="page-title">{t('collections.title')}</h1>
         <button
           onClick={() => setShowCreateModal(true)}
           className={styles.createBtn}
         >
-          + Create
+          + {t('collections.create')}
         </button>
       </div>
       {isPending ? (
@@ -58,20 +60,22 @@ export function Collections() {
               <div className={styles.meta}>
                 {col.embeddingModel} · {col.dimensions}D
               </div>
-              <div className={styles.meta}>{col.documentCount} docs</div>
+              <div className={styles.meta}>
+                {col.documentCount} {t('collections.documentCount')}
+              </div>
               <div className={styles.actions}>
                 <button
                   onClick={() => deleteMutation.mutate(col.id)}
                   className={styles.deleteBtn}
                   disabled={deleteMutation.isPending}
                 >
-                  Delete
+                  {t('collections.delete')}
                 </button>
               </div>
             </div>
           ))}
           {data?.data?.collections?.length === 0 && (
-            <div className={styles.empty}>No collections found</div>
+            <div className={styles.empty}>{t('collections.noCollections')}</div>
           )}
         </div>
       )}

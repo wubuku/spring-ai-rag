@@ -50,7 +50,7 @@ describe('Collections', () => {
     });
 
     render(<Collections />);
-    expect(screen.getByText('Collections')).toBeInTheDocument();
+    expect(screen.getByText('collections.title')).toBeInTheDocument();
   });
 
   it('shows collection cards when data exists', () => {
@@ -77,7 +77,7 @@ describe('Collections', () => {
     render(<Collections />);
     expect(screen.getByText('Test Collection')).toBeInTheDocument();
     expect(screen.getByText('BGE-M3 · 1024D')).toBeInTheDocument();
-    expect(screen.getByText('10 docs')).toBeInTheDocument();
+    expect(screen.getByText('10 collections.documentCount')).toBeInTheDocument();
   });
 
   it('shows empty state when no collections', () => {
@@ -87,6 +87,6 @@ describe('Collections', () => {
     });
 
     render(<Collections />);
-    expect(screen.getByText('No collections found')).toBeInTheDocument();
+    expect(screen.getByText('collections.noCollections')).toBeInTheDocument();
   });
 });

@@ -21,12 +21,12 @@ describe('Search', () => {
     render(<Search />);
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('Search');
+    expect(h1).toHaveTextContent('search.title');
   });
 
   it('shows search input', () => {
     render(<Search />);
-    expect(screen.getByPlaceholderText(/Enter your search query/)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/search.placeholder/)).toBeInTheDocument();
   });
 
   it('shows hybrid checkbox', () => {
@@ -36,26 +36,26 @@ describe('Search', () => {
 
   it('shows search button', () => {
     render(<Search />);
-    expect(screen.getByRole('button', { name: 'Search' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeInTheDocument();
   });
 
   it('search button is disabled when input is empty', () => {
     render(<Search />);
-    expect(screen.getByRole('button', { name: 'Search' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
   });
 
   it('search button is enabled when input has text', () => {
     render(<Search />);
-    const input = screen.getByPlaceholderText(/Enter your search query/);
+    const input = screen.getByPlaceholderText(/search.placeholder/);
     fireEvent.change(input, { target: { value: 'test' } });
-    expect(screen.getByRole('button', { name: 'Search' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /search.searchButton/ })).not.toBeDisabled();
   });
 
   it('calls refetch when form is submitted', () => {
     render(<Search />);
-    const input = screen.getByPlaceholderText(/Enter your search query/);
+    const input = screen.getByPlaceholderText(/search.placeholder/);
     fireEvent.change(input, { target: { value: 'test query' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
     expect(mockRefetch).toHaveBeenCalled();
   });
 });

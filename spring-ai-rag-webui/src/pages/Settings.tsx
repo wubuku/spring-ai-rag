@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import styles from './Settings.module.css';
 
 interface RetrievalConfig {
@@ -17,7 +18,8 @@ interface CacheConfig {
 const SETTINGS_KEY = 'user_settings';
 
 export function Settings() {
-  const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache'>('llm');
+  const { t, i18n } = useTranslation();
+  const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache' | 'language'>('llm');
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const lastSavedRef = useRef<{ retrieval: RetrievalConfig; cache: CacheConfig } | null>(null);
@@ -94,15 +96,21 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
+  const handleLanguageChange = (lang: string) => {
+    i18n.changeLanguage(lang);
+    localStorage.setItem('language', lang);
+  };
+
   const tabs = [
-    { id: 'llm' as const, label: 'LLM Provider' },
-    { id: 'retrieval' as const, label: 'Retrieval' },
-    { id: 'cache' as const, label: 'Cache' },
+    { id: 'llm' as const, label: t('settings.llmProvider') },
+    { id: 'retrieval' as const, label: t('settings.retrieval') },
+    { id: 'cache' as const, label: t('settings.cache') },
+    { id: 'language' as const, label: t('settings.title').split(' ')[0] === '设置' ? '语言' : 'Language' },
   ];
 
   return (
     <div className={styles.container}>
-      <h1 className="page-title">Settings</h1>
+      <h1 className="page-title">{t('settings.title')}</h1>
 
       <div className={styles.tabs}>
         {tabs.map(tab => (
@@ -119,23 +127,27 @@ export function Settings() {
       <div className={styles.content}>
         {activeTab === 'llm' && (
           <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>LLM Provider Configuration</h2>
+            <h2 className={styles.sectionTitle}>{t('settings.llmProvider')}</h2>
             <p className={styles.sectionDesc}>
-              Configure the language model used for RAG conversations and query rewriting.
+              {i18n.language === 'zh-CN'
+                ? '配置用于 RAG 对话和查询改写的语言模型。'
+                : 'Configure the language model used for RAG conversations and query rewriting.'}
             </p>
 
             <div className={styles.field}>
-              <label className={styles.label}>Provider</label>
+              <label className={styles.label}>{t('settings.provider')}</label>
               <select className={styles.select} value={llmConfig.provider} disabled>
                 <option value="deepseek">DeepSeek</option>
                 <option value="anthropic">Anthropic</option>
                 <option value="openai">OpenAI</option>
               </select>
-              <span className={styles.hint}>Currently active provider</span>
+              <span className={styles.hint}>
+                {i18n.language === 'zh-CN' ? '当前激活的提供商' : 'Currently active provider'}
+              </span>
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Model</label>
+              <label className={styles.label}>{t('settings.model')}</label>
               <input type="text" className={styles.input} value={llmConfig.model} disabled />
             </div>
 
@@ -143,10 +155,14 @@ export function Settings() {
               <label className={styles.label}>API Key</label>
               <div className={styles.apiKeyStatus}>
                 <span className={styles.statusDot} data-ok={llmConfig.apiKeyConfigured} />
-                <span>{llmConfig.apiKeyConfigured ? 'Configured' : 'Not configured'}</span>
+                <span>
+                  {llmConfig.apiKeyConfigured ? t('settings.apiKeyConfigured') : t('settings.apiKeyNotSet')}
+                </span>
               </div>
               <span className={styles.hint}>
-                API key is managed via environment variables for security
+                {i18n.language === 'zh-CN'
+                  ? 'API Key 通过环境变量管理以保障安全'
+                  : 'API key is managed via environment variables for security'}
               </span>
             </div>
           </div>
@@ -154,13 +170,15 @@ export function Settings() {
 
         {activeTab === 'retrieval' && (
           <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>Retrieval Configuration</h2>
+            <h2 className={styles.sectionTitle}>{t('settings.retrieval')}</h2>
             <p className={styles.sectionDesc}>
-              Configure hybrid search weights and retrieval parameters.
+              {i18n.language === 'zh-CN'
+                ? '配置混合搜索权重和检索参数。'
+                : 'Configure hybrid search weights and retrieval parameters.'}
             </p>
 
             <div className={styles.field}>
-              <label className={styles.label}>Vector Weight</label>
+              <label className={styles.label}>{t('settings.vectorWeight')}</label>
               <input
                 type="range"
                 min="0"
@@ -179,7 +197,7 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Full-text Weight</label>
+              <label className={styles.label}>{t('settings.fulltextWeight')}</label>
               <input
                 type="range"
                 min="0"
@@ -198,7 +216,7 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Top K (results to retrieve)</label>
+              <label className={styles.label}>{t('settings.topK')}</label>
               <input
                 type="number"
                 className={styles.input}
@@ -215,7 +233,7 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Rerank Top K</label>
+              <label className={styles.label}>{t('settings.rerankTopK')}</label>
               <input
                 type="number"
                 className={styles.input}
@@ -229,15 +247,19 @@ export function Settings() {
                 min="1"
                 max="50"
               />
-              <span className={styles.hint}>Number of results to include after reranking</span>
+              <span className={styles.hint}>
+                {i18n.language === 'zh-CN' ? '重排后保留的结果数量' : 'Number of results to include after reranking'}
+              </span>
             </div>
           </div>
         )}
 
         {activeTab === 'cache' && (
           <div className={styles.section}>
-            <h2 className={styles.sectionTitle}>Cache Configuration</h2>
-            <p className={styles.sectionDesc}>Configure embedding and query result caching.</p>
+            <h2 className={styles.sectionTitle}>{t('settings.cache')}</h2>
+            <p className={styles.sectionDesc}>
+              {i18n.language === 'zh-CN' ? '配置嵌入和查询结果缓存。' : 'Configure embedding and query result caching.'}
+            </p>
 
             <div className={styles.field}>
               <label className={styles.checkboxLabel}>
@@ -247,12 +269,12 @@ export function Settings() {
                   onChange={e => setCacheConfig(c => ({ ...c, enabled: e.target.checked }))}
                   className={styles.checkbox}
                 />
-                <span>Enable caching</span>
+                <span>{t('settings.enabled')}</span>
               </label>
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>TTL (minutes)</label>
+              <label className={styles.label}>{t('settings.ttlMinutes')}</label>
               <input
                 type="number"
                 className={styles.input}
@@ -270,7 +292,7 @@ export function Settings() {
             </div>
 
             <div className={styles.field}>
-              <label className={styles.label}>Max Size</label>
+              <label className={styles.label}>{t('settings.maxSize')}</label>
               <input
                 type="number"
                 className={styles.input}
@@ -285,7 +307,41 @@ export function Settings() {
                 max="10000"
                 disabled={!cacheConfig.enabled}
               />
-              <span className={styles.hint}>Maximum number of cached items</span>
+              <span className={styles.hint}>
+                {i18n.language === 'zh-CN' ? '缓存项最大数量' : 'Maximum number of cached items'}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'language' && (
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>
+              {i18n.language === 'zh-CN' ? '语言设置' : 'Language Settings'}
+            </h2>
+            <p className={styles.sectionDesc}>
+              {i18n.language === 'zh-CN'
+                ? '选择您偏好的界面语言。更改将立即生效。'
+                : 'Choose your preferred interface language. Changes take effect immediately.'}
+            </p>
+            <div className={styles.field}>
+              <label className={styles.label}>
+                {i18n.language === 'zh-CN' ? '当前语言' : 'Current Language'}
+              </label>
+              <div className={styles.languageOptions}>
+                <button
+                  className={`${styles.langBtn} ${i18n.language === 'en' ? styles.langActive : ''}`}
+                  onClick={() => handleLanguageChange('en')}
+                >
+                  🇺🇸 English
+                </button>
+                <button
+                  className={`${styles.langBtn} ${i18n.language === 'zh-CN' ? styles.langActive : ''}`}
+                  onClick={() => handleLanguageChange('zh-CN')}
+                >
+                  🇨🇳 中文
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -296,7 +352,7 @@ export function Settings() {
             className={styles.saveBtn}
             disabled={!hasChanges}
           >
-            {saved ? '✓ Saved!' : 'Save Changes'}
+            {saved ? `✓ ${t('settings.saved')}` : t('settings.save')}
           </button>
         </div>
       </div>

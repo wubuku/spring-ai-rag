@@ -1,11 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import { searchApi } from '../api/search';
 import { SearchResults } from '../components/SearchResults';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import styles from './Search.module.css';
 
 export function Search() {
+  const { t } = useTranslation();
   const [query, setQuery] = useState<string>('');
   const [useHybrid, setUseHybrid] = useState(true);
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
@@ -45,14 +47,14 @@ export function Search() {
 
   return (
     <div>
-      <h1 className="page-title">Search</h1>
+      <h1 className="page-title">{t('search.title')}</h1>
       <form onSubmit={handleSearch} className={styles.form}>
         <div className={styles.searchWrapper}>
           <input
             value={query}
             onChange={e => setQuery(e.target.value)}
             onFocus={() => history.length > 0 && setShowHistory(true)}
-            placeholder="Enter your search query..."
+            placeholder={t('search.placeholder')}
             className={styles.searchInput}
           />
           {history.length > 0 && (
@@ -61,7 +63,7 @@ export function Search() {
                 type="button"
                 className={styles.historyBtn}
                 onClick={() => setShowHistory(v => !v)}
-                title="Search history"
+                title={t('search.history') || 'History'}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="12" r="10"/>
@@ -72,9 +74,9 @@ export function Search() {
               {showHistory && (
                 <div className={styles.historyPanel}>
                   <div className={styles.historyHeader}>
-                    <span>Recent Searches</span>
+                    <span>{t('search.recentSearches')}</span>
                     <button type="button" onClick={clearHistory} className={styles.clearAll}>
-                      Clear all
+                      {t('search.clearHistory')}
                     </button>
                   </div>
                   <ul className={styles.historyList}>
@@ -87,14 +89,15 @@ export function Search() {
                         >
                           <span className={styles.historyQuery}>{item.query}</span>
                           <span className={styles.historyMeta}>
-                            {item.useHybrid ? 'Hybrid' : 'Vector'} · {new Date(item.timestamp).toLocaleTimeString()}
+                            {item.useHybrid ? 'Hybrid' : 'Vector'} ·{' '}
+                            {new Date(item.timestamp).toLocaleTimeString()}
                           </span>
                         </button>
                         <button
                           type="button"
                           className={styles.historyRemove}
                           onClick={e => { e.stopPropagation(); removeItem(item.timestamp); }}
-                          title="Remove"
+                          title={t('common.delete')}
                         >
                           ×
                         </button>
@@ -115,11 +118,11 @@ export function Search() {
           Hybrid
         </label>
         <button type="submit" disabled={!query.trim()} className={styles.searchBtn}>
-          Search
+          {t('search.searchButton')}
         </button>
       </form>
 
-      {isPending && <div className={styles.loading}>Searching...</div>}
+      {isPending && <div className={styles.loading}>{t('common.loading')}</div>}
 
       {data?.data && (
         <SearchResults results={data.data.results} query={data.data.query} />

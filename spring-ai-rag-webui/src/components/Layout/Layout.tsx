@@ -1,23 +1,25 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from '../ThemeToggle';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
-  { to: '/dashboard', label: 'Dashboard', icon: '📊' },
-  { to: '/documents', label: 'Documents', icon: '📄' },
-  { to: '/collections', label: 'Collections', icon: '📚' },
-  { to: '/chat', label: 'Chat', icon: '💬' },
-  { to: '/search', label: 'Search', icon: '🔍' },
-  { to: '/metrics', label: 'Metrics', icon: '📈' },
-  { to: '/alerts', label: 'Alerts', icon: '🔔' },
-  { to: '/settings', label: 'Settings', icon: '⚙️' },
+  { to: '/dashboard', labelKey: 'nav.dashboard', icon: '📊' },
+  { to: '/documents', labelKey: 'nav.documents', icon: '📄' },
+  { to: '/collections', labelKey: 'nav.collections', icon: '📚' },
+  { to: '/chat', labelKey: 'nav.chat', icon: '💬' },
+  { to: '/search', labelKey: 'nav.search', icon: '🔍' },
+  { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
+  { to: '/alerts', labelKey: 'nav.alerts', icon: '🔔' },
+  { to: '/settings', labelKey: 'nav.settings', icon: '⚙️' },
 ];
 
 const MOBILE_BREAKPOINT = 768;
 
 export function Layout() {
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
 
@@ -73,7 +75,7 @@ export function Layout() {
               onClick={handleNavClick}
             >
               <span className={styles.icon}>{item.icon}</span>
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
         </nav>
