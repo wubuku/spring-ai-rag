@@ -901,7 +901,8 @@
 - 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成
 - 2026-04-05 16:50 — ✅ B8-3 Prometheus Alerting Rules：创建 docs/prometheus/ 目录，含 rag-alerts.yml（35+ 告警规则，覆盖服务健康/延迟/缓存/LLM/检索质量/JVM/数据库连接池/限流/SLO）+ README.md（安装指南+告警参考表+调优说明+Recording Rules）；mvn test ✅（零失败零错误）；commit 72e7c99 已推送
 
-- 2026-04-05 13:00 — 🔍 主动巡检：识别 WebUI 改进空间（Vitest 覆盖率低/无 Error Boundary/无 dark mode toggle/无 ESLint）
+- 2026-04-05 17:35 — ✅ D1-1 WebUI 路由级代码分割（D2-4 CI Codecov 同步完成）：App.tsx React.lazy() 替代静态导入，初始包 721KB→243KB（-66%），Metrics/recharts 365KB 按需加载，9个路由各自独立 chunk（0.4KB–11KB）；ci.yml 新增 codecov-action@v4 上传 jacoco.xml（需 CODECOV_TOKEN secret 配置）；1127 测试全通过；commit ee4cad8 + a2d6320 已推送
+
 
 ## 待办（WebUI 精益求精）
 
@@ -967,7 +968,7 @@
 | D2-1 | B8-2 Grafana Dashboard JSON 面板（推广使用） | 可观测性 | ✅ 2026-04-05 |
 | D2-2 | B8-3 Prometheus Alerting Rules（RAG 专属规则） | 可观测性 | ✅ 2026-04-05 |
 | D2-3 | 版本兼容性：升级到 Spring Boot 3.5.x + Spring AI 1.1.x | 依赖升级 | ⏳ 待推进 |
-| D2-4 | CI 改进：上传 JaCoCo 覆盖率到 Codecov / Coveralls | CI/CD | ⏳ 待推进 |
+| D2-4 | CI 改进：上传 JaCoCo 覆盖率到 Codecov / Coveralls | CI/CD | ✅ 2026-04-05（codecov-action@v4，jacoco.xml 全模块上传） |
 
 ## 待办（测试 B9 — 测试增强）
 
