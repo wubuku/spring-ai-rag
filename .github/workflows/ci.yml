@@ -73,38 +73,36 @@ jobs:
       - name: Install modules (skip tests, install to local Maven repo)
         run: mvn install -DskipTests -B -q
 
-      - name: Run database migrations (manual V1 schema)
-        run: |
-          psql -h localhost -U postgres -d spring_ai_rag_test << 'EOF'
-          CREATE TABLE IF NOT EXISTS rag_collection (
-            id BIGSERIAL PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            description TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-          );
-          CREATE TABLE IF NOT EXISTS rag_documents (
-            id BIGSERIAL PRIMARY KEY,
-            collection_id BIGINT,
-            title VARCHAR(500),
-            content TEXT,
-            metadata JSONB,
-            content_hash VARCHAR(64),
-            embedded_content_hash VARCHAR(64),
-            status VARCHAR(50) DEFAULT 'PENDING',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            CONSTRAINT fk_collection FOREIGN KEY (collection_id) REFERENCES rag_collection(id) ON DELETE CASCADE
-          );
-          CREATE INDEX IF NOT EXISTS idx_documents_collection ON rag_documents(collection_id);
-          CREATE INDEX IF NOT EXISTS idx_documents_status ON rag_documents(status);
-          CREATE INDEX IF NOT EXISTS idx_documents_hash ON rag_documents(content_hash);
-          CREATE INDEX IF NOT EXISTS idx_embeddings_vector ON rag_embeddings USING hnsw (embedding vector_cosine_ops);
-          CREATE INDEX IF NOT EXISTS idx_documents_fts ON rag_documents USING gin (to_tsvector('jiebacfg', content));
-          EOF
-
       - name: Build & Test with JaCoCo
         run: mvn test -B
+
+      - name: Flyway migration consistency check
+        run: |
+          echo "## Flyway Migration Status" >> $GITHUB_STEP_SUMMARY
+          # Count migration scripts in the codebase
+          MIGRATION_COUNT=$(find spring-ai-rag-core/src/main/resources/db/migration -name "V*.sql" | wc -l | tr -d ' ')
+          echo "Migration scripts in codebase: $MIGRATION_COUNT" | tee -a $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```sql' >> $GITHUB_STEP_SUMMARY
+          # Show Flyway migration history (Flyway ran during mvn test via Spring Boot auto-config)
+          psql -h localhost -U postgres -d spring_ai_rag_test -c "SELECT version, description, type, installed_on, state FROM flyway_schema_history ORDER BY installed_rank;" 2>&1 | tee -a $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          # Verify all migrations applied: installed_count must equal script count
+          INSTALLED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE type='SQL' AND state='Success';" | tr -d ' ')
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "$INSTALLED_COUNT" != "$MIGRATION_COUNT" ]; then
+            echo "❌ MIGRATION DRIFT DETECTED: $INSTALLED_COUNT applied, but $MIGRATION_COUNT scripts exist" | tee -a $GITHUB_STEP_SUMMARY
+            echo "Pending or failed migrations found. Ensure all Flyway scripts are applied." | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          else
+            echo "✅ Flyway migration consistency verified: $INSTALLED_COUNT/$MIGRATION_COUNT migrations applied" | tee -a $GITHUB_STEP_SUMMARY
+          fi
+          # Check for failed migrations
+          FAILED_COUNT=$(psql -h localhost -U postgres -d spring_ai_rag_test -t -c "SELECT COUNT(*) FROM flyway_schema_history WHERE state='Failed';" | tr -d ' ')
+          if [ "$FAILED_COUNT" -gt 0 ]; then
+            echo "❌ Failed migrations found in database" | tee -a $GITHUB_STEP_SUMMARY
+            exit 1
+          fi
 
       - name: Package
         run: mvn package -DskipTests -B
