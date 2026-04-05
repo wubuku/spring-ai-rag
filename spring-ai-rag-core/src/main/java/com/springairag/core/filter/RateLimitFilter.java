@@ -17,13 +17,17 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import com.springairag.core.filter.ApiKeyAuthFilter;
+
 /**
  * API 限流过滤器
  *
- * <p>基于滑动窗口计数器，支持两种限流策略：
+ * <p>基于滑动窗口计数器，支持三种限流策略：
  * <ul>
  *   <li>{@code ip} — 按客户端 IP 限流（默认）</li>
- *   <li>{@code api-key} — 按 API Key 限流，未携带 Key 时回退到 IP</li>
+ *   <li>{@code api-key} — 按 X-API-Key 请求头限流，未携带时回退到 IP</li>
+ *   <li>{@code user} — 按已认证用户限流（优先从 {@code authenticatedApiKey} 请求属性获取，
+ *       该属性由 {@link ApiKeyAuthFilter} 设置；未认证时回退到 IP）</li>
  * </ul>
  *
  * <p>当 {@code strategy=api-key} 且配置了 {@code keyLimits} 时，
@@ -140,6 +144,15 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * 按策略解析客户端标识符
      */
     private ClientId resolveClientId(HttpServletRequest request) {
+        if ("user".equals(strategy)) {
+            // 优先使用已认证用户身份（由 ApiKeyAuthFilter 设置）
+            Object authenticatedKey = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
+            if (authenticatedKey instanceof String key && !((String) key).isBlank()) {
+                return new ClientId(key, "user");
+            }
+            // 未认证时回退到 IP
+            return new ClientId(resolveClientIp(request), "ip");
+        }
         if ("api-key".equals(strategy)) {
             String apiKey = request.getHeader(API_KEY_HEADER);
             if (apiKey != null && !apiKey.isBlank()) {
@@ -154,7 +167,8 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * 解析该标识符对应的限额
      */
     private int resolveLimit(ClientId clientId) {
-        if ("api-key".equals(clientId.type) && !keyLimits.isEmpty()) {
+        if (("api-key".equals(clientId.type) || "user".equals(clientId.type))
+                && !keyLimits.isEmpty()) {
             Integer customLimit = keyLimits.get(clientId.identifier);
             if (customLimit != null && customLimit > 0) {
                 return customLimit;

@@ -35,6 +35,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
+    /** 请求属性：认证成功后的 API Key 标识（供 RateLimitFilter 等下游组件使用） */
+    public static final String AUTHENTICATED_KEY_ATTRIBUTE = "authenticatedApiKey";
+
     private final String configuredApiKey;
     private final boolean authEnabled;
 
@@ -73,6 +76,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         log.debug("API Key 验证通过: {} {}", request.getMethod(), path);
+        // 设置已认证标识，供下游 RateLimitFilter 等组件使用
+        request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, requestApiKey);
         filterChain.doFilter(request, response);
     }
 

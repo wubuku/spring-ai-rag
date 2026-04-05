@@ -1,6 +1,8 @@
 package com.springairag.core.filter;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -281,6 +283,133 @@ class RateLimitFilterTest {
             chain = new MockFilterChain();
             filter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.OK.value(), response.getStatus(), "窗口过期后应重置计数");
+        }
+    }
+
+    @Nested
+    @DisplayName("user 策略 — 按已认证用户限流")
+    class UserStrategy {
+
+        @Test
+        @DisplayName("已认证用户使用 authenticatedApiKey 属性作为限流标识")
+        void authenticatedUserUsesAttribute() throws Exception {
+            RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
+            userFilter.clearWindows();
+
+            // 模拟 ApiKeyAuthFilter 已设置的认证属性
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-authenticated-user");
+            request.setRemoteAddr("192.168.1.100");
+
+            for (int i = 0; i < LIMIT; i++) {
+                response = new MockHttpServletResponse();
+                chain = new MockFilterChain();
+                userFilter.doFilterInternal(request, response, chain);
+                assertEquals(HttpStatus.OK.value(), response.getStatus(),
+                        "第 " + (i + 1) + " 次请求应在限额内");
+            }
+
+            // 第 LIMIT+1 次应被限流
+            response = new MockHttpServletResponse();
+            chain = new MockFilterChain();
+            userFilter.doFilterInternal(request, response, chain);
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
+                    "第 " + (LIMIT + 1) + " 次请求应触发限流");
+        }
+
+        @Test
+        @DisplayName("未认证用户回退到 IP 限流")
+        void unauthenticatedUserFallsBackToIp() throws Exception {
+            RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
+            userFilter.clearWindows();
+
+            // 未设置 authenticatedApiKey 属性（模拟未认证）
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, null);
+            request.setRemoteAddr("192.168.1.200");
+
+            for (int i = 0; i < LIMIT; i++) {
+                response = new MockHttpServletResponse();
+                chain = new MockFilterChain();
+                userFilter.doFilterInternal(request, response, chain);
+                assertEquals(HttpStatus.OK.value(), response.getStatus());
+            }
+
+            response = new MockHttpServletResponse();
+            chain = new MockFilterChain();
+            userFilter.doFilterInternal(request, response, chain);
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
+                    "未认证用户应使用 IP 限流");
+        }
+
+        @Test
+        @DisplayName("不同已认证用户独立计数")
+        void differentAuthenticatedUsersIndependent() throws Exception {
+            RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
+            userFilter.clearWindows();
+
+            // 用户 A 消耗完限额
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-user-a");
+            for (int i = 0; i <= LIMIT; i++) {
+                response = new MockHttpServletResponse();
+                chain = new MockFilterChain();
+                userFilter.doFilterInternal(request, response, chain);
+            }
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
+                    "用户 A 应被限流");
+
+            // 用户 B 应仍可正常请求
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-user-b");
+            response = new MockHttpServletResponse();
+            chain = new MockFilterChain();
+            userFilter.doFilterInternal(request, response, chain);
+            assertEquals(HttpStatus.OK.value(), response.getStatus(),
+                    "用户 B 不应受用户 A 限流影响");
+        }
+
+        @Test
+        @DisplayName("user 策略支持 keyLimits 自定义限额")
+        void userStrategySupportsKeyLimits() throws Exception {
+            Map<String, Integer> keyLimits = Map.of("sk-vip-user", 2);
+            RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", keyLimits);
+            userFilter.clearWindows();
+
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-vip-user");
+
+            // VIP 用户只有 2 次限额
+            for (int i = 0; i < 2; i++) {
+                response = new MockHttpServletResponse();
+                chain = new MockFilterChain();
+                userFilter.doFilterInternal(request, response, chain);
+                assertEquals(HttpStatus.OK.value(), response.getStatus());
+            }
+
+            response = new MockHttpServletResponse();
+            chain = new MockFilterChain();
+            userFilter.doFilterInternal(request, response, chain);
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
+                    "VIP 用户自定义限额为 2，超出应限流");
+        }
+
+        @Test
+        @DisplayName("authenticatedApiKey 为空字符串时回退到 IP")
+        void emptyAuthenticatedKeyFallsBackToIp() throws Exception {
+            RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
+            userFilter.clearWindows();
+
+            request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "   ");
+            request.setRemoteAddr("192.168.1.50");
+
+            for (int i = 0; i < LIMIT; i++) {
+                response = new MockHttpServletResponse();
+                chain = new MockFilterChain();
+                userFilter.doFilterInternal(request, response, chain);
+                assertEquals(HttpStatus.OK.value(), response.getStatus());
+            }
+
+            response = new MockHttpServletResponse();
+            chain = new MockFilterChain();
+            userFilter.doFilterInternal(request, response, chain);
+            assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
+                    "空字符串 authenticatedApiKey 应回退到 IP");
         }
     }
 }
