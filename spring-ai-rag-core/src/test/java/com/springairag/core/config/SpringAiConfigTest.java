@@ -5,6 +5,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.minimax.MiniMaxChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.web.client.RestClient;
@@ -130,5 +131,56 @@ class SpringAiConfigTest {
         // But mocks are plain ChatModel, not OpenAiChatModel/MiniMaxChatModel/AnthropicChatModel
         // So all remain null and IllegalStateException is thrown
         assertThrows(IllegalStateException.class, () -> config.chatModel(provider));
+    }
+
+    @Test
+    @DisplayName("provider=openai 时 miniMaxChatModel 返回 null")
+    void miniMaxChatModel_whenProviderOpenAi_returnsNull() {
+        setProvider("openai");
+
+        ChatModel model = config.miniMaxChatModel();
+        assertNull(model);
+    }
+
+    @Test
+    @DisplayName("provider=anthropic 时 miniMaxChatModel 返回 null")
+    void miniMaxChatModel_whenProviderAnthropic_returnsNull() {
+        setProvider("anthropic");
+
+        ChatModel model = config.miniMaxChatModel();
+        assertNull(model);
+    }
+
+    @Test
+    @DisplayName("provider=minimax 时 miniMaxChatModel 创建模型")
+    void miniMaxChatModel_whenProviderMiniMax_returnsModel() {
+        setProvider("minimax");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxBaseUrl", "https://api.minimax.chat/v1");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxApiKey", "test-minimax-key");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxModel", "MiniMax-M2.7");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxTemperature", 0.7);
+
+        ChatModel model = config.miniMaxChatModel();
+        assertNotNull(model);
+        assertTrue(model instanceof MiniMaxChatModel);
+    }
+
+    @Test
+    @DisplayName("chatModel 选择 miniMax 当 provider=minimax")
+    void chatModel_whenProviderMiniMax_selectsMiniMax() {
+        setProvider("minimax");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxBaseUrl", "https://api.minimax.chat/v1");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxApiKey", "test-minimax-key");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxModel", "MiniMax-M2.7");
+        org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxTemperature", 0.7);
+
+        ChatModel miniMax = config.miniMaxChatModel();
+        assertNotNull(miniMax);
+
+        ObjectProvider<ChatModel> provider = mock(ObjectProvider.class);
+        when(provider.iterator()).thenReturn(List.of(miniMax).iterator());
+
+        ChatModel selected = config.chatModel(provider);
+        assertSame(miniMax, selected);
     }
 }

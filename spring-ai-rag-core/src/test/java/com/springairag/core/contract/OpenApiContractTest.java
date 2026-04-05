@@ -47,10 +47,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.flyway.enabled=false",
         "spring.jpa.hibernate.ddl-auto=none",
         "spring.autoconfigure.exclude=" +
+                "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration," +
+                "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration," +
                 "org.springframework.ai.model.chat.memory.repository.jdbc.autoconfigure.JdbcChatMemoryRepositoryAutoConfiguration," +
                 "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration," +
                 "org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration," +
-                "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration"
+                "org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration",
+        "management.health.db.enabled=false",
+        "management.endpoint.health.validate-group-membership=false"
 })
 @DisplayName("OpenAPI Contract Tests")
 class OpenApiContractTest {
