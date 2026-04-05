@@ -4,6 +4,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -14,6 +15,8 @@ import java.io.IOException;
  * WebUI static files configuration.
  *
  * <p>Serves the pre-built WebUI from {@code classpath:/static/webui/}.
+ * All /webui/* paths (except /webui/assets/*) serve the React SPA index.html
+ * so that client-side React Router can handle routing.
  */
 @Configuration
 public class WebUiConfig implements WebMvcConfigurer {
@@ -27,14 +30,37 @@ public class WebUiConfig implements WebMvcConfigurer {
 
     /**
      * Serves /webui and /webui/ as the React SPA entry point.
+     * Also handles any /webui/{path} to support SPA client-side routing.
      */
     @RestController
     public static class WebUiController {
 
+        private static final String WEBUI_INDEX;
+
+        static {
+            try {
+                WEBUI_INDEX = new String(
+                    new ClassPathResource("/static/webui/index.html")
+                        .getInputStream().readAllBytes()
+                );
+            } catch (IOException e) {
+                throw new RuntimeException("Failed to load WebUI index.html", e);
+            }
+        }
+
         @GetMapping(value = {"/webui", "/webui/"}, produces = MediaType.TEXT_HTML_VALUE)
-        public String webuiIndex() throws IOException {
-            ClassPathResource r = new ClassPathResource("/static/webui/index.html");
-            return new String(r.getInputStream().readAllBytes());
+        public String webuiIndex() {
+            return WEBUI_INDEX;
+        }
+
+        // Catch-all for /webui/* paths (but not /webui/assets/* which is handled by ResourceHandler)
+        @GetMapping(value = "/webui/{path}", produces = MediaType.TEXT_HTML_VALUE)
+        public String webuiCatchAll(@PathVariable String path) {
+            // Exclude assets paths - those are served by ResourceHandler
+            if (path.startsWith("assets/")) {
+                throw new IllegalStateException("Should be handled by ResourceHandler");
+            }
+            return WEBUI_INDEX;
         }
     }
 }
