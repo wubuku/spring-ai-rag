@@ -940,7 +940,7 @@
 | B7-3 | 批量操作进度：SSE 实时推送嵌入进度（% 汇报） | 功能 | ✅ 2026-04-05（B7-3 完成，POST /batch/embed/stream SSE 端点） |
 | B7-4 | HikariCP 监控：JMX → /metrics 暴露连接池指标 | 可观测性 | ✅ 2026-04-05（B7-4 完成，hikari.pool.* 指标已启用） |
 | B7-5 | SLO 配置持久化：SloConfig 存入数据库 | 功能 | ✅ 2026-04-05（B7-5 完成，SLO Config CRUD REST API） |
-| B7-6 | 告警静默期：配置 Downtime/Suppress 时段 | 功能 | ⏳ 待推进 |
+| B7-6 | 告警静默期：配置 Downtime/Suppress 时段 | 功能 | ✅ 2026-04-05（B7-6 完成，静默计划 CRUD REST API + V11 迁移） |
 
 ## 待办（DevOps B8 — 部署增强）
 
