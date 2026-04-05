@@ -981,5 +981,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | C3-1 | AlertControllerTest：补充 SloConfigRepository + RagSilenceScheduleRepository | 测试修复 | ✅ 2026-04-05（C3-1 完成，AlertController 构造器变更适配） |
+| C3-2 | RagChatControllerTest/SseStreamE2ETest：已有 ChatExportService，无需修改 | 测试修复 | ✅ 2026-04-05（C3-2 已确认，无需修改） |
+| C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ✅ 2026-04-05（C3-3 完成，+147 行文档） |
 | C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ⏳ 待推进 |
 
