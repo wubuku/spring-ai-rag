@@ -1,4 +1,5 @@
 import { Outlet, NavLink } from 'react-router-dom';
+import { ErrorBoundary } from '../ErrorBoundary';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -33,7 +34,9 @@ export function Layout() {
         </nav>
       </aside>
       <main className={styles.main}>
-        <Outlet />
+        <ErrorBoundary>
+          <Outlet />
+        </ErrorBoundary>
       </main>
     </div>
   );
