@@ -1154,7 +1154,7 @@
 | C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ⏳ | P2 |
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
-| C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ⏳ | P2 |
+| C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ⏳ | P2 |
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ⏳ | P3 |
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
