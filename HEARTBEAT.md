@@ -984,7 +984,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | M1 | MultiModelProperties 配置绑定（YAML + JSON 双格式） | 核心功能 | ✅ 2026-04-05（M1 完成，MultiModelProperties + MultiModelConfigLoader + models.json） |
-| M2 | ModelRegistry 重构 + JSON 外部配置加载器 | 核心功能 | ⏳ 待推进 |
+| M2 | ModelRegistry 重构 + JSON 外部配置加载器 | 核心功能 | ✅ 2026-04-05（M2 完成，ModelRegistry 使用 MultiModelProperties + 向后兼容） |
 | M3 | ChatModelRouter + Fallback 链 | 核心功能 | ⏳ 待推进 |
 | M4 | Embedding 模型多模型支持 | 核心功能 | ⏳ 待推进 |
 | M5 | 现有组件整合（ModelComparisonService 等） | 集成 | ⏳ 待推进 |
