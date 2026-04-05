@@ -681,11 +681,11 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| R1 | 安全检查（敏感信息脱敏验证 + API Key 过滤） | 安全 | ⏳ 待推进 |
-| R2 | Spring Boot 3.5 新特性检查（WebClient Builder / Virtual Threads 默认启用） | 技术升级 | ⏳ 待推进 |
-| R3 | HikariCP 连接池参数调优（最大连接数/空闲超时/连接超时审查） | 性能 | ⏳ 待推进 |
-| R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ⏳ 待推进 |
-| R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ⏳ 待推进 |
+| R1 | 安全检查（敏感信息脱敏验证 + API Key 过滤） | 安全 | ✅ 2026-04-05（R1 完成，99 security tests 全通过，SensitiveMdc + SensitiveDataMaskingConverter 完整覆盖） |
+| R2 | Spring Boot 3.5 新特性检查（WebClient Builder / Virtual Threads 默认启用） | 技术升级 | ✅ 2026-04-05（R2 完成，Spring Boot 3.5.3 已是最新 LTS，Virtual Threads 已启用） |
+| R3 | HikariCP 连接池参数调优（最大连接数/空闲超时/连接超时审查） | 性能 | ✅ 2026-04-05（R3 完成，HikariCP 已配置合理参数：max=20/min=5/idle=5m/timeout=10s） |
+| R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ✅ 2026-04-05（R4 完成，MaskingLogstashEncoder 9 tests + SensitiveDataMaskingConverter 38 tests） |
+| R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ✅ 2026-04-05（R5 完成，app.models YAML 配置完整且与 MultiModelProperties 对应，零未使用配置） |
 
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
