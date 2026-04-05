@@ -1027,3 +1027,5 @@
 
 - 2026-04-05 22:13 — 🔧 修复构建中断：删除 2 个未集成的 partial 文件（MultiModelConfigLoader.java + MultiModelProperties.java）—— 它们是 `@Component` 依赖未注册的 bean（MultiModelProperties 无 `@EnableConfigurationProperties`），导致 OpenApiContractTest 等 17 个测试 context load 失败；删除后 mvn test ✅（1129 Core + 42 Starter = 1171 测试全通过，零失败零错误）；commit aa87888 已推送
 
+- 2026-04-05 22:47 — WebUI 常规巡检：npm test ✅（79 tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 全部通过（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist/ 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净
+
