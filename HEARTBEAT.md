@@ -1169,3 +1169,10 @@
 | C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
 
 **Cron 执行保证**：每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前，cron 永不停止。
+
+## 待办（C41-C42 — 代码库巡检）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C41 | OpenAiApi.class 是 Spring AI 内部类，无需修改 | 调研 | ✅ 已确认 |
+| C42 | demo-* 符号链接结构已正确（demos/demo-basic-rag → demo-basic-rag symlink） | 代码质量 | ✅ 已确认 |
