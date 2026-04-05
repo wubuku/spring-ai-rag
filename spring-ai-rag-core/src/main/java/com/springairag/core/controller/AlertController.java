@@ -5,6 +5,9 @@ import com.springairag.api.dto.FireAlertRequest;
 import com.springairag.api.dto.FireAlertResponse;
 import com.springairag.api.dto.ResolveAlertRequest;
 import com.springairag.api.dto.SilenceAlertRequest;
+import com.springairag.api.dto.SloConfigRequest;
+import com.springairag.core.entity.RagSloConfig;
+import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -31,9 +34,11 @@ import java.util.Map;
 public class AlertController {
 
     private final AlertService alertService;
+    private final SloConfigRepository sloConfigRepository;
 
-    public AlertController(AlertService alertService) {
+    public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository) {
         this.alertService = alertService;
+        this.sloConfigRepository = sloConfigRepository;
     }
 
     /**
@@ -163,5 +168,88 @@ public class AlertController {
             @RequestParam String endDate) {
         return ResponseEntity.ok(alertService.checkSlo(
                 sloName, ZonedDateTime.parse(startDate), ZonedDateTime.parse(endDate)));
+    }
+
+    // ==================== SLO Config CRUD ====================
+
+    @Operation(summary = "Create SLO config", description = "Create a new SLO configuration.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "SLO config created"),
+        @ApiResponse(responseCode = "400", description = "Invalid request"),
+        @ApiResponse(responseCode = "409", description = "SLO config with this name already exists")
+    })
+    @PostMapping("/slos")
+    public ResponseEntity<RagSloConfig> createSloConfig(@Valid @RequestBody SloConfigRequest request) {
+        if (sloConfigRepository.findBySloName(request.getSloName()).isPresent()) {
+            return ResponseEntity.status(409).build();
+        }
+        RagSloConfig config = new RagSloConfig();
+        config.setSloName(request.getSloName());
+        config.setSloType(request.getSloType());
+        config.setTargetValue(request.getTargetValue());
+        config.setUnit(request.getUnit());
+        config.setDescription(request.getDescription());
+        config.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+        config.setMetadata(request.getMetadata());
+        config.setCreatedAt(ZonedDateTime.now());
+        RagSloConfig saved = sloConfigRepository.save(config);
+        return ResponseEntity.status(201).body(saved);
+    }
+
+    @Operation(summary = "List all SLO configs", description = "List all SLO configurations.")
+    @GetMapping("/slos/configs")
+    public ResponseEntity<List<RagSloConfig>> listSloConfigs() {
+        return ResponseEntity.ok(sloConfigRepository.findAll());
+    }
+
+    @Operation(summary = "Get SLO config by name", description = "Get a specific SLO configuration by its name.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "SLO config found"),
+        @ApiResponse(responseCode = "404", description = "SLO config not found")
+    })
+    @GetMapping("/slos/configs/{sloName}")
+    public ResponseEntity<RagSloConfig> getSloConfig(@PathVariable String sloName) {
+        return sloConfigRepository.findBySloName(sloName)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Update SLO config", description = "Update an existing SLO configuration.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "SLO config updated"),
+        @ApiResponse(responseCode = "404", description = "SLO config not found")
+    })
+    @PutMapping("/slos/configs/{sloName}")
+    public ResponseEntity<RagSloConfig> updateSloConfig(
+            @PathVariable String sloName,
+            @Valid @RequestBody SloConfigRequest request) {
+        return sloConfigRepository.findBySloName(sloName)
+                .map(existing -> {
+                    existing.setSloType(request.getSloType());
+                    existing.setTargetValue(request.getTargetValue());
+                    existing.setUnit(request.getUnit());
+                    existing.setDescription(request.getDescription());
+                    if (request.getEnabled() != null) {
+                        existing.setEnabled(request.getEnabled());
+                    }
+                    existing.setMetadata(request.getMetadata());
+                    existing.setUpdatedAt(ZonedDateTime.now());
+                    return ResponseEntity.ok(sloConfigRepository.save(existing));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Delete SLO config", description = "Delete an SLO configuration by its name.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "SLO config deleted"),
+        @ApiResponse(responseCode = "404", description = "SLO config not found")
+    })
+    @DeleteMapping("/slos/configs/{sloName}")
+    public ResponseEntity<Void> deleteSloConfig(@PathVariable String sloName) {
+        if (!sloConfigRepository.findBySloName(sloName).isPresent()) {
+            return ResponseEntity.notFound().build();
+        }
+        sloConfigRepository.deleteBySloName(sloName);
+        return ResponseEntity.noContent().build();
     }
 }
