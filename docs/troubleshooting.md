@@ -1,26 +1,28 @@
-# 故障排查指南
+# Troubleshooting Guide
 
-> 常见问题和解决方案，按症状分类。
+> 📖 English | 📖 中文
+
+> Common problems and solutions, organized by symptom.
 
 ---
 
-## 启动问题
+## Startup Issues
 
-### Flyway 迁移失败
+### Flyway Migration Failed
 
-**症状**：启动时报 `FlywayException` 或 `Migration failed`
+**Symptom**: `FlywayException` or `Migration failed` on startup
 
-**原因**：PostgreSQL 未安装必需扩展
+**Cause**: Required PostgreSQL extensions not installed
 
-**解决**：
+**Solution**:
 
 ```sql
--- 连接到目标数据库执行
+-- Execute in the target database
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 ```
 
-验证扩展安装：
+Verify extensions installed:
 
 ```sql
 SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');
@@ -28,46 +30,46 @@ SELECT extname FROM pg_extension WHERE extname IN ('vector', 'pg_trgm');
 
 ---
 
-### 数据库连接失败
+### Database Connection Failed
 
-**症状**：`Connection refused` 或 `FATAL: database does not exist`
+**Symptom**: `Connection refused` or `FATAL: database does not exist`
 
-**排查步骤**：
+**Troubleshooting**:
 
 ```bash
-# 1. 检查 PostgreSQL 是否运行
+# 1. Check if PostgreSQL is running
 pg_isready -h localhost -p 5432
 
-# 2. 检查数据库是否存在
+# 2. Check if database exists
 psql -h localhost -U postgres -l | grep spring_ai_rag
 
-# 3. 检查配置
+# 3. Check configuration
 grep -A5 "spring.datasource" application.yml
 ```
 
-**常见原因**：
-- PostgreSQL 未启动
-- 端口不是 5432
-- 数据库名不匹配
-- 用户名/密码错误
+**Common causes**:
+- PostgreSQL not started
+- Port not 5432
+- Database name mismatch
+- Wrong username/password
 
 ---
 
-### Bean 创建失败
+### Bean Creation Failed
 
-**症状**：`NoSuchBeanDefinitionException` 或 `UnsatisfiedDependencyException`
+**Symptom**: `NoSuchBeanDefinitionException` or `UnsatisfiedDependencyException`
 
-**排查步骤**：
+**Troubleshooting**:
 
 ```bash
-# 检查 starter 是否引入
+# Check if starter is included
 mvn dependency:tree | grep spring-ai-rag-starter
 
-# 检查组件扫描
+# Check component scanning
 grep -rn "@ComponentScan" src/
 ```
 
-**解决**：确保 demo 的主类在 `com.springairag` 包下，或添加：
+**Solution**: Ensure demo's main class is under `com.springairag` package, or add:
 
 ```java
 @SpringBootApplication(scanBasePackages = "com.springairag")
@@ -75,212 +77,212 @@ grep -rn "@ComponentScan" src/
 
 ---
 
-## 嵌入问题
+## Embedding Issues
 
-### 嵌入请求超时
+### Embedding Request Timeout
 
-**症状**：嵌入文档时长时间无响应，最终超时
+**Symptom**: Document embedding hangs indefinitely, then times out
 
-**原因**：SiliconFlow API 限流或网络问题
+**Cause**: SiliconFlow API rate limiting or network issue
 
-**解决**：
+**Solution**:
 
 ```yaml
 rag:
   embedding:
-    timeout-ms: 30000      # 增加超时时间
-    batch-size: 5           # 减小批次大小
-    retry-count: 3          # 增加重试次数
+    timeout-ms: 30000      # Increase timeout
+    batch-size: 5           # Reduce batch size
+    retry-count: 3          # Increase retry count
 ```
 
 ---
 
-### 向量维度不匹配
+### Vector Dimension Mismatch
 
-**症状**：`Vector dimension mismatch` 或 `expected 1024, got xxx`
+**Symptom**: `Vector dimension mismatch` or `expected 1024, got xxx`
 
-**原因**：嵌入模型与数据库向量维度不一致
+**Cause**: Embedding model dimensions don't match database vector column
 
-**排查**：
+**Troubleshooting**:
 
 ```sql
--- 检查 pgvector 列维度
+-- Check pgvector column dimensions
 SELECT column_name, data_type
 FROM information_schema.columns
 WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 ```
 
-**解决**：确保 `rag.embedding.dimensions` 与 pgvector 列定义一致。BGE-M3 是 1024 维。
+**Solution**: Ensure `rag.embedding.dimensions` matches pgvector column definition. BGE-M3 is 1024 dimensions.
 
 ---
 
-## 检索问题
+## Retrieval Issues
 
-### 检索结果为空
+### Retrieval Results Empty
 
-**症状**：查询返回空列表，但文档已导入
+**Symptom**: Query returns empty list, but documents were imported
 
-**排查步骤**：
+**Troubleshooting**:
 
 ```bash
-# 1. 检查文档是否已嵌入
+# 1. Check if documents are embedded
 curl http://localhost:8080/api/v1/rag/documents/stats
 
-# 2. 直接调用检索接口（跳过 LLM）
-curl "http://localhost:8080/api/v1/rag/search?query=测试&limit=5"
+# 2. Call retrieval directly (skip LLM)
+curl "http://localhost:8080/api/v1/rag/search?query=test&limit=5"
 
-# 3. 降低相似度阈值
+# 3. Lower similarity threshold
 curl -X POST http://localhost:8080/api/v1/rag/search \
   -H "Content-Type: application/json" \
-  -d '{"query": "测试", "config": {"minScore": 0.1, "maxResults": 10}}'
+  -d '{"query": "test", "config": {"minScore": 0.1, "maxResults": 10}}'
 ```
 
-**常见原因**：
-- 文档未执行 `embed`（只创建了文档，未生成向量）
-- `minScore` 阈值过高
-- 查询语言与文档语言不匹配
+**Common causes**:
+- Document not embedded (created but no vectors generated)
+- `minScore` threshold too high
+- Query language doesn't match document language
 
 ---
 
-### 检索结果质量差
+### Poor Retrieval Quality
 
-**症状**：返回的结果与问题不相关
+**Symptom**: Returned results are unrelated to the query
 
-**优化策略**：
+**Optimization strategies**:
 
-1. **启用查询改写**：
+1. **Enable query rewriting**:
 ```yaml
 rag:
   query-rewrite:
     enabled: true
-    llm-enabled: true  # LLM 辅助改写
+    llm-enabled: true  # LLM-assisted rewriting
 ```
 
-2. **调整混合检索权重**：
+2. **Adjust hybrid search weights**:
 ```bash
 curl "http://localhost:8080/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltextWeight=0.3"
 ```
 
-3. **启用重排序**：
+3. **Enable reranking**:
 ```yaml
 rag:
   rerank:
     enabled: true
-    top-k: 20  # 重排前保留的结果数
+    top-k: 20  # Results to keep before reranking
 ```
 
 ---
 
-## LLM 问题
+## LLM Issues
 
-### LLM 调用 401/403
+### LLM Call 401/403
 
-**症状**：`Unauthorized` 或 `Forbidden`
+**Symptom**: `Unauthorized` or `Forbidden`
 
-**排查**：
+**Troubleshooting**:
 
 ```bash
-# 检查 API Key 配置
+# Check API Key configuration
 echo $OPENAI_API_KEY | head -c 10
 
-# 检查 base-url 是否正确
+# Check base-url is correct
 grep "base-url" application.yml
 ```
 
-**解决**：确认 API Key 有效且未过期，base-url 与 provider 匹配。
+**Solution**: Confirm API Key is valid and not expired, base-url matches provider.
 
 ---
 
-### LLM 响应慢
+### LLM Response Slow
 
-**症状**：单次问答耗时 >10 秒
+**Symptom**: Single Q&A takes >10 seconds
 
-**排查**：
+**Troubleshooting**:
 
 ```bash
-# 查看各环节耗时（检查日志）
+# Check timing of each stage (check logs)
 grep -i "retrieval\|llm\|total" logs/application.log | tail -10
 ```
 
-**优化**：
-- 减少 `maxResults`（检索结果数）
-- 缩短系统提示词
-- 使用更快的模型
-- 启用流式响应（`/stream`）提升感知速度
+**Optimization**:
+- Reduce `maxResults` (number of retrieval results)
+- Shorten system prompt
+- Use faster model
+- Enable streaming (`/stream`) to improve perceived speed
 
 ---
 
-### 流式响应中断
+### Streaming Response Interrupted
 
-**症状**：SSE 流中途断开
+**Symptom**: SSE stream disconnects mid-way
 
-**排查**：
+**Troubleshooting**:
 
 ```bash
-# 检查 SSE 连接
+# Check SSE connection
 curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "test", "sessionId": "s1"}' 2>&1
 ```
 
-**常见原因**：
-- 反向代理（Nginx）超时：增加 `proxy_read_timeout`
-- LLM 响应超时：增加 `rag.llm.timeout-ms`
-- 客户端断开：检查网络稳定性
+**Common causes**:
+- Reverse proxy (Nginx) timeout: increase `proxy_read_timeout`
+- LLM response timeout: increase `rag.llm.timeout-ms`
+- Client disconnect: check network stability
 
 ---
 
-## API 问题
+## API Issues
 
 ### 400 Bad Request
 
-**响应**：
+**Response**:
 
 ```json
 {
   "status": 400,
   "error": "Bad Request",
-  "message": "消息内容不能为空"
+  "message": "message content cannot be empty"
 }
 ```
 
-**排查**：检查请求体是否满足字段校验要求：
+**Troubleshooting**: Check if request body meets field validation requirements:
 
-| 字段 | 约束 |
-|------|------|
-| `message` | 非空，≤10000 字符 |
-| `sessionId` | 非空 |
-| `title` | 非空 |
-| `content` | 非空 |
-| `name` | 非空，≤255 字符 |
+| Field | Constraint |
+|-------|-----------|
+| `message` | Non-empty, ≤10000 characters |
+| `sessionId` | Non-empty |
+| `title` | Non-empty |
+| `content` | Non-empty |
+| `name` | Non-empty, ≤255 characters |
 
 ---
 
 ### 401 Unauthorized
 
-**原因**：启用了 API Key 认证但未提供
+**Cause**: API Key authentication enabled but not provided
 
-**解决**：
+**Solution**:
 
 ```bash
 curl -H "X-API-Key: your-key" http://localhost:8080/api/v1/rag/chat/ask ...
 ```
 
-或临时禁用认证：
+Or temporarily disable authentication:
 
 ```yaml
 rag:
   security:
-    api-keys: ""  # 清空则不启用认证
+    api-keys: ""  # Clear to disable auth
 ```
 
 ---
 
 ### 404 Not Found
 
-**症状**：文档/集合 ID 不存在
+**Symptom**: Document/collection ID doesn't exist
 
-**解决**：先查询确认 ID 存在：
+**Solution**: First verify ID exists:
 
 ```bash
 curl http://localhost:8080/api/v1/rag/documents?page=0&size=10
@@ -289,54 +291,54 @@ curl http://localhost:8080/api/v1/rag/collections?page=0&size=10
 
 ---
 
-## 监控问题
+## Monitoring Issues
 
-### 告警误报
+### Alert False Positives
 
-**症状**：频繁收到 SLO 告警
+**Symptom**: Receiving frequent SLO alerts
 
-**排查**：
+**Troubleshooting**:
 
 ```bash
-# 查看活跃告警
+# View active alerts
 curl http://localhost:8080/api/v1/rag/alerts/active
 
-# 查看 SLO 配置
+# View SLO configuration
 curl http://localhost:8080/api/v1/rag/alerts/slos
 ```
 
-**调整**：
+**Adjust**:
 
 ```yaml
 rag:
   slo:
-    search-latency-ms: 1000  # 调整搜索延迟阈值
-    chat-latency-ms: 10000   # 调整问答延迟阈值
-    error-rate-percent: 5    # 调整错误率阈值
+    search-latency-ms: 1000  # Adjust search latency threshold
+    chat-latency-ms: 10000   # Adjust chat latency threshold
+    error-rate-percent: 5    # Adjust error rate threshold
 ```
 
 ---
 
-## 性能问题
+## Performance Issues
 
-### 检索延迟高 (>500ms)
+### High Retrieval Latency (>500ms)
 
-**排查**：
+**Troubleshooting**:
 
 ```sql
--- 检查索引是否存在
+-- Check if indexes exist
 SELECT indexname, indexdef
 FROM pg_indexes
 WHERE tablename = 'rag_embeddings';
 
--- 检查向量索引类型
+-- Check vector index type
 SELECT * FROM pg_indexes WHERE indexdef LIKE '%hnsw%' OR indexdef LIKE '%ivfflat%';
 ```
 
-**优化**：
+**Optimization**:
 
 ```sql
--- 如果没有向量索引，创建 HNSW 索引
+-- If no vector index exists, create HNSW index
 CREATE INDEX ON rag_embeddings
 USING hnsw (embedding vector_cosine_ops)
 WITH (m = 16, ef_construction = 200);
@@ -345,33 +347,33 @@ WITH (m = 16, ef_construction = 200);
 ```yaml
 rag:
   search:
-    cache-enabled: true      # 启用检索缓存
-    cache-ttl-seconds: 300   # 缓存 5 分钟
+    cache-enabled: true      # Enable retrieval cache
+    cache-ttl-seconds: 300   # Cache for 5 minutes
 ```
 
 ---
 
-### 内存占用高
+### High Memory Usage
 
-**排查**：
+**Troubleshooting**:
 
 ```bash
-# 查看 JVM 内存使用
+# Check JVM memory usage
 jmap -heap $(pgrep -f spring-ai-rag)
 ```
 
-**优化**：
+**Optimization**:
 
 ```bash
-# 限制 JVM 内存
+# Limit JVM memory
 java -Xms512m -Xmx1024m -jar spring-ai-rag.jar
 ```
 
 ---
 
-## 日志与调试
+## Logging & Debugging
 
-### 开启详细日志
+### Enable Detailed Logging
 
 ```yaml
 logging:
@@ -380,35 +382,35 @@ logging:
     org.springframework.ai: DEBUG
 ```
 
-### 关键日志标识
+### Key Log Identifiers
 
-| 日志关键字 | 说明 |
-|-----------|------|
-| `HybridRetrieverService` | 检索执行 |
-| `QueryRewritingService` | 查询改写 |
-| `ReRankingService` | 重排序 |
-| `RagChatService` | 问答流程 |
-| `DomainExtensionRegistry` | 领域扩展注册 |
-| `ApiKeyAuthFilter` | API 认证 |
+| Log Keyword | Description |
+|-------------|-------------|
+| `HybridRetrieverService` | Retrieval execution |
+| `QueryRewritingService` | Query rewriting |
+| `ReRankingService` | Reranking |
+| `RagChatService` | Q&A flow |
+| `DomainExtensionRegistry` | Domain extension registration |
+| `ApiKeyAuthFilter` | API authentication |
 
-### 导出诊断信息
+### Export Diagnostic Info
 
 ```bash
-# 导出健康检查
+# Export health check
 curl http://localhost:8080/api/v1/rag/health | jq .
 
-# 导出文档统计
+# Export document statistics
 curl http://localhost:8080/api/v1/rag/documents/stats | jq .
 
-# 导出告警统计
+# Export alert statistics
 curl http://localhost:8080/api/v1/rag/alerts/stats | jq .
 ```
 
 ---
 
-## 获取帮助
+## Getting Help
 
-- [架构设计](architecture.md) — 理解系统设计
-- [配置参考](configuration.md) — 所有配置项
-- [测试指南](testing-guide.md) — 如何编写测试
-- GitHub Issues — 提交 Bug 报告
+- [Architecture Design](architecture.md) — Understand system design
+- [Configuration Reference](configuration.md) — All configuration items
+- [Testing Guide](testing-guide.md) — How to write tests
+- GitHub Issues — Submit bug reports

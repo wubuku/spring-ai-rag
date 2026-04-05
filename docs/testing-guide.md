@@ -1,46 +1,48 @@
-# 测试指南
+# Testing Guide
 
-Spring AI RAG 项目对测试的态度是"测试是生产代码"——写代码必须同步写测试，`mvn test` 不通过就不算完成。
+> 📖 English | 📖 中文
 
-## 测试金字塔
+> Spring AI RAG project philosophy on testing: "Tests are production code" — write tests alongside code, `mvn test` must pass before considering work done.
+
+## Testing Pyramid
 
 ```
     ┌──────────┐
-    │  E2E 测试  │  scripts/e2e-test.sh
+    │  E2E Tests │  scripts/e2e-test.sh
     ├──────────┤
-    │ 集成测试    │  @SpringBootTest
+    │ Integration │  @SpringBootTest
     ├──────────┤
-    │ 单元测试    │  JUnit 5 + Mockito
+    │   Unit     │  JUnit 5 + Mockito
     └──────────┘
 ```
 
-## 快速开始
+## Quick Start
 
 ```bash
-# 运行全部单元测试 + 集成测试
+# Run all unit + integration tests
 export $(cat .env | grep -v '^#' | xargs) && mvn test
 
-# 只测试特定模块
+# Test only a specific module
 mvn test -pl spring-ai-rag-core
 
-# 只运行某个测试类
+# Run a specific test class
 mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 
-# 跳过测试构建
+# Skip tests during build
 mvn clean package -DskipTests
 ```
 
-## 测试分类
+## Test Categories
 
-### 单元测试（JUnit 5 + Mockito）
+### Unit Tests (JUnit 5 + Mockito)
 
-**目标**：验证单个类/方法的逻辑，不依赖外部服务。
+**Goal**: Verify logic of individual classes/methods without external service dependencies.
 
-**命名规范**：`{ClassName}Test.java`
+**Naming convention**: `{ClassName}Test.java`
 
-**位置**：各模块的 `src/test/java/`
+**Location**: Each module's `src/test/java/`
 
-**示例**：
+**Example**:
 ```java
 @SpringBootTest
 @AutoConfigureMockMvc
@@ -63,85 +65,85 @@ class RagDocumentControllerTest {
 }
 ```
 
-**Mock 要点**：
-- 使用 `@MockBean` 替代 `@Mock`（Spring 上下文集成）
-- Service 层可以 `@Mock` + `@ExtendWith(MockitoExtension.class)` 纯单元测试
-- 涉及数据库的用 `@DataJpaTest` 切片测试
+**Mock guidelines**:
+- Use `@MockBean` for Spring context integration
+- Service layer can use `@Mock` + `@ExtendWith(MockitoExtension.class)` for pure unit tests
+- Use `@DataJpaTest` for database-related slice tests
 
-### 集成测试（@SpringBootTest）
+### Integration Tests (@SpringBootTest)
 
-**目标**：验证组件协作，用真实 Spring 上下文。
+**Goal**: Verify component collaboration with real Spring context.
 
-**命名规范**：`{ClassName}IntegrationTest.java`
+**Naming convention**: `{ClassName}IntegrationTest.java`
 
-**关键注解**：
+**Key annotations**:
 ```java
 @SpringBootTest
 @AutoConfigureMockMvc
-@Testcontainers   // 如果需要 PostgreSQL
+@Testcontainers   // if PostgreSQL is needed
 class RagChatControllerIntegrationTest {
-    // 测试完整的 RAG Pipeline：查询 → 改写 → 检索 → 重排 → LLM
+    // Test complete RAG Pipeline: query → rewrite → retrieval → rerank → LLM
 }
 ```
 
-### E2E 测试（Shell + curl）
+### E2E Tests (Shell + curl)
 
-**目标**：验证 HTTP 端点完整链路（真实服务运行）。
+**Goal**: Verify HTTP endpoint full链路 (real service running).
 
-**脚本**：`scripts/e2e-test.sh`
+**Script**: `scripts/e2e-test.sh`
 
-**用法**：
+**Usage**:
 ```bash
-# 启动服务
+# Start the service
 export $(cat .env | grep -v '^#' | xargs) && bash scripts/start-server.sh
 
-# 在另一个终端运行 E2E 测试
+# Run E2E tests in another terminal
 export $(cat .env | grep -v '^#' | xargs) && bash scripts/e2e-test.sh
 ```
 
-E2E 测试覆盖的端点：
-1. `GET /api/v1/rag/health` — 健康检查
-2. `POST /api/v1/rag/documents` — 创建文档
-3. `GET /api/v1/rag/documents/{id}` — 获取文档（含 JSONB metadata）
-4. `GET /api/v1/rag/documents` — 文档列表（分页）
-5. `POST /api/v1/rag/documents/{id}/embed` — 生成嵌入向量
-6. `GET /api/v1/rag/search` — 直接检索
-7. `POST /api/v1/rag/chat/ask` — RAG 问答
-8. `POST /api/v1/rag/chat/stream` — 流式响应（SSE）
-9. `GET /api/v1/rag/chat/history/{sessionId}` — 对话历史
-10. `DELETE /api/v1/rag/documents/{id}` — 删除文档 + 验证 404
+E2E test coverage:
+1. `GET /api/v1/rag/health` — Health check
+2. `POST /api/v1/rag/documents` — Create document
+3. `GET /api/v1/rag/documents/{id}` — Get document (with JSONB metadata)
+4. `GET /api/v1/rag/documents` — Document list (pagination)
+5. `POST /api/v1/rag/documents/{id}/embed` — Generate embedding vectors
+6. `GET /api/v1/rag/search` — Direct retrieval
+7. `POST /api/v1/rag/chat/ask` — RAG Q&A
+8. `POST /api/v1/rag/chat/stream` — Streaming response (SSE)
+9. `GET /api/v1/rag/chat/history/{sessionId}` — Conversation history
+10. `DELETE /api/v1/rag/documents/{id}` — Delete document + verify 404
 
-## 覆盖率
+## Coverage
 
-JaCoCo 已集成到所有模块：
+JaCoCo is integrated into all modules:
 
 ```bash
-# 生成覆盖率报告
+# Generate coverage report
 mvn clean test jacoco:report
 
-# 报告位置
+# Report location
 # spring-ai-rag-core/target/site/jacoco/index.html
 # spring-ai-rag-api/target/site/jacoco/index.html
 # spring-ai-rag-documents/target/site/jacoco/index.html
 # spring-ai-rag-starter/target/site/jacoco/index.html
 ```
 
-**覆盖率目标**：
-- 指令覆盖率 ≥ 90%
-- 分支覆盖率 ≥ 75%
+**Coverage targets**:
+- Instruction coverage ≥ 90%
+- Branch coverage ≥ 75%
 
-**查看覆盖率**：
+**View coverage**:
 ```bash
-# 快速查看（终端输出）
+# Quick view (terminal output)
 mvn jacoco:check
 
-# 合并多模块报告
+# Merge multi-module reports
 mvn jacoco:report-aggregate
 ```
 
-## 测试数据库
+## Test Database
 
-单元测试使用 H2 内存数据库（默认），集成测试可用 Testcontainers：
+Unit tests use H2 in-memory database (default); integration tests can use Testcontainers:
 
 ```java
 @Testcontainers
@@ -161,43 +163,43 @@ class PgVectorStoreIntegrationTest {
 }
 ```
 
-## 编写新测试的规则
+## Rules for Writing New Tests
 
-1. **先写测试再写实现**（TDD 友好）
-2. **每个 public 方法至少一个正向测试 + 一个边界测试**
-3. **Controller 测试**用 `MockMvc`，不启动真实 HTTP
-4. **Service 测试**用 `@Mock` 纯单元测试或 `@SpringBootTest` 集成测试
-5. **不要用 `@Ignore` 跳过测试**——修好它或删掉它
-6. **测试名称用 `should_描述预期行为` 格式**
-7. **每个测试独立**——不依赖执行顺序
+1. **Write tests before implementation** (TDD-friendly)
+2. **At least one positive test + one boundary test per public method**
+3. **Controller tests** use `MockMvc`, no real HTTP server
+4. **Service tests** use `@Mock` pure unit tests or `@SpringBootTest` integration tests
+5. **Never `@Ignore` tests** — fix them or delete them
+6. **Test names use `should_ describe expected behavior` format**
+7. **Each test is independent** — no execution order dependency
 
-## 性能基准测试
+## Performance Benchmark Tests
 
-`RetrievalBenchmarkTest` 验证核心操作在合理时间内完成：
+`RetrievalBenchmarkTest` verifies core operations complete within reasonable time:
 
-| 操作 | 目标 | 实测 |
-|------|------|------|
-| 向量检索 | < 500ms | ~1.9ms |
-| 融合检索 | < 500ms | ~6ms |
-| Cosine 计算 (10万次) | < 200ms | ~75ms |
+| Operation | Target | Actual |
+|-----------|--------|--------|
+| Vector retrieval | < 500ms | ~1.9ms |
+| Fusion retrieval | < 500ms | ~6ms |
+| Cosine calculation (100k) | < 200ms | ~75ms |
 
-## 常见问题
+## FAQ
 
-### `mvn test` 报错 "Connection refused"
+### `mvn test` reports "Connection refused"
 
-PostgreSQL 未启动或 `.env` 未加载：
+PostgreSQL not started or `.env` not loaded:
 
 ```bash
-# 确认 PostgreSQL 运行
+# Confirm PostgreSQL is running
 pg_isready -h localhost -p 5432
 
-# 加载环境变量
+# Load environment variables
 export $(cat .env | grep -v '^#' | xargs)
 ```
 
-### 嵌入模型测试太慢
+### Embedding model tests too slow
 
-嵌入模型调用（SiliconFlow API）需要网络，在 CI 中可以 Mock：
+Embedding model calls (SiliconFlow API) require network; mock in CI:
 
 ```java
 @MockBean
@@ -206,13 +208,13 @@ private EmbeddingModel embeddingModel;
 @BeforeEach
 void setup() {
     when(embeddingModel.embed(any(String.class)))
-        .thenReturn(new float[1024]); // 返回固定向量
+        .thenReturn(new float[1024]); // Return fixed vector
 }
 ```
 
-### JaCoCo 覆盖率不准确
+### JaCoCo coverage inaccurate
 
 ```bash
-# 清理后重新测试
+# Clean and retest
 mvn clean test jacoco:report
 ```
