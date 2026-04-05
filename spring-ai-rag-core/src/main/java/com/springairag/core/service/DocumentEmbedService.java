@@ -1,6 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.BatchCreateAndEmbedRequest;
+import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.config.RagProperties;
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * 文档嵌入服务
@@ -237,6 +239,102 @@ public class DocumentEmbedService {
                         "skipped", skipped
                 )
         );
+    }
+
+    /**
+     * 批量嵌入文档（带 SSE 进度回调）
+     *
+     * @param documentIds 文档 ID 列表
+     * @param progressCallback 进度回调，每次处理完一个文档后调用
+     * @return 批量操作结果（results + summary）
+     */
+    @Transactional
+    public Map<String, Object> batchEmbedDocumentsWithProgress(
+            List<Long> documentIds,
+            Consumer<BatchEmbedProgressEvent> progressCallback) {
+        if (documentIds.size() > 50) {
+            throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
+        }
+
+        log.info("Batch embedding with progress: {} documents", documentIds.size());
+
+        List<Map<String, Object>> results = new java.util.ArrayList<>(documentIds.size());
+        int success = 0, failed = 0, skipped = 0, cached = 0;
+
+        for (int i = 0; i < documentIds.size(); i++) {
+            Long id = documentIds.get(i);
+            final int docIndex = i;
+
+            // Send "preparing" event
+            sendProgress(progressCallback, docIndex, documentIds.size(), id, "PREPARING", 0, 0,
+                    "Preparing document " + (docIndex + 1) + "/" + documentIds.size(),
+                    success, failed, cached);
+
+            Map<String, Object> itemResult = embedSingleDocument(id);
+            String status = (String) itemResult.get("status");
+            int chunksTotal = (int) itemResult.getOrDefault("chunksCreated", 0);
+
+            switch (status) {
+                case "COMPLETED" -> {
+                    success++;
+                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "COMPLETED",
+                            chunksTotal, chunksTotal,
+                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " completed",
+                            success, failed, cached);
+                }
+                case "FAILED" -> {
+                    failed++;
+                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "FAILED",
+                            0, 0,
+                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " failed: " + itemResult.get("error"),
+                            success, failed, cached);
+                }
+                case "CACHED" -> {
+                    cached++;
+                    int stored = (int) itemResult.getOrDefault("embeddingsStored", 0);
+                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "CACHED",
+                            stored, stored,
+                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " (cached)",
+                            success, failed, cached);
+                }
+                default -> {
+                    skipped++;
+                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "SKIPPED",
+                            0, 0,
+                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " skipped",
+                            success, failed, cached);
+                }
+            }
+            results.add(itemResult);
+        }
+
+        log.info("Batch embed with progress completed: {} success, {} cached, {} failed, {} skipped",
+                success, cached, failed, skipped);
+
+        return Map.of(
+                "results", results,
+                "summary", Map.of(
+                        "total", documentIds.size(),
+                        "success", success,
+                        "cached", cached,
+                        "failed", failed,
+                        "skipped", skipped
+                )
+        );
+    }
+
+    private void sendProgress(Consumer<BatchEmbedProgressEvent> callback, int docIndex, int totalDocs,
+                              Long docId, String phase, int current, int total,
+                              String message, int success, int failed, int cached) {
+        if (callback != null) {
+            try {
+                callback.accept(new BatchEmbedProgressEvent(
+                        docIndex, totalDocs, docId, phase, current, total,
+                        message, success, failed, cached));
+            } catch (Exception e) {
+                log.warn("Progress callback failed: {}", e.getMessage());
+            }
+        }
     }
 
     /**

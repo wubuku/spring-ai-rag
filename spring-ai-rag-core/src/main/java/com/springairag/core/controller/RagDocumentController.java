@@ -6,6 +6,7 @@ import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
+import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -360,6 +361,45 @@ public class RagDocumentController {
         }
         Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
         return ResponseEntity.ok(result);
+    }
+
+    @Operation(summary = "Batch generate embeddings via SSE streaming with progress",
+            description = "Similar to POST /batch/embed, but pushes real-time progress via Server-Sent Events. "
+                    + "Clients listen for 'progress' events to track current document, overall percentage, and counts.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "SSE stream established; progress events will follow")
+    })
+    @PostMapping("/batch/embed/stream")
+    public SseEmitter batchEmbedDocumentsStream(
+            @RequestBody Map<String, List<Long>> request) {
+        List<Long> ids = request.get("ids");
+        if (ids == null || ids.isEmpty()) {
+            throw new IllegalArgumentException("ids list cannot be empty");
+        }
+        if (ids.size() > 50) {
+            throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
+        }
+
+        SseEmitter emitter = new SseEmitter(0L);
+        try {
+            documentEmbedService.batchEmbedDocumentsWithProgress(ids, event -> {
+                try {
+                    emitter.send(SseEmitter.event().name("progress").data(event));
+                } catch (Exception ex) {
+                    log.warn("SSE send failed for batch embed: {}", ex.getMessage());
+                }
+            });
+            emitter.send(SseEmitter.event().name("done").data(Map.of("total", ids.size(), "status", "completed")));
+            emitter.complete();
+        } catch (IllegalArgumentException e) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of("error", e.getMessage())));
+            } catch (Exception ex) { /* best-effort */ }
+            emitter.completeWithError(e);
+        } catch (Exception e) {
+            emitter.completeWithError(e);
+        }
+        return emitter;
     }
 
     // ==================== 批量创建并嵌入（已废弃，使用 /batch?embed=true 代替） ====================
