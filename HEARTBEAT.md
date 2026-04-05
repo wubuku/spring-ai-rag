@@ -958,3 +958,29 @@
 | B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ⏳ 待推进 |
 | B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ⏳ 待推进 |
 
+## 待办（Metrics C1 — 可观测性补全）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C1-1 | CacheMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
+| C1-2 | RagMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
+| C1-3 | ModelMetricsService 单元测试 | 测试覆盖 | ⏳ 待推进 |
+| C1-4 | SilenceScheduleRepository 单元测试 | 测试覆盖 | ⏳ 待推进 |
+
+## 待办（WebUI C2 — SLO & 静默计划 UI）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C2-1 | Alerts 页面：SLO Config CRUD UI（SLO 配置增删改查表单） | 功能 | ⏳ 待推进 |
+| C2-2 | Alerts 页面：Silence Schedule UI（静默时段创建/编辑） | 功能 | ⏳ 待推进 |
+| C2-3 | WebUI 全局错误边界：React ErrorBoundary 组件 | 体验 | ⏳ 待推进 |
+| C2-4 | WebUI 响应式布局：移动端侧边栏折叠 | 体验 | ⏳ 待推进 |
+
+## 待办（集成 C3 — 测试修复）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C3-1 | RagChatControllerTest：补充 ChatExportService MockBean | 测试修复 | ⏳ 待推进 |
+| C3-2 | SseStreamE2ETest：补充 ChatExportService MockBean | 测试修复 | ⏳ 待推进 |
+| C3-3 | rest-api.md 同步 B7 新增端点（SLO CRUD、静默计划、导出） | 文档 | ⏳ 待推进 |
+
