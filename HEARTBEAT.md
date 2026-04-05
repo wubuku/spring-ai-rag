@@ -903,6 +903,7 @@
 | W6-3 | Dark Mode Toggle：Layout 添加主题切换按钮 | UX | ✅ 2026-04-05（W6-3 完成，🌙/☀️ toggle + localStorage 持久化） |
 | W6-4 | ESLint + Prettier：WebUI 代码规范配置 | 工程化 | ✅ 2026-04-05（W6-4 完成，flat config + 21文件格式化） |
 | W6-5 | Loading Skeletons：Loading..." 替换为骨架屏 | UX | ✅ 2026-04-05（W6-5 完成，Skeleton 组件 + Dashboard 集成） |
+| W6-6 | Toast 通知系统：操作反馈（删除成功/失败等） | UX | ✅ 2026-04-05（W6-6 完成，ToastProvider + useToast hook + Collections 集成） |
 
 ## 后端改进
 
