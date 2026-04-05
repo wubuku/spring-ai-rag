@@ -1,0 +1,115 @@
+{{/*
+NOTES.txt: shown after a successful helm install/upgrade.
+*/}}
+{{- $fullName := include "spring-ai-rag.fullname" . -}}
+
+{{- if .Release.IsUpgrade }}
+Spring AI RAG has been upgraded!
+
+{{- else if .Release.IsInstall }}
+Spring AI RAG has been installed!
+
+{{- end }}
+
+Release:    {{ .Release.Name }}
+Namespace:  {{ .Release.Namespace }}
+Chart:      {{ .Chart.Name }} ({{ .Chart.Version }})
+App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📡 Service endpoints:
+
+  # Internal (ClusterIP — default)
+  {{ include "spring-ai-rag.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
+
+  # Port-forward (for local access)
+  kubectl port-forward svc/{{ $fullName }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+  # Ingress (after DNS propagation, if ingress is enabled)
+  {{- range .Values.ingress.hosts }}
+  https://{{ .host }}
+  {{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ How to verify the deployment is healthy:
+
+  # Check pod status
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/name=spring-ai-rag
+
+  # Watch rollout status
+  kubectl rollout status deployment/{{ $fullName }} -n {{ .Release.Namespace }}
+
+  # Check pod logs
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name=spring-ai-rag -f
+
+  # Curl health endpoint (via port-forward)
+  curl http://localhost:8080/actuator/health
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️  Configuration:
+
+  # View current config (ConfigMap)
+  kubectl get configmap {{ $fullName }}-config -n {{ .Release.Namespace }} -o yaml
+
+  # View current secrets (base64 decoded)
+  kubectl get secret  {{ $fullName }}-env  -n {{ .Release.Namespace }} -o jsonpath='{.data}' | jq 'map_values(@base64d)'
+
+  # Upgrade with custom values:
+  helm upgrade {{ .Release.Name }} ./k8s \
+    -f ./k8s/values.yaml \
+    -f ./k8s/values-production.yaml \
+    --set secrets.postgresPassword=your-password \
+    --set secrets.deepseekApiKey=sk-xxx \
+    --set secrets.siliconflowApiKey=sk-xxx \
+    -n {{ .Release.Namespace }}
+
+  # Dry-run (see what would be rendered):
+  helm template {{ .Release.Name }} ./k8s -n {{ .Release.Namespace }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔧 Required secrets:
+
+  The following secrets MUST be provided at install/upgrade time:
+
+    secrets.postgresPassword    — PostgreSQL password
+    secrets.deepseekApiKey      — DeepSeek API key (LLM)
+    secrets.siliconflowApiKey    — SiliconFlow API key (embedding)
+
+  Optional secrets:
+    secrets.anthropicApiKey     — Anthropic API key
+    secrets.minimaxApiKey        — MiniMax API key
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📋 Namespace setup (one-time):
+
+  # Create namespace
+  kubectl create namespace {{ .Release.Namespace }}
+
+  # (Optional) Create docker-registry pull secret for GHCR
+  kubectl create secret docker-registry ghcr-pull \
+    --docker-server=ghcr.io \
+    --docker-username=your-github-username \
+    --docker-password=your-github-token \
+    -n {{ .Release.Namespace }}
+
+  # Install / upgrade
+  helm upgrade --install {{ .Release.Name }} ./k8s \
+    --namespace {{ .Release.Namespace }} \
+    --create-namespace \
+    --set image.repository=ghcr.io/wubuku/spring-ai-rag \
+    --set secrets.postgresPassword=postgres \
+    --set secrets.deepseekApiKey=sk-xxx \
+    --set secrets.siliconflowApiKey=sk-xxx
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 More info:
+  Chart README:    cat k8s/README.md
+  Architecture:    docs/architecture.md
+  Deployment:      docs/DEPLOYMENT.md
+  Docker Compose:  docker/docker-compose.yml

@@ -1,0 +1,141 @@
+{{/*
+ConfigMap: non-sensitive application configuration.
+Mounted as /config/application.yml inside the container.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "spring-ai-rag.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spring-ai-rag.labels" . | nindent 4 }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+data:
+  application.yml: |
+    spring:
+      application:
+        name: spring-ai-rag
+      threads:
+        virtual:
+          enabled: {{ .Values.config.virtualThreads }}
+      main:
+        allow-bean-definition-overriding: true
+      autoconfigure:
+        exclude:
+          - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
+          - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
+          - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
+
+    # ── DataSource ──────────────────────────────────────────────────────
+    spring.datasource:
+      url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag}
+      username: ${POSTGRES_USER:postgres}
+      password: ${POSTGRES_PASSWORD:}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        maximum-pool-size: 20
+        minimum-idle: 5
+        idle-timeout: 300000
+        connection-timeout: 20000
+        max-lifetime: 1200000
+        leak-detection-threshold: 60000
+
+    # ── JPA / Flyway ────────────────────────────────────────────────────
+    spring.jpa:
+      open-in-view: false
+      hibernate:
+        ddl-auto: validate
+      show-sql: false
+      properties:
+        hibernate:
+          dialect: org.hibernate.dialect.PostgreSQLDialect
+          format_sql: false
+
+    spring.flyway:
+      enabled: true
+      baseline-on-migrate: true
+      locations: classpath:db/migration
+
+    # ── LLM: OpenAI-compatible (DeepSeek / SiliconFlow / custom) ─────────
+    spring.ai.openai:
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+      api-key: ${OPENAI_API_KEY:}
+      chat:
+        options:
+          model: ${OPENAI_MODEL:deepseek-chat}
+          temperature: 0.7
+          max-tokens: 8192
+
+    # ── Embedding model (SiliconFlow BGE-M3) ────────────────────────────
+    siliconflow:
+      api-key: ${SILICONFLOW_API_KEY:}
+      base-url: https://api.siliconflow.cn/v1
+      embedding:
+        model: BAAI/bge-m3
+        dimensions: 1024
+
+    # ── rag.* configuration ───────────────────────────────────────────────
+    rag:
+      retrieval:
+        vector:
+          topK: {{ .Values.config.defaultTopK }}
+          defaultSimilarityThreshold: {{ .Values.config.defaultSimilarityThreshold }}
+        hybrid:
+          enable: true
+          vectorWeight: 0.7
+          fulltextWeight: 0.3
+        rerank:
+          enabled: true
+          model: BAAI/bge-reranker-v2-m3
+          topN: 10
+      embedding:
+        batchSize: {{ .Values.config.embeddingBatchSize }}
+      chat:
+        memory:
+          maxMessages: 20
+          messageTtlDays: 30
+
+    # ── Management / Actuator ─────────────────────────────────────────────
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus,circuitbreakers
+      endpoint:
+        health:
+          show-details: always
+          probes: true
+      health:
+        livenessState:
+          enabled: true
+        readinessState:
+          enabled: true
+        db:
+          enabled: true
+        llmCircuitBreaker:
+          enabled: true
+        rags:
+          enabled: true
+      metrics:
+        export:
+          prometheus:
+            enabled: true
+        tags:
+          application: ${spring.application.name}
+        distribution:
+          percentiles-histogram:
+            http.server.requests: true
+          percentiles:
+            http.server.requests: 0.5,0.95,0.99
+
+    # ── Logging ──────────────────────────────────────────────────────────
+    logging:
+      level:
+        root: INFO
+        com.ruichuang: DEBUG
+        org.springframework.ai: INFO
+      pattern:
+        console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"

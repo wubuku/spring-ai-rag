@@ -1,0 +1,253 @@
+# ============================================
+# Spring AI RAG — Helm Values (default)
+# ============================================
+# Usage: helm install/upgrade -f values.yaml spring-ai-rag ./k8s
+#
+# For overrides, create your own values file or use --set flags.
+# All times use Go duration format (e.g. 30s, 1m, 512Mi).
+
+# ── Global ────────────────────────────────────────────────────────────────
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+  storageClass: ""
+
+# ── Application ──────────────────────────────────────────────────────────
+replicaCount: 1
+
+image:
+  repository: ghcr.io/wubuku/spring-ai-rag
+  # Overridden by CI during image build
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# ── Image pull secret (for GHCR) ──────────────────────────────────────────
+imagePullSecrets: []
+
+# ── Service account ──────────────────────────────────────────────────────
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ── Pod annotations ──────────────────────────────────────────────────────
+podAnnotations: {}
+  # example: prometheus.io/scrape: "true"
+  # example: prometheus.io/port: "8080"
+
+# ── Security context (Pod level) ─────────────────────────────────────────
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# ── Security context (Container level) ───────────────────────────────────
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false   # needs /tmp for JVM and Spring Boot working dirs
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+    add: []
+
+# ── Service ───────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 8080
+  labels: {}
+
+# ── Ingress ───────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations:
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.kubernetes.io/proxy-send-timeout: "300"
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: spring-ai-rag-tls
+      hosts:
+        - rag.example.com
+
+# ── Resources ────────────────────────────────────────────────────────────
+resources:
+  limits:
+    cpu: "2"
+    memory: "2Gi"
+  requests:
+    cpu: "250m"
+    memory: "512Mi"
+
+# ── Autoscaling (HPA) ─────────────────────────────────────────────────────
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# ── Node selector ─────────────────────────────────────────────────────────
+nodeSelector: {}
+
+# ── Tolerations ───────────────────────────────────────────────────────────
+tolerations: []
+
+# ── Affinity ──────────────────────────────────────────────────────────────
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        podAffinityTerm:
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: spring-ai-rag
+          topologyKey: kubernetes.io/hostname
+
+# ── Liveness / Readiness probes ───────────────────────────────────────────
+# Spring Boot Actuator endpoints (must be enabled in application.yml)
+livenessProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 60
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 6
+
+readinessProbe:
+  httpGet:
+    path: /actuator/health/readiness
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 5
+  timeoutSeconds: 3
+  failureThreshold: 3
+
+# ── Startup probe (slow-start protection) ─────────────────────────────────
+startupProbe:
+  httpGet:
+    path: /actuator/health/liveness
+    port: 8080
+  initialDelaySeconds: 10
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 30
+
+# ── Pod disruption budget ─────────────────────────────────────────────────
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+  # maxUnavailable: 1   # use only one of minAvailable / maxUnavailable
+
+# ── JVM / container tuning ────────────────────────────────────────────────
+jvm:
+  # Heap: 75% of container memory limit (leave room for metaspace / off-heap)
+  heapPercent: 0.75
+  extraOptions: >-
+    -XX:+UseG1GC
+    -XX:+ExitOnOutOfMemoryError
+    -XX:+UnlockDiagnosticVMOptions
+    -XX:NativeMemoryTracking=summary
+
+# ── Spring profile ─────────────────────────────────────────────────────────
+springProfile: ""
+
+# ── Config (non-sensitive, stored in ConfigMap) ────────────────────────────
+config:
+  # spring.threads.virtual.enabled
+  virtualThreads: true
+  # rag.retrieval.vector.topK
+  defaultTopK: 5
+  # rag.retrieval.vector.defaultSimilarityThreshold
+  defaultSimilarityThreshold: 0.7
+  # rag.embedding.batchSize
+  embeddingBatchSize: 100
+
+# ── Secrets (sensitive, stored in Secret) ──────────────────────────────────
+# Provide via --set or a pre-created Secret named {{ include "spring-ai-rag.fullname" . }}-env
+secrets:
+  # Spring profile override
+  springProfile: ""
+
+  # PostgreSQL connection
+  postgresHost: "postgres"
+  postgresPort: "5432"
+  postgresDatabase: "spring_ai_rag"
+  postgresUsername: "postgres"
+  postgresPassword: ""   # REQUIRED — set via --set secrets.postgresPassword=xxx
+
+  # DeepSeek / OpenAI-compatible LLM
+  deepseekApiKey: ""     # REQUIRED — set via --set secrets.deepseekApiKey=xxx
+  openaiApiKey: ""       # falls back to deepseekApiKey if not set
+  openaiBaseUrl: "https://api.deepseek.com/v1"
+  openaiModel: "deepseek-chat"
+
+  # SiliconFlow embedding (BGE-M3)
+  siliconflowApiKey: ""  # REQUIRED — set via --set secrets.siliconflowApiKey=xxx
+
+  # Anthropic (optional)
+  anthropicApiKey: ""
+
+  # MiniMax (optional)
+  minimaxApiKey: ""
+  minimaxApiKeyId: ""
+  minimaxBaseUrl: "https://api.minimax.chat/v1"
+
+  # Optional: External pgvector host (leave empty to use the postgres subchart / sidecar)
+  externalPostgresHost: ""
+  externalPostgresPort: "5432"
+
+# ── PostgreSQL subchart (optional, enable if you don't have an external DB) ─
+postgresql:
+  enabled: false
+  # Full values: https://github.com/bitnami/charts/blob/main/bitnami/postgresql/values.yaml
+  #
+  # auth:
+  #   database: spring_ai_rag
+  #   username: postgres
+  #   password: ""   # REQUIRED
+  # primary:
+  #   persistence:
+  #     enabled: true
+  #     size: 10Gi
+  #   extendedConfiguration: |
+  #     max_connections = 200
+  #     shared_buffers = 256MB
+  # service:
+  #   ports:
+  #     postgresql: 5432
+  #
+  # pgvector extension must be enabled via initdb scripts or a Job before startup.
+  # See: https://github.com/pgvector/pgvector
+
+# ── Ingress class / cert-manager (reference only) ─────────────────────────
+# These are set via the `ingress.annotations` above.
+# For cert-manager:
+#   1. Install cert-manager: kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.0/cert-manager.yaml
+#   2. Create ClusterIssuer: kubectl apply -f - <<EOF
+#        apiVersion: cert-manager.io/v1
+#        kind: ClusterIssuer
+#        metadata:
+#          name: letsencrypt-prod
+#        spec:
+#          acme:
+#            server: https://acme-v02.api.letsencrypt.org/directory
+#            email: your-email@example.com
+#            privateKeySecretRef:
+#              name: letsencrypt-prod
+#            solvers:
+#              - http01:
+#                  ingress:
+#                    class: nginx
+#        EOF

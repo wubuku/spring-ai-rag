@@ -1,0 +1,24 @@
+{{/*
+PodDisruptionBudget: ensures minimum availability during node drains.
+*/}}
+{{- if .Values.podDisruptionBudget.enabled -}}
+{{- $fullName := include "spring-ai-rag.fullname" . -}}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $fullName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spring-ai-rag.labels" . | nindent 4 }}
+spec:
+  {{- if .Values.podDisruptionBudget.minAvailable }}
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable }}
+  {{- else if .Values.podDisruptionBudget.maxUnavailable }}
+  maxUnavailable: {{ .Values.podDisruptionBudget.maxUnavailable }}
+  {{- else }}
+  minAvailable: 1
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "spring-ai-rag.selectorLabels" . | nindent 6 }}
+{{- end }}

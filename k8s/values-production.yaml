@@ -1,0 +1,105 @@
+# ============================================
+# Spring AI RAG — Helm Values (production)
+# Usage: helm upgrade --install spring-ai-rag ./k8s -f ./k8s/values.yaml -f ./k8s/values-production.yaml
+# ============================================
+
+replicaCount: 3
+
+image:
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: rag.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: spring-ai-rag-tls
+      hosts:
+        - rag.example.com
+
+resources:
+  limits:
+    cpu: "4"
+    memory: "4Gi"
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true   # production: should be true; requires /tmp write access for JVM
+  runAsNonRoot: true
+  runAsUser: 1000
+  capabilities:
+    drop:
+      - ALL
+
+jvm:
+  heapPercent: 0.80
+  extraOptions: >-
+    -XX:+UseG1GC
+    -XX:+ExitOnOutOfMemoryError
+    -XX:+UseContainerSupport
+    -XX:MaxRAMPercentage=80.0
+    -Djava.security.egd=file:/dev/./urandom
+
+# Production readiness defaults (all explicitly set for auditability)
+config:
+  virtualThreads: true
+  defaultTopK: 10
+  defaultSimilarityThreshold: 0.75
+  embeddingBatchSize: 200
+
+livenessProbe:
+  initialDelaySeconds: 90
+  periodSeconds: 15
+  failureThreshold: 8
+
+readinessProbe:
+  initialDelaySeconds: 45
+  periodSeconds: 10
+  failureThreshold: 5
+
+startupProbe:
+  initialDelaySeconds: 15
+  periodSeconds: 15
+  failureThreshold: 40
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2
+
+# Annotations for prometheus scraping in production
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"

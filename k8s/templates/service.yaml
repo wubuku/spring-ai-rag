@@ -1,0 +1,29 @@
+{{/*
+Service: exposes the Spring AI RAG deployment.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "spring-ai-rag.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "spring-ai-rag.labels" . | nindent 4 }}
+  {{- with .Values.service.labels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+      {{- if eq .Values.service.type "NodePort" }}
+      nodePort: {{ .Values.service.nodePort | default 30080 }}
+      {{- end }}
+  selector:
+    {{- include "spring-ai-rag.selectorLabels" . | nindent 4 }}
