@@ -1,0 +1,499 @@
+# Prometheus Alerting Rules for Spring AI RAG Service
+# https://prometheus.io/docs/prometheus/latest/configuration/alerting/
+# Place in /etc/prometheus/rules/rag-service.rules.yml or import via prometheus.yml
+
+groups:
+  # ===========================================================================
+  # RAG Service Health Alerts
+  # ===========================================================================
+  - name: rag_service_health
+    interval: 30s
+    rules:
+      # High error rate — more than 5% of requests failing in 5 minutes
+      - alert: RAGHighErrorRate
+        expr: |
+          (
+            rate(rag_requests_failed_total[5m])
+            /
+            rate(rag_requests_total[5m])
+          ) > 0.05
+        for: 2m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service error rate exceeds 5%"
+          description: |
+            RAG service has {{ $value | humanizePercentage }} error rate (threshold: 5%).
+            Failed requests: {{ $value | humanizePercentage }} of total in the last 5 minutes.
+          runbook_url: "https://github.com/your-org/spring-ai-rag/blob/main/docs/troubleshooting.md"
+
+      # Service completely down — no successful requests but traffic exists
+      - alert: RAGServiceDown
+        expr: |
+          rate(rag_requests_success_total[5m]) == 0
+          and rate(rag_requests_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service is not responding successfully"
+          description: "RAG service received {{ $value | humanize }} req/s but had 0 successful responses for 5 minutes."
+          runbook_url: "https://github.com/your-org/spring-ai-rag/blob/main/docs/troubleshooting.md"
+
+      # No traffic — service may be down or misconfigured
+      - alert: RAGNoTraffic
+        expr: rate(rag_requests_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service has no incoming traffic"
+          description: "No RAG requests received in the last 10 minutes. Service may be down or load balancer misconfigured."
+
+  # ===========================================================================
+  # RAG Latency Alerts
+  # ===========================================================================
+  - name: rag_latency
+    interval: 30s
+    rules:
+      # P95 latency critical — 95th percentile > 2s
+      - alert: RAGHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_response_time_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG P95 latency exceeds 2 seconds"
+          description: |
+            RAG P95 response latency is {{ $value | humanizeDuration }} (threshold: 2s).
+            Users will experience noticeable delays.
+
+      # P99 latency critical — 99th percentile > 5s
+      - alert: RAGSevereLatency
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(rag_response_time_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG P99 latency exceeds 5 seconds"
+          description: |
+            RAG P99 response latency is {{ $value | humanizeDuration }} (threshold: 5s).
+            Indicates severe bottlenecks — check LLM provider status and vector DB performance.
+
+      # Latency spike — sudden 3x increase compared to 15min average
+      - alert: RAGLatencySpike
+        expr: |
+          (
+            histogram_quantile(0.95,
+              sum(rate(rag_response_time_seconds_bucket[5m])) by (le)
+            )
+          )
+          /
+          (
+            histogram_quantile(0.95,
+              sum(rate(rag_response_time_seconds_bucket[15m])) by (le)
+            )
+          ) > 3
+        for: 3m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG latency spiked to 3x normal levels"
+          description: "RAG P95 latency is {{ $value | humanize }}x the 15-minute baseline. Investigate LLM provider or vector DB issues."
+
+  # ===========================================================================
+  # Embedding Cache Alerts
+  # ===========================================================================
+  - name: rag_cache
+    interval: 60s
+    rules:
+      # Cache hit rate too low — below 60%
+      - alert: RAGLowCacheHitRate
+        expr: |
+          (
+            rate(rag_cache_embedding_hit_total[10m])
+            /
+            (rate(rag_cache_embedding_hit_total[10m]) + rate(rag_cache_embedding_miss_total[10m]))
+          ) < 0.6
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG embedding cache hit rate is below 60%"
+          description: |
+            Embedding cache hit rate is {{ $value | humanizePercentage }} (threshold: 60%).
+            Low hit rate increases embedding latency and API costs.
+            Consider: document update frequency, cache TTL, cache size.
+
+      # Cache hit rate critically low — below 30%
+      - alert: RAGCacheHitRateCritical
+        expr: |
+          (
+            rate(rag_cache_embedding_hit_total[10m])
+            /
+            (rate(rag_cache_embedding_hit_total[10m]) + rate(rag_cache_embedding_miss_total[10m]))
+          ) < 0.3
+        for: 5m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG embedding cache hit rate is critically low (<30%)"
+          description: |
+            Embedding cache hit rate is {{ $value | humanizePercentage }} (threshold: 30%).
+            This will significantly impact performance and increase LLM API costs.
+
+      # Zero cache hits despite high traffic — possible cache failure
+      - alert: RAGCacheFailure
+        expr: |
+          rate(rag_cache_embedding_hit_total[5m]) == 0
+          and (rate(rag_cache_embedding_hit_total[5m]) + rate(rag_cache_embedding_miss_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "Embedding cache is not functioning"
+          description: "Cache is receiving requests but registering zero hits. Check Caffeine cache configuration and application logs."
+
+  # ===========================================================================
+  # LLM Provider Health Alerts
+  # ===========================================================================
+  - name: rag_llm_provider
+    interval: 30s
+    rules:
+      # LLM error rate per provider — > 10% errors
+      - alert: RAGLLMHighErrorRate
+        expr: |
+          (
+            sum(rate(rag_model_errors_total[5m])) by (provider)
+            /
+            sum(rate(rag_model_calls_total[5m])) by (provider)
+          ) > 0.10
+        for: 3m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "LLM provider {{ $labels.provider }} error rate exceeds 10%"
+          description: |
+            LLM provider `{{ $labels.provider }}` error rate is {{ $value | humanizePercentage }}.
+            Check: API key validity, quota limits, provider status page.
+
+      # LLM latency per provider — P95 > 10s
+      - alert: RAGLLMHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_model_latency_seconds_bucket[5m])) by (le, provider)
+          ) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "LLM provider {{ $labels.provider }} P95 latency exceeds 10 seconds"
+          description: |
+            LLM provider `{{ $labels.provider }}` P95 latency is {{ $value | humanizeDuration }}.
+            Consider switching to a faster model or checking provider status.
+
+      # LLM circuit breaker open
+      - alert: RAGLLMCircuitBreakerOpen
+        expr: rag_llm_circuit_breaker_state == 2
+        for: 1m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "LLM circuit breaker is OPEN for {{ $labels.provider }}"
+          description: |
+            The LLM circuit breaker for `{{ $labels.provider }}` is OPEN.
+            Requests are being rejected without calling the LLM.
+            Check application logs for the reason and manually close the circuit after fixing.
+
+      # LLM circuit breaker half-open — recovering
+      - alert: RAGLLMCircuitBreakerHalfOpen
+        expr: rag_llm_circuit_breaker_state == 1
+        for: 0s
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "LLM circuit breaker is HALF-OPEN for {{ $labels.provider }}"
+          description: |
+            LLM circuit breaker for `{{ $labels.provider }}` is testing recovery with probe requests.
+            This is normal during recovery. Monitor for CLOSED (recovered) or OPEN (failed again) transitions.
+
+      # No LLM calls for a provider that normally has traffic
+      - alert: RAGLLMNoTraffic
+        expr: |
+          sum(rate(rag_model_calls_total[15m])) by (provider) == 0
+          and sum(rate(rag_model_calls_total[1h])) by (provider) > 10
+        for: 15m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "LLM provider {{ $labels.provider }} has no recent traffic"
+          description: |
+            LLM provider `{{ $labels.provider }}` normally receives traffic but has 0 calls in 15 minutes.
+            Possible causes: circuit breaker open, API key issue, or provider outage.
+
+  # ===========================================================================
+  # Retrieval Quality Alerts
+  # ===========================================================================
+  - name: rag_retrieval_quality
+    interval: 60s
+    rules:
+      # Retrieval returning zero results frequently
+      - alert: RAGEmptyRetrievalResults
+        expr: |
+          (
+            sum(rate(rag_retrieval_results_total[5m])) by (le)
+            /
+            sum(rate(rag_requests_success_total[5m])) by ()
+          ) < 1
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG retrieval frequently returns zero results"
+          description: |
+            Some successful RAG requests are returning 0 retrieval results.
+            Check: document embedding status, collection health, similarity threshold.
+
+      # Low retrieval-to-request ratio — fewer results than expected
+      - alert: RAGLowRetrievalYield
+        expr: |
+          avg(
+            sum(rate(rag_retrieval_results_total[30m])) by (le)
+            /
+            sum(rate(rag_requests_success_total[30m])) by ()
+          ) < 1
+        for: 30m
+        labels:
+          severity: info
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG retrieval yield is low — check vector DB health"
+          description: |
+            Average retrieval results per successful request is below 1.
+            This may indicate vector DB issues or collection data problems.
+
+  # ===========================================================================
+  # JVM & Infrastructure Alerts
+  # ===========================================================================
+  - name: rag_jvm_infrastructure
+    interval: 30s
+    rules:
+      # High JVM heap usage — > 85%
+      - alert: RAGJVMHighHeapUsage
+        expr: |
+          (
+            jvm_memory_used_bytes{area="heap"}
+            /
+            jvm_memory_max_bytes{area="heap"}
+          ) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "JVM heap usage exceeds 85%"
+          description: |
+            JVM heap usage is {{ $value | humanizePercentage }} (threshold: 85%).
+            {{ if gt ($value | float) 0.90 }}JVM is at risk of OOM. Consider increasing heap size or investigating memory leaks.{{ end }}
+
+      # Critical JVM heap usage — > 95%
+      - alert: RAGJVMHeapUsageCritical
+        expr: |
+          (
+            jvm_memory_used_bytes{area="heap"}
+            /
+            jvm_memory_max_bytes{area="heap"}
+          ) > 0.95
+        for: 1m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "JVM heap usage exceeds 95% — imminent OOM risk"
+          description: |
+            JVM heap usage is {{ $value | humanizePercentage }} (threshold: 95%).
+            Immediate action required: increase heap, check for memory leaks, or restart.
+
+      # Excessive GC — more than 10 major GCs per minute
+      - alert: RAGExcessiveGC
+        expr: |
+          sum(rate(jvm_gc_pause_seconds_count[1m])) by (cause)
+          > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "Excessive garbage collection in RAG service"
+          description: |
+            GC pause rate is {{ $value | humanize }}/min for cause: {{ $labels.cause }}.
+            This indicates memory pressure. Check heap size and object allocation patterns.
+
+      # High CPU usage — > 80% for 5 minutes
+      - alert: RAGHighCPU
+        expr: |
+          sum(rate(process_cpu_usage_total{service="spring-ai-rag"}[5m])) by (instance)
+          * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service CPU usage exceeds 80%"
+          description: "CPU usage on {{ $labels.instance }} is {{ $value | humanize }}%. Consider scaling horizontally or optimizing hot paths."
+
+  # ===========================================================================
+  # Database Connection Pool Alerts
+  # ===========================================================================
+  - name: rag_database_pool
+    interval: 30s
+    rules:
+      # HikariCP connection pool exhaustion
+      - alert: RAGDBPoolExhausted
+        expr: |
+          hikaricp_connections_active{pool="HikariPool-RagPool"} > 0
+          and
+          (
+            hikaricp_connections_active{pool="HikariPool-RagPool"}
+            /
+            hikaricp_connections_max{pool="HikariPool-RagPool"}
+          ) > 0.95
+        for: 2m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG database connection pool is nearly exhausted"
+          description: |
+            HikariCP pool utilization: {{ $value | humanizePercentage }}.
+            Active: {{ $labels.active }}, Max: {{ $labels.max }}.
+            New requests will block or fail. Check for slow queries or connection leaks.
+
+      # HikariCP waiting threads — requests waiting for connection
+      - alert: RAGDBPoolWaiting
+        expr: |
+          hikaricp_connections_pending{pool="HikariPool-RagPool"} > 5
+        for: 2m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "Threads are waiting for RAG database connections"
+          description: |
+            {{ $value }} threads are waiting for a database connection.
+            This indicates slow queries or pool saturation. Check HikariCP settings and query performance.
+
+      # HikariCP connection creation delays
+      - alert: RAGDBPoolCreationDelay
+        expr: |
+          rate(hikaricp_connections_creation_duration_seconds_sum[5m])
+          /
+          rate(hikaricp_connections_creation_duration_seconds_count[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "HikariCP connection creation is taking more than 1 second"
+          description: |
+            Average connection creation time: {{ $value | humanizeDuration }}.
+            This usually indicates PostgreSQL is under heavy load or network latency issues.
+
+      # HikariCP connection leaks detected
+      - alert: RAGDBPoolLeakDetection
+        expr: |
+          increase(hikaricp_connections_timeout_total{pool="HikariPool-RagPool"}[5m]) > 0
+        for: 0s
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "HikariCP connection leak detected"
+          description: |
+            {{ $value }} connection timeout(s) in the last 5 minutes — possible connection leak.
+            Application is not returning connections to the pool. Check repository transaction handling.
+
+  # ===========================================================================
+  # Rate Limiting Alerts
+  # ===========================================================================
+  - name: rag_rate_limiting
+    interval: 60s
+    rules:
+      # High rate limit rejection rate
+      - alert: RAGHighRateLimitRejections
+        expr: |
+          sum(rate(rate_limit_rejected_total[5m])) by (reason)
+          / sum(rate(rag_requests_total[5m])) by () > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "More than 10% of requests are being rate-limited"
+          description: |
+            Rate limiting rejection rate is {{ $value | humanizePercentage }}.
+            Legitimate users may be impacted. Consider adjusting rate limits or investigating abuse.
+            Reason: {{ $labels.reason }}
+
+  # ===========================================================================
+  # SLO Breach Alerts (for use with Recording Rules)
+  # ===========================================================================
+  - name: rag_slo
+    interval: 60s
+    rules:
+      # Availability SLO breach — < 99.5% success rate over 1 hour
+      - alert: RAGAvailabilitySLOBreach
+        expr: |
+          (
+            sum(rate(rag_requests_success_total[1h]))
+            /
+            sum(rate(rag_requests_total[1h]))
+          ) < 0.995
+        for: 5m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+          slo: availability
+        annotations:
+          summary: "RAG availability SLO breached (< 99.5%)"
+          description: |
+            RAG 1-hour availability is {{ $value | humanizePercentage }} (SLO target: 99.5%).
+            Page on-call engineer and initiate incident response.
+
+      # Latency SLO breach — P95 > 1s over 5 minutes
+      - alert: RAGLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_response_time_seconds_bucket[5m])) by (le)
+          ) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+          slo: latency
+        annotations:
+          summary: "RAG latency SLO breached (P95 > 1s)"
+          description: |
+            RAG P95 latency is {{ $value | humanizeDuration }} (SLO target: < 1s).
+            Latency has exceeded SLO for 5 consecutive minutes.
