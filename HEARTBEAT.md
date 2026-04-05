@@ -922,8 +922,8 @@
 |---|--------|------|------|
 | W7-1 | Metrics 页面可视化：JSON→图表（Recharts） | UX | ✅ 2026-04-05（W7-1 完成，Bar/Line图表 + Latency + Cache + Model对比） |
 | W7-2 | Chat 会话历史侧边栏：查看/切换历史对话 | UX | ✅ 2026-04-05（W7-2 完成，localStorage持久化 + 时间戳 + 删除按钮） |
-| W7-3 | Collections 创建模态框：表单验证 + Toast 反馈 | UX | ⏳ 待推进 |
-| W7-4 | Settings 持久化：当前设置保存到后端 API | 功能 | ⏳ 待推进 |
+| W7-3 | Collections 创建模态框：表单验证 + Toast 反馈 | UX | ✅ 2026-04-05（W7-3 完成，模态框 + 验证 + Toast） |
+| W7-4 | Settings 持久化：当前设置保存到后端 API | 功能 | ✅ 2026-04-05（W7-4 完成，localStorage 持久化，保存按钮状态追踪） |
 | W7-5 | API Client 重试机制：自动重试 + 超时配置 | 可靠性 | ⏳ 待推进 |
 | W7-6 | Documents 行内预览：点击文档查看内容摘要 | UX | ⏳ 待推进 |
 
