@@ -5,6 +5,7 @@ import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.service.ChatExportService;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +15,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -27,6 +29,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -46,10 +49,14 @@ public class RagChatController {
 
     private final RagChatService ragChatService;
     private final RagChatHistoryRepository historyRepository;
+    private final ChatExportService chatExportService;
 
-    public RagChatController(RagChatService ragChatService, RagChatHistoryRepository historyRepository) {
+    public RagChatController(RagChatService ragChatService,
+                             RagChatHistoryRepository historyRepository,
+                             ChatExportService chatExportService) {
         this.ragChatService = ragChatService;
         this.historyRepository = historyRepository;
+        this.chatExportService = chatExportService;
     }
 
     /**
@@ -137,5 +144,51 @@ public class RagChatController {
         log.info("Clearing chat history for session: {}", sessionId);
         int deleted = historyRepository.deleteBySessionId(sessionId);
         return ResponseEntity.ok(ClearHistoryResponse.of(sessionId, deleted));
+    }
+
+    /**
+     * 导出会话历史（JSON 或 Markdown 格式下载）
+     *
+     * @param sessionId 会话 ID
+     * @param format 导出格式: json 或 md（默认 json）
+     * @param limit 最大导出记录数（0 = 不限）
+     * @return 文件下载响应
+     */
+    @Operation(summary = "Export chat history", description = "Download session history as JSON or Markdown file.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "File download with appropriate Content-Type"),
+            @ApiResponse(responseCode = "400", description = "Invalid format parameter (must be json or md)")
+    })
+    @GetMapping("/export/{sessionId}")
+    public ResponseEntity<org.springframework.core.io.ByteArrayResource> exportHistory(
+            @PathVariable String sessionId,
+            @RequestParam(defaultValue = "json") String format,
+            @RequestParam(defaultValue = "0") int limit) {
+
+        if (!format.equalsIgnoreCase("json") && !format.equalsIgnoreCase("md")) {
+            throw new IllegalArgumentException("format must be 'json' or 'md', got: " + format);
+        }
+
+        log.info("Exporting chat history for session: {}, format: {}, limit: {}", sessionId, format, limit);
+
+        byte[] content;
+        String contentType;
+        String filename;
+
+        if (format.equalsIgnoreCase("md")) {
+            content = chatExportService.exportAsMarkdown(sessionId, limit);
+            contentType = "text/markdown; charset=utf-8";
+            filename = sessionId + ".md";
+        } else {
+            content = chatExportService.exportAsJson(sessionId, limit);
+            contentType = "application/json; charset=utf-8";
+            filename = sessionId + ".json";
+        }
+
+        ByteArrayResource resource = new ByteArrayResource(content);
+        return ResponseEntity.ok()
+                .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
+                .body(resource);
     }
 }

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
+import { chatApi } from '../api/chat';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
 
@@ -17,6 +18,7 @@ export function Chat() {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [showSidebar, setShowSidebar] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const { addSession } = useChatSessions();
@@ -98,6 +100,24 @@ export function Chat() {
     setShowSidebar(false);
   };
 
+  const handleExport = async (format: 'json' | 'md') => {
+    setShowExportMenu(false);
+    if (!conversationId) return;
+    try {
+      const blob = await chatApi.exportConversation(conversationId, format);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `conversation-${conversationId}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // ignore download errors
+    }
+  };
+
   const handleSelectSession = (sessionId: string) => {
     // For now, just switch to the session - in future, load its messages
     setConversationId(sessionId);
@@ -134,9 +154,22 @@ export function Chat() {
             <h1 className="page-title">RAG Chat</h1>
           </div>
           {messages.length > 0 && (
-            <button onClick={handleNewChat} className={styles.newChatBtn}>
-              New Chat
-            </button>
+            <>
+              <div className={styles.exportWrapper}>
+                <button onClick={() => setShowExportMenu(!showExportMenu)} className={styles.exportBtn}>
+                  Export ▾
+                </button>
+                {showExportMenu && (
+                  <div className={styles.exportMenu}>
+                    <button onClick={() => handleExport('json')}>JSON</button>
+                    <button onClick={() => handleExport('md')}>Markdown</button>
+                  </div>
+                )}
+              </div>
+              <button onClick={handleNewChat} className={styles.newChatBtn}>
+                New Chat
+              </button>
+            </>
           )}
         </div>
 
