@@ -271,6 +271,11 @@ server:
   port: 8081
   tomcat:
     protocol-handler: NIO
+  # Gzip compression for API responses
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/plain,text/css,text/javascript
+    min-response-size: 1024  # compress responses >= 1KB
 
 # ============================================
 # Logging Configuration
