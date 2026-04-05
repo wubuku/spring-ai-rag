@@ -21,7 +21,7 @@ export function Collections() {
     <div>
       <h1 className="page-title">Collections</h1>
       {isPending ? (
-        <div>Loading...</div>
+        <div className={styles.loading}>Loading collections...</div>
       ) : (
         <div className={styles.grid}>
           {data?.data?.collections?.map((col) => (

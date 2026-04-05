@@ -837,6 +837,30 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | W5-1 | Vitest 单元测试（组件 + Hooks） | 测试 | ⏳ 待推进 |
+| W5-2 | Style Unification：统一各页面输入框/按钮/标题/加载状态样式 | UI | ✅ 2026-04-05（Search/Collections 初步修复） |
+
+**Style Unification 详细任务**：
+
+各页面样式一致性检查清单：
+
+| 页面 | 检查项 | 状态 |
+|------|--------|------|
+| Dashboard | page-title 样式、card 样式 | ✅ |
+| Documents | page-title 样式、upload zone、table、pagination | ✅ |
+| Collections | page-title 样式、card 样式、loading 状态 | ✅ 已修复 |
+| Chat | page-title 样式、message bubble、input 样式 | ✅ |
+| Search | page-title 样式、input 样式、button 样式 | ✅ 已修复 |
+| Metrics | page-title 样式、card 样式 | ✅ |
+| Alerts | page-title 样式、table 样式 | ✅ |
+| Settings | page-title 样式、tab 样式、form 样式 | ✅ |
+
+**统一规范**：
+- 输入框：`padding: 0.625rem 0.875rem; border: 1px solid var(--color-border); border-radius: 8px;`
+- 按钮（主要）：`background: var(--color-primary); color: white; border-radius: 8px;`
+- 按钮（次要）：`background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 6px;`
+- 标题：`font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;`
+- 加载状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
+- 空状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
 | W5-2 | Playwright E2E 测试（核心用户流程） | 测试 | ⏳ 待推进 |
 | W5-3 | 前端生产构建验证（dist 完整性） | 质量 | ⏳ 待推进 |
 

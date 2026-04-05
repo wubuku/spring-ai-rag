@@ -35,9 +35,11 @@ export function Search() {
             checked={useHybrid}
             onChange={(e) => setUseHybrid(e.target.checked)}
           />
-          Hybrid Search
+          Hybrid
         </label>
-        <button type="submit" disabled={!query.trim()}>Search</button>
+        <button type="submit" disabled={!query.trim()} className={styles.searchBtn}>
+          Search
+        </button>
       </form>
 
       {isPending && <div>Searching...</div>}
