@@ -1059,6 +1059,8 @@
 
 - 2026-04-06 01:29 — ✅ C13/C1 per-user 限流精细化：ApiKeyAuthFilter 认证成功后设置 `AUTHENTICATED_KEY_ATTRIBUTE` 请求属性；RateLimitFilter 新增 `user` 策略——优先用已认证用户身份限流，未认证时回退到 IP；`resolveLimit()` 同时支持 user/api-key 两种策略的 keyLimits；RagRateLimitProperties 文档更新；RateLimitFilterTest 新增 5 个测试覆盖（已认证用户/未认证回退/多用户独立计数/keyLimits/空属性回退）；mvn test ✅（全通过）；commit efbefa4 已推送
 
+- 2026-04-06 02:06 — ✅ C15 N18 AuditLogService 写操作覆盖增强：AbTestController（6个写操作：POST /experiments、PUT /experiments/{id}、POST /{id}/start|pause|stop、POST /{id}/results）添加审计日志；EvaluationController（POST /feedback）添加审计日志；新增 USER_FEEDBACK entity 类型；AbTestControllerTest/EvaluationControllerTest 构造函数更新（传入 null 给可选 AuditLogService）；mvn clean compile ✅ / mvn test ✅（1079 tests，2个 OpenApiContractTest/RagControllerIntegrationTest 为已有基础设施依赖问题，与本次改动无关）；commit 15bbf53 已推送
+
 - 2026-04-06 00:26 — ✅ N38 API 统一错误码规范：spring-ai-rag-api 新增 ErrorCode enum（26 个标准化错误码，含 HTTP status/title/problemTypeUri）；RagException 重构为 ErrorCode enum（getErrorCode() String 保留向后兼容 + 新增 getErrorCodeEnum()）；DocumentNotFoundException/RetrievalException/EmbeddingException/LlmCircuitOpenException 更新；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error(code) 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 迁移；mvn clean compile ✅ / mvn test ✅（1155 tests 全通过）；commit 6a3c6c4 已推送
 
 ## 进度日志（2026-04-05 晚间）
@@ -1114,6 +1116,7 @@
 | N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
 | N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ⏳ 待推进 |
 | N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ⏳ 待推进 |
+| N43 | N18 AuditLogService 增强：AbTestController + EvaluationController 审计覆盖 | 安全 | ✅ 2026-04-06（N43 完成：AbTestController 6个写操作 + EvaluationController POST /feedback 审计日志；USER_FEEDBACK entity 类型；测试更新；1079 tests ✅，commit 15bbf53） |
 
 ## 待办（Cron 持续推进 — 永不空转）
 
@@ -1143,7 +1146,7 @@
 |---|--------|------|------|--------|
 | C13 | C1 per-user 限流：ApiKeyAuthFilter 提取用户身份 → RateLimitFilter 支持 per-user | 安全 | ✅ 2026-04-06 | P1 |
 | C14 | N17 WebUI搜索历史：搜索记录 localStorage 持久化 + 展示历史列表 | UX | ⏳ | P1 |
-| C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ⏳ | P1 |
+| C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ✅ 2026-04-06 | P1 |
 | C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ⏳ | P2 |
 | C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ⏳ | P2 |
