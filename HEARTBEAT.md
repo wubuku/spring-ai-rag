@@ -703,11 +703,11 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | N7 | API 响应压缩（gzip）+ 请求限流优化 | 性能 | ✅ 2026-04-05（N7 完成，server.compression.enabled，1141 tests） |
-| N8 | HikariCP 连接池监控指标暴露（Actuator） | 可观测性 | ⏳ 待推进 |
-| N9 | WebUI 主题持久化（深色模式 + 语言偏好） | UX | ⏳ 待推进 |
-| N10 | 数据库连接池调优（production values） | 性能 | ⏳ 待推进 |
-| N11 | API 文档增强（SpringDoc operation description 补全） | 文档 | ⏳ 待推进 |
-| N12 | CI 自动 Changelog 生成（Conventional Commits） | DevOps | ⏳ 待推进 |
+| N8 | HikariCP 连接池监控指标暴露（Actuator） | 可观测性 | ✅ 2026-04-05（N8 完成，Actuator + Micrometer 自动暴露 HikariCP metrics） |
+| N9 | WebUI 主题持久化（深色模式 + 语言偏好） | UX | ✅ 2026-04-05（N9 完成，ThemeToggle localStorage 持久化，12 tests） |
+| N10 | 数据库连接池调优（production values） | 性能 | ✅ 2026-04-05（N10 完成，HikariCP 完整配置：pool=20/min=5/idle=5m/lifetime=30m/timeout=10s） |
+| N11 | API 文档增强（SpringDoc operation description 补全） | 文档 | ✅ 2026-04-05（N11 完成，277 annotations 覆盖全部 13 个 Controller） |
+| N12 | CI 自动 Changelog 生成（Conventional Commits） | DevOps | ✅ 2026-04-05（N12 完成，已使用 Conventional Commits，HISTORY.md 自动生成） |
 
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
@@ -1063,3 +1063,14 @@
 
 - 2026-04-05 23:35 — WebUI 常规发布：npm test ✅（79/79）/ npm run build ✅（243KB gzipped）/ E2E 11/11 ✅ / WebUiConfig assets/ 路径修复（返回 index 而非抛异常）+ playwright.config.ts baseURL 默认 8081 / commit 415fff9 已推送
 
+
+## 待办（新一波改进 N13-N18）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N13 | API 版本管理（v1 → v2 端点规划文档） | 架构 | ⏳ 待推进 |
+| N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ⏳ 待推进 |
+| N15 | 缓存失效管理 API（Admin 端点清除缓存） | 可观测性 | ⏳ 待推进 |
+| N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
+| N17 | WebUI 搜索历史记录 | UX | ⏳ 待推进 |
+| N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ⏳ 待推进 |
