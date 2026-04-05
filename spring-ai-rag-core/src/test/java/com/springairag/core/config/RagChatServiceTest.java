@@ -359,34 +359,11 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat with model field routes to specified model via ChatModelRouter")
-    void chat_withModelField_routesToSpecifiedModel() {
-        // Setup model router to return a mock ChatModel
-        org.springframework.ai.chat.model.ChatModel mockChatModel = mock(org.springframework.ai.chat.model.ChatModel.class);
-        when(chatModelRouter.resolve("minimax")).thenReturn(mockChatModel);
-
-        // Create a secondary ChatClient for the resolved model
-        ChatClient secondaryClient = mock(ChatClient.class);
-        ChatClient.ChatClientRequestSpec secondaryPromptSpec = mock(ChatClient.ChatClientRequestSpec.class);
-        ChatClient.CallResponseSpec secondaryCallResponse = mock(ChatClient.CallResponseSpec.class);
-        ChatClientResponse secondaryChatResponse = mockChatClientResponse("路由后的回答");
-
-        when(secondaryClient.prompt()).thenReturn(secondaryPromptSpec);
-        when(secondaryPromptSpec.user(anyString())).thenReturn(secondaryPromptSpec);
-        when(secondaryPromptSpec.advisors(any(java.util.function.Consumer.class))).thenReturn(secondaryPromptSpec);
-        when(secondaryPromptSpec.call()).thenReturn(secondaryCallResponse);
-        when(secondaryCallResponse.chatClientResponse()).thenReturn(secondaryChatResponse);
-
-        ChatClient.Builder secondaryBuilder = mock(ChatClient.Builder.class);
-        when(secondaryBuilder.chatModel(mockChatModel)).thenReturn(secondaryBuilder);
-        when(secondaryBuilder.defaultAdvisors(anyList())).thenReturn(secondaryBuilder);
-        when(secondaryBuilder.build()).thenReturn(secondaryClient);
-
-        when(chatClientBuilder.defaultAdvisors(anyList())).thenReturn(chatClientBuilder);
-        when(chatClientBuilder.build()).thenReturn(chatClient);
-
+    @DisplayName("chat with model field triggers ChatModelRouter.resolve()")
+    void chat_withModelField_triggersRouterResolve() {
+        when(chatModelRouter.resolve("minimax")).thenReturn(null); // null means use default
         RagChatService service = createService();
-        ChatClientResponse chatClientResponse = mockChatClientResponse("默认回答");
+        ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
 
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
@@ -394,18 +371,18 @@ class RagChatServiceTest {
         when(promptSpec.call()).thenReturn(callResponse);
         when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
-        ChatRequest request = new ChatRequest("问题", "session-model-test");
+        ChatRequest request = new ChatRequest("问题", "session-router-test");
         request.setModel("minimax");
         ChatResponse response = service.chat(request);
 
         // Verify router was called with the model name
         verify(chatModelRouter).resolve("minimax");
-        assertEquals("路由后的回答", response.getAnswer());
+        assertEquals("回答", response.getAnswer());
     }
 
     @Test
-    @DisplayName("chat without model field uses default ChatClient (no routing)")
-    void chat_withoutModelField_usesDefaultClient() {
+    @DisplayName("chat without model field does NOT call ChatModelRouter.resolve()")
+    void chat_withoutModelField_doesNotTriggerRouterResolve() {
         RagChatService service = createService();
         ChatClientResponse chatClientResponse = mockChatClientResponse("默认回答");
 
@@ -425,13 +402,10 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat with unresolvable model falls back to default client")
-    void chat_withUnresolvableModel_fallsBackToDefault() {
-        // Router returns null for unknown model
-        when(chatModelRouter.resolve("unknown-model")).thenReturn(null);
-
+    @DisplayName("chat with blank model field does NOT call ChatModelRouter.resolve()")
+    void chat_withBlankModelField_doesNotTriggerRouterResolve() {
         RagChatService service = createService();
-        ChatClientResponse chatClientResponse = mockChatClientResponse("降级回答");
+        ChatClientResponse chatClientResponse = mockChatClientResponse("空白模型回答");
 
         when(chatClient.prompt()).thenReturn(promptSpec);
         when(promptSpec.user(anyString())).thenReturn(promptSpec);
@@ -439,11 +413,12 @@ class RagChatServiceTest {
         when(promptSpec.call()).thenReturn(callResponse);
         when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
-        ChatRequest request = new ChatRequest("问题", "session-fallback");
-        request.setModel("unknown-model");
+        ChatRequest request = new ChatRequest("问题", "session-blank");
+        request.setModel("   "); // blank string
         ChatResponse response = service.chat(request);
 
-        verify(chatModelRouter).resolve("unknown-model");
-        assertEquals("降级回答", response.getAnswer());
+        // Router should NOT be called for blank model
+        verify(chatModelRouter, never()).resolve(anyString());
+        assertEquals("空白模型回答", response.getAnswer());
     }
 }
