@@ -4,6 +4,7 @@ import com.springairag.api.dto.EvaluateRequest;
 import com.springairag.api.dto.FeedbackRequest;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.entity.RagUserFeedback;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import com.springairag.core.versioning.ApiVersion;
@@ -12,12 +13,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 检索效果评估控制器
@@ -30,13 +33,18 @@ import java.util.List;
 @Tag(name = "RAG Evaluation", description = "检索效果评估（Precision@K, Recall@K, MRR, NDCG）")
 public class EvaluationController {
 
+    private static final String ENTITY_USER_FEEDBACK = "UserFeedback";
+
     private final RetrievalEvaluationService evaluationService;
     private final UserFeedbackService userFeedbackService;
+    private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public EvaluationController(RetrievalEvaluationService evaluationService,
-                                UserFeedbackService userFeedbackService) {
+                                UserFeedbackService userFeedbackService,
+                                @Autowired(required = false) AuditLogService auditLogService) {
         this.evaluationService = evaluationService;
         this.userFeedbackService = userFeedbackService;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -154,6 +162,11 @@ public class EvaluationController {
                 request.getSelectedDocumentIds(),
                 request.getDwellTimeMs()
         );
+        auditCreate(ENTITY_USER_FEEDBACK,
+                String.valueOf(result.getId()),
+                "User feedback submitted: " + result.getFeedbackType(),
+                Map.of("sessionId", request.getSessionId() != null ? request.getSessionId() : "null",
+                        "rating", result.getRating() != null ? result.getRating() : 0));
         return ResponseEntity.ok(result);
     }
 
@@ -203,5 +216,14 @@ public class EvaluationController {
                 request.getRetrievedDocIds(),
                 request.getRelevantDocIds()
         );
+    }
+
+    // Null-safe audit logging helpers (AuditLogService is optional)
+    private void auditCreate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message);
+    }
+
+    private void auditCreate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message, details);
     }
 }

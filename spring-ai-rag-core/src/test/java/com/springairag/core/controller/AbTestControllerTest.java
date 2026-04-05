@@ -26,7 +26,7 @@ class AbTestControllerTest {
     @BeforeEach
     void setUp() {
         abTestService = mock(AbTestService.class);
-        controller = new AbTestController(abTestService);
+        controller = new AbTestController(abTestService, null);
     }
 
     // ==================== createExperiment ====================

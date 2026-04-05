@@ -67,6 +67,8 @@ public class AuditLogService {
     public static final String ENTITY_SILENCE_SCHEDULE = "SilenceSchedule";
     /** 实体类型：嵌入缓存 */
     public static final String ENTITY_EMBED_CACHE = "EmbedCache";
+    /** 实体类型：用户反馈 */
+    public static final String ENTITY_USER_FEEDBACK = "UserFeedback";
 
     private final RagAuditLogRepository repository;
     private final ObjectMapper objectMapper;

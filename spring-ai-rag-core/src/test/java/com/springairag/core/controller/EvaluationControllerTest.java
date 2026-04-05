@@ -31,7 +31,7 @@ class EvaluationControllerTest {
     void setUp() {
         evaluationService = mock(RetrievalEvaluationService.class);
         userFeedbackService = mock(UserFeedbackService.class);
-        controller = new EvaluationController(evaluationService, userFeedbackService);
+        controller = new EvaluationController(evaluationService, userFeedbackService, null);
     }
 
     @Test
