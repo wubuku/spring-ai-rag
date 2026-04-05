@@ -687,6 +687,17 @@
 | R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ✅ 2026-04-05（R4 完成，MaskingLogstashEncoder 9 tests + SensitiveDataMaskingConverter 38 tests） |
 | R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ✅ 2026-04-05（R5 完成，app.models YAML 配置完整且与 MultiModelProperties 对应，零未使用配置） |
 
+## 待办（新一波改进）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N1 | B8 DevOps：Helm Chart + Kubernetes 部署清单 | 部署 | ⏳ 待推进 |
+| N2 | B8 DevOps：Grafana Dashboard JSON 配置 | 监控 | ⏳ 待推进 |
+| N3 | B8 DevOps：Prometheus Alerting Rules | 监控 | ⏳ 待推进 |
+| N4 | B8 DevOps：k6 负载测试脚本 | 性能 | ⏳ 待推进 |
+| N5 | B9 Testing：Playwright E2E SSE 流式响应 + 文件上传 | 测试 | ⏳ 待推进 |
+| N6 | D1-4：DocumentVersionService 单元测试补强 | 测试 | ⏳ 待推进 |
+
 ## 2026-04-05 00:22 — ✅ 日志审计完善
 
 - RagAuditLog 实体 + RagAuditLogRepository（JPA，8 个查询方法）
