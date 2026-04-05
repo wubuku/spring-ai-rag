@@ -973,8 +973,8 @@
 |---|--------|------|------|
 | C2-1 | Alerts 页面：SLO Config CRUD UI（SLO 配置增删改查表单） | 功能 | ⏳ 待推进 |
 | C2-2 | Alerts 页面：Silence Schedule UI（静默时段创建/编辑） | 功能 | ⏳ 待推进 |
-| C2-3 | WebUI 全局错误边界：React ErrorBoundary 组件 | 体验 | ⏳ 待推进 |
-| C2-4 | WebUI 响应式布局：移动端侧边栏折叠 | 体验 | ⏳ 待推进 |
+| C2-3 | WebUI 全局错误边界：React ErrorBoundary 组件 | 体验 | ✅ 2026-04-05（C2-3 已有，Layout 已集成 ErrorBoundary） |
+| C2-4 | WebUI 响应式布局：移动端侧边栏折叠 | 体验 | ✅ 2026-04-05（C2-4 完成，移动端抽屉侧边栏 + 遮罩层） |
 
 ## 待办（集成 C3 — 测试修复）
 
