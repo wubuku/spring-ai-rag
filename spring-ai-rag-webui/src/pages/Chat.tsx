@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useChatSSE } from '../hooks/useSSE';
+import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
 
@@ -15,8 +16,12 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [showSidebar, setShowSidebar] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { addSession } = useChatSessions();
+  const addSessionRef = useRef(addSession);
+  addSessionRef.current = addSession;
 
   const { send, isConnected } = useChatSSE({
     onChunk: () => {
@@ -55,6 +60,18 @@ export function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // Save conversation when it ends
+  useEffect(() => {
+    if (conversationId && messages.length > 0) {
+      const userMsg = messages.find(m => m.role === 'user');
+      if (userMsg) {
+        const title = userMsg.content.slice(0, 50) + (userMsg.content.length > 50 ? '...' : '');
+        addSessionRef.current(conversationId, title);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversationId, messages.length]);
+
   const handleSend = () => {
     if (!input.trim() || isConnected) return;
     const userMsg = input.trim();
@@ -78,6 +95,13 @@ export function Chat() {
   const handleNewChat = () => {
     setMessages([]);
     setConversationId(undefined);
+    setShowSidebar(false);
+  };
+
+  const handleSelectSession = (sessionId: string) => {
+    // For now, just switch to the session - in future, load its messages
+    setConversationId(sessionId);
+    setShowSidebar(false);
   };
 
   // Auto-resize textarea
@@ -89,69 +113,87 @@ export function Chat() {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h1 className="page-title">RAG Chat</h1>
-        {messages.length > 0 && (
-          <button onClick={handleNewChat} className={styles.newChatBtn}>
-            New Chat
-          </button>
-        )}
-      </div>
-
-      <div className={styles.messages}>
-        {messages.length === 0 && (
-          <div className={styles.emptyState}>
-            <p>Ask me anything about your documents!</p>
-            <p className={styles.hint}>
-              I&apos;ll search through your knowledge base to find the most relevant information.
-            </p>
-          </div>
-        )}
-
-        {messages.map(msg => (
-          <div
-            key={msg.id}
-            className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}
-          >
-            <div className={styles.role}>{msg.role === 'user' ? 'You' : 'Assistant'}</div>
-            <div className={styles.content}>
-              {msg.content}
-              {msg.isStreaming && <span className={styles.cursor}>▍</span>}
-            </div>
-            {msg.sources && msg.sources.length > 0 && (
-              <div className={styles.sources}>
-                <strong>Sources:</strong>
-                {msg.sources.map((s, i) => (
-                  <span key={i} className={styles.source}>
-                    [{s.title} ({(s.score * 100).toFixed(0)}%)]
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
-
-      <div className={styles.inputRow}>
-        <textarea
-          ref={textareaRef}
-          value={input}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          placeholder="Ask a question... (Enter to send, Shift+Enter for new line)"
-          disabled={isConnected}
-          className={styles.input}
-          rows={1}
+    <div className={styles.layout}>
+      {showSidebar && (
+        <ChatSidebar
+          currentSessionId={conversationId}
+          onSelectSession={handleSelectSession}
+          onNewChat={handleNewChat}
         />
-        <button
-          onClick={handleSend}
-          disabled={isConnected || !input.trim()}
-          className={styles.sendBtn}
-        >
-          {isConnected ? '...' : 'Send'}
-        </button>
+      )}
+      <div className={styles.container}>
+        <div className={styles.header}>
+          <div className={styles.headerLeft}>
+            <button
+              className={styles.sidebarToggle}
+              onClick={() => setShowSidebar(!showSidebar)}
+              title="Toggle history"
+            >
+              ☰
+            </button>
+            <h1 className="page-title">RAG Chat</h1>
+          </div>
+          {messages.length > 0 && (
+            <button onClick={handleNewChat} className={styles.newChatBtn}>
+              New Chat
+            </button>
+          )}
+        </div>
+
+        <div className={styles.messages}>
+          {messages.length === 0 && (
+            <div className={styles.emptyState}>
+              <p>Ask me anything about your documents!</p>
+              <p className={styles.hint}>
+                I will search through your knowledge base to find the most relevant information.
+              </p>
+            </div>
+          )}
+
+          {messages.map(msg => (
+            <div
+              key={msg.id}
+              className={`${styles.msg} ${msg.role === 'user' ? styles.user : styles.assistant}`}
+            >
+              <div className={styles.role}>{msg.role === 'user' ? 'You' : 'Assistant'}</div>
+              <div className={styles.content}>
+                {msg.content}
+                {msg.isStreaming && <span className={styles.cursor}>▍</span>}
+              </div>
+              {msg.sources && msg.sources.length > 0 && (
+                <div className={styles.sources}>
+                  <strong>Sources:</strong>
+                  {msg.sources.map((s, i) => (
+                    <span key={i} className={styles.source}>
+                      [{s.title} ({(s.score * 100).toFixed(0)}%)]
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+
+        <div className={styles.inputRow}>
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={handleInput}
+            onKeyDown={handleKeyDown}
+            placeholder="Ask a question... (Enter to send, Shift+Enter for new line)"
+            disabled={isConnected}
+            className={styles.input}
+            rows={1}
+          />
+          <button
+            onClick={handleSend}
+            disabled={isConnected || !input.trim()}
+            className={styles.sendBtn}
+          >
+            {isConnected ? '...' : 'Send'}
+          </button>
+        </div>
       </div>
     </div>
   );
