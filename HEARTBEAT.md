@@ -1083,7 +1083,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| N19 | N15：缓存失效管理 API（DELETE /cache/invalidate 端点） | 可观测性 | ⏳ 待推进 |
+| N19 | N15：缓存失效管理 API（DELETE /cache/invalidate 端点） | 可观测性 | ✅ 2026-04-06（N19 完成，DELETE /api/v1/rag/cache/invalidate + CacheMetricsService.clearCache()） |
 | N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
 | N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ 待推进 |
 | N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ⏳ 待推进 |
