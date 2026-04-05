@@ -5,8 +5,11 @@ import com.springairag.api.dto.FireAlertRequest;
 import com.springairag.api.dto.FireAlertResponse;
 import com.springairag.api.dto.ResolveAlertRequest;
 import com.springairag.api.dto.SilenceAlertRequest;
+import com.springairag.api.dto.SilenceScheduleRequest;
 import com.springairag.api.dto.SloConfigRequest;
+import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.entity.RagSloConfig;
+import com.springairag.core.repository.RagSilenceScheduleRepository;
 import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.versioning.ApiVersion;
@@ -35,10 +38,13 @@ public class AlertController {
 
     private final AlertService alertService;
     private final SloConfigRepository sloConfigRepository;
+    private final RagSilenceScheduleRepository silenceScheduleRepository;
 
-    public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository) {
+    public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository,
+                           RagSilenceScheduleRepository silenceScheduleRepository) {
         this.alertService = alertService;
         this.sloConfigRepository = sloConfigRepository;
+        this.silenceScheduleRepository = silenceScheduleRepository;
     }
 
     /**
@@ -250,6 +256,92 @@ public class AlertController {
             return ResponseEntity.notFound().build();
         }
         sloConfigRepository.deleteBySloName(sloName);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ==================== Silence Schedule CRUD ====================
+
+    @Operation(summary = "Create silence schedule", description = "Create a new silence schedule for alert downtime/suppress periods.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Silence schedule created"),
+        @ApiResponse(responseCode = "400", description = "Invalid request"),
+        @ApiResponse(responseCode = "409", description = "Schedule with this name already exists")
+    })
+    @PostMapping("/silence-schedules")
+    public ResponseEntity<RagSilenceSchedule> createSilenceSchedule(
+            @Valid @RequestBody SilenceScheduleRequest request) {
+        if (silenceScheduleRepository.findByName(request.getName()).isPresent()) {
+            return ResponseEntity.status(409).build();
+        }
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setName(request.getName());
+        schedule.setAlertKey(request.getAlertKey());
+        schedule.setSilenceType(request.getSilenceType());
+        schedule.setStartTime(request.getStartTime());
+        schedule.setEndTime(request.getEndTime());
+        schedule.setDescription(request.getDescription());
+        schedule.setEnabled(request.getEnabled() != null ? request.getEnabled() : true);
+        schedule.setMetadata(request.getMetadata());
+        schedule.setCreatedAt(ZonedDateTime.now());
+        RagSilenceSchedule saved = silenceScheduleRepository.save(schedule);
+        return ResponseEntity.status(201).body(saved);
+    }
+
+    @Operation(summary = "List all silence schedules", description = "List all configured silence schedules.")
+    @GetMapping("/silence-schedules")
+    public ResponseEntity<List<RagSilenceSchedule>> listSilenceSchedules() {
+        return ResponseEntity.ok(silenceScheduleRepository.findAll());
+    }
+
+    @Operation(summary = "Get silence schedule by name", description = "Get a specific silence schedule by its name.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Silence schedule found"),
+        @ApiResponse(responseCode = "404", description = "Silence schedule not found")
+    })
+    @GetMapping("/silence-schedules/{name}")
+    public ResponseEntity<RagSilenceSchedule> getSilenceSchedule(@PathVariable String name) {
+        return silenceScheduleRepository.findByName(name)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Update silence schedule", description = "Update an existing silence schedule.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Silence schedule updated"),
+        @ApiResponse(responseCode = "404", description = "Silence schedule not found")
+    })
+    @PutMapping("/silence-schedules/{name}")
+    public ResponseEntity<RagSilenceSchedule> updateSilenceSchedule(
+            @PathVariable String name,
+            @Valid @RequestBody SilenceScheduleRequest request) {
+        return silenceScheduleRepository.findByName(name)
+                .map(existing -> {
+                    existing.setAlertKey(request.getAlertKey());
+                    existing.setSilenceType(request.getSilenceType());
+                    existing.setStartTime(request.getStartTime());
+                    existing.setEndTime(request.getEndTime());
+                    existing.setDescription(request.getDescription());
+                    if (request.getEnabled() != null) {
+                        existing.setEnabled(request.getEnabled());
+                    }
+                    existing.setMetadata(request.getMetadata());
+                    existing.setUpdatedAt(ZonedDateTime.now());
+                    return ResponseEntity.ok(silenceScheduleRepository.save(existing));
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Delete silence schedule", description = "Delete a silence schedule by its name.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Silence schedule deleted"),
+        @ApiResponse(responseCode = "404", description = "Silence schedule not found")
+    })
+    @DeleteMapping("/silence-schedules/{name}")
+    public ResponseEntity<Void> deleteSilenceSchedule(@PathVariable String name) {
+        if (!silenceScheduleRepository.findByName(name).isPresent()) {
+            return ResponseEntity.notFound().build();
+        }
+        silenceScheduleRepository.deleteByName(name);
         return ResponseEntity.noContent().build();
     }
 }
