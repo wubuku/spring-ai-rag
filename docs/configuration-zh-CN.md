@@ -235,6 +235,32 @@ rag:
 | `rag.async.max-pool-size` | `16` | 最大线程数 |
 | `rag.async.queue-capacity` | `100` | 队列容量 |
 
+## LLM API 超时配置
+
+```yaml
+rag:
+  timeout:
+    connect-timeout-ms: 10000   # 连接建立超时
+    read-timeout-ms: 60000     # 读取超时（等待首字节时间）
+    chat-ask-ms: 120000       # 非流式对话超时
+    chat-stream-ms: 180000     # 流式对话超时（更长以支持 token 生成）
+    search-ms: 30000          # 检索端点超时
+    embed-ms: 60000           # 嵌入端点超时
+    model-compare-ms: 90000    # 单模型对比超时
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.timeout.connect-timeout-ms` | `10000` | HTTP 连接建立超时（毫秒） |
+| `rag.timeout.read-timeout-ms` | `60000` | LLM API 响应读取超时（毫秒） |
+| `rag.timeout.chat-ask-ms` | `120000` | 非流式对话调用超时（毫秒） |
+| `rag.timeout.chat-stream-ms` | `180000` | 流式对话调用超时（毫秒） |
+| `rag.timeout.search-ms` | `30000` | 检索端点超时（毫秒） |
+| `rag.timeout.embed-ms` | `60000` | 嵌入调用超时（毫秒） |
+| `rag.timeout.model-compare-ms` | `90000` | 单模型对比超时（毫秒） |
+
+超时作用于 `RestClient` 层级，对所有外部 LLM API 调用生效（OpenAI、Anthropic、MiniMax）。复杂查询或网络慢时建议增大配置值。
+
 ## 安全认证配置
 
 ```yaml

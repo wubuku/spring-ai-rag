@@ -255,6 +255,17 @@ rag:
     max-pool-size: 16
     queue-capacity: 100
 
+  # Per-endpoint LLM API timeout configuration (milliseconds)
+  # Applied at the RestClient level for OpenAI/Anthropic/MiniMax API calls
+  timeout:
+    connect-timeout-ms: 10000    # Connection establishment timeout
+    read-timeout-ms: 60000       # Read timeout (time waiting for first byte)
+    chat-ask-ms: 120000          # Non-streaming chat endpoint timeout
+    chat-stream-ms: 180000       # Streaming chat endpoint timeout (longer for token gen)
+    search-ms: 30000             # Search endpoint timeout
+    embed-ms: 60000              # Embedding endpoint timeout
+    model-compare-ms: 90000      # Per-model comparison timeout
+
   # LLM circuit breaker configuration (disabled by default)
   # When enabled, prevents request pile-up during LLM API outages
   # circuit-breaker:

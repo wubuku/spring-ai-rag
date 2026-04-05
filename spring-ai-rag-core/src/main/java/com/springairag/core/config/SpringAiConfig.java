@@ -24,6 +24,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -46,6 +47,12 @@ import java.util.List;
 public class SpringAiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiConfig.class);
+
+    private final RagProperties ragProperties;
+
+    public SpringAiConfig(RagProperties ragProperties) {
+        this.ragProperties = ragProperties;
+    }
 
     @Value("${app.llm.provider:openai}")
     private String provider;
@@ -101,14 +108,35 @@ public class SpringAiConfig {
         }
     }
 
+    /**
+     * Creates a ClientHttpRequestFactory with configurable timeouts.
+     * 
+     * @param noProxy if true, sets Proxy.NO_PROXY to bypass JVM proxy settings
+     * @return configured request factory
+     */
+    private SimpleClientHttpRequestFactory createRequestFactory(boolean noProxy) {
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        if (noProxy) {
+            factory.setProxy(Proxy.NO_PROXY);
+        }
+        RagTimeoutProperties timeout = ragProperties.getTimeout();
+        factory.setConnectTimeout(timeout.getConnectTimeoutMs());
+        factory.setReadTimeout(timeout.getReadTimeoutMs());
+        log.debug("RestClient timeouts: connect={}ms, read={}ms",
+                timeout.getConnectTimeoutMs(), timeout.getReadTimeoutMs());
+        return factory;
+    }
+
     @Bean("openAiChatModel")
-    public ChatModel openAiChatModel(RestClient.Builder restClientBuilder) {
+    public ChatModel openAiChatModel() {
         if (!"openai".equals(provider)) {
             log.debug("OpenAI ChatModel skipped, provider is: {}", provider);
             return null;
         }
         log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", openAiBaseUrl, openAiModel);
 
+        RestClient.Builder restClientBuilder = RestClient.builder()
+                .requestFactory(createRequestFactory(false));
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(openAiBaseUrl)
                 .apiKey(openAiApiKey)
@@ -147,19 +175,17 @@ public class SpringAiConfig {
     }
 
     @Bean("miniMaxChatModel")
-    public ChatModel miniMaxChatModel(RestClient.Builder restClientBuilder) {
+    public ChatModel miniMaxChatModel() {
         if (!"minimax".equals(provider)) {
             log.debug("MiniMax ChatModel skipped, provider is: {}", provider);
             return null;
         }
         log.info("Creating MiniMax ChatModel: baseUrl={}, model={}", minimaxBaseUrl, minimaxModel);
 
-        // Create RestClient with NO_PROXY to bypass JVM proxy settings
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setProxy(Proxy.NO_PROXY);
-        RestClient.Builder noProxyBuilder = RestClient.builder()
-                .requestFactory(requestFactory);
-        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, noProxyBuilder);
+        // Create RestClient with NO_PROXY to bypass JVM proxy settings + timeouts
+        RestClient.Builder restClientBuilder = RestClient.builder()
+                .requestFactory(createRequestFactory(true));
+        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder);
 
         MiniMaxChatOptions options = MiniMaxChatOptions.builder()
                 .model(minimaxModel)

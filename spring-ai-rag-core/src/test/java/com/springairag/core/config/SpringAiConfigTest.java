@@ -20,12 +20,12 @@ import static org.mockito.Mockito.*;
 class SpringAiConfigTest {
 
     private SpringAiConfig config;
-    private RestClient.Builder restClientBuilder;
+    private RagProperties ragProperties;
 
     @BeforeEach
     void setUp() {
-        config = new SpringAiConfig();
-        restClientBuilder = mock(RestClient.Builder.class);
+        ragProperties = new RagProperties();
+        config = new SpringAiConfig(ragProperties);
     }
 
     private void setProvider(String provider) {
@@ -37,7 +37,7 @@ class SpringAiConfigTest {
     void openAiChatModel_whenProviderAnthropic_returnsNull() {
         setProvider("anthropic");
 
-        ChatModel model = config.openAiChatModel(restClientBuilder);
+        ChatModel model = config.openAiChatModel();
         assertNull(model);
     }
 
@@ -46,7 +46,7 @@ class SpringAiConfigTest {
     void openAiChatModel_whenProviderOther_returnsNull() {
         setProvider("zhipu");
 
-        ChatModel model = config.openAiChatModel(restClientBuilder);
+        ChatModel model = config.openAiChatModel();
         assertNull(model);
     }
 

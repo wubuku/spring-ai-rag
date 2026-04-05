@@ -235,6 +235,32 @@ rag:
 | `rag.async.max-pool-size` | `16` | Max thread count |
 | `rag.async.queue-capacity` | `100` | Queue capacity |
 
+## LLM API Timeout Configuration
+
+```yaml
+rag:
+  timeout:
+    connect-timeout-ms: 10000   # Connection establishment timeout
+    read-timeout-ms: 60000     # Read timeout (time waiting for first byte)
+    chat-ask-ms: 120000        # Non-streaming chat endpoint timeout
+    chat-stream-ms: 180000     # Streaming chat endpoint timeout
+    search-ms: 30000           # Search endpoint timeout
+    embed-ms: 60000            # Embedding endpoint timeout
+    model-compare-ms: 90000    # Per-model comparison timeout
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.timeout.connect-timeout-ms` | `10000` | HTTP connection establishment timeout (ms) |
+| `rag.timeout.read-timeout-ms` | `60000` | Read timeout for LLM API responses (ms) |
+| `rag.timeout.chat-ask-ms` | `120000` | Non-streaming chat call timeout (ms) |
+| `rag.timeout.chat-stream-ms` | `180000` | Streaming chat call timeout (ms, longer for token generation) |
+| `rag.timeout.search-ms` | `30000` | Search endpoint timeout (ms) |
+| `rag.timeout.embed-ms` | `60000` | Embedding call timeout (ms) |
+| `rag.timeout.model-compare-ms` | `90000` | Per-model comparison timeout (ms) |
+
+Timeouts are applied at the `RestClient` level to all external LLM API calls (OpenAI, Anthropic, MiniMax). Increase values for complex queries or slow network conditions.
+
 ## Security Authentication Configuration
 
 ```yaml
