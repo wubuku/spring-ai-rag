@@ -36,6 +36,9 @@ public class ChatRequest {
     @Schema(description = "领域扩展标识（可选）", example = "medical")
     private String domainId;
 
+    @Schema(description = "指定模型（可选，如 \"minimax\" 或 \"openai/deepseek-chat\"，null 使用默认模型）", example = "minimax")
+    private String model;
+
     @Schema(description = "额外元数据（透传给领域扩展）")
     private Map<String, Object> metadata;
 
@@ -63,6 +66,9 @@ public class ChatRequest {
 
     public String getDomainId() { return domainId; }
     public void setDomainId(String domainId) { this.domainId = domainId; }
+
+    public String getModel() { return model; }
+    public void setModel(String model) { this.model = model; }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

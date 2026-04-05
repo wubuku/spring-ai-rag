@@ -23,6 +23,7 @@ import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.client.advisor.api.Advisor;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
@@ -67,6 +68,9 @@ public class RagChatService {
     private static final Logger log = LoggerFactory.getLogger(RagChatService.class);
 
     private final ChatClient chatClient;
+    private final ChatClient.Builder chatClientBuilder; // 用于动态模型路由
+    private final List<Advisor> sortedAdvisors; // 用于动态模型路由时重建 ChatClient
+    private final ChatModelRouter chatModelRouter; // 可选，未配置时为 null
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensionRegistry;
     private final PromptCustomizerChain promptCustomizerChain;
@@ -82,6 +86,8 @@ public class RagChatService {
 
     public RagChatService(
             ChatClient.Builder chatClientBuilder,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ChatModelRouter chatModelRouter,
             QueryRewriteAdvisor queryRewriteAdvisor,
             HybridSearchAdvisor hybridSearchAdvisor,
             RerankAdvisor rerankAdvisor,
@@ -95,6 +101,8 @@ public class RagChatService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             List<RagAdvisorProvider> customAdvisorProviders) {
 
+        this.chatClientBuilder = chatClientBuilder;
+        this.chatModelRouter = chatModelRouter;
         this.historyRepository = historyRepository;
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
@@ -113,11 +121,11 @@ public class RagChatService {
 
         int maxMessages = ragProperties.getMemory().getMaxMessages();
         ChatMemory chatMemory = buildChatMemory(jdbcChatMemoryRepository, maxMessages);
-        List<Advisor> sortedAdvisors = buildSortedAdvisors(
+        this.sortedAdvisors = buildSortedAdvisors(
                 queryRewriteAdvisor, hybridSearchAdvisor, rerankAdvisor,
                 customAdvisorProviders, chatMemory);
 
-        this.chatClient = chatClientBuilder.defaultAdvisors(sortedAdvisors).build();
+        this.chatClient = chatClientBuilder.defaultAdvisors(this.sortedAdvisors).build();
 
         String advisorNames = sortedAdvisors.stream()
                 .map(a -> a.getClass().getSimpleName())
@@ -183,7 +191,7 @@ public class RagChatService {
      * @return 回答文本
      */
     public String chat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
-        return executeChat(userMessage, sessionId, domainId, metadata).getAnswer();
+        return executeChat(userMessage, sessionId, domainId, metadata, null).getAnswer();
     }
 
     /**
@@ -194,24 +202,41 @@ public class RagChatService {
                 request.getMessage(),
                 request.getSessionId(),
                 request.getDomainId(),
-                request.getMetadata()
+                request.getMetadata(),
+                request.getModel()
         );
     }
 
     /**
      * 核心聊天执行方法，返回含 sources 的完整响应
+     *
+     * @param model 可选模型引用（如 "minimax"），为 null 时使用默认模型
      */
-    private ChatResponse executeChat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
+    private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
+            Map<String, Object> metadata, String model) {
         // Circuit breaker check (fast-fail if OPEN)
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
             throw new LlmCircuitOpenException();
         }
 
+        // Resolve model dynamically if specified and router is available (M5: MultiModel integration)
+        ChatClient effectiveClient = this.chatClient;
+        if (model != null && !model.isBlank() && chatModelRouter != null) {
+            ChatModel resolved = chatModelRouter.resolve(model);
+            if (resolved != null) {
+                effectiveClient = ChatClient.builder(resolved)
+                        .defaultAdvisors(sortedAdvisors).build();
+                log.info("Routing request to model '{}' via ChatModelRouter", model);
+            } else {
+                log.warn("Model '{}' could not be resolved, using default", model);
+            }
+        }
+
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
 
-        ChatClient.ChatClientRequestSpec spec = chatClient.prompt();
+        ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();
         if (systemPrompt != null) {
             spec.system(systemPrompt);
         }

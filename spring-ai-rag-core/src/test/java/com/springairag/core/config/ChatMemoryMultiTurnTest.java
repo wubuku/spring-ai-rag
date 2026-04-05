@@ -46,6 +46,7 @@ class ChatMemoryMultiTurnTest {
     private ChatClient.ChatClientRequestSpec promptSpec;
     private ChatClient.CallResponseSpec callResponse;
     private RagChatHistoryRepository historyRepository;
+    private ChatModelRouter chatModelRouter;
 
     /** 捕获每轮 chat() 实际传入 advisor 的参数 */
     private List<Map<String, Object>> capturedAdvisorParams;
@@ -65,6 +66,7 @@ class ChatMemoryMultiTurnTest {
         historyRepository = mock(RagChatHistoryRepository.class);
         DomainExtensionRegistry domainExtensionRegistry = mock(DomainExtensionRegistry.class);
         PromptCustomizerChain promptCustomizerChain = mock(PromptCustomizerChain.class);
+        chatModelRouter = mock(ChatModelRouter.class);
 
         when(chatClientBuilder.defaultAdvisors(anyList())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
@@ -115,6 +117,7 @@ class ChatMemoryMultiTurnTest {
     private RagChatService createService() {
         return new RagChatService(
                 chatClientBuilder,
+                chatModelRouter,
                 mock(QueryRewriteAdvisor.class),
                 mock(HybridSearchAdvisor.class),
                 mock(RerankAdvisor.class),
