@@ -892,6 +892,8 @@
 - 依赖：playwright（已在 spring-ai-rag-webui 安装）
 
 - 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成
+- 2026-04-05 14:06 — ✅ B-1 SSE emitter 注释完善：embedDocumentStream 添加完整 Javadoc（事件类型/错误策略/best-effort 回调/0L 超时含义），@Operation/@ApiResponse/@Parameter 翻译为英文，1 文件 +30/-6 行；mvn test ✅；commit 5d0d1bf 已推送
+
 - 2026-04-05 13:00 — 🔍 主动巡检：识别 WebUI 改进空间（Vitest 覆盖率低/无 Error Boundary/无 dark mode toggle/无 ESLint）
 
 ## 待办（WebUI 精益求精）
@@ -909,5 +911,5 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| B-1 | RagDocumentController SSE emitter 注释完善 | 代码质量 | ⏳ 待推进 |
+| B-1 | RagDocumentController SSE emitter 注释完善 | 代码质量 | ✅ 2026-04-05 |
 
