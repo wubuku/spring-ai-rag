@@ -176,7 +176,7 @@ async function testChat(page) {
 async function testSearch(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/search`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
-    { selector: 'input[placeholder*="search"]', description: 'Search input', state: 'visible' },
+    { selector: 'input[placeholder*="earch"]', description: 'Search input', state: 'visible' },
     { selector: 'button[type="submit"]', description: 'Search button', state: 'visible' },
   ]);
   
@@ -187,7 +187,7 @@ async function testSearch(page) {
   console.log(`  → Page title: "${title.trim()}"`);
   
   // Test search input interaction
-  const input = page.locator('input[placeholder*="search"]');
+  const input = page.locator('input[placeholder*="earch"]');
   await input.fill('test query');
   const value = await input.inputValue();
   if (value !== 'test query') {

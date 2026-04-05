@@ -90,24 +90,25 @@ describe('useSearchHistory', () => {
   it('removes item by timestamp', async () => {
     const { result } = setup();
 
-    // Add first item
+    // Add first item with useHybrid=true
     act(() => {
-      result.current.addQuery('to remove', true);
+      result.current.addQuery('first query', true);
     });
     await waitFor(() => {
       expect(result.current.history).toHaveLength(1);
     });
     const tsToRemove = result.current.history[0].timestamp;
 
-    // Add second item
+    // Add second item with useHybrid=false — different flag means no deduplication conflict
     act(() => {
-      result.current.addQuery('to keep', true);
+      result.current.addQuery('second query', false);
     });
     await waitFor(() => {
       expect(result.current.history).toHaveLength(2);
     });
-    expect(result.current.history[0].query).toBe('to keep');
-    expect(result.current.history[1].query).toBe('to remove');
+    // Newest first
+    expect(result.current.history[0].query).toBe('second query');
+    expect(result.current.history[1].query).toBe('first query');
 
     // Remove first item
     act(() => {
@@ -116,7 +117,7 @@ describe('useSearchHistory', () => {
     await waitFor(() => {
       expect(result.current.history).toHaveLength(1);
     });
-    expect(result.current.history[0].query).toBe('to keep');
+    expect(result.current.history[0].query).toBe('second query');
   });
 
   it('clears all history', async () => {
