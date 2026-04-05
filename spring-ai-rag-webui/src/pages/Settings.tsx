@@ -1,11 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import styles from './Settings.module.css';
-
-interface LlmConfig {
-  provider: string;
-  model: string;
-  apiKeyConfigured: boolean;
-}
 
 interface RetrievalConfig {
   vectorWeight: number;
@@ -20,41 +14,91 @@ interface CacheConfig {
   maxSize: number;
 }
 
+const SETTINGS_KEY = 'user_settings';
+
 export function Settings() {
   const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache'>('llm');
   const [saved, setSaved] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
+  const lastSavedRef = useRef<{ retrieval: RetrievalConfig; cache: CacheConfig } | null>(null);
 
-  // Mock data - in real app, this would come from API
-  const [llmConfig] = useState<LlmConfig>({
+  const [llmConfig] = useState({
     provider: 'deepseek',
     model: 'deepseek-chat',
     apiKeyConfigured: true,
   });
 
-  const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfig>({
-    vectorWeight: 0.7,
-    fulltextWeight: 0.3,
-    topK: 10,
-    rerankTopK: 5,
+  const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfig>(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          vectorWeight: parsed.vectorWeight ?? 0.7,
+          fulltextWeight: parsed.fulltextWeight ?? 0.3,
+          topK: parsed.topK ?? 10,
+          rerankTopK: parsed.rerankTopK ?? 5,
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return { vectorWeight: 0.7, fulltextWeight: 0.3, topK: 10, rerankTopK: 5 };
   });
 
-  const [cacheConfig, setCacheConfig] = useState<CacheConfig>({
-    enabled: true,
-    ttlMinutes: 60,
-    maxSize: 1000,
+  const [cacheConfig, setCacheConfig] = useState<CacheConfig>(() => {
+    try {
+      const stored = localStorage.getItem(SETTINGS_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        return {
+          enabled: parsed.enabled ?? true,
+          ttlMinutes: parsed.ttlMinutes ?? 60,
+          maxSize: parsed.maxSize ?? 1000,
+        };
+      }
+    } catch {
+      // ignore
+    }
+    return { enabled: true, ttlMinutes: 60, maxSize: 1000 };
   });
+
+  useEffect(() => {
+    const lastSaved = lastSavedRef.current;
+    if (!lastSaved) return;
+    const hasChanges =
+      retrievalConfig.vectorWeight !== lastSaved.retrieval.vectorWeight ||
+      retrievalConfig.fulltextWeight !== lastSaved.retrieval.fulltextWeight ||
+      retrievalConfig.topK !== lastSaved.retrieval.topK ||
+      retrievalConfig.rerankTopK !== lastSaved.retrieval.rerankTopK ||
+      cacheConfig.enabled !== lastSaved.cache.enabled ||
+      cacheConfig.ttlMinutes !== lastSaved.cache.ttlMinutes ||
+      cacheConfig.maxSize !== lastSaved.cache.maxSize;
+    setHasChanges(hasChanges);
+  }, [retrievalConfig, cacheConfig]);
 
   const handleSave = () => {
-    // In real app, this would call the API to save settings
+    const settings = {
+      vectorWeight: retrievalConfig.vectorWeight,
+      fulltextWeight: retrievalConfig.fulltextWeight,
+      topK: retrievalConfig.topK,
+      rerankTopK: retrievalConfig.rerankTopK,
+      enabled: cacheConfig.enabled,
+      ttlMinutes: cacheConfig.ttlMinutes,
+      maxSize: cacheConfig.maxSize,
+    };
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    lastSavedRef.current = { retrieval: retrievalConfig, cache: cacheConfig };
     setSaved(true);
+    setHasChanges(false);
     setTimeout(() => setSaved(false), 2000);
   };
 
   const tabs = [
-    { id: 'llm', label: 'LLM Provider' },
-    { id: 'retrieval', label: 'Retrieval' },
-    { id: 'cache', label: 'Cache' },
-  ] as const;
+    { id: 'llm' as const, label: 'LLM Provider' },
+    { id: 'retrieval' as const, label: 'Retrieval' },
+    { id: 'cache' as const, label: 'Cache' },
+  ];
 
   return (
     <div className={styles.container}>
@@ -247,7 +291,11 @@ export function Settings() {
         )}
 
         <div className={styles.actions}>
-          <button onClick={handleSave} className={styles.saveBtn}>
+          <button
+            onClick={handleSave}
+            className={styles.saveBtn}
+            disabled={!hasChanges}
+          >
             {saved ? '✓ Saved!' : 'Save Changes'}
           </button>
         </div>
