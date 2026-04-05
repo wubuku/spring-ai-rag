@@ -891,13 +891,22 @@
 - 运行：`node scripts/webui-e2e-test.js`
 - 依赖：playwright（已在 spring-ai-rag-webui 安装）
 
-- 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成：
-  - 发现 WebUI 未提交变更：Playwright E2E 测试套件（11 tests）、vite.config.ts dev middleware、package.json scripts
-  - 新增 e2e/ 目录（api-mocks.ts + 7 个 spec 文件）+ playwright.config.ts
-  - .gitignore 新增 test-results/ 和 playwright-report/
-  - useSSE.test.ts 和 useFileUpload.test.ts 清理未使用变量
-  - 1056 Java 测试全通过，零失败零错误
-  - commit 79ab1dc 已推送
-  - **全部 Phase 1-7 + P1/P2/P3 + W1-W5 全部完成，项目处于生产级成熟状态**
-  - **无 ⏳ 待办项**
+- 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成
+- 2026-04-05 13:00 — 🔍 主动巡检：识别 WebUI 改进空间（Vitest 覆盖率低/无 Error Boundary/无 dark mode toggle/无 ESLint）
+
+## 待办（WebUI 精益求精）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| W6-1 | Vitest 单元测试：Documents/Search/Collections/Metrics/Alerts 页 | 测试 | ⏳ 进行中（仅 Chat+Settings 有测试，25 tests） |
+| W6-2 | React Error Boundary：错误边界组件，捕获子组件异常 | 可靠性 | ⏳ 待推进 |
+| W6-3 | Dark Mode Toggle：Layout 添加主题切换按钮 | UX | ⏳ 待推进 |
+| W6-4 | ESLint + Prettier：WebUI 代码规范配置 | 工程化 | ⏳ 待推进 |
+| W6-5 | Loading Skeletons：Loading..." 替换为骨架屏 | UX | ⏳ 待推进 |
+
+## 后端改进
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| B-1 | RagDocumentController SSE emitter 注释完善 | 代码质量 | ⏳ 待推进 |
 
