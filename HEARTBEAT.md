@@ -1050,3 +1050,5 @@
 
 - 2026-04-05 22:47 — WebUI 常规巡检：npm test ✅（79 tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 全部通过（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist/ 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净
 
+- 2026-04-05 23:35 — WebUI 常规发布：npm test ✅（79/79）/ npm run build ✅（243KB gzipped）/ E2E 11/11 ✅ / WebUiConfig assets/ 路径修复（返回 index 而非抛异常）+ playwright.config.ts baseURL 默认 8081 / commit 415fff9 已推送
+
