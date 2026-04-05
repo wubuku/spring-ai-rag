@@ -979,6 +979,17 @@
 | B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ✅ 2026-04-05（22 tests: RFC 7807 + request field + spec completeness） |
 | B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ✅ 2026-04-05（11 E2E 全通过） |
 
+## 待办（Multi-Model M1-M6 — 多模型支持）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| M1 | MultiModelProperties 配置绑定（YAML + JSON 双格式） | 核心功能 | ✅ 2026-04-05（M1 完成，MultiModelProperties + MultiModelConfigLoader + models.json） |
+| M2 | ModelRegistry 重构 + JSON 外部配置加载器 | 核心功能 | ⏳ 待推进 |
+| M3 | ChatModelRouter + Fallback 链 | 核心功能 | ⏳ 待推进 |
+| M4 | Embedding 模型多模型支持 | 核心功能 | ⏳ 待推进 |
+| M5 | 现有组件整合（ModelComparisonService 等） | 集成 | ⏳ 待推进 |
+| M6 | E2E 验证（Playwright 多模型测试） | 验证 | ⏳ 待推进 |
+
 ## 待办（Metrics C1 — 可观测性补全）
 
 | # | 改进项 | 类型 | 状态 |
