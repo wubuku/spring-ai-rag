@@ -1,0 +1,62 @@
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    var(--color-surface-hover) 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.textContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.tableHeader {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tableRow {
+  display: flex;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.tableRow:last-child {
+  border-bottom: none;
+}
