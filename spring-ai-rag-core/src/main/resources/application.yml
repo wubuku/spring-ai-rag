@@ -82,7 +82,7 @@ spring:
   # Spring AI MiniMax model configuration (optional, enabled when provider=minimax)
   minimax:
     api-key: ${MINIMAX_API_KEY:dummy}
-    base-url: ${MINIMAX_BASE_URL:https://api.minimaxi.com}
+    base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat/v1}
     chat:
       enabled: false
       options:
