@@ -8,14 +8,15 @@ import styles from './Documents.module.css';
 
 export function Documents() {
   const [page, setPage] = useState(0);
+  const [keyword, setKeyword] = useState('');
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   const { data, isPending, error } = useQuery({
-    queryKey: ['documents', page],
-    queryFn: () => documentsApi.list({ page, size: PAGE_SIZE }),
+    queryKey: ['documents', page, keyword],
+    queryFn: () => documentsApi.list({ page, size: PAGE_SIZE, title: keyword || undefined }),
     staleTime: 10000,
   });
 
@@ -60,6 +61,11 @@ export function Documents() {
     handleFiles(e.dataTransfer.files);
   };
 
+  const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setKeyword(e.target.value);
+    setPage(0);
+  };
+
   const handlePreview = (doc: { id: number; title: string; content: string }) => {
     setPreviewDoc(doc);
   };
@@ -88,6 +94,21 @@ export function Documents() {
           <span>{isUploading ? 'Uploading...' : 'Drop files here or click to upload'}</span>
           <span className={styles.uploadHint}>Supports: txt, md, json, xml, html, csv, log</span>
         </label>
+      </div>
+
+      <div className={styles.searchRow}>
+        <input
+          type="text"
+          placeholder="Search documents by title..."
+          value={keyword}
+          onChange={handleKeywordChange}
+          className={styles.searchInput}
+        />
+        {keyword && (
+          <button onClick={() => { setKeyword(''); setPage(0); }} className={styles.clearBtn}>
+            ✕
+          </button>
+        )}
       </div>
 
       {isPending ? (

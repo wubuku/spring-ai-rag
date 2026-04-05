@@ -20,7 +20,7 @@ export interface DocumentListResponse {
 }
 
 export const documentsApi = {
-  list: (params: { page?: number; size?: number; collectionId?: number }) =>
+  list: (params: { page?: number; size?: number; collectionId?: number; title?: string }) =>
     apiClient.get<DocumentListResponse>('/documents', { params }),
 
   get: (id: number) => apiClient.get<Document>(`/documents/${id}`),
