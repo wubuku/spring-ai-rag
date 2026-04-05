@@ -203,7 +203,7 @@ class RagCollectionControllerTest {
 
         when(documentRepository.findByCollectionId(eq(1L), any(Pageable.class))).thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(1L, 0, 20);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(1L, 0, 20, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("collectionId"));
@@ -215,7 +215,7 @@ class RagCollectionControllerTest {
     void listDocuments_collectionNotExists_returns404() {
         when(collectionRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(999L, 0, 20);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(999L, 0, 20, null, null, null);
 
         assertEquals(404, response.getStatusCode().value());
     }

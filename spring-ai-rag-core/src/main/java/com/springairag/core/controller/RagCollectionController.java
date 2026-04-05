@@ -9,6 +9,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -197,7 +198,10 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> listDocuments(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int offset,
-            @RequestParam(defaultValue = "20") int limit) {
+            @RequestParam(defaultValue = "20") int limit,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String documentType,
+            @RequestParam(required = false) String processingStatus) {
 
         if (!collectionRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
@@ -205,7 +209,22 @@ public class RagCollectionController {
 
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
-        var pageResult = documentRepository.findByCollectionId(id, pageable);
+        Page<RagDocument> pageResult;
+
+        boolean hasFilters = (keyword != null && !keyword.isBlank())
+                || (documentType != null && !documentType.isBlank())
+                || (processingStatus != null && !processingStatus.isBlank());
+
+        if (hasFilters) {
+            pageResult = documentRepository.searchDocumentsByCollectionId(
+                    id,
+                    keyword != null ? keyword.trim() : null,
+                    documentType,
+                    processingStatus,
+                    pageable);
+        } else {
+            pageResult = documentRepository.findByCollectionId(id, pageable);
+        }
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
                 .map(this::toDocumentSummary)

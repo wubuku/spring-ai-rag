@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.service.ChatExportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -31,13 +32,15 @@ class SseStreamE2ETest {
 
     private RagChatService ragChatService;
     private RagChatHistoryRepository historyRepository;
+    private ChatExportService chatExportService;
     private RagChatController controller;
 
     @BeforeEach
     void setUp() {
         ragChatService = mock(RagChatService.class);
         historyRepository = mock(RagChatHistoryRepository.class);
-        controller = new RagChatController(ragChatService, historyRepository);
+        chatExportService = mock(ChatExportService.class);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService);
     }
 
     /**

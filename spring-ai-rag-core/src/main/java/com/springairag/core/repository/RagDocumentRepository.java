@@ -42,6 +42,25 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     Page<RagDocument> findByCollectionId(Long collectionId, Pageable pageable);
 
     /**
+     * 按集合 ID + 标题关键词搜索（忽略大小写）
+     */
+    Page<RagDocument> findByCollectionIdAndTitleContainingIgnoreCase(
+            Long collectionId, String title, Pageable pageable);
+
+    /**
+     * 在集合内综合搜索：标题关键词 + 可选类型/状态过滤
+     */
+    @Query("SELECT d FROM RagDocument d WHERE d.collectionId = :collectionId AND " +
+           "(COALESCE(:keyword, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND " +
+           "(COALESCE(:documentType, '') = '' OR d.documentType = :documentType) AND " +
+           "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus)")
+    Page<RagDocument> searchDocumentsByCollectionId(@Param("collectionId") Long collectionId,
+                                                    @Param("keyword") String keyword,
+                                                    @Param("documentType") String documentType,
+                                                    @Param("processingStatus") String processingStatus,
+                                                    Pageable pageable);
+
+    /**
      * 综合搜索：标题模糊 + 可选类型/状态过滤
      */
     @Query("SELECT d FROM RagDocument d WHERE " +

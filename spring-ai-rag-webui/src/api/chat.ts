@@ -34,4 +34,10 @@ export const chatApi = {
     apiClient.get<{ messages: ChatMessage[] }>(`/chat/history/${conversationId}?limit=${limit}`),
 
   clearHistory: (conversationId: string) => apiClient.delete(`/chat/history/${conversationId}`),
+
+  exportConversation: (conversationId: string, format: 'json' | 'md') =>
+    fetch(`/api/v1/rag/chat/export/${conversationId}?format=${format}`).then(res => {
+      if (!res.ok) throw new Error('Export failed');
+      return res.blob();
+    }),
 };

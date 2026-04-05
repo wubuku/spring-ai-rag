@@ -5,6 +5,7 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.service.ChatExportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -28,13 +29,15 @@ class RagChatControllerTest {
 
     private RagChatService ragChatService;
     private RagChatHistoryRepository historyRepository;
+    private ChatExportService chatExportService;
     private RagChatController controller;
 
     @BeforeEach
     void setUp() {
         ragChatService = mock(RagChatService.class);
         historyRepository = mock(RagChatHistoryRepository.class);
-        controller = new RagChatController(ragChatService, historyRepository);
+        chatExportService = mock(ChatExportService.class);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService);
     }
 
     // ==================== ask ====================

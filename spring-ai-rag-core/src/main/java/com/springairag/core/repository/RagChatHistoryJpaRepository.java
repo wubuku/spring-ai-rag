@@ -21,6 +21,17 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
     List<RagChatHistory> findBySessionIdOrderByCreatedAtDesc(String sessionId, org.springframework.data.domain.Pageable pageable);
 
     /**
+     * 按会话 ID 查询所有历史记录（无分页，按时间倒序）
+     */
+    List<RagChatHistory> findAllBySessionIdOrderByCreatedAtDesc(String sessionId);
+
+    /**
+     * 按会话 ID 查询所有历史记录（无分页，按时间正序）
+     */
+    @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId ORDER BY h.createdAt ASC")
+    List<RagChatHistory> findBySessionIdAsc(@Param("sessionId") String sessionId);
+
+    /**
      * 按会话 ID 删除所有历史记录
      */
     @Modifying
