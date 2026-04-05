@@ -825,3 +825,7 @@
 - W3: 高级功能（RAG 对话 + 实时检索）
 - W4: 监控与配置（指标 + 告警 + 设置）
 - W5: 工程化收尾（测试 + 性能优化）
+
+## 进度日志（2026-04-05 国际化 — c5 配置/pom 文件）
+
+- 2026-04-05 02:08 — ✅ 代码国际化 c5（配置 + pom）：application.yml 5份 / logback-spring.xml / docker-compose.yml / pom.xml 6份 / demo pom 4份，全部中文注释翻译为英文，零中文残留，mvn test ✅，commit 6a2390d 已推送
