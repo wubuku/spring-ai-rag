@@ -750,12 +750,6 @@
 **代码国际化任务（高优先级）**：
 用户可见消息必须为英文，或支持国际化（i18n 多语言）。
 
-当前问题：大量 API 错误消息/响应是中文 hardcoded，需要改为英文或引入 i18n 框架。
-
-建议方案：
-1. 短期：直接改为英文消息（简单直接）
-2. 长期：引入 Spring i18n，支持多语言切换
-
 本次采用方案1，API 响应消息统一改为英文。扫描范围：
 - Controller @Operation/@ApiResponse/@Tag 注解
 - Service/Repository 方法 Javadoc
@@ -770,12 +764,12 @@
 分批执行（按模块）：
 | 批次 | 模块 | 状态 |
 |------|------|------|
-| c1 | core/controller/* | 📋 待做 |
-| c2 | core/service/* | 📋 待做 |
-| c3 | core/repository/* + core/entity/* | 📋 待做 |
-| c4 | core/retrieval/* + core/advisor/* | 📋 待做 |
-| c5 | api/dto/* + core/config/* | 📋 待做 |
-| c6 | core/filter/* + core/exception/* | 📋 待做 |
+| c1 | core/controller/* | ✅ 2026-04-05 |
+| c2 | core/service/* | ✅ 2026-04-05 |
+| c3 | core/repository/* + core/entity/* | ✅ 2026-04-05 |
+| c4 | core/retrieval/* + core/advisor/* | ✅ 2026-04-05 |
+| c5 | api/dto/* + core/config/* | ✅ 2026-04-05 |
+| c6 | core/filter/* + core/exception/* | ✅ 2026-04-05 |
 
 **⚠️ 重要规则**：
 - HEARTBEAT 已规划的任务**永久保留，只增不减**
@@ -826,6 +820,7 @@
 - W4: 监控与配置（指标 + 告警 + 设置）
 - W5: 工程化收尾（测试 + 性能优化）
 
-## 进度日志（2026-04-05 国际化 — c5 配置/pom 文件）
+## 进度日志（2026-04-05 国际化 — c1-c6 代码消息）
 
+- 2026-04-05 10:27 — ✅ 代码国际化 c1-c6（用户可见消息全面英文化）：Exception(RetrievalException/DocumentNotFoundException/EmbeddingException/GlobalExceptionHandler 8个handler)/Controller响应(AlertController/RagCollectionController/RagDocumentController/RagChatController)/Service日志(AlertServiceImpl/DocumentVersionService/DocumentEmbedService/BatchDocumentService/AbTestServiceImpl/ComponentHealthService)/Filter日志(RequestTraceFilter/RateLimitFilter)/SystemPrompt(QueryRewritingService/RerankAdvisor)/API DTO(EmbedProgressEvent SSE进度消息/FireAlertResponse/DocumentAddedResponse/CollectionDeleteResponse/CollectionCreatedResponse/ClearHistoryResponse)/DefaultDomainRagExtension，1183测试全通过，commit fcfb0d4 已推送
 - 2026-04-05 02:08 — ✅ 代码国际化 c5（配置 + pom）：application.yml 5份 / logback-spring.xml / docker-compose.yml / pom.xml 6份 / demo pom 4份，全部中文注释翻译为英文，零中文残留，mvn test ✅，commit 6a2390d 已推送
