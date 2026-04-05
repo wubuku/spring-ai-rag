@@ -898,7 +898,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| W6-1 | Vitest 单元测试：Documents/Search/Collections/Metrics/Alerts 页 | 测试 | ⏳ 进行中（Chat 10 + Settings 4 + Collections 3 + Skeleton 7 + Toast 7 + useSSE 6 + useFileUpload 5 = 42 tests） |
+| W6-1 | Vitest 单元测试：Documents/Search/Collections/Metrics/Alerts 页 | 测试 | ✅ 2026-04-05（W6-1 完成：62 tests — Chat 10 + Settings 4 + Collections 3 + Dashboard 0 + Documents 6 + Search 6 + Metrics 3 + Alerts 4 + Skeleton 7 + Toast 7 + useSSE 6 + useFileUpload 5） |
 | W6-2 | React Error Boundary：错误边界组件，捕获子组件异常 | 可靠性 | ✅ 2026-04-05（W6-2 完成，ErrorBoundary 包裹所有页面） |
 | W6-3 | Dark Mode Toggle：Layout 添加主题切换按钮 | UX | ✅ 2026-04-05（W6-3 完成，🌙/☀️ toggle + localStorage 持久化） |
 | W6-4 | ESLint + Prettier：WebUI 代码规范配置 | 工程化 | ✅ 2026-04-05（W6-4 完成，flat config + 21文件格式化） |
