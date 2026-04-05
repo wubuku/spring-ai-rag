@@ -3,10 +3,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { CreateCollectionModal } from '../components/CreateCollectionModal';
 import styles from './Collections.module.css';
 
 export function Collections() {
   const [page] = useState(0);
+  const [showCreateModal, setShowCreateModal] = useState(false);
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
@@ -28,7 +30,15 @@ export function Collections() {
 
   return (
     <div>
-      <h1 className="page-title">Collections</h1>
+      <div className={styles.header}>
+        <h1 className="page-title">Collections</h1>
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className={styles.createBtn}
+        >
+          + Create
+        </button>
+      </div>
       {isPending ? (
         <div className={styles.grid}>
           {[1, 2, 3].map(i => (
@@ -65,6 +75,10 @@ export function Collections() {
           )}
         </div>
       )}
+      <CreateCollectionModal
+        isOpen={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+      />
     </div>
   );
 }
