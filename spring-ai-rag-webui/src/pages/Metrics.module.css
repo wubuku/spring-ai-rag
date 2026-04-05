@@ -6,4 +6,27 @@
   font-size: 0.85rem;
   overflow-x: auto;
   white-space: pre-wrap;
+  margin-top: 1rem;
+}
+
+.loading,
+.empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--color-text-muted);
+}
+
+.raw {
+  margin-top: 1.5rem;
+}
+
+.raw summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  padding: 0.5rem 0;
+}
+
+.raw summary:hover {
+  color: var(--color-text);
 }
