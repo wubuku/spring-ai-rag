@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { searchApi } from '../api/search';
+import { SearchResults } from '../components/SearchResults';
 import styles from './Search.module.css';
 
 export function Search() {
@@ -42,23 +43,10 @@ export function Search() {
         </button>
       </form>
 
-      {isPending && <div>Searching...</div>}
+      {isPending && <div className={styles.loading}>Searching...</div>}
 
       {data?.data && (
-        <div className={styles.results}>
-          <div className={styles.resultCount}>
-            {data.data.total} results for "{data.data.query}"
-          </div>
-          {data.data.results.map((r, i) => (
-            <div key={i} className={styles.result}>
-              <div className={styles.resultHeader}>
-                <span className={styles.title}>{r.title}</span>
-                <span className={styles.score}>{(r.score * 100).toFixed(1)}%</span>
-              </div>
-              <div className={styles.snippet}>{r.content.slice(0, 200)}...</div>
-            </div>
-          ))}
-        </div>
+        <SearchResults results={data.data.results} query={data.data.query} />
       )}
     </div>
   );
