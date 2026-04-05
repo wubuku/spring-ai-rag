@@ -46,11 +46,14 @@ public class RagCollectionController {
 
     private final RagCollectionRepository collectionRepository;
     private final RagDocumentRepository documentRepository;
+    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public RagCollectionController(RagCollectionRepository collectionRepository,
-                                    RagDocumentRepository documentRepository) {
+                                    RagDocumentRepository documentRepository,
+                                    @Autowired(required = false) AuditLogService auditLogService) {
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -73,6 +76,9 @@ public class RagCollectionController {
         collection = collectionRepository.save(collection);
 
         log.info("Collection created: id={}, name={}", collection.getId(), collection.getName());
+        auditCreate(AuditLogService.ENTITY_COLLECTION,
+                String.valueOf(collection.getId()),
+                "Collection created: " + collection.getName());
 
         return ResponseEntity.ok(toMap(collection, 0));
     }
@@ -124,8 +130,7 @@ public class RagCollectionController {
                 "collections", items,
                 "total", pageResult.getTotalElements(),
                 "offset", offset,
-                "limit", limit
-        ));
+                "limit", limit));
     }
 
     /**
@@ -155,6 +160,9 @@ public class RagCollectionController {
                     long docCount = documentRepository.countByCollectionId(id);
 
                     log.info("Collection updated: id={}", id);
+                    auditUpdate(AuditLogService.ENTITY_COLLECTION,
+                            String.valueOf(id),
+                            "Collection updated: " + existing.getName());
                     return ResponseEntity.ok(toMap(saved, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
@@ -181,6 +189,9 @@ public class RagCollectionController {
                     collectionRepository.deleteById(id);
 
                     log.info("Collection deleted: id={}", id);
+                    auditDelete(AuditLogService.ENTITY_COLLECTION,
+                            String.valueOf(id),
+                            "Collection deleted, documentsUnlinked: " + count);
                     return ResponseEntity.ok(Map.of(
                             "message", "Collection deleted",
                             "id", String.valueOf(id),
@@ -235,8 +246,7 @@ public class RagCollectionController {
                 "documents", docs,
                 "total", pageResult.getTotalElements(),
                 "offset", offset,
-                "limit", limit
-        ));
+                "limit", limit));
     }
 
     private Map<String, Object> toDocumentSummary(RagDocument doc) {
@@ -279,6 +289,10 @@ public class RagCollectionController {
                     documentRepository.save(doc);
 
                     log.info("Document {} added to collection {}", documentId, id);
+                    auditUpdate(AuditLogService.ENTITY_DOCUMENT,
+                            String.valueOf(documentId),
+                            "Document added to collection " + id,
+                            Map.of("collectionId", id));
                     Map<String, Object> result = new HashMap<>();
                     result.put("message", "Document added to collection");
                     result.put("collectionId", id);
@@ -353,6 +367,10 @@ public class RagCollectionController {
 
         log.info("Collection imported: id={}, name={}, documents={}",
                 collection.getId(), name, importedDocs);
+        auditCreate(AuditLogService.ENTITY_COLLECTION,
+                String.valueOf(collection.getId()),
+                "Collection imported: " + name + ", documents: " + importedDocs,
+                Map.of("importedDocuments", importedDocs));
 
         Map<String, Object> result = toMap(collection, importedDocs);
         result.put("importedDocuments", importedDocs);
@@ -420,5 +438,25 @@ public class RagCollectionController {
         map.put("updatedAt", c.getUpdatedAt());
         map.put("documentCount", documentCount);
         return map;
+    }
+
+    // Null-safe audit logging helpers (AuditLogService is optional)
+    private void auditCreate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message);
+    }
+    private void auditCreate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message, details);
+    }
+    private void auditUpdate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message);
+    }
+    private void auditUpdate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message, details);
+    }
+    private void auditDelete(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
+    }
+    private void auditDelete(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message, details);
     }
 }

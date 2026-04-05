@@ -12,6 +12,7 @@ import com.springairag.core.entity.RagSloConfig;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
 import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * 告警管理控制器
@@ -39,12 +41,15 @@ public class AlertController {
     private final AlertService alertService;
     private final SloConfigRepository sloConfigRepository;
     private final RagSilenceScheduleRepository silenceScheduleRepository;
+    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public AlertController(AlertService alertService, SloConfigRepository sloConfigRepository,
-                           RagSilenceScheduleRepository silenceScheduleRepository) {
+                           RagSilenceScheduleRepository silenceScheduleRepository,
+                           @Autowired(required = false) AuditLogService auditLogService) {
         this.alertService = alertService;
         this.sloConfigRepository = sloConfigRepository;
         this.silenceScheduleRepository = silenceScheduleRepository;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -104,6 +109,11 @@ public class AlertController {
             @PathVariable Long alertId,
             @Valid @RequestBody ResolveAlertRequest body) {
         alertService.resolveAlert(alertId, body.resolution() != null ? body.resolution() : "");
+
+        auditUpdate(AuditLogService.ENTITY_ALERT,
+                String.valueOf(alertId),
+                "Alert resolved: " + (body.resolution() != null ? body.resolution() : ""));
+
         return ResponseEntity.ok(AlertActionResponse.ok("Alert resolved"));
     }
 
@@ -120,6 +130,13 @@ public class AlertController {
             @Valid @RequestBody SilenceAlertRequest body) {
         int duration = body.durationMinutes() != null ? body.durationMinutes() : 60;
         alertService.silenceAlert(body.alertKey(), duration);
+
+        auditUpdate(AuditLogService.ENTITY_ALERT,
+                body.alertKey(),
+                "Alert silenced: " + body.alertKey() + " for " + duration + " minutes",
+                Map.of("alertKey", body.alertKey() != null ? body.alertKey() : "",
+                        "durationMinutes", duration));
+
         return ResponseEntity.ok(AlertActionResponse.ok(
                 "Alert silenced: " + body.alertKey() + " (" + duration + " minutes)"));
     }
@@ -140,6 +157,14 @@ public class AlertController {
         Long alertId = alertService.fireAlert(
                 body.alertType(), body.alertName(), body.message(),
                 severity, metrics);
+
+        auditCreate(AuditLogService.ENTITY_ALERT,
+                String.valueOf(alertId),
+                "Alert fired: " + body.alertName() + " [" + severity + "]",
+                Map.of("alertType", body.alertType() != null ? body.alertType() : "",
+                        "alertName", body.alertName() != null ? body.alertName() : "",
+                        "severity", severity));
+
         return ResponseEntity.ok(FireAlertResponse.of(alertId));
     }
 
@@ -199,6 +224,11 @@ public class AlertController {
         config.setMetadata(request.getMetadata());
         config.setCreatedAt(ZonedDateTime.now());
         RagSloConfig saved = sloConfigRepository.save(config);
+
+        auditCreate(AuditLogService.ENTITY_SLO_CONFIG,
+                request.getSloName(),
+                "SLO config created: " + request.getSloName());
+
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -240,7 +270,13 @@ public class AlertController {
                     }
                     existing.setMetadata(request.getMetadata());
                     existing.setUpdatedAt(ZonedDateTime.now());
-                    return ResponseEntity.ok(sloConfigRepository.save(existing));
+                    RagSloConfig saved = sloConfigRepository.save(existing);
+
+                    auditUpdate(AuditLogService.ENTITY_SLO_CONFIG,
+                            sloName,
+                            "SLO config updated: " + sloName);
+
+                    return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -256,6 +292,11 @@ public class AlertController {
             return ResponseEntity.notFound().build();
         }
         sloConfigRepository.deleteBySloName(sloName);
+
+        auditDelete(AuditLogService.ENTITY_SLO_CONFIG,
+                sloName,
+                "SLO config deleted: " + sloName);
+
         return ResponseEntity.noContent().build();
     }
 
@@ -284,6 +325,11 @@ public class AlertController {
         schedule.setMetadata(request.getMetadata());
         schedule.setCreatedAt(ZonedDateTime.now());
         RagSilenceSchedule saved = silenceScheduleRepository.save(schedule);
+
+        auditCreate(AuditLogService.ENTITY_SILENCE_SCHEDULE,
+                request.getName(),
+                "Silence schedule created: " + request.getName());
+
         return ResponseEntity.status(201).body(saved);
     }
 
@@ -326,7 +372,13 @@ public class AlertController {
                     }
                     existing.setMetadata(request.getMetadata());
                     existing.setUpdatedAt(ZonedDateTime.now());
-                    return ResponseEntity.ok(silenceScheduleRepository.save(existing));
+                    RagSilenceSchedule saved = silenceScheduleRepository.save(existing);
+
+                    auditUpdate(AuditLogService.ENTITY_SILENCE_SCHEDULE,
+                            name,
+                            "Silence schedule updated: " + name);
+
+                    return ResponseEntity.ok(saved);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }
@@ -342,6 +394,28 @@ public class AlertController {
             return ResponseEntity.notFound().build();
         }
         silenceScheduleRepository.deleteByName(name);
+
+        auditDelete(AuditLogService.ENTITY_SILENCE_SCHEDULE,
+                name,
+                "Silence schedule deleted: " + name);
+
         return ResponseEntity.noContent().build();
+    }
+
+    // Null-safe audit logging helpers
+    private void auditCreate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message);
+    }
+    private void auditCreate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message, details);
+    }
+    private void auditUpdate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message);
+    }
+    private void auditUpdate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message, details);
+    }
+    private void auditDelete(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
     }
 }

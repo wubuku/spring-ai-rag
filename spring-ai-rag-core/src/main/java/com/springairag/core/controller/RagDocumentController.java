@@ -13,6 +13,7 @@ import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
@@ -25,6 +26,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -59,6 +61,7 @@ public class RagDocumentController {
     private final DocumentEmbedService documentEmbedService;
     private final BatchDocumentService batchDocumentService;
     private final DocumentVersionService documentVersionService;
+    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     // SHA256 utility for content hashing (breaks circular dependency)
     private static String computeSha256(String content) {
@@ -77,12 +80,14 @@ public class RagDocumentController {
                                   RagEmbeddingRepository embeddingRepository,
                                   @Lazy DocumentEmbedService documentEmbedService,
                                   @Lazy BatchDocumentService batchDocumentService,
-                                  DocumentVersionService documentVersionService) {
+                                  DocumentVersionService documentVersionService,
+                                  @Autowired(required = false) AuditLogService auditLogService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
         this.documentEmbedService = documentEmbedService;
         this.batchDocumentService = batchDocumentService;
         this.documentVersionService = documentVersionService;
+        this.auditLogService = auditLogService;
     }
 
     // ==================== CRUD ====================
@@ -124,6 +129,9 @@ public class RagDocumentController {
         doc = documentRepository.save(doc);
 
         log.info("Document created: id={}, hash={}", doc.getId(), contentHash);
+        auditCreate(AuditLogService.ENTITY_DOCUMENT,
+                String.valueOf(doc.getId()),
+                "Document created: " + doc.getTitle());
 
         return ResponseEntity.ok(Map.of(
                 "id", doc.getId(),
@@ -217,6 +225,13 @@ public class RagDocumentController {
             @RequestParam(defaultValue = "false") boolean force) {
         try {
             Map<String, Object> result = documentEmbedService.embedDocument(id, force);
+
+            auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
+                    String.valueOf(id),
+                    "Embed document: id=" + id + ", force=" + force,
+                    Map.of("chunks", result.getOrDefault("chunks", 0),
+                            "embeddings", result.getOrDefault("embeddings", 0)));
+
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(Map.of(
@@ -333,6 +348,15 @@ public class RagDocumentController {
                 request.isEmbed(),
                 request.getCollectionId(),
                 request.isForce());
+
+        auditCreate(AuditLogService.ENTITY_DOCUMENT,
+                "batch",
+                "Batch create: " + result.created() + " created, "
+                        + result.skipped() + " skipped, "
+                        + (request.getCollectionId() != null ? "collectionId=" + request.getCollectionId() : "no collection"),
+                Map.of("created", result.created(), "skipped", result.skipped(),
+                        "collectionId", request.getCollectionId() != null ? request.getCollectionId() : ""));
+
         return ResponseEntity.ok(result);
     }
 
@@ -345,6 +369,13 @@ public class RagDocumentController {
             throw new IllegalArgumentException("ids 列表不能为空");
         }
         Map<String, Object> result = batchDocumentService.batchDeleteDocuments(ids);
+
+        auditDelete(AuditLogService.ENTITY_DOCUMENT,
+                "batch:" + ids.size(),
+                "Batch delete: " + ids.size() + " documents",
+                Map.of("deleted", result.getOrDefault("deleted", 0),
+                        "notFound", result.getOrDefault("notFound", 0)));
+
         return ResponseEntity.ok(result);
     }
 
@@ -360,6 +391,13 @@ public class RagDocumentController {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
         Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
+
+        auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
+                "batch:" + ids.size(),
+                "Batch embed: " + ids.size() + " documents",
+                Map.of("succeeded", result.getOrDefault("succeeded", 0),
+                        "failed", result.getOrDefault("failed", 0)));
+
         return ResponseEntity.ok(result);
     }
 
@@ -471,6 +509,13 @@ public class RagDocumentController {
         }
 
         log.info("File upload completed: {} success, {} failed", success, failed);
+
+        auditCreate(AuditLogService.ENTITY_DOCUMENT,
+                "upload:" + files.length,
+                "File upload: " + files.length + " files, success=" + success + ", failed=" + failed,
+                Map.of("total", files.length, "success", success, "failed", failed,
+                        "collectionId", collectionId != null ? collectionId : ""));
+
         return ResponseEntity.ok(new FileUploadResponse(files.length, success, failed, results));
     }
 
@@ -633,5 +678,19 @@ public class RagDocumentController {
             map.put("contentSnapshot", v.getContentSnapshot());
         }
         return map;
+    }
+
+    // Null-safe audit logging helpers (AuditLogService is optional)
+    private void auditCreate(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message);
+    }
+    private void auditCreate(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message, details);
+    }
+    private void auditDelete(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
+    }
+    private void auditDelete(String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message, details);
     }
 }

@@ -8,6 +8,7 @@ import com.springairag.api.dto.SilenceAlertRequest;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
 import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
+import com.springairag.core.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,7 @@ class AlertControllerTest {
     private AlertService alertService;
     private SloConfigRepository sloConfigRepository;
     private RagSilenceScheduleRepository silenceScheduleRepository;
+    private AuditLogService auditLogService;
     private AlertController controller;
 
     @BeforeEach
@@ -35,7 +37,8 @@ class AlertControllerTest {
         alertService = mock(AlertService.class);
         sloConfigRepository = mock(SloConfigRepository.class);
         silenceScheduleRepository = mock(RagSilenceScheduleRepository.class);
-        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository);
+        auditLogService = mock(AuditLogService.class);
+        controller = new AlertController(alertService, sloConfigRepository, silenceScheduleRepository, auditLogService);
     }
 
     // ==================== getActiveAlerts ====================

@@ -38,6 +38,18 @@ public class AuditLogService {
     public static final String OP_UPDATE = "UPDATE";
     /** 操作类型：删除 */
     public static final String OP_DELETE = "DELETE";
+    /** 操作类型：导入 */
+    public static final String OP_IMPORT = "IMPORT";
+    /** 操作类型：嵌入 */
+    public static final String OP_EMBED = "EMBED";
+    /** 操作类型：清除缓存 */
+    public static final String OP_CACHE_CLEAR = "CACHE_CLEAR";
+    /** 操作类型：触发告警 */
+    public static final String OP_ALERT_FIRE = "ALERT_FIRE";
+    /** 操作类型：解决告警 */
+    public static final String OP_ALERT_RESOLVE = "ALERT_RESOLVE";
+    /** 操作类型：静默告警 */
+    public static final String OP_ALERT_SILENCE = "ALERT_SILENCE";
 
     /** 实体类型：集合 */
     public static final String ENTITY_COLLECTION = "Collection";
@@ -49,6 +61,12 @@ public class AuditLogService {
     public static final String ENTITY_AB_TEST = "AbTest";
     /** 实体类型：告警 */
     public static final String ENTITY_ALERT = "Alert";
+    /** 实体类型：SLO 配置 */
+    public static final String ENTITY_SLO_CONFIG = "SloConfig";
+    /** 实体类型：静默计划 */
+    public static final String ENTITY_SILENCE_SCHEDULE = "SilenceSchedule";
+    /** 实体类型：嵌入缓存 */
+    public static final String ENTITY_EMBED_CACHE = "EmbedCache";
 
     private final RagAuditLogRepository repository;
     private final ObjectMapper objectMapper;

@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,9 @@ class CacheMetricsControllerTest {
 
     @MockitoBean
     private CacheMetricsService cacheMetricsService;
+
+    @MockitoBean
+    private AuditLogService auditLogService;
 
     @Test
     void getCacheStats_returnsStats() throws Exception {

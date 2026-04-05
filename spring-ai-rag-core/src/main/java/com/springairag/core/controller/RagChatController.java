@@ -5,8 +5,10 @@ import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
 import com.springairag.core.versioning.ApiVersion;
+import org.springframework.beans.factory.annotation.Autowired;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -50,13 +52,16 @@ public class RagChatController {
     private final RagChatService ragChatService;
     private final RagChatHistoryRepository historyRepository;
     private final ChatExportService chatExportService;
+    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
-                             ChatExportService chatExportService) {
+                             ChatExportService chatExportService,
+                             @Autowired(required = false) AuditLogService auditLogService) {
         this.ragChatService = ragChatService;
         this.historyRepository = historyRepository;
         this.chatExportService = chatExportService;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -143,6 +148,11 @@ public class RagChatController {
     public ResponseEntity<ClearHistoryResponse> clearHistory(@PathVariable String sessionId) {
         log.info("Clearing chat history for session: {}", sessionId);
         int deleted = historyRepository.deleteBySessionId(sessionId);
+
+        auditDelete(AuditLogService.ENTITY_CHAT_HISTORY,
+                sessionId,
+                "Chat history cleared: " + deleted + " messages");
+
         return ResponseEntity.ok(ClearHistoryResponse.of(sessionId, deleted));
     }
 
@@ -190,5 +200,10 @@ public class RagChatController {
                 .header("Content-Disposition", "attachment; filename=\"" + filename + "\"")
                 .contentType(org.springframework.http.MediaType.parseMediaType(contentType))
                 .body(resource);
+    }
+
+    // Null-safe audit logging helper
+    private void auditDelete(String entityType, String entityId, String message) {
+        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
     }
 }

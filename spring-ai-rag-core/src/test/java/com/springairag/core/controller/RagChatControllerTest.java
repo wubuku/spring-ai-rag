@@ -5,6 +5,7 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ class RagChatControllerTest {
     private RagChatService ragChatService;
     private RagChatHistoryRepository historyRepository;
     private ChatExportService chatExportService;
+    private AuditLogService auditLogService;
     private RagChatController controller;
 
     @BeforeEach
@@ -37,7 +39,8 @@ class RagChatControllerTest {
         ragChatService = mock(RagChatService.class);
         historyRepository = mock(RagChatHistoryRepository.class);
         chatExportService = mock(ChatExportService.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService);
+        auditLogService = mock(AuditLogService.class);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, auditLogService);
     }
 
     // ==================== ask ====================

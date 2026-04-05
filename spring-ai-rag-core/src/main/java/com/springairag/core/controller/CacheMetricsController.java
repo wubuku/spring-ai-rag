@@ -2,7 +2,9 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.CacheStatsResponse;
 import com.springairag.core.metrics.CacheMetricsService;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import org.springframework.beans.factory.annotation.Autowired;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,9 +28,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class CacheMetricsController {
 
     private final CacheMetricsService cacheMetricsService;
+    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
-    public CacheMetricsController(CacheMetricsService cacheMetricsService) {
+    public CacheMetricsController(CacheMetricsService cacheMetricsService,
+                                   @Autowired(required = false) AuditLogService auditLogService) {
         this.cacheMetricsService = cacheMetricsService;
+        this.auditLogService = auditLogService;
     }
 
     /**
@@ -55,6 +60,14 @@ public class CacheMetricsController {
     @DeleteMapping("/invalidate")
     public ResponseEntity<Map<String, Object>> invalidateCache() {
         int cleared = cacheMetricsService.clearCache();
+
+        if (auditLogService != null) {
+            auditLogService.logCreate(AuditLogService.ENTITY_EMBED_CACHE,
+                    "cache",
+                    "Cache invalidated: " + cleared + " entries cleared",
+                    Map.of("cleared", cleared));
+        }
+
         return ResponseEntity.ok(Map.of(
                 "cleared", cleared,
                 "message", cleared > 0 ? "Cache invalidated" : "No entries to clear"

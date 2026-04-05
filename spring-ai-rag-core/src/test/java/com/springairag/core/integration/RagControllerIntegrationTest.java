@@ -74,6 +74,7 @@ class RagControllerIntegrationTest {
     @MockBean private RagChatService ragChatService;
     @MockBean private RagChatHistoryRepository historyRepository;
     @MockBean private com.springairag.core.service.ChatExportService chatExportService;
+    @MockBean private com.springairag.core.service.AuditLogService auditLogService;
 
     // ==================== Search ====================
     @MockBean private HybridRetrieverService hybridRetrieverService;

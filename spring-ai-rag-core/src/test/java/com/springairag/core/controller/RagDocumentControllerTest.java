@@ -6,6 +6,7 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
+import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
@@ -34,6 +35,7 @@ class RagDocumentControllerTest {
     private DocumentEmbedService documentEmbedService;
     private BatchDocumentService batchDocumentService;
     private DocumentVersionService documentVersionService;
+    private AuditLogService auditLogService;
     private RagDocumentController controller;
 
     @BeforeEach
@@ -43,7 +45,8 @@ class RagDocumentControllerTest {
         documentEmbedService = mock(DocumentEmbedService.class);
         batchDocumentService = mock(BatchDocumentService.class);
         documentVersionService = mock(DocumentVersionService.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService, documentVersionService);
+        auditLogService = mock(AuditLogService.class);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService, documentVersionService, auditLogService);
     }
 
     private RagDocument createDoc(Long id, String title, String content) {

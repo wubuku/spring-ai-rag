@@ -5,6 +5,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.service.AuditLogService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
@@ -24,13 +25,15 @@ class RagCollectionControllerTest {
 
     private RagCollectionRepository collectionRepository;
     private RagDocumentRepository documentRepository;
+    private AuditLogService auditLogService;
     private RagCollectionController controller;
 
     @BeforeEach
     void setUp() {
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
-        controller = new RagCollectionController(collectionRepository, documentRepository);
+        auditLogService = mock(AuditLogService.class);
+        controller = new RagCollectionController(collectionRepository, documentRepository, auditLogService);
     }
 
     private RagCollection createCollection(Long id, String name) {
