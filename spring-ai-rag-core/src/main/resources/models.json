@@ -1,0 +1,121 @@
+{
+  "models": {
+    "providers": {
+      "openrouter": {
+        "displayName": "OpenRouter",
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "${OPENROUTER_API_KEY}",
+        "apiType": "openai-completions",
+        "enabled": true,
+        "priority": 1,
+        "models": [
+          {
+            "id": "xiaomi/mimo-v2-pro",
+            "name": "MiMo V2 Pro",
+            "type": "chat",
+            "reasoning": false,
+            "inputModalities": ["text"],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 600000,
+            "maxTokens": 32000
+          }
+        ]
+      },
+      "minimax": {
+        "displayName": "MiniMax",
+        "baseUrl": "https://api.minimaxi.com/anthropic",
+        "apiKey": "${MINIMAX_API_KEY}",
+        "apiType": "anthropic-messages",
+        "enabled": true,
+        "priority": 2,
+        "models": [
+          {
+            "id": "MiniMax-M2.7",
+            "name": "MiniMax M2.7",
+            "type": "chat",
+            "reasoning": false,
+            "inputModalities": ["text"],
+            "cost": {
+              "input": 15,
+              "output": 60,
+              "cacheRead": 2,
+              "cacheWrite": 10
+            },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "embo-01",
+            "name": "Embedding V01",
+            "type": "embedding",
+            "inputModalities": ["text"],
+            "dimension": 1024,
+            "cost": {
+              "input": 0,
+              "output": 0
+            }
+          }
+        ]
+      },
+      "siliconflow": {
+        "displayName": "SiliconFlow",
+        "baseUrl": "https://api.siliconflow.cn/v1",
+        "apiKey": "${SILICONFLOW_API_KEY}",
+        "apiType": "openai-chat",
+        "enabled": true,
+        "priority": 5,
+        "models": [
+          {
+            "id": "BGE-M3",
+            "name": "BGE-M3 Embedding",
+            "type": "embedding",
+            "inputModalities": ["text"],
+            "dimension": 1024,
+            "cost": {
+              "input": 0,
+              "output": 0
+            }
+          }
+        ]
+      },
+      "zhipu": {
+        "displayName": "智谱 GLM-5",
+        "baseUrl": "https://open.bigmodel.cn/api/anthropic",
+        "apiKey": "${ZHIPU_API_KEY}",
+        "apiType": "anthropic-messages",
+        "enabled": true,
+        "priority": 3,
+        "models": [
+          {
+            "id": "GLM-5",
+            "name": "GLM-5",
+            "type": "chat",
+            "reasoning": true,
+            "inputModalities": ["text"],
+            "cost": {
+              "input": 5,
+              "output": 15,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    },
+    "chatModel": {
+      "primary": "minimax/MiniMax-M2.7",
+      "fallbacks": ["openrouter/xiaomi/mimo-v2-pro", "zhipu/GLM-5"]
+    },
+    "embeddingModel": {
+      "primary": "siliconflow/BGE-M3",
+      "fallbacks": ["minimax/embo-01"]
+    }
+  }
+}
