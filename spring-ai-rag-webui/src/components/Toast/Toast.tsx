@@ -1,5 +1,6 @@
 import { useState, useCallback, type ReactNode } from 'react';
 import { ToastContext, useToastContext } from './ToastContext';
+import { TOAST_ICONS } from './constants';
 import styles from './Toast.module.css';
 
 type ToastType = 'success' | 'error' | 'info' | 'warning';
@@ -30,20 +31,13 @@ export function ToastProvider({ children }: ToastProviderProps) {
     setToasts(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const icons: Record<ToastType, string> = {
-    success: '✅',
-    error: '❌',
-    info: 'ℹ️',
-    warning: '⚠️',
-  };
-
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
       <div className={styles.container}>
         {toasts.map(toast => (
           <div key={toast.id} className={`${styles.toast} ${styles[toast.type]}`}>
-            <span className={styles.icon}>{icons[toast.type]}</span>
+            <span className={styles.icon}>{TOAST_ICONS[toast.type]}</span>
             <span className={styles.message}>{toast.message}</span>
             <button className={styles.close} onClick={() => removeToast(toast.id)}>
               ×

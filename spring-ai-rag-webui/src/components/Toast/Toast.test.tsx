@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ToastProvider, useToast } from './Toast';
+import { TOAST_ICONS } from './constants';
 
 // Test component that uses the toast
 function TestConsumer() {
@@ -52,7 +53,7 @@ describe('Toast', () => {
     );
 
     fireEvent.click(screen.getByText('Show Success'));
-    expect(screen.getByText('✅')).toBeInTheDocument();
+    expect(screen.getByText(TOAST_ICONS.success)).toBeInTheDocument();
   });
 
   it('shows error icon for error toasts', () => {
@@ -63,7 +64,7 @@ describe('Toast', () => {
     );
 
     fireEvent.click(screen.getByText('Show Error'));
-    expect(screen.getByText('❌')).toBeInTheDocument();
+    expect(screen.getByText(TOAST_ICONS.error)).toBeInTheDocument();
   });
 
   it('can close toast manually', () => {
