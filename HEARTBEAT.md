@@ -1158,7 +1158,7 @@
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ✅ 2026-04-06 | P2 |
 | C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ⏳ | P2 |
 | C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
-| C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ⏳ | P2 |
+| C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ✅ 2026-04-06 | P2 |
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
@@ -1199,6 +1199,10 @@
   - E2E 测试：11/11 ✅
   - commit 875a477，45 files，875 行新增
 
+
+## 进度日志（2026-04-06 上午）
+
+- 2026-04-06 06:13 — ✅ C20 Dockerfile 优化 (<200MB)：Spring Boot 分层 JAR (jarmode=layertools) + jlink 裁剪 JRE + distroless/java21-debian12:nonroot base。3-stage 多阶段构建：Maven builder → jlink-builder (创建最小化 JRE，--compress=2) → distroless 运行时。jlink 排除 50+ 不需要模块（java.corba/java.xml.bind/java.desktop/java.scripting/java.nashorn 等），--add-modules 仅保留 Spring AI RAG 需要的核心模块。Health check 使用 nc TCP 端口检测。非 root 用户。mvn clean compile ✅ / mvn test ✅（1290 tests，0 failures，0 errors）。Test fix: RagControllerIntegrationTest.submitFeedback_returnsResult mock 使用 `nullable(Integer.class)` + `nullable(List.class)` 替代 `any()` + `anyList()` 匹配 null 参数值。commit c41de47 已推送
 
 ## 待办（C41-C42 — 代码库巡检）
 
