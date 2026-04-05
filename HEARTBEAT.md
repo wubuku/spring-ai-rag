@@ -1068,9 +1068,43 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| N13 | API 版本管理（v1 → v2 端点规划文档） | 架构 | ⏳ 待推进 |
-| N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ⏳ 待推进 |
+| N13 | API 版本管理（v1 → v2 端点规划文档） | 架构 | ✅ 2026-04-05（N13 完成，docs/api-versioning.md 包含 v2 breaking changes 清单） |
+| N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ✅ 2026-04-05（N14 完成，POST /batch/embed/stream + POST /{id}/embed/stream + BatchEmbedProgressEvent） |
 | N15 | 缓存失效管理 API（Admin 端点清除缓存） | 可观测性 | ⏳ 待推进 |
 | N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
 | N17 | WebUI 搜索历史记录 | UX | ⏳ 待推进 |
 | N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ⏳ 待推进 |
+
+## 待办（新一波改进 N19-N30）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N19 | N15：缓存失效管理 API（DELETE /cache/invalidate 端点） | 可观测性 | ⏳ 待推进 |
+| N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
+| N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ 待推进 |
+| N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ⏳ 待推进 |
+| N23 | N2：Grafana Dashboard JSON 配置完善（补充缺失 panels） | 监控 | ⏳ 待推进 |
+| N24 | N3：Prometheus Alerting Rules 完善（补充 SLA 告警） | 监控 | ⏳ 待推进 |
+| N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ⏳ 待推进 |
+| N26 | Flyway 迁移脚本版本一致性检查（CI 环节） | DevOps | ⏳ 待推进 |
+| N27 | API 端点响应时间基准测试（SLO < 500ms） | 性能 | ⏳ 待推进 |
+| N28 | WebUI 国际化支持（i18n framework 搭建） | UX | ⏳ 待推进 |
+| N29 | Spring Boot 3.5 新特性：Virtual Threads 压测验证 | 技术升级 | ⏳ 待推进 |
+| N30 | 敏感信息脱敏：审计日志中用户查询内容脱敏 | 安全 | ⏳ 待推进 |
+
+## 待办（新一波改进 N31-N42）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N31 | ChatMemory 表数据膨胀治理策略（TTL + 归档） | 数据管理 | ⏳ 待推进 |
+| N32 | 向量数据库 pgvector HNSW vs IVFFlat 性能对比测试 | 性能 | ⏳ 待推进 |
+| N33 | RAG 检索结果可溯源（traceId 贯穿整个 Pipeline） | 可观测性 | ⏳ 待推进 |
+| N34 | Collection 删除保护（防止误删 + 恢复机制） | 安全 | ⏳ 待推进 |
+| N35 | API 请求超时配置化（per-endpoint timeout） | 韧性 | ⏳ 待推进 |
+| N36 | Dockerfile 多阶段构建优化（减小镜像体积） | 部署 | ⏳ 待推进 |
+| N37 | WebUI 错误边界（React ErrorBoundary 增强） | UX | ⏳ 待推进 |
+| N38 | API 统一错误码规范（ErrorCode enum） | 代码质量 | ⏳ 待推进 |
+| N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ⏳ 待推进 |
+| N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
+| N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ⏳ 待推进 |
+| N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ⏳ 待推进 |
