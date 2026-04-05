@@ -920,7 +920,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| W7-1 | Metrics 页面可视化：JSON→图表（Recharts） | UX | ⏳ 待推进 |
+| W7-1 | Metrics 页面可视化：JSON→图表（Recharts） | UX | ✅ 2026-04-05（W7-1 完成，Bar/Line图表 + Latency + Cache + Model对比） |
 | W7-2 | Chat 会话历史侧边栏：查看/切换历史对话 | UX | ⏳ 待推进 |
 | W7-3 | Collections 创建模态框：表单验证 + Toast 反馈 | UX | ⏳ 待推进 |
 | W7-4 | Settings 持久化：当前设置保存到后端 API | 功能 | ⏳ 待推进 |
