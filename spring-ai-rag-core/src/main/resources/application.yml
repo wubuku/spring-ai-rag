@@ -266,6 +266,15 @@ rag:
     embed-ms: 60000              # Embedding endpoint timeout
     model-compare-ms: 90000      # Per-model comparison timeout
 
+  # HTTP proxy configuration for LLM API calls
+  # By default, proxy is disabled (enabled: false) to avoid dev environment interference
+  # Set enabled: true and configure host/port when running behind a corporate proxy
+  # proxy:
+  #   enabled: true
+  #   host: 127.0.0.1
+  #   port: 7890
+  #   no-proxy-hosts: localhost|127.0.0.1|*.internal
+
   # LLM circuit breaker configuration (disabled by default)
   # When enabled, prevents request pile-up during LLM API outages
   # circuit-breaker:

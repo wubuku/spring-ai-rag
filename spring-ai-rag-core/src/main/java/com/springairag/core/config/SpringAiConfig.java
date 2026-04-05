@@ -97,14 +97,46 @@ public class SpringAiConfig {
     private Double minimaxTemperature;
 
     @PostConstruct
-    public void disableProxyForMiniMax() {
-        // Disable JVM-wide proxy for MiniMax API calls
-        // The proxy at 127.0.0.1:1235 intercepts HTTPS and returns 404 for MiniMax
-        try {
-            java.net.ProxySelector.setDefault(java.net.ProxySelector.of(null));
-            log.info("JVM-wide proxy selector set to NO_PROXY");
-        } catch (Exception e) {
-            log.warn("Failed to disable proxy selector: {}", e.getMessage());
+    public void initProxySettings() {
+        RagProxyProperties proxy = ragProperties.getProxy();
+        if (!proxy.isEnabled()) {
+            // Proxy disabled: bypass JVM proxy by setting NO_PROXY selector
+            try {
+                java.net.ProxySelector.setDefault(java.net.ProxySelector.of(null));
+                log.info("JVM proxy disabled (rag.proxy.enabled=false), NO_PROXY selector active");
+            } catch (Exception e) {
+                log.warn("Failed to set NO_PROXY selector: {}", e.getMessage());
+            }
+        } else {
+            // Proxy enabled: configure proxy host/port from properties
+            java.net.Proxy proxyHost = new java.net.Proxy(
+                    java.net.Proxy.Type.HTTP,
+                    new java.net.InetSocketAddress(proxy.getHost(), proxy.getPort()));
+            // Parse noProxyHosts from properties (pipe-separated)
+            String[] noProxyArray = proxy.getNoProxyHosts().split("\\|");
+            java.net.ProxySelector selector = new java.net.ProxySelector() {
+                @Override
+                public java.util.List<java.net.Proxy> select(java.net.URI uri) {
+                    String host = uri.getHost();
+                    if (host != null) {
+                        for (String np : noProxyArray) {
+                            if (np.startsWith("*.")) {
+                                String domain = np.substring(2);
+                                if (host.endsWith(domain)) return java.util.List.of(proxyHost);
+                            } else if (host.equals(np)) {
+                                return java.util.List.of(java.net.Proxy.NO_PROXY);
+                            }
+                        }
+                    }
+                    return java.util.List.of(proxyHost);
+                }
+                @Override
+                public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException e) {
+                    log.warn("Proxy connection failed for {}: {}", uri, e.getMessage());
+                }
+            };
+            java.net.ProxySelector.setDefault(selector);
+            log.info("JVM proxy enabled: {}:{}, noProxy={}", proxy.getHost(), proxy.getPort(), proxy.getNoProxyHosts());
         }
     }
 
@@ -182,9 +214,9 @@ public class SpringAiConfig {
         }
         log.info("Creating MiniMax ChatModel: baseUrl={}, model={}", minimaxBaseUrl, minimaxModel);
 
-        // Create RestClient with NO_PROXY to bypass JVM proxy settings + timeouts
+        // Create RestClient with timeouts; NO_PROXY depends on rag.proxy.enabled
         RestClient.Builder restClientBuilder = RestClient.builder()
-                .requestFactory(createRequestFactory(true));
+                .requestFactory(createRequestFactory(!ragProperties.getProxy().isEnabled()));
         MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder);
 
         MiniMaxChatOptions options = MiniMaxChatOptions.builder()

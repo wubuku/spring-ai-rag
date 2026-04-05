@@ -51,6 +51,7 @@ public class RagProperties {
     private final RagTracingProperties tracing = new RagTracingProperties();
     private final RagCircuitBreakerProperties circuitBreaker = new RagCircuitBreakerProperties();
     private final RagTimeoutProperties timeout = new RagTimeoutProperties();
+    private final RagProxyProperties proxy = new RagProxyProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -106,5 +107,9 @@ public class RagProperties {
 
     public RagTimeoutProperties getTimeout() {
         return timeout;
+    }
+
+    public RagProxyProperties getProxy() {
+        return proxy;
     }
 }
