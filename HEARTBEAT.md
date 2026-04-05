@@ -832,12 +832,25 @@
   - mvn clean compile ✅ / mvn test ✅（1183 测试全通过，零失败零错误）
   - git 已推送（commit e3775a8）
 
+- 2026-04-05 11:46 — ✅ W5-1 Vitest 单元测试 + W5-3 前端构建验证：
+  - 安装 vitest + @testing-library/react + jsdom + @vitest/ui
+  - vitest.config.ts（jsdom 环境、globals、覆盖率）
+  - src/test/setup.ts（matchMedia/crypto.scrollIntoView/DataTransfer mock）
+  - useChatSSE 钩子测试（6 tests：初始化/send/close/unmount/二次发送）
+  - useFileUpload 钩子测试（5 tests：初始化/clearUploads/空FileList/上传状态）
+  - Chat 组件测试（10 tests：渲染/空状态/发送按钮/Enter提交/Shift+Enter/新对话/连接状态）
+  - tsconfig.app.json 排除测试文件 + 添加 vitest/globals 类型
+  - npm run build ✅（328KB JS + 16KB CSS gzipped）
+  - npm run test:run ✅（21 tests 全通过）
+  - 2 commits 已推送（91a10f5 + ce76fbf）
+
 ## 待办（WebUI W5 — 工程化收尾）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| W5-1 | Vitest 单元测试（组件 + Hooks） | 测试 | ⏳ 待推进 |
+| W5-1 | Vitest 单元测试（组件 + Hooks） | 测试 | ✅ 2026-04-05（21 tests: useChatSSE 6 + useFileUpload 5 + Chat 10） |
 | W5-2 | Style Unification：统一各页面输入框/按钮/标题/加载状态样式 | UI | ✅ 2026-04-05（Search/Collections 初步修复） |
+| W5-3 | 前端生产构建验证（dist 完整性） | 质量 | ✅ 2026-04-05（328KB JS + 16KB CSS gzipped） |
 
 **Style Unification 详细任务**：
 
@@ -861,6 +874,5 @@
 - 标题：`font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem;`
 - 加载状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
 - 空状态：`text-align: center; padding: 2rem; color: var(--color-text-muted);`
-| W5-2 | Playwright E2E 测试（核心用户流程） | 测试 | ⏳ 待推进 |
-| W5-3 | 前端生产构建验证（dist 完整性） | 质量 | ⏳ 待推进 |
+| W5-4 | Playwright E2E 测试（核心用户流程） | 测试 | ⏳ 待推进 |
 
