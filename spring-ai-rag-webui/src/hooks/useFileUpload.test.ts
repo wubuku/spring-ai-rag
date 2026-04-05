@@ -46,7 +46,6 @@ describe('useFileUpload', () => {
 
   it('uploadFiles sets isUploading to true during upload', async () => {
     // Mock fetch to never resolve (keep isUploading in "uploading" state)
-    const abortController = new AbortController();
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
       () => new Promise(() => {}) // Never resolves, simulating a hanging request
     );
@@ -60,7 +59,7 @@ describe('useFileUpload', () => {
 
     let isUploadingDuringUpload = false;
     act(() => {
-      const uploadPromise = result.current.uploadFiles(dt.files);
+      result.current.uploadFiles(dt.files);
       isUploadingDuringUpload = result.current.isUploading;
       // Don't await - we just want to check the state DURING the upload
     });
