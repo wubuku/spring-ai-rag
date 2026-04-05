@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
+import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.anthropic.AnthropicChatModel;
@@ -16,15 +17,19 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.beans.BeansException;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
+import java.net.Proxy;
+import java.net.ProxySelector;
 import java.util.List;
 
 /**
@@ -84,6 +89,18 @@ public class SpringAiConfig {
     @Value("${spring.ai.minimax.chat.options.temperature:0.7}")
     private Double minimaxTemperature;
 
+    @PostConstruct
+    public void disableProxyForMiniMax() {
+        // Disable JVM-wide proxy for MiniMax API calls
+        // The proxy at 127.0.0.1:1235 intercepts HTTPS and returns 404 for MiniMax
+        try {
+            java.net.ProxySelector.setDefault(java.net.ProxySelector.of(null));
+            log.info("JVM-wide proxy selector set to NO_PROXY");
+        } catch (Exception e) {
+            log.warn("Failed to disable proxy selector: {}", e.getMessage());
+        }
+    }
+
     @Bean("openAiChatModel")
     public ChatModel openAiChatModel(RestClient.Builder restClientBuilder) {
         if (!"openai".equals(provider)) {
@@ -137,7 +154,12 @@ public class SpringAiConfig {
         }
         log.info("Creating MiniMax ChatModel: baseUrl={}, model={}", minimaxBaseUrl, minimaxModel);
 
-        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, restClientBuilder);
+        // Create RestClient with NO_PROXY to bypass JVM proxy settings
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setProxy(Proxy.NO_PROXY);
+        RestClient.Builder noProxyBuilder = RestClient.builder()
+                .requestFactory(requestFactory);
+        MiniMaxApi miniMaxApi = new MiniMaxApi(minimaxBaseUrl, minimaxApiKey, noProxyBuilder);
 
         MiniMaxChatOptions options = MiniMaxChatOptions.builder()
                 .model(minimaxModel)
@@ -151,27 +173,29 @@ public class SpringAiConfig {
     @Primary
     @ConditionalOnMissingBean(name = "chatModel")
     public ChatModel chatModel(
-            org.springframework.context.ApplicationContext ctx) {
+            ObjectProvider<ChatModel> chatModels) {
         ChatModel openAi = null;
-        ChatModel anthropic = null;
         ChatModel miniMax = null;
-        try { openAi = ctx.getBean("openAiChatModel", ChatModel.class); } catch (BeansException ignored) {}
-        try { anthropic = ctx.getBean("anthropicChatModel", ChatModel.class); } catch (BeansException ignored) {}
-        try { miniMax = ctx.getBean("miniMaxChatModel", ChatModel.class); } catch (BeansException ignored) {}
+        ChatModel anthropic = null;
+        for (ChatModel cm : chatModels) {
+            if (cm instanceof OpenAiChatModel) openAi = cm;
+            else if (cm instanceof MiniMaxChatModel) miniMax = cm;
+            else if (cm instanceof AnthropicChatModel) anthropic = cm;
+        }
 
         if ("openai".equals(provider) && openAi != null) {
             log.info("Using OpenAI ChatModel as primary");
             return openAi;
-        } else if ("anthropic".equals(provider) && anthropic != null) {
-            log.info("Using Anthropic ChatModel as primary");
-            return anthropic;
         } else if ("minimax".equals(provider) && miniMax != null) {
             log.info("Using MiniMax ChatModel as primary");
             return miniMax;
+        } else if ("anthropic".equals(provider) && anthropic != null) {
+            log.info("Using Anthropic ChatModel as primary");
+            return anthropic;
         }
         if (openAi != null) { return openAi; }
-        if (anthropic != null) { return anthropic; }
         if (miniMax != null) { return miniMax; }
+        if (anthropic != null) { return anthropic; }
         throw new IllegalStateException("No ChatModel configured. Set app.llm.provider to 'openai', 'anthropic', or 'minimax'.");
     }
 

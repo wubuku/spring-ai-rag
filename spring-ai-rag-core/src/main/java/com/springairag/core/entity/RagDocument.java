@@ -18,7 +18,9 @@ import java.util.Map;
     @Index(name = "idx_rag_doc_created", columnList = "created_at"),
     @Index(name = "idx_rag_doc_collection", columnList = "collection_id"),
     @Index(name = "idx_rag_doc_hash", columnList = "content_hash"),
-    @Index(name = "idx_rag_doc_status", columnList = "processing_status")
+    @Index(name = "idx_rag_doc_status", columnList = "processing_status"),
+    @Index(name = "idx_rag_doc_type", columnList = "document_type"),
+    @Index(name = "idx_rag_doc_enabled", columnList = "enabled")
 })
 public class RagDocument {
 

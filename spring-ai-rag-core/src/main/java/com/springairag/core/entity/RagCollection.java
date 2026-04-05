@@ -14,7 +14,8 @@ import java.util.Map;
  */
 @Entity
 @Table(name = "rag_collection", indexes = {
-    @Index(name = "idx_rag_col_enabled", columnList = "enabled")
+    @Index(name = "idx_rag_col_enabled", columnList = "enabled"),
+    @Index(name = "idx_rag_col_name", columnList = "name")
 })
 public class RagCollection {
 
