@@ -163,7 +163,7 @@ async function testChat(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/chat`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
     { selector: 'textarea, input[type="text"]', description: 'Chat input', state: 'visible' },
-    { selector: 'button', description: 'Send button', state: 'visible' },
+    { selector: 'button:has-text("Send")', description: 'Send button', state: 'visible' },
   ]);
   
   const title = await page.locator('h1').textContent();

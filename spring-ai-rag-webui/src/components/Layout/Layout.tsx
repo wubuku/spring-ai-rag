@@ -1,5 +1,6 @@
 import { Outlet, NavLink } from 'react-router-dom';
 import { ErrorBoundary } from '../ErrorBoundary';
+import { ThemeToggle } from '../ThemeToggle';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -18,6 +19,9 @@ export function Layout() {
     <div className={styles.layout}>
       <aside className={styles.sidebar}>
         <div className={styles.logo}>spring-ai-rag</div>
+        <div className={styles.themeToggle}>
+          <ThemeToggle />
+        </div>
         <nav>
           {NAV_ITEMS.map((item) => (
             <NavLink
