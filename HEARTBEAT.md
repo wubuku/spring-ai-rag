@@ -891,3 +891,13 @@
 - 运行：`node scripts/webui-e2e-test.js`
 - 依赖：playwright（已在 spring-ai-rag-webui 安装）
 
+- 2026-04-05 12:46 — ✅ WebUI Playwright E2E 提交 + W5 全部完成：
+  - 发现 WebUI 未提交变更：Playwright E2E 测试套件（11 tests）、vite.config.ts dev middleware、package.json scripts
+  - 新增 e2e/ 目录（api-mocks.ts + 7 个 spec 文件）+ playwright.config.ts
+  - .gitignore 新增 test-results/ 和 playwright-report/
+  - useSSE.test.ts 和 useFileUpload.test.ts 清理未使用变量
+  - 1056 Java 测试全通过，零失败零错误
+  - commit 79ab1dc 已推送
+  - **全部 Phase 1-7 + P1/P2/P3 + W1-W5 全部完成，项目处于生产级成熟状态**
+  - **无 ⏳ 待办项**
+
