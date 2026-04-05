@@ -670,7 +670,7 @@ class RagControllerIntegrationTest {
             com.springairag.core.entity.RagUserFeedback feedback =
                     new com.springairag.core.entity.RagUserFeedback();
             when(userFeedbackService.submitFeedback(anyString(), anyString(), anyString(),
-                    any(), anyString(), anyList(), anyList(), any()))
+                    nullable(Integer.class), anyString(), nullable(List.class), nullable(List.class), any()))
                     .thenReturn(feedback);
 
             mockMvc.perform(post("/api/v1/rag/evaluation/feedback")
