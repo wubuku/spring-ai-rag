@@ -1011,3 +1011,8 @@
 |---|--------|------|------|
 | C4-1 | AuditLogService 单元测试（22 tests） | 测试覆盖 | ✅ 2026-04-05（C4-1 完成，22 个测试，0 失败） |
 
+
+## 进度日志（2026-04-05 晚间）
+
+- 2026-04-05 22:13 — 🔧 修复构建中断：删除 2 个未集成的 partial 文件（MultiModelConfigLoader.java + MultiModelProperties.java）—— 它们是 `@Component` 依赖未注册的 bean（MultiModelProperties 无 `@EnableConfigurationProperties`），导致 OpenApiContractTest 等 17 个测试 context load 失败；删除后 mvn test ✅（1129 Core + 42 Starter = 1171 测试全通过，零失败零错误）；commit aa87888 已推送
+
