@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
-const baseURL = process.env.BASE_URL || 'http://localhost:5173/webui';
+// E2E tests run against the Spring Boot backend (port 8081) which serves the webui at /webui/
+const baseURL = process.env.BASE_URL || 'http://localhost:8081/webui';
 
 export default defineConfig({
   testDir: './e2e',
@@ -23,14 +24,8 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: process.env.E2E_NO_DEV_SERVER
-    ? undefined
-    : {
-        command: 'npm run dev',
-        url: 'http://localhost:5173',
-        reuseExistingServer: !process.env.CI,
-        timeout: 30_000,
-        stdout: 'pipe',
-        stderr: 'pipe',
-      },
+  // E2E tests expect Spring Boot backend already running on port 8081
+  // Start backend: cd spring-ai-rag && POSTGRES_HOST=localhost POSTGRES_USER=postgres POSTGRES_PASSWORD=123456 POSTGRES_DATABASE=spring_ai_rag_dev mvn spring-boot:run -pl spring-ai-rag-core
+  // Then: cd spring-ai-rag-webui && npx playwright test
+  webServer: undefined,
 });

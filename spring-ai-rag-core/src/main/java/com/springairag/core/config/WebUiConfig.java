@@ -24,6 +24,7 @@ public class WebUiConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Serve /webui/assets/** from classpath:/static/webui/assets/
+        // Explicitly set the order to ensure it runs AFTER the controller catch-all
         registry.addResourceHandler("/webui/assets/**")
                 .addResourceLocations("classpath:/static/webui/assets/");
     }
@@ -58,7 +59,9 @@ public class WebUiConfig implements WebMvcConfigurer {
         public String webuiCatchAll(@PathVariable String path) {
             // Exclude assets paths - those are served by ResourceHandler
             if (path.startsWith("assets/")) {
-                throw new IllegalStateException("Should be handled by ResourceHandler");
+                // This should be handled by ResourceHandler, not this controller
+                // Return index.html as fallback (ResourceHandler should have handled it)
+                return WEBUI_INDEX;
             }
             return WEBUI_INDEX;
         }
