@@ -100,6 +100,8 @@ class RagControllerIntegrationTest {
 
     // ==================== Alert ====================
     @MockBean private AlertService alertService;
+    @MockBean private com.springairag.core.repository.SloConfigRepository sloConfigRepository;
+    @MockBean private com.springairag.core.repository.RagSilenceScheduleRepository silenceScheduleRepository;
 
     // ==================== Health ====================
     @MockBean private com.springairag.core.metrics.ComponentHealthService componentHealthService;
