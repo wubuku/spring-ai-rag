@@ -117,6 +117,16 @@ jobs:
           path: '**/target/site/jacoco/'
           retention-days: 14
 
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: '**/target/site/jacoco/jacoco.xml'
+          flags: 'maven,jacoco'
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4

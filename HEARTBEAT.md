@@ -955,7 +955,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| D1-1 | WebUI 大块告警：构建警告 chunk>500KB，优化路由级代码分割 | 性能 | ⏳ 待推进 |
+| D1-1 | WebUI 大块告警：构建警告 chunk>500KB，优化路由级代码分割 | 性能 | ✅ 2026-04-05（721KB→243KB初始，React.lazy路由分割） |
 | D1-2 | WebUI Vitest 覆盖率提升（当前仅 hooks/components/api 覆盖） | 测试覆盖 | ⏳ 待推进 |
 | D1-3 | WebUI Playwright E2E 补强：SSE 流式对话 + 嵌入进度 + Settings | 测试 | ⏳ 待推进 |
 | D1-4 | DocumentVersionService 单元测试 | 测试覆盖 | ⏳ 待推进 |
