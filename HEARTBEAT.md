@@ -913,3 +913,41 @@
 |---|--------|------|------|
 | B-1 | RagDocumentController SSE emitter 注释完善 | 代码质量 | ✅ 2026-04-05 |
 
+## 待办（WebUI W7 — UX 精益求精 v2）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| W7-1 | Metrics 页面可视化：JSON→图表（Recharts） | UX | ⏳ 待推进 |
+| W7-2 | Chat 会话历史侧边栏：查看/切换历史对话 | UX | ⏳ 待推进 |
+| W7-3 | Collections 创建模态框：表单验证 + Toast 反馈 | UX | ⏳ 待推进 |
+| W7-4 | Settings 持久化：当前设置保存到后端 API | 功能 | ⏳ 待推进 |
+| W7-5 | API Client 重试机制：自动重试 + 超时配置 | 可靠性 | ⏳ 待推进 |
+| W7-6 | Documents 行内预览：点击文档查看内容摘要 | UX | ⏳ 待推进 |
+
+## 待办（后端 B7 — 功能增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| B7-1 | Chat 对话导出：JSON/Markdown 格式导出会话 | 功能 | ⏳ 待推进 |
+| B7-2 | Document 全文搜索：Collection 内 keyword 搜索 | 功能 | ⏳ 待推进 |
+| B7-3 | 批量操作进度：SSE 实时推送嵌入进度（% 汇报） | 功能 | ⏳ 待推进 |
+| B7-4 | HikariCP 监控：JMX → /metrics 暴露连接池指标 | 可观测性 | ⏳ 待推进 |
+| B7-5 | SLO 配置持久化：SloConfig 存入数据库 | 功能 | ⏳ 待推进 |
+| B7-6 | 告警静默期：配置 Downtime/Suppress 时段 | 功能 | ⏳ 待推进 |
+
+## 待办（DevOps B8 — 部署增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| B8-1 | Helm Chart：Kubernetes 部署清单 | 部署 | ⏳ 待推进 |
+| B8-2 | Grafana Dashboard：JSON 监控面板 | 可观测性 | ⏳ 待推进 |
+| B8-3 | Prometheus Alerting Rules：RAG 专属告警规则 | 可观测性 | ⏳ 待推进 |
+| B8-4 | k6 负载测试脚本：关键 API 性能基准 | 性能 | ⏳ 待推进 |
+
+## 待办（测试 B9 — 测试增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| B9-1 | OpenAPI Contract Testing：schema 验证 | 测试 | ⏳ 待推进 |
+| B9-2 | Playwright E2E 补强：Chat SSE 流式 + 上传进度 | 测试 | ⏳ 待推进 |
+
