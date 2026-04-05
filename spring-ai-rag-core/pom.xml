@@ -122,6 +122,13 @@
             <version>${springdoc.version}</version>
         </dependency>
 
+        <!-- Force swagger-annotations-jakarta to match springdoc 2.8.x requirement (resolves SchemaResolution conflict with jsonschema-module-swagger-2) -->
+        <dependency>
+            <groupId>io.swagger.core.v3</groupId>
+            <artifactId>swagger-annotations-jakarta</artifactId>
+            <version>2.2.28</version>
+        </dependency>
+
         <!-- Spring Boot Actuator (metrics + health checks) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

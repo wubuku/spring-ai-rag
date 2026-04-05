@@ -4,6 +4,9 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Contact;
 import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.info.License;
+import io.swagger.v3.oas.models.media.Content;
+import io.swagger.v3.oas.models.media.MediaType;
+import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import io.swagger.v3.oas.models.responses.ApiResponses;
 import io.swagger.v3.oas.models.servers.Server;
@@ -58,7 +61,20 @@ public class OpenApiConfig {
      */
     @Bean
     public OpenApiCustomizer globalResponseCustomizer() {
-        return openApi -> openApi.getPaths().values().forEach(pathItem ->
+        return openApi -> {
+            // Add ErrorResponse schema (RFC 7807 Problem Details)
+            if (openApi.getComponents() == null) {
+                openApi.setComponents(new io.swagger.v3.oas.models.Components());
+            }
+            java.util.Map<String, io.swagger.v3.oas.models.media.Schema> schemas = openApi.getComponents().getSchemas();
+            if (schemas == null) {
+                schemas = new java.util.HashMap<>();
+                openApi.getComponents().setSchemas(schemas);
+            }
+            schemas.put("ErrorResponse", createErrorResponseSchema());
+
+            // Add 400/500 error responses to all endpoints
+            openApi.getPaths().values().forEach(pathItem ->
                 pathItem.readOperations().forEach(operation -> {
                     ApiResponses responses = operation.getResponses();
                     if (responses == null) {
@@ -74,5 +90,26 @@ public class OpenApiConfig {
                                 .description("服务器内部错误"));
                     }
                 }));
+        };
+    }
+
+    /**
+     * RFC 7807 Problem Details schema for error responses.
+     * Spring Boot 3.x uses ProblemDetail for error handling.
+     */
+    private Schema<?> createErrorResponseSchema() {
+        Schema<?> schema = new Schema<>();
+        schema.setType("object");
+        schema.setDescription("RFC 7807 Problem Details error response");
+        schema.addProperty("type", new Schema<>().type("string").description("错误类型 URI"));
+        schema.addProperty("title", new Schema<>().type("string").description("错误标题"));
+        schema.addProperty("status", new Schema<>().type("integer").format("int32").description("HTTP 状态码"));
+        schema.addProperty("detail", new Schema<>().type("string").description("错误详情"));
+        schema.addProperty("instance", new Schema<>().type("string").description("错误实例 URI"));
+        schema.addProperty("error", new Schema<>().type("string").description("错误代码"));
+        schema.addProperty("message", new Schema<>().type("string").description("错误消息"));
+        schema.addProperty("timestamp", new Schema<>().type("string").format("date-time").description("错误发生时间"));
+        schema.addProperty("path", new Schema<>().type("string").description("请求路径"));
+        return schema;
     }
 }
