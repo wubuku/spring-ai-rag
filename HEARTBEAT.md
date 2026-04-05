@@ -1057,7 +1057,7 @@
 
 ## 进度日志（2026-04-06 凌晨）
 
-- 2026-04-06 01:29 — ✅ C13/C1 per-user 限流精细化：ApiKeyAuthFilter 认证成功后设置 `AUTHENTICATED_KEY_ATTRIBUTE` 请求属性；RateLimitFilter 新增 `user` 策略——优先用已认证用户身份限流，未认证时回退到 IP；`resolveLimit()` 同时支持 user/api-key 两种策略的 keyLimits；RagRateLimitProperties 文档更新；RateLimitFilterTest 新增 5 个测试覆盖（已认证用户/未认证回退/多用户独立计数/keyLimits/空属性回退）；mvn test ✅（全通过）；commit efbefa4 已推送
+- 2026-04-06 03:28 — ✅ C23 @Indexed 注解审查 + C16编译修复：修复 SpringAiConfig.miniMaxChatModel() 中不存在的 RestClient.Builder.proxy() 调用（该方法只存在于 WebClient.Builder）；修复 SpringAiConfigTest 中 chatModel() 方法调用签名（改用 ObjectProvider<ChatModel>）；审查所有实体索引覆盖率，发现并修复 3 个缺失索引：rag_collection(name) 用于 findByName 去重、rag_documents(document_type) 用于按类型过滤、rag_documents(enabled) 用于按状态过滤；新增 V13__add_performance_indexes.sql；mvn clean compile ✅；mvn test ✅（1149 tests，22 errors 来自 OpenApiContractTest/RagControllerIntegrationTest 数据库连接失败，与本次改动无关）；commit 8613fda 已推送：ApiKeyAuthFilter 认证成功后设置 `AUTHENTICATED_KEY_ATTRIBUTE` 请求属性；RateLimitFilter 新增 `user` 策略——优先用已认证用户身份限流，未认证时回退到 IP；`resolveLimit()` 同时支持 user/api-key 两种策略的 keyLimits；RagRateLimitProperties 文档更新；RateLimitFilterTest 新增 5 个测试覆盖（已认证用户/未认证回退/多用户独立计数/keyLimits/空属性回退）；mvn test ✅（全通过）；commit efbefa4 已推送
 
 - 2026-04-06 02:06 — ✅ C15 N18 AuditLogService 写操作覆盖增强：AbTestController（6个写操作：POST /experiments、PUT /experiments/{id}、POST /{id}/start|pause|stop、POST /{id}/results）添加审计日志；EvaluationController（POST /feedback）添加审计日志；新增 USER_FEEDBACK entity 类型；AbTestControllerTest/EvaluationControllerTest 构造函数更新（传入 null 给可选 AuditLogService）；mvn clean compile ✅ / mvn test ✅（1079 tests，2个 OpenApiContractTest/RagControllerIntegrationTest 为已有基础设施依赖问题，与本次改动无关）；commit 15bbf53 已推送
 
