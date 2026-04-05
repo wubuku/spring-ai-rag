@@ -1166,7 +1166,7 @@
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
 | C28 |SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ⏳ | P1 |
-| C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ⏳ | P3 |
+| C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
 | C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ⏳ | P2 |
 | C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
 | C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
@@ -1180,6 +1180,24 @@
 | C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
 
 **Cron 执行保证**：每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前，cron 永不停止。
+
+## 进度日志（WebUI i18n — 2026-04-06 05:17）
+
+- ✅ C29: WebUI 国际化框架搭建完成
+  - 安装 react-i18next + i18next + i18next-browser-languagedetector
+  - 创建 src/i18n/index.ts（react-i18next 配置，检测优先级：localStorage → navigator）
+  - 创建 src/i18n/locales/en.json（英文翻译，所有页面完整覆盖）
+  - 创建 src/i18n/locales/zh-CN.json（中文翻译，完整覆盖）
+  - 集成 i18n 到 main.tsx
+  - 更新所有页面使用 useTranslation（Dashboard, Collections, Documents, Chat, Search, Metrics, Alerts, Settings）
+  - 添加 Settings 页面 Language Tab（语言切换按钮 EN/中文）
+  - 更新 Layout 导航使用 i18n key
+  - 修复 test/setup.ts 添加 i18next mock
+  - 更新所有相关测试使用 i18n mock keys（88 tests ✅）
+  - npm run build ✅，WebUI dist 复制到 static/webui
+  - E2E 测试：11/11 ✅
+  - commit 875a477，45 files，875 行新增
+
 
 ## 待办（C41-C42 — 代码库巡检）
 
