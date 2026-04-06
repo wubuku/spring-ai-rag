@@ -366,7 +366,7 @@ public class RagDocumentController {
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("ids 列表不能为空");
+            throw new IllegalArgumentException("ids list cannot be empty");
         }
         Map<String, Object> result = batchDocumentService.batchDeleteDocuments(ids);
 
@@ -385,7 +385,7 @@ public class RagDocumentController {
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
-            throw new IllegalArgumentException("ids 列表不能为空");
+            throw new IllegalArgumentException("ids list cannot be empty");
         }
         if (ids.size() > 50) {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");

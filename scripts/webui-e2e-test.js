@@ -201,7 +201,8 @@ async function testChatInteraction(page) {
   await page.waitForTimeout(8000); // Wait for SSE stream to complete (8s for LLM response)
   
   // Check that the user message appears
-  const messages = page.locator('[class*="message"], [class*="chat-message"], .messages >> div');
+  // Note: CSS modules generate hashed class names like _msg_xxx, _user_xxx, _assistant_xxx
+  const messages = page.locator('[class*="_msg_"], [class*="_user_"], [class*="_assistant_"]');
   const messageCount = await messages.count();
   console.log(`  → Messages in chat: ${messageCount}`);
   

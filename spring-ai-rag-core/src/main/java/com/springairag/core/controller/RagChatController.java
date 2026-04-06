@@ -93,6 +93,28 @@ public class RagChatController {
     }
 
     /**
+     * RAG 问答（非流式）— /chat 是 /ask 的别名，统一入口
+     */
+    @Operation(summary = "RAG 问答（非流式）", description = "发送问题，返回完整回答。")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "问答成功，返回完整回答"),
+            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+    })
+    @PostMapping
+    @Timed(value = "rag.chat.non-stream", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
+    public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
+        if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+            request.setSessionId(java.util.UUID.randomUUID().toString());
+        }
+        log.info("RAG chat: sessionId={}, domain={}, message={}",
+                request.getSessionId(), request.getDomainId(),
+                request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
+
+        ChatResponse response = ragChatService.chat(request);
+        return ResponseEntity.ok(response);
+    }
+
+    /**
      * RAG 问答（流式，SSE）
      */
     @Operation(summary = "RAG 问答（流式 SSE）", description = "流式返回回答内容，通过 Server-Sent Events 逐块推送。")

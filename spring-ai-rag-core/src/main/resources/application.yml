@@ -65,16 +65,16 @@ spring:
   # DeepSeek example: base-url=https://api.deepseek.com/v1, model=deepseek-chat
   # Zhipu example: base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
   openai:
-    api-key: ${OPENAI_API_KEY:dummy}
+    api-key: ${SPRING_AI_OPENAI_API_KEY:${OPENAI_API_KEY:dummy}}
     # ⚠️ 重要：Spring AI OpenAiApi 会自动追加 /v1/chat/completions
     # base-url 不要包含 /v1，避免 /v1/v1 重复路径导致 401/404
     # 参考：https://github.com/spring-projects/spring-ai/issues/710
-    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
+    base-url: ${SPRING_AI_OPENAI_BASE_URL:${OPENAI_BASE_URL:https://api.siliconflow.cn}}
     chat:
       # DISABLED — ChatModel beans are manually created by SpringAiConfig
       enabled: false
       options:
-        model: ${OPENAI_MODEL:deepseek-chat}
+        model: ${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:${OPENAI_MODEL:Qwen/Qwen2.5-7B-Instruct}}
         temperature: ${OPENAI_TEMPERATURE:0.7}
 
   # Spring AI Anthropic model configuration (optional)

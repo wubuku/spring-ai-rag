@@ -376,7 +376,7 @@ public class RagCollectionController {
 
         Long documentId = request.get("documentId");
         if (documentId == null) {
-            throw new IllegalArgumentException("documentId 不能为空");
+            throw new IllegalArgumentException("documentId is required");
         }
 
         if (!collectionRepository.existsById(id)) {
@@ -455,7 +455,7 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
         String name = (String) importData.get("name");
         if (name == null || name.isBlank()) {
-            throw new IllegalArgumentException("name 不能为空");
+            throw new IllegalArgumentException("name is required");
         }
 
         log.info("Importing collection: name={}", name);
