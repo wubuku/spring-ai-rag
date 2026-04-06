@@ -5,14 +5,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import jakarta.annotation.PostConstruct;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -29,11 +34,44 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
     private final RagRetrievalEvaluationRepository evaluationRepository;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
+
+    private Timer evaluateTimer;
+    private Counter evaluationCounter;
+    private Counter batchEvaluationCounter;
+    private Counter evaluationHitCounter;
+    private Counter evaluationMissCounter;
 
     public RetrievalEvaluationServiceImpl(RagRetrievalEvaluationRepository evaluationRepository,
-                                          ObjectMapper objectMapper) {
+                                          ObjectMapper objectMapper,
+                                          MeterRegistry meterRegistry) {
         this.evaluationRepository = evaluationRepository;
         this.objectMapper = objectMapper;
+        this.meterRegistry = meterRegistry;
+    }
+
+    @PostConstruct
+    void initMetrics() {
+        evaluateTimer = Timer.builder("rag.evaluation.duration")
+                .description("Single retrieval evaluation latency")
+                .publishPercentiles(0.5, 0.95, 0.99)
+                .register(meterRegistry);
+
+        evaluationCounter = Counter.builder("rag.evaluation.count")
+                .description("Total number of retrieval evaluations performed")
+                .register(meterRegistry);
+
+        batchEvaluationCounter = Counter.builder("rag.evaluation.batch_count")
+                .description("Total number of batch evaluation cases processed")
+                .register(meterRegistry);
+
+        evaluationHitCounter = Counter.builder("rag.evaluation.hits")
+                .description("Evaluations where at least one relevant document was retrieved")
+                .register(meterRegistry);
+
+        evaluationMissCounter = Counter.builder("rag.evaluation.misses")
+                .description("Evaluations where no relevant documents were retrieved")
+                .register(meterRegistry);
     }
 
     @Override
@@ -63,14 +101,25 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         evalResult.put("recallAt10", metrics.getRecallAtK().getOrDefault(DEFAULT_K, 0.0));
         evaluation.setEvaluationResult(evalResult);
 
+        long start = System.currentTimeMillis();
         RagRetrievalEvaluation saved = evaluationRepository.save(evaluation);
-        log.info("[RetrievalEval] query=\"{}\", MRR={:.4f}, NDCG={:.4f}, hitRate={}",
+        evaluateTimer.record(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
+        evaluationCounter.increment();
+        if (metrics.getHitRate() > 0) {
+            evaluationHitCounter.increment();
+        } else {
+            evaluationMissCounter.increment();
+        }
+        log.info("[RetrievalEval] query=\"{}\", MRR={}, NDCG={}, hitRate={}",
                 query, metrics.getMrr(), metrics.getNdcg(), metrics.getHitRate());
         return saved;
     }
 
     @Override
     public List<RagRetrievalEvaluation> batchEvaluate(List<EvaluationCase> cases) {
+        if (cases != null) {
+            batchEvaluationCounter.increment(cases.size());
+        }
         return cases.stream()
                 .map(c -> evaluate(c.getQuery(), c.getRetrievedDocIds(), c.getRelevantDocIds(),
                         c.getEvaluationMethod(), c.getEvaluatorId()))

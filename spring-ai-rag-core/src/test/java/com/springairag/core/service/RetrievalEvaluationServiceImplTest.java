@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -35,7 +36,8 @@ class RetrievalEvaluationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper());
+        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry());
+        service.initMetrics();
     }
 
     // ==================== calculateMetrics ====================
