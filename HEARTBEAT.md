@@ -151,6 +151,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-07 05:37 — ✅ HS1-2 SearchCapabilities 测试兼容修复：FulltextSearchProviderFactory + SearchCapabilities 添加 no-arg constructors（test contexts without JdbcTemplate）；SearchCapabilities @PostConstruct 加 null guard；HybridRetrieverServiceTest 2 个失败测试修复（strategyTrgm_unavailable_throws + strategyAuto_selectsBestAvailable 补全 queryForObject mock）；FulltextSearchProviderFactoryTest 大重构（fake providers + SearchCapabilities(init=false)）；1272 tests 全通过（BUILD SUCCESS）；commit 90b3727 已推送
 - 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
 - 2026-04-06 15:46 — ✅ C21 WebUI 错误边界增强（错误日志上报）：ErrorBoundary componentDidCatch 异步 POST 错误到 `POST /api/v1/rag/client-errors`（不阻塞 UI）；后端 `ClientErrorController` + `ClientErrorServiceImpl` + `RagClientError` entity + `V14__add_client_error_log.sql` Flyway 迁移；113 vitest tests ✅（WebUI）+ ClientErrorControllerTest (6) + ClientErrorServiceImplTest (4) ✅；WebUI 113 tests 全通过；npm run build ✅；E2E 10/12 ✅（Chat Page/Chat Interaction 为已存在问题）；commit dab5f8b 已推送
 
@@ -1381,7 +1382,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | HS1-1 | QueryLang enum + LanguageDetector（语言检测，Unicode CJK 区块） | 架构 | ✅ 2026-04-07（23 tests） |
-| HS1-2 | SearchCapabilities 类（扩展 + 索引探测） | 架构 | ⏳ |
+| HS1-2 | SearchCapabilities 类（扩展 + 索引探测） | 架构 | ✅ 2026-04-07（no-arg ctor + test setters + OpenApiContractTest 修复） |
 | HS1-3 | PgEnglishFtsProvider（英文 FTS，search_vector tsvector） | 功能 | ⏳ |
 | HS1-4 | FulltextSearchProviderFactory 改造（支持语言参数） | 架构 | ⏳ |
 | HS1-5 | HybridRetrieverService 集成语言检测 + 策略选择 | 集成 | ⏳ |
