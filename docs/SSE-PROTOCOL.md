@@ -1,253 +1,231 @@
 # SSE 流式协议设计文档
 
-> 状态：规划中 | 日期：2026-04-06
+> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-04-06
 
-## 1. 当前实现
+## 1. 当前实现的协议格式
 
-### 1.1 当前协议格式
+### 1.1 协议概述
+
+采用 **OpenAI 兼容格式**，与 Spring AI OpenAI 集成保持兼容，同时支持 RAG 特有功能。
 
 ```
-event:trace
-data:{traceId}
+Content-Type: text/event-stream
+Cache-Control: no-cache
+X-Trace-Id: {traceId}   # 可选，传递请求追踪 ID
 
-event:chunk
-data:{text content}
+# Content 块（OpenAI 兼容）
+data:{"choices":[{"delta":{"content":"你"}}]}
+data:{"choices":[{"delta":{"content":"好"}}]}
+data:{"choices":[{"delta":{"content":"，"}}]}
+...
 
-event:sources
-data:{sources JSON}
-
+# 完成事件
 event:done
 data:{"traceId":"xxx","status":"complete"}
 ```
 
-### 1.2 当前实现代码
-
-**后端**（`RagChatController.java`）：
-```java
-// trace 事件
-emitter.send(SseEmitter.event().name("trace").data(traceId));
-
-// chunk 事件（当前：发送纯文本）
-emitter.send(SseEmitter.event().name("chunk").data(chunk));
-
-// sources 事件
-emitter.send(SseEmitter.event().name("sources").data(json));
-
-// done 事件
-emitter.send(SseEmitter.event().name("done").data("{\"traceId\":\"...\",\"status\":\"complete\"}"));
-```
-
-**前端**（`useSSE.ts`）：
-- 读取 SSE 流，按 `\n\n` 分割事件
-- 根据 `event:` 类型处理：`chunk`/`sources`/`done`/`trace`
-
-### 1.3 当前问题
-
-| 问题 | 描述 |
-|------|------|
-| 非标准格式 | 使用自定义 `event:chunk` 命名事件，非主流 SSE 实践 |
-| 无 Content-Type | 没有声明 `text/event-stream` Content-Type |
-| 错误处理粗糙 | 仅通过 `completeWithError` 传递错误 |
-| 缺少 metadata | 没有 token 使用量、模型名称等元数据 |
-| sources 格式不明确 | sources 事件的 JSON 结构未文档化 |
-| 缺少 heartbeat | 长时间传输没有心跳保活 |
-
-## 2. 参考协议设计
-
-### 2.1 OpenAI SSE 格式（最佳实践）
-
-参考 `spring-ai-skills-demo/docs/drafts/多模态输入支持规划文档.md` 第 11 章：
-
-```
-Content-Type: text/event-stream
-Cache-Control: no-cache
-Connection: keep-alive
-
-data:{"choices":[{"delta":{"content":"你"}}]}
-data:{"choices":[{"delta":{"content":"好"}}]}
-...
-data:{"choices":[{"delta":{"content":"！"},"finish_reason":"stop"}]}
-data:[DONE]
-```
-
-**特点**：
-- 标准 SSE `data:` 行格式（无 `event:` 命名事件）
-- OpenAI Chat Completions 兼容的 JSON 结构
-- `choices[0].delta.content` 包含增量内容
-- `finish_reason` 标识结束原因
-- `data:[DONE]` 是标准的结束标记
-
-### 2.2 多模态扩展（参考）
-
-```json
-// 视觉块事件
-data:{"type":"vision","image_url":"data:image/png;base64,..."}
-
-// 文本块事件
-data:{"type":"content","content":"文本内容"}
-
-// 元数据事件
-data:{"type":"metadata","model":"gpt-4","tokens":125,"usage":{"prompt":10,"completion":115}}
-```
-
-## 3. 协议设计改进
-
-### 3.1 推荐协议：OpenAI 兼容格式
-
-**目标**：与 Spring AI OpenAI 集成保持兼容，同时支持 RAG 特有功能。
-
-```
-Content-Type: text/event-stream
-Cache-Control: no-cache
-Connection: keep-alive
-X-Content-Type-Options: nosniff
-
-data:{"choices":[{"delta":{"content":"你"}}]}
-data:{"choices":[{"delta":{"content":"好"}}]}
-...
-data:{"choices":[{"delta":{"content":"！"},"finish_reason":"stop"}]}
-data:{"choices":[{"delta":{"content":"[SOURCES]"},"finish_reason":"sources"}]}
-data:{"id":"chatcmpl-xxx","object":"chat.completion.chunk","model":"qwen-2.5-7b","usage":{"prompt_tokens":10,"completion_tokens":50,"total_tokens":60}}
-data:[DONE]
-```
-
-### 3.2 事件类型定义
+### 1.2 事件类型
 
 | Event | Format | Description |
 |-------|--------|-------------|
-| `content` | `data:{"choices":[{"delta":{"content":"..."}}]}` | 文本内容块 |
-| `sources` | `data:{"choices":[{"delta":{"content":"[SOURCES]"}}]}` | 标识 sources 元数据即将发送 |
-| `metadata` | `data:{"id":"...","object":"chat.completion.chunk","usage":{...}}` | 元数据（token 统计等） |
-| `done` | `data:[DONE]` | 传输完成 |
-| `error` | `data:{"error":{"message":"...","type":"invalid_request_error"}}` | 错误信息 |
+| `content` | `data:{"choices":[{"delta":{"content":"..."}}]}` | 文本内容块（无 event name，默认类型） |
+| `done` | `event:done\ndata:{"traceId":"...","status":"complete"}` | 传输完成 |
 
-### 3.3 sources 传输机制
+### 1.3 Content 块格式
 
-RAG 特有需求：在回复结束后返回检索来源。
+```json
+// 单个 content 块
+data:{"choices":[{"delta":{"content":"你"}}]}
 
-**方案 A**：在 content 中发送 `[SOURCES]` 标识符，后跟 metadata 事件
+// OpenAI 兼容结构
+{
+  "choices": [{
+    "delta": {
+      "content": "文本内容"
+    }
+  }]
+}
 ```
-data:{"choices":[{"delta":{"content":"根据搜索结果..."}}]}
-data:{"choices":[{"delta":{"content":"[SOURCES]"}}]}
-data:{"id":"...","object":"chat.completion.chunk","usage":{"prompt_tokens":10,"completion_tokens":50},"rag":{"sources":[{"documentId":"106","title":"...","score":0.66}]}}
-data:[DONE]
-```
 
-**方案 B**（推荐）：使用 Server-Sent Events 的 `event:` 类型扩展
-```
-event:content
-data:{"choices":[{"delta":{"content":"根据搜索结果..."}}]}
+### 1.4 Done 事件格式
 
-event:sources
-data:{"sources":[{"documentId":"106","title":"...","score":0.66}]}
-
+```json
+// 完成
 event:done
-data:{"traceId":"xxx","status":"complete","usage":{"total_tokens":60}}
-```
+data:{"traceId":"abc123","status":"complete"}
 
-### 3.4 推荐的最终协议
-
-采用**混合方案**：
-- 主通道使用 OpenAI 兼容的 `data:` 格式
-- RAG 特有功能（sources）使用 `event:` 命名事件扩展
-
-```
-Content-Type: text/event-stream
-Cache-Control: no-cache
-X-Trace-Id: {traceId}
-
-# 标准 OpenAI 格式
-data:{"choices":[{"delta":{"content":"你好"}}]}
-data:{"choices":[{"delta":{"content":"，"}}]}
-...
-
-# RAG sources（命名事件）
-event:sources
-data:{"sources":[{"documentId":"106","title":"痘痘肌肤护理指南","chunkText":"...","score":0.66}]}
-
-# 完成事件
-event:done
-data:{"traceId":"xxx","status":"complete","usage":{"total_tokens":60,"prompt_tokens":10,"completion_tokens":50}}
-
-# 错误事件（如果发生）
+// 错误（如果发生）
 event:error
-data:{"error":{"message":"Service unavailable","type":"rate_limit_error","code":429}}
+data:{"error":{"message":"Service unavailable","type":"internal_error"}}
 ```
 
-## 4. 改进计划
+## 2. 后端实现
 
-### 4.1 后端改动
+### 2.1 RagChatController.java
 
-| 改动 | 文件 | 描述 |
-|------|------|------|
-| 修改 SSE 发送格式 | `RagChatController.java` | 改用 `data:{"choices":[{"delta":{"content":"..."}}]}` 格式 |
-| 添加 Content-Type 头 | `RagChatController.java` | 显式设置 `text/event-stream` |
-| 分离 sources 事件 | `RagChatService.java` | 返回结构化事件对象流 |
-| 添加 metadata 事件 | `RagChatController.java` | 发送 token 统计等元数据 |
-| 错误事件规范化 | `RagChatController.java` | 使用 `event:error` 格式 |
+**文件**：`spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java`
 
-### 4.2 前端改动
+```java
+@PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
+    // ...
+    SseEmitter emitter = new SseEmitter(0L); // 无超时
 
-| 改动 | 文件 | 描述 |
-|------|------|------|
-| 简化 SSE 解析 | `useSSE.ts` | 移除 `event:` 类型判断，专注 `data:` 解析 |
-| 处理 OpenAI 格式 | `useSSE.ts` | 解析 `choices[0].delta.content` |
-| 处理 sources 事件 | `useSSE.ts` | 识别 `event:sources` 获取来源 |
-| 处理 done 事件 | `useSSE.ts` | 识别 `event:done` 或 `data:[DONE]` |
-| 类型定义更新 | `useSSE.ts` | `ChatStreamChunkEvent` 适配 OpenAI 格式 |
+    ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
+            .subscribe(
+                    chunk -> {
+                        // Content 块：OpenAI 兼容格式
+                        String json = "{\"choices\":[{\"delta\":{\"content\":\"" + escapeJson(chunk) + "\"}}]}";
+                        emitter.send(SseEmitter.event().data(json));
+                    },
+                    emitter::completeWithError,
+                    () -> {
+                        // Done 事件
+                        String doneJson = "{\"traceId\":\"" + traceId + "\",\"status\":\"complete\"}";
+                        emitter.send(SseEmitter.event().name("done").data(doneJson));
+                        emitter.complete();
+                    }
+            );
+    return emitter;
+}
+```
 
-### 4.3 类型定义
+### 2.2 escapeJson 辅助函数
+
+```java
+private String escapeJson(String text) {
+    if (text == null) return "";
+    return text
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t");
+}
+```
+
+## 3. 前端实现
+
+### 3.1 useSSE.ts
+
+**文件**：`spring-ai-rag-webui/src/hooks/useSSE.ts`
 
 ```typescript
-// OpenAI 兼容格式
-interface SSEContentEvent {
-  id: string;
-  object: 'chat.completion.chunk';
-  choices: Array<{
-    index: number;
-    delta: { content?: string; role?: string };
-    finish_reason?: 'stop' | 'length';
-  }>;
-}
+// SSE 协议：OpenAI 兼容格式
+// - Content events: data:{"choices":[{"delta":{"content":"..."}}]}
+// - Done event:     event:done\ndata:{"traceId":"...","status":"complete"}
 
-interface SSESourcesEvent {
-  sources: Array<{
-    documentId: string | number;
-    title?: string;
-    content?: string;
-    chunkText?: string;
-    score?: number;
-  }>;
-}
+export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
+    const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
+    const accumulatedContentRef = useRef<string>('');
 
-interface SSEErrorEvent {
-  error: {
-    message: string;
-    type: string;
-    code?: string | number;
-  };
+    const send = useCallback(async (message: string, collectionId?: number, conversationId?: string) => {
+        close();
+        setIsConnected(true);
+        accumulatedContentRef.current = '';
+
+        const response = await fetch('/api/v1/rag/chat/stream', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, collectionId, sessionId: conversationId }),
+        });
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Process complete SSE events (separated by \n\n)
+            while (buffer.includes('\n\n')) {
+                const eventEnd = buffer.indexOf('\n\n');
+                const eventBlock = buffer.slice(0, eventEnd);
+                buffer = buffer.slice(eventEnd + 2);
+
+                const event = parseSSEEvent(eventBlock);
+                if (!event) continue;
+
+                if (event.type === 'content' && event.data) {
+                    // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
+                    const content = extractContentFromChoices(event.data);
+                    if (content) {
+                        onChunkRef.current?.(content);
+                    }
+                } else if (event.type === 'done') {
+                    onDoneRef.current?.();
+                }
+            }
+        }
+    }, [close]);
 }
 ```
 
-## 5. 实施步骤
+### 3.2 SSE 事件解析器
 
-### Phase 1: 后端协议改造
-1. 修改 `chatStream` 返回 `Flux<String>` 为 `Flux<SseEvent>`（结构化事件）
-2. 重构 `RagChatController` SSE 端点
-3. 添加 `text/event-stream` Content-Type
-4. 测试 curl 验证协议格式
+```typescript
+function parseSSEEvent(block: string): { type: string; data: string } | null {
+    if (!block.trim()) return null;
 
-### Phase 2: 前端适配
-1. 更新 `useSSE.ts` 解析器
-2. 更新 `Chat.tsx` 事件处理
-3. 验证打字机效果
+    let eventType = 'content'; // Default to content (OpenAI format uses no event type)
+    let eventData = '';
 
-### Phase 3: 完善错误处理和 metadata
-1. 添加 token 使用量统计
-2. 规范化错误事件格式
-3. 添加 heartbeat（可选）
+    const lines = block.split('\n');
+    for (const line of lines) {
+        if (line.startsWith('event:')) {
+            eventType = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+            eventData = line.slice(5);
+        }
+    }
 
-## 6. 附录：curl 测试命令
+    if (!eventData) return null;
+    return { type: eventType, data: eventData };
+}
+
+function extractContentFromChoices(jsonStr: string): string | null {
+    try {
+        const parsed = JSON.parse(jsonStr);
+        if (parsed.choices && parsed.choices.length > 0) {
+            return parsed.choices[0].delta.content ?? null;
+        }
+    } catch { /* not JSON or wrong format */ }
+    return null;
+}
+```
+
+## 4. Chat.tsx 集成
+
+**文件**：`spring-ai-rag-webui/src/pages/Chat.tsx`
+
+```typescript
+const { send, isConnected } = useChatSSE({
+    onChunk: (content: string) => {
+        // Append chunk to the last streaming assistant message
+        setMessages(prev => {
+            const lastMsg = prev[prev.length - 1];
+            if (lastMsg?.isStreaming) {
+                return prev.map(msg =>
+                    msg.id === lastMsg.id
+                        ? { ...msg, content: msg.content + content }
+                        : msg
+                );
+            }
+            return prev;
+        });
+    },
+    onDone: () => {
+        setMessages(prev =>
+            prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
+        );
+    },
+});
+```
+
+## 5. curl 测试命令
 
 ```bash
 # 测试 SSE 端点（显示原始格式）
@@ -255,12 +233,33 @@ curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H 'Content-Type: application/json' \
   -d '{"message":"你好"}' --no-buffer
 
-# 期望输出格式：
-# data:{"choices":[{"delta":{"content":"你"}}]}
-# data:{"choices":[{"delta":{"content":"好"}}]}
+# 期望输出：
+# data:{"choices":[{"delta":{"content":"Hello"}}]}
+# data:{"choices":[{"delta":{"content":"!"}}]}
 # ...
-# event:sources
-# data:{"sources":[{"documentId":"106","title":"...","score":0.66}]}
 # event:done
-# data:{"traceId":"xxx","status":"complete","usage":{"total_tokens":50}}
+# data:{"traceId":"abc123","status":"complete"}
 ```
+
+## 6. 与旧格式的对比
+
+| 特性 | 旧格式 (event:chunk) | 新格式 (OpenAI 兼容) |
+|------|---------------------|---------------------|
+| Content 格式 | `event:chunk\ndata:纯文本` | `data:{"choices":[{"delta":{"content":"..."}}]}` |
+| Done 格式 | `event:done\ndata:{...}` | `event:done\ndata:{...}` (相同) |
+| 兼容性 | 自定义 | OpenAI/ Spring AI 兼容 |
+| 前端解析 | 需识别 event name | 统一解析 data: JSON |
+
+## 7. 已知限制
+
+1. **sources 事件**：当前实现未发送 sources 事件（来源文档在 done 之后通过另一个 API 获取）
+2. **error 事件**：错误通过 `completeWithError` 传递，未使用 `event:error`
+3. **token 统计**：未发送 token 使用量元数据
+4. **heartbeat**：无心跳保活（`SseEmitter(0L)` 表示无限超时）
+
+## 8. 未来改进方向
+
+- [ ] 添加 sources 事件（`event:sources\ndata:{"sources":[...]}`)
+- [ ] 添加 error 事件规范化
+- [ ] 添加 token 使用量元数据
+- [ ] 添加 heartbeat 保活
