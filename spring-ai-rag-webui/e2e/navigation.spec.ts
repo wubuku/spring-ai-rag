@@ -4,7 +4,7 @@ import { mockAllApiCalls } from './api-mocks';
 test.describe('Navigation', () => {
   test('sidebar navigation links are visible', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/dashboard', { waitUntil: 'networkidle' });
+    await page.goto('/webui/dashboard', { waitUntil: 'networkidle' });
     const sidebar = page.locator('aside');
     await expect(sidebar).toBeVisible();
 
@@ -45,7 +45,7 @@ test.describe('Navigation', () => {
 
   test('redirects root to dashboard', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/', { waitUntil: 'networkidle' });
+    await page.goto('/webui/', { waitUntil: 'networkidle' });
     await expect(page).toHaveURL(/\/dashboard/);
   });
 });

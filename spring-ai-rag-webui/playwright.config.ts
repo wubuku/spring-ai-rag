@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 
 // E2E tests run against the Spring Boot backend (port 8081) which serves the webui at /webui/
-const baseURL = process.env.BASE_URL || 'http://localhost:8081/webui';
+const baseURL = process.env.BASE_URL || 'http://localhost:8081';
 
 export default defineConfig({
   testDir: './e2e',
