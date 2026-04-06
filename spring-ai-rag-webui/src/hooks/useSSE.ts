@@ -1,41 +1,29 @@
-'use client';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { useEffect, useRef, useCallback, useState } from 'react';
-import type { ChatStreamChunkEvent, ChatStreamSourcesEvent, ChatSource } from '../types/api';
+export interface ChatStreamChunkEvent {
+  type: 'chunk';
+  content: string;
+}
 
-interface UseChatSSEOptions {
+export interface ChatStreamSourcesEvent {
+  type: 'sources';
+  sources: unknown[];
+  conversationId?: string;
+}
+
+export interface UseChatSSEOptions {
   onChunk?: (content: string) => void;
-  onSources?: (sources: ChatSource[], conversationId: string) => void;
+  onSources?: (sources: any[], conversationId?: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
 }
 
-interface UseChatSSEReturn {
+export interface UseChatSSEReturn {
   isConnected: boolean;
   send: (message: string, collectionId?: number, conversationId?: string) => void;
   close: () => void;
 }
 
-/**
- * SSE hook for RAG chat streaming.
- *
- * Uses fetch + ReadableStream (POST) instead of EventSource (GET-only),
- * because the backend /chat/stream endpoint is @PostMapping.
- *
- * SSE format:
- *   event: trace\n
- *   data: <traceId>\n
- *   \n
- *   data: <chunk>\n
- *   \n
- *   event: done\n
- *   data: {"status":"complete"}\n
- *   \n
- *
- * Each event is separated by \n\n.
- * Data fields use JSON format: {"type":"chunk","content":"..."}
- * or raw text format.
- */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   const { onChunk, onSources, onError, onDone } = options;
   const [isConnected, setIsConnected] = useState(false);
@@ -52,12 +40,79 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   onErrorRef.current = onError;
   onDoneRef.current = onDone;
 
+  // Cleanup: cancel any ongoing stream when component unmounts
+  useEffect(() => {
+    return () => {
+      if (readerRef.current) {
+        readerRef.current.cancel();
+        readerRef.current = null;
+      }
+    };
+  }, []);
+
   const close = useCallback(() => {
     if (readerRef.current) {
       readerRef.current.cancel();
       readerRef.current = null;
     }
     setIsConnected(false);
+  }, []);
+
+  /**
+   * Process a complete SSE event block immediately.
+   * Called as soon as a complete event (ending with \n\n) is detected.
+   */
+  const processEvent = useCallback((block: string) => {
+    if (!block.trim()) return;
+
+    let eventType = 'message';
+    let eventData = '';
+
+    // Split block into lines
+    const lines = block.split('\n');
+    for (const line of lines) {
+      if (line.startsWith('event:')) {
+        eventType = line.slice(6).trim();
+      } else if (line.startsWith('data:')) {
+        const dataVal = line.slice(5); // after "data:"
+        eventData = eventData + dataVal;
+      }
+    }
+
+    if (eventType === 'trace') {
+      // Ignore trace events
+    } else if (eventType === 'done') {
+      try {
+        const parsed = JSON.parse(eventData) as { status?: string };
+        if (parsed.status === 'complete') {
+          onDoneRef.current?.();
+        }
+      } catch { /* ignore */ }
+    } else {
+      // Content event - try JSON first, then raw text
+      if (eventData) {
+        let handled = false;
+        try {
+          const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
+          if (parsed.type === 'chunk') {
+            accumulatedContentRef.current += parsed.content;
+            onChunkRef.current?.(parsed.content);
+            handled = true;
+          } else if (parsed.type === 'sources') {
+            onSourcesRef.current?.(parsed.sources, parsed.conversationId);
+            handled = true;
+          }
+        } catch { /* not JSON */ }
+
+        if (!handled) {
+          const trimmed = eventData.trim();
+          if (trimmed) {
+            accumulatedContentRef.current += trimmed;
+            onChunkRef.current?.(trimmed);
+          }
+        }
+      }
+    }
   }, []);
 
   const send = useCallback(
@@ -81,84 +136,32 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           throw new Error(`HTTP ${response.status}`);
         }
 
-        // Read entire stream
         const reader = response.body!.getReader();
         readerRef.current = reader;
 
-        const allChunks: Uint8Array[] = [];
-        let readResult: { done: boolean; value?: Uint8Array };
-        do {
-          readResult = await reader.read();
-          if (readResult.value) {
-            allChunks.push(readResult.value);
+        // Streaming SSE parsing: process events as they arrive
+        const decoder = new TextDecoder();
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          // Process complete events (separated by \n\n)
+          // Keep the last partial line in the buffer
+          while (buffer.includes('\n\n')) {
+            const eventEnd = buffer.indexOf('\n\n');
+            const eventBlock = buffer.slice(0, eventEnd);
+            buffer = buffer.slice(eventEnd + 2); // +2 to skip the \n\n
+            processEvent(eventBlock);
           }
-        } while (!readResult.done);
+        }
 
-        // Combine all chunks
-        let totalLen = 0;
-        for (const c of allChunks) totalLen += c.length;
-        const combined = new Uint8Array(totalLen);
-        let offset = 0;
-        for (const c of allChunks) { combined.set(c, offset); offset += c.length; }
-        const text = new TextDecoder().decode(combined);
-
-        // SSE parsing using simple regex
-        // Split by \n\n to get individual events
-        const eventBlocks = text.split('\n\n');
-
-        for (const block of eventBlocks) {
-          if (!block.trim()) continue;
-
-          // Extract event type (event: <type>) and data (data: <data>)
-          let eventType = 'message';
-          let eventData = '';
-
-          // Split block into lines
-          const lines = block.split('\n');
-          for (const rawLine of lines) {
-            const line = rawLine;
-            if (line.startsWith('event:')) {
-              eventType = line.slice(6).trim();
-            } else if (line.startsWith('data:')) {
-              const dataVal = line.slice(5); // after "data:"
-              eventData = eventData + dataVal; // concat multiple data fields
-            }
-          }
-
-          if (eventType === 'trace') {
-            // Ignore trace events
-          } else if (eventType === 'done') {
-            try {
-              const parsed = JSON.parse(eventData) as { status?: string };
-              if (parsed.status === 'complete') {
-                onDoneRef.current?.();
-              }
-            } catch { /* ignore */ }
-          } else {
-            // Content event - try JSON first, then raw text
-            if (eventData) {
-              let handled = false;
-              try {
-                const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
-                if (parsed.type === 'chunk') {
-                  accumulatedContentRef.current += parsed.content;
-                  onChunkRef.current?.(parsed.content);
-                  handled = true;
-                } else if (parsed.type === 'sources') {
-                  onSourcesRef.current?.(parsed.sources, parsed.conversationId);
-                  handled = true;
-                }
-              } catch { /* not JSON */ }
-
-              if (!handled) {
-                const trimmed = eventData.trim();
-                if (trimmed) {
-                  accumulatedContentRef.current += trimmed;
-                  onChunkRef.current?.(trimmed);
-                }
-              }
-            }
-          }
+        // Process any remaining data in buffer (might be an incomplete last event)
+        if (buffer.trim()) {
+          // Don't process incomplete events - wait for complete ones
         }
 
       } catch (err) {
@@ -169,12 +172,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         readerRef.current = null;
       }
     },
-    [close]
+    [close, processEvent]
   );
-
-  useEffect(() => {
-    return () => close();
-  }, [close]);
 
   return { isConnected, send, close };
 }
