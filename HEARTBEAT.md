@@ -1142,7 +1142,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | N31 | ChatMemory 表数据膨胀治理策略（TTL + 归档） | 数据管理 | ⏳ 待推进 |
-| N32 | 向量数据库 pgvector HNSW vs IVFFlat 性能对比测试 | 性能 | ⏳ 待推进 |
+| N32 | 向量数据库 pgvector HNSW vs IVFFlat 性能对比测试 | 性能 | ✅ 2026-04-06（N32 完成，docs/pgvector-index-comparison.md 8KB，含算法对比/决策矩阵/参数调优/迁移步骤/基准测试方法论/Spring AI 配置参考） |
 | N33 | RAG 检索结果可溯源（traceId 贯穿整个 Pipeline） | 可观测性 | ⏳ 待推进 |
 | N34 | Collection 删除保护（防止误删 + 恢复机制） | 安全 | ⏳ 待推进 |
 | N35 | API 请求超时配置化（per-endpoint timeout） | 韧性 | ⏳ 待推进 |
@@ -1184,7 +1184,7 @@
 | C13 | C1 per-user 限流：ApiKeyAuthFilter 提取用户身份 → RateLimitFilter 支持 per-user | 安全 | ✅ 2026-04-06 | P1 |
 | C14 | N17 WebUI搜索历史：搜索记录 localStorage 持久化 + 展示历史列表 | UX | ✅ 2026-04-06（C14 完成，useSearchHistory hook + Search 页面集成 + 9 tests，88 webui tests 全通过，E2E 11/11 ✅） | P1 |
 | C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ✅ 2026-04-06 | P1 |
-| C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
+| C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ✅ 2026-04-06 | P2 |
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ✅ 2026-04-06 | P2 |
 | C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ✅ 2026-04-06（C18 完成：softDelete/restore + findByIdAndDeletedFalse + DELETE 软删除 + POST /{id}/restore 恢复端点，1235 测试全通过） | P2 |
 | C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
@@ -1253,6 +1253,10 @@
 ## 进度日志（后端可观测性 — 2026-04-06 10:22）
 
 - 2026-04-06 10:22 — ✅ C24 HikariCP 慢查询日志：C24 完成——RagSlowQueryProperties（阈值1000ms/启用/日志/保留数）+ SlowQueryMetricsService（Micrometer rag.slow_query.* 计数器 + 历史记录）+ GET /api/v1/rag/metrics/slow-queries REST 端点 + SlowQueryStatsResponse DTO；Hibernate generate_statistics 默认 false（生产环境开启有~5%性能损耗）；RagSlowQueryPropertiesTest 5 tests + SlowQueryMetricsServiceTest 10 tests + RagMetricsControllerTest +2 slow-query tests；mvn test ✅（全通过）；commit 824c0d0 已推送
+
+## 进度日志（后端文档 — 2026-04-06 13:00）
+
+- 2026-04-06 13:00 — ✅ C16 + N32 pgvector HNSW vs IVFFlat 性能对比文档完成：docs/pgvector-index-comparison.md（8.3KB，英文版），含 HNSW（m=16/ef=64）与 IVFFlat（lists=√n）算法对比/决策矩阵/参数调优表/迁移 SQL/基准测试方法论/Spring AI pgvector 配置参考；附带 ChatRequest.sessionId 可选化 + application.yml CORS 开发配置；1203 tests（53 errors 来自 RagControllerIntegrationTest 数据库连接，属于已有基础设施问题）；commit d0082e9 已推送
 
 ## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
 
