@@ -301,7 +301,11 @@ public class RagChatService {
     private LlmCallResult invokeChatClient(ChatClient.ChatClientRequestSpec spec, long startTime) {
         try {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
-            String answer = chatClientResponse.chatResponse().getResult().getOutput().getText();
+            var result = chatClientResponse.chatResponse().getResult();
+            if (result == null || result.getOutput() == null) {
+                throw new IllegalStateException("LLM returned null result (authentication failure or API error)");
+            }
+            String answer = result.getOutput().getText();
             List<ChatResponse.SourceDocument> sources = extractSources(chatClientResponse);
             List<StepMetricRecord> pipelineMetrics = extractPipelineMetrics(chatClientResponse);
             if (circuitBreaker != null) {
