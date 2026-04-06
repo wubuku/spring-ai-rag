@@ -1354,3 +1354,16 @@
 ## 后端巡检（2026-04-06 19:14）
 
 - 2026-04-06 19:14 — ✅ C43 RetrievalEvaluationService Micrometer 可观测性增强：注入 MeterRegistry + @PostConstruct 初始化 5 个 meters——`rag.evaluation.duration` (Timer, p50/p95/p99) 评测延迟、`rag.evaluation.count` (Counter) 评测总次数、`rag.evaluation.batch_count` (Counter) 批量评测用例数、`rag.evaluation.hits`/`rag.evaluation.misses` (Counter) 有/无命中统计；修复 SLF4J log 格式 bug：`'{:.4f}'` (Python) → `'{}'` (Java SLF4J)；RetrievalEvaluationServiceImplTest 手动调用 `initMetrics()` 初始化 meters；1238+ tests 全通过；commit 2b31b55 已推送
+
+## WebUI 巡检（2026-04-06 19:40）
+
+- 2026-04-06 19:40 — ✅ WebUI 常规发布 + SSE 协议升级修复：
+  - useSSE.ts: 恢复 useEffect unmount cleanup（cancel readerRef）——之前重构时意外删除导致测试失败
+  - api.ts: ChatSource.documentId 改为 string|number，title/score 改为 optional（匹配 SSE 数据源）
+  - Chat.tsx: null safety for s.score/s.title（`s.title ?? "Document"` + `?? 0`）
+  - RagChatController: SSE 格式改为 OpenAI 兼容（`data:{"choices":[{"delta":{"content":"..."}}]}`）+ JSON escape
+  - docs/SSE-PROTOCOL.md: SSE 协议文档新增
+  - 清理旧版本 stale webui assets（140+ 旧 hash 文件）
+  - npm test ✅（113 vitest 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 12/12 ✅
+  - commit 0c6b799 已推送
+
