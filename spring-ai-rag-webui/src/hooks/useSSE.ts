@@ -1,3 +1,5 @@
+'use client';
+
 import { useEffect, useRef, useCallback, useState } from 'react';
 import type { ChatStreamChunkEvent, ChatStreamSourcesEvent, ChatSource } from '../types/api';
 
@@ -14,65 +16,141 @@ interface UseChatSSEReturn {
   close: () => void;
 }
 
+/**
+ * SSE hook for RAG chat streaming.
+ *
+ * Uses fetch + ReadableStream (POST) instead of EventSource (GET-only),
+ * because the backend /chat/stream endpoint is @PostMapping.
+ *
+ * SSE format:
+ *   event: trace
+ *   data: <traceId>
+ *   event: done
+ *   data: {"traceId":"...","status":"complete"}
+ *   data: <chunk content>   ← unnamed event → onmessage → type=chunk
+ */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   const { onChunk, onSources, onError, onDone } = options;
   const [isConnected, setIsConnected] = useState(false);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const accumulatedContentRef = useRef<string>('');
 
   const close = useCallback(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-      setIsConnected(false);
+    if (readerRef.current) {
+      readerRef.current.cancel();
+      readerRef.current = null;
     }
+    setIsConnected(false);
   }, []);
 
   const send = useCallback(
-    (message: string, collectionId?: number, conversationId?: string) => {
+    async (message: string, collectionId?: number, conversationId?: string) => {
       close();
-
-      const params = new URLSearchParams({
-        message,
-        collectionId: collectionId?.toString() ?? '',
-        conversationId: conversationId ?? '',
-      });
-
-      const url = `/api/v1/rag/chat/stream?${params.toString()}`;
-      const es = new EventSource(url);
-      eventSourceRef.current = es;
       setIsConnected(true);
       accumulatedContentRef.current = '';
 
-      es.onmessage = event => {
-        try {
-          const data = JSON.parse(event.data) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
+      try {
+        const response = await fetch('/api/v1/rag/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            collectionId: collectionId ?? undefined,
+            sessionId: conversationId ?? undefined,
+          }),
+        });
 
-          if (data.type === 'chunk') {
-            accumulatedContentRef.current += data.content;
-            onChunk?.(data.content);
-          } else if (data.type === 'sources') {
-            onSources?.(data.sources, data.conversationId);
-          }
-        } catch {
-          // Ignore parse errors for empty/invalid messages
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
         }
-      };
 
-      es.onerror = () => {
-        const error = 'Connection error';
-        onError?.(error);
-        close();
-      };
+        // Decode the stream as UTF-8 text and parse SSE format line-by-line
+        const textDecoder = new TextDecoder();
+        let eventType = 'message';
+        let eventData = '';
 
-      // SSE doesn't have a direct "done" event, but we can detect when the connection closes
-      es.addEventListener('done', () => {
+        const reader = response.body!.getReader();
+        readerRef.current = reader;
+
+        let buffer = '';
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += textDecoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          // Keep the last partial line in the buffer
+          buffer = lines.pop() ?? '';
+
+          for (const line of lines) {
+            const colonIdx = line.indexOf(':');
+            if (colonIdx === -1) continue; // ignore invalid lines
+
+            const field = line.slice(0, colonIdx);
+            const value2 = line.slice(colonIdx + 1).replace(/^\s+/, ''); // strip leading space per SSE spec
+
+            if (field === 'event') {
+              eventType = value2;
+            } else if (field === 'data') {
+              eventData = value2;
+            } else if (field === '') {
+              // Empty line → dispatch accumulated event
+              if (eventType === 'trace') {
+                // trace events have no content to display
+              } else if (eventType === 'done') {
+                try {
+                  const parsed = JSON.parse(eventData) as { traceId?: string; status?: string };
+                  if (parsed.status === 'complete') {
+                    onDone?.();
+                  }
+                } catch {
+                  // ignore parse errors
+                }
+              } else {
+                // Default "message" event: treat as a chunk
+                if (eventData) {
+                  try {
+                    const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
+                    if (parsed.type === 'chunk') {
+                      accumulatedContentRef.current += parsed.content;
+                      onChunk?.(parsed.content);
+                    } else if (parsed.type === 'sources') {
+                      onSources?.(parsed.sources, parsed.conversationId);
+                    }
+                  } catch {
+                    // Not JSON — treat raw data as a text chunk
+                    accumulatedContentRef.current += eventData;
+                    onChunk?.(eventData);
+                  }
+                }
+              }
+              eventType = 'message';
+              eventData = '';
+            }
+          }
+        }
+
+        // Process any remaining buffer after stream ends
+        if (buffer.trim()) {
+          const colonIdx = buffer.indexOf(':');
+          if (colonIdx !== -1) {
+            const field = buffer.slice(0, colonIdx);
+            const value2 = buffer.slice(colonIdx + 1).replace(/^\s+/, '');
+            if (field === 'data' && value2) {
+              accumulatedContentRef.current += value2;
+              onChunk?.(value2);
+            }
+          }
+        }
+
         onDone?.();
-        close();
-      });
-
-      // For SSE, the connection staying open without messages means completion
-      // We also listen for the error event which fires on completion
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Connection error';
+        onError?.(message);
+      } finally {
+        setIsConnected(false);
+        readerRef.current = null;
+      }
     },
     [close, onChunk, onSources, onError, onDone]
   );
