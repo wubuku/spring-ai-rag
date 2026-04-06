@@ -1209,7 +1209,7 @@
 | C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
 | C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ⏳ | P2 |
 | C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ⏳ | P3 |
-| C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ⏳ | P3 |
+| C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ✅ 2026-04-07（d8211e3） | P3 |
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
 | C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ✅ 2026-04-06（C38 完成：validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache；1280 tests ✅，commit a42e4f2） | P2 |

@@ -145,23 +145,30 @@ public class HybridRetrieverService {
     private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
                                                           List<Long> documentIds, int limit) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
+        log.info("executeVectorQuery: vectorStr length={}, documentIds={}, limit={}", vectorStr.length(), documentIds, limit);
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
+            // Use CAST(? AS vector) for proper parameter binding with pgvector
             String sql = String.format(
                     "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
                             "FROM rag_embeddings WHERE document_id IN (%s) " +
-                            "ORDER BY embedding <=> ?::vector LIMIT ?",
+                            "ORDER BY embedding <=> CAST(? AS vector) LIMIT ?",
                     placeholders);
             List<Object> args = new ArrayList<>(documentIds);
             args.add(vectorStr);
             args.add(limit);
-            return jdbcTemplate.queryForList(sql, args.toArray());
+            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, args.toArray());
+            log.info("executeVectorQuery: returned {} rows", rows.size());
+            return rows;
         }
-        return jdbcTemplate.queryForList(
+        // Use CAST(? AS vector) for proper parameter binding with pgvector
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
-                        "FROM rag_embeddings ORDER BY embedding <=> ?::vector LIMIT ?",
+                        "FROM rag_embeddings ORDER BY embedding <=> CAST(? AS vector) LIMIT ?",
                 vectorStr, limit);
+        log.info("executeVectorQuery: returned {} rows", rows.size());
+        return rows;
     }
 
     private List<RetrievalResult> mapVectorResults(List<Map<String, Object>> rows,
@@ -169,8 +176,26 @@ public class HybridRetrieverService {
         return rows.stream()
                 .filter(row -> isNotExcluded(row, excludeIds))
                 .map(row -> {
+                    Object embObj = row.get("embedding");
+                    String embClass = embObj != null ? embObj.getClass().getName() : "null";
+                    // Get first element if it's an array
+                    String embPreview = "null";
+                    if (embObj instanceof float[]) {
+                        float[] arr = (float[]) embObj;
+                        embPreview = "float[len=" + arr.length + "][0]=" + arr[0];
+                    } else if (embObj instanceof double[]) {
+                        double[] arr = (double[]) embObj;
+                        embPreview = "double[len=" + arr.length + "][0]=" + arr[0];
+                    } else if (embObj instanceof Object[]) {
+                        Object[] arr = (Object[]) embObj;
+                        embPreview = "Object[len=" + arr.length + "][0]=" + arr[0];
+                    } else if (embObj != null) {
+                        embPreview = embObj.toString().substring(0, Math.min(50, embObj.toString().length()));
+                    }
                     float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
                     double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
+                    log.info("mapVectorResults: docId={}, embType={}, embPreview={}, emb.length={}, score={}",
+                        row.get("document_id"), embClass, embPreview, emb.length, score);
                     return toRetrievalResult(row, score, score, 0.0);
                 })
                 .collect(Collectors.toList());

@@ -95,43 +95,34 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
     }
 
     private List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
-        // 使用 plainto_tsquery 做分词查询 + ILIKE 模糊匹配作为 fallback
-        // 当 pg_jieba 分词对短词返回空时，ILIKE 可以兜底
-        String safeQuery = query.trim().replace("'", "''");
-        // 组合条件：tsquery 匹配 OR 模糊匹配（ILIKE 不区分大小写，适合中文）
-        String tsqueryClause = String.format(
-                "(to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', '%s') OR chunk_text ILIKE '%%%s%%')",
-                TS_CONFIG, TS_CONFIG, safeQuery, safeQuery);
-        // 如果是模糊匹配命中，给一个较低的基础分
-        String rankExpr = String.format(
-                "COALESCE(ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', '%s')), 0.001) * CASE WHEN chunk_text ILIKE '%%%s%%' THEN 0.5 ELSE 1 END",
-                TS_CONFIG, TS_CONFIG, safeQuery, safeQuery);
-
+        // 使用 plainto_tsquery 做分词查询，ts_rank 做相关度排序
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
             String sql = String.format(
                     "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                            "%s as rank " +
+                            "ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', ?)) as rank " +
                             "FROM rag_embeddings " +
                             "WHERE document_id IN (%s) " +
-                            "AND %s " +
+                            "AND to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', ?) " +
                             "ORDER BY rank DESC LIMIT ?",
-                    rankExpr, placeholders, tsqueryClause);
+                    TS_CONFIG, TS_CONFIG, placeholders, TS_CONFIG, TS_CONFIG);
             List<Object> args = new ArrayList<>();
+            args.add(query);  // ts_rank 参数
             args.addAll(documentIds);
+            args.add(query);  // @@ 匹配参数
             args.add(limit);
             return jdbcTemplate.queryForList(sql, args.toArray());
         }
 
         String sql = String.format(
                 "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                        "%s as rank " +
+                        "ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', ?)) as rank " +
                         "FROM rag_embeddings " +
-                        "WHERE %s " +
+                        "WHERE to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', ?) " +
                         "ORDER BY rank DESC LIMIT ?",
-                rankExpr, tsqueryClause);
-        return jdbcTemplate.queryForList(sql, limit);
+                TS_CONFIG, TS_CONFIG, TS_CONFIG, TS_CONFIG);
+        return jdbcTemplate.queryForList(sql, query, query, limit);
     }
 
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {
