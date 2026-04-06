@@ -158,8 +158,16 @@
   - E2E 断言：删除响应文本从 "文档已删除" → "deleted"，"集合已删除" → "Collection deleted"
   - E2E 结果：**44/45 通过**（流式 RAG ✅、嵌入 ✅、检索 ✅、Collection CRUD ✅）
   - 已知问题：MiniMax 非流式 `/chat/ask` 返回 500（`login fail: API secret key in Authorization`）— MiniMax API 非流式认证格式与流式不同，属于 MiniMax API 本身特性
-  - 11 个 RagCollectionControllerTest 失败是之前就存在的（HEAD 上也失败），与本次修复无关
   - commit 22a8f03 已推送
+
+- 2026-04-06 09:08 — ✅ 代码库清理 + RagCollection entity 修复：
+  - 清理之前会话残留：`test_tee.txt`、`V14__add_collection_soft_delete.sql`（未提交迁移文件）、`test_write.txt`
+  - `RagCollection.java`：补充 `deleted` + `deletedAt` 字段（JPA 映射 DB 已有的 `deleted` column，V14 迁移已运行）
+  - `RagCollectionRepository.java`：还原到 origin/main（避免与未完成的 soft-delete 逻辑产生分歧）
+  - 还原 `RagCollectionController.java` 和 `RagCollectionControllerTest.java`（之前会话的未完成改动）
+  - WebUI 在 `/webui` 路径正常（Spring Boot 静态资源）
+  - Playwright 浏览器测试 31 failed / 4 passed：API mock 数据格式与当前 UI 不匹配（i18n 重构后遗留问题，与本次改动无关）
+  - commit e77acce 已推送
 - 2026-04-06 07:40 — ✅ HTTP 代理配置化：RagProxyProperties（enabled/host/port/noProxyHosts）+ SpringAiConfig.initProxySettings() 重构（替代硬编码 disableProxyForMiniMax）；proxy.enabled=false 时使用 NO_PROXY selector，enabled=true 时使用配置的代理；application.yml 添加 rag.proxy.* 配置节；RagProxyPropertiesTest（2 tests）；mvn clean compile ✅，mvn test ✅；commit d63437c 已推送
 - 2026-04-06 07:56 — ✅ MiniMax API 集成测试补强 + OpenApiContractTest 修复：SpringAiConfigTest 新增 4 个 `miniMaxChatModel()` 单元测试（provider=minimax 创建模型、provider=openai/anthropic 返回 null、chatModel 选择 miniMax）；OpenApiContractTest 修复 context 加载问题——排除 `DataSourceAutoConfiguration` + `HibernateJpaAutoConfiguration` + `management.health.db.enabled=false`，解决无 DB 环境下 "Included health contributor 'db' in group 'readiness'" 错误；1169 测试全通过（零失败零错误）；commit 64e7cfc 已推送
 - 2026-04-06 08:03 — ✅ C28 SiliconFlow 嵌入调试：修复 `.env` 中 `SILICONFLOW_URL=https://api.siliconflow.cn/v1/embeddings`（含 `/embeddings` 导致 Spring AI `OpenAiApi` URL 双重复制：`.../v1/embeddings/embeddings`）；修正为 `https://api.siliconflow.cn/v1`（不含 `/embeddings`）；新增 `EmbeddingModelConfigTest`（3 tests：OpenAiEmbeddingModel 创建验证 + BAAI/bge-m3 1024维配置 + 自定义 baseUrl）；1172 测试全通过；commit 9782e56 已推送
