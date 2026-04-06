@@ -84,7 +84,7 @@ public class SpringAiConfig {
     @Value("${spring.ai.anthropic.chat.options.max-tokens:4096}")
     private Integer anthropicMaxTokens;
 
-    @Value("${spring.ai.minimax.base-url:https://api.minimax.chat/v1}")
+    @Value("${spring.ai.minimax.base-url:https://api.minimax.chat}")
     private String minimaxBaseUrl;
 
     @Value("${spring.ai.minimax.api-key:dummy}")

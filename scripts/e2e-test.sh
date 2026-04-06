@@ -264,7 +264,7 @@ echo ""
 # 1️⃣2️⃣ 缓存统计
 # ────────────────────────────────────────
 echo "1️⃣2️⃣ 缓存统计"
-RESP=$(curl -s -w "\n%{http_code}" "$BASE_URL/api/v1/cache/stats")
+RESP=$(curl -s -w "\n%{http_code}" "$API/cache/stats")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /cache/stats" "200" "$CODE"

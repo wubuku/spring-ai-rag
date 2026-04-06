@@ -6,7 +6,7 @@ package com.springairag.core.config;
 public class RagEmbeddingProperties {
 
     private String apiKey = "";
-    private String baseUrl = "https://api.siliconflow.cn/v1";
+    private String baseUrl = "https://api.siliconflow.cn";
     private String model = "BAAI/bge-m3";
     private int dimensions = 1024;
 
