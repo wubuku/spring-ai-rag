@@ -97,7 +97,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
         }
     }
     
-    private List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
+    List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));

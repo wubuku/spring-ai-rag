@@ -4,6 +4,10 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
+import com.springairag.core.retrieval.fulltext.PgJiebaFulltextProvider;
+import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
+import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
+import com.springairag.core.retrieval.fulltext.SearchCapabilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -47,16 +51,36 @@ class HybridRetrieverServiceBenchmarkTest {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
 
-        // detectAvailability() 在构造函数中被调用，需要 Boolean mock + Integer mock
-        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
-                .thenReturn(true);
-        when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
-                .thenReturn(1);
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
-                .thenThrow(new DataAccessResourceFailureException("not found"));
-
         RagProperties props = new RagProperties();
-        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate, props);
+
+        // 完整 mock setup：SearchCapabilities 和 Provider detectAvailability() 都需要这些
+        when(jdbcTemplate.queryForObject(contains("search_vector_zh"), eq(Boolean.class))).thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(false);
+        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
+        when(jdbcTemplate.queryForList(anyString(), eq(String.class))).thenReturn(List.of("vector"));
+        when(jdbcTemplate.queryForObject(contains("pg_extension"), eq(Integer.class))).thenReturn(1);
+
+        // 创建 SearchCapabilities（init=false，直接设置字段）
+        SearchCapabilities caps = new SearchCapabilities(jdbcTemplate, false);
+        caps.setHasPgVector(true);
+        caps.setHasJieba(false);
+        caps.setHasZhIndex(false);
+        caps.setHasEnIndex(false);
+        caps.setHasPgTrgm(true);
+        caps.setHasTrgmIndex(true);
+
+        // 创建 spy providers（isAvailable 可被 stub）
+        PgJiebaFulltextProvider spyJieba = spy(new PgJiebaFulltextProvider(jdbcTemplate));
+        PgEnglishFtsProvider spyEnglish = spy(new PgEnglishFtsProvider(jdbcTemplate));
+        PgTrgmFulltextProvider spyTrgm = spy(new PgTrgmFulltextProvider(jdbcTemplate));
+
+        // 默认：jieba 和 english 不可用，trgm 可用
+        doReturn(false).when(spyJieba).isAvailable();
+        doReturn(false).when(spyEnglish).isAvailable();
+        doReturn(true).when(spyTrgm).isAvailable();
+
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(
+                jdbcTemplate, "auto", caps, spyJieba, spyEnglish, spyTrgm);
         Executor directExecutor = Runnable::run;
         service = new HybridRetrieverService(embeddingModel, jdbcTemplate, props, factory, directExecutor);
     }
@@ -488,6 +512,8 @@ class HybridRetrieverServiceBenchmarkTest {
             row.put("chunk_index", i);
             row.put("metadata", Map.of("source", "fulltext"));
             row.put("sim", 0.5 + (float) i / (count * 2));
+            row.put("score_trgm", 0.5 + (float) i / (count * 2)); // PgTrgmFulltextProvider.toResult() reads score_trgm
+            row.put("rank", i + 1); // PgEnglishFtsProvider.toResult() reads rank
             rows.add(row);
         }
         return rows;

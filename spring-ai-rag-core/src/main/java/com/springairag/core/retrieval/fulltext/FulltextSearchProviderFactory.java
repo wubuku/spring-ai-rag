@@ -39,15 +39,34 @@ public class FulltextSearchProviderFactory {
     private final String configuredStrategy;
     private final SearchCapabilities capabilities;
     
-    // 缓存各语言的 Provider
-    private volatile PgJiebaFulltextProvider jiebaProvider;
-    private volatile PgEnglishFtsProvider englishProvider;
-    private volatile PgTrgmFulltextProvider trgmProvider;
+    // 缓存各语言的 Provider（接口类型，支持测试注入）
+    private volatile FulltextSearchProvider jiebaProvider;
+    private volatile FulltextSearchProvider englishProvider;
+    private volatile FulltextSearchProvider trgmProvider;
     
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, RagProperties ragProperties) {
+        this(jdbcTemplate, ragProperties.getRetrieval().getFulltextStrategy(),
+                new SearchCapabilities(jdbcTemplate));
+    }
+    
+    /**
+     * No-arg constructor for test contexts where JdbcTemplate is unavailable.
+     * Creates a fully-disabled factory (all providers return NoOpFulltextSearchProvider).
+     */
+    public FulltextSearchProviderFactory() {
+        this.configuredStrategy = "none";
+        this.capabilities = null;
+        this.jdbcTemplate = null;
+    }
+    
+    /**
+     * 测试用构造函数（注入 SearchCapabilities 以便精确控制能力探测结果）
+     */
+    public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, String configuredStrategy,
+                                         SearchCapabilities capabilities) {
         this.jdbcTemplate = jdbcTemplate;
-        this.configuredStrategy = ragProperties.getRetrieval().getFulltextStrategy();
-        this.capabilities = new SearchCapabilities(jdbcTemplate);
+        this.configuredStrategy = configuredStrategy;
+        this.capabilities = capabilities;
         
         // 初始化各语言的 Provider
         initProviders();
@@ -60,6 +79,22 @@ public class FulltextSearchProviderFactory {
         
         log.info("Fulltext search factory initialized with strategy={}, capabilities: {}", 
                 configuredStrategy, capabilities);
+    }
+
+    /**
+     * 完全可控的构造函数（用于测试注入 spy/fake providers）
+     */
+    public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, String configuredStrategy,
+                                        SearchCapabilities capabilities,
+                                        FulltextSearchProvider jiebaProvider,
+                                        FulltextSearchProvider englishProvider,
+                                        FulltextSearchProvider trgmProvider) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.configuredStrategy = configuredStrategy;
+        this.capabilities = capabilities;
+        this.jiebaProvider = jiebaProvider;
+        this.englishProvider = englishProvider;
+        this.trgmProvider = trgmProvider;
     }
     
     /**

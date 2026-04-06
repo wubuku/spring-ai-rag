@@ -34,14 +34,47 @@ public class SearchCapabilities {
     private boolean hasEnIndex;     // english tsvector GIN 索引
     private boolean hasTrgmIndex;   // trigram GIN 索引
     
+    /**
+     * 主要构造函数（Spring DI 使用）
+     */
     public SearchCapabilities(JdbcTemplate jdbcTemplate) {
+        this(jdbcTemplate, true);
+    }
+    
+    /**
+     * No-arg constructor for test contexts where JdbcTemplate is unavailable.
+     * All capabilities are disabled.
+     */
+    public SearchCapabilities() {
+        this.jdbcTemplate = null;
+        this.hasPgVector = false;
+        this.hasPgTrgm = false;
+        this.hasJieba = false;
+        this.hasZhparser = false;
+        this.hasZhIndex = false;
+        this.hasEnIndex = false;
+        this.hasTrgmIndex = false;
+    }
+    
+    /**
+     * 测试用构造函数
+     * @param init 是否执行数据库探测（测试时传 false，由测试完全控制各字段值）
+     */
+    public SearchCapabilities(JdbcTemplate jdbcTemplate, boolean init) {
         this.jdbcTemplate = jdbcTemplate;
-        // 直接调用初始化（@PostConstruct 不会在 new SearchCapabilities() 时自动调用）
-        init();
+        if (init) {
+            detectExtensions();
+            detectIndexes();
+            logCapabilities();
+        }
     }
     
     @PostConstruct
     public void init() {
+        if (jdbcTemplate == null) {
+            log.debug("SearchCapabilities initialized with no JdbcTemplate; all capabilities disabled");
+            return;
+        }
         detectExtensions();
         detectIndexes();
         logCapabilities();
@@ -153,4 +186,14 @@ public class SearchCapabilities {
     public boolean hasZhIndex() { return hasZhIndex; }
     public boolean hasEnIndex() { return hasEnIndex; }
     public boolean hasTrgmIndex() { return hasTrgmIndex; }
+    
+    // ========== Test Setters (public for test access) ==========
+    
+    public void setHasPgVector(boolean v) { this.hasPgVector = v; }
+    public void setHasPgTrgm(boolean v) { this.hasPgTrgm = v; }
+    public void setHasJieba(boolean v) { this.hasJieba = v; }
+    public void setHasZhparser(boolean v) { this.hasZhparser = v; }
+    public void setHasZhIndex(boolean v) { this.hasZhIndex = v; }
+    public void setHasEnIndex(boolean v) { this.hasEnIndex = v; }
+    public void setHasTrgmIndex(boolean v) { this.hasTrgmIndex = v; }
 }

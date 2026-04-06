@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
+import com.springairag.core.retrieval.fulltext.SearchCapabilities;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -36,14 +37,29 @@ class HybridRetrieverServiceTest {
     void setUp() {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
-        // 模拟 pg_trgm 可用，pg_jieba 不可用
-        // anyString() 先设置默认行为，eq() 后设置覆盖特定查询
+
+        // === 直接设置 SearchCapabilities 字段（跳过 DB 探测）===
+        SearchCapabilities caps = new SearchCapabilities(jdbcTemplate, false);
+        caps.setHasPgVector(true);
+        caps.setHasJieba(false);   // pg_jieba 不可用
+        caps.setHasZhIndex(false); // jieba 索引不存在
+        caps.setHasEnIndex(false); // english 索引不存在
+        caps.setHasPgTrgm(true);  // pg_trgm 扩展存在
+        caps.setHasTrgmIndex(true); // trgm 索引存在
+
+        // Provider detectAvailability() 的 pg_extension 和 pg_indexes 查询
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
                 .thenThrow(new DataAccessResourceFailureException("not found"));
-        when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
-                .thenReturn(1);
+        when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class)))
+                .thenReturn(1);  // pg_trgm extension available
+        // pg_jieba: anyString() throws → not available
+        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true); // trgm 索引存在
+        // search_vector_zh/en: not mocked → returns null → not available
+
         RagProperties ragProperties = new RagProperties();
-        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate, ragProperties);
+        FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(
+                jdbcTemplate, "auto", caps);
         service = new HybridRetrieverService(embeddingModel, jdbcTemplate, ragProperties, factory, null);
     }
 
@@ -78,7 +94,7 @@ class HybridRetrieverServiceTest {
 
         // 全文检索 —— 不同方法签名，用 any() 匹配
         Map<String, Object> ftRow = mockDbRow(2L, "doc-2", 1, "全文匹配内容", queryVec);
-        ftRow.put("sim", 0.85);
+        ftRow.put("score_trgm", 0.85); // PgTrgmFulltextProvider.toResult() reads score_trgm
         // 全文检索也用 queryForList，需要区分调用
         // 使用 doReturn 来处理可变参数
         List<Map<String, Object>> fulltextRows = new ArrayList<>();
@@ -185,9 +201,10 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
         when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
+        when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
 
         Map<String, Object> ftRow = mockDbRow(1L, "doc-1", 0, "模糊匹配内容", queryVec);
-        ftRow.put("sim", 0.75);
+        ftRow.put("score_trgm", 0.75); // PgTrgmFulltextProvider.toResult() reads score_trgm
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(List.of(ftRow));
 
@@ -204,9 +221,10 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
         when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
+        when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
 
         Map<String, Object> ftRow = mockDbRow(1L, "doc-1", 0, "低相关", queryVec);
-        ftRow.put("sim", 0.1); // 低于 minScore 0.3
+        ftRow.put("score_trgm", 0.1); // 低于 minScore 0.3
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(List.of(ftRow));
 
@@ -225,6 +243,7 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
         when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
+        when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenThrow(new RuntimeException("DB connection failed"));
 
@@ -578,26 +597,30 @@ class HybridRetrieverServiceTest {
         @DisplayName("strategy=pg_trgm 但扩展不可用时启动失败")
         void strategyTrgm_unavailable_throws() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            // SearchCapabilities 检测返回空
+            // SearchCapabilities: only vector extension (no pg_trgm)
             when(jdbc.queryForList(anyString(), eq(String.class)))
-                    .thenReturn(List.of("vector"));  // 只有 vector，没有 pg_trgm
+                    .thenReturn(List.of("vector"));
+            // All index checks return false
+            when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
+                    .thenReturn(false);
 
             RagProperties props = new RagProperties();
             props.getRetrieval().setFulltextStrategy("pg_trgm");
 
             assertThrows(IllegalStateException.class,
-                    () -> new FulltextSearchProviderFactory(jdbc, props));
+                    () -> new FulltextSearchProviderFactory(jdbc, props).getProvider());
         }
 
         @Test
         @DisplayName("strategy=auto 自动选择最佳可用策略")
         void strategyAuto_selectsBestAvailable() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            // SearchCapabilities 检测：只有 pg_trgm 可用
+            // SearchCapabilities: only pg_trgm extension available
             when(jdbc.queryForList(anyString(), eq(String.class)))
                     .thenReturn(List.of("vector", "pg_trgm"));
+            // trgm index exists (3rd call), zh/en indexes do not (1st and 2nd calls)
             when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
-                    .thenReturn(true);
+                    .thenReturn(false, false, true);
 
             RagProperties props = new RagProperties();
             // default strategy is "auto"
