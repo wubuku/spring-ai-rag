@@ -287,4 +287,142 @@ class SensitiveDataMaskingConverterTest {
         String result = SensitiveDataMaskingConverter.maskSensitiveDataKeepType(input);
         assertEquals(input, result);
     }
+
+    // ===== Chinese National ID Masking =====
+
+    @Test
+    void maskSensitiveData_chineseNationalId_standard() {
+        // Valid 18-digit national ID (birthdate: 1990-03-07, area: 110101)
+        String input = "RAG query: search patient info, nationalId=110101199003071234";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("110101199003071234"));
+        assertTrue(result.contains(MASK));
+    }
+
+    @Test
+    void maskSensitiveData_chineseNationalId_xChecksum() {
+        // National ID ending with X: 18 chars total
+        // 110101 (area) + 19990512 (birthdate) + 012 (seq) + X (checksum) = 18
+        String input = "User query: 查询身份证号 11010119990512012X 的信息";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("11010119990512012X"));
+        assertTrue(result.contains(MASK));
+        assertTrue(result.contains("查询"));  // non-sensitive preserved
+    }
+
+    @Test
+    void maskSensitiveData_chineseNationalId_inJson() {
+        // Valid: birthdate 1988-05-07, area 310101
+        String input = "{\"query\":\"准备材料\",\"nationalId\":\"310101198805071234\"}";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("310101198805071234"));
+        assertTrue(result.contains(MASK));
+        assertTrue(result.contains("准备材料")); // non-sensitive preserved
+    }
+
+    @Test
+    void maskSensitiveData_chineseNationalId_userQuery() {
+        // Realistic RAG user query containing national ID (birthdate: 1994-08-12)
+        String input = "RAG ask: sessionId=abc123, message=我的身份证号是 420106199408121234，请帮我查询";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("420106199408121234"));
+        assertTrue(result.contains(MASK));
+        assertTrue(result.contains("我的身份证号是")); // non-sensitive part preserved
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+        // Valid IDs: 6-digit area + 8-digit birthdate (YYYYMMDD, month 01-12, day 01-29) + 3-digit seq + checksum
+        "'110101199003071234', '110101199003071234', true",     // area=110101, birth=1990-03-07, seq=123
+        "'110101199905121234', '110101199905121234', true",     // area=110101, birth=1999-05-12, seq=123 (checksum=4)
+        "'310101198805071234', '310101198805071234', true",     // area=310101, birth=1988-05-07, seq=234
+        "'420106199408121234', '420106199408121234', true",     // area=420106, birth=1994-08-12, seq=234
+        // Invalid IDs
+        "'000101201001011234', '000101201001011234', false",     // invalid: starts 000
+        "'110101199900071234', '110101199900071234', false",     // invalid: month=00 (positions 10-11='00')
+        "'110101199907001234', '110101199907001234', false",     // invalid: day=00 (positions 12-13='00')
+        "'110101199905120X', '110101199905120X', false",         // invalid: len=16 (only 15 digits before X, seq needs 3 digits)
+        "'11010119990307123', '11010119990307123', false",       // too short (17 chars, seq 2 digits)
+        "'1101011999030712345', '1101011999030712345', false",  // too long (19 chars)
+        "'11010119990307AB18', '11010119990307AB18', false",     // invalid: 'AB' in seq (positions 14-15='AB')
+        "'123456789012345678', '123456789012345678', false",      // invalid: starts with 1 but month=90 at positions 10-11
+    })
+    void maskSensitiveData_chineseNationalId_validity(String id, String expected, boolean shouldMask) {
+        String input = "query: " + id;
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        boolean masked = !result.contains(id);
+        assertEquals(shouldMask, masked, () -> "ID " + id + " masking=" + masked + " (expected " + shouldMask + ")");
+    }
+
+    // ===== Chinese Mobile Phone Number Masking =====
+
+    @Test
+    void maskSensitiveData_chinesePhone_standard() {
+        String input = "RAG query: search docs about 13800138000";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("13800138000"));
+        assertTrue(result.contains(MASK));
+    }
+
+    @Test
+    void maskSensitiveData_chinesePhone_variousPrefixes() {
+        // All valid prefixes: 133, 134(0-9), 135-139, 141-149, 150-159, 160-169, 170-179, 180-189, 191-199
+        String[] phones = {"13312345678", "13401234567", "13512345678", "13912345678",
+                           "14712345678", "15012345678", "15912345678",
+                           "16612345678", "17012345678", "17812345678",
+                           "18012345678", "19912345678"};
+        for (String phone : phones) {
+            String input = "query: " + phone;
+            String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+            assertFalse(result.contains(phone), () -> "Phone " + phone + " should be masked: " + result);
+            assertTrue(result.contains(MASK));
+        }
+    }
+
+    @Test
+    void maskSensitiveData_chinesePhone_userQuery() {
+        // Realistic RAG user query containing phone number
+        String input = "RAG ask: sessionId=sess-001, message=请联系我，手机号 13800138000";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("13800138000"));
+        assertTrue(result.contains(MASK));
+        assertTrue(result.contains("请联系我"));  // non-sensitive preserved
+    }
+
+    @Test
+    void maskSensitiveData_chinesePhone_invalidNumbers() {
+        // These should NOT be masked (invalid format)
+        String[] invalid = {"12345678901", "10012345678", "12012345678", "138123456", "138001380001"};
+        for (String phone : invalid) {
+            String input = "query: " + phone;
+            String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+            assertEquals(input, result, () -> "Invalid phone " + phone + " should NOT be masked: " + result);
+        }
+    }
+
+    @Test
+    void maskSensitiveData_chinesePhone_withNationalId() {
+        // Both patterns in one message (valid national ID: 1990-03-07)
+        String input = "query: 身份证 110101199003071234，手机 13800138000";
+        String result = SensitiveDataMaskingConverter.maskSensitiveData(input);
+        assertFalse(result.contains("110101199003071234"));
+        assertFalse(result.contains("13800138000"));
+        assertTrue(result.contains(MASK));
+    }
+
+    @Test
+    void maskSensitiveDataKeepType_chineseNationalId() {
+        String input = "query: 110101199003074518";
+        String result = SensitiveDataMaskingConverter.maskSensitiveDataKeepType(input);
+        assertTrue(result.contains("[SENSITIVE:NATIONAL_ID]"));
+        assertFalse(result.contains("110101199003074518"));
+    }
+
+    @Test
+    void maskSensitiveDataKeepType_chinesePhone() {
+        String input = "query: 13800138000";
+        String result = SensitiveDataMaskingConverter.maskSensitiveDataKeepType(input);
+        assertTrue(result.contains("[SENSITIVE:PHONE]"));
+        assertFalse(result.contains("13800138000"));
+    }
 }

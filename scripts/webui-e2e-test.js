@@ -198,7 +198,7 @@ async function testChatInteraction(page) {
   
   // Wait for assistant response to appear (streamed)
   // The response should appear in the messages area
-  await page.waitForTimeout(3000); // Wait for SSE stream to complete
+  await page.waitForTimeout(8000); // Wait for SSE stream to complete (8s for LLM response)
   
   // Check that the user message appears
   const messages = page.locator('[class*="message"], [class*="chat-message"], .messages >> div');

@@ -156,6 +156,10 @@ class OpenApiContractTest {
     @MockBean
     private RagSilenceScheduleRepository ragSilenceScheduleRepository;
 
+    // Client Error
+    @MockBean
+    private RagClientErrorRepository ragClientErrorRepository;
+
     // Health
     @MockBean
     private ComponentHealthService componentHealthService;

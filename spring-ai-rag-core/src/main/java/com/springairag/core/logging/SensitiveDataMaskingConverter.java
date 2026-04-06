@@ -32,6 +32,25 @@ public class SensitiveDataMaskingConverter extends MessageConverter {
      * Patterns applied in order. Each pattern matches a sensitive field
      * and captures the value portion for replacement.
      */
+    // ─── User PII Patterns (Chinese RAG – protect user queries in logs) ───
+
+    /**
+     * Chinese National ID (18 digits, last may be X).
+     * Structure: 6-digit area + 8-digit birthdate (YYYYMMDD) + 3-digit seq + 1 checksum.
+     * Area codes start with non-zero province digits (e.g. 11=Beijing, 31=Shanghai).
+     * Valid months: 01-12, valid days: 01-29 (leap years not distinguished).
+     * Example: 110101199003071234
+     */
+    private static final Pattern CHINESE_NATIONAL_ID = Pattern.compile(
+            "\\b[1-9]\\d{5}(?:19|20)\\d{2}(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]\\b");
+
+    /**
+     * Chinese mobile phone numbers (11 digits, starting 1[3-9]).
+     * Example: 13800138000, 15912345678
+     */
+    private static final Pattern CHINESE_PHONE = Pattern.compile(
+            "\\b1[3-9]\\d{9}\\b");
+
     private static final List<Pattern> SENSITIVE_PATTERNS = List.of(
             // JSON field patterns: "password":"value" or 'password':'value'
             Pattern.compile("\"(password|passwd|pwd|pass)\"\\s*:\\s*\"[^\"]*\"", Pattern.CASE_INSENSITIVE),
@@ -113,6 +132,9 @@ public class SensitiveDataMaskingConverter extends MessageConverter {
         for (Pattern pattern : SENSITIVE_PATTERNS) {
             result = pattern.matcher(result).replaceAll(MASK);
         }
+        // Apply dedicated high-precision PII patterns
+        result = CHINESE_NATIONAL_ID.matcher(result).replaceAll(MASK);
+        result = CHINESE_PHONE.matcher(result).replaceAll(MASK);
         return result;
     }
 
@@ -131,10 +153,24 @@ public class SensitiveDataMaskingConverter extends MessageConverter {
                        message.substring(matcher.end());
             }
         }
+        // Check dedicated Chinese PII patterns
+        java.util.regex.Matcher nationalIdMatcher = CHINESE_NATIONAL_ID.matcher(message);
+        if (nationalIdMatcher.find()) {
+            return message.substring(0, nationalIdMatcher.start()) + "[SENSITIVE:NATIONAL_ID]" +
+                   message.substring(nationalIdMatcher.end());
+        }
+        java.util.regex.Matcher phoneMatcher = CHINESE_PHONE.matcher(message);
+        if (phoneMatcher.find()) {
+            return message.substring(0, phoneMatcher.start()) + "[SENSITIVE:PHONE]" +
+                   message.substring(phoneMatcher.end());
+        }
         return message;
     }
 
     private static String getSensitiveType(Pattern pattern) {
+        // Check by identity for pre-compiled patterns
+        if (pattern == CHINESE_NATIONAL_ID) return "NATIONAL_ID";
+        if (pattern == CHINESE_PHONE) return "PHONE";
         String p = pattern.pattern();
         if (p.contains("password") || p.contains("passwd") || p.contains("pwd")) return "PASSWORD";
         if (p.contains("apiKey") || p.contains("api_key") || p.contains("apikey")) return "API_KEY";
