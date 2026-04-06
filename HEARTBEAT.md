@@ -1152,7 +1152,7 @@
 | N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ⏳ 待推进 |
 | N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
 | N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ✅ 2026-04-06（N41 完成：AdvisorMetrics Micrometer 组件，8 个 meters 暴露到 Prometheus——Timer/Counter for QueryRewrite/HybridSearch/Rerank；rag.advisor.{step}.duration（p50/p95/p99）、rag.advisor.{step}.count、rag.advisor.hybrid_search.results、rag.advisor.rerank.skipped；1245 tests 全通过，commit 5b9b69d） |
-| N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ⏳ 待推进 |
+| N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ✅ 2026-04-06 |
 | N43 | N18 AuditLogService 增强：AbTestController + EvaluationController 审计覆盖 | 安全 | ✅ 2026-04-06（N43 完成：AbTestController 6个写操作 + EvaluationController POST /feedback 审计日志；USER_FEEDBACK entity 类型；测试更新；1079 tests ✅，commit 15bbf53） |
 
 ## 待办（Cron 持续推进 — 永不空转）
@@ -1194,7 +1194,7 @@
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ✅ 2026-04-06 | P3 |
-| C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
+| C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ✅ 2026-04-06（C26 完成：springdoc swagger-ui settings(deep-linking/try-it-out/display-request-duration) + exampleResponseCustomizer 为9个端点添加JSON示例响应 + CollectionRequest @Schema注解 + English API描述，1245 tests ✅） | P3 |
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
 | C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
 | C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
@@ -1286,3 +1286,12 @@
   - commit ab40aa0 已推送
 
 - 2026-04-06 13:55 — ✅ WebUI 常规发布：npm test 112 ✅ / npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；git 工作区干净；WebUI 项目处于生产级成熟状态
+
+- 2026-04-06 14:41 — ✅ C26 SpringDoc snippets + example responses：
+  - application.yml：springdoc swagger-ui settings（deep-linking/try-it-out/display-request-duration/operations-sorter/tags-sorter）
+  - OpenApiConfig：新增 exampleResponseCustomizer() bean，为9个端点添加JSON示例响应（chat/stream SSE/search/documents/batch create/collections/chat history/cache stats/metrics）
+  - OpenApiConfig API描述改为英文 + API versioning 说明
+  - CollectionRequest：补全 @Schema 注解（name/description/dimensions/enabled）
+  - OpenApiConfigTest：更新测试匹配英文描述
+  - mvn clean compile ✅ / mvn test ✅（1245 tests，零失败零错误）
+  - commit 577d60c 已推送
