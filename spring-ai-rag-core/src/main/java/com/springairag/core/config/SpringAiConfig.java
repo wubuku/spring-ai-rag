@@ -169,13 +169,9 @@ public class SpringAiConfig {
         }
         log.info("Creating OpenAI ChatModel: baseUrl={}, model={}", openAiBaseUrl, openAiModel);
 
-        RestClient.Builder restClientBuilder = RestClient.builder()
-                .requestFactory(createRequestFactory(false));
         OpenAiApi openAiApi = OpenAiApi.builder()
                 .baseUrl(openAiBaseUrl)
                 .apiKey(openAiApiKey)
-                .restClientBuilder(restClientBuilder)
-                .webClientBuilder(WebClient.builder())
                 .build();
 
         return OpenAiChatModel.builder()
