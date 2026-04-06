@@ -34,13 +34,23 @@ spring:
     hikari:
       maximum-pool-size: ${DB_POOL_SIZE:20}
       minimum-idle: ${DB_POOL_MIN_IDLE:5}
-      idle-timeout: 300000         # Idle connections evicted after 5 minutes
-      max-lifetime: 1800000        # Connection max lifetime 30 minutes
-      connection-timeout: 10000     # Connection acquisition timeout 10 seconds
-      leak-detection-threshold: 60000  # Leak detection after 60 seconds
+      idle-timeout: 300000              # Idle connections evicted after 5 minutes
+      max-lifetime: 1800000             # Connection max lifetime 30 minutes
+      connection-timeout: 10000         # Connection acquisition timeout 10 seconds
+      validation-timeout: 5000          # Connection validation timeout 5 seconds
+      initialization-fail-timeout: 10000 # Fail fast: abort startup if pool init fails within 10s
+      leak-detection-threshold: 60000   # Leak detection after 60 seconds
       pool-name: rag-hikari
+      register-mbeans: true             # JMX MBean registration for HikariCP pool (JConsole/VisualVM)
+      auto-commit: true                 # Explicit auto-commit (PostgreSQL default)
       metrics:
-        enable: true               # Enable HikariCP metrics for Micrometer
+        enable: true                    # Enable HikariCP metrics for Micrometer
+      data-source-properties:
+        # PostgreSQL prepared statement cache: reuse query execution plans for repeated queries
+        prepareThreshold: 5             # Use server-prepared statements after 5 repeated uses
+        cachePrepStmts: true            # Enable prepared statement cache (default: false)
+        prepStmtCacheSize: 250          # Number of cached prepared statements per connection
+        prepStmtCacheSqlLimit: 256      # Max SQL length cached (chars) before eviction
 
   # JPA / Hibernate configuration (Flyway manages schema, Hibernate does not modify DDL)
   jpa:
