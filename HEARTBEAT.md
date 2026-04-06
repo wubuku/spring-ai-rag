@@ -1383,13 +1383,13 @@
 |---|--------|------|------|
 | HS1-1 | QueryLang enum + LanguageDetector（语言检测，Unicode CJK 区块） | 架构 | ✅ 2026-04-07（23 tests） |
 | HS1-2 | SearchCapabilities 类（扩展 + 索引探测） | 架构 | ✅ 2026-04-07（no-arg ctor + test setters + OpenApiContractTest 修复） |
-| HS1-3 | PgEnglishFtsProvider（英文 FTS，search_vector tsvector） | 功能 | ⏳ |
-| HS1-4 | FulltextSearchProviderFactory 改造（支持语言参数） | 架构 | ⏳ |
-| HS1-5 | HybridRetrieverService 集成语言检测 + 策略选择 | 集成 | ⏳ |
-| HS2-1 | V15: search_vector 列 + GIN 索引（英文 FTS） | 数据库 | ⏳ |
-| HS2-2 | V16: trigram 索引（条件执行） | 数据库 | ⏳ |
+| HS1-3 | PgEnglishFtsProvider（英文 FTS，search_vector tsvector） | 功能 | ✅ 2026-04-07（10 tests） |
+| HS1-4 | FulltextSearchProviderFactory 改造（支持语言参数） | 架构 | ✅ 2026-04-07（已有实现） |
+| HS1-5 | HybridRetrieverService 集成语言检测 + 策略选择 | 集成 | ✅ 2026-04-07（detectLang + getProvider） |
+| HS2-1 | V15: search_vector 列 + GIN 索引（英文 FTS） | 数据库 | ✅ 2026-04-07（V15 migration exists） |
+| HS2-2 | V16: trigram 索引（条件执行） | 数据库 | ✅ 2026-04-07（V16 migration exists） |
 | HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ⏳ |
-| HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ⏳ |
+| HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
 
 ## Cron 进度（2026-04-07 01:55）
 
@@ -1406,3 +1406,4 @@
 - 2026-04-07 03:53 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；Search 测试失败原因：数据库为空（SiliconFlow embedding API 在测试环境 embeddingsStored=0），搜索无结果返回——已知环境问题，非代码 bug；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端未提交变更（PgTrgmFulltextProvider，归属后端 cron，不在本 WebUI cron 范围）；WebUI 项目处于生产级成熟状态
 
 - 2026-04-07 05:17 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅（Search 测试失败：数据库为空，已知环境问题，非代码 bug）；dist 已同步到 static/webui/；后端服务 8081 UP；WebUI 项目处于生产级成熟状态
+- 2026-04-07 06:14 — ✅ HS1-3 + HS4-*：PgEnglishFtsProviderTest 10 个单元测试（availability/search/ts_rank/filter/score/exclude/empty-query/DB-error）；HS1-4/HS1-5/V15/V16 经审查已完整实现，无需额外工作；全量测试通过，commit c0725e9 已推送
