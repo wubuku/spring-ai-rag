@@ -1186,7 +1186,7 @@
 | C15 | N18 AuditLogService：覆盖 POST/PUT/DELETE 所有写操作，记录 user/apiKey/timestamp | 安全 | ✅ 2026-04-06 | P1 |
 | C16 | N32 pgvector HNSW vs IVFFlat 性能对比测试文档 | 性能 | ⏳ | P2 |
 | C17 | N33 RAG 检索可溯源：traceId 贯穿 HybridSearchAdvisor → RerankAdvisor → ChatMemory | 可观测性 | ✅ 2026-04-06 | P2 |
-| C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ⏳ | P2 |
+| C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ✅ 2026-04-06（C18 完成：softDelete/restore + findByIdAndDeletedFalse + DELETE 软删除 + POST /{id}/restore 恢复端点，1235 测试全通过） | P2 |
 | C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
 | C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ✅ 2026-04-06 | P2 |
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
