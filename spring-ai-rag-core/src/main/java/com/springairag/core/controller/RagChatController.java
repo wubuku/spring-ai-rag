@@ -148,7 +148,8 @@ public class RagChatController {
                 .subscribe(
                         chunk -> {
                             try {
-                                emitter.send(SseEmitter.event().data(chunk));
+                                // Send as named event "chunk" with plain text data (frontend expects event type + text content)
+                                emitter.send(SseEmitter.event().name("chunk").data(chunk));
                             } catch (IOException e) {
                                 emitter.completeWithError(e);
                             }
