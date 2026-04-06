@@ -1,123 +1,211 @@
 #!/bin/bash
 # =============================================================================
-# 虚拟线程性能压测脚本
-# 验证 Spring Boot 3.5 + Java 21 虚拟线程在高并发下的表现
+# Virtual Threads Performance Benchmark
+# Validates Spring Boot 3.5 + Java 21 virtual threads under high concurrency.
+#
+# Usage:
+#   ./benchmark-virtual-threads.sh                        # defaults
+#   BASE_URL=http://localhost:8081 CONCURRENT=100 ./...  # custom
+#   CONCURRENT=50 REQUESTS=500 DURATION=60 ./...         # heavier load
+#
+# Prerequisites:
+#   1. Server running: mvn spring-boot:run -pl spring-ai-rag-core
+#   2. curl, bc installed
 # =============================================================================
-
-set -e
 
 BASE_URL="${BASE_URL:-http://localhost:8081}"
 CONCURRENT="${CONCURRENT:-50}"
 REQUESTS="${REQUESTS:-200}"
-DURATION="${DURATION:-30}"
+WARMUP="${WARMUP:-10}"
 
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
 NC='\033[0m'
 
-pass() { echo -e "${GREEN}✅ PASS${NC} $1"; }
-fail() { echo -e "${RED}❌ FAIL${NC} $1"; }
-info() { echo -e "${YELLOW}ℹ️  INFO${NC} $1"; }
+pass()  { echo -e "${GREEN}✅ PASS${NC}  $1"; }
+fail()  { echo -e "${RED}❌ FAIL${NC}  $1"; }
+info()  { echo -e "${YELLOW}ℹ️  INFO${NC} $1"; }
+phase() { echo -e "${CYAN}▸${NC} $1"; }
 
-echo "=========================================="
-echo "  虚拟线程性能压测"
-echo "=========================================="
-echo "  Base URL:    $BASE_URL"
-echo "  Concurrent:   $CONCURRENT 并发连接"
-echo "  Total:       $REQUESTS 请求"
-echo "  Duration:    ${DURATION}s"
-echo "=========================================="
-
-# Check server is up
 echo ""
-info "检查服务器健康状态..."
-HEALTH=$(curl -s --connect-timeout 3 "$BASE_URL/api/v1/rag/health" 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','DOWN'))" 2>/dev/null || echo "DOWN")
-if [ "$HEALTH" != "UP" ]; then
-    fail "服务器未就绪 (status=$HEALTH)"
-    exit 1
-fi
-pass "服务器健康: $HEALTH"
-
-# Pre-warm
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║     Spring AI RAG — Virtual Threads Benchmark           ║"
+echo "╠══════════════════════════════════════════════════════════╣"
+printf "║  Base URL:    %-42s║\n" "$BASE_URL"
+printf "║  Concurrent:  %-42s║\n" "${CONCURRENT} parallel connections"
+printf "║  Total reqs:  %-42s║\n" "$REQUESTS requests"
+printf "║  Warmup:      %-42s║\n" "$WARMUP requests"
+echo "╚══════════════════════════════════════════════════════════╝"
 echo ""
-info "预热请求..."
-for i in {1..5}; do
-    curl -s --connect-timeout 2 --max-time 5 "$BASE_URL/api/v1/rag/health" > /dev/null 2>&1 || true
+
+# ── Helper: check server ready ─────────────────────────────────────────────────
+wait_for_server() {
+  phase "Waiting for server to be ready..."
+  local max_retries=30
+  for i in $(seq 1 $max_retries); do
+    local status
+    status=$(curl -s --connect-timeout 2 --max-time 5 \
+      "$BASE_URL/api/v1/rag/health" \
+      2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','DOWN'))" 2>/dev/null || echo "DOWN")
+    if [ "$status" = "UP" ] || [ "$status" = "ok" ]; then
+      pass "Server is UP (attempt $i)"
+      return 0
+    fi
+    sleep 1
+  done
+  fail "Server did not become ready after ${max_retries}s"
+  exit 1
+}
+
+# ── Phase 1: Server health check ───────────────────────────────────────────────
+wait_for_server
+
+# ── Phase 2: Warmup ───────────────────────────────────────────────────────────
+phase "Warmup: $WARMUP requests..."
+WARMUP_BODY='{"query":"warmup ping","sessionId":"bench-warmup"}'
+for i in $(seq 1 $WARMUP); do
+  curl -s --connect-timeout 3 --max-time 15 \
+    -X POST "$BASE_URL/api/v1/rag/chat/ask" \
+    -H "Content-Type: application/json" \
+    -d "$WARMUP_BODY" > /dev/null 2>&1 || true
 done
-pass "预热完成"
+pass "Warmup done"
 
-# Simple concurrent test using curl parallel
-echo ""
-info "开始压测..."
+# ── Phase 3: Concurrent benchmark ─────────────────────────────────────────────
+phase "Starting benchmark: $REQUESTS requests with $CONCURRENT parallelism..."
 
-START_TIME=$(date +%s%3N)
-SUCCESS=0
-FAIL=0
-TIMEOUT=0
+# Each trial: returns "HTTP_CODE LATENCY_MS" (space-separated)
+do_trial() {
+  local trial_id="$1"
+  local body
+  body=$(printf '{"query":"virtual thread benchmark %d","sessionId":"bench-%s"}' \
+    $((trial_id % 20 + 1)) "vt-$trial_id")
 
-# Use GNU parallel or xargs for concurrency
-if command -v parallel &>/dev/null; then
-    # Use GNU parallel
-    seq 1 $REQUESTS | parallel -j $CONCURRENT --halt soon,fail=1 "\
-        curl -s --connect-timeout 3 --max-time 10 \
-        -X POST '$BASE_URL/api/v1/rag/chat/ask' \
-        -H 'Content-Type: application/json' \
-        -d '{\"message\":\"并发测试 $(({1}%10)+1)\",\"sessionId\":\"bench-{} \"}' \
-        > /dev/null 2>&1 && echo 1 || echo 0" \
-        | awk '{if($1==1) success++; else fail++} END{print "success="success,"fail="fail}'
-else
-    # Fallback: sequential with background jobs
-    for i in $(seq 1 $REQUESTS); do
-        (
-            curl -s --connect-timeout 3 --max-time 10 \
-            -X POST "$BASE_URL/api/v1/rag/chat/ask" \
-            -H "Content-Type: application/json" \
-            -d "{\"message\":\"并发测试 $((i%10+1))\",\"sessionId\":\"bench-$i\"}" \
-            > /dev/null 2>&1 && echo 1 || echo 0
-        ) &
-        # Throttle to avoid too many processes
-        if (( i % CONCURRENT == 0 )); then wait; fi
-    done | awk '{if($1==1) success++; else fail++} END{print "success="success,"fail="fail}'
-fi > /tmp/bench_result.txt
+  local start_ns end_ns latency http_code
+  start_ns=$(date +%s%N)
 
-END_TIME=$(date +%s%3N)
-ELAPSED=$((END_TIME - START_TIME))
+  # Capture http_code via -w and body via -o
+  local curl_out
+  curl_out=$(curl -s --connect-timeout 5 --max-time 30 \
+    -w "\n%{http_code}" \
+    -o /dev/null \
+    -X POST "$BASE_URL/api/v1/rag/chat/ask" \
+    -H "Content-Type: application/json" \
+    -d "$body" 2>/dev/null)
 
-# Parse results
-RESULT=$(cat /tmp/bench_result.txt 2>/dev/null || echo "success=0 fail=0")
-SUCCESS=$(echo "$RESULT" | sed 's/.*success=\([0-9]*\).*/\1/')
-FAIL=$(echo "$RESULT" | sed 's/.*fail=\([0-9]*\).*/\1/')
-TOTAL=$((SUCCESS + FAIL))
+  end_ns=$(date +%s%N)
+  latency=$(echo "scale=2; ($end_ns - $start_ns) / 1000000" | bc)
+  http_code=$(echo "$curl_out" | tail -1)
 
-echo ""
-echo "=========================================="
-echo "  压测结果"
-echo "=========================================="
-echo "  总请求:     $TOTAL"
-echo "  成功:       $SUCCESS"
-echo "  失败:       $FAIL"
-echo "  耗时:       ${ELAPSED}ms"
-echo "  QPS:        $(echo "scale=2; $TOTAL * 1000 / $ELAPSED" | bc)"
-echo "=========================================="
+  # Output: "HTTP_CODE LATENCY_MS"
+  echo "$http_code $latency"
+}
 
-# Evaluate results
-if [ "$TOTAL" -eq 0 ]; then
-    fail "没有收到任何响应"
-    exit 1
+export -f do_trial
+export BASE_URL
+
+# Generate trial IDs and run in parallel with xargs
+TMPRESULTS=$(mktemp)
+BENCH_START=$(date +%s%N)
+seq 1 $REQUESTS | xargs -P $CONCURRENT -I{} bash -c 'do_trial {}' > "$TMPRESULTS"
+BENCH_END=$(date +%s%N)
+BENCH_ELAPSED_MS=$(( (BENCH_END - BENCH_START) / 1000000 ))
+
+# ── Phase 4: Parse results ────────────────────────────────────────────────────
+total=$(wc -l < "$TMPRESULTS" | tr -d ' ')
+success=$(awk '{if($1==200) s++} END{print s+0}' "$TMPRESULTS")
+fail_count=$((total - success))
+
+if [ "$total" -eq 0 ]; then
+  fail "No responses received"
+  rm -f "$TMPRESULTS"
+  exit 1
 fi
 
-SUCCESS_RATE=$(echo "scale=1; $SUCCESS * 100 / $TOTAL" | bc)
-info "成功率: ${SUCCESS_RATE}%"
+# Latencies in column 2
+TMPLAT=$(mktemp)
+awk '{print $2}' "$TMPRESULTS" > "$TMPLAT"
 
-if [ "$SUCCESS_RATE" -ge 95 ]; then
-    pass "压测通过 (成功率 >= 95%)"
-    exit 0
-elif [ "$SUCCESS_RATE" -ge 80 ]; then
-    info "成功率一般 (80-95%)"
-    exit 0
-else
-    fail "成功率过低 (< 80%)"
-    exit 1
+count=$(wc -l < "$TMPLAT" | tr -d ' ')
+
+# Compute percentiles using sort + head/tail
+p50_lat=$(sort -n "$TMPLAT" | awk -v p=50 -v n="$count" 'BEGIN{c=int(n*p/100); if(c<1)c=1} {if(++lines==c) print}')
+p95_lat=$(sort -n "$TMPLAT" | awk -v p=95 -v n="$count" 'BEGIN{c=int(n*p/100); if(c<1)c=1} {if(++lines==c) print}')
+p99_lat=$(sort -n "$TMPLAT" | awk -v p=99 -v n="$count" 'BEGIN{c=int(n*p/100); if(c<1)c=1} {if(++lines==c) print}')
+avg_latency=$(awk '{sum+=$1} END {printf "%.2f", sum/NR}' "$TMPLAT")
+max_latency=$(tail -1 <<< "$(sort -n "$TMPLAT")")
+min_latency=$(head -1 <<< "$(sort -n "$TMPLAT")")
+
+# Throughput based on actual wall-clock elapsed time
+BENCH_ELAPSED_S=$(echo "scale=2; $BENCH_ELAPSED_MS / 1000" | bc)
+qps=$(echo "scale=2; $total / $BENCH_ELAPSED_S" | bc)
+
+success_rate=$(echo "scale=1; $success * 100 / $total" | bc)
+
+# ── Phase 5: Report ────────────────────────────────────────────────────────────
+echo ""
+echo "╔══════════════════════════════════════════════════════════╗"
+echo "║              Benchmark Results                           ║"
+echo "╠══════════════════════════════════════════════════════════╣"
+printf "║  Total requests :  %-41s║\n" "$total"
+printf "║  Successful     :  %-41s║\n" "$success"
+printf "║  Failed         :  %-41s║\n" "$fail_count"
+printf "║  Wall time      :  %-41s║\n" "${BENCH_ELAPSED_S}s"
+printf "║  Throughput     :  %-41s║\n" "${qps} req/s"
+echo "╠══════════════════════════════════════════════════════════╣"
+echo "║  Latency (ms)   :                                       ║"
+printf "║    min          :  %-41s║\n" "${min_latency} ms"
+printf "║    avg          :  %-41s║\n" "${avg_latency} ms"
+printf "║    p(50)        :  %-41s║\n" "${p50_lat} ms"
+printf "║    p(95)        :  %-41s║\n" "${p95_lat} ms"
+printf "║    p(99)        :  %-41s║\n" "${p99_lat} ms"
+printf "║    max          :  %-41s║\n" "${max_latency} ms"
+echo "╠══════════════════════════════════════════════════════════╣"
+printf "║  Success rate   :  %-41s║\n" "${success_rate}%"
+echo "╚══════════════════════════════════════════════════════════╝"
+echo ""
+
+# ── Phase 6: Evaluate SLOs ─────────────────────────────────────────────────────
+phase "Evaluating SLOs..."
+
+# Chat RAG SLO: p99 < 5000ms (LLM calls included), success >= 95%
+status=0
+
+if   [ "$success_rate" -ge 99 ]; then result="EXCELLENT"
+elif [ "$success_rate" -ge 95 ]; then result="GOOD"
+elif [ "$success_rate" -ge 80 ]; then result="FAIR"
+else                                  result="POOR"; status=1
 fi
+
+phase "Success rate: ${success_rate}% → $result"
+
+# p99 SLO check
+p99_int=${p99_lat%.*}
+PHIGH=5000
+if [ "$p99_int" -lt "$PHIGH" ]; then
+  pass "p99 latency: ${p99_lat}ms < ${PHIGH}ms (chat SLO target)"
+else
+  fail "p99 latency: ${p99_lat}ms exceeds ${PHIGH}ms (SLO breach)"
+  status=1
+fi
+
+# p95 SLO check (informational)
+p95_int=${p95_lat%.*}
+PTGT=2000
+if [ "$p95_int" -lt "$PTGT" ]; then
+  pass "p95 latency: ${p95_lat}ms < ${PTGT}ms (info)"
+else
+  info "p95 latency: ${p95_lat}ms exceeds ${PTGT}ms (acceptable)"
+fi
+
+if [ "$status" -eq 0 ]; then
+  pass "Virtual threads benchmark: all SLOs met"
+else
+  fail "Virtual threads benchmark: some SLOs breached"
+fi
+
+rm -f "$TMPRESULTS" "$TMPLAT"
+exit $status
