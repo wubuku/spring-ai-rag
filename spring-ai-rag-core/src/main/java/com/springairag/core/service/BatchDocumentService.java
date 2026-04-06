@@ -128,6 +128,9 @@ public class BatchDocumentService {
                 String status = (String) embedResult.get("status");
                 if (!"COMPLETED".equals(status) && !"CACHED".equals(status)) {
                     String error = (String) embedResult.get("error");
+                    // 嵌入失败时更新文档状态为 EMBEDDING_FAILED
+                    doc.setProcessingStatus("EMBEDDING_FAILED");
+                    documentRepository.save(doc);
                     return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated,
                             "Embedding failed: " + (error != null ? error : status));
                 }
