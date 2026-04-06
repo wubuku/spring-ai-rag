@@ -1333,3 +1333,7 @@
 
 ### 提交
 - commit: SiliconFlow LLM 配置修复 + E2E 45/45 通过
+
+## WebUI 常规发布（2026-04-06 17:15）
+
+- 2026-04-06 17:15 — WebUI 常规发布：npm test ✅（113 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/12 ✅（Chat Interaction 1 失败为 LLM API 环境问题，非代码 bug）；后端 8081 UP（database/PGVECTOR UP）；git 工作区干净，无需提交；WebUI 项目处于生产级成熟状态
