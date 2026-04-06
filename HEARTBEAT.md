@@ -1336,7 +1336,7 @@
 
 ## WebUI 常规发布（2026-04-06 17:15）
 
-- 2026-04-06 17:15 — WebUI 常规发布：npm test ✅（113 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/12 ✅（Chat Interaction 1 失败为 LLM API 环境问题，非代码 bug）；后端 8081 UP（database/PGVECTOR UP）；git 工作区干净，无需提交；WebUI 项目处于生产级成熟状态
+- 2026-04-06 18:47 — ✅ WebUI cron（useSSE unmount cleanup）：发现 useSSE.test.ts 'unmount during streaming cancels stream' 测试失败；根因：useSSE hook 无 unmount cleanup；修复：添加 useEffect cleanup 取消 readerRef；113 vitest tests ✅；npm run build ✅（243KB index gzipped）；E2E 12/12 ✅（后端 SiliconFlow LLM 正常）；dist 已同步到 static/webui/；commit 496e41a 已推送
 
 ## 后端巡检（2026-04-06 17:52）
 
