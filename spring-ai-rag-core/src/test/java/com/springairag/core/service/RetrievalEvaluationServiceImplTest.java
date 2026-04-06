@@ -13,6 +13,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.data.domain.Pageable;
 
 import java.time.ZonedDateTime;
@@ -32,11 +33,14 @@ class RetrievalEvaluationServiceImplTest {
     @Mock
     private RagRetrievalEvaluationRepository repository;
 
+    @Mock
+    private ChatClient.Builder chatClientBuilder;
+
     private RetrievalEvaluationServiceImpl service;
 
     @BeforeEach
     void setUp() {
-        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry());
+        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry(), null);
         service.initMetrics();
     }
 
@@ -301,5 +305,81 @@ class RetrievalEvaluationServiceImplTest {
         assertEquals(1.0, metrics.getAvgHitRate(), 0.001);
         assertEquals(0.5, metrics.getAvgPrecisionAtK().get(1), 0.001);
         assertEquals(0.75, metrics.getAvgRecallAtK().get(3), 0.001);
+    }
+
+    // ==================== evaluateAnswerQuality ====================
+
+    @Test
+    @DisplayName("evaluateAnswerQuality: ChatClient unavailable throws UnsupportedOperationException")
+    void evaluateAnswerQuality_noChatClient_throwsUnsupported() {
+        // Service was constructed with null ChatClient.Builder
+        UnsupportedOperationException ex = assertThrows(UnsupportedOperationException.class,
+                () -> service.evaluateAnswerQuality("query", "context", "answer"));
+        assertTrue(ex.getMessage().contains("ChatClient"));
+    }
+
+    @Test
+    @DisplayName("evaluateAnswerQuality: parses valid JSON response correctly")
+    void evaluateAnswerQuality_validJson_parsesCorrectly() {
+        RetrievalEvaluationServiceImpl svcWithChatClient =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder);
+        svcWithChatClient.initMetrics();
+
+        // Use the same mocking pattern as RagChatServiceTest:
+        // prompt() -> ChatClientRequestSpec, call() -> CallResponseSpec
+        ChatClient mockClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec mockCallResponse = mock(ChatClient.CallResponseSpec.class);
+
+        when(chatClientBuilder.build()).thenReturn(mockClient);
+        when(mockClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.call()).thenReturn(mockCallResponse);
+        when(mockCallResponse.content()).thenReturn("""
+            {
+              "groundedness": 4,
+              "relevance": 5,
+              "helpfulness": 3,
+              "reasoning": "Answer is grounded but adds some extraneous info.",
+              "recommendation": "REVISION"
+            }""");
+
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svcWithChatClient.evaluateAnswerQuality("What is Spring AI?", "Spring AI is a framework.", "Spring AI is a framework for building AI apps.");
+
+        assertEquals(4, result.getGroundedness());
+        assertEquals(5, result.getRelevance());
+        assertEquals(3, result.getHelpfulness());
+        assertEquals("Answer is grounded but adds some extraneous info.", result.getReasoning());
+        assertEquals("REVISION", result.getRecommendation());
+    }
+
+    @Test
+    @DisplayName("evaluateAnswerQuality: unparseable JSON returns default scores")
+    void evaluateAnswerQuality_invalidJson_returnsDefaults() {
+        RetrievalEvaluationServiceImpl svcWithChatClient =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder);
+        svcWithChatClient.initMetrics();
+
+        ChatClient mockClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec mockCallResponse = mock(ChatClient.CallResponseSpec.class);
+
+        when(chatClientBuilder.build()).thenReturn(mockClient);
+        when(mockClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.call()).thenReturn(mockCallResponse);
+        when(mockCallResponse.content()).thenReturn("This is not JSON at all!!!");
+
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svcWithChatClient.evaluateAnswerQuality("query", "context", "answer");
+
+        assertEquals(3, result.getGroundedness());
+        assertEquals(3, result.getRelevance());
+        assertEquals(3, result.getHelpfulness());
+        assertTrue(result.getReasoning().contains("failed to parse"));
+        assertEquals("REVISION", result.getRecommendation());
     }
 }

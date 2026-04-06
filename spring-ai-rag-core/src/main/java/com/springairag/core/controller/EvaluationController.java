@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.AnswerQualityRequest;
+import com.springairag.api.dto.AnswerQualityResponse;
 import com.springairag.api.dto.EvaluateRequest;
 import com.springairag.api.dto.FeedbackRequest;
 import com.springairag.core.entity.RagRetrievalEvaluation;
@@ -19,6 +21,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.ZonedDateTime;
+
 import java.util.List;
 import java.util.Map;
 
@@ -83,6 +86,42 @@ public class EvaluationController {
                 .toList();
         List<RagRetrievalEvaluation> results = evaluationService.batchEvaluate(cases);
         return ResponseEntity.ok(results);
+    }
+
+    // ==================== LLM-as-judge Answer Quality ====================
+
+    /**
+     * LLM-as-judge answer quality evaluation
+     */
+    @Operation(summary = "Answer quality evaluation (LLM-as-judge)",
+            description = "Uses an LLM to evaluate a RAG answer across three dimensions: " +
+                    "groundedness (1-5, is the answer supported by the context?), " +
+                    "relevance (1-5, does it address the query?), " +
+                    "helpfulness (1-5, is it useful and clear?). " +
+                    "Results are NOT persisted to the database.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Evaluation returned successfully"),
+        @ApiResponse(responseCode = "400", description = "Request parameters invalid"),
+        @ApiResponse(responseCode = "500", description = "LLM judge unavailable or evaluation failed")
+    })
+    @PostMapping("/answer-quality")
+    public ResponseEntity<AnswerQualityResponse> evaluateAnswerQuality(
+            @Valid @RequestBody AnswerQualityRequest request) {
+        RetrievalEvaluationService.AnswerQualityResult result =
+                evaluationService.evaluateAnswerQuality(
+                        request.getQuery(),
+                        request.getContext(),
+                        request.getAnswer()
+                );
+        AnswerQualityResponse response = new AnswerQualityResponse(
+                result.getGroundedness(),
+                result.getRelevance(),
+                result.getHelpfulness(),
+                result.getReasoning(),
+                result.getRecommendation(),
+                ZonedDateTime.now()
+        );
+        return ResponseEntity.ok(response);
     }
 
     /**

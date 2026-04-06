@@ -66,6 +66,19 @@ public interface RetrievalEvaluationService {
      */
     AggregatedMetrics getAggregatedMetrics(ZonedDateTime startDate, ZonedDateTime endDate);
 
+    /**
+     * LLM-as-judge answer quality evaluation.
+     *
+     * <p>Evaluates a RAG answer using an LLM judge across three dimensions:
+     * groundedness, relevance, and helpfulness (each 1-5).
+     *
+     * @param query  original user query
+     * @param context retrieved context that should ground the answer
+     * @param answer  generated RAG answer to evaluate
+     * @return answer quality evaluation result (does NOT persist to DB)
+     */
+    AnswerQualityResult evaluateAnswerQuality(String query, String context, String answer);
+
     // ==================== Inner Classes ====================
 
     /**
@@ -187,5 +200,41 @@ public interface RetrievalEvaluationService {
         public void setAvgPrecisionAtK(Map<Integer, Double> avgPrecisionAtK) { this.avgPrecisionAtK = avgPrecisionAtK; }
         public Map<Integer, Double> getAvgRecallAtK() { return avgRecallAtK; }
         public void setAvgRecallAtK(Map<Integer, Double> avgRecallAtK) { this.avgRecallAtK = avgRecallAtK; }
+    }
+
+    /**
+     * LLM-as-judge answer quality evaluation result.
+     *
+     * <p>Three scores (1-5) plus reasoning and a summary recommendation.
+     */
+    class AnswerQualityResult {
+        private int groundedness;   // 1-5: is answer supported by context?
+        private int relevance;     // 1-5: does answer address the query?
+        private int helpfulness;   // 1-5: is answer useful and clear?
+        private String reasoning;
+        private String recommendation; // ACCEPT / REVISION / REJECT
+
+        public AnswerQualityResult() {
+        }
+
+        public AnswerQualityResult(int groundedness, int relevance, int helpfulness,
+                                   String reasoning, String recommendation) {
+            this.groundedness = groundedness;
+            this.relevance = relevance;
+            this.helpfulness = helpfulness;
+            this.reasoning = reasoning;
+            this.recommendation = recommendation;
+        }
+
+        public int getGroundedness() { return groundedness; }
+        public void setGroundedness(int groundedness) { this.groundedness = groundedness; }
+        public int getRelevance() { return relevance; }
+        public void setRelevance(int relevance) { this.relevance = relevance; }
+        public int getHelpfulness() { return helpfulness; }
+        public void setHelpfulness(int helpfulness) { this.helpfulness = helpfulness; }
+        public String getReasoning() { return reasoning; }
+        public void setReasoning(String reasoning) { this.reasoning = reasoning; }
+        public String getRecommendation() { return recommendation; }
+        public void setRecommendation(String recommendation) { this.recommendation = recommendation; }
     }
 }

@@ -10,6 +10,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +37,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     private final RagRetrievalEvaluationRepository evaluationRepository;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
+    private final ChatClient.Builder chatClientBuilder;
 
     private Timer evaluateTimer;
     private Counter evaluationCounter;
@@ -44,10 +47,12 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
     public RetrievalEvaluationServiceImpl(RagRetrievalEvaluationRepository evaluationRepository,
                                           ObjectMapper objectMapper,
-                                          MeterRegistry meterRegistry) {
+                                          MeterRegistry meterRegistry,
+                                          @Autowired(required = false) ChatClient.Builder chatClientBuilder) {
         this.evaluationRepository = evaluationRepository;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
+        this.chatClientBuilder = chatClientBuilder;
     }
 
     @PostConstruct
@@ -258,6 +263,66 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         Accumulator acc = accumulateMetrics(evaluations);
         applyAverages(metrics, acc, count);
         return metrics;
+    }
+
+    @Override
+    public AnswerQualityResult evaluateAnswerQuality(String query, String context, String answer) {
+        if (chatClientBuilder == null) {
+            throw new UnsupportedOperationException(
+                    "ChatClient is not available. Please configure an LLM provider.");
+        }
+
+        String judgePrompt = buildJudgePrompt(query, context, answer);
+
+        String responseText = chatClientBuilder.build()
+                .prompt()
+                .user(judgePrompt)
+                .call()
+                .content();
+
+        return parseJudgeResponse(responseText);
+    }
+
+    private String buildJudgePrompt(String query, String context, String answer) {
+        return """
+            You are an expert RAG system evaluator. Evaluate the quality of the AI assistant's answer
+            based on the retrieved context and the user's query.
+
+            Provide your evaluation in the following structured format (JSON only, no additional text):
+            {
+              "groundedness": <score 1-5>,  // Is the answer supported by the context? (1=completely unsupported, 5=fully grounded)
+              "relevance": <score 1-5>,      // Does the answer address the query? (1=totally irrelevant, 5=perfectly relevant)
+              "helpfulness": <score 1-5>,    // Is the answer useful and clear? (1=useless, 5=extremely helpful)
+              "reasoning": "<brief explanation (1-2 sentences)>",
+              "recommendation": "<ACCEPT if all scores >= 3; REVISION if any score < 3; REJECT if any score <= 1>"
+            }
+
+            Query:
+            %s
+
+            Retrieved Context:
+            %s
+
+            AI Answer:
+            %s
+            """.formatted(query, context, answer);
+    }
+
+    private AnswerQualityResult parseJudgeResponse(String responseText) {
+        try {
+            var node = objectMapper.readTree(responseText.trim());
+            int groundedness = Math.min(5, Math.max(1, node.path("groundedness").asInt(3)));
+            int relevance = Math.min(5, Math.max(1, node.path("relevance").asInt(3)));
+            int helpfulness = Math.min(5, Math.max(1, node.path("helpfulness").asInt(3)));
+            String reasoning = node.path("reasoning").asText("No reasoning provided");
+            String recommendation = node.path("recommendation").asText("REVISION");
+            return new AnswerQualityResult(groundedness, relevance, helpfulness, reasoning, recommendation);
+        } catch (JsonProcessingException e) {
+            log.warn("Failed to parse LLM judge response as JSON, returning default result. Response: {}",
+                    responseText, e);
+            return new AnswerQualityResult(3, 3, 3,
+                    "Evaluation failed to parse model response", "REVISION");
+        }
     }
 
     private record Accumulator(

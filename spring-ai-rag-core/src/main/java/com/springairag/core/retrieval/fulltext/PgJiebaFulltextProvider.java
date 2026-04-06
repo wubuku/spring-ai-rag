@@ -52,9 +52,10 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             // 检测 jiebacfg 配置
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg'", Integer.class);
+            log.info("pg_jieba availability check: extension and config found");
             return true;
         } catch (Exception e) { // Health probe: must never throw, graceful degradation
-            log.debug("pg_jieba not available: {}", e.getMessage());
+            log.warn("pg_jieba not available: {}", e.getMessage());
             return false;
         }
     }
@@ -77,6 +78,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
 
         try {
             List<Map<String, Object>> rows = executeSearch(query.trim(), documentIds, limit);
+            log.debug("pg_jieba search for '{}' returned {} rows", query, rows.size());
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
@@ -87,40 +89,49 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     .limit(limit)
                     .collect(Collectors.toList());
         } catch (Exception e) { // Resilience: return empty on search failure
-            log.warn("pg_jieba search failed: {}", e.getMessage());
+            log.warn("pg_jieba search failed for query '{}': {}", query, e.getMessage());
             return Collections.emptyList();
         }
     }
 
     private List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
-        // 使用 plainto_tsquery 做分词查询，ts_rank 做相关度排序
+        // 使用 plainto_tsquery 做分词查询 + ILIKE 模糊匹配作为 fallback
+        // 当 pg_jieba 分词对短词返回空时，ILIKE 可以兜底
+        String safeQuery = query.trim().replace("'", "''");
+        // 组合条件：tsquery 匹配 OR 模糊匹配（ILIKE 不区分大小写，适合中文）
+        String tsqueryClause = String.format(
+                "(to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', '%s') OR chunk_text ILIKE '%%%s%%')",
+                TS_CONFIG, TS_CONFIG, safeQuery, safeQuery);
+        // 如果是模糊匹配命中，给一个较低的基础分
+        String rankExpr = String.format(
+                "COALESCE(ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', '%s')), 0.001) * CASE WHEN chunk_text ILIKE '%%%s%%' THEN 0.5 ELSE 1 END",
+                TS_CONFIG, TS_CONFIG, safeQuery, safeQuery);
+
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
             String sql = String.format(
                     "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                            "ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', ?)) as rank " +
+                            "%s as rank " +
                             "FROM rag_embeddings " +
                             "WHERE document_id IN (%s) " +
-                            "AND to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', ?) " +
+                            "AND %s " +
                             "ORDER BY rank DESC LIMIT ?",
-                    TS_CONFIG, TS_CONFIG, placeholders, TS_CONFIG, TS_CONFIG);
+                    rankExpr, placeholders, tsqueryClause);
             List<Object> args = new ArrayList<>();
-            args.add(query);  // ts_rank 参数
             args.addAll(documentIds);
-            args.add(query);  // @@ 匹配参数
             args.add(limit);
             return jdbcTemplate.queryForList(sql, args.toArray());
         }
 
         String sql = String.format(
                 "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                        "ts_rank(to_tsvector('%s', chunk_text), plainto_tsquery('%s', ?)) as rank " +
+                        "%s as rank " +
                         "FROM rag_embeddings " +
-                        "WHERE to_tsvector('%s', chunk_text) @@ plainto_tsquery('%s', ?) " +
+                        "WHERE %s " +
                         "ORDER BY rank DESC LIMIT ?",
-                TS_CONFIG, TS_CONFIG, TS_CONFIG, TS_CONFIG);
-        return jdbcTemplate.queryForList(sql, query, query, limit);
+                rankExpr, tsqueryClause);
+        return jdbcTemplate.queryForList(sql, limit);
     }
 
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {
