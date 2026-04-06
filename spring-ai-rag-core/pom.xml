@@ -212,8 +212,9 @@
     <profiles>
         <!--
             WebUI profile: builds the spring-ai-rag-webui frontend
-            and copies dist/ to src/main/resources/static/webui/
+            and copies dist/ to spring-ai-rag-core/src/main/resources/static/webui/
             Usage: mvn spring-boot:run -Pwebui
+                  or: mvn package -pl spring-ai-rag-core -Pwebui
         -->
         <profile>
             <id>webui</id>
@@ -227,11 +228,38 @@
                             <execution>
                                 <id>build-webui</id>
                                 <goals><goal>exec</goal></goals>
-                                <phase>generate-resources</phase>
+                                <phase>prepare-package</phase>
                                 <configuration>
                                     <workingDirectory>${project.basedir}/../spring-ai-rag-webui</workingDirectory>
                                     <executable>npm</executable>
                                     <arguments>run build</arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <artifactId>maven-clean-plugin</artifactId>
+                        <version>3.3.0</version>
+                        <executions>
+                            <execution>
+                                <id>clean-webui-static</id>
+                                <goals><goal>clean</goal></goals>
+                                <phase>prepare-package</phase>
+                                <configuration>
+                                    <filesets>
+                                        <fileset>
+                                            <directory>${project.basedir}/src/main/resources/static/webui/assets</directory>
+                                            <includes>
+                                                <include>**/*</include>
+                                            </includes>
+                                        </fileset>
+                                        <fileset>
+                                            <directory>${project.basedir}/src/main/resources/static/webui</directory>
+                                            <excludes>
+                                                <exclude>assets/**</exclude>
+                                            </excludes>
+                                        </fileset>
+                                    </filesets>
                                 </configuration>
                             </execution>
                         </executions>
@@ -243,9 +271,9 @@
                             <execution>
                                 <id>copy-webui</id>
                                 <goals><goal>copy-resources</goal></goals>
-                                <phase>generate-resources</phase>
+                                <phase>prepare-package</phase>
                                 <configuration>
-                                    <outputDirectory>${project.build.outputDirectory}/static/webui</outputDirectory>
+                                    <outputDirectory>${project.basedir}/src/main/resources/static/webui</outputDirectory>
                                     <resources>
                                         <resource>
                                             <directory>${project.basedir}/../spring-ai-rag-webui/dist</directory>
