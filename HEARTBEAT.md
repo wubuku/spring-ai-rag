@@ -1397,8 +1397,16 @@
 | HS1-5 | HybridRetrieverService 集成语言检测 + 策略选择 | 集成 | ✅ 2026-04-07（detectLang + getProvider） |
 | HS2-1 | V15: search_vector 列 + GIN 索引（英文 FTS） | 数据库 | ✅ 2026-04-07（V15 migration exists） |
 | HS2-2 | V16: trigram 索引（条件执行） | 数据库 | ✅ 2026-04-07（V16 migration exists） |
-| HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ⏳ |
+| HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ✅ 2026-04-07（PgJiebaFulltextProvider 已使用 websearch_to_tsquery + search_vector_zh 预建列，SearchCapabilitiesTest 15 tests 验证能力探测） |
 | HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
+
+## Cron 进度（2026-04-07 06:54）
+
+- 2026-04-07 06:54 — ✅ HS3-1 + SearchCapabilitiesTest 完成：
+  - PgJiebaFulltextProvider 已使用 `websearch_to_tsquery('jiebacfg', ?)` + `search_vector_zh` 预建列（GIN 索引）—— HS3-1 实现确认完成
+  - 新增 `SearchCapabilitiesTest.java`：15 个单元测试覆盖 no-arg/init=false/init=true 构造、@PostConstruct null guard、enableChineseFts/enableEnglishFts/enableTrgm 逻辑、全部 getter/setter、边界场景
+  - 全量测试：1297 tests（core+starter+demos）全通过，零失败零错误
+  - commit 321d05d 已推送
 
 ## Cron 进度（2026-04-07 01:55）
 
