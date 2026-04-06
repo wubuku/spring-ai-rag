@@ -1272,3 +1272,10 @@
 - 2026-04-06 11:52 — ✅ C30 Collection 克隆 REST 端点：POST /{id}/clone 深拷贝集合（name + " (Copy)"），复制所有文档（processingStatus=PENDING，嵌入向量不复制），返回 CollectionCloneResponse（clonedId/clonedName/sourceId/sourceName/documentsCloned）；新增 CollectionCloneResponse DTO；RagCollectionControllerTest 新增 3 个测试（多文档/空集合/不存在404）；mvn test ✅（全通过）；commit 64f24af 已推送
 
 - 2026-04-06 12:25 — ✅ N41 Advisor chain Micrometer observability：AdvisorMetrics 组件——8 个 Micrometer meters 暴露到 Prometheus（Timer+Counter for QueryRewrite/HybridSearch/Rerank，含 p50/p95/p99 percentile + rag.advisor.hybrid_search.results + rag.advisor.rerank.skipped）；注入到 3 个 Advisor 的 before() 方法；新增 AdvisorMetricsTest 7 tests（init/record/timer/counter/skipped/accumulation）；更新 4 个测试文件的 Advisor 构造函数调用；1245 tests 全通过（+7）；commit 5b9b69d 已推送
+
+- 2026-04-06 12:51 — ✅ WebUI useSSE 测试修复 + 常规发布：
+  - useSSE.test.ts：实现已改用 `fetch`+`ReadableStream`（而非 EventSource），测试 mock 改为 `vi.stubGlobal('fetch')` + ReadableStream mock
+  - 6 个测试：init/send stream/close/unmount/no params/send twice
+  - 112 vitest tests 全通过 / npm run build ✅（243KB index gzipped）
+  - E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - commit ab40aa0 已推送
