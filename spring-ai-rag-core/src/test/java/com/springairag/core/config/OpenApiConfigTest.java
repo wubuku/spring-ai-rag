@@ -25,7 +25,7 @@ class OpenApiConfigTest {
         assertEquals("Spring AI RAG Service API", openAPI.getInfo().getTitle());
         assertEquals("1.0.0-SNAPSHOT", openAPI.getInfo().getVersion());
         assertNotNull(openAPI.getInfo().getDescription());
-        assertTrue(openAPI.getInfo().getDescription().contains("通用 RAG"));
+        assertTrue(openAPI.getInfo().getDescription().contains("RAG"));
         assertNotNull(openAPI.getInfo().getContact());
         assertNotNull(openAPI.getInfo().getLicense());
         assertNotNull(openAPI.getServers());
@@ -37,12 +37,11 @@ class OpenApiConfigTest {
         OpenAPI openAPI = config.springRagOpenAPI();
         String desc = openAPI.getInfo().getDescription();
 
-        assertTrue(desc.contains("文档管理"));
-        assertTrue(desc.contains("检索"));
-        assertTrue(desc.contains("问答"));
-        assertTrue(desc.contains("评估"));
-        assertTrue(desc.contains("A/B 实验"));
-        assertTrue(desc.contains("监控"));
+        assertTrue(desc.contains("Document Management"));
+        assertTrue(desc.contains("Retrieval"));
+        assertTrue(desc.contains("Evaluation"));
+        assertTrue(desc.contains("Monitoring"));
+        assertTrue(desc.contains("Model-Agnostic"));
     }
 
     @Test

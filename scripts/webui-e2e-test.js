@@ -173,6 +173,56 @@ async function testChat(page) {
   console.log(`  → Page title: "${title.trim()}"`);
 }
 
+async function testChatInteraction(page) {
+  // Navigate to chat
+  await page.goto(`${WEBUI_BASE}/chat`, { waitUntil: 'networkidle', timeout: TEST_CONFIG.timeout });
+  console.log('  → Chat page loaded');
+  
+  // Find and fill the message input
+  const input = page.locator('textarea, input[type="text"]').first();
+  if (!(await input.isVisible({ timeout: 5000 }))) {
+    throw new Error('Chat input not visible');
+  }
+  
+  const testMessage = 'Hello, this is a test message';
+  await input.fill(testMessage);
+  console.log(`  → Typed: "${testMessage}"`);
+  
+  // Click send button
+  const sendButton = page.locator('button:has-text("Send")');
+  if (!(await sendButton.isEnabled({ timeout: 5000 }))) {
+    throw new Error('Send button not enabled');
+  }
+  await sendButton.click();
+  console.log('  → Clicked Send');
+  
+  // Wait for assistant response to appear (streamed)
+  // The response should appear in the messages area
+  await page.waitForTimeout(3000); // Wait for SSE stream to complete
+  
+  // Check that the user message appears
+  const messages = page.locator('[class*="message"], [class*="chat-message"], .messages >> div');
+  const messageCount = await messages.count();
+  console.log(`  → Messages in chat: ${messageCount}`);
+  
+  // Verify we have at least 2 messages (user + assistant)
+  if (messageCount < 2) {
+    throw new Error(`Expected at least 2 messages, got ${messageCount}`);
+  }
+  
+  // Get the last message (assistant response)
+  const lastMessage = messages.last();
+  const lastMessageContent = await lastMessage.textContent();
+  console.log(`  → Assistant response: "${lastMessageContent?.slice(0, 100)}..."`);
+  
+  // Verify the response is not empty
+  if (!lastMessageContent || lastMessageContent.trim().length === 0) {
+    throw new Error('Assistant response is empty');
+  }
+  
+  console.log('  → Chat interaction test PASSED');
+}
+
 async function testSearch(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/search`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
@@ -345,6 +395,7 @@ async function main() {
   await runTest('Documents Page', testDocuments);
   await runTest('Collections Page', testCollections);
   await runTest('Chat Page', testChat);
+  await runTest('Chat Interaction (Real)', testChatInteraction);
   await runTest('Search Page', testSearch);
   await runTest('Metrics Page', testMetrics);
   await runTest('Alerts Page', testAlerts);

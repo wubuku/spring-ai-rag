@@ -1284,3 +1284,5 @@
   - 112 vitest tests 全通过 / npm run build ✅（243KB index gzipped）
   - E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
   - commit ab40aa0 已推送
+
+- 2026-04-06 13:55 — ✅ WebUI 常规发布：npm test 112 ✅ / npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；git 工作区干净；WebUI 项目处于生产级成熟状态

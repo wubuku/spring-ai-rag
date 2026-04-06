@@ -386,3 +386,35 @@ management:
         http.server.requests: true
       percentiles:
         http.server.requests: 0.5, 0.95, 0.99
+
+# ============================================
+# SpringDoc OpenAPI / Swagger UI Configuration
+# ============================================
+springdoc:
+  # Swagger UI settings
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+    display-operation-id: false
+    show-extensions: true
+    try-it-out-enabled: true  # Enable "Try it out" for all operations
+    filter: false
+    maxDisplayedTags: 100
+    with-credentials: false
+    settings:
+      # Deep linking: URL reflects operation selected in Try-it-Out
+      deep-linking: true
+      # Show request/response examples in addition to schemas
+      show-request-duration: true
+      default-models-expand-depth: 2
+      default-model-expand-depth: 2
+  # OpenAPI 3 spec generation settings
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+    auto-generate-collection-schema: false
+  # Group operations by tag instead of path
+  show-actuator: false
