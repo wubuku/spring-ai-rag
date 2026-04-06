@@ -151,6 +151,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
 - 2026-04-06 09:30 — ✅ E2E + mvn test 双验证：RagChatService.invokeChatClient() 添加 null-guard（防止 LLM 返回 null result 时 NPE → 改为清晰 IllegalStateException）；E2E **44/45** 通过（核心 RAG 链路全部正常：流式 RAG ✅、嵌入 ✅、检索 ✅、Collection CRUD ✅）；`mvn test` **1172 tests / 0 failures** ✅；commit 5e8d5a2 已推送
 - 2026-04-06 08:50 — ✅ E2E 端到端 RAG 链路修复（HTTP 代理 + base-url 纠错）：
   - SiliconFlow base-url: `/v1` 硬编码到 EmbeddingModelConfig（避免 Spring @ConfigurationProperties 绑定路径混淆），确保 `OpenAiApi` 用 `https://api.siliconflow.cn` + `/v1/embeddings` → 正确 URL
