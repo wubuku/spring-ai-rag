@@ -153,6 +153,7 @@
 ## 进度日志
 - 2026-04-06 07:40 — ✅ HTTP 代理配置化：RagProxyProperties（enabled/host/port/noProxyHosts）+ SpringAiConfig.initProxySettings() 重构（替代硬编码 disableProxyForMiniMax）；proxy.enabled=false 时使用 NO_PROXY selector，enabled=true 时使用配置的代理；application.yml 添加 rag.proxy.* 配置节；RagProxyPropertiesTest（2 tests）；mvn clean compile ✅，mvn test ✅；commit d63437c 已推送
 - 2026-04-06 07:56 — ✅ MiniMax API 集成测试补强 + OpenApiContractTest 修复：SpringAiConfigTest 新增 4 个 `miniMaxChatModel()` 单元测试（provider=minimax 创建模型、provider=openai/anthropic 返回 null、chatModel 选择 miniMax）；OpenApiContractTest 修复 context 加载问题——排除 `DataSourceAutoConfiguration` + `HibernateJpaAutoConfiguration` + `management.health.db.enabled=false`，解决无 DB 环境下 "Included health contributor 'db' in group 'readiness'" 错误；1169 测试全通过（零失败零错误）；commit 64e7cfc 已推送
+- 2026-04-06 08:03 — ✅ C28 SiliconFlow 嵌入调试：修复 `.env` 中 `SILICONFLOW_URL=https://api.siliconflow.cn/v1/embeddings`（含 `/embeddings` 导致 Spring AI `OpenAiApi` URL 双重复制：`.../v1/embeddings/embeddings`）；修正为 `https://api.siliconflow.cn/v1`（不含 `/embeddings`）；新增 `EmbeddingModelConfigTest`（3 tests：OpenAiEmbeddingModel 创建验证 + BAAI/bge-m3 1024维配置 + 自定义 baseUrl）；1172 测试全通过；commit 9782e56 已推送
 - 2026-04-06 05:50 — ✅ C19 API per-endpoint 超时配置化：RagTimeoutProperties（7 项配置：connect/read/chat-ask/chat-stream/search/embed/model-compare）+ SpringAiConfig 重构（RestClient 层级注入超时）+ application.yml rag.timeout.* 配置节；SpringAiConfigTest 适配构造函数注入（8 tests）；RagTimeoutPropertiesTest（4 tests）；docs/configuration.md + configuration-zh-CN.md 添加 LLM API 超时配置章节；12 tests ✅；mvn clean compile ✅；commit cdfe91c 已推送
 - 2026-04-04 19:45 — ✅ CI JDK 版本对齐：GitHub Actions workflow Java 17 → Java 21（LTS），与项目运行时版本同步；mvn clean compile ✅，mvn test ✅（全通过）；commit 62da699 已推送
 - 2026-04-06 07:28 — ✅ C36 API 重试策略：spring-retry + RagRetryProperties（指数退避+抖动，429/503/超时可配置），RagChatService + QueryRewritingService 集成 RetryTemplate；RagRetryPropertiesTest + RetryConfigTest（10 tests）；1175+ 测试全通过；commit 1562ed1
@@ -1169,7 +1170,7 @@
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ⏳ | P3 |
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
-| C28 |SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ⏳ | P1 |
+| C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
 | C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
 | C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ⏳ | P2 |
 | C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
