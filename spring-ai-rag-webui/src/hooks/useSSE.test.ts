@@ -61,18 +61,9 @@ describe('useChatSSE', () => {
   });
 
   it('close cancels the reader', async () => {
-    let cancelCalled = false;
-    const stream = new ReadableStream({
-      pull(controller) {
-        controller.enqueue(new TextEncoder().encode('data: test\n\n'));
-      },
-      cancel() {
-        cancelCalled = true;
-      },
-    });
     mockFetch.mockResolvedValue({
       ok: true,
-      body: { getReader: () => ({ read: () => new Promise(() => {}), cancel: () => { cancelCalled = true; } }), cancel: () => { cancelCalled = true; } },
+      body: { getReader: () => ({ read: () => new Promise(() => {}), cancel: vi.fn() }), cancel: vi.fn() },
     });
     const { result } = renderHook(() =>
       useChatSSE({ onChunk: vi.fn(), onSources: vi.fn(), onError: vi.fn(), onDone: vi.fn() })
@@ -123,11 +114,6 @@ describe('useChatSSE', () => {
 
   it('send twice cancels previous reader before opening new one', async () => {
     let cancelCount = 0;
-    let firstReaderCancelled = false;
-
-    const stream1 = new ReadableStream({
-      cancel() { firstReaderCancelled = true; },
-    });
 
     mockFetch
       .mockResolvedValueOnce({
