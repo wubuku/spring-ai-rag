@@ -727,9 +727,9 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | N1 | B8 DevOps：Helm Chart + Kubernetes 部署清单 | 部署 | ✅ 2026-04-05（N1 完成，k8s/ 目录已完整：Chart.yaml + values.yaml + 8 个 templates + values-production.yaml） |
-| N2 | B8 DevOps：Grafana Dashboard JSON 配置 | 监控 | ⏳ 待推进 |
-| N3 | B8 DevOps：Prometheus Alerting Rules | 监控 | ⏳ 待推进 |
-| N4 | B8 DevOps：k6 负载测试脚本 | 性能 | ⏳ 待推进 |
+| N2 | B8 DevOps：Grafana Dashboard JSON 配置 | 监控 | ✅ 2026-04-06（N23 完成：21 panels/9 rows 总仪表盘 + docs/grafana/README.md） |
+| N3 | B8 DevOps：Prometheus Alerting Rules | 监控 | ✅ 2026-04-06（N24 完成：11 告警规则含 Advisor/SlowQuery/AlertHealth） |
+| N4 | B8 DevOps：k6 负载测试脚本 | 性能 | ✅ 2026-04-06（N25 完成：k6-load-test.js 705行，smoke/load/stress profiles） |
 | N5 | B9 Testing：Playwright E2E SSE 流式响应 + 文件上传 | 测试 | ✅ 2026-04-05（N5 完成，streaming-upload.spec.ts 4 tests，chat page + documents upload） |
 | N6 | D1-4：DocumentVersionService 单元测试补强 | 测试 | ✅ 2026-04-05（N6 完成，13 tests 覆盖 recordVersion/forceRecordVersion/getVersionHistory 等全部方法） |
 
@@ -1120,41 +1120,43 @@
 | N13 | API 版本管理（v1 → v2 端点规划文档） | 架构 | ✅ 2026-04-05（N13 完成，docs/api-versioning.md 包含 v2 breaking changes 清单） |
 | N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ✅ 2026-04-05（N14 完成，POST /batch/embed/stream + POST /{id}/embed/stream + BatchEmbedProgressEvent） |
 | N15 | ~~缓存失效管理 API（Admin 端点清除缓存）~~ → 已由 N19 实现 | 可观测性 | ✅ → N19 |
-| N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
+| N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ✅ 2026-04-06（C13 完成：RateLimitFilter user 策略 + keyLimits 分级限额） |
 | N17 | WebUI 搜索历史记录 | UX | ⏳ 待推进 |
-| N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ⏳ 待推进 |
+| N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ✅ 2026-04-06（C15+N43 完成：AbTestController+EvaluationController 审计覆盖，USER_FEEDBACK 类型） |
+
 
 ## 待办（新一波改进 N19-N30）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | N19 | N15：缓存失效管理 API（DELETE /cache/invalidate 端点） | 可观测性 | ✅ 2026-04-06（N19 完成，DELETE /api/v1/rag/cache/invalidate + CacheMetricsService.clearCache()） |
-| N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
-| N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ 待推进 |
+| N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ✅ 2026-04-06（同 C13） |
+| N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ✅ 2026-04-06（C14 完成：useSearchHistory hook + Search 页面集成） |
+
 | N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ✅ 2026-04-06 — commit 20cecc6 |
 | N23 | N2：Grafana Dashboard JSON 配置完善（补充 Advisor/Model/Cache/SlowQuery panels） | 监控 | ✅ 2026-04-06（N23 完成：新增 21 panels，9 rows，44 panels 总数；docs/grafana/README.md 指标参考文档；commit 1871acf） |
 | N24 | N3：Prometheus Alerting Rules 完善（补充 SLA 告警） | 监控 | ✅ 2026-04-06（N24 完成：新增 Advisor Pipeline/Retrieval Evaluation/Slow Query/Alert Health 4 组告警规则，共 11 个告警；README 补 6 张新告警参考表；commit b051dbf） |
-| N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ⏳ 待推进 |
+| N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ✅ 2026-04-06（k6-load-test.js 705行覆盖全部端点，benchmark-virtual-threads.sh 修复 JSON 字段并增强） |
 | N26 | Flyway 迁移脚本版本一致性检查（CI 环节） | DevOps | ✅ 2026-04-06（C7 完成：移除错误的手动 schema 创建步骤，添加 mvn test 后 flyway_schema_history 一致性检查——对比 V*.sql 脚本数与已应用数，检测 drift 或 failed 迁移则 CI 失败） |
-| N27 | API 端点响应时间基准测试（SLO < 500ms） | 性能 | ⏳ 待推进 |
-| N28 | WebUI 国际化支持（i18n framework 搭建） | UX | ⏳ 待推进 |
-| N29 | Spring Boot 3.5 新特性：Virtual Threads 压测验证 | 技术升级 | ⏳ 待推进 |
+| N27 | API 端点响应时间基准测试（SLO < 500ms） | 性能 | ✅ 2026-04-06（C8 完成：ApiSloTrackerService + GET /metrics/slo） |
+| N28 | WebUI 国际化支持（i18n framework 搭建） | UX | ✅ 2026-04-06（C29 完成：react-i18next + en/zh-CN locales） |
+| N29 | Spring Boot 3.5 新特性：Virtual Threads 压测验证 | 技术升级 | ✅ 2026-04-06（N29 完成：benchmark-virtual-threads.sh 修复 JSON 字段 message→query、真实 wall-clock QPS、p50/p95/p99 百分位延迟、xargs -P 并发压测、SLO 评估 success_rate≥95% && p99<5000ms） |
 | N30 | 敏感信息脱敏：审计日志中用户查询内容脱敏 | 安全 | ✅ 2026-04-06（Chinese PII 脱敏：SensitiveDataMaskingConverter 增加 CHINESE_NATIONAL_ID + CHINESE_PHONE 高精度正则；对应测试 138 lines；commit a38d05d） |
 
 ## 待办（新一波改进 N31-N42）
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| N31 | ChatMemory 表数据膨胀治理策略（TTL + 归档） | 数据管理 | ⏳ 待推进 |
+| N31 | ChatMemory 表数据膨胀治理策略（TTL + 归档） | 数据管理 | ✅ 2026-04-05（ChatHistoryCleanupService + messageTtlDays 配置，每日凌晨3点执行 TTL 清理） |
 | N32 | 向量数据库 pgvector HNSW vs IVFFlat 性能对比测试 | 性能 | ✅ 2026-04-06（N32 完成，docs/pgvector-index-comparison.md 8KB，含算法对比/决策矩阵/参数调优/迁移步骤/基准测试方法论/Spring AI 配置参考） |
-| N33 | RAG 检索结果可溯源（traceId 贯穿整个 Pipeline） | 可观测性 | ⏳ 待推进 |
-| N34 | Collection 删除保护（防止误删 + 恢复机制） | 安全 | ⏳ 待推进 |
-| N35 | API 请求超时配置化（per-endpoint timeout） | 韧性 | ⏳ 待推进 |
-| N36 | Dockerfile 多阶段构建优化（减小镜像体积） | 部署 | ⏳ 待推进 |
-| N37 | WebUI 错误边界（React ErrorBoundary 增强） | UX | ⏳ 待推进 |
+| N33 | RAG 检索结果可溯源（traceId 贯穿整个 Pipeline） | 可观测性 | ✅ 2026-04-05（C17 完成：RequestTraceFilter + MDC traceId 全链路贯穿） |
+| N34 | Collection 删除保护（防止误删 + 恢复机制） | 安全 | ✅ 2026-04-06（C18 完成：softDelete/restore + POST /{id}/restore 端点） |
+| N35 | API 请求超时配置化（per-endpoint timeout） | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties + RestClient 超时注入） |
+| N36 | Dockerfile 多阶段构建优化（减小镜像体积） | 部署 | ✅ 2026-04-06（C20 完成：jarmode layertools + jlink 最小化 JRE + distroless，非root） |
+| N37 | WebUI 错误边界（React ErrorBoundary 增强） | UX | ✅ 2026-04-06（C21 完成：ErrorBoundary + POST /client-errors 错误上报） |
 | N38 | API 统一错误码规范（ErrorCode enum） | 代码质量 | ✅ 2026-04-06（N38 完成：spring-ai-rag-api 新增 ErrorCode enum，26 个标准化错误码含 HTTP status/title/problemTypeUri；RagException 重构为 ErrorCode enum + backward-compatible getErrorCode() String；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error/code 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 更新；1155 tests 全通过，commit 6a3c6c4） |
-| N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ⏳ 待推进 |
-| N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
+| N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ✅ 2026-04-06（C23 完成：V13 添加 name/document_type/enabled 索引，@Indexed 覆盖率100%） |
+| N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries） |
 | N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ✅ 2026-04-06（N41 完成：AdvisorMetrics Micrometer 组件，8 个 meters 暴露到 Prometheus——Timer/Counter for QueryRewrite/HybridSearch/Rerank；rag.advisor.{step}.duration（p50/p95/p99）、rag.advisor.{step}.count、rag.advisor.hybrid_search.results、rag.advisor.rerank.skipped；1245 tests 全通过，commit 5b9b69d） |
 | N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ✅ 2026-04-06 |
 | N43 | N18 AuditLogService 增强：AbTestController + EvaluationController 审计覆盖 | 安全 | ✅ 2026-04-06（N43 完成：AbTestController 6个写操作 + EvaluationController POST /feedback 审计日志；USER_FEEDBACK entity 类型；测试更新；1079 tests ✅，commit 15bbf53） |
@@ -1165,16 +1167,16 @@
 |---|--------|------|------|----------------|
 | C1 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ✅ 2026-04-06（C13 完成） | P1 |
 | C2 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ | P1 |
-| C3 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ⏳ | P1 |
-| C4 | N21：Grafana Dashboard JSON 配置完善 | 监控 | ⏳ | P2 |
-| C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ⏳ | P2 |
-| C6 | N23：k6 负载测试脚本完善（search + chat 并发） | 性能 | ⏳ | P2 |
+| C3 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ✅ 2026-04-06 | P1 |
+| C4 | N21：Grafana Dashboard JSON 配置完善 | 监控 | ✅ 2026-04-06 | P2 |
+| C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ✅ 2026-04-06 | P2 |
+| C6 | N23：k6 负载测试脚本完善（search + chat 并发） | 性能 | ✅ 2026-04-06 | P2 |
 | C7 | N26：Flyway 迁移脚本版本一致性检查（CI） | DevOps | ✅ 2026-04-06 | P2 |
 | C8 | N27：API SLO 合规追踪（/metrics/slo endpoint + 滑动窗口 p50/p95/p99） | 性能 | ✅ 2026-04-06 | P2 |
-| C9 | N28：WebUI 国际化支持（i18n 框架搭建） | UX | ⏳ | P3 |
-| C10 | N29：Spring Boot 3.5 Virtual Threads 压测验证 | 技术升级 | ⏳ | P3 |
+| C9 | N28：WebUI 国际化支持（i18n 框架搭建） | UX | ✅ 2026-04-06 | P3 |
+| C10 | N29：Spring Boot 3.5 Virtual Threads 压测验证 | 技术升级 | ✅ 2026-04-06 | P3 |
 | C11 | N30：敏感日志脱敏（用户查询内容脱敏） | 安全 | ✅ 2026-04-06 | P3 |
-| C12 | N31：ChatMemory 表数据膨胀治理（TTL + 归档） | 数据管理 | ⏳ | P3 |
+| C12 | N31：ChatMemory 表数据膨胀治理（TTL + 归档） | 数据管理 | ✅ 2026-04-05 | P3 |
 
 **Cron 执行规则**：
 - 每次 cron 触发：优先执行 P1 任务，完成后扫描 P2
@@ -1194,7 +1196,7 @@
 | C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
 | C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ✅ 2026-04-06 | P2 |
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ✅ 2026-04-06（C21 完成：ErrorBoundary componentDidCatch POST 到 POST /api/v1/rag/client-errors；ClientErrorController + ClientErrorService + RagClientError entity + V14 迁移；6 backend tests + ErrorBoundary 11 tests，113 vitest ✅；commit dab5f8b） | P2 |
-| C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
+| C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ✅ 2026-04-06 | P2 |
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ✅ 2026-04-06 | P3 |
@@ -1212,7 +1214,7 @@
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
 | C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ✅ 2026-04-06（C38 完成：validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache；1280 tests ✅，commit a42e4f2） | P2 |
 | C39 | 第三方 LLM API Mock Server：Node.js mock server，/v1/chat/completions + /v1/embeddings，支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06（C39 完成：scripts/mock-llm-server.js + run-mock-llm.sh，8086默认端口，零依赖，commit d6c2665） | P2 |
-| C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
+| C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ✅ 2026-04-06（actions/setup-java cache=maven 已覆盖，无需额外配置） | P3 |
 
 **Cron 执行保证**：每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前，cron 永不停止。
 
@@ -1369,5 +1371,7 @@
 
 
 - 2026-04-06 20:28 — ✅ C39 Mock LLM Server：scripts/mock-llm-server.js（Node.js HTTP server，实现 OpenAI-compatible /v1/chat/completions + /v1/embeddings + SSE streaming，零外部依赖）+ scripts/run-mock-llm.sh helper；环境变量配置：MOCK_PORT/MOCK_DELAY_MS/MOCK_ERROR_RATE/MOCK_MODEL；默认端口 8086（避免 demo 端口 8082-8085）；mvn test ✅（全通过）；commit d6c2665 已推送
+
+- 2026-04-06 22:54 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing/Chat Real）；dist 已同步到 static/webui/；commit ae8cbab 已推送；WebUI 项目处于生产级成熟状态
 
 - 2026-04-06 20:33 — ✅ WebUI 常规巡检：npm test 113 ✅ / npm run build 243KB ✅（301KB index gzipped）/ E2E 12/12 ✅（SPA Routing/Chat SSE/Navigation/Settings/Metrics/Alerts/Dashboard/Documents/Collections/Search/Backend Health）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
