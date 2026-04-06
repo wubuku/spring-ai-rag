@@ -4,27 +4,27 @@ import { mockAllApiCalls } from './api-mocks';
 test.describe('Documents', () => {
   test('renders documents page with title', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/documents');
+    await page.goto('/documents', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Documents' })).toBeVisible();
   });
 
   test('shows upload zone', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/documents');
+    await page.goto('/documents', { waitUntil: 'networkidle' });
     const uploadZone = page.locator('#file-upload');
     await expect(uploadZone).toBeAttached();
   });
 
   test('shows upload label text', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/documents');
+    await page.goto('/documents', { waitUntil: 'networkidle' });
     await expect(page.getByText('Drop files here or click to upload')).toBeVisible();
     await expect(page.getByText('Supports: txt, md, json, xml, html, csv, log')).toBeVisible();
   });
 
   test('shows table or empty state', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/documents');
+    await page.goto('/documents', { waitUntil: 'networkidle' });
     // Should show either table or loading or empty state
     const hasContent = await page
       .locator('table')

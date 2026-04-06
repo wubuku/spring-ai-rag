@@ -4,13 +4,13 @@ import { mockAllApiCalls } from './api-mocks';
 test.describe('Collections', () => {
   test('renders collections page with title', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/collections');
+    await page.goto('/collections', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Collections' })).toBeVisible();
   });
 
   test('shows collections list or empty state', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/collections');
+    await page.goto('/collections', { waitUntil: 'networkidle' });
     const hasGrid = await page
       .locator('[class*="grid"]')
       .isVisible()
@@ -30,13 +30,13 @@ test.describe('Collections', () => {
 test.describe('Settings', () => {
   test('renders settings page with title', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 
   test('shows three tabs', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'networkidle' });
     await expect(page.getByRole('button', { name: 'LLM Provider' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Retrieval' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Cache' })).toBeVisible();
@@ -44,7 +44,7 @@ test.describe('Settings', () => {
 
   test('switches between tabs', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'Retrieval' }).click();
     await expect(page.getByText('Retrieval Configuration')).toBeVisible();
     await page.getByRole('button', { name: 'Cache' }).click();
@@ -53,7 +53,7 @@ test.describe('Settings', () => {
 
   test('shows save button', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/settings');
+    await page.goto('/settings', { waitUntil: 'networkidle' });
     await expect(page.getByRole('button', { name: 'Save Changes' })).toBeVisible();
   });
 });
@@ -61,13 +61,13 @@ test.describe('Settings', () => {
 test.describe('Metrics', () => {
   test('renders metrics page with title', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/metrics');
+    await page.goto('/metrics', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Metrics' })).toBeVisible();
   });
 
   test('shows loading or metrics content', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/metrics');
+    await page.goto('/metrics', { waitUntil: 'networkidle' });
     const hasLoading = await page
       .getByText('Loading')
       .isVisible()
@@ -83,7 +83,7 @@ test.describe('Metrics', () => {
 test.describe('Alerts', () => {
   test('renders alerts page with title', async ({ page }) => {
     mockAllApiCalls(page);
-    await page.goto('/alerts');
+    await page.goto('/alerts', { waitUntil: 'networkidle' });
     await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible();
   });
 });

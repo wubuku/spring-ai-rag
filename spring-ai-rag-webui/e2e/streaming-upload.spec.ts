@@ -78,7 +78,7 @@ test.describe('Documents Upload', () => {
   });
 
   test('upload zone is visible on documents page', async ({ page }) => {
-    await page.goto(`${WEBUI_BASE}/documents`);
+    await page.goto(`${WEBUI_BASE}/documents`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#file-upload', { timeout: 15000 });
 
     await expect(page.getByText('Drop files here or click to upload')).toBeVisible();
@@ -86,7 +86,7 @@ test.describe('Documents Upload', () => {
   });
 
   test('can select a file for upload', async ({ page }) => {
-    await page.goto(`${WEBUI_BASE}/documents`);
+    await page.goto(`${WEBUI_BASE}/documents`, { waitUntil: 'networkidle' });
     await page.waitForSelector('#file-upload', { timeout: 15000 });
 
     const fileInput = page.locator('input[type="file"]');

@@ -114,15 +114,49 @@ export function mockAllApiCalls(page: Page) {
     });
   });
 
-  // Default: allow any other requests to pass through (e.g. static assets)
+  // Mock non-streaming chat endpoint
+  page.route('/api/v1/rag/chat', route => {
+    if (route.request().method() === 'POST') {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          response: 'This is a mock RAG response from the knowledge base.',
+          conversationId: 'mock-session-123',
+          sources: [],
+        }),
+      });
+    } else {
+      route.continue();
+    }
+  });
+
+  // Mock chat history endpoint (GET and DELETE)
+  page.route(/\/api\/v1\/rag\/chat\/history\/.*/, route => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ messages: [] }),
+      });
+    } else if (method === 'DELETE') {
+      route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });
+    } else {
+      route.continue();
+    }
+  });
+
+  // Default: pass through non-API requests (static assets, fonts, etc.)
+  // Mock only known API endpoints, pass everything else through
   page.route('**', route => {
-    if (
-      route.request().url().startsWith('http://localhost:5173') ||
-      route.request().url().startsWith('https://localhost:5173')
-    ) {
+    const url = route.request().url();
+    // Skip mocking for non-API requests (static assets from Spring Boot)
+    if (!url.includes('/api/v1/rag/')) {
       route.continue();
     } else {
-      route.fulfill({ status: 200, body: '' });
+      // For unmocked API calls, pass through to real backend
+      route.continue();
     }
   });
 }

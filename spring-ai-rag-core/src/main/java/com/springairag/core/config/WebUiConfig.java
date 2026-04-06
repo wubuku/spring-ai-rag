@@ -65,5 +65,21 @@ public class WebUiConfig implements WebMvcConfigurer {
             }
             return WEBUI_INDEX;
         }
+
+        /**
+         * Catch-all for SPA client-side routes at root level (/chat, /documents, etc.).
+         * @param path the URL path (e.g. "chat", "documents", "search")
+         * @return the React SPA index.html
+         */
+        @GetMapping(value = "/{path}", produces = MediaType.TEXT_HTML_VALUE)
+        public String spaCatchAll(@PathVariable String path) {
+            return WEBUI_INDEX;
+        }
+
+        // Also handle root "/" -> serve index.html
+        @GetMapping(value = "/", produces = MediaType.TEXT_HTML_VALUE)
+        public String rootIndex() {
+            return WEBUI_INDEX;
+        }
     }
 }
