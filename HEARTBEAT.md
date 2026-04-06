@@ -152,6 +152,8 @@
 
 ## 进度日志
 - 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
+- 2026-04-06 15:46 — ✅ C21 WebUI 错误边界增强（错误日志上报）：ErrorBoundary componentDidCatch 异步 POST 错误到 `POST /api/v1/rag/client-errors`（不阻塞 UI）；后端 `ClientErrorController` + `ClientErrorServiceImpl` + `RagClientError` entity + `V14__add_client_error_log.sql` Flyway 迁移；113 vitest tests ✅（WebUI）+ ClientErrorControllerTest (6) + ClientErrorServiceImplTest (4) ✅；WebUI 113 tests 全通过；npm run build ✅；E2E 10/12 ✅（Chat Page/Chat Interaction 为已存在问题）；commit dab5f8b 已推送
+
 - 2026-04-06 10:30 — ✅ Playwright 浏览器 E2E 修复 + WebUiConfig SPA 路由：
   - `WebUiConfig.java`：添加 `/{path}` catch-all 返回 index.html（支持 React Router SPA 客户端路由）—— 后续移除 `spaCatchAll` 方法（NoResourceFoundException 构造函数不兼容，改为仅保留 `webuiCatchAll` + `rootIndex`）
   - `playwright.config.ts`：baseURL 从 `'http://localhost:8081/webui'` 改为 `'http://localhost:8081'`
@@ -1189,7 +1191,7 @@
 | C18 | N34 Collection 删除保护：软删除 + 恢复机制 | 安全 | ✅ 2026-04-06（C18 完成：softDelete/restore + findByIdAndDeletedFalse + DELETE 软删除 + POST /{id}/restore 恢复端点，1235 测试全通过） | P2 |
 | C19 | N35 API 请求超时配置化：per-endpoint timeout annotation | 韧性 | ✅ 2026-04-06（C19 完成：RagTimeoutProperties 7 项配置 + RestClient 超时注入 + SpringAiConfig 重构 + 12 tests） | P2 |
 | C20 | N36 Dockerfile 多阶段构建优化（减小镜像体积 <200MB） | 部署 | ✅ 2026-04-06 | P2 |
-| C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
+| C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ✅ 2026-04-06（C21 完成：ErrorBoundary componentDidCatch POST 到 POST /api/v1/rag/client-errors；ClientErrorController + ClientErrorService + RagClientError entity + V14 迁移；6 backend tests + ErrorBoundary 11 tests，113 vitest ✅；commit dab5f8b） | P2 |
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
