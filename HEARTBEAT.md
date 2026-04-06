@@ -1210,7 +1210,7 @@
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ⏳ | P3 |
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
-| C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ⏳ | P2 |
+| C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ✅ 2026-04-06（C38 完成：validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache；1280 tests ✅，commit a42e4f2） | P2 |
 | C39 | 第三方 LLM API Mock Server：测试环境下模拟各 provider 响应 | 测试 | ⏳ | P2 |
 | C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
 
@@ -1357,7 +1357,7 @@
 
 ## WebUI 巡检（2026-04-06 19:40）
 
-- 2026-04-06 19:40 — ✅ WebUI 常规发布 + SSE 协议升级修复：
+- 2026-04-06 19:49 — ✅ C38 HikariCP 生产级调优：新增 validation-timeout(5000ms) + initialization-fail-timeout(10000ms) + register-mbeans(true) + auto-commit(true) + PostgreSQL prepared-statement cache(data-source-properties: prepareThreshold=5/cachePrepStmts/prepStmtCacheSize=250/prepStmtCacheSqlLimit=256)；1280 tests（1238 core + 42 starter）全通过；commit a42e4f2 已推送
   - useSSE.ts: 恢复 useEffect unmount cleanup（cancel readerRef）——之前重构时意外删除导致测试失败
   - api.ts: ChatSource.documentId 改为 string|number，title/score 改为 optional（匹配 SSE 数据源）
   - Chat.tsx: null safety for s.score/s.title（`s.title ?? "Document"` + `?? 0`）
