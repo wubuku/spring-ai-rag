@@ -2,9 +2,13 @@ import styles from './SearchResults.module.css';
 
 export interface SearchResultItem {
   documentId: number | string;
-  title: string;
-  content: string;
-  score: number;
+  title?: string;
+  content?: string;
+  chunkText?: string;
+  score?: number | string;
+  fulltextScore?: number;
+  vectorScore?: number;
+  [key: string]: unknown;
 }
 
 interface SearchResultsProps {
@@ -28,15 +32,20 @@ export function SearchResults({ results, query }: SearchResultsProps) {
       <div className={styles.count}>
         {results.length} result{results.length !== 1 ? 's' : ''} for "{query}"
       </div>
-      {results.map((result, index) => (
-        <div key={`${result.documentId}-${index}`} className={styles.result}>
-          <div className={styles.header}>
-            <span className={styles.title}>{result.title}</span>
-            <span className={styles.score}>{(result.score * 100).toFixed(1)}%</span>
+      {results.map((result, index) => {
+        // Use fulltextScore if available, fallback to numeric score
+        const scoreValue = result.fulltextScore ?? (typeof result.score === 'number' ? result.score : parseFloat(String(result.score)));
+        const displayScore = isNaN(scoreValue) ? null : `${(scoreValue * 100).toFixed(1)}%`;
+        return (
+          <div key={`${result.documentId}-${index}`} className={styles.result}>
+            <div className={styles.header}>
+              <span className={styles.title}>{result.title || `Document ${result.documentId}`}</span>
+              {displayScore && <span className={styles.score}>{displayScore}</span>}
+            </div>
+            <p className={styles.snippet}>{result.content || result.chunkText || ''}</p>
           </div>
-          <p className={styles.snippet}>{result.content}</p>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

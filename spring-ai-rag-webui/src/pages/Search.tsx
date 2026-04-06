@@ -125,7 +125,17 @@ export function Search() {
       {isPending && <div className={styles.loading}>{t('common.loading')}</div>}
 
       {data?.data && (
-        <SearchResults results={data.data.results} query={data.data.query} />
+        <SearchResults
+          results={data.data.results.map((r: {documentId?:string|number; title?:string; content?:string; chunkText?:string; score?:string|number; fulltextScore?:number; vectorScore?:number}) => ({
+            documentId: r.documentId ?? 'unknown',
+            title: String(r.title || `Document ${r.documentId}`),
+            content: String(r.content || r.chunkText || ''),
+            score: (typeof r.score === 'number' ? r.score : r.fulltextScore) ?? 0,
+            fulltextScore: r.fulltextScore,
+            vectorScore: r.vectorScore,
+          }))}
+          query={data.data.query}
+        />
       )}
     </div>
   );
