@@ -1375,3 +1375,27 @@
 - 2026-04-06 22:54 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing/Chat Real）；dist 已同步到 static/webui/；commit ae8cbab 已推送；WebUI 项目处于生产级成熟状态
 
 - 2026-04-06 20:33 — ✅ WebUI 常规巡检：npm test 113 ✅ / npm run build 243KB ✅（301KB index gzipped）/ E2E 12/12 ✅（SPA Routing/Chat SSE/Navigation/Settings/Metrics/Alerts/Dashboard/Documents/Collections/Search/Backend Health）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
+
+## 待办（混合检索增强 — docs/hybrid-search-enhancement-plan.md）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| HS1-1 | QueryLang enum + LanguageDetector（语言检测，Unicode CJK 区块） | 架构 | ✅ 2026-04-07（23 tests） |
+| HS1-2 | SearchCapabilities 类（扩展 + 索引探测） | 架构 | ⏳ |
+| HS1-3 | PgEnglishFtsProvider（英文 FTS，search_vector tsvector） | 功能 | ⏳ |
+| HS1-4 | FulltextSearchProviderFactory 改造（支持语言参数） | 架构 | ⏳ |
+| HS1-5 | HybridRetrieverService 集成语言检测 + 策略选择 | 集成 | ⏳ |
+| HS2-1 | V15: search_vector 列 + GIN 索引（英文 FTS） | 数据库 | ⏳ |
+| HS2-2 | V16: trigram 索引（条件执行） | 数据库 | ⏳ |
+| HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ⏳ |
+| HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ⏳ |
+
+## Cron 进度（2026-04-07 01:55）
+
+- 2026-04-07 01:55 — ✅ HS1-1 QueryLang + LanguageDetector 完成：
+  - `QueryLang` enum: ZH | EN_OR_OTHER，用于选择中文/英文 FTS 策略
+  - `LanguageDetector`: 轻量级 CJK Unicode 区块检测（BMP blocks + 补充平面 Extension A-G 显式代码点范围，因 `Character.UnicodeBlock.of()` 对补充平面字符返回 GENERAL_PURPOSE_PLANE）
+  - `LanguageDetectorTest`: 23 个测试覆盖简体中文/繁体/Extension A-G/兼容字/英文/数字/空白/null/日文假名/韩文谚文/俄语西里尔/emoji
+  - 修复测试 bug：`\u20000` Java 转义被解析为 `\u2000` + `0`，改为 `Character.toChars(0x20000)` 正确创建补充平面字符
+  - mvn test ✅（1280+ tests 全通过，零失败零错误）
+  - commit 7b88992 已推送
