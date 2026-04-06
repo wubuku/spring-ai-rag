@@ -1369,3 +1369,5 @@
 
 
 - 2026-04-06 20:28 — ✅ C39 Mock LLM Server：scripts/mock-llm-server.js（Node.js HTTP server，实现 OpenAI-compatible /v1/chat/completions + /v1/embeddings + SSE streaming，零外部依赖）+ scripts/run-mock-llm.sh helper；环境变量配置：MOCK_PORT/MOCK_DELAY_MS/MOCK_ERROR_RATE/MOCK_MODEL；默认端口 8086（避免 demo 端口 8082-8085）；mvn test ✅（全通过）；commit d6c2665 已推送
+
+- 2026-04-06 20:33 — ✅ WebUI 常规巡检：npm test 113 ✅ / npm run build 243KB ✅（301KB index gzipped）/ E2E 12/12 ✅（SPA Routing/Chat SSE/Navigation/Settings/Metrics/Alerts/Dashboard/Documents/Collections/Search/Backend Health）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
