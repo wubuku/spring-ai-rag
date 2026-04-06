@@ -1266,3 +1266,5 @@
   - 新增 SearchResults 组件测试（5 tests：空状态/结果数量/单数/标题+分数/内容片段）
   - dist 已同步到 static/webui/
   - commits e5d7273 + e94a4c0 已推送
+
+- 2026-04-06 11:38 — ✅ WebUI 常规发布：npm test 112 ✅ / npm run build 243KB ✅ / E2E 11/11 ✅（全部页面）；后端发现并修复：RagCollectionController delete/restore 方法缺少 @Transactional 注解，补充导入；RagCollectionControllerTest 26 tests ✅；commit 7a7ed5c 已推送
