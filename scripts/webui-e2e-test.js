@@ -245,6 +245,32 @@ async function testSearch(page) {
     throw new Error(`Search input value mismatch: "${value}"`);
   }
   console.log('  → Search input accepts text');
+  
+  // Perform actual search and verify results
+  await input.fill('痘痘');
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(3000);
+  
+  // Check results are displayed
+  const body = await page.evaluate(() => document.body.innerText);
+  if (!body.includes('results for')) {
+    throw new Error('Search did not return results');
+  }
+  console.log('  → Search returned results');
+  
+  // Check score display - MUST NOT show NaN
+  // The score should be a valid number (e.g., "66.2%" or "0.0%") or absent, but NOT "NaN%"
+  if (body.includes('NaN')) {
+    throw new Error('Search results contain NaN score - retrieval fusion bug!');
+  }
+  console.log('  → Scores are valid (no NaN)');
+  
+  // Verify at least one score percentage is displayed
+  const scoreMatches = body.match(/\d+\.\d+%/g);
+  if (!scoreMatches || scoreMatches.length === 0) {
+    throw new Error('No score percentages found in search results');
+  }
+  console.log(`  → Found scores: ${scoreMatches.slice(0, 3).join(', ')}`);
 }
 
 async function testMetrics(page) {

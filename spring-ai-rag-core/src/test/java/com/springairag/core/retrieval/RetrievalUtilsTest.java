@@ -241,4 +241,71 @@ class RetrievalUtilsTest {
         assertEquals(3, r.getChunkIndex());
         assertEquals(0.75, r.getScore(), 1e-9);
     }
+
+    // ========== Edge Cases: All-Zero and NaN Scores ==========
+
+    @Test
+    void fuseResults_allZeroVectorScores_noNaN() {
+        // Bug fix: when all vector scores are 0, division by zero produced NaN
+        RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "zero vec", 0, 0.0);
+        RetrievalResult v2 = RetrievalUtils.createResult("doc-2", "also zero", 0, 0.0);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(v1, v2), List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(2, fused.size());
+        for (RetrievalResult r : fused) {
+            assertFalse(Double.isNaN(r.getScore()), "Score should not be NaN when all inputs are 0");
+            assertEquals(0.0, r.getScore(), 0.0, "Score should be 0.0 when all inputs are 0");
+        }
+    }
+
+    @Test
+    void fuseResults_allZeroFulltextScores_noNaN() {
+        RetrievalResult f1 = RetrievalUtils.createResult("doc-1", "zero ft", 0, 0.0);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(), List.of(f1), 10, 0.5f, 0.5f);
+
+        assertEquals(1, fused.size());
+        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN");
+        assertEquals(0.0, fused.get(0).getScore(), 0.0, "Score should be 0.0");
+    }
+
+    @Test
+    void fuseResults_emptyVectorList_noNaN() {
+        RetrievalResult f1 = RetrievalUtils.createResult("doc-1", "ft only", 0, 0.5);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(), List.of(f1), 10, 0.5f, 0.5f);
+
+        assertEquals(1, fused.size());
+        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN with empty vector list");
+    }
+
+    @Test
+    void fuseResults_emptyFulltextList_noNaN() {
+        RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "vec only", 0, 0.5);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(v1), List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(1, fused.size());
+        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN with empty fulltext list");
+    }
+
+    @Test
+    void fuseResults_mixedZeroAndValidScores_noNaN() {
+        // Some valid scores mixed with zeros should work fine
+        RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "valid", 0, 0.8);
+        RetrievalResult v2 = RetrievalUtils.createResult("doc-2", "zero", 0, 0.0);
+
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(v1, v2), List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(2, fused.size());
+        for (RetrievalResult r : fused) {
+            assertFalse(Double.isNaN(r.getScore()), "Score should not be NaN: " + r.getDocumentId());
+        }
+    }
 }
