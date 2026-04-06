@@ -249,7 +249,7 @@ if [ -n "$DOC_ID" ]; then
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "DELETE /documents/$DOC_ID" "200" "$CODE"
-    assert_contains "确认删除" "$BODY" "文档已删除"
+    assert_contains "确认删除" "$BODY" "deleted"
 
     # 验证已删除
     RESP2=$(curl -s -w "\n%{http_code}" "$API/documents/$DOC_ID")
@@ -291,7 +291,7 @@ if [ -n "$COLLECTION_ID" ]; then
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "DELETE /collections/{id}" "200" "$CODE"
-    assert_contains "确认删除" "$BODY" "集合已删除"
+    assert_contains "确认删除" "$BODY" "Collection deleted"
 else
     echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
 fi

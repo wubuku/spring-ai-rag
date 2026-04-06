@@ -20,7 +20,7 @@ class RagPropertiesTest {
 
         // Embedding defaults
         assertEquals("", props.getEmbedding().getApiKey());
-        assertEquals("https://api.siliconflow.cn/v1", props.getEmbedding().getBaseUrl());
+        assertEquals("https://api.siliconflow.cn", props.getEmbedding().getBaseUrl());
         assertEquals("BAAI/bge-m3", props.getEmbedding().getModel());
         assertEquals(1024, props.getEmbedding().getDimensions());
 

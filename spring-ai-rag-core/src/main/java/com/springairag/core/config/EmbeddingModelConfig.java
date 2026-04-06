@@ -28,21 +28,27 @@ public class EmbeddingModelConfig {
     @Bean
     @ConditionalOnMissingBean(EmbeddingModel.class)
     public EmbeddingModel embeddingModel() {
+        // Use explicit SiliconFlow URL without /v1 suffix (OpenAiApi appends /v1/embeddings automatically)
+        String baseUrl = "https://api.siliconflow.cn";
+        String apiKey = embedding.getApiKey();
+        String model = embedding.getModel();
+        int dimensions = embedding.getDimensions();
+
         org.slf4j.LoggerFactory.getLogger(EmbeddingModelConfig.class)
                 .info("Creating EmbeddingModel: baseUrl={}, model={}, apiKey={}..., dimensions={}",
-                        embedding.getBaseUrl(), embedding.getModel(),
-                        embedding.getApiKey().length() > 10 ? embedding.getApiKey().substring(0, 10) : "***",
-                        embedding.getDimensions());
+                        baseUrl, model,
+                        apiKey.length() > 10 ? apiKey.substring(0, 10) : "***",
+                        dimensions);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
-                .baseUrl(embedding.getBaseUrl())
-                .apiKey(embedding.getApiKey())
+                .baseUrl(baseUrl)
+                .apiKey(apiKey)
                 .build();
 
         return new OpenAiEmbeddingModel(openAiApi, MetadataMode.EMBED,
                 OpenAiEmbeddingOptions.builder()
-                        .model(embedding.getModel())
-                        .dimensions(embedding.getDimensions())
+                        .model(model)
+                        .dimensions(dimensions)
                         .build());
     }
 }

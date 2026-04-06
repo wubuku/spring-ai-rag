@@ -82,7 +82,7 @@ spring:
   # Spring AI MiniMax model configuration (optional, enabled when provider=minimax)
   minimax:
     api-key: ${MINIMAX_API_KEY:dummy}
-    base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat/v1}
+    base-url: ${MINIMAX_BASE_URL:https://api.minimax.chat}
     chat:
       enabled: false
       options:
@@ -164,7 +164,7 @@ app:
 
       siliconflow:
         displayName: SiliconFlow
-        baseUrl: https://api.siliconflow.cn/v1
+        baseUrl: https://api.siliconflow.cn
         apiKey: ${SILICONFLOW_API_KEY:}
         apiType: openai-chat
         enabled: true
@@ -217,7 +217,7 @@ app:
 rag:
   embedding:
     api-key: ${SILICONFLOW_API_KEY:}
-    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn/v1}
+    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 
