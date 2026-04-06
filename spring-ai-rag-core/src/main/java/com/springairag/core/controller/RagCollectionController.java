@@ -1,10 +1,10 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
 import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionRequest;
-import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -233,6 +233,72 @@ public class RagCollectionController {
                     return ResponseEntity.ok(toMap(c, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 克隆集合（深拷贝）
+     */
+    @Operation(summary = "Clone collection", description = "Creates a deep copy of an existing collection. All documents are copied with PENDING processing status (embeddings are not copied and must be re-embedded).")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection cloned successfully"),
+            @ApiResponse(responseCode = "404", description = "Source collection not found or deleted")
+    })
+    @PostMapping("/{id}/clone")
+    public ResponseEntity<CollectionCloneResponse> cloneCollection(@PathVariable Long id) {
+        log.info("Cloning collection: id={}", id);
+
+        return collectionRepository.findByIdAndDeletedFalse(id)
+                .map(source -> {
+                    // Build new collection as a copy
+                    RagCollection cloned = new RagCollection();
+                    cloned.setName(source.getName() + " (Copy)");
+                    cloned.setDescription(source.getDescription());
+                    cloned.setEmbeddingModel(source.getEmbeddingModel());
+                    cloned.setDimensions(source.getDimensions());
+                    cloned.setEnabled(source.getEnabled());
+                    cloned.setMetadata(source.getMetadata());
+                    final RagCollection saved = collectionRepository.save(cloned);
+
+                    // Copy all documents (content + metadata only; embeddings require re-embedding)
+                    List<RagDocument> sourceDocs = documentRepository.findAllByCollectionId(id);
+                    List<RagDocument> clonedDocs = sourceDocs.stream()
+                            .map(doc -> cloneDocument(doc, saved.getId()))
+                            .toList();
+                    if (!clonedDocs.isEmpty()) {
+                        documentRepository.saveAll(clonedDocs);
+                    }
+
+                    log.info("Collection cloned: sourceId={}, newId={}, documents={}",
+                            id, saved.getId(), clonedDocs.size());
+                    auditCreate(AuditLogService.ENTITY_COLLECTION,
+                            String.valueOf(saved.getId()),
+                            "Collection cloned from " + source.getName() + " (ID: " + id + "), documents: " + clonedDocs.size(),
+                            Map.of("sourceCollectionId", id,
+                                    "sourceCollectionName", source.getName(),
+                                    "documentsCloned", clonedDocs.size()));
+
+                    return ResponseEntity.ok(CollectionCloneResponse.of(
+                            saved.getId(),
+                            saved.getName(),
+                            id,
+                            source.getName(),
+                            clonedDocs.size()));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private RagDocument cloneDocument(RagDocument source, Long newCollectionId) {
+        RagDocument doc = new RagDocument();
+        doc.setTitle(source.getTitle());
+        doc.setSource(source.getSource());
+        doc.setContent(source.getContent());
+        doc.setDocumentType(source.getDocumentType());
+        doc.setMetadata(source.getMetadata());
+        doc.setSize(source.getSize());
+        doc.setCollectionId(newCollectionId);
+        doc.setEnabled(source.getEnabled());
+        doc.setProcessingStatus("PENDING");  // Must re-embed; embeddings not copied
+        return doc;
     }
 
     /**

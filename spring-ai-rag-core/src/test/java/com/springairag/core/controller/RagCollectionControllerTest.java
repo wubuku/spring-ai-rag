@@ -433,4 +433,97 @@ class RagCollectionControllerTest {
         assertThrows(IllegalArgumentException.class,
                 () -> controller.importCollection(Map.of("name", "  ")));
     }
+
+    @Test
+    void cloneCollection_existingCollectionWithDocuments_clonesSuccessfully() {
+        RagCollection source = createCollection(1L, "Source Collection");
+        source.setDescription("A source collection");
+        source.setEmbeddingModel("bge-m3");
+        source.setDimensions(1024);
+
+        RagDocument doc1 = new RagDocument();
+        doc1.setId(10L);
+        doc1.setTitle("Doc 1");
+        doc1.setSource("http://example.com/1");
+        doc1.setContent("Content of doc 1");
+        doc1.setDocumentType("PDF");
+        doc1.setMetadata(Map.of("key", "value"));
+        doc1.setSize(1024L);
+        doc1.setCollectionId(1L);
+        doc1.setEnabled(true);
+        doc1.setProcessingStatus("COMPLETED");
+
+        RagDocument doc2 = new RagDocument();
+        doc2.setId(11L);
+        doc2.setTitle("Doc 2");
+        doc2.setContent("Content of doc 2");
+        doc2.setCollectionId(1L);
+        doc2.setEnabled(true);
+        doc2.setProcessingStatus("COMPLETED");
+
+        RagCollection savedClone = createCollection(5L, "Source Collection (Copy)");
+
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
+        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
+        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
+            RagCollection c = inv.getArgument(0);
+            if (c.getId() == null) {
+                c.setId(5L);
+            }
+            return c;
+        });
+        when(documentRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+
+        ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
+                controller.cloneCollection(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(5L, response.getBody().clonedCollectionId());
+        assertEquals("Source Collection (Copy)", response.getBody().clonedCollectionName());
+        assertEquals(1L, response.getBody().sourceCollectionId());
+        assertEquals("Source Collection", response.getBody().sourceCollectionName());
+        assertEquals(2, response.getBody().documentsCloned());
+
+        // Verify the clone has PENDING status (must re-embed)
+        verify(documentRepository).saveAll(argThat((List<RagDocument> docs) -> {
+            assertEquals(2, docs.size());
+            docs.forEach(doc -> assertEquals("PENDING", doc.getProcessingStatus()));
+            assertEquals(5L, docs.get(0).getCollectionId());
+            return true;
+        }));
+        verify(collectionRepository).save(any(RagCollection.class));
+    }
+
+    @Test
+    void cloneCollection_existingCollectionNoDocuments_clonesWithZeroDocuments() {
+        RagCollection source = createCollection(1L, "Empty Source");
+
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
+        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of());
+        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
+            RagCollection c = inv.getArgument(0);
+            if (c.getId() == null) c.setId(5L);
+            return c;
+        });
+
+        ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
+                controller.cloneCollection(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals(5L, response.getBody().clonedCollectionId());
+        assertEquals(0, response.getBody().documentsCloned());
+        verify(documentRepository, never()).saveAll(anyList());
+    }
+
+    @Test
+    void cloneCollection_nonExisting_returns404() {
+        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+
+        ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
+                controller.cloneCollection(999L);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
 }
