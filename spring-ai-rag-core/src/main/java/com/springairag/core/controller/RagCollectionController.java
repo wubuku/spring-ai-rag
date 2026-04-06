@@ -86,16 +86,16 @@ public class RagCollectionController {
     /**
      * 获取集合详情
      */
-    @Operation(summary = "获取集合详情", description = "查询集合信息及其文档数量。")
+    @Operation(summary = "Get collection details", description = "Query collection info and document count.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回集合详情"),
-            @ApiResponse(responseCode = "404", description = "集合不存在")
+            @ApiResponse(responseCode = "200", description = "Collection found"),
+            @ApiResponse(responseCode = "404", description = "Collection not found or deleted")
     })
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
         log.info("Getting collection: id={}", id);
 
-        return collectionRepository.findById(id)
+        return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(id);
                     return ResponseEntity.ok(toMap(c, docCount));
@@ -136,14 +136,14 @@ public class RagCollectionController {
     /**
      * 更新集合
      */
-    @Operation(summary = "更新集合", description = "更新集合名称、描述等信息。")
+    @Operation(summary = "Update collection", description = "Update collection name, description, etc.")
     @PutMapping("/{id}")
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable Long id,
             @Valid @RequestBody CollectionRequest request) {
         log.info("Updating collection: id={}", id);
 
-        return collectionRepository.findById(id)
+        return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(existing -> {
                     existing.setName(request.getName());
                     existing.setDescription(request.getDescription());
@@ -169,15 +169,15 @@ public class RagCollectionController {
     }
 
     /**
-     * 删除集合
+     * 删除集合（软删除）
      */
-    @Operation(summary = "删除集合", description = "删除集合。关联的文档 collection_id 将被置空（不删除文档）。")
-    @ApiResponse(responseCode = "200", description = "删除成功")
+    @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
+    @ApiResponse(responseCode = "200", description = "Collection soft-deleted")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
-        log.info("Deleting collection: id={}", id);
+        log.info("Soft-deleting collection: id={}", id);
 
-        return collectionRepository.findById(id)
+        return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
                     // 批量清空关联文档的 collection_id（避免逐个加载）
                     long count = documentRepository.countByCollectionId(id);
@@ -186,17 +186,48 @@ public class RagCollectionController {
                         log.info("Unlinked {} documents from collection {}", count, id);
                     }
 
-                    collectionRepository.deleteById(id);
+                    collectionRepository.softDelete(id, java.time.LocalDateTime.now());
 
-                    log.info("Collection deleted: id={}", id);
+                    log.info("Collection soft-deleted: id={}", id);
                     auditDelete(AuditLogService.ENTITY_COLLECTION,
                             String.valueOf(id),
-                            "Collection deleted, documentsUnlinked: " + count);
+                            "Collection soft-deleted, documentsUnlinked: " + count);
                     return ResponseEntity.ok(Map.of(
                             "message", "Collection deleted",
                             "id", String.valueOf(id),
                             "documentsUnlinked", String.valueOf(count)
                     ));
+                })
+                .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    /**
+     * 恢复已删除的集合
+     */
+    @Operation(summary = "Restore deleted collection", description = "Restores a soft-deleted collection. Associated documents will NOT be re-linked automatically.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection restored"),
+            @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
+    })
+    @PostMapping("/{id}/restore")
+    public ResponseEntity<Map<String, Object>> restore(@PathVariable Long id) {
+        log.info("Restoring collection: id={}", id);
+
+        int updated = collectionRepository.restore(id);
+        if (updated == 0) {
+            log.warn("Collection not found or not deleted for restore: id={}", id);
+            return ResponseEntity.notFound().build();
+        }
+
+        log.info("Collection restored: id={}", id);
+        auditUpdate(AuditLogService.ENTITY_COLLECTION,
+                String.valueOf(id),
+                "Collection restored");
+
+        return collectionRepository.findById(id)
+                .map(c -> {
+                    long docCount = documentRepository.countByCollectionId(id);
+                    return ResponseEntity.ok(toMap(c, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -310,7 +341,7 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> exportCollection(@PathVariable Long id) {
         log.info("Exporting collection: id={}", id);
 
-        return collectionRepository.findById(id)
+        return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
                     List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
                     Map<String, Object> exportData = buildExportData(collection, docs);
@@ -436,6 +467,8 @@ public class RagCollectionController {
         map.put("metadata", c.getMetadata());
         map.put("createdAt", c.getCreatedAt());
         map.put("updatedAt", c.getUpdatedAt());
+        map.put("deleted", c.getDeleted());
+        map.put("deletedAt", c.getDeletedAt());
         map.put("documentCount", documentCount);
         return map;
     }

@@ -377,7 +377,7 @@ class RagControllerIntegrationTest {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
             collection.setName("我的知识库");
-            when(collectionRepository.findById(1L)).thenReturn(Optional.of(collection));
+            when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(collection));
             when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
 
             mockMvc.perform(get("/api/v1/rag/collections/{id}", 1))
@@ -388,7 +388,7 @@ class RagControllerIntegrationTest {
 
         @Test
         void getCollection_notFound() throws Exception {
-            when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+            when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
             mockMvc.perform(get("/api/v1/rag/collections/{id}", 999))
                     .andExpect(status().isNotFound());
@@ -413,8 +413,9 @@ class RagControllerIntegrationTest {
         void deleteCollection_found() throws Exception {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
-            when(collectionRepository.findById(1L)).thenReturn(Optional.of(collection));
-            when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of());
+            when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(collection));
+            when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+            when(collectionRepository.softDelete(eq(1L), any())).thenReturn(1);
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 1))
                     .andExpect(status().isOk())
@@ -423,7 +424,7 @@ class RagControllerIntegrationTest {
 
         @Test
         void deleteCollection_notFound() throws Exception {
-            when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+            when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 999))
                     .andExpect(status().isNotFound());

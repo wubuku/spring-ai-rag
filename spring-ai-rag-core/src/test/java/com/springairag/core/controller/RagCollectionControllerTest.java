@@ -72,7 +72,7 @@ class RagCollectionControllerTest {
     @Test
     void getById_existingCollection_returnsCollection() {
         RagCollection c = createCollection(1L, "知识库A");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
         when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
 
         ResponseEntity<Map<String, Object>> response = controller.getById(1L);
@@ -84,9 +84,23 @@ class RagCollectionControllerTest {
 
     @Test
     void getById_nonExisting_returns404() {
-        when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.getById(999L);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void getById_deletedCollection_returns404() {
+        // A deleted collection should not be returned even if findById finds it
+        RagCollection c = createCollection(1L, "Deleted Collection");
+        c.setDeleted(true);
+        c.setDeletedAt(LocalDateTime.now());
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String, Object>> response = controller.getById(1L);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -129,7 +143,7 @@ class RagCollectionControllerTest {
     @Test
     void update_existingCollection_updatesFields() {
         RagCollection existing = createCollection(1L, "旧名称");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(existing));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(existing));
         when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> inv.getArgument(0));
         when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
@@ -146,7 +160,7 @@ class RagCollectionControllerTest {
 
     @Test
     void update_nonExisting_returns404() {
-        when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
         CollectionRequest req = new CollectionRequest();
         req.setName("test");
@@ -157,10 +171,11 @@ class RagCollectionControllerTest {
     }
 
     @Test
-    void delete_existingCollection_unlinksDocumentsAndDeletes() {
+    void delete_existingCollection_unlinksDocumentsAndSoftDeletes() {
         RagCollection c = createCollection(1L, "待删除集合");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
         when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
+        when(collectionRepository.softDelete(eq(1L), any(LocalDateTime.class))).thenReturn(1);
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
@@ -168,12 +183,12 @@ class RagCollectionControllerTest {
         assertEquals("Collection deleted", response.getBody().get("message"));
         assertEquals("1", response.getBody().get("documentsUnlinked"));
         verify(documentRepository).clearCollectionIdByCollectionId(1L);
-        verify(collectionRepository).deleteById(1L);
+        verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
     }
 
     @Test
     void delete_nonExisting_returns404() {
-        when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, String>> response = controller.delete(999L);
 
@@ -183,15 +198,51 @@ class RagCollectionControllerTest {
     @Test
     void delete_existingCollectionNoDocuments_doesNotCallClearCollectionId() {
         RagCollection c = createCollection(1L, "空集合");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
         when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+        when(collectionRepository.softDelete(eq(1L), any(LocalDateTime.class))).thenReturn(1);
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("0", response.getBody().get("documentsUnlinked"));
         verify(documentRepository, org.mockito.Mockito.never()).clearCollectionIdByCollectionId(anyLong());
-        verify(collectionRepository).deleteById(1L);
+        verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
+    }
+
+    @Test
+    void delete_alreadyDeleted_returns404() {
+        // Trying to delete an already-soft-deleted collection should return 404
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
+
+        ResponseEntity<Map<String, String>> response = controller.delete(1L);
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void restore_existingDeletedCollection_restoresSuccessfully() {
+        when(collectionRepository.restore(1L)).thenReturn(1);
+        RagCollection restored = createCollection(1L, "Restored Collection");
+        restored.setDeleted(false);
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(restored));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
+
+        ResponseEntity<Map<String, Object>> response = controller.restore(1L);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("Restored Collection", response.getBody().get("name"));
+        assertEquals(3L, response.getBody().get("documentCount"));
+        verify(collectionRepository).restore(1L);
+    }
+
+    @Test
+    void restore_nonExisting_returns404() {
+        when(collectionRepository.restore(999L)).thenReturn(0);
+
+        ResponseEntity<Map<String, Object>> response = controller.restore(999L);
+
+        assertEquals(404, response.getStatusCode().value());
     }
 
     @Test
@@ -269,7 +320,7 @@ class RagCollectionControllerTest {
     @Test
     void exportCollection_returnsCollectionAndDocuments() {
         RagCollection c = createCollection(1L, "知识库A");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
 
         RagDocument doc = new RagDocument();
         doc.setTitle("文档1");
@@ -296,7 +347,7 @@ class RagCollectionControllerTest {
     @Test
     void exportCollection_multipleDocuments_exportsAllCorrectly() {
         RagCollection c = createCollection(1L, "多文档知识库");
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
 
         RagDocument doc1 = new RagDocument();
         doc1.setTitle("文档A");
@@ -331,10 +382,10 @@ class RagCollectionControllerTest {
     }
 
     @Test
-    void exportCollection_notFound_returns404() {
-        when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+    void exportCollection_deletedCollection_returns404() {
+        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(999L);
+        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
 
         assertEquals(404, response.getStatusCode().value());
     }
