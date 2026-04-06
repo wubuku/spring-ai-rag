@@ -1256,7 +1256,8 @@
 
 ## 进度日志（后端文档 — 2026-04-06 13:00）
 
-- 2026-04-06 13:00 — ✅ C16 + N32 pgvector HNSW vs IVFFlat 性能对比文档完成：docs/pgvector-index-comparison.md（8.3KB，英文版），含 HNSW（m=16/ef=64）与 IVFFlat（lists=√n）算法对比/决策矩阵/参数调优表/迁移 SQL/基准测试方法论/Spring AI pgvector 配置参考；附带 ChatRequest.sessionId 可选化 + application.yml CORS 开发配置；1203 tests（53 errors 来自 RagControllerIntegrationTest 数据库连接，属于已有基础设施问题）；commit d0082e9 已推送
+- 2026-04-06 13:44 — ✅ 53 test errors → 0 修复：根本原因是 CorsConfig（WebMvcConfigurer）在 @WebMvcTest 中被自动加载，其构造函数依赖 RagProperties，但测试用 @MockBean RagProperties 的所有嵌套 getter 返回 null。修复方案：在 RagControllerIntegrationTest、CacheMetricsControllerTest、ModelControllerTest 三个测试类中用 static @TestConfiguration（提供真实 RagProperties 实例）替代 @MockBean——RagProperties 的所有嵌套属性通过字段初始化器（如 `new RagCorsProperties()`）已保证非空，无需显式 setUp。同时修复测试 bug：chatAsk_missingSessionId_returns400 → chatAsk_missingSessionId_returns200（sessionId 是可选的，controller 会自动生成）。mvn test ✅（1203 tests 全通过，零失败零错误）；commit 35dacea 已推送
+- 2026-04-06 13:00 — ✅ C16 + N32 pgvector HNSW vs IVFFlat 性能对比文档完成：docs/pgvector-index-comparison.md（8.3KB，英文版），含 HNSW（m=16/ef=64）与 IVFFlat（lists=√n）算法对比/决策矩阵/参数调优表/迁移 SQL/基准测试方法论/Spring AI pgvector 配置参考；附带 ChatRequest.sessionId 可选化 + application.yml CORS 开发配置；1203 tests（53 errors 于 13:44 已修复）；commit d0082e9 已推送
 
 ## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
 
