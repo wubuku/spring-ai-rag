@@ -1184,7 +1184,7 @@
 | C21 | N37 WebUI 错误边界：React ErrorBoundary 增强 + 错误日志上报 | UX | ⏳ | P2 |
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
-| C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ⏳ | P2 |
+| C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ⏳ | P3 |
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
@@ -1241,6 +1241,10 @@
 | W9 | Card/Modal/Table 组件测试 | 测试覆盖 | ⏳（组件目录为空，跳过） | P2 |
 | W10 | Upload 组件测试（进度回调 + 错误处理） | 测试覆盖 | ⏳（useFileUpload 5 tests 已覆盖） | P2 |
 | W11 | MetricsCharts 组件测试（Recharts 图表渲染） | 测试覆盖 | ✅ 2026-04-06（W11 完成：8 tests — loading/null/undefined/minimal data/model comparison/section counts） | P2 |
+
+## 进度日志（后端可观测性 — 2026-04-06 10:22）
+
+- 2026-04-06 10:22 — ✅ C24 HikariCP 慢查询日志：C24 完成——RagSlowQueryProperties（阈值1000ms/启用/日志/保留数）+ SlowQueryMetricsService（Micrometer rag.slow_query.* 计数器 + 历史记录）+ GET /api/v1/rag/metrics/slow-queries REST 端点 + SlowQueryStatsResponse DTO；Hibernate generate_statistics 默认 false（生产环境开启有~5%性能损耗）；RagSlowQueryPropertiesTest 5 tests + SlowQueryMetricsServiceTest 10 tests + RagMetricsControllerTest +2 slow-query tests；mvn test ✅（全通过）；commit 824c0d0 已推送
 
 ## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
 
