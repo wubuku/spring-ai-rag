@@ -57,7 +57,8 @@ public class SpringAiConfig {
     @Value("${app.llm.provider:openai}")
     private String provider;
 
-    @Value("${spring.ai.openai.base-url:https://api.deepseek.com/v1}")
+    // ⚠️ 注意：Spring AI OpenAiApi 自动追加 /v1/chat/completions，base-url 不要包含 /v1
+    @Value("${spring.ai.openai.base-url:https://api.deepseek.com}")
     private String openAiBaseUrl;
 
     @Value("${spring.ai.openai.api-key:dummy}")
@@ -84,7 +85,8 @@ public class SpringAiConfig {
     @Value("${spring.ai.anthropic.chat.options.max-tokens:4096}")
     private Integer anthropicMaxTokens;
 
-    @Value("${spring.ai.minimax.base-url:https://api.minimax.chat}")
+    // ⚠️ 注意：Spring AI MiniMaxApi 自动追加 /v1/chat/completions，base-url 不要包含 /v1
+    @Value("${spring.ai.minimax.base-url:https://api.minimaxi.com}")
     private String minimaxBaseUrl;
 
     @Value("${spring.ai.minimax.api-key:dummy}")
