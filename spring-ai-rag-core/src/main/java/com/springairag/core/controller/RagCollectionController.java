@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -173,6 +174,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
     @ApiResponse(responseCode = "200", description = "Collection soft-deleted")
+    @Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         log.info("Soft-deleting collection: id={}", id);
@@ -209,6 +211,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "200", description = "Collection restored"),
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
     })
+    @Transactional
     @PostMapping("/{id}/restore")
     public ResponseEntity<Map<String, Object>> restore(@PathVariable Long id) {
         log.info("Restoring collection: id={}", id);
