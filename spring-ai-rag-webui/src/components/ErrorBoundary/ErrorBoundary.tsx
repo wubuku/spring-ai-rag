@@ -11,6 +11,37 @@ interface State {
   error?: Error;
 }
 
+interface ClientErrorPayload {
+  errorType: string;
+  errorMessage: string;
+  stackTrace?: string;
+  componentStack?: string;
+  pageUrl: string;
+}
+
+/** Gets the current pathname, always returning a string. */
+function getCurrentPathname(): string {
+  const p: string | null | undefined = window.location.pathname;
+  if (p != null && p.length > 0) return p as string;
+  return '/';
+}
+
+/**
+ * Reports client-side errors to the backend server.
+ * Errors are sent asynchronously and do not block the UI.
+ */
+async function reportErrorToServer(payload: ClientErrorPayload): Promise<void> {
+  try {
+    await fetch('/api/v1/rag/client-errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    // Silently ignore — error reporting must never break the UI
+  }
+}
+
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -23,6 +54,17 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+
+    const payload: ClientErrorPayload = {
+      errorType: error.name || 'Error',
+      errorMessage: error.message || 'Unknown error',
+      stackTrace: error.stack,
+      componentStack: errorInfo.componentStack ?? undefined,
+      pageUrl: getCurrentPathname(),
+    };
+
+    // Report asynchronously — do not await
+    reportErrorToServer(payload);
   }
 
   render() {

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { ErrorBoundary } from './ErrorBoundary';
 
@@ -9,7 +9,6 @@ describe('ErrorBoundary', () => {
     consoleErrorSpy.mockClear();
   });
 
-  // Throw an error inside a component
   const ThrowError = ({ shouldThrow }: { shouldThrow: boolean }) => {
     if (shouldThrow) {
       throw new Error('Test error message');
@@ -70,21 +69,12 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    // Error is showing
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-
-    // Click Try Again — this resets hasError to false
     fireEvent.click(screen.getByText('Try Again'));
-
-    // After reset, ErrorBoundary renders children again.
-    // But ThrowError shouldThrow=true, so it throws immediately again.
-    // ErrorBoundary catches it and shows error UI again.
-    // So the error UI re-appears (expected behavior when child is still broken).
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
   });
 
   it('resets and recovers when child stops throwing after reset', () => {
-    // Use a ref to toggle throw behavior
     let shouldThrow = true;
     const DynamicThrow = () => {
       if (shouldThrow) throw new Error('Dynamic error');
@@ -97,20 +87,13 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    // Error is showing
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
-
-    // Click Try Again — still throwing, error re-appears
     fireEvent.click(screen.getByText('Try Again'));
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
 
-    // Now stop throwing before the next reset
     shouldThrow = false;
-
-    // Click Try Again again — now child renders successfully
     fireEvent.click(screen.getByText('Try Again'));
 
-    // Error boundary should now show children (recovered)
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument();
     expect(screen.getByTestId('recovered')).toBeInTheDocument();
 
@@ -129,6 +112,21 @@ describe('ErrorBoundary', () => {
       expect.any(Error),
       expect.objectContaining({ componentStack: expect.any(String) })
     );
+  });
+
+  it('does not throw when backend report fails', () => {
+    // Simulate fetch failing — ErrorBoundary should still show error UI (best-effort reporting)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('Network error')));
+
+    render(
+      <ErrorBoundary>
+        <ThrowError shouldThrow={true} />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+
+    vi.unstubAllGlobals();
   });
 
   it('shows "An unexpected error occurred" when error has no message', () => {
@@ -166,7 +164,6 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
 
-    // Should fall back to default error UI
     expect(screen.getByText('Something went wrong')).toBeInTheDocument();
     expect(screen.getByText('Try Again')).toBeInTheDocument();
   });

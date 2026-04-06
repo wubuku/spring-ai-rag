@@ -55,3 +55,4 @@ application-local.yml
 .mvn/
 e2e-start.sh
 e2e-test.properties
+test-results

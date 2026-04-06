@@ -36,13 +36,11 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   const accumulatedContentRef = useRef<string>('');
 
   // Use refs to store callbacks to avoid stale closures
-  // This ensures send() always uses the latest callbacks even if it's recreated
   const onChunkRef = useRef(onChunk);
   const onSourcesRef = useRef(onSources);
   const onErrorRef = useRef(onError);
   const onDoneRef = useRef(onDone);
 
-  // Update refs when callbacks change
   onChunkRef.current = onChunk;
   onSourcesRef.current = onSources;
   onErrorRef.current = onError;
@@ -65,6 +63,9 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       let eventType = 'message';
       let eventData = '';
       let buffer = '';
+      let chunkCount = 0;
+      let emitCount = 0;
+      let lastLine = '';
 
       try {
         const response = await fetch('/api/v1/rag/chat/stream', {
@@ -89,40 +90,52 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           const { done, value } = await reader.read();
           if (done) break;
 
-          buffer += textDecoder.decode(value, { stream: true });
+          chunkCount++;
+          const text = textDecoder.decode(value, { stream: true });
+          buffer += text;
 
-          // Process complete lines (lines ending with \n)
+          // Debug: log chunk info every 5 chunks
+          if (chunkCount <= 3 || chunkCount % 10 === 0) {
+            console.log(`[SSE] Chunk ${chunkCount}: ${JSON.stringify(text.slice(0, 50))}... buffer len=${buffer.length}`);
+          }
+
+          // Process complete lines
           while (buffer.includes('\n')) {
             const newlineIdx = buffer.indexOf('\n');
             const line = buffer.slice(0, newlineIdx);
             buffer = buffer.slice(newlineIdx + 1);
+            lastLine = line;
 
             const colonIdx = line.indexOf(':');
             if (colonIdx === -1) {
               // Empty line → SSE event terminator
-              // Emit pending event if any
               if (eventData) {
+                console.log(`[SSE] Empty line, emitting: ${JSON.stringify(eventData)} (eventType=${eventType})`);
+                emitCount++;
                 if (eventType === 'done') {
                   try {
                     const parsed = JSON.parse(eventData) as { traceId?: string; status?: string };
+                    console.log(`[SSE] Done event parsed: ${JSON.stringify(parsed)}`);
                     if (parsed.status === 'complete') {
                       onDoneRef.current?.();
+                      console.log(`[SSE] onDone called!`);
                     }
-                  } catch {
-                    // ignore
+                  } catch (e) {
+                    console.log(`[SSE] Done parse error: ${e}`);
                   }
                 } else if (eventType !== 'trace') {
-                  // 'message' event: treat as content chunk
                   try {
                     const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
                     if (parsed.type === 'chunk') {
+                      console.log(`[SSE] Chunk event: ${JSON.stringify(parsed.content)}`);
                       accumulatedContentRef.current += parsed.content;
                       onChunkRef.current?.(parsed.content);
                     } else if (parsed.type === 'sources') {
                       onSourcesRef.current?.(parsed.sources, parsed.conversationId);
                     }
-                  } catch {
-                    // Not JSON — treat raw data as a text chunk
+                  } catch (e) {
+                    // Not JSON - treat as raw text
+                    console.log(`[SSE] Raw text chunk: ${JSON.stringify(eventData)}`);
                     accumulatedContentRef.current += eventData;
                     onChunkRef.current?.(eventData);
                   }
@@ -134,89 +147,32 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             }
 
             const field = line.slice(0, colonIdx);
-            // strip leading space (SSE spec) and trailing \r
             const value2 = line.slice(colonIdx + 1).replace(/^\s+/, '').replace(/\r$/, '');
 
             if (field === 'event') {
-              // Emit pending event before starting new event type
+              console.log(`[SSE] Event type: ${value2}, pending eventData=${JSON.stringify(eventData)}`);
               if (eventData) {
-                if (eventType === 'done') {
-                  try {
-                    const parsed = JSON.parse(eventData) as { traceId?: string; status?: string };
-                    if (parsed.status === 'complete') {
-                      onDoneRef.current?.();
-                    }
-                  } catch {
-                    // ignore
-                  }
-                } else if (eventType !== 'trace') {
-                  try {
-                    const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
-                    if (parsed.type === 'chunk') {
-                      accumulatedContentRef.current += parsed.content;
-                      onChunkRef.current?.(parsed.content);
-                    } else if (parsed.type === 'sources') {
-                      onSourcesRef.current?.(parsed.sources, parsed.conversationId);
-                    }
-                  } catch {
-                    accumulatedContentRef.current += eventData;
-                    onChunkRef.current?.(eventData);
-                  }
-                }
-                eventData = '';
+                console.log(`[SSE] WARNING: had pending eventData=${JSON.stringify(eventData)}, should have emitted!`);
               }
               eventType = value2;
+              eventData = '';
             } else if (field === 'data') {
-              // Emit pending event before new data
+              console.log(`[SSE] Data field: ${JSON.stringify(value2)}, current eventData=${JSON.stringify(eventData)}, eventType=${eventType}`);
               if (eventData) {
-                if (eventType === 'done') {
-                  try {
-                    const parsed = JSON.parse(eventData) as { traceId?: string; status?: string };
-                    if (parsed.status === 'complete') {
-                      onDoneRef.current?.();
-                    }
-                  } catch {
-                    // ignore
-                  }
-                } else if (eventType !== 'trace') {
-                  try {
-                    const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
-                    if (parsed.type === 'chunk') {
-                      accumulatedContentRef.current += parsed.content;
-                      onChunkRef.current?.(parsed.content);
-                    } else if (parsed.type === 'sources') {
-                      onSourcesRef.current?.(parsed.sources, parsed.conversationId);
-                    }
-                  } catch {
-                    accumulatedContentRef.current += eventData;
-                    onChunkRef.current?.(eventData);
-                  }
-                }
-                eventData = '';
+                // This shouldn't happen in well-formed SSE
+                console.log(`[SSE] WARNING: overwriting pending eventData=${JSON.stringify(eventData)}`);
               }
-              // If eventType is 'done', immediately process this data as the done event payload
-              if (eventType === 'done') {
-                try {
-                  const parsed = JSON.parse(value2) as { traceId?: string; status?: string };
-                  if (parsed.status === 'complete') {
-                    onDoneRef.current?.();
-                  }
-                } catch {
-                  // ignore
-                }
-                eventType = 'message';
-                eventData = '';
-              } else {
-                eventData = value2;
-              }
+              eventData = value2;
             }
-            // Other fields ignored
           }
         }
 
-        // Process remaining buffer at end
-        if (buffer.trim() && eventData) {
-          if (eventType !== 'trace') {
+        console.log(`[SSE] Stream ended. chunkCount=${chunkCount}, emitCount=${emitCount}, buffer=${JSON.stringify(buffer)}, lastLine=${JSON.stringify(lastLine)}, eventData=${JSON.stringify(eventData)}, eventType=${eventType}`);
+
+        // Process remaining buffer
+        if (buffer.trim() || eventData) {
+          console.log(`[SSE] Processing remaining: buffer=${JSON.stringify(buffer)}, eventData=${JSON.stringify(eventData)}`);
+          if (eventData && eventType !== 'trace') {
             try {
               const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
               if (parsed.type === 'chunk') {
@@ -233,8 +189,10 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         }
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Connection error';
+        console.log(`[SSE] Error: ${errorMessage}`);
         onErrorRef.current?.(errorMessage);
       } finally {
+        console.log(`[SSE] Finally: isConnected=false, accumulated=${JSON.stringify(accumulatedContentRef.current)}`);
         setIsConnected(false);
         readerRef.current = null;
       }
