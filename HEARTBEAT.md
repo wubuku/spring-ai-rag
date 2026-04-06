@@ -1337,3 +1337,9 @@
 ## WebUI 常规发布（2026-04-06 17:15）
 
 - 2026-04-06 17:15 — WebUI 常规发布：npm test ✅（113 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/12 ✅（Chat Interaction 1 失败为 LLM API 环境问题，非代码 bug）；后端 8081 UP（database/PGVECTOR UP）；git 工作区干净，无需提交；WebUI 项目处于生产级成熟状态
+
+## 后端巡检（2026-04-06 17:52）
+
+- 2026-04-06 17:52 — ✅ 国际化查漏：修复 3 处遗漏的中文错误消息（RagCollectionController 2处 + RagDocumentController 2处），统一改为英文；RagControllerIntegrationTest 同步更新断言；1238 tests 全通过；commit 9152bb6 已推送
+
+**扫描发现**：项目全部 ⏳ 待办均已完成或为 WebUI 任务。后端代码库零 TODO/FIXME，零中文用户可见消息，1238 测试全通过，处于生产级成熟状态。C27（MiniMax API E2E 测试）需要 `LLM_PROVIDER=minimax` + 有效 API key，建议在有可用 key 时执行。
