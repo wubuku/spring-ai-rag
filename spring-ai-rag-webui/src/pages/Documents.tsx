@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/documents';
@@ -99,6 +100,8 @@ export function Documents() {
           <span className={styles.uploadHint}>Supports: txt, md, json, xml, html, csv, log</span>
         </label>
       </div>
+
+      <ReembedAllButton />
 
       <div className={styles.searchRow}>
         <input

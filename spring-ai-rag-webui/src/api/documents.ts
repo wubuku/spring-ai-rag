@@ -58,4 +58,14 @@ export const documentsApi = {
     apiClient.post('/documents/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+
+  getEmbeddingStatus: () =>
+    apiClient.get<{ totalDocuments: number; withEmbeddings: number; withoutEmbeddings: number; hasMissing: boolean }>(
+      '/documents/embed-vector-status'
+    ),
+
+  reembedMissing: (force?: boolean) =>
+    apiClient.post<{ total: number; success: number; failed: number }>('/documents/embed-vector-reembed', null, {
+      params: { force },
+    }),
 };

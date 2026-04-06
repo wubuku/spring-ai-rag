@@ -101,4 +101,24 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE RagDocument d SET d.collectionId = NULL WHERE d.collectionId = :collectionId")
     void clearCollectionIdByCollectionId(@Param("collectionId") Long collectionId);
+
+    /**
+     * 查找没有嵌入向量的文档（rag_embeddings 中没有对应记录，或 embedding 为 NULL）
+     */
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT d.* FROM rag_documents d " +
+                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
+                "WHERE e.id IS NULL OR e.embedding IS NULL",
+        nativeQuery = true)
+    List<RagDocument> findDocumentsWithoutEmbeddings();
+
+    /**
+     * 统计没有嵌入向量的文档数量
+     */
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT COUNT(*) FROM rag_documents d " +
+                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
+                "WHERE e.id IS NULL OR e.embedding IS NULL",
+        nativeQuery = true)
+    long countDocumentsWithoutEmbeddings();
 }

@@ -60,7 +60,13 @@
     "totalDocuments": "Total Documents",
     "pending": "Pending",
     "embedded": "Embedded",
-    "failed": "Failed"
+    "failed": "Failed",
+    "missingEmbeddings": "documents need re-embedding",
+    "reembedAlert": "Documents missing embeddings",
+    "reembedDescription": "Found documents without embeddings. This may happen after data migration. Click to re-generate embeddings for all missing documents.",
+    "reembed": "Re-embed All",
+    "reembedForce": "Force Re-embed",
+    "reembedForceConfirm": "Force re-embed will regenerate ALL embeddings (may take a while). Continue?"
   },
   "collections": {
     "title": "Collections",

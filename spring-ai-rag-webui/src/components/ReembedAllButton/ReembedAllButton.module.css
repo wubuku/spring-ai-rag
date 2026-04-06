@@ -1,0 +1,114 @@
+.container {
+  margin-bottom: 12px;
+}
+
+.skeleton {
+  height: 44px;
+  margin-bottom: 12px;
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: 8px;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.alertButton {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 12px 16px;
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #856404;
+  transition: all 0.2s;
+}
+
+.alertButton:hover {
+  background: #ffe69c;
+}
+
+.icon {
+  font-size: 18px;
+}
+
+.text {
+  flex: 1;
+  text-align: left;
+  font-weight: 500;
+}
+
+.arrow {
+  font-size: 12px;
+  opacity: 0.7;
+}
+
+.panel {
+  margin-top: 8px;
+  padding: 16px;
+  background: #fefefe;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+}
+
+.message {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.reembedBtn {
+  flex: 1;
+  padding: 8px 16px;
+  background: #1976d2;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.reembedBtn:hover:not(:disabled) {
+  background: #1565c0;
+}
+
+.reembedBtn:disabled {
+  background: #90caf9;
+  cursor: not-allowed;
+}
+
+.forceBtn {
+  padding: 8px 16px;
+  background: #f57c00;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: background 0.2s;
+}
+
+.forceBtn:hover:not(:disabled) {
+  background: #ef6c00;
+}
+
+.forceBtn:disabled {
+  background: #ffcc80;
+  cursor: not-allowed;
+}

@@ -38,6 +38,8 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -239,6 +241,79 @@ public class RagDocumentController {
                     "documentId", id
             ));
         }
+    }
+
+    /**
+     * 查询嵌入向量状态
+     */
+    @Operation(summary = "嵌入向量状态", description = "查询有多少文档缺少嵌入向量，帮助判断是否需要重新嵌入")
+    @GetMapping("/embed-vector-status")
+    public ResponseEntity<Map<String, Object>> embeddingStatus() {
+        long total = documentRepository.count();
+        long withoutEmbedding = documentRepository.countDocumentsWithoutEmbeddings();
+        long withEmbedding = total - withoutEmbedding;
+        return ResponseEntity.ok(Map.of(
+                "totalDocuments", total,
+                "withEmbeddings", withEmbedding,
+                "withoutEmbeddings", withoutEmbedding,
+                "hasMissing", withoutEmbedding > 0
+        ));
+    }
+
+    /**
+     * 批量重新嵌入缺少向量的文档
+     */
+    @Operation(summary = "批量重新嵌入", description = "自动查找所有缺少嵌入向量的文档，批量生成并存储向量。用于数据迁移后修复或强制重嵌入。")
+    @PostMapping("/embed-vector-reembed")
+    public ResponseEntity<Map<String, Object>> reembedMissing(
+            @Parameter(description = "是否强制重嵌入（跳过已有向量）")
+            @RequestParam(defaultValue = "false") boolean force) {
+        List<RagDocument> missing = documentRepository.findDocumentsWithoutEmbeddings();
+        if (missing.isEmpty()) {
+            return ResponseEntity.ok(Map.of(
+                    "message", "All documents already have embeddings",
+                    "processed", 0
+            ));
+        }
+
+        log.info("Re-embedding {} documents without embeddings (force={})", missing.size(), force);
+        List<Map<String, Object>> results = new ArrayList<>();
+        int success = 0;
+        int failed = 0;
+
+        for (RagDocument doc : missing) {
+            try {
+                Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
+                results.add(Map.of(
+                        "documentId", doc.getId(),
+                        "title", doc.getTitle(),
+                        "status", "success",
+                        "chunks", result.getOrDefault("chunks", 0)
+                ));
+                success++;
+            } catch (Exception e) {
+                log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
+                results.add(Map.of(
+                        "documentId", doc.getId(),
+                        "title", doc.getTitle(),
+                        "status", "error",
+                        "error", e.getMessage()
+                ));
+                failed++;
+            }
+        }
+
+        auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
+                "batch",
+                "Reembed missing: force=" + force,
+                Map.of("success", success, "failed", failed, "total", missing.size()));
+
+        return ResponseEntity.ok(Map.of(
+                "total", missing.size(),
+                "success", success,
+                "failed", failed,
+                "results", results
+        ));
     }
 
     /**

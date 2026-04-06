@@ -60,7 +60,13 @@
     "totalDocuments": "文档总数",
     "pending": "待处理",
     "embedded": "已嵌入",
-    "failed": "失败"
+    "failed": "失败",
+    "missingEmbeddings": "个文档缺少嵌入向量",
+    "reembedAlert": "文档缺少嵌入向量",
+    "reembedDescription": "发现部分文档缺少嵌入向量。这可能是数据迁移时未迁移嵌入向量导致的。点击可重新为所有缺失文档生成嵌入向量。",
+    "reembed": "重新嵌入全部",
+    "reembedForce": "强制重新嵌入",
+    "reembedForceConfirm": "强制重新嵌入会重新生成所有文档的嵌入向量（可能需要较长时间）。确定继续吗？"
   },
   "collections": {
     "title": "知识库管理",
