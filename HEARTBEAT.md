@@ -1230,6 +1230,16 @@
   - commit 875a477，45 files，875 行新增
 
 
+## 进度日志（2026-04-06 下午）
+
+- 2026-04-06 14:47 — ✅ WebUI i18n placeholder 覆盖完善：
+  - 发现 5 个硬编码英文 placeholder（Alerts.tsx 3个 + CreateCollectionModal.tsx 2个）
+  - 新增 i18n key：alerts.sloConfigNamePlaceholder / alerts.silenceNamePlaceholder / alerts.silenceDescriptionPlaceholder / collections.createNamePlaceholder / collections.createDescriptionPlaceholder
+  - CreateCollectionModal 补 useTranslation hook（修复 4 个测试失败 ReferenceError: t is not defined）
+  - npm test ✅（112 tests 全通过）/ npm run build ✅（243KB index gzipped）
+  - E2E 11/12 ✅（Chat real LLM API 环境问题，非代码 bug）
+  - commit b181d16 已推送
+
 ## 进度日志（2026-04-06 上午）
 
 - 2026-04-06 06:13 — ✅ C20 Dockerfile 优化 (<200MB)：Spring Boot 分层 JAR (jarmode=layertools) + jlink 裁剪 JRE + distroless/java21-debian12:nonroot base。3-stage 多阶段构建：Maven builder → jlink-builder (创建最小化 JRE，--compress=2) → distroless 运行时。jlink 排除 50+ 不需要模块（java.corba/java.xml.bind/java.desktop/java.scripting/java.nashorn 等），--add-modules 仅保留 Spring AI RAG 需要的核心模块。Health check 使用 nc TCP 端口检测。非 root 用户。mvn clean compile ✅ / mvn test ✅（1290 tests，0 failures，0 errors）。Test fix: RagControllerIntegrationTest.submitFeedback_returnsResult mock 使用 `nullable(Integer.class)` + `nullable(List.class)` 替代 `any()` + `anyList()` 匹配 null 参数值。commit c41de47 已推送
