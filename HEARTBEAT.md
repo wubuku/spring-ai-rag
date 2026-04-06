@@ -1308,3 +1308,27 @@
   - OpenApiConfigTest：更新测试匹配英文描述
   - mvn clean compile ✅ / mvn test ✅（1245 tests，零失败零错误）
   - commit 577d60c 已推送
+
+## 下午进度（2026-04-06 16:55）
+
+### 解决的关键问题
+
+**1. SiliconFlow API Key 配置正确**
+- 之前 `.env` 用的 DeepSeek key (`sk-denicaowawxspumyxgytvmoasrjfvmmisegvehozxoixrhbj`) 对 DeepSeek API 返回 "Invalid token"
+- 参考项目的 key 也是同一个——对 DeepSeek 无效，但对 SiliconFlow 有效
+- SiliconFlow 既支持 Embedding（BAAI/bge-m3）又支持 Chat（Qwen/Qwen2.5-7B-Instruct）
+- 更新 `.env`：`OPENAI_API_KEY_BASE_URL=https://api.siliconflow.cn/v1`，`OPENAI_MODEL=Qwen/Qwen2.5-7B-Instruct`
+
+**2. 环境变量名不匹配**
+- `application.yml` 期望 `OPENAI_API_KEY_API_KEY` 和 `OPENAI_API_KEY_BASE_URL`
+- `.env` 之前用 `OPENAI_API_KEY` 和 `OPENAI_BASE_URL`（缺少 `_API_KEY` 后缀）
+- 修复：统一为 `OPENAI_API_KEY_API_KEY` 和 `OPENAI_API_KEY_BASE_URL`
+
+**3. E2E 测试 45/45 通过**
+- Search: ✅ 返回 doc 106（score 0.66）
+- Chat 非流式: ✅ 返回中文回答
+- Chat 流式 SSE: ✅ 正确解析
+- 所有 UI 组件: ✅
+
+### 提交
+- commit: SiliconFlow LLM 配置修复 + E2E 45/45 通过
