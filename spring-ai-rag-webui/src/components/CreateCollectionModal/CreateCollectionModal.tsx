@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { collectionsApi } from '../../api/collections';
 import { useToast } from '../Toast';
@@ -10,6 +11,7 @@ interface CreateCollectionModalProps {
 }
 
 export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModalProps) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
@@ -82,7 +84,7 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
               value={name}
               onChange={e => setName(e.target.value)}
               className={`${styles.input} ${errors.name ? styles.inputError : ''}`}
-              placeholder="e.g., Product Documentation"
+              placeholder={t('collections.createNamePlaceholder')}
               autoFocus
             />
             {errors.name && <span className={styles.error}>{errors.name}</span>}
@@ -95,7 +97,7 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
               value={description}
               onChange={e => setDescription(e.target.value)}
               className={`${styles.textarea} ${errors.description ? styles.inputError : ''}`}
-              placeholder="Optional description for this collection"
+              placeholder={t('collections.createDescriptionPlaceholder')}
               rows={3}
             />
             <div className={styles.charCount}>

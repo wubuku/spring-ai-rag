@@ -81,7 +81,9 @@
     "createTitle": "创建新知识库",
     "namePlaceholder": "例如：产品知识库",
     "description": "描述",
-    "descriptionPlaceholder": "这个知识库的用途是什么？"
+    "descriptionPlaceholder": "这个知识库的用途是什么？",
+    "createNamePlaceholder": "例如：产品文档",
+    "createDescriptionPlaceholder": "可选的集合描述"
   },
   "chat": {
     "title": "RAG 对话",
@@ -147,7 +149,10 @@
     "deleteSuccess": "静默计划已删除",
     "deleteError": "删除静默计划失败",
     "createSuccess": "静默计划创建成功",
-    "createError": "创建静默计划失败"
+    "createError": "创建静默计划失败",
+    "sloConfigNamePlaceholder": "例如：latency_p99",
+    "silenceNamePlaceholder": "例如：周末维护",
+    "silenceDescriptionPlaceholder": "留空则静默所有告警"
   },
   "settings": {
     "title": "系统设置",

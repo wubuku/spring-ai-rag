@@ -81,7 +81,9 @@
     "createTitle": "Create New Collection",
     "namePlaceholder": "e.g., Product Knowledge Base",
     "description": "Description",
-    "descriptionPlaceholder": "What is this collection for?"
+    "descriptionPlaceholder": "What is this collection for?",
+    "createNamePlaceholder": "e.g., Product Documentation",
+    "createDescriptionPlaceholder": "Optional description for this collection"
   },
   "chat": {
     "title": "Chat",
@@ -147,7 +149,10 @@
     "deleteSuccess": "Silence plan deleted",
     "deleteError": "Failed to delete silence plan",
     "createSuccess": "Silence plan created",
-    "createError": "Failed to create silence plan"
+    "createError": "Failed to create silence plan",
+    "sloConfigNamePlaceholder": "e.g. latency_p99",
+    "silenceNamePlaceholder": "e.g. weekend-maintenance",
+    "silenceDescriptionPlaceholder": "Leave empty to silence all alerts"
   },
   "settings": {
     "title": "Settings",

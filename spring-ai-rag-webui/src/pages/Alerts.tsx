@@ -157,7 +157,7 @@ function SloConfigsTab({ showForm, onShowForm, onHideForm }: { showForm: boolean
                 className={styles.input}
                 value={form.sloName}
                 onChange={e => setForm({ ...form, sloName: e.target.value })}
-                placeholder="e.g. latency_p99"
+                placeholder={t('alerts.sloConfigNamePlaceholder')}
                 required
               />
             </div>
@@ -312,7 +312,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
                 className={styles.input}
                 value={form.name}
                 onChange={e => setForm({ ...form, name: e.target.value })}
-                placeholder="e.g. weekend-maintenance"
+                placeholder={t('alerts.silenceNamePlaceholder')}
                 required
               />
             </div>
@@ -322,7 +322,7 @@ function SilenceSchedulesTab({ showForm, onShowForm, onHideForm }: { showForm: b
                 className={styles.input}
                 value={form.alertKey}
                 onChange={e => setForm({ ...form, alertKey: e.target.value })}
-                placeholder="Leave empty to silence all alerts"
+                placeholder={t('alerts.silenceDescriptionPlaceholder')}
               />
             </div>
             <div className={styles.formRow}>
