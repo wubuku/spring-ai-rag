@@ -561,10 +561,11 @@ class HybridRetrieverServiceTest {
         @DisplayName("strategy=pg_trgm 且扩展可用时使用 pg_trgm")
         void strategyTrgm_available_usesTrgm() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
-                    .thenThrow(new RuntimeException("not found"));
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
-                    .thenReturn(1);
+            // SearchCapabilities 检测
+            when(jdbc.queryForList(anyString(), eq(String.class)))
+                    .thenReturn(List.of("vector", "pg_trgm"));
+            when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
+                    .thenReturn(true);
 
             RagProperties props = new RagProperties();
             props.getRetrieval().setFulltextStrategy("pg_trgm");
@@ -577,8 +578,9 @@ class HybridRetrieverServiceTest {
         @DisplayName("strategy=pg_trgm 但扩展不可用时启动失败")
         void strategyTrgm_unavailable_throws() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
-                    .thenThrow(new RuntimeException("not found"));
+            // SearchCapabilities 检测返回空
+            when(jdbc.queryForList(anyString(), eq(String.class)))
+                    .thenReturn(List.of("vector"));  // 只有 vector，没有 pg_trgm
 
             RagProperties props = new RagProperties();
             props.getRetrieval().setFulltextStrategy("pg_trgm");
@@ -591,11 +593,11 @@ class HybridRetrieverServiceTest {
         @DisplayName("strategy=auto 自动选择最佳可用策略")
         void strategyAuto_selectsBestAvailable() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            // pg_jieba 不可用，pg_trgm 可用
-            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
-                    .thenThrow(new RuntimeException("not found"));
-            when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
-                    .thenReturn(1);
+            // SearchCapabilities 检测：只有 pg_trgm 可用
+            when(jdbc.queryForList(anyString(), eq(String.class)))
+                    .thenReturn(List.of("vector", "pg_trgm"));
+            when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
+                    .thenReturn(true);
 
             RagProperties props = new RagProperties();
             // default strategy is "auto"
@@ -607,8 +609,9 @@ class HybridRetrieverServiceTest {
         @DisplayName("strategy=auto 全部不可用时降级为 NoOp")
         void strategyAuto_allUnavailable_fallsBackToNoOp() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
-            when(jdbc.queryForObject(anyString(), eq(Integer.class)))
-                    .thenThrow(new RuntimeException("not found"));
+            // SearchCapabilities 检测返回空扩展列表
+            when(jdbc.queryForList(anyString(), eq(String.class)))
+                    .thenReturn(List.of("vector"));  // 只有 vector
 
             RagProperties props = new RagProperties();
             FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);

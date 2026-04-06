@@ -7,6 +7,7 @@ import com.springairag.core.config.RagRetrievalProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
+import com.springairag.core.retrieval.fulltext.QueryLang;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -15,14 +16,12 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 
 /**
@@ -30,7 +29,10 @@ import java.util.stream.Collectors;
  *
  * <p>结合向量检索和全文检索，通过结果融合提升召回质量。
  * 全文检索策略由 {@link FulltextSearchProviderFactory} 自动选择：
- * pg_jieba（中文分词优先）→ pg_trgm（降级）→ 无（纯向量）。
+ * <ul>
+ *   <li>中文：jieba FTS → pg_trgm → 无</li>
+ *   <li>英文/其他：English FTS → pg_trgm → 无</li>
+ * </ul>
  */
 @Service
 public class HybridRetrieverService {
@@ -41,7 +43,7 @@ public class HybridRetrieverService {
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private final RagRetrievalProperties retrieval;
-    private final FulltextSearchProvider fulltextProvider;
+    private final FulltextSearchProviderFactory fulltextProviderFactory;
 
     private final int retrievalTimeoutSeconds;
 
@@ -56,19 +58,29 @@ public class HybridRetrieverService {
         this.retrieval = ragProperties.getRetrieval();
         this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
-        this.fulltextProvider = fulltextProviderFactory != null
-                ? fulltextProviderFactory.getProvider()
-                : new NoOpFulltextSearchProvider();
-        log.info("HybridRetrieverService initialized with full-text provider: {}, retrievalTimeout={}s",
-                fulltextProvider.getName(), retrievalTimeoutSeconds);
+        this.fulltextProviderFactory = fulltextProviderFactory;
+        log.info("HybridRetrieverService initialized, retrievalTimeout={}s, fulltextStrategy={}",
+                retrievalTimeoutSeconds,
+                fulltextProviderFactory != null ? "auto-detect" : "disabled (no factory)");
+    }
+
+    /**
+     * 检测查询语言并选择全文检索策略
+     */
+    private FulltextSearchProvider selectFulltextProvider(String query) {
+        if (fulltextProviderFactory == null) {
+            return new NoOpFulltextSearchProvider();
+        }
+        QueryLang lang = fulltextProviderFactory.detectLang(query);
+        return fulltextProviderFactory.getProvider(lang);
     }
 
     /**
      * 是否应使用全文检索
      */
-    private boolean isFulltextAvailable(RetrievalConfig config) {
+    private boolean isFulltextAvailable(RetrievalConfig config, FulltextSearchProvider provider) {
         if (!retrieval.isFulltextEnabled()) return false;
-        if (!fulltextProvider.isAvailable()) return false;
+        if (!provider.isAvailable()) return false;
         return config == null || config.isUseHybridSearch();
     }
 
@@ -89,12 +101,16 @@ public class HybridRetrieverService {
                                          RetrievalConfig config) {
         log.debug("Executing hybrid search for query: {}", query);
 
+        // 检测语言并选择全文检索 Provider
+        FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
+        log.debug("Selected fulltext provider for query '{}': {}", query, fulltextProvider.getName());
+
         int effectiveLimit = (config != null && config.getMaxResults() > 0)
                 ? config.getMaxResults() : limit;
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
-        if (!isFulltextAvailable(config)) {
+        if (!isFulltextAvailable(config, fulltextProvider)) {
             return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
         }
 
@@ -145,7 +161,6 @@ public class HybridRetrieverService {
     private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
                                                           List<Long> documentIds, int limit) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
-        log.info("executeVectorQuery: vectorStr length={}, documentIds={}, limit={}", vectorStr.length(), documentIds, limit);
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
@@ -158,16 +173,13 @@ public class HybridRetrieverService {
             List<Object> args = new ArrayList<>(documentIds);
             args.add(vectorStr);
             args.add(limit);
-            List<Map<String, Object>> rows = jdbcTemplate.queryForList(sql, args.toArray());
-            log.info("executeVectorQuery: returned {} rows", rows.size());
-            return rows;
+            return jdbcTemplate.queryForList(sql, args.toArray());
         }
         // Use CAST(? AS vector) for proper parameter binding with pgvector
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
                         "FROM rag_embeddings ORDER BY embedding <=> CAST(? AS vector) LIMIT ?",
                 vectorStr, limit);
-        log.info("executeVectorQuery: returned {} rows", rows.size());
         return rows;
     }
 
@@ -176,26 +188,8 @@ public class HybridRetrieverService {
         return rows.stream()
                 .filter(row -> isNotExcluded(row, excludeIds))
                 .map(row -> {
-                    Object embObj = row.get("embedding");
-                    String embClass = embObj != null ? embObj.getClass().getName() : "null";
-                    // Get first element if it's an array
-                    String embPreview = "null";
-                    if (embObj instanceof float[]) {
-                        float[] arr = (float[]) embObj;
-                        embPreview = "float[len=" + arr.length + "][0]=" + arr[0];
-                    } else if (embObj instanceof double[]) {
-                        double[] arr = (double[]) embObj;
-                        embPreview = "double[len=" + arr.length + "][0]=" + arr[0];
-                    } else if (embObj instanceof Object[]) {
-                        Object[] arr = (Object[]) embObj;
-                        embPreview = "Object[len=" + arr.length + "][0]=" + arr[0];
-                    } else if (embObj != null) {
-                        embPreview = embObj.toString().substring(0, Math.min(50, embObj.toString().length()));
-                    }
                     float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
                     double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
-                    log.info("mapVectorResults: docId={}, embType={}, embPreview={}, emb.length={}, score={}",
-                        row.get("document_id"), embClass, embPreview, emb.length, score);
                     return toRetrievalResult(row, score, score, 0.0);
                 })
                 .collect(Collectors.toList());

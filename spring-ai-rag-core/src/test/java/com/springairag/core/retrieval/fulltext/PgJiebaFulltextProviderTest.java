@@ -21,7 +21,9 @@ class PgJiebaFulltextProviderTest {
     @DisplayName("pg_jieba + jiebacfg 都可用时 isAvailable=true")
     void available_whenExtensionAndConfigExist() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        // detectAvailability(): pg_jieba ext (Integer) + jiebacfg config (Integer) + search_vector_zh index (Boolean)
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class))).thenReturn(true);
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
         assertTrue(provider.isAvailable());
@@ -64,16 +66,18 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("search 使用 ts_rank 和 plainto_tsquery")
+    @DisplayName("search 使用 ts_rank 和 websearch_to_tsquery")
     void search_usesTsQueryAndRank() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        // detectAvailability(): ext (Integer) + config (Integer) + index (Boolean)
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class))).thenReturn(true);
 
         Map<String, Object> row = new HashMap<>();
         row.put("id", 1L); row.put("chunk_text", "测试文档"); row.put("document_id", 1L);
         row.put("chunk_index", 0); row.put("metadata", null); row.put("rank", 0.75);
 
-        when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of(row));
+        when(jdbc.queryForList(contains("ts_rank"), any(Object[].class))).thenReturn(List.of(row));
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
         List<RetrievalResult> results = provider.search("测试", null, null, 5, 0.0);

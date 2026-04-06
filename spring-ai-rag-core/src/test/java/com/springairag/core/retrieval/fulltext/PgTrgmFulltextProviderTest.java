@@ -21,7 +21,9 @@ class PgTrgmFulltextProviderTest {
     @DisplayName("pg_trgm 可用时 isAvailable=true")
     void available_whenExtensionExists() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        // detectAvailability(): extension check (Integer) + index existence check (Boolean)
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
         assertTrue(provider.isAvailable());
@@ -55,7 +57,9 @@ class PgTrgmFulltextProviderTest {
     @DisplayName("多词查询：每个关键词分别检索取最高相似度")
     void search_multiWord_takesBestScore() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        // detectAvailability(): extension (Integer) + index (Boolean)
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
 
         Map<String, Object> row1 = new HashMap<>();
         row1.put("id", 1L); row1.put("chunk_text", "doc1"); row1.put("document_id", 1L);
@@ -65,7 +69,7 @@ class PgTrgmFulltextProviderTest {
         row2.put("chunk_index", 0); row2.put("metadata", null); row2.put("sim", 0.5);
 
         // 第一个词返回高分，第二个词返回低分
-        when(jdbc.queryForList(anyString(), any(Object[].class)))
+        when(jdbc.queryForList(contains("similarity"), isA(Object[].class)))
                 .thenReturn(List.of(row1))
                 .thenReturn(List.of(row2));
 
@@ -99,12 +103,14 @@ class PgTrgmFulltextProviderTest {
     void search_excludeIds_filtered() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
 
         Map<String, Object> row = new HashMap<>();
         row.put("id", 1L); row.put("chunk_text", "doc1"); row.put("document_id", 1L);
         row.put("chunk_index", 0); row.put("metadata", null); row.put("sim", 0.8);
 
-        when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of(row));
+        when(jdbc.queryForList(contains("similarity"), any(Object.class)))
+                .thenReturn(List.of(row));
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
         List<RetrievalResult> results = provider.search("test", null, List.of(1L), 5, 0.3);
@@ -145,6 +151,7 @@ class PgTrgmFulltextProviderTest {
     void search_withDocumentIds_filtersByDocument() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(Collections.emptyList());
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);

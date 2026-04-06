@@ -27,25 +27,74 @@ class FulltextSearchProviderFactoryTest {
         props = new RagProperties();
     }
 
-    /** 模拟 pg_jieba 扩展可用 */
+    /** 模拟 pg_jieba 扩展可用且索引存在 */
     private void mockJiebaAvailable() {
-        // PgJiebaFulltextProvider 检查两个 SQL
-        when(jdbc.queryForObject("SELECT 1 FROM pg_extension WHERE extname = 'pg_jieba'", Integer.class))
+        // SearchCapabilities: 扩展检测
+        when(jdbc.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("vector", "pg_jieba"));
+        // SearchCapabilities: 索引检测 (Boolean) — 所有查询都返回 true，SearchCapabilities 消耗后 PgJiebaFulltextProvider 的 index 检查继续使用同一 mock
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
+                .thenReturn(true);
+        // PgJiebaFulltextProvider: 扩展和配置检测（使用 pg_extension 避免冲突）
+        when(jdbc.queryForObject(contains("pg_extension"), eq(Integer.class)))
                 .thenReturn(1);
-        when(jdbc.queryForObject("SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg'", Integer.class))
+        when(jdbc.queryForObject(contains("pg_ts_config"), eq(Integer.class)))
                 .thenReturn(1);
     }
 
-    /** 模拟 pg_trgm 扩展可用 */
+    /** 模拟 pg_trgm 扩展可用且索引存在 */
     private void mockTrgmAvailable() {
-        when(jdbc.queryForObject("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'", Integer.class))
+        // SearchCapabilities: 扩展检测
+        when(jdbc.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("vector", "pg_trgm"));
+        // SearchCapabilities: 索引检测（所有索引都存在）
+        when(jdbc.queryForObject(anyString(), eq(Boolean.class)))
+                .thenReturn(true);
+        // PgTrgmFulltextProvider: 使用更具体的匹配器，避免与 SearchCapabilities 冲突
+        // detectAvailability() 查询 pg_extension（扩展）+ gin_trgm_ops（索引）
+        when(jdbc.queryForObject(contains("pg_extension"), eq(Integer.class)))
                 .thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
     }
 
     /** 模拟所有扩展不可用 */
     private void mockAllUnavailable() {
-        when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+        // SearchCapabilities: 扩展检测返回空
+        when(jdbc.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("vector"));
+        // SearchCapabilities: 索引检测返回 false（所有 FTS 索引都不可用）
+        when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class)))
+                .thenReturn(false);
+        when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class)))
+                .thenReturn(false);
+        when(jdbc.queryForObject(contains("gin_trgm"), eq(Boolean.class)))
+                .thenReturn(false);
+        // detectAvailability() 的扩展检查也抛出异常（使用 pg_extension 避免与 SearchCapabilities 的 contains("pg_trgm") 冲突）
+        doThrow(new EmptyResultDataAccessException(1) {})
+                .when(jdbc).queryForObject(contains("pg_extension"), eq(Integer.class));
+    }
+
+    /** 模拟 pg_jieba 不可用但 pg_trgm 可用 */
+    private void mockJiebaUnavailableTrgmAvailable() {
+        // SearchCapabilities: 只有 pg_trgm 可用
+        when(jdbc.queryForList(anyString(), eq(String.class)))
+                .thenReturn(List.of("vector", "pg_trgm"));
+        // SearchCapabilities: 索引检测 - jieba 和 english 都不可用，只有 trgm 可用
+        when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class)))
+                .thenReturn(false);
+        when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class)))
+                .thenReturn(false);
+        when(jdbc.queryForObject(contains("gin_trgm"), eq(Boolean.class)))
+                .thenReturn(true);
+        // PgJiebaFulltextProvider: pg_jieba 不可用
+        when(jdbc.queryForObject(contains("pg_jieba"), eq(Integer.class)))
                 .thenThrow(EmptyResultDataAccessException.class);
+        // PgTrgmFulltextProvider: pg_trgm 可用（使用 pg_extension 避免与 SearchCapabilities 的 index 查询冲突）
+        when(jdbc.queryForObject(contains("pg_extension"), eq(Integer.class)))
+                .thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
     }
 
     @Nested
@@ -69,10 +118,7 @@ class FulltextSearchProviderFactoryTest {
         @DisplayName("pg_jieba 不可用时降级到 pg_trgm")
         void fallbackToPgTrgm() {
             props.getRetrieval().setFulltextStrategy("auto");
-            mockTrgmAvailable();
-            // pg_jieba 不可用：pg_extension 查询抛异常
-            when(jdbc.queryForObject("SELECT 1 FROM pg_extension WHERE extname = 'pg_jieba'", Integer.class))
-                    .thenThrow(EmptyResultDataAccessException.class);
+            mockJiebaUnavailableTrgmAvailable();
 
             FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbc, props);
             FulltextSearchProvider provider = factory.getProvider();

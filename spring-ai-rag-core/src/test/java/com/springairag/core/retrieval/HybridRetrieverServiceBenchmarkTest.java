@@ -47,11 +47,13 @@ class HybridRetrieverServiceBenchmarkTest {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
 
-        // 模拟 pg_trgm 可用（更具体的 matcher 放在后面才能覆盖 anyString）
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
-                .thenThrow(new DataAccessResourceFailureException("not found"));
+        // detectAvailability() 在构造函数中被调用，需要 Boolean mock + Integer mock
+        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
         when(jdbcTemplate.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
                 .thenReturn(1);
+        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
+                .thenThrow(new DataAccessResourceFailureException("not found"));
 
         RagProperties props = new RagProperties();
         FulltextSearchProviderFactory factory = new FulltextSearchProviderFactory(jdbcTemplate, props);
@@ -100,9 +102,9 @@ class HybridRetrieverServiceBenchmarkTest {
         List<Map<String, Object>> vectorRows = createFakeRows(20);
         List<Map<String, Object>> fulltextRows = createFakeFulltextRows(20);
 
-        // pg_trgm 可用性检测
-        when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class)))
-                .thenReturn(1);
+        // pg_trgm 可用性检测（Boolean for index + Integer for extension）
+        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
+        when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
 
         // 第一次调用是向量搜索（ORDER BY embedding <=>），第二次是全文搜索（similarity）
         when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
@@ -363,6 +365,7 @@ class HybridRetrieverServiceBenchmarkTest {
         List<Map<String, Object>> vectorRows = createFakeRows(20);
         List<Map<String, Object>> fulltextRows = createFakeFulltextRows(20);
 
+        when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
         when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
                 .thenReturn(vectorRows);
