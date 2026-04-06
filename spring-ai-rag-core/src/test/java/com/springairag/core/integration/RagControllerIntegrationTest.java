@@ -20,7 +20,9 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
@@ -60,7 +62,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         EvaluationController.class,
         AlertController.class
 })
-@Import({GlobalExceptionHandler.class, ApiVersionConfig.class})
+@Import({GlobalExceptionHandler.class, ApiVersionConfig.class, RagControllerIntegrationTest.RagPropertiesTestConfig.class})
 @TestPropertySource(properties = {
         "spring.mvc.throw-exception-if-no-handler-found=true",
         "spring.mvc.static-path-pattern=/static-never-match"
@@ -70,7 +72,21 @@ class RagControllerIntegrationTest {
     @Autowired
     private MockMvc mockMvc;
 
-    // ==================== Chat ====================
+    // ==================== Configuration ====================
+
+    /**
+     * Provides a fully-populated RagProperties so CorsConfig can initialize during context load.
+     * Must be static so it is registered before CorsConfig construction.
+     */
+    @TestConfiguration
+    static class RagPropertiesTestConfig {
+        @Bean
+        com.springairag.core.config.RagProperties ragProperties() {
+            // All nested properties are initialized via field initializers (e.g. new RagCorsProperties())
+            // so CorsConfig.getCors() will never return null
+            return new com.springairag.core.config.RagProperties();
+        }
+    }
     @MockBean private RagChatService ragChatService;
     @MockBean private RagChatHistoryRepository historyRepository;
     @MockBean private com.springairag.core.service.ChatExportService chatExportService;
@@ -172,7 +188,8 @@ class RagControllerIntegrationTest {
         }
 
         @Test
-        void chatAsk_missingSessionId_returns400() throws Exception {
+        void chatAsk_missingSessionId_returns200() throws Exception {
+            // sessionId is optional — controller auto-generates for new conversations
             mockMvc.perform(post("/api/v1/rag/chat/ask")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
@@ -180,7 +197,7 @@ class RagControllerIntegrationTest {
                                         "message": "测试消息"
                                     }
                                     """))
-                    .andExpect(status().isBadRequest());
+                    .andExpect(status().isOk());
         }
 
         @Test

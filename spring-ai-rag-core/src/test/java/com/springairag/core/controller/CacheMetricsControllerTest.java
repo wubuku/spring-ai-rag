@@ -1,12 +1,15 @@
 package com.springairag.core.controller;
 
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,7 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * CacheMetricsController 测试
  */
 @WebMvcTest(CacheMetricsController.class)
-@Import(ApiVersionConfig.class)
+@Import({ApiVersionConfig.class, CacheMetricsControllerTest.RagPropertiesTestConfig.class})
 class CacheMetricsControllerTest {
 
     @Autowired
@@ -66,5 +69,13 @@ class CacheMetricsControllerTest {
                 .andExpect(jsonPath("$.hitCount").value(0))
                 .andExpect(jsonPath("$.totalCount").value(0))
                 .andExpect(jsonPath("$.hitRate").value("N/A"));
+    }
+
+    @TestConfiguration
+    static class RagPropertiesTestConfig {
+        @Bean
+        RagProperties ragProperties() {
+            return new RagProperties();
+        }
     }
 }

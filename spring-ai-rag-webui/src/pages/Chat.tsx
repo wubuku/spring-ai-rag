@@ -28,8 +28,19 @@ export function Chat() {
   addSessionRef.current = addSession;
 
   const { send, isConnected } = useChatSSE({
-    onChunk: () => {
-      // Content updates are handled via the streaming message detection
+    onChunk: (content: string) => {
+      // Append chunk to the last streaming assistant message
+      setMessages(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (lastMsg?.isStreaming) {
+          return prev.map(msg =>
+            msg.id === lastMsg.id
+              ? { ...msg, content: msg.content + content }
+              : msg
+          );
+        }
+        return prev;
+      });
     },
     onSources: (sources, convId) => {
       setConversationId(convId);

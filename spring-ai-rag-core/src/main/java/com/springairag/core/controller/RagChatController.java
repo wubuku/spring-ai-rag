@@ -80,6 +80,10 @@ public class RagChatController {
     @PostMapping("/ask")
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
+        // 首次对话时 sessionId 为空，自动生成
+        if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+            request.setSessionId(java.util.UUID.randomUUID().toString());
+        }
         log.info("RAG ask: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
@@ -99,6 +103,10 @@ public class RagChatController {
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
+        // 首次对话时 sessionId 为空，自动生成
+        if (request.getSessionId() == null || request.getSessionId().isBlank()) {
+            request.setSessionId(java.util.UUID.randomUUID().toString());
+        }
         log.info("RAG stream: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());

@@ -2,14 +2,19 @@ package com.springairag.core.controller;
 
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.config.RagCorsProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
 import com.springairag.core.versioning.ApiVersionConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -24,7 +29,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * ModelController 单元测试
  */
 @WebMvcTest(ModelController.class)
-@Import(ApiVersionConfig.class)
+@Import({ApiVersionConfig.class, ModelControllerTest.RagPropertiesTestConfig.class})
 class ModelControllerTest {
 
     @Autowired
@@ -110,5 +115,13 @@ class ModelControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    @TestConfiguration
+    static class RagPropertiesTestConfig {
+        @Bean
+        RagProperties ragProperties() {
+            return new RagProperties();
+        }
     }
 }

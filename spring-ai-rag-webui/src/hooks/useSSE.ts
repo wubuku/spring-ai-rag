@@ -87,17 +87,16 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             if (colonIdx === -1) continue; // ignore invalid lines
 
             const field = line.slice(0, colonIdx);
-            const value2 = line.slice(colonIdx + 1).replace(/^\s+/, ''); // strip leading space per SSE spec
+            // strip leading space (SSE spec) and trailing \r (HTTP chunked encoding uses CRLF)
+            const value2 = line.slice(colonIdx + 1).replace(/^\s+/, '').replace(/\r$/, '');
 
             if (field === 'event') {
               eventType = value2;
             } else if (field === 'data') {
               eventData = value2;
             } else if (field === '') {
-              // Empty line → dispatch accumulated event
-              if (eventType === 'trace') {
-                // trace events have no content to display
-              } else if (eventType === 'done') {
+              // Empty line → SSE event terminator. Always reset after processing.
+              if (eventType === 'done') {
                 try {
                   const parsed = JSON.parse(eventData) as { traceId?: string; status?: string };
                   if (parsed.status === 'complete') {
@@ -106,8 +105,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
                 } catch {
                   // ignore parse errors
                 }
-              } else {
-                // Default "message" event: treat as a chunk
+              } else if (eventType !== 'trace') {
+                // 'message' event: treat as content chunk
                 if (eventData) {
                   try {
                     const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
@@ -124,6 +123,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
                   }
                 }
               }
+              // Always reset after processing the SSE event terminator
               eventType = 'message';
               eventData = '';
             }
