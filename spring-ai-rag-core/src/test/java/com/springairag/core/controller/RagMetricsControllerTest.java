@@ -2,10 +2,12 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
+import com.springairag.api.dto.SlowQueryStatsResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.metrics.SlowQueryMetricsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -36,12 +38,15 @@ class RagMetricsControllerTest {
     @Mock
     private ChatModelRouter modelRouter;
 
+    @Mock
+    private SlowQueryMetricsService slowQueryMetricsService;
+
     private RagMetricsController controller;
 
     @BeforeEach
     void setUp() {
         controller = new RagMetricsController(
-                metricsService, modelMetricsService, modelRegistry, modelRouter);
+                metricsService, modelMetricsService, modelRegistry, modelRouter, slowQueryMetricsService);
     }
 
     @Test
@@ -153,5 +158,37 @@ class RagMetricsControllerTest {
         assertEquals(0L, stats.errors());
         assertEquals(0.0, stats.errorRate());
         assertEquals("Claude 3.5 Sonnet", stats.displayName());
+    }
+
+    @Test
+    void getSlowQueryStats_nullService_returnsDisabledResponse() {
+        // Controller constructed with null slowQueryMetricsService
+        RagMetricsController controllerNoSlowQuery = new RagMetricsController(
+                metricsService, modelMetricsService, modelRegistry, modelRouter, null);
+
+        SlowQueryStatsResponse result = controllerNoSlowQuery.getSlowQueryStats();
+
+        assertNotNull(result);
+        assertFalse(result.enabled());
+        assertEquals(0L, result.totalQueryCount());
+        assertEquals(0L, result.slowQueryCount());
+    }
+
+    @Test
+    void getSlowQueryStats_enabled_returnsStatsFromService() {
+        when(slowQueryMetricsService.isEnabled()).thenReturn(true);
+        when(slowQueryMetricsService.getThresholdMs()).thenReturn(1000L);
+        when(slowQueryMetricsService.getStatsSummary())
+                .thenReturn(new SlowQueryMetricsService.SlowQueryStatsSummary(
+                        500L, 200L, 10L, 1000L, 50L, List.of()));
+
+        SlowQueryStatsResponse result = controller.getSlowQueryStats();
+
+        assertNotNull(result);
+        assertTrue(result.enabled());
+        assertEquals(1000L, result.thresholdMs());
+        assertEquals(500L, result.totalQueryCount());
+        assertEquals(10L, result.slowQueryCount());
+        assertEquals(50L, result.averageDurationMs());
     }
 }

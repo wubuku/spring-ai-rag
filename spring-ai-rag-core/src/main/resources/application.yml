@@ -48,6 +48,11 @@ spring:
       ddl-auto: none
     open-in-view: false
     show-sql: false
+    properties:
+      hibernate:
+        # Enable Hibernate query statistics for slow query monitoring.
+        # Warning: has a minor performance impact (~5%) in production.
+        generate_statistics: false
 
   # Flyway database migrations
   flyway:
@@ -298,6 +303,15 @@ rag:
     retry-on-connect-timeout: true
     retry-on-read-timeout: true
     jitter-factor: 0.2          # Random jitter factor (0.0 to 1.0)
+
+  # Slow query monitoring configuration
+  # Requires hibernate.generate_statistics=true (see spring.jpa.properties above)
+  # Warning: enabling statistics has a minor performance impact (~5%)
+  # slow-query:
+  #   enabled: true
+  #   threshold-ms: 1000           # Queries exceeding this (ms) are logged and counted
+  #   log-enabled: true             # Log slow queries to application log
+  #   max-retained: 100             # Max recent slow queries to retain for REST exposure
 
 # ============================================
 # Server Configuration

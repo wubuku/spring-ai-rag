@@ -2,15 +2,18 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
+import com.springairag.api.dto.SlowQueryStatsResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.metrics.SlowQueryMetricsService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -35,15 +38,18 @@ public class RagMetricsController {
     private final ModelMetricsService modelMetricsService;
     private final ModelRegistry modelRegistry;
     private final ChatModelRouter modelRouter;
+    private final SlowQueryMetricsService slowQueryMetricsService;
 
     public RagMetricsController(RagMetricsService metricsService,
                                 ModelMetricsService modelMetricsService,
                                 ModelRegistry modelRegistry,
-                                ChatModelRouter modelRouter) {
+                                ChatModelRouter modelRouter,
+                                @Autowired(required = false) SlowQueryMetricsService slowQueryMetricsService) {
         this.metricsService = metricsService;
         this.modelMetricsService = modelMetricsService;
         this.modelRegistry = modelRegistry;
         this.modelRouter = modelRouter;
+        this.slowQueryMetricsService = slowQueryMetricsService;
     }
 
     @Operation(summary = "获取 RAG 指标汇总",
@@ -82,5 +88,40 @@ public class RagMetricsController {
                 .toList();
 
         return new ModelMetricsResponse(modelRouter.isMultiModelEnabled(), modelStats);
+    }
+
+    @Operation(summary = "Get slow query statistics",
+            description = "Returns slow query count, threshold, and recent slow query records. "
+                    + "Requires hibernate.generate_statistics=true to be configured.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns slow query statistics"),
+    })
+    @GetMapping(value = "/metrics/slow-queries", produces = MediaType.APPLICATION_JSON_VALUE)
+    public SlowQueryStatsResponse getSlowQueryStats() {
+        if (slowQueryMetricsService == null) {
+            return new SlowQueryStatsResponse(
+                    false, 0, 0, 0, 0, List.of());
+        }
+        SlowQueryMetricsService.SlowQueryStatsSummary summary =
+                slowQueryMetricsService.getStatsSummary();
+        List<SlowQueryStatsResponse.SlowQueryRecordDto> recentRecords =
+                summary.recentSlowQueries().stream()
+                        .map(r -> new SlowQueryStatsResponse.SlowQueryRecordDto(
+                                r.timestampMs(), r.durationMs(),
+                                maskSql(r.sql())))
+                        .toList();
+        return new SlowQueryStatsResponse(
+                slowQueryMetricsService.isEnabled(),
+                slowQueryMetricsService.getThresholdMs(),
+                summary.totalQueryCount(),
+                summary.slowQueryCount(),
+                summary.averageQueryDurationMs(),
+                recentRecords
+        );
+    }
+
+    private static String maskSql(String sql) {
+        if (sql == null) return null;
+        return sql.replaceAll("(?i)('[^']*')", "'***'");
     }
 }
