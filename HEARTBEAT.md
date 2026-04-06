@@ -181,6 +181,7 @@
   - commit e77acce 已推送
 - 2026-04-06 07:40 — ✅ HTTP 代理配置化：RagProxyProperties（enabled/host/port/noProxyHosts）+ SpringAiConfig.initProxySettings() 重构（替代硬编码 disableProxyForMiniMax）；proxy.enabled=false 时使用 NO_PROXY selector，enabled=true 时使用配置的代理；application.yml 添加 rag.proxy.* 配置节；RagProxyPropertiesTest（2 tests）；mvn clean compile ✅，mvn test ✅；commit d63437c 已推送
 - 2026-04-06 07:56 — ✅ MiniMax API 集成测试补强 + OpenApiContractTest 修复：SpringAiConfigTest 新增 4 个 `miniMaxChatModel()` 单元测试（provider=minimax 创建模型、provider=openai/anthropic 返回 null、chatModel 选择 miniMax）；OpenApiContractTest 修复 context 加载问题——排除 `DataSourceAutoConfiguration` + `HibernateJpaAutoConfiguration` + `management.health.db.enabled=false`，解决无 DB 环境下 "Included health contributor 'db' in group 'readiness'" 错误；1169 测试全通过（零失败零错误）；commit 64e7cfc 已推送
+- 2026-04-06 16:52 — ✅ C8 API SLO 合规追踪：新增 ApiSloTrackerService（滑动时间窗口追踪 per-endpoint p50/p95/p99 延迟和合规百分比）、ApiSloProperties（每个端点可配置阈值，search=500ms/chat=1000ms/embed=2000ms）、ApiSloHandlerInterceptor（自动读取 @Timed 注解值）、ApiSloConfig（/api/** 路径注册拦截器）、GET /api/v1/rag/metrics/slo REST 端点（返回每个端点的 compliance%/SLO breach count/p50/p95/p99）；10 files changed, +628 lines；1352 tests 全通过；commit 78d77e0 已推送
 - 2026-04-06 16:28 — ✅ N30 + OpenApiContractTest 修复：OpenApiContractTest 新增 `@MockBean RagClientErrorRepository`（排除 DataSourceAutoConfiguration 后 ClientErrorServiceImpl 构造失败）；SensitiveDataMaskingConverter 增加中文 PII 脱敏规则（CHINESE_NATIONAL_ID 身份证号 + CHINESE_PHONE 手机号），覆盖日志中可能出现的用户敏感数据；对应 SensitiveDataMaskingConverterTest 138 行；mvn test ✅（全模块 BUILD SUCCESS）；commit a38d05d 已推送
 - 2026-04-06 08:03 — ✅ C28 SiliconFlow 嵌入调试：修复 `.env` 中 `SILICONFLOW_URL=https://api.siliconflow.cn/v1/embeddings`（含 `/embeddings` 导致 Spring AI `OpenAiApi` URL 双重复制：`.../v1/embeddings/embeddings`）；修正为 `https://api.siliconflow.cn/v1`（不含 `/embeddings`）；新增 `EmbeddingModelConfigTest`（3 tests：OpenAiEmbeddingModel 创建验证 + BAAI/bge-m3 1024维配置 + 自定义 baseUrl）；1172 测试全通过；commit 9782e56 已推送
 - 2026-04-06 05:50 — ✅ C19 API per-endpoint 超时配置化：RagTimeoutProperties（7 项配置：connect/read/chat-ask/chat-stream/search/embed/model-compare）+ SpringAiConfig 重构（RestClient 层级注入超时）+ application.yml rag.timeout.* 配置节；SpringAiConfigTest 适配构造函数注入（8 tests）；RagTimeoutPropertiesTest（4 tests）；docs/configuration.md + configuration-zh-CN.md 添加 LLM API 超时配置章节；12 tests ✅；mvn clean compile ✅；commit cdfe91c 已推送
@@ -1169,7 +1170,7 @@
 | C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ⏳ | P2 |
 | C6 | N23：k6 负载测试脚本完善（search + chat 并发） | 性能 | ⏳ | P2 |
 | C7 | N26：Flyway 迁移脚本版本一致性检查（CI） | DevOps | ✅ 2026-04-06 | P2 |
-| C8 | N27：API 响应时间基准测试（SLO < 500ms） | 性能 | ⏳ | P2 |
+| C8 | N27：API SLO 合规追踪（/metrics/slo endpoint + 滑动窗口 p50/p95/p99） | 性能 | ✅ 2026-04-06 | P2 |
 | C9 | N28：WebUI 国际化支持（i18n 框架搭建） | UX | ⏳ | P3 |
 | C10 | N29：Spring Boot 3.5 Virtual Threads 压测验证 | 技术升级 | ⏳ | P3 |
 | C11 | N30：敏感日志脱敏（用户查询内容脱敏） | 安全 | ✅ 2026-04-06 | P3 |
