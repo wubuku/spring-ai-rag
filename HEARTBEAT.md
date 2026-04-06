@@ -1255,6 +1255,13 @@
 | C41 | OpenAiApi.class 是 Spring AI 内部类，无需修改 | 调研 | ✅ 已确认 |
 | C42 | demo-* 符号链接结构已正确（demos/demo-basic-rag → demo-basic-rag symlink） | 代码质量 | ✅ 已确认 |
 
+## 待办（C43 — 可观测性增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C43 | RetrievalEvaluationService Micrometer 指标（rag.evaluation.*） | 可观测性 | ✅ 2026-04-06（C43 完成：5 个 meters——rag.evaluation.duration[Timer]/count[Counter]/batch_count[Counter]/hits[Counter]/misses[Counter]；修复 SLF4J log '{:.4f}' Python 格式 bug → '{}'；1238+ tests 全通过，commit 2b31b55） |
+
+
 ## 待办（WebUI 组件测试补强 W8-W11）
 
 | # | 改进项 | 类型 | 状态 | 优先级 |
@@ -1343,3 +1350,7 @@
 - 2026-04-06 17:52 — ✅ 国际化查漏：修复 3 处遗漏的中文错误消息（RagCollectionController 2处 + RagDocumentController 2处），统一改为英文；RagControllerIntegrationTest 同步更新断言；1238 tests 全通过；commit 9152bb6 已推送
 
 **扫描发现**：项目全部 ⏳ 待办均已完成或为 WebUI 任务。后端代码库零 TODO/FIXME，零中文用户可见消息，1238 测试全通过，处于生产级成熟状态。C27（MiniMax API E2E 测试）需要 `LLM_PROVIDER=minimax` + 有效 API key，建议在有可用 key 时执行。
+
+## 后端巡检（2026-04-06 19:14）
+
+- 2026-04-06 19:14 — ✅ C43 RetrievalEvaluationService Micrometer 可观测性增强：注入 MeterRegistry + @PostConstruct 初始化 5 个 meters——`rag.evaluation.duration` (Timer, p50/p95/p99) 评测延迟、`rag.evaluation.count` (Counter) 评测总次数、`rag.evaluation.batch_count` (Counter) 批量评测用例数、`rag.evaluation.hits`/`rag.evaluation.misses` (Counter) 有/无命中统计；修复 SLF4J log 格式 bug：`'{:.4f}'` (Python) → `'{}'` (Java SLF4J)；RetrievalEvaluationServiceImplTest 手动调用 `initMetrics()` 初始化 meters；1238+ tests 全通过；commit 2b31b55 已推送
