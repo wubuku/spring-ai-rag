@@ -1,10 +1,12 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ApiSloComplianceResponse;
 import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.api.dto.SlowQueryStatsResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.metrics.ApiSloTrackerService;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.metrics.SlowQueryMetricsService;
@@ -39,17 +41,20 @@ public class RagMetricsController {
     private final ModelRegistry modelRegistry;
     private final ChatModelRouter modelRouter;
     private final SlowQueryMetricsService slowQueryMetricsService;
+    private final ApiSloTrackerService sloTrackerService;
 
     public RagMetricsController(RagMetricsService metricsService,
                                 ModelMetricsService modelMetricsService,
                                 ModelRegistry modelRegistry,
                                 ChatModelRouter modelRouter,
-                                @Autowired(required = false) SlowQueryMetricsService slowQueryMetricsService) {
+                                @Autowired(required = false) SlowQueryMetricsService slowQueryMetricsService,
+                                @Autowired(required = false) ApiSloTrackerService sloTrackerService) {
         this.metricsService = metricsService;
         this.modelMetricsService = modelMetricsService;
         this.modelRegistry = modelRegistry;
         this.modelRouter = modelRouter;
         this.slowQueryMetricsService = slowQueryMetricsService;
+        this.sloTrackerService = sloTrackerService;
     }
 
     @Operation(summary = "获取 RAG 指标汇总",
@@ -118,6 +123,21 @@ public class RagMetricsController {
                 summary.averageQueryDurationMs(),
                 recentRecords
         );
+    }
+
+    @Operation(summary = "Get API SLO compliance metrics",
+            description = "Returns per-endpoint SLO compliance percentages (p95 latency vs. threshold) "
+                    + "within the configured time window. Use this to monitor whether key API endpoints "
+                    + "are meeting their latency objectives.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns SLO compliance metrics per endpoint"),
+    })
+    @GetMapping(value = "/metrics/slo", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ApiSloComplianceResponse getSloCompliance() {
+        if (sloTrackerService == null) {
+            return new ApiSloComplianceResponse(false, 0, List.of());
+        }
+        return sloTrackerService.getCompliance();
     }
 
     private static String maskSql(String sql) {

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import com.springairag.core.config.ApiSloProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.ComponentScan;
 
@@ -45,8 +46,8 @@ class GeneralRagAutoConfigurationTest {
         EnableConfigurationProperties annotation = GeneralRagAutoConfiguration.class
                 .getAnnotation(EnableConfigurationProperties.class);
         assertNotNull(annotation);
-        // RagProperties 通过 @Bean ragProperties() 注册，@EnableConfigurationProperties 只绑定 GeneralRagProperties
-        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class}, annotation.value());
+        // RagProperties 通过 @Bean ragProperties() 注册，@EnableConfigurationProperties 只绑定 GeneralRagProperties 和 ApiSloProperties
+        assertArrayEquals(new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class}, annotation.value());
     }
 
     @Test

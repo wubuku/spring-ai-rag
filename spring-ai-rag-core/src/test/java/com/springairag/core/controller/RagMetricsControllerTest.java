@@ -1,10 +1,12 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ApiSloComplianceResponse;
 import com.springairag.api.dto.ModelMetricsResponse;
 import com.springairag.api.dto.RagMetricsSummary;
 import com.springairag.api.dto.SlowQueryStatsResponse;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.metrics.ApiSloTrackerService;
 import com.springairag.core.metrics.ModelMetricsService;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.metrics.SlowQueryMetricsService;
@@ -41,12 +43,16 @@ class RagMetricsControllerTest {
     @Mock
     private SlowQueryMetricsService slowQueryMetricsService;
 
+    @Mock
+    private ApiSloTrackerService sloTrackerService;
+
     private RagMetricsController controller;
 
     @BeforeEach
     void setUp() {
         controller = new RagMetricsController(
-                metricsService, modelMetricsService, modelRegistry, modelRouter, slowQueryMetricsService);
+                metricsService, modelMetricsService, modelRegistry, modelRouter,
+                slowQueryMetricsService, sloTrackerService);
     }
 
     @Test
@@ -164,7 +170,7 @@ class RagMetricsControllerTest {
     void getSlowQueryStats_nullService_returnsDisabledResponse() {
         // Controller constructed with null slowQueryMetricsService
         RagMetricsController controllerNoSlowQuery = new RagMetricsController(
-                metricsService, modelMetricsService, modelRegistry, modelRouter, null);
+                metricsService, modelMetricsService, modelRegistry, modelRouter, null, sloTrackerService);
 
         SlowQueryStatsResponse result = controllerNoSlowQuery.getSlowQueryStats();
 
@@ -190,5 +196,39 @@ class RagMetricsControllerTest {
         assertEquals(500L, result.totalQueryCount());
         assertEquals(10L, result.slowQueryCount());
         assertEquals(50L, result.averageDurationMs());
+    }
+
+    @Test
+    void getSloCompliance_nullService_returnsDisabledResponse() {
+        RagMetricsController controllerNoSlo = new RagMetricsController(
+                metricsService, modelMetricsService, modelRegistry, modelRouter,
+                slowQueryMetricsService, null);
+
+        ApiSloComplianceResponse result = controllerNoSlo.getSloCompliance();
+
+        assertNotNull(result);
+        assertFalse(result.enabled());
+        assertTrue(result.endpoints().isEmpty());
+    }
+
+    @Test
+    void getSloCompliance_enabled_returnsComplianceFromService() {
+        ApiSloComplianceResponse compliance = new ApiSloComplianceResponse(
+                true, 300,
+                List.of(new ApiSloComplianceResponse.EndpointSlo(
+                        "rag.search.post", "POST", 500, 95.0, 100, 95, 5,
+                        new ApiSloComplianceResponse.LatencyStats(50, 400, 480, 10, 600, 80)
+                )));
+
+        when(sloTrackerService.getCompliance()).thenReturn(compliance);
+
+        ApiSloComplianceResponse result = controller.getSloCompliance();
+
+        assertNotNull(result);
+        assertTrue(result.enabled());
+        assertEquals(300, result.windowSeconds());
+        assertEquals(1, result.endpoints().size());
+        assertEquals("rag.search.post", result.endpoints().get(0).endpoint());
+        assertEquals(95.0, result.endpoints().get(0).compliancePercent());
     }
 }

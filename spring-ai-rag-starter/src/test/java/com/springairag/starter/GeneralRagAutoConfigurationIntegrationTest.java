@@ -1,6 +1,8 @@
 package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
+import com.springairag.core.config.ApiSloConfig;
+import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -60,14 +62,15 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@EnableConfigurationProperties 绑定 GeneralRagProperties")
+        @DisplayName("@EnableConfigurationProperties 绑定 GeneralRagProperties + ApiSloProperties")
         void enableConfigurationProperties() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(EnableConfigurationProperties.class);
             assertNotNull(ann);
             // RagProperties 通过 @Bean ragProperties() 注册，不再通过 @EnableConfigurationProperties
+            // ApiSloProperties 通过 @EnableConfigurationProperties 绑定
             assertArrayEquals(
-                    new Class<?>[]{GeneralRagProperties.class},
+                    new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class},
                     ann.value());
         }
 
@@ -80,11 +83,14 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@Import 不再使用（配置类通过 Spring Boot 主扫描加载）")
+        @DisplayName("@Import 导入 ApiSloConfig")
         void importsConfigs() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(Import.class);
-            assertNull(ann);
+            assertNotNull(ann);
+            assertArrayEquals(
+                    new Class<?>[]{ApiSloConfig.class},
+                    ann.value());
         }
     }
 

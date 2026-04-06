@@ -1,6 +1,8 @@
 package com.springairag.starter;
 
 import com.springairag.api.service.DomainRagExtension;
+import com.springairag.core.config.ApiSloConfig;
+import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagSecurityProperties;
 import com.springairag.core.config.RagRateLimitProperties;
@@ -21,6 +23,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 
 /**
  * 通用 RAG 服务自动配置
@@ -32,7 +35,8 @@ import org.springframework.context.annotation.Bean;
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties({GeneralRagProperties.class})
+@EnableConfigurationProperties({GeneralRagProperties.class, ApiSloProperties.class})
+@Import(ApiSloConfig.class)
 public class GeneralRagAutoConfiguration {
 
     /**
@@ -171,5 +175,18 @@ public class GeneralRagAutoConfiguration {
     public Object llmCircuitBreakerIndicator(
             com.springairag.core.config.RagChatService ragChatService) {
         return new com.springairag.core.metrics.CircuitBreakerHealthIndicator(ragChatService);
+    }
+
+    /**
+     * API SLO Compliance Tracker
+     */
+    @Bean
+    @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
+    @ConditionalOnMissingBean(com.springairag.core.metrics.ApiSloTrackerService.class)
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+            prefix = "rag.slo", name = "enabled", havingValue = "true", matchIfMissing = true)
+    public com.springairag.core.metrics.ApiSloTrackerService apiSloTrackerService(
+            ApiSloProperties apiSloProperties) {
+        return new com.springairag.core.metrics.ApiSloTrackerService(apiSloProperties);
     }
 }
