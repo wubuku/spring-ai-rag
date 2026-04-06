@@ -1424,3 +1424,5 @@
 
 - 2026-04-07 05:17 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅（Search 测试失败：数据库为空，已知环境问题，非代码 bug）；dist 已同步到 static/webui/；后端服务 8081 UP；WebUI 项目处于生产级成熟状态
 - 2026-04-07 06:14 — ✅ HS1-3 + HS4-*：PgEnglishFtsProviderTest 10 个单元测试（availability/search/ts_rank/filter/score/exclude/empty-query/DB-error）；HS1-4/HS1-5/V15/V16 经审查已完整实现，无需额外工作；全量测试通过，commit c0725e9 已推送
+- 2026-04-07 07:30 — ✅ ApiSloTrackerService 单元测试补全：ApiSloTrackerServiceTest 16 个测试（constructor/enabled-disabled/recordLatency/getCompliance/并发1000条/concurrent 10线程×100条/多endpoint/方法提取POST/GET/PUT/DELETE/SSE/未知默认GET/阈值边界500ms=compliant）；全量测试通过，commit 1c009e0 已推送
+
