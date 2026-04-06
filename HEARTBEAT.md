@@ -1219,13 +1219,14 @@
 
 | # | 改进项 | 类型 | 状态 | 优先级 |
 |---|--------|------|------|--------|
-| W8 | ErrorBoundary 组件测试（错误捕获 + fallback 渲染） | 测试覆盖 | ⏳ | P2 |
-| W9 | Card/Modal/Table 组件测试 | 测试覆盖 | ⏳ | P2 |
-| W10 | Upload 组件测试（进度回调 + 错误处理） | 测试覆盖 | ⏳ | P2 |
-| W11 | MetricsCharts 组件测试（Recharts 图表渲染） | 测试覆盖 | ⏳ | P2 |
+| W8 | ErrorBoundary 组件测试（错误捕获 + fallback 渲染） | 测试覆盖 | ✅ 2026-04-06（W8 完成：11 tests — renders/children/normal/captures error/default+custom fallback/reset+recover/log error/no message/multiple children） | P2 |
+| W9 | Card/Modal/Table 组件测试 | 测试覆盖 | ⏳（组件目录为空，跳过） | P2 |
+| W10 | Upload 组件测试（进度回调 + 错误处理） | 测试覆盖 | ⏳（useFileUpload 5 tests 已覆盖） | P2 |
+| W11 | MetricsCharts 组件测试（Recharts 图表渲染） | 测试覆盖 | ✅ 2026-04-06（W11 完成：8 tests — loading/null/undefined/minimal data/model comparison/section counts） | P2 |
 
 ## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
 
+- 2026-04-06 08:12 — ✅ W8 + W11 WebUI 组件测试完成：ErrorBoundary 11 tests（renders/children/captures error/default+custom fallback/reset+recover/log error/no message/multiple children）+ MetricsCharts 8 tests（loading/null/undefined/minimal data/model comparison/section counts）；npm test ✅（112 tests）；npm run build ✅（243KB index gzipped）；E2E 11/11 ✅；dist 已同步到 static/webui/；附带修复：RagEmbeddingProperties.baseUrl /v1 移除 + minimax base-url /v1 移除 + e2e-test.sh cache/stats 路径修复；commit 970616a 已推送
 - 2026-04-06 06:52 — ✅ WebUI 维护修复 + SearchResults 测试补强：
   - 修复 useSearchHistory.test.ts 'removes item by timestamp' 测试稳定性问题：改为不同 query 字符串（'first query' vs 'second query'）+ 不同 useHybrid 值，避免相同 useHybrid 时去重逻辑干扰
   - 修复 scripts/webui-e2e-test.js Search Page selector case-sensitivity：CSS attribute selector 区分大小写，placeholder="Search documents…" 不匹配 `placeholder*="search"`，改为 `placeholder*="earch"`
