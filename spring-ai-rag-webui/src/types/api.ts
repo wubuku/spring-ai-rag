@@ -80,9 +80,9 @@ export interface CollectionListResponse {
 
 // Chat API
 export interface ChatSource {
-  documentId: number;
-  title: string;
-  score: number;
+  documentId: string | number;
+  title?: string;
+  score?: number;
   chunkContent?: string;
 }
 

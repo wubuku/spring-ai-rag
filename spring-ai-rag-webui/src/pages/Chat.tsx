@@ -211,7 +211,7 @@ export function Chat() {
                   <strong>{t('chat.sources')}:</strong>
                   {msg.sources.map((s, i) => (
                     <span key={i} className={styles.source}>
-                      [{s.title} ({(s.score * 100).toFixed(0)}%)]
+                      [{s.title ?? 'Document'} ({((s.score ?? 0) * 100).toFixed(0)}%)]
                     </span>
                   ))}
                 </div>

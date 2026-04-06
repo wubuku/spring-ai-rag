@@ -136,20 +136,17 @@ public class RagChatController {
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         SseEmitter emitter = new SseEmitter(0L); // 无超时
 
-        // 发送 traceId 事件，使流式响应可全链路追踪
-        try {
-            emitter.send(SseEmitter.event().name("trace").data(traceId != null ? traceId : ""));
-        } catch (IOException e) {
-            emitter.completeWithError(e);
-            return emitter;
-        }
+        // SSE 协议：OpenAI 兼容格式
+        // 主通道: data:{"choices":[{"delta":{"content":"..."}}]}
+        // done:    event:done + data:{"traceId":"...","status":"complete"}
 
         ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
                 .subscribe(
                         chunk -> {
                             try {
                                 // Send as named event "chunk" with plain text data (frontend expects event type + text content)
-                                emitter.send(SseEmitter.event().name("chunk").data(chunk));
+                                String json = "{\"choices\":[{\"delta\":{\"content\":\"" + escapeJson(chunk) + "\"}}]}";
+                                emitter.send(SseEmitter.event().data(json));
                             } catch (IOException e) {
                                 emitter.completeWithError(e);
                             }
@@ -157,7 +154,8 @@ public class RagChatController {
                         emitter::completeWithError,
                         () -> {
                             try {
-                                emitter.send(SseEmitter.event().name("done").data("{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}"));
+                                String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
+                                emitter.send(SseEmitter.event().name("done").data(doneJson));
                                 emitter.complete();
                             } catch (IOException e) {
                                 emitter.completeWithError(e);
@@ -248,5 +246,18 @@ public class RagChatController {
     // Null-safe audit logging helper
     private void auditDelete(String entityType, String entityId, String message) {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
+    }
+
+    /**
+     * JSON 转义（防止 SSE JSON 注入）
+     */
+    private static String escapeJson(String text) {
+        if (text == null) return "";
+        return text
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 }

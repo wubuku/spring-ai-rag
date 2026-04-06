@@ -1,19 +1,31 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export interface ChatStreamChunkEvent {
-  type: 'chunk';
-  content: string;
+  choices: Array<{
+    index: number;
+    delta: { content?: string; role?: string };
+    finish_reason?: 'stop' | 'length';
+  }>;
 }
 
 export interface ChatStreamSourcesEvent {
-  type: 'sources';
-  sources: unknown[];
-  conversationId?: string;
+  sources: Array<{
+    documentId: string | number;
+    title?: string;
+    content?: string;
+    chunkText?: string;
+    score?: number;
+  }>;
+}
+
+export interface ChatStreamDoneEvent {
+  traceId: string;
+  status: 'complete';
 }
 
 export interface UseChatSSEOptions {
   onChunk?: (content: string) => void;
-  onSources?: (sources: any[], conversationId?: string) => void;
+  onSources?: (sources: Array<{documentId: string | number; title?: string; content?: string; score?: number}>, conversationId?: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
 }
@@ -24,6 +36,15 @@ export interface UseChatSSEReturn {
   close: () => void;
 }
 
+/**
+ * SSE 流式聊天 Hook
+ *
+ * SSE 协议：OpenAI 兼容格式
+ * - Content events: data:{"choices":[{"delta":{"content":"..."}}]}
+ * - Done event:     event:done\ndata:{"traceId":"...","status":"complete"}
+ * - Sources event:  event:sources\ndata:{"sources":[...]}
+ * - Error event:   event:error\ndata:{"error":{"message":"..."}}
+ */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   const { onChunk, onSources, onError, onDone } = options;
   const [isConnected, setIsConnected] = useState(false);
@@ -56,63 +77,6 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       readerRef.current = null;
     }
     setIsConnected(false);
-  }, []);
-
-  /**
-   * Process a complete SSE event block immediately.
-   * Called as soon as a complete event (ending with \n\n) is detected.
-   */
-  const processEvent = useCallback((block: string) => {
-    if (!block.trim()) return;
-
-    let eventType = 'message';
-    let eventData = '';
-
-    // Split block into lines
-    const lines = block.split('\n');
-    for (const line of lines) {
-      if (line.startsWith('event:')) {
-        eventType = line.slice(6).trim();
-      } else if (line.startsWith('data:')) {
-        const dataVal = line.slice(5); // after "data:"
-        eventData = eventData + dataVal;
-      }
-    }
-
-    if (eventType === 'trace') {
-      // Ignore trace events
-    } else if (eventType === 'done') {
-      try {
-        const parsed = JSON.parse(eventData) as { status?: string };
-        if (parsed.status === 'complete') {
-          onDoneRef.current?.();
-        }
-      } catch { /* ignore */ }
-    } else {
-      // Content event - try JSON first, then raw text
-      if (eventData) {
-        let handled = false;
-        try {
-          const parsed = JSON.parse(eventData) as ChatStreamChunkEvent | ChatStreamSourcesEvent;
-          if (parsed.type === 'chunk') {
-            accumulatedContentRef.current += parsed.content;
-            onChunkRef.current?.(parsed.content);
-            handled = true;
-          } else if (parsed.type === 'sources') {
-            onSourcesRef.current?.(parsed.sources, parsed.conversationId);
-            handled = true;
-          }
-        } catch { /* not JSON */ }
-
-        if (!handled) {
-          const trimmed = eventData.trim();
-          if (trimmed) {
-            accumulatedContentRef.current += trimmed;
-            onChunkRef.current?.(trimmed);
-          }
-        }
-      }
-    }
   }, []);
 
   const send = useCallback(
@@ -149,19 +113,49 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
 
           buffer += decoder.decode(value, { stream: true });
 
-          // Process complete events (separated by \n\n)
-          // Keep the last partial line in the buffer
+          // Process complete SSE events (separated by \n\n)
           while (buffer.includes('\n\n')) {
             const eventEnd = buffer.indexOf('\n\n');
             const eventBlock = buffer.slice(0, eventEnd);
-            buffer = buffer.slice(eventEnd + 2); // +2 to skip the \n\n
-            processEvent(eventBlock);
-          }
-        }
+            buffer = buffer.slice(eventEnd + 2);
 
-        // Process any remaining data in buffer (might be an incomplete last event)
-        if (buffer.trim()) {
-          // Don't process incomplete events - wait for complete ones
+            // Parse the SSE event
+            const event = parseSSEEvent(eventBlock);
+            if (!event) continue;
+
+            if (event.type === 'content' && event.data) {
+              // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
+              const content = extractContentFromChoices(event.data);
+              if (content) {
+                accumulatedContentRef.current += content;
+                onChunkRef.current?.(content);
+              }
+            } else if (event.type === 'sources' && event.data) {
+              // Sources event: {"sources":[...]}
+              try {
+                const sourcesData = JSON.parse(event.data);
+                if (sourcesData.sources) {
+                  onSourcesRef.current?.(sourcesData.sources);
+                }
+              } catch { /* ignore parse errors */ }
+            } else if (event.type === 'done' && event.data) {
+              // Done event: {"traceId":"...","status":"complete"}
+              try {
+                const doneData = JSON.parse(event.data);
+                if (doneData.status === 'complete') {
+                  onDoneRef.current?.();
+                }
+              } catch { /* ignore */ }
+            } else if (event.type === 'error' && event.data) {
+              // Error event: {"error":{"message":"..."}}
+              try {
+                const errorData = JSON.parse(event.data);
+                if (errorData.error?.message) {
+                  onErrorRef.current?.(errorData.error.message);
+                }
+              } catch { /* ignore */ }
+            }
+          }
         }
 
       } catch (err) {
@@ -172,8 +166,49 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         readerRef.current = null;
       }
     },
-    [close, processEvent]
+    [close]
   );
 
   return { isConnected, send, close };
+}
+
+/**
+ * SSE 事件解析器
+ * 支持：
+ * - data:{"choices":[{"delta":{"content":"..."}}]}   -> type: content
+ * - event:sources\ndata:{"sources":[...]}          -> type: sources
+ * - event:done\ndata:{"traceId":"..."}                -> type: done
+ * - event:error\ndata:{"error":{...}}                  -> type: error
+ */
+function parseSSEEvent(block: string): { type: string; data: string } | null {
+  if (!block.trim()) return null;
+
+  let eventType = 'content'; // Default to content (OpenAI format uses no event type)
+  let eventData = '';
+
+  const lines = block.split('\n');
+  for (const line of lines) {
+    if (line.startsWith('event:')) {
+      eventType = line.slice(6).trim();
+    } else if (line.startsWith('data:')) {
+      eventData = line.slice(5); // after "data:"
+    }
+  }
+
+  if (!eventData) return null;
+
+  return { type: eventType, data: eventData };
+}
+
+/**
+ * 从 OpenAI 格式的 choices 数组中提取内容
+ */
+function extractContentFromChoices(jsonStr: string): string | null {
+  try {
+    const parsed = JSON.parse(jsonStr) as ChatStreamChunkEvent;
+    if (parsed.choices && parsed.choices.length > 0) {
+      return parsed.choices[0].delta.content ?? null;
+    }
+  } catch { /* not JSON or wrong format */ }
+  return null;
 }
