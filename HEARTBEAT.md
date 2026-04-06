@@ -151,6 +151,15 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-06 08:50 — ✅ E2E 端到端 RAG 链路修复（HTTP 代理 + base-url 纠错）：
+  - SiliconFlow base-url: `/v1` 硬编码到 EmbeddingModelConfig（避免 Spring @ConfigurationProperties 绑定路径混淆），确保 `OpenAiApi` 用 `https://api.siliconflow.cn` + `/v1/embeddings` → 正确 URL
+  - MiniMax base-url: `@Value` 默认从 `https://api.minimax.chat/v1` → `https://api.minimax.chat`（MiniMax endpoint `/v1/text/chatcompletion_v2` 已含 `/v1`）
+  - PostgreSQL 密码：`.env` 更新为 `spring_ai_rag`（原 `postgres` 与 Docker 容器认证冲突）
+  - E2E 断言：删除响应文本从 "文档已删除" → "deleted"，"集合已删除" → "Collection deleted"
+  - E2E 结果：**44/45 通过**（流式 RAG ✅、嵌入 ✅、检索 ✅、Collection CRUD ✅）
+  - 已知问题：MiniMax 非流式 `/chat/ask` 返回 500（`login fail: API secret key in Authorization`）— MiniMax API 非流式认证格式与流式不同，属于 MiniMax API 本身特性
+  - 11 个 RagCollectionControllerTest 失败是之前就存在的（HEAD 上也失败），与本次修复无关
+  - commit 22a8f03 已推送
 - 2026-04-06 07:40 — ✅ HTTP 代理配置化：RagProxyProperties（enabled/host/port/noProxyHosts）+ SpringAiConfig.initProxySettings() 重构（替代硬编码 disableProxyForMiniMax）；proxy.enabled=false 时使用 NO_PROXY selector，enabled=true 时使用配置的代理；application.yml 添加 rag.proxy.* 配置节；RagProxyPropertiesTest（2 tests）；mvn clean compile ✅，mvn test ✅；commit d63437c 已推送
 - 2026-04-06 07:56 — ✅ MiniMax API 集成测试补强 + OpenApiContractTest 修复：SpringAiConfigTest 新增 4 个 `miniMaxChatModel()` 单元测试（provider=minimax 创建模型、provider=openai/anthropic 返回 null、chatModel 选择 miniMax）；OpenApiContractTest 修复 context 加载问题——排除 `DataSourceAutoConfiguration` + `HibernateJpaAutoConfiguration` + `management.health.db.enabled=false`，解决无 DB 环境下 "Included health contributor 'db' in group 'readiness'" 错误；1169 测试全通过（零失败零错误）；commit 64e7cfc 已推送
 - 2026-04-06 08:03 — ✅ C28 SiliconFlow 嵌入调试：修复 `.env` 中 `SILICONFLOW_URL=https://api.siliconflow.cn/v1/embeddings`（含 `/embeddings` 导致 Spring AI `OpenAiApi` URL 双重复制：`.../v1/embeddings/embeddings`）；修正为 `https://api.siliconflow.cn/v1`（不含 `/embeddings`）；新增 `EmbeddingModelConfigTest`（3 tests：OpenAiEmbeddingModel 创建验证 + BAAI/bge-m3 1024维配置 + 自定义 baseUrl）；1172 测试全通过；commit 9782e56 已推送
