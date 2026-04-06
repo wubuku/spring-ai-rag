@@ -1132,7 +1132,7 @@
 | N20 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ⏳ 待推进 |
 | N21 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ 待推进 |
 | N22 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ✅ 2026-04-06 — commit 20cecc6 |
-| N23 | N2：Grafana Dashboard JSON 配置完善（补充缺失 panels） | 监控 | ⏳ 待推进 |
+| N23 | N2：Grafana Dashboard JSON 配置完善（补充 Advisor/Model/Cache/SlowQuery panels） | 监控 | ✅ 2026-04-06（N23 完成：新增 21 panels，9 rows，44 panels 总数；docs/grafana/README.md 指标参考文档；commit 1871acf） |
 | N24 | N3：Prometheus Alerting Rules 完善（补充 SLA 告警） | 监控 | ⏳ 待推进 |
 | N25 | N4：k6 负载测试脚本完善（补充 search + chat 并发测试） | 性能 | ⏳ 待推进 |
 | N26 | Flyway 迁移脚本版本一致性检查（CI 环节） | DevOps | ✅ 2026-04-06（C7 完成：移除错误的手动 schema 创建步骤，添加 mvn test 后 flyway_schema_history 一致性检查——对比 V*.sql 脚本数与已应用数，检测 drift 或 failed 迁移则 CI 失败） |
