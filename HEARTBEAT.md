@@ -1211,7 +1211,7 @@
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
 | C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ✅ 2026-04-06（C38 完成：validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache；1280 tests ✅，commit a42e4f2） | P2 |
-| C39 | 第三方 LLM API Mock Server：测试环境下模拟各 provider 响应 | 测试 | ⏳ | P2 |
+| C39 | 第三方 LLM API Mock Server：Node.js mock server，/v1/chat/completions + /v1/embeddings，支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06（C39 完成：scripts/mock-llm-server.js + run-mock-llm.sh，8086默认端口，零依赖，commit d6c2665） | P2 |
 | C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ⏳ | P3 |
 
 **Cron 执行保证**：每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前，cron 永不停止。
@@ -1367,3 +1367,5 @@
   - npm test ✅（113 vitest 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 12/12 ✅
   - commit 0c6b799 已推送
 
+
+- 2026-04-06 20:28 — ✅ C39 Mock LLM Server：scripts/mock-llm-server.js（Node.js HTTP server，实现 OpenAI-compatible /v1/chat/completions + /v1/embeddings + SSE streaming，零外部依赖）+ scripts/run-mock-llm.sh helper；环境变量配置：MOCK_PORT/MOCK_DELAY_MS/MOCK_ERROR_RATE/MOCK_MODEL；默认端口 8086（避免 demo 端口 8082-8085）；mvn test ✅（全通过）；commit d6c2665 已推送
