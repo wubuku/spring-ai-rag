@@ -132,25 +132,40 @@ public final class RetrievalUtils {
 
         for (RetrievalResult r : vectorResults) {
             String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalized = (float) (r.getScore() / maxVector) * vectorWeight;
+            // Guard against division by zero (maxVector == 0 means all scores are 0)
+            float normalized = (Float.isNaN(maxVector) || maxVector == 0f) ? 0f : (float) (r.getScore() / maxVector) * vectorWeight;
+            // Math.max with NaN returns NaN, so use a helper that treats NaN as -inf
             MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = Math.max(entry.fusedScore, normalized);
-            entry.vectorScore = Math.max(entry.vectorScore, (float) r.getScore());
+            entry.fusedScore = maxWithNaN(entry.fusedScore, normalized);
+            entry.vectorScore = maxWithNaN(entry.vectorScore, (float) r.getScore());
         }
 
         for (RetrievalResult r : fulltextResults) {
             String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            float normalized = (float) ((r.getScore() / maxFulltext) * fulltextWeight);
+            // Guard against division by zero (maxFulltext == 0 means all scores are 0)
+            float normalized = (Float.isNaN(maxFulltext) || maxFulltext == 0f) ? 0f : (float) ((r.getScore() / maxFulltext) * fulltextWeight);
             MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = Math.max(entry.fusedScore, normalized);
-            entry.fulltextScore = Math.max(entry.fulltextScore, (float) r.getScore());
+            entry.fusedScore = maxWithNaN(entry.fusedScore, normalized);
+            entry.fulltextScore = maxWithNaN(entry.fulltextScore, (float) r.getScore());
         }
         return merged;
     }
 
+    /**
+     * Like Math.max but treats NaN as negative infinity.
+     * Math.max(Float.NaN, x) returns NaN, which is not the max semantics we want.
+     */
+    private static float maxWithNaN(float a, float b) {
+        if (Float.isNaN(a)) return b;
+        if (Float.isNaN(b)) return a;
+        return Math.max(a, b);
+    }
+
     private static float maxScore(List<RetrievalResult> results) {
-        return results.isEmpty() ? 1f :
-                (float) results.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
+        if (results.isEmpty()) return 1f;
+        double max = results.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
+        // Math.max(NaN, x) returns NaN, so replace NaN with 0
+        return (float) (Double.isNaN(max) ? 0f : max);
     }
 
     /**

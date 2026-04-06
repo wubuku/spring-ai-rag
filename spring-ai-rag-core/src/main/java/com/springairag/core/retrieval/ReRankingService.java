@@ -51,7 +51,10 @@ public class ReRankingService {
                 .map(r -> {
                     float relevance = calculateRelevanceScore(query, r.getChunkText());
                     float diversity = calculateDiversityScore(r.getChunkText(), results);
-                    float finalScore = (float) r.getScore() * (1 - config.getDiversityWeight())
+                    // Guard against NaN scores from upstream (e.g., fusion division by zero)
+                    float rawScore = (float) r.getScore();
+                    float safeScore = Float.isNaN(rawScore) ? 0f : rawScore;
+                    float finalScore = safeScore * (1 - config.getDiversityWeight())
                             + relevance * config.getDiversityWeight() * 0.5f
                             + diversity * config.getDiversityWeight() * 0.5f;
 
