@@ -159,6 +159,37 @@ receivers:
 | `RAGAvailabilitySLOBreach` | **critical** | 1-hour availability < 99.5% |
 | `RAGLatencySLOBreach` | warning | P95 latency > 1s (latency SLO) |
 
+### Advisor Pipeline
+
+| Alert | Severity | Description |
+|-------|----------|-------------|
+| `RAGQueryRewriteHighLatency` | warning | Query Rewrite P95 > 3s |
+| `RAGHybridSearchHighLatency` | warning | Hybrid Search P95 > 2s |
+| `RAGRerankHighLatency` | warning | Rerank P95 > 5s |
+| `RAGHybridSearchEmptyResults` | warning | Hybrid search returns 0 results |
+| `RAGRerankSkippedRateHigh` | info | Rerank skipped > 30% of requests |
+
+### Retrieval Evaluation
+
+| Alert | Severity | Description |
+|-------|----------|-------------|
+| `RAGEvaluationLowHitRate` | warning | Evaluation hit rate < 40% |
+| `RAGEvaluationFailure` | warning | < 50% of evaluations succeeding |
+
+### Slow Queries
+
+| Alert | Severity | Description |
+|-------|----------|-------------|
+| `RAGSlowQueryRateHigh` | warning | > 10 slow queries/min |
+| `RAGSlowQueryRateCritical` | **critical** | > 50 slow queries/min |
+
+### Alert Health
+
+| Alert | Severity | Description |
+|-------|----------|-------------|
+| `RAGAlertServiceDown` | warning | No alerts fired in 15 min despite traffic |
+| `RAGAlertFatigue` | warning | > 20 alerts/min — alert fatigue risk |
+
 ---
 
 ## Alert Labels

@@ -497,3 +497,208 @@ groups:
           description: |
             RAG P95 latency is {{ $value | humanizeDuration }} (SLO target: < 1s).
             Latency has exceeded SLO for 5 consecutive minutes.
+
+  # ===========================================================================
+  # Advisor Pipeline Alerts
+  # ===========================================================================
+  - name: rag_advisor_pipeline
+    interval: 60s
+    rules:
+      # Query rewrite advisor P95 latency > 3s
+      - alert: RAGQueryRewriteHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_advisor_query_rewrite_duration_seconds_bucket[5m])) by (le)
+          ) > 3
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+          advisor: query_rewrite
+        annotations:
+          summary: "RAG Query Rewrite advisor P95 latency exceeds 3 seconds"
+          description: |
+            Query Rewrite step P95 latency is {{ $value | humanizeDuration }} (threshold: 3s).
+            This adds latency before the retrieval step. Check LLM provider for rewrite operations.
+
+      # Hybrid search advisor P95 latency > 2s
+      - alert: RAGHybridSearchHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_advisor_hybrid_search_duration_seconds_bucket[5m])) by (le)
+          ) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+          advisor: hybrid_search
+        annotations:
+          summary: "RAG Hybrid Search advisor P95 latency exceeds 2 seconds"
+          description: |
+            Hybrid Search step P95 latency is {{ $value | humanizeDuration }} (threshold: 2s).
+            Check: pgvector query performance, embedding model latency, network connectivity.
+
+      # Rerank advisor P95 latency > 5s (usually LLM call)
+      - alert: RAGRerankHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(rag_advisor_rerank_duration_seconds_bucket[5m])) by (le)
+          ) > 5
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+          advisor: rerank
+        annotations:
+          summary: "RAG Rerank advisor P95 latency exceeds 5 seconds"
+          description: |
+            Rerank step P95 latency is {{ $value | humanizeDuration }} (threshold: 5s).
+            Reranking typically involves an LLM call. Check rerank provider latency or consider disabling rerank.
+
+      # Hybrid search returning zero results frequently
+      - alert: RAGHybridSearchEmptyResults
+        expr: |
+          sum(rate(rag_advisor_hybrid_search_results_total[10m])) == 0
+          and sum(rate(rag_requests_success_total[10m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+          advisor: hybrid_search
+        annotations:
+          summary: "RAG Hybrid Search is returning zero results"
+          description: |
+            Hybrid search has returned 0 results despite active requests.
+            Check: pgvector extension, embedding vectors, collection document status.
+
+      # Rerank skipped rate too high (> 30%) — rerank disabled or failing
+      - alert: RAGRerankSkippedRateHigh
+        expr: |
+          (
+            sum(rate(rag_advisor_rerank_skipped_total[30m]))
+            /
+            sum(rate(rag_advisor_rerank_count_total[30m]))
+          ) > 0.3
+        for: 30m
+        labels:
+          severity: info
+          service: spring-ai-rag
+          advisor: rerank
+        annotations:
+          summary: "RAG Rerank is being skipped more than 30% of the time"
+          description: |
+            Rerank skip rate is {{ $value | humanizePercentage }} (threshold: 30%).
+            This may indicate rerank is temporarily disabled or results count is below rerank threshold.
+
+  # ===========================================================================
+  # Retrieval Evaluation Alerts
+  # ===========================================================================
+  - name: rag_retrieval_evaluation
+    interval: 60s
+    rules:
+      # Evaluation hit rate too low — below 40%
+      - alert: RAGEvaluationLowHitRate
+        expr: |
+          (
+            sum(rate(rag_evaluation_hits_total[30m]))
+            /
+            (sum(rate(rag_evaluation_hits_total[30m])) + sum(rate(rag_evaluation_misses_total[30m])))
+          ) < 0.4
+        for: 30m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG retrieval evaluation hit rate below 40%"
+          description: |
+            Retrieval evaluation hit rate is {{ $value | humanizePercentage }} (threshold: 40%).
+            Retrieval quality may be declining. Check embedding freshness and retrieval configuration.
+
+      # Evaluation failure rate — evaluation service itself failing
+      - alert: RAGEvaluationFailure
+        expr: |
+          (
+            sum(rate(rag_evaluation_count_total[5m])) by (result)
+            /
+            sum(rate(rag_evaluation_count_total[5m]))
+          ) < 0.5
+          and sum(rate(rag_evaluation_count_total[5m])) > 0
+        for: 10m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG retrieval evaluation is returning mostly failures"
+          description: |
+            Less than 50% of evaluation runs succeeded in the last 10 minutes.
+            Check evaluation service configuration and test collection data quality.
+
+  # ===========================================================================
+  # Slow Query Alerts
+  # ===========================================================================
+  - name: rag_slow_queries
+    interval: 60s
+    rules:
+      # High slow query rate — more than 10 slow queries per minute
+      - alert: RAGSlowQueryRateHigh
+        expr: |
+          sum(rate(rag_slow_query_total[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service generating more than 10 slow queries per minute"
+          description: |
+            Slow query rate: {{ $value | humanize }}/min (threshold: 10/min).
+            Check the /api/v1/rag/metrics/slow-queries endpoint for details.
+            Likely causes: missing indexes, large result sets, or N+1 queries.
+
+      # Slow query rate critical — more than 50 per minute
+      - alert: RAGSlowQueryRateCritical
+        expr: |
+          sum(rate(rag_slow_query_total[1m])) > 50
+        for: 2m
+        labels:
+          severity: critical
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG service critical slow query rate (> 50/min)"
+          description: |
+            Slow query rate: {{ $value | humanize }}/min. Database is under severe load.
+            Immediate investigation required. Check PostgreSQL performance and query plans.
+
+  # ===========================================================================
+  # Alert Health Alerts
+  # ===========================================================================
+  - name: rag_alert_health
+    interval: 60s
+    rules:
+      # Alert service itself is down
+      - alert: RAGAlertServiceDown
+        expr: |
+          sum(rate(rag_alert_triggered_total[5m])) == 0
+          and sum(rate(rag_requests_total[5m])) > 10
+        for: 15m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG alert service has not triggered any alerts"
+          description: |
+            No alerts have been triggered in the last 15 minutes despite active traffic.
+            Either alerting is disabled or the AlertService is not functioning.
+
+      # Too many alerts firing — alert fatigue risk
+      - alert: RAGAlertFatigue
+        expr: |
+          sum(rate(rag_alert_triggered_total[5m])) > 20
+        for: 5m
+        labels:
+          severity: warning
+          service: spring-ai-rag
+        annotations:
+          summary: "RAG alert service is firing more than 20 alerts per minute"
+          description: |
+            Alert rate: {{ $value | humanize }}/min. Risk of alert fatigue.
+            Consider reviewing active alert thresholds or creating suppression rules.
