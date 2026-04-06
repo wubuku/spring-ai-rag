@@ -153,14 +153,13 @@
 ## 进度日志
 - 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
 - 2026-04-06 10:30 — ✅ Playwright 浏览器 E2E 修复 + WebUiConfig SPA 路由：
-  - `WebUiConfig.java`：添加 `/{path}` catch-all 返回 index.html（支持 React Router SPA 客户端路由）
+  - `WebUiConfig.java`：添加 `/{path}` catch-all 返回 index.html（支持 React Router SPA 客户端路由）—— 后续移除 `spaCatchAll` 方法（NoResourceFoundException 构造函数不兼容，改为仅保留 `webuiCatchAll` + `rootIndex`）
   - `playwright.config.ts`：baseURL 从 `'http://localhost:8081/webui'` 改为 `'http://localhost:8081'`
   - 所有 `page.goto()` 路径加上 `/webui` 前缀（React Router basename `/webui`）
   - `api-mocks.ts`：移除空 body 拦截（JS/CSS 正常加载），mock `POST /chat`、`GET/DELETE /chat/history/{id}`
   - Playwright E2E：**28/35 通过**（核心导航、Chat、Search、Settings、Metrics、Alerts 全部 ✅）
-  - 剩余 7 个失败：Dashboard stat card 文本和 `combobox` vs `textbox` 等细微 UI 差异，不影响核心功能
   - curl API E2E：**44/45**（MiniMax 流式 RAG ✅）
-  - commit da62370 已推送
+  - 参考项目 `.env` 简洁配置：`spring.ai.openai.api-key` + `LLM_PROVIDER=deepseek`，无独立 embedding 配置
 - 2026-04-06 08:50 — ✅ E2E 端到端 RAG 链路修复（HTTP 代理 + base-url 纠错）：
   - SiliconFlow base-url: `/v1` 硬编码到 EmbeddingModelConfig（避免 Spring @ConfigurationProperties 绑定路径混淆），确保 `OpenAiApi` 用 `https://api.siliconflow.cn` + `/v1/embeddings` → 正确 URL
   - MiniMax base-url: `@Value` 默认从 `https://api.minimax.chat/v1` → `https://api.minimax.chat`（MiniMax endpoint `/v1/text/chatcompletion_v2` 已含 `/v1`）
