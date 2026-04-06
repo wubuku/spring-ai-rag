@@ -18,8 +18,7 @@ public class ChatRequest {
     @Schema(description = "用户消息内容", example = "退货政策是什么？", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
-    @NotBlank(message = "会话 ID 不能为空")
-    @Schema(description = "会话 ID，用于多轮对话记忆", example = "conv-123", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "会话 ID，用于多轮对话记忆。首次对话可为空，服务端自动生成新会话", example = "conv-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String sessionId;
 
     @Min(value = 1, message = "最大检索结果数量最小为 1")

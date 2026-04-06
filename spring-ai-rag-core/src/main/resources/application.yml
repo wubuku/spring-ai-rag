@@ -295,6 +295,16 @@ rag:
   #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
   #   sliding-window-size: 20         # Sliding window size
 
+  # CORS configuration — enable for WebUI development
+  cors:
+    enabled: true
+    allowed-origins:
+      - "http://localhost:8081"
+      - "http://localhost:3000"
+    allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    allowed-headers: "*"
+    max-age: 3600
+
   # LLM API retry configuration
   # Retry with exponential backoff for transient failures (timeouts, 429, 503)
   # Note: streaming (SSE) responses cannot be retried — only non-streaming calls
