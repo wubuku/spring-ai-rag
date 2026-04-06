@@ -1399,3 +1399,9 @@
   - 修复测试 bug：`\u20000` Java 转义被解析为 `\u2000` + `0`，改为 `Character.toChars(0x20000)` 正确创建补充平面字符
   - mvn test ✅（1280+ tests 全通过，零失败零错误）
   - commit 7b88992 已推送
+
+## WebUI 常规发布（2026-04-07 03:53）
+
+- 2026-04-07 03:53 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；Search 测试失败原因：数据库为空（SiliconFlow embedding API 在测试环境 embeddingsStored=0），搜索无结果返回——已知环境问题，非代码 bug；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端未提交变更（PgTrgmFulltextProvider，归属后端 cron，不在本 WebUI cron 范围）；WebUI 项目处于生产级成熟状态
+
+- 2026-04-07 05:17 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅（Search 测试失败：数据库为空，已知环境问题，非代码 bug）；dist 已同步到 static/webui/；后端服务 8081 UP；WebUI 项目处于生产级成熟状态
