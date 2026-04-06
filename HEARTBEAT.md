@@ -1198,7 +1198,7 @@
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
 | C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
 | C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
-| C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ⏳ | P2 |
+| C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ✅ 2026-04-06 | P2 |
 | C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
 | C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
 | C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ⏳ | P2 |
@@ -1268,3 +1268,5 @@
   - commits e5d7273 + e94a4c0 已推送
 
 - 2026-04-06 11:38 — ✅ WebUI 常规发布：npm test 112 ✅ / npm run build 243KB ✅ / E2E 11/11 ✅（全部页面）；后端发现并修复：RagCollectionController delete/restore 方法缺少 @Transactional 注解，补充导入；RagCollectionControllerTest 26 tests ✅；commit 7a7ed5c 已推送
+
+- 2026-04-06 11:52 — ✅ C30 Collection 克隆 REST 端点：POST /{id}/clone 深拷贝集合（name + " (Copy)"），复制所有文档（processingStatus=PENDING，嵌入向量不复制），返回 CollectionCloneResponse（clonedId/clonedName/sourceId/sourceName/documentsCloned）；新增 CollectionCloneResponse DTO；RagCollectionControllerTest 新增 3 个测试（多文档/空集合/不存在404）；mvn test ✅（全通过）；commit 64f24af 已推送
