@@ -1377,6 +1377,15 @@
 
 - 2026-04-06 20:33 — ✅ WebUI 常规巡检：npm test 113 ✅ / npm run build 243KB ✅（301KB index gzipped）/ E2E 12/12 ✅（SPA Routing/Chat SSE/Navigation/Settings/Metrics/Alerts/Dashboard/Documents/Collections/Search/Backend Health）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
 
+## 进度日志（WebUI 巡检 — 2026-04-07 06:30）
+
+- 2026-04-07 06:30 — ✅ WebUI 常规发布 + ESLint 清理：
+  - npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 11/12 ✅
+  - 修复 3 个 ESLint error（unused imports: ErrorBoundary.test.tsx afterEach/act、MetricsCharts.test.tsx act、ThemeToggle.test.tsx fireEvent）
+  - 修复 useSSE.test.ts 4 个 unused var 错误（cancelCalled/stream in close-cancels-reader test、stream1 in send-twice-cancels test）
+  - 零 ESLint errors（剩余 5 warnings: coverage/ 目录 + fast-refresh HMR 提示）
+  - dist 已同步到 static/webui/；commit 7027b45 已推送
+
 ## 待办（混合检索增强 — docs/hybrid-search-enhancement-plan.md）
 
 | # | 改进项 | 类型 | 状态 |
