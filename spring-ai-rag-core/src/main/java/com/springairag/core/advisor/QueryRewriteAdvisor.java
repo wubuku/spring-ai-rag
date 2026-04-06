@@ -44,10 +44,13 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
     public static final String CTX_REWRITE_QUERIES = "rewrite.queries";
 
     private final QueryRewritingService queryRewritingService;
+    private final AdvisorMetrics advisorMetrics;
 
     @Autowired
-    public QueryRewriteAdvisor(QueryRewritingService queryRewritingService) {
+    public QueryRewriteAdvisor(QueryRewritingService queryRewritingService,
+                               AdvisorMetrics advisorMetrics) {
         this.queryRewritingService = queryRewritingService;
+        this.advisorMetrics = advisorMetrics;
     }
 
     @Override
@@ -83,9 +86,10 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
         log.info("[QueryRewriteAdvisor] 原始查询: \"{}\" → 改写 {} 条，耗时 {}ms: {}",
                 originalQuery, rewrittenQueries.size(), elapsedMs, rewrittenQueries);
 
-        // 记录 Pipeline 可观测指标
+        // Record Micrometer metrics for Prometheus + in-memory pipeline metrics
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("QueryRewrite", elapsedMs, rewrittenQueries.size());
+        advisorMetrics.record("QueryRewrite", elapsedMs, rewrittenQueries.size());
 
         // 将改写结果存入 context，传递给下游 Advisor（HybridSearchAdvisor 等）
         return request.mutate()

@@ -41,7 +41,8 @@ class RerankAdvisorTest {
             @Override
             public ApiCompatibilityAdapter getAdapter(String baseUrl) { return adapter; }
         };
-        return new RerankAdvisor(rerankingService, factory, "https://api.example.com");
+        AdvisorMetrics advisorMetrics = Mockito.mock(AdvisorMetrics.class);
+        return new RerankAdvisor(rerankingService, factory, advisorMetrics, "https://api.example.com");
     }
 
     @Test
@@ -272,7 +273,7 @@ class RerankAdvisorTest {
     @Test
     void order_isAfterHybridSearch() {
         RerankAdvisor advisor = createAdvisor(openAiAdapter);
-        HybridSearchAdvisor hybridSearch = new HybridSearchAdvisor(null);
+        HybridSearchAdvisor hybridSearch = new HybridSearchAdvisor(null, Mockito.mock(AdvisorMetrics.class));
         assertTrue(advisor.getOrder() > hybridSearch.getOrder(),
                 "RerankAdvisor 应在 HybridSearchAdvisor 之后执行");
     }

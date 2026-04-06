@@ -42,6 +42,8 @@ public class RerankAdvisor extends AbstractRagAdvisor {
 
     private final ApiCompatibilityAdapter adapter;
 
+    private final AdvisorMetrics advisorMetrics;
+
     /** 重排结果在 response context 中的 key，供 RagChatService 提取 sources */
     public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
 
@@ -52,9 +54,12 @@ public class RerankAdvisor extends AbstractRagAdvisor {
     private int maxResults = 5;
 
     @Autowired
-    public RerankAdvisor(ReRankingService rerankingService, ApiAdapterFactory adapterFactory, @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.base-url:}") String baseUrl) {
+    public RerankAdvisor(ReRankingService rerankingService, ApiAdapterFactory adapterFactory,
+                          AdvisorMetrics advisorMetrics,
+                          @org.springframework.beans.factory.annotation.Value("${spring.ai.openai.base-url:}") String baseUrl) {
         this.rerankingService = rerankingService;
         this.adapter = adapterFactory.getAdapter(baseUrl);
+        this.advisorMetrics = advisorMetrics;
     }
 
     public void setSystemContextPrefix(String systemContextPrefix) {
@@ -99,6 +104,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
         log.info("[RerankAdvisor] 重排完成：{} → {} 条结果，耗时 {}ms", results.size(), reranked.size(), elapsedMs);
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("Rerank", elapsedMs, reranked.size());
+        advisorMetrics.record("Rerank", elapsedMs, reranked.size());
 
         return injectRerankedContext(request, reranked);
     }

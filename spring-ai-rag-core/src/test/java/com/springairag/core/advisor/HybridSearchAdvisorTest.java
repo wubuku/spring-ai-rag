@@ -26,7 +26,7 @@ class HybridSearchAdvisorTest {
     @BeforeEach
     void setUp() {
         hybridRetriever = Mockito.mock(HybridRetrieverService.class);
-        advisor = new HybridSearchAdvisor(hybridRetriever);
+        advisor = new HybridSearchAdvisor(hybridRetriever, mock(AdvisorMetrics.class));
     }
 
     @Test

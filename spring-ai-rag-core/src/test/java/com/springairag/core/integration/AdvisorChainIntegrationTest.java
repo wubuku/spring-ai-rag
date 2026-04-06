@@ -1,6 +1,7 @@
 package com.springairag.core.integration;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.advisor.AdvisorMetrics;
 import com.springairag.core.advisor.AdvisorUtils;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
@@ -62,9 +63,9 @@ class AdvisorChainIntegrationTest {
         rerankingService = mock(ReRankingService.class);
         advisorChain = mock(AdvisorChain.class);
 
-        queryRewriteAdvisor = new QueryRewriteAdvisor(queryRewritingService);
-        hybridSearchAdvisor = new HybridSearchAdvisor(hybridRetrieverService);
-        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.ApiAdapterFactory() { public com.springairag.core.adapter.ApiCompatibilityAdapter getAdapter(String u) { return new com.springairag.core.adapter.OpenAiCompatibleAdapter(); } }, "https://api.example.com");
+        queryRewriteAdvisor = new QueryRewriteAdvisor(queryRewritingService, mock(AdvisorMetrics.class));
+        hybridSearchAdvisor = new HybridSearchAdvisor(hybridRetrieverService, mock(AdvisorMetrics.class));
+        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.ApiAdapterFactory() { public com.springairag.core.adapter.ApiCompatibilityAdapter getAdapter(String u) { return new com.springairag.core.adapter.OpenAiCompatibleAdapter(); } }, mock(AdvisorMetrics.class), "https://api.example.com");
     }
 
     /**

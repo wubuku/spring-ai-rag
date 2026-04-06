@@ -24,7 +24,7 @@ class QueryRewriteAdvisorTest {
     @BeforeEach
     void setUp() {
         queryRewritingService = mock(QueryRewritingService.class);
-        advisor = new QueryRewriteAdvisor(queryRewritingService);
+        advisor = new QueryRewriteAdvisor(queryRewritingService, mock(AdvisorMetrics.class));
     }
 
     @Test

@@ -36,12 +36,15 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
     public static final String RETRIEVAL_RESULTS_KEY = "hybrid.search.results";
 
     private final HybridRetrieverService hybridRetriever;
+    private final AdvisorMetrics advisorMetrics;
 
     private RetrievalLoggingService retrievalLoggingService;
 
     @Autowired
-    public HybridSearchAdvisor(HybridRetrieverService hybridRetriever) {
+    public HybridSearchAdvisor(HybridRetrieverService hybridRetriever,
+                                 AdvisorMetrics advisorMetrics) {
         this.hybridRetriever = hybridRetriever;
+        this.advisorMetrics = advisorMetrics;
     }
 
     /**
@@ -97,6 +100,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
                                       long elapsedMs, List<RetrievalResult> results) {
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("HybridSearch", elapsedMs, results.size());
+        advisorMetrics.record("HybridSearch", elapsedMs, results.size());
 
         if (retrievalLoggingService != null) {
             String sessionId = request.context().get("sessionId") != null
