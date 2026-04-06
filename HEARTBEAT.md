@@ -1151,7 +1151,7 @@
 | N38 | API 统一错误码规范（ErrorCode enum） | 代码质量 | ✅ 2026-04-06（N38 完成：spring-ai-rag-api 新增 ErrorCode enum，26 个标准化错误码含 HTTP status/title/problemTypeUri；RagException 重构为 ErrorCode enum + backward-compatible getErrorCode() String；GlobalExceptionHandler.handleRagException() 使用 typed enum 正确分离 error/code 和 title；ErrorCodeTest 11 tests + RagExceptionTest/LlmCircuitOpenExceptionTest 更新；1155 tests 全通过，commit 6a3c6c4） |
 | N39 | @Indexed 注解审查（检查索引覆盖是否合理） | 性能 | ⏳ 待推进 |
 | N40 | HikariCP 慢查询日志（SQL 执行时间阈值配置） | 可观测性 | ⏳ 待推进 |
-| N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ⏳ 待推进 |
+| N41 | Spring AI Advisor 可观测性增强（tracing + metrics） | 可观测性 | ✅ 2026-04-06（N41 完成：AdvisorMetrics Micrometer 组件，8 个 meters 暴露到 Prometheus——Timer/Counter for QueryRewrite/HybridSearch/Rerank；rag.advisor.{step}.duration（p50/p95/p99）、rag.advisor.{step}.count、rag.advisor.hybrid_search.results、rag.advisor.rerank.skipped；1245 tests 全通过，commit 5b9b69d） |
 | N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ⏳ 待推进 |
 | N43 | N18 AuditLogService 增强：AbTestController + EvaluationController 审计覆盖 | 安全 | ✅ 2026-04-06（N43 完成：AbTestController 6个写操作 + EvaluationController POST /feedback 审计日志；USER_FEEDBACK entity 类型；测试更新；1079 tests ✅，commit 15bbf53） |
 
@@ -1193,7 +1193,7 @@
 | C22 | N38 API 统一错误码规范：ErrorCode enum 完善 | 代码质量 | ⏳ | P2 |
 | C23 | N39 @Indexed 注解审查：检查高频查询字段是否有索引 | 性能 | ✅ 2026-04-06 | P2 |
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
-| C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ⏳ | P3 |
+| C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ✅ 2026-04-06 | P3 |
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ⏳ | P3 |
 | C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
 | C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
@@ -1270,3 +1270,5 @@
 - 2026-04-06 11:38 — ✅ WebUI 常规发布：npm test 112 ✅ / npm run build 243KB ✅ / E2E 11/11 ✅（全部页面）；后端发现并修复：RagCollectionController delete/restore 方法缺少 @Transactional 注解，补充导入；RagCollectionControllerTest 26 tests ✅；commit 7a7ed5c 已推送
 
 - 2026-04-06 11:52 — ✅ C30 Collection 克隆 REST 端点：POST /{id}/clone 深拷贝集合（name + " (Copy)"），复制所有文档（processingStatus=PENDING，嵌入向量不复制），返回 CollectionCloneResponse（clonedId/clonedName/sourceId/sourceName/documentsCloned）；新增 CollectionCloneResponse DTO；RagCollectionControllerTest 新增 3 个测试（多文档/空集合/不存在404）；mvn test ✅（全通过）；commit 64f24af 已推送
+
+- 2026-04-06 12:25 — ✅ N41 Advisor chain Micrometer observability：AdvisorMetrics 组件——8 个 Micrometer meters 暴露到 Prometheus（Timer+Counter for QueryRewrite/HybridSearch/Rerank，含 p50/p95/p99 percentile + rag.advisor.hybrid_search.results + rag.advisor.rerank.skipped）；注入到 3 个 Advisor 的 before() 方法；新增 AdvisorMetricsTest 7 tests（init/record/timer/counter/skipped/accumulation）；更新 4 个测试文件的 Advisor 构造函数调用；1245 tests 全通过（+7）；commit 5b9b69d 已推送
