@@ -9,6 +9,13 @@
 
 ## 每轮步骤
 
+> ### 🔴 铁律：cron 调度检查（每次唤醒必须执行）
+> **cron agent 不得空转。**
+> - 调用 `sessions_list` 查看 `spring-ai-rag-backend-cron` 和 `spring-ai-rag-webui-cron` 的状态
+> - 如果两者都超过 1 小时无新消息（`lastMessage` 超过 60 分钟前），立即重新 `sessions_spawn` 启动它们
+> - 如果两者都显示已完成/空闲，用 `sessions_send` 发送"继续推进"的指令
+> - **不允许两个 cron 同时空闲超过 1 小时**
+
 1. `export $(cat .env | grep -v '^#' | xargs) && mvn clean test` 确认构建通过
 2. 读待办清单，选下一个 ⏳ 项
 3. 实现改进（文档类任务：每轮至少完成 2 项）
@@ -1282,6 +1289,10 @@
 
 - 2026-04-06 13:44 — ✅ 53 test errors → 0 修复：根本原因是 CorsConfig（WebMvcConfigurer）在 @WebMvcTest 中被自动加载，其构造函数依赖 RagProperties，但测试用 @MockBean RagProperties 的所有嵌套 getter 返回 null。修复方案：在 RagControllerIntegrationTest、CacheMetricsControllerTest、ModelControllerTest 三个测试类中用 static @TestConfiguration（提供真实 RagProperties 实例）替代 @MockBean——RagProperties 的所有嵌套属性通过字段初始化器（如 `new RagCorsProperties()`）已保证非空，无需显式 setUp。同时修复测试 bug：chatAsk_missingSessionId_returns400 → chatAsk_missingSessionId_returns200（sessionId 是可选的，controller 会自动生成）。mvn test ✅（1203 tests 全通过，零失败零错误）；commit 35dacea 已推送
 - 2026-04-06 13:00 — ✅ C16 + N32 pgvector HNSW vs IVFFlat 性能对比文档完成：docs/pgvector-index-comparison.md（8.3KB，英文版），含 HNSW（m=16/ef=64）与 IVFFlat（lists=√n）算法对比/决策矩阵/参数调优表/迁移 SQL/基准测试方法论/Spring AI pgvector 配置参考；附带 ChatRequest.sessionId 可选化 + application.yml CORS 开发配置；1203 tests（53 errors 于 13:44 已修复）；commit d0082e9 已推送
+
+## 进度日志（WebUI 巡检 — 2026-04-07 19:48）
+
+- 2026-04-07 19:48 — ✅ WebUI 常规发布：Collections.test.tsx 3 个测试失败（useNavigate 无 Router context）；修复 BrowserRouter 包裹 render 调用；113 vitest tests ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing/Chat Real）；dist 已同步到 static/webui/；commit 66768f0 已推送
 
 ## 进度日志（WebUI 巡检 — 2026-04-06 06:52）
 
