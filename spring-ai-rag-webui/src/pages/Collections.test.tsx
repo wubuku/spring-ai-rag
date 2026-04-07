@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { BrowserRouter } from 'react-router-dom';
 import { Collections } from './Collections';
 
 // Create mock functions at module level
@@ -49,7 +50,7 @@ describe('Collections', () => {
       isPending: false,
     });
 
-    render(<Collections />);
+    render(<BrowserRouter><Collections /></BrowserRouter>);
     expect(screen.getByText('collections.title')).toBeInTheDocument();
   });
 
@@ -74,7 +75,7 @@ describe('Collections', () => {
       isPending: false,
     });
 
-    render(<Collections />);
+    render(<BrowserRouter><Collections /></BrowserRouter>);
     expect(screen.getByText('Test Collection')).toBeInTheDocument();
     expect(screen.getByText('BGE-M3 · 1024D')).toBeInTheDocument();
     expect(screen.getByText('10 collections.documentCount')).toBeInTheDocument();
@@ -86,7 +87,7 @@ describe('Collections', () => {
       isPending: false,
     });
 
-    render(<Collections />);
+    render(<BrowserRouter><Collections /></BrowserRouter>);
     expect(screen.getByText('collections.noCollections')).toBeInTheDocument();
   });
 });
