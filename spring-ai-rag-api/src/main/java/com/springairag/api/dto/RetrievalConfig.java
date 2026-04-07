@@ -12,30 +12,30 @@ import jakarta.validation.constraints.Min;
 @Schema(description = "检索配置参数")
 public class RetrievalConfig {
 
-    @Min(value = 1, message = "最大结果数量最小为 1")
-    @Max(value = 100, message = "最大结果数量不超过 100")
-    @Schema(description = "最大结果数量", example = "10", defaultValue = "10")
+    @Min(value = 1, message = "Max results must be at least 1")
+    @Max(value = 100, message = "Max results must not exceed 100")
+    @Schema(description = "Maximum number of results", example = "10", defaultValue = "10")
     private int maxResults = 10;
 
-    @DecimalMin(value = "0.0", message = "最低相关性得分最小为 0.0")
-    @DecimalMax(value = "1.0", message = "最低相关性得分最大为 1.0")
-    @Schema(description = "最低相关性得分阈值", example = "0.5", defaultValue = "0.5")
+    @DecimalMin(value = "0.0", message = "Min score must be at least 0.0")
+    @DecimalMax(value = "1.0", message = "Min score must not exceed 1.0")
+    @Schema(description = "Minimum relevance score threshold", example = "0.5", defaultValue = "0.5")
     private double minScore = 0.5;
 
-    @Schema(description = "是否使用混合检索", example = "true", defaultValue = "true")
+    @Schema(description = "Whether to use hybrid search", example = "true", defaultValue = "true")
     private boolean useHybridSearch = true;
 
-    @Schema(description = "是否使用重排序", example = "true", defaultValue = "true")
+    @Schema(description = "Whether to use reranking", example = "true", defaultValue = "true")
     private boolean useRerank = true;
 
-    @DecimalMin(value = "0.0", message = "向量检索权重最小为 0.0")
-    @DecimalMax(value = "1.0", message = "向量检索权重最大为 1.0")
-    @Schema(description = "向量检索权重", example = "0.5", defaultValue = "0.5")
+    @DecimalMin(value = "0.0", message = "Vector weight must be at least 0.0")
+    @DecimalMax(value = "1.0", message = "Vector weight must not exceed 1.0")
+    @Schema(description = "Vector search weight", example = "0.5", defaultValue = "0.5")
     private double vectorWeight = 0.5;
 
-    @DecimalMin(value = "0.0", message = "全文检索权重最小为 0.0")
-    @DecimalMax(value = "1.0", message = "全文检索权重最大为 1.0")
-    @Schema(description = "全文检索权重", example = "0.5", defaultValue = "0.5")
+    @DecimalMin(value = "0.0", message = "Fulltext weight must be at least 0.0")
+    @DecimalMax(value = "1.0", message = "Fulltext weight must not exceed 1.0")
+    @Schema(description = "Fulltext search weight", example = "0.5", defaultValue = "0.5")
     private double fulltextWeight = 0.5;
 
     public RetrievalConfig() {}

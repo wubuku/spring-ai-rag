@@ -13,29 +13,29 @@ import java.util.Map;
 @Schema(description = "RAG 问答请求")
 public class ChatRequest {
 
-    @NotBlank(message = "消息内容不能为空")
-    @Size(max = 10000, message = "消息内容不能超过 10000 字符")
-    @Schema(description = "用户消息内容", example = "退货政策是什么？", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Message content must not be blank")
+    @Size(max = 10000, message = "Message content must not exceed 10000 characters")
+    @Schema(description = "User message content", example = "What is the return policy?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
-    @Schema(description = "会话 ID，用于多轮对话记忆。首次对话可为空，服务端自动生成新会话", example = "conv-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Schema(description = "Session ID for multi-turn conversation memory. If empty for first message, a new session is auto-generated", example = "conv-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String sessionId;
 
-    @Min(value = 1, message = "最大检索结果数量最小为 1")
-    @Max(value = 50, message = "最大检索结果数量不超过 50")
-    @Schema(description = "最大检索结果数量", example = "5", defaultValue = "5")
+    @Min(value = 1, message = "Max results must be at least 1")
+    @Max(value = 50, message = "Max results must not exceed 50")
+    @Schema(description = "Maximum number of retrieval results", example = "5", defaultValue = "5")
     private int maxResults = 5;
 
-    @Schema(description = "是否使用混合检索（向量 + 全文）", example = "true", defaultValue = "true")
+    @Schema(description = "Whether to use hybrid search (vector + fulltext)", example = "true", defaultValue = "true")
     private boolean useHybridSearch = true;
 
-    @Schema(description = "是否使用重排序", example = "true", defaultValue = "true")
+    @Schema(description = "Whether to use reranking", example = "true", defaultValue = "true")
     private boolean useRerank = true;
 
-    @Schema(description = "领域扩展标识（可选）", example = "medical")
+    @Schema(description = "Domain extension identifier (optional)", example = "medical")
     private String domainId;
 
-    @Schema(description = "指定模型（可选，如 \"minimax\" 或 \"openai/deepseek-chat\"，null 使用默认模型）", example = "minimax")
+    @Schema(description = "Specify model (optional, e.g. \"minimax\" or \"openai/deepseek-chat\", null uses default model)", example = "minimax")
     private String model;
 
     @Schema(description = "额外元数据（透传给领域扩展）")

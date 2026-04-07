@@ -11,22 +11,22 @@ import java.util.Map;
 @Schema(description = "文档创建/更新请求")
 public class DocumentRequest {
 
-    @NotBlank(message = "文档标题不能为空")
-    @Size(max = 500, message = "文档标题不能超过 500 字符")
-    @Schema(description = "文档标题", example = "产品说明书", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Document title must not be blank")
+    @Size(max = 500, message = "Document title must not exceed 500 characters")
+    @Schema(description = "Document title", example = "Product Manual", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
-    @NotBlank(message = "文档内容不能为空")
-    @Size(max = 1_000_000, message = "文档内容不能超过 100 万字符")
-    @Schema(description = "文档正文内容", example = "本文档介绍产品的使用方法...", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Document content must not be blank")
+    @Size(max = 1_000_000, message = "Document content must not exceed 1 million characters")
+    @Schema(description = "Document body content", example = "This document describes how to use the product...", requiredMode = Schema.RequiredMode.REQUIRED)
     private String content;
 
-    @Size(max = 255, message = "文档来源标识不能超过 255 字符")
-    @Schema(description = "文档来源标识", example = "manual-upload")
+    @Size(max = 255, message = "Document source must not exceed 255 characters")
+    @Schema(description = "Document source identifier", example = "manual-upload")
     private String source;
 
-    @Size(max = 50, message = "文档类型不能超过 50 字符")
-    @Schema(description = "文档类型", example = "markdown")
+    @Size(max = 50, message = "Document type must not exceed 50 characters")
+    @Schema(description = "Document type", example = "markdown")
     private String documentType;
 
     @Schema(description = "附加元数据（JSON 对象）")

@@ -12,17 +12,17 @@ import java.util.List;
 @Schema(description = "检索效果评估请求")
 public class EvaluateRequest {
 
-    @NotBlank(message = "查询文本不能为空")
-    @Size(max = 10000, message = "查询文本不能超过 10000 字符")
-    @Schema(description = "查询文本", example = "如何配置 Spring AI？", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Query text must not be blank")
+    @Size(max = 10000, message = "Query text must not exceed 10000 characters")
+    @Schema(description = "Query text", example = "How to configure Spring AI?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String query;
 
-    @NotEmpty(message = "检索到的文档 ID 列表不能为空")
-    @Schema(description = "检索到的文档 ID 列表（按排名顺序）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "Retrieved document ID list must not be empty")
+    @Schema(description = "Retrieved document ID list (in ranking order)", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Long> retrievedDocIds;
 
-    @NotEmpty(message = "相关文档 ID 列表不能为空")
-    @Schema(description = "相关文档 ID 列表（Ground Truth）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotEmpty(message = "Relevant document ID list must not be empty")
+    @Schema(description = "Relevant document ID list (Ground Truth)", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Long> relevantDocIds;
 
     @Schema(description = "评估方法", example = "AUTO")

@@ -16,17 +16,17 @@ import java.util.List;
 @Schema(description = "批量创建并嵌入文档请求（一步到位）")
 public class BatchCreateAndEmbedRequest {
 
-    @NotNull(message = "collectionId 不能为空")
-    @Schema(description = "目标知识库 ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotNull(message = "Collection ID must not be null")
+    @Schema(description = "Target collection ID", example = "1", requiredMode = Schema.RequiredMode.REQUIRED)
     private Long collectionId;
 
-    @NotEmpty(message = "文档列表不能为空")
-    @Size(max = 100, message = "单次批量操作不超过 100 条")
+    @NotEmpty(message = "Document list must not be empty")
+    @Size(max = 100, message = "Batch operation must not exceed 100 items")
     @Valid
-    @Schema(description = "文档列表（最多 100 条）", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "List of documents (max 100)", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<DocumentRequest> documents;
 
-    @Schema(description = "是否强制重新嵌入（忽略已有嵌入）", example = "false")
+    @Schema(description = "Whether to force re-embedding (ignore existing embeddings)", example = "false")
     private boolean force = false;
 
     public BatchCreateAndEmbedRequest() {}

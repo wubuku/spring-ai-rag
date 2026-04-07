@@ -12,12 +12,12 @@ import java.util.List;
 @Schema(description = "检索请求参数")
 public class SearchRequest {
 
-    @NotBlank(message = "查询文本不能为空")
-    @Size(max = 10000, message = "查询文本不能超过 10000 字符")
-    @Schema(description = "查询文本", example = "Spring AI 是什么？", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Query text must not be blank")
+    @Size(max = 10000, message = "Query text must not exceed 10000 characters")
+    @Schema(description = "Query text", example = "What is Spring AI?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String query;
 
-    @Schema(description = "限定文档 ID 列表（为空则检索全部）", example = "[1, 2, 3]")
+    @Schema(description = "Limit to document ID list (empty means search all)", example = "[1, 2, 3]")
     private List<Long> documentIds;
 
     @Valid
