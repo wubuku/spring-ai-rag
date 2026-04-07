@@ -1511,7 +1511,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| W12 | C31：Document 版本对比 UI（diff 视图展示两个版本差异） | UX | ⏳ |
+| W12 | C31：Document 版本对比 UI（diff 视图展示两个版本差异） | UX | ✅ 2026-04-08（W12 完成：VersionHistoryModal 含版本列表+diff对比标签页；LCS行差异算法（零外部依赖）；GET /documents/{id}/versions API集成；两版本选择+行级diff展示（+/‑着色）；Documents表格行内Versions按钮；i18n中英；130 vitest全通过/E2E 12/12；commit adf11f6） |
 | W13 | C32：A/B 测试实时看板（WebUI 展示实验结果统计图表） | UX | ✅ 2026-04-08（W13 完成：ABTest.tsx 含实验列表/详情/统计图表/创建模态框；abtest.ts API client；ABTest.module.css；/abtest 路由+导航项；中英 i18n；ABTest chunk 18KB gzipped 5KB；113 vitest ✅ / E2E 12/12 ✅；commit 984fbca） |
 | W14 | C37：Dark Mode 自动跟随系统主题 + 手动切换增强 | UX | ⏳ |
 
@@ -1549,3 +1549,7 @@
 ## Cron 进度（2026-04-08 05:15 — 后端国际化查漏第七轮：Service Javadoc）
 
 - 2026-04-08 05:15 — ✅ Service 接口/实现 Javadoc 国际化（第七轮）：翻译 4 个文件全部中文 Javadoc 为英文——RetrievalEvaluationService（接口类+方法 Javadoc）、RetrievalEvaluationServiceImpl（类 Javadoc + inline comments: 累计命中/补齐/NDCG）、UserFeedbackService（接口类+方法 Javadoc）、DocumentVersionService（类+方法 Javadoc + inline comments）；4 files，82 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit 66b49fe 已推送
+
+## Cron 进度（2026-04-08 05:28 — W12 Document 版本对比 UI）
+
+- 2026-04-08 05:28 — ✅ W12 Document 版本对比 UI（WebUI）：实现 VersionHistoryModal 组件（版本列表+Diff对比标签页）；LCS行级差异算法（零外部依赖，computeLineDiff/truncateForPreview）；GET /documents/{id}/versions API集成；两版本选择+行级diff展示（+/‑ 着色）；Documents表格行内Versions按钮；i18n中英键（versions.*）；diffUtils.test.ts 9 tests + VersionHistoryModal.test.tsx 8 tests；setup.ts: initReactI18next mock补全；.gitignore: static/webui/assets/ 忽略构建产物；130 vitest全通过（22 files）/ E2E 12/12 ✅；dist已同步到 static/webui/；commit adf11f6 已推送；W12 → ✅
