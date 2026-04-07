@@ -1217,7 +1217,7 @@
 | C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
 | C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
 | C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ✅ 2026-04-07（C33 完成：NotificationConfig + NotificationService 接口 + DingTalkNotificationService 实现（HTTPS webhook + HMAC-SHA256 加签） + AlertServiceImpl.fireAlert() 异步通知触发 + 11 个单元测试 + application.yml 配置模板；邮件 SMTP 待接入） | P2 |
-| C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ⏳ | P3 |
+| C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ✅ 2026-04-08（C34 完成：euclideanDistance + dotProduct + 20 tests，RetrievalUtilsTest 28→48 tests） | P3 |
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ✅ 2026-04-07（d8211e3） | P3 |
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
 | C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
@@ -1514,6 +1514,10 @@
 | W12 | C31：Document 版本对比 UI（diff 视图展示两个版本差异） | UX | ⏳ |
 | W13 | C32：A/B 测试实时看板（WebUI 展示实验结果统计图表） | UX | ⏳ |
 | W14 | C37：Dark Mode 自动跟随系统主题 + 手动切换增强 | UX | ⏳ |
+
+## Cron 进度（2026-04-08 02:50 — C34 向量相似度算法补全）
+
+- 2026-04-08 02:50 — ✅ C34 向量相似度算法补全：`RetrievalUtils` 新增 `euclideanDistance(float[], float[])` L2 距离（维度不匹配返回 Double.MAX_VALUE）和 `dotProduct(float[], float[])` 内积（用于 max-inner-product 搜索，pgvector `<#>` 操作符对应）；所有 Javadoc 翻译为英文；`RetrievalUtilsTest` 新增 20 个测试覆盖 identical/orthogonal/opposite/null/empty/high-dimensional 场景；28→48 tests；mvn test ✅；commit 4e26e2c 已推送
 
 ## Cron 进度（2026-04-08 02:03 — 控制器 Javadoc 国际化第四轮）
 
