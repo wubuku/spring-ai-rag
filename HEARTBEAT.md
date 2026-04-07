@@ -1502,3 +1502,7 @@
 
 - 2026-04-08 01:25 — ✅ 控制器 Javadoc 国际化（第三轮）：扫描发现 EvaluationController、AlertController、RagSearchController 残留中文 Javadoc/@Operation/@Tag/@ApiResponse descriptions；3 个文件全部翻译为英文；mvn test ✅（1462 tests，零失败零错误）；commit c0069a9 已推送
   - ⚠️ 仍有余量：RagDocumentController、RagChatController、RagCollectionController、RagHealthController、RagMetricsController、ModelController、AbTestController、CacheMetricsController 共 8 个控制器残留中文 Javadoc，建议下次 cron 继续推进
+
+## Cron 进度（2026-04-08 01:41 — WebUI 常规发布）
+
+- 2026-04-08 01:41 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
