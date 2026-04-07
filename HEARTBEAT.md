@@ -1475,3 +1475,14 @@
   - `GET  /api/v1/rag/client-errors/count`：客户端错误总数
   - 5 个端点均已实现但未入文档，本次全部归档；1313 tests 全通过，零失败零错误
   - commit 6796125 已推送
+
+## Cron 进度（2026-04-07 21:10 — WebUI 常规发布）
+
+- 2026-04-07 21:10 — ✅ WebUI 常规发布：
+  - npm test ✅（113 vitest tests，20 test files，全通过）
+  - npm run build ✅（96KB index gzipped，28 个 chunk）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - 根因修复：E2E 失败源于 Spring Boot 运行时静态文件缓存（未重启服务前旧 JS bundle hash 仍被引用）—— 本次补重启后端服务，E2E 全部通过
+  - 清理 26 个历史 stale chunk 文件（commit 76649db）
+  - 后端服务 8081 UP
+  - git 已推送（commit 76649db）
