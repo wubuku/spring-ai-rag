@@ -43,6 +43,7 @@ public class DocumentEmbedService {
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
 
     private final HierarchicalTextChunker chunker;
+    private final RagProperties ragProperties;
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
     private final EmbeddingBatchService embeddingBatchService;
@@ -64,6 +65,7 @@ public class DocumentEmbedService {
                 ragProperties.getChunk().getDefaultChunkSize(),
                 ragProperties.getChunk().getMinChunkSize(),
                 ragProperties.getChunk().getDefaultChunkOverlap());
+        this.ragProperties = ragProperties;
     }
 
     /**
@@ -538,7 +540,8 @@ public class DocumentEmbedService {
             return new EmbedPrepareResult(doc, Map.of(
                     "message", "Document content too short, no chunking needed",
                     "documentId", documentId,
-                    "chunksCreated", 0
+                    "chunksCreated", 0,
+                    "status", "FAILED"
             ), null);
         }
         log.info("Document {} split into {} chunks", documentId, chunks.size());

@@ -284,13 +284,19 @@ public class RagDocumentController {
         for (RagDocument doc : missing) {
             try {
                 Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
+                String status = String.valueOf(result.getOrDefault("status", "UNKNOWN"));
+                if ("COMPLETED".equals(status)) {
+                    success++;
+                } else {
+                    failed++;
+                }
                 results.add(Map.of(
                         "documentId", doc.getId(),
                         "title", doc.getTitle(),
-                        "status", "success",
-                        "chunks", result.getOrDefault("chunks", 0)
+                        "status", status,
+                        "chunks", result.getOrDefault("chunksCreated", 0),
+                        "message", result.getOrDefault("message", "")
                 ));
-                success++;
             } catch (Exception e) {
                 log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
                 results.add(Map.of(
