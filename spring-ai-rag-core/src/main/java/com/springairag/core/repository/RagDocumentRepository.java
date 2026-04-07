@@ -67,11 +67,13 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
            "(COALESCE(:title, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
            "(COALESCE(:documentType, '') = '' OR d.documentType = :documentType) AND " +
            "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus) AND " +
-           "(:enabled IS NULL OR d.enabled = :enabled)")
+           "(:enabled IS NULL OR d.enabled = :enabled) AND " +
+           "(:collectionId IS NULL OR d.collectionId = :collectionId)")
     Page<RagDocument> searchDocuments(@Param("title") String title,
                                        @Param("documentType") String documentType,
                                        @Param("processingStatus") String processingStatus,
                                        @Param("enabled") Boolean enabled,
+                                       @Param("collectionId") Long collectionId,
                                        Pageable pageable);
 
     /**

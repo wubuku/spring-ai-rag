@@ -10,6 +10,9 @@ export interface Document {
   metadata: Record<string, unknown>;
   createdAt: string;
   updatedAt: string;
+  collectionId: number | null;
+  collectionName: string | null;
+  chunkCount: number;
 }
 
 export interface DocumentListResponse {

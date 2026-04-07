@@ -1439,3 +1439,9 @@
   - 1313 tests 全通过，零失败零错误
   - commit 6853ab8 已推送
 
+- 2026-04-07 17:46 — ✅ RagDocumentController 长方法重构（第二轮）：
+  - `reembedMissing` 86→40 行：提取 `executeReembeddingBatch()` 私有方法处理嵌入循环
+  - `processUploadedFile` 88→45 行：提取 `validateTextFile()` (文件类型验证) + `readFileContent()` (内容读取+标题构建)
+  - 新增 `FileValidationResult` + `FileContentResult` Java record 类型
+  - 1313 tests 全通过，零失败零错误，commit 4c1a389 已推送
+

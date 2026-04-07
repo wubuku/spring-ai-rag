@@ -4,6 +4,7 @@ import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.AuditLogService;
@@ -32,6 +33,7 @@ class RagDocumentControllerTest {
 
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
+    private RagCollectionRepository collectionRepository;
     private DocumentEmbedService documentEmbedService;
     private BatchDocumentService batchDocumentService;
     private DocumentVersionService documentVersionService;
@@ -42,11 +44,16 @@ class RagDocumentControllerTest {
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
         embeddingRepository = mock(RagEmbeddingRepository.class);
+        collectionRepository = mock(RagCollectionRepository.class);
         documentEmbedService = mock(DocumentEmbedService.class);
         batchDocumentService = mock(BatchDocumentService.class);
         documentVersionService = mock(DocumentVersionService.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, documentEmbedService, batchDocumentService, documentVersionService, auditLogService);
+        controller = new RagDocumentController(documentRepository, embeddingRepository, collectionRepository, documentEmbedService, batchDocumentService, documentVersionService, auditLogService);
+
+        // Default mock behavior for documentToMap calls
+        when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);
+        when(collectionRepository.findById(any())).thenReturn(Optional.empty());
     }
 
     private RagDocument createDoc(Long id, String title, String content) {
@@ -136,7 +143,7 @@ class RagDocumentControllerTest {
         ResponseEntity<Map<String, Object>> response = controller.getDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(5L, response.getBody().get("embeddingCount"));
+        assertEquals(5L, response.getBody().get("chunkCount"));
         assertEquals("文档标题", response.getBody().get("title"));
     }
 
@@ -178,10 +185,10 @@ class RagDocumentControllerTest {
                 createDoc(2L, "文档2", "内容2")
         );
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 2);
-        when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2L, response.getBody().get("total"));
@@ -193,10 +200,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByTitle() {
         List<RagDocument> docs = List.of(createDoc(1L, "Spring AI 入门", "内容"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -208,10 +215,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByDocumentType() {
         List<RagDocument> docs = List.of(createDoc(1L, "文档", "内容", "markdown", "COMPLETED"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, "markdown", null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, "markdown", null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -221,10 +228,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByStatus() {
         List<RagDocument> docs = List.of(createDoc(1L, "文档", "内容", "txt", "PENDING"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, "PENDING", null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -234,10 +241,10 @@ class RagDocumentControllerTest {
     void listDocuments_combinedFilters() {
         List<RagDocument> docs = List.of(createDoc(1L, "Spring Boot 教程", "内容", "markdown", "COMPLETED"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -246,10 +253,10 @@ class RagDocumentControllerTest {
     @Test
     void listDocuments_emptyResult() {
         Page<RagDocument> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(0L, response.getBody().get("total"));

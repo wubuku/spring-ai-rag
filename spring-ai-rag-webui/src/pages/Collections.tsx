@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { collectionsApi } from '../api/collections';
@@ -11,6 +12,7 @@ export function Collections() {
   const { t } = useTranslation();
   const [page] = useState(0);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
@@ -64,6 +66,12 @@ export function Collections() {
                 {col.documentCount} {t('collections.documentCount')}
               </div>
               <div className={styles.actions}>
+                <button
+                  onClick={() => navigate(`/documents?collectionId=${col.id}`)}
+                  className={styles.viewBtn}
+                >
+                  View Documents
+                </button>
                 <button
                   onClick={() => deleteMutation.mutate(col.id)}
                   className={styles.deleteBtn}

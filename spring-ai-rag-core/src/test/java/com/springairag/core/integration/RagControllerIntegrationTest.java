@@ -303,7 +303,7 @@ class RagControllerIntegrationTest {
             RagDocument doc = new RagDocument();
             doc.setId(1L);
             doc.setTitle("测试文档");
-            when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+            when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                     .thenReturn(new PageImpl<>(List.of(doc)));
             when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
 

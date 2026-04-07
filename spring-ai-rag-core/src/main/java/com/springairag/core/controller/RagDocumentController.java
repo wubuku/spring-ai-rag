@@ -11,6 +11,7 @@ import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.service.AuditLogService;
@@ -60,6 +61,7 @@ public class RagDocumentController {
 
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
+    private final RagCollectionRepository collectionRepository;
     private final DocumentEmbedService documentEmbedService;
     private final BatchDocumentService batchDocumentService;
     private final DocumentVersionService documentVersionService;
@@ -80,12 +82,14 @@ public class RagDocumentController {
 
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
+                                  RagCollectionRepository collectionRepository,
                                   @Lazy DocumentEmbedService documentEmbedService,
                                   @Lazy BatchDocumentService batchDocumentService,
                                   DocumentVersionService documentVersionService,
                                   @Autowired(required = false) AuditLogService auditLogService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
+        this.collectionRepository = collectionRepository;
         this.documentEmbedService = documentEmbedService;
         this.batchDocumentService = batchDocumentService;
         this.documentVersionService = documentVersionService;
@@ -155,9 +159,7 @@ public class RagDocumentController {
 
         return documentRepository.findById(id)
                 .map(doc -> {
-                    long embeddingCount = embeddingRepository.countByDocumentId(id);
-                    Map<String, Object> result = documentToMap(doc);
-                    result.put("embeddingCount", embeddingCount);
+                    Map<String, Object> result = documentToMap(doc, collectionRepository);
                     return ResponseEntity.ok(result);
                 })
                 .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -179,15 +181,16 @@ public class RagDocumentController {
             @RequestParam(required = false) String title,
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String processingStatus,
-            @RequestParam(required = false) Boolean enabled) {
+            @RequestParam(required = false) Boolean enabled,
+            @RequestParam(required = false) Long collectionId) {
 
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
         var pageResult = documentRepository.searchDocuments(
-                title, documentType, processingStatus, enabled, pageable);
+                title, documentType, processingStatus, enabled, collectionId, pageable);
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(this::documentToMap)
+                .map(doc -> documentToMap(doc, collectionRepository))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
@@ -738,17 +741,31 @@ public class RagDocumentController {
 
     // ==================== 辅助方法 ====================
 
-    private Map<String, Object> documentToMap(RagDocument doc) {
+    private Map<String, Object> documentToMap(RagDocument doc, RagCollectionRepository collectionRepository) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", doc.getId());
         map.put("title", doc.getTitle());
         map.put("source", doc.getSource());
-        map.put("document_type", doc.getDocumentType());
+        map.put("documentType", doc.getDocumentType());
         map.put("enabled", doc.getEnabled());
-        map.put("created_at", doc.getCreatedAt());
-        map.put("updated_at", doc.getUpdatedAt());
-        map.put("processing_status", doc.getProcessingStatus());
+        map.put("createdAt", doc.getCreatedAt());
+        map.put("updatedAt", doc.getUpdatedAt());
+        map.put("processingStatus", doc.getProcessingStatus());
         map.put("size", doc.getSize());
+        map.put("contentHash", doc.getContentHash());
+
+        // Collection 关联
+        Long collectionId = doc.getCollectionId();
+        map.put("collectionId", collectionId);
+        if (collectionId != null) {
+            var collection = collectionRepository.findById(collectionId);
+            collection.ifPresent(c -> map.put("collectionName", c.getName()));
+        }
+
+        // Chunk 数量
+        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+        map.put("chunkCount", chunkCount);
+
         if (doc.getContent() != null) {
             map.put("content", doc.getContent());
         }

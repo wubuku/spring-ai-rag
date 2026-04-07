@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { documentsApi } from '../api/documents';
+import { collectionsApi } from '../api/collections';
 import { useFileUpload } from '../hooks/useFileUpload';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
@@ -12,14 +13,35 @@ export function Documents() {
   const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState('');
+  const [selectedCollection, setSelectedCollection] = useState<number | undefined>(undefined);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
+  // Read collectionId from URL on mount (e.g., when navigated from Collections page)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const urlCollectionId = params.get('collectionId');
+    if (urlCollectionId) {
+      setSelectedCollection(Number(urlCollectionId));
+    }
+  }, []);
+
+  const { data: collectionsData } = useQuery({
+    queryKey: ['collections-all'],
+    queryFn: () => collectionsApi.list({ page: 0, size: 1000 }),
+  });
+
   const { data, isPending, error } = useQuery({
-    queryKey: ['documents', page, keyword],
-    queryFn: () => documentsApi.list({ page, size: PAGE_SIZE, title: keyword || undefined }),
+    queryKey: ['documents', page, keyword, selectedCollection],
+    queryFn: () =>
+      documentsApi.list({
+        page,
+        size: PAGE_SIZE,
+        title: keyword || undefined,
+        collectionId: selectedCollection,
+      }),
     staleTime: 10000,
   });
 
@@ -69,9 +91,17 @@ export function Documents() {
     setPage(0);
   };
 
+  const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedCollection(val === '' ? undefined : Number(val));
+    setPage(0);
+  };
+
   const handlePreview = (doc: { id: number; title: string; content: string }) => {
     setPreviewDoc(doc);
   };
+
+  const collections = collectionsData?.data?.collections ?? [];
 
   return (
     <div>
@@ -112,10 +142,28 @@ export function Documents() {
           className={styles.searchInput}
         />
         {keyword && (
-          <button onClick={() => { setKeyword(''); setPage(0); }} className={styles.clearBtn}>
+          <button
+            onClick={() => {
+              setKeyword('');
+              setPage(0);
+            }}
+            className={styles.clearBtn}
+          >
             ✕
           </button>
         )}
+        <select
+          value={selectedCollection ?? ''}
+          onChange={handleCollectionChange}
+          className={styles.filterSelect}
+        >
+          <option value="">All Collections</option>
+          {collections.map((c: { id: number; name: string }) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       {isPending ? (
@@ -124,7 +172,8 @@ export function Documents() {
         </div>
       ) : error ? (
         <div className={styles.error}>
-          {t('documents.loadError') || t('common.error')}: {error instanceof Error ? error.message : 'Unknown error'}
+          {t('documents.loadError') || t('common.error')}:{' '}
+          {error instanceof Error ? error.message : 'Unknown error'}
         </div>
       ) : (
         <>
@@ -134,7 +183,9 @@ export function Documents() {
                 <tr>
                   <th>{t('documents.documentId')}</th>
                   <th>{t('documents.title') || 'Title'}</th>
+                  <th>Collection</th>
                   <th>{t('documents.documentType')}</th>
+                  <th>Chunks</th>
                   <th>{t('documents.createdAt')}</th>
                   <th>{t('documents.contentHash')}</th>
                   <th>{t('documents.actions')}</th>
@@ -149,7 +200,9 @@ export function Documents() {
                         {doc.title}
                       </button>
                     </td>
+                    <td>{doc.collectionName ?? '—'}</td>
                     <td>{doc.documentType ?? '—'}</td>
+                    <td>{doc.chunkCount}</td>
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
                     <td>
@@ -165,7 +218,7 @@ export function Documents() {
                 ))}
                 {data?.data?.documents?.length === 0 && (
                   <tr>
-                    <td colSpan={6} className={styles.empty}>
+                    <td colSpan={8} className={styles.empty}>
                       {t('documents.noDocuments')}
                     </td>
                   </tr>
