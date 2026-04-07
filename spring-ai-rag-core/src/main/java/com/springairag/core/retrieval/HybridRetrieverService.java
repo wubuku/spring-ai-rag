@@ -25,13 +25,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * 混合检索服务
+ * Hybrid retrieval service.
  *
- * <p>结合向量检索和全文检索，通过结果融合提升召回质量。
- * 全文检索策略由 {@link FulltextSearchProviderFactory} 自动选择：
+ * <p>Combines vector search and full-text search, improving recall quality through result fusion.
+ * Full-text search strategy is auto-selected by {@link FulltextSearchProviderFactory}:
  * <ul>
- *   <li>中文：jieba FTS → pg_trgm → 无</li>
- *   <li>英文/其他：English FTS → pg_trgm → 无</li>
+ *   <li>Chinese: jieba FTS → pg_trgm → none</li>
+ *   <li>English/other: English FTS → pg_trgm → none</li>
  * </ul>
  */
 @Service
@@ -114,7 +114,7 @@ public class HybridRetrieverService {
             return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
         }
 
-        // 并行执行向量检索和全文检索（各自带超时，超时则降级为空结果）
+        // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
         CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
                 .supplyAsync(() -> vectorSearch(query, documentIds, excludeIds, effectiveLimit * 2), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)

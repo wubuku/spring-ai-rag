@@ -10,18 +10,18 @@ import org.springframework.stereotype.Component;
 import java.util.Map;
 
 /**
- * 全文检索策略工厂
+ * Full-text search strategy factory.
  *
- * <p>支持两种模式：
+ * <p>Supports two modes:
  * <ul>
- *   <li>固定策略：通过 {@code rag.retrieval.fulltext-strategy} 配置选择单一策略</li>
- *   <li>自动策略（默认）：根据语言检测自动选择最佳策略</li>
+ *   <li>Fixed strategy: selects a single strategy via {@code rag.retrieval.fulltext-strategy} config</li>
+ *   <li>Auto strategy (default): automatically selects the best strategy based on language detection</li>
  * </ul>
  *
- * <p>自动策略降级链：
+ * <p>Auto strategy fallback chain:
  * <ul>
- *   <li>中文：jieba FTS → pg_trgm → none</li>
- *   <li>英文/其他：English FTS → pg_trgm → none</li>
+ *   <li>Chinese: jieba FTS → pg_trgm → none</li>
+ *   <li>English/other: English FTS → pg_trgm → none</li>
  * </ul>
  */
 @Component
@@ -40,7 +40,7 @@ public class FulltextSearchProviderFactory {
     private final String configuredStrategy;
     private final SearchCapabilities capabilities;
     
-    // 缓存各语言的 Provider（接口类型，支持测试注入）
+    // Cached per-language providers (interface type, supports test injection)
     private volatile FulltextSearchProvider jiebaProvider;
     private volatile FulltextSearchProvider englishProvider;
     private volatile FulltextSearchProvider trgmProvider;
@@ -123,11 +123,11 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 根据语言自动选择最佳 Provider
+     * Auto-select best Provider based on language.
      */
     private FulltextSearchProvider autoDetectForLang(QueryLang lang) {
         if (lang == QueryLang.ZH) {
-            // 中文降级链：jieba → trgm → none
+            // Chinese fallback chain: jieba → trgm → none
             if (capabilities.enableChineseFts() && jiebaProvider.isAvailable()) {
                 return jiebaProvider;
             }
@@ -136,7 +136,7 @@ public class FulltextSearchProviderFactory {
             }
             return new NoOpFulltextSearchProvider();
         } else {
-            // 英文降级链：english FTS → trgm → none
+            // English fallback chain: english FTS → trgm → none
             if (capabilities.enableEnglishFts() && englishProvider.isAvailable()) {
                 log.debug("Auto-selected provider for EN: english_fts");
                 return englishProvider;
@@ -151,20 +151,20 @@ public class FulltextSearchProviderFactory {
     }
 
     /**
-     * 自动选择最佳 Provider（不指定语言，优先选择 pg_jieba）
+     * Auto-select best Provider (no language specified, prefers pg_jieba).
      */
     private FulltextSearchProvider autoDetectBest() {
-        // 优先检查 jieba（中文场景）
+        // Prefer jieba (Chinese scenarios)
         if (capabilities.enableChineseFts() && jiebaProvider.isAvailable()) {
             log.debug("Auto-selected best provider: pg_jieba");
             return jiebaProvider;
         }
-        // 然后检查 english FTS
+        // Then check english FTS
         if (capabilities.enableEnglishFts() && englishProvider.isAvailable()) {
             log.debug("Auto-selected best provider: english_fts");
             return englishProvider;
         }
-        // 最后检查 trgm
+        // Finally check trgm
         if (capabilities.enableTrgm() && trgmProvider.isAvailable()) {
             log.debug("Auto-selected best provider: pg_trgm");
             return trgmProvider;

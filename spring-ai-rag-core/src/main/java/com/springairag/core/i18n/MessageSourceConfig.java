@@ -11,16 +11,16 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * 国际化配置
+ * Internationalization configuration.
  *
- * <p>提供多语言错误消息支持。通过 Accept-Language 请求头自动选择语言，
- * 默认中文（zh_CN），支持中文和英文切换。
+ * <p>Provides multi-language error message support. Auto-selects language via Accept-Language header,
+ * defaulting to zh_CN with support for Chinese and English.
  *
- * <p>消息文件位于 classpath:messages/ 目录：
+ * <p>Message files are located in classpath:messages/ directory:
  * <ul>
- *   <li>messages.properties — 默认（中文）</li>
- *   <li>messages_zh_CN.properties — 中文</li>
- *   <li>messages_en.properties — 英文</li>
+ *   <li>messages.properties — default (Chinese)</li>
+ *   <li>messages_zh_CN.properties — Chinese</li>
+ *   <li>messages_en.properties — English</li>
  * </ul>
  */
 @Configuration

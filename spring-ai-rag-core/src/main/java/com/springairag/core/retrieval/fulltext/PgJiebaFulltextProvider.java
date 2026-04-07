@@ -9,16 +9,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * pg_jieba 中文分词全文检索策略
+ * pg_jieba Chinese tokenization full-text search strategy.
  *
- * <p>使用 PostgreSQL pg_jieba 扩展的 `jiebacfg` 文本搜索配置，
- * 通过预建的 search_vector_zh GENERATED 列（有 GIN 索引）实现高效中文全文检索。
+ * <p>Uses PostgreSQL pg_jieba extension with `jiebacfg` text search configuration,
+ * via a pre-built search_vector_zh GENERATED column (with GIN index) for efficient Chinese FTS.
  *
- * <p>前提条件：
+ * <p>Prerequisites:
  * <ul>
- *   <li>数据库安装了 pg_jieba 扩展</li>
- *   <li>V15 迁移成功创建了 search_vector_zh GENERATED 列和 jiebacfg 文本搜索配置</li>
- *   <li>search_vector_zh 列有 GIN 索引</li>
+ *   <li>pg_jieba extension is installed in the database</li>
+ *   <li>V15 migration created the search_vector_zh GENERATED column and jiebacfg text search configuration</li>
+ *   <li>search_vector_zh column has a GIN index</li>
  * </ul>
  */
 public class PgJiebaFulltextProvider implements FulltextSearchProvider {
@@ -39,13 +39,13 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
 
     private boolean detectAvailability() {
         try {
-            // 检测 pg_jieba 扩展
+            // Detect pg_jieba extension
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_extension WHERE extname = 'pg_jieba'", Integer.class);
-            // 检测 jiebacfg 配置
+            // Detect jiebacfg configuration
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_ts_config WHERE cfgname = 'jiebacfg'", Integer.class);
-            // 检测 search_vector_zh GIN 索引
+            // Detect search_vector_zh GIN index
             Boolean hasIndex = jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
@@ -98,8 +98,8 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
     }
 
     private List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
-        // 使用预建的 search_vector_zh 列（有 GIN 索引）
-        // 使用 websearch_to_tsquery 支持 Google 风格搜索语法
+        // Use pre-built search_vector_zh column (with GIN index)
+        // Use websearch_to_tsquery for Google-style search syntax
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
