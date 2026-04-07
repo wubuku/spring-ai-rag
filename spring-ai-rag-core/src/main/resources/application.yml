@@ -340,6 +340,31 @@ rag:
   #   log-enabled: true             # Log slow queries to application log
   #   max-retained: 100             # Max recent slow queries to retain for REST exposure
 
+  # Alert notification channels (disabled by default)
+  # When enabled, fired alerts are sent to configured channels asynchronously
+  # notifications:
+  #   enabled: true
+  #   dingtalk:
+  #     - name: default
+  #       webhook-url: https://oapi.dingtalk.com/robot/send?access_token=YOUR_TOKEN
+  #       secret: SEC...            # Optional: DingTalk加签密钥 (机器人安全设置)
+  #       alert-types:              # Only notify for these alert types
+  #         - THRESHOLD_HIGH
+  #         - SLO_BREACH
+  #         - AVAILABILITY
+  #   email:
+  #     enabled: false
+  #     host: smtp.example.com
+  #     port: 587
+  #     username: alerts@example.com
+  #     password: secret
+  #     from: rag-alerts@example.com
+  #     to:
+  #       - admin@example.com
+  #     alert-types:
+  #       - CRITICAL
+  #       - SLO_BREACH
+
 # ============================================
 # Server Configuration
 # ============================================

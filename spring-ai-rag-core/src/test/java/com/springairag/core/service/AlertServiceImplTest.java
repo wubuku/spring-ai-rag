@@ -35,11 +35,14 @@ class AlertServiceImplTest {
     @Mock
     private RagRetrievalEvaluationRepository evaluationRepository;
 
+    @Mock
+    private NotificationService notificationService;
+
     private AlertService alertService;
 
     @BeforeEach
     void setUp() {
-        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository);
+        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, notificationService);
     }
 
     // ==================== shouldAlert ====================
@@ -117,6 +120,25 @@ class AlertServiceImplTest {
                 "WARNING".equals(alert.getSeverity()) &&
                 "ACTIVE".equals(alert.getStatus())
         ));
+    }
+
+    @Test
+    @DisplayName("fireAlert sends notification after saving alert")
+    void fireAlert_sendsNotification() {
+        RagAlert savedAlert = new RagAlert();
+        savedAlert.setId(1L);
+        when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
+
+        alertService.fireAlert("SLO_BREACH", "P99 Latency", "P99 超标",
+                "CRITICAL", Map.of("p99_latency_ms", 5500));
+
+        verify(notificationService).sendAlert(
+                eq("SLO_BREACH"),
+                eq("P99 Latency"),
+                eq("CRITICAL"),
+                eq("P99 超标"),
+                eq(Map.of("p99_latency_ms", 5500))
+        );
     }
 
     // ==================== resolveAlert ====================

@@ -52,13 +52,16 @@ public class AlertServiceImpl implements AlertService {
     private final AlertRepository alertRepository;
     private final RagRetrievalLogRepository retrievalLogRepository;
     private final RagRetrievalEvaluationRepository evaluationRepository;
+    private final NotificationService notificationService;
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
-                           RagRetrievalEvaluationRepository evaluationRepository) {
+                           RagRetrievalEvaluationRepository evaluationRepository,
+                           NotificationService notificationService) {
         this.alertRepository = alertRepository;
         this.retrievalLogRepository = retrievalLogRepository;
         this.evaluationRepository = evaluationRepository;
+        this.notificationService = notificationService;
     }
 
     @Override
@@ -103,6 +106,12 @@ public class AlertServiceImpl implements AlertService {
         alert.setFiredAt(ZonedDateTime.now());
 
         alert = alertRepository.save(alert);
+
+        // Send external notification (async, best-effort)
+        if (notificationService != null) {
+            notificationService.sendAlert(alertType, alertName, severity, message, metrics);
+        }
+
         return alert.getId();
     }
 
