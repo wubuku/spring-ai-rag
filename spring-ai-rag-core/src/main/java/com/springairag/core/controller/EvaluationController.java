@@ -26,14 +26,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 检索效果评估控制器
+ * Retrieval evaluation controller
  *
- * <p>提供检索质量评估的 REST API，支持单次评估、批量评估、报告查询等操作。
+ * <p>Provides REST API for retrieval quality evaluation, supporting single evaluation, batch evaluation, report queries, etc.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/evaluation")
-@Tag(name = "RAG Evaluation", description = "检索效果评估（Precision@K, Recall@K, MRR, NDCG）")
+@Tag(name = "RAG Evaluation", description = "Retrieval quality evaluation (Precision@K, Recall@K, MRR, NDCG)")
 public class EvaluationController {
 
     private static final String ENTITY_USER_FEEDBACK = "UserFeedback";
@@ -51,12 +51,12 @@ public class EvaluationController {
     }
 
     /**
-     * 单次评估
+     * Single evaluation
      */
-    @Operation(summary = "单次检索评估", description = "提交查询和检索结果进行效果评估，计算 Precision@K、MRR、NDCG 等指标")
+    @Operation(summary = "Single retrieval evaluation", description = "Submit query and retrieval results for quality evaluation, computing Precision@K, MRR, NDCG, etc.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "评估成功"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Evaluation succeeded"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/evaluate")
     public ResponseEntity<RagRetrievalEvaluation> evaluate(@Valid @RequestBody EvaluateRequest request) {
@@ -71,12 +71,12 @@ public class EvaluationController {
     }
 
     /**
-     * 批量评估
+     * Batch evaluation
      */
-    @Operation(summary = "批量检索评估", description = "提交多组评估用例进行批量评估")
+    @Operation(summary = "Batch retrieval evaluation", description = "Submit multiple evaluation cases for batch processing")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "批量评估成功"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Batch evaluation succeeded"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/batch")
     public ResponseEntity<List<RagRetrievalEvaluation>> batchEvaluate(
@@ -125,10 +125,10 @@ public class EvaluationController {
     }
 
     /**
-     * 计算指标（不持久化）
+     * Calculate metrics (non-persistent)
      */
-    @Operation(summary = "计算评估指标", description = "纯计算，不写入数据库。用于快速预览指标。")
-    @ApiResponse(responseCode = "200", description = "返回计算结果")
+    @Operation(summary = "Calculate evaluation metrics", description = "Pure calculation without persistence. Used for quick metric preview.")
+    @ApiResponse(responseCode = "200", description = "Returns calculation result")
     @GetMapping("/metrics/calculate")
     public ResponseEntity<RetrievalEvaluationService.EvaluationMetrics> calculateMetrics(
             @RequestParam List<Long> retrieved,
@@ -138,12 +138,12 @@ public class EvaluationController {
     }
 
     /**
-     * 获取评估报告
+     * Get evaluation report
      */
-    @Operation(summary = "评估报告", description = "按时间段聚合的评估报告，包含平均指标")
+    @Operation(summary = "Evaluation report", description = "Aggregated evaluation report by time range, including average metrics")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回评估报告"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns evaluation report"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/report")
     public ResponseEntity<RetrievalEvaluationService.EvaluationReport> getReport(
@@ -153,10 +153,10 @@ public class EvaluationController {
     }
 
     /**
-     * 获取评估历史
+     * Get evaluation history
      */
-    @Operation(summary = "评估历史", description = "分页查询评估记录")
-    @ApiResponse(responseCode = "200", description = "返回评估历史分页列表")
+    @Operation(summary = "Evaluation history", description = "Paginated retrieval of evaluation records")
+    @ApiResponse(responseCode = "200", description = "Returns paginated evaluation history")
     @GetMapping("/history")
     public ResponseEntity<List<RagRetrievalEvaluation>> getHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -165,12 +165,12 @@ public class EvaluationController {
     }
 
     /**
-     * 获取聚合指标
+     * Get aggregated metrics
      */
-    @Operation(summary = "聚合指标", description = "按时间段聚合的 IR 指标（平均 MRR、NDCG、Hit Rate 等）")
+    @Operation(summary = "Aggregated metrics", description = "IR metrics aggregated by time range (average MRR, NDCG, Hit Rate, etc.)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回聚合指标"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns aggregated metrics"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/metrics/aggregated")
     public ResponseEntity<RetrievalEvaluationService.AggregatedMetrics> getAggregatedMetrics(
@@ -179,15 +179,15 @@ public class EvaluationController {
         return ResponseEntity.ok(evaluationService.getAggregatedMetrics(startDate, endDate));
     }
 
-    // ==================== 用户反馈 ====================
+    // ==================== User Feedback ====================
 
     /**
-     * 提交用户反馈
+     * Submit user feedback
      */
-    @Operation(summary = "提交用户反馈", description = "用户对 RAG 检索结果和回答质量的反馈（点赞/点踩/评分）")
+    @Operation(summary = "Submit user feedback", description = "User feedback on RAG retrieval results and answer quality (thumbs up/down or rating)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "反馈提交成功"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Feedback submitted successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/feedback")
     public ResponseEntity<RagUserFeedback> submitFeedback(@Valid @RequestBody FeedbackRequest request) {
@@ -210,12 +210,12 @@ public class EvaluationController {
     }
 
     /**
-     * 获取反馈统计
+     * Get feedback statistics
      */
-    @Operation(summary = "反馈统计", description = "按时间段统计用户反馈分布（点赞/点踩/评分）")
+    @Operation(summary = "Feedback statistics", description = "User feedback distribution by time range (thumbs up/down or rating)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回反馈统计"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns feedback statistics"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/feedback/stats")
     public ResponseEntity<UserFeedbackService.FeedbackStats> getFeedbackStats(
@@ -225,10 +225,10 @@ public class EvaluationController {
     }
 
     /**
-     * 获取反馈历史
+     * Get feedback history
      */
-    @Operation(summary = "反馈历史", description = "分页查询用户反馈记录")
-    @ApiResponse(responseCode = "200", description = "返回反馈历史分页列表")
+    @Operation(summary = "Feedback history", description = "Paginated query of user feedback records")
+    @ApiResponse(responseCode = "200", description = "Returns paginated feedback history")
     @GetMapping("/feedback/history")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -237,10 +237,10 @@ public class EvaluationController {
     }
 
     /**
-     * 按类型查询反馈
+     * Query feedback by type
      */
-    @Operation(summary = "按类型查询反馈", description = "按反馈类型（THUMBS_UP/THUMBS_DOWN/RATING）分页查询")
-    @ApiResponse(responseCode = "200", description = "返回该类型反馈分页列表")
+    @Operation(summary = "Query feedback by type", description = "Paginated query of feedback by type (THUMBS_UP/THUMBS_DOWN/RATING)")
+    @ApiResponse(responseCode = "200", description = "Returns paginated list of feedback for the specified type")
     @GetMapping("/feedback/type/{feedbackType}")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackByType(
             @PathVariable String feedbackType,

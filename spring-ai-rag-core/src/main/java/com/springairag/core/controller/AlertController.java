@@ -28,14 +28,14 @@ import java.util.Map;
 import org.springframework.beans.factory.annotation.Autowired;
 
 /**
- * 告警管理控制器
+ * Alert management controller
  *
- * <p>提供告警查询、触发、解决、静默，以及 SLO 状态检查接口。
+ * <p>Provides alert query, trigger, resolve, silence, and SLO status check endpoints.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/alerts")
-@Tag(name = "RAG Alerts", description = "告警管理（阈值告警 + SLO 监控）")
+@Tag(name = "RAG Alerts", description = "Alert management (threshold alerts + SLO monitoring)")
 public class AlertController {
 
     private final AlertService alertService;
@@ -53,22 +53,22 @@ public class AlertController {
     }
 
     /**
-     * 获取活跃告警
+     * Get active alerts
      */
-    @Operation(summary = "获取活跃告警", description = "查询所有未解决的告警记录，按触发时间倒序。")
-    @ApiResponse(responseCode = "200", description = "返回活跃告警列表")
+    @Operation(summary = "Get active alerts", description = "Query all unresolved alert records, ordered by trigger time descending.")
+    @ApiResponse(responseCode = "200", description = "Returns list of active alerts")
     @GetMapping("/active")
     public ResponseEntity<List<AlertService.AlertRecord>> getActiveAlerts() {
         return ResponseEntity.ok(alertService.getActiveAlerts());
     }
 
     /**
-     * 获取告警历史
+     * Get alert history
      */
-    @Operation(summary = "获取告警历史", description = "按时间范围查询告警记录，支持按严重程度和类型过滤。")
+    @Operation(summary = "Get alert history", description = "Query alert records by time range, supports filtering by severity and type.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回告警历史列表"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns alert history list"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/history")
     public ResponseEntity<List<AlertService.AlertRecord>> getAlertHistory(
@@ -81,12 +81,12 @@ public class AlertController {
     }
 
     /**
-     * 获取告警统计
+     * Get alert statistics
      */
-    @Operation(summary = "获取告警统计", description = "统计指定时间范围内的告警总数、各严重程度数量和告警频率。")
+    @Operation(summary = "Get alert statistics", description = "Statistics on total alerts, per-severity counts, and alert frequency within the specified time range.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回告警统计"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns alert statistics"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/stats")
     public ResponseEntity<AlertService.AlertStats> getAlertStats(
@@ -97,12 +97,12 @@ public class AlertController {
     }
 
     /**
-     * 解决告警
+     * Resolve alert
      */
-    @Operation(summary = "解决告警", description = "将告警标记为已解决。")
+    @Operation(summary = "Resolve alert", description = "Mark an alert as resolved.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "告警已解决"),
-        @ApiResponse(responseCode = "404", description = "告警不存在")
+        @ApiResponse(responseCode = "200", description = "Alert resolved"),
+        @ApiResponse(responseCode = "404", description = "Alert not found")
     })
     @PostMapping("/{alertId}/resolve")
     public ResponseEntity<AlertActionResponse> resolveAlert(
@@ -118,12 +118,12 @@ public class AlertController {
     }
 
     /**
-     * 静默告警
+     * Silence alert
      */
-    @Operation(summary = "静默告警", description = "临时屏蔽指定告警，指定时间内不再触发同类型告警。")
+    @Operation(summary = "Silence alert", description = "Temporarily suppress a specified alert, preventing the same type from triggering within the specified duration.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "告警已静默"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Alert silenced"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/silence")
     public ResponseEntity<AlertActionResponse> silenceAlert(
@@ -142,12 +142,12 @@ public class AlertController {
     }
 
     /**
-     * 手动触发告警
+     * Manually fire an alert
      */
-    @Operation(summary = "手动触发告警", description = "手动创建一条告警记录（用于外部系统集成）。")
+    @Operation(summary = "Manually fire an alert", description = "Manually create an alert record (used for external system integration).")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "告警已触发"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Alert fired"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/fire")
     public ResponseEntity<FireAlertResponse> fireAlert(
@@ -169,12 +169,12 @@ public class AlertController {
     }
 
     /**
-     * 检查所有 SLO 状态
+     * Check all SLO statuses
      */
-    @Operation(summary = "检查所有 SLO", description = "检查所有 SLO（可用性、延迟、质量）的达标状态。")
+    @Operation(summary = "Check all SLO statuses", description = "Check compliance status of all SLOs (availability, latency, quality).")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回所有 SLO 状态"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns all SLO statuses"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/slos")
     public ResponseEntity<Map<String, AlertService.SloStatus>> checkAllSlos(
@@ -185,12 +185,12 @@ public class AlertController {
     }
 
     /**
-     * 检查单个 SLO
+     * Check single SLO status
      */
-    @Operation(summary = "检查单个 SLO", description = "检查指定 SLO 的达标状态。")
+    @Operation(summary = "Check single SLO status", description = "Check compliance status of a specific SLO.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回 SLO 状态"),
-        @ApiResponse(responseCode = "400", description = "日期格式无效")
+        @ApiResponse(responseCode = "200", description = "Returns SLO status"),
+        @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
     @GetMapping("/slos/{sloName}")
     public ResponseEntity<AlertService.SloStatus> checkSlo(

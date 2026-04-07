@@ -28,14 +28,14 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * 检索控制器
+ * Search controller
  *
- * <p>提供直接检索接口（不经过 LLM 生成），用于调试和预览检索效果。
+ * <p>Provides direct retrieval endpoints (no LLM generation), used for debugging and previewing retrieval quality.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/search")
-@Tag(name = "RAG Search", description = "直接检索接口（不经过 LLM，用于调试和预览）")
+@Tag(name = "RAG Search", description = "Direct retrieval endpoint (no LLM, for debugging and preview)")
 public class RagSearchController {
 
     private static final Logger log = LoggerFactory.getLogger(RagSearchController.class);
@@ -47,17 +47,17 @@ public class RagSearchController {
     }
 
     /**
-     * 直接检索（混合检索，不生成回答）
+     * Direct retrieval (hybrid search, no answer generation)
      *
-     * @param query 查询文本
-     * @param limit 返回结果数量（默认 10）
-     * @param useHybrid 是否使用混合检索（默认 true）
-     * @param vectorWeight 向量权重（默认 0.5）
-     * @param fulltextWeight 全文权重（默认 0.5）
-     * @return 检索结果列表
+     * @param query the query text
+     * @param limit max results to return (default 10)
+     * @param useHybrid whether to use hybrid search (default true)
+     * @param vectorWeight vector weight (default 0.5)
+     * @param fulltextWeight fulltext weight (default 0.5)
+     * @return list of retrieval results
      */
-    @Operation(summary = "直接检索（GET）", description = "混合检索，不经过 LLM 生成。支持向量/全文权重调节。")
-    @ApiResponse(responseCode = "200", description = "返回检索结果列表")
+    @Operation(summary = "Direct retrieval (GET)", description = "Hybrid search, no LLM generation. Supports vector/fulltext weight adjustment.")
+    @ApiResponse(responseCode = "200", description = "Returns retrieval results list")
     @GetMapping
     @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<?> search(
@@ -92,12 +92,12 @@ public class RagSearchController {
     }
 
     /**
-     * 带请求体的检索（支持更复杂的配置）
+     * Retrieval with request body (supports advanced config)
      */
-    @Operation(summary = "直接检索（POST）", description = "通过请求体提交检索配置，支持限定文档 ID 等高级参数。")
+    @Operation(summary = "Direct retrieval (POST)", description = "Submit retrieval config via request body, supports filtering by document IDs and other advanced parameters.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回检索结果列表"),
-            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+            @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
+            @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
     @Timed(value = "rag.search.post", description = "RAG direct search (POST)", percentiles = {0.5, 0.95, 0.99})
