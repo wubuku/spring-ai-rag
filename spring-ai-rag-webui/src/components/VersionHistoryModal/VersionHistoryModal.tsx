@@ -50,8 +50,9 @@ export function VersionHistoryModal({ documentId, documentTitle, onClose }: Vers
         documentsApi.getVersion(documentId, compareA.versionNumber),
         documentsApi.getVersion(documentId, compareB.versionNumber),
       ]);
-      const vAd = vA.data;
-      const vBd = vB.data;
+      const vAd = vA?.data;
+      const vBd = vB?.data;
+      if (!vAd || !vBd) return;
       const older = vAd.versionNumber < vBd.versionNumber ? vAd : vBd;
       const newer = vAd.versionNumber < vBd.versionNumber ? vBd : vAd;
       const lines = computeLineDiff(

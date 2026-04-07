@@ -176,6 +176,7 @@ describe('VersionHistoryModal', () => {
   });
 
   it('switches to diff tab after comparing versions', async () => {
+    // getVersions returns IDs 1 (v3) and 2 (v2), so getVersion must mock versionNumbers 3 and 2
     vi.mocked(documentsApi.getVersions).mockResolvedValueOnce({
       data: { documentId: 42, totalVersions: 2, page: 0, size: 20, versions: mockVersions.slice(0, 2) },
     } as any);
@@ -184,7 +185,7 @@ describe('VersionHistoryModal', () => {
       .mockResolvedValueOnce({
         id: 1,
         documentId: 42,
-        versionNumber: 1,
+        versionNumber: 3,
         contentHash: 'abc12345',
         size: 100,
         changeType: 'CREATE',
