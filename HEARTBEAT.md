@@ -1526,3 +1526,7 @@
 ## Cron 进度（2026-04-08 03:18 — 脚本国际化清理）
 
 - 2026-04-08 03:18 — ✅ 脚本国际化清理：`scripts/rebuild-search-vectors.sql` 中文注释翻译为英文（38行变更），SQL 逻辑不变，项目国际化政策一致；1462 tests 全通过，零失败零错误；commit 4ffc3f3 已推送
+
+## Cron 进度（2026-04-08 03:26 — WebUI 常规发布）
+
+- 2026-04-08 03:26 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
