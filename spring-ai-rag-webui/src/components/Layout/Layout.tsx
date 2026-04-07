@@ -13,6 +13,7 @@ const NAV_ITEMS = [
   { to: '/search', labelKey: 'nav.search', icon: '🔍' },
   { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
   { to: '/alerts', labelKey: 'nav.alerts', icon: '🔔' },
+  { to: '/abtest', labelKey: 'nav.abtest', icon: '🧪' },
   { to: '/settings', labelKey: 'nav.settings', icon: '⚙️' },
 ];
 

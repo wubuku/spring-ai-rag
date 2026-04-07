@@ -1539,3 +1539,7 @@
 
 - 2026-04-08 04:21 — ✅ 国际化查漏第六轮（后端）：AlertService.java 全文 Javadoc/方法注释/内部类注释英文化（14 个方法注释 + 3 个数据类注释）；AlertServiceImpl.java 类注释/SLO 注释/行内注释英文化（8 处）；RetrievalLoggingService.java 和 AuditLogService.java 中文日志消息英文化（4 处）；14 个 API DTO @Schema description 英文化（ChatRequest/ChatResponse/SearchRequest/SearchResponse/ErrorResponse/DocumentRequest/BatchCreateResponse/CollectionCreatedResponse/CollectionListResponse/RetrievalConfig/RetrievalResult/FeedbackRequest/HealthResponse/CacheStatsResponse/ComponentHealthResponse）；19 files，132 行变更（132 insertions, 132 deletions）；1462 tests 全通过，零失败零错误；commit 4eff9e0 已推送；**剩余 23 个 API DTO 仍有中文 @Schema descriptions，继续推进**
 
+
+## Cron 进度（2026-04-08 04:34 — WebUI 常规发布）
+
+- 2026-04-08 04:34 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态

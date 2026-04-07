@@ -16,6 +16,7 @@ const Chat = lazy(() => import('./pages/Chat').then(m => ({ default: m.Chat })))
 const Search = lazy(() => import('./pages/Search').then(m => ({ default: m.Search })));
 const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
 const Alerts = lazy(() => import('./pages/Alerts').then(m => ({ default: m.Alerts })));
+const ABTest = lazy(() => import('./pages/ABTest').then(m => ({ default: m.ABTest })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 
 const queryClient = new QueryClient({
@@ -118,6 +119,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageFallback />}>
                     <Alerts />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="abtest"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <ABTest />
                   </Suspense>
                 }
               />
