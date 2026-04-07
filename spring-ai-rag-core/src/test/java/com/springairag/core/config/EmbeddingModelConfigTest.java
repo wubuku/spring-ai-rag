@@ -16,16 +16,11 @@ class EmbeddingModelConfigTest {
     @Test
     @DisplayName("embeddingModel 创建 OpenAiEmbeddingModel，配置正确传递")
     void embeddingModel_createsOpenAiEmbeddingModel_withCorrectConfig() {
-        RagEmbeddingProperties embedding = new RagEmbeddingProperties();
-        embedding.setBaseUrl("https://api.siliconflow.cn/v1");
-        embedding.setApiKey("test-siliconflow-key");
-        embedding.setModel("BAAI/bge-m3");
-        embedding.setDimensions(1024);
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "test-siliconflow-key");
+        ReflectionTestUtils.setField(config, "model", "BAAI/bge-m3");
+        ReflectionTestUtils.setField(config, "dimensions", 1024);
 
-        RagProperties ragProperties = new RagProperties();
-        ReflectionTestUtils.setField(ragProperties, "embedding", embedding);
-
-        EmbeddingModelConfig config = new EmbeddingModelConfig(ragProperties);
         EmbeddingModel model = config.embeddingModel();
 
         assertNotNull(model);
@@ -36,16 +31,11 @@ class EmbeddingModelConfigTest {
     @Test
     @DisplayName("embeddingModel 使用正确维度配置 BAAI/bge-m3")
     void embeddingModel_usesCorrectDimensions() {
-        RagEmbeddingProperties embedding = new RagEmbeddingProperties();
-        embedding.setBaseUrl("https://api.siliconflow.cn/v1");
-        embedding.setApiKey("test-key");
-        embedding.setModel("BAAI/bge-m3");
-        embedding.setDimensions(1024);
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "test-key");
+        ReflectionTestUtils.setField(config, "model", "BAAI/bge-m3");
+        ReflectionTestUtils.setField(config, "dimensions", 1024);
 
-        RagProperties ragProperties = new RagProperties();
-        ReflectionTestUtils.setField(ragProperties, "embedding", embedding);
-
-        EmbeddingModelConfig config = new EmbeddingModelConfig(ragProperties);
         EmbeddingModel model = config.embeddingModel();
 
         assertNotNull(model);
@@ -55,16 +45,11 @@ class EmbeddingModelConfigTest {
     @Test
     @DisplayName("embeddingModel 支持自定义 baseUrl（兼容其他 OpenAI 兼容 API）")
     void embeddingModel_supportsCustomBaseUrl() {
-        RagEmbeddingProperties embedding = new RagEmbeddingProperties();
-        embedding.setBaseUrl("https://api.example.com/v1");
-        embedding.setApiKey("custom-key");
-        embedding.setModel("custom-embedding-model");
-        embedding.setDimensions(1536);
+        EmbeddingModelConfig config = new EmbeddingModelConfig();
+        ReflectionTestUtils.setField(config, "apiKey", "custom-key");
+        ReflectionTestUtils.setField(config, "model", "custom-embedding-model");
+        ReflectionTestUtils.setField(config, "dimensions", 1536);
 
-        RagProperties ragProperties = new RagProperties();
-        ReflectionTestUtils.setField(ragProperties, "embedding", embedding);
-
-        EmbeddingModelConfig config = new EmbeddingModelConfig(ragProperties);
         EmbeddingModel model = config.embeddingModel();
 
         assertNotNull(model);

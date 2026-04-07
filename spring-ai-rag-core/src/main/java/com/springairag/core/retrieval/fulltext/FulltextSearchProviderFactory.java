@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.core.config.RagProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -44,9 +45,12 @@ public class FulltextSearchProviderFactory {
     private volatile FulltextSearchProvider englishProvider;
     private volatile FulltextSearchProvider trgmProvider;
     
+    @Autowired
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, RagProperties ragProperties) {
         this(jdbcTemplate, ragProperties.getRetrieval().getFulltextStrategy(),
                 new SearchCapabilities(jdbcTemplate));
+        log.info("FulltextSearchProviderFactory initialized: strategy={}, capabilities={}",
+                configuredStrategy, capabilities);
     }
     
     /**
@@ -54,6 +58,7 @@ public class FulltextSearchProviderFactory {
      * Creates a fully-disabled factory (all providers return NoOpFulltextSearchProvider).
      */
     public FulltextSearchProviderFactory() {
+        log.info("CONSTRUCTOR: FulltextSearchProviderFactory() - NO-ARG CONSTRUCTOR USED");
         this.configuredStrategy = "none";
         this.capabilities = null;
         this.jdbcTemplate = null;
@@ -104,6 +109,7 @@ public class FulltextSearchProviderFactory {
      * @return 对应语言的全文检索 Provider
      */
     public FulltextSearchProvider getProvider(QueryLang lang) {
+        log.info("GET_PROVIDER called: configuredStrategy={}, lang={}", configuredStrategy, lang);
         if ("none".equals(configuredStrategy)) {
             return new NoOpFulltextSearchProvider();
         }
@@ -123,14 +129,11 @@ public class FulltextSearchProviderFactory {
         if (lang == QueryLang.ZH) {
             // 中文降级链：jieba → trgm → none
             if (capabilities.enableChineseFts() && jiebaProvider.isAvailable()) {
-                log.debug("Auto-selected provider for ZH: pg_jieba");
                 return jiebaProvider;
             }
             if (capabilities.enableTrgm() && trgmProvider.isAvailable()) {
-                log.debug("Auto-selected provider for ZH: pg_trgm (fallback)");
                 return trgmProvider;
             }
-            log.debug("No fulltext provider available for ZH, using NoOp");
             return new NoOpFulltextSearchProvider();
         } else {
             // 英文降级链：english FTS → trgm → none

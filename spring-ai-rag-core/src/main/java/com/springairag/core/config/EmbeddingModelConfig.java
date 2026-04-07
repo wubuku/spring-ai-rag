@@ -8,6 +8,7 @@ import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Value;
 
 /**
  * EmbeddingModel 配置
@@ -19,25 +20,27 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class EmbeddingModelConfig {
 
-    private final RagEmbeddingProperties embedding;
+    // Use @Value to directly bind from environment - avoids nested @ConfigurationProperties issues
+    // Uses spring.ai.openai.* which is passed via command-line in mvn spring-boot:run
+    @Value("${spring.ai.openai.api-key:${SPRING_AI_OPENAI_API_KEY:}}")
+    private String apiKey;
 
-    public EmbeddingModelConfig(RagProperties ragProperties) {
-        this.embedding = ragProperties.getEmbedding();
-    }
+    @Value("${rag.embedding.model:BAAI/bge-m3}")
+    private String model;
+
+    @Value("${rag.embedding.dimensions:1024}")
+    private int dimensions;
 
     @Bean
     @ConditionalOnMissingBean(EmbeddingModel.class)
     public EmbeddingModel embeddingModel() {
         // Use explicit SiliconFlow URL without /v1 suffix (OpenAiApi appends /v1/embeddings automatically)
         String baseUrl = "https://api.siliconflow.cn";
-        String apiKey = embedding.getApiKey();
-        String model = embedding.getModel();
-        int dimensions = embedding.getDimensions();
 
         org.slf4j.LoggerFactory.getLogger(EmbeddingModelConfig.class)
                 .info("Creating EmbeddingModel: baseUrl={}, model={}, apiKey={}..., dimensions={}",
                         baseUrl, model,
-                        apiKey.length() > 10 ? apiKey.substring(0, 10) : "***",
+                        apiKey != null && apiKey.length() > 10 ? apiKey.substring(0, 10) : "***",
                         dimensions);
 
         OpenAiApi openAiApi = OpenAiApi.builder()
