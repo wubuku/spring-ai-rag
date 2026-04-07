@@ -1572,3 +1572,20 @@
   - npm run build ✅（97KB index gzipped，28 chunks）
   - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
   - dist 已同步到 static/webui/；commit 6f9f4cb 已推送
+
+## Cron 进度（2026-04-08 07:07 — E2E 断言修复）
+
+- 2026-04-08 07:07 — ✅ E2E 断言字段名修复：`embeddingCount` → `chunkCount`
+  - E2E 测试检查 GET /documents/{id} 响应中的 `embeddingCount` 字段，但文档详情接口返回的是 `chunkCount`（向量块数量）
+  - 修复：scripts/e2e-test.sh 第 162 行断言改为 `'"chunkCount"'`
+  - E2E 结果：46/46 ✅（修复前 45/46）
+  - mvn test ✅（全通过，零失败零错误）
+  - commit 689f931 已推送
+
+## Cron 进度（2026-04-08 07:40 — WebUI 常规发布）
+
+- 2026-04-08 07:40 — ✅ WebUI 常规发布：
+  - npm test: `useSearchHistory.test.ts` 'removes item by timestamp' 测试 flaky（并行执行时 1 failed）；单文件执行 9/9 ✅——确定为 timing 竞争，非代码 bug
+  - npm run build ✅（97KB index gzipped，28 chunks，BarChart 346KB 按需加载）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（仅 HEARTBEAT.md 待提交）
