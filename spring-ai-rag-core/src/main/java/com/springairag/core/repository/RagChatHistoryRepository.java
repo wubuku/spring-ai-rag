@@ -13,12 +13,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * RAG 对话历史仓储（业务审计表）
+ * RAG chat history repository (business audit table).
  *
- * <p>写入 rag_chat_history 表，用于业务层查询对话记录。
- * 与 Spring AI 的 spring_ai_chat_memory 表（LLM 上下文用）双表共存。
+ * <p>Writes to rag_chat_history table for business-layer chat record queries.
+ * Coexists with Spring AI's spring_ai_chat_memory table (used for LLM context).
  *
- * <p>内部使用 Spring Data JPA 实现，保持与原 JdbcTemplate 版本相同的公共 API。
+ * <p>Internally uses Spring Data JPA, maintaining the same public API as the original JdbcTemplate version.
  */
 @Repository
 public class RagChatHistoryRepository {
@@ -35,14 +35,14 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 保存对话记录到业务审计表
+     * Save chat record to business audit table.
      */
     public void save(String sessionId, String userMessage, String aiResponse) {
         save(sessionId, userMessage, aiResponse, null, null);
     }
 
     /**
-     * 保存对话记录到业务审计表（含关联文档和元数据）
+     * Save chat record to business audit table (with related documents and metadata).
      */
     public void save(String sessionId, String userMessage, String aiResponse,
                      String relatedDocumentIds, Map<String, Object> metadata) {
@@ -61,7 +61,7 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 查询会话的历史记录
+     * Query chat history by session ID.
      */
     public List<Map<String, Object>> findBySessionId(String sessionId, int limit) {
         List<RagChatHistory> results = jpaRepository.findBySessionIdOrderByCreatedAtDesc(
@@ -72,16 +72,16 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 查询会话的历史记录（默认 50 条）
+     * Query chat history by session ID (default 50 records).
      */
     public List<Map<String, Object>> findBySessionId(String sessionId) {
         return findBySessionId(sessionId, 50);
     }
 
     /**
-     * 删除会话的所有历史记录（同时清理 Spring AI ChatMemory）
+     * Delete all history for a session (also clears Spring AI ChatMemory).
      *
-     * @return 删除的记录数（仅 rag_chat_history）
+     * @return Number of records deleted (rag_chat_history only)
      */
     @Transactional
     public int deleteBySessionId(String sessionId) {
@@ -99,9 +99,9 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 删除指定时间之前的聊天历史（TTL 清理）
+     * Delete chat history older than the given cutoff (TTL cleanup).
      *
-     * @return 删除的记录数
+     * @return Number of records deleted
      */
     @Transactional
     public int deleteOlderThan(java.time.LocalDateTime cutoff) {
@@ -114,7 +114,7 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * 将实体转换为 Map（保持向后兼容）
+     * Convert entity to Map (maintains backward compatibility).
      */
     private Map<String, Object> toMap(RagChatHistory entity) {
         Map<String, Object> map = new java.util.LinkedHashMap<>();

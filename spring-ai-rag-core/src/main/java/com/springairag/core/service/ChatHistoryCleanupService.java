@@ -10,10 +10,11 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDateTime;
 
 /**
- * 聊天历史定时清理服务（TTL 过期策略）
+ * Scheduled chat history cleanup service (TTL expiration policy).
  *
- * <p>定期清理超过保留期限的 rag_chat_history 记录，支持数据治理和 GDPR 合规。
- * 默认保留 30 天，可通过 {@code rag.memory.message-ttl-days} 配置。
+ * <p>Periodically purges rag_chat_history records beyond the retention period,
+ * supporting data governance and GDPR compliance.
+ * Default retention: 30 days, configurable via {@code rag.memory.message-ttl-days}.
  */
 @Service
 public class ChatHistoryCleanupService {
@@ -30,8 +31,8 @@ public class ChatHistoryCleanupService {
     }
 
     /**
-     * 每天凌晨 3 点执行一次 TTL 清理
-     * 使用 fixedDelay 保证上一次执行完成后才开始下一次
+     * Executes TTL cleanup once daily at 3 AM.
+     * Uses fixedDelay to ensure the next run starts only after the previous one completes.
      */
     @Scheduled(cron = "${rag.memory.cleanup-cron:0 0 3 * * *}", zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
     public void cleanupExpiredChatHistory() {
@@ -53,10 +54,10 @@ public class ChatHistoryCleanupService {
     }
 
     /**
-     * 手动触发清理（供外部调用）
+     * Manually trigger cleanup (for external callers).
      *
-     * @param cutoff 删除此时间之前的记录
-     * @return 删除的记录数
+     * @param cutoff Delete records older than this timestamp
+     * @return Number of records deleted
      */
     public int cleanupOlderThan(LocalDateTime cutoff) {
         if (cutoff == null) {

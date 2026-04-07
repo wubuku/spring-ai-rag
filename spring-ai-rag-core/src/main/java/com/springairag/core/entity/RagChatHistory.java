@@ -9,10 +9,10 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * RAG 聊天历史实体
- * 存储用户与AI的对话记录（业务审计表）
+ * RAG chat history entity.
+ * Stores user-AI conversation records (business audit table).
  *
- * <p>与 Spring AI 的 spring_ai_chat_memory 表（LLM 上下文用）双表共存。
+ * <p>Coexists with Spring AI's spring_ai_chat_memory table (used for LLM context).
  */
 @Entity
 @Table(name = "rag_chat_history", indexes = {
@@ -26,7 +26,7 @@ public class RagChatHistory {
     private Long id;
 
     /**
-     * 会话ID（用于分组相关的对话）
+     * Session ID (used to group related conversations).
      */
     @Column(name = "session_id", nullable = false, length = 255)
     private String sessionId;
@@ -50,7 +50,7 @@ public class RagChatHistory {
     private String relatedDocumentIds;
 
     /**
-     * 聊天元数据 (JSONB格式)
+     * Chat metadata (JSONB format).
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")

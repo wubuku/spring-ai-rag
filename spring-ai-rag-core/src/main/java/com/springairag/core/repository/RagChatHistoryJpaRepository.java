@@ -10,36 +10,36 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * RAG 聊天历史 JPA Repository（内部使用）
+ * RAG chat history JPA repository (internal use).
  */
 @Repository
 public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistory, Long> {
 
     /**
-     * 按会话 ID 查询历史记录（分页）
+     * Query history by session ID (paginated).
      */
     List<RagChatHistory> findBySessionIdOrderByCreatedAtDesc(String sessionId, org.springframework.data.domain.Pageable pageable);
 
     /**
-     * 按会话 ID 查询所有历史记录（无分页，按时间倒序）
+     * Query all history by session ID (no pagination, descending by time).
      */
     List<RagChatHistory> findAllBySessionIdOrderByCreatedAtDesc(String sessionId);
 
     /**
-     * 按会话 ID 查询所有历史记录（无分页，按时间正序）
+     * Query all history by session ID (no pagination, ascending by time).
      */
     @Query("SELECT h FROM RagChatHistory h WHERE h.sessionId = :sessionId ORDER BY h.createdAt ASC")
     List<RagChatHistory> findBySessionIdAsc(@Param("sessionId") String sessionId);
 
     /**
-     * 按会话 ID 删除所有历史记录
+     * Delete all history by session ID.
      */
     @Modifying
     @Query("DELETE FROM RagChatHistory h WHERE h.sessionId = :sessionId")
     int deleteBySessionId(@Param("sessionId") String sessionId);
 
     /**
-     * 删除指定时间之前的聊天历史（TTL 清理）
+     * Delete chat history older than the given cutoff (TTL cleanup).
      */
     @Modifying
     @Query("DELETE FROM RagChatHistory h WHERE h.createdAt < :cutoff")

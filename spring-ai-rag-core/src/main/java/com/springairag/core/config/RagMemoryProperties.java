@@ -3,19 +3,19 @@ package com.springairag.core.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 对话记忆配置
+ * Chat memory configuration properties.
  */
 @ConfigurationProperties(prefix = "rag.memory")
 public class RagMemoryProperties {
 
     /**
-     * 对话上下文最大消息条数（Spring AI JdbcChatMemory 限制）
+     * Maximum number of messages in chat context (Spring AI JdbcChatMemory limit).
      */
     private int maxMessages = 20;
 
     /**
-     * 聊天历史保留天数（0 = 不过期）
-     * 超过此天数的 rag_chat_history 记录将被定时清理
+     * Chat history retention days (0 = no expiration).
+     * Records in rag_chat_history older than this will be purged by scheduled cleanup.
      */
     private int messageTtlDays = 30;
 
