@@ -3,13 +3,13 @@ package com.springairag.api.dto;
 import java.util.Map;
 
 /**
- * 缓存统计响应
+ * Cache statistics response.
  *
- * @param hitCount 命中次数
- * @param missCount 未命中次数
- * @param totalCount 总查询次数
- * @param hitRate 命中率（百分比字符串）
- * @param details 原始统计数据
+ * @param hitCount Hit count
+ * @param missCount Miss count
+ * @param totalCount Total query count
+ * @param hitRate Hit rate (percentage string)
+ * @param details Raw statistics
  */
 public record CacheStatsResponse(
         long hitCount,

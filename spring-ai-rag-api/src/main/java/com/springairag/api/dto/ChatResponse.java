@@ -17,7 +17,7 @@ public class ChatResponse {
     @Schema(description = "请求追踪 ID（全链路可溯源）", example = "a1b2c3d4e5f6")
     private String traceId;
 
-    @Schema(description = "引用来源文档列表")
+    @Schema(description = "Source document citations")
     private List<SourceDocument> sources;
 
     @Schema(description = "响应元数据（包含 sessionId 等）")
@@ -66,7 +66,7 @@ public class ChatResponse {
     @Schema(description = "Pipeline 单个步骤的执行指标")
     public static class StepMetricRecord {
 
-        @Schema(description = "步骤名称", example = "HybridSearch")
+        @Schema(description = "Step name", example = "HybridSearch")
         private String stepName;
 
         @Schema(description = "执行耗时（毫秒）", example = "23")
@@ -100,7 +100,7 @@ public class ChatResponse {
         @Schema(description = "来源文档 ID", example = "doc-456")
         private String documentId;
 
-        @Schema(description = "匹配的文本片段", example = "退货政策：自收到商品之日起7天内...")
+        @Schema(description = "Matched text snippet", example = "退货政策：自收到商品之日起7天内...")
         private String chunkText;
 
         @Schema(description = "相关性得分 (0-1)", example = "0.92")

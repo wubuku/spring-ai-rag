@@ -6,9 +6,9 @@ import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
- * 文档创建/更新请求
+ * Document create/update request.
  */
-@Schema(description = "文档创建/更新请求")
+@Schema(description = "Document create/update request")
 public class DocumentRequest {
 
     @NotBlank(message = "Document title must not be blank")
@@ -29,10 +29,10 @@ public class DocumentRequest {
     @Schema(description = "Document type", example = "markdown")
     private String documentType;
 
-    @Schema(description = "附加元数据（JSON 对象）")
+    @Schema(description = "Additional metadata (JSON object)")
     private Map<String, Object> metadata;
 
-    @Schema(description = "所属知识库 ID（可选，创建时指定）", example = "1")
+    @Schema(description = "Collection ID (optional, specified at creation time)", example = "1")
     private Long collectionId;
 
     public DocumentRequest() {}

@@ -9,7 +9,7 @@ import jakarta.validation.constraints.Min;
 /**
  * 检索配置
  */
-@Schema(description = "检索配置参数")
+@Schema(description = "Retrieval configuration parameters")
 public class RetrievalConfig {
 
     @Min(value = 1, message = "Max results must be at least 1")

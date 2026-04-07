@@ -12,7 +12,7 @@ import java.util.List;
  *
  * <p>用于用户对 RAG 检索结果和回答质量的反馈。
  */
-@Schema(description = "用户反馈请求")
+@Schema(description = "User feedback request")
 public class FeedbackRequest {
 
     @NotBlank(message = "Session ID must not be blank")

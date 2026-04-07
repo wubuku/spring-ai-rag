@@ -9,7 +9,7 @@ import java.util.List;
 /**
  * 检索请求参数
  */
-@Schema(description = "检索请求参数")
+@Schema(description = "Search request parameters")
 public class SearchRequest {
 
     @NotBlank(message = "Query text must not be blank")
@@ -21,7 +21,7 @@ public class SearchRequest {
     private List<Long> documentIds;
 
     @Valid
-    @Schema(description = "检索配置参数")
+    @Schema(description = "Retrieval configuration parameters")
     private RetrievalConfig config;
 
     public SearchRequest() {}

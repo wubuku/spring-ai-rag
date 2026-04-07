@@ -7,18 +7,18 @@ import java.util.List;
 /**
  * 知识库列表响应
  */
-@Schema(description = "知识库列表响应")
+@Schema(description = "Collection list response")
 public record CollectionListResponse(
-        @Schema(description = "知识库列表")
+        @Schema(description = "Collection list")
         List<CollectionResponse> collections,
 
-        @Schema(description = "总数", example = "25")
+        @Schema(description = "Total count", example = "25")
         long total,
 
-        @Schema(description = "页码", example = "0")
+        @Schema(description = "Page number", example = "0")
         int page,
 
-        @Schema(description = "每页大小", example = "10")
+        @Schema(description = "Page size", example = "10")
         int pageSize
 ) {
 }

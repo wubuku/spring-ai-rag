@@ -4,11 +4,11 @@ import java.time.Instant;
 import java.util.Map;
 
 /**
- * 组件详细健康检查响应
+ * Component detailed health check response.
  *
- * @param status 整体状态（UP/DEGRADED/DOWN）
- * @param timestamp 检查时间
- * @param components 各组件详细状态（name → 完整状态信息）
+ * @param status Overall status (UP/DEGRADED/DOWN)
+ * @param timestamp Check timestamp
+ * @param components Detailed component status (name -> full status info)
  */
 public record ComponentHealthResponse(
         String status,

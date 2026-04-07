@@ -5,113 +5,113 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 告警服务
+ * Alert service interface.
  *
- * <p>负责 RAG 系统的告警检测、记录和通知。
- * 支持阈值告警和 SLO（Service Level Objective）违约告警。
+ * <p>Handles alert detection, recording, and notification for the RAG system.
+ * Supports threshold alerts and SLO (Service Level Objective) breach alerts.
  *
- * <p>使用示例：
+ * <p>Usage example:
  * <pre>
- * // 检查是否需要告警
+ * // Check if alert condition is met
  * if (alertService.shouldAlert("THRESHOLD_HIGH", "latency_p95", 2500, 2000)) {
- *     alertService.fireAlert("THRESHOLD_HIGH", "高延迟告警",
- *         "P95 延迟超过 2000ms", "WARNING", Map.of("latency", 2500));
+ *     alertService.fireAlert("THRESHOLD_HIGH", "High Latency Alert",
+ *         "P95 latency exceeded 2000ms", "WARNING", Map.of("latency", 2500));
  * }
  * </pre>
  */
 public interface AlertService {
 
     /**
-     * 检查是否触发告警条件
+     * Check if alert condition is met.
      *
-     * @param alertType   告警类型（THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH）
-     * @param metricName  指标名称
-     * @param currentValue 当前值
-     * @param threshold   阈值
-     * @return 是否触发告警
+     * @param alertType    alert type (THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH)
+     * @param metricName  metric name
+     * @param currentValue current value
+     * @param threshold   threshold
+     * @return true if alert should fire
      */
     boolean shouldAlert(String alertType, String metricName, double currentValue, double threshold);
 
     /**
-     * 触发告警
+     * Fire an alert.
      *
-     * @param alertType  告警类型
-     * @param alertName  告警名称
-     * @param message    告警消息
-     * @param severity   严重程度（INFO / WARNING / CRITICAL）
-     * @param metrics    关联的指标数据
-     * @return 告警记录 ID
+     * @param alertType  alert type
+     * @param alertName  alert name
+     * @param message    alert message
+     * @param severity   severity (INFO / WARNING / CRITICAL)
+     * @param metrics    associated metric data
+     * @return alert record ID
      */
     Long fireAlert(String alertType, String alertName, String message,
                    String severity, Map<String, Object> metrics);
 
     /**
-     * 获取告警历史
+     * Get alert history.
      *
-     * @param startDate  开始日期
-     * @param endDate    结束日期
-     * @param severity   严重程度过滤（可选，null 表示不过滤）
-     * @param alertType  告警类型过滤（可选，null 表示不过滤）
-     * @return 告警记录列表
+     * @param startDate start date
+     * @param endDate   end date
+     * @param severity  severity filter (optional, null means no filter)
+     * @param alertType alert type filter (optional, null means no filter)
+     * @return list of alert records
      */
     List<AlertRecord> getAlertHistory(ZonedDateTime startDate, ZonedDateTime endDate,
                                       String severity, String alertType);
 
     /**
-     * 获取活跃告警（未解决的）
+     * Get active (unresolved) alerts.
      *
-     * @return 活跃告警列表
+     * @return list of active alerts
      */
     List<AlertRecord> getActiveAlerts();
 
     /**
-     * 解决告警
+     * Resolve an alert.
      *
-     * @param alertId   告警 ID
-     * @param resolution 解决方案描述
+     * @param alertId     alert ID
+     * @param resolution  resolution description
      */
     void resolveAlert(Long alertId, String resolution);
 
     /**
-     * 静默告警（暂时屏蔽）
+     * Silence an alert (temporarily suppress).
      *
-     * @param alertKey        告警键（格式：alertType:metricName）
-     * @param durationMinutes 静默时长（分钟）
+     * @param alertKey         alert key (format: alertType:metricName)
+     * @param durationMinutes  silence duration in minutes
      */
     void silenceAlert(String alertKey, int durationMinutes);
 
     /**
-     * 获取告警统计
+     * Get alert statistics.
      *
-     * @param startDate 开始日期
-     * @param endDate   结束日期
-     * @return 告警统计数据
+     * @param startDate start date
+     * @param endDate   end date
+     * @return alert statistics
      */
     AlertStats getAlertStats(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 检查所有 SLO 状态
+     * Check all SLO statuses.
      *
-     * @param windowStart 检查窗口开始时间
-     * @param windowEnd   检查窗口结束时间
-     * @return 各 SLO 状态（key = SLO 名称）
+     * @param windowStart check window start time
+     * @param windowEnd   check window end time
+     * @return map of SLO name to SLO status
      */
     Map<String, SloStatus> checkAllSlos(ZonedDateTime windowStart, ZonedDateTime windowEnd);
 
     /**
-     * 检查单个 SLO 状态
+     * Check a single SLO status.
      *
-     * @param sloName   SLO 名称
-     * @param startDate 开始日期
-     * @param endDate   结束日期
-     * @return SLO 状态
+     * @param sloName   SLO name
+     * @param startDate start date
+     * @param endDate   end date
+     * @return SLO status
      */
     SloStatus checkSlo(String sloName, ZonedDateTime startDate, ZonedDateTime endDate);
 
-    // ==================== 数据类 ====================
+    // ==================== Data classes ====================
 
     /**
-     * 告警记录（API 层数据传输对象）
+     * Alert record (API layer data transfer object).
      */
     class AlertRecord {
         private Long id;
@@ -151,7 +151,7 @@ public interface AlertService {
     }
 
     /**
-     * 告警统计
+     * Alert statistics.
      */
     class AlertStats {
         private long totalAlerts;
@@ -176,7 +176,7 @@ public interface AlertService {
     }
 
     /**
-     * SLO 达标状态
+     * SLO compliance status.
      */
     class SloStatus {
         private String sloName;

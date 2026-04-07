@@ -60,10 +60,10 @@ public class RetrievalLoggingService {
             entry.setResultScores(extractResultScores(results));
 
             repository.save(entry);
-            log.debug("[RetrievalLogging] 已记录检索日志: query=\"{}\", strategy={}, total={}ms, results={}",
+            log.debug("[RetrievalLogging] Retrieval log recorded: query=\"{}\", strategy={}, total={}ms, results={}",
                     query, strategy, entry.getTotalTimeMs(), entry.getResultCount());
         } catch (Exception e) { // Resilience: retrieval logging is non-critical
-            log.warn("[RetrievalLogging] 记录检索日志失败: {}", e.getMessage());
+            log.warn("[RetrievalLogging] Failed to record retrieval log: {}", e.getMessage());
         }
     }
 

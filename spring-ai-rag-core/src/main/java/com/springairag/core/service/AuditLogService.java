@@ -138,7 +138,7 @@ public class AuditLogService {
             log.info("[AUDIT] {} {} id={} by session={} trace={}",
                     operation, entityType, entityId, sessionId, entry.getTraceId());
         } catch (Exception e) { // Resilience: audit logging is non-critical
-            log.warn("[AUDIT] 记录审计日志失败: {} {} id={} - {}",
+            log.warn("[AUDIT] Failed to record audit log: {} {} id={} - {}",
                     operation, entityType, entityId, e.getMessage());
         }
     }

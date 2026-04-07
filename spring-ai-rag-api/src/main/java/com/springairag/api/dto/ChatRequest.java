@@ -8,9 +8,9 @@ import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
- * RAG 问答请求
+ * RAG chat request.
  */
-@Schema(description = "RAG 问答请求")
+@Schema(description = "RAG chat request")
 public class ChatRequest {
 
     @NotBlank(message = "Message content must not be blank")
@@ -38,7 +38,7 @@ public class ChatRequest {
     @Schema(description = "Specify model (optional, e.g. \"minimax\" or \"openai/deepseek-chat\", null uses default model)", example = "minimax")
     private String model;
 
-    @Schema(description = "额外元数据（透传给领域扩展）")
+    @Schema(description = "Additional metadata (passed through to domain extension)")
     private Map<String, Object> metadata;
 
     public ChatRequest() {}

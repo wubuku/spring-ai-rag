@@ -53,7 +53,7 @@ public class ErrorResponse {
     /** Optional: request path (same as instance, backward-compatible) */
     private String path;
 
-    /** 默认问题类型 URI 前缀 */
+    /** Default problem type URI prefix */
     private static final String PROBLEM_TYPE_PREFIX = "https://springairag.dev/problems/";
 
     public ErrorResponse() {
@@ -80,7 +80,7 @@ public class ErrorResponse {
 
     // ==================== Builder ====================
 
-    /** 简单错误消息工厂方法 */
+    /** Simple error message factory method */
     public static ErrorResponse of(String detail) {
         return builder()
                 .detail(detail)
@@ -162,11 +162,11 @@ public class ErrorResponse {
         }
 
         public ErrorResponse build() {
-            // 确保 type 不为 null
+            // Ensure type is not null
             if (response.type == null && response.error != null) {
                 response.type = PROBLEM_TYPE_PREFIX + response.error.toLowerCase().replace('_', '-');
             }
-            // 确保 title/detail 同步
+            // Ensure title/detail are in sync
             if (response.title == null && response.error != null) {
                 response.title = response.error;
             }

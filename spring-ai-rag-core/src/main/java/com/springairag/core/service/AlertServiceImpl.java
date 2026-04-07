@@ -18,19 +18,19 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 告警服务实现
+ * Alert service implementation.
  *
- * <p>提供阈值告警和 SLO 违约告警能力，告警记录持久化到 rag_alerts 表。
- * 支持告警静默、解决和统计查询。
+ * <p>Provides threshold alerting and SLO breach alerting, with alert records persisted to rag_alerts table.
+ * Supports alert silencing, resolution, and statistical queries.
  *
- * <p>内置 SLO 指标：
+ * <p>Built-in SLO metrics:
  * <ul>
- *   <li>可用性 SLO: 99.9%</li>
- *   <li>P50 延迟 SLO: 500ms</li>
- *   <li>P95 延迟 SLO: 2000ms</li>
- *   <li>P99 延迟 SLO: 5000ms</li>
- *   <li>MRR（平均倒数排名）SLO: 0.6</li>
- *   <li>命中率 SLO: 85%</li>
+ *   <li>Availability SLO: 99.9%</li>
+ *   <li>P50 latency SLO: 500ms</li>
+ *   <li>P95 latency SLO: 2000ms</li>
+ *   <li>P99 latency SLO: 5000ms</li>
+ *   <li>MRR (Mean Reciprocal Rank) SLO: 0.6</li>
+ *   <li>Hit rate SLO: 85%</li>
  * </ul>
  */
 @Service
@@ -38,7 +38,7 @@ public class AlertServiceImpl implements AlertService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertServiceImpl.class);
 
-    // 默认 SLO 定义
+    // Default SLO definitions
     public static final double AVAILABILITY_SLO = 99.9;
     public static final double P50_LATENCY_SLO_MS = 500;
     public static final double P95_LATENCY_SLO_MS = 2000;
@@ -46,7 +46,7 @@ public class AlertServiceImpl implements AlertService {
     public static final double MRR_SLO = 0.6;
     public static final double HIT_RATE_SLO = 0.85;
 
-    // 告警静默缓存
+    // Alert silencing cache
     private final Map<String, ZonedDateTime> silencedAlerts = new ConcurrentHashMap<>();
 
     private final AlertRepository alertRepository;
@@ -67,14 +67,14 @@ public class AlertServiceImpl implements AlertService {
     @Override
     public boolean shouldAlert(String alertType, String metricName,
                                double currentValue, double threshold) {
-        // 检查是否被静默
+        // Check if silenced
         String alertKey = alertType + ":" + metricName;
         ZonedDateTime silencedUntil = silencedAlerts.get(alertKey);
         if (silencedUntil != null && ZonedDateTime.now().isBefore(silencedUntil)) {
             return false;
         }
 
-        // 清理过期的静默记录
+        // Clean up expired silence records
         cleanupExpiredSilenceRecords();
 
         return switch (alertType) {
@@ -196,7 +196,7 @@ public class AlertServiceImpl implements AlertService {
         };
     }
 
-    // ==================== 内部方法 ====================
+    // ==================== Internal methods ====================
 
     private void cleanupExpiredSilenceRecords() {
         ZonedDateTime now = ZonedDateTime.now();
@@ -235,7 +235,7 @@ public class AlertServiceImpl implements AlertService {
             return status;
         }
 
-        // 基于平均延迟判断可用性：平均延迟 > P99 SLO 视为不可用
+        // Determine availability based on average latency: considered unavailable if avg latency > P99 SLO
         Double avgTotalTime = retrievalLogRepository.findAvgTotalTime(startDate, endDate);
         double availability = (avgTotalTime != null && avgTotalTime <= P99_LATENCY_SLO_MS) ? 100.0 : 99.0;
         status.setActual(availability);
@@ -258,7 +258,7 @@ public class AlertServiceImpl implements AlertService {
         status.setWindowStart(startDate);
         status.setWindowEnd(endDate);
 
-        // 使用平均延迟作为代理（精确的 P95/P99 需要原生 SQL PERCENTILE_CONT）
+        // Use average latency as proxy (accurate P95/P99 requires native SQL PERCENTILE_CONT)
         Double actualLatency = retrievalLogRepository.findAvgTotalTime(startDate, endDate);
         status.setActual(actualLatency != null ? actualLatency : 0);
         status.setMet(status.getActual() <= thresholdMs);
