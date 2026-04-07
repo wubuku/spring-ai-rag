@@ -6,7 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import java.util.Map;
 
 /**
- * 静默计划请求 DTO
+ * Silence schedule request DTO
  */
 @Schema(description = "Silence schedule request")
 public class SilenceScheduleRequest {

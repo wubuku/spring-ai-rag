@@ -3,17 +3,17 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 清空会话历史响应
+ * Clear session history response
  */
-@Schema(description = "清空会话历史响应")
+@Schema(description = "Clear session history response")
 public record ClearHistoryResponse(
-        @Schema(description = "操作结果消息", example = "会话历史已清空")
+        @Schema(description = "Operation result message", example = "Session history cleared")
         String message,
 
-        @Schema(description = "会话 ID", example = "session-123")
+        @Schema(description = "Session ID", example = "session-123")
         String sessionId,
 
-        @Schema(description = "删除的记录数", example = "5")
+        @Schema(description = "Number of deleted records", example = "5")
         int deletedCount
 ) {
     public static ClearHistoryResponse of(String sessionId, int deletedCount) {

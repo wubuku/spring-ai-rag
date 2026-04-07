@@ -3,10 +3,10 @@ package com.springairag.api.dto;
 import java.util.Map;
 
 /**
- * 模型详情响应
+ * Model detail response
  *
- * @param available 是否可用
- * @param details 模型详细信息（provider/name/displayName 等）
+ * @param available Whether the model is available
+ * @param details Model details (provider/name/displayName, etc.)
  */
 public record ModelDetailResponse(
         boolean available,

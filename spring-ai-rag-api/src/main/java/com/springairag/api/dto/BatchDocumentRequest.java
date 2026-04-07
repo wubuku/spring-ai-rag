@@ -8,11 +8,11 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 批量文档操作请求
+ * Batch document operation request
  *
- * <p>支持两种模式：仅创建（默认）和创建并嵌入（embed=true）。
+ * <p>Supports two modes: create-only (default) and create-with-embed (embed=true).
  */
-@Schema(description = "批量文档操作请求")
+@Schema(description = "Batch document operation request")
 public class BatchDocumentRequest {
 
     @NotEmpty(message = "Document list must not be empty")

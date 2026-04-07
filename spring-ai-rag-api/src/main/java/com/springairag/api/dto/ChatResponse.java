@@ -6,24 +6,24 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 问答响应
+ * RAG chat response
  */
-@Schema(description = "RAG 问答响应")
+@Schema(description = "RAG chat response")
 public class ChatResponse {
 
-    @Schema(description = "LLM 生成的回答文本")
+    @Schema(description = "LLM-generated answer text")
     private String answer;
 
-    @Schema(description = "请求追踪 ID（全链路可溯源）", example = "a1b2c3d4e5f6")
+    @Schema(description = "Request trace ID (end-to-end traceable)", example = "a1b2c3d4e5f6")
     private String traceId;
 
     @Schema(description = "Source document citations")
     private List<SourceDocument> sources;
 
-    @Schema(description = "响应元数据（包含 sessionId 等）")
+    @Schema(description = "Response metadata (contains sessionId, etc.)")
     private Map<String, Object> metadata;
 
-    @Schema(description = "RAG Pipeline 步骤指标（每步耗时ms + 结果数量）")
+    @Schema(description = "RAG Pipeline step metrics (duration ms + result count per step)")
     private List<StepMetricRecord> stepMetrics;
 
     public ChatResponse() {}
@@ -61,18 +61,18 @@ public class ChatResponse {
     }
 
     /**
-     * RAG Pipeline 单个步骤的执行指标
+     * Single RAG Pipeline step execution metrics
      */
-    @Schema(description = "Pipeline 单个步骤的执行指标")
+    @Schema(description = "Single RAG Pipeline step execution metrics")
     public static class StepMetricRecord {
 
         @Schema(description = "Step name", example = "HybridSearch")
         private String stepName;
 
-        @Schema(description = "执行耗时（毫秒）", example = "23")
+        @Schema(description = "Execution duration in milliseconds", example = "23")
         private long durationMs;
 
-        @Schema(description = "输出结果数量", example = "12")
+        @Schema(description = "Number of output results", example = "12")
         private int resultCount;
 
         public StepMetricRecord() {}
@@ -92,18 +92,18 @@ public class ChatResponse {
     }
 
     /**
-     * 来源文档片段
+     * Source document snippet
      */
-    @Schema(description = "引用来源文档片段")
+    @Schema(description = "Source document citation snippet")
     public static class SourceDocument {
 
-        @Schema(description = "来源文档 ID", example = "doc-456")
+        @Schema(description = "Source document ID", example = "doc-456")
         private String documentId;
 
-        @Schema(description = "Matched text snippet", example = "退货政策：自收到商品之日起7天内...")
+        @Schema(description = "Matched text snippet", example = "Return policy: Within 7 days of receiving the product...")
         private String chunkText;
 
-        @Schema(description = "相关性得分 (0-1)", example = "0.92")
+        @Schema(description = "Relevance score (0-1)", example = "0.92")
         private double score;
 
         public SourceDocument() {}

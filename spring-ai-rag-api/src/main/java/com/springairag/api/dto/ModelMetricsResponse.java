@@ -3,23 +3,23 @@ package com.springairag.api.dto;
 import java.util.List;
 
 /**
- * 模型指标响应
+ * Model metrics response
  *
- * @param multiModelEnabled 是否启用多模型
- * @param models 各模型的指标数据
+ * @param multiModelEnabled Whether multi-model is enabled
+ * @param models Metrics data for each model
  */
 public record ModelMetricsResponse(
         boolean multiModelEnabled,
         List<ModelMetric> models
 ) {
     /**
-     * 单个模型指标
+     * Single model metrics
      *
-     * @param provider 提供商名
-     * @param calls 调用次数
-     * @param errors 错误次数
-     * @param errorRate 错误率
-     * @param displayName 显示名称
+     * @param provider Provider name
+     * @param calls Number of calls
+     * @param errors Number of errors
+     * @param errorRate Error rate
+     * @param displayName Display name
      */
     public record ModelMetric(
             String provider,

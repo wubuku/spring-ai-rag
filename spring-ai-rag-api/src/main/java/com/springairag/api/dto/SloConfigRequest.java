@@ -8,7 +8,7 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * SLO 配置请求 DTO
+ * SLO configuration request DTO
  */
 @Schema(description = "SLO configuration request")
 public class SloConfigRequest {

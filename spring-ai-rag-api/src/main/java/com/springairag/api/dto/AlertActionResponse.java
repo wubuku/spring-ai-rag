@@ -1,10 +1,10 @@
 package com.springairag.api.dto;
 
 /**
- * 告警操作响应
+ * Alert action response
  *
- * @param success 是否成功
- * @param message 操作结果消息
+ * @param success Whether the operation succeeded
+ * @param message Operation result message
  */
 public record AlertActionResponse(boolean success, String message) {
     public static AlertActionResponse ok(String message) {

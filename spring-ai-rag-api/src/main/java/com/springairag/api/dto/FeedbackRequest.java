@@ -8,9 +8,9 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 用户反馈请求 DTO
+ * User feedback request DTO
  *
- * <p>用于用户对 RAG 检索结果和回答质量的反馈。
+ * <p>Used for user feedback on RAG retrieval results and answer quality.
  */
 @Schema(description = "User feedback request")
 public class FeedbackRequest {
@@ -37,13 +37,13 @@ public class FeedbackRequest {
     @Schema(description = "User comment")
     private String comment;
 
-    @Schema(description = "检索到的文档 ID 列表")
+    @Schema(description = "List of retrieved document IDs")
     private List<Long> retrievedDocumentIds;
 
-    @Schema(description = "用户认为有用的文档 ID 列表")
+    @Schema(description = "List of document IDs the user found useful")
     private List<Long> selectedDocumentIds;
 
-    @Schema(description = "用户停留时间（毫秒）")
+    @Schema(description = "User dwell time in milliseconds")
     private Long dwellTimeMs;
 
     public FeedbackRequest() {

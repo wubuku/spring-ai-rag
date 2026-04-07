@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
- * 知识库列表响应
+ * Collection list response
  */
 @Schema(description = "Collection list response")
 public record CollectionListResponse(

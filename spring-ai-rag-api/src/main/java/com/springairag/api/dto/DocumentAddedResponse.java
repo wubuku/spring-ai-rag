@@ -3,17 +3,17 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 添加文档到知识库响应
+ * Add document to collection response
  */
-@Schema(description = "添加文档到知识库响应")
+@Schema(description = "Add document to collection response")
 public record DocumentAddedResponse(
-        @Schema(description = "操作结果消息")
+        @Schema(description = "Operation result message")
         String message,
 
-        @Schema(description = "知识库 ID", example = "1")
+        @Schema(description = "Collection ID", example = "1")
         Long collectionId,
 
-        @Schema(description = "文档 ID", example = "1")
+        @Schema(description = "Document ID", example = "1")
         Long documentId
 ) {
     public static DocumentAddedResponse of(Long collectionId, Long documentId) {

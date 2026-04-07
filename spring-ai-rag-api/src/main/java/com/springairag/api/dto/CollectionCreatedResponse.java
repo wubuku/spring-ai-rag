@@ -3,7 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 创建知识库响应
+ * Create collection response
  */
 @Schema(description = "Collection creation response")
 public record CollectionCreatedResponse(

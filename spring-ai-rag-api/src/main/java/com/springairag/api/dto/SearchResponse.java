@@ -6,7 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
- * 直接检索响应（GET /search）
+ * Direct search response (GET /search)
  */
 @Schema(description = "Direct search response")
 public record SearchResponse(
@@ -16,7 +16,7 @@ public record SearchResponse(
         @Schema(description = "Total result count", example = "10")
         int total,
 
-        @Schema(description = "检索query", example = "什么是Spring AI")
+        @Schema(description = "Search query", example = "What is Spring AI")
         String query
 ) {
     public static SearchResponse of(List<RetrievalResult> results, String query) {

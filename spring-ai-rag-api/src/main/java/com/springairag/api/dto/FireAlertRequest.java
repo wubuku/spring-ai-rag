@@ -5,23 +5,23 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
 
 /**
- * 手动触发告警请求
+ * Manual alert trigger request
  */
-@Schema(description = "手动触发告警请求")
+@Schema(description = "Manual alert trigger request")
 public record FireAlertRequest(
-        @Schema(description = "告警类型", example = "manual")
+        @Schema(description = "Alert type", example = "manual")
         String alertType,
 
-        @Schema(description = "告警名称", example = "手动测试告警")
+        @Schema(description = "Alert name", example = "Manual test alert")
         String alertName,
 
-        @Schema(description = "告警消息", example = "这是一条手动触发的测试告警")
+        @Schema(description = "Alert message", example = "This is a manually triggered test alert")
         String message,
 
-        @Schema(description = "严重程度", example = "WARNING")
+        @Schema(description = "Severity level", example = "WARNING")
         String severity,
 
-        @Schema(description = "关联指标")
+        @Schema(description = "Associated metrics")
         Map<String, Object> metrics
 ) {
 }

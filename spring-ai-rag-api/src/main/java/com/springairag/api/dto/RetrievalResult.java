@@ -5,12 +5,12 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.Map;
 
 /**
- * 检索结果
+ * Retrieval result
  */
 @Schema(description = "Single retrieval result")
 public class RetrievalResult {
 
-    @Schema(description = "来源文档 ID", example = "doc-456")
+    @Schema(description = "Source document ID", example = "doc-456")
     private String documentId;
 
     @Schema(description = "Matched text snippet")

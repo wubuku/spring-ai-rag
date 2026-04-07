@@ -3,12 +3,12 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 触发告警响应
+ * Fire alert response
  *
- * @param alertId 告警 ID
- * @param message 操作结果消息
+ * @param alertId Alert ID
+ * @param message Operation result message
  */
-@Schema(description = "触发告警响应")
+@Schema(description = "Fire alert response")
 public record FireAlertResponse(
         Long alertId,
         String message

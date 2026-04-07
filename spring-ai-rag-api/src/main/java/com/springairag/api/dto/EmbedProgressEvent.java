@@ -5,29 +5,29 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.io.Serializable;
 
 /**
- * 嵌入进度事件（用于 SSE 实时推送）
+ * Embedding progress event (for SSE real-time push)
  *
- * @param phase 当前阶段（PREPARING/CHUNKING/EMBEDDING/STORING/COMPLETED/FAILED）
- * @param current 当前处理数量
- * @param total 总数量
- * @param message 描述信息
- * @param documentId 文档 ID
+ * @param phase Current phase (PREPARING/CHUNKING/EMBEDDING/STORING/COMPLETED/FAILED)
+ * @param current Current processing count
+ * @param total Total count
+ * @param message Description
+ * @param documentId Document ID
  */
-@Schema(description = "嵌入进度事件（SSE 流推送）")
+@Schema(description = "Embedding progress event (SSE stream push)")
 public record EmbedProgressEvent(
-        @Schema(description = "当前阶段", example = "EMBEDDING")
+        @Schema(description = "Current phase", example = "EMBEDDING")
         String phase,
 
-        @Schema(description = "当前处理数量", example = "5")
+        @Schema(description = "Current processing count", example = "5")
         int current,
 
-        @Schema(description = "总数量", example = "20")
+        @Schema(description = "Total count", example = "20")
         int total,
 
-        @Schema(description = "描述信息", example = "正在生成第 5/20 个块的嵌入向量")
+        @Schema(description = "Description", example = "Generating embedding for chunk 5/20")
         String message,
 
-        @Schema(description = "关联文档 ID", example = "42")
+        @Schema(description = "Associated document ID", example = "42")
         Long documentId
 ) implements Serializable {
 

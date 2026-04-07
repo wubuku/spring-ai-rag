@@ -6,40 +6,40 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 批量创建并嵌入文档响应
+ * Batch create and embed documents response
  */
-@Schema(description = "批量创建并嵌入文档响应")
+@Schema(description = "Batch create and embed documents response")
 public record BatchCreateAndEmbedResponse(
-        @Schema(description = "成功创建的文档数", example = "10")
+        @Schema(description = "Number of successfully created documents", example = "10")
         int created,
 
-        @Schema(description = "成功嵌入向量的文档数", example = "10")
+        @Schema(description = "Number of successfully embedded documents", example = "10")
         int embedded,
 
-        @Schema(description = "跳过的文档数（内容未变更）", example = "2")
+        @Schema(description = "Number of skipped documents (content unchanged)", example = "2")
         int skipped,
 
-        @Schema(description = "失败的文档数", example = "0")
+        @Schema(description = "Number of failed documents", example = "0")
         int failed,
 
-        @Schema(description = "各文档的创建+嵌入结果详情")
+        @Schema(description = "Details of each document create+embed result")
         List<DocumentResult> results
 ) {
-    @Schema(description = "单个文档结果")
+    @Schema(description = "Single document result")
     public record DocumentResult(
-            @Schema(description = "文档 ID", example = "1")
+            @Schema(description = "Document ID", example = "1")
             Long documentId,
 
-            @Schema(description = "文档标题", example = "产品说明书")
+            @Schema(description = "Document title", example = "Product Manual")
             String title,
 
-            @Schema(description = "是否成功嵌入", example = "true")
+            @Schema(description = "Whether successfully embedded", example = "true")
             boolean embedded,
 
-            @Schema(description = "分块数量", example = "5")
+            @Schema(description = "Number of chunks", example = "5")
             int chunks,
 
-            @Schema(description = "错误信息（失败时）")
+            @Schema(description = "Error message (on failure)")
             String error
     ) {}
 }

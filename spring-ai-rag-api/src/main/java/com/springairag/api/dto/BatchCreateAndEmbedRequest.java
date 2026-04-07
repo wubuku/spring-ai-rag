@@ -9,11 +9,11 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 批量创建并嵌入文档请求
+ * Batch create and embed documents request
  *
- * <p>一步到位：创建文档 + 分块 + 嵌入向量。
+ * <p>One-step: create document + chunk + embed vector.
  */
-@Schema(description = "批量创建并嵌入文档请求（一步到位）")
+@Schema(description = "Batch create and embed documents request (one-step)")
 public class BatchCreateAndEmbedRequest {
 
     @NotNull(message = "Collection ID must not be null")

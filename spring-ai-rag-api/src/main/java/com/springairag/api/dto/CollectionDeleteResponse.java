@@ -3,17 +3,17 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 删除知识库响应
+ * Delete collection response
  */
-@Schema(description = "删除知识库响应")
+@Schema(description = "Delete collection response")
 public record CollectionDeleteResponse(
-        @Schema(description = "操作结果消息", example = "集合已删除")
+        @Schema(description = "Operation result message", example = "Collection deleted")
         String message,
 
-        @Schema(description = "知识库 ID", example = "1")
+        @Schema(description = "Collection ID", example = "1")
         Long id,
 
-        @Schema(description = "解除关联的文档数", example = "5")
+        @Schema(description = "Number of documents unlinked", example = "5")
         long documentsUnlinked
 ) {
     public static CollectionDeleteResponse of(Long id, long documentsUnlinked) {

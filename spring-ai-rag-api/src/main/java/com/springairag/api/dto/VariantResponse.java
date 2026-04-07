@@ -1,9 +1,9 @@
 package com.springairag.api.dto;
 
 /**
- * A/B 测试变体分配响应
+ * A/B test variant assignment response
  *
- * @param variant 分配的变体名称
+ * @param variant Assigned variant name
  */
 public record VariantResponse(String variant) {
     public static VariantResponse of(String variant) {

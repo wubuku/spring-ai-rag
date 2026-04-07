@@ -6,38 +6,38 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * 知识库详情响应（用于 getById, export 等）
+ * Collection detail response (used by getById, export, etc.)
  */
-@Schema(description = "知识库详情响应")
+@Schema(description = "Collection detail response")
 public record CollectionResponse(
-        @Schema(description = "知识库 ID", example = "1")
+        @Schema(description = "Collection ID", example = "1")
         Long id,
 
-        @Schema(description = "知识库名称", example = "我的知识库")
+        @Schema(description = "Collection name", example = "My Knowledge Base")
         String name,
 
-        @Schema(description = "描述")
+        @Schema(description = "Description")
         String description,
 
-        @Schema(description = "嵌入模型", example = "BAAI/bge-m3")
+        @Schema(description = "Embedding model", example = "BAAI/bge-m3")
         String embeddingModel,
 
-        @Schema(description = "向量维度", example = "1024")
+        @Schema(description = "Vector dimensions", example = "1024")
         int dimensions,
 
-        @Schema(description = "是否启用")
+        @Schema(description = "Whether the collection is enabled")
         boolean enabled,
 
-        @Schema(description = "元数据")
+        @Schema(description = "Metadata")
         Map<String, Object> metadata,
 
-        @Schema(description = "创建时间")
+        @Schema(description = "Creation timestamp")
         ZonedDateTime createdAt,
 
-        @Schema(description = "更新时间")
+        @Schema(description = "Last update timestamp")
         ZonedDateTime updatedAt,
 
-        @Schema(description = "文档数量")
+        @Schema(description = "Number of documents")
         long documentCount
 ) {
 }

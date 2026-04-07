@@ -4,13 +4,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 模型列表响应
+ * Model list response
  *
- * @param multiModelEnabled 是否启用多模型
- * @param defaultProvider 默认提供商
- * @param availableProviders 可用提供商列表
- * @param fallbackChain 降级链
- * @param models 各模型详细信息
+ * @param multiModelEnabled Whether multi-model is enabled
+ * @param defaultProvider Default provider
+ * @param availableProviders List of available providers
+ * @param fallbackChain Fallback chain
+ * @param models Detailed information for each model
  */
 public record ModelListResponse(
         boolean multiModelEnabled,

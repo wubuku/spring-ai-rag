@@ -3,14 +3,14 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 /**
- * 导出知识库响应
+ * Export collection response
  */
-@Schema(description = "导出知识库响应")
+@Schema(description = "Export collection response")
 public record CollectionExportResponse(
-        @Schema(description = "知识库信息")
+        @Schema(description = "Collection information")
         CollectionResponse collection,
 
-        @Schema(description = "文档数量", example = "42")
+        @Schema(description = "Number of documents", example = "42")
         int documentCount
 ) {
 }

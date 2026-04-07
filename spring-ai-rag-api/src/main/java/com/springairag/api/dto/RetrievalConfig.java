@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 
 /**
- * 检索配置
+ * Retrieval configuration
  */
 @Schema(description = "Retrieval configuration parameters")
 public class RetrievalConfig {

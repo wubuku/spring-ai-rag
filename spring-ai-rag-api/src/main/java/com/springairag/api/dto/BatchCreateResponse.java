@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
- * 批量创建文档响应（统一响应格式）
+ * Batch document creation response (unified response format)
  */
 @Schema(description = "Batch document creation response")
 public record BatchCreateResponse(

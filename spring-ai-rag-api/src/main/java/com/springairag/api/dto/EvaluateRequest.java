@@ -7,9 +7,9 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 评估请求 DTO
+ * Retrieval evaluation request DTO
  */
-@Schema(description = "检索效果评估请求")
+@Schema(description = "Retrieval evaluation request")
 public class EvaluateRequest {
 
     @NotBlank(message = "Query text must not be blank")
@@ -25,10 +25,10 @@ public class EvaluateRequest {
     @Schema(description = "Relevant document ID list (Ground Truth)", requiredMode = Schema.RequiredMode.REQUIRED)
     private List<Long> relevantDocIds;
 
-    @Schema(description = "评估方法", example = "AUTO")
+    @Schema(description = "Evaluation method", example = "AUTO")
     private String evaluationMethod = "AUTO";
 
-    @Schema(description = "评估人 ID")
+    @Schema(description = "Evaluator ID")
     private String evaluatorId;
 
     public EvaluateRequest() {

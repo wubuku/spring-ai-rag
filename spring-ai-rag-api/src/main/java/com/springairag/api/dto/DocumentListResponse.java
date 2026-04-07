@@ -5,14 +5,14 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
- * 知识库文档列表响应
+ * Collection document list response
  */
-@Schema(description = "知识库文档列表响应")
+@Schema(description = "Collection document list response")
 public record DocumentListResponse(
-        @Schema(description = "文档列表")
+        @Schema(description = "Document list")
         List<?> documents,
 
-        @Schema(description = "总数", example = "25")
+        @Schema(description = "Total count", example = "25")
         long total
 ) {
 }

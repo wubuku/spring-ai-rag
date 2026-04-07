@@ -7,7 +7,7 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 检索请求参数
+ * Search request parameters
  */
 @Schema(description = "Search request parameters")
 public class SearchRequest {
