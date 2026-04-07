@@ -73,6 +73,121 @@ class RetrievalUtilsTest {
         assertTrue(sim >= -1.0 && sim <= 1.0, "相似度应在 [-1, 1] 范围内");
     }
 
+    // ========== euclideanDistance ==========
+
+    @Test
+    void euclideanDistance_identicalVectors_returnsZero() {
+        float[] a = {3.0f, 4.0f};
+        float[] b = {3.0f, 4.0f};
+        assertEquals(0.0, RetrievalUtils.euclideanDistance(a, b), 1e-9);
+    }
+
+    @Test
+    void euclideanDistance_knownDistance() {
+        // Distance from (0,0) to (3,4) = 5
+        float[] a = {0.0f, 0.0f};
+        float[] b = {3.0f, 4.0f};
+        assertEquals(5.0, RetrievalUtils.euclideanDistance(a, b), 1e-9);
+    }
+
+    @Test
+    void euclideanDistance_differentDimensions_returnsMaxValue() {
+        float[] a = {1.0f, 0.0f};
+        float[] b = {1.0f, 0.0f, 0.0f};
+        assertEquals(Double.MAX_VALUE, RetrievalUtils.euclideanDistance(a, b), 1e-9);
+    }
+
+    @Test
+    void euclideanDistance_nullInput_returnsMaxValue() {
+        assertEquals(Double.MAX_VALUE, RetrievalUtils.euclideanDistance(null, new float[]{1.0f}), 1e-9);
+        assertEquals(Double.MAX_VALUE, RetrievalUtils.euclideanDistance(new float[]{1.0f}, null), 1e-9);
+    }
+
+    @Test
+    void euclideanDistance_emptyVectors_returnsMaxValue() {
+        assertEquals(Double.MAX_VALUE, RetrievalUtils.euclideanDistance(new float[0], new float[0]), 1e-9);
+    }
+
+    @Test
+    void euclideanDistance_highDimensional() {
+        float[] a = new float[1024];
+        float[] b = new float[1024];
+        for (int i = 0; i < 1024; i++) {
+            a[i] = (float) Math.random();
+            b[i] = (float) Math.random();
+        }
+        double dist = RetrievalUtils.euclideanDistance(a, b);
+        assertTrue(dist >= 0.0, "Distance should be non-negative");
+    }
+
+    // ========== dotProduct ==========
+
+    @Test
+    void dotProduct_identicalUnitVectors_returnsOne() {
+        float[] a = {1.0f, 0.0f, 0.0f};
+        float[] b = {1.0f, 0.0f, 0.0f};
+        assertEquals(1.0, RetrievalUtils.dotProduct(a, b), 1e-9);
+    }
+
+    @Test
+    void dotProduct_orthogonalVectors_returnsZero() {
+        float[] a = {1.0f, 0.0f};
+        float[] b = {0.0f, 1.0f};
+        assertEquals(0.0, RetrievalUtils.dotProduct(a, b), 1e-9);
+    }
+
+    @Test
+    void dotProduct_oppositeVectors_returnsNegative() {
+        float[] a = {1.0f, 0.0f};
+        float[] b = {-1.0f, 0.0f};
+        assertEquals(-1.0, RetrievalUtils.dotProduct(a, b), 1e-9);
+    }
+
+    @Test
+    void dotProduct_knownValues() {
+        // [1,2,3] · [4,5,6] = 4+10+18 = 32
+        float[] a = {1.0f, 2.0f, 3.0f};
+        float[] b = {4.0f, 5.0f, 6.0f};
+        assertEquals(32.0, RetrievalUtils.dotProduct(a, b), 1e-9);
+    }
+
+    @Test
+    void dotProduct_differentDimensions_returnsZero() {
+        float[] a = {1.0f, 0.0f};
+        float[] b = {1.0f, 0.0f, 0.0f};
+        assertEquals(0.0, RetrievalUtils.dotProduct(a, b));
+    }
+
+    @Test
+    void dotProduct_nullInput_returnsZero() {
+        assertEquals(0.0, RetrievalUtils.dotProduct(null, new float[]{1.0f}));
+        assertEquals(0.0, RetrievalUtils.dotProduct(new float[]{1.0f}, null));
+    }
+
+    @Test
+    void dotProduct_emptyVectors_returnsZero() {
+        assertEquals(0.0, RetrievalUtils.dotProduct(new float[0], new float[0]));
+    }
+
+    @Test
+    void dotProduct_allZeroVector_returnsZero() {
+        float[] a = {0.0f, 0.0f};
+        float[] b = {1.0f, 2.0f};
+        assertEquals(0.0, RetrievalUtils.dotProduct(a, b), 1e-9);
+    }
+
+    @Test
+    void dotProduct_highDimensional() {
+        float[] a = new float[1024];
+        float[] b = new float[1024];
+        for (int i = 0; i < 1024; i++) {
+            a[i] = (float) (Math.random() * 2 - 1); // [-1, 1]
+            b[i] = (float) (Math.random() * 2 - 1);
+        }
+        double product = RetrievalUtils.dotProduct(a, b);
+        assertTrue(Double.isFinite(product), "Dot product should be finite");
+    }
+
     // ========== vectorToString ==========
 
     @Test

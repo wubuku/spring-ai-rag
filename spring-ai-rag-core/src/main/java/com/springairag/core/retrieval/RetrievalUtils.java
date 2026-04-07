@@ -7,9 +7,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 检索算法工具类
+ * Retrieval algorithm utilities.
  *
- * <p>提取自 HybridRetrieverService 的纯算法方法，便于独立测试和复用。
+ * <p>Extracted from HybridRetrieverService for independent testing and reuse.
  */
 public final class RetrievalUtils {
 
@@ -17,11 +17,11 @@ public final class RetrievalUtils {
     }
 
     /**
-     * 余弦相似度计算
+     * Cosine similarity between two vectors.
      *
-     * @param a 向量 a
-     * @param b 向量 b
-     * @return 相似度 [-1, 1]，维度不匹配返回 0
+     * @param a vector a
+     * @param b vector b
+     * @return similarity in [-1, 1]; returns 0 if dimensions mismatch or either is null/empty
      */
     public static double cosineSimilarity(float[] a, float[] b) {
         if (a == null || b == null || a.length != b.length || a.length == 0) {
@@ -38,7 +38,47 @@ public final class RetrievalUtils {
     }
 
     /**
-     * 将 float 数组转换为 pgvector 格式字符串 "[0.1,0.2,...]"
+     * Euclidean (L2) distance between two vectors.
+     *
+     * @param a vector a
+     * @param b vector b
+     * @return non-negative distance; returns Double.MAX_VALUE if dimensions mismatch or either is null/empty
+     */
+    public static double euclideanDistance(float[] a, float[] b) {
+        if (a == null || b == null || a.length != b.length || a.length == 0) {
+            return Double.MAX_VALUE;
+        }
+        double sum = 0.0;
+        for (int i = 0; i < a.length; i++) {
+            double diff = (double) a[i] - b[i];
+            sum += diff * diff;
+        }
+        return Math.sqrt(sum);
+    }
+
+    /**
+     * Dot product (inner product) of two vectors.
+     *
+     * <p>Note: pgvector uses negative dot product ({@code <#>}) for max-inner-product search.
+     * Higher values indicate more similar for un-normalized embeddings.
+     *
+     * @param a vector a
+     * @param b vector b
+     * @return dot product; returns 0 if dimensions mismatch or either is null/empty
+     */
+    public static double dotProduct(float[] a, float[] b) {
+        if (a == null || b == null || a.length != b.length || a.length == 0) {
+            return 0.0;
+        }
+        double sum = 0.0;
+        for (int i = 0; i < a.length; i++) {
+            sum += (double) a[i] * b[i];
+        }
+        return sum;
+    }
+
+    /**
+     * Converts a float array to pgvector string format "[0.1,0.2,...]"
      */
     public static String vectorToString(float[] vector) {
         if (vector == null || vector.length == 0) {
@@ -54,7 +94,7 @@ public final class RetrievalUtils {
     }
 
     /**
-     * 解析数据库中的向量表示（float[]、double[] 或 String）
+     * Parses a vector from database representation (float[], double[], or String).
      */
     public static float[] parseVector(Object vectorObj) {
         if (vectorObj == null) {
@@ -94,16 +134,17 @@ public final class RetrievalUtils {
     }
 
     /**
-     * 检索结果分数融合
+     * Fuses vector and fulltext retrieval results using normalized score fusion.
      *
-     * <p>将向量检索和全文检索的结果归一化后加权合并，按融合分数降序返回。
+     * <p>Normalizes both result sets to [0,1] range, applies weights, merges overlapping
+     * entries (same document+chunk), and returns results sorted by fused score descending.
      *
-     * @param vectorResults  向量检索结果
-     * @param fulltextResults 全文检索结果
-     * @param limit          返回数量上限
-     * @param vectorWeight   向量权重
-     * @param fulltextWeight 全文权重
-     * @return 融合后的排序结果
+     * @param vectorResults   vector retrieval results (may be null or empty)
+     * @param fulltextResults fulltext retrieval results (may be null or empty)
+     * @param limit          maximum number of results to return
+     * @param vectorWeight   weight for vector scores (0.0–1.0)
+     * @param fulltextWeight weight for fulltext scores (0.0–1.0)
+     * @return fused and sorted results
      */
     public static List<RetrievalResult> fuseResults(
             List<RetrievalResult> vectorResults,
@@ -169,7 +210,7 @@ public final class RetrievalUtils {
     }
 
     /**
-     * 创建检索结果（测试辅助）
+     * Creates a retrieval result (test helper).
      */
     public static RetrievalResult createResult(String docId, String chunkText,
                                                 int chunkIndex, double score) {
