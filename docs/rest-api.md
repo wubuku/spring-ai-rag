@@ -900,6 +900,26 @@ Get embedding cache statistics.
 }
 ```
 
+### `DELETE /api/v1/rag/cache/invalidate`
+
+Admin endpoint: clear the embedding Caffeine cache, forcing subsequent embedding requests to call the remote API again.
+
+**Response:**
+
+```json
+{
+  "cleared": 42,
+  "message": "Cache invalidated"
+}
+```
+
+**Field descriptions:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `cleared` | int | Number of cache entries cleared |
+| `message` | string | Human-readable status |
+
 ---
 
 ## Metrics — RAG Metrics Monitoring
@@ -931,6 +951,93 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 | `successRate` | double | Success rate (successful/total) |
 | `totalRetrievalResults` | long | Cumulative retrieval result count |
 | `totalLlmTokens` | long | Cumulative LLM token consumption |
+
+---
+
+### `GET /api/v1/rag/metrics/slow-queries`
+
+Get slow query statistics from the database connection pool (HikariCP). Returns aggregated stats and recent slow query records.
+
+Requires `rag.slow-query.enabled = true`.
+
+**Response:**
+
+```json
+{
+  "totalQueryCount": 15234,
+  "totalQueryDurationMs": 4567890,
+  "slowQueryCount": 12,
+  "thresholdMs": 1000,
+  "averageQueryDurationMs": 300,
+  "recentSlowQueries": [
+    {
+      "timestampMs": 1712123456789,
+      "sql": "SELECT * FROM rag_embeddings WHERE ...",
+      "durationMs": 2345
+    }
+  ]
+}
+```
+
+**Field descriptions:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `totalQueryCount` | long | Total query count since service startup |
+| `totalQueryDurationMs` | long | Total query duration in ms |
+| `slowQueryCount` | long | Number of queries exceeding threshold |
+| `thresholdMs` | long | Configured slow query threshold in ms |
+| `averageQueryDurationMs` | long | Average query duration in ms |
+| `recentSlowQueries` | array | Last N slow query records (configurable via `rag.slow-query.keep-count`) |
+
+---
+
+### `GET /api/v1/rag/metrics/slo`
+
+Get API SLO compliance metrics per endpoint using a sliding time window. Tracks p50/p95/p99 latency and compliance percentage against per-endpoint thresholds.
+
+Requires `rag.slo.enabled = true`.
+
+**Response:**
+
+```json
+{
+  "enabled": true,
+  "windowSeconds": 300,
+  "endpoints": [
+    {
+      "endpoint": "rag.search.post",
+      "method": "POST",
+      "thresholdMs": 500,
+      "compliancePercent": 98.5,
+      "requestCount": 1523,
+      "sloCount": 1500,
+      "breachCount": 23,
+      "stats": {
+        "p50Ms": 45.2,
+        "p95Ms": 380.5,
+        "p99Ms": 490.0,
+        "minMs": 12.3,
+        "maxMs": 1200.5,
+        "avgMs": 87.4
+      }
+    }
+  ]
+}
+```
+
+**Field descriptions:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Whether SLO tracking is active |
+| `windowSeconds` | int | Sliding time window size in seconds |
+| `endpoints[].endpoint` | string | Endpoint identifier (e.g., `rag.search.post`) |
+| `endpoints[].thresholdMs` | long | SLO threshold in milliseconds |
+| `endpoints[].compliancePercent` | double | Percentage of requests within SLO (0–100) |
+| `endpoints[].requestCount` | int | Total requests in the window |
+| `endpoints[].sloCount` | int | Requests meeting SLO |
+| `endpoints[].breachCount` | int | Requests breaching SLO |
 
 ---
 
@@ -1066,3 +1173,57 @@ Get per-model invocation metrics (call count, error rate).
   ]
 }
 ```
+
+---
+
+## Client Errors — WebUI Error Reporting
+
+### `POST /api/v1/rag/client-errors`
+
+Receive and record client-side errors from the WebUI for server-side aggregation and analysis. Used by the WebUI ErrorBoundary component.
+
+**Request body:**
+
+```json
+{
+  "errorType": "Error",
+  "errorMessage": "Cannot read properties of undefined",
+  "stackTrace": "TypeError: Cannot read properties of undefined\n    at Chat.render (Chat.tsx:42:10)",
+  "componentStack": "at Chat (Chat.tsx:38)\nat App (App.tsx:12)",
+  "pageUrl": "/webui/chat",
+  "sessionId": "sess-abc123",
+  "userId": null
+}
+```
+
+**Field descriptions:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `errorType` | string | Yes | Error type (e.g., `Error`, `TypeError`, `ReferenceError`) |
+| `errorMessage` | string | Yes | Error message text |
+| `stackTrace` | string | No | JavaScript stack trace (max 8192 chars) |
+| `componentStack` | string | No | React component stack trace (max 4096 chars) |
+| `pageUrl` | string | No | Page URL where error occurred (max 512 chars) |
+| `sessionId` | string | No | WebUI session identifier (max 64 chars) |
+| `userId` | string | No | Authenticated user ID (max 64 chars) |
+
+**Response:** `202 Accepted` (empty body)
+
+---
+
+### `GET /api/v1/rag/client-errors/count`
+
+Get the total number of recorded client-side errors.
+
+**Response:**
+
+```json
+{
+  "type": "about:blank",
+  "title": "Total client errors: 42",
+  "status": 200
+}
+```
+
+**Note:** The response uses RFC 7807 format with the count embedded in the `title` field.
