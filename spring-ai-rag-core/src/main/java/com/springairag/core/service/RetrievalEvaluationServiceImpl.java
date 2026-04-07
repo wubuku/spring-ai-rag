@@ -23,9 +23,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * 检索效果评估服务实现
+ * Retrieval evaluation service implementation.
  *
- * <p>计算标准 IR 评估指标并持久化到 rag_retrieval_evaluations 表。
+ * <p>Computes standard IR evaluation metrics and persists them to the rag_retrieval_evaluations table.
  */
 @Service
 @Transactional
@@ -140,7 +140,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         Set<Long> relevantSet = new HashSet<>(relevant);
         int relevantCount = relevantSet.size();
 
-        // 累计命中计数，计算 Precision@K / Recall@K
+        // Cumulative hit count for Precision@K / Recall@K
         Map<Integer, Double> precisionAtK = new LinkedHashMap<>();
         Map<Integer, Double> recallAtK = new LinkedHashMap<>();
         int hitCount = 0;
@@ -154,7 +154,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
             recallAtK.put(pos, (double) hitCount / relevantCount);
         }
 
-        // 补齐未达到 K 的位置
+        // Pad positions beyond retrieved.size() up to K
         for (int i = retrieved.size(); i < k; i++) {
             int pos = i + 1;
             precisionAtK.putIfAbsent(pos, precisionAtK.getOrDefault(i, 0.0));
@@ -178,9 +178,9 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     }
 
     /**
-     * 计算 NDCG@K
+     * Computes NDCG@K.
      * DCG = Σ(relevance_i / log2(position_i + 1))
-     * IDCG = 理想排序下的 DCG
+     * IDCG = DCG under ideal ranking
      * NDCG = DCG / IDCG
      */
     private double calculateNDCG(List<Long> retrieved, Set<Long> relevantSet, int k) {

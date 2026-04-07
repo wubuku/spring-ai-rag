@@ -14,18 +14,18 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 文档版本历史服务
+ * Document version history service.
  *
- * <p>管理文档内容变更的版本记录，支持版本查询和回溯。
+ * <p>Manages version records of document content changes, supporting version queries and rollback.
  *
- * <p>版本记录规则：
+ * <p>Version recording rules:
  * <ul>
- *   <li>CREATE — 文档首次创建时记录初始版本</li>
- *   <li>UPDATE — 内容哈希变更时记录新版本</li>
- *   <li>EMBED — 首次嵌入时记录（标记嵌入时间点）</li>
+ *   <li>CREATE — records initial version when document is first created</li>
+ *   <li>UPDATE — records new version when content hash changes</li>
+ *   <li>EMBED — records when document is first embedded (marks embedding timestamp)</li>
  * </ul>
  *
- * <p>相同 content_hash 不重复记录版本（避免重复嵌入产生冗余版本）。
+ * <p>Same content_hash does not create duplicate version records (avoids redundant versions from re-embedding).
  */
 @Service
 public class DocumentVersionService {
@@ -39,12 +39,12 @@ public class DocumentVersionService {
     }
 
     /**
-     * 记录文档版本（如果 content_hash 发生变更）
+     * Records a document version (if content_hash has changed).
      *
-     * @param doc        文档实体
-     * @param changeType 变更类型（CREATE / UPDATE / EMBED）
-     * @param description 变更描述（可选）
-     * @return 创建的版本记录，如果哈希未变更则返回 empty
+     * @param doc        document entity
+     * @param changeType change type (CREATE / UPDATE / EMBED)
+     * @param description change description (optional)
+     * @return created version record, or empty if hash has not changed
      */
     @Transactional
     public Optional<RagDocumentVersion> recordVersion(RagDocument doc, String changeType, String description) {
@@ -53,7 +53,7 @@ public class DocumentVersionService {
             return Optional.empty();
         }
 
-        // 检查是否已有相同哈希的版本（避免重复记录）
+        // Check for existing version with same hash (avoid duplicate records)
         List<RagDocumentVersion> existing = versionRepository
                 .findByDocumentIdAndContentHash(doc.getId(), doc.getContentHash());
         if (!existing.isEmpty()) {
@@ -61,7 +61,7 @@ public class DocumentVersionService {
             return Optional.empty();
         }
 
-        // 计算新版本号
+        // Compute next version number
         int nextVersion = getNextVersionNumber(doc.getId());
 
         RagDocumentVersion version = RagDocumentVersion.fromDocument(doc, changeType, description);
@@ -73,7 +73,7 @@ public class DocumentVersionService {
     }
 
     /**
-     * 强制记录版本（忽略哈希去重，用于重要变更点）
+     * Force-records a version (ignores hash deduplication, for important change points).
      */
     @Transactional
     public RagDocumentVersion forceRecordVersion(RagDocument doc, String changeType, String description) {
@@ -88,42 +88,42 @@ public class DocumentVersionService {
     }
 
     /**
-     * 查询文档版本历史（分页，最新在前）
+     * Queries document version history (paginated, newest first).
      */
     public Page<RagDocumentVersion> getVersionHistory(Long documentId, Pageable pageable) {
         return versionRepository.findByDocumentIdOrderByVersionNumberDesc(documentId, pageable);
     }
 
     /**
-     * 查询文档版本历史（全量，按版本号升序）
+     * Queries document version history (full, ascending by version number).
      */
     public List<RagDocumentVersion> getFullVersionHistory(Long documentId) {
         return versionRepository.findByDocumentIdOrderByVersionNumberAsc(documentId);
     }
 
     /**
-     * 获取指定版本
+     * Gets a specific version.
      */
     public Optional<RagDocumentVersion> getVersion(Long documentId, int versionNumber) {
         return versionRepository.findByDocumentIdAndVersionNumber(documentId, versionNumber);
     }
 
     /**
-     * 获取最新版本
+     * Gets the latest version.
      */
     public Optional<RagDocumentVersion> getLatestVersion(Long documentId) {
         return versionRepository.findLatestByDocumentId(documentId);
     }
 
     /**
-     * 统计文档版本数
+     * Counts document versions.
      */
     public long countVersions(Long documentId) {
         return versionRepository.countByDocumentId(documentId);
     }
 
     /**
-     * 删除文档的所有版本记录
+     * Deletes all version records for a document.
      */
     @Transactional
     public void deleteVersions(Long documentId) {
@@ -132,7 +132,7 @@ public class DocumentVersionService {
     }
 
     /**
-     * 计算下一个版本号
+     * Computes the next version number.
      */
     private int getNextVersionNumber(Long documentId) {
         return versionRepository.findLatestByDocumentId(documentId)

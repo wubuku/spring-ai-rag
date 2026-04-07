@@ -6,29 +6,29 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 用户反馈服务接口
+ * User feedback service interface.
  *
- * <p>收集和分析用户对 RAG 检索结果的反馈，形成质量闭环：
+ * <p>Collects and analyzes user feedback on RAG retrieval results, forming a quality feedback loop:
  * <ul>
- *   <li>提交反馈（点赞/点踩/评分）</li>
- *   <li>统计反馈分布</li>
- *   <li>计算满意度指标</li>
+ *   <li>Submit feedback (thumbs up / thumbs down / rating)</li>
+ *   <li>Feedback distribution statistics</li>
+ *   <li>Satisfaction metrics computation</li>
  * </ul>
  */
 public interface UserFeedbackService {
 
     /**
-     * 提交用户反馈
+     * Submits user feedback.
      *
-     * @param sessionId           会话 ID
-     * @param query               查询文本
-     * @param feedbackType        反馈类型：THUMBS_UP / THUMBS_DOWN / RATING
-     * @param rating              评分（1-5，可选）
-     * @param comment             用户评论（可选）
-     * @param retrievedDocumentIds 检索到的文档 ID 列表（可选）
-     * @param selectedDocumentIds 用户认为有用的文档 ID 列表（可选）
-     * @param dwellTimeMs         用户停留时间毫秒数（可选）
-     * @return 保存后的反馈记录
+     * @param sessionId           session ID
+     * @param query               query text
+     * @param feedbackType        feedback type: THUMBS_UP / THUMBS_DOWN / RATING
+     * @param rating              rating (1-5, optional)
+     * @param comment             user comment (optional)
+     * @param retrievedDocumentIds retrieved document IDs (optional)
+     * @param selectedDocumentIds document IDs user found useful (optional)
+     * @param dwellTimeMs         user dwell time in milliseconds (optional)
+     * @return saved feedback record
      */
     RagUserFeedback submitFeedback(String sessionId, String query, String feedbackType,
                                    Integer rating, String comment,
@@ -36,37 +36,37 @@ public interface UserFeedbackService {
                                    Long dwellTimeMs);
 
     /**
-     * 获取反馈统计
+     * Gets feedback statistics.
      *
-     * @param startDate 起始时间
-     * @param endDate   结束时间
-     * @return 反馈统计
+     * @param startDate start date
+     * @param endDate   end date
+     * @return feedback statistics
      */
     FeedbackStats getStats(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 获取反馈历史（分页）
+     * Gets feedback history with pagination.
      *
-     * @param page 页码（0-based）
-     * @param size 每页大小
-     * @return 反馈列表
+     * @param page page number (0-based)
+     * @param size page size
+     * @return feedback list
      */
     List<RagUserFeedback> getHistory(int page, int size);
 
     /**
-     * 按反馈类型查询
+     * Queries feedback by type.
      *
-     * @param feedbackType 反馈类型
-     * @param page         页码
-     * @param size         每页大小
-     * @return 反馈列表
+     * @param feedbackType feedback type
+     * @param page        page number
+     * @param size        page size
+     * @return feedback list
      */
     List<RagUserFeedback> getByType(String feedbackType, int page, int size);
 
     // ==================== Inner Classes ====================
 
     /**
-     * 反馈统计
+     * Feedback statistics.
      */
     class FeedbackStats {
         private long totalFeedbacks;

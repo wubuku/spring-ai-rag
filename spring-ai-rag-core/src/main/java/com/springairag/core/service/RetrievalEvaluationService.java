@@ -7,62 +7,62 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 检索效果评估服务接口
+ * Retrieval evaluation service interface.
  *
- * <p>提供 IR 评估指标的计算和持久化能力：
+ * <p>Provides IR evaluation metric computation and persistence:
  * <ul>
- *   <li>Precision@K — 前 K 个结果中的精确率</li>
- *   <li>Recall@K — 前 K 个结果中的召回率</li>
- *   <li>MRR — Mean Reciprocal Rank，第一个相关结果排名的倒数</li>
+ *   <li>Precision@K — precision among the top K results</li>
+ *   <li>Recall@K — recall among the top K results</li>
+ *   <li>MRR — Mean Reciprocal Rank, reciprocal of the first relevant result rank</li>
  *   <li>NDCG — Normalized Discounted Cumulative Gain</li>
- *   <li>Hit Rate — top-K 中是否命中至少一个相关文档</li>
+ *   <li>Hit Rate — whether at least one relevant document is in top-K</li>
  * </ul>
  */
 public interface RetrievalEvaluationService {
 
     /**
-     * 评估单次检索效果
+     * Evaluates a single retrieval.
      *
-     * @param query           查询文本
-     * @param retrievedDocIds 实际检索到的文档 ID 列表（按排名顺序）
-     * @param relevantDocIds  期望相关的文档 ID 列表（Ground Truth）
-     * @return 评估记录
+     * @param query           query text
+     * @param retrievedDocIds retrieved document IDs in ranking order
+     * @param relevantDocIds  expected relevant document IDs (Ground Truth)
+     * @return evaluation record
      */
     RagRetrievalEvaluation evaluate(String query, List<Long> retrievedDocIds, List<Long> relevantDocIds);
 
     /**
-     * 评估单次检索效果（带方法和评估人标识）
+     * Evaluates a single retrieval with method and evaluator identifiers.
      */
     RagRetrievalEvaluation evaluate(String query, List<Long> retrievedDocIds, List<Long> relevantDocIds,
                                     String evaluationMethod, String evaluatorId);
 
     /**
-     * 批量评估
+     * Batch evaluation.
      */
     List<RagRetrievalEvaluation> batchEvaluate(List<EvaluationCase> cases);
 
     /**
-     * 计算评估指标（不持久化）
+     * Computes evaluation metrics without persisting.
      *
-     * @param retrieved 实际检索到的文档 ID 列表
-     * @param relevant  期望相关的文档 ID 列表
-     * @param k         计算 Precision@K 和 Recall@K 的 K 值
-     * @return 评估指标
+     * @param retrieved retrieved document IDs
+     * @param relevant  expected relevant document IDs
+     * @param k         K value for Precision@K and Recall@K
+     * @return evaluation metrics
      */
     EvaluationMetrics calculateMetrics(List<Long> retrieved, List<Long> relevant, int k);
 
     /**
-     * 获取评估报告（按时间段聚合）
+     * Gets evaluation report aggregated by time range.
      */
     EvaluationReport getReport(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 获取评估历史（分页）
+     * Gets evaluation history with pagination.
      */
     List<RagRetrievalEvaluation> getHistory(int page, int size);
 
     /**
-     * 获取聚合指标
+     * Gets aggregated metrics.
      */
     AggregatedMetrics getAggregatedMetrics(ZonedDateTime startDate, ZonedDateTime endDate);
 
@@ -82,7 +82,7 @@ public interface RetrievalEvaluationService {
     // ==================== Inner Classes ====================
 
     /**
-     * 评估用例
+     * Evaluation case.
      */
     class EvaluationCase {
         private String query;
@@ -113,7 +113,7 @@ public interface RetrievalEvaluationService {
     }
 
     /**
-     * 评估指标结果
+     * Evaluation metrics result.
      */
     class EvaluationMetrics {
         private Map<Integer, Double> precisionAtK;
@@ -147,7 +147,7 @@ public interface RetrievalEvaluationService {
     }
 
     /**
-     * 评估报告
+     * Evaluation report.
      */
     class EvaluationReport {
         private int totalEvaluations;
@@ -178,7 +178,7 @@ public interface RetrievalEvaluationService {
     }
 
     /**
-     * 聚合指标
+     * Aggregated metrics.
      */
     class AggregatedMetrics {
         private Double avgMrr;
