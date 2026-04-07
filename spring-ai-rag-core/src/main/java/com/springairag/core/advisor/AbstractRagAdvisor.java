@@ -6,19 +6,19 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 
 /**
- * RAG Pipeline Advisor 抽象基类
+ * Abstract base class for RAG Pipeline Advisors
  *
- * <p>提取三个核心 Advisor（QueryRewriteAdvisor、HybridSearchAdvisor、RerankAdvisor）的公共模式：
+ * <p>Extracts common patterns from the three core Advisors (QueryRewriteAdvisor, HybridSearchAdvisor, RerankAdvisor):
  * <ul>
- *   <li>启用/禁用开关（{@code enabled}）</li>
- *   <li>默认 {@code after()} 透传响应</li>
+ *   <li>Enable/disable switch ({@code enabled})</li>
+ *   <li>Default {@code after()} passes through the response unchanged</li>
  * </ul>
  *
- * <p>子类只需实现 {@code before()} 和 {@code getOrder()} 即可。
+ * <p>Subclasses only need to implement {@code before()} and {@code getOrder()}.
  */
 public abstract class AbstractRagAdvisor implements BaseAdvisor {
 
-    /** Advisor 启用开关，可通过 Starter 配置类覆盖 */
+    /** Advisor enable/disable switch; can be overridden by Starter configuration class */
     private boolean enabled = true;
 
     public boolean isEnabled() {
@@ -39,14 +39,14 @@ public abstract class AbstractRagAdvisor implements BaseAdvisor {
     }
 
     /**
-     * 检查是否应跳过处理（禁用时记录 debug 日志并返回 true）
+     * Checks whether processing should be skipped (returns true when disabled, logging debug info)
      *
-     * @param log    子类 Logger
-     * @return true 表示应跳过
+     * @param log    subclass Logger
+     * @return true means skip
      */
     protected boolean shouldSkip(Logger log) {
         if (!enabled) {
-            log.debug("[{}] 已禁用，跳过处理", getName());
+            log.debug("[{}] is disabled, skipping", getName());
             return true;
         }
         return false;

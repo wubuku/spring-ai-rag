@@ -5,48 +5,49 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A/B 测试服务接口
+ * A/B test service interface
  *
- * <p>支持检索策略对比实验，通过流量分割将用户分配到不同变体，
- * 记录检索指标并进行统计分析，找出最优策略。
+ * <p>Supports retrieval strategy comparison experiments, assigns users to different variants
+ * via traffic splitting, records retrieval metrics and performs statistical analysis to find
+ * the optimal strategy.
  */
 public interface AbTestService {
 
-    /** 创建实验 */
+    /** Create a new experiment */
     Experiment createExperiment(CreateExperimentRequest request);
 
-    /** 更新实验（仅 DRAFT/PAUSED 状态可编辑） */
+    /** Update experiment (only DRAFT/PAUSED status is editable) */
     void updateExperiment(Long id, UpdateExperimentRequest request);
 
-    /** 启动实验 */
+    /** Start the experiment */
     void startExperiment(Long id);
 
-    /** 暂停实验 */
+    /** Pause the experiment */
     void pauseExperiment(Long id);
 
-    /** 停止实验 */
+    /** Stop the experiment */
     void stopExperiment(Long id);
 
-    /** 获取正在运行的实验 */
+    /** Get all running experiments */
     List<Experiment> getRunningExperiments();
 
-    /** 根据 sessionId 获取应分配的变体 */
+    /** Get the variant assigned to a session by sessionId */
     String getVariantForSession(String sessionId, Long experimentId);
 
-    /** 记录实验结果 */
+    /** Record an experiment result */
     void recordResult(Long experimentId, String variantName, String sessionId,
                       String query, List<Long> retrievedDocIds,
                       Map<String, Double> metrics);
 
-    /** 分析实验结果 */
+    /** Analyze experiment results */
     ExperimentAnalysis analyzeExperiment(Long experimentId);
 
-    /** 获取实验结果列表（分页） */
+    /** Get paginated experiment results */
     List<ExperimentResult> getExperimentResults(Long experimentId, int page, int size);
 
     // ==================== Inner DTOs ====================
 
-    /** 实验 */
+    /** Experiment */
     class Experiment {
         private Long id;
         private String experimentName;
@@ -81,7 +82,7 @@ public interface AbTestService {
         public void setCreatedAt(ZonedDateTime createdAt) { this.createdAt = createdAt; }
     }
 
-    /** 实验结果 */
+    /** Experiment result */
     class ExperimentResult {
         private Long id;
         private String variantName;
@@ -107,7 +108,7 @@ public interface AbTestService {
         public void setCreatedAt(ZonedDateTime createdAt) { this.createdAt = createdAt; }
     }
 
-    /** 创建实验请求 */
+    /** Create experiment request */
     class CreateExperimentRequest {
         private String experimentName;
         private String description;
@@ -127,7 +128,7 @@ public interface AbTestService {
         public void setMinSampleSize(Integer minSampleSize) { this.minSampleSize = minSampleSize; }
     }
 
-    /** 更新实验请求 */
+    /** Update experiment request */
     class UpdateExperimentRequest {
         private String description;
         private Map<String, Double> trafficSplit;
@@ -144,7 +145,7 @@ public interface AbTestService {
         public void setMinSampleSize(Integer minSampleSize) { this.minSampleSize = minSampleSize; }
     }
 
-    /** 实验分析结果 */
+    /** Experiment analysis result */
     class ExperimentAnalysis {
         private Long experimentId;
         private String status;
@@ -173,7 +174,7 @@ public interface AbTestService {
         public void setAnalyzedAt(ZonedDateTime analyzedAt) { this.analyzedAt = analyzedAt; }
     }
 
-    /** 变体统计 */
+    /** Variant statistics */
     class VariantStats {
         private String variantName;
         private int sampleSize;

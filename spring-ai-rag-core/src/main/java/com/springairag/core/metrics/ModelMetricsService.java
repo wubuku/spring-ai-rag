@@ -10,9 +10,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 模型级指标服务
+ * Model-level metrics service
  *
- * <p>跟踪各 provider 的调用量、延迟和错误率。
+ * <p>Tracks per-provider call volume, latency, and error rates.
  */
 @Component
 public class ModelMetricsService {
@@ -44,7 +44,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * 获取指定 provider 的调用次数
+     * Gets the call count for the specified provider
      */
     public long getCallCount(String provider) {
         Counter c = callCounters.get(provider);
@@ -52,7 +52,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * 获取指定 provider 的错误次数
+     * Gets the error count for the specified provider
      */
     public long getErrorCount(String provider) {
         Counter c = errorCounters.get(provider);
@@ -60,7 +60,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * 获取指定 provider 的错误率
+     * Gets the error rate for the specified provider
      */
     public double getErrorRate(String provider) {
         long total = getCallCount(provider);

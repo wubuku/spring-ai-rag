@@ -16,21 +16,21 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 重排序 Advisor
+ * Re-ranking Advisor
  *
- * <p>在 RAG Pipeline 中执行顺序：第四位（HybridSearchAdvisor 之后）。
- * 职责：从 context attributes 获取 {@link HybridSearchAdvisor} 的检索结果，
- * 调用 {@link ReRankingService} 进行重排，然后将最终结果注入 Prompt 上下文。
+ * <p>Execution order in RAG Pipeline: fourth (after HybridSearchAdvisor).
+ * Responsibility: retrieves {@link HybridSearchAdvisor} results from context attributes,
+ * calls {@link ReRankingService} to re-rank, then injects the final results into the Prompt context.
  *
- * <p>注入策略（由 {@link ApiCompatibilityAdapter} 决定）：
+ * <p>Injection strategy (determined by {@link ApiCompatibilityAdapter}):
  * <ul>
- *   <li>支持多 system 消息的 API（OpenAI/Anthropic）→ 使用 augmentSystemMessage</li>
- *   <li>不支持的 API（MiniMax 等）→ 使用 augmentUserMessage 合并到用户消息</li>
+ *   <li>APIs supporting multiple system messages (OpenAI/Anthropic) → use augmentSystemMessage</li>
+ *   <li>APIs not supporting it (MiniMax, etc.) → use augmentUserMessage merged into the user message</li>
  * </ul>
  *
  * <p>Context Keys:
  * <ul>
- *   <li>读取：{@code hybrid.search.results} — HybridSearchAdvisor 的检索结果</li>
+ *   <li>Read: {@code hybrid.search.results} — HybridSearchAdvisor retrieval results</li>
  * </ul>
  */
 @Component
@@ -44,7 +44,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
 
     private final AdvisorMetrics advisorMetrics;
 
-    /** 重排结果在 response context 中的 key，供 RagChatService 提取 sources */
+    /** Reranked results key in response context, used by RagChatService to extract sources */
     public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
 
     /** 注入到系统消息的上下文前缀 */
@@ -101,7 +101,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
         List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[RerankAdvisor] 重排完成：{} → {} 条结果，耗时 {}ms", results.size(), reranked.size(), elapsedMs);
+        log.info("[RerankAdvisor] reranking complete: {} → {} results, {}ms", results.size(), reranked.size(), elapsedMs);
         RagPipelineMetrics.getOrCreate(request.context())
                 .recordStep("Rerank", elapsedMs, reranked.size());
         advisorMetrics.record("Rerank", elapsedMs, reranked.size());
@@ -109,35 +109,35 @@ public class RerankAdvisor extends AbstractRagAdvisor {
         return injectRerankedContext(request, reranked);
     }
 
-    /** 从 context 获取检索结果，无结果返回 null */
+    /** Retrieves retrieval results from context; returns null if no results */
     @SuppressWarnings("unchecked")
     private List<RetrievalResult> getRetrievalResults(ChatClientRequest request) {
         Object resultsObj = request.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
         if (resultsObj == null) {
-            log.warn("[RerankAdvisor] context 中未找到检索结果，跳过重排");
+            log.warn("[RerankAdvisor] no retrieval results found in context, skipping rerank");
             return null;
         }
         List<RetrievalResult> results = (List<RetrievalResult>) resultsObj;
         if (results.isEmpty()) {
-            log.debug("[RerankAdvisor] 检索结果为空，跳过重排");
+            log.debug("[RerankAdvisor] retrieval results empty, skipping rerank");
             return null;
         }
         return results;
     }
 
-    /** 根据 API 适配器选择策略，将重排结果注入 Prompt 上下文 */
+    /** Selects strategy based on API adapter, injects reranked results into Prompt context */
     private ChatClientRequest injectRerankedContext(ChatClientRequest request, List<RetrievalResult> reranked) {
         String context = buildContextFromResults(reranked);
         ChatClientRequest.Builder mutated = request.mutate().context(RERANKED_RESULTS_KEY, reranked);
 
         if (adapter.supportsMultipleSystemMessages()) {
             mutated.prompt(request.prompt().augmentSystemMessage(systemContextPrefix + context));
-            log.debug("[RerankAdvisor] 使用 augmentSystemMessage 注入上下文");
+            log.debug("[RerankAdvisor] using augmentSystemMessage to inject context");
         } else {
             String userPrefix = systemContextPrefix + context + "\n\n基于以上资料回答以下问题：\n\n";
             mutated.prompt(request.prompt().augmentUserMessage(
                     userMsg -> new UserMessage(userPrefix + userMsg.getText())));
-            log.debug("[RerankAdvisor] 使用 augmentUserMessage 注入上下文（API 不支持多 system 消息）");
+            log.debug("[RerankAdvisor] using augmentUserMessage to inject context (API does not support multiple system messages)");
         }
         return mutated.build();
     }

@@ -23,45 +23,45 @@ import java.util.List;
  */
 public class RagPipelineMetrics {
 
-    /** 在 ChatClientRequest context 中的 key */
+    /** Key in ChatClientRequest context */
     public static final String CONTEXT_KEY = "rag.pipeline.metrics";
 
     private final List<StepMetric> steps = new ArrayList<>();
 
     /**
-     * 记录一个 Pipeline 步骤的执行指标
+     * Records execution metrics for a single Pipeline step
      *
-     * @param stepName   步骤名称（如 "QueryRewrite"、"HybridSearch"、"Rerank"）
-     * @param durationMs 执行耗时（毫秒）
-     * @param resultCount 结果数量（改写查询数 / 检索结果数 / 重排结果数）
+     * @param stepName   step name (e.g. "QueryRewrite", "HybridSearch", "Rerank")
+     * @param durationMs execution duration in milliseconds
+     * @param resultCount result count (rewritten queries / retrieval results / reranked results)
      */
     public void recordStep(String stepName, long durationMs, int resultCount) {
         steps.add(new StepMetric(stepName, durationMs, resultCount));
     }
 
     /**
-     * 获取所有步骤指标（不可变视图）
+     * Gets all step metrics (immutable view)
      */
     public List<StepMetric> getSteps() {
         return Collections.unmodifiableList(steps);
     }
 
     /**
-     * 获取 Pipeline 总耗时（所有步骤之和）
+     * Gets total Pipeline duration (sum of all steps)
      */
     public long getTotalDurationMs() {
         return steps.stream().mapToLong(StepMetric::durationMs).sum();
     }
 
     /**
-     * 获取步骤数量
+     * Gets the number of steps
      */
     public int getStepCount() {
         return steps.size();
     }
 
     /**
-     * 从 context 中获取已有的 RagPipelineMetrics，不存在则返回 null
+     * Gets existing RagPipelineMetrics from context, returns null if not present
      */
     public static RagPipelineMetrics get(java.util.Map<String, Object> context) {
         if (context == null) {
@@ -72,7 +72,7 @@ public class RagPipelineMetrics {
     }
 
     /**
-     * 从 context 中获取或创建 RagPipelineMetrics
+     * Gets or creates RagPipelineMetrics from context
      */
     public static RagPipelineMetrics getOrCreate(java.util.Map<String, Object> context) {
         if (context == null) {
@@ -88,7 +88,7 @@ public class RagPipelineMetrics {
     }
 
     /**
-     * 单个 Pipeline 步骤的指标
+     * Metrics for a single Pipeline step
      */
     public record StepMetric(String stepName, long durationMs, int resultCount) {
 

@@ -12,24 +12,24 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 查询改写 Advisor
+ * Query Rewrite Advisor
  *
- * <p>在 RAG Pipeline 中执行顺序：第二位（仅次于客户自定义高优先级 Advisor）。
- * 职责：在检索之前调用 {@link QueryRewritingService} 对原始查询进行改写，
- * 将改写结果存入 {@link ChatClientRequest#context()} 中，供后续 {@link HybridSearchAdvisor} 使用。
+ * <p>Execution order in RAG Pipeline: second (after any custom high-priority Advisors).
+ * Responsibility: before retrieval, calls {@link QueryRewritingService} to rewrite the original query,
+ * storing results in {@link ChatClientRequest#context()} for downstream {@link HybridSearchAdvisor}.
  *
- * <p>执行流程：
+ * <p>Execution flow:
  * <ol>
- *   <li>before() → 读取原始 user query，调用 QueryRewritingService.rewriteQuery()，
- *      将 List&lt;String&gt; 改写结果存入 context</li>
- *   <li>adviseCall()（框架调用）→ 依次执行 before() → chain.nextCall() → after()</li>
- *   <li>after() → 原样透传响应（继承自 AbstractRagAdvisor）</li>
+ *   <li>before() → reads original user query, calls QueryRewritingService.rewriteQuery(),
+ *      stores List&lt;String&gt; results in context</li>
+ *   <li>adviseCall() (framework call) → executes before() → chain.nextCall() → after() in order</li>
+ *   <li>after() → passes response through unchanged (inherited from AbstractRagAdvisor)</li>
  * </ol>
  *
  * <p>Context Keys:
  * <ul>
- *   <li>{@code rewrite.original} — 原始查询文本（String）</li>
- *   <li>{@code rewrite.queries} — 改写后的查询列表（List&lt;String&gt;），首个元素为原始查询</li>
+ *   <li>{@code rewrite.original} — original query text (String)</li>
+ *   <li>{@code rewrite.queries} — rewritten query list (List&lt;String&gt;), first element is the original query</li>
  * </ul>
  */
 @Component
@@ -37,10 +37,10 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewriteAdvisor.class);
 
-    /** Context key: 原始查询文本 */
+    /** Context key: original query text */
     public static final String CTX_ORIGINAL_QUERY = "rewrite.original";
 
-    /** Context key: 改写后的查询列表（List&lt;String&gt;） */
+    /** Context key: rewritten query list (List&lt;String&gt;) */
     public static final String CTX_REWRITE_QUERIES = "rewrite.queries";
 
     private final QueryRewritingService queryRewritingService;
@@ -60,7 +60,7 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
     /**
      * HIGHEST_PRECEDENCE + 10
-     * 确保在 HybridSearchAdvisor（+20）之前执行，在客户自定义高优先级 Advisor 之后执行
+     * Ensures execution before HybridSearchAdvisor (+20) and after any custom high-priority Advisors
      */
     @Override
     public int getOrder() {
@@ -75,7 +75,7 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
         String originalQuery = AdvisorUtils.extractUserMessage(request);
         if (originalQuery == null || originalQuery.isBlank()) {
-            log.debug("[QueryRewriteAdvisor] 查询为空，不改写");
+            log.debug("[QueryRewriteAdvisor] query is empty, skipping rewrite");
             return request;
         }
 
@@ -83,7 +83,7 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
         List<String> rewrittenQueries = queryRewritingService.rewriteQuery(originalQuery);
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[QueryRewriteAdvisor] 原始查询: \"{}\" → 改写 {} 条，耗时 {}ms: {}",
+        log.info("[QueryRewriteAdvisor] original query: \"{}\" → {} rewritten, {}ms: {}",
                 originalQuery, rewrittenQueries.size(), elapsedMs, rewrittenQueries);
 
         // Record Micrometer metrics for Prometheus + in-memory pipeline metrics
@@ -91,7 +91,7 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
                 .recordStep("QueryRewrite", elapsedMs, rewrittenQueries.size());
         advisorMetrics.record("QueryRewrite", elapsedMs, rewrittenQueries.size());
 
-        // 将改写结果存入 context，传递给下游 Advisor（HybridSearchAdvisor 等）
+        // Store rewritten results in context for downstream Advisors (HybridSearchAdvisor, etc.)
         return request.mutate()
                 .context(CTX_ORIGINAL_QUERY, originalQuery)
                 .context(CTX_REWRITE_QUERIES, rewrittenQueries)

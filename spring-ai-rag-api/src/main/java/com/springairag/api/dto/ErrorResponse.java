@@ -5,52 +5,52 @@ import com.springairag.api.enums.ErrorCode;
 import java.time.Instant;
 
 /**
- * 统一错误响应 DTO — RFC 7807 Problem Detail 兼容
+ * Unified error response DTO — RFC 7807 Problem Detail compatible
  *
- * <p>所有 API 错误返回此格式。遵循 RFC 7807 (Problem Details for HTTP APIs)：
+ * <p>All API errors return this format. Conforms to RFC 7807 (Problem Details for HTTP APIs):
  * <ul>
- *   <li>{@code type} — 问题类型的 URI 标识（如 "https://springairag.dev/problems/validation-failed"）</li>
- *   <li>{@code title} — 问题类型的简短描述（对应 RFC title）</li>
- *   <li>{@code status} — HTTP 状态码</li>
- *   <li>{@code detail} — 具体错误消息（对应 RFC detail）</li>
- *   <li>{@code instance} — 发生问题的请求路径（对应 RFC instance）</li>
+ *   <li>{@code type} — URI identifying the problem type (e.g. "https://springairag.dev/problems/validation-failed")</li>
+ *   <li>{@code title} — Short description of the problem type (RFC title)</li>
+ *   <li>{@code status} — HTTP status code</li>
+ *   <li>{@code detail} — Specific error message (RFC detail)</li>
+ *   <li>{@code instance} — Request path where the problem occurred (RFC instance)</li>
  * </ul>
  *
- * <p>同时保留向后兼容的字段：
+ * <p>Also preserves backward-compatible fields:
  * <ul>
- *   <li>{@code error} — 错误码（同 title，保留向后兼容）</li>
- *   <li>{@code message} — 错误消息（同 detail，保留向后兼容）</li>
- *   <li>{@code timestamp} — 错误发生时间</li>
- *   <li>{@code path} — 请求路径（同 instance，保留向后兼容）</li>
+ *   <li>{@code error} — Error code (same as title, backward-compatible alias)</li>
+ *   <li>{@code message} — Human-readable message (same as detail, backward-compatible alias)</li>
+ *   <li>{@code timestamp} — Error occurrence time</li>
+ *   <li>{@code path} — Request path (same as instance, backward-compatible alias)</li>
  * </ul>
  */
 public class ErrorResponse {
 
-    /** RFC 7807: 问题类型 URI */
+    /** RFC 7807: problem type URI */
     private String type;
 
-    /** RFC 7807: 问题标题（保留 error 向后兼容） */
+    /** RFC 7807: problem title (alias for 'error' field, backward-compatible) */
     private String title;
 
-    /** RFC 7807: HTTP 状态码 */
+    /** RFC 7807: HTTP status code */
     private Integer status;
 
-    /** RFC 7807: 详细描述（保留 message 向后兼容） */
+    /** RFC 7807: detailed description (alias for 'message' field, backward-compatible) */
     private String detail;
 
-    /** RFC 7807: 问题实例 URI（保留 path 向后兼容） */
+    /** RFC 7807: problem instance URI (alias for 'path' field, backward-compatible) */
     private String instance;
 
-    /** 错误码（向后兼容，等同 title） */
+    /** Error code (same as title, backward-compatible) */
     private String error;
 
-    /** 人类可读的错误消息（向后兼容，等同 detail） */
+    /** Human-readable error message (same as detail, backward-compatible) */
     private String message;
 
-    /** 错误发生时间（ISO-8601） */
+    /** Error occurrence time (ISO-8601) */
     private String timestamp;
 
-    /** 可选：请求路径（向后兼容，等同 instance） */
+    /** Optional: request path (same as instance, backward-compatible) */
     private String path;
 
     /** 默认问题类型 URI 前缀 */
@@ -141,7 +141,7 @@ public class ErrorResponse {
             return this;
         }
 
-        /** 设置错误码，自动生成 type URI */
+        /** Sets the error code and auto-generates the type URI */
         public Builder error(String error) {
             response.error = error;
             response.title = error;

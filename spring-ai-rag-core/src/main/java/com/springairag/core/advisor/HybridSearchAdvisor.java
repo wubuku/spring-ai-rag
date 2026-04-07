@@ -14,17 +14,17 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * 混合检索 Advisor
+ * Hybrid Search Advisor
  *
- * <p>在 RAG Pipeline 中执行顺序：第三位（QueryRewriteAdvisor 之后，RerankAdvisor 之前）。
- * 职责：调用 {@link HybridRetrieverService} 进行向量 + 全文混合检索，
- * 将检索结果存入 context attributes，供后续 {@link RerankAdvisor} 使用。
+ * <p>Execution order in RAG Pipeline: third (after QueryRewriteAdvisor, before RerankAdvisor).
+ * Responsibility: calls {@link HybridRetrieverService} for vector + full-text hybrid retrieval,
+ * stores results in context attributes for downstream {@link RerankAdvisor}.
  *
- * <p>重要：此 Advisor 只执行检索，不注入上下文。上下文注入由 RerankAdvisor 完成。
+ * <p>Important: this Advisor only performs retrieval; context injection is done by RerankAdvisor.
  *
  * <p>Context Keys:
  * <ul>
- *   <li>{@code hybrid.search.results} — 混合检索结果（List&lt;RetrievalResult&gt;）</li>
+ *   <li>{@code hybrid.search.results} — hybrid search results (List&lt;RetrievalResult&gt;)</li>
  * </ul>
  */
 @Component
@@ -32,7 +32,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
 
     private static final Logger log = LoggerFactory.getLogger(HybridSearchAdvisor.class);
 
-    /** 检索结果在 request context 中的 attribute key */
+    /** Retrieval results attribute key in request context */
     public static final String RETRIEVAL_RESULTS_KEY = "hybrid.search.results";
 
     private final HybridRetrieverService hybridRetriever;
@@ -48,7 +48,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
     }
 
     /**
-     * 可选注入：检索日志服务（Repository 不可用时为 null）
+     * Optional injection: retrieval logging service (null when Repository is unavailable)
      */
     @Autowired(required = false)
     public void setRetrievalLoggingService(RetrievalLoggingService retrievalLoggingService) {
@@ -62,7 +62,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
 
     /**
      * HIGHEST_PRECEDENCE + 20
-     * 在 QueryRewriteAdvisor (+10) 之后执行，在 RerankAdvisor (+30) 之前执行
+     * Executes after QueryRewriteAdvisor (+10) and before RerankAdvisor (+30)
      */
     @Override
     public int getOrder() {
@@ -77,7 +77,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
 
         String query = AdvisorUtils.extractUserMessage(request);
         if (query == null || query.isBlank()) {
-            log.debug("[HybridSearchAdvisor] 查询为空，跳过检索");
+            log.debug("[HybridSearchAdvisor] query is empty, skipping search");
             return request;
         }
 
@@ -85,7 +85,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
         List<RetrievalResult> results = hybridRetriever.search(query, null, null, 10);
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[HybridSearchAdvisor] 混合检索返回 {} 条结果，耗时 {}ms，查询: \"{}\"",
+        log.info("[HybridSearchAdvisor] hybrid search returned {} results in {}ms, query: \"{}\"",
                 results.size(), elapsedMs, query);
 
         recordMetricsAndLog(request, query, elapsedMs, results);
@@ -95,7 +95,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
                 .build();
     }
 
-    /** 记录 Pipeline 指标和检索日志 */
+    /** Records pipeline metrics and retrieval logs */
     private void recordMetricsAndLog(ChatClientRequest request, String query,
                                       long elapsedMs, List<RetrievalResult> results) {
         RagPipelineMetrics.getOrCreate(request.context())

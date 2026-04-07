@@ -297,7 +297,7 @@ public class RagChatService {
         return llmCall.get();
     }
 
-    /** LLM 调用 + 响应提取，异常时记录熔断器/指标后上抛 */
+    /** LLM call + response extraction; on exception, records circuit breaker/metrics then rethrows */
     private LlmCallResult invokeChatClient(ChatClient.ChatClientRequestSpec spec, long startTime) {
         try {
             ChatClientResponse chatClientResponse = spec.call().chatClientResponse();
@@ -324,11 +324,11 @@ public class RagChatService {
         }
     }
 
-    /** LLM 调用结果 record */
+    /** LLM call result record */
     private record LlmCallResult(String answer, List<ChatResponse.SourceDocument> sources,
             List<StepMetricRecord> pipelineMetrics, long elapsedMs) {}
 
-    /** 构建领域扩展的系统提示词，无扩展返回 null */
+    /** Builds domain extension system prompt; returns null if no extensions */
     private String buildSystemPrompt(String domainId, Map<String, Object> metadata) {
         if (!domainExtensionRegistry.hasExtensions()) {
             return null;

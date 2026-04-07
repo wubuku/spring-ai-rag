@@ -9,23 +9,23 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 用户反馈 Repository
+ * User Feedback Repository
  */
 @Repository
 public interface RagUserFeedbackRepository extends JpaRepository<RagUserFeedback, Long> {
 
-    /** 按反馈类型查询，按时间倒序 */
+    /** Find by feedback type, ordered by time descending */
     List<RagUserFeedback> findByFeedbackTypeOrderByCreatedAtDesc(String feedbackType, Pageable pageable);
 
-    /** 按时间段查询 */
+    /** Find by time range */
     List<RagUserFeedback> findByCreatedAtBetweenOrderByCreatedAtDesc(ZonedDateTime start, ZonedDateTime end);
 
-    /** 按会话 ID 查询 */
+    /** Find by session ID */
     List<RagUserFeedback> findBySessionIdOrderByCreatedAtDesc(String sessionId);
 
-    /** 统计某类型的反馈数量 */
+    /** Count feedback by type */
     long countByFeedbackType(String feedbackType);
 
-    /** 按时间段统计某类型的反馈数量 */
+    /** Count feedback by type within time range */
     long countByFeedbackTypeAndCreatedAtBetween(String feedbackType, ZonedDateTime start, ZonedDateTime end);
 }

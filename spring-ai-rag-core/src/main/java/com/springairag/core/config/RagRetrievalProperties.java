@@ -12,9 +12,9 @@ public class RagRetrievalProperties {
     private float fulltextWeight = 0.5f;
     private int defaultLimit = 10;
     private float minScore = 0.3f;
-    /** 是否启用全文检索（不可用时自动降级为纯向量检索） */
+    /** Whether to enable full-text search (falls back to pure vector search if unavailable) */
     private boolean fulltextEnabled = true;
-    /** 全文检索策略：auto（自动检测）/ pg_jieba / pg_trgm / none */
+    /** Full-text search strategy: auto (auto-detect) / pg_jieba / pg_trgm / none */
     private String fulltextStrategy = "auto";
 
     public float getVectorWeight() {
