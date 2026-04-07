@@ -1215,7 +1215,7 @@
 | C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ✅ 2026-04-06 | P2 |
 | C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
 | C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
-| C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ⏳ | P2 |
+| C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ✅ 2026-04-07（C33 完成：NotificationConfig + NotificationService 接口 + DingTalkNotificationService 实现（HTTPS webhook + HMAC-SHA256 加签） + AlertServiceImpl.fireAlert() 异步通知触发 + 11 个单元测试 + application.yml 配置模板；邮件 SMTP 待接入） | P2 |
 | C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ⏳ | P3 |
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ✅ 2026-04-07（d8211e3） | P3 |
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
@@ -1364,6 +1364,8 @@
 - 2026-04-06 17:52 — ✅ 国际化查漏：修复 3 处遗漏的中文错误消息（RagCollectionController 2处 + RagDocumentController 2处），统一改为英文；RagControllerIntegrationTest 同步更新断言；1238 tests 全通过；commit 9152bb6 已推送
 
 **扫描发现**：项目全部 ⏳ 待办均已完成或为 WebUI 任务。后端代码库零 TODO/FIXME，零中文用户可见消息，1238 测试全通过，处于生产级成熟状态。C27（MiniMax API E2E 测试）需要 `LLM_PROVIDER=minimax` + 有效 API key，建议在有可用 key 时执行。
+
+- 2026-04-07 23:24 — ✅ C33 告警通知基础设施完成：NotificationConfig（rag.notifications YAML 配置，dingtalk + email 双通道）+ NotificationService 接口 + DingTalkNotificationService（HTTPS webhook + HMAC-SHA256 加签，支持 markdown 消息格式，每通道可配置 alert-types 过滤）+ AlertServiceImpl.fireAlert() 集成异步通知（@Async）+ AlertServiceImplTest 新增 notification 测试 + DingTalkNotificationServiceTest 11 个单元测试 + application.yml 通知配置模板；1314 tests 全通过，零失败零错误；commit c38912c 已推送
 
 ## 后端巡检（2026-04-06 19:14）
 
