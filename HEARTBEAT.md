@@ -1522,3 +1522,7 @@
 ## Cron 进度（2026-04-08 02:03 — 控制器 Javadoc 国际化第四轮）
 
 - 2026-04-08 02:03 — ✅ 控制器 Javadoc 国际化（第四轮）：扫描发现 9 个控制器残留中文 Swagger/OpenAPI 注解——RagDocumentController(602字)、RagCollectionController(407字)、AlertController(310字)、RagChatController(188字)、AbTestController(145字)、GlobalExceptionHandler(134字)、RagMetricsController(118字)、ModelController(100字)、RagHealthController+RagCacheMetricsController(少量)；全部翻译为英文（@Tag/@Operation/@ApiResponse/@Parameter descriptions + class Javadoc + inline comments）；9 files，206 行变更（206 insertions, 206 deletions）；42 tests ✅（42 tests 全通过，零失败零错误）；commit 4820b2d 已推送；**所有 13 个 Controller 现已 100% 英文化**
+
+## Cron 进度（2026-04-08 03:18 — 脚本国际化清理）
+
+- 2026-04-08 03:18 — ✅ 脚本国际化清理：`scripts/rebuild-search-vectors.sql` 中文注释翻译为英文（38行变更），SQL 逻辑不变，项目国际化政策一致；1462 tests 全通过，零失败零错误；commit 4ffc3f3 已推送
