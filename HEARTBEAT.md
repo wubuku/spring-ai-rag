@@ -1505,7 +1505,15 @@
 
 ## Cron 进度（2026-04-08 01:41 — WebUI 常规发布）
 
-- 2026-04-08 01:41 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-08 02:35 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（302KB index gzipped 96KB，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## 待办（WebUI 常规改进）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| W12 | C31：Document 版本对比 UI（diff 视图展示两个版本差异） | UX | ⏳ |
+| W13 | C32：A/B 测试实时看板（WebUI 展示实验结果统计图表） | UX | ⏳ |
+| W14 | C37：Dark Mode 自动跟随系统主题 + 手动切换增强 | UX | ⏳ |
 
 ## Cron 进度（2026-04-08 02:03 — 控制器 Javadoc 国际化第四轮）
 
