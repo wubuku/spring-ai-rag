@@ -1557,3 +1557,7 @@
 ## Cron 进度（2026-04-08 05:57 — 实体测试补强）
 
 - 2026-04-08 05:57 — ✅ 实体测试补强：扫描发现 12 个 JPA 实体（RagDocument/RagCollection/RagAlert/RagAbExperiment 等）缺少专属单元测试。本轮新增 RagDocumentTest（5 tests: defaults/all-fields/processingStatus/enabled/metadata JSON）和 RagCollectionTest（6 tests: defaults/all-fields/dimensions/enabled/deleted/metadata JSON）；11 tests 全通过；commit c49d3a8 已推送
+
+## Cron 进度（2026-04-08 06:31 — 后端国际化查漏第八轮：RagMetricsService）
+
+- 2026-04-08 06:31 — ✅ 后端国际化查漏第八轮（RagMetricsService）：RagMetricsService.java 类级 Javadoc + Micrometer descriptions（rag.requests.total/success/failed/response.time）+ 全部方法 Javadoc（recordSuccess/recordFailure/recordLlmTokens/getTotalRequests/getSuccessfulRequests/getFailedRequests/getSuccessRate/getTotalRetrievalResults/getTotalLlmTokens）英文化；1 file，28 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit f944520 已推送
