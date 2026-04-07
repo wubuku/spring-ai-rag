@@ -22,14 +22,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 多模型管理 REST 端点
+ * Multi-model management REST endpoint.
  *
- * <p>提供模型列表查询、模型详情、路由状态、模型对比等管理接口。
+ * <p>Provides model list query, model details, routing status, model comparison and other management interfaces.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/models")
-@Tag(name = "Models", description = "多模型管理")
+@Tag(name = "Models", description = "Multi-model management")
 public class ModelController {
 
     private final ModelRegistry modelRegistry;
@@ -45,8 +45,8 @@ public class ModelController {
     }
 
     @GetMapping
-    @Operation(summary = "获取所有已注册模型列表")
-    @ApiResponse(responseCode = "200", description = "返回所有已注册模型及其状态")
+    @Operation(summary = "Get all registered model list")
+    @ApiResponse(responseCode = "200", description = "Returns all registered models and their status")
     public ResponseEntity<ModelListResponse> listModels() {
         List<String> availableProviders = modelRouter.getAvailableProviders();
         return ResponseEntity.ok(ModelListResponse.of(
@@ -59,10 +59,10 @@ public class ModelController {
     }
 
     @GetMapping("/{provider}")
-    @Operation(summary = "获取指定 provider 的模型详情")
+    @Operation(summary = "Get model details for specified provider")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回模型详情"),
-        @ApiResponse(responseCode = "404", description = "provider 不存在或不可用")
+        @ApiResponse(responseCode = "200", description = "Returns model details"),
+        @ApiResponse(responseCode = "404", description = "Provider not found or unavailable")
     })
     public ResponseEntity<ModelDetailResponse> getModel(@PathVariable String provider) {
         if (!modelRouter.isProviderAvailable(provider)) {
@@ -73,11 +73,11 @@ public class ModelController {
     }
 
     @PostMapping("/compare")
-    @Operation(summary = "并行对比多个模型的响应",
-            description = "将同一查询发送给多个模型，并行收集响应内容和延迟数据。用于模型效果对比。")
+    @Operation(summary = "Compare responses from multiple models in parallel",
+            description = "Sends the same query to multiple models and collects response content and latency data in parallel. Used for model effect comparison.")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回各模型的对比结果"),
-        @ApiResponse(responseCode = "400", description = "providers 列表为空或无效")
+        @ApiResponse(responseCode = "200", description = "Returns comparison results of each model"),
+        @ApiResponse(responseCode = "400", description = "providers list is empty or invalid")
     })
     public ResponseEntity<?> compareModels(@Valid @RequestBody CompareModelsRequest request) {
         if (request.providers == null || request.providers.isEmpty()) {
@@ -116,7 +116,7 @@ public class ModelController {
         return providers.isEmpty() ? "none" : providers.get(0);
     }
 
-    /** 模型对比请求 DTO */
+    /** Model comparison request DTO. */
     public static class CompareModelsRequest {
         @NotBlank(message = "query cannot be blank")
         public String query;
@@ -124,7 +124,7 @@ public class ModelController {
         @Size(min = 1, message = "providers cannot be empty")
         public List<String> providers;
 
-        /** 单个模型超时秒数，默认 30 */
+        /** Per-model timeout in seconds; default 30 */
         public Integer timeoutSeconds;
     }
 }

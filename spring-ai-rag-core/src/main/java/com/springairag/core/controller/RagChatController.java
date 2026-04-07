@@ -39,15 +39,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 聊天控制器
+ * RAG chat controller.
  *
- * <p>提供非流式和流式（SSE）两种问答接口，以及会话历史管理。
- * 支持通过 domainId 参数选择领域扩展。
+ * <p>Provides both non-streaming and streaming (SSE) Q&A interfaces, plus session history management.
+ * Supports domainId parameter to select domain extensions.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/chat")
-@Tag(name = "RAG Chat", description = "RAG 问答接口（非流式 + SSE 流式）")
+@Tag(name = "RAG Chat", description = "RAG Q&A interface (non-streaming + SSE streaming)")
 public class RagChatController {
 
     private static final Logger log = LoggerFactory.getLogger(RagChatController.class);
@@ -68,19 +68,19 @@ public class RagChatController {
     }
 
     /**
-     * RAG 问答（非流式）
+     * RAG Q&A (non-streaming).
      *
-     * <p>请求体中可选 domainId 字段指定领域扩展。
+     * <p>Request body may include an optional domainId field to specify a domain extension.
      */
-    @Operation(summary = "RAG 问答（非流式）", description = "发送问题，返回完整回答。支持 domainId 指定领域扩展。")
+    @Operation(summary = "RAG Q&A (non-streaming)", description = "Send a question and receive a complete answer. Supports domainId to specify domain extension.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "问答成功，返回完整回答"),
-            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+            @ApiResponse(responseCode = "200", description = "Q&A succeeded, returns complete answer"),
+            @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping("/ask")
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
-        // 首次对话时 sessionId 为空，自动生成
+        // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
@@ -93,12 +93,12 @@ public class RagChatController {
     }
 
     /**
-     * RAG 问答（非流式）— /chat 是 /ask 的别名，统一入口
+     * RAG Q&A (non-streaming) — /chat is an alias for /ask, unified entry point.
      */
-    @Operation(summary = "RAG 问答（非流式）", description = "发送问题，返回完整回答。")
+    @Operation(summary = "RAG Q&A (non-streaming)", description = "Send a question and receive a complete answer.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "问答成功，返回完整回答"),
-            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+            @ApiResponse(responseCode = "200", description = "Q&A succeeded, returns complete answer"),
+            @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
     @Timed(value = "rag.chat.non-stream", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
@@ -115,17 +115,17 @@ public class RagChatController {
     }
 
     /**
-     * RAG 问答（流式，SSE）
+     * RAG Q&A (streaming, SSE).
      */
-    @Operation(summary = "RAG 问答（流式 SSE）", description = "流式返回回答内容，通过 Server-Sent Events 逐块推送。")
+    @Operation(summary = "RAG Q&A (streaming SSE)", description = "Stream answer content, pushing chunks via Server-Sent Events.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "SSE 流式响应，逐块推送回答内容"),
-            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+            @ApiResponse(responseCode = "200", description = "SSE streaming response, pushing answer chunks"),
+            @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
-        // 首次对话时 sessionId 为空，自动生成
+        // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
@@ -134,10 +134,10 @@ public class RagChatController {
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
-        SseEmitter emitter = new SseEmitter(0L); // 无超时
+        SseEmitter emitter = new SseEmitter(0L); // No timeout
 
-        // SSE 协议：OpenAI 兼容格式
-        // 主通道: data:{"choices":[{"delta":{"content":"..."}}]}
+        // SSE protocol: OpenAI-compatible format
+        // Main channel: data:{"choices":[{"delta":{"content":"..."}}]}
         // done:    event:done + data:{"traceId":"...","status":"complete"}
 
         ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
@@ -167,10 +167,10 @@ public class RagChatController {
     }
 
     /**
-     * 获取会话历史
+     * Get session history.
      */
-    @Operation(summary = "获取会话历史", description = "查询指定会话的聊天记录，按时间倒序返回。")
-    @ApiResponse(responseCode = "200", description = "返回会话历史记录列表")
+    @Operation(summary = "Get session history", description = "Query chat history for the specified session, returned in reverse chronological order.")
+    @ApiResponse(responseCode = "200", description = "Session history records returned")
     @GetMapping("/history/{sessionId}")
     public ResponseEntity<List<Map<String, Object>>> getHistory(
             @PathVariable String sessionId,
@@ -180,10 +180,10 @@ public class RagChatController {
     }
 
     /**
-     * 清空会话历史
+     * Clear session history.
      *
-     * <p>删除 rag_chat_history 表中的记录（业务审计表）。
-     * spring_ai_chat_memory 表由 Spring AI ChatMemory 管理，不受此接口影响。
+     * <p>Deletes records from the rag_chat_history table (business audit table).
+     * The spring_ai_chat_memory table is managed by Spring AI ChatMemory and is not affected by this endpoint.
      */
     @DeleteMapping("/history/{sessionId}")
     public ResponseEntity<ClearHistoryResponse> clearHistory(@PathVariable String sessionId) {
@@ -198,12 +198,12 @@ public class RagChatController {
     }
 
     /**
-     * 导出会话历史（JSON 或 Markdown 格式下载）
+     * Export session history (JSON or Markdown format download).
      *
-     * @param sessionId 会话 ID
-     * @param format 导出格式: json 或 md（默认 json）
-     * @param limit 最大导出记录数（0 = 不限）
-     * @return 文件下载响应
+     * @param sessionId Session ID
+     * @param format Export format: json or md (default json)
+     * @param limit Maximum records to export (0 = unlimited)
+     * @return File download response
      */
     @Operation(summary = "Export chat history", description = "Download session history as JSON or Markdown file.")
     @ApiResponses({
@@ -249,7 +249,7 @@ public class RagChatController {
     }
 
     /**
-     * JSON 转义（防止 SSE JSON 注入）
+     * JSON escape (prevent SSE JSON injection).
      */
     private static String escapeJson(String text) {
         if (text == null) return "";

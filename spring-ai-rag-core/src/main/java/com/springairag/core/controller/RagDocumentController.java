@@ -46,15 +46,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 文档管理控制器
+ * Document management controller.
  *
- * <p>提供文档的 CRUD 操作和嵌入向量管理。
- * 业务逻辑委托给 {@link DocumentEmbedService} 和 {@link BatchDocumentService}。
+ * <p>Provides document CRUD operations and embedding vector management.
+ * Business logic delegates to {@link DocumentEmbedService} and {@link BatchDocumentService}.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/documents")
-@Tag(name = "RAG Documents", description = "文档管理（CRUD + 嵌入向量生成）")
+@Tag(name = "RAG Documents", description = "Document management (CRUD + embedding vector generation)")
 public class RagDocumentController {
 
     private static final Logger log = LoggerFactory.getLogger(RagDocumentController.class);
@@ -98,10 +98,10 @@ public class RagDocumentController {
 
     // ==================== CRUD ====================
 
-    @Operation(summary = "创建文档", description = "上传文档内容，自动计算内容哈希用于去重。嵌入向量需通过 /embed 接口单独生成。")
+    @Operation(summary = "Create document", description = "Upload document content; content hash is computed for deduplication. Embedding vectors must be generated separately via POST /{id}/embed.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "创建成功（或检测到重复内容）"),
-            @ApiResponse(responseCode = "400", description = "请求参数校验失败")
+            @ApiResponse(responseCode = "200", description = "Document created (or duplicate detected)"),
+            @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
     public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
@@ -110,7 +110,7 @@ public class RagDocumentController {
         String content = request.getContent();
         String contentHash = computeSha256(content);
 
-        // 去重检查
+        // Deduplication check
         List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
         if (!existing.isEmpty()) {
             RagDocument dup = existing.get(0);
@@ -148,10 +148,10 @@ public class RagDocumentController {
         ));
     }
 
-    @Operation(summary = "获取文档详情", description = "查询文档内容、元数据及嵌入向量数量。")
+    @Operation(summary = "Get document details", description = "Query document content, metadata, and embedding vector count.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回文档详情"),
-            @ApiResponse(responseCode = "404", description = "文档不存在")
+            @ApiResponse(responseCode = "200", description = "Document details returned"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
@@ -165,15 +165,15 @@ public class RagDocumentController {
                 .orElseThrow(() -> new DocumentNotFoundException(id));
     }
 
-    @Operation(summary = "删除文档", description = "删除文档及其关联的嵌入向量（级联删除）。")
-    @ApiResponse(responseCode = "200", description = "删除成功")
+    @Operation(summary = "Delete document", description = "Delete document and its associated embedding vectors (cascading delete).")
+    @ApiResponse(responseCode = "200", description = "Document deleted")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
     }
 
-    @Operation(summary = "列出文档", description = "分页查询文档列表，支持按标题/类型/状态过滤，按创建时间倒序。")
-    @ApiResponse(responseCode = "200", description = "返回文档分页列表")
+    @Operation(summary = "List documents", description = "Paginated document list with filtering by title/type/status and sorting by creation time descending.")
+    @ApiResponse(responseCode = "200", description = "Paginated document list returned")
     @GetMapping
     public ResponseEntity<Map<String, Object>> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
@@ -201,7 +201,7 @@ public class RagDocumentController {
         ));
     }
 
-    @Operation(summary = "文档统计", description = "获取各处理状态的文档数量统计。")
+    @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Object>> getDocumentStats() {
         List<Object[]> statusCounts = documentRepository.countByProcessingStatus();
@@ -216,17 +216,17 @@ public class RagDocumentController {
         return ResponseEntity.ok(Map.of("total", total, "byStatus", counts));
     }
 
-    // ==================== 嵌入向量 ====================
+    // ==================== Embedding Vectors ====================
 
-    @Operation(summary = "生成嵌入向量", description = "对文档进行分块并生成嵌入向量，存储到 rag_embeddings 表。已有嵌入时默认跳过，传入 force=true 强制重嵌入。")
+    @Operation(summary = "Generate embedding vectors", description = "Chunk document and generate embedding vectors stored in rag_embeddings. Skips existing embeddings by default; set force=true to re-embed.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "嵌入向量生成成功"),
-            @ApiResponse(responseCode = "404", description = "文档不存在")
+            @ApiResponse(responseCode = "200", description = "Embedding vectors generated"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @PostMapping("/{id}/embed")
     public ResponseEntity<Map<String, Object>> embedDocument(
             @PathVariable Long id,
-            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
         try {
             Map<String, Object> result = documentEmbedService.embedDocument(id, force);
@@ -247,9 +247,9 @@ public class RagDocumentController {
     }
 
     /**
-     * 查询嵌入向量状态
+     * Query embedding vector status.
      */
-    @Operation(summary = "嵌入向量状态", description = "查询有多少文档缺少嵌入向量，帮助判断是否需要重新嵌入")
+    @Operation(summary = "Embedding vector status", description = "Query how many documents lack embedding vectors, to help determine if re-embedding is needed")
     @GetMapping("/embed-vector-status")
     public ResponseEntity<Map<String, Object>> embeddingStatus() {
         long total = documentRepository.count();
@@ -264,12 +264,12 @@ public class RagDocumentController {
     }
 
     /**
-     * 批量重新嵌入缺少向量的文档
+     * Batch re-embed documents lacking embedding vectors.
      */
-    @Operation(summary = "批量重新嵌入", description = "自动查找所有缺少嵌入向量的文档，批量生成并存储向量。用于数据迁移后修复或强制重嵌入。")
+    @Operation(summary = "Batch re-embed", description = "Automatically find all documents lacking embedding vectors and batch generate/store vectors. Used for data migration fixes or forced re-embedding.")
     @PostMapping("/embed-vector-reembed")
     public ResponseEntity<Map<String, Object>> reembedMissing(
-            @Parameter(description = "是否强制重嵌入（跳过已有向量）")
+            @Parameter(description = "Whether to force re-embedding (skip existing vectors)")
             @RequestParam(defaultValue = "false") boolean force) {
         List<RagDocument> missing = documentRepository.findDocumentsWithoutEmbeddings();
         if (missing.isEmpty()) {
@@ -385,12 +385,12 @@ public class RagDocumentController {
         return emitter;
     }
 
-    @Operation(summary = "通过 VectorStore 生成嵌入向量",
-            description = "使用 VectorStore.add() 自动完成嵌入生成和存储，代码更简洁。存储到 rag_vector_store 表。已有嵌入时默认跳过，传入 force=true 强制重嵌入。")
+    @Operation(summary = "Generate embedding vectors via VectorStore",
+            description = "Use VectorStore.add() to automatically generate and store embeddings with simpler code. Stored in rag_vector_store table. Skips existing embeddings by default; set force=true to re-embed.")
     @PostMapping("/{id}/embed/vs")
     public ResponseEntity<Map<String, Object>> embedDocumentViaVectorStore(
             @PathVariable Long id,
-            @Parameter(description = "强制重嵌入（跳过缓存）")
+            @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
         try {
             Map<String, Object> result = documentEmbedService.embedDocumentViaVectorStore(id, force);
@@ -408,15 +408,15 @@ public class RagDocumentController {
         }
     }
 
-    // ==================== 批量操作 ====================
+    // ==================== Batch Operations ====================
 
     @Operation(summary = "Batch create documents",
                description = "Upload multiple documents at once (up to 100), auto-deduplication."
                            + " Set embed=true to create and embed in one step (no need to call /batch/embed)."
                            + " Single document failure does not affect other documents.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回创建结果"),
-            @ApiResponse(responseCode = "400", description = "请求参数无效（ids 为空/超限）")
+            @ApiResponse(responseCode = "200", description = "Creation results returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters (ids empty or exceeds limit)")
     })
     @PostMapping("/batch")
     public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
@@ -442,7 +442,7 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(summary = "批量删除文档", description = "按 ID 列表批量删除文档及其嵌入向量。单条不存在不影响其他文档。")
+    @Operation(summary = "Batch delete documents", description = "Batch delete documents and their embedding vectors by ID list. Missing IDs don't affect other deletions.")
     @DeleteMapping("/batch")
     public ResponseEntity<Map<String, Object>> batchDeleteDocuments(
             @RequestBody Map<String, List<Long>> request) {
@@ -461,7 +461,7 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(summary = "批量生成嵌入向量", description = "对多个文档批量执行分块和嵌入生成。单个文档失败不影响其他文档。")
+    @Operation(summary = "Batch generate embedding vectors", description = "Batch chunk and generate embeddings for multiple documents. Single document failure doesn't affect others.")
     @PostMapping("/batch/embed")
     public ResponseEntity<Map<String, Object>> batchEmbedDocuments(
             @RequestBody Map<String, List<Long>> request) {
@@ -522,19 +522,19 @@ public class RagDocumentController {
         return emitter;
     }
 
-    // ==================== 批量创建并嵌入（已废弃，使用 /batch?embed=true 代替） ====================
+    // ==================== Batch Create and Embed (deprecated, use /batch?embed=true instead) ====================
 
     /**
-     * @deprecated 请使用 {@link #batchCreateDocuments(BatchDocumentRequest)} batch=true}，
-     *             功能完全相同，且无需额外端点。
-     *             例如：POST /batch + body { "documents": [...], "embed": true, "collectionId": 1 }
+     * @deprecated Please use {@link #batchCreateDocuments(BatchDocumentRequest)} with embed=true instead.
+     *             Functionality is identical and requires no extra endpoint.
+     *             e.g.: POST /batch + body { "documents": [...], "embed": true, "collectionId": 1 }
      */
     @Deprecated
-    @Operation(summary = "批量创建并嵌入文档（已废弃）",
-               description = "@Deprecated 请改用 POST /batch + embed=true。功能完全相同。")
+    @Operation(summary = "Batch create and embed documents (deprecated)",
+               description = "@deprecated Please use POST /batch + embed=true instead. Functionality is identical.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回创建和嵌入结果"),
-            @ApiResponse(responseCode = "400", description = "请求参数无效")
+            @ApiResponse(responseCode = "200", description = "Creation and embedding results returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/batch/create-and-embed")
     public ResponseEntity<BatchCreateAndEmbedResponse> batchCreateAndEmbed(
@@ -542,11 +542,11 @@ public class RagDocumentController {
         log.info("Batch create and embed (deprecated): collectionId={}, docs={}, force={}",
                 request.getCollectionId(), request.getDocuments().size(), request.isForce());
 
-        // 委托给服务层（统一使用 embed=true）
+        // Delegates to service layer (unified embed=true)
         BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
                 request.getDocuments(), true, request.getCollectionId(), request.isForce());
 
-        // 转换为旧的响应格式
+        // Convert to legacy response format
         List<BatchCreateAndEmbedResponse.DocumentResult> results = resp.results().stream()
                 .map(r -> new BatchCreateAndEmbedResponse.DocumentResult(
                         r.documentId(), r.title(), r.newlyCreated(), 0, r.error()))
@@ -556,12 +556,12 @@ public class RagDocumentController {
                 resp.created(), resp.created(), resp.skipped(), resp.failed(), results));
     }
 
-    // ==================== 文件上传并嵌入 ====================
+    // ==================== File Upload and Embed ====================
 
-    @Operation(summary = "上传文件并嵌入", description = "上传文本文件（txt/md 等），自动创建文档并生成嵌入向量。")
+    @Operation(summary = "Upload file and embed", description = "Upload text files (txt/md etc.) and auto-create document with embedding vectors.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "文件处理完成"),
-            @ApiResponse(responseCode = "400", description = "无文件或文件格式不支持")
+            @ApiResponse(responseCode = "200", description = "File processing completed"),
+            @ApiResponse(responseCode = "400", description = "No file or unsupported file format")
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
@@ -697,18 +697,18 @@ public class RagDocumentController {
         }
     }
 
-    // ==================== 版本历史 ====================
+    // ==================== Version History ====================
 
-    @Operation(summary = "获取文档版本历史", description = "分页查询文档的内容变更版本记录，最新在前。")
+    @Operation(summary = "Get document version history", description = "Paginated version history of document content changes, newest first.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回版本历史"),
-            @ApiResponse(responseCode = "404", description = "文档不存在")
+            @ApiResponse(responseCode = "200", description = "Version history returned"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}/versions")
     public ResponseEntity<Map<String, Object>> getVersionHistory(
-            @Parameter(description = "文档 ID") @PathVariable Long id,
-            @Parameter(description = "页码") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Document ID") @PathVariable Long id,
+            @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
 
         if (!documentRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
@@ -724,22 +724,22 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
-    @Operation(summary = "获取指定版本", description = "查询文档的指定版本详情（含内容快照）。")
+    @Operation(summary = "Get specific version", description = "Query specific version details of a document (including content snapshot).")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回版本详情"),
-            @ApiResponse(responseCode = "404", description = "版本不存在")
+            @ApiResponse(responseCode = "200", description = "Version details returned"),
+            @ApiResponse(responseCode = "404", description = "Version not found")
     })
     @GetMapping("/{id}/versions/{versionNumber}")
     public ResponseEntity<Map<String, Object>> getVersion(
-            @Parameter(description = "文档 ID") @PathVariable Long id,
-            @Parameter(description = "版本号") @PathVariable int versionNumber) {
+            @Parameter(description = "Document ID") @PathVariable Long id,
+            @Parameter(description = "Version number") @PathVariable int versionNumber) {
 
         return documentVersionService.getVersion(id, versionNumber)
                 .map(v -> ResponseEntity.ok(versionToMap(v)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helper Methods ====================
 
     private Map<String, Object> documentToMap(RagDocument doc, RagCollectionRepository collectionRepository) {
         Map<String, Object> map = new HashMap<>();
@@ -754,7 +754,7 @@ public class RagDocumentController {
         map.put("size", doc.getSize());
         map.put("contentHash", doc.getContentHash());
 
-        // Collection 关联
+        // Collection association
         Long collectionId = doc.getCollectionId();
         map.put("collectionId", collectionId);
         if (collectionId != null) {
@@ -762,7 +762,7 @@ public class RagDocumentController {
             collection.ifPresent(c -> map.put("collectionName", c.getName()));
         }
 
-        // Chunk 数量
+        // Chunk count
         long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
         map.put("chunkCount", chunkCount);
 
@@ -785,7 +785,7 @@ public class RagDocumentController {
         map.put("changeType", v.getChangeType());
         map.put("changeDescription", v.getChangeDescription());
         map.put("createdAt", v.getCreatedAt());
-        // 仅在单版本详情中返回内容快照，列表中省略以节省带宽
+        // Content snapshot only returned in single version details, omitted in list to save bandwidth
         if (v.getContentSnapshot() != null) {
             map.put("contentSnapshot", v.getContentSnapshot());
         }

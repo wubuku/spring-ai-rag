@@ -24,16 +24,16 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 
 /**
- * RAG 指标监控控制器
+ * RAG metrics monitoring controller.
  *
- * <p>提供关键指标的简洁 JSON 视图。
- * 指标由 {@link RagMetricsService} 通过 Micrometer 收集，
- * 此端点聚合关键数据，避免客户端直接查询 Actuator。
+ * <p>Provides a concise JSON view of key metrics.
+ * Metrics are collected by {@link RagMetricsService} via Micrometer;
+ * this endpoint aggregates key data, avoiding clients from directly querying Actuator.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag")
-@Tag(name = "RAG Metrics", description = "RAG 服务指标监控")
+@Tag(name = "RAG Metrics", description = "RAG service metrics monitoring")
 public class RagMetricsController {
 
     private final RagMetricsService metricsService;
@@ -57,10 +57,10 @@ public class RagMetricsController {
         this.sloTrackerService = sloTrackerService;
     }
 
-    @Operation(summary = "获取 RAG 指标汇总",
-            description = "返回总请求数、成功率、检索结果总数、Token 消耗等关键指标。")
+    @Operation(summary = "Get RAG metrics summary",
+            description = "Returns key metrics: total requests, success rate, total retrieval results, token consumption, etc.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回 RAG 指标汇总数据"),
+            @ApiResponse(responseCode = "200", description = "Returns RAG metrics summary data"),
     })
     @GetMapping(value = "/metrics", produces = MediaType.APPLICATION_JSON_VALUE)
     public RagMetricsSummary getMetrics() {
@@ -74,10 +74,10 @@ public class RagMetricsController {
         );
     }
 
-    @Operation(summary = "获取各模型指标",
-            description = "返回各 provider 的调用量、错误率、延迟等模型级指标。")
+    @Operation(summary = "Get per-model metrics",
+            description = "Returns per-provider call count, error rate, latency and other model-level metrics.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回模型级指标数据"),
+            @ApiResponse(responseCode = "200", description = "Returns model-level metrics data"),
     })
     @GetMapping(value = "/metrics/models", produces = MediaType.APPLICATION_JSON_VALUE)
     public ModelMetricsResponse getModelMetrics() {

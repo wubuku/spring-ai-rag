@@ -17,14 +17,14 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 缓存指标 REST 端点
+ * Cache metrics REST endpoint.
  *
- * <p>提供嵌入缓存的命中率统计，便于运维监控缓存效果。
+ * <p>Provides hit rate statistics for embedding cache, facilitating operations monitoring of cache effectiveness.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/cache")
-@Tag(name = "Cache Metrics", description = "嵌入缓存指标监控")
+@Tag(name = "Cache Metrics", description = "Embedding cache metrics monitoring")
 public class CacheMetricsController {
 
     private final CacheMetricsService cacheMetricsService;

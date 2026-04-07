@@ -32,15 +32,15 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * 文档集合（知识库）管理控制器
+ * Document collection (knowledge base) management controller.
  *
- * <p>提供集合的 CRUD 操作，支持多知识库/多租户隔离。
- * 集合用于组织文档，每个文档可归属一个集合。
+ * <p>Provides collection CRUD operations with multi-knowledge-base/multi-tenant isolation support.
+ * Collections organize documents; each document can belong to one collection.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/collections")
-@Tag(name = "RAG Collections", description = "文档集合（知识库）管理")
+@Tag(name = "RAG Collections", description = "Document collection (knowledge base) management")
 public class RagCollectionController {
 
     private static final Logger log = LoggerFactory.getLogger(RagCollectionController.class);
@@ -58,10 +58,10 @@ public class RagCollectionController {
     }
 
     /**
-     * 创建集合
+     * Create a collection.
      */
-    @Operation(summary = "创建集合", description = "创建新的文档集合（知识库）。")
-    @ApiResponse(responseCode = "200", description = "创建成功，返回集合信息")
+    @Operation(summary = "Create collection", description = "Create a new document collection (knowledge base).")
+    @ApiResponse(responseCode = "200", description = "Collection created, returns collection info")
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
         log.info("Creating collection: name={}", request.getName());
@@ -85,7 +85,7 @@ public class RagCollectionController {
     }
 
     /**
-     * 获取集合详情
+     * Get collection details.
      */
     @Operation(summary = "Get collection details", description = "Query collection info and document count.")
     @ApiResponses({
@@ -105,9 +105,9 @@ public class RagCollectionController {
     }
 
     /**
-     * 列出集合（分页）
+     * List collections (paginated).
      */
-    @Operation(summary = "列出集合", description = "分页查询集合列表，按创建时间倒序。")
+    @Operation(summary = "List collections", description = "Paginated collection list, sorted by creation time descending.")
     @GetMapping
     public ResponseEntity<Map<String, Object>> list(
             @RequestParam(defaultValue = "0") int offset,
@@ -135,7 +135,7 @@ public class RagCollectionController {
     }
 
     /**
-     * 更新集合
+     * Update collection.
      */
     @Operation(summary = "Update collection", description = "Update collection name, description, etc.")
     @PutMapping("/{id}")
@@ -170,7 +170,7 @@ public class RagCollectionController {
     }
 
     /**
-     * 删除集合（软删除）
+     * Delete collection (soft delete).
      */
     @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
     @ApiResponse(responseCode = "200", description = "Collection soft-deleted")
@@ -181,7 +181,7 @@ public class RagCollectionController {
 
         return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
-                    // 批量清空关联文档的 collection_id（避免逐个加载）
+                    // Batch clear collection_id of associated documents (avoid loading one by one)
                     long count = documentRepository.countByCollectionId(id);
                     if (count > 0) {
                         documentRepository.clearCollectionIdByCollectionId(id);
@@ -204,7 +204,7 @@ public class RagCollectionController {
     }
 
     /**
-     * 恢复已删除的集合
+     * Restore a deleted collection.
      */
     @Operation(summary = "Restore deleted collection", description = "Restores a soft-deleted collection. Associated documents will NOT be re-linked automatically.")
     @ApiResponses({
@@ -236,7 +236,7 @@ public class RagCollectionController {
     }
 
     /**
-     * 克隆集合（深拷贝）
+     * Clone collection (deep copy).
      */
     @Operation(summary = "Clone collection", description = "Creates a deep copy of an existing collection. All documents are copied with PENDING processing status (embeddings are not copied and must be re-embedded).")
     @ApiResponses({
@@ -302,9 +302,9 @@ public class RagCollectionController {
     }
 
     /**
-     * 列出集合中的文档
+     * List documents in a collection.
      */
-    @Operation(summary = "列出集合中的文档", description = "查询指定集合下的文档列表（分页）。")
+    @Operation(summary = "List documents in collection", description = "Query document list under the specified collection (paginated).")
     @GetMapping("/{id}/documents")
     public ResponseEntity<Map<String, Object>> listDocuments(
             @PathVariable Long id,
@@ -362,12 +362,12 @@ public class RagCollectionController {
     }
 
     /**
-     * 将文档加入集合
+     * Add document to collection.
      */
-    @Operation(summary = "将文档加入集合", description = "将指定文档关联到集合中。")
+    @Operation(summary = "Add document to collection", description = "Associate the specified document with a collection.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "添加成功，返回添加详情"),
-            @ApiResponse(responseCode = "404", description = "集合不存在")
+            @ApiResponse(responseCode = "200", description = "Document added successfully, returns details"),
+            @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @PostMapping("/{id}/documents")
     public ResponseEntity<Map<String, Object>> addDocument(
@@ -403,9 +403,9 @@ public class RagCollectionController {
     }
 
     /**
-     * 导出集合（含文档元数据）
+     * Export collection (with document metadata).
      */
-    @Operation(summary = "导出集合", description = "导出集合信息及其文档元数据为 JSON，用于备份和迁移。")
+    @Operation(summary = "Export collection", description = "Export collection info and document metadata as JSON for backup and migration.")
     @GetMapping("/{id}/export")
     public ResponseEntity<Map<String, Object>> exportCollection(@PathVariable Long id) {
         log.info("Exporting collection: id={}", id);
@@ -448,9 +448,9 @@ public class RagCollectionController {
     }
 
     /**
-     * 导入集合（从 JSON 创建新集合）
+     * Import collection (create new collection from JSON).
      */
-    @Operation(summary = "导入集合", description = "从导出的 JSON 数据创建新集合及其文档。")
+    @Operation(summary = "Import collection", description = "Create a new collection and its documents from exported JSON data.")
     @PostMapping("/import")
     public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
         String name = (String) importData.get("name");

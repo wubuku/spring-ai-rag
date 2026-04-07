@@ -25,19 +25,19 @@ import org.springframework.web.servlet.NoHandlerFoundException;
 import java.util.List;
 
 /**
- * 全局异常处理 — RFC 7807 Problem Detail
+ * Global exception handler — RFC 7807 Problem Detail.
  *
- * <p>所有异常统一返回 {@link ErrorResponse} 格式，遵循 RFC 7807 标准字段：
- * type / title / status / detail / instance。
+ * <p>All exceptions return a unified {@link ErrorResponse} format, following RFC 7807 standard fields:
+ * type / title / status / detail / instance.
  *
- * <p>响应 Content-Type 设为 {@code application/problem+json}（RFC 7807 §3）。
+ * <p>Response Content-Type is set to {@code application/problem+json} (RFC 7807 §3).
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    /** RFC 7807 标准 Content-Type */
+    /** RFC 7807 standard Content-Type */
     private static final MediaType PROBLEM_JSON = MediaType.parseMediaType("application/problem+json");
 
     // ==================== 400 Bad Request ====================
@@ -151,7 +151,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ErrorResponse> handleException(Exception e,
                                                          HttpServletRequest request) {
-        // 异常消息可能包含内部路径、SQL 错误等，先脱敏再返回给用户
+        // Exception messages may contain internal paths, SQL errors, etc.; desensitize before returning to user
         String rawMessage = e.getMessage() != null ? e.getMessage() : "Unknown error";
         String safeMessage = SensitiveDataMaskingConverter.maskSensitiveData(rawMessage);
         log.error("Request failed: {}", safeMessage, e);
@@ -161,7 +161,7 @@ public class GlobalExceptionHandler {
     // ==================== Helper ====================
 
     /**
-     * 构建 RFC 7807 Problem Detail 响应，Content-Type 设为 application/problem+json。
+     * Build RFC 7807 Problem Detail response, Content-Type set to application/problem+json.
      */
     private ResponseEntity<ErrorResponse> buildResponse(HttpStatus status, String error,
                                                          String detail, HttpServletRequest request) {

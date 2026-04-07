@@ -17,18 +17,18 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 健康检查控制器（增强版 — 多组件探针）
+ * Health check controller (enhanced — multi-component probes).
  *
- * <p>提供细粒度的组件级健康状态，支持：
+ * <p>Provides fine-grained component-level health status, supports:
  * <ul>
- *   <li>GET /rag/health — 整体状态 + 各组件摘要</li>
- *   <li>GET /rag/health/components — 各组件详细状态</li>
+ *   <li>GET /rag/health — overall status + component summaries</li>
+ *   <li>GET /rag/health/components — detailed status of each component</li>
  * </ul>
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag")
-@Tag(name = "RAG Health", description = "健康检查与状态监控")
+@Tag(name = "RAG Health", description = "Health check and status monitoring")
 public class RagHealthController {
 
     private final ComponentHealthService componentHealth;
@@ -38,18 +38,18 @@ public class RagHealthController {
     }
 
     /**
-     * 整体健康检查
+     * Overall health check.
      */
-    @Operation(summary = "健康检查", description = "返回整体状态和各组件摘要。")
+    @Operation(summary = "Health check", description = "Returns overall status and component summaries.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回健康状态（UP/DEGRADED/DOWN）和各组件状态"),
+            @ApiResponse(responseCode = "200", description = "Returns health status (UP/DEGRADED/DOWN) and each component status"),
     })
     @GetMapping("/health")
     public ResponseEntity<HealthResponse> health() {
         Map<String, ComponentHealthService.ComponentStatus> components =
                 componentHealth.checkAll();
 
-        // 简化输出：每个组件只返回 status
+        // Simplified output: only return status for each component
         Map<String, String> componentStatuses = new LinkedHashMap<>();
         for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
             componentStatuses.put(entry.getKey(), entry.getValue().status());
@@ -60,18 +60,18 @@ public class RagHealthController {
     }
 
     /**
-     * 组件级详细健康检查
+     * Component-level detailed health check.
      */
-    @Operation(summary = "组件详细状态", description = "返回每个组件的详细健康信息，包括延迟、版本、表计数等。")
+    @Operation(summary = "Component detailed status", description = "Returns detailed health information for each component, including latency, version, table counts, etc.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "返回各组件的详细状态信息（database/pgvector/tables/cache）"),
+            @ApiResponse(responseCode = "200", description = "Returns detailed status info for each component (database/pgvector/tables/cache)"),
     })
     @GetMapping("/health/components")
     public ResponseEntity<ComponentHealthResponse> healthComponents() {
         Map<String, ComponentHealthService.ComponentStatus> components =
                 componentHealth.checkAll();
 
-        // 详细输出：每个组件的完整信息
+        // Detailed output: full information for each component
         Map<String, Map<String, Object>> componentDetails = new LinkedHashMap<>();
         for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
             componentDetails.put(entry.getKey(), entry.getValue().toMap());

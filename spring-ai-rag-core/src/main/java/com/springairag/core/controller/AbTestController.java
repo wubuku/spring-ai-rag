@@ -17,14 +17,14 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A/B 测试控制器
+ * A/B test controller.
  *
- * <p>提供实验的 CRUD、生命周期管理、结果记录和统计分析接口。
+ * <p>Provides experiment CRUD, lifecycle management, result recording and statistical analysis.
  */
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/ab")
-@Tag(name = "A/B Testing", description = "A/B 测试：检索策略对比实验")
+@Tag(name = "A/B Testing", description = "A/B testing: retrieval strategy comparison experiment")
 public class AbTestController {
 
     private final AbTestService abTestService;
@@ -36,10 +36,10 @@ public class AbTestController {
         this.auditLogService = auditLogService;
     }
 
-    @Operation(summary = "创建实验")
+    @Operation(summary = "Create experiment")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "实验创建成功"),
-        @ApiResponse(responseCode = "400", description = "请求参数无效")
+        @ApiResponse(responseCode = "200", description = "Experiment created successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/experiments")
     public ResponseEntity<AbTestService.Experiment> createExperiment(
@@ -51,11 +51,11 @@ public class AbTestController {
         return ResponseEntity.ok(experiment);
     }
 
-    @Operation(summary = "更新实验（仅 DRAFT/PAUSED 状态）")
+    @Operation(summary = "Update experiment (DRAFT/PAUSED status only)")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "实验更新成功"),
-        @ApiResponse(responseCode = "404", description = "实验不存在"),
-        @ApiResponse(responseCode = "409", description = "实验状态不允许更新")
+        @ApiResponse(responseCode = "200", description = "Experiment updated successfully"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found"),
+        @ApiResponse(responseCode = "409", description = "Experiment status does not allow update")
     })
     @PutMapping("/experiments/{id}")
     public ResponseEntity<Void> updateExperiment(
@@ -67,11 +67,11 @@ public class AbTestController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "启动实验")
+    @Operation(summary = "Start experiment")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "实验启动成功"),
-        @ApiResponse(responseCode = "404", description = "实验不存在"),
-        @ApiResponse(responseCode = "409", description = "实验状态不允许启动")
+        @ApiResponse(responseCode = "200", description = "Experiment started successfully"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found"),
+        @ApiResponse(responseCode = "409", description = "Experiment status does not allow starting")
     })
     @PostMapping("/experiments/{id}/start")
     public ResponseEntity<Void> startExperiment(@PathVariable Long id) {
@@ -81,10 +81,10 @@ public class AbTestController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "暂停实验")
+    @Operation(summary = "Pause experiment")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "实验暂停成功"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Experiment paused successfully"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @PostMapping("/experiments/{id}/pause")
     public ResponseEntity<Void> pauseExperiment(@PathVariable Long id) {
@@ -94,10 +94,10 @@ public class AbTestController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "停止实验")
+    @Operation(summary = "Stop experiment")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "实验停止成功"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Experiment stopped successfully"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @PostMapping("/experiments/{id}/stop")
     public ResponseEntity<Void> stopExperiment(@PathVariable Long id) {
@@ -107,17 +107,17 @@ public class AbTestController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "获取运行中的实验")
-    @ApiResponse(responseCode = "200", description = "返回运行中的实验列表")
+    @Operation(summary = "Get running experiments")
+    @ApiResponse(responseCode = "200", description = "Returns list of running experiments")
     @GetMapping("/experiments/running")
     public ResponseEntity<List<AbTestService.Experiment>> getRunningExperiments() {
         return ResponseEntity.ok(abTestService.getRunningExperiments());
     }
 
-    @Operation(summary = "获取变体分配", description = "根据 sessionId 计算该用户应分配到的变体")
+    @Operation(summary = "Get variant assignment", description = "Calculate which variant this user should be assigned to based on sessionId")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回变体分配结果"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Returns variant assignment result"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @GetMapping("/experiments/{id}/variant")
     public ResponseEntity<VariantResponse> getVariant(
@@ -127,10 +127,10 @@ public class AbTestController {
         return ResponseEntity.ok(VariantResponse.of(variant));
     }
 
-    @Operation(summary = "记录实验结果")
+    @Operation(summary = "Record experiment results")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "结果记录成功"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Result recorded successfully"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @PostMapping("/experiments/{id}/results")
     public ResponseEntity<Void> recordResult(
@@ -145,20 +145,20 @@ public class AbTestController {
         return ResponseEntity.ok().build();
     }
 
-    @Operation(summary = "分析实验结果")
+    @Operation(summary = "Analyze experiment results")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回实验分析结果"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Returns experiment analysis results"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @GetMapping("/experiments/{id}/analysis")
     public ResponseEntity<AbTestService.ExperimentAnalysis> analyzeExperiment(@PathVariable Long id) {
         return ResponseEntity.ok(abTestService.analyzeExperiment(id));
     }
 
-    @Operation(summary = "获取实验结果列表")
+    @Operation(summary = "Get experiment results list")
     @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "返回实验结果分页列表"),
-        @ApiResponse(responseCode = "404", description = "实验不存在")
+        @ApiResponse(responseCode = "200", description = "Returns paginated experiment results list"),
+        @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
     @GetMapping("/experiments/{id}/results")
     public ResponseEntity<List<AbTestService.ExperimentResult>> getResults(
@@ -171,7 +171,7 @@ public class AbTestController {
     // ==================== Request DTO ====================
 
     /**
-     * 记录结果请求体
+     * Result recording request body.
      */
     public static class ResultRequest {
         public String variantName;
