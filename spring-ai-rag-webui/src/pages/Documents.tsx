@@ -7,6 +7,7 @@ import { collectionsApi } from '../api/collections';
 import { useFileUpload } from '../hooks/useFileUpload';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
 import styles from './Documents.module.css';
 
 export function Documents() {
@@ -15,6 +16,7 @@ export function Documents() {
   const [keyword, setKeyword] = useState('');
   const [selectedCollection, setSelectedCollection] = useState<number | undefined>(undefined);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
+  const [versionsDoc, setVersionsDoc] = useState<{ id: number; title: string } | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -206,13 +208,21 @@ export function Documents() {
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
                     <td>
-                      <button
-                        onClick={() => deleteMutation.mutate(doc.id)}
-                        className={styles.deleteBtn}
-                        disabled={deleteMutation.isPending}
-                      >
-                        {t('documents.delete')}
-                      </button>
+                      <div className={styles.actions}>
+                        <button
+                          onClick={() => setVersionsDoc({ id: doc.id, title: doc.title })}
+                          className={styles.versionsBtn}
+                        >
+                          {t('versions.button', 'Versions')}
+                        </button>
+                        <button
+                          onClick={() => deleteMutation.mutate(doc.id)}
+                          className={styles.deleteBtn}
+                          disabled={deleteMutation.isPending}
+                        >
+                          {t('documents.delete')}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -266,6 +276,15 @@ export function Documents() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Version History Modal */}
+      {versionsDoc && (
+        <VersionHistoryModal
+          documentId={versionsDoc.id}
+          documentTitle={versionsDoc.title}
+          onClose={() => setVersionsDoc(null)}
+        />
       )}
     </div>
   );

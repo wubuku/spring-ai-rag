@@ -250,6 +250,30 @@
   color: var(--color-text-muted);
 }
 
+.actions {
+  display: flex;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.versionsBtn {
+  padding: 0.25rem 0.625rem;
+  border-radius: 6px;
+  border: 1px solid var(--color-border, #e5e7eb);
+  background: var(--color-surface, #ffffff);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text, #111827);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.versionsBtn:hover {
+  background: var(--color-background, #f9fafb);
+  border-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary, #3b82f6);
+}
+
 .deleteBtn {
   padding: 0.375rem 0.75rem;
   background: transparent;

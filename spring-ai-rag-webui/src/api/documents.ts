@@ -71,4 +71,28 @@ export const documentsApi = {
     apiClient.post<{ total: number; success: number; failed: number }>('/documents/embed-vector-reembed', null, {
       params: { force },
     }),
+
+  getVersions: (id: number, page = 0, size = 20) =>
+    apiClient.get<{ documentId: number; totalVersions: number; page: number; size: number; versions: DocumentVersion[] }>(
+      `/documents/${id}/versions`,
+      { params: { page, size } }
+    ),
+
+  getVersion: (id: number, versionNumber: number) =>
+    apiClient.get<DocumentVersionDetail>(`/documents/${id}/versions/${versionNumber}`),
 };
+
+export interface DocumentVersion {
+  id: number;
+  documentId: number;
+  versionNumber: number;
+  contentHash: string;
+  size: number;
+  changeType: string;
+  changeDescription: string;
+  createdAt: string;
+}
+
+export interface DocumentVersionDetail extends DocumentVersion {
+  contentSnapshot: string;
+}

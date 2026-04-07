@@ -192,6 +192,20 @@
     "en": "English",
     "zh-CN": "中文"
   },
+  "versions": {
+    "title": "Version History",
+    "button": "Versions",
+    "listTab": "Version List",
+    "diffTab": "Diff View",
+    "compare": "Compare",
+    "selectTwo": "Select two versions to compare",
+    "noVersions": "No version history found",
+    "loadError": "Failed to load version history",
+    "page": "Page {{page}} of {{total}}",
+    "inserted": "inserted",
+    "deleted": "deleted",
+    "noDiff": "Select two versions to compare first"
+  },
   "abtest": {
     "title": "A/B Testing",
     "createExperiment": "New Experiment",

@@ -190,6 +190,20 @@
     "en": "English",
     "zh-CN": "中文"
   },
+  "versions": {
+    "title": "版本历史",
+    "button": "版本",
+    "listTab": "版本列表",
+    "diffTab": "差异对比",
+    "compare": "对比",
+    "selectTwo": "选择两个版本进行对比",
+    "noVersions": "暂无版本记录",
+    "loadError": "加载版本历史失败",
+    "page": "第 {{page}} 页，共 {{total}} 页",
+    "inserted": "新增",
+    "deleted": "删除",
+    "noDiff": "请先选择两个版本进行对比"
+  },
   "abtest": {
     "title": "A/B 测试",
     "createExperiment": "新建实验",
