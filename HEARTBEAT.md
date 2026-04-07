@@ -1395,6 +1395,10 @@
 
 - 2026-04-07 20:54 — ✅ DTO validation messages i18n：扫描发现 8 个 DTO 类残留中文 validation message（ChatRequest/RetrievalConfig/BatchDocumentRequest/FeedbackRequest/DocumentRequest/SearchRequest/BatchCreateAndEmbedRequest/EvaluateRequest），全部翻译为英文（30+ 约束消息）；同步翻译 @Schema description 为英文示例；1313 tests 全通过，零失败零错误；commit df78606 已推送
 
+## 进度日志（后端国际化查漏第九轮 — 2026-04-08 07:54）
+
+- 2026-04-08 07:54 — ✅ FTS + i18n 源码文件国际化收尾：翻译 6 个源文件残留中文 Javadoc/注释为英文——QueryLang.java(enum Javadoc)、PgJiebaFulltextProvider.java(类+内联注释)、SearchCapabilities.java(类+字段+方法注释)、FulltextSearchProviderFactory.java(类+字段+内联注释)、HybridRetrieverService.java(类+内联注释)、MessageSourceConfig.java(类注释)；6 files，88 行等量替换；mvn test ✅（全通过，零失败零错误）；commit 2658305 已推送
+
 ## 进度日志（WebUI 巡检 — 2026-04-07 15:09）
 
 - 2026-04-07 15:09 — ✅ WebUI 常规巡检：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing/Chat Real）；dist 已同步到 static/webui/；后端服务 8081 UP；WebUI 项目处于生产级成熟状态
