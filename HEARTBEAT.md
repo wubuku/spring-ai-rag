@@ -1445,3 +1445,7 @@
   - 新增 `FileValidationResult` + `FileContentResult` Java record 类型
   - 1313 tests 全通过，零失败零错误，commit 4c1a389 已推送
 
+## Cron 进度（2026-04-07 19:42 — 后端国际化查漏）
+
+- 2026-04-07 19:42 — ✅ 代码国际化收尾：扫描发现 11 个 Java 文件残留中文 Javadoc（ErrorResponse/AbTestService/AbstractRagAdvisor/HybridSearchAdvisor/QueryRewriteAdvisor/RerankAdvisor/RagPipelineMetrics/RagChatService/RagRetrievalProperties/ModelMetricsService/RagUserFeedbackRepository），全部翻译为英文；同步翻译 Advisor 类内的 debug/info 日志消息（"查询为空"→"query is empty" 等）；11 files，124 行变更；1313 tests 全通过，零失败零错误；commit 8464720 已推送
+
