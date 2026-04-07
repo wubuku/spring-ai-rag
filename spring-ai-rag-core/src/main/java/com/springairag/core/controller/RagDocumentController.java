@@ -277,37 +277,10 @@ public class RagDocumentController {
         }
 
         log.info("Re-embedding {} documents without embeddings (force={})", missing.size(), force);
-        List<Map<String, Object>> results = new ArrayList<>();
-        int success = 0;
-        int failed = 0;
+        List<Map<String, Object>> results = executeReembeddingBatch(missing, force);
 
-        for (RagDocument doc : missing) {
-            try {
-                Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
-                String status = String.valueOf(result.getOrDefault("status", "UNKNOWN"));
-                if ("COMPLETED".equals(status)) {
-                    success++;
-                } else {
-                    failed++;
-                }
-                results.add(Map.of(
-                        "documentId", doc.getId(),
-                        "title", doc.getTitle(),
-                        "status", status,
-                        "chunks", result.getOrDefault("chunksCreated", 0),
-                        "message", result.getOrDefault("message", "")
-                ));
-            } catch (Exception e) {
-                log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
-                results.add(Map.of(
-                        "documentId", doc.getId(),
-                        "title", doc.getTitle(),
-                        "status", "error",
-                        "error", e.getMessage()
-                ));
-                failed++;
-            }
-        }
+        long success = results.stream().filter(r -> "COMPLETED".equals(String.valueOf(r.getOrDefault("status", "")))).count();
+        long failed = results.size() - success;
 
         auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
                 "batch",
@@ -320,6 +293,31 @@ public class RagDocumentController {
                 "failed", failed,
                 "results", results
         ));
+    }
+
+    private List<Map<String, Object>> executeReembeddingBatch(List<RagDocument> documents, boolean force) {
+        List<Map<String, Object>> results = new ArrayList<>();
+        for (RagDocument doc : documents) {
+            try {
+                Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
+                results.add(Map.of(
+                        "documentId", doc.getId(),
+                        "title", doc.getTitle(),
+                        "status", result.getOrDefault("status", "UNKNOWN"),
+                        "chunks", result.getOrDefault("chunksCreated", 0),
+                        "message", result.getOrDefault("message", "")
+                ));
+            } catch (Exception e) {
+                log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
+                results.add(Map.of(
+                        "documentId", doc.getId(),
+                        "title", doc.getTitle(),
+                        "status", "error",
+                        "error", e.getMessage()
+                ));
+            }
+        }
+        return results;
     }
 
     /**
@@ -608,67 +606,32 @@ public class RagDocumentController {
         }
 
         try {
-            // 提取文件扩展名
-            String originalFilename = file.getOriginalFilename();
-            String extension = "";
-            if (originalFilename != null && originalFilename.contains(".")) {
-                extension = originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase();
-            }
-
-            // 检查是否为支持的文本类型
-            String contentType = file.getContentType();
-            boolean isText = contentType != null && (
-                    contentType.startsWith("text/") ||
-                    contentType.equals("application/json") ||
-                    contentType.equals("application/xml") ||
-                    contentType.equals("application/javascript") ||
-                    extension.equals("txt") || extension.equals("md") ||
-                    extension.equals("markdown") || extension.equals("json") ||
-                    extension.equals("xml") || extension.equals("html") ||
-                    extension.equals("csv") || extension.equals("log")
-            );
-
-            if (!isText && !file.isEmpty()) {
-                // 尝试作为文本读取
-                try {
-                    file.getBytes(); // 触发检查
-                } catch (Exception e) {
-                    return new FileUploadResponse.FileResult(
-                            filename, null, null, false, 0,
-                            "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
-                }
-            }
-
-            // 读取文件内容
-            String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
-            if (content.isBlank()) {
+            FileValidationResult validation = validateTextFile(file, filename);
+            if (validation.errorMessage != null) {
                 return new FileUploadResponse.FileResult(
-                        filename, null, null, false, 0, "File content is empty");
+                        filename, null, null, false, 0, validation.errorMessage);
             }
 
-            // 构建文档标题（使用文件名）
-            String title = filename;
-            if (title.toLowerCase().endsWith(".txt") || title.toLowerCase().endsWith(".md")) {
-                title = title.substring(0, title.lastIndexOf('.'));
+            FileContentResult content = readFileContent(file, filename);
+            if (content.errorMessage != null) {
+                return new FileUploadResponse.FileResult(
+                        filename, null, null, false, 0, content.errorMessage);
             }
 
-            // 创建文档请求
-            DocumentRequest docReq = new DocumentRequest(title, content);
+            DocumentRequest docReq = new DocumentRequest(content.title, content.content);
             if (collectionId != null) {
                 docReq.setCollectionId(collectionId);
             }
 
-            // 使用服务层统一处理（创建 + 嵌入）
             BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
                     List.of(docReq), true, collectionId, force);
             BatchCreateResponse.DocumentResult r = resp.results().getFirst();
 
             if (r.documentId() != null) {
-                // 嵌入成功（因为 embed=true）
-                return new FileUploadResponse.FileResult(filename, r.documentId(), title, true, 0, null);
+                return new FileUploadResponse.FileResult(filename, r.documentId(), content.title, true, 0, null);
             } else {
                 return new FileUploadResponse.FileResult(
-                        filename, null, title, false, 0,
+                        filename, null, content.title, false, 0,
                         r.error() != null ? r.error() : "Creation failed");
             }
 
@@ -677,6 +640,57 @@ public class RagDocumentController {
             return new FileUploadResponse.FileResult(
                     filename, null, null, false, 0,
                     "Processing failed: " + e.getMessage());
+        }
+    }
+
+    private record FileValidationResult(boolean isText, String extension, String errorMessage) {}
+
+    private FileValidationResult validateTextFile(MultipartFile file, String filename) {
+        String originalFilename = file.getOriginalFilename();
+        String extension = "";
+        if (originalFilename != null && originalFilename.contains(".")) {
+            extension = originalFilename.substring(originalFilename.lastIndexOf('.') + 1).toLowerCase();
+        }
+
+        String contentType = file.getContentType();
+        boolean isText = contentType != null && (
+                contentType.startsWith("text/") ||
+                contentType.equals("application/json") ||
+                contentType.equals("application/xml") ||
+                contentType.equals("application/javascript") ||
+                extension.equals("txt") || extension.equals("md") ||
+                extension.equals("markdown") || extension.equals("json") ||
+                extension.equals("xml") || extension.equals("html") ||
+                extension.equals("csv") || extension.equals("log")
+        );
+
+        if (!isText && !file.isEmpty()) {
+            try {
+                file.getBytes();
+            } catch (Exception e) {
+                return new FileValidationResult(false, extension,
+                        "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
+            }
+        }
+        return new FileValidationResult(isText, extension, null);
+    }
+
+    private record FileContentResult(String title, String content, String errorMessage) {}
+
+    private FileContentResult readFileContent(MultipartFile file, String filename) {
+        try {
+            String content = new String(file.getBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            if (content.isBlank()) {
+                return new FileContentResult(null, null, "File content is empty");
+            }
+
+            String title = filename;
+            if (title.toLowerCase().endsWith(".txt") || title.toLowerCase().endsWith(".md")) {
+                title = title.substring(0, title.lastIndexOf('.'));
+            }
+            return new FileContentResult(title, content, null);
+        } catch (Exception e) {
+            return new FileContentResult(null, null, "Failed to read file: " + e.getMessage());
         }
     }
 
