@@ -20,16 +20,16 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
- * 查询改写服务
+ * Query rewriting service
  *
- * <p>支持三种改写模式：
+ * <p>Supports three rewriting modes:
  * <ul>
- *   <li>规则模式 — 同义词扩展、领域限定词扩展、Padding 查询</li>
- *   <li>LLM 辅助模式 — 调用 ChatModel 生成改写查询</li>
- *   <li>混合模式 — 规则 + LLM 双管齐下</li>
+ *   <li>Rule mode — synonym expansion, domain qualifier expansion, padding query</li>
+ *   <li>LLM-assisted mode — calls ChatModel to generate rewritten queries</li>
+ *   <li>Hybrid mode — both rule and LLM</li>
  * </ul>
  *
- * <p>同义词词典和领域限定词可通过配置自定义（默认空，不含领域硬编码）。
+ * <p>Synonym dictionary and domain qualifiers are configurable (empty by default, no hardcoded domain).
  */
 @Service
 public class QueryRewritingService {
@@ -167,18 +167,18 @@ public class QueryRewritingService {
             String prompt = buildRewritePrompt(originalQuery);
             String response = callLlm(prompt);
             if (response == null || response.isBlank()) {
-                log.warn("LLM 返回空响应");
+                log.warn("LLM returned empty response");
                 return List.of();
             }
 
             List<String> rewritten = parseRewriteResponse(response, originalQuery);
-            log.info("LLM 改写: \"{}\" → {} 条: {}",
+            log.info("LLM rewrite: \"{}\" → {} results: {}",
                     originalQuery, rewritten.size(),
                     rewritten.size() > 3 ? rewritten.subList(0, 3) + "..." : rewritten);
             return rewritten.stream().limit(config.getLlmMaxRewrites()).toList();
 
         } catch (Exception e) { // Resilience: LLM failure, fallback to rule mode
-            log.error("LLM 改写失败，降级到规则模式: {}", e.getMessage());
+            log.error("LLM rewrite failed, falling back to rule mode: {}", e.getMessage());
             return List.of();
         }
     }

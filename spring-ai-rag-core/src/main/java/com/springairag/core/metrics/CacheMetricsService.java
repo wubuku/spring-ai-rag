@@ -12,13 +12,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 缓存指标服务 — 追踪嵌入缓存命中率
+ * Cache metrics service — tracks embedding cache hit rate
  *
- * <p>从 PerformanceConfig.CachingEmbeddingModel 的 Micrometer 计数器读取数据，
- * 提供结构化的缓存统计信息。
+ * <p>Reads data from PerformanceConfig.CachingEmbeddingModel Micrometer counters,
+ * providing structured cache statistics.
  *
- * <p>可通过 `/actuator/metrics/rag.cache.embedding.hit` 等端点查询原始指标，
- * 或通过 `/api/v1/cache/stats` 获取汇总统计。
+ * <p>Raw metrics can be queried at `/actuator/metrics/rag.cache.embedding.hit`, etc.,
+ * or aggregated statistics via `/api/v1/cache/stats`.
  */
 @Service
 public class CacheMetricsService {
@@ -33,10 +33,10 @@ public class CacheMetricsService {
     public CacheMetricsService(MeterRegistry meterRegistry,
                               @Autowired(required = false) CacheManager cacheManager) {
         this.hitCounter = Counter.builder("rag.cache.embedding.hit")
-                .description("嵌入缓存命中次数")
+                .description("Embedding cache hit count")
                 .register(meterRegistry);
         this.missCounter = Counter.builder("rag.cache.embedding.miss")
-                .description("嵌入缓存未命中次数")
+                .description("Embedding cache miss count")
                 .register(meterRegistry);
         this.cacheManager = cacheManager;
         log.info("CacheMetricsService initialized (cacheManager: {})",
@@ -44,28 +44,28 @@ public class CacheMetricsService {
     }
 
     /**
-     * 获取缓存命中次数
+     * Returns the number of cache hits
      */
     public long getHitCount() {
         return (long) hitCounter.count();
     }
 
     /**
-     * 获取缓存未命中次数
+     * Returns the number of cache misses
      */
     public long getMissCount() {
         return (long) missCounter.count();
     }
 
     /**
-     * 获取总查询次数
+     * Returns the total number of cache queries
      */
     public long getTotalCount() {
         return getHitCount() + getMissCount();
     }
 
     /**
-     * 获取缓存命中率（百分比，0-100）
+     * Returns the cache hit rate (percentage, 0-100)
      */
     public double getHitRate() {
         long total = getTotalCount();
@@ -73,7 +73,7 @@ public class CacheMetricsService {
     }
 
     /**
-     * 获取完整的缓存统计信息
+     * Returns the complete cache statistics
      */
     public Map<String, Object> getStats() {
         Map<String, Object> stats = new LinkedHashMap<>();
@@ -88,12 +88,12 @@ public class CacheMetricsService {
     }
 
     /**
-     * 清除嵌入缓存。
+     * Clears the embedding cache.
      *
-     * <p>清除后，所有后续嵌入请求将重新调用嵌入模型，
-     * 缓存命中率将重置为 0%。
+     * <p>After clearing, all subsequent embedding requests will call the embedding model again.
+     * Cache hit rate will reset to 0%.
      *
-     * @return 清除的缓存条目数量（估算）
+     * @return the number of cache entries cleared (estimated)
      */
     public int clearCache() {
         if (cacheManager == null) {
