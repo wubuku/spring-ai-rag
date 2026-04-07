@@ -1501,8 +1501,12 @@
 ## Cron 进度（2026-04-08 01:25 — 后端国际化：控制器 Javadoc 第三轮）
 
 - 2026-04-08 01:25 — ✅ 控制器 Javadoc 国际化（第三轮）：扫描发现 EvaluationController、AlertController、RagSearchController 残留中文 Javadoc/@Operation/@Tag/@ApiResponse descriptions；3 个文件全部翻译为英文；mvn test ✅（1462 tests，零失败零错误）；commit c0069a9 已推送
-  - ⚠️ 仍有余量：RagDocumentController、RagChatController、RagCollectionController、RagHealthController、RagMetricsController、ModelController、AbTestController、CacheMetricsController 共 8 个控制器残留中文 Javadoc，建议下次 cron 继续推进
+  - ⚠️ 仍有余量（已处理）：以上 8 个控制器已在本轮完成国际化翻译
 
 ## Cron 进度（2026-04-08 01:41 — WebUI 常规发布）
 
 - 2026-04-08 01:41 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-08 02:03 — 控制器 Javadoc 国际化第四轮）
+
+- 2026-04-08 02:03 — ✅ 控制器 Javadoc 国际化（第四轮）：扫描发现 9 个控制器残留中文 Swagger/OpenAPI 注解——RagDocumentController(602字)、RagCollectionController(407字)、AlertController(310字)、RagChatController(188字)、AbTestController(145字)、GlobalExceptionHandler(134字)、RagMetricsController(118字)、ModelController(100字)、RagHealthController+RagCacheMetricsController(少量)；全部翻译为英文（@Tag/@Operation/@ApiResponse/@Parameter descriptions + class Javadoc + inline comments）；9 files，206 行变更（206 insertions, 206 deletions）；42 tests ✅（42 tests 全通过，零失败零错误）；commit 4820b2d 已推送；**所有 13 个 Controller 现已 100% 英文化**
