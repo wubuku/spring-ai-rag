@@ -1388,6 +1388,10 @@
 
 - 2026-04-06 20:33 — ✅ WebUI 常规巡检：npm test 113 ✅ / npm run build 243KB ✅（301KB index gzipped）/ E2E 12/12 ✅（SPA Routing/Chat SSE/Navigation/Settings/Metrics/Alerts/Dashboard/Documents/Collections/Search/Backend Health）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
 
+## 进度日志（后端国际化查漏 — 2026-04-07 20:54）
+
+- 2026-04-07 20:54 — ✅ DTO validation messages i18n：扫描发现 8 个 DTO 类残留中文 validation message（ChatRequest/RetrievalConfig/BatchDocumentRequest/FeedbackRequest/DocumentRequest/SearchRequest/BatchCreateAndEmbedRequest/EvaluateRequest），全部翻译为英文（30+ 约束消息）；同步翻译 @Schema description 为英文示例；1313 tests 全通过，零失败零错误；commit df78606 已推送
+
 ## 进度日志（WebUI 巡检 — 2026-04-07 15:09）
 
 - 2026-04-07 15:09 — ✅ WebUI 常规巡检：npm test 113 ✅（20 test files）/ npm run build ✅（96KB index gzipped）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing/Chat Real）；dist 已同步到 static/webui/；后端服务 8081 UP；WebUI 项目处于生产级成熟状态
