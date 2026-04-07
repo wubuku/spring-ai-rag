@@ -100,10 +100,10 @@ public class PerformanceConfig {
             this.delegate = delegate;
             this.cache = cacheManager.getCache("embeddings");
             this.hitCounter = Counter.builder("rag.cache.embedding.hit")
-                    .description("嵌入缓存命中次数")
+                    .description("Embedding cache hit count")
                     .register(meterRegistry);
             this.missCounter = Counter.builder("rag.cache.embedding.miss")
-                    .description("嵌入缓存未命中次数")
+                    .description("Embedding cache miss count")
                     .register(meterRegistry);
             this.cacheSize = new AtomicLong(0);
             meterRegistry.gauge("rag.cache.embedding.size", cacheSize);

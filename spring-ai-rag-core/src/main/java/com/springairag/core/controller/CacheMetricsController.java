@@ -37,26 +37,26 @@ public class CacheMetricsController {
     }
 
     /**
-     * 获取缓存统计信息
+     * Get cache statistics
      *
-     * @return 缓存命中/未命中次数及命中率
+     * @return cache hit/miss counts and hit rate
      */
-    @Operation(summary = "获取缓存统计", description = "返回嵌入缓存的命中/未命中次数及命中率")
-    @ApiResponse(responseCode = "200", description = "返回缓存统计信息")
+    @Operation(summary = "Get cache statistics", description = "Returns embedding cache hit/miss counts and hit rate")
+    @ApiResponse(responseCode = "200", description = "Returns cache statistics")
     @GetMapping("/stats")
     public ResponseEntity<CacheStatsResponse> getCacheStats() {
         return ResponseEntity.ok(CacheStatsResponse.from(cacheMetricsService.getStats()));
     }
 
     /**
-     * 清除嵌入缓存
+     * Clear embedding cache
      *
-     * <p>Admin 端点：清除 Caffeine 本地缓存，强制后续嵌入请求重新调用 API。
+     * <p>Admin endpoint: clears Caffeine local cache, forcing subsequent embedding requests to call the API again.
      *
-     * @return 清除的缓存条目数量
+     * @return the number of cache entries cleared
      */
-    @Operation(summary = "清除嵌入缓存", description = "Admin 端点：清除 Caffeine 本地嵌入缓存，强制重新嵌入。返回清除的条目数量。")
-    @ApiResponse(responseCode = "200", description = "返回清除的缓存条目数量")
+    @Operation(summary = "Clear embedding cache", description = "Admin endpoint: clears Caffeine local embedding cache, forcing re-embedding. Returns the number of cache entries cleared.")
+    @ApiResponse(responseCode = "200", description = "Returns the number of cache entries cleared")
     @DeleteMapping("/invalidate")
     public ResponseEntity<Map<String, Object>> invalidateCache() {
         int cleared = cacheMetricsService.clearCache();

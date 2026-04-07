@@ -118,12 +118,12 @@ public class QueryRewritingService {
     }
 
     /**
-     * 改写查询
+     * Rewrite query
      *
-     * <p>根据配置执行规则改写、LLM 改写或混合模式。
+     * <p>Executes rule rewrite, LLM rewrite, or hybrid mode based on configuration.
      *
-     * @param originalQuery 原始查询
-     * @return 改写后的查询列表（包含原始查询和扩展查询）
+     * @param originalQuery the original query
+     * @return list of rewritten queries (including original and expanded queries)
      */
     public List<String> rewriteQuery(String originalQuery) {
         if (config == null || !config.isEnabled() || originalQuery == null || originalQuery.isBlank()) {
@@ -155,11 +155,11 @@ public class QueryRewritingService {
      * 失败时静默降级，不影响规则改写结果。
      *
      * @param originalQuery 原始查询
-     * @return LLM 生成的改写查询列表
+     * @return list of LLM-generated rewritten queries
      */
     public List<String> llmRewrite(String originalQuery) {
         if (chatModel == null) {
-            log.warn("LLM 改写已启用但 ChatModel 未配置，跳过");
+            log.warn("LLM rewrite enabled but ChatModel not configured, skipping");
             return List.of();
         }
 
