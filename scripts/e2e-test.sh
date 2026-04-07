@@ -159,7 +159,7 @@ BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /documents/$DOC_ID" "200" "$CODE"
 assert_contains "返回正确标题" "$BODY" "E2E自动化测试文档"
 assert_contains "返回metadata(JSONB)" "$BODY" '"author":"e2e-script"'
-assert_contains "返回embeddingCount" "$BODY" '"embeddingCount"'
+assert_contains "返回chunkCount" "$BODY" '"chunkCount"'
 echo ""
 
 # ────────────────────────────────────────
