@@ -1430,3 +1430,12 @@
 - 2026-04-07 06:14 — ✅ HS1-3 + HS4-*：PgEnglishFtsProviderTest 10 个单元测试（availability/search/ts_rank/filter/score/exclude/empty-query/DB-error）；HS1-4/HS1-5/V15/V16 经审查已完整实现，无需额外工作；全量测试通过，commit c0725e9 已推送
 - 2026-04-07 07:30 — ✅ ApiSloTrackerService 单元测试补全：ApiSloTrackerServiceTest 16 个测试（constructor/enabled-disabled/recordLatency/getCompliance/并发1000条/concurrent 10线程×100条/多endpoint/方法提取POST/GET/PUT/DELETE/SSE/未知默认GET/阈值边界500ms=compliant）；全量测试通过，commit 1c009e0 已推送
 
+## Cron 进度（2026-04-07 17:25）
+
+- 2026-04-07 17:25 — ✅ 测试回归修复 + 配置简化：
+  - 发现根因：工作区有未提交的 HybridRetrieverService.java + HybridRetrieverServiceTest.java WIP 改动（实验性 SQL 优化），导致 `fulltextThrowsException_fallsBackToEmpty_vectorResultsReturned` 失败（SQL 不再含 `"ORDER BY embedding <=>"`，mock 匹配失效）
+  - 修复：revert 上述两个文件的 WIP 改动（恢复至 90b3727 提交状态）
+  - 同时提交：EmbeddingModelConfig @Value 注入简化（替代 RagProperties 构造器注入）+ FulltextSearchProviderFactory 日志增强
+  - 1313 tests 全通过，零失败零错误
+  - commit 6853ab8 已推送
+
