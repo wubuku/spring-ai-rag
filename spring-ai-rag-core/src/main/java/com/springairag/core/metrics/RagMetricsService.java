@@ -11,22 +11,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * RAG 指标监控服务（Micrometer 版）
+ * RAG Metrics Service (Micrometer-based)
  *
- * <p>使用 Micrometer 计数器和计时器收集 RAG Pipeline 关键指标，
- * 可对接 Prometheus、InfluxDB、Grafana 等监控系统。
+ * <p>Collects RAG Pipeline key metrics using Micrometer counters and timers,
+ * compatible with Prometheus, InfluxDB, Grafana, and other monitoring systems.
  *
- * <p>核心指标：
+ * <p>Core metrics:
  * <ul>
- *   <li>rag.requests.total — 总请求数</li>
- *   <li>rag.requests.success — 成功请求数</li>
- *   <li>rag.requests.failed — 失败请求数</li>
- *   <li>rag.response.time — 请求响应时间分布</li>
- *   <li>rag.retrieval.results — 每次检索的平均结果数</li>
- *   <li>rag.llm.tokens — LLM token 消耗</li>
+ *   <li>rag.requests.total — total request count</li>
+ *   <li>rag.requests.success — successful request count</li>
+ *   <li>rag.requests.failed — failed request count</li>
+ *   <li>rag.response.time — request response time distribution</li>
+ *   <li>rag.retrieval.results — total retrieval results count</li>
+ *   <li>rag.llm.tokens — LLM token consumption</li>
  * </ul>
  *
- * <p>可通过 `/actuator/metrics/rag.requests.total` 等端点查询。
+ * <p>Query via endpoints such as `/actuator/metrics/rag.requests.total`.
  */
 @Service
 public class RagMetricsService {
@@ -42,19 +42,19 @@ public class RagMetricsService {
 
     public RagMetricsService(MeterRegistry meterRegistry) {
         this.totalRequestCounter = Counter.builder("rag.requests.total")
-                .description("RAG 请求总数")
+                .description("Total RAG request count")
                 .register(meterRegistry);
 
         this.successRequestCounter = Counter.builder("rag.requests.success")
-                .description("RAG 成功请求数")
+                .description("Successful RAG request count")
                 .register(meterRegistry);
 
         this.failedRequestCounter = Counter.builder("rag.requests.failed")
-                .description("RAG 失败请求数")
+                .description("Failed RAG request count")
                 .register(meterRegistry);
 
         this.responseTimer = Timer.builder("rag.response.time")
-                .description("RAG 请求响应时间")
+                .description("RAG request response time")
                 .publishPercentiles(0.5, 0.95, 0.99)
                 .register(meterRegistry);
 
@@ -66,10 +66,10 @@ public class RagMetricsService {
     }
 
     /**
-     * 记录成功的 RAG 请求
+     * Records a successful RAG request.
      *
-     * @param durationMs    响应时间（毫秒）
-     * @param resultCount   检索结果数量
+     * @param durationMs  response time in milliseconds
+     * @param resultCount number of retrieval results
      */
     public void recordSuccess(long durationMs, int resultCount) {
         totalRequestCounter.increment();
@@ -80,9 +80,9 @@ public class RagMetricsService {
     }
 
     /**
-     * 记录失败的 RAG 请求
+     * Records a failed RAG request.
      *
-     * @param durationMs 响应时间（毫秒）
+     * @param durationMs response time in milliseconds
      */
     public void recordFailure(long durationMs) {
         totalRequestCounter.increment();
@@ -92,37 +92,37 @@ public class RagMetricsService {
     }
 
     /**
-     * 记录 LLM token 消耗
+     * Records LLM token consumption.
      *
-     * @param tokens token 数量
+     * @param tokens token count
      */
     public void recordLlmTokens(long tokens) {
         totalLlmTokens.addAndGet(tokens);
     }
 
     /**
-     * 获取总请求数（从 Micrometer 计数器读取）
+     * Returns the total request count (read from Micrometer counter).
      */
     public long getTotalRequests() {
         return (long) totalRequestCounter.count();
     }
 
     /**
-     * 获取成功请求数
+     * Returns the successful request count.
      */
     public long getSuccessfulRequests() {
         return (long) successRequestCounter.count();
     }
 
     /**
-     * 获取失败请求数
+     * Returns the failed request count.
      */
     public long getFailedRequests() {
         return (long) failedRequestCounter.count();
     }
 
     /**
-     * 获取成功率（百分比）
+     * Returns the success rate as a percentage.
      */
     public double getSuccessRate() {
         long total = getTotalRequests();
@@ -130,14 +130,14 @@ public class RagMetricsService {
     }
 
     /**
-     * 获取检索结果总数（从 Micrometer gauge 读取）
+     * Returns the total retrieval results count (read from Micrometer gauge).
      */
     public long getTotalRetrievalResults() {
         return totalRetrievalResults.get();
     }
 
     /**
-     * 获取 LLM Token 消耗总数（从 Micrometer gauge 读取）
+     * Returns the total LLM token consumption (read from Micrometer gauge).
      */
     public long getTotalLlmTokens() {
         return totalLlmTokens.get();
