@@ -1530,3 +1530,7 @@
 ## Cron 进度（2026-04-08 03:26 — WebUI 常规发布）
 
 - 2026-04-08 03:26 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，113 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-08 03:43 — 国际化查漏第五轮）
+
+- 2026-04-08 03:43 — ✅ 国际化查漏第五轮：翻译 ChatHistoryCleanupService/RagMemoryProperties/RagChatHistoryJpaRepository/RagChatHistoryRepository/RagChatHistory 全部中文 Javadoc 为英文（5 files，37 行变更）；1462 tests 全通过，零失败零错误；commit bfafac9 已推送
