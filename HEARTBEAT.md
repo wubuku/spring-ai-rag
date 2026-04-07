@@ -1561,3 +1561,14 @@
 ## Cron 进度（2026-04-08 06:31 — 后端国际化查漏第八轮：RagMetricsService）
 
 - 2026-04-08 06:31 — ✅ 后端国际化查漏第八轮（RagMetricsService）：RagMetricsService.java 类级 Javadoc + Micrometer descriptions（rag.requests.total/success/failed/response.time）+ 全部方法 Javadoc（recordSuccess/recordFailure/recordLlmTokens/getTotalRequests/getSuccessfulRequests/getFailedRequests/getSuccessRate/getTotalRetrievalResults/getTotalLlmTokens）英文化；1 file，28 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit f944520 已推送
+
+## Cron 进度（2026-04-08 06:50 — WebUI 常规发布 + VersionHistoryModal 修复）
+
+- 2026-04-08 06:50 — ✅ WebUI 常规发布 + VersionHistoryModal bug 修复：
+  - npm test: 发现 1 unhandled error（Vitest）在 `switches to diff tab after comparing versions`
+  - 根因：`getVersions` 返回 IDs 1(v3)/2(v2)，但 `getVersion` mock 对应 versionNumber 1/2（不匹配）；当点击版本时 handleSelectForCompare 触发 `getVersion(versionNumber)` 请求 3/2 但无 mock → vA.data undefined → TypeError
+  - 修复：handleCompare 添加 `vA?.data` / `vBd?.data` 可选链 + `if (!vAd || !vBd) return` 防御性检查；测试 mock 数据对齐（getVersion mock 返回 versionNumber 3 和 2）
+  - npm test 130 ✅（22 test files，零 errors）
+  - npm run build ✅（97KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/；commit 6f9f4cb 已推送
