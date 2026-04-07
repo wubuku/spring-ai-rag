@@ -233,7 +233,7 @@ export function Documents() {
               disabled={page === 0}
               className={styles.pageBtn}
             >
-              {t('common.previous') || 'Previous'}
+              {t('common.previous')}
             </button>
             <span className={styles.pageInfo}>
               Page {page + 1} — {t('documents.totalDocuments')}: {data?.data?.total ?? 0}
@@ -245,7 +245,7 @@ export function Documents() {
               }
               className={styles.pageBtn}
             >
-              {t('common.next') || 'Next'}
+              {t('common.next')}
             </button>
           </div>
         </>

@@ -56,6 +56,8 @@
     "uploaded": "Document uploaded successfully",
     "deleted": "Document deleted",
     "deleteError": "Failed to delete document",
+    "noDocuments": "No documents found",
+    "totalDocuments": "Total",
     "deleteConfirm": "Delete this document?",
     "totalDocuments": "Total Documents",
     "pending": "Pending",
