@@ -8,12 +8,12 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import java.util.Map;
 
 /**
- * RAG Readiness 健康探针（Kubernetes ReadinessProbe 用）
+ * RAG Readiness health probe (for Kubernetes ReadinessProbe).
  *
- * <p>检查完整组件健康状态：数据库 + pgvector + 表结构 + 缓存。
- * 用于控制是否将流量路由到本 Pod（Ready = true 时才接收请求）。
+ * <p>Checks full component health: database + pgvector + table structure + cache.
+ * Controls whether traffic is routed to this Pod (accepts requests only when Ready = true).
  *
- * <p>访问路径：GET /actuator/health/readiness
+ * <p>Access path: GET /actuator/health/readiness
  */
 public class RagReadinessIndicator implements HealthIndicator {
 

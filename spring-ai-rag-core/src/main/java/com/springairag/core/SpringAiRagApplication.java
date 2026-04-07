@@ -5,7 +5,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 /**
- * Spring AI RAG 应用入口
+ * Spring AI RAG application entry point.
  */
 @SpringBootApplication(scanBasePackages = "com.springairag")
 @ConfigurationPropertiesScan("com.springairag.core.config")

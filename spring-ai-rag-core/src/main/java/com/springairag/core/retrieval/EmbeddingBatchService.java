@@ -15,16 +15,16 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 批量嵌入生成服务
+ * Batch embedding generation service.
  *
- * <p>提供高效的批量向量化处理能力：
+ * <p>Provides efficient batch vectorization:
  * <ul>
- *   <li>按 batchSize 分批调用 {@link EmbeddingModel#call(EmbeddingRequest)} 批量 API</li>
- *   <li>减少 API 调用次数，避免逐条请求的网络开销</li>
- *   <li>单条失败不阻塞整批，自动降级为逐条重试</li>
+ *   <li>Calls {@link EmbeddingModel#call(EmbeddingRequest)} in batches of batchSize</li>
+ *   <li>Reduces API call count, avoiding per-item network overhead</li>
+ *   <li>Individual failures do not block the batch; automatic degradation to sequential retry</li>
  * </ul>
  *
- * <p>适配 Spring AI 1.1.x EmbeddingModel 接口。
+ * <p>Compatible with Spring AI 1.1.x EmbeddingModel interface.
  */
 @Service
 public class EmbeddingBatchService {
@@ -47,21 +47,21 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * 批量生成嵌入向量
+     * Generate embeddings for a list of texts.
      *
-     * @param texts 文本列表
-     * @return 嵌入结果列表（顺序与输入一致）
+     * @param texts the text list
+     * @return embedding results (order matches input)
      */
     public List<EmbeddingResult> createEmbeddingsBatch(List<String> texts) {
         return createEmbeddingsBatch(texts, null);
     }
 
     /**
-     * 批量生成嵌入向量（带进度回调）
+     * Generate embeddings with a progress callback.
      *
-     * @param texts            文本列表
-     * @param progressCallback 进度回调（可为 null）
-     * @return 嵌入结果列表（顺序与输入一致）
+     * @param texts            the text list
+     * @param progressCallback progress callback (may be null)
+     * @return embedding results (order matches input)
      */
     public List<EmbeddingResult> createEmbeddingsBatch(List<String> texts,
                                                         ProgressCallback progressCallback) {
@@ -92,7 +92,7 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * 处理一个批次：先尝试批量 API，失败则逐条降级
+     * Process one batch: try batch API first, degrade to sequential on failure.
      */
     private void processBatch(List<String> batch, List<EmbeddingResult> results) {
         try {
@@ -113,7 +113,6 @@ public class EmbeddingBatchService {
             }
         } catch (Exception batchError) { // Resilience: batch → sequential fallback
             log.warn("Batch embedding failed, falling back to sequential: {}", batchError.getMessage());
-            // 批量失败，逐条降级
             for (String text : batch) {
                 try {
                     float[] embedding = embeddingModel.embed(text);
@@ -127,7 +126,7 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * 嵌入结果
+     * Embedding result.
      */
     public static class EmbeddingResult {
         private final String text;
@@ -150,7 +149,7 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * 进度回调接口
+     * Progress callback interface.
      */
     @FunctionalInterface
     public interface ProgressCallback {

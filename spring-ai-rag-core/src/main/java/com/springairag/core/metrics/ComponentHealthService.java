@@ -12,20 +12,20 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 组件级健康检查服务
+ * Component-level health check service.
  *
- * <p>独立于 Spring Boot Actuator，可被 REST 控制器和 Actuator 指标共用。
- * 每个检查方法返回标准化的 {@link ComponentStatus}，包含状态、延迟和可选错误信息。
+ * <p>Independent of Spring Boot Actuator, can be used by REST controllers and Actuator metrics.
+ * Each check method returns a standardized {@link ComponentStatus} containing status, latency, and optional error info.
  *
- * <h3>检查项</h3>
+ * <h3>Check items</h3>
  * <ul>
- *   <li>database — PostgreSQL 连接 + 查询延迟</li>
- *   <li>pgvector — vector 扩展可用性</li>
- *   <li>tables — 核心表存在性</li>
- *   <li>cache — 缓存统计摘要</li>
+ *   <li>database — PostgreSQL connection + query latency</li>
+ *   <li>pgvector — vector extension availability</li>
+ *   <li>tables — core table existence</li>
+ *   <li>cache — cache statistics summary</li>
  * </ul>
  *
- * <p>嵌入模型和 LLM 检查是可选的（外部 API 调用），仅在显式启用时执行。
+ * <p>Embedding model and LLM checks are optional (external API calls), executed only when explicitly enabled.
  */
 @Service // Spring bean (also created by GeneralRagAutoConfiguration.componentHealthService)
 public class ComponentHealthService {
@@ -45,7 +45,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 检查所有组件，返回有序结果
+     * Check all components and return ordered results.
      */
     public Map<String, ComponentStatus> checkAll() {
         Map<String, ComponentStatus> results = new LinkedHashMap<>();
@@ -57,7 +57,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 检查数据库连接和延迟
+     * Check database connection and latency.
      */
     public ComponentStatus checkDatabase() {
         try {
@@ -81,7 +81,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 检查 pgvector 扩展是否可用
+     * Check if pgvector extension is available.
      */
     public ComponentStatus checkPgVector() {
         try {
@@ -99,7 +99,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 检查核心表是否存在
+     * Check if core tables exist.
      */
     public ComponentStatus checkTables() {
         String[] coreTables = {"rag_documents", "rag_embeddings", "rag_collections"};
@@ -121,7 +121,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 检查缓存状态
+     * Check cache status.
      */
     public ComponentStatus checkCache() {
         try {
@@ -141,7 +141,7 @@ public class ComponentHealthService {
     }
 
     /**
-     * 综合状态：任一核心组件 DOWN 则整体 DOWN
+     * Overall status: DOWN if any core component is DOWN.
      */
     public String overallStatus(Map<String, ComponentStatus> components) {
         ComponentStatus db = components.get("database");
@@ -159,14 +159,14 @@ public class ComponentHealthService {
         return hasSlow ? "DEGRADED" : "UP";
     }
 
-    // ==================== 内部类 ====================
+    // ==================== Inner class ====================
 
     /**
-     * 组件状态
+     * Component status.
      *
-     * @param status  状态：UP / DOWN / DEGRADED / SLOW
-     * @param details 详细信息
-     * @param error   错误消息（null 表示无错误）
+     * @param status  status: UP / DOWN / DEGRADED / SLOW
+     * @param details details
+     * @param error   error message (null means no error)
      */
     public record ComponentStatus(String status, Map<String, Object> details, String error) {
 

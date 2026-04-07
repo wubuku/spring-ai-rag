@@ -8,12 +8,12 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import java.util.Map;
 
 /**
- * RAG 服务健康检查指示器（增强版 — 多组件探针）
+ * RAG service health indicator (enhanced — multi-component probe).
  *
- * <p>集成 Spring Boot Actuator，通过 `/actuator/health` 端点暴露 RAG 服务健康状态。
- * 基于 {@link ComponentHealthService} 检查每个组件的独立状态。
+ * <p>Integrates with Spring Boot Actuator, exposing RAG service health via `/actuator/health`.
+ * Checks each component's independent status based on {@link ComponentHealthService}.
  *
- * <p>健康检查结果示例：
+ * <p>Health check response example:
  * <pre>
  * {
  *   "status": "UP",
@@ -52,12 +52,12 @@ public class RagHealthIndicator implements HealthIndicator {
         String overallStatus = componentHealth.overallStatus(components);
         Health.Builder builder = "UP".equals(overallStatus) ? Health.up() : Health.down();
 
-        // 每个组件的详细状态
+        // Detailed status for each component
         for (Map.Entry<String, ComponentHealthService.ComponentStatus> entry : components.entrySet()) {
             builder.withDetail(entry.getKey(), entry.getValue().toMap());
         }
 
-        // 业务指标
+        // Business metrics
         builder.withDetail("totalRequests", metricsService.getTotalRequests());
         builder.withDetail("successRate", String.format("%.1f%%", metricsService.getSuccessRate()));
 

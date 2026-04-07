@@ -12,16 +12,16 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * LLM 熔断器健康检查指示器
+ * LLM circuit breaker health check indicator.
  *
- * <p>通过 `/actuator/health/llmCircuitBreaker` 端点暴露熔断器状态：
+ * <p>Exposes circuit breaker state via `/actuator/health/llmCircuitBreaker`:
  * <ul>
- *   <li>CLOSED — 正常，LLM 调用畅通</li>
- *   <li>OPEN — 熔断中，LLM 调用被拒绝（快速失败）</li>
- *   <li>HALF_OPEN — 探测状态，允许一个测试调用</li>
+ *   <li>CLOSED — normal, LLM calls pass through</li>
+ *   <li>OPEN — circuit open, LLM calls rejected (fast failure)</li>
+ *   <li>HALF_OPEN — probe state, allows one test call</li>
  * </ul>
  *
- * <p>健康检查结果示例：
+ * <p>Health check response example:
  * <pre>{@code
  * {
  *   "status": "UP",
@@ -39,7 +39,7 @@ import java.util.Map;
  * }
  * }</pre>
  *
- * <p>当熔断器未启用（circuit-breaker.enabled=false）时返回：
+ * <p>When circuit breaker is disabled (circuit-breaker.enabled=false) returns:
  * <pre>{@code
  * {
  *   "status": "UNKNOWN",
@@ -89,7 +89,7 @@ public class CircuitBreakerHealthIndicator implements HealthIndicator {
 
         Health.Builder builder = switch (state) {
             case CLOSED -> Health.up();
-            case HALF_OPEN -> Health.unknown();  // 探测状态，既不是 up 也不是 down
+            case HALF_OPEN -> Health.unknown();  // probe state: neither up nor down
             case OPEN -> Health.down();
         };
 

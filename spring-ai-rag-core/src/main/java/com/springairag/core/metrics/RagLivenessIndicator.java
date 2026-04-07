@@ -7,18 +7,18 @@ import org.springframework.boot.actuate.health.HealthIndicator;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * RAG Liveness 健康探针（Kubernetes LivenessProbe 用）
+ * RAG Liveness health probe (for Kubernetes LivenessProbe).
  *
- * <p>仅检查核心基础设施（数据库连接），不检查外部依赖。
- * 如果数据库无响应，K8s 应重启容器。
+ * <p>Checks only core infrastructure (database connection), not external dependencies.
+ * If the database is unresponsive, K8s should restart the container.
  *
- * <p>对比：
+ * <p>Comparison:
  * <ul>
- *   <li>LivenessProbe — 数据库是否可达（快速失败）</li>
- *   <li>ReadinessProbe — 完整组件健康（流量调度）</li>
+ *   <li>LivenessProbe — is database reachable (fast failure)</li>
+ *   <li>ReadinessProbe — full component health (traffic routing)</li>
  * </ul>
  *
- * <p>访问路径：GET /actuator/health/liveness
+ * <p>Access path: GET /actuator/health/liveness
  */
 public class RagLivenessIndicator implements HealthIndicator {
 

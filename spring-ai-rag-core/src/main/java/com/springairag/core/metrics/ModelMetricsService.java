@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Model-level metrics service
+ * Model-level metrics service.
  *
  * <p>Tracks per-provider call volume, latency, and error rates.
  */
@@ -27,7 +27,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * 记录模型调用成功
+     * Record a successful model call.
      */
     public void recordSuccess(String provider, long durationMs) {
         getOrCreateCallCounter(provider).increment();
@@ -35,7 +35,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * 记录模型调用失败
+     * Record a failed model call.
      */
     public void recordError(String provider, long durationMs) {
         getOrCreateCallCounter(provider).increment();
@@ -44,7 +44,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * Gets the call count for the specified provider
+     * Gets the call count for the specified provider.
      */
     public long getCallCount(String provider) {
         Counter c = callCounters.get(provider);
@@ -52,7 +52,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * Gets the error count for the specified provider
+     * Gets the error count for the specified provider.
      */
     public long getErrorCount(String provider) {
         Counter c = errorCounters.get(provider);
@@ -60,7 +60,7 @@ public class ModelMetricsService {
     }
 
     /**
-     * Gets the error rate for the specified provider
+     * Gets the error rate for the specified provider.
      */
     public double getErrorRate(String provider) {
         long total = getCallCount(provider);

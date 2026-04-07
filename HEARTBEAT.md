@@ -1492,3 +1492,7 @@
 ## Cron 进度（2026-04-08 00:03 — 后端国际化查漏第二轮）
 
 - 2026-04-08 00:03 — ✅ 代码国际化收尾（第二轮）：扫描发现 5 个文件残留中文 log/Javadoc/Micrometer description——QueryRewritingService（class Javadoc + 3 log messages）、CacheMetricsService（class Javadoc + method Javadoc + Micrometer .description()）、PerformanceConfig（CachingEmbeddingModel Micrometer description）、CacheMetricsController（@Operation summary/description Javadoc）；全部翻译为英文；1462 tests 全通过，零失败零错误；commits 31a7096 + 9e53a20 已推送
+
+## Cron 进度（2026-04-08 00:06 — WebUI 常规发布）
+
+- 2026-04-08 00:06 — ✅ WebUI 常规发布：npm test 113 ✅（20 test files，20 passed）/ npm run build ✅（96KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
