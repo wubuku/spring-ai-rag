@@ -1534,3 +1534,8 @@
 ## Cron 进度（2026-04-08 03:43 — 国际化查漏第五轮）
 
 - 2026-04-08 03:43 — ✅ 国际化查漏第五轮：翻译 ChatHistoryCleanupService/RagMemoryProperties/RagChatHistoryJpaRepository/RagChatHistoryRepository/RagChatHistory 全部中文 Javadoc 为英文（5 files，37 行变更）；1462 tests 全通过，零失败零错误；commit bfafac9 已推送
+
+## Cron 进度（2026-04-08 04:21 — 国际化查漏第六轮：AlertService + API DTOs）
+
+- 2026-04-08 04:21 — ✅ 国际化查漏第六轮（后端）：AlertService.java 全文 Javadoc/方法注释/内部类注释英文化（14 个方法注释 + 3 个数据类注释）；AlertServiceImpl.java 类注释/SLO 注释/行内注释英文化（8 处）；RetrievalLoggingService.java 和 AuditLogService.java 中文日志消息英文化（4 处）；14 个 API DTO @Schema description 英文化（ChatRequest/ChatResponse/SearchRequest/SearchResponse/ErrorResponse/DocumentRequest/BatchCreateResponse/CollectionCreatedResponse/CollectionListResponse/RetrievalConfig/RetrievalResult/FeedbackRequest/HealthResponse/CacheStatsResponse/ComponentHealthResponse）；19 files，132 行变更（132 insertions, 132 deletions）；1462 tests 全通过，零失败零错误；commit 4eff9e0 已推送；**剩余 23 个 API DTO 仍有中文 @Schema descriptions，继续推进**
+
