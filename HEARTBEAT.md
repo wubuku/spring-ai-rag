@@ -1553,3 +1553,7 @@
 ## Cron 进度（2026-04-08 05:28 — W12 Document 版本对比 UI）
 
 - 2026-04-08 05:28 — ✅ W12 Document 版本对比 UI（WebUI）：实现 VersionHistoryModal 组件（版本列表+Diff对比标签页）；LCS行级差异算法（零外部依赖，computeLineDiff/truncateForPreview）；GET /documents/{id}/versions API集成；两版本选择+行级diff展示（+/‑ 着色）；Documents表格行内Versions按钮；i18n中英键（versions.*）；diffUtils.test.ts 9 tests + VersionHistoryModal.test.tsx 8 tests；setup.ts: initReactI18next mock补全；.gitignore: static/webui/assets/ 忽略构建产物；130 vitest全通过（22 files）/ E2E 12/12 ✅；dist已同步到 static/webui/；commit adf11f6 已推送；W12 → ✅
+
+## Cron 进度（2026-04-08 05:57 — 实体测试补强）
+
+- 2026-04-08 05:57 — ✅ 实体测试补强：扫描发现 12 个 JPA 实体（RagDocument/RagCollection/RagAlert/RagAbExperiment 等）缺少专属单元测试。本轮新增 RagDocumentTest（5 tests: defaults/all-fields/processingStatus/enabled/metadata JSON）和 RagCollectionTest（6 tests: defaults/all-fields/dimensions/enabled/deleted/metadata JSON）；11 tests 全通过；commit c49d3a8 已推送
