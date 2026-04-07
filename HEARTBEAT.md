@@ -1460,3 +1460,14 @@
 
 - 2026-04-07 19:42 — ✅ 代码国际化收尾：扫描发现 11 个 Java 文件残留中文 Javadoc（ErrorResponse/AbTestService/AbstractRagAdvisor/HybridSearchAdvisor/QueryRewriteAdvisor/RerankAdvisor/RagPipelineMetrics/RagChatService/RagRetrievalProperties/ModelMetricsService/RagUserFeedbackRepository），全部翻译为英文；同步翻译 Advisor 类内的 debug/info 日志消息（"查询为空"→"query is empty" 等）；11 files，124 行变更；1313 tests 全通过，零失败零错误；commit 8464720 已推送
 
+
+## Cron 进度（2026-04-07 20:10 — API 文档补全）
+
+- 2026-04-07 20:10 — ✅ rest-api.md 文档补全（5 个未归档端点）：
+  - `DELETE /api/v1/rag/cache/invalidate`：Admin 端点清除 Caffeine 嵌入缓存
+  - `GET  /api/v1/rag/metrics/slow-queries`：HikariCP 慢查询统计（含 recentSlowQueries 历史记录）
+  - `GET  /api/v1/rag/metrics/slo`：API SLO 合规率（per-endpoint p50/p95/p99 + 合规百分比）
+  - `POST /api/v1/rag/client-errors`：WebUI ErrorBoundary 错误上报（含完整请求体说明）
+  - `GET  /api/v1/rag/client-errors/count`：客户端错误总数
+  - 5 个端点均已实现但未入文档，本次全部归档；1313 tests 全通过，零失败零错误
+  - commit 6796125 已推送
