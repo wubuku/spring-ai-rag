@@ -1782,3 +1782,14 @@
   - `sendEmail()` 添加 null guard，mailSender 不可用时抛出 `MessagingException`（被 `sendAlert()` catch 并返回 false）
   - 1388 tests 全通过，零失败零错误（BUILD SUCCESS）
   - commit 33e883d 已推送
+
+## Cron 进度（WebUI — 2026-04-08 22:53 — 常规发布）
+
+- 2026-04-08 22:53 — ✅ WebUI 常规发布：
+  - npm test: 142 vitest tests ✅（22 test files，142 passed，全通过）
+  - npm run build ✅（97KB index gzipped，306KB initial bundle，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - git 工作区干净（无变更，static/webui 在 .gitignore 中）
+  - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
