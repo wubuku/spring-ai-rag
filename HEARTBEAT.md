@@ -1658,3 +1658,16 @@
   - 全量测试：1407 tests 全通过，零失败零错误
   - git 已推送（commit 6fbf547）
 
+## Cron 进度（2026-04-08 11:48 — ApiSloProperties 单元测试补全）
+
+- 2026-04-08 11:48 — ✅ ApiSloProperties 单元测试补全：
+  - ApiSloPropertiesTest.java：7 个单元测试覆盖
+    - 默认构造函数初始化 5 个阈值（search 500ms / chat.ask 1000ms / chat.stream 1500ms / embed 2000ms）
+    - getThreshold() 返回已配置值
+    - getThreshold() 对未知端点返回默认 500L
+    - setEnabled / setWindowSeconds / setThresholds 变更生效
+    - 空阈值 map 对所有端点返回默认 500L
+  - ApiSloProperties 为 @ConfigurationProperties 类，无独立测试文件
+  - 全量测试通过，零失败零错误
+  - git 已推送（commit f902dc2）
+
