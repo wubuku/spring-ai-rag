@@ -1586,6 +1586,18 @@
   - mvn test ✅（全通过，零失败零错误）
   - commit 689f931 已推送
 
+## Cron 进度（2026-04-08 08:28 — 后端国际化：Advisor + DocumentEmbedService）
+
+- 2026-04-08 08:28 — ✅ 后端 Advisor + DocumentEmbedService 国际化：
+  - AbstractRagAdvisor.java：class Javadoc + default after() Javadoc 英文化
+  - AdvisorUtils.java：class Javadoc + extractUserMessage Javadoc 英文化
+  - RerankAdvisor.java：field Javadoc × 2 + execution order Javadoc + `基于以上资料回答以下问题` → `Answer the question based on the above references:` + format method Javadoc 英文化
+  - RagPipelineMetrics.java：全文 Javadoc 英文化
+  - DocumentEmbedService.java：全部中文 method Javadoc/field comments/inline comments 英文化（18 处）
+  - 5 files，75 行变更（等量替换）
+  - 1393 tests 全通过，零失败零错误
+  - commit 1c964ec 已推送
+
 ## Cron 进度（2026-04-08 07:40 — WebUI 常规发布）
 
 - 2026-04-08 07:40 — ✅ WebUI 常规发布：
