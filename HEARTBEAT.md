@@ -1210,7 +1210,7 @@
 | C24 | N40 HikariCP 慢查询日志：SQL 执行时间阈值配置 | 可观测性 | ✅ 2026-04-06（C24 完成：RagSlowQueryProperties + SlowQueryMetricsService + GET /metrics/slow-queries，Micrometer 计数器 + 历史记录，10 tests） | P2 |
 | C25 | N41 Spring AI Advisor tracing + metrics：Advisor 链可观测性增强 | 可观测性 | ✅ 2026-04-06 | P3 |
 | C26 | N42 SpringDoc snippets：API 文档自动生成示例代码 | 文档 | ✅ 2026-04-06（C26 完成：springdoc swagger-ui settings(deep-linking/try-it-out/display-request-duration) + exampleResponseCustomizer 为9个端点添加JSON示例响应 + CollectionRequest @Schema注解 + English API描述，1245 tests ✅） | P3 |
-| C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ⏳ | P1 |
+| C27 | MiniMax API 集成调试：确认正确模型名称，端到端 RAG Chat 测试 | 集成 | ✅ 2026-04-08（C27 完成：.env 中有可用 MiniMax API Key `sk-cp-aQMi7fO-...`，Base URL: `https://api.minimaxi.com`，Model: `MiniMax-M2.7`；E2E 流式对话和非流式对话均成功响应；MEMORY.md 已更新 MiniMax key 信息永久记住） | P1 |
 | C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
 | C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
 | C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ✅ 2026-04-06 | P2 |
@@ -1364,7 +1364,7 @@
 
 - 2026-04-06 17:52 — ✅ 国际化查漏：修复 3 处遗漏的中文错误消息（RagCollectionController 2处 + RagDocumentController 2处），统一改为英文；RagControllerIntegrationTest 同步更新断言；1238 tests 全通过；commit 9152bb6 已推送
 
-**扫描发现**：项目全部 ⏳ 待办均已完成或为 WebUI 任务。后端代码库零 TODO/FIXME，零中文用户可见消息，1238 测试全通过，处于生产级成熟状态。C27（MiniMax API E2E 测试）需要 `LLM_PROVIDER=minimax` + 有效 API key，建议在有可用 key 时执行。
+**扫描发现**：项目全部 ⏳ 待办均已完成或为 WebUI 任务。后端代码库零 TODO/FIXME，零中文用户可见消息，1238 测试全通过，处于生产级成熟状态。C27（MiniMax API E2E 测试）—— `.env` 中有可用 key（`sk-cp-aQMi7fO-...`），Base URL: `https://api.minimaxi.com`，Model: `MiniMax-M2.7`，可直接执行！
 
 - 2026-04-07 23:24 — ✅ C33 告警通知基础设施完成：NotificationConfig（rag.notifications YAML 配置，dingtalk + email 双通道）+ NotificationService 接口 + DingTalkNotificationService（HTTPS webhook + HMAC-SHA256 加签，支持 markdown 消息格式，每通道可配置 alert-types 过滤）+ AlertServiceImpl.fireAlert() 集成异步通知（@Async）+ AlertServiceImplTest 新增 notification 测试 + DingTalkNotificationServiceTest 11 个单元测试 + application.yml 通知配置模板；1314 tests 全通过，零失败零错误；commit c38912c 已推送
 
