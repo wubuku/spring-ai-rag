@@ -3,52 +3,53 @@ package com.springairag.core.adapter;
 import java.util.List;
 
 /**
- * API 兼容性适配接口
+ * API Compatibility Adapter Interface
  *
- * <p>不同 LLM API 对 OpenAI 兼容程度不同。此接口定义了需要适配的行为，
- * 各 API 提供者可实现不同的适配策略。
+ * <p>Different LLM APIs have varying levels of OpenAI compatibility. This interface
+ * defines behaviors that need adaptation, allowing each API provider to implement
+ * its own adaptation strategy.
  */
 public interface ApiCompatibilityAdapter {
 
     /**
-     * 检查是否支持 system 消息角色
+     * Checks whether the API supports the system message role
      *
-     * <p>MiniMax、部分国产模型不支持 role: system，直接拒绝。
-     * OpenAI、DeepSeek 等支持。
+     * <p>MiniMax and some domestic models do not support role: system and will reject
+     * it directly. OpenAI and DeepSeek support it.
      *
-     * @return true=支持 system 角色，false=不支持（会自动转换为 user 角色）
+     * @return true = supports system role, false = not supported (will be converted to user role)
      */
     default boolean supportsSystemMessage() {
         return true;
     }
 
     /**
-     * 检查是否支持多个 system 消息
+     * Checks whether the API supports multiple system messages
      *
-     * <p>MiniMax、部分国产模型只支持单个 system 消息（且必须在最前面）。
-     * OpenAI、Anthropic 支持多个 system 消息。
+     * <p>MiniMax and some domestic models only support a single system message
+     * (and it must be first). OpenAI and Anthropic support multiple system messages.
      */
     boolean supportsMultipleSystemMessages();
 
     /**
-     * 检查 system 消息是否必须在最前面
+     * Checks whether system messages must appear first in the list
      */
     boolean requiresSystemMessageFirst();
 
     /**
-     * 规范化消息列表——确保符合目标 API 的要求
+     * Normalizes the message list to comply with the target API's requirements
      *
-     * <p>处理策略：
+     * <p>Processing strategy:
      * <ol>
-     *   <li>如果不支持 system 角色，将所有 system 消息转为 user 消息（加 [System] 前缀）</li>
-     *   <li>如果不支持多个 system 消息，合并多个为单个</li>
-     *   <li>如果要求 system 在最前面但当前不在前面，调整顺序</li>
+     *   <li>If system role is not supported, convert all system messages to user messages (with [System] prefix)</li>
+     *   <li>If multiple system messages are not supported, merge them into a single one</li>
+     *   <li>If system must be first but isn't, reorder the messages</li>
      * </ol>
      */
     default List<ChatMessage> normalizeMessages(List<ChatMessage> messages) {
         List<ChatMessage> normalized = messages;
 
-        // Step 1: 如果不支持 system 角色，转换为 user 消息
+        // Step 1: Convert system messages to user if not supported
         if (!supportsSystemMessage()) {
             normalized = normalized.stream()
                     .map(msg -> "system".equals(msg.role())
@@ -57,12 +58,12 @@ public interface ApiCompatibilityAdapter {
                     .toList();
         }
 
-        // Step 2: 如果不支持多个 system，合并为单个
+        // Step 2: Merge multiple system messages into one if not supported
         if (!supportsMultipleSystemMessages()) {
             normalized = mergeSystemMessages(normalized);
         }
 
-        // Step 3: 如果要求 system 在最前面但当前不在前面，调整顺序
+        // Step 3: Reorder to put system message first if required
         if (requiresSystemMessageFirst() && !normalized.isEmpty()) {
             normalized = reorderSystemMessageFirst(normalized);
         }
@@ -70,7 +71,7 @@ public interface ApiCompatibilityAdapter {
         return normalized;
     }
 
-    /** 合并多个 system 消息为一个 */
+    /** Merges multiple system messages into a single system message */
     private List<ChatMessage> mergeSystemMessages(List<ChatMessage> messages) {
         StringBuilder combinedSystem = new StringBuilder();
         List<ChatMessage> nonSystemMessages = new java.util.ArrayList<>();
@@ -94,7 +95,7 @@ public interface ApiCompatibilityAdapter {
         return result;
     }
 
-    /** 将 system 消息移到列表最前面 */
+    /** Moves system messages to the front of the list */
     private List<ChatMessage> reorderSystemMessageFirst(List<ChatMessage> messages) {
         List<ChatMessage> systemMsgs = new java.util.ArrayList<>();
         List<ChatMessage> otherMsgs = new java.util.ArrayList<>();
@@ -111,7 +112,7 @@ public interface ApiCompatibilityAdapter {
     }
 
     /**
-     * 消息记录
+     * Chat message record
      */
     record ChatMessage(String role, String content) {}
 }

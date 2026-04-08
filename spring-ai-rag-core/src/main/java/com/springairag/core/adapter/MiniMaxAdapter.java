@@ -1,21 +1,22 @@
 package com.springairag.core.adapter;
 
 /**
- * MiniMax API 适配器
+ * MiniMax API Adapter
  *
- * <p>MiniMax API 不支持 role: system 消息，会返回错误。
- * 所有 system 消息会自动转换为 user 消息（加 [System] 前缀）。
- * 即使转换后只有一个 system 消息也转为 user（因为不支持 system 角色）。
+ * <p>MiniMax API does not support role: system messages and will return an error.
+ * All system messages are automatically converted to user messages (with [System] prefix).
+ * Even when there is only one system message after conversion, it is still converted
+ * to user because the system role is not supported.
  *
- * <p>已验证：
- * - ❌ role: system → 400 错误 "invalid message role: system"
- * - ✅ 所有 system 消息 → 转为 user 消息
+ * <p>Verified:
+ * - ❌ role: system → 400 error "invalid message role: system"
+ * - ✅ All system messages → converted to user messages
  */
 public class MiniMaxAdapter implements ApiCompatibilityAdapter {
 
     @Override
     public boolean supportsSystemMessage() {
-        return false; // MiniMax 不支持 system 角色
+        return false; // MiniMax does not support system role
     }
 
     @Override

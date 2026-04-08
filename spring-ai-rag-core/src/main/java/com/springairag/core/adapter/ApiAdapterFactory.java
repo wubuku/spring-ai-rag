@@ -5,10 +5,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
 /**
- * API 兼容性适配器工厂
+ * API Compatibility Adapter Factory
  *
- * <p>根据 base-url 自动选择合适的适配器。
- * 不同 API 提供者有不同的 OpenAI 兼容程度。
+ * <p>Automatically selects the appropriate adapter based on base-url.
+ * Different API providers have varying levels of OpenAI compatibility.
  */
 @Component
 public class ApiAdapterFactory {
@@ -16,7 +16,7 @@ public class ApiAdapterFactory {
     private static final Logger log = LoggerFactory.getLogger(ApiAdapterFactory.class);
 
     /**
-     * 根据 base-url 选择适配器
+     * Selects an adapter based on base-url
      */
     public ApiCompatibilityAdapter getAdapter(String baseUrl) {
         if (baseUrl == null) {
@@ -30,7 +30,7 @@ public class ApiAdapterFactory {
             return new MiniMaxAdapter();
         }
 
-        // 默认使用 OpenAI 兼容适配器
+        // Default to OpenAI-compatible adapter
         log.debug("Using OpenAI compatible adapter for base URL: {}", baseUrl);
         return new OpenAiCompatibleAdapter();
     }
