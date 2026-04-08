@@ -1517,7 +1517,7 @@
 |---|--------|------|------|
 | W12 | C31：Document 版本对比 UI（diff 视图展示两个版本差异） | UX | ✅ 2026-04-08（W12 完成：VersionHistoryModal 含版本列表+diff对比标签页；LCS行差异算法（零外部依赖）；GET /documents/{id}/versions API集成；两版本选择+行级diff展示（+/‑着色）；Documents表格行内Versions按钮；i18n中英；130 vitest全通过/E2E 12/12；commit adf11f6） |
 | W13 | C32：A/B 测试实时看板（WebUI 展示实验结果统计图表） | UX | ✅ 2026-04-08（W13 完成：ABTest.tsx 含实验列表/详情/统计图表/创建模态框；abtest.ts API client；ABTest.module.css；/abtest 路由+导航项；中英 i18n；ABTest chunk 18KB gzipped 5KB；113 vitest ✅ / E2E 12/12 ✅；commit 984fbca） |
-| W14 | C37：Dark Mode 自动跟随系统主题 + 手动切换增强 | UX | ⏳ |
+| W14 | C37：Dark Mode 自动跟随系统主题 + 手动切换增强 | UX | ✅ 2026-04-08 |
 
 ## Cron 进度（2026-04-08 02:50 — C34 向量相似度算法补全）
 
@@ -1670,4 +1670,19 @@
   - ApiSloProperties 为 @ConfigurationProperties 类，无独立测试文件
   - 全量测试通过，零失败零错误
   - git 已推送（commit f902dc2）
+
+## Cron 进度（2026-04-08 11:58 — W14 Dark Mode 自动跟随系统主题）
+
+- 2026-04-08 11:58 — ✅ W14 Dark Mode 自动跟随系统主题 + 手动切换增强：
+  - ThemeToggle 3 态模式：auto（🔄）/ locked-light（☀️）/ locked-dark（🌙）
+  - Auto 模式：通过 `matchMedia('(prefers-color-scheme: dark)')` 监听系统偏好变化，实时更新
+  - 手动锁定：点击 toggle 按钮锁定到当前系统主题，显示 'A' 按钮可随时回归 auto
+  - localStorage 持久化（manual lock = theme key 存在；auto = key 不存在）
+  - ThemeToggle.module.css：.wrapper flex 布局 + .autoBtn 小型按钮样式
+  - ThemeToggle.test.tsx：15 个测试覆盖所有状态和交互转换（15/15 ✅）
+  - npm run test：142 vitest tests（22 files）全通过
+  - npm run build ✅（98KB index gzipped）
+  - E2E 12/12 ✅
+  - git 已推送（commit d95ba17）
+  - W14 → ✅
 
