@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * A/B 实验 Repository
+ * A/B Experiment Repository
  */
 @Repository
 public interface RagAbExperimentRepository extends JpaRepository<RagAbExperiment, Long> {

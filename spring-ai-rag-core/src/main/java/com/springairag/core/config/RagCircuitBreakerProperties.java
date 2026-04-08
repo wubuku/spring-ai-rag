@@ -1,17 +1,17 @@
 package com.springairag.core.config;
 
 /**
- * LLM 熔断器配置
+ * LLM Circuit Breaker Configuration
  *
- * <p>配置示例：
+ * <p>Configuration example:
  * <pre>
  * rag:
  *   circuit-breaker:
  *     enabled: true
- *     failure-rate-threshold: 50       # 失败率阈值（%），超过则熔断
- *     minimum-number-of-calls: 10      # 滑动窗口内最小调用数
- *     wait-duration-in-open-state: 30  # OPEN 状态持续秒数
- *     sliding-window-size: 20          # 滑动窗口大小
+ *     failure-rate-threshold: 50       # Failure rate threshold (%), circuit opens when exceeded
+ *     minimum-number-of-calls: 10      # Minimum calls in the sliding window
+ *     wait-duration-in-open-state: 30  # Seconds to stay in OPEN state
+ *     sliding-window-size: 20          # Sliding window size
  * </pre>
  */
 public class RagCircuitBreakerProperties {

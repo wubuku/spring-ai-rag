@@ -12,44 +12,44 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 文档版本历史 Repository
+ * Document Version History Repository
  */
 @Repository
 public interface RagDocumentVersionRepository extends JpaRepository<RagDocumentVersion, Long> {
 
     /**
-     * 查询文档的所有版本（按版本号降序）
+     * Query all versions of a document (ordered by version number descending).
      */
     Page<RagDocumentVersion> findByDocumentIdOrderByVersionNumberDesc(Long documentId, Pageable pageable);
 
     /**
-     * 查询文档的所有版本（按版本号升序）
+     * Query all versions of a document (ordered by version number ascending).
      */
     List<RagDocumentVersion> findByDocumentIdOrderByVersionNumberAsc(Long documentId);
 
     /**
-     * 查询文档的指定版本
+     * Query a specific version of a document.
      */
     Optional<RagDocumentVersion> findByDocumentIdAndVersionNumber(Long documentId, int versionNumber);
 
     /**
-     * 查询文档的最新版本
+     * Query the latest version of a document.
      */
     @Query("SELECT v FROM RagDocumentVersion v WHERE v.documentId = :documentId ORDER BY v.versionNumber DESC LIMIT 1")
     Optional<RagDocumentVersion> findLatestByDocumentId(@Param("documentId") Long documentId);
 
     /**
-     * 统计文档版本数
+     * Count document versions.
      */
     long countByDocumentId(Long documentId);
 
     /**
-     * 删除文档的所有版本
+     * Delete all versions of a document.
      */
     void deleteByDocumentId(Long documentId);
 
     /**
-     * 按 contentHash 查询（用于去重判断）
+     * Query by content hash (for deduplication check).
      */
     List<RagDocumentVersion> findByDocumentIdAndContentHash(Long documentId, String contentHash);
 }

@@ -3,42 +3,43 @@ package com.springairag.api.service;
 import com.springairag.api.dto.RetrievalConfig;
 
 /**
- * 领域 RAG 扩展点
- * 特定领域（如皮肤检测）可实现此接口提供领域特定的 Prompt 模板和配置
+ * Domain RAG Extension Point
+ * Domain-specific implementations (e.g., dermatology detection) can implement this interface
+ * to provide domain-specific Prompt templates and configuration.
  */
 public interface DomainRagExtension {
 
     /**
-     * 获取领域唯一标识
+     * Get unique domain identifier.
      */
     String getDomainId();
 
     /**
-     * 获取领域显示名称
+     * Get domain display name.
      */
     String getDomainName();
 
     /**
-     * 获取领域特定的系统提示词模板
+     * Get domain-specific system prompt template.
      */
     String getSystemPromptTemplate();
 
     /**
-     * 获取领域特定的检索配置
+     * Get domain-specific retrieval configuration.
      */
     default RetrievalConfig getRetrievalConfig() {
         return RetrievalConfig.builder().build();
     }
 
     /**
-     * 后处理生成的答案（可选）
+     * Post-process generated answer (optional).
      */
     default String postProcessAnswer(String answer) {
         return answer;
     }
 
     /**
-     * 校验查询是否属于本领域（默认全部接受）
+     * Check if the query belongs to this domain (accepts all by default).
      */
     default boolean isApplicable(String query) {
         return true;

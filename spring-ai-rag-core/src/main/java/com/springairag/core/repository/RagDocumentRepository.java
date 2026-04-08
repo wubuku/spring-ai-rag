@@ -11,44 +11,44 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * RAG 文档 JPA Repository
+ * RAG Document JPA Repository
  */
 @Repository
 public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> {
 
     /**
-     * 按标题模糊搜索（忽略大小写）
+     * Search by title (case-insensitive).
      */
     Page<RagDocument> findByTitleContainingIgnoreCase(String title, Pageable pageable);
 
     /**
-     * 按文档类型查询
+     * Query by document type.
      */
     Page<RagDocument> findByDocumentType(String documentType, Pageable pageable);
 
     /**
-     * 按处理状态查询
+     * Query by processing status.
      */
     Page<RagDocument> findByProcessingStatus(String processingStatus, Pageable pageable);
 
     /**
-     * 按是否启用查询
+     * Query by enabled status.
      */
     Page<RagDocument> findByEnabled(Boolean enabled, Pageable pageable);
 
     /**
-     * 按集合 ID 查询
+     * Query by collection ID.
      */
     Page<RagDocument> findByCollectionId(Long collectionId, Pageable pageable);
 
     /**
-     * 按集合 ID + 标题关键词搜索（忽略大小写）
+     * Search within collection: title keyword + optional type/status filter (case-insensitive).
      */
     Page<RagDocument> findByCollectionIdAndTitleContainingIgnoreCase(
             Long collectionId, String title, Pageable pageable);
 
     /**
-     * 在集合内综合搜索：标题关键词 + 可选类型/状态过滤
+     * Comprehensive search within collection: title keyword + optional type/status filter.
      */
     @Query("SELECT d FROM RagDocument d WHERE d.collectionId = :collectionId AND " +
            "(COALESCE(:keyword, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :keyword, '%'))) AND " +
@@ -61,7 +61,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                                                     Pageable pageable);
 
     /**
-     * 综合搜索：标题模糊 + 可选类型/状态过滤
+     * Comprehensive search: title fuzzy + optional type/status filter.
      */
     @Query("SELECT d FROM RagDocument d WHERE " +
            "(COALESCE(:title, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
@@ -77,35 +77,35 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                                        Pageable pageable);
 
     /**
-     * 统计各状态的文档数量
+     * Count documents by processing status.
      */
     @Query("SELECT d.processingStatus, COUNT(d) FROM RagDocument d GROUP BY d.processingStatus")
     List<Object[]> countByProcessingStatus();
 
     /**
-     * 按内容哈希查找（用于去重）
+     * Find by content hash (for deduplication).
      */
     List<RagDocument> findByContentHash(String contentHash);
 
     /**
-     * 统计集合中的文档数量
+     * Count documents in a collection.
      */
     long countByCollectionId(Long collectionId);
 
     /**
-     * 按集合 ID 查询（不分页）
+     * Query by collection ID (no pagination).
      */
     List<RagDocument> findAllByCollectionId(Long collectionId);
 
     /**
-     * 将指定集合的所有文档的 collectionId 置空（批量操作，避免逐个加载）
+     * Clear collection ID for all documents in a collection (batch operation, avoids loading one by one).
      */
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE RagDocument d SET d.collectionId = NULL WHERE d.collectionId = :collectionId")
     void clearCollectionIdByCollectionId(@Param("collectionId") Long collectionId);
 
     /**
-     * 查找没有嵌入向量的文档（rag_embeddings 中没有对应记录，或 embedding 为 NULL）
+     * Find documents without embeddings (no corresponding record in rag_embeddings, or embedding is NULL).
      */
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT d.* FROM rag_documents d " +
@@ -115,7 +115,7 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     List<RagDocument> findDocumentsWithoutEmbeddings();
 
     /**
-     * 统计没有嵌入向量的文档数量
+     * Count documents without embeddings.
      */
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT COUNT(*) FROM rag_documents d " +

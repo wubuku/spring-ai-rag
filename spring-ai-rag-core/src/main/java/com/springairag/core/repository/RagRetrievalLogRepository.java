@@ -13,26 +13,26 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 检索日志仓库
+ * Retrieval Log Repository
  *
- * <p>提供检索日志的 CRUD 操作和统计查询能力。
+ * <p>Provides CRUD operations and statistical query capabilities for retrieval logs.
  */
 @Repository
 public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog, Long> {
 
     /**
-     * 按时间范围分页查询
+     * Paginated query by time range.
      */
     Page<RagRetrievalLog> findByCreatedAtBetween(
             ZonedDateTime startDate, ZonedDateTime endDate, Pageable pageable);
 
     /**
-     * 按会话 ID 查询
+     * Query by session ID.
      */
     List<RagRetrievalLog> findBySessionIdOrderByCreatedAtDesc(String sessionId);
 
     /**
-     * 查询慢查询（按总耗时降序）
+     * Query slow queries (ordered by total time descending).
      */
     @Query("SELECT l FROM RagRetrievalLog l WHERE l.createdAt BETWEEN :startDate AND :endDate " +
            "ORDER BY l.totalTimeMs DESC")
@@ -42,12 +42,12 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             Pageable pageable);
 
     /**
-     * 统计指定时间段的总日志数
+     * Count total logs in the specified time range.
      */
     long countByCreatedAtBetween(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 平均总耗时
+     * Average total time.
      */
     @Query("SELECT AVG(l.totalTimeMs) FROM RagRetrievalLog l " +
            "WHERE l.createdAt BETWEEN :startDate AND :endDate")
@@ -56,7 +56,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 平均向量检索耗时
+     * Average vector search time.
      */
     @Query("SELECT AVG(l.vectorSearchTimeMs) FROM RagRetrievalLog l " +
            "WHERE l.createdAt BETWEEN :startDate AND :endDate")
@@ -65,7 +65,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 平均全文检索耗时
+     * Average full-text search time.
      */
     @Query("SELECT AVG(l.fulltextSearchTimeMs) FROM RagRetrievalLog l " +
            "WHERE l.createdAt BETWEEN :startDate AND :endDate")
@@ -74,7 +74,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 按检索策略分组统计
+     * Stats grouped by retrieval strategy.
      */
     @Query("SELECT l.retrievalStrategy, COUNT(l), AVG(l.totalTimeMs) FROM RagRetrievalLog l " +
            "WHERE l.createdAt BETWEEN :startDate AND :endDate " +
@@ -84,7 +84,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 按天聚合平均总耗时（趋势图）
+     * Aggregate average total time by day (for trend charts).
      */
     @Query(value = "SELECT DATE_TRUNC('day', created_at) as day, AVG(total_time_ms) as avg_time, COUNT(*) as cnt " +
            "FROM rag_retrieval_logs WHERE created_at BETWEEN :startDate AND :endDate " +
@@ -95,7 +95,7 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 清理指定时间之前的日志
+     * Delete logs before the specified time.
      */
     @Modifying
     @Query("DELETE FROM RagRetrievalLog l WHERE l.createdAt < :cutoff")

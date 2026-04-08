@@ -12,45 +12,45 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 审计日志仓库
+ * Audit Log Repository
  */
 @Repository
 public interface RagAuditLogRepository extends JpaRepository<RagAuditLog, Long> {
 
     /**
-     * 查询指定实体的审计历史
+     * Query audit history for a specific entity.
      */
     Page<RagAuditLog> findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
             String entityType, String entityId, Pageable pageable);
 
     /**
-     * 查询指定会话的审计记录
+     * Query audit records for a specific session.
      */
     Page<RagAuditLog> findBySessionIdOrderByCreatedAtDesc(String sessionId, Pageable pageable);
 
     /**
-     * 查询指定操作类型的审计记录
+     * Query audit records for a specific operation type.
      */
     Page<RagAuditLog> findByOperationOrderByCreatedAtDesc(String operation, Pageable pageable);
 
     /**
-     * 查询时间范围内的审计记录
+     * Query audit records within a time range.
      */
     Page<RagAuditLog> findByCreatedAtBetweenOrderByCreatedAtDesc(
             ZonedDateTime start, ZonedDateTime end, Pageable pageable);
 
     /**
-     * 统计指定实体的操作次数
+     * Count operations for a specific entity.
      */
     long countByEntityTypeAndEntityIdAndOperation(String entityType, String entityId, String operation);
 
     /**
-     * 清理指定时间之前的审计日志
+     * Delete audit logs before the specified time.
      */
     long deleteByCreatedAtBefore(ZonedDateTime cutoff);
 
     /**
-     * 查询最近的操作记录（用于实时监控）
+     * Query recent operation records (for real-time monitoring).
      */
     List<RagAuditLog> findTop20ByOrderByCreatedAtDesc();
 }

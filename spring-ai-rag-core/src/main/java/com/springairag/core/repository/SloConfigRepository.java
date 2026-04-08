@@ -8,28 +8,28 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * SLO 配置仓库
+ * SLO Configuration Repository
  */
 @Repository
 public interface SloConfigRepository extends JpaRepository<RagSloConfig, Long> {
 
     /**
-     * 按名称查找 SLO 配置
+     * Find SLO config by name.
      */
     Optional<RagSloConfig> findBySloName(String sloName);
 
     /**
-     * 获取所有启用的 SLO 配置
+     * Get all enabled SLO configs.
      */
     List<RagSloConfig> findByEnabledTrue();
 
     /**
-     * 按类型查找 SLO 配置
+     * Find SLO configs by type.
      */
     List<RagSloConfig> findBySloType(String sloType);
 
     /**
-     * 按名称删除
+     * Delete by name.
      */
     void deleteBySloName(String sloName);
 }

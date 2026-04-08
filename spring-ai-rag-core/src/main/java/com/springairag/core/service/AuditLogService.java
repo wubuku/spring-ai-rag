@@ -18,13 +18,13 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 审计日志服务
+ * Audit Log Service
  *
- * <p>为关键业务操作（创建/更新/删除）提供结构化审计日志记录。
- * 通过 {@link ConditionalOnBean} 条件注册，仅在 RagAuditLogRepository 可用时创建。
+ * <p>Provides structured audit logging for critical business operations (create/update/delete).
+ * Registered conditionally via {@link ConditionalOnBean} — only created when RagAuditLogRepository is available.
  *
- * <p>审计事件通过 MDC 注入 traceId，通过 HttpServletRequest 获取 clientIp。
- * 操作失败时不阻断业务流程（韧性模式）。
+ * <p>Audit events inject traceId via MDC and obtain clientIp from HttpServletRequest.
+ * Failures do not block the business flow (resilience mode).
  */
 @Service
 @ConditionalOnBean(RagAuditLogRepository.class)

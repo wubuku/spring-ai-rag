@@ -3,34 +3,34 @@ package com.springairag.api.service;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 
 /**
- * 自定义 Advisor 提供者接口
- * 客户实现此接口并注册为 Spring Bean，即可向 RAG Pipeline 添加自定义 Advisor
+ * Custom Advisor Provider Interface
+ * Clients implement this interface and register as Spring Beans to add custom Advisors to the RAG Pipeline.
  *
- * <p>Starter 会自动发现所有 RagAdvisorProvider 实例，按 getOrder() 排序后注入 Advisor 链。</p>
+ * <p>The Starter auto-discovers all RagAdvisorProvider instances, sorts by getOrder(), and injects them into the Advisor chain.</p>
  *
- * <p>推荐的 order 值：
+ * <p>Recommended order values:
  * <ul>
- *   <li>HIGHEST_PRECEDENCE + 5  : 在查询改写之前（如限流、安全检查）</li>
- *   <li>HIGHEST_PRECEDENCE + 15 : 在查询改写之后、检索之前</li>
- *   <li>HIGHEST_PRECEDENCE + 25 : 在检索之后、重排之前</li>
- *   <li>HIGHEST_PRECEDENCE + 35 : 在重排之后、LLM 调用之前</li>
- *   <li>LOWEST_PRECEDENCE - 10  : 在 LLM 调用之后（如日志记录）</li>
+ *   <li>HIGHEST_PRECEDENCE + 5  : Before query rewriting (e.g., rate limiting, security check)</li>
+ *   <li>HIGHEST_PRECEDENCE + 15 : After query rewriting, before retrieval</li>
+ *   <li>HIGHEST_PRECEDENCE + 25 : After retrieval, before reranking</li>
+ *   <li>HIGHEST_PRECEDENCE + 35 : After reranking, before LLM call</li>
+ *   <li>LOWEST_PRECEDENCE - 10  : After LLM call (e.g., logging)</li>
  * </ul>
  */
 public interface RagAdvisorProvider {
 
     /**
-     * 获取 Advisor 名称（用于日志和调试）
+     * Get Advisor name (for logging and debugging).
      */
     String getName();
 
     /**
-     * 获取 Advisor 执行顺序（值越小优先级越高）
+     * Get Advisor execution order (smaller value = higher priority).
      */
     int getOrder();
 
     /**
-     * 创建 Advisor 实例
+     * Create Advisor instance.
      */
     BaseAdvisor createAdvisor();
 }

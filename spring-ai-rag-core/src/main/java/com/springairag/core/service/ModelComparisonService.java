@@ -22,10 +22,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * 多模型并行对比服务
+ * Multi-Model Parallel Comparison Service
  *
- * <p>将同一查询发送给多个模型，收集响应内容和延迟数据，
- * 用于模型效果对比和 A/B 实验前的数据采集。
+ * <p>Sends the same query to multiple models, collects response content and latency data,
+ * used for model effectiveness comparison and pre-A/B experiment data collection.
  */
 @Service
 public class ModelComparisonService {

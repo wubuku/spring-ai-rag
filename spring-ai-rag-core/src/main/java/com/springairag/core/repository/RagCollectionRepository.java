@@ -13,13 +13,13 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 /**
- * RAG 文档集合 JPA Repository
+ * RAG Document Collection JPA Repository
  */
 @Repository
 public interface RagCollectionRepository extends JpaRepository<RagCollection, Long> {
 
     /**
-     * 综合搜索：名称模糊 + 启用状态过滤（默认排除已删除）
+     * Comprehensive search: name fuzzy match + enabled status filter (excludes deleted by default).
      */
     @Query("SELECT c FROM RagCollection c WHERE c.deleted = false AND " +
            "(COALESCE(:name, '') = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
@@ -29,26 +29,26 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
                                            Pageable pageable);
 
     /**
-     * 按ID查找（排除已删除）
+     * Find by ID (excluding deleted).
      */
     Optional<RagCollection> findByIdAndDeletedFalse(Long id);
 
     /**
-     * 软删除：标记为已删除
+     * Soft delete: mark as deleted.
      */
     @Modifying
     @Query("UPDATE RagCollection c SET c.deleted = true, c.deletedAt = :deletedAt WHERE c.id = :id")
     int softDelete(@Param("id") Long id, @Param("deletedAt") LocalDateTime deletedAt);
 
     /**
-     * 恢复：取消删除标记
+     * Restore: clear the deleted flag.
      */
     @Modifying
     @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null WHERE c.id = :id")
     int restore(@Param("id") Long id);
 
     /**
-     * 按名称查找
+     * Find by name.
      */
     RagCollection findByName(String name);
 }

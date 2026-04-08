@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * 静默计划仓库
+ * Silence Schedule Repository
  */
 @Repository
 public interface RagSilenceScheduleRepository extends JpaRepository<RagSilenceSchedule, Long> {

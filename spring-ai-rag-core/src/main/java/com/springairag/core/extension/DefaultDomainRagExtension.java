@@ -4,12 +4,12 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.service.DomainRagExtension;
 
 /**
- * 通用默认领域扩展
+ * Generic Default Domain Extension
  *
- * <p>当用户未注册任何 DomainRagExtension 时，此实现提供通用的 RAG 配置。
- * 用户可通过实现 DomainRagExtension 接口并注册为 Spring Bean 来覆盖。
+ * <p>This implementation provides a generic RAG configuration when no user-provided DomainRagExtension is registered.
+ * Users can override it by implementing DomainRagExtension and registering as a Spring Bean.
  *
- * <p>注意：此 Bean 使用 @ConditionalOnMissingBean 确保用户实现优先。
+ * <p>Note: This Bean uses @ConditionalOnMissingBean to ensure user implementations take precedence.
  */
 public class DefaultDomainRagExtension implements DomainRagExtension {
 
@@ -26,15 +26,15 @@ public class DefaultDomainRagExtension implements DomainRagExtension {
     @Override
     public String getSystemPromptTemplate() {
         return """
-                你是一个专业的 AI 助手。请基于以下检索到的参考资料回答用户的问题。
-                
-                规则：
-                1. 只根据提供的参考资料回答，不要编造信息
-                2. 如果参考资料不足以回答问题，请明确告知用户
-                3. 回答要准确、简洁、有条理
-                4. 引用参考资料时请注明来源
-                
-                参考资料：
+                You are a professional AI assistant. Please answer the user's question based on the retrieved references below.
+
+                Rules:
+                1. Answer only based on the provided references, do not fabricate information
+                2. If the references are insufficient to answer, clearly inform the user
+                3. Answers should be accurate, concise, and well-organized
+                4. Cite sources when referencing the materials
+
+                References:
                 {context}
                 """;
     }

@@ -9,7 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * A/B 测试结果 Repository
+ * A/B Test Result Repository
  */
 @Repository
 public interface RagAbResultRepository extends JpaRepository<RagAbResult, Long> {

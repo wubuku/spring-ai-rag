@@ -12,29 +12,29 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 检索评估记录仓库
+ * Retrieval Evaluation Record Repository
  */
 @Repository
 public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetrievalEvaluation, Long> {
 
     /**
-     * 按时间范围查询（按创建时间降序）
+     * Query by time range (ordered by creation time descending).
      */
     List<RagRetrievalEvaluation> findByCreatedAtBetweenOrderByCreatedAtDesc(
             ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 分页查询（按创建时间降序）
+     * Paginated query (ordered by creation time descending).
      */
     Page<RagRetrievalEvaluation> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
     /**
-     * 统计指定时间段的评估数
+     * Count evaluations in the specified time range.
      */
     long countByCreatedAtBetween(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 平均 MRR
+     * Average MRR.
      */
     @Query("SELECT AVG(e.mrr) FROM RagRetrievalEvaluation e " +
            "WHERE e.createdAt BETWEEN :startDate AND :endDate AND e.mrr IS NOT NULL")
@@ -43,7 +43,7 @@ public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetri
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 平均 NDCG
+     * Average NDCG.
      */
     @Query("SELECT AVG(e.ndcg) FROM RagRetrievalEvaluation e " +
            "WHERE e.createdAt BETWEEN :startDate AND :endDate AND e.ndcg IS NOT NULL")
@@ -52,7 +52,7 @@ public interface RagRetrievalEvaluationRepository extends JpaRepository<RagRetri
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 平均 Hit Rate
+     * Average Hit Rate.
      */
     @Query("SELECT AVG(e.hitRate) FROM RagRetrievalEvaluation e " +
            "WHERE e.createdAt BETWEEN :startDate AND :endDate AND e.hitRate IS NOT NULL")

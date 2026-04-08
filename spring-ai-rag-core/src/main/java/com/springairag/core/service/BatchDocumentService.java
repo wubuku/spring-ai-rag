@@ -20,10 +20,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 批量文档操作服务
+ * Batch Document Operations Service
  *
- * <p>负责批量创建、删除文档，支持按内容 SHA-256 哈希去重。
- * 批量创建支持可选嵌入向量生成（embed=true）。
+ * <p>Handles batch create/delete of documents, supports deduplication by content SHA-256 hash.
+ * Batch create supports optional embedding vector generation (embed=true).
  */
 @Service
 public class BatchDocumentService {

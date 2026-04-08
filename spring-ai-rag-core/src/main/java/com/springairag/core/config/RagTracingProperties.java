@@ -1,16 +1,16 @@
 package com.springairag.core.config;
 
 /**
- * 分布式追踪配置
+ * Distributed Tracing Configuration
  *
- * <p>配置示例：
+ * <p>Configuration example:
  * <pre>
  * rag:
  *   tracing:
  *     enabled: true
- *     sampling-rate: 1.0           # 0.0~1.0，1.0=全量追踪
- *     w3c-format: true             # 输出 W3C traceparent 格式
- *     span-id-enabled: true        # 生成 spanId 支持嵌套追踪
+ *     sampling-rate: 1.0           # 0.0~1.0, 1.0=full tracing
+ *     w3c-format: true             # Output W3C traceparent format
+ *     span-id-enabled: true        # Generate spanId for nested tracing
  * </pre>
  */
 public class RagTracingProperties {

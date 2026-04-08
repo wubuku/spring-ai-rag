@@ -3,22 +3,23 @@ package com.springairag.api.service;
 import java.util.Map;
 
 /**
- * Prompt 定制器接口
+ * Prompt Customizer Interface
  *
- * <p>客户实现此接口可自定义系统提示词和用户消息。
- * 多个 PromptCustomizer 实现会按优先级链式调用。
+ * <p>Clients implement this interface to customize the system prompt and user messages.
+ * Multiple PromptCustomizer implementations are chained by priority order.
  *
- * <p>使用方式：实现接口 + @Component 注册为 Spring Bean，Starter 自动发现。
+ * <p>Usage: implement the interface + annotate with @Component to register as a Spring Bean;
+ * the Starter auto-discovers it.
  */
 public interface PromptCustomizer {
 
     /**
-     * 定制系统提示词
+     * Customize the system prompt
      *
-     * @param originalSystemPrompt 原始系统提示词
-     * @param context              RAG 上下文（检索到的文档片段）
-     * @param metadata             元数据（sessionId、domainId 等）
-     * @return 定制后的系统提示词
+     * @param originalSystemPrompt original system prompt
+     * @param context              RAG context (retrieved document fragments)
+     * @param metadata             metadata (sessionId, domainId, etc.)
+     * @return customized system prompt
      */
     default String customizeSystemPrompt(String originalSystemPrompt,
                                           String context,
@@ -27,11 +28,11 @@ public interface PromptCustomizer {
     }
 
     /**
-     * 定制用户提示词
+     * Customize the user prompt
      *
-     * @param originalUserMessage 原始用户消息
-     * @param metadata            元数据
-     * @return 定制后的用户消息
+     * @param originalUserMessage original user message
+     * @param metadata            metadata
+     * @return customized user message
      */
     default String customizeUserMessage(String originalUserMessage,
                                          Map<String, Object> metadata) {
@@ -39,7 +40,7 @@ public interface PromptCustomizer {
     }
 
     /**
-     * 执行顺序（值越小优先级越高）
+     * Execution order (smaller value = higher priority)
      */
     default int getOrder() {
         return 0;

@@ -15,10 +15,11 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 检索日志服务
+ * Retrieval Logging Service
  *
- * <p>记录每次检索的性能数据，包括向量检索耗时、全文检索耗时、重排耗时、总耗时、结果数量和得分。
- * 通过 {@link ConditionalOnBean} 条件注册，仅在 RagRetrievalLogRepository 可用时创建。
+ * <p>Records performance data for each retrieval, including vector search latency, full-text search latency,
+ * rerank latency, total latency, result count, and scores.
+ * Registered conditionally via {@link ConditionalOnBean} — only created when RagRetrievalLogRepository is available.
  */
 @Service
 @ConditionalOnBean(RagRetrievalLogRepository.class)

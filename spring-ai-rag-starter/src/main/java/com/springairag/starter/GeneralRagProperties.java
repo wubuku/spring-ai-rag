@@ -3,18 +3,18 @@ package com.springairag.starter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 通用 RAG 服务配置属性
+ * General RAG Service Configuration Properties
  */
 @ConfigurationProperties(prefix = "general.rag")
 public class GeneralRagProperties {
 
     /**
-     * 是否启用 RAG 服务
+     * Whether the RAG service is enabled.
      */
     private boolean enabled = true;
 
     /**
-     * 对话记忆配置
+     * Chat memory configuration.
      */
     private Memory memory = new Memory();
 

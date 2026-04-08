@@ -12,10 +12,10 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 领域扩展注册表
+ * Domain Extension Registry
  *
- * <p>收集所有 {@link DomainRagExtension} 实现，提供按 domainId 查找的能力。
- * 通过构造函数注入自动发现所有 Spring Bean 实现。
+ * <p>Collects all {@link DomainRagExtension} implementations and provides lookup by domainId.
+ * Auto-discovers all Spring Bean implementations via constructor injection.
  */
 @Component
 public class DomainExtensionRegistry {
@@ -42,7 +42,7 @@ public class DomainExtensionRegistry {
                 map.put(domainId, ext);
                 log.info("Registered domain extension: {} -> {}", domainId, ext.getDomainName());
 
-                // 第一个注册的作为默认
+                // First registered becomes the default
                 if (defaultExt == null) {
                     defaultExt = ext;
                 }
@@ -56,10 +56,10 @@ public class DomainExtensionRegistry {
     }
 
     /**
-     * 根据 domainId 获取领域扩展
+     * Get domain extension by domainId.
      *
-     * @param domainId 领域标识
-     * @return 扩展实现，未找到返回 null
+     * @param domainId domain identifier
+     * @return extension implementation, null if not found
      */
     public DomainRagExtension getExtension(String domainId) {
         if (domainId == null || domainId.isBlank()) {
@@ -69,17 +69,17 @@ public class DomainExtensionRegistry {
     }
 
     /**
-     * 获取所有已注册的领域扩展
+     * Get all registered domain extensions.
      */
     public Collection<DomainRagExtension> getAllExtensions() {
         return extensions.values();
     }
 
     /**
-     * 获取领域扩展的系统提示词模板
+     * Get domain extension's system prompt template.
      *
-     * @param domainId 领域标识（null 则使用默认）
-     * @return 系统提示词模板，无扩展时返回 null
+     * @param domainId domain identifier (null to use default)
+     * @return system prompt template, null if no extension found
      */
     public String getSystemPromptTemplate(String domainId) {
         DomainRagExtension ext = getExtension(domainId);
@@ -87,14 +87,14 @@ public class DomainExtensionRegistry {
     }
 
     /**
-     * 检查是否有注册的扩展
+     * Check if any extensions are registered.
      */
     public boolean hasExtensions() {
         return !extensions.isEmpty();
     }
 
     /**
-     * 检查指定 domainId 是否存在
+     * Check if a specific domainId exists.
      */
     public boolean hasDomain(String domainId) {
         return domainId != null && extensions.containsKey(domainId);

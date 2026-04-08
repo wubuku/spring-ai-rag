@@ -11,13 +11,13 @@ import java.time.ZonedDateTime;
 import java.util.List;
 
 /**
- * 告警记录仓库
+ * Alert Record Repository
  */
 @Repository
 public interface AlertRepository extends JpaRepository<RagAlert, Long> {
 
     /**
-     * 按时间范围和过滤条件查询告警历史
+     * Query alert history by time range and filter conditions.
      */
     @Query("SELECT a FROM RagAlert a WHERE a.firedAt BETWEEN :startDate AND :endDate " +
            "AND (:severity IS NULL OR a.severity = :severity) " +
@@ -30,12 +30,12 @@ public interface AlertRepository extends JpaRepository<RagAlert, Long> {
             @Param("alertType") String alertType);
 
     /**
-     * 获取活跃告警（未解决的）
+     * Get active alerts (unresolved).
      */
     List<RagAlert> findByStatusOrderByFiredAtDesc(String status);
 
     /**
-     * 按严重程度统计告警数量
+     * Count alerts by severity.
      */
     @Query("SELECT COUNT(a) FROM RagAlert a WHERE a.firedAt BETWEEN :startDate AND :endDate " +
            "AND a.severity = :severity")
@@ -45,7 +45,7 @@ public interface AlertRepository extends JpaRepository<RagAlert, Long> {
             @Param("severity") String severity);
 
     /**
-     * 统计活跃告警数量
+     * Count active alerts.
      */
     @Query("SELECT COUNT(a) FROM RagAlert a WHERE a.firedAt BETWEEN :startDate AND :endDate " +
            "AND a.status = 'ACTIVE'")
@@ -54,12 +54,12 @@ public interface AlertRepository extends JpaRepository<RagAlert, Long> {
             @Param("endDate") ZonedDateTime endDate);
 
     /**
-     * 统计总告警数量
+     * Count total alerts.
      */
     long countByFiredAtBetween(ZonedDateTime startDate, ZonedDateTime endDate);
 
     /**
-     * 删除已解决的旧告警记录
+     * Delete old resolved alert records.
      */
     @Modifying
     @Query("DELETE FROM RagAlert a WHERE a.status = 'RESOLVED' AND a.resolvedAt < :cutoff")

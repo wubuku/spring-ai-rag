@@ -10,9 +10,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Prompt 定制器链
+ * Prompt Customizer Chain
  *
- * <p>收集所有 {@link PromptCustomizer} 实现，按 {@link PromptCustomizer#getOrder()} 排序后链式调用。
+ * <p>Collects all {@link PromptCustomizer} implementations and chains them in order
+ * determined by {@link PromptCustomizer#getOrder()}.
  */
 @Component
 public class PromptCustomizerChain {
@@ -34,7 +35,7 @@ public class PromptCustomizerChain {
     }
 
     /**
-     * 链式定制系统提示词
+     * Chain-customize the system prompt.
      */
     public String customizeSystemPrompt(String originalSystemPrompt,
                                          String context,
@@ -47,7 +48,7 @@ public class PromptCustomizerChain {
     }
 
     /**
-     * 链式定制用户消息
+     * Chain-customize the user message.
      */
     public String customizeUserMessage(String originalUserMessage,
                                         Map<String, Object> metadata) {
@@ -59,7 +60,7 @@ public class PromptCustomizerChain {
     }
 
     /**
-     * 是否有注册的定制器
+     * Check if any customizers are registered.
      */
     public boolean hasCustomizers() {
         return !customizers.isEmpty();

@@ -3,12 +3,12 @@ package com.springairag.core.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * HTTP 代理配置
+ * HTTP Proxy Configuration
  *
- * <p>支持为 LLM API 调用配置 HTTP(S) 代理。
- * 默认禁用（noProxy=true），避免开发环境代理干扰。
+ * <p>Supports configuring HTTP(S) proxy for LLM API calls.
+ * Disabled by default (noProxy=true) to avoid dev environment proxy interference.
  *
- * <p>配置示例：
+ * <p>Configuration example:
  * <pre>
  * rag:
  *   proxy:
@@ -22,23 +22,23 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 public class RagProxyProperties {
 
     /**
-     * 是否启用 HTTP 代理，默认 false（不启用）
+     * Whether to enable HTTP proxy, default false (disabled).
      */
     private boolean enabled = false;
 
     /**
-     * 代理主机地址
+     * Proxy host address.
      */
     private String host = "127.0.0.1";
 
     /**
-     * 代理端口
+     * Proxy port.
      */
     private int port = 7890;
 
     /**
-     * 跳过代理的主机列表，支持通配符，多个用 | 分隔
-     * 例如：localhost|127.0.0.1|*.internal|*.local
+     * Hosts to skip proxy for, supports wildcards, multiple separated by |.
+     * Example: localhost|127.0.0.1|*.internal|*.local
      */
     private String noProxyHosts = "localhost|127.0.0.1|::1";
 

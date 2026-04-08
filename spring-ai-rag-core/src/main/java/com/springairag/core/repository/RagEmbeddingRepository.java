@@ -11,24 +11,24 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 
 /**
- * RAG 向量嵌入 JPA Repository
+ * RAG Vector Embedding JPA Repository
  *
- * <p>注意：涉及 vector 列的方法使用原生 SQL，因为 Hibernate 的 FloatPrimitiveArrayJavaType
- * 无法反序列化 pgvector 的二进制格式。
+ * <p>Note: methods involving the vector column use native SQL because Hibernate's
+ * FloatPrimitiveArrayJavaType cannot deserialize pgvector's binary format.
  */
 @Repository
 public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long> {
 
     /**
-     * 按文档 ID 删除所有嵌入向量
+     * Delete all embeddings by document ID.
      *
-     * <p>注意：hibernate-vector 模块提供 pgvector 正确类型映射，
-     * 派生方法可正常工作（不再需要原生 SQL）。
+     * <p>Note: the hibernate-vector module provides proper pgvector type mapping,
+     * so derived methods work correctly (native SQL no longer needed).
      */
     void deleteByDocumentId(Long documentId);
 
     /**
-     * 按文档 ID 列表批量删除嵌入向量
+     * Batch delete embeddings by document ID list.
      */
     @Modifying
     @Transactional
@@ -36,7 +36,7 @@ public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long
     void deleteByDocumentIdIn(@Param("documentIds") List<Long> documentIds);
 
     /**
-     * 按文档 ID 统计嵌入向量数量
+     * Count embeddings by document ID.
      */
     long countByDocumentId(Long documentId);
 }

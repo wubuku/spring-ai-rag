@@ -18,7 +18,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * A/B 测试服务实现
+ * A/B Test Service Implementation
  */
 @Service
 @Transactional
