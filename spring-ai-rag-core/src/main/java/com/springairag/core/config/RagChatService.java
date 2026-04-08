@@ -42,29 +42,30 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * RAG 聊天服务
+ * RAG Chat Service
  *
- * <p>通过 ChatClient 调用 LLM，自动经过 Advisor 链（查询改写 → 混合检索 → 重排 → 记忆）。
- * 同时写入 rag_chat_history 业务审计表（双表共存策略）。
+ * <p>Calls LLM via ChatClient, automatically through the Advisor chain
+ * (query rewriting → hybrid retrieval → reranking → memory).
+ * Also writes to the rag_chat_history audit table (dual-table coexistence strategy).
  *
- * <p>扩展点支持：
+ * <p>Extension points:
  * <ul>
- *   <li>{@link RagAdvisorProvider} — 客户自定义 Advisor，自动发现并注入链中</li>
- *   <li>{@link DomainRagExtension} — 领域扩展，提供领域特定的系统提示词和检索配置</li>
- *   <li>{@link com.springairag.api.service.PromptCustomizer} — Prompt 定制器</li>
+ *   <li>{@link RagAdvisorProvider} — Custom user-defined Advisor, auto-discovered and injected into the chain</li>
+ *   <li>{@link DomainRagExtension} — Domain extension, provides domain-specific system prompts and retrieval config</li>
+ *   <li>{@link com.springairag.api.service.PromptCustomizer} — Prompt customizer</li>
  * </ul>
  *
- * <p>Advisor 执行顺序（由 getOrder() 决定）：
+ * <p>Advisor execution order (determined by getOrder()):
  * <ol>
- *   <li>客户自定义 Advisor（order < +10）</li>
- *   <li>QueryRewriteAdvisor（+10）— 查询改写</li>
- *   <li>客户自定义 Advisor（+11 ~ +19）</li>
- *   <li>HybridSearchAdvisor（+20）— 混合检索</li>
- *   <li>客户自定义 Advisor（+21 ~ +29）</li>
- *   <li>RerankAdvisor（+30）— 重排序 + 上下文注入</li>
- *   <li>客户自定义 Advisor（+31 ~ +39）</li>
- *   <li>MessageChatMemoryAdvisor — 对话记忆</li>
- *   <li>客户自定义 Advisor（order > +40）</li>
+ *   <li>Custom user Advisor (order &lt; +10)</li>
+ *   <li>QueryRewriteAdvisor (+10) — query rewriting</li>
+ *   <li>Custom user Advisor (+11 ~ +19)</li>
+ *   <li>HybridSearchAdvisor (+20) — hybrid retrieval</li>
+ *   <li>Custom user Advisor (+21 ~ +29)</li>
+ *   <li>RerankAdvisor (+30) — reranking + context injection</li>
+ *   <li>Custom user Advisor (+31 ~ +39)</li>
+ *   <li>MessageChatMemoryAdvisor — conversation memory</li>
+ *   <li>Custom user Advisor (order &gt; +40)</li>
  * </ol>
  */
 @Service
@@ -73,18 +74,18 @@ public class RagChatService {
     private static final Logger log = LoggerFactory.getLogger(RagChatService.class);
 
     private final ChatClient chatClient;
-    private final ChatClient.Builder chatClientBuilder; // 用于动态模型路由
-    private final List<Advisor> sortedAdvisors; // 用于动态模型路由时重建 ChatClient
-    private final ChatModelRouter chatModelRouter; // 可选，未配置时为 null
+    private final ChatClient.Builder chatClientBuilder; // for dynamic model routing
+    private final List<Advisor> sortedAdvisors; // for rebuilding ChatClient during dynamic model routing
+    private final ChatModelRouter chatModelRouter; // optional, null when not configured
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensionRegistry;
     private final PromptCustomizerChain promptCustomizerChain;
-    private final RagMetricsService metricsService; // 可选，未引入 actuator 时为 null
-    private final LlmCircuitBreaker circuitBreaker; // 可选，未启用时为 null
-    private final RetryTemplate retryTemplate; // LLM 调用重试模板，可选
+    private final RagMetricsService metricsService; // optional, null when actuator is not present
+    private final LlmCircuitBreaker circuitBreaker; // optional, null when not enabled
+    private final RetryTemplate retryTemplate; // LLM call retry template, optional
 
     /**
-     * 获取 LLM 熔断器实例（可能为 null，当未启用时）
+     * Returns the LLM circuit breaker instance (may be null when not enabled)
      */
     public LlmCircuitBreaker getCircuitBreaker() {
         return circuitBreaker;
@@ -184,27 +185,27 @@ public class RagChatService {
     }
 
     /**
-     * RAG 问答（非流式）
+     * RAG Q&amp;A (non-streaming)
      */
     public String chat(String userMessage, String sessionId) {
         return chat(userMessage, sessionId, null, null);
     }
 
     /**
-     * RAG 问答（非流式，带领域支持）
+     * RAG Q&amp;A (non-streaming, with domain support)
      *
-     * @param userMessage 用户消息
-     * @param sessionId   会话 ID
-     * @param domainId    领域标识（null 则使用默认领域）
-     * @param metadata    额外元数据
-     * @return 回答文本
+     * @param userMessage user message
+     * @param sessionId   session ID
+     * @param domainId    domain identifier (null uses default domain)
+     * @param metadata    extra metadata
+     * @return answer text
      */
     public String chat(String userMessage, String sessionId, String domainId, Map<String, Object> metadata) {
         return executeChat(userMessage, sessionId, domainId, metadata, null).getAnswer();
     }
 
     /**
-     * RAG 问答（从 ChatRequest 构建），返回含引用来源的完整响应
+     * RAG Q&amp;A (built from ChatRequest), returns full response with citation sources
      */
     public ChatResponse chat(ChatRequest request) {
         return executeChat(
@@ -217,9 +218,9 @@ public class RagChatService {
     }
 
     /**
-     * 核心聊天执行方法，返回含 sources 的完整响应
+     * Core chat execution method, returns full response with sources
      *
-     * @param model 可选模型引用（如 "minimax"），为 null 时使用默认模型
+     * @param model optional model reference (e.g. "minimax"), null uses default model
      */
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
             Map<String, Object> metadata, String model) {
@@ -344,7 +345,7 @@ public class RagChatService {
         return template;
     }
 
-    /** 应用 PromptCustomizer 定制用户消息 */
+    /** Applies PromptCustomizer to customize the user message */
     private String customizeUserMessage(String userMessage, Map<String, Object> metadata) {
         if (!promptCustomizerChain.hasCustomizers()) {
             return userMessage;
@@ -353,7 +354,7 @@ public class RagChatService {
                 userMessage, metadata != null ? metadata : Map.of());
     }
 
-    /** 构建 Advisor 参数（会话 ID、领域、元数据） */
+    /** Builds Advisor parameters (session ID, domain, metadata) */
     private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
             String sessionId, String domainId, Map<String, Object> metadata) {
         return a -> {
@@ -367,7 +368,7 @@ public class RagChatService {
         };
     }
 
-    /** 从 advisor context 提取重排后的检索结果作为引用来源 */
+    /** Extracts reranked retrieval results from advisor context as citation sources */
     @SuppressWarnings("unchecked")
     private List<ChatResponse.SourceDocument> extractSources(ChatClientResponse chatClientResponse) {
         List<RetrievalResult> reranked = (List<RetrievalResult>) chatClientResponse.context()
@@ -386,7 +387,7 @@ public class RagChatService {
         return sources;
     }
 
-    /** 从 advisor response context 提取 Pipeline 步骤指标 */
+    /** Extracts Pipeline step metrics from advisor response context */
     private List<StepMetricRecord> extractPipelineMetrics(ChatClientResponse chatClientResponse) {
         RagPipelineMetrics pipelineMetrics = RagPipelineMetrics.get(chatClientResponse.context());
         if (pipelineMetrics == null || pipelineMetrics.getSteps().isEmpty()) {
@@ -398,7 +399,7 @@ public class RagChatService {
     }
 
     /**
-     * RAG 问答（流式，返回 Flux 逐 token 输出）
+     * RAG Q&amp;A (streaming, returns Flux with per-token output)
      */
     public Flux<String> chatStream(String userMessage, String sessionId) {
         return chatClient.prompt()
@@ -409,12 +410,12 @@ public class RagChatService {
     }
 
     /**
-     * RAG 问答（流式，带领域支持）
+     * RAG Q&amp;A (streaming, with domain support)
      */
     public Flux<String> chatStream(String userMessage, String sessionId, String domainId) {
         ChatClient.ChatClientRequestSpec spec = chatClient.prompt();
 
-        // 应用领域扩展的系统提示词
+        // Apply domain extension system prompt
         if (domainExtensionRegistry.hasExtensions()) {
             String template = domainExtensionRegistry.getSystemPromptTemplate(domainId);
             if (template != null) {
