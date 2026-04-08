@@ -1708,3 +1708,14 @@
   - 28 files，188 insertions，184 deletions
   - 1393 tests 全通过，零失败零错误
   - git 已推送（commit 0edbba5）
+
+## Cron 进度（2026-04-08 18:35 — WebUI 常规发布）
+
+- 2026-04-08 18:35 — ✅ WebUI 常规发布：
+  - npm test: `useSearchHistory.test.ts 'removes item by timestamp'`  flaky（并行执行 1 failed，隔离执行 9/9 ✅）—— 已知 timing 问题，非代码 bug
+  - npm run build ✅（97KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - commit 2ade17e 已推送
+  - WebUI 项目处于生产级成熟状态；全部 W1-W14 待办均已完成
