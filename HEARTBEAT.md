@@ -1260,6 +1260,14 @@
 
 - 2026-04-06 06:13 — ✅ C20 Dockerfile 优化 (<200MB)：Spring Boot 分层 JAR (jarmode=layertools) + jlink 裁剪 JRE + distroless/java21-debian12:nonroot base。3-stage 多阶段构建：Maven builder → jlink-builder (创建最小化 JRE，--compress=2) → distroless 运行时。jlink 排除 50+ 不需要模块（java.corba/java.xml.bind/java.desktop/java.scripting/java.nashorn 等），--add-modules 仅保留 Spring AI RAG 需要的核心模块。Health check 使用 nc TCP 端口检测。非 root 用户。mvn clean compile ✅ / mvn test ✅（1290 tests，0 failures，0 errors）。Test fix: RagControllerIntegrationTest.submitFeedback_returnsResult mock 使用 `nullable(Integer.class)` + `nullable(List.class)` 替代 `any()` + `anyList()` 匹配 null 参数值。commit c41de47 已推送
 
+## 待办（K6 — k6 负载测试增强）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| K6-1 | k6: Collection Write CRUD 测试组 | 性能测试 | ✅ 2026-04-09 |
+| K6-2 | k6: A/B Experiments 测试组 | 性能测试 | ✅ 2026-04-09 |
+| K6-3 | k6: Alerts & Feedback 测试组 | 性能测试 | ✅ 2026-04-09 |
+
 ## 待办（C41-C42 — 代码库巡检）
 
 | # | 改进项 | 类型 | 状态 |
@@ -1818,3 +1826,12 @@
   - 1430 tests 全通过，零失败零错误
   - commit 3725a8e 已推送
   - 仍有 63 个 main source 文件含中文，继续推进
+
+## Cron 进度（2026-04-09 00:44 — 后端 k6 负载测试增强）
+- 2026-04-09 00:44 — ✅ K6-1/K6-2/K6-3 k6 负载测试增强：新增 3 个测试组（+168 行）
+  - runCollectionWrite: per-VU create/update/get/delete collections
+  - runAbTests: list/create/start/stop/get results A/B experiments
+  - runAlertsAndFeedback: list alerts + submit feedback + evaluation + SLO + slow-queries + client-errors
+  - k6 测试组从 7 增至 10（Health/CollectionRead/CollectionWrite/Document/HybridSearch/ChatAsk/ChatStream/AbTests/AlertsFeedback/MetricsCache）
+  - mvn test ✅（1393 tests，零失败零错误）
+  - commit ee64e4f 已推送
