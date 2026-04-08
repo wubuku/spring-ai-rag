@@ -6,12 +6,12 @@ import org.springframework.web.servlet.config.annotation.CorsRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 /**
- * CORS 跨域安全配置
+ * CORS Cross-Origin Security Configuration
  *
- * <p>通过 rag.cors.enabled=true 启用，支持配置允许的源、方法、请求头。
- * 默认关闭（生产环境应显式配置 allowed-origins）。
+ * <p>Enabled via rag.cors.enabled=true, supports configurable allowed origins, methods, and headers.
+ * Disabled by default (production environments should explicitly configure allowed-origins).
  *
- * <p>配置示例：
+ * <p>Example:
  * <pre>
  * rag:
  *   cors:

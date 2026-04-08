@@ -34,13 +34,13 @@ import java.net.ProxySelector;
 import java.util.List;
 
 /**
- * Spring AI ChatModel 配置
+ * Spring AI ChatModel Configuration
  *
- * 四 Bean 模式：
- * - openAiChatModel：OpenAI/兼容模型，provider=openai 时创建
- * - anthropicChatModel：Anthropic 模型，provider=anthropic 时创建
- * - miniMaxChatModel：MiniMax 模型，provider=minimax 时创建
- * - chatModel：主入口，从上述三个中选择可用的
+ * Four-Bean pattern:
+ * - openAiChatModel: OpenAI/compatible models, created when provider=openai
+ * - anthropicChatModel: Anthropic models, created when provider=anthropic
+ * - miniMaxChatModel: MiniMax models, created when provider=minimax
+ * - chatModel: Main entry point, selects one from the above three if available
  */
 @Configuration
 @EnableConfigurationProperties({RagProperties.class, RagMemoryProperties.class})
@@ -57,7 +57,7 @@ public class SpringAiConfig {
     @Value("${app.llm.provider:openai}")
     private String provider;
 
-    // ⚠️ 注意：Spring AI OpenAiApi 自动追加 /v1/chat/completions，base-url 不要包含 /v1
+    // ⚠️ NOTE: Spring AI OpenAiApi automatically appends /v1/chat/completions, base-url must NOT contain /v1
     @Value("${spring.ai.openai.base-url:https://api.deepseek.com}")
     private String openAiBaseUrl;
 
@@ -85,7 +85,7 @@ public class SpringAiConfig {
     @Value("${spring.ai.anthropic.chat.options.max-tokens:4096}")
     private Integer anthropicMaxTokens;
 
-    // ⚠️ 注意：Spring AI MiniMaxApi 自动追加 /v1/chat/completions，base-url 不要包含 /v1
+    // ⚠️ NOTE: Spring AI MiniMaxApi automatically appends /v1/chat/completions, base-url must NOT contain /v1
     @Value("${spring.ai.minimax.base-url:https://api.minimaxi.com}")
     private String minimaxBaseUrl;
 
@@ -265,12 +265,12 @@ public class SpringAiConfig {
     }
 
     /**
-     * API 兼容性适配器
+     * API Compatibility Adapter
      *
-     * <p>根据当前 provider 自动选择适配策略：
-     * - openai → OpenAiCompatibleAdapter（支持多 system 消息）
-     * - minimax → MiniMax 专用适配器
-     * - anthropic → 透传
+     * <p>Automatically selects the appropriate adapter strategy based on the current provider:
+     * - openai → OpenAiCompatibleAdapter (supports multiple system messages)
+     * - minimax → MiniMax-specific adapter
+     * - anthropic → passthrough
      */
     @Bean
     public ApiCompatibilityAdapter apiCompatibilityAdapter(ApiAdapterFactory factory) {

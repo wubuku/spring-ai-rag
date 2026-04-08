@@ -7,44 +7,44 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 多模型配置属性。
+ * Multi-model Configuration Properties.
  *
- * <p>支持两种配置来源（优先级从低到高）：
+ * <p>Supports two configuration sources (priority low to high):
  * <ol>
- *   <li>application.yml 的 app.models.* 配置</li>
- *   <li>外部 models.json 文件（通过 configFile 指定）</li>
+ *   <li>application.yml app.models.* configuration</li>
+ *   <li>External models.json file (specified via configFile)</li>
  * </ol>
  *
- * <p>当外部 JSON 文件存在时，完全覆盖 YAML 配置（不支持合并）。
+ * <p>When an external JSON file exists, it completely overrides YAML configuration (no merging).
  *
- * <p>路由引用格式为 {@code providerId/modelId}，如 {@code minimax/MiniMax-M2.7}。
+ * <p>Routing reference format is {@code providerId/modelId}, e.g. {@code minimax/MiniMax-M2.7}.
  */
 @ConfigurationProperties(prefix = "app.models")
 @Schema(description = "Multi-model configuration properties")
 public class MultiModelProperties {
 
     /**
-     * 外部 JSON 配置文件路径。
-     * 当此文件存在时，完全覆盖 YAML 配置。
+     * External JSON config file path.
+     * When this file exists, it completely overrides YAML configuration.
      */
     @Schema(description = "External JSON config file path. When present, overrides YAML config entirely.")
     private String configFile;
 
     /**
-     * 所有模型供应商。
-     * Key = provider ID，如 openrouter / minimax / zhipu。
+     * All model providers.
+     * Key = provider ID, e.g. openrouter / minimax / zhipu.
      */
     @Schema(description = "All model providers")
     private Map<String, ProviderConfig> providers = new java.util.HashMap<>();
 
     /**
-     * Chat（LLM）模型的路由配置。
+     * Chat (LLM) model routing configuration.
      */
     @Schema(description = "Chat model routing config")
     private ModelRouting chatModel;
 
     /**
-     * Embedding 模型的路由配置。
+     * Embedding model routing configuration.
      */
     @Schema(description = "Embedding model routing config")
     private ModelRouting embeddingModel;
@@ -83,10 +83,10 @@ public class MultiModelProperties {
         this.embeddingModel = embeddingModel;
     }
 
-    // ─── 辅助方法 ─────────────────────────────────────────────────
+    // ─── Helper Methods ─────────────────────────────────────────────
 
     /**
-     * 根据模型引用（providerId/modelId）查找对应的 ProviderConfig。
+     * Looks up the ProviderConfig for a given model reference (providerId/modelId).
      */
     public ProviderConfig getProviderByModelRef(String modelRef) {
         if (modelRef == null || !modelRef.contains("/")) {
@@ -97,7 +97,7 @@ public class MultiModelProperties {
     }
 
     /**
-     * 根据模型引用（providerId/modelId）查找对应的 ModelItem。
+     * Looks up the ModelItem for a given model reference (providerId/modelId).
      */
     public ModelItem getModelItem(String modelRef) {
         ProviderConfig provider = getProviderByModelRef(modelRef);
@@ -108,10 +108,10 @@ public class MultiModelProperties {
         return provider.findModel(modelId);
     }
 
-    // ─── 内嵌类型 ─────────────────────────────────────────────────
+    // ─── Inner Types ─────────────────────────────────────────────
 
     /**
-     * 单个模型的 cost 信息。
+     * Cost information for a single model.
      */
     @Schema(description = "Model cost information (per 1M tokens)")
     public record ModelCost(
@@ -136,7 +136,7 @@ public class MultiModelProperties {
     }
 
     /**
-     * 单个模型的配置（chat 和 embedding 混合存放于 ProviderConfig.models[]）。
+     * Configuration for a single model (chat and embedding are stored together in ProviderConfig.models[]).
      */
     @Schema(description = "Single model configuration (chat or embedding)")
     public record ModelItem(
@@ -177,7 +177,7 @@ public class MultiModelProperties {
     }
 
     /**
-     * 单个模型供应商的完整配置。
+     * Complete configuration for a single model provider.
      */
     @Schema(description = "Model provider configuration")
     public record ProviderConfig(
@@ -204,7 +204,7 @@ public class MultiModelProperties {
             List<ModelItem> models
     ) {
         /**
-         * 根据模型 ID 查找对应的 ModelItem。
+         * Finds the ModelItem by model ID.
          */
         public ModelItem findModel(String modelId) {
             if (models == null || modelId == null) {
@@ -217,7 +217,7 @@ public class MultiModelProperties {
         }
 
         /**
-         * 获取所有 chat 模型。
+         * Returns all chat models.
          */
         public List<ModelItem> chatModels() {
             return models == null ? List.of()
@@ -225,7 +225,7 @@ public class MultiModelProperties {
         }
 
         /**
-         * 获取所有 embedding 模型。
+         * Returns all embedding models.
          */
         public List<ModelItem> embeddingModels() {
             return models == null ? List.of()
@@ -234,7 +234,7 @@ public class MultiModelProperties {
     }
 
     /**
-     * 模型路由配置。引用格式为 {@code providerId/modelId}。
+     * Model routing configuration. Reference format is {@code providerId/modelId}.
      */
     @Schema(description = "Model routing configuration (references use providerId/modelId format)")
     public record ModelRouting(

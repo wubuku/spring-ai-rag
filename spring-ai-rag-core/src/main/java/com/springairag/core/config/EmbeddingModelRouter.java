@@ -13,10 +13,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
- * EmbeddingModel 路由器：支持主模型 + Fallback 链。
+ * EmbeddingModel Router: supports primary model + Fallback chain.
  *
- * <p>根据模型引用（{@code providerId/modelId}）解析到对应的 EmbeddingModel 实例。
- * 当主模型调用抛出异常时，自动切换到备选模型。
+ * <p>Resolves model references ({@code providerId/modelId}) to the corresponding EmbeddingModel instance.
+ * When the primary model throws an exception, automatically switches to the fallback model.
  */
 @Component
 public class EmbeddingModelRouter {
@@ -44,7 +44,7 @@ public class EmbeddingModelRouter {
     }
 
     /**
-     * 解析模型引用（providerId/modelId）获取 EmbeddingModel 实例。
+     * Resolves a model reference (providerId/modelId) to an EmbeddingModel instance.
      */
     public EmbeddingModel resolve(String modelRef) {
         if (modelRef == null || modelRef.isBlank()) {
@@ -63,7 +63,7 @@ public class EmbeddingModelRouter {
     }
 
     /**
-     * 获取主 EmbeddingModel。
+     * Gets the primary EmbeddingModel.
      */
     public EmbeddingModel getPrimary() {
         String primary = modelRegistry.getPrimaryEmbeddingModelName();
@@ -71,7 +71,7 @@ public class EmbeddingModelRouter {
     }
 
     /**
-     * 获取 Fallback EmbeddingModel 列表。
+     * Gets the list of fallback EmbeddingModels.
      */
     public List<EmbeddingModel> getFallbacks() {
         List<String> fallbackNames = modelRegistry.getFallbackEmbeddingModelNames();
@@ -82,7 +82,7 @@ public class EmbeddingModelRouter {
     }
 
     /**
-     * 按优先级获取所有可用的 EmbeddingModel（主模型在前，fallback 在后）。
+     * Gets all available EmbeddingModels in priority order (primary first, fallbacks after).
      */
     public List<EmbeddingModel> getAllOrdered() {
         List<EmbeddingModel> result = new ArrayList<>();
@@ -99,13 +99,13 @@ public class EmbeddingModelRouter {
     }
 
     /**
-     * 获取所有已注册的 EmbeddingModel provider 名称。
+     * Gets all registered EmbeddingModel provider names.
      */
     public List<String> getAvailableProviders() {
         return List.copyOf(embeddingModelsByProvider.keySet());
     }
 
-    // ─── 内部方法 ─────────────────────────────────────────────────
+    // ─── Internal Methods ───────────────────────────────────────────
 
     private String extractProviderId(String modelRef) {
         if (modelRef.contains("/")) {

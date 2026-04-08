@@ -1,7 +1,7 @@
 package com.springairag.core.config;
 
 /**
- * 嵌入模型配置
+ * Embedding Model Configuration
  */
 public class RagEmbeddingProperties {
 

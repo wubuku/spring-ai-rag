@@ -9,12 +9,12 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * PgVectorStore 配置（手动 Bean 创建，覆盖自动配置）
+ * PgVectorStore Configuration (manual Bean creation, overrides auto-configuration)
  *
- * <p>仅在 postgresql profile 激活时生效。
- * 默认排除 PgVectorStoreAutoConfiguration，通过此手动 Bean 提供更精细的控制。
+ * <p>Only takes effect when the postgresql profile is active.
+ * PgVectorStoreAutoConfiguration is excluded by default; this manual Bean provides finer control.
  *
- * <p>dimensions 必须与 EmbeddingModel 输出的维度一致（BGE-M3 = 1024）。
+ * <p>dimensions must match the EmbeddingModel output dimension (BGE-M3 = 1024).
  */
 @Configuration
 @Profile("postgresql")

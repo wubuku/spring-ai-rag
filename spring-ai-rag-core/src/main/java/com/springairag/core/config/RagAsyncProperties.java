@@ -1,14 +1,14 @@
 package com.springairag.core.config;
 
 /**
- * 异步线程池配置
+ * Async Thread Pool Configuration
  */
 public class RagAsyncProperties {
 
     private int corePoolSize = 4;
     private int maxPoolSize = 16;
     private int queueCapacity = 100;
-    /** 并行检索超时秒数（向量/全文并行执行时） */
+    /** Parallel retrieval timeout in seconds (for vector/full-text parallel execution) */
     private int retrievalTimeoutSeconds = 5;
 
     public int getCorePoolSize() {

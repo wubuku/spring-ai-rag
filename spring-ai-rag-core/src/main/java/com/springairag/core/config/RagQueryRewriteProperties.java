@@ -5,7 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 查询改写配置
+ * Query Rewrite Configuration
  */
 public class RagQueryRewriteProperties {
 
@@ -64,7 +64,7 @@ public class RagQueryRewriteProperties {
         this.llmMaxRewrites = llmMaxRewrites;
     }
 
-    // 保持向后兼容的 getter 名
+    // Backward-compatible getter name
     public List<String> getDomainQualifiers() {
         return domainQualifiers;
     }

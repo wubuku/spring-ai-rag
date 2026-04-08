@@ -4,27 +4,27 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * API 限流配置
+ * API Rate Limiting Configuration
  *
- * <p>支持三种策略：
+ * <p>Supports three strategies:
  * <ul>
- *   <li>{@code ip} — 按客户端 IP 限流（默认，向后兼容）</li>
- *   <li>{@code api-key} — 按 X-API-Key 请求头限流，未携带时回退到 IP</li>
- *   <li>{@code user} — 按已认证用户限流，优先从 {@code authenticatedApiKey} 请求属性获取
- *       （该属性由 {@link com.springairag.core.filter.ApiKeyAuthFilter} 在认证成功后设置），
- *       未认证时回退到 IP</li>
+ *   <li>{@code ip} — Rate limit by client IP (default, backward compatible)</li>
+ *   <li>{@code api-key} — Rate limit by X-API-Key request header, falls back to IP when not provided</li>
+ *   <li>{@code user} — Rate limit by authenticated user; reads {@code authenticatedApiKey} request attribute
+ *       (set by {@link com.springairag.core.filter.ApiKeyAuthFilter} after successful authentication),
+ *       falls back to IP when not authenticated</li>
  * </ul>
  *
- * <p>配置示例：
+ * <p>Example:
  * <pre>
  * rag:
  *   rate-limit:
  *     enabled: true
  *     requests-per-minute: 60
  *     strategy: user               # ip | api-key | user
- *     key-limits:                  # strategy=user 或 api-key 时生效
- *       sk-premium-key: 300        # 高级用户 300 次/分钟
- *       sk-basic-key: 100          # 基础用户 100 次/分钟
+ *     key-limits:                  # effective when strategy=user or api-key
+ *       sk-premium-key: 300        # 300 requests/minute for premium users
+ *       sk-basic-key: 100          # 100 requests/minute for basic users
  * </pre>
  */
 public class RagRateLimitProperties {

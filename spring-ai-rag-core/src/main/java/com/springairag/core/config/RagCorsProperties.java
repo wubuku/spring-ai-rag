@@ -3,9 +3,9 @@ package com.springairag.core.config;
 import java.util.List;
 
 /**
- * CORS 跨域配置
+ * CORS (Cross-Origin Resource Sharing) Configuration
  *
- * <p>配置示例：
+ * <p>Example:
  * <pre>
  * rag:
  *   cors:

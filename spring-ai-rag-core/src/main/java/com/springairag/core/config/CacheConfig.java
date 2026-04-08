@@ -11,15 +11,15 @@ import org.springframework.context.annotation.Primary;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 缓存配置 — Caffeine 本地缓存
+ * Cache Configuration — Caffeine Local Cache
  *
- * <p>提供以下缓存区域：
+ * <p>Provides the following cache regions:
  * <ul>
- *   <li>embeddings — 嵌入向量缓存（文本 → 向量），避免重复 API 调用</li>
- *   <li>retrieval — 检索结果缓存（查询 → 结果），减少数据库压力</li>
+ *   <li>embeddings — Embedding vector cache (text → vector), avoids repeated API calls</li>
+ *   <li>retrieval — Retrieval result cache (query → results), reduces database pressure</li>
  * </ul>
  *
- * <p>缓存参数通过 rag.cache.* 配置，支持运行时调整。
+ * <p>Cache parameters are configured via rag.cache.*, supporting runtime adjustment.
  */
 @Configuration
 @EnableCaching
@@ -32,9 +32,9 @@ public class CacheConfig {
     }
 
     /**
-     * Caffeine 缓存管理器（通用缓存）
+     * Caffeine CacheManager (general cache)
      *
-     * <p>使用 rag.cache.maximum-size 和 rag.cache.expire-after-write-minutes 配置
+     * <p>Configured using rag.cache.maximum-size and rag.cache.expire-after-write-minutes
      */
     @Bean
     @Primary
@@ -49,10 +49,10 @@ public class CacheConfig {
     }
 
     /**
-     * 嵌入向量专用缓存管理器 — 更大容量、更长过期时间
+     * Embedding vector dedicated CacheManager — larger capacity, longer TTL
      *
-     * <p>嵌入向量是无状态的（同一文本始终产生相同向量），可以长时间缓存。
-     * 使用 rag.cache.embedding-maximum-size 和 rag.cache.embedding-expire-after-write-hours 配置
+     * <p>Embedding vectors are stateless (the same text always produces the same vector) and can be cached for longer.
+     * Configured using rag.cache.embedding-maximum-size and rag.cache.embedding-expire-after-write-hours
      */
     @Bean("embeddingCacheManager")
     public CacheManager embeddingCacheManager() {

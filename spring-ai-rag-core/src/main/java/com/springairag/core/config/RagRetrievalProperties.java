@@ -4,7 +4,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 检索配置
+ * Retrieval Configuration
  */
 public class RagRetrievalProperties {
 

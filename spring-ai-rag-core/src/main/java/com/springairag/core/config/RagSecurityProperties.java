@@ -1,9 +1,9 @@
 package com.springairag.core.config;
 
 /**
- * 安全认证配置
+ * Security Authentication Configuration
  *
- * <p>配置示例：
+ * <p>Example:
  * <pre>
  * rag:
  *   security:

@@ -1,7 +1,7 @@
 package com.springairag.core.config;
 
 /**
- * 重排序配置
+ * Re-ranking Configuration
  */
 public class RagRerankProperties {
 

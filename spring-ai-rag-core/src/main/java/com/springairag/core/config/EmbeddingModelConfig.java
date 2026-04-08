@@ -11,11 +11,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.beans.factory.annotation.Value;
 
 /**
- * EmbeddingModel 配置
- * 使用 SiliconFlow API（OpenAI 兼容格式），不受 app.llm.provider 开关影响
+ * EmbeddingModel Configuration
+ * Uses SiliconFlow API (OpenAI-compatible format), unaffected by app.llm.provider switch
  *
- * <p>MiniMaxEmbeddingAutoConfiguration 在 application.yml 中已排除，
- * 确保 SiliconFlow EmbeddingModel 是唯一的 EmbeddingModel 实现。
+ * <p>MiniMaxEmbeddingAutoConfiguration is excluded in application.yml,
+ * ensuring SiliconFlow EmbeddingModel is the only EmbeddingModel implementation.
  */
 @Configuration
 public class EmbeddingModelConfig {

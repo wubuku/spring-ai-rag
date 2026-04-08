@@ -1,7 +1,7 @@
 package com.springairag.core.config;
 
 /**
- * 缓存配置
+ * Cache Configuration
  */
 public class RagCacheProperties {
 

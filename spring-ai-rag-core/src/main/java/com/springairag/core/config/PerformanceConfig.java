@@ -22,22 +22,22 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * 性能优化配置
+ * Performance Optimization Configuration
  *
- * <p>提供：
+ * <p>Provides:
  * <ul>
- *   <li>缓存嵌入模型 — 包装原始 EmbeddingModel，对相同文本缓存向量结果</li>
- *   <li>检索专用线程池 — 给 HybridRetrieverService 并行向量/全文检索用</li>
+ *   <li>Caching EmbeddingModel — wraps the original EmbeddingModel, caches vectors for identical text</li>
+ *   <li>Retrieval-dedicated thread pool — for HybridRetrieverService parallel vector/full-text retrieval</li>
  * </ul>
  */
 @Configuration
 public class PerformanceConfig {
 
     /**
-     * 检索专用线程池
+     * Retrieval-dedicated thread pool
      *
-     * <p>固定 4 线程，用于 HybridRetrieverService 的 CompletableFuture 并行检索。
-     * 不使用默认 ForkJoinPool，避免与其他异步任务竞争。
+     * <p>Fixed 4 threads, used for HybridRetrieverService CompletableFuture parallel retrieval.
+     * Does not use the default ForkJoinPool to avoid competing with other async tasks.
      */
     @Bean("ragSearchExecutor")
     public Executor ragSearchExecutor() {
@@ -49,10 +49,10 @@ public class PerformanceConfig {
     }
 
     /**
-     * 模型对比专用线程池
+     * Model comparison dedicated thread pool
      *
-     * <p>核心 2 线程、最大 8 线程，支持模型对比场景的动态扩展。
-     * 复用线程避免每次对比创建新 ExecutorService（资源泄漏）。
+     * <p>Core 2 threads, max 8 threads, supports dynamic expansion for model comparison scenarios.
+     * Reuses threads to avoid creating a new ExecutorService for each comparison (resource leak).
      */
     @Bean("modelComparisonExecutor")
     public ExecutorService modelComparisonExecutor() {
@@ -69,10 +69,10 @@ public class PerformanceConfig {
     }
 
     /**
-     * 缓存嵌入模型 — 包装原始 EmbeddingModel
+     * Caching EmbeddingModel — wraps the original EmbeddingModel
      *
-     * <p>对 embed(text) 调用做 Caffeine 缓存，同一文本 2 小时内不重复调用 API。
-     * 通过 @Primary 优先注入，HybridRetrieverService 等自动获得缓存能力。
+     * <p>Caches Caffeine results for embed(text) calls; the same text won't call the API again within the TTL.
+     * Marked @Primary so it is injected by preference, giving HybridRetrieverService etc. automatic caching.
      */
     @Bean
     @Primary

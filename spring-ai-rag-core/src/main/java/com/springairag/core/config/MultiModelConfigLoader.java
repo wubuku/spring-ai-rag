@@ -15,10 +15,10 @@ import java.nio.file.Path;
 import java.util.List;
 
 /**
- * 外部 models.json 配置文件加载器。
+ * External models.json Configuration File Loader.
  *
- * <p>当外部 JSON 文件存在时，完全覆盖 YAML 配置（不支持合并）。
- * JSON 与 YAML 结构完全一致（仅 camelCase vs snake_case）。
+ * <p>When an external JSON file exists, it completely overrides YAML configuration (no merging).
+ * JSON and YAML structures are identical (only camelCase vs snake_case).
  */
 @Component
 public class MultiModelConfigLoader {
@@ -126,7 +126,7 @@ public class MultiModelConfigLoader {
         );
     }
 
-    // ─── JSON 结构映射（camelCase）─────────────────────────────
+    // ─── JSON Structure Mapping (camelCase) ─────────────────────────
 
     public static class ModelsJsonRoot {
         public ModelsJson models;

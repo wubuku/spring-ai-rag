@@ -3,12 +3,12 @@ package com.springairag.core.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * RAG 统一配置类
+ * RAG Unified Configuration Class
  *
- * <p>整合所有 rag.* 前缀的业务配置，替代分散的 @Value 注入。
- * 配置映射自 application.yml 的 rag: 节点。
+ * <p>Consolidates all rag.* prefix business configuration, replacing scattered @Value injections.
+ * Configuration is mapped from the rag: node in application.yml.
  *
- * <p>配置示例：
+ * <p>Example:
  * <pre>
  * rag:
  *   embedding:

@@ -15,16 +15,17 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
- * 异步任务配置
+ * Async Task Configuration
  *
- * <p>配置通用异步任务执行器（@Async 用），与 PerformanceConfig 的 ragSearchExecutor（检索专用）分离。
+ * <p>Configures the common async task executor (for @Async), separate from
+ * PerformanceConfig's ragSearchExecutor (retrieval-specific).
  *
  * <ul>
- *   <li>ragSearchExecutor — HybridRetrieverService 并行检索，固定 4 线程</li>
- *   <li>taskExecutor — 通用 @Async 异步任务，可配置线程池</li>
+ *   <li>ragSearchExecutor — HybridRetrieverService parallel retrieval, fixed 4 threads</li>
+ *   <li>taskExecutor — General @Async async tasks, configurable thread pool</li>
  * </ul>
  *
- * <p>队列满时降级策略：CallerRunsPolicy（背压保护）。
+ * <p>Queue full degradation strategy: CallerRunsPolicy (backpressure protection).
  */
 @Configuration
 @EnableAsync
@@ -52,7 +53,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(60);
 
-        // 队列满时的降级策略：CallerRunsPolicy 提供背压
+        // Queue full degradation: CallerRunsPolicy provides backpressure
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
 
         executor.initialize();
@@ -67,9 +68,9 @@ public class AsyncConfig implements AsyncConfigurer {
     }
 
     /**
-     * 异步方法未捕获异常处理器
+     * Uncaught exception handler for async methods
      *
-     * <p>记录异常日志，未来可扩展为告警通知。
+     * <p>Logs the exception; can be extended to send alert notifications in the future.
      */
     static class RagAsyncExceptionHandler implements AsyncUncaughtExceptionHandler {
         private static final Logger log = LoggerFactory.getLogger(RagAsyncExceptionHandler.class);

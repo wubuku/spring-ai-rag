@@ -1,7 +1,7 @@
 package com.springairag.core.config;
 
 /**
- * 文档分块配置
+ * Document Chunking Configuration
  */
 public class RagChunkProperties {
 
