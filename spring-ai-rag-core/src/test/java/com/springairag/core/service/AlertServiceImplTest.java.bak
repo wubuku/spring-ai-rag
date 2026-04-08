@@ -21,7 +21,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * AlertService unit tests
+ * AlertService 单元测试
  */
 @ExtendWith(MockitoExtension.class)
 class AlertServiceImplTest {
@@ -48,50 +48,50 @@ class AlertServiceImplTest {
     // ==================== shouldAlert ====================
 
     @Test
-    @DisplayName("THRESHOLD_HIGH: should trigger alert when exceeding threshold")
+    @DisplayName("THRESHOLD_HIGH: 超过阈值应告警")
     void shouldAlert_thresholdHigh_aboveThreshold() {
         assertTrue(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 2500, 2000));
     }
 
     @Test
-    @DisplayName("THRESHOLD_HIGH: should not trigger alert when not exceeding threshold")
+    @DisplayName("THRESHOLD_HIGH: 未超过阈值不应告警")
     void shouldAlert_thresholdHigh_belowThreshold() {
         assertFalse(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 1500, 2000));
     }
 
     @Test
-    @DisplayName("THRESHOLD_LOW: should trigger alert when below threshold")
+    @DisplayName("THRESHOLD_LOW: 低于阈值应告警")
     void shouldAlert_thresholdLow_belowThreshold() {
         assertTrue(alertService.shouldAlert("THRESHOLD_LOW", "hit_rate", 0.7, 0.85));
     }
 
     @Test
-    @DisplayName("THRESHOLD_LOW: should not trigger alert when not below threshold")
+    @DisplayName("THRESHOLD_LOW: 未低于阈值不应告警")
     void shouldAlert_thresholdLow_aboveThreshold() {
         assertFalse(alertService.shouldAlert("THRESHOLD_LOW", "hit_rate", 0.9, 0.85));
     }
 
     @Test
-    @DisplayName("SLO_BREACH: should trigger alert when latency exceeds threshold")
+    @DisplayName("SLO_BREACH: 延迟指标超过阈值应告警")
     void shouldAlert_sloBreach_latency() {
         assertTrue(alertService.shouldAlert("SLO_BREACH", "latency_p95", 3000, 2000));
     }
 
     @Test
-    @DisplayName("SLO_BREACH: should trigger alert when quality metric is below threshold")
+    @DisplayName("SLO_BREACH: 质量指标低于阈值应告警")
     void shouldAlert_sloBreach_quality() {
         assertTrue(alertService.shouldAlert("SLO_BREACH", "mrr", 0.4, 0.6));
     }
 
     @Test
-    @DisplayName("alert in silence period should not trigger")
+    @DisplayName("静默中的告警不应触发")
     void shouldAlert_silenced_returnsFalse() {
         alertService.silenceAlert("THRESHOLD_HIGH:latency", 60);
         assertFalse(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
     }
 
     @Test
-    @DisplayName("unknown alert type returns false")
+    @DisplayName("未知告警类型返回 false")
     void shouldAlert_unknownType_returnsFalse() {
         assertFalse(alertService.shouldAlert("UNKNOWN", "metric", 100, 50));
     }
@@ -99,19 +99,19 @@ class AlertServiceImplTest {
     // ==================== fireAlert ====================
 
     @Test
-    @DisplayName("fireAlert creates alert record and returns ID")
+    @DisplayName("fireAlert 创建告警记录并返回 ID")
     void fireAlert_createsAlert() {
         RagAlert savedAlert = new RagAlert();
         savedAlert.setId(42L);
         savedAlert.setAlertType("THRESHOLD_HIGH");
-        savedAlert.setAlertName("High Latency Alert");
+        savedAlert.setAlertName("高延迟告警");
         savedAlert.setSeverity("WARNING");
         savedAlert.setStatus("ACTIVE");
 
         when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
 
         Long alertId = alertService.fireAlert(
-                "THRESHOLD_HIGH", "High Latency Alert", "P95 exceeds 2000ms",
+                "THRESHOLD_HIGH", "高延迟告警", "P95 延迟超过 2000ms",
                 "WARNING", Map.of("latency", 2500));
 
         assertEquals(42L, alertId);
@@ -129,14 +129,14 @@ class AlertServiceImplTest {
         savedAlert.setId(1L);
         when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
 
-        alertService.fireAlert("SLO_BREACH", "P99 Latency", "P99 exceeded",
+        alertService.fireAlert("SLO_BREACH", "P99 Latency", "P99 超标",
                 "CRITICAL", Map.of("p99_latency_ms", 5500));
 
         verify(notificationService).sendAlert(
                 eq("SLO_BREACH"),
                 eq("P99 Latency"),
                 eq("CRITICAL"),
-                eq("P99 exceeded"),
+                eq("P99 超标"),
                 eq(Map.of("p99_latency_ms", 5500))
         );
     }
@@ -144,7 +144,7 @@ class AlertServiceImplTest {
     // ==================== resolveAlert ====================
 
     @Test
-    @DisplayName("resolveAlert marks alert as resolved")
+    @DisplayName("resolveAlert 将告警标记为已解决")
     void resolveAlert_resolvesExistingAlert() {
         RagAlert alert = new RagAlert();
         alert.setId(1L);
@@ -153,30 +153,30 @@ class AlertServiceImplTest {
         when(alertRepository.findById(1L)).thenReturn(Optional.of(alert));
         when(alertRepository.save(any(RagAlert.class))).thenReturn(alert);
 
-        alertService.resolveAlert(1L, "Fixed");
+        alertService.resolveAlert(1L, "已修复");
 
         verify(alertRepository).save(argThat(a ->
                 "RESOLVED".equals(a.getStatus()) &&
-                "Fixed".equals(a.getResolution()) &&
+                "已修复".equals(a.getResolution()) &&
                 a.getResolvedAt() != null
         ));
     }
 
     @Test
-    @DisplayName("resolveAlert does not throw for non-existent ID")
+    @DisplayName("resolveAlert 对不存在的 ID 不抛异常")
     void resolveAlert_nonExistent_noException() {
         when(alertRepository.findById(999L)).thenReturn(Optional.empty());
-        assertDoesNotThrow(() -> alertService.resolveAlert(999L, "none"));
+        assertDoesNotThrow(() -> alertService.resolveAlert(999L, "无"));
     }
 
     // ==================== getActiveAlerts ====================
 
     @Test
-    @DisplayName("getActiveAlerts returns active alert list")
+    @DisplayName("getActiveAlerts 返回活跃告警列表")
     void getActiveAlerts_returnsList() {
         RagAlert alert = new RagAlert();
         alert.setId(1L);
-        alert.setAlertName("Test Alert");
+        alert.setAlertName("测试告警");
         alert.setStatus("ACTIVE");
         alert.setFiredAt(ZonedDateTime.now());
 
@@ -184,13 +184,13 @@ class AlertServiceImplTest {
 
         List<AlertService.AlertRecord> active = alertService.getActiveAlerts();
         assertEquals(1, active.size());
-        assertEquals("Test Alert", active.get(0).getAlertName());
+        assertEquals("测试告警", active.get(0).getAlertName());
     }
 
     // ==================== getAlertStats ====================
 
     @Test
-    @DisplayName("getAlertStats returns correct statistics")
+    @DisplayName("getAlertStats 返回正确统计数据")
     void getAlertStats_returnsStats() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -214,7 +214,7 @@ class AlertServiceImplTest {
     // ==================== getAlertHistory ====================
 
     @Test
-    @DisplayName("getAlertHistory returns alert history list")
+    @DisplayName("getAlertHistory 返回告警历史列表")
     void getAlertHistory_returnsList() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -222,7 +222,7 @@ class AlertServiceImplTest {
         RagAlert alert1 = new RagAlert();
         alert1.setId(1L);
         alert1.setAlertType("THRESHOLD_HIGH");
-        alert1.setAlertName("High Latency");
+        alert1.setAlertName("高延迟");
         alert1.setSeverity("WARNING");
         alert1.setStatus("ACTIVE");
         alert1.setFiredAt(ZonedDateTime.now().minusDays(1));
@@ -230,7 +230,7 @@ class AlertServiceImplTest {
         RagAlert alert2 = new RagAlert();
         alert2.setId(2L);
         alert2.setAlertType("SLO_BREACH");
-        alert2.setAlertName("SLO Breach");
+        alert2.setAlertName("SLO 违约");
         alert2.setSeverity("CRITICAL");
         alert2.setStatus("RESOLVED");
         alert2.setFiredAt(ZonedDateTime.now().minusDays(2));
@@ -240,11 +240,11 @@ class AlertServiceImplTest {
 
         List<AlertService.AlertRecord> history = alertService.getAlertHistory(start, end, "WARNING", null);
         assertEquals(1, history.size());
-        assertEquals("High Latency", history.get(0).getAlertName());
+        assertEquals("高延迟", history.get(0).getAlertName());
     }
 
     @Test
-    @DisplayName("getAlertHistory empty result returns empty list")
+    @DisplayName("getAlertHistory 空结果返回空列表")
     void getAlertHistory_empty_returnsEmptyList() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -258,7 +258,7 @@ class AlertServiceImplTest {
     // ==================== checkAllSlos ====================
 
     @Test
-    @DisplayName("checkAllSlos returns all 6 SLO statuses")
+    @DisplayName("checkAllSlos 返回全部 6 个 SLO 状态")
     void checkAllSlos_returnsSixSlos() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -289,7 +289,7 @@ class AlertServiceImplTest {
     // ==================== checkSlo: availability with data ====================
 
     @Test
-    @DisplayName("checkSlo: availability with data and latency met")
+    @DisplayName("checkSlo: availability 有数据且延迟达标")
     void checkSlo_availability_withData_met() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -307,7 +307,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: availability with data but latency not met")
+    @DisplayName("checkSlo: availability 有数据但延迟不达标")
     void checkSlo_availability_withData_notMet() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -325,7 +325,7 @@ class AlertServiceImplTest {
     // ==================== checkSlo: latency p50/p99 ====================
 
     @Test
-    @DisplayName("checkSlo: latency_p50 met")
+    @DisplayName("checkSlo: latency_p50 达标")
     void checkSlo_latencyP50_met() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -341,7 +341,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: latency_p99 exceeds threshold not met")
+    @DisplayName("checkSlo: latency_p99 超过阈值不达标")
     void checkSlo_latencyP99_breached() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -356,7 +356,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: latency with no data returns 0")
+    @DisplayName("checkSlo: latency 无数据时 actual 为 0")
     void checkSlo_latency_noData() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -372,7 +372,7 @@ class AlertServiceImplTest {
     // ==================== checkSlo: quality mrr/hit_rate ====================
 
     @Test
-    @DisplayName("checkSlo: mrr met")
+    @DisplayName("checkSlo: mrr 达标")
     void checkSlo_mrr_met() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -389,7 +389,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: mrr with no data returns 0")
+    @DisplayName("checkSlo: mrr 无数据时 actual 为 0")
     void checkSlo_mrr_noData() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -403,7 +403,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: hit_rate met")
+    @DisplayName("checkSlo: hit_rate 达标")
     void checkSlo_hitRate_met() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -419,7 +419,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: hit_rate not met")
+    @DisplayName("checkSlo: hit_rate 不达标")
     void checkSlo_hitRate_notMet() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -433,7 +433,7 @@ class AlertServiceImplTest {
     }
 
     @Test
-    @DisplayName("checkSlo: hit_rate with no data")
+    @DisplayName("checkSlo: hit_rate 无数据")
     void checkSlo_hitRate_noData() {
         ZonedDateTime start = ZonedDateTime.now().minusHours(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -446,10 +446,10 @@ class AlertServiceImplTest {
         assertFalse(status.isMet());
     }
 
-    // ==================== getAlertStats zero-hour window ====================
+    // ==================== getAlertStats 零小时 ====================
 
     @Test
-    @DisplayName("getAlertStats zero-hour window alertRate is 0")
+    @DisplayName("getAlertStats 零小时窗口 alertRate 为 0")
     void getAlertStats_zeroHours_alertRateZero() {
         ZonedDateTime now = ZonedDateTime.now();
 
@@ -465,20 +465,20 @@ class AlertServiceImplTest {
         assertEquals(0, stats.getAlertRate());
     }
 
-    // ==================== Silence expired recovery ====================
+    // ==================== 静默过期恢复 ====================
 
     @Test
-    @DisplayName("silence expired: alert should resume triggering")
+    @DisplayName("静默过期后告警恢复触发")
     void shouldAlert_silenceExpired_resumesTrigger() {
-        // Silence -1 minute (already expired)
+        // 静默 -1 分钟（已过期）
         alertService.silenceAlert("THRESHOLD_HIGH:latency", -1);
         assertTrue(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
     }
 
-    // ==================== fireAlert field completeness ====================
+    // ==================== fireAlert 字段完整性 ====================
 
     @Test
-    @DisplayName("fireAlert sets all fields")
+    @DisplayName("fireAlert 设置所有字段")
     void fireAlert_setsAllFields() {
         RagAlert savedAlert = new RagAlert();
         savedAlert.setId(1L);
@@ -486,12 +486,12 @@ class AlertServiceImplTest {
         when(alertRepository.save(any(RagAlert.class))).thenReturn(savedAlert);
 
         Map<String, Object> metrics = Map.of("latency", 3000, "p95", 2500);
-        alertService.fireAlert("SLO_BREACH", "Latency SLO", "P95 exceeded", "CRITICAL", metrics);
+        alertService.fireAlert("SLO_BREACH", "延迟 SLO", "P95 超标", "CRITICAL", metrics);
 
         verify(alertRepository).save(argThat(alert ->
                 "SLO_BREACH".equals(alert.getAlertType()) &&
-                "Latency SLO".equals(alert.getAlertName()) &&
-                "P95 exceeded".equals(alert.getMessage()) &&
+                "延迟 SLO".equals(alert.getAlertName()) &&
+                "P95 超标".equals(alert.getMessage()) &&
                 "CRITICAL".equals(alert.getSeverity()) &&
                 alert.getMetrics() != null &&
                 "ACTIVE".equals(alert.getStatus()) &&
@@ -499,10 +499,10 @@ class AlertServiceImplTest {
         ));
     }
 
-    // ==================== resolveAlert complete field validation ====================
+    // ==================== resolveAlert 完整字段验证 ====================
 
     @Test
-    @DisplayName("resolveAlert sets resolvedAt and resolution")
+    @DisplayName("resolveAlert 设置 resolvedAt 和 resolution")
     void resolveAlert_setsResolutionFields() {
         RagAlert alert = new RagAlert();
         alert.setId(5L);
@@ -510,46 +510,46 @@ class AlertServiceImplTest {
 
         when(alertRepository.findById(5L)).thenReturn(Optional.of(alert));
 
-        alertService.resolveAlert(5L, "Scaled up");
+        alertService.resolveAlert(5L, "扩容处理");
 
         verify(alertRepository).save(argThat(a ->
                 "RESOLVED".equals(a.getStatus()) &&
-                "Scaled up".equals(a.getResolution()) &&
+                "扩容处理".equals(a.getResolution()) &&
                 a.getResolvedAt() != null
         ));
     }
 
-    // ==================== SLO_BREACH: latency breach ====================
+    // ==================== SLO_BREACH: latency 不达标 ====================
 
     @Test
-    @DisplayName("SLO_BREACH: time metric should trigger alert when exceeding threshold")
+    @DisplayName("SLO_BREACH: time 指标超过阈值应告警")
     void shouldAlert_sloBreach_timeMetric() {
         assertTrue(alertService.shouldAlert("SLO_BREACH", "response_time", 3000, 2000));
     }
 
-    // ==================== silenceAlert covers expired cleanup path ====================
+    // ==================== silenceAlert 覆盖过期清理路径 ====================
 
     @Test
-    @DisplayName("multiple shouldAlert calls should clean up expired silence records")
+    @DisplayName("多次 shouldAlert 清理过期静默记录")
     void shouldAlert_cleansExpiredSilence() {
         alertService.silenceAlert("THRESHOLD_HIGH:metric1", -1);
         alertService.silenceAlert("THRESHOLD_HIGH:metric2", 60);
 
-        // First call triggers cleanup
+        // 第一次调用触发 cleanup
         assertTrue(alertService.shouldAlert("THRESHOLD_HIGH", "metric1", 100, 50));
-        // Silenced ones still do not trigger
+        // 已静默的仍不触发
         assertFalse(alertService.shouldAlert("THRESHOLD_HIGH", "metric2", 100, 50));
     }
 
-    // ==================== AlertRecord completeness ====================
+    // ==================== AlertRecord 完整性 ====================
 
     @Test
-    @DisplayName("getActiveAlerts maps all AlertRecord fields")
+    @DisplayName("getActiveAlerts 映射所有 AlertRecord 字段")
     void getActiveAlerts_mapsAllFields() {
         RagAlert alert = new RagAlert();
         alert.setId(10L);
         alert.setAlertType("THRESHOLD_LOW");
-        alert.setAlertName("Low Hit Rate");
+        alert.setAlertName("命中率低");
         alert.setMessage("hit_rate < 0.85");
         alert.setSeverity("WARNING");
         alert.setMetrics(Map.of("hit_rate", 0.7));
@@ -564,7 +564,7 @@ class AlertServiceImplTest {
         AlertService.AlertRecord r = records.get(0);
         assertEquals(10L, r.getId());
         assertEquals("THRESHOLD_LOW", r.getAlertType());
-        assertEquals("Low Hit Rate", r.getAlertName());
+        assertEquals("命中率低", r.getAlertName());
         assertEquals("hit_rate < 0.85", r.getMessage());
         assertEquals("WARNING", r.getSeverity());
         assertEquals("ACTIVE", r.getStatus());
