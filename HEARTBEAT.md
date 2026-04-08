@@ -1268,6 +1268,10 @@
 | K6-1 | k6: Collection Write CRUD 测试组 | 性能测试 | ✅ 2026-04-09 |
 | K6-2 | k6: A/B Experiments 测试组 | 性能测试 | ✅ 2026-04-09 |
 | K6-3 | k6: Alerts & Feedback 测试组 | 性能测试 | ✅ 2026-04-09 |
+| K6-4 | k6: 分离 chat 非流/流式延迟指标（独立 p95 阈值） | 性能测试 | ✅ 2026-04-09 |
+| K6-5 | k6: 探索性测试——梯度压测（ramp VUs 逐步增加找到吞吐上限） | 性能测试 | ⏳ |
+| K6-6 | k6: 持久化会话压测（多 VU 共享同一 sessionId 压测 ChatMemory 锁竞争） | 性能测试 | ⏳ |
+| K6-7 | k6: 向量检索专项压测（高并发 100+ VUs 搜索端点，验证 pgvector HNSW 性能） | 性能测试 | ⏳ |
 
 ## 待办（C41-C42 — 代码库巡检）
 
@@ -1913,3 +1917,13 @@
   - 修复：`RagPropertiesTestConfig` 添加 `ragSseProperties()` Bean 方法
   - 1421 tests 全通过（0 failures, 0 errors）
   - commit 11fa1b5 已推送
+
+## Cron 进度（2026-04-09 04:47 — k6 负载测试增强）
+
+- 2026-04-09 04:47 — ✅ k6 负载测试：分离 chat 延迟指标
+  - `rag_chat_latency` → 拆分为 `rag_chat_nonstream_latency`（/chat/ask, p95<5s, p99<10s）和 `rag_chat_stream_latency`（/chat/stream SSE 总时间, p95<8s, p99<15s）
+  - 非流式 chat 测量完整 LLM 响应时间；流式 SSE 测量接收到所有 chunk 的总时间——两种本质不同的延迟 profile，之前被混为一谈
+  - Summary 输出分别展示 chat(ns) 和 chat(ss) 两个 p(95) 值
+  - 1 file changed, +19/-8 行
+  - mvn test ✅（全通过）
+  - commit 57aca5a 已推送
