@@ -15,6 +15,7 @@ import java.util.function.Consumer;
  *   <li>No-timeout emitters (client disconnection detected via IOException)</li>
  *   <li>Progress event sending with best-effort error handling</li>
  *   <li>Standardized done/error completion</li>
+ *   <li>Heartbeat comments to keep connections alive through proxies</li>
  * </ul>
  */
 public final class SseEmitters {
@@ -122,6 +123,17 @@ public final class SseEmitters {
         } catch (Exception ex) {
             log.warn("SSE raw send failed for {}: {}", context, ex.getMessage());
         }
+    }
+
+    /**
+     * Sends a heartbeat comment to keep the connection alive through proxies/load balancers.
+     * Heartbeat is sent as an unnamed comment line: {@code : heartbeat\n\n}
+     * Proxies may close idle connections after ~60s, so a heartbeat every 30s is recommended.
+     *
+     * @param emitter the SSE emitter
+     */
+    public static void sendHeartbeat(SseEmitter emitter) {
+        sendRaw(emitter, null, ": heartbeat", "heartbeat");
     }
 
     /**

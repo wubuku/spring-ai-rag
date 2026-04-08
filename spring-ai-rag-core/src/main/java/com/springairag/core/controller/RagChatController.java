@@ -4,6 +4,8 @@ import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.config.RagChatService;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
@@ -37,6 +39,10 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 
 /**
  * RAG chat controller.
@@ -55,15 +61,18 @@ public class RagChatController {
     private final RagChatService ragChatService;
     private final RagChatHistoryRepository historyRepository;
     private final ChatExportService chatExportService;
+    private final RagSseProperties sseProperties;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
                              ChatExportService chatExportService,
+                             RagSseProperties sseProperties,
                              @Autowired(required = false) AuditLogService auditLogService) {
         this.ragChatService = ragChatService;
         this.historyRepository = historyRepository;
         this.chatExportService = chatExportService;
+        this.sseProperties = sseProperties;
         this.auditLogService = auditLogService;
     }
 
@@ -139,17 +148,43 @@ public class RagChatController {
         // SSE protocol: OpenAI-compatible format
         // Main channel: data:{"choices":[{"delta":{"content":"..."}}]}
         // done:    event:done + data:{"traceId":"...","status":"complete"}
+        // heartbeat: comment (: heartbeat\n\n) if sse.heartbeatIntervalSeconds > 0
+
+        final SseEmitter finalEmitter = emitter;
+        final String finalTraceId = traceId;
+
+        final ScheduledFuture<?>[] heartbeatTask = new ScheduledFuture<?>[1];
+        final ScheduledExecutorService[] heartbeatScheduler = new ScheduledExecutorService[1];
+
+        if (sseProperties != null && sseProperties.isHeartbeatEnabled()) {
+            int interval = sseProperties.getHeartbeatIntervalSeconds();
+            heartbeatScheduler[0] = Executors.newSingleThreadScheduledExecutor(r -> {
+                Thread t = new Thread(r, "sse-heartbeat");
+                t.setDaemon(true);
+                return t;
+            });
+            heartbeatTask[0] = heartbeatScheduler[0].scheduleAtFixedRate(
+                    () -> SseEmitters.sendHeartbeat(finalEmitter),
+                    interval, interval, TimeUnit.SECONDS);
+            log.debug("SSE heartbeat enabled: {}s interval", interval);
+        }
 
         ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
                 .subscribe(
                         chunk -> {
                             String json = "{\"choices\":[{\"delta\":{\"content\":\"" + SseEmitters.escapeJson(chunk) + "\"}}]}";
-                            SseEmitters.sendRaw(emitter, null, json, "chat chunk");
+                            SseEmitters.sendRaw(finalEmitter, null, json, "chat chunk");
                         },
-                        emitter::completeWithError,
+                        error -> {
+                            if (heartbeatTask[0] != null) heartbeatTask[0].cancel(false);
+                            if (heartbeatScheduler[0] != null) heartbeatScheduler[0].shutdown();
+                            finalEmitter.completeWithError(error);
+                        },
                         () -> {
-                            String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
-                            SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
+                            if (heartbeatTask[0] != null) heartbeatTask[0].cancel(false);
+                            if (heartbeatScheduler[0] != null) heartbeatScheduler[0].shutdown();
+                            String doneJson = "{\"traceId\":\"" + (finalTraceId != null ? finalTraceId : "") + "\",\"status\":\"complete\"}";
+                            SseEmitters.sendRaw(finalEmitter, "done", doneJson, "chat done");
                         }
                 );
 

@@ -53,6 +53,7 @@ public class RagProperties {
     private final RagTimeoutProperties timeout = new RagTimeoutProperties();
     private final RagProxyProperties proxy = new RagProxyProperties();
     private final RagSlowQueryProperties slowQuery = new RagSlowQueryProperties();
+    private final RagSseProperties sse = new RagSseProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -116,5 +117,9 @@ public class RagProperties {
 
     public RagSlowQueryProperties getSlowQuery() {
         return slowQuery;
+    }
+
+    public RagSseProperties getSse() {
+        return sse;
     }
 }

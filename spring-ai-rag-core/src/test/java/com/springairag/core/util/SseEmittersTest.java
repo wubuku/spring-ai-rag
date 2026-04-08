@@ -73,6 +73,23 @@ class SseEmittersTest {
         assertDoesNotThrow(() -> SseEmitters.sendDone(emitter, null));
     }
 
+    // --- sendHeartbeat tests ---
+
+    @Test
+    @DisplayName("sendHeartbeat does not throw with connected client")
+    void sendHeartbeat_noThrow() {
+        SseEmitter emitter = SseEmitters.create();
+        assertDoesNotThrow(() -> SseEmitters.sendHeartbeat(emitter));
+    }
+
+    @Test
+    @DisplayName("sendHeartbeat does not throw with disconnected client")
+    void sendHeartbeat_disconnectedClient() {
+        SseEmitter emitter = SseEmitters.create();
+        emitter.complete();
+        assertDoesNotThrow(() -> SseEmitters.sendHeartbeat(emitter));
+    }
+
     @Test
     @DisplayName("sendError does not throw with connected client")
     void sendError_noThrow() {

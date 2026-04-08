@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.core.config.RagChatService;
+import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
@@ -34,6 +35,7 @@ class SseStreamE2ETest {
     private RagChatService ragChatService;
     private RagChatHistoryRepository historyRepository;
     private ChatExportService chatExportService;
+    private RagSseProperties sseProperties;
     private AuditLogService auditLogService;
     private RagChatController controller;
 
@@ -42,8 +44,9 @@ class SseStreamE2ETest {
         ragChatService = mock(RagChatService.class);
         historyRepository = mock(RagChatHistoryRepository.class);
         chatExportService = mock(ChatExportService.class);
+        sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
-        controller = new RagChatController(ragChatService, historyRepository, chatExportService, auditLogService);
+        controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, auditLogService);
     }
 
     /**
