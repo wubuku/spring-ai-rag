@@ -5,6 +5,10 @@ import com.springairag.api.dto.FireAlertRequest;
 import com.springairag.api.dto.FireAlertResponse;
 import com.springairag.api.dto.ResolveAlertRequest;
 import com.springairag.api.dto.SilenceAlertRequest;
+import com.springairag.api.dto.SilenceScheduleRequest;
+import com.springairag.api.dto.SloConfigRequest;
+import com.springairag.core.entity.RagSilenceSchedule;
+import com.springairag.core.entity.RagSloConfig;
 import com.springairag.core.repository.RagSilenceScheduleRepository;
 import com.springairag.core.repository.SloConfigRepository;
 import com.springairag.core.service.AlertService;
@@ -261,5 +265,214 @@ class AlertControllerTest {
                 "2026-04-02T00:00:00+08:00");
 
         assertTrue(response.getBody().isMet());
+    }
+
+    // ==================== SLO Config CRUD ====================
+
+    @Test
+    void createSloConfig_success() {
+        SloConfigRequest request = new SloConfigRequest();
+        request.setSloName("latency_p99");
+        request.setSloType("LATENCY");
+        request.setTargetValue(200.0);
+        request.setUnit("ms");
+        request.setDescription("P99 latency SLO");
+
+        RagSloConfig saved = new RagSloConfig();
+        saved.setSloName("latency_p99");
+        saved.setSloType("LATENCY");
+        saved.setTargetValue(200.0);
+        saved.setUnit("ms");
+
+        when(sloConfigRepository.findBySloName("latency_p99")).thenReturn(java.util.Optional.empty());
+        when(sloConfigRepository.save(any(RagSloConfig.class))).thenReturn(saved);
+
+        ResponseEntity<RagSloConfig> response = controller.createSloConfig(request);
+
+        assertEquals(201, response.getStatusCode().value());
+        assertEquals("latency_p99", response.getBody().getSloName());
+        assertEquals("LATENCY", response.getBody().getSloType());
+    }
+
+    @Test
+    void createSloConfig_duplicate_returns409() {
+        SloConfigRequest request = new SloConfigRequest();
+        request.setSloName("existing_slo");
+        request.setSloType("AVAILABILITY");
+        request.setTargetValue(99.9);
+        request.setUnit("%");
+
+        RagSloConfig existing = new RagSloConfig();
+        existing.setSloName("existing_slo");
+        when(sloConfigRepository.findBySloName("existing_slo")).thenReturn(java.util.Optional.of(existing));
+
+        ResponseEntity<RagSloConfig> response = controller.createSloConfig(request);
+
+        assertEquals(409, response.getStatusCode().value());
+        verify(sloConfigRepository, never()).save(any());
+    }
+
+    @Test
+    void listSloConfigs_returnsList() {
+        RagSloConfig c1 = new RagSloConfig();
+        c1.setSloName("slo1");
+        RagSloConfig c2 = new RagSloConfig();
+        c2.setSloName("slo2");
+
+        when(sloConfigRepository.findAll()).thenReturn(List.of(c1, c2));
+
+        ResponseEntity<List<RagSloConfig>> response = controller.listSloConfigs();
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(2, response.getBody().size());
+    }
+
+    @Test
+    void getSloConfig_found() {
+        RagSloConfig config = new RagSloConfig();
+        config.setSloName("latency");
+        config.setTargetValue(500.0);
+        when(sloConfigRepository.findBySloName("latency")).thenReturn(java.util.Optional.of(config));
+
+        ResponseEntity<RagSloConfig> response = controller.getSloConfig("latency");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("latency", response.getBody().getSloName());
+    }
+
+    @Test
+    void getSloConfig_notFound_returns404() {
+        when(sloConfigRepository.findBySloName("nonexistent")).thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<RagSloConfig> response = controller.getSloConfig("nonexistent");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void deleteSloConfig_existing_returns204() {
+        RagSloConfig config = new RagSloConfig();
+        config.setSloName("to_delete");
+        when(sloConfigRepository.findBySloName("to_delete")).thenReturn(java.util.Optional.of(config));
+        doNothing().when(sloConfigRepository).deleteBySloName("to_delete");
+
+        ResponseEntity<Void> response = controller.deleteSloConfig("to_delete");
+
+        assertEquals(204, response.getStatusCode().value());
+        verify(sloConfigRepository).deleteBySloName("to_delete");
+    }
+
+    @Test
+    void deleteSloConfig_notFound_returns404() {
+        when(sloConfigRepository.findBySloName("nonexistent")).thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<Void> response = controller.deleteSloConfig("nonexistent");
+
+        assertEquals(404, response.getStatusCode().value());
+        verify(sloConfigRepository, never()).deleteBySloName(any());
+    }
+
+    // ==================== Silence Schedule CRUD ====================
+
+    @Test
+    void createSilenceSchedule_success() {
+        SilenceScheduleRequest request = new SilenceScheduleRequest();
+        request.setName("weekend_maint");
+        request.setAlertKey("high-latency");
+        request.setSilenceType("ONE_TIME");
+        request.setStartTime("2026-04-10T02:00:00+08:00");
+        request.setEndTime("2026-04-10T04:00:00+08:00");
+        request.setDescription("Weekend maintenance");
+
+        RagSilenceSchedule saved = new RagSilenceSchedule();
+        saved.setName("weekend_maint");
+        saved.setAlertKey("high-latency");
+        saved.setSilenceType("ONE_TIME");
+
+        when(silenceScheduleRepository.findByName("weekend_maint")).thenReturn(java.util.Optional.empty());
+        when(silenceScheduleRepository.save(any(RagSilenceSchedule.class))).thenReturn(saved);
+
+        ResponseEntity<RagSilenceSchedule> response = controller.createSilenceSchedule(request);
+
+        assertEquals(201, response.getStatusCode().value());
+        assertEquals("weekend_maint", response.getBody().getName());
+    }
+
+    @Test
+    void createSilenceSchedule_duplicate_returns409() {
+        SilenceScheduleRequest request = new SilenceScheduleRequest();
+        request.setName("existing_schedule");
+        request.setSilenceType("RECURRING");
+        request.setStartTime("2026-04-10T02:00:00+08:00");
+        request.setEndTime("2026-04-10T04:00:00+08:00");
+
+        RagSilenceSchedule existing = new RagSilenceSchedule();
+        existing.setName("existing_schedule");
+        when(silenceScheduleRepository.findByName("existing_schedule")).thenReturn(java.util.Optional.of(existing));
+
+        ResponseEntity<RagSilenceSchedule> response = controller.createSilenceSchedule(request);
+
+        assertEquals(409, response.getStatusCode().value());
+        verify(silenceScheduleRepository, never()).save(any());
+    }
+
+    @Test
+    void listSilenceSchedules_returnsList() {
+        RagSilenceSchedule s1 = new RagSilenceSchedule();
+        s1.setName("schedule1");
+        RagSilenceSchedule s2 = new RagSilenceSchedule();
+        s2.setName("schedule2");
+
+        when(silenceScheduleRepository.findAll()).thenReturn(List.of(s1, s2));
+
+        ResponseEntity<List<RagSilenceSchedule>> response = controller.listSilenceSchedules();
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(2, response.getBody().size());
+    }
+
+    @Test
+    void getSilenceSchedule_found() {
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setName("maintenance");
+        schedule.setSilenceType("ONE_TIME");
+        when(silenceScheduleRepository.findByName("maintenance")).thenReturn(java.util.Optional.of(schedule));
+
+        ResponseEntity<RagSilenceSchedule> response = controller.getSilenceSchedule("maintenance");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("maintenance", response.getBody().getName());
+    }
+
+    @Test
+    void getSilenceSchedule_notFound_returns404() {
+        when(silenceScheduleRepository.findByName("nonexistent")).thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<RagSilenceSchedule> response = controller.getSilenceSchedule("nonexistent");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void deleteSilenceSchedule_existing_returns204() {
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setName("to_delete");
+        when(silenceScheduleRepository.findByName("to_delete")).thenReturn(java.util.Optional.of(schedule));
+        doNothing().when(silenceScheduleRepository).deleteByName("to_delete");
+
+        ResponseEntity<Void> response = controller.deleteSilenceSchedule("to_delete");
+
+        assertEquals(204, response.getStatusCode().value());
+        verify(silenceScheduleRepository).deleteByName("to_delete");
+    }
+
+    @Test
+    void deleteSilenceSchedule_notFound_returns404() {
+        when(silenceScheduleRepository.findByName("nonexistent")).thenReturn(java.util.Optional.empty());
+
+        ResponseEntity<Void> response = controller.deleteSilenceSchedule("nonexistent");
+
+        assertEquals(404, response.getStatusCode().value());
+        verify(silenceScheduleRepository, never()).deleteByName(any());
     }
 }
