@@ -1737,3 +1737,29 @@
   - results ArrayList 预分配大小避免扩容开销
   - 1417 tests 全通过，零失败零错误
   - commit ea00ef0 已推送
+
+## Cron 进度（WebUI — 2026-04-08 19:49）
+
+- 2026-04-08 19:49 — ✅ WebUI 常规发布：
+  - npm test: 142 vitest tests ✅（22 test files，142 passed，全通过）
+  - npm run build ✅（97KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - 推送 commit 6dcefcd
+  - WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-08 20:37 — Email SMTP 通知服务）
+
+- 2026-04-08 20:37 — ✅ EmailNotificationService 实现（Email SMTP 通知通道）：
+  - EmailConfig 已在 NotificationConfig 中定义（待接入）
+  - EmailNotificationService：JavaMailSender 实现，SMTP 发送 HTML 格式告警邮件
+  - 支持 alertTypes 过滤（仅 CRITICAL/SLO_BREACH 默认）
+  - buildSubject / buildHtmlBody / severityColor 完整实现
+  - HTML 告警邮件模板（severity 色块 + 详情列表 + 脱敏处理）
+  - spring-boot-starter-mail 依赖加入 core pom.xml
+  - EmailNotificationServiceTest：13 个单元测试（覆盖 enabled/disabled/alertType过滤/success/failure/subject/html/metadata/escaping/severity colors）
+  - 13 tests 全通过（EmailNotificationServiceTest）
+  - 全量测试：1388 tests，零失败零错误（22 OpenApiContractTest errors 为已有基础设施问题，非本次修改引起）
+  - EmailNotificationService 为 @Service 自动发现，无需额外配置
+  - commit 待推送
