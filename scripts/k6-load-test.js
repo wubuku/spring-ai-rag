@@ -313,10 +313,13 @@ export default function(data) {
   // Run test groups in sequence per VU iteration
   runHealthChecks(data);
   runCollectionRead(data);
+  runCollectionWrite(data);
   runDocumentCRUD(data);
   runHybridSearch(data);
   runChatAsk(data);
   runChatStream(data);
+  runAbTests(data);
+  runAlertsAndFeedback(data);
   runMetricsAndCache(data);
 
   // Small think time between iterations
@@ -621,6 +624,171 @@ function runMetricsAndCache(data) {
         cacheHitRate.add(hitRate);
       } catch { /* ignore */ }
     }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Collections Write – create / update / delete collections
+// ─────────────────────────────────────────────────────────────────
+
+function runCollectionWrite(data) {
+  group('Collection Write', () => {
+    // Create a transient collection (per-VU unique to avoid collisions)
+    const colName = `k6-col-${__VU}-${Date.now()}`;
+    const cr = post(`${BASE_URL}/api/v1/rag/collections`, {
+      name: colName,
+      description: `k6 load test collection by VU ${__VU}`,
+      metadata: { vu: __VU, test: true },
+    }, {}, { name: 'collection_create' });
+
+    let createdId = null;
+    const created = check(cr, {
+      'collection create returns 201': r => r.status === 201,
+      'collection create returns id': r => {
+        try {
+          const b = JSON.parse(r.body);
+          createdId = b.data?.id || b.id;
+          return !!createdId;
+        } catch { return false; }
+      },
+    });
+
+    if (created && createdId) {
+      // Get the created collection
+      const gr = get(`${BASE_URL}/api/v1/rag/collections/${createdId}`, HEADERS_JSON, { name: 'collection_get' });
+      check(gr, { 'collection get returns 200': r => r.status === 200 });
+
+      // Update the collection
+      const ur = post(`${BASE_URL}/api/v1/rag/collections/${createdId}`, {
+        name: colName + '-updated',
+        description: 'updated by k6 load test',
+      }, {}, { name: 'collection_update' });
+      check(ur, {
+        'collection update returns 200': r => r.status === 200 || r.status === 201,
+      });
+
+      // Delete the collection
+      const dr = del(`${BASE_URL}/api/v1/rag/collections/${createdId}`, HEADERS_JSON, { name: 'collection_delete' });
+      check(dr, {
+        'collection delete returns 200/204': r => r.status === 200 || r.status === 204,
+      });
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// A/B Experiments – list / create experiments
+// ─────────────────────────────────────────────────────────────────
+
+function runAbTests(data) {
+  group('A/B Experiments', () => {
+    // List experiments
+    const lr = get(`${BASE_URL}/api/v1/rag/ab-tests`, HEADERS_JSON, { name: 'abtest_list' });
+    check(lr, {
+      'abtest list returns 200': r => r.status === 200,
+    });
+
+    // Create an experiment
+    const expName = `k6-exp-${__VU}-${Date.now()}`;
+    const cr = post(`${BASE_URL}/api/v1/rag/ab-tests`, {
+      name: expName,
+      description: 'k6 load test experiment',
+      modelA: 'deepseek-chat',
+      modelB: 'gpt-4o',
+      trafficSplit: 0.5,
+      enabled: false,
+    }, {}, { name: 'abtest_create' });
+
+    let expId = null;
+    const created = check(cr, {
+      'abtest create returns 201': r => r.status === 201 || r.status === 200,
+      'abtest create returns id': r => {
+        try {
+          const b = JSON.parse(r.body);
+          expId = b.data?.id || b.id;
+          return !!expId;
+        } catch { return false; }
+      },
+    });
+
+    if (created && expId) {
+      // Get the experiment
+      const gr = get(`${BASE_URL}/api/v1/rag/ab-tests/${expId}`, HEADERS_JSON, { name: 'abtest_get' });
+      check(gr, { 'abtest get returns 200': r => r.status === 200 });
+
+      // Start the experiment
+      const sr = post(`${BASE_URL}/api/v1/rag/ab-tests/${expId}/start`, {}, {}, { name: 'abtest_start' });
+      check(sr, {
+        'abtest start returns 200': r => r.status === 200 || r.status === 201,
+      });
+
+      // Stop the experiment
+      const pr = post(`${BASE_URL}/api/v1/rag/ab-tests/${expId}/stop`, {}, {}, { name: 'abtest_stop' });
+      check(pr, {
+        'abtest stop returns 200': r => r.status === 200 || r.status === 201,
+      });
+
+      // Get experiment results
+      const rr = get(`${BASE_URL}/api/v1/rag/ab-tests/${expId}/results`, HEADERS_JSON, { name: 'abtest_results' });
+      check(rr, {
+        'abtest results returns 200': r => r.status === 200,
+      });
+    }
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Alerts, Feedback & Evaluation
+// ─────────────────────────────────────────────────────────────────
+
+function runAlertsAndFeedback(data) {
+  group('Alerts & Feedback', () => {
+    // List alerts
+    const ar = get(`${BASE_URL}/api/v1/rag/alerts`, HEADERS_JSON, { name: 'alert_list' });
+    check(ar, {
+      'alert list returns 200': r => r.status === 200,
+    });
+
+    // Submit user feedback
+    const fr = post(`${BASE_URL}/api/v1/rag/feedback`, {
+      query: 'k6 load test query',
+      response: 'k6 load test response',
+      relevanceScore: 4,
+      helpful: true,
+      sessionId: data.sessionId || 'k6-session',
+    }, {}, { name: 'feedback_submit' });
+    check(fr, {
+      'feedback submit returns 200': r => r.status === 200 || r.status === 201,
+    });
+
+    // Retrieval evaluation (if documents exist)
+    if (data.documentId) {
+      const er = post(`${BASE_URL}/api/v1/rag/evaluate`, {
+        collectionId: data.collectionId,
+        topK: 5,
+      }, {}, { name: 'evaluate' });
+      check(er, {
+        'evaluate returns 200': r => r.status === 200 || r.status === 404,
+      });
+    }
+
+    // SLO compliance endpoint
+    const sr = get(`${BASE_URL}/api/v1/rag/metrics/slo`, HEADERS_JSON, { name: 'slo_compliance' });
+    check(sr, {
+      'slo compliance returns 200': r => r.status === 200,
+    });
+
+    // Slow queries endpoint
+    const sqr = get(`${BASE_URL}/api/v1/rag/metrics/slow-queries`, HEADERS_JSON, { name: 'slow_queries' });
+    check(sqr, {
+      'slow queries returns 200': r => r.status === 200,
+    });
+
+    // Client errors
+    const cer = get(`${BASE_URL}/api/v1/rag/client-errors/count`, HEADERS_JSON, { name: 'client_errors_count' });
+    check(cer, {
+      'client errors count returns 200': r => r.status === 200,
+    });
   });
 }
 
