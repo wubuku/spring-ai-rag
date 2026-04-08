@@ -1,10 +1,10 @@
 package com.springairag.core.adapter;
 
 /**
- * OpenAI 兼容 API 适配器
+ * OpenAI-compatible API adapter.
  *
- * <p>适用于：OpenAI、DeepSeek、智谱等完全兼容 OpenAI 的 API。
- * 支持多个 system 消息，无需特殊处理。
+ * <p>Applicable to: OpenAI, DeepSeek, Zhipu, and other fully OpenAI-compatible APIs.
+ * Supports multiple system messages without special handling.
  */
 public class OpenAiCompatibleAdapter implements ApiCompatibilityAdapter {
 

@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * RAG 告警实体
+ * RAG alert entity.
  *
- * <p>持久化存储告警记录，支持服务重启后数据不丢失。
- * 告警类型包括阈值告警、SLO 违约告警等。
+ * <p>Persists alert records so data survives service restarts.
+ * Alert types include threshold alerts, SLO breach alerts, etc.
  */
 @Entity
 @Table(name = "rag_alerts", indexes = {
@@ -26,48 +26,48 @@ public class RagAlert {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 告警类型：THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH */
+    /** Alert type: THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH */
     @Column(name = "alert_type", nullable = false, length = 50)
     private String alertType;
 
-    /** 告警名称 */
+    /** Alert name */
     @Column(name = "alert_name", nullable = false, length = 100)
     private String alertName;
 
-    /** 告警消息 */
+    /** Alert message */
     @Column(columnDefinition = "TEXT", nullable = false)
     private String message;
 
-    /** 严重程度：INFO / WARNING / CRITICAL */
+    /** Severity: INFO / WARNING / CRITICAL */
     @Column(nullable = false, length = 20)
     private String severity;
 
-    /** 关联的指标数据 */
+    /** Associated metric data */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metrics;
 
-    /** 状态：ACTIVE / RESOLVED / SILENCED */
+    /** Status: ACTIVE / RESOLVED / SILENCED */
     @Column(nullable = false, length = 20)
     private String status = "ACTIVE";
 
-    /** 解决方案描述 */
+    /** Resolution description */
     @Column(columnDefinition = "TEXT")
     private String resolution;
 
-    /** 触发时间 */
+    /** Triggered at */
     @Column(name = "fired_at", nullable = false)
     private ZonedDateTime firedAt;
 
-    /** 解决时间 */
+    /** Resolved at */
     @Column(name = "resolved_at")
     private ZonedDateTime resolvedAt;
 
-    /** 静默截止时间 */
+    /** Silence deadline */
     @Column(name = "silenced_until")
     private ZonedDateTime silencedUntil;
 
-    /** 创建时间 */
+    /** Created at */
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 

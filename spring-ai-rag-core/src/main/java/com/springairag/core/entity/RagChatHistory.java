@@ -32,19 +32,19 @@ public class RagChatHistory {
     private String sessionId;
 
     /**
-     * 用户消息
+     * User message
      */
     @Column(name = "user_message", columnDefinition = "TEXT", nullable = false)
     private String userMessage;
 
     /**
-     * AI 响应
+     * AI response
      */
     @Column(name = "ai_response", columnDefinition = "TEXT")
     private String aiResponse;
 
     /**
-     * 使用的相关文档ID列表（JSON格式字符串）
+     * Associated document ID list (JSON string)
      */
     @Column(name = "related_document_ids", columnDefinition = "TEXT")
     private String relatedDocumentIds;
@@ -57,7 +57,7 @@ public class RagChatHistory {
     private Map<String, Object> metadata;
 
     /**
-     * 创建时间
+     * Created at
      */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * 检索评估记录实体
+ * Retrieval evaluation record entity.
  *
- * <p>记录每次检索效果评估的数据，包括 Precision@K、Recall@K、MRR、NDCG、Hit Rate 等指标。
- * 用于检索质量的持续监控和优化。
+ * <p>Records retrieval effectiveness metrics per evaluation, including Precision@K, Recall@K, MRR, NDCG, Hit Rate, etc.
+ * Used for continuous monitoring and optimization of retrieval quality.
  */
 @Entity
 @Table(name = "rag_retrieval_evaluations", indexes = {
@@ -24,29 +24,29 @@ public class RagRetrievalEvaluation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 查询文本 */
+    /** Query text */
     @Column(columnDefinition = "TEXT", nullable = false)
     private String query;
 
-    /** 期望相关文档 ID 列表（JSON） */
+    /** Expected relevant document IDs (JSON) */
     @Column(name = "expected_document_ids", columnDefinition = "TEXT")
     private String expectedDocumentIds;
 
-    /** 实际检索到的文档 ID 列表（JSON） */
+    /** Actually retrieved document IDs (JSON) */
     @Column(name = "retrieved_document_ids", columnDefinition = "TEXT")
     private String retrievedDocumentIds;
 
-    /** 评估结果详情（JSON） */
+    /** Evaluation result details (JSON) */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "evaluation_result", columnDefinition = "jsonb")
     private Map<String, Object> evaluationResult;
 
-    /** Precision@K（K → 值） */
+    /** Precision@K (K → value) */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "precision_at_k", columnDefinition = "jsonb")
     private Map<Integer, Double> precisionAtK;
 
-    /** Recall@K（K → 值） */
+    /** Recall@K (K → value) */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "recall_at_k", columnDefinition = "jsonb")
     private Map<Integer, Double> recallAtK;
@@ -57,24 +57,24 @@ public class RagRetrievalEvaluation {
     /** Normalized Discounted Cumulative Gain */
     private Double ndcg;
 
-    /** Hit Rate（top-K 中是否命中至少一个相关文档） */
+    /** Hit Rate (whether at least one relevant doc is in top-K) */
     @Column(name = "hit_rate")
     private Double hitRate;
 
-    /** 评估方法：AUTO / MANUAL / LLM */
+    /** Evaluation method: AUTO / MANUAL / LLM */
     @Column(name = "evaluation_method", length = 50)
     private String evaluationMethod;
 
-    /** 评估人 ID */
+    /** Evaluator ID */
     @Column(name = "evaluator_id")
     private String evaluatorId;
 
-    /** 扩展字段 */
+    /** Extension fields */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
-    /** 创建时间 */
+    /** Created at */
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 

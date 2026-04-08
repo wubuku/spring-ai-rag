@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * RAG 文档集合实体（支持多知识库/多租户隔离）
+ * RAG document collection entity (supports multiple knowledge bases / multi-tenant isolation)
  */
 @Entity
 @Table(name = "rag_collection", indexes = {

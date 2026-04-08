@@ -9,10 +9,10 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * 文档版本历史实体
+ * Document version history entity.
  *
- * <p>每次文档内容变更（content_hash 不同）时自动记录快照。
- * 支持版本回溯和变更审计。
+ * <p>Automatically records a snapshot on each content change (different content_hash).
+ * Supports version rollback and change auditing.
  */
 @Entity
 @Table(name = "rag_document_versions", indexes = {
@@ -27,55 +27,55 @@ public class RagDocumentVersion {
     private Long id;
 
     /**
-     * 关联的文档 ID
+     * Associated document ID
      */
     @Column(name = "document_id", nullable = false)
     private Long documentId;
 
     /**
-     * 版本号（从 1 开始递增）
+     * Version number (starting from 1)
      */
     @Column(name = "version_number", nullable = false)
     private int versionNumber;
 
     /**
-     * 该版本的内容 SHA-256 哈希值
+     * Content SHA-256 hash for this version
      */
     @Column(name = "content_hash", length = 64, nullable = false)
     private String contentHash;
 
     /**
-     * 内容快照（完整文本）
+     * Content snapshot (full text)
      */
     @Column(name = "content_snapshot", columnDefinition = "TEXT", nullable = false)
     private String contentSnapshot;
 
     /**
-     * 内容大小（字节）
+     * Content size (bytes)
      */
     private Long size;
 
     /**
-     * 变更类型：CREATE, UPDATE, EMBED
+     * Change type: CREATE, UPDATE, EMBED
      */
     @Column(name = "change_type", length = 20, nullable = false)
     private String changeType;
 
     /**
-     * 变更描述（可选）
+     * Change description (optional)
      */
     @Column(name = "change_description", length = 500)
     private String changeDescription;
 
     /**
-     * 版本元数据快照 (JSONB)
+     * Version metadata snapshot (JSONB)
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadataSnapshot;
 
     /**
-     * 创建时间
+     * Created at
      */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -84,10 +84,10 @@ public class RagDocumentVersion {
     public RagDocumentVersion() {
     }
 
-    // ==================== 便捷工厂方法 ====================
+    // ==================== Convenient factory methods ====================
 
     /**
-     * 从 RagDocument 创建初始版本快照
+     * Create initial version snapshot from RagDocument
      */
     public static RagDocumentVersion fromDocument(RagDocument doc, String changeType, String description) {
         RagDocumentVersion version = new RagDocumentVersion();

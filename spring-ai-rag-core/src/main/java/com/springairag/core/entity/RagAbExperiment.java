@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * A/B 测试实验实体
+ * A/B test experiment entity.
  *
- * <p>一个实验包含多个变体（variant），通过 trafficSplit 控制流量分配。
- * 状态流转：DRAFT → RUNNING → PAUSED → COMPLETED
+ * <p>An experiment contains multiple variants, with trafficSplit controlling distribution.
+ * State transitions: DRAFT → RUNNING → PAUSED → COMPLETED
  */
 @Entity
 @Table(name = "rag_ab_experiments", indexes = {

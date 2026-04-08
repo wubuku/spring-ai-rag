@@ -10,8 +10,8 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * RAG 文档实体
- * 存储原始文档内容和元数据
+ * RAG Document Entity
+ * Stores original document content and metadata
  */
 @Entity
 @Table(name = "rag_documents", indexes = {
@@ -29,95 +29,96 @@ public class RagDocument {
     private Long id;
 
     /**
-     * 所属集合 ID（FK → rag_collection）
+     * Owning collection ID (FK → rag_collection)
      */
     @Column(name = "collection_id")
     private Long collectionId;
 
     /**
-     * 文档标题
+     * Document title
      */
     @Column(nullable = false, length = 255)
     private String title;
 
     /**
-     * 文档内容（原始文本）
+     * Document content (raw text)
      */
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
 
     /**
-     * 文档来源（例如：file_name, url, api_endpoint）
+     * Document source (e.g. file_name, url, api_endpoint)
      */
     @Column(length = 255)
     private String source;
 
     /**
-     * 文档类型（例如：txt, pdf, markdown, html）
+     * Document type (e.g. txt, pdf, markdown, html)
      */
     @Column(name = "document_type", length = 50)
     private String documentType;
 
     /**
-     * 原始上传文件名
+     * Original uploaded filename
      */
     @Column(name = "original_filename", length = 255)
     private String originalFilename;
 
     /**
-     * 内容 SHA-256 哈希值
+     * Content SHA-256 hash value
      */
     @Column(name = "content_hash", length = 64)
     private String contentHash;
 
     /**
-     * 上次嵌入时的内容 SHA-256 哈希值
+     * SHA-256 hash of the content at last embedding time.
      *
-     * <p>用于嵌入缓存：比较当前 contentHash 与 embeddedContentHash，
-     * 如果一致说明内容未变更，跳过重嵌入。
+     * <p>Used for embedding cache: compares current contentHash with
+     * embeddedContentHash — if equal, content has not changed and
+     * re-embedding is skipped.
      */
     @Column(name = "embedded_content_hash", length = 64)
     private String embeddedContentHash;
 
     /**
-     * 文档大小（字节）
+     * Document size (bytes)
      */
     private Long size;
 
     /**
-     * 处理状态: PENDING, PROCESSING, COMPLETED, FAILED
+     * Processing status: PENDING, PROCESSING, COMPLETED, FAILED
      */
     @Column(name = "processing_status", length = 20)
     private String processingStatus = "COMPLETED";
 
     /**
-     * 处理失败时的错误信息
+     * Error message on processing failure
      */
     @Column(name = "processing_error", columnDefinition = "TEXT")
     private String processingError;
 
     /**
-     * 文档元数据 (JSONB格式)
+     * Document metadata (JSONB format)
      */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
     /**
-     * 是否启用
+     * Whether document is enabled
      */
     @Column(nullable = false)
     private Boolean enabled = true;
 
     /**
-     * 创建时间
+     * Creation timestamp
      */
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
     /**
-     * 更新时间
+     * Last update timestamp
      */
     @UpdateTimestamp
     @Column(name = "updated_at")

@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * A/B 测试结果实体
+ * A/B test result entity.
  *
- * <p>记录单次实验请求的检索指标。每个 sessionId + experimentId 组合只记录一次，
- * 避免重复统计。
+ * <p>Records retrieval metrics for a single experiment request.
+ * Each sessionId + experimentId combination is recorded only once to avoid duplicate statistics.
  */
 @Entity
 @Table(name = "rag_ab_results", indexes = {

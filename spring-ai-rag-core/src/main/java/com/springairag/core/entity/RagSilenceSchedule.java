@@ -8,12 +8,12 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * 告警静默计划实体
+ * Alert silence schedule entity.
  *
- * <p>定义告警静默时段，支持：
+ * <p>Defines alert silence periods, supporting:
  * <ul>
- *   <li>一次性静默：在指定时间范围内静默告警</li>
- *   <li>周期性静默：按 Cron 表达式在指定时段静默告警</li>
+ *   <li>One-time silence: silence alerts within a specified time range</li>
+ *   <li>Recurring silence: silence alerts on a cron schedule</li>
  * </ul>
  */
 @Entity
@@ -27,35 +27,35 @@ public class RagSilenceSchedule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 静默名称 */
+    /** Silence name */
     @Column(name = "name", nullable = false, unique = true, length = 100)
     private String name;
 
-    /** 关联的告警键（null 表示所有告警） */
+    /** Associated alert key (null = all alerts) */
     @Column(name = "alert_key", length = 100)
     private String alertKey;
 
-    /** 静默类型：ONE_TIME / RECURRING */
+    /** Silence type: ONE_TIME / RECURRING */
     @Column(name = "silence_type", nullable = false, length = 20)
     private String silenceType;
 
-    /** 开始时间（一次性静默）或 Cron 表达式（周期性静默） */
+    /** Start time (one-time) or cron expression (recurring) */
     @Column(name = "start_time", length = 100)
     private String startTime;
 
-    /** 结束时间（一次性静默）或 Cron 表达式结束时间（周期性静默） */
+    /** End time (one-time) or cron expression end time (recurring) */
     @Column(name = "end_time", length = 100)
     private String endTime;
 
-    /** 描述 */
+    /** Description */
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    /** 是否启用 */
+    /** Whether enabled */
     @Column(nullable = false)
     private Boolean enabled = true;
 
-    /** 扩展元数据 */
+    /** Extended metadata */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;

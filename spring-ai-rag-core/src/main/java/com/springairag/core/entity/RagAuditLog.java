@@ -5,9 +5,9 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * 审计日志实体
+ * Audit log entity.
  *
- * <p>记录关键业务操作的审计轨迹，包括创建、更新、删除等操作。
+ * <p>Records audit trails of key business operations including create, update, delete.
  */
 @Entity
 @Table(name = "rag_audit_log", indexes = {
@@ -23,55 +23,55 @@ public class RagAuditLog {
     private Long id;
 
     /**
-     * 操作类型：CREATE / UPDATE / DELETE / READ
+     * Operation type: CREATE / UPDATE / DELETE / READ
      */
     @Column(name = "operation", nullable = false, length = 16)
     private String operation;
 
     /**
-     * 实体类型：如 Collection、Document、ChatHistory 等
+     * Entity type: e.g. Collection, Document, ChatHistory
      */
     @Column(name = "entity_type", nullable = false, length = 64)
     private String entityType;
 
     /**
-     * 实体 ID
+     * Entity ID
      */
     @Column(name = "entity_id", nullable = false, length = 64)
     private String entityId;
 
     /**
-     * 会话 ID（可为 null）
+     * Session ID (nullable)
      */
     @Column(name = "session_id", length = 128)
     private String sessionId;
 
     /**
-     * 操作人标识（如 API Key 前缀、用户 ID，可为 null）
+     * Operator identifier (e.g. API key prefix, user ID — nullable)
      */
     @Column(name = "operator", length = 128)
     private String operator;
 
     /**
-     * 操作描述（如 "创建集合 test-collection"）
+     * Operation description (e.g. "Created collection test-collection")
      */
     @Column(name = "description", length = 512)
     private String description;
 
     /**
-     * 操作详情（JSON 格式，存储变更前后内容等）
+     * Operation details (JSON format, stores before/after content, etc.)
      */
     @Column(name = "details", columnDefinition = "TEXT")
     private String details;
 
     /**
-     * 客户端 IP 地址
+     * Client IP address
      */
     @Column(name = "client_ip", length = 45)
     private String clientIp;
 
     /**
-     * 请求追踪 ID
+     * Request trace ID
      */
     @Column(name = "trace_id", length = 64)
     private String traceId;

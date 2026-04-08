@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * SLO 配置实体
+ * SLO configuration entity.
  *
- * <p>定义服务级别目标（Service Level Objective），用于告警触发判断。
- * 支持可用性、延迟、质量等维度的 SLO 配置。
+ * <p>Defines Service Level Objectives (SLOs) used for alert triggering.
+ * Supports availability, latency, and quality dimensions.
  */
 @Entity
 @Table(name = "rag_slo_configs", indexes = {
@@ -24,31 +24,31 @@ public class RagSloConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** SLO 名称，唯一标识 */
+    /** SLO name, unique identifier */
     @Column(name = "slo_name", nullable = false, unique = true, length = 100)
     private String sloName;
 
-    /** SLO 类型：AVAILABILITY / LATENCY / QUALITY / ERROR_RATE */
+    /** SLO type: AVAILABILITY / LATENCY / QUALITY / ERROR_RATE */
     @Column(name = "slo_type", nullable = false, length = 50)
     private String sloType;
 
-    /** 目标值 */
+    /** Target value */
     @Column(name = "target_value", nullable = false)
     private Double targetValue;
 
-    /** 单位：ms / % / score */
+    /** Unit: ms / % / score */
     @Column(nullable = false, length = 20)
     private String unit;
 
-    /** 描述 */
+    /** Description */
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    /** 是否启用 */
+    /** Whether enabled */
     @Column(nullable = false)
     private Boolean enabled = true;
 
-    /** 扩展元数据 */
+    /** Extended metadata */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;

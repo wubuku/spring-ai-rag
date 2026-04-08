@@ -61,7 +61,7 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
 
         List<RagUserFeedback> allFeedbacks = feedbackRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
 
-        // 统计 RATING 类型
+        // Aggregate RATING type
         List<RagUserFeedback> ratings = allFeedbacks.stream()
                 .filter(f -> "RATING".equals(f.getFeedbackType()) && f.getRating() != null)
                 .toList();

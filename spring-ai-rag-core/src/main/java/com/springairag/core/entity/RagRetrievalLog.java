@@ -8,10 +8,10 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * RAG 检索日志实体
+ * RAG retrieval log entity.
  *
- * <p>记录每次检索的详细性能数据，用于趋势分析和性能调优。
- * 每次 HybridSearchAdvisor 执行检索时自动创建一条记录。
+ * <p>Records detailed performance data per retrieval for trend analysis and tuning.
+ * Auto-created each time HybridSearchAdvisor executes a retrieval.
  */
 @Entity
 @Table(name = "rag_retrieval_logs", indexes = {
@@ -25,49 +25,49 @@ public class RagRetrievalLog {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 会话ID */
+    /** Session ID */
     @Column(name = "session_id")
     private String sessionId;
 
-    /** 查询文本 */
+    /** Query text */
     @Column(columnDefinition = "TEXT", nullable = false)
     private String query;
 
-    /** 检索策略：hybrid/vector/fulltext */
+    /** Retrieval strategy: hybrid/vector/fulltext */
     @Column(name = "retrieval_strategy", length = 50)
     private String retrievalStrategy;
 
-    /** 向量检索耗时（毫秒） */
+    /** Vector search elapsed time (ms) */
     @Column(name = "vector_search_time_ms")
     private Long vectorSearchTimeMs;
 
-    /** 全文检索耗时（毫秒） */
+    /** Fulltext search elapsed time (ms) */
     @Column(name = "fulltext_search_time_ms")
     private Long fulltextSearchTimeMs;
 
-    /** 重排序耗时（毫秒） */
+    /** Rerank elapsed time (ms) */
     @Column(name = "rerank_time_ms")
     private Long rerankTimeMs;
 
-    /** 总耗时（毫秒） */
+    /** Total elapsed time (ms) */
     @Column(name = "total_time_ms")
     private Long totalTimeMs;
 
-    /** 返回结果数 */
+    /** Number of results returned */
     @Column(name = "result_count")
     private Integer resultCount;
 
-    /** 各结果得分（文档ID → 分数） */
+    /** Per-result scores (documentId → score) */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "result_scores", columnDefinition = "jsonb")
     private Map<String, Object> resultScores;
 
-    /** 扩展字段 */
+    /** Extension fields */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
-    /** 创建时间 */
+    /** Created at */
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 
