@@ -1903,3 +1903,13 @@
   - commit bc6ac03 已推送
 
 - 2026-04-09 03:50 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 passed）/ npm run build ✅（97KB index gzipped，BarChart 102KB gzipped，29 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-09 04:27 — RagControllerIntegrationTest 回归修复）
+
+- 2026-04-09 04:27 — ✅ RagControllerIntegrationTest 46 errors 回归修复：
+  - 根因：`RagPropertiesTestConfig` 只提供 `RagProperties` Bean，未提供 `RagSseProperties`
+  - `RagChatController` 构造函数参数 3 依赖 `RagSseProperties`（SSE heartbeat 配置）
+  - 症状：`NoSuchBeanDefinitionException: No qualifying bean of type 'com.springairag.core.config.RagSseProperties' available`
+  - 修复：`RagPropertiesTestConfig` 添加 `ragSseProperties()` Bean 方法
+  - 1421 tests 全通过（0 failures, 0 errors）
+  - commit 11fa1b5 已推送
