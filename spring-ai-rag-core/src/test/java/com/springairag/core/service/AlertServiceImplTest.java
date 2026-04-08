@@ -42,7 +42,7 @@ class AlertServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, notificationService);
+        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, List.of(notificationService));
     }
 
     // ==================== shouldAlert ====================

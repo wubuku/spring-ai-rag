@@ -52,16 +52,16 @@ public class AlertServiceImpl implements AlertService {
     private final AlertRepository alertRepository;
     private final RagRetrievalLogRepository retrievalLogRepository;
     private final RagRetrievalEvaluationRepository evaluationRepository;
-    private final NotificationService notificationService;
+    private final List<NotificationService> notificationServices;
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
                            RagRetrievalEvaluationRepository evaluationRepository,
-                           NotificationService notificationService) {
+                           List<NotificationService> notificationServices) {
         this.alertRepository = alertRepository;
         this.retrievalLogRepository = retrievalLogRepository;
         this.evaluationRepository = evaluationRepository;
-        this.notificationService = notificationService;
+        this.notificationServices = notificationServices != null ? notificationServices : List.of();
     }
 
     @Override
@@ -108,8 +108,16 @@ public class AlertServiceImpl implements AlertService {
         alert = alertRepository.save(alert);
 
         // Send external notification (async, best-effort)
-        if (notificationService != null) {
-            notificationService.sendAlert(alertType, alertName, severity, message, metrics);
+        if (!notificationServices.isEmpty()) {
+            for (NotificationService ns : notificationServices) {
+                try {
+                    ns.sendAlert(alertType, alertName, severity, message, metrics);
+                } catch (Exception e) {
+                    // Resilience: one channel failure must not block others
+                    log.warn("Notification channel {} failed for alert {}: {}",
+                            ns.getClass().getSimpleName(), alertName, e.getMessage());
+                }
+            }
         }
 
         return alert.getId();
