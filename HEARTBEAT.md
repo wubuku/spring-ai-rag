@@ -1889,3 +1889,14 @@
   - 后端服务 8081 UP
   - commit 0a70ff5 已推送
   - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+
+## Cron 进度（2026-04-09 03:02 — 后端 SSE Emitter 助手扩展 + RagChatController 重构）
+
+- 2026-04-09 03:02 — ✅ SSE Emitter 助手扩展（RagChatController 重构）：
+  - `SseEmitters` 新增 `sendRaw(emitter, eventName, rawJson, context)` 方法：发送命名 SSE 事件（支持 null eventName）
+  - `SseEmitters` 新增 `escapeJson(text)` 公开方法：JSON 字符串转义（SSE JSON 注入防护）
+  - `RagChatController.stream()` 重构：内联 try/catch → `SseEmitters.sendRaw()` + `SseEmitters.escapeJson()`
+  - 删除 `RagChatController` 私有 `escapeJson()` 方法和未使用的 `java.io.IOException` import
+  - `SseEmittersTest` 新增 11 个测试（escapeJson 7 个 + sendRaw 3 个），总计 26 tests
+  - 1414 tests 全通过，零失败零错误
+  - commit bc6ac03 已推送
