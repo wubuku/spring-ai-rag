@@ -1709,6 +1709,15 @@
   - 1393 tests 全通过，零失败零错误
   - git 已推送（commit 0edbba5）
 
+## Cron 进度（2026-04-08 18:51 — 后端 i18n 国际化收尾）
+
+- 2026-04-08 18:51 — ✅ 后端 i18n 国际化收尾（RagUserFeedback + BatchDocumentService）：
+  - `RagUserFeedback.java`：全文 Javadoc（class + 12 个 field comments）英文化
+  - `BatchDocumentService.java`：2 个 inline comments 英文化（collectionId preference logic + embed failure handling）
+  - 1417 tests 全通过，零失败零错误，零 TODO/FIXME
+  - commit 9939ea8 已推送
+  - 仍有 65 个 Java 文件含中文（Javadoc/field comments），后续 cron 继续推进
+
 ## Cron 进度（2026-04-08 18:35 — WebUI 常规发布）
 
 - 2026-04-08 18:35 — ✅ WebUI 常规发布：
