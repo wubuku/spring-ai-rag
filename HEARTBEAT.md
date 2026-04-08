@@ -731,7 +731,7 @@
 | R3 | HikariCP 连接池参数调优（最大连接数/空闲超时/连接超时审查） | 性能 | ✅ 2026-04-05（R3 完成，HikariCP 已配置合理参数：max=20/min=5/idle=5m/timeout=10s） |
 | R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ✅ 2026-04-05（R4 完成，MaskingLogstashEncoder 9 tests + SensitiveDataMaskingConverter 38 tests） |
 | R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ✅ 2026-04-05（R5 完成，app.models YAML 配置完整且与 MultiModelProperties 对应，零未使用配置） |
-| R6 | 剩余 Java 文件中文 Javadoc/Field comments 国际化（约 65 个文件） | i18n | ⏳ 进行中（R6 开始推进，AlertServiceImplTest 32 处中文已清零，剩余 ~65 文件待处理） |
+| R6 | 剩余 Java 文件中文 Javadoc/Field comments 国际化（25 文件 / 2900 字） | i18n | ⏳ 进行中（2026-04-09 本轮：RateLimitFilter + ModelRegistry 英文化，-147 字；剩余 25 文件 2900 字） |
 
 ## 待办（新一波改进）
 
