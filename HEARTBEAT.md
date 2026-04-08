@@ -1808,3 +1808,13 @@
   - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
   - git 工作区干净（无变更）
   - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+
+## Cron 进度（2026-04-09 00:18 — 后端 i18n 国际化：RagChatService）
+- 2026-04-09 00:18 — ✅ i18n 国际化推进：翻译 RagChatService.java 全部中文 Javadoc/注释为英文（89 Chinese → 0 remaining）
+  - Class Javadoc: RAG Chat Service 概述 + Advisor 执行顺序图
+  - Field comments: 动态模型路由/可选依赖说明
+  - Method Javadoc: chat()/chatStream() 英文描述
+  - Inline comments: 熔断器/重试/Advisor参数/领域提示词
+  - 1430 tests 全通过，零失败零错误
+  - commit 3725a8e 已推送
+  - 仍有 63 个 main source 文件含中文，继续推进
