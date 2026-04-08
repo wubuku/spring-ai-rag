@@ -5,18 +5,18 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * RAG Pipeline 执行指标收集器
+ * RAG Pipeline execution metrics collector
  *
- * <p>在 request context 中传递，每个 Advisor 步骤调用 {@link #recordStep(String, long, int)}
- * 记录执行指标。服务层可通过 context key {@link #CONTEXT_KEY} 读取完整指标。
+ * <p>Passed in request context; each Advisor step calls {@link #recordStep(String, long, int)}
+ * to record execution metrics. Service layer can retrieve full metrics via context key {@link #CONTEXT_KEY}.
  *
- * <p>使用方式：
+ * <p>Usage:
  * <pre>
- * // 在 Advisor 中
+ * // In Advisor
  * RagPipelineMetrics metrics = RagPipelineMetrics.getOrCreate(request.context());
  * metrics.recordStep("QueryRewrite", elapsedMs, resultCount);
  *
- * // 在 Service 中
+ * // In Service
  * RagPipelineMetrics metrics = (RagPipelineMetrics) request.context().get(RagPipelineMetrics.CONTEXT_KEY);
  * List&lt;StepMetric&gt; steps = metrics.getSteps();
  * </pre>

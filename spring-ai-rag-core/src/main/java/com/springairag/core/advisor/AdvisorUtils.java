@@ -7,17 +7,17 @@ import org.springframework.ai.chat.messages.UserMessage;
 import java.util.List;
 
 /**
- * Advisor 共享工具方法
+ * Shared utility methods for Advisors
  */
 public final class AdvisorUtils {
 
     private AdvisorUtils() {}
 
     /**
-     * 从 ChatClientRequest 中提取最后一个非空 UserMessage 文本
+     * Extracts the last non-empty UserMessage text from a ChatClientRequest
      *
-     * @param request 聊天请求
-     * @return 用户消息文本，无有效消息时返回 null
+     * @param request the chat request
+     * @return user message text, or null if no valid message
      */
     public static String extractUserMessage(ChatClientRequest request) {
         if (request == null || request.prompt() == null) {

@@ -47,10 +47,10 @@ public class RerankAdvisor extends AbstractRagAdvisor {
     /** Reranked results key in response context, used by RagChatService to extract sources */
     public static final String RERANKED_RESULTS_KEY = "rag.reranked.results";
 
-    /** 注入到系统消息的上下文前缀 */
+    /** Context prefix injected into system messages */
     private String systemContextPrefix = "Answer the question based on the following references:\n\n";
 
-    /** 返回的最大结果数 */
+    /** Maximum number of results to return */
     private int maxResults = 5;
 
     @Autowired
@@ -77,7 +77,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
 
     /**
      * HIGHEST_PRECEDENCE + 30
-     * 在 HybridSearchAdvisor (+20) 之后执行
+     * Executes after HybridSearchAdvisor (+20)
      */
     @Override
     public int getOrder() {
@@ -134,7 +134,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
             mutated.prompt(request.prompt().augmentSystemMessage(systemContextPrefix + context));
             log.debug("[RerankAdvisor] using augmentSystemMessage to inject context");
         } else {
-            String userPrefix = systemContextPrefix + context + "\n\n基于以上资料回答以下问题：\n\n";
+            String userPrefix = systemContextPrefix + context + "\n\nAnswer the question based on the above references:\n\n";
             mutated.prompt(request.prompt().augmentUserMessage(
                     userMsg -> new UserMessage(userPrefix + userMsg.getText())));
             log.debug("[RerankAdvisor] using augmentUserMessage to inject context (API does not support multiple system messages)");
@@ -143,7 +143,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
     }
 
     /**
-     * 将检索结果格式化为上下文文本
+     * Formats retrieval results as context text
      */
     String buildContextFromResults(List<RetrievalResult> results) {
         StringBuilder sb = new StringBuilder();

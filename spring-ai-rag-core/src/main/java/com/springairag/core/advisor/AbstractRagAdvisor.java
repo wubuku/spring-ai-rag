@@ -30,8 +30,8 @@ public abstract class AbstractRagAdvisor implements BaseAdvisor {
     }
 
     /**
-     * 默认 after()：原样透传响应，不做任何后处理。
-     * 子类需要后处理时覆盖此方法。
+     * Default after(): passes through the response unchanged.
+     * Override this method when subclasses need post-processing.
      */
     @Override
     public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {

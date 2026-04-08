@@ -28,13 +28,13 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * 文档嵌入服务
+ * Document embedding service
  *
- * <p>负责将文档内容分块、生成嵌入向量并存储。
- * 支持两种存储路径：
+ * <p>Responsible for chunking document content, generating embedding vectors, and storing them.
+ * Supports two storage paths:
  * <ul>
- *   <li>JdbcTemplate 路径 — 存储到 rag_embeddings，支持 document_id 关联</li>
- *   <li>VectorStore 路径 — 存储到 rag_vector_store，Spring AI 自动管理</li>
+ *   <li>JdbcTemplate path: stores to rag_embeddings, supports document_id association</li>
+ *   <li>VectorStore path: stores to rag_vector_store, managed by Spring AI</li>
  * </ul>
  */
 @Service
@@ -69,15 +69,15 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 为文档生成嵌入向量（JdbcTemplate 路径）
+     * Generates embedding vectors for a document (JdbcTemplate path)
      *
-     * <p>流程：获取文档 → 分块 → 生成嵌入 → 存储到 rag_embeddings → 更新状态
+     * <p>Flow: fetch document → chunk → generate embeddings → store to rag_embeddings → update status
      *
-     * <p>嵌入缓存：如果文档已有嵌入且状态为 COMPLETED，跳过重嵌入。
-     * 传入 {@code force=true} 可强制重嵌入（例如嵌入模型变更后）。
+     * <p>Embedding cache: if document already has embeddings with COMPLETED status, skips re-embedding.
+     * Pass {@code force=true} to force re-embedding (e.g., after embedding model change).
      *
-     * @param documentId 文档 ID
-     * @return 操作结果（chunksCreated, embeddingsStored, status）
+     * @param documentId document ID
+     * @return operation result (chunksCreated, embeddingsStored, status)
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId) {
@@ -85,11 +85,11 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 为文档生成嵌入向量（JdbcTemplate 路径，支持强制重嵌入）
+     * Generates embedding vectors for a document (JdbcTemplate path, supports force re-embedding)
      *
-     * @param documentId 文档 ID
-     * @param force 是否强制重嵌入（跳过缓存检查）
-     * @return 操作结果（chunksCreated, embeddingsStored, status）
+     * @param documentId document ID
+     * @param force whether to force re-embedding (skip cache check)
+     * @return operation result (chunksCreated, embeddingsStored, status)
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId, boolean force) {
@@ -97,12 +97,12 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 为文档生成嵌入向量，支持进度回调（用于 SSE 流式推送）
+     * Generates embedding vectors for a document with progress callback (for SSE streaming)
      *
-     * @param documentId 文档 ID
-     * @param force 是否强制重嵌入
-     * @param progressCallback 进度回调，可为 null
-     * @return 操作结果
+     * @param documentId document ID
+     * @param force whether to force re-embedding
+     * @param progressCallback progress callback, can be null
+     * @return operation result
      */
     @Transactional
     public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
@@ -124,7 +124,7 @@ public class DocumentEmbedService {
 
         maybeEmit(progressCallback, EmbedProgressEvent.chunking(documentId, chunks.size()));
 
-        // 删除旧向量 → 生成嵌入 → 存储
+        // Delete old vectors → generate embeddings → store
         embeddingRepository.deleteByDocumentId(documentId);
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
         List<EmbeddingBatchService.EmbeddingResult> results =
@@ -141,12 +141,12 @@ public class DocumentEmbedService {
         return buildSuccessResult(documentId, chunks.size(), stored, "COMPLETED");
     }
 
-    /** 安全触发进度回调（null-safe） */
+    /** Safely emits a progress callback (null-safe) */
     private void maybeEmit(java.util.function.Consumer<EmbedProgressEvent> cb, EmbedProgressEvent event) {
         if (cb != null) cb.accept(event);
     }
 
-    /** 批量触发嵌入进度（逐条通知） */
+    /** Emits embedding progress in batches (one notification per item) */
     private void emitEmbeddingProgress(java.util.function.Consumer<EmbedProgressEvent> cb,
                                        Long documentId, int total) {
         if (cb == null) return;
@@ -156,11 +156,11 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 为文档生成嵌入向量（VectorStore 简化路径）
+     * Generates embedding vectors for a document (VectorStore simplified path)
      *
-     * @param documentId 文档 ID
-     * @return 操作结果
-     * @throws IllegalStateException VectorStore 未配置时抛出
+     * @param documentId document ID
+     * @return operation result
+     * @throws IllegalStateException thrown when VectorStore is not configured
      */
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId) {
@@ -168,12 +168,12 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 为文档生成嵌入向量（VectorStore 简化路径，支持强制重嵌入）
+     * Generates embedding vectors for a document (VectorStore simplified path, supports force re-embedding)
      *
-     * @param documentId 文档 ID
-     * @param force 是否强制重嵌入（跳过缓存检查）
-     * @return 操作结果
-     * @throws IllegalStateException VectorStore 未配置时抛出
+     * @param documentId document ID
+     * @param force whether to force re-embedding (skip cache check)
+     * @return operation result
+     * @throws IllegalStateException thrown when VectorStore is not configured
      */
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId, boolean force) {
@@ -200,10 +200,10 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 批量为多个文档生成嵌入向量
+     * Batch generates embedding vectors for multiple documents
      *
-     * @param documentIds 文档 ID 列表
-     * @return 批量操作结果（results + summary）
+     * @param documentIds list of document IDs
+     * @return batch operation result (results + summary)
      */
     @Transactional
     public Map<String, Object> batchEmbedDocuments(List<Long> documentIds) {
@@ -244,11 +244,11 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 批量嵌入文档（带 SSE 进度回调）
+     * Batch embeds documents with SSE progress callback
      *
-     * @param documentIds 文档 ID 列表
-     * @param progressCallback 进度回调，每次处理完一个文档后调用
-     * @return 批量操作结果（results + summary）
+     * @param documentIds list of document IDs
+     * @param progressCallback progress callback, called after each document is processed
+     * @return batch operation result (results + summary)
      */
     @Transactional
     public Map<String, Object> batchEmbedDocumentsWithProgress(
@@ -340,7 +340,7 @@ public class DocumentEmbedService {
     }
 
     /**
-     * 单文档嵌入处理（供 batchEmbedDocuments 调用）
+     * Single document embedding processing (called by batchEmbedDocuments)
      */
     private Map<String, Object> embedSingleDocument(Long id) {
         Map<String, Object> result = new HashMap<>();
@@ -355,7 +355,7 @@ public class DocumentEmbedService {
         return result;
     }
 
-    /** 执行单文档嵌入的核心逻辑，结果写入 result Map */
+    /** Executes core logic for single document embedding; writes result to result Map */
     private void processSingleEmbedding(Long id, Map<String, Object> result) {
         RagDocument doc = findAndValidateDocument(id, result);
         if (doc == null) {
@@ -381,7 +381,7 @@ public class DocumentEmbedService {
         result.put("embeddingsStored", stored);
     }
 
-    /** 查找文档并检查缓存，返回 null 表示已在 result 中写入状态 */
+    /** Finds document and checks cache; returns null when status already written to result */
     private RagDocument findAndValidateDocument(Long id, Map<String, Object> result) {
         RagDocument doc = documentRepository.findById(id).orElse(null);
         if (doc == null) {
@@ -397,7 +397,7 @@ public class DocumentEmbedService {
         return doc;
     }
 
-    /** 分块处理，返回 null 表示无需嵌入（已在 result 中写入原因） */
+    /** Handles chunking; returns null when no embedding needed (reason already written to result) */
     private List<TextChunk> prepareChunks(RagDocument doc, Map<String, Object> result) {
         String content = doc.getContent();
         if (content == null || content.isBlank()) {
@@ -415,32 +415,32 @@ public class DocumentEmbedService {
     }
 
     /**
-     * VectorStore 是否可用
+     * Checks whether VectorStore is available
      */
     public boolean isVectorStoreAvailable() {
         return vectorStore != null;
     }
 
-    // ==================== 内部方法 ====================
+    // ==================== Internal Methods ====================
 
     /**
-     * 检查嵌入缓存 — 基于内容哈希判断是否需要重嵌入
+     * Checks embedding cache — determines whether re-embedding is needed based on content hash
      *
-     * <p>检查策略（三层）：
+     * <p>Check strategy (three layers):
      * <ol>
-     *   <li>状态检查：非 COMPLETED 状态不命中缓存</li>
-     *   <li>内容哈希检查：当前内容哈希与已嵌入哈希不一致 → 内容已变更，需重嵌入</li>
-     *   <li>嵌入记录检查：无已有嵌入记录 → 需嵌入</li>
+     *   <li>Status check: non-COMPLETED status does not hit cache</li>
+     *   <li>Content hash check: current content hash differs from embedded hash → content changed, needs re-embedding</li>
+     *   <li>Embedding record check: no existing embedding records → needs embedding</li>
      * </ol>
      *
-     * @return 缓存命中返回结果 Map，未命中返回 null
+     * @return result Map on cache hit, null on miss
      */
     private Map<String, Object> checkEmbeddingCache(RagDocument doc) {
         if (!"COMPLETED".equals(doc.getProcessingStatus())) {
             return null;
         }
 
-        // 内容哈希比对：如果内容已变更，即使有旧嵌入也需重新嵌入
+        // Content hash comparison: if content changed, need to re-embed even if old embeddings exist
         String currentHash = doc.getContentHash();
         String embeddedHash = doc.getEmbeddedContentHash();
         if (currentHash != null && embeddedHash != null && !currentHash.equals(embeddedHash)) {
@@ -515,14 +515,14 @@ public class DocumentEmbedService {
         return documents;
     }
 
-    // ==================== 提取的共享逻辑 ====================
+    // ==================== Extracted Shared Logic ====================
 
-    /** 嵌入准备结果：文档 + 缓存检查 + 分块结果 */
+    /** Embedding preparation result: document + cache check + chunking result */
     private record EmbedPrepareResult(RagDocument doc, Map<String, Object> cached, List<TextChunk> chunks) {}
 
     /**
-     * 统一的嵌入准备流程：查找文档 → 检查缓存 → 验证内容 → 分块
-     * @return 准备结果；cached 非 null 表示缓存命中直接返回
+     * Unified embedding preparation flow: find document → check cache → validate content → chunk
+     * @return preparation result; non-null cached means cache hit, return directly
      */
     private EmbedPrepareResult prepareForEmbedding(Long documentId, boolean force) {
         RagDocument doc = findDocument(documentId);
@@ -548,14 +548,14 @@ public class DocumentEmbedService {
         return new EmbedPrepareResult(doc, null, chunks);
     }
 
-    /** 标记嵌入完成：COMPLETED + 更新内容哈希 */
+    /** Marks embedding as complete: COMPLETED + updates content hash */
     private void completeEmbedding(RagDocument doc, int chunkCount) {
         doc.setProcessingStatus("COMPLETED");
         doc.setEmbeddedContentHash(doc.getContentHash());
         documentRepository.save(doc);
     }
 
-    /** 构建成功响应 Map */
+    /** Builds success response Map */
     private Map<String, Object> buildSuccessResult(Long docId, int chunks, int stored, String status,
                                                      String... extraEntries) {
         Map<String, Object> result = new HashMap<>();
