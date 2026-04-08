@@ -1269,8 +1269,8 @@
 | K6-2 | k6: A/B Experiments 测试组 | 性能测试 | ✅ 2026-04-09 |
 | K6-3 | k6: Alerts & Feedback 测试组 | 性能测试 | ✅ 2026-04-09 |
 | K6-4 | k6: 分离 chat 非流/流式延迟指标（独立 p95 阈值） | 性能测试 | ✅ 2026-04-09 |
-| K6-5 | k6: 探索性测试——梯度压测（ramp VUs 逐步增加找到吞吐上限） | 性能测试 | ⏳ |
-| K6-6 | k6: 持久化会话压测（多 VU 共享同一 sessionId 压测 ChatMemory 锁竞争） | 性能测试 | ⏳ |
+| K6-5 | k6: 探索性测试——梯度压测（ramp VUs 逐步增加找到吞吐上限） | 性能测试 | ✅ 2026-04-09（k6-ramp-to-saturation.js + run-k6-ramp-test.sh，k6 native stages 驱动 VU ramp，per-stage RPS 追踪，峰值 RPS 报告） |
+| K6-6 | k6: 持久化会话压测（多 VU 共享同一 sessionId 压测 ChatMemory 锁竞争） | 性能测试 | ✅ 2026-04-09（k6-session-stress.js + run-k6-session-stress.sh，共享 sessionId 高并发写入，concurrent_sessions 追踪，conflict_rate 检测锁竞争） |
 | K6-7 | k6: 向量检索专项压测（高并发 100+ VUs 搜索端点，验证 pgvector HNSW 性能） | 性能测试 | ⏳ |
 
 ## 待办（C41-C42 — 代码库巡检）
@@ -1927,3 +1927,12 @@
   - 1 file changed, +19/-8 行
   - mvn test ✅（全通过）
   - commit 57aca5a 已推送
+
+## Cron 进度（2026-04-09 05:23 — K6-5 探索性梯度压测）
+
+- ✅ K6-5 探索性梯度压测：k6-ramp-to-saturation.js（k6 native stages 驱动 VU ramp START_VUS→END_VUS，step STAGE_STEP）+ run-k6-ramp-test.sh（支持 --profile smoke/load/stress + 自定义参数），per-stage RPS 追踪 + 错误率 + 峰值报告，饱和检测（throughput plateau / err >5% / p95 >2000ms）；mvn test ✅（全通过）；commit a04bb86 已推送
+
+
+## Cron 进度（2026-04-09 05:23 — K6-6 持久化会话压测）
+
+- ✅ K6-6 持久化会话压测：k6-session-stress.js（k6 native stages 驱动 VU ramp，共享 sessionId 高并发写入 ChatMemory，concurrent_sessions/concurrent_writes/conflict_rate 追踪，setup/teardown 自动清理）+ run-k6-session-stress.sh（--profile smoke/moderate/extreme）；mvn test ✅（全通过）；commit 待推送
