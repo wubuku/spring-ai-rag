@@ -103,6 +103,43 @@ public final class SseEmitters {
         }
     }
 
+    /**
+     * Sends a named SSE event with raw JSON data string.
+     * Use for OpenAI-compatible SSE chunk format: {@code data:{"choices":[{"delta":{"content":"..."}}]}}.
+     *
+     * @param emitter the SSE emitter
+     * @param eventName event name (e.g., "chunk", "done"), or null for comment-only
+     * @param rawJson raw JSON string to send as data
+     * @param context human-readable context for warning logs
+     */
+    public static void sendRaw(SseEmitter emitter, String eventName, String rawJson, String context) {
+        try {
+            SseEmitter.SseEventBuilder event = SseEmitter.event().data(rawJson);
+            if (eventName != null) {
+                event.name(eventName);
+            }
+            emitter.send(event);
+        } catch (Exception ex) {
+            log.warn("SSE raw send failed for {}: {}", context, ex.getMessage());
+        }
+    }
+
+    /**
+     * Escapes a string for safe inclusion in a JSON string value.
+     *
+     * @param text the raw text
+     * @return JSON-escaped text (null-safe)
+     */
+    public static String escapeJson(String text) {
+        if (text == null) return "";
+        return text
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
+    }
+
     private static Map<String, Object> buildErrorData(String error, Map<String, Object> extra) {
         if (extra == null || extra.isEmpty()) {
             return Map.of("error", error);

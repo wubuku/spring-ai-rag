@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.DisplayName;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -140,5 +141,90 @@ class SseEmittersTest {
         assertDoesNotThrow(() -> SseEmitters.execute(emitter, callback -> {
             // No events
         }, Map.of("total", 0)));
+    }
+
+    // --- escapeJson tests ---
+
+    @Test
+    @DisplayName("escapeJson null returns empty string")
+    void escapeJson_null() {
+        assertEquals("", SseEmitters.escapeJson(null));
+    }
+
+    @Test
+    @DisplayName("escapeJson escapes backslash")
+    void escapeJson_backslash() {
+        assertEquals("\\\\", SseEmitters.escapeJson("\\"));
+    }
+
+    @Test
+    @DisplayName("escapeJson escapes double-quote")
+    void escapeJson_quote() {
+        assertEquals("\\\"", SseEmitters.escapeJson("\""));
+    }
+
+    @Test
+    @DisplayName("escapeJson escapes newline")
+    void escapeJson_newline() {
+        assertEquals("\\n", SseEmitters.escapeJson("\n"));
+    }
+
+    @Test
+    @DisplayName("escapeJson escapes carriage return")
+    void escapeJson_carriageReturn() {
+        assertEquals("\\r", SseEmitters.escapeJson("\r"));
+    }
+
+    @Test
+    @DisplayName("escapeJson escapes tab")
+    void escapeJson_tab() {
+        assertEquals("\\t", SseEmitters.escapeJson("\t"));
+    }
+
+    @Test
+    @DisplayName("escapeJson preserves plain text")
+    void escapeJson_plainText() {
+        assertEquals("hello world", SseEmitters.escapeJson("hello world"));
+    }
+
+    @Test
+    @DisplayName("escapeJson handles SSE injection characters")
+    void escapeJson_sseInjection() {
+        String input = "hello\nworld\rt\best\\special\"chars";
+        String result = SseEmitters.escapeJson(input);
+        assertFalse(result.contains("\n"), "Should not contain raw newline");
+        assertFalse(result.contains("\r"), "Should not contain raw carriage return");
+        assertFalse(result.contains("\t"), "Should not contain raw tab");
+        // After escaping, the string contains \" and \\ (not bare " or \)
+        assertTrue(result.contains("\\\""), "Should escape double-quote");
+        assertTrue(result.contains("\\\\"), "Should escape backslash");
+    }
+
+    // --- sendRaw tests ---
+
+    @Test
+    @DisplayName("sendRaw null event name sends data without event name")
+    void sendRaw_nullEventName() {
+        SseEmitter emitter = SseEmitters.create();
+        assertDoesNotThrow(() -> SseEmitters.sendRaw(emitter, null,
+                "{\"choices\":[{\"delta\":{\"content\":\"hello\"}}]}", "test"));
+    }
+
+    @Test
+    @DisplayName("sendRaw with event name sends named event")
+    void sendRaw_withEventName() {
+        SseEmitter emitter = SseEmitters.create();
+        assertDoesNotThrow(() -> SseEmitters.sendRaw(emitter, "done",
+                "{\"status\":\"complete\"}", "test"));
+    }
+
+    @Test
+    @DisplayName("sendRaw handles IO exception gracefully")
+    void sendRaw_ioException_handled() {
+        SseEmitter emitter = SseEmitters.create();
+        emitter.completeWithError(new IOException("simulated disconnect"));
+        // Should not throw - sendRaw catches and logs the exception
+        assertDoesNotThrow(() -> SseEmitters.sendRaw(emitter, null,
+                "{\"data\":\"test\"}", "after-complete"));
     }
 }

@@ -7,6 +7,7 @@ import com.springairag.core.config.RagChatService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
+import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.micrometer.core.annotation.Timed;
@@ -33,7 +34,6 @@ import com.springairag.core.filter.RequestTraceFilter;
 import org.slf4j.MDC;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -134,7 +134,7 @@ public class RagChatController {
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
-        SseEmitter emitter = new SseEmitter(0L); // No timeout
+        SseEmitter emitter = SseEmitters.create();
 
         // SSE protocol: OpenAI-compatible format
         // Main channel: data:{"choices":[{"delta":{"content":"..."}}]}
@@ -143,23 +143,13 @@ public class RagChatController {
         ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
                 .subscribe(
                         chunk -> {
-                            try {
-                                // Send as named event "chunk" with plain text data (frontend expects event type + text content)
-                                String json = "{\"choices\":[{\"delta\":{\"content\":\"" + escapeJson(chunk) + "\"}}]}";
-                                emitter.send(SseEmitter.event().data(json));
-                            } catch (IOException e) {
-                                emitter.completeWithError(e);
-                            }
+                            String json = "{\"choices\":[{\"delta\":{\"content\":\"" + SseEmitters.escapeJson(chunk) + "\"}}]}";
+                            SseEmitters.sendRaw(emitter, null, json, "chat chunk");
                         },
                         emitter::completeWithError,
                         () -> {
-                            try {
-                                String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
-                                emitter.send(SseEmitter.event().name("done").data(doneJson));
-                                emitter.complete();
-                            } catch (IOException e) {
-                                emitter.completeWithError(e);
-                            }
+                            String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
+                            SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
                         }
                 );
 
@@ -248,16 +238,4 @@ public class RagChatController {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
     }
 
-    /**
-     * JSON escape (prevent SSE JSON injection).
-     */
-    private static String escapeJson(String text) {
-        if (text == null) return "";
-        return text
-                .replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
-    }
 }
