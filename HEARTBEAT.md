@@ -1221,7 +1221,7 @@
 | C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ✅ 2026-04-08（C34 完成：euclideanDistance + dotProduct + 20 tests，RetrievalUtilsTest 28→48 tests） | P3 |
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ✅ 2026-04-07（d8211e3） | P3 |
 | C36 | API 请求重试策略配置化：per-endpoint retry count + backoff | 韧性 | ✅ 2026-04-06（1562ed1） | P2 |
-| C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ⏳ | P3 |
+| C37 | WebUI 深色模式增强：自动跟随系统主题 + 手动切换 | UX | ✅ 2026-04-09（W14 完成：ThemeToggle 自动跟随系统 matchMedia + 手动切换 + A 恢复自动 + 14 tests） | P3 |
 | C38 | 数据库连接池生产环境调优：压测后确定 optimal pool size | 性能 | ✅ 2026-04-06（C38 完成：validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache；1280 tests ✅，commit a42e4f2） | P2 |
 | C39 | 第三方 LLM API Mock Server：Node.js mock server，/v1/chat/completions + /v1/embeddings，支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06（C39 完成：scripts/mock-llm-server.js + run-mock-llm.sh，8086默认端口，零依赖，commit d6c2665） | P2 |
 | C40 | CI 缓存优化：Maven/npm 依赖缓存策略改进 | DevOps | ✅ 2026-04-06（actions/setup-java cache=maven 已覆盖，无需额外配置） | P3 |
@@ -1619,7 +1619,7 @@
   - 清理 24 个历史 stale webui chunk 文件（-123 行）
   - commit 36b807a 已推送
   - WebUI 项目处于生产级成熟状态
-  - 剩余 WebUI 待办：W14（C37 Dark Mode 自动跟随系统主题 + 手动切换增强）
+  - 剩余 WebUI 待办：无（W1-W14 全部完成）
 
 ## Cron 进度（2026-04-08 10:10 — WebUI 常规发布）
 
@@ -1631,7 +1631,7 @@
   - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
   - git 工作区干净（无变更）
   - WebUI 项目处于生产级成熟状态
-  - 剩余 WebUI 待办：W14（C37 Dark Mode 自动跟随系统主题 + 手动切换增强）
+  - 剩余 WebUI 待办：无（W1-W14 全部完成）
 
 ## Cron 进度（2026-04-08 10:23 — 后端 API DTO 校验增强）
 
