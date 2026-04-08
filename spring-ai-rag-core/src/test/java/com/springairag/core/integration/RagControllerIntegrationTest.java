@@ -86,6 +86,10 @@ class RagControllerIntegrationTest {
             // so CorsConfig.getCors() will never return null
             return new com.springairag.core.config.RagProperties();
         }
+        @Bean
+        com.springairag.core.config.RagSseProperties ragSseProperties() {
+            return new com.springairag.core.config.RagSseProperties();
+        }
     }
     @MockBean private RagChatService ragChatService;
     @MockBean private RagChatHistoryRepository historyRepository;
