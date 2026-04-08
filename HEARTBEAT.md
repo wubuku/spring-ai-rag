@@ -1686,3 +1686,14 @@
   - git 已推送（commit d95ba17）
   - W14 → ✅
 
+
+## Cron 进度（2026-04-08 12:58 — 后端 Javadoc 国际化收尾）
+
+- 2026-04-08 12:58 — ✅ 后端 Javadoc 国际化收尾（第九轮）：扫描发现 28 个 Java 文件残留中文 Javadoc，全部翻译为英文
+  - Service 层：AbTestServiceImpl / AuditLogService / UserFeedbackServiceImpl / ModelComparisonService / RetrievalLoggingService / BatchDocumentService / PromptCustomizerChain / DomainExtensionRegistry / DefaultDomainRagExtension
+  - API 接口：PromptCustomizer / DomainRagExtension / RagAdvisorProvider
+  - Repository 层（13 个）：AlertRepository / SloConfigRepository / RagAuditLogRepository / RagRetrievalEvaluationRepository / RagRetrievalLogRepository / RagDocumentRepository / RagCollectionRepository / RagEmbeddingRepository / RagDocumentVersionRepository / RagAbExperimentRepository / RagAbResultRepository / RagSilenceScheduleRepository
+  - Config 属性：GeneralRagProperties / RagCircuitBreakerProperties / RagProxyProperties / RagTracingProperties
+  - 28 files，188 insertions，184 deletions
+  - 1393 tests 全通过，零失败零错误
+  - git 已推送（commit 0edbba5）
