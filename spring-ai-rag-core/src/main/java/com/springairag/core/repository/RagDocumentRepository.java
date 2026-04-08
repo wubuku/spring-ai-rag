@@ -98,6 +98,12 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     List<RagDocument> findAllByCollectionId(Long collectionId);
 
     /**
+     * Find document IDs belonging to any of the given collection IDs (multi-collection search).
+     */
+    @Query("SELECT d.id FROM RagDocument d WHERE d.collectionId IN :collectionIds")
+    List<Long> findIdsByCollectionIdIn(@Param("collectionIds") List<Long> collectionIds);
+
+    /**
      * Clear collection ID for all documents in a collection (batch operation, avoids loading one by one).
      */
     @org.springframework.data.jpa.repository.Modifying

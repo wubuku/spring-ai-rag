@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
+import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -41,9 +43,12 @@ public class RagSearchController {
     private static final Logger log = LoggerFactory.getLogger(RagSearchController.class);
 
     private final HybridRetrieverService hybridRetriever;
+    private final RagDocumentRepository documentRepository;
 
-    public RagSearchController(HybridRetrieverService hybridRetriever) {
+    public RagSearchController(HybridRetrieverService hybridRetriever,
+                               RagDocumentRepository documentRepository) {
         this.hybridRetriever = hybridRetriever;
+        this.documentRepository = documentRepository;
     }
 
     /**
@@ -94,7 +99,7 @@ public class RagSearchController {
     /**
      * Retrieval with request body (supports advanced config)
      */
-    @Operation(summary = "Direct retrieval (POST)", description = "Submit retrieval config via request body, supports filtering by document IDs and other advanced parameters.")
+    @Operation(summary = "Direct retrieval (POST)", description = "Submit retrieval config via request body. Supports filtering by document IDs, or by collection IDs (multi-collection search).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
@@ -104,20 +109,46 @@ public class RagSearchController {
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
             @Valid @RequestBody SearchRequest request) {
 
-        log.info("Direct search with config: query={}, config={}", request.getQuery(), request.getConfig());
+        log.info("Direct search with config: query={}, collectionIds={}, documentIds={}",
+                request.getQuery(), request.getCollectionIds(), request.getDocumentIds());
 
         RetrievalConfig config = request.getConfig() != null ? request.getConfig()
                 : RetrievalConfig.builder().build();
 
+        // Resolve collectionIds to documentIds if provided
+        List<Long> resolvedDocIds = resolveDocumentIds(request.getDocumentIds(), request.getCollectionIds());
+
         List<RetrievalResult> results = hybridRetriever.search(
                 request.getQuery(),
-                request.getDocumentIds(),
+                resolvedDocIds,
                 null,
                 config.getMaxResults(),
                 config);
 
         log.info("Direct search returned {} results", results.size());
         return ResponseEntity.ok(results);
+    }
+
+    /**
+     * Resolve document IDs: if collectionIds are provided, look up all document IDs in those collections.
+     * If both are provided, documentIds take precedence (filter further by those IDs).
+     */
+    private List<Long> resolveDocumentIds(List<Long> documentIds, List<Long> collectionIds) {
+        if (collectionIds == null || collectionIds.isEmpty()) {
+            return documentIds; // no collection filter, use documentIds as-is
+        }
+        List<Long> idsFromCollections = documentRepository.findIdsByCollectionIdIn(collectionIds);
+        if (documentIds == null || documentIds.isEmpty()) {
+            return idsFromCollections;
+        }
+        // Intersection: only include documentIds that also belong to the specified collections
+        List<Long> intersection = new ArrayList<>();
+        for (Long id : documentIds) {
+            if (idsFromCollections.contains(id)) {
+                intersection.add(id);
+            }
+        }
+        return intersection;
     }
 
 }

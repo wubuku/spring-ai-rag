@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -32,12 +33,14 @@ import static org.mockito.Mockito.*;
 class RagSearchControllerBenchmarkTest {
 
     private HybridRetrieverService hybridRetriever;
+    private RagDocumentRepository documentRepository;
     private RagSearchController controller;
 
     @BeforeEach
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
-        controller = new RagSearchController(hybridRetriever);
+        documentRepository = mock(RagDocumentRepository.class);
+        controller = new RagSearchController(hybridRetriever, documentRepository);
 
         RetrievalResult mockResult = new RetrievalResult();
         mockResult.setDocumentId("doc-benchmark");

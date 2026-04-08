@@ -20,6 +20,9 @@ public class SearchRequest {
     @Schema(description = "Limit to document ID list (empty means search all)", example = "[1, 2, 3]")
     private List<Long> documentIds;
 
+    @Schema(description = "Search within these collection IDs (multi-collection search)", example = "[1, 2, 3]")
+    private List<Long> collectionIds;
+
     @Valid
     @Schema(description = "Retrieval configuration parameters")
     private RetrievalConfig config;
@@ -35,6 +38,9 @@ public class SearchRequest {
 
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
+
+    public List<Long> getCollectionIds() { return collectionIds; }
+    public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
     public RetrievalConfig getConfig() { return config; }
     public void setConfig(RetrievalConfig config) { this.config = config; }

@@ -5,6 +5,7 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
+import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -24,12 +25,14 @@ import static org.mockito.Mockito.*;
 class RagSearchControllerTest {
 
     private HybridRetrieverService hybridRetriever;
+    private RagDocumentRepository documentRepository;
     private RagSearchController controller;
 
     @BeforeEach
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
-        controller = new RagSearchController(hybridRetriever);
+        documentRepository = mock(RagDocumentRepository.class);
+        controller = new RagSearchController(hybridRetriever, documentRepository);
     }
 
     @Test
@@ -183,6 +186,65 @@ class RagSearchControllerTest {
         // 全部由全文承担
         ResponseEntity<?> r2 = controller.search("q", 5, true, 0.0, 1.0);
         assertEquals(200, r2.getStatusCode().value());
+    }
+
+    // ========== Multi-collection search ==========
+
+    @Test
+    @DisplayName("POST with collectionIds resolves to document IDs")
+    void searchWithConfig_collectionIds_resolvesToDocumentIds() {
+        when(documentRepository.findIdsByCollectionIdIn(List.of(1L, 2L)))
+                .thenReturn(List.of(10L, 11L, 12L));
+        when(hybridRetriever.search(eq("query"), eq(List.of(10L, 11L, 12L)), isNull(), eq(10), any(RetrievalConfig.class)))
+                .thenReturn(List.of(createResult("doc1", "chunk", 0.9)));
+
+        SearchRequest req = new SearchRequest();
+        req.setQuery("query");
+        req.setCollectionIds(List.of(1L, 2L));
+
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().size());
+        verify(documentRepository).findIdsByCollectionIdIn(List.of(1L, 2L));
+    }
+
+    @Test
+    @DisplayName("POST with both collectionIds and documentIds returns intersection")
+    void searchWithConfig_bothCollectionIdsAndDocumentIds_returnsIntersection() {
+        when(documentRepository.findIdsByCollectionIdIn(List.of(1L)))
+                .thenReturn(List.of(10L, 11L, 12L));
+        // Intersection: documentIds [11L, 99L] ∩ collectionDocIds [10L, 11L, 12L] = [11L]
+        when(hybridRetriever.search(eq("query"), eq(List.of(11L)), isNull(), eq(10), any(RetrievalConfig.class)))
+                .thenReturn(List.of(createResult("doc2", "chunk", 0.8)));
+
+        SearchRequest req = new SearchRequest();
+        req.setQuery("query");
+        req.setCollectionIds(List.of(1L));
+        req.setDocumentIds(List.of(11L, 99L));
+
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(hybridRetriever).search(eq("query"), eq(List.of(11L)), isNull(), eq(10), any(RetrievalConfig.class));
+    }
+
+    @Test
+    @DisplayName("POST with collectionIds but no match returns empty list")
+    void searchWithConfig_collectionIdsNoMatch_returnsEmpty() {
+        when(documentRepository.findIdsByCollectionIdIn(List.of(999L)))
+                .thenReturn(List.of()); // no documents in this collection
+        when(hybridRetriever.search(eq("query"), eq(List.of()), isNull(), eq(10), any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+
+        SearchRequest req = new SearchRequest();
+        req.setQuery("query");
+        req.setCollectionIds(List.of(999L));
+
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue(response.getBody().isEmpty());
     }
 
     private RetrievalResult createResult(String docId, String text, double score) {
