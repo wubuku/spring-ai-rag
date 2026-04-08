@@ -1763,3 +1763,14 @@
   - 全量测试：1388 tests，零失败零错误（22 OpenApiContractTest errors 为已有基础设施问题，非本次修改引起）
   - EmailNotificationService 为 @Service 自动发现，无需额外配置
   - commit 待推送
+
+## Cron 进度（WebUI — 2026-04-08 20:49 — 常规发布）
+
+- 2026-04-08 20:49 — ✅ WebUI 常规发布：
+  - npm test: 142 vitest tests ✅（22 test files，142 passed，全通过）
+  - npm run build ✅（97KB index gzipped，306KB initial bundle，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - git 工作区干净（无变更，static/webui 在 .gitignore 中）
+  - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
