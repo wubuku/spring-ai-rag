@@ -13,22 +13,22 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 /**
- * 模型注册中心
+ * Central model registry for all registered ChatModel instances.
  *
- * <p>统一管理所有已注册的 ChatModel 实例，支持运行时查询和切换。
- * 与 {@link SpringAiConfig} 配合工作：
- * SpringAiConfig 创建各 provider 的 ChatModel Bean，
- * ModelRegistry 负责收集并提供统一的访问接口。
+ * <p>Unified access to all registered ChatModel instances with runtime query and switching support.
+ * Works with {@link SpringAiConfig}:
+ * SpringAiConfig creates ChatModel beans for each provider,
+ * and ModelRegistry collects and exposes them through a unified interface.
  *
- * <p>支持的 providers：
+ * <p>Supported providers:
  * <ul>
- *   <li>openai - OpenAI / DeepSeek / 智谱 等 OpenAI 兼容模型</li>
- *   <li>anthropic - Anthropic Claude 系列</li>
- *   <li>minimax - MiniMax 系列</li>
+ *   <li>openai - OpenAI / DeepSeek / Zhipu and other OpenAI-compatible models</li>
+ *   <li>anthropic - Anthropic Claude series</li>
+ *   <li>minimax - MiniMax series</li>
  * </ul>
  *
- * <p>M2 增强：支持 {@link MultiModelProperties} 外部配置。
- * 当 MultiModelProperties 可用时，路由方法优先使用其配置。
+ * <p>M2 Enhancement: Supports {@link MultiModelProperties} external configuration.
+ * When MultiModelProperties is available, routing methods prefer its configuration.
  */
 @Component
 public class ModelRegistry {
@@ -57,7 +57,7 @@ public class ModelRegistry {
 
     @PostConstruct
     public void init() {
-        register("openai", "openAiChatModel", "OpenAI (DeepSeek/兼容)");
+        register("openai", "openAiChatModel", "OpenAI (DeepSeek/Compatible)");
         register("anthropic", "anthropicChatModel", "Anthropic (Claude)");
         register("minimax", "miniMaxChatModel", "MiniMax");
 
@@ -79,11 +79,11 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取指定 provider 的 ChatModel
+     * Gets the ChatModel for the specified provider.
      *
-     * @param provider provider 标识（openai / anthropic / minimax）
-     * @return ChatModel 实例
-     * @throws IllegalArgumentException 当 provider 未注册或不可用时
+     * @param provider Provider identifier (openai / anthropic / minimax)
+     * @return ChatModel instance
+     * @throws IllegalArgumentException when the provider is not registered or unavailable
      */
     public ChatModel get(String provider) {
         ChatModel model = models.get(provider);
@@ -96,9 +96,9 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取默认 ChatModel
+     * Gets the default ChatModel.
      *
-     * <p>当未指定 provider 时使用主 ChatModel（由 SpringAiConfig 的 chatModel Bean 决定）。
+     * <p>When no provider is specified, the primary ChatModel is used (determined by SpringAiConfig's chatModel bean).
      */
     public ChatModel getDefault() {
         ChatModel defaultModel = ctx.getBean("chatModel", ChatModel.class);
@@ -109,28 +109,28 @@ public class ModelRegistry {
     }
 
     /**
-     * 检查指定 provider 是否已注册且可用
+     * Checks whether the specified provider is registered and available.
      */
     public boolean isAvailable(String provider) {
         return models.containsKey(provider);
     }
 
     /**
-     * 获取所有已注册的 provider 列表
+     * Gets all registered provider identifiers.
      */
     public Set<String> availableProviders() {
         return Collections.unmodifiableSet(models.keySet());
     }
 
     /**
-     * 获取 provider 的显示名称
+     * Gets the display name for a provider.
      */
     public String getDisplayName(String provider) {
         return modelNames.getOrDefault(provider, provider);
     }
 
     /**
-     * 获取已注册模型的详细信息
+     * Gets detailed information for a registered model.
      */
     public Map<String, Object> getModelInfo(String provider) {
         Map<String, Object> info = new LinkedHashMap<>();
@@ -145,7 +145,7 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取所有已注册模型的概览信息
+     * Gets overview information for all registered models.
      */
     public List<Map<String, Object>> getAllModelsInfo() {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -155,11 +155,11 @@ public class ModelRegistry {
         return result;
     }
 
-    // ─── M2: MultiModelProperties 集成 ──────────────────────────────────────
+    // ─── M2: MultiModelProperties Integration ──────────────────────────────────
 
     /**
-     * 获取主 ChatModel 名称。
-     * 优先使用 MultiModelProperties.chatModel.primary，否则回退到 app.llm.provider。
+     * Gets the primary ChatModel name.
+     * Prefers MultiModelProperties.chatModel.primary, falls back to app.llm.provider.
      */
     public String getPrimaryChatModelName() {
         if (multiModelProperties != null && multiModelProperties.getChatModel() != null
@@ -170,8 +170,8 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取 Fallback ChatModel 名称列表。
-     * 优先使用 MultiModelProperties.chatModel.fallbacks。
+     * Gets the list of fallback ChatModel names.
+     * Prefers MultiModelProperties.chatModel.fallbacks.
      */
     public List<String> getFallbackChatModelNames() {
         if (multiModelProperties != null && multiModelProperties.getChatModel() != null
@@ -182,8 +182,8 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取主 EmbeddingModel 名称。
-     * 优先使用 MultiModelProperties.embeddingModel.primary。
+     * Gets the primary EmbeddingModel name.
+     * Prefers MultiModelProperties.embeddingModel.primary.
      */
     public String getPrimaryEmbeddingModelName() {
         if (multiModelProperties != null && multiModelProperties.getEmbeddingModel() != null
@@ -197,7 +197,7 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取 Fallback EmbeddingModel 名称列表。
+     * Gets the list of fallback EmbeddingModel names.
      */
     public List<String> getFallbackEmbeddingModelNames() {
         if (multiModelProperties != null && multiModelProperties.getEmbeddingModel() != null
@@ -208,8 +208,8 @@ public class ModelRegistry {
     }
 
     /**
-     * 根据名称查找 Provider ID。
-     * 优先从 MultiModelProperties.providers 匹配（忽略大小写）。
+     * Finds the Provider ID by model name.
+     * Prefers matching from MultiModelProperties.providers (case-insensitive).
      */
     public String getProviderByName(String providerName) {
         if (multiModelProperties != null && multiModelProperties.getProviders() != null
@@ -222,7 +222,7 @@ public class ModelRegistry {
                 return found;
             }
         }
-        // 兼容旧架构：硬编码 provider 名称
+        // Backward compatibility: hardcoded provider names
         if (providerName == null) {
             return null;
         }
@@ -234,7 +234,7 @@ public class ModelRegistry {
     }
 
     /**
-     * 获取所有已注册的 Provider 配置。
+     * Gets all registered Provider configurations.
      */
     public Map<String, MultiModelProperties.ProviderConfig> getAllProviders() {
         return multiModelProperties != null
@@ -243,7 +243,7 @@ public class ModelRegistry {
     }
 
     /**
-     * 根据模型引用（providerId/modelId）获取 ProviderConfig。
+     * Gets the ProviderConfig by model reference (providerId/modelId).
      */
     public MultiModelProperties.ProviderConfig getProviderByModelRef(String modelRef) {
         return multiModelProperties != null
@@ -252,7 +252,7 @@ public class ModelRegistry {
     }
 
     /**
-     * 根据模型引用（providerId/modelId）获取 ModelItem。
+     * Gets the ModelItem by model reference (providerId/modelId).
      */
     public MultiModelProperties.ModelItem getModelItem(String modelRef) {
         return multiModelProperties != null

@@ -20,35 +20,35 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 
 /**
- * API 限流过滤器
+ * API rate limiting filter based on sliding window counter.
  *
- * <p>基于滑动窗口计数器，支持三种限流策略：
+ * <p>Supports three rate limiting strategies:
  * <ul>
- *   <li>{@code ip} — 按客户端 IP 限流（默认）</li>
- *   <li>{@code api-key} — 按 X-API-Key 请求头限流，未携带时回退到 IP</li>
- *   <li>{@code user} — 按已认证用户限流（优先从 {@code authenticatedApiKey} 请求属性获取，
- *       该属性由 {@link ApiKeyAuthFilter} 设置；未认证时回退到 IP）</li>
+ *   <li>{@code ip} — Rate limit by client IP address (default)</li>
+ *   <li>{@code api-key} — Rate limit by X-API-Key header; falls back to IP if not provided</li>
+ *   <li>{@code user} — Rate limit by authenticated user (prefers {@code authenticatedApiKey} request attribute
+ *       set by {@link ApiKeyAuthFilter}; falls back to IP if not authenticated)</li>
  * </ul>
  *
- * <p>当 {@code strategy=api-key} 且配置了 {@code keyLimits} 时，
- * 为每个 API Key 使用独立限额；未配置的 Key 使用默认限额。
+ * <p>When {@code strategy=api-key} and {@code keyLimits} is configured,
+ * each API key gets its own limit; unconfigured keys use the default limit.
  *
- * <p>限流关闭或 requestsPerMinute ≤ 0 时直接放行。
+ * <p>Requests pass through directly when rate limiting is disabled or requestsPerMinute ≤ 0.
  *
- * <p>排除路径（不需要限流）：
+ * <p>Excluded paths (not rate limited):
  * <ul>
- *   <li>/actuator/** — 健康检查</li>
- *   <li>/swagger-ui/** — API 文档</li>
- *   <li>/v3/api-docs — OpenAPI 规范</li>
- *   <li>/health — 健康检查</li>
- *   <li>/error — Spring 错误页</li>
+ *   <li>/actuator/** — Health checks</li>
+ *   <li>/swagger-ui/** — API documentation</li>
+ *   <li>/v3/api-docs — OpenAPI specification</li>
+ *   <li>/health — Health check</li>
+ *   <li>/error — Spring error page</li>
  * </ul>
  *
- * <p>限流响应：
+ * <p>Rate limit response:
  * <ul>
  *   <li>HTTP 429 Too Many Requests</li>
- *   <li>响应头 Retry-After: 60</li>
- *   <li>响应体 JSON {@link ErrorResponse}</li>
+ *   <li>Retry-After: 60 response header</li>
+ *   <li>JSON {@link ErrorResponse} body</li>
  * </ul>
  */
 public class RateLimitFilter extends OncePerRequestFilter {
@@ -56,16 +56,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private static final Logger log = LoggerFactory.getLogger(RateLimitFilter.class);
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** 响应头：限流窗口剩余秒数 */
+    /** Response header: seconds remaining in the rate limit window */
     public static final String RETRY_AFTER_HEADER = "Retry-After";
 
-    /** 响应头：当前窗口已用请求数 */
+    /** Response header: number of requests used in current window */
     public static final String RATE_LIMIT_REMAINING_HEADER = "X-RateLimit-Remaining";
 
-    /** 响应头：窗口内最大请求数 */
+    /** Response header: maximum requests allowed in window */
     public static final String RATE_LIMIT_LIMIT_HEADER = "X-RateLimit-Limit";
 
-    /** 请求属性：限流标识符（供测试和日志使用） */
+    /** Request attribute: rate limit client identifier (for testing and logging) */
     public static final String CLIENT_ID_ATTRIBUTE = "rateLimitClientId";
 
     private static final String API_KEY_HEADER = "X-API-Key";
@@ -75,23 +75,23 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final String strategy;
     private final Map<String, Integer> keyLimits;
 
-    /** 标识符 → 窗口状态 */
+    /** Identifier to window state mapping */
     private final ConcurrentHashMap<String, WindowState> windows = new ConcurrentHashMap<>();
 
     /**
-     * 便捷构造函数（向后兼容，等价 strategy=ip）
+     * Convenience constructor (backward compatible, equivalent to strategy=ip).
      */
     public RateLimitFilter(boolean enabled, int requestsPerMinute) {
         this(enabled, requestsPerMinute, "ip", Map.of());
     }
 
     /**
-     * 完整构造函数
+     * Full constructor.
      *
-     * @param enabled           是否启用
-     * @param requestsPerMinute 默认每分钟限额
-     * @param strategy          限流策略（ip 或 api-key）
-     * @param keyLimits         API Key → 自定义限额映射（strategy=api-key 时生效）
+     * @param enabled           Whether rate limiting is enabled
+     * @param requestsPerMinute Default requests per minute limit
+     * @param strategy          Rate limiting strategy (ip or api-key)
+     * @param keyLimits         API key to custom limit mapping (effective when strategy=api-key or strategy=user)
      */
     public RateLimitFilter(boolean enabled, int requestsPerMinute,
                            String strategy, Map<String, Integer> keyLimits) {
@@ -116,7 +116,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
-        // 按策略解析标识符
+        // Resolve client identifier by strategy
         ClientId clientId = resolveClientId(request);
         request.setAttribute(CLIENT_ID_ATTRIBUTE, clientId.identifier);
 
@@ -126,7 +126,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
         int currentCount = state.incrementAndGet();
         int remaining = limit - currentCount;
 
-        // 设置限流响应头
+        // Set rate limit response headers
         response.setHeader(RATE_LIMIT_LIMIT_HEADER, String.valueOf(limit));
         response.setHeader(RATE_LIMIT_REMAINING_HEADER, String.valueOf(Math.max(0, remaining)));
 
@@ -141,16 +141,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 按策略解析客户端标识符
+     * Resolves client identifier based on the configured strategy.
      */
     private ClientId resolveClientId(HttpServletRequest request) {
         if ("user".equals(strategy)) {
-            // 优先使用已认证用户身份（由 ApiKeyAuthFilter 设置）
+            // Prefer authenticated user identity (set by ApiKeyAuthFilter)
             Object authenticatedKey = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
             if (authenticatedKey instanceof String key && !((String) key).isBlank()) {
                 return new ClientId(key, "user");
             }
-            // 未认证时回退到 IP
+            // Fall back to IP when not authenticated
             return new ClientId(resolveClientIp(request), "ip");
         }
         if ("api-key".equals(strategy)) {
@@ -159,12 +159,12 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 return new ClientId(apiKey, "api-key");
             }
         }
-        // ip 策略或 api-key 未携带时回退到 IP
+        // Fall back to IP for ip strategy or when api-key is not provided
         return new ClientId(resolveClientIp(request), "ip");
     }
 
     /**
-     * 解析该标识符对应的限额
+     * Resolves the rate limit for the given client identifier.
      */
     private int resolveLimit(ClientId clientId) {
         if (("api-key".equals(clientId.type) || "user".equals(clientId.type))
@@ -194,7 +194,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 获取或创建窗口状态，过期窗口自动重置
+     * Gets or creates a window state; expired windows are automatically reset.
      */
     private WindowState getOrCreateWindow(String identifier) {
         return windows.compute(identifier, (key, existing) -> {
@@ -215,7 +215,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 解析客户端 IP，优先 X-Forwarded-For，兜底 RemoteAddr
+     * Resolves client IP address, preferring X-Forwarded-For header, falling back to RemoteAddr.
      */
     String resolveClientIp(HttpServletRequest request) {
         String forwarded = request.getHeader("X-Forwarded-For");
@@ -226,14 +226,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         return request.getRemoteAddr();
     }
 
-    // ==================== 内部类 ====================
+    // ==================== Inner Classes ====================
 
     /**
-     * 客户端标识符（含类型信息）
+     * Client identifier with type information.
      */
     static class ClientId {
         final String identifier;
-        final String type; // "ip" or "api-key"
+        final String type; // "ip", "api-key", or "user"
 
         ClientId(String identifier, String type) {
             this.identifier = identifier;
@@ -242,7 +242,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     /**
-     * 滑动窗口状态
+     * Sliding window state.
      */
     static class WindowState {
         final long windowStart;
@@ -258,14 +258,14 @@ public class RateLimitFilter extends OncePerRequestFilter {
         }
     }
 
-    // ==================== 测试辅助 ====================
+    // ==================== Test Helpers ====================
 
-    /** 获取当前窗口状态（测试用） */
+    /** Returns the current window states (for testing). */
     ConcurrentHashMap<String, WindowState> getWindows() {
         return windows;
     }
 
-    /** 清空所有窗口（测试用） */
+    /** Clears all windows (for testing). */
     void clearWindows() {
         windows.clear();
     }

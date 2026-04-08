@@ -110,7 +110,7 @@ class ModelRegistryTest {
     @Test
     @DisplayName("已知 provider 返回正确显示名")
     void testGetDisplayName_known() {
-        assertEquals("OpenAI (DeepSeek/兼容)", buildRegistry("openai").getDisplayName("openai"));
+        assertEquals("OpenAI (DeepSeek/Compatible)", buildRegistry("openai").getDisplayName("openai"));
         assertEquals("Anthropic (Claude)", buildRegistry("anthropic").getDisplayName("anthropic"));
         assertEquals("MiniMax", buildRegistry("minimax").getDisplayName("minimax"));
     }
@@ -130,7 +130,7 @@ class ModelRegistryTest {
         Map<String, Object> info = r.getModelInfo("openai");
         assertEquals("openai", info.get("provider"));
         assertEquals(true, info.get("available"));
-        assertEquals("OpenAI (DeepSeek/兼容)", info.get("displayName"));
+        assertEquals("OpenAI (DeepSeek/Compatible)", info.get("displayName"));
         assertNotNull(info.get("className"));
     }
 
