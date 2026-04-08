@@ -1798,3 +1798,13 @@
 ## Cron 进度（2026-04-08 23:45 — i18n 收尾：AlertServiceImplTest）
 
 - 2026-04-08 23:45 — ✅ AlertServiceImplTest 国际化收尾：扫描发现 AlertServiceImplTest.java 残留 32 处中文 @DisplayName/test data/inline comments，全部翻译为英文——@DisplayName(未知告警类型/fireAlert 创建告警记录/resolveAlert 将告警标记为已解决)、alert names(高延迟告警→High Latency Alert/SLO 违约→SLO Breach)、messages(P95 延迟超过 2000ms→P95 exceeds 2000ms/P99 超标→P99 exceeded/P95 超标→P95 exceeded)、resolutions(已修复→Fixed/扩容处理→Scaled up/无→none)、section headers(getAlertStats 零小时→zero-hour window)、comments(静默过期恢复/silenceAlert 覆盖过期清理路径)；63 replacements（63 insertions, 63 deletions, net zero）；1388+ tests 全通过，BUILD SUCCESS；commit a044592 已推送
+
+## Cron 进度（2026-04-08 23:47 — WebUI 常规发布）
+- 2026-04-08 23:47 — ✅ WebUI 常规发布：
+  - npm test 142 ✅（22 test files，142 passed，全通过）
+  - npm run build ✅（97KB index gzipped，28 chunks，BarChart 102KB 按需加载）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - git 工作区干净（无变更）
+  - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
