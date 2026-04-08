@@ -106,7 +106,7 @@ public class SpringAiConfig {
             try {
                 java.net.ProxySelector.setDefault(java.net.ProxySelector.of(null));
                 log.info("JVM proxy disabled (rag.proxy.enabled=false), NO_PROXY selector active");
-            } catch (Exception e) {
+            } catch (SecurityException | NullPointerException e) {
                 log.warn("Failed to set NO_PROXY selector: {}", e.getMessage());
             }
         } else {

@@ -288,7 +288,7 @@ public class RagChatService {
                     }
                     return llmCall.get();
                 });
-            } catch (Exception e) {
+            } catch (Exception e) { // Retry exhausted: extract root cause and propagate as RuntimeException
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
                 log.error("LLM call failed after all retry attempts: {}", cause.getMessage());
                 throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(cause);
