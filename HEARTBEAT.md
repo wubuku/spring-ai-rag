@@ -1131,7 +1131,7 @@
 | N14 | 批量操作 SSE 进度追踪（实时推送进度） | 功能 | ✅ 2026-04-05（N14 完成，POST /batch/embed/stream + POST /{id}/embed/stream + BatchEmbedProgressEvent） |
 | N15 | ~~缓存失效管理 API（Admin 端点清除缓存）~~ → 已由 N19 实现 | 可观测性 | ✅ → N19 |
 | N16 | API 限流精细化（per-user + per-IP 双维度） | 安全 | ✅ 2026-04-06（C13 完成：RateLimitFilter user 策略 + keyLimits 分级限额） |
-| N17 | WebUI 搜索历史记录 | UX | ⏳ 待推进 |
+| N17 | WebUI 搜索历史记录 | UX | ✅ 2026-04-06 (C14) |
 | N18 | API 审计日志（谁在何时调用了什么 API） | 安全 | ✅ 2026-04-06（C15+N43 完成：AbTestController+EvaluationController 审计覆盖，USER_FEEDBACK 类型） |
 
 
@@ -1176,7 +1176,7 @@
 | # | 改进项 | 类型 | 状态 | Cron 执行优先级 |
 |---|--------|------|------|----------------|
 | C1 | N16：API 限流精细化（per-user + per-IP 双维度） | 安全 | ✅ 2026-04-06（C13 完成） | P1 |
-| C2 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ⏳ | P1 |
+| C2 | N17：WebUI 搜索历史记录（localStorage 持久化） | UX | ✅ 2026-04-06 (C14) | P1 |
 | C3 | N18：API 审计日志（AuditLogService 增强，覆盖所有写操作） | 安全 | ✅ 2026-04-06 | P1 |
 | C4 | N21：Grafana Dashboard JSON 配置完善 | 监控 | ✅ 2026-04-06 | P2 |
 | C5 | N22：Prometheus Alerting Rules 完善（SLA 告警） | 监控 | ✅ 2026-04-06 | P2 |
@@ -1215,8 +1215,8 @@
 | C28 | SiliconFlow 嵌入调试：确认向量存储，Search 链路端到端测试 | 集成 | ✅ 2026-04-06（C28 完成：.env SILICONFLOW_URL 修复 + EmbeddingModelConfigTest 3 tests，1172 tests ✅） | P1 |
 | C29 | WebUI i18n：搭建 react-i18next，中英文双语支持 | UX | ✅ 2026-04-06（C29: react-i18next 国际化框架完成，支持 Settings 页面语言切换，45 files/875 行） | P3 |
 | C30 | Collection 复制/克隆功能：REST 端点 + UI 按钮 | 功能 | ✅ 2026-04-06 | P2 |
-| C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ⏳ | P3 |
-| C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ⏳ | P2 |
+| C31 | Document 版本对比 UI：diff 视图展示两个版本的差异 | UX | ✅ 2026-04-08 (W12) | P3 |
+| C32 | A/B 测试实时看板：WebUI 展示实验结果统计图表 | UX | ✅ 2026-04-08 (W13) | P2 |
 | C33 | 告警规则自定义：用户配置 SLO 阈值 + 邮件/钉钉通知 | 功能 | ✅ 2026-04-07（C33 完成：NotificationConfig + NotificationService 接口 + DingTalkNotificationService 实现（HTTPS webhook + HMAC-SHA256 加签） + AlertServiceImpl.fireAlert() 异步通知触发 + 11 个单元测试 + application.yml 配置模板；邮件 SMTP 待接入） | P2 |
 | C34 | 向量近似度算法对比：余弦 vs 欧氏距离 vs 点积 | 性能 | ✅ 2026-04-08（C34 完成：euclideanDistance + dotProduct + 20 tests，RetrievalUtilsTest 28→48 tests） | P3 |
 | C35 | RAG 回答质量评分：自动评分 + 历史评分趋势图 | 功能 | ✅ 2026-04-07（d8211e3） | P3 |
@@ -1873,3 +1873,19 @@
   - 新增 `SseEmittersTest`（15 tests，覆盖全部助手方法）
   - 1393+ tests 全通过，零失败零错误
   - commit 08496d5 已推送
+
+## Cron 进度（2026-04-09 02:42 — WebUI 常规发布 + AlertServiceImpl 修复）
+
+- 2026-04-09 02:42 — ✅ WebUI 常规发布 + AlertServiceImpl bean 冲突修复：
+  - npm test 142 ✅（22 test files，142 passed）
+  - npm run build ✅（97KB index gzipped，28 chunks）
+  - 后端修复：AlertServiceImpl NotificationService bean 歧义（DingTalk + Email 双实现冲突）
+    - 单 NotificationService → List<NotificationService> 注入
+    - 遍历所有通道发送告警，单通道失败不阻塞其他通道
+    - catch per-channel + log.warn 容错
+  - 后端测试：1403 tests ✅（零失败零错误）
+  - E2E 12/12 ✅（全部页面）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP
+  - commit 0a70ff5 已推送
+  - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
