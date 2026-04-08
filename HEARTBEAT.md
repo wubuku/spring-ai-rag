@@ -1835,3 +1835,18 @@
   - k6 测试组从 7 增至 10（Health/CollectionRead/CollectionWrite/Document/HybridSearch/ChatAsk/ChatStream/AbTests/AlertsFeedback/MetricsCache）
   - mvn test ✅（1393 tests，零失败零错误）
   - commit ee64e4f 已推送
+
+## Cron 进度（2026-04-09 01:13 — 后端 i18n：Config 模块全部翻译）
+
+- 2026-04-09 01:13 — ✅ i18n 国际化 Config 模块（21 文件）：
+  - RagRateLimitProperties, AsyncConfig, CacheConfig, PerformanceConfig
+  - RagCorsProperties, RagSecurityProperties, RagChunkProperties
+  - RagCacheProperties, RagRerankProperties, RagRetrievalProperties
+  - RagEmbeddingProperties, RagAsyncProperties, RagQueryRewriteProperties
+  - RagProperties, MultiModelProperties, MultiModelConfigLoader
+  - EmbeddingModelConfig, EmbeddingModelRouter, ChatModelRouter
+  - SpringAiConfig, CorsConfig, VectorStoreConfig
+  - 全部 class/method Javadoc + inline comments → 英文
+  - 1525 tests 全通过（66 api + 29 documents + 1388 core + 42 starter）
+  - commit 097ee41 已推送
+  - 仍有 adapter/service/entity/controller/retrieval/filter 等模块含中文，继续推进
