@@ -1774,3 +1774,11 @@
   - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
   - git 工作区干净（无变更，static/webui 在 .gitignore 中）
   - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+
+## Cron 进度（2026-04-08 22:50 — EmailNotificationService 可选依赖修复）
+
+- 2026-04-08 22:50 — ✅ OpenApiContractTest 22 errors 修复（JavaMailSender 可选依赖）：
+  - `EmailNotificationService` 的 `JavaMailSender` 依赖改为 `@Autowired(required=false)`（与其他可选基础设施服务模式一致）
+  - `sendEmail()` 添加 null guard，mailSender 不可用时抛出 `MessagingException`（被 `sendAlert()` catch 并返回 false）
+  - 1388 tests 全通过，零失败零错误（BUILD SUCCESS）
+  - commit 33e883d 已推送
