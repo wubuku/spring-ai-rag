@@ -299,28 +299,33 @@ public class RagDocumentController {
     }
 
     private List<Map<String, Object>> executeReembeddingBatch(List<RagDocument> documents, boolean force) {
-        List<Map<String, Object>> results = new ArrayList<>();
+        List<Map<String, Object>> results = new ArrayList<>(documents.size());
         for (RagDocument doc : documents) {
-            try {
-                Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
-                results.add(Map.of(
-                        "documentId", doc.getId(),
-                        "title", doc.getTitle(),
-                        "status", result.getOrDefault("status", "UNKNOWN"),
-                        "chunks", result.getOrDefault("chunksCreated", 0),
-                        "message", result.getOrDefault("message", "")
-                ));
-            } catch (Exception e) {
-                log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
-                results.add(Map.of(
-                        "documentId", doc.getId(),
-                        "title", doc.getTitle(),
-                        "status", "error",
-                        "error", e.getMessage()
-                ));
-            }
+            Map<String, Object> result = buildReembedResult(doc, force);
+            results.add(result);
         }
         return results;
+    }
+
+    private Map<String, Object> buildReembedResult(RagDocument doc, boolean force) {
+        try {
+            Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
+            return Map.ofEntries(
+                    Map.entry("documentId", doc.getId()),
+                    Map.entry("title", doc.getTitle()),
+                    Map.entry("status", result.getOrDefault("status", "UNKNOWN")),
+                    Map.entry("chunks", result.getOrDefault("chunksCreated", 0)),
+                    Map.entry("message", result.getOrDefault("message", ""))
+            );
+        } catch (Exception e) {
+            log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
+            return Map.of(
+                    "documentId", doc.getId(),
+                    "title", doc.getTitle(),
+                    "status", "error",
+                    "error", e.getMessage()
+            );
+        }
     }
 
     /**
