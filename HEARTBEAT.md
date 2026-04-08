@@ -1634,11 +1634,16 @@
 
 ## Cron 进度（2026-04-08 10:23 — 后端 API DTO 校验增强）
 
+- 2026-04-08 10:40 — ✅ SpringAiConfig.initProxySettings() catch 收窄 + RagChatService retry catch 注释：
+  - `catch(Exception)` → `catch(SecurityException | NullPointerException)`（ProxySelector.setDefault(null) 实际抛出的类型）
+  - RagChatService retry exhausted catch 添加 "Retry exhausted" 注释说明意图
+  - 2 files，2 行变更；1393 tests 全通过，零失败零错误；commit 7f2cf06 已推送
+
 - 2026-04-08 10:23 — ✅ FireAlertRequest + SilenceAlertRequest 输入校验约束补充：
   - FireAlertRequest：alertType/alertName 加 @NotBlank + @Size，message/severity 加 @Size
   - SilenceAlertRequest：alertKey 加 @NotBlank + @Size，durationMinutes 加 @Min(1)
   - 与 AlertController 端点 @Valid 注解对齐，无效输入返回 400 Bad Request
   - 1393 tests 全通过，零失败零错误
   - commit 79c2b04 已推送
-  - 后端待办：SpringAiConfig.initProxySettings() catch(Exception) 可收窄为 SecurityException/NullPointerException（后续轮次）
+  - 后端待办：SpringAiConfig.initProxySettings() catch(Exception) 可收窄为 SecurityException/NullPointerException（后续轮次）→ ✅ 2026-04-08（已收窄 + RagChatService retry catch 添加注释）
   - 后端待办：W14 Dark Mode 系统主题跟随（WebUI cron 负责）
