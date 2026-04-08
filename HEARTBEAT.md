@@ -1631,3 +1631,14 @@
   - git 工作区干净（无变更）
   - WebUI 项目处于生产级成熟状态
   - 剩余 WebUI 待办：W14（C37 Dark Mode 自动跟随系统主题 + 手动切换增强）
+
+## Cron 进度（2026-04-08 10:23 — 后端 API DTO 校验增强）
+
+- 2026-04-08 10:23 — ✅ FireAlertRequest + SilenceAlertRequest 输入校验约束补充：
+  - FireAlertRequest：alertType/alertName 加 @NotBlank + @Size，message/severity 加 @Size
+  - SilenceAlertRequest：alertKey 加 @NotBlank + @Size，durationMinutes 加 @Min(1)
+  - 与 AlertController 端点 @Valid 注解对齐，无效输入返回 400 Bad Request
+  - 1393 tests 全通过，零失败零错误
+  - commit 79c2b04 已推送
+  - 后端待办：SpringAiConfig.initProxySettings() catch(Exception) 可收窄为 SecurityException/NullPointerException（后续轮次）
+  - 后端待办：W14 Dark Mode 系统主题跟随（WebUI cron 负责）
