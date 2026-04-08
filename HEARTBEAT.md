@@ -1605,3 +1605,17 @@
   - npm run build ✅（97KB index gzipped，28 chunks，BarChart 346KB 按需加载）
   - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
   - dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（仅 HEARTBEAT.md 待提交）
+
+## Cron 进度（2026-04-08 08:41 — WebUI 常规发布）
+
+- 2026-04-08 08:41 — ✅ WebUI 常规发布：
+  - npm test 130 ✅（22 test files，130 passed，全通过）
+  - npm run build ✅（97KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 修复 .env 缺失 POSTGRES_HOST/POSTGRES_DATABASE 变量（导致后端无法启动）
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - 清理 24 个历史 stale webui chunk 文件（-123 行）
+  - commit 36b807a 已推送
+  - WebUI 项目处于生产级成熟状态
+  - 剩余 WebUI 待办：W14（C37 Dark Mode 自动跟随系统主题 + 手动切换增强）
