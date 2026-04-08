@@ -74,7 +74,8 @@ const cfg = PROFILES[PROFILE] || PROFILES.load;
 
 const httpReqDuration = new Trend('http_req_duration', true);  // true = rates show as time
 const searchLatency   = new Trend('rag_search_latency');
-const chatLatency    = new Trend('rag_chat_latency');
+const chatNonStreamLatency = new Trend('rag_chat_nonstream_latency');  // Non-streaming /chat/ask
+const chatStreamLatency    = new Trend('rag_chat_stream_latency');      // Streaming /chat/stream (total time to receive all SSE chunks)
 const embedLatency   = new Trend('rag_embed_latency');
 const httpErrors     = new Counter('http_errors_total');
 const apiCallsTotal  = new Counter('api_calls_total');
@@ -294,8 +295,10 @@ export const options = {
     http_errors_total: ['rate<0.01'],
     // Search specific
     rag_search_latency: ['p(95)<1000', 'p(99)<2000', 'avg<500'],
-    // Chat specific
-    rag_chat_latency: ['p(95)<5000', 'p(99)<10000', 'avg<2000'],
+    // Chat non-stream specific (synchronous, waits for full LLM response)
+    rag_chat_nonstream_latency: ['p(95)<5000', 'p(99)<10000', 'avg<2000'],
+    // Chat stream specific (SSE, total time to receive all chunks)
+    rag_chat_stream_latency: ['p(95)<8000', 'p(99)<15000', 'avg<3000'],
     // Embed specific
     rag_embed_latency: ['p(95)<3000', 'p(99)<8000', 'avg<1500'],
     // Availability
@@ -547,7 +550,7 @@ function runChatAsk(data) {
     });
 
     if (chatOk) {
-      chatLatency.add(chatRes.timings.duration);
+      chatNonStreamLatency.add(chatRes.timings.duration);
     }
   });
 }
@@ -575,11 +578,16 @@ function runChatStream(data) {
       }
     );
 
-    check(res, {
+    const streamOk = check(res, {
       'chat/stream returns 200': r => r.status === 200,
       'chat/stream is SSE': r => r.headers['Content-Type'] && r.headers['Content-Type'].includes('text/event-stream'),
       'chat/stream has body': r => r.body && r.body.length > 0,
     });
+
+    if (streamOk) {
+      // Total SSE round-trip: request sent + all chunks received
+      chatStreamLatency.add(res.timings.duration);
+    }
 
     // Validate SSE chunks contain expected fields (id, event, data:)
     if (res.status === 200 && res.body) {
@@ -818,7 +826,8 @@ export function handleSummary(data) {
         http_req_duration_max: data.metrics.http_req_duration?.values?.max || 0,
         http_errors_rate: data.metrics.http_errors_total?.values?.rate || 0,
         rag_search_latency_p95: data.metrics.rag_search_latency?.values?.['p(95)'] || 0,
-        rag_chat_latency_p95: data.metrics.rag_chat_latency?.values?.['p(95)'] || 0,
+        rag_chat_nonstream_latency_p95: data.metrics.rag_chat_nonstream_latency?.values?.['p(95)'] || 0,
+        rag_chat_stream_latency_p95: data.metrics.rag_chat_stream_latency?.values?.['p(95)'] || 0,
         rag_embed_latency_p95: data.metrics.rag_embed_latency?.values?.['p(95)'] || 0,
         api_calls_total: data.metrics.api_calls_total?.values?.count || 0,
       },
@@ -837,7 +846,8 @@ function textSummary(data, opts) {
   const http_max = (data.metrics.http_req_duration?.values?.max / 1000).toFixed(2);
 
   const search_p95 = (data.metrics.rag_search_latency?.values?.['p(95)'] / 1000).toFixed(2);
-  const chat_p95   = (data.metrics.rag_chat_latency?.values?.['p(95)'] / 1000).toFixed(2);
+  const chat_nonstream_p95 = (data.metrics.rag_chat_nonstream_latency?.values?.['p(95)'] / 1000).toFixed(2);
+  const chat_stream_p95    = (data.metrics.rag_chat_stream_latency?.values?.['p(95)'] / 1000).toFixed(2);
   const embed_p95  = (data.metrics.rag_embed_latency?.values?.['p(95)'] / 1000).toFixed(2);
 
   const total = data.metrics.api_calls_total?.values?.count || 0;
@@ -859,7 +869,8 @@ function textSummary(data, opts) {
     '╠══════════════════════════════════════════════════════════════╣',
     '║  RAG Pipeline Latency (p95)                                 ║',
     `║    search  : ${search_p95}s`.padEnd(57) + '║',
-    `║    chat    : ${chat_p95}s`.padEnd(57) + '║',
+    `║    chat(ns): ${chat_nonstream_p95}s`.padEnd(57) + '║',
+    `║    chat(ss): ${chat_stream_p95}s`.padEnd(57) + '║',
     `║    embed   : ${embed_p95}s`.padEnd(57) + '║',
     '╠══════════════════════════════════════════════════════════════╣',
     '║  Quality                                                  ║',
