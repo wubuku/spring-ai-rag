@@ -158,6 +158,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-09 03:50 — ✅ SSE 心跳机制：添加 `SseEmitters.sendHeartbeat()` + `RagSseProperties.heartbeat-interval-seconds`（默认30s）防止代理关闭空闲连接；`RagChatController.stream()` 集成定时心跳调度器；`SseEmittersTest` 新增 2 个心跳测试；`RagSsePropertiesTest` 新增 5 个测试；`RagChatControllerTest` + `SseStreamE2ETest` 更新构造函数签名适配；43 tests ✅；commit 8e245d0 已推送
 - 2026-04-08 00:52 — ✅ Javadoc 国际化（metrics 包 + EmbeddingBatchService）：翻译 6 个 metrics 类和 EmbeddingBatchService 的中文注释为英文；所有测试通过；commit c761448 已推送
 - 2026-04-07 05:37 — ✅ HS1-2 SearchCapabilities 测试兼容修复：FulltextSearchProviderFactory + SearchCapabilities 添加 no-arg constructors（test contexts without JdbcTemplate）；SearchCapabilities @PostConstruct 加 null guard；HybridRetrieverServiceTest 2 个失败测试修复（strategyTrgm_unavailable_throws + strategyAuto_selectsBestAvailable 补全 queryForObject mock）；FulltextSearchProviderFactoryTest 大重构（fake providers + SearchCapabilities(init=false)）；1272 tests 全通过（BUILD SUCCESS）；commit 90b3727 已推送
 - 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
