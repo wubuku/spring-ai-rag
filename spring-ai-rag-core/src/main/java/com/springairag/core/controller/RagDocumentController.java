@@ -18,6 +18,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -40,7 +41,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.HashMap;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -361,29 +361,14 @@ public class RagDocumentController {
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
-        // 0L = no timeout; client disconnection is detected via IOException in async callback
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = SseEmitters.create();
         try {
             documentEmbedService.embedDocumentWithProgress(id, force, event -> {
-                try {
-                    emitter.send(SseEmitter.event()
-                            .name("progress")
-                            .data(event));
-                } catch (Exception ex) {
-                    // Best-effort: client likely disconnected mid-stream
-                    log.warn("SSE send failed for document {}: {}", id, ex.getMessage());
-                }
+                SseEmitters.sendProgress(emitter, "progress", event, "document " + id);
             });
-            emitter.send(SseEmitter.event().name("done").data(Map.of("documentId", id)));
-            emitter.complete();
+            SseEmitters.sendDone(emitter, Map.of("documentId", id));
         } catch (IllegalArgumentException e) {
-            try {
-                emitter.send(SseEmitter.event().name("error").data(Map.of(
-                        "error", e.getMessage(),
-                        "documentId", id
-                )));
-            } catch (Exception ex) { /* best-effort: error already sent via completeWithError */ }
-            emitter.completeWithError(e);
+            SseEmitters.sendError(emitter, e.getMessage(), Map.of("documentId", id));
         } catch (Exception e) {
             emitter.completeWithError(e);
         }
@@ -505,22 +490,14 @@ public class RagDocumentController {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
 
-        SseEmitter emitter = new SseEmitter(0L);
+        SseEmitter emitter = SseEmitters.create();
         try {
             documentEmbedService.batchEmbedDocumentsWithProgress(ids, event -> {
-                try {
-                    emitter.send(SseEmitter.event().name("progress").data(event));
-                } catch (Exception ex) {
-                    log.warn("SSE send failed for batch embed: {}", ex.getMessage());
-                }
+                SseEmitters.sendProgress(emitter, "progress", event, "batch embed");
             });
-            emitter.send(SseEmitter.event().name("done").data(Map.of("total", ids.size(), "status", "completed")));
-            emitter.complete();
+            SseEmitters.sendDone(emitter, Map.of("total", ids.size(), "status", "completed"));
         } catch (IllegalArgumentException e) {
-            try {
-                emitter.send(SseEmitter.event().name("error").data(Map.of("error", e.getMessage())));
-            } catch (Exception ex) { /* best-effort */ }
-            emitter.completeWithError(e);
+            SseEmitters.sendError(emitter, e.getMessage(), Map.of());
         } catch (Exception e) {
             emitter.completeWithError(e);
         }
