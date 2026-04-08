@@ -1862,3 +1862,14 @@
   - git 工作区干净（无变更）
   - WebUI 项目处于生产级成熟状态
   - 剩余 WebUI 待办：无（W1-W14 全部完成）
+
+## Cron 进度（2026-04-09 02:14 — 后端 SSE Emitter 助手提取）
+
+- 2026-04-09 02:14 — ✅ SSE Emitter 助手提取重构：
+  - 新增 `SseEmitters` 工具类（`core/util/`）：`create()`/`sendProgress()`/`sendDone()`/`sendError()`/`execute()` 方法
+  - `RagDocumentController` 两个 SSE 方法（`embedDocumentStream`/`batchEmbedDocumentsStream`）重构使用助手，消除 ~40 行重复 try-catch/emit 代码
+  - 修复 `RagDocumentController` 重复 `import java.util.List`（行 43-44）
+  - 修复 `ModelComparisonServiceTest` 重复 `import static org.mockito.Mockito.*`（行 26-27）
+  - 新增 `SseEmittersTest`（15 tests，覆盖全部助手方法）
+  - 1393+ tests 全通过，零失败零错误
+  - commit 08496d5 已推送
