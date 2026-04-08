@@ -1687,6 +1687,17 @@
   - W14 → ✅
 
 
+## Cron 进度（2026-04-08 18:14 — 多集合检索 Multi-Collection Search）
+
+- 2026-04-08 18:14 — ✅ 多集合检索（Multi-Collection Search）：
+  - `SearchRequest`: 新增 `collectionIds` 字段（`List<Long>`）
+  - `RagDocumentRepository`: 新增 `findIdsByCollectionIdIn()` JPQL 查询
+  - `RagSearchController`: 注入 `RagDocumentRepository`；`searchWithConfig()` 支持将 `collectionIds` 解析为 `documentIds`（两者都提供时取交集）
+  - `RagSearchControllerTest`: 新增 3 个多集合测试（collectionIds 解析/交集/空结果）
+  - `RagSearchControllerBenchmarkTest`: 添加 `RagDocumentRepository` mock
+  - 1375 tests 全通过，零失败零错误
+  - commit 7fae8fd 已推送
+
 ## Cron 进度（2026-04-08 12:58 — 后端 Javadoc 国际化收尾）
 
 - 2026-04-08 12:58 — ✅ 后端 Javadoc 国际化收尾（第九轮）：扫描发现 28 个 Java 文件残留中文 Javadoc，全部翻译为英文
