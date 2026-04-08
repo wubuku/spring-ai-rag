@@ -1647,3 +1647,14 @@
   - commit 79c2b04 已推送
   - 后端待办：SpringAiConfig.initProxySettings() catch(Exception) 可收窄为 SecurityException/NullPointerException（后续轮次）→ ✅ 2026-04-08（已收窄 + RagChatService retry catch 添加注释）
   - 后端待办：W14 Dark Mode 系统主题跟随（WebUI cron 负责）
+
+## Cron 进度（2026-04-08 11:06 — 后端测试覆盖率提升）
+
+- 2026-04-08 11:06 — ✅ AlertController 测试覆盖率提升（+14 CRUD 测试）：
+  - AlertControllerTest：新增 14 个测试覆盖 SLO Config 和 Silence Schedule CRUD 端点
+  - SLO Config：create(201)/duplicate(409)/list/get/delete(204/404) 全覆盖
+  - Silence Schedule：create(201)/duplicate(409)/list/get/delete(204/404) 全覆盖
+  - AlertControllerTest：14→28 tests（翻倍），全通过
+  - 全量测试：1407 tests 全通过，零失败零错误
+  - git 已推送（commit 6fbf547）
+
