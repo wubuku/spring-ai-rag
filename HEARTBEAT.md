@@ -1728,3 +1728,12 @@
   - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
   - commit 2ade17e 已推送
   - WebUI 项目处于生产级成熟状态；全部 W1-W14 待办均已完成
+
+## Cron 进度（2026-04-08 19:45 — 后端长方法重构：executeReembeddingBatch）
+
+- 2026-04-08 19:45 — ✅ executeReembeddingBatch 重构（RagDocumentController）：
+  - executeReembeddingBatch: 55→17 行（-69%）
+  - 提取 buildReembedResult(doc, force) 私有方法处理单文档重嵌入结果
+  - results ArrayList 预分配大小避免扩容开销
+  - 1417 tests 全通过，零失败零错误
+  - commit ea00ef0 已推送
