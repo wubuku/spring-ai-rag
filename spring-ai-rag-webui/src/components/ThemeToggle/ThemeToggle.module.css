@@ -1,3 +1,9 @@
+.wrapper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .toggle {
   display: flex;
   align-items: center;
@@ -15,4 +21,27 @@
 .toggle:hover {
   background: var(--color-surface-hover);
   border-color: var(--color-primary);
+}
+
+.autoBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  background: var(--color-surface);
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  transition: all 0.15s ease;
+  letter-spacing: 0;
+}
+
+.autoBtn:hover {
+  background: var(--color-surface-hover);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
