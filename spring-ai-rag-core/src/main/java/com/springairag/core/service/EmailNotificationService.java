@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import com.springairag.core.config.NotificationConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -25,7 +26,8 @@ public class EmailNotificationService implements NotificationService {
     private final NotificationConfig notificationConfig;
     private final JavaMailSender mailSender;
 
-    public EmailNotificationService(NotificationConfig notificationConfig, JavaMailSender mailSender) {
+    public EmailNotificationService(NotificationConfig notificationConfig,
+                                   @Autowired(required = false) JavaMailSender mailSender) {
         this.notificationConfig = notificationConfig;
         this.mailSender = mailSender;
     }
@@ -58,6 +60,10 @@ public class EmailNotificationService implements NotificationService {
     private void sendEmail(NotificationConfig.EmailConfig config,
                            String alertType, String alertName, String severity,
                            String message, Map<String, Object> metadata) throws MessagingException {
+        if (mailSender == null) {
+            log.warn("JavaMailSender not available, skipping email notification");
+            throw new MessagingException("JavaMailSender not configured");
+        }
         MimeMessage mimeMessage = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
 
