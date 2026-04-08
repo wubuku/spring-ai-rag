@@ -111,7 +111,7 @@ public class BatchDocumentService {
                 doc.setDocumentType(req.getDocumentType());
                 doc.setMetadata(req.getMetadata());
                 doc.setContentHash(contentHash);
-                // 优先使用 per-doc 的 collectionId，否则使用 batch 级别的 collectionId
+                // Prefer per-doc collectionId, fall back to batch-level collectionId
                 if (req.getCollectionId() != null) {
                     doc.setCollectionId(req.getCollectionId());
                 } else {
@@ -128,7 +128,7 @@ public class BatchDocumentService {
                 String status = (String) embedResult.get("status");
                 if (!"COMPLETED".equals(status) && !"CACHED".equals(status)) {
                     String error = (String) embedResult.get("error");
-                    // 嵌入失败时更新文档状态为 EMBEDDING_FAILED
+                    // On embed failure, update document status to EMBEDDING_FAILED
                     doc.setProcessingStatus("EMBEDDING_FAILED");
                     documentRepository.save(doc);
                     return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated,

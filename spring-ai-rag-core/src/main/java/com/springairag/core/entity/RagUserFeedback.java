@@ -8,10 +8,12 @@ import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
- * 用户反馈实体
+ * User feedback entity
  *
- * <p>记录用户对 RAG 检索结果和回答质量的反馈，包括点赞/点踩、评分、评论等。
- * 反馈数据可用于检索质量分析、模型调优依据、知识库补充决策。
+ * <p>Records user feedback on RAG retrieval results and answer quality,
+ * including thumbs up/down, ratings, and comments.
+ * Feedback data can be used for retrieval quality analysis, model tuning,
+ * and knowledge base supplementation decisions.
  */
 @Entity
 @Table(name = "rag_user_feedback", indexes = {
@@ -25,43 +27,43 @@ public class RagUserFeedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    /** 会话 ID */
+    /** Session ID */
     @Column(name = "session_id", nullable = false)
     private String sessionId;
 
-    /** 查询文本 */
+    /** Query text */
     @Column(columnDefinition = "TEXT", nullable = false)
     private String query;
 
-    /** 检索到的文档 ID 列表（JSON） */
+    /** List of retrieved document IDs (JSON) */
     @Column(name = "retrieved_document_ids", columnDefinition = "TEXT")
     private String retrievedDocumentIds;
 
-    /** 反馈类型：THUMBS_UP / THUMBS_DOWN / RATING */
+    /** Feedback type: THUMBS_UP / THUMBS_DOWN / RATING */
     @Column(name = "feedback_type", nullable = false, length = 50)
     private String feedbackType;
 
-    /** 评分（1-5） */
+    /** Rating (1-5) */
     private Integer rating;
 
-    /** 用户评论 */
+    /** User comment */
     @Column(columnDefinition = "TEXT")
     private String comment;
 
-    /** 用户认为有用的文档 ID 列表（JSON） */
+    /** List of document IDs the user found useful (JSON) */
     @Column(name = "selected_document_ids", columnDefinition = "TEXT")
     private String selectedDocumentIds;
 
-    /** 用户停留时间（毫秒） */
+    /** User dwell time (milliseconds) */
     @Column(name = "dwell_time_ms")
     private Long dwellTimeMs;
 
-    /** 扩展字段 */
+    /** Extension metadata */
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
 
-    /** 创建时间 */
+    /** Creation time */
     @Column(name = "created_at", nullable = false)
     private ZonedDateTime createdAt = ZonedDateTime.now();
 
