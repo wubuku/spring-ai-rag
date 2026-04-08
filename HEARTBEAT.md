@@ -1271,7 +1271,7 @@
 | K6-4 | k6: 分离 chat 非流/流式延迟指标（独立 p95 阈值） | 性能测试 | ✅ 2026-04-09 |
 | K6-5 | k6: 探索性测试——梯度压测（ramp VUs 逐步增加找到吞吐上限） | 性能测试 | ✅ 2026-04-09（k6-ramp-to-saturation.js + run-k6-ramp-test.sh，k6 native stages 驱动 VU ramp，per-stage RPS 追踪，峰值 RPS 报告） |
 | K6-6 | k6: 持久化会话压测（多 VU 共享同一 sessionId 压测 ChatMemory 锁竞争） | 性能测试 | ✅ 2026-04-09（k6-session-stress.js + run-k6-session-stress.sh，共享 sessionId 高并发写入，concurrent_sessions 追踪，conflict_rate 检测锁竞争） |
-| K6-7 | k6: 向量检索专项压测（高并发 100+ VUs 搜索端点，验证 pgvector HNSW 性能） | 性能测试 | ⏳ |
+| K6-7 | k6: 向量检索专项压测（高并发 100+ VUs 搜索端点，验证 pgvector HNSW 性能） | 性能测试 | ✅ 2026-04-09（k6-vector-search-stress.js + run-k6-vector-search.sh，纯向量搜索压测（vectorWeight=1.0），自动创建测试 collection+document，p(50)<200ms/p(95)<800ms/p(99)<2000ms 阈值，吞吐量 ops/sec 追踪） |
 
 ## 待办（C41-C42 — 代码库巡检）
 
