@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * {@link AbstractRagAdvisor} 单元测试
+ * Unit tests for {@link AbstractRagAdvisor}
  */
 class AbstractRagAdvisorTest {
 
@@ -30,17 +30,17 @@ class AbstractRagAdvisorTest {
     }
 
     @Nested
-    @DisplayName("enabled 开关")
+    @DisplayName("enabled switch")
     class EnabledTests {
 
         @Test
-        @DisplayName("默认启用")
+        @DisplayName("enabled by default")
         void defaultEnabled() {
             assertTrue(advisor.isEnabled());
         }
 
         @Test
-        @DisplayName("setEnabled 切换状态")
+        @DisplayName("setEnabled toggles state")
         void setEnabled() {
             advisor.setEnabled(false);
             assertFalse(advisor.isEnabled());
@@ -50,14 +50,14 @@ class AbstractRagAdvisorTest {
         }
 
         @Test
-        @DisplayName("禁用时 shouldSkip 返回 true")
+        @DisplayName("shouldSkip returns true when disabled")
         void shouldSkipWhenDisabled() {
             advisor.setEnabled(false);
             assertTrue(advisor.shouldSkip(log));
         }
 
         @Test
-        @DisplayName("启用时 shouldSkip 返回 false")
+        @DisplayName("shouldSkip returns false when enabled")
         void shouldNotSkipWhenEnabled() {
             advisor.setEnabled(true);
             assertFalse(advisor.shouldSkip(log));
@@ -65,11 +65,11 @@ class AbstractRagAdvisorTest {
     }
 
     @Nested
-    @DisplayName("after() 透传")
+    @DisplayName("after() passthrough")
     class AfterTests {
 
         @Test
-        @DisplayName("after() 原样返回 response")
+        @DisplayName("after() returns response unchanged")
         void afterPassesThrough() {
             ChatClientResponse mockResponse = mock(ChatClientResponse.class);
             AdvisorChain mockChain = mock(AdvisorChain.class);
@@ -81,23 +81,23 @@ class AbstractRagAdvisorTest {
     }
 
     @Nested
-    @DisplayName("子类契约")
+    @DisplayName("subclass contract")
     class ContractTests {
 
         @Test
-        @DisplayName("getName 返回自定义名称")
+        @DisplayName("getName returns custom name")
         void getName() {
             assertEquals("TestAdvisor", advisor.getName());
         }
 
         @Test
-        @DisplayName("getOrder 返回指定顺序")
+        @DisplayName("getOrder returns specified order")
         void getOrder() {
             assertEquals(Ordered.HIGHEST_PRECEDENCE + 50, advisor.getOrder());
         }
     }
 
-    /** 测试用具体实现 */
+    /** Test concrete implementation */
     static class TestAdvisor extends AbstractRagAdvisor {
 
         @Override

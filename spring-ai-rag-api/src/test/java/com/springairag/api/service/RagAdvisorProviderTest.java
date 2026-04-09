@@ -6,12 +6,12 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RagAdvisorProvider 接口测试
+ * Tests for RagAdvisorProvider interface
  */
 class RagAdvisorProviderTest {
 
     @Test
-    @DisplayName("接口方法可正确调用")
+    @DisplayName("interface methods can be invoked correctly")
     void interfaceMethods_work() {
         RagAdvisorProvider provider = new RagAdvisorProvider() {
             @Override

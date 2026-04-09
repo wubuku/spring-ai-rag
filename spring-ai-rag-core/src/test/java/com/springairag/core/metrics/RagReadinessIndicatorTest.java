@@ -102,7 +102,7 @@ class RagReadinessIndicatorTest {
     }
 
     @Test
-    @DisplayName("包含所有组件的详细状态")
+    @DisplayName("includes all component details")
     void health_includesAllComponentDetails() {
         Map<String, ComponentHealthService.ComponentStatus> components = new LinkedHashMap<>();
         components.put("database", new ComponentHealthService.ComponentStatus("UP",

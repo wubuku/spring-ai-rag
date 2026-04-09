@@ -53,7 +53,7 @@ class RagLivenessIndicatorTest {
     }
 
     @Test
-    @DisplayName("包含延迟信息")
+    @DisplayName("includes latency information")
     void health_includesLatencyDetail() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
 

@@ -8,26 +8,26 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * PromptCustomizer 接口默认方法测试
+ * Tests for PromptCustomizer interface default methods
  */
 class PromptCustomizerTest {
 
     @Test
-    @DisplayName("默认 customizeSystemPrompt 返回原始文本")
+    @DisplayName("default customizeSystemPrompt returns original text")
     void defaultSystemPrompt_returnsOriginal() {
         PromptCustomizer customizer = new PromptCustomizer() {};
-        assertEquals("原始提示", customizer.customizeSystemPrompt("原始提示", "上下文", Map.of()));
+        assertEquals("original prompt", customizer.customizeSystemPrompt("original prompt", "context", Map.of()));
     }
 
     @Test
-    @DisplayName("默认 customizeUserMessage 返回原始文本")
+    @DisplayName("default customizeUserMessage returns original text")
     void defaultUserMessage_returnsOriginal() {
         PromptCustomizer customizer = new PromptCustomizer() {};
-        assertEquals("用户消息", customizer.customizeUserMessage("用户消息", Map.of()));
+        assertEquals("user message", customizer.customizeUserMessage("user message", Map.of()));
     }
 
     @Test
-    @DisplayName("默认 order 为 0")
+    @DisplayName("default order is 0")
     void defaultOrder_isZero() {
         PromptCustomizer customizer = new PromptCustomizer() {};
         assertEquals(0, customizer.getOrder());

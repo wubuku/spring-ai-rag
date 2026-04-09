@@ -10,7 +10,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * PromptCustomizerChain 单元测试
+ * Unit tests for PromptCustomizerChain
  */
 class PromptCustomizerChainTest {
 
@@ -38,7 +38,7 @@ class PromptCustomizerChainTest {
     }
 
     @Test
-    @DisplayName("空定制器链不修改原始文本")
+    @DisplayName("empty customizer chain does not modify original text")
     void emptyChain_doesNotModify() {
         PromptCustomizerChain chain = new PromptCustomizerChain(List.of());
 
@@ -48,14 +48,14 @@ class PromptCustomizerChainTest {
     }
 
     @Test
-    @DisplayName("null 列表不抛异常")
+    @DisplayName("null list does not throw")
     void nullList_doesNotThrow() {
         PromptCustomizerChain chain = new PromptCustomizerChain(null);
         assertFalse(chain.hasCustomizers());
     }
 
     @Test
-    @DisplayName("单个定制器生效")
+    @DisplayName("single customizer works")
     void singleCustomizer_works() {
         PromptCustomizerChain chain = new PromptCustomizerChain(List.of(
                 new PrefixCustomizer("[A] ", 0)
@@ -67,15 +67,15 @@ class PromptCustomizerChainTest {
     }
 
     @Test
-    @DisplayName("多个定制器按 order 顺序链式调用")
+    @DisplayName("multiple customizers are chained in order by order value")
     void multipleCustomizers_orderedChain() {
         PromptCustomizerChain chain = new PromptCustomizerChain(List.of(
                 new PrefixCustomizer("[B] ", 10),
                 new PrefixCustomizer("[A] ", 0)
         ));
 
-        // order=0 的先执行（加 [A]），然后 order=10（加 [B]）
-        // 最终：[B] [A] hello（B 包裹 A 包裹原值）
+        // order=0 runs first (adds [A]), then order=10 (adds [B])
+        // Final: [B] [A] hello (B wraps A wraps original)
         assertEquals("[B] [A] hello", chain.customizeSystemPrompt("hello", "", Map.of()));
         assertEquals("[B] [A] world", chain.customizeUserMessage("world", Map.of()));
     }

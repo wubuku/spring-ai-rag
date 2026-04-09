@@ -9,12 +9,12 @@ import org.springframework.test.util.ReflectionTestUtils;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * EmbeddingModelConfig 单元测试
+ * Unit tests for EmbeddingModelConfig
  */
 class EmbeddingModelConfigTest {
 
     @Test
-    @DisplayName("embeddingModel 创建 OpenAiEmbeddingModel，配置正确传递")
+    @DisplayName("embeddingModel creates OpenAiEmbeddingModel with correct config")
     void embeddingModel_createsOpenAiEmbeddingModel_withCorrectConfig() {
         EmbeddingModelConfig config = new EmbeddingModelConfig();
         ReflectionTestUtils.setField(config, "apiKey", "test-siliconflow-key");
@@ -29,7 +29,7 @@ class EmbeddingModelConfigTest {
     }
 
     @Test
-    @DisplayName("embeddingModel 使用正确维度配置 BAAI/bge-m3")
+    @DisplayName("embeddingModel uses correct dimensions for BAAI/bge-m3")
     void embeddingModel_usesCorrectDimensions() {
         EmbeddingModelConfig config = new EmbeddingModelConfig();
         ReflectionTestUtils.setField(config, "apiKey", "test-key");
@@ -43,7 +43,7 @@ class EmbeddingModelConfigTest {
     }
 
     @Test
-    @DisplayName("embeddingModel 支持自定义 baseUrl（兼容其他 OpenAI 兼容 API）")
+    @DisplayName("embeddingModel supports custom baseUrl (compatible with other OpenAI-compatible APIs)")
     void embeddingModel_supportsCustomBaseUrl() {
         EmbeddingModelConfig config = new EmbeddingModelConfig();
         ReflectionTestUtils.setField(config, "apiKey", "custom-key");

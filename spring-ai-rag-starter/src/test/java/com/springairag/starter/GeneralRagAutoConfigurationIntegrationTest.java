@@ -19,29 +19,29 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Starter 模块完整集成测试
+ * Full integration tests for the Starter module auto-configuration
  *
- * <p>由于 @ComponentScan 会扫描整个 com.springairag 包（含 JPA 实体/Controller），
- * 无法用 ApplicationContextRunner 做轻量级测试。本测试类通过注解反射验证
- * 自动配置的条件逻辑、Bean 定义和属性绑定。
+ * <p>Since @ComponentScan scans the entire com.springairag package (including JPA entities/Controllers),
+ * lightweight tests using ApplicationContextRunner are not feasible. This test class validates
+ * auto-configuration conditional logic, Bean definitions, and property binding via annotation reflection.
  */
 class GeneralRagAutoConfigurationIntegrationTest {
 
-    // ========== 注解层验证 ==========
+    // ========== Annotation Layer Validation ==========
 
     @Nested
-    @DisplayName("自动配置类注解")
+    @DisplayName("Auto-configuration class annotations")
     class AnnotationTests {
 
         @Test
-        @DisplayName("@AutoConfiguration 标注")
+        @DisplayName("@AutoConfiguration annotation present")
         void hasAutoConfiguration() {
             assertTrue(GeneralRagAutoConfiguration.class
                     .isAnnotationPresent(AutoConfiguration.class));
         }
 
         @Test
-        @DisplayName("@ConditionalOnClass 要求 ChatClient")
+        @DisplayName("@ConditionalOnClass requires ChatClient")
         void conditionalOnClass() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(ConditionalOnClass.class);
@@ -62,20 +62,20 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@EnableConfigurationProperties 绑定 GeneralRagProperties + ApiSloProperties")
+        @DisplayName("@EnableConfigurationProperties binds GeneralRagProperties + ApiSloProperties")
         void enableConfigurationProperties() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(EnableConfigurationProperties.class);
             assertNotNull(ann);
-            // RagProperties 通过 @Bean ragProperties() 注册，不再通过 @EnableConfigurationProperties
-            // ApiSloProperties 通过 @EnableConfigurationProperties 绑定
+            // RagProperties is registered via @Bean ragProperties(), not @EnableConfigurationProperties
+            // ApiSloProperties is bound via @EnableConfigurationProperties
             assertArrayEquals(
                     new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class},
                     ann.value());
         }
 
         @Test
-        @DisplayName("@ComponentScan 不再使用（由 Spring Boot 主扫描处理）")
+        @DisplayName("@ComponentScan not used (handled by Spring Boot main scan)")
         void componentScan() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(ComponentScan.class);
@@ -83,7 +83,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@Import 导入 ApiSloConfig")
+        @DisplayName("@Import imports ApiSloConfig")
         void importsConfigs() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(Import.class);
@@ -94,10 +94,11 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
     }
 
-    // ========== Bean 方法验证 ==========
+    // ========== Bean Method Validation ==========
 
     @Nested
-    @DisplayName("Bean 方法定义")
+    @DisplayName("Bean method definitions")
+
     class BeanMethodTests {
 
         @Test
@@ -124,7 +125,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("apiKeyAuthFilterRegistration: 返回 FilterRegistrationBean<ApiKeyAuthFilter>")
+        @DisplayName("apiKeyAuthFilterRegistration: returns FilterRegistrationBean<ApiKeyAuthFilter>")
         void filterBean() throws Exception {
             var method = GeneralRagAutoConfiguration.class
                     .getMethod("apiKeyAuthFilterRegistration",
@@ -134,7 +135,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("rateLimitFilterRegistration: 返回 FilterRegistrationBean<RateLimitFilter>")
+        @DisplayName("rateLimitFilterRegistration: returns FilterRegistrationBean<RateLimitFilter>")
         void rateLimitFilterBean() throws Exception {
             var method = GeneralRagAutoConfiguration.class
                     .getMethod("rateLimitFilterRegistration",
@@ -161,14 +162,14 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
     }
 
-    // ========== GeneralRagProperties 完整测试 ==========
+    // ========== GeneralRagProperties Full Test ==========
 
     @Nested
-    @DisplayName("GeneralRagProperties 属性绑定")
+    @DisplayName("GeneralRagProperties property binding")
     class PropertiesTests {
 
         @Test
-        @DisplayName("默认值正确")
+        @DisplayName("default values are correct")
         void defaults() {
             var props = new GeneralRagProperties();
             assertTrue(props.isEnabled());
@@ -187,7 +188,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("Memory 完整赋值")
+        @DisplayName("Memory all fields set correctly")
         void memoryAllFields() {
             var memory = new GeneralRagProperties.Memory();
             memory.setEnabled(false);
@@ -200,7 +201,7 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("setMemory 替换默认值")
+        @DisplayName("setMemory replaces default values")
         void replaceMemory() {
             var props = new GeneralRagProperties();
             var memory = new GeneralRagProperties.Memory();

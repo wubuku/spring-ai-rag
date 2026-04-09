@@ -60,7 +60,7 @@ class ComponentHealthServiceTest {
     class PgVectorCheck {
 
         @Test
-        @DisplayName("扩展存在返回版本号")
+        @DisplayName("extension exists and returns version")
         void extensionExists() {
             when(jdbcTemplate.queryForObject(
                     eq("SELECT extversion FROM pg_extension WHERE extname = 'vector'"),

@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * ChatModelRouter 单元测试
+ * Unit tests for ChatModelRouter
  */
 class ChatModelRouterTest {
 
@@ -28,7 +28,7 @@ class ChatModelRouterTest {
     @BeforeEach
     void setUp() {
         registry = mock(ModelRegistry.class);
-        // 注入空的 chatModelsByProvider（通过反射测试 resolve）
+        // inject empty chatModelsByProvider (test resolve via reflection)
         router = new ChatModelRouter(registry, null);
 
         mockOpenAiModel = mock(ChatModel.class);
@@ -39,7 +39,7 @@ class ChatModelRouterTest {
     // ─── isMultiModelEnabled() ───────────────────────────────────
 
     @Test
-    @DisplayName("有 MultiModelProperties 时 isMultiModelEnabled 返回 true")
+    @DisplayName("isMultiModelEnabled returns true when MultiModelProperties present")
     void testIsMultiModelEnabled_true() {
         when(registry.getAllProviders()).thenReturn(
                 Map.of("openai", new MultiModelProperties.ProviderConfig(
@@ -49,7 +49,7 @@ class ChatModelRouterTest {
     }
 
     @Test
-    @DisplayName("无 MultiModelProperties 时 isMultiModelEnabled 返回 false")
+    @DisplayName("isMultiModelEnabled returns false when no MultiModelProperties")
     void testIsMultiModelEnabled_false() {
         when(registry.getAllProviders()).thenReturn(Collections.emptyMap());
 
@@ -59,7 +59,7 @@ class ChatModelRouterTest {
     // ─── getFallbackChain() ──────────────────────────────────────
 
     @Test
-    @DisplayName("getFallbackChain 返回 ModelRegistry 的 fallback 列表")
+    @DisplayName("getFallbackChain returns ModelRegistry fallback list")
     void testGetFallbackChain() {
         when(registry.getFallbackChatModelNames()).thenReturn(List.of("minimax/MiniMax-M2.7", "openai/gpt-4o"));
 
@@ -69,7 +69,7 @@ class ChatModelRouterTest {
     }
 
     @Test
-    @DisplayName("getFallbackChain 返回空列表当无 fallback 时")
+    @DisplayName("getFallbackChain returns empty list when no fallback")
     void testGetFallbackChain_empty() {
         when(registry.getFallbackChatModelNames()).thenReturn(Collections.emptyList());
 
@@ -79,7 +79,7 @@ class ChatModelRouterTest {
     // ─── getPrimaryChatModelName() ───────────────────────────────
 
     @Test
-    @DisplayName("getPrimaryChatModelName 返回主模型名称")
+    @DisplayName("getPrimaryChatModelName returns primary model name")
     void testGetPrimaryChatModelName() {
         when(registry.getPrimaryChatModelName()).thenReturn("minimax/MiniMax-M2.7");
 
@@ -89,11 +89,11 @@ class ChatModelRouterTest {
     // ─── getAvailableProviders() ─────────────────────────────────
 
     @Test
-    @DisplayName("getAvailableProviders 返回模型名称列表")
+    @DisplayName("getAvailableProviders returns model name list")
     void testGetAvailableProviders() {
         when(registry.availableProviders()).thenReturn(Set.of("openai", "minimax", "anthropic"));
 
-        // 通过 ModelRegistry 间接验证
+        // verify via ModelRegistry indirectly
         Set<String> providers = registry.availableProviders();
         assertEquals(3, providers.size());
     }
@@ -101,7 +101,7 @@ class ChatModelRouterTest {
     // ─── getPrimaryEmbeddingModelName() ─────────────────────────
 
     @Test
-    @DisplayName("getPrimaryEmbeddingModelName 返回主嵌入模型名称")
+    @DisplayName("getPrimaryEmbeddingModelName returns primary embedding model name")
     void testGetPrimaryEmbeddingModelName() {
         when(registry.getPrimaryEmbeddingModelName()).thenReturn("siliconflow/BGE-M3");
 

@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * EmbeddingModelRouter 单元测试
+ * Unit tests for EmbeddingModelRouter
  */
 class EmbeddingModelRouterTest {
 
@@ -35,7 +35,7 @@ class EmbeddingModelRouterTest {
     // ─── getPrimaryEmbeddingModelName() ─────────────────────────
 
     @Test
-    @DisplayName("getPrimaryEmbeddingModelName 返回主嵌入模型名称")
+    @DisplayName("getPrimaryEmbeddingModelName returns primary embedding model name")
     void testGetPrimaryEmbeddingModelName() {
         when(registry.getPrimaryEmbeddingModelName()).thenReturn("siliconflow/BGE-M3");
 
@@ -45,7 +45,7 @@ class EmbeddingModelRouterTest {
     // ─── getFallbackEmbeddingModelNames() ─────────────────────
 
     @Test
-    @DisplayName("getFallbackEmbeddingModelNames 返回 fallback 列表")
+    @DisplayName("getFallbackEmbeddingModelNames returns fallback list")
     void testGetFallbackEmbeddingModelNames() {
         when(registry.getFallbackEmbeddingModelNames()).thenReturn(List.of("minimax/embo-01"));
 
@@ -55,30 +55,30 @@ class EmbeddingModelRouterTest {
     }
 
     @Test
-    @DisplayName("getFallbackEmbeddingModelNames 返回空列表当无 fallback 时")
+    @DisplayName("getFallbackEmbeddingModelNames returns empty list when no fallback")
     void testGetFallbackEmbeddingModelNames_empty() {
         when(registry.getFallbackEmbeddingModelNames()).thenReturn(Collections.emptyList());
 
         assertTrue(registry.getFallbackEmbeddingModelNames().isEmpty());
     }
 
-    // ─── EmbeddingModelRouter 本身的方法 ─────────────────────────────────
+    // ─── EmbeddingModelRouter own methods ─────────────────────────────────
 
     @Test
-    @DisplayName("EmbeddingModelRouter 无可用 EmbeddingModel 时返回空 provider 列表")
+    @DisplayName("EmbeddingModelRouter returns empty provider list when no EmbeddingModel available")
     void testGetAvailableProviders_empty() {
         List<String> providers = router.getAvailableProviders();
         assertTrue(providers.isEmpty());
     }
 
     @Test
-    @DisplayName("EmbeddingModelRouter 无可用时 resolve 返回 null")
+    @DisplayName("EmbeddingModelRouter resolve returns null when no models available")
     void testResolve_noModels_returnsNull() {
         assertNull(router.resolve("siliconflow/BGE-M3"));
     }
 
     @Test
-    @DisplayName("EmbeddingModelRouter 无 fallback 时 getAllOrdered 返回空")
+    @DisplayName("EmbeddingModelRouter getAllOrdered returns empty when no fallback")
     void testGetAllOrdered_noFallbacks_returnsEmpty() {
         when(registry.getPrimaryEmbeddingModelName()).thenReturn(null);
         when(registry.getFallbackEmbeddingModelNames()).thenReturn(Collections.emptyList());

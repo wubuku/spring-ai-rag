@@ -10,11 +10,11 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * DomainExtensionRegistry 单元测试
+ * Unit tests for DomainExtensionRegistry
  */
 class DomainExtensionRegistryTest {
 
-    // 测试用的领域扩展实现
+    // Test domain extension implementation
     static class TestDomainExtension implements DomainRagExtension {
         private final String domainId;
         private final String domainName;
@@ -30,7 +30,7 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("空列表初始化时 hasExtensions 为 false")
+    @DisplayName("empty list initialization: hasExtensions returns false")
     void emptyList_hasNoExtensions() {
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of());
         assertFalse(registry.hasExtensions());
@@ -38,28 +38,28 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("null 列表初始化时不抛异常")
+    @DisplayName("null list initialization does not throw")
     void nullList_doesNotThrow() {
         DomainExtensionRegistry registry = new DomainExtensionRegistry(null);
         assertFalse(registry.hasExtensions());
     }
 
     @Test
-    @DisplayName("注册单个扩展后可按 domainId 查找")
+    @DisplayName("single registered extension can be found by domainId")
     void singleExtension_canBeFound() {
-        TestDomainExtension ext = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
         assertTrue(registry.hasExtensions());
         assertTrue(registry.hasDomain("skin"));
-        assertEquals("皮肤检测", registry.getExtension("skin").getDomainName());
+        assertEquals("Skin Detection", registry.getExtension("skin").getDomainName());
     }
 
     @Test
-    @DisplayName("注册多个扩展后各自可查")
+    @DisplayName("multiple registered extensions can each be found")
     void multipleExtensions_allFound() {
-        TestDomainExtension skin = new TestDomainExtension("skin", "皮肤检测");
-        TestDomainExtension legal = new TestDomainExtension("legal", "法律咨询");
+        TestDomainExtension skin = new TestDomainExtension("skin", "Skin Detection");
+        TestDomainExtension legal = new TestDomainExtension("legal", "Legal Consultation");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(skin, legal));
 
         assertEquals(2, registry.getAllExtensions().size());
@@ -69,9 +69,9 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("domainId 为 null 时返回第一个注册的扩展（默认）")
+    @DisplayName("null domainId returns first registered extension (default)")
     void nullDomainId_returnsFirstExtension() {
-        TestDomainExtension ext = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
         DomainRagExtension defaultExt = registry.getExtension(null);
@@ -80,9 +80,9 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("domainId 为空白字符串时也返回默认扩展")
+    @DisplayName("blank domainId also returns default extension")
     void blankDomainId_returnsDefault() {
-        TestDomainExtension ext = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
         assertNotNull(registry.getExtension("  "));
@@ -90,28 +90,28 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("getSystemPromptTemplate 正确委托给扩展")
+    @DisplayName("getSystemPromptTemplate correctly delegates to extension")
     void getSystemPromptTemplate_delegatesToExtension() {
-        TestDomainExtension ext = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
         assertEquals("test prompt for skin", registry.getSystemPromptTemplate("skin"));
     }
 
     @Test
-    @DisplayName("getSystemPromptTemplate 对未知 domain 返回 null")
+    @DisplayName("getSystemPromptTemplate returns null for unknown domain")
     void getSystemPromptTemplate_unknownDomain_returnsNull() {
-        TestDomainExtension ext = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension ext = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(ext));
 
         assertNull(registry.getSystemPromptTemplate("unknown"));
     }
 
     @Test
-    @DisplayName("空 domainId 的扩展被跳过")
+    @DisplayName("extensions with blank domainId are skipped")
     void blankDomainId_skipped() {
-        TestDomainExtension blank = new TestDomainExtension("", "空白");
-        TestDomainExtension valid = new TestDomainExtension("skin", "皮肤检测");
+        TestDomainExtension blank = new TestDomainExtension("", "Blank");
+        TestDomainExtension valid = new TestDomainExtension("skin", "Skin Detection");
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(blank, valid));
 
         assertEquals(1, registry.getAllExtensions().size());
@@ -119,7 +119,7 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension 的默认检索配置合理")
+    @DisplayName("DefaultDomainRagExtension has reasonable default retrieval config")
     void defaultExtension_hasReasonableConfig() {
         DefaultDomainRagExtension ext = new DefaultDomainRagExtension();
         RetrievalConfig config = ext.getRetrievalConfig();
@@ -131,7 +131,7 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension 的系统提示词包含 {context} 占位符")
+    @DisplayName("DefaultDomainRagExtension system prompt contains {context} placeholder")
     void defaultExtension_promptContainsContextPlaceholder() {
         DefaultDomainRagExtension ext = new DefaultDomainRagExtension();
         assertTrue(ext.getSystemPromptTemplate().contains("{context}"));

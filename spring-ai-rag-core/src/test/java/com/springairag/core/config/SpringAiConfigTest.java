@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * SpringAiConfig 单元测试
+ * Unit tests for SpringAiConfig
  */
 class SpringAiConfigTest {
 
@@ -34,7 +34,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=anthropic 时 openAiChatModel 返回 null")
+    @DisplayName("provider=anthropic: openAiChatModel returns null")
     void openAiChatModel_whenProviderAnthropic_returnsNull() {
         setProvider("anthropic");
 
@@ -43,7 +43,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=其他值 时 openAiChatModel 返回 null")
+    @DisplayName("provider=other: openAiChatModel returns null")
     void openAiChatModel_whenProviderOther_returnsNull() {
         setProvider("zhipu");
 
@@ -52,7 +52,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=openai 时 anthropicChatModel 返回 null")
+    @DisplayName("provider=openai: anthropicChatModel returns null")
     void anthropicChatModel_whenProviderOpenAi_returnsNull() {
         setProvider("openai");
 
@@ -61,7 +61,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=anthropic 时 anthropicChatModel 创建模型")
+    @DisplayName("provider=anthropic: anthropicChatModel creates model")
     void anthropicChatModel_whenProviderAnthropic_returnsModel() {
         setProvider("anthropic");
         org.springframework.test.util.ReflectionTestUtils.setField(config, "anthropicBaseUrl", "https://api.anthropic.com");
@@ -75,7 +75,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("chatModel 选择 anthropic 当 provider=anthropic")
+    @DisplayName("chatModel selects anthropic when provider=anthropic")
     void chatModel_whenProviderAnthropic_selectsAnthropic() {
         setProvider("anthropic");
         org.springframework.test.util.ReflectionTestUtils.setField(config, "anthropicBaseUrl", "https://api.anthropic.com");
@@ -95,7 +95,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("chatModel 无可用 Bean 时抛出异常")
+    @DisplayName("chatModel throws exception when no model bean available")
     void chatModel_whenNoModelAvailable_throwsException() {
         setProvider("openai");
 
@@ -106,35 +106,31 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("chatClientBuilder 空列表时抛出异常")
+    @DisplayName("chatClientBuilder throws exception for empty list")
     void chatClientBuilder_emptyList_throwsException() {
         List<ChatModel> models = List.of();
         assertThrows(Exception.class, () -> config.chatClientBuilder(models));
     }
 
     @Test
-    @DisplayName("chatModel 回退：优先选 openai 再 anthropic")
+    @DisplayName("chatModel fallback: prefers openai then anthropic")
     void chatModel_fallbackOrder() {
-        // provider=unknown 时，fallback 顺序是 openai > miniMax > anthropic
+        // With provider=unknown, fallback order is openai > miniMax > anthropic
         setProvider("unknown");
 
         ChatModel mockOpenAi = mock(ChatModel.class);
         ChatModel mockMiniMax = mock(ChatModel.class);
         ChatModel mockAnthropic = mock(ChatModel.class);
 
-        // ObjectProvider returns the ChatModel mocks directly
         ObjectProvider<ChatModel> provider = mock(ObjectProvider.class);
         when(provider.iterator()).thenReturn(List.of(mockOpenAi, mockMiniMax, mockAnthropic).iterator());
 
-        // With provider=unknown and all three available, fallback should return first non-null (openAi)
-        // Since instanceof checks fail for mocks, it falls through to "if (openAi != null) return openAi"
-        // But mocks are plain ChatModel, not OpenAiChatModel/MiniMaxChatModel/AnthropicChatModel
-        // So all remain null and IllegalStateException is thrown
+        // Since instanceof checks fail for mocks, all remain null and IllegalStateException is thrown
         assertThrows(IllegalStateException.class, () -> config.chatModel(provider));
     }
 
     @Test
-    @DisplayName("provider=openai 时 miniMaxChatModel 返回 null")
+    @DisplayName("provider=openai: miniMaxChatModel returns null")
     void miniMaxChatModel_whenProviderOpenAi_returnsNull() {
         setProvider("openai");
 
@@ -143,7 +139,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=anthropic 时 miniMaxChatModel 返回 null")
+    @DisplayName("provider=anthropic: miniMaxChatModel returns null")
     void miniMaxChatModel_whenProviderAnthropic_returnsNull() {
         setProvider("anthropic");
 
@@ -152,7 +148,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("provider=minimax 时 miniMaxChatModel 创建模型")
+    @DisplayName("provider=minimax: miniMaxChatModel creates model")
     void miniMaxChatModel_whenProviderMiniMax_returnsModel() {
         setProvider("minimax");
         org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxBaseUrl", "https://api.minimax.chat/v1");
@@ -166,7 +162,7 @@ class SpringAiConfigTest {
     }
 
     @Test
-    @DisplayName("chatModel 选择 miniMax 当 provider=minimax")
+    @DisplayName("chatModel selects miniMax when provider=minimax")
     void chatModel_whenProviderMiniMax_selectsMiniMax() {
         setProvider("minimax");
         org.springframework.test.util.ReflectionTestUtils.setField(config, "minimaxBaseUrl", "https://api.minimax.chat/v1");
