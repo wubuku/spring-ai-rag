@@ -44,6 +44,20 @@ public class EmbeddingModelRouter {
     }
 
     /**
+     * Package-private constructor for testing — allows direct injection of provider→model mappings
+     * without relying on class-name inference via resolveProvider().
+     */
+    EmbeddingModelRouter(ModelRegistry modelRegistry, Map<String, EmbeddingModel> modelsByProvider) {
+        this.modelRegistry = modelRegistry;
+        if (modelsByProvider != null) {
+            modelsByProvider.forEach((k, v) ->
+                    embeddingModelsByProvider.put(k.toLowerCase(), v));
+        }
+        log.info("EmbeddingModelRouter initialized (test constructor) with {} providers: {}",
+                embeddingModelsByProvider.size(), embeddingModelsByProvider.keySet());
+    }
+
+    /**
      * Resolves a model reference (providerId/modelId) to an EmbeddingModel instance.
      */
     public EmbeddingModel resolve(String modelRef) {
