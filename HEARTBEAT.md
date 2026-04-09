@@ -159,6 +159,7 @@
 
 ## 进度日志
 - 2026-04-09 03:50 — ✅ SSE 心跳机制：添加 `SseEmitters.sendHeartbeat()` + `RagSseProperties.heartbeat-interval-seconds`（默认30s）防止代理关闭空闲连接；`RagChatController.stream()` 集成定时心跳调度器；`SseEmittersTest` 新增 2 个心跳测试；`RagSsePropertiesTest` 新增 5 个测试；`RagChatControllerTest` + `SseStreamE2ETest` 更新构造函数签名适配；43 tests ✅；commit 8e245d0 已推送
+- 2026-04-09 08:27 — ✅ R6 主源码国际化完成：翻译 26 个主源码文件（QueryRewritingService、AuditLogService、HybridRetrieverService、BatchDocumentService、RequestTraceFilter、ApiKeyAuthFilter、LlmCircuitBreaker、MessageResolver、PerformanceConfig、FulltextSearchProvider 全套、ModelComparisonService、RetrievalLoggingService、ApiVersion 系列、TextChunk、HierarchicalTextChunker、TextCleaner、GeneralRagAutoConfiguration 等）的 Javadoc 和注释为英文；保留功能字符串（如中文 padding query 前缀/后缀、`[表格]` 标签等）；mvn test ✅ 1421 pass；commit 574f21e 已推送
 - 2026-04-08 00:52 — ✅ Javadoc 国际化（metrics 包 + EmbeddingBatchService）：翻译 6 个 metrics 类和 EmbeddingBatchService 的中文注释为英文；所有测试通过；commit c761448 已推送
 - 2026-04-07 05:37 — ✅ HS1-2 SearchCapabilities 测试兼容修复：FulltextSearchProviderFactory + SearchCapabilities 添加 no-arg constructors（test contexts without JdbcTemplate）；SearchCapabilities @PostConstruct 加 null guard；HybridRetrieverServiceTest 2 个失败测试修复（strategyTrgm_unavailable_throws + strategyAuto_selectsBestAvailable 补全 queryForObject mock）；FulltextSearchProviderFactoryTest 大重构（fake providers + SearchCapabilities(init=false)）；1272 tests 全通过（BUILD SUCCESS）；commit 90b3727 已推送
 - 2026-04-06 10:26 — ✅ WebUI 常规发布：npm test ✅（112 vitest tests 全通过）/ npm run build ✅（243KB index gzipped）/ E2E 11/11 ✅（Dashboard/Documents/Collections/Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；commit da62370 已推送（含 WebUiConfig SPA catch-all 路由 + E2E 增强：networkidle/UI 文本同步/API mocks）
@@ -731,7 +732,7 @@
 | R3 | HikariCP 连接池参数调优（最大连接数/空闲超时/连接超时审查） | 性能 | ✅ 2026-04-05（R3 完成，HikariCP 已配置合理参数：max=20/min=5/idle=5m/timeout=10s） |
 | R4 | 敏感日志脱敏验证（信用卡/手机号/API Key 日志覆盖测试） | 安全 | ✅ 2026-04-05（R4 完成，MaskingLogstashEncoder 9 tests + SensitiveDataMaskingConverter 38 tests） |
 | R5 | Application.yml 配置审计（未使用配置项清理） | 代码质量 | ✅ 2026-04-05（R5 完成，app.models YAML 配置完整且与 MultiModelProperties 对应，零未使用配置） |
-| R6 | 剩余 Java 文件中文 Javadoc/Field comments 国际化 | i18n | ⏳ 进行中（2026-04-09 本轮：adapter 包 3 文件英文化；剩余 214 文件） |
+| R6 | 剩余 Java 文件中文 Javadoc/Field comments 国际化 | i18n | ✅ 2026-04-09（R6 主源码完成：26 个主源码文件全部 Javadoc/注释英文化；测试文件 `@DisplayName` 97 个仍待处理；mvn test ✅ 1421 pass；commit 574f21e） |
 
 ## 待办（新一波改进）
 
