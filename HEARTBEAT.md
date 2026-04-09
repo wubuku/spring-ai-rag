@@ -2095,3 +2095,13 @@
 ## Cron 进度（2026-04-10 01:26 — WebUI 常规巡检）
 
 - 2026-04-10 01:26 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-10 01:40 — Controller 分层治理）
+
+- 2026-04-10 01:40 — ✅ C12 收尾：`RagCollectionController` 移除 `@Transactional`（delete/restore/clone），事务下沉至 `RagCollectionService`
+  - 新增 `RagCollectionService`：deleteCollection/restoreCollection/cloneCollection，含 `@Transactional`
+  - 新增 `RagCollectionServiceTest`：11 个单元测试（正常路径 + null auditLogService）
+  - 更新 `RagCollectionControllerTest`：改用 service mock
+  - 更新 `RagControllerIntegrationTest.CollectionTests`：改用 service mock
+  - commit cf805a5 已推送
+  - 测试全通过：1453 tests（+11 新测试），BUILD SUCCESS
