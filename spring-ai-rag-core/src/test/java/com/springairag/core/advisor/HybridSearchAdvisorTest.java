@@ -16,7 +16,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * HybridSearchAdvisor 单元测试
+ * HybridSearchAdvisor unit tests.
  */
 class HybridSearchAdvisorTest {
 
@@ -31,7 +31,7 @@ class HybridSearchAdvisorTest {
 
     @Test
     void before_storesRetrievalResultsInContext() {
-        // 准备检索结果
+        // Prepare retrieval results
         List<RetrievalResult> mockResults = Arrays.asList(
                 createResult("doc-1", "Spring Boot 是一个框架", 0.9),
                 createResult("doc-2", "Spring AI 支持 RAG", 0.8)
@@ -39,16 +39,16 @@ class HybridSearchAdvisorTest {
         when(hybridRetriever.search(eq("什么是 Spring Boot"), isNull(), isNull(), eq(10)))
                 .thenReturn(mockResults);
 
-        // 构建请求
+        // Build request
         Prompt prompt = new Prompt(new UserMessage("什么是 Spring Boot"));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .build();
 
-        // 执行
+        // Execute
         ChatClientRequest result = advisor.before(request, null);
 
-        // 验证检索结果存入 context
+        // Verify retrieval results stored in context
         Object contextResults = result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
         assertNotNull(contextResults);
         assertTrue(contextResults instanceof List);
@@ -91,9 +91,9 @@ class HybridSearchAdvisorTest {
 
         ChatClientRequest result = advisor.before(request, null);
 
-        // 不应调用检索
+        // Should not invoke retrieval
         verifyNoInteractions(hybridRetriever);
-        // context 中不应有检索结果
+        // No retrieval results should be in context
         assertNull(result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY));
     }
 
@@ -129,7 +129,7 @@ class HybridSearchAdvisorTest {
 
     @Test
     void after_returnsOriginalResponse() {
-        // after() 直接透传响应
+        // after() passes through response directly
         var response = advisor.after(null, null);
         assertNull(response);
     }

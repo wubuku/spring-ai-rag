@@ -14,7 +14,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * QueryRewriteAdvisor 单元测试
+ * QueryRewriteAdvisor unit tests.
  */
 class QueryRewriteAdvisorTest {
 
