@@ -2018,3 +2018,6 @@
 
 ## Cron 进度（2026-04-09 17:50 — 测试类型不匹配修复）
 - 2026-04-09 17:50 — ✅ 测试类型不匹配修复：`BatchDocumentService.deleteDocument()` 返回 `DocumentDeleteResponse` DTO（非 `Map<String, String>`），`batchDeleteDocuments()` 返回 `BatchDeleteResponse` DTO（非 `Map<String, Object>`）；修复 `BatchDocumentServiceTest` 和 `RagDocumentControllerTest` 中 5 个测试方法的 mock 返回类型和断言；1424 tests 全通过，零失败零错误；commit 7a0b8ae 已推送
+
+## Cron 进度（2026-04-09 18:47 — reembedMissing DTO 化）
+- 2026-04-09 18:47 — ✅ reembedMissing API 一致性改造：`POST /embed-vector-reembed` 端点 `Map<String, Object>` 返回 → `ReembedMissingResponse` + `ReembedResultResponse` DTOs（total/success/failed/results）；新增 `ReembedResultResponse`（documentId/title/status/chunks/message）和 `ReembedMissingResponse`（total/success/failed/results）；`RagDocumentController.reembedMissing()` 重构；RagDocumentControllerTest 新增 4 个测试覆盖空结果/全成功/部分失败/force标志；43 tests（was 39，+4）；mvn test ✅（BUILD SUCCESS）；commit a890db1 已推送
