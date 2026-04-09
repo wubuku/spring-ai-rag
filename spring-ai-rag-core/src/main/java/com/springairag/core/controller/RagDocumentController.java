@@ -10,6 +10,8 @@ import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.api.dto.ReembedMissingResponse;
+import com.springairag.api.dto.ReembedResultResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -283,21 +285,18 @@ public class RagDocumentController {
      */
     @Operation(summary = "Batch re-embed", description = "Automatically find all documents lacking embedding vectors and batch generate/store vectors. Used for data migration fixes or forced re-embedding.")
     @PostMapping("/embed-vector-reembed")
-    public ResponseEntity<Map<String, Object>> reembedMissing(
+    public ResponseEntity<ReembedMissingResponse> reembedMissing(
             @Parameter(description = "Whether to force re-embedding (skip existing vectors)")
             @RequestParam(defaultValue = "false") boolean force) {
         List<RagDocument> missing = documentRepository.findDocumentsWithoutEmbeddings();
         if (missing.isEmpty()) {
-            return ResponseEntity.ok(Map.of(
-                    "message", "All documents already have embeddings",
-                    "processed", 0
-            ));
+            return ResponseEntity.ok(new ReembedMissingResponse(0, 0, 0, List.of()));
         }
 
         log.info("Re-embedding {} documents without embeddings (force={})", missing.size(), force);
-        List<Map<String, Object>> results = executeReembeddingBatch(missing, force);
+        List<ReembedResultResponse> results = executeReembeddingBatch(missing, force);
 
-        long success = results.stream().filter(r -> "COMPLETED".equals(String.valueOf(r.getOrDefault("status", "")))).count();
+        long success = results.stream().filter(r -> "COMPLETED".equals(r.status())).count();
         long failed = results.size() - success;
 
         auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
@@ -305,40 +304,41 @@ public class RagDocumentController {
                 "Reembed missing: force=" + force,
                 Map.of("success", success, "failed", failed, "total", missing.size()));
 
-        return ResponseEntity.ok(Map.of(
-                "total", missing.size(),
-                "success", success,
-                "failed", failed,
-                "results", results
+        return ResponseEntity.ok(new ReembedMissingResponse(
+                missing.size(),
+                (int) success,
+                (int) failed,
+                results
         ));
     }
 
-    private List<Map<String, Object>> executeReembeddingBatch(List<RagDocument> documents, boolean force) {
-        List<Map<String, Object>> results = new ArrayList<>(documents.size());
+    private List<ReembedResultResponse> executeReembeddingBatch(List<RagDocument> documents, boolean force) {
+        List<ReembedResultResponse> results = new ArrayList<>(documents.size());
         for (RagDocument doc : documents) {
-            Map<String, Object> result = buildReembedResult(doc, force);
+            ReembedResultResponse result = buildReembedResult(doc, force);
             results.add(result);
         }
         return results;
     }
 
-    private Map<String, Object> buildReembedResult(RagDocument doc, boolean force) {
+    private ReembedResultResponse buildReembedResult(RagDocument doc, boolean force) {
         try {
             Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
-            return Map.ofEntries(
-                    Map.entry("documentId", doc.getId()),
-                    Map.entry("title", doc.getTitle()),
-                    Map.entry("status", result.getOrDefault("status", "UNKNOWN")),
-                    Map.entry("chunks", result.getOrDefault("chunksCreated", 0)),
-                    Map.entry("message", result.getOrDefault("message", ""))
+            return new ReembedResultResponse(
+                    doc.getId(),
+                    doc.getTitle(),
+                    String.valueOf(result.getOrDefault("status", "UNKNOWN")),
+                    ((Number) result.getOrDefault("chunksCreated", 0)).intValue(),
+                    String.valueOf(result.getOrDefault("message", ""))
             );
         } catch (Exception e) {
             log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
-            return Map.of(
-                    "documentId", doc.getId(),
-                    "title", doc.getTitle(),
-                    "status", "error",
-                    "error", e.getMessage()
+            return new ReembedResultResponse(
+                    doc.getId(),
+                    doc.getTitle(),
+                    "error",
+                    0,
+                    e.getMessage()
             );
         }
     }

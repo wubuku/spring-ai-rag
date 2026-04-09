@@ -6,6 +6,8 @@ import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDeleteSummary;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.ReembedMissingResponse;
+import com.springairag.api.dto.ReembedResultResponse;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -621,5 +623,96 @@ class RagDocumentControllerTest {
         ResponseEntity<Map<String, Object>> response = controller.getVersion(1L, 99);
 
         assertEquals(404, response.getStatusCode().value());
+    }
+
+    // --- reembedMissing tests ---
+
+    @Test
+    void reembedMissing_noDocuments_returnsEmptyResults() {
+        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of());
+
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+
+        assertEquals(200, response.getStatusCode().value());
+        ReembedMissingResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals(0, body.total());
+        assertEquals(0, body.success());
+        assertEquals(0, body.failed());
+        assertTrue(body.results().isEmpty());
+    }
+
+    @Test
+    void reembedMissing_allSucceed_returnsCorrectCounts() {
+        RagDocument doc1 = createDoc(1L, "Doc One", "content one");
+        RagDocument doc2 = createDoc(2L, "Doc Two", "content two");
+        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc1, doc2));
+        when(documentEmbedService.embedDocument(1L, false))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
+        when(documentEmbedService.embedDocument(2L, false))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 3, "message", "done"));
+
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+
+        assertEquals(200, response.getStatusCode().value());
+        ReembedMissingResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.total());
+        assertEquals(2, body.success());
+        assertEquals(0, body.failed());
+        assertEquals(2, body.results().size());
+
+        ReembedResultResponse r1 = body.results().get(0);
+        assertEquals(1L, r1.documentId());
+        assertEquals("Doc One", r1.title());
+        assertEquals("COMPLETED", r1.status());
+        assertEquals(5, r1.chunks());
+
+        ReembedResultResponse r2 = body.results().get(1);
+        assertEquals(2L, r2.documentId());
+        assertEquals("COMPLETED", r2.status());
+        assertEquals(3, r2.chunks());
+    }
+
+    @Test
+    void reembedMissing_oneSucceedsOneFails_returnsMixedCounts() {
+        RagDocument doc1 = createDoc(1L, "Good Doc", "content");
+        RagDocument doc2 = createDoc(2L, "Bad Doc", "content");
+        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc1, doc2));
+        when(documentEmbedService.embedDocument(1L, false))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
+        when(documentEmbedService.embedDocument(2L, false))
+                .thenThrow(new RuntimeException("Embedding service unavailable"));
+
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
+
+        assertEquals(200, response.getStatusCode().value());
+        ReembedMissingResponse body = response.getBody();
+        assertNotNull(body);
+        assertEquals(2, body.total());
+        assertEquals(1, body.success());
+        assertEquals(1, body.failed());
+
+        ReembedResultResponse failed = body.results().stream()
+                .filter(r -> "error".equals(r.status())).findFirst().orElseThrow();
+        assertEquals(2L, failed.documentId());
+        assertEquals("Bad Doc", failed.title());
+        assertEquals("error", failed.status());
+        assertEquals(0, failed.chunks());
+        assertEquals("Embedding service unavailable", failed.message());
+    }
+
+    @Test
+    void reembedMissing_forceFlag_passesThroughToService() {
+        RagDocument doc = createDoc(1L, "Force Doc", "content");
+        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc));
+        when(documentEmbedService.embedDocument(1L, true))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "force re-embed"));
+
+        ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(true);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(documentEmbedService).embedDocument(1L, true);
+        assertEquals("COMPLETED", response.getBody().results().get(0).status());
     }
 }
