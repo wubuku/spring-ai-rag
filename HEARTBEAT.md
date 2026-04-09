@@ -2110,6 +2110,8 @@
 ## Cron 进度（2026-04-10 02:15 — EmbeddingModelRouterTest 全面重构）
 
 - 2026-04-10 02:15 — ✅ EmbeddingModelRouterTest 全面重构
+
+- 2026-04-10 02:50 — ✅ PerformanceConfigTest 增强：`CachingEmbeddingModel` 新增 2 个测试——`cachedEmbeddingModelCounters` 验证 `rag.cache.embedding.hit/miss` 计数器在 cache miss/hit 时正确递增，`cachedEmbeddingModelEmbedDocument` 验证 `embed(Document)` 正确提取 `getText()` 并委托给 `embed(String)`；6 tests 全通过；commit b5314c1 已推送
   - 发现：原有 EmbeddingModelRouterTest 3 个测试仅验证 ModelRegistry mock 行为，未测试 EmbeddingModelRouter 自身
   - 重写为 22 个嵌套测试类（Resolve/GetAvailableProviders/GetPrimary/GetAllOrdered/GetFallbacks）
   - EmbeddingModelRouter 新增 package-private 构造函数 `EmbeddingModelRouter(ModelRegistry, Map<String, EmbeddingModel>)` 供测试直接注入模型
