@@ -2028,3 +2028,19 @@
 
 ## Cron 进度（2026-04-09 18:49 — WebUI 常规巡检）
 - 2026-04-09 18:49 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest tests 全通过）/ npm run build ✅（97.89 KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-09 20:50 — 后端 i18n 测试 DisplayName 国际化 R6 批次 1）
+- ✅ 后端 i18n 国际化（R6 测试 @DisplayName 批次 1）：
+  - 翻译 8 个测试文件全部 @DisplayName 注解 + class Javadoc 为英文：
+    - RagEmbeddingTest（1 @DisplayName）
+    - RagSloConfigTest（1 @DisplayName + inline comments）
+    - MessageResolverTest（9 @DisplayName）
+    - MessageSourceConfigTest（8 @DisplayName）
+    - CacheConfigTest（4 @DisplayName）
+    - PerformanceConfigTest（4 @DisplayName + inline comments）
+    - ModelRegistryTest（7 @DisplayName + inline comments）
+    - MultiModelConfigLoaderTest（7 @DisplayName）
+  - 共计：41 @DisplayName + class Javadocs + inline comments 翻译为英文
+  - 1421 tests 全通过，零失败零错误
+  - commit 29d1434 已推送
+  - 仍有 ~28 个测试文件含中文 @DisplayName（约 360 处），继续推进 R6
