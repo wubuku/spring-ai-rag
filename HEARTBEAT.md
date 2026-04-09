@@ -2075,3 +2075,19 @@
   - 向后兼容：SSE 协议格式、响应格式完全不变
   - 1474 tests 全通过（core 1432 + starter 42，零失败零错误）
   - commit 784e407 已推送
+
+## Cron 进度（2026-04-10 01:06 — ChatModelRouter NPE 修复 + 测试扩充）
+- ✅ `ChatModelRouter.resolve()` NPE 修复：
+  - `extractProviderId()` 对不包含 "/" 且无法推断 provider 的 modelRef（如 "unknown"）返回 null
+  - 原有代码直接调用 `providerId.toLowerCase()` 导致 NullPointerException
+  - 修复：添加 `if (providerId == null) return null;` 守卫
+- ✅ `ChatModelRouterTest` 从 7 测试扩充到 17 测试：
+  - 新增：`resolve(null/blank/no-providers)` 测试
+  - 新增：`isMultiModelEnabled` null case 测试
+  - 新增：`getFallbackChain` null case 测试
+  - 新增：`getAvailableProviders` unmodifiable 测试
+  - 新增：constructor 空列表/null 列表容错测试
+  - 新增：`getPrimary`/`getFallbacks`/`getAllOrdered` 空注册表边界测试
+  - 原有 7 个 registry 委托测试保留
+  - 1484 tests 全通过（core 1442 + starter 42，零失败零错误）
+  - commit 021487d 已推送
