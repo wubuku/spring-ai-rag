@@ -124,6 +124,36 @@ public class RagChatController {
     }
 
     /**
+     * Holds heartbeat scheduler resources.
+     */
+    private record HeartbeatHandles(ScheduledFuture<?> task, ScheduledExecutorService scheduler) {
+        void stop() {
+            if (task != null) task.cancel(false);
+            if (scheduler != null) scheduler.shutdown();
+        }
+    }
+
+    /**
+     * Starts SSE heartbeat scheduler if enabled in configuration.
+     */
+    private HeartbeatHandles startHeartbeat(SseEmitter emitter) {
+        if (sseProperties == null || !sseProperties.isHeartbeatEnabled()) {
+            return new HeartbeatHandles(null, null);
+        }
+        int interval = sseProperties.getHeartbeatIntervalSeconds();
+        ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "sse-heartbeat");
+            t.setDaemon(true);
+            return t;
+        });
+        ScheduledFuture<?> task = scheduler.scheduleAtFixedRate(
+                () -> SseEmitters.sendHeartbeat(emitter),
+                interval, interval, TimeUnit.SECONDS);
+        log.debug("SSE heartbeat enabled: {}s interval", interval);
+        return new HeartbeatHandles(task, scheduler);
+    }
+
+    /**
      * RAG Q&A (streaming, SSE).
      */
     @Operation(summary = "RAG Q&A (streaming SSE)", description = "Stream answer content, pushing chunks via Server-Sent Events.")
@@ -138,53 +168,33 @@ public class RagChatController {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
+        String sessionId = request.getSessionId();
         log.info("RAG stream: sessionId={}, domain={}, message={}",
-                request.getSessionId(), request.getDomainId(),
+                sessionId, request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
-        String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         SseEmitter emitter = SseEmitters.create();
-
+        String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         // SSE protocol: OpenAI-compatible format
-        // Main channel: data:{"choices":[{"delta":{"content":"..."}}]}
-        // done:    event:done + data:{"traceId":"...","status":"complete"}
-        // heartbeat: comment (: heartbeat\n\n) if sse.heartbeatIntervalSeconds > 0
+        //   chunk: data:{"choices":[{"delta":{"content":"..."}}]}
+        //   done:  event:done data:{"traceId":"...","status":"complete"}
+        //   heartbeat: comment (: heartbeat\n\n) if enabled
+        HeartbeatHandles heartbeat = startHeartbeat(emitter);
 
-        final SseEmitter finalEmitter = emitter;
-        final String finalTraceId = traceId;
-
-        final ScheduledFuture<?>[] heartbeatTask = new ScheduledFuture<?>[1];
-        final ScheduledExecutorService[] heartbeatScheduler = new ScheduledExecutorService[1];
-
-        if (sseProperties != null && sseProperties.isHeartbeatEnabled()) {
-            int interval = sseProperties.getHeartbeatIntervalSeconds();
-            heartbeatScheduler[0] = Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "sse-heartbeat");
-                t.setDaemon(true);
-                return t;
-            });
-            heartbeatTask[0] = heartbeatScheduler[0].scheduleAtFixedRate(
-                    () -> SseEmitters.sendHeartbeat(finalEmitter),
-                    interval, interval, TimeUnit.SECONDS);
-            log.debug("SSE heartbeat enabled: {}s interval", interval);
-        }
-
-        ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
+        ragChatService.chatStream(request.getMessage(), sessionId, request.getDomainId())
                 .subscribe(
                         chunk -> {
                             String json = "{\"choices\":[{\"delta\":{\"content\":\"" + SseEmitters.escapeJson(chunk) + "\"}}]}";
-                            SseEmitters.sendRaw(finalEmitter, null, json, "chat chunk");
+                            SseEmitters.sendRaw(emitter, null, json, "chat chunk");
                         },
                         error -> {
-                            if (heartbeatTask[0] != null) heartbeatTask[0].cancel(false);
-                            if (heartbeatScheduler[0] != null) heartbeatScheduler[0].shutdown();
-                            finalEmitter.completeWithError(error);
+                            heartbeat.stop();
+                            emitter.completeWithError(error);
                         },
                         () -> {
-                            if (heartbeatTask[0] != null) heartbeatTask[0].cancel(false);
-                            if (heartbeatScheduler[0] != null) heartbeatScheduler[0].shutdown();
-                            String doneJson = "{\"traceId\":\"" + (finalTraceId != null ? finalTraceId : "") + "\",\"status\":\"complete\"}";
-                            SseEmitters.sendRaw(finalEmitter, "done", doneJson, "chat done");
+                            heartbeat.stop();
+                            String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
+                            SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
                         }
                 );
 
