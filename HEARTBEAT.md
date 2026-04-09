@@ -2065,3 +2065,13 @@
 
 ## Cron 进度（WebUI — 2026-04-09 23:44 — 常规巡检）
 - ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest tests 全通过）/ npm run build ✅（97.89 KB index gzipped，28 chunks，BarChart 346KB 按需加载）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（health: UP，database: UP，pgvector: UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+
+## Cron 进度（2026-04-10 00:22 — RagChatController.stream() 重构）
+- ✅ `RagChatController.stream()` 长方法重构（57→37 行，-35%）：
+  - 提取 `HeartbeatHandles` record（持有 `ScheduledFuture` + `ScheduledExecutorService`，含 `stop()` 方法）
+  - 提取 `startHeartbeat(SseEmitter)` 私有方法，将心跳调度器创建逻辑从 `stream()` 移出
+  - 消除 `ScheduledFuture<?>[1]` 数组包装，改为使用 record 替代
+  - `stream()` 现在专注于请求准备、Emitter 创建和响应流订阅，心跳生命周期自包含
+  - 向后兼容：SSE 协议格式、响应格式完全不变
+  - 1474 tests 全通过（core 1432 + starter 42，零失败零错误）
+  - commit 784e407 已推送
