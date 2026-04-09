@@ -158,6 +158,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-09 12:18 — ✅ listDocuments N+1 查询消除：RagDocumentController.listDocuments() 批量预取 collection 名称——收集所有 document 的 collectionId，findAllById() 一次查询替代逐条 findById()，O(N)→O(1) DB 往返；新增重载 documentToMap(doc, collectionNameMap)；39 RagDocumentControllerTest 全通过；1422 测试全通过；commit 765919c 已推送
 - 2026-04-09 03:50 — ✅ SSE 心跳机制：添加 `SseEmitters.sendHeartbeat()` + `RagSseProperties.heartbeat-interval-seconds`（默认30s）防止代理关闭空闲连接；`RagChatController.stream()` 集成定时心跳调度器；`SseEmittersTest` 新增 2 个心跳测试；`RagSsePropertiesTest` 新增 5 个测试；`RagChatControllerTest` + `SseStreamE2ETest` 更新构造函数签名适配；43 tests ✅；commit 8e245d0 已推送
 - 2026-04-09 08:27 — ✅ R6 主源码国际化完成：翻译 26 个主源码文件（QueryRewritingService、AuditLogService、HybridRetrieverService、BatchDocumentService、RequestTraceFilter、ApiKeyAuthFilter、LlmCircuitBreaker、MessageResolver、PerformanceConfig、FulltextSearchProvider 全套、ModelComparisonService、RetrievalLoggingService、ApiVersion 系列、TextChunk、HierarchicalTextChunker、TextCleaner、GeneralRagAutoConfiguration 等）的 Javadoc 和注释为英文；保留功能字符串（如中文 padding query 前缀/后缀、`[表格]` 标签等）；mvn test ✅ 1421 pass；commit 574f21e 已推送
 - 2026-04-08 00:52 — ✅ Javadoc 国际化（metrics 包 + EmbeddingBatchService）：翻译 6 个 metrics 类和 EmbeddingBatchService 的中文注释为英文；所有测试通过；commit c761448 已推送
