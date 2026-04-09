@@ -1999,3 +1999,7 @@
   - ChatMemoryMultiTurnTest 14 tests ✅；全量测试 1421 tests ✅
   - commit c22342a 已推送
   - 仍有 3 个测试文件含中文（RagChatServiceTest / MultiModelConfigLoaderTest / 1 个其他），继续推进
+
+## Cron 进度（2026-04-09 15:08 — WebUI 常规发布）
+
+- ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest passed）/ npm run build ✅（97KB index gzipped，29 chunks，BarChart 346KB 按需加载）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（health: UP，database: UP，pgvector: UP）；git 工作区干净（static/webui 在 .gitignore 中）；WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
