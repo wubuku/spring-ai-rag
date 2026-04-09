@@ -2132,3 +2132,5 @@
 
 - 2026-04-10 04:27 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 - 2026-04-10 04:39 — ✅ .env.example 全面更新：补充缺失的 6 大配置模块——SiliconFlow 嵌入（SILICONFLOW_*）、Spring AI MiniMax 原生支持（SPRING_AI_MINIMAX_*）、火山引擎 ARK MiniMax 示例（ANTHROPIC_BASE_URL）、语音转写（TRANSCRIPTION_*）、视觉模型（VISION_*）、Spring 数据源 URL（SPRING_DATASOURCE_URL）；移除个人绝对路径，改为注释占位符；完善 base-url 注意事项说明（所有 provider 均不带 /v1 后缀）；mvn test ✅（BUILD SUCCESS）；commit ad02676 已推送
+
+- 2026-04-10 04:54 — ✅ 后端配置属性测试补强：`RagCircuitBreakerPropertiesTest` 7 个单元测试（defaults: enabled=false/failureRateThreshold=50/minimumNumberOfCalls=10/waitDurationInOpenStateSeconds=30/slidingWindowSize=20 + setters + allDefaultsFormValidConfiguration）；1520 tests 全通过，BUILD SUCCESS；commit 4f0fd5f 已推送
