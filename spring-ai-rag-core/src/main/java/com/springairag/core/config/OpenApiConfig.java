@@ -115,198 +115,82 @@ public class OpenApiConfig {
                     ApiResponses responses = operation.getResponses();
                     if (responses == null) return;
 
-                    // POST /chat/ask → ChatResponse example
-                    if ("chatAsk".equals(opId) || operation.getSummary() != null && operation.getSummary().contains("Ask")) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "answer": "Spring AI is a Spring Framework extension that simplifies AI model integration...",
-                                      "traceId": "a1b2c3d4e5f6",
-                                      "sources": [
-                                        {
-                                          "documentId": "doc-123",
-                                          "chunkText": "Spring AI provides a consistent API for interacting with LLMs...",
-                                          "score": 0.92
-                                        }
-                                      ],
-                                      "metadata": {
-                                        "sessionId": "conv-123",
-                                        "model": "deepseek-chat",
-                                        "retrievalTimeMs": 45
-                                      },
-                                      "stepMetrics": [
-                                        { "stepName": "QueryRewrite", "durationMs": 120, "resultCount": 1 },
-                                        { "stepName": "HybridSearch", "durationMs": 38, "resultCount": 10 },
-                                        { "stepName": "Rerank", "durationMs": 55, "resultCount": 5 }
-                                      ]
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // POST /chat/stream → text/event-stream example
-                    if ("chatStream".equals(opId) || (operation.getSummary() != null && operation.getSummary().contains("Stream"))) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    data: {"answer":"Spring","done":false,"traceId":"abc123","stepMetrics":[]}
-
-                                    data: {"answer":" Spring AI","done":false,"traceId":"abc123","stepMetrics":[]}
-
-                                    data: {"answer":" is a","done":false,"traceId":"abc123","stepMetrics":[]}
-
-                                    data: {"answer":" framework...","done":true,"traceId":"abc123","sources":[{"documentId":"doc-1","chunkText":"...","score":0.9}],"stepMetrics":[{"stepName":"HybridSearch","durationMs":42,"resultCount":8}]}
-                                    """,
-                                "text/event-stream");
-                    }
-
-                    // GET /search → SearchResponse example
-                    if ("search".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "results": [
-                                        {
-                                          "documentId": 1,
-                                          "content": "Spring AI provides a consistent API...",
-                                          "score": 0.92,
-                                          "highlights": ["Spring AI provides <em>a consistent API</em>"]
-                                        },
-                                        {
-                                          "documentId": 2,
-                                          "content": "Getting started with Spring AI RAG...",
-                                          "score": 0.85,
-                                          "highlights": []
-                                        }
-                                      ],
-                                      "query": "What is Spring AI?",
-                                      "totalResults": 2,
-                                      "traceId": "xyz789"
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // GET /documents → DocumentListResponse example
-                    if ("listDocuments".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "documents": [
-                                        {
-                                          "id": 1,
-                                          "title": "Spring AI Guide",
-                                          "contentType": "text/plain",
-                                          "processingStatus": "COMPLETED",
-                                          "enabled": true,
-                                          "chunkCount": 5,
-                                          "createdAt": "2026-04-06T10:00:00Z",
-                                          "updatedAt": "2026-04-06T10:05:00Z"
-                                        }
-                                      ],
-                                      "totalElements": 1,
-                                      "totalPages": 1,
-                                      "currentPage": 0
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // POST /documents/batch → BatchCreateResponse example
-                    if ("batchCreateDocuments".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "successful": 3,
-                                      "failed": 0,
-                                      "results": [
-                                        { "id": 1, "title": "doc1.txt", "status": "CREATED", "message": null },
-                                        { "id": 2, "title": "doc2.txt", "status": "CREATED", "message": null },
-                                        { "id": 3, "title": "doc3.txt", "status": "CREATED", "message": null }
-                                      ],
-                                      "traceId": "batch-123"
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // POST /collections → CollectionCreatedResponse example
-                    if ("createCollection".equals(opId)) {
-                        addExampleResponse(responses, "201",
-                                """
-                                    {
-                                      "id": 1,
-                                      "name": "My Knowledge Base",
-                                      "description": "Company documentation",
-                                      "dimensions": 1024,
-                                      "documentCount": 0,
-                                      "createdAt": "2026-04-06T10:00:00Z",
-                                      "updatedAt": "2026-04-06T10:00:00Z"
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // GET /chat/history/{id} → ClearHistoryResponse example
-                    if ("getChatHistory".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "history": [
-                                        {
-                                          "messageId": "msg-1",
-                                          "role": "user",
-                                          "content": "What is RAG?",
-                                          "timestamp": "2026-04-06T10:00:00Z"
-                                        },
-                                        {
-                                          "messageId": "msg-2",
-                                          "role": "assistant",
-                                          "content": "RAG combines retrieval with generation...",
-                                          "timestamp": "2026-04-06T10:00:01Z"
-                                        }
-                                      ],
-                                      "totalMessages": 2,
-                                      "sessionId": "conv-123"
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // GET /cache/stats → CacheStatsResponse example
-                    if ("getCacheStats".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "enabled": true,
-                                      "hitCount": 1523,
-                                      "missCount": 287,
-                                      "hitRate": 0.841,
-                                      "totalRequests": 1810,
-                                      "totalBytesSaved": 4567890
-                                    }
-                                    """,
-                                "application/json");
-                    }
-
-                    // GET /metrics/rag → RagMetricsSummary example
-                    if ("getRagMetrics".equals(opId)) {
-                        addExampleResponse(responses, "200",
-                                """
-                                    {
-                                      "totalRequests": 5420,
-                                      "successfulRequests": 5300,
-                                      "failedRequests": 120,
-                                      "totalRetrievalResults": 32100,
-                                      "averageRetrievalResults": 5.92,
-                                      "totalLlmTokens": 892340,
-                                      "averageLatencyMs": 342
-                                    }
-                                    """,
-                                "application/json");
-                    }
+                    applyExamples(operation, responses, opId);
                 }));
         };
     }
+
+    private void applyExamples(io.swagger.v3.oas.models.Operation operation,
+                               ApiResponses responses, String opId) {
+        // Table-driven example responses keyed by operationId
+        ExampleDef example = switch (opId) {
+            case "chatAsk" -> new ExampleDef("200",
+                """
+                    { "answer": "Spring AI is a Spring Framework extension...", "traceId": "a1b2c3d4e5f6",
+                      "sources": [{ "documentId": "doc-123", "chunkText": "Spring AI provides a consistent API...", "score": 0.92 }],
+                      "metadata": { "sessionId": "conv-123", "model": "deepseek-chat", "retrievalTimeMs": 45 },
+                      "stepMetrics": [
+                        { "stepName": "QueryRewrite", "durationMs": 120, "resultCount": 1 },
+                        { "stepName": "HybridSearch", "durationMs": 38, "resultCount": 10 },
+                        { "stepName": "Rerank", "durationMs": 55, "resultCount": 5 }
+                      ] }""", "application/json");
+            case "chatStream" -> new ExampleDef("200",
+                """
+                    data: {"answer":"Spring","done":false,"traceId":"abc123","stepMetrics":[]}
+                    data: {"answer":" Spring AI","done":false,"traceId":"abc123","stepMetrics":[]}
+                    data: {"answer":" is a","done":false,"traceId":"abc123","stepMetrics":[]}
+                    data: {"answer":" framework...","done":true,"traceId":"abc123","sources":[{"documentId":"doc-1","chunkText":"...","score":0.9}],"stepMetrics":[{"stepName":"HybridSearch","durationMs":42,"resultCount":8}]}""",
+                "text/event-stream");
+            case "search" -> new ExampleDef("200",
+                """
+                    { "results": [
+                        { "documentId": 1, "content": "Spring AI provides a consistent API...", "score": 0.92, "highlights": ["Spring AI provides <em>a consistent API</em>"] },
+                        { "documentId": 2, "content": "Getting started with Spring AI RAG...", "score": 0.85, "highlights": [] }
+                      ], "query": "What is Spring AI?", "totalResults": 2, "traceId": "xyz789" }""", "application/json");
+            case "listDocuments" -> new ExampleDef("200",
+                """
+                    { "documents": [
+                        { "id": 1, "title": "Spring AI Guide", "contentType": "text/plain",
+                          "processingStatus": "COMPLETED", "enabled": true, "chunkCount": 5,
+                          "createdAt": "2026-04-06T10:00:00Z", "updatedAt": "2026-04-06T10:05:00Z" }
+                      ], "totalElements": 1, "totalPages": 1, "currentPage": 0 }""", "application/json");
+            case "batchCreateDocuments" -> new ExampleDef("200",
+                """
+                    { "successful": 3, "failed": 0,
+                      "results": [
+                        { "id": 1, "title": "doc1.txt", "status": "CREATED", "message": null },
+                        { "id": 2, "title": "doc2.txt", "status": "CREATED", "message": null },
+                        { "id": 3, "title": "doc3.txt", "status": "CREATED", "message": null }
+                      ], "traceId": "batch-123" }""", "application/json");
+            case "createCollection" -> new ExampleDef("201",
+                """
+                    { "id": 1, "name": "My Knowledge Base", "description": "Company documentation",
+                      "dimensions": 1024, "documentCount": 0,
+                      "createdAt": "2026-04-06T10:00:00Z", "updatedAt": "2026-04-06T10:00:00Z" }""", "application/json");
+            case "getChatHistory" -> new ExampleDef("200",
+                """
+                    { "history": [
+                        { "messageId": "msg-1", "role": "user", "content": "What is RAG?", "timestamp": "2026-04-06T10:00:00Z" },
+                        { "messageId": "msg-2", "role": "assistant", "content": "RAG combines retrieval with generation...", "timestamp": "2026-04-06T10:00:01Z" }
+                      ], "totalMessages": 2, "sessionId": "conv-123" }""", "application/json");
+            case "getCacheStats" -> new ExampleDef("200",
+                """
+                    { "enabled": true, "hitCount": 1523, "missCount": 287,
+                      "hitRate": 0.841, "totalRequests": 1810, "totalBytesSaved": 4567890 }""", "application/json");
+            case "getRagMetrics" -> new ExampleDef("200",
+                """
+                    { "totalRequests": 5420, "successfulRequests": 5300, "failedRequests": 120,
+                      "totalRetrievalResults": 32100, "averageRetrievalResults": 5.92,
+                      "totalLlmTokens": 892340, "averageLatencyMs": 342 }""", "application/json");
+            default -> null;
+        };
+
+        if (example != null) {
+            addExampleResponse(responses, example.code, example.json, example.mediaType);
+        }
+    }
+
+    private record ExampleDef(String code, String json, String mediaType) {}
 
     private void addExampleResponse(ApiResponses responses, String code, String example, String mediaType) {
         ApiResponse resp = responses.get(code);
