@@ -2121,3 +2121,5 @@
 - 2026-04-10 02:22 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
 - 2026-04-10 03:04 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+- 2026-04-10 03:20 — ✅ 后端主动巡检：ClientErrorController 硬编码 @RequestMapping("/api/v1/rag/client-errors") → @ApiVersion("v1") + @RequestMapping("/rag/client-errors")，与全部 12 个 Controller API 版本管理风格统一；1513 tests 全通过；commit c3a0af4 已推送；HEARTBEAT 状态同步；docs/IMPLEMENTATION_COMPARISON.md header 更新（1513 tests）
