@@ -2015,3 +2015,6 @@
 
 ## Cron 进度（2026-04-09 15:33 — ApiVersionConfig 单元测试补全）
 - 2026-04-09 15:33 — ✅ ApiVersionConfig 单元测试补全：`ApiVersionConfigTest.java` 3 个测试覆盖 `webMvcRegistrations()` bean 创建/返回类型/实例可复用性；+3 tests，零失败零错误；mvn test ✅（BUILD SUCCESS）；commit 45d064f 已推送
+
+## Cron 进度（2026-04-09 17:50 — 测试类型不匹配修复）
+- 2026-04-09 17:50 — ✅ 测试类型不匹配修复：`BatchDocumentService.deleteDocument()` 返回 `DocumentDeleteResponse` DTO（非 `Map<String, String>`），`batchDeleteDocuments()` 返回 `BatchDeleteResponse` DTO（非 `Map<String, Object>`）；修复 `BatchDocumentServiceTest` 和 `RagDocumentControllerTest` 中 5 个测试方法的 mock 返回类型和断言；1424 tests 全通过，零失败零错误；commit 7a0b8ae 已推送
