@@ -64,6 +64,9 @@ public class ChatModelRouter {
         }
 
         String providerId = extractProviderId(modelRef);
+        if (providerId == null) {
+            return null;
+        }
         String modelId = extractModelId(modelRef);
 
         ChatModel model = chatModelsByProvider.get(providerId.toLowerCase());
