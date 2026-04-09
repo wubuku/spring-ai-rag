@@ -111,6 +111,7 @@ class RagControllerIntegrationTest {
 
     // ==================== Collection ====================
     @MockBean private RagCollectionRepository collectionRepository;
+    @MockBean private com.springairag.core.service.RagCollectionService ragCollectionService;
 
     // ==================== AB Test ====================
     @MockBean private AbTestService abTestService;
@@ -432,11 +433,8 @@ class RagControllerIntegrationTest {
 
         @Test
         void deleteCollection_found() throws Exception {
-            RagCollection collection = new RagCollection();
-            collection.setId(1L);
-            when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(collection));
-            when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
-            when(collectionRepository.softDelete(eq(1L), any())).thenReturn(1);
+            when(ragCollectionService.deleteCollection(1L))
+                    .thenReturn(Optional.of(new com.springairag.core.service.RagCollectionService.DeleteResult(1L, 0L)));
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 1))
                     .andExpect(status().isOk())
@@ -445,7 +443,7 @@ class RagControllerIntegrationTest {
 
         @Test
         void deleteCollection_notFound() throws Exception {
-            when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+            when(ragCollectionService.deleteCollection(999L)).thenReturn(Optional.empty());
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 999))
                     .andExpect(status().isNotFound());

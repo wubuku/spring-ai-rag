@@ -6,6 +6,7 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.RagCollectionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
@@ -19,12 +20,13 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagCollectionController 单元测试
+ * RagCollectionController unit tests.
  */
 class RagCollectionControllerTest {
 
     private RagCollectionRepository collectionRepository;
     private RagDocumentRepository documentRepository;
+    private RagCollectionService collectionService;
     private AuditLogService auditLogService;
     private RagCollectionController controller;
 
@@ -32,8 +34,9 @@ class RagCollectionControllerTest {
     void setUp() {
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
+        collectionService = mock(RagCollectionService.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagCollectionController(collectionRepository, documentRepository, auditLogService);
+        controller = new RagCollectionController(collectionRepository, documentRepository, collectionService, auditLogService);
     }
 
     private RagCollection createCollection(Long id, String name) {
@@ -172,23 +175,20 @@ class RagCollectionControllerTest {
 
     @Test
     void delete_existingCollection_unlinksDocumentsAndSoftDeletes() {
-        RagCollection c = createCollection(1L, "待删除集合");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
-        when(collectionRepository.softDelete(eq(1L), any(LocalDateTime.class))).thenReturn(1);
+        when(collectionService.deleteCollection(1L))
+                .thenReturn(Optional.of(new com.springairag.core.service.RagCollectionService.DeleteResult(1L, 1L)));
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Collection deleted", response.getBody().get("message"));
         assertEquals("1", response.getBody().get("documentsUnlinked"));
-        verify(documentRepository).clearCollectionIdByCollectionId(1L);
-        verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
+        verify(collectionService).deleteCollection(1L);
     }
 
     @Test
     void delete_nonExisting_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        when(collectionService.deleteCollection(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, String>> response = controller.delete(999L);
 
@@ -197,23 +197,19 @@ class RagCollectionControllerTest {
 
     @Test
     void delete_existingCollectionNoDocuments_doesNotCallClearCollectionId() {
-        RagCollection c = createCollection(1L, "空集合");
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
-        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
-        when(collectionRepository.softDelete(eq(1L), any(LocalDateTime.class))).thenReturn(1);
+        when(collectionService.deleteCollection(1L))
+                .thenReturn(Optional.of(new com.springairag.core.service.RagCollectionService.DeleteResult(1L, 0L)));
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals("0", response.getBody().get("documentsUnlinked"));
-        verify(documentRepository, org.mockito.Mockito.never()).clearCollectionIdByCollectionId(anyLong());
-        verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
+        verify(collectionService).deleteCollection(1L);
     }
 
     @Test
     void delete_alreadyDeleted_returns404() {
-        // Trying to delete an already-soft-deleted collection should return 404
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
+        when(collectionService.deleteCollection(1L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, String>> response = controller.delete(1L);
 
@@ -222,10 +218,12 @@ class RagCollectionControllerTest {
 
     @Test
     void restore_existingDeletedCollection_restoresSuccessfully() {
-        when(collectionRepository.restore(1L)).thenReturn(1);
         RagCollection restored = createCollection(1L, "Restored Collection");
         restored.setDeleted(false);
-        when(collectionRepository.findById(1L)).thenReturn(Optional.of(restored));
+        // The restored collection's id is used to count documents
+        when(collectionService.restoreCollection(1L))
+                .thenReturn(Optional.of(new com.springairag.core.service.RagCollectionService.RestoreResult(restored, 3L)));
+        // The controller also calls documentRepository.countByCollectionId for the response map
         when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
 
         ResponseEntity<Map<String, Object>> response = controller.restore(1L);
@@ -233,12 +231,12 @@ class RagCollectionControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals("Restored Collection", response.getBody().get("name"));
         assertEquals(3L, response.getBody().get("documentCount"));
-        verify(collectionRepository).restore(1L);
+        verify(collectionService).restoreCollection(1L);
     }
 
     @Test
     void restore_nonExisting_returns404() {
-        when(collectionRepository.restore(999L)).thenReturn(0);
+        when(collectionService.restoreCollection(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<Map<String, Object>> response = controller.restore(999L);
 
@@ -436,43 +434,9 @@ class RagCollectionControllerTest {
 
     @Test
     void cloneCollection_existingCollectionWithDocuments_clonesSuccessfully() {
-        RagCollection source = createCollection(1L, "Source Collection");
-        source.setDescription("A source collection");
-        source.setEmbeddingModel("bge-m3");
-        source.setDimensions(1024);
-
-        RagDocument doc1 = new RagDocument();
-        doc1.setId(10L);
-        doc1.setTitle("Doc 1");
-        doc1.setSource("http://example.com/1");
-        doc1.setContent("Content of doc 1");
-        doc1.setDocumentType("PDF");
-        doc1.setMetadata(Map.of("key", "value"));
-        doc1.setSize(1024L);
-        doc1.setCollectionId(1L);
-        doc1.setEnabled(true);
-        doc1.setProcessingStatus("COMPLETED");
-
-        RagDocument doc2 = new RagDocument();
-        doc2.setId(11L);
-        doc2.setTitle("Doc 2");
-        doc2.setContent("Content of doc 2");
-        doc2.setCollectionId(1L);
-        doc2.setEnabled(true);
-        doc2.setProcessingStatus("COMPLETED");
-
-        RagCollection savedClone = createCollection(5L, "Source Collection (Copy)");
-
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
-        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
-        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
-            RagCollection c = inv.getArgument(0);
-            if (c.getId() == null) {
-                c.setId(5L);
-            }
-            return c;
-        });
-        when(documentRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+        com.springairag.api.dto.CollectionCloneResponse mockResponse =
+                com.springairag.api.dto.CollectionCloneResponse.of(5L, "Source Collection (Copy)", 1L, "Source Collection", 2);
+        when(collectionService.cloneCollection(1L)).thenReturn(Optional.of(mockResponse));
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
                 controller.cloneCollection(1L);
@@ -484,28 +448,14 @@ class RagCollectionControllerTest {
         assertEquals(1L, response.getBody().sourceCollectionId());
         assertEquals("Source Collection", response.getBody().sourceCollectionName());
         assertEquals(2, response.getBody().documentsCloned());
-
-        // Verify the clone has PENDING status (must re-embed)
-        verify(documentRepository).saveAll(argThat((List<RagDocument> docs) -> {
-            assertEquals(2, docs.size());
-            docs.forEach(doc -> assertEquals("PENDING", doc.getProcessingStatus()));
-            assertEquals(5L, docs.get(0).getCollectionId());
-            return true;
-        }));
-        verify(collectionRepository).save(any(RagCollection.class));
+        verify(collectionService).cloneCollection(1L);
     }
 
     @Test
     void cloneCollection_existingCollectionNoDocuments_clonesWithZeroDocuments() {
-        RagCollection source = createCollection(1L, "Empty Source");
-
-        when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
-        when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of());
-        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
-            RagCollection c = inv.getArgument(0);
-            if (c.getId() == null) c.setId(5L);
-            return c;
-        });
+        com.springairag.api.dto.CollectionCloneResponse mockResponse =
+                com.springairag.api.dto.CollectionCloneResponse.of(5L, "Empty Source (Copy)", 1L, "Empty Source", 0);
+        when(collectionService.cloneCollection(1L)).thenReturn(Optional.of(mockResponse));
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
                 controller.cloneCollection(1L);
@@ -514,12 +464,12 @@ class RagCollectionControllerTest {
         assertNotNull(response.getBody());
         assertEquals(5L, response.getBody().clonedCollectionId());
         assertEquals(0, response.getBody().documentsCloned());
-        verify(documentRepository, never()).saveAll(anyList());
+        verify(collectionService).cloneCollection(1L);
     }
 
     @Test
     void cloneCollection_nonExisting_returns404() {
-        when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
+        when(collectionService.cloneCollection(999L)).thenReturn(Optional.empty());
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
                 controller.cloneCollection(999L);

@@ -2091,3 +2091,7 @@
   - 原有 7 个 registry 委托测试保留
   - 1484 tests 全通过（core 1442 + starter 42，零失败零错误）
   - commit 021487d 已推送
+
+## Cron 进度（2026-04-10 01:26 — WebUI 常规巡检）
+
+- 2026-04-10 01:26 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态

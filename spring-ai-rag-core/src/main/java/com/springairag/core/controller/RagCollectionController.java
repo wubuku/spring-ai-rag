@@ -11,6 +11,7 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -47,13 +48,16 @@ public class RagCollectionController {
 
     private final RagCollectionRepository collectionRepository;
     private final RagDocumentRepository documentRepository;
+    private final RagCollectionService collectionService;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public RagCollectionController(RagCollectionRepository collectionRepository,
                                     RagDocumentRepository documentRepository,
+                                    RagCollectionService collectionService,
                                     @Autowired(required = false) AuditLogService auditLogService) {
         this.collectionRepository = collectionRepository;
         this.documentRepository = documentRepository;
+        this.collectionService = collectionService;
         this.auditLogService = auditLogService;
     }
 
@@ -174,32 +178,16 @@ public class RagCollectionController {
      */
     @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
     @ApiResponse(responseCode = "200", description = "Collection soft-deleted")
-    @Transactional
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         log.info("Soft-deleting collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
-                .map(collection -> {
-                    // Batch clear collection_id of associated documents (avoid loading one by one)
-                    long count = documentRepository.countByCollectionId(id);
-                    if (count > 0) {
-                        documentRepository.clearCollectionIdByCollectionId(id);
-                        log.info("Unlinked {} documents from collection {}", count, id);
-                    }
-
-                    collectionRepository.softDelete(id, java.time.LocalDateTime.now());
-
-                    log.info("Collection soft-deleted: id={}", id);
-                    auditDelete(AuditLogService.ENTITY_COLLECTION,
-                            String.valueOf(id),
-                            "Collection soft-deleted, documentsUnlinked: " + count);
-                    return ResponseEntity.ok(Map.of(
-                            "message", "Collection deleted",
-                            "id", String.valueOf(id),
-                            "documentsUnlinked", String.valueOf(count)
-                    ));
-                })
+        return collectionService.deleteCollection(id)
+                .map(result -> ResponseEntity.ok(Map.of(
+                        "message", "Collection deleted",
+                        "id", String.valueOf(result.id()),
+                        "documentsUnlinked", String.valueOf(result.documentsUnlinked())
+                )))
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
@@ -211,26 +199,14 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "200", description = "Collection restored"),
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
     })
-    @Transactional
     @PostMapping("/{id}/restore")
     public ResponseEntity<Map<String, Object>> restore(@PathVariable Long id) {
         log.info("Restoring collection: id={}", id);
 
-        int updated = collectionRepository.restore(id);
-        if (updated == 0) {
-            log.warn("Collection not found or not deleted for restore: id={}", id);
-            return ResponseEntity.notFound().build();
-        }
-
-        log.info("Collection restored: id={}", id);
-        auditUpdate(AuditLogService.ENTITY_COLLECTION,
-                String.valueOf(id),
-                "Collection restored");
-
-        return collectionRepository.findById(id)
-                .map(c -> {
-                    long docCount = documentRepository.countByCollectionId(id);
-                    return ResponseEntity.ok(toMap(c, docCount));
+        return collectionService.restoreCollection(id)
+                .map(result -> {
+                    long docCount = documentRepository.countByCollectionId(result.collection().getId());
+                    return ResponseEntity.ok(toMap(result.collection(), docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -247,58 +223,9 @@ public class RagCollectionController {
     public ResponseEntity<CollectionCloneResponse> cloneCollection(@PathVariable Long id) {
         log.info("Cloning collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
-                .map(source -> {
-                    // Build new collection as a copy
-                    RagCollection cloned = new RagCollection();
-                    cloned.setName(source.getName() + " (Copy)");
-                    cloned.setDescription(source.getDescription());
-                    cloned.setEmbeddingModel(source.getEmbeddingModel());
-                    cloned.setDimensions(source.getDimensions());
-                    cloned.setEnabled(source.getEnabled());
-                    cloned.setMetadata(source.getMetadata());
-                    final RagCollection saved = collectionRepository.save(cloned);
-
-                    // Copy all documents (content + metadata only; embeddings require re-embedding)
-                    List<RagDocument> sourceDocs = documentRepository.findAllByCollectionId(id);
-                    List<RagDocument> clonedDocs = sourceDocs.stream()
-                            .map(doc -> cloneDocument(doc, saved.getId()))
-                            .toList();
-                    if (!clonedDocs.isEmpty()) {
-                        documentRepository.saveAll(clonedDocs);
-                    }
-
-                    log.info("Collection cloned: sourceId={}, newId={}, documents={}",
-                            id, saved.getId(), clonedDocs.size());
-                    auditCreate(AuditLogService.ENTITY_COLLECTION,
-                            String.valueOf(saved.getId()),
-                            "Collection cloned from " + source.getName() + " (ID: " + id + "), documents: " + clonedDocs.size(),
-                            Map.of("sourceCollectionId", id,
-                                    "sourceCollectionName", source.getName(),
-                                    "documentsCloned", clonedDocs.size()));
-
-                    return ResponseEntity.ok(CollectionCloneResponse.of(
-                            saved.getId(),
-                            saved.getName(),
-                            id,
-                            source.getName(),
-                            clonedDocs.size()));
-                })
+        return collectionService.cloneCollection(id)
+                .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
-    }
-
-    private RagDocument cloneDocument(RagDocument source, Long newCollectionId) {
-        RagDocument doc = new RagDocument();
-        doc.setTitle(source.getTitle());
-        doc.setSource(source.getSource());
-        doc.setContent(source.getContent());
-        doc.setDocumentType(source.getDocumentType());
-        doc.setMetadata(source.getMetadata());
-        doc.setSize(source.getSize());
-        doc.setCollectionId(newCollectionId);
-        doc.setEnabled(source.getEnabled());
-        doc.setProcessingStatus("PENDING");  // Must re-embed; embeddings not copied
-        return doc;
     }
 
     /**
