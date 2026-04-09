@@ -2062,3 +2062,6 @@
   - `EmbeddingBatchServiceTest` 全部 16 个 @DisplayName 注解和内联注释翻译为英文
   - 1569 tests 全通过（core 1432/api 66/documents 29/starter 42）
   - commit 69bfa0a 已推送
+
+## Cron 进度（WebUI — 2026-04-09 23:44 — 常规巡检）
+- ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest tests 全通过）/ npm run build ✅（97.89 KB index gzipped，28 chunks，BarChart 346KB 按需加载）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（health: UP，database: UP，pgvector: UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
