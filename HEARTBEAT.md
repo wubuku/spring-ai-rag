@@ -138,6 +138,12 @@
 | 63 | HierarchicalTextChunker 使用 RagProperties 配置（消除硬编码） | 代码质量 | ✅ 2026-04-03 |
 | 64 | CacheMetricsController 补 Swagger 注解 | 文档 | ✅ 2026-04-03 |
 
+## 待办（主动巡检 — 2026-04-09）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 65 | 嵌入模型断路器（EmbeddingCircuitBreaker） | 弹性 | ✅ 2026-04-09 |
+
 - 2026-04-04 06:45 — 🔍 主动巡检（cron）：mvn clean compile ✅，JaCoCo 覆盖率分析——Core 模块 91% 指令/78% 分支，config.logging 43% 分支（regex 分支正常）；EmbeddingModelConfig/VectorStoreConfig 0%（@ConditionalOnProperty 路径，测试环境不激活属于正常）；无待处理变更，无 ⏳ 待办，项目处于生产级成熟状态
 
 - 2026-04-03 06:39 — ✅ 主动巡检（cron）：ApiCompatibilityAdapter.normalizeMessages() 默认方法补 6 个单元测试（单 system 合并/不变/无 system/空列表、多 system 模式透传、ChatMessage record），825 测试全通过
@@ -2045,3 +2051,14 @@
   - 1421 tests 全通过，零失败零错误
   - commit 29d1434 已推送
   - 仍有 ~28 个测试文件含中文 @DisplayName（约 360 处），继续推进 R6
+
+## Cron 进度（2026-04-09 23:40 — 嵌入模型断路器 EmbeddingCircuitBreaker）
+- ✅ 嵌入模型断路器（EmbeddingCircuitBreaker）：
+  - 新增 `EmbeddingCircuitBreakerProperties`（`rag.embedding-circuit-breaker.*` 配置）
+  - `LlmCircuitBreaker` 新增第二构造函数接受 `EmbeddingCircuitBreakerProperties`（复用滑动窗口算法）
+  - `EmbeddingBatchService` 集成断路器：OPEN 状态立即拒绝批次，返回 "circuit breaker open" 错误，无需调用 embedding API
+  - `application.yml` 添加 `rag.embedding-circuit-breaker.*` 配置注释
+  - `EmbeddingBatchServiceTest` 新增 4 个断路器测试（CLOSED 允许/OPEN 拒绝/无断路器/批量失败记录）
+  - `EmbeddingBatchServiceTest` 全部 16 个 @DisplayName 注解和内联注释翻译为英文
+  - 1569 tests 全通过（core 1432/api 66/documents 29/starter 42）
+  - commit 69bfa0a 已推送
