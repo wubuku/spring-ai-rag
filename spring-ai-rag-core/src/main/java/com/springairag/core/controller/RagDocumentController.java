@@ -8,6 +8,7 @@ import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -43,6 +44,7 @@ import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -189,8 +191,19 @@ public class RagDocumentController {
         var pageResult = documentRepository.searchDocuments(
                 title, documentType, processingStatus, enabled, collectionId, pageable);
 
+        // Batch-fetch collection names to avoid N+1 queries (one findById per document)
+        List<Long> collectionIds = pageResult.getContent().stream()
+                .map(RagDocument::getCollectionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> collectionNameMap = collectionIds.isEmpty()
+                ? Map.of()
+                : collectionRepository.findAllById(collectionIds).stream()
+                        .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
+
         List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(doc -> documentToMap(doc, collectionRepository))
+                .map(doc -> documentToMap(doc, collectionNameMap))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
@@ -723,6 +736,46 @@ public class RagDocumentController {
 
     // ==================== Helper Methods ====================
 
+    /**
+     * Batch-friendly variant: uses pre-built collection-name map to avoid N+1 queries.
+     */
+    private Map<String, Object> documentToMap(RagDocument doc, Map<Long, String> collectionNameMap) {
+        Map<String, Object> map = new HashMap<>();
+        map.put("id", doc.getId());
+        map.put("title", doc.getTitle());
+        map.put("source", doc.getSource());
+        map.put("documentType", doc.getDocumentType());
+        map.put("enabled", doc.getEnabled());
+        map.put("createdAt", doc.getCreatedAt());
+        map.put("updatedAt", doc.getUpdatedAt());
+        map.put("processingStatus", doc.getProcessingStatus());
+        map.put("size", doc.getSize());
+        map.put("contentHash", doc.getContentHash());
+
+        // Collection association (pre-fetched)
+        Long collectionId = doc.getCollectionId();
+        map.put("collectionId", collectionId);
+        if (collectionId != null) {
+            String name = collectionNameMap.get(collectionId);
+            if (name != null) map.put("collectionName", name);
+        }
+
+        // Chunk count
+        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+        map.put("chunkCount", chunkCount);
+
+        if (doc.getContent() != null) {
+            map.put("content", doc.getContent());
+        }
+        if (doc.getMetadata() != null) {
+            map.put("metadata", doc.getMetadata());
+        }
+        return map;
+    }
+
+    /**
+     * Single-document variant: fetches collection name on demand.
+     */
     private Map<String, Object> documentToMap(RagDocument doc, RagCollectionRepository collectionRepository) {
         Map<String, Object> map = new HashMap<>();
         map.put("id", doc.getId());
