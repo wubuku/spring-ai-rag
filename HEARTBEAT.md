@@ -2021,3 +2021,6 @@
 
 ## Cron 进度（2026-04-09 18:47 — reembedMissing DTO 化）
 - 2026-04-09 18:47 — ✅ reembedMissing API 一致性改造：`POST /embed-vector-reembed` 端点 `Map<String, Object>` 返回 → `ReembedMissingResponse` + `ReembedResultResponse` DTOs（total/success/failed/results）；新增 `ReembedResultResponse`（documentId/title/status/chunks/message）和 `ReembedMissingResponse`（total/success/failed/results）；`RagDocumentController.reembedMissing()` 重构；RagDocumentControllerTest 新增 4 个测试覆盖空结果/全成功/部分失败/force标志；43 tests（was 39，+4）；mvn test ✅（BUILD SUCCESS）；commit a890db1 已推送
+
+## Cron 进度（2026-04-09 18:49 — WebUI 常规巡检）
+- 2026-04-09 18:49 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest tests 全通过）/ npm run build ✅（97.89 KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
