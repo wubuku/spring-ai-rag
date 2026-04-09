@@ -2105,3 +2105,13 @@
   - 更新 `RagControllerIntegrationTest.CollectionTests`：改用 service mock
   - commit cf805a5 已推送
   - 测试全通过：1453 tests（+11 新测试），BUILD SUCCESS
+
+
+## Cron 进度（2026-04-10 02:15 — EmbeddingModelRouterTest 全面重构）
+
+- 2026-04-10 02:15 — ✅ EmbeddingModelRouterTest 全面重构
+  - 发现：原有 EmbeddingModelRouterTest 3 个测试仅验证 ModelRegistry mock 行为，未测试 EmbeddingModelRouter 自身
+  - 重写为 22 个嵌套测试类（Resolve/GetAvailableProviders/GetPrimary/GetAllOrdered/GetFallbacks）
+  - EmbeddingModelRouter 新增 package-private 构造函数 `EmbeddingModelRouter(ModelRegistry, Map<String, EmbeddingModel>)` 供测试直接注入模型
+  - 所有 1484+ tests 全通过，BUILD SUCCESS
+  - commit 492f11f 已推送
