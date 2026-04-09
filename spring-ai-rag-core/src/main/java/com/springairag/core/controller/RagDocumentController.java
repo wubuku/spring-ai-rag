@@ -23,6 +23,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -165,7 +166,7 @@ public class RagDocumentController {
 
         return documentRepository.findById(id)
                 .map(doc -> {
-                    Map<String, Object> result = documentToMap(doc, collectionRepository);
+                    Map<String, Object> result = DocumentMapper.toMap(doc, collectionRepository, embeddingRepository);
                     return ResponseEntity.ok(result);
                 })
                 .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -207,7 +208,7 @@ public class RagDocumentController {
                         .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(doc -> documentToMap(doc, collectionNameMap))
+                .map(doc -> DocumentMapper.toMap(doc, collectionNameMap, embeddingRepository))
                 .collect(Collectors.toList());
 
         return ResponseEntity.ok(Map.of(
@@ -717,7 +718,7 @@ public class RagDocumentController {
         result.put("totalVersions", versions.getTotalElements());
         result.put("page", page);
         result.put("size", size);
-        result.put("versions", versions.getContent().stream().map(this::versionToMap).collect(Collectors.toList()));
+        result.put("versions", versions.getContent().stream().map(DocumentMapper::toVersionMap).collect(Collectors.toList()));
         return ResponseEntity.ok(result);
     }
 
@@ -732,102 +733,11 @@ public class RagDocumentController {
             @Parameter(description = "Version number") @PathVariable int versionNumber) {
 
         return documentVersionService.getVersion(id, versionNumber)
-                .map(v -> ResponseEntity.ok(versionToMap(v)))
+                .map(v -> ResponseEntity.ok(DocumentMapper.toVersionMap(v)))
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ==================== Helper Methods ====================
-
-    /**
-     * Batch-friendly variant: uses pre-built collection-name map to avoid N+1 queries.
-     */
-    private Map<String, Object> documentToMap(RagDocument doc, Map<Long, String> collectionNameMap) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", doc.getId());
-        map.put("title", doc.getTitle());
-        map.put("source", doc.getSource());
-        map.put("documentType", doc.getDocumentType());
-        map.put("enabled", doc.getEnabled());
-        map.put("createdAt", doc.getCreatedAt());
-        map.put("updatedAt", doc.getUpdatedAt());
-        map.put("processingStatus", doc.getProcessingStatus());
-        map.put("size", doc.getSize());
-        map.put("contentHash", doc.getContentHash());
-
-        // Collection association (pre-fetched)
-        Long collectionId = doc.getCollectionId();
-        map.put("collectionId", collectionId);
-        if (collectionId != null) {
-            String name = collectionNameMap.get(collectionId);
-            if (name != null) map.put("collectionName", name);
-        }
-
-        // Chunk count
-        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
-        map.put("chunkCount", chunkCount);
-
-        if (doc.getContent() != null) {
-            map.put("content", doc.getContent());
-        }
-        if (doc.getMetadata() != null) {
-            map.put("metadata", doc.getMetadata());
-        }
-        return map;
-    }
-
-    /**
-     * Single-document variant: fetches collection name on demand.
-     */
-    private Map<String, Object> documentToMap(RagDocument doc, RagCollectionRepository collectionRepository) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", doc.getId());
-        map.put("title", doc.getTitle());
-        map.put("source", doc.getSource());
-        map.put("documentType", doc.getDocumentType());
-        map.put("enabled", doc.getEnabled());
-        map.put("createdAt", doc.getCreatedAt());
-        map.put("updatedAt", doc.getUpdatedAt());
-        map.put("processingStatus", doc.getProcessingStatus());
-        map.put("size", doc.getSize());
-        map.put("contentHash", doc.getContentHash());
-
-        // Collection association
-        Long collectionId = doc.getCollectionId();
-        map.put("collectionId", collectionId);
-        if (collectionId != null) {
-            var collection = collectionRepository.findById(collectionId);
-            collection.ifPresent(c -> map.put("collectionName", c.getName()));
-        }
-
-        // Chunk count
-        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
-        map.put("chunkCount", chunkCount);
-
-        if (doc.getContent() != null) {
-            map.put("content", doc.getContent());
-        }
-        if (doc.getMetadata() != null) {
-            map.put("metadata", doc.getMetadata());
-        }
-        return map;
-    }
-
-    private Map<String, Object> versionToMap(RagDocumentVersion v) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", v.getId());
-        map.put("documentId", v.getDocumentId());
-        map.put("versionNumber", v.getVersionNumber());
-        map.put("contentHash", v.getContentHash());
-        map.put("size", v.getSize());
-        map.put("changeType", v.getChangeType());
-        map.put("changeDescription", v.getChangeDescription());
-        map.put("createdAt", v.getCreatedAt());
-        // Content snapshot only returned in single version details, omitted in list to save bandwidth
-        if (v.getContentSnapshot() != null) {
-            map.put("contentSnapshot", v.getContentSnapshot());
-        }
-        return map;
-    }
+    // ==================== Audit Logging Helpers ====================
 
     // Null-safe audit logging helpers (AuditLogService is optional)
     private void auditCreate(String entityType, String entityId, String message) {

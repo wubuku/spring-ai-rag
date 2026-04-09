@@ -1,0 +1,230 @@
+package com.springairag.core.util;
+
+import com.springairag.core.entity.RagCollection;
+import com.springairag.core.entity.RagDocument;
+import com.springairag.core.entity.RagDocumentVersion;
+import com.springairag.core.repository.RagCollectionRepository;
+import com.springairag.core.repository.RagEmbeddingRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Nested;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.time.LocalDateTime;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Optional;
+
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.*;
+
+@ExtendWith(MockitoExtension.class)
+@DisplayName("DocumentMapper Tests")
+class DocumentMapperTest {
+
+    @Mock
+    private RagCollectionRepository collectionRepository;
+
+    @Mock
+    private RagEmbeddingRepository embeddingRepository;
+
+    private RagDocument sampleDocument;
+
+    @BeforeEach
+    void setUp() {
+        sampleDocument = new RagDocument();
+        sampleDocument.setId(1L);
+        sampleDocument.setTitle("Test Document");
+        sampleDocument.setSource("test-source");
+        sampleDocument.setDocumentType("TEXT");
+        sampleDocument.setEnabled(true);
+        sampleDocument.setCreatedAt(LocalDateTime.now());
+        sampleDocument.setUpdatedAt(LocalDateTime.now());
+        sampleDocument.setProcessingStatus("COMPLETED");
+        sampleDocument.setSize(1024L);
+        sampleDocument.setContentHash("abc123");
+    }
+
+    @Nested
+    @DisplayName("toMap (batch variant)")
+    class BatchVariantTests {
+
+        @Test
+        @DisplayName("maps core fields correctly")
+        void mapsCoreFieldsCorrectly() {
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertEquals(1L, result.get("id"));
+            assertEquals("Test Document", result.get("title"));
+            assertEquals("test-source", result.get("source"));
+            assertEquals("TEXT", result.get("documentType"));
+            assertEquals(true, result.get("enabled"));
+            assertEquals("COMPLETED", result.get("processingStatus"));
+            assertEquals(1024L, result.get("size"));
+            assertEquals("abc123", result.get("contentHash"));
+            assertEquals(5L, result.get("chunkCount"));
+        }
+
+        @Test
+        @DisplayName("uses pre-built collection name map")
+        void usesPrebuiltCollectionNameMap() {
+            Map<Long, String> collectionMap = Map.of(10L, "Knowledge Base A");
+            sampleDocument.setCollectionId(10L);
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, collectionMap, embeddingRepository);
+
+            assertEquals(10L, result.get("collectionId"));
+            assertEquals("Knowledge Base A", result.get("collectionName"));
+            verify(collectionRepository, never()).findById(anyLong());
+        }
+
+        @Test
+        @DisplayName("skips collection name when not in map")
+        void skipsCollectionNameWhenNotInMap() {
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            sampleDocument.setCollectionId(99L);
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertEquals(99L, result.get("collectionId"));
+            assertNull(result.get("collectionName"));
+        }
+
+        @Test
+        @DisplayName("includes optional content and metadata")
+        void includesOptionalFields() {
+            sampleDocument.setContent("Document body text");
+            Map<String, Object> metadata = Map.of("author", "tester");
+            sampleDocument.setMetadata(metadata);
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertEquals("Document body text", result.get("content"));
+            assertEquals(metadata, result.get("metadata"));
+        }
+
+        @Test
+        @DisplayName("handles null content and metadata gracefully")
+        void handlesNullOptionalFields() {
+            sampleDocument.setContent(null);
+            sampleDocument.setMetadata(null);
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertNull(result.get("content"));
+            assertNull(result.get("metadata"));
+        }
+    }
+
+    @Nested
+    @DisplayName("toMap (single-document variant)")
+    class SingleVariantTests {
+
+        @Test
+        @DisplayName("fetches collection name on demand")
+        void fetchesCollectionNameOnDemand() {
+            sampleDocument.setCollectionId(20L);
+            RagCollection collection = new RagCollection();
+            collection.setName("On-Demand Collection");
+            when(collectionRepository.findById(20L)).thenReturn(Optional.of(collection));
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, collectionRepository, embeddingRepository);
+
+            assertEquals(20L, result.get("collectionId"));
+            assertEquals("On-Demand Collection", result.get("collectionName"));
+            verify(collectionRepository).findById(20L);
+        }
+
+        @Test
+        @DisplayName("handles missing collection gracefully")
+        void handlesMissingCollection() {
+            sampleDocument.setCollectionId(999L);
+            when(collectionRepository.findById(999L)).thenReturn(Optional.empty());
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, collectionRepository, embeddingRepository);
+
+            assertEquals(999L, result.get("collectionId"));
+            assertNull(result.get("collectionName"));
+        }
+
+        @Test
+        @DisplayName("maps same core fields as batch variant")
+        void mapsSameCoreFieldsAsBatchVariant() {
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(3L);
+
+            Map<String, Object> result = DocumentMapper.toMap(sampleDocument, collectionRepository, embeddingRepository);
+
+            assertEquals(1L, result.get("id"));
+            assertEquals("Test Document", result.get("title"));
+            assertEquals(3L, result.get("chunkCount"));
+            assertNull(result.get("collectionName")); // no collection set
+        }
+    }
+
+    @Nested
+    @DisplayName("toVersionMap")
+    class VersionMapTests {
+
+        @Test
+        @DisplayName("maps all version fields correctly")
+        void mapsAllVersionFieldsCorrectly() {
+            RagDocumentVersion version = new RagDocumentVersion();
+            version.setId(100L);
+            version.setDocumentId(1L);
+            version.setVersionNumber(2);
+            version.setContentHash("hash-v2");
+            version.setSize(2048L);
+            version.setChangeType("UPDATE");
+            version.setChangeDescription("Updated content");
+            version.setCreatedAt(LocalDateTime.now());
+            version.setContentSnapshot("Full content at this version");
+
+            Map<String, Object> result = DocumentMapper.toVersionMap(version);
+
+            assertEquals(100L, result.get("id"));
+            assertEquals(1L, result.get("documentId"));
+            assertEquals(2, result.get("versionNumber"));
+            assertEquals("hash-v2", result.get("contentHash"));
+            assertEquals(2048L, result.get("size"));
+            assertEquals("UPDATE", result.get("changeType"));
+            assertEquals("Updated content", result.get("changeDescription"));
+            assertEquals("Full content at this version", result.get("contentSnapshot"));
+        }
+
+        @Test
+        @DisplayName("omits null content snapshot")
+        void omitsNullContentSnapshot() {
+            RagDocumentVersion version = new RagDocumentVersion();
+            version.setId(101L);
+            version.setDocumentId(1L);
+            version.setVersionNumber(3);
+            version.setContentHash("hash-v3");
+            version.setSize(512L);
+            version.setChangeType("CREATE");
+            version.setChangeDescription("Initial version");
+            version.setCreatedAt(LocalDateTime.now());
+            version.setContentSnapshot(null);
+
+            Map<String, Object> result = DocumentMapper.toVersionMap(version);
+
+            assertNull(result.get("contentSnapshot"));
+            assertFalse(result.containsKey("contentSnapshot"));
+        }
+    }
+}
