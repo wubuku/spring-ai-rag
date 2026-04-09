@@ -29,6 +29,12 @@ public class RagDocument {
     private Long id;
 
     /**
+     * Optimistic locking version field.
+     */
+    @Version
+    private Long version;
+
+    /**
      * Owning collection ID (FK → rag_collection)
      */
     @Column(name = "collection_id")

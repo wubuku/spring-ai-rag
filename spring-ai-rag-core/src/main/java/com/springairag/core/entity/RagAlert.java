@@ -26,6 +26,10 @@ public class RagAlert {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic locking version field. */
+    @Version
+    private Long version;
+
     /** Alert type: THRESHOLD_HIGH / THRESHOLD_LOW / SLO_BREACH */
     @Column(name = "alert_type", nullable = false, length = 50)
     private String alertType;

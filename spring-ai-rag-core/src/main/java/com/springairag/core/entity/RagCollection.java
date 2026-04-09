@@ -23,6 +23,14 @@ public class RagCollection {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /**
+     * Optimistic locking version field.
+     * Automatically incremented by Hibernate on each update.
+     * Throws OptimisticLockException on concurrent modification.
+     */
+    @Version
+    private Long version;
+
     @Column(nullable = false, length = 255)
     private String name;
 

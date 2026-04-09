@@ -27,6 +27,10 @@ public class RagSilenceSchedule {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic locking version field. */
+    @Version
+    private Long version;
+
     /** Silence name */
     @Column(name = "name", nullable = false, unique = true, length = 100)
     private String name;

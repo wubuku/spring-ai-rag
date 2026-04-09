@@ -24,6 +24,10 @@ public class RagAbExperiment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic locking version field. */
+    @Version
+    private Long version;
+
     @Column(name = "experiment_name", nullable = false, unique = true)
     private String experimentName;
 

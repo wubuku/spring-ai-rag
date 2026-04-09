@@ -27,6 +27,10 @@ public class RagUserFeedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic locking version field. */
+    @Version
+    private Long version;
+
     /** Session ID */
     @Column(name = "session_id", nullable = false)
     private String sessionId;

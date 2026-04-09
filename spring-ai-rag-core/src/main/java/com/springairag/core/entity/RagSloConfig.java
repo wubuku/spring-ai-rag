@@ -24,6 +24,10 @@ public class RagSloConfig {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    /** Optimistic locking version field. */
+    @Version
+    private Long version;
+
     /** SLO name, unique identifier */
     @Column(name = "slo_name", nullable = false, unique = true, length = 100)
     private String sloName;
