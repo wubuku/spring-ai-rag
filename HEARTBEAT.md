@@ -1964,6 +1964,10 @@
 
 - 2026-04-09 10:58 — ✅ 主动巡检（cron）：mvn test ✅（1462 测试全通过，零失败零错误）；零 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 全部完成；项目处于生产级成熟状态；更新 IMPLEMENTATION_COMPARISON.md 统计（1041→1462 测试）；commit 4d6073d 已推送
 
+## Cron 进度（2026-04-09 11:41 — 后端 i18n：非 metrics 测试文件 DisplayName 国际化）
+
+- ✅ 后端 i18n 国际化（非 metrics 测试文件 DisplayName）：翻译 13 个测试文件的 Chinese @DisplayName → English——RagAdvisorProviderTest(1)、PromptCustomizerTest(3)、GeneralRagAutoConfigurationIntegrationTest(15)、AbstractRagAdvisorTest(8)、DomainExtensionRegistryTest(11)、PromptCustomizerChainTest(4)、RagLivenessIndicatorTest(1)、ComponentHealthServiceTest(1)、RagReadinessIndicatorTest(1)、EmbeddingModelRouterTest(6)、SpringAiConfigTest(12)、EmbeddingModelConfigTest(3)、ChatModelRouterTest(6)；13 files，113 insertions, 116 deletions；67 targeted tests pass，full suite 1421 tests pass；commit a5aa591 已推送
+
 ## Cron 进度（2026-04-09 11:37 — WebUI 常规发布）
 
 - 2026-04-09 11:37 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest passed）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（HEARTBEAT.md 无变更可提交）；WebUI 项目处于生产级成熟状态
