@@ -9,25 +9,25 @@ import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("MessageSourceConfig 国际化配置")
+@DisplayName("MessageSourceConfig i18n Configuration")
 class MessageSourceConfigTest {
 
     private final MessageSourceConfig config = new MessageSourceConfig();
 
     @Test
-    @DisplayName("MessageSource Bean 创建成功")
+    @DisplayName("MessageSource Bean created successfully")
     void messageSourceCreated() {
         MessageSource messageSource = config.messageSource();
 
         assertNotNull(messageSource);
-        // 验证默认消息文件存在
+        // Verify default message file exists
         String message = messageSource.getMessage("error.rate_limit_exceeded", null, Locale.CHINA);
         assertNotNull(message);
         assertFalse(message.isEmpty());
     }
 
     @Test
-    @DisplayName("useCodeAsDefaultMessage 为 true，未知代码返回代码本身")
+    @DisplayName("useCodeAsDefaultMessage is true, unknown codes return the code itself")
     void unknownCodeFallsBackToCode() {
         MessageSource messageSource = config.messageSource();
 
@@ -37,7 +37,7 @@ class MessageSourceConfigTest {
     }
 
     @Test
-    @DisplayName("中文消息正确解析")
+    @DisplayName("Chinese message resolves correctly")
     void chineseMessageResolved() {
         MessageSource messageSource = config.messageSource();
 
@@ -47,7 +47,7 @@ class MessageSourceConfigTest {
     }
 
     @Test
-    @DisplayName("英文消息正确解析")
+    @DisplayName("English message resolves correctly")
     void englishMessageResolved() {
         MessageSource messageSource = config.messageSource();
 
@@ -57,7 +57,7 @@ class MessageSourceConfigTest {
     }
 
     @Test
-    @DisplayName("带参数消息解析")
+    @DisplayName("Message with arguments resolves correctly")
     void messageWithArgs() {
         MessageSource messageSource = config.messageSource();
 
@@ -68,7 +68,7 @@ class MessageSourceConfigTest {
     }
 
     @Test
-    @DisplayName("LocaleResolver Bean 创建成功")
+    @DisplayName("LocaleResolver Bean created successfully")
     void localeResolverCreated() {
         LocaleResolver resolver = config.localeResolver();
 
@@ -76,11 +76,11 @@ class MessageSourceConfigTest {
     }
 
     @Test
-    @DisplayName("默认 Locale 为中文")
+    @DisplayName("Default locale is Chinese")
     void defaultLocaleIsChinese() {
         LocaleResolver resolver = config.localeResolver();
 
-        // AcceptHeaderLocaleResolver 的默认 Locale
+        // AcceptHeaderLocaleResolver default locale
         assertNotNull(resolver);
     }
 }

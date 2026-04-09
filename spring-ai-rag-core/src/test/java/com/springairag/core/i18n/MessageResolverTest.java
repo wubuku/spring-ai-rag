@@ -12,7 +12,7 @@ import java.util.Locale;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
-@DisplayName("MessageResolver 国际化消息解析")
+@DisplayName("MessageResolver i18n Message Resolution")
 class MessageResolverTest {
 
     private MessageSource messageSource;
@@ -26,35 +26,35 @@ class MessageResolverTest {
     }
 
     @Nested
-    @DisplayName("resolve(code, args) 使用当前 Locale")
+    @DisplayName("resolve(code, args) Uses Current Locale")
     class ResolveWithCurrentLocale {
 
         @Test
-        @DisplayName("无参数消息解析")
+        @DisplayName("No-argument message resolution")
         void resolveWithoutArgs() {
             when(messageSource.getMessage("error.rate_limit_exceeded", new Object[0],
                     "error.rate_limit_exceeded", Locale.CHINA))
-                    .thenReturn("请求过于频繁，请稍后重试");
+                    .thenReturn("Rate limit exceeded, please retry later");
 
             String result = resolver.resolve("error.rate_limit_exceeded");
 
-            assertEquals("请求过于频繁，请稍后重试", result);
+            assertEquals("Rate limit exceeded, please retry later", result);
         }
 
         @Test
-        @DisplayName("带参数消息解析")
+        @DisplayName("Message resolution with arguments")
         void resolveWithArgs() {
             when(messageSource.getMessage(eq("error.document_not_found"), eq(new Object[]{"doc-123"}),
                     eq("error.document_not_found"), any()))
-                    .thenReturn("文档不存在: doc-123");
+                    .thenReturn("Document not found: doc-123");
 
             String result = resolver.resolve("error.document_not_found", "doc-123");
 
-            assertEquals("文档不存在: doc-123", result);
+            assertEquals("Document not found: doc-123", result);
         }
 
         @Test
-        @DisplayName("消息代码不存在时返回代码本身")
+        @DisplayName("Returns code itself when message code does not exist")
         void resolveFallbackToCode() {
             when(messageSource.getMessage(eq("unknown.code"), any(), eq("unknown.code"), any()))
                     .thenReturn("unknown.code");
@@ -65,7 +65,7 @@ class MessageResolverTest {
         }
 
         @Test
-        @DisplayName("英文 Locale 解析")
+        @DisplayName("English locale resolution")
         void resolveWithEnglishLocale() {
             LocaleContextHolder.setLocale(Locale.ENGLISH);
             when(messageSource.getMessage("error.rate_limit_exceeded", new Object[0],
@@ -79,23 +79,23 @@ class MessageResolverTest {
     }
 
     @Nested
-    @DisplayName("resolve(code, locale, args) 指定 Locale")
+    @DisplayName("resolve(code, locale, args) Explicit Locale")
     class ResolveWithExplicitLocale {
 
         @Test
-        @DisplayName("指定中文 Locale")
+        @DisplayName("Specifies Chinese locale")
         void resolveWithChineseLocale() {
             when(messageSource.getMessage("error.rate_limit_exceeded", new Object[0],
                     "error.rate_limit_exceeded", Locale.CHINA))
-                    .thenReturn("请求过于频繁，请稍后重试");
+                    .thenReturn("Rate limit exceeded, please retry later");
 
             String result = resolver.resolve("error.rate_limit_exceeded", Locale.CHINA);
 
-            assertEquals("请求过于频繁，请稍后重试", result);
+            assertEquals("Rate limit exceeded, please retry later", result);
         }
 
         @Test
-        @DisplayName("指定英文 Locale 带参数")
+        @DisplayName("Specifies English locale with arguments")
         void resolveWithEnglishLocaleAndArgs() {
             when(messageSource.getMessage(eq("error.document_not_found"), eq(new Object[]{"doc-456"}),
                     eq("error.document_not_found"), eq(Locale.ENGLISH)))
@@ -107,16 +107,16 @@ class MessageResolverTest {
         }
 
         @Test
-        @DisplayName("当前 Locale 为英文但指定中文 Locale 返回中文")
+        @DisplayName("Returns Chinese when current locale is English but Chinese is specified")
         void overrideEnglishLocaleWithChinese() {
             LocaleContextHolder.setLocale(Locale.ENGLISH);
             when(messageSource.getMessage("error.rate_limit_exceeded", new Object[0],
                     "error.rate_limit_exceeded", Locale.CHINA))
-                    .thenReturn("请求过于频繁，请稍后重试");
+                    .thenReturn("Rate limit exceeded, please retry later");
 
             String result = resolver.resolve("error.rate_limit_exceeded", Locale.CHINA);
 
-            assertEquals("请求过于频繁，请稍后重试", result);
+            assertEquals("Rate limit exceeded, please retry later", result);
         }
     }
 }

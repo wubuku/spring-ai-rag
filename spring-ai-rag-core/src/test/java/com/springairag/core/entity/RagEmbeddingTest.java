@@ -9,12 +9,12 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RagEmbedding 实体单元测试
+ * RagEmbedding Entity Unit Test
  */
 class RagEmbeddingTest {
 
     @Test
-    @DisplayName("默认构造和 getter/setter")
+    @DisplayName("Default constructor and getters/setters")
     void defaultsAndSetters() {
         var entity = new RagEmbedding();
 

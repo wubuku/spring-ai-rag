@@ -17,31 +17,31 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * PerformanceConfig 单元测试
+ * PerformanceConfig Unit Test
  */
 class PerformanceConfigTest {
 
     @Test
-    @DisplayName("ragSearchExecutor 创建成功且为守护线程")
+    @DisplayName("ragSearchExecutor created successfully and is daemon thread")
     void ragSearchExecutorCreated() {
         PerformanceConfig config = new PerformanceConfig();
         Executor executor = config.ragSearchExecutor();
         assertNotNull(executor);
 
-        // 验证可以执行任务
+        // Verify task can be executed
         var completed = new java.util.concurrent.atomic.AtomicBoolean(false);
         executor.execute(() -> completed.set(true));
 
-        // 等待任务完成
+        // Wait for task to complete
         long start = System.currentTimeMillis();
         while (!completed.get() && System.currentTimeMillis() - start < 1000) {
             Thread.yield();
         }
-        assertTrue(completed.get(), "线程池应能执行任务");
+        assertTrue(completed.get(), "Thread pool should be able to execute tasks");
     }
 
     @Test
-    @DisplayName("缓存嵌入模型代理调用原始模型")
+    @DisplayName("Cached embedding model proxy delegates to original model")
     void cachedEmbeddingModelDelegates() {
         EmbeddingModel mockDelegate = mock(EmbeddingModel.class);
         float[] fakeVector = {0.1f, 0.2f, 0.3f};
@@ -53,24 +53,24 @@ class PerformanceConfigTest {
         PerformanceConfig config = new PerformanceConfig();
         EmbeddingModel cached = config.cachedEmbeddingModel(mockDelegate, cacheManager, meterRegistry);
 
-        // 第一次调用
+        // First call
         float[] result1 = cached.embed("hello");
         assertArrayEquals(fakeVector, result1);
         verify(mockDelegate, times(1)).embed("hello");
 
-        // 第二次调用相同文本 — 应走缓存，不调用 delegate
+        // Second call with same text — should use cache, not call delegate
         float[] result2 = cached.embed("hello");
         assertArrayEquals(fakeVector, result2);
         verify(mockDelegate, times(1)).embed("hello");
 
-        // 不同文本 — 应调用 delegate
+        // Different text — should call delegate
         float[] result3 = cached.embed("world");
         assertArrayEquals(new float[]{0.4f, 0.5f, 0.6f}, result3);
         verify(mockDelegate, times(1)).embed("world");
     }
 
     @Test
-    @DisplayName("缓存嵌入模型的 call() 直接透传不做缓存")
+    @DisplayName("Cached embedding model's call() passes through directly without caching")
     void cachedEmbeddingModelCallPassthrough() {
         EmbeddingModel mockDelegate = mock(EmbeddingModel.class);
         org.springframework.ai.embedding.EmbeddingRequest request =
@@ -90,7 +90,7 @@ class PerformanceConfigTest {
     }
 
     @Test
-    @DisplayName("缓存嵌入模型返回正确的 dimensions")
+    @DisplayName("Cached embedding model returns correct dimensions")
     void cachedEmbeddingModelDimensions() {
         EmbeddingModel mockDelegate = mock(EmbeddingModel.class);
         when(mockDelegate.dimensions()).thenReturn(1024);

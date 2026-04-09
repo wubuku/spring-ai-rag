@@ -6,32 +6,32 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CacheConfig 单元测试
+ * CacheConfig Unit Test
  */
 class CacheConfigTest {
 
     private final CacheConfig config = new CacheConfig(new RagProperties());
 
     @Test
-    @DisplayName("默认缓存管理器创建成功")
+    @DisplayName("Default cache manager created successfully")
     void cacheManagerCreated() {
         assertNotNull(config.cacheManager());
     }
 
     @Test
-    @DisplayName("嵌入缓存管理器创建成功")
+    @DisplayName("Embedding cache manager created successfully")
     void embeddingCacheManagerCreated() {
         assertNotNull(config.embeddingCacheManager());
     }
 
     @Test
-    @DisplayName("两个缓存管理器是不同实例")
+    @DisplayName("Two cache managers are different instances")
     void twoCacheManagersAreDifferent() {
         assertNotSame(config.cacheManager(), config.embeddingCacheManager());
     }
 
     @Test
-    @DisplayName("自定义配置生效")
+    @DisplayName("Custom configuration takes effect")
     void customConfigTakesEffect() {
         RagProperties props = new RagProperties();
         props.getCache().setMaximumSize(500);

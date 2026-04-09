@@ -13,9 +13,9 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * MultiModelConfigLoader 单元测试：验证从外部文件系统加载 JSON 配置。
+ * MultiModelConfigLoader Unit Test: validates loading JSON config from external file system.
  *
- * <p>JSON 格式（注意：顶层是 "models" 包裹，与 MultiModelProperties 的字段名对应）：
+ * <p>JSON format (note: top-level wrapped in "models", matching MultiModelProperties field names):
  * <pre>
  * {
  *   "models": {
@@ -38,10 +38,10 @@ class MultiModelConfigLoaderTest {
         return props;
     }
 
-    // ─── 基础测试 ───────────────────────────────────────────────
+    // ─── Basic tests ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("configFile 为空时跳过加载（YAML only）")
+    @DisplayName("Skips loading when configFile is empty (YAML only)")
     void loadExternalJsonIfPresent_noConfigFile_skips() {
         MultiModelProperties props = createProperties("");
         MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
@@ -51,7 +51,7 @@ class MultiModelConfigLoaderTest {
     }
 
     @Test
-    @DisplayName("configFile 指向不存在文件时跳过加载")
+    @DisplayName("Skips loading when configFile points to non-existent file")
     void loadExternalJsonIfPresent_fileNotFound_skips() {
         MultiModelProperties props = createProperties("/nonexistent/path/models.json");
         MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
@@ -60,10 +60,10 @@ class MultiModelConfigLoaderTest {
         assertTrue(props.getProviders().isEmpty());
     }
 
-    // ─── 完整加载测试 ────────────────────────────────────────────
+    // ─── Full load test ───────────────────────────────────────────
 
     @Test
-    @DisplayName("configFile 指向真实 JSON 文件时正确加载 providers + routing")
+    @DisplayName("Loads providers and routing correctly when configFile points to valid JSON file")
     void loadExternalJsonIfPresent_validJson_loadsAll() throws IOException {
         Path jsonFile = tempDir.resolve("models.json");
         String json = """
@@ -126,12 +126,12 @@ class MultiModelConfigLoaderTest {
         MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
         loader.loadExternalJsonIfPresent();
 
-        // 验证 providers
+        // Verify providers
         assertEquals(2, props.getProviders().size());
         assertTrue(props.getProviders().containsKey("openrouter"));
         assertTrue(props.getProviders().containsKey("minimax"));
 
-        // 验证 openrouter 配置
+        // Verify openrouter config
         MultiModelProperties.ProviderConfig openrouter = props.getProviders().get("openrouter");
         assertEquals("OpenRouter", openrouter.displayName());
         assertEquals("https://openrouter.ai/api/v1", openrouter.baseUrl());
@@ -141,26 +141,26 @@ class MultiModelConfigLoaderTest {
         assertEquals("chat", openrouter.models().get(0).type());
         assertEquals(200000, openrouter.models().get(0).contextWindow());
 
-        // 验证 minimax 配置
+        // Verify minimax config
         MultiModelProperties.ProviderConfig minimax = props.getProviders().get("minimax");
         assertEquals("MiniMax", minimax.displayName());
         assertEquals("https://api.minimaxi.com", minimax.baseUrl());
 
-        // 验证 chatModel routing（格式：providerId/modelId）
+        // Verify chatModel routing (format: providerId/modelId)
         assertNotNull(props.getChatModel());
         assertEquals("openrouter/anthropic/claude-3-5-sonnet-20241022", props.getChatModel().primary());
         assertEquals(1, props.getChatModel().fallbacks().size());
         assertEquals("minimax/MiniMax-M2.7", props.getChatModel().fallbacks().get(0));
 
-        // 验证 embeddingModel routing
+        // Verify embeddingModel routing
         assertNotNull(props.getEmbeddingModel());
         assertEquals("siliconflow/BGE-M3", props.getEmbeddingModel().primary());
     }
 
-    // ─── Provider + ModelRef 测试 ─────────────────────────────────
+    // ─── Provider + ModelRef tests ───────────────────────────────
 
     @Test
-    @DisplayName("getProviderByModelRef 正确解析 providerId/modelId")
+    @DisplayName("getProviderByModelRef correctly parses providerId/modelId")
     void testGetProviderByModelRef() throws IOException {
         Path jsonFile = tempDir.resolve("models.json");
         String json = """
@@ -199,7 +199,7 @@ class MultiModelConfigLoaderTest {
     }
 
     @Test
-    @DisplayName("模型 ID 不带 provider 前缀，引用时使用 providerId/modelId")
+    @DisplayName("Model ID without provider prefix, referenced using providerId/modelId")
     void testModelIdWithoutProviderPrefix() throws IOException {
         Path jsonFile = tempDir.resolve("models.json");
         String json = """
@@ -228,12 +228,12 @@ class MultiModelConfigLoaderTest {
         MultiModelConfigLoader loader = new MultiModelConfigLoader(props);
         loader.loadExternalJsonIfPresent();
 
-        // 模型 ID 就是 "MiniMax-M2.7"（不带 "minimax/" 前缀）
+        // Model ID is "MiniMax-M2.7" (without "minimax/" prefix)
         MultiModelProperties.ModelItem model = props.getModelItem("minimax/MiniMax-M2.7");
         assertNotNull(model);
         assertEquals("MiniMax-M2.7", model.id());
 
-        // 第二个模型
+        // Second model
         MultiModelProperties.ModelItem embModel = props.getModelItem("minimax/embo-01");
         assertNotNull(embModel);
         assertEquals("embo-01", embModel.id());
@@ -241,10 +241,10 @@ class MultiModelConfigLoaderTest {
         assertEquals(1024, embModel.dimension());
     }
 
-    // ─── Embedding 模型测试 ──────────────────────────────────────
+    // ─── Embedding model tests ───────────────────────────────────
 
     @Test
-    @DisplayName("Embedding 模型配置正确加载（含 dimension）")
+    @DisplayName("Embedding model config loads correctly (including dimension)")
     void testEmbeddingModelConfig() throws IOException {
         Path jsonFile = tempDir.resolve("models.json");
         String json = """
@@ -287,10 +287,10 @@ class MultiModelConfigLoaderTest {
         assertEquals(1024, sf.models().get(0).dimension());
     }
 
-    // ─── 成本配置测试 ────────────────────────────────────────────
+    // ─── Cost config tests ───────────────────────────────────────
 
     @Test
-    @DisplayName("cost 配置正确解析（input/output/cacheRead/cacheWrite）")
+    @DisplayName("Cost config parses correctly (input/output/cacheRead/cacheWrite)")
     void testCostParsing() throws IOException {
         Path jsonFile = tempDir.resolve("models.json");
         String json = """

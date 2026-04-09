@@ -15,7 +15,7 @@ import static org.mockito.Mockito.*;
 import static org.mockito.Mockito.lenient;
 
 /**
- * ModelRegistry 单元测试（纯 Mock 方式，无需 Spring 上下文）
+ * ModelRegistry Unit Test (Pure Mock, No Spring Context Required)
  */
 class ModelRegistryTest {
 
@@ -33,11 +33,11 @@ class ModelRegistryTest {
     }
 
     private ModelRegistry buildRegistry(String... availableProviders) {
-        // 直接使用 when...thenReturn 链式调用
-        // Mock 返回 null 表示 Bean 不存在
+        // Directly use when...thenReturn chain
+        // Mock returns null to indicate Bean does not exist
         when(ctx.getBean(anyString(), eq(ChatModel.class))).thenReturn(null);
 
-        // 只为可用的 provider 配置返回值
+        // Only configure return values for available providers
         for (String p : availableProviders) {
             if ("openai".equals(p)) {
                 when(ctx.getBean("openAiChatModel", ChatModel.class)).thenReturn(mockOpenAiModel);
@@ -54,17 +54,17 @@ class ModelRegistryTest {
         return registry;
     }
 
-    // ========== init() 行为测试 ==========
+    // ========== init() behavior tests ==========
 
     @Test
-    @DisplayName("有可用 ChatModel 时注册到 providers 集合")
+    @DisplayName("Available ChatModel is registered to providers collection")
     void testInit_withAvailableModels() {
         ModelRegistry r = buildRegistry("openai");
         assertTrue(r.availableProviders().contains("openai"));
     }
 
     @Test
-    @DisplayName("无任何可用 ChatModel 时 providers 为空")
+    @DisplayName("No available ChatModel results in empty providers")
     void testInit_withNoModels() {
         when(ctx.getBean(anyString(), eq(ChatModel.class))).thenReturn(null);
         registry = new ModelRegistry(ctx, new RagProperties(), null);
@@ -72,17 +72,17 @@ class ModelRegistryTest {
         assertTrue(registry.availableProviders().isEmpty());
     }
 
-    // ========== get() 测试 ==========
+    // ========== get() tests ==========
 
     @Test
-    @DisplayName("get(openai) 返回对应的 ChatModel")
+    @DisplayName("get(openai) returns corresponding ChatModel")
     void testGet_existingProvider() {
         ModelRegistry r = buildRegistry("openai");
         assertSame(mockOpenAiModel, r.get("openai"));
     }
 
     @Test
-    @DisplayName("get(unknown) 抛出 IllegalArgumentException")
+    @DisplayName("get(unknown) throws IllegalArgumentException")
     void testGet_unknownProvider() {
         ModelRegistry r = buildRegistry("openai");
         IllegalArgumentException ex = assertThrows(
@@ -91,24 +91,24 @@ class ModelRegistryTest {
         assertTrue(ex.getMessage().contains("unknown"));
     }
 
-    // ========== isAvailable() 测试 ==========
+    // ========== isAvailable() tests ==========
 
     @Test
-    @DisplayName("已注册 provider 返回 true")
+    @DisplayName("Registered provider returns true")
     void testIsAvailable_true() {
         assertTrue(buildRegistry("openai").isAvailable("openai"));
     }
 
     @Test
-    @DisplayName("未注册 provider 返回 false")
+    @DisplayName("Unregistered provider returns false")
     void testIsAvailable_false() {
         assertFalse(buildRegistry("openai").isAvailable("minimax"));
     }
 
-    // ========== getDisplayName() 测试 ==========
+    // ========== getDisplayName() tests ==========
 
     @Test
-    @DisplayName("已知 provider 返回正确显示名")
+    @DisplayName("Known provider returns correct display name")
     void testGetDisplayName_known() {
         assertEquals("OpenAI (DeepSeek/Compatible)", buildRegistry("openai").getDisplayName("openai"));
         assertEquals("Anthropic (Claude)", buildRegistry("anthropic").getDisplayName("anthropic"));
@@ -116,15 +116,15 @@ class ModelRegistryTest {
     }
 
     @Test
-    @DisplayName("未知 provider 返回原标识")
+    @DisplayName("Unknown provider returns original identifier")
     void testGetDisplayName_unknown() {
         assertEquals("unknown", buildRegistry("openai").getDisplayName("unknown"));
     }
 
-    // ========== getModelInfo() 测试 ==========
+    // ========== getModelInfo() tests ==========
 
     @Test
-    @DisplayName("getModelInfo(openai) 返回完整信息")
+    @DisplayName("getModelInfo(openai) returns complete information")
     void testGetModelInfo() {
         ModelRegistry r = buildRegistry("openai");
         Map<String, Object> info = r.getModelInfo("openai");
@@ -134,10 +134,10 @@ class ModelRegistryTest {
         assertNotNull(info.get("className"));
     }
 
-    // ========== getAllModelsInfo() 测试 ==========
+    // ========== getAllModelsInfo() tests ==========
 
     @Test
-    @DisplayName("getAllModelsInfo 返回所有已注册模型")
+    @DisplayName("getAllModelsInfo returns all registered models")
     void testGetAllModelsInfo() {
         ModelRegistry r = buildRegistry("openai", "minimax");
         List<Map<String, Object>> all = r.getAllModelsInfo();
