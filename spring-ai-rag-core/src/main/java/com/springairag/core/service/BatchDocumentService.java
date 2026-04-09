@@ -2,6 +2,10 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchCreateResponse.DocumentResult;
+import com.springairag.api.dto.BatchDeleteItem;
+import com.springairag.api.dto.BatchDeleteResponse;
+import com.springairag.api.dto.BatchDeleteSummary;
+import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -151,7 +155,7 @@ public class BatchDocumentService {
      * @return deletion result (including number of embedding vectors deleted)
      */
     @Transactional
-    public Map<String, String> deleteDocument(Long id) {
+    public DocumentDeleteResponse deleteDocument(Long id) {
         log.info("Deleting document: id={}", id);
 
         if (!documentRepository.existsById(id)) {
@@ -164,11 +168,7 @@ public class BatchDocumentService {
 
         log.info("Document deleted: id={}, embeddings removed: {}", id, embCount);
 
-        return Map.of(
-                "message", "Document deleted",
-                "id", String.valueOf(id),
-                "embeddingsRemoved", String.valueOf(embCount)
-        );
+        return new DocumentDeleteResponse("Document deleted", id, embCount);
     }
 
     /**
@@ -178,14 +178,14 @@ public class BatchDocumentService {
      * @return batch operation result
      */
     @Transactional
-    public Map<String, Object> batchDeleteDocuments(List<Long> ids) {
+    public BatchDeleteResponse batchDeleteDocuments(List<Long> ids) {
         if (ids.size() > 100) {
             throw new IllegalArgumentException("Batch delete limited to 100 documents per request");
         }
 
         log.info("Batch deleting {} documents", ids.size());
 
-        List<Map<String, Object>> results = new ArrayList<>(ids.size());
+        List<BatchDeleteItem> results = new ArrayList<>(ids.size());
 
         // Batch delete embedding vectors
         embeddingRepository.deleteByDocumentIdIn(ids);
@@ -194,32 +194,21 @@ public class BatchDocumentService {
             results.add(deleteSingleDocument(id));
         }
 
-        int deleted = (int) results.stream().filter(r -> "DELETED".equals(r.get("status"))).count();
+        int deleted = (int) results.stream().filter(r -> "DELETED".equals(r.status())).count();
         int notFound = results.size() - deleted;
 
         log.info("Batch delete completed: {} deleted, {} not found", deleted, notFound);
 
-        return Map.of(
-                "results", results,
-                "summary", Map.of(
-                        "total", ids.size(),
-                        "deleted", deleted,
-                        "notFound", notFound
-                )
-        );
+        return new BatchDeleteResponse(results, new BatchDeleteSummary(ids.size(), deleted, notFound));
     }
 
-    private Map<String, Object> deleteSingleDocument(Long id) {
-        Map<String, Object> itemResult = new java.util.HashMap<>();
-        itemResult.put("id", id);
-
+    private BatchDeleteItem deleteSingleDocument(Long id) {
         if (documentRepository.existsById(id)) {
             documentRepository.deleteById(id);
-            itemResult.put("status", "DELETED");
+            return new BatchDeleteItem(id, "DELETED");
         } else {
-            itemResult.put("status", "NOT_FOUND");
+            return new BatchDeleteItem(id, "NOT_FOUND");
         }
-        return itemResult;
     }
 
     /**

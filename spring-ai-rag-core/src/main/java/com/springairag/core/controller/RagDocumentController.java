@@ -3,7 +3,9 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.BatchCreateAndEmbedRequest;
 import com.springairag.api.dto.BatchCreateAndEmbedResponse;
 import com.springairag.api.dto.BatchCreateResponse;
+import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
+import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
@@ -170,7 +172,7 @@ public class RagDocumentController {
     @Operation(summary = "Delete document", description = "Delete document and its associated embedding vectors (cascading delete).")
     @ApiResponse(responseCode = "200", description = "Document deleted")
     @DeleteMapping("/{id}")
-    public ResponseEntity<Map<String, String>> deleteDocument(@PathVariable Long id) {
+    public ResponseEntity<DocumentDeleteResponse> deleteDocument(@PathVariable Long id) {
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
     }
 
@@ -447,19 +449,19 @@ public class RagDocumentController {
 
     @Operation(summary = "Batch delete documents", description = "Batch delete documents and their embedding vectors by ID list. Missing IDs don't affect other deletions.")
     @DeleteMapping("/batch")
-    public ResponseEntity<Map<String, Object>> batchDeleteDocuments(
+    public ResponseEntity<BatchDeleteResponse> batchDeleteDocuments(
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("ids list cannot be empty");
         }
-        Map<String, Object> result = batchDocumentService.batchDeleteDocuments(ids);
+        BatchDeleteResponse result = batchDocumentService.batchDeleteDocuments(ids);
 
         auditDelete(AuditLogService.ENTITY_DOCUMENT,
                 "batch:" + ids.size(),
                 "Batch delete: " + ids.size() + " documents",
-                Map.of("deleted", result.getOrDefault("deleted", 0),
-                        "notFound", result.getOrDefault("notFound", 0)));
+                Map.of("deleted", result.summary().deleted(),
+                        "notFound", result.summary().notFound()));
 
         return ResponseEntity.ok(result);
     }

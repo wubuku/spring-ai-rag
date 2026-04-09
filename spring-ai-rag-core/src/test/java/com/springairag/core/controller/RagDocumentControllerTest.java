@@ -1,6 +1,10 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.BatchCreateResponse;
+import com.springairag.api.dto.BatchDeleteItem;
+import com.springairag.api.dto.BatchDeleteResponse;
+import com.springairag.api.dto.BatchDeleteSummary;
+import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -156,17 +160,14 @@ class RagDocumentControllerTest {
 
     @Test
     void deleteDocument_found() {
-        when(batchDocumentService.deleteDocument(1L)).thenReturn(Map.of(
-                "message", "Document deleted",
-                "id", "1",
-                "embeddingsRemoved", "3"
-        ));
+        when(batchDocumentService.deleteDocument(1L)).thenReturn(
+                new DocumentDeleteResponse("Document deleted", 1L, 3L));
 
-        ResponseEntity<Map<String, String>> response = controller.deleteDocument(1L);
+        ResponseEntity<DocumentDeleteResponse> response = controller.deleteDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Document deleted", response.getBody().get("message"));
-        assertEquals("3", response.getBody().get("embeddingsRemoved"));
+        assertEquals("Document deleted", response.getBody().message());
+        assertEquals(3L, response.getBody().embeddingsRemoved());
         verify(batchDocumentService).deleteDocument(1L);
     }
 
@@ -443,39 +444,31 @@ class RagDocumentControllerTest {
 
     @Test
     void batchDeleteDocuments_success() {
-        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 2L))).thenReturn(Map.of(
-                "results", List.of(
-                        Map.of("id", 1L, "status", "DELETED"),
-                        Map.of("id", 2L, "status", "DELETED")
-                ),
-                "summary", Map.of("total", 2, "deleted", 2, "notFound", 0)
-        ));
+        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 2L))).thenReturn(
+                new BatchDeleteResponse(
+                        List.of(new BatchDeleteItem(1L, "DELETED"), new BatchDeleteItem(2L, "DELETED")),
+                        new BatchDeleteSummary(2, 2, 0)));
 
-        ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
+        ResponseEntity<BatchDeleteResponse> response = controller.batchDeleteDocuments(
                 Map.of("ids", List.of(1L, 2L)));
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(2, summary.get("deleted"));
+        assertEquals(2, response.getBody().summary().deleted());
     }
 
     @Test
     void batchDeleteDocuments_someNotFound() {
-        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 999L))).thenReturn(Map.of(
-                "results", List.of(
-                        Map.of("id", 1L, "status", "DELETED"),
-                        Map.of("id", 999L, "status", "NOT_FOUND")
-                ),
-                "summary", Map.of("total", 2, "deleted", 1, "notFound", 1)
-        ));
+        when(batchDocumentService.batchDeleteDocuments(List.of(1L, 999L))).thenReturn(
+                new BatchDeleteResponse(
+                        List.of(new BatchDeleteItem(1L, "DELETED"), new BatchDeleteItem(999L, "NOT_FOUND")),
+                        new BatchDeleteSummary(2, 1, 1)));
 
-        ResponseEntity<Map<String, Object>> response = controller.batchDeleteDocuments(
+        ResponseEntity<BatchDeleteResponse> response = controller.batchDeleteDocuments(
                 Map.of("ids", List.of(1L, 999L)));
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(1, summary.get("deleted"));
-        assertEquals(1, summary.get("notFound"));
+        assertEquals(1, response.getBody().summary().deleted());
+        assertEquals(1, response.getBody().summary().notFound());
     }
 
     @Test

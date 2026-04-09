@@ -1,6 +1,9 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.BatchCreateResponse;
+import com.springairag.api.dto.BatchDeleteItem;
+import com.springairag.api.dto.BatchDeleteResponse;
+import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -230,11 +233,11 @@ class BatchDocumentServiceTest {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
 
-        Map<String, String> result = service.deleteDocument(1L);
+        DocumentDeleteResponse result = service.deleteDocument(1L);
 
-        assertEquals("Document deleted", result.get("message"));
-        assertEquals("1", result.get("id"));
-        assertEquals("5", result.get("embeddingsRemoved"));
+        assertEquals("Document deleted", result.message());
+        assertEquals(1L, result.id());
+        assertEquals(5L, result.embeddingsRemoved());
         verify(embeddingRepository).deleteByDocumentId(1L);
         verify(documentRepository).deleteById(1L);
     }
@@ -257,13 +260,11 @@ class BatchDocumentServiceTest {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.existsById(2L)).thenReturn(true);
 
-        Map<String, Object> output = service.batchDeleteDocuments(List.of(1L, 2L));
+        BatchDeleteResponse output = service.batchDeleteDocuments(List.of(1L, 2L));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(2, summary.get("total"));
-        assertEquals(2, summary.get("deleted"));
-        assertEquals(0, summary.get("notFound"));
+        assertEquals(2, output.summary().total());
+        assertEquals(2, output.summary().deleted());
+        assertEquals(0, output.summary().notFound());
 
         verify(embeddingRepository).deleteByDocumentIdIn(List.of(1L, 2L));
         verify(documentRepository).deleteById(1L);
@@ -275,12 +276,10 @@ class BatchDocumentServiceTest {
     void batchDeleteDocuments_notFound() {
         when(documentRepository.existsById(99L)).thenReturn(false);
 
-        Map<String, Object> output = service.batchDeleteDocuments(List.of(99L));
+        BatchDeleteResponse output = service.batchDeleteDocuments(List.of(99L));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(1, summary.get("notFound"));
-        assertEquals(0, summary.get("deleted"));
+        assertEquals(1, output.summary().notFound());
+        assertEquals(0, output.summary().deleted());
 
         verify(documentRepository, never()).deleteById(any());
     }
@@ -291,17 +290,18 @@ class BatchDocumentServiceTest {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.existsById(2L)).thenReturn(false);
 
-        Map<String, Object> output = service.batchDeleteDocuments(List.of(1L, 2L));
+        BatchDeleteResponse output = service.batchDeleteDocuments(List.of(1L, 2L));
 
-        @SuppressWarnings("unchecked")
-        Map<String, Object> summary = (Map<String, Object>) output.get("summary");
-        assertEquals(1, summary.get("deleted"));
-        assertEquals(1, summary.get("notFound"));
+        assertEquals(1, output.summary().deleted());
+        assertEquals(1, output.summary().notFound());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> results = (List<Map<String, Object>>) output.get("results");
-        assertEquals("DELETED", results.get(0).get("status"));
-        assertEquals("NOT_FOUND", results.get(1).get("status"));
+        BatchDeleteItem r1 = output.results().get(0);
+        assertEquals(1L, r1.id());
+        assertEquals("DELETED", r1.status());
+
+        BatchDeleteItem r2 = output.results().get(1);
+        assertEquals(2L, r2.id());
+        assertEquals("NOT_FOUND", r2.status());
     }
 
     @Test
