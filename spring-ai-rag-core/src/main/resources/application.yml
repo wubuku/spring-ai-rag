@@ -311,6 +311,12 @@ rag:
   #   minimum-number-of-calls: 10     # Min calls in sliding window
   #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
   #   sliding-window-size: 20         # Sliding window size
+  # embedding-circuit-breaker:
+  #   enabled: true
+  #   failure-rate-threshold: 50      # Failure rate threshold (%), trip when exceeded
+  #   minimum-number-of-calls: 10     # Min calls in sliding window
+  #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
+  #   sliding-window-size: 20         # Sliding window size
 
   # CORS configuration — enable for WebUI development
   cors:

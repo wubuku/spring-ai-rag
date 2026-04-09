@@ -50,6 +50,7 @@ public class RagProperties {
     private final RagCacheProperties cache = new RagCacheProperties();
     private final RagTracingProperties tracing = new RagTracingProperties();
     private final RagCircuitBreakerProperties circuitBreaker = new RagCircuitBreakerProperties();
+    private final EmbeddingCircuitBreakerProperties embeddingCircuitBreaker = new EmbeddingCircuitBreakerProperties();
     private final RagTimeoutProperties timeout = new RagTimeoutProperties();
     private final RagProxyProperties proxy = new RagProxyProperties();
     private final RagSlowQueryProperties slowQuery = new RagSlowQueryProperties();
@@ -105,6 +106,10 @@ public class RagProperties {
 
     public RagCircuitBreakerProperties getCircuitBreaker() {
         return circuitBreaker;
+    }
+
+    public EmbeddingCircuitBreakerProperties getEmbeddingCircuitBreaker() {
+        return embeddingCircuitBreaker;
     }
 
     public RagTimeoutProperties getTimeout() {

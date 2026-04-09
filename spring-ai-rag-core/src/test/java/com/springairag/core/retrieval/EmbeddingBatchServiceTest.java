@@ -1,5 +1,7 @@
 package com.springairag.core.retrieval;
 
+import com.springairag.core.config.EmbeddingCircuitBreakerProperties;
+import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -17,7 +19,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * EmbeddingBatchService 单元测试
+ * EmbeddingBatchService Unit Tests
  */
 class EmbeddingBatchServiceTest {
 
@@ -39,7 +41,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("批量 API 调用成功——一次性处理所有文本")
+    @DisplayName("Batch API succeeds — all texts processed in one batch")
     void createEmbeddingsBatch_batchApiSuccess() {
         float[] vec1 = {0.1f, 0.2f, 0.3f};
         float[] vec2 = {0.4f, 0.5f, 0.6f};
@@ -57,20 +59,20 @@ class EmbeddingBatchServiceTest {
         assertArrayEquals(vec1, results.get(0).getEmbedding());
         assertArrayEquals(vec2, results.get(1).getEmbedding());
 
-        // 验证只调用了一次批量 API，而非两次 embed(text)
+        // Verify batch API called once, not individual embed(text) twice
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
         verify(embeddingModel, never()).embed(anyString());
     }
 
     @Test
-    @DisplayName("批量 API 失败时降级为逐条调用")
+    @DisplayName("Batch API fails — degrades to sequential embedding")
     void createEmbeddingsBatch_batchApiFails_fallbackToSequential() {
         float[] vec1 = {0.1f, 0.2f};
         float[] vec2 = {0.3f, 0.4f};
-        // 批量 API 抛异常
+        // Batch API throws
         when(embeddingModel.call(any(EmbeddingRequest.class)))
                 .thenThrow(new RuntimeException("Batch API error"));
-        // 逐条调用成功
+        // Sequential calls succeed
         when(embeddingModel.embed("text1")).thenReturn(vec1);
         when(embeddingModel.embed("text2")).thenReturn(vec2);
 
@@ -83,13 +85,13 @@ class EmbeddingBatchServiceTest {
         assertArrayEquals(vec1, results.get(0).getEmbedding());
         assertArrayEquals(vec2, results.get(1).getEmbedding());
 
-        // 验证尝试了批量 API，然后降级到逐条
+        // Verify batch API tried first, then degraded to sequential
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
         verify(embeddingModel, times(2)).embed(anyString());
     }
 
     @Test
-    @DisplayName("逐条降级时部分失败继续处理")
+    @DisplayName("Sequential fallback — partial failure continues processing")
     void createEmbeddingsBatch_sequentialFallback_partialFailure() {
         float[] vec1 = {0.1f, 0.2f};
         when(embeddingModel.call(any(EmbeddingRequest.class)))
@@ -109,7 +111,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("超过 batchSize 时分批调用批量 API")
+    @DisplayName("Exceeds batchSize — splits into multiple batches")
     void createEmbeddingsBatch_exceedsBatchSize_splitsIntoBatches() {
         EmbeddingBatchService smallBatchService = new EmbeddingBatchService(embeddingModel, 2);
 
@@ -128,12 +130,12 @@ class EmbeddingBatchServiceTest {
         assertTrue(results.get(1).isSuccess());
         assertTrue(results.get(2).isSuccess());
 
-        // 验证分了 2 批：第一批 ["a","b"]，第二批 ["c"]
+        // Verify 2 batches: ["a","b"] then ["c"]
         verify(embeddingModel, times(2)).call(any(EmbeddingRequest.class));
     }
 
     @Test
-    @DisplayName("空输入返回空列表")
+    @DisplayName("Empty input returns empty list")
     void createEmbeddingsBatch_emptyInput_returnsEmpty() {
         List<EmbeddingBatchService.EmbeddingResult> results = service.createEmbeddingsBatch(List.of());
         assertTrue(results.isEmpty());
@@ -141,14 +143,14 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("null 输入返回空列表")
+    @DisplayName("null input returns empty list")
     void createEmbeddingsBatch_nullInput_returnsEmpty() {
         List<EmbeddingBatchService.EmbeddingResult> results = service.createEmbeddingsBatch(null);
         assertTrue(results.isEmpty());
     }
 
     @Test
-    @DisplayName("进度回调报告正确进度")
+    @DisplayName("Progress callback reports correct progress")
     void createEmbeddingsBatch_withProgressCallback() {
         float[] vec = {0.1f};
         when(embeddingModel.call(any(EmbeddingRequest.class)))
@@ -167,7 +169,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("null 回调不抛异常")
+    @DisplayName("null callback does not throw")
     void createEmbeddingsBatch_nullCallback_doesNotThrow() {
         float[] vec = {0.1f};
         when(embeddingModel.call(any(EmbeddingRequest.class)))
@@ -177,7 +179,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入成功结果字段正确")
+    @DisplayName("Embedding success result fields are correct")
     void embeddingResult_successFields() {
         float[] vec = {0.1f, 0.2f};
         EmbeddingBatchService.EmbeddingResult result =
@@ -190,7 +192,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入失败结果字段正确")
+    @DisplayName("Embedding failure result fields are correct")
     void embeddingResult_failureFields() {
         EmbeddingBatchService.EmbeddingResult result =
                 new EmbeddingBatchService.EmbeddingResult("text", null, "error");
@@ -202,7 +204,7 @@ class EmbeddingBatchServiceTest {
     }
 
     @Test
-    @DisplayName("batchSize=0 使用默认值 10")
+    @DisplayName("batchSize=0 uses default value of 10")
     void constructor_zeroBatchSize_usesDefault() {
         EmbeddingBatchService defaultService = new EmbeddingBatchService(embeddingModel, 0);
 
@@ -211,21 +213,109 @@ class EmbeddingBatchServiceTest {
                 .thenReturn(mockBatchResponse(vec));
 
         defaultService.createEmbeddingsBatch(List.of("a"));
-        // 应该一次批量调用处理完（batchSize 默认为 10）
+        // Should complete in 1 batch call (default batchSize=10)
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
     }
 
     @Test
-    @DisplayName("两参数构造函数使用默认 batchSize=10")
+    @DisplayName("Two-arg constructor uses default batchSize=10")
     void twoArgConstructor_usesDefaultBatchSize() {
-        EmbeddingBatchService defaultService = new EmbeddingBatchService(embeddingModel);
+        EmbeddingBatchService defaultService = new EmbeddingBatchService(embeddingModel, 10);
 
-        // 5 个文本应该在 1 批内处理完（默认 batchSize=10）
+        // 5 texts should complete in 1 batch (default batchSize=10)
         float[] vec = {0.1f};
         when(embeddingModel.call(any(EmbeddingRequest.class)))
                 .thenReturn(mockBatchResponse(vec, vec, vec, vec, vec));
 
         defaultService.createEmbeddingsBatch(List.of("a", "b", "c", "d", "e"));
+        verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
+    }
+
+    // --- Circuit Breaker Tests ---
+
+    private LlmCircuitBreaker createEnabledCircuitBreaker() {
+        EmbeddingCircuitBreakerProperties props = new EmbeddingCircuitBreakerProperties();
+        props.setEnabled(true);
+        props.setFailureRateThreshold(50);
+        props.setMinimumNumberOfCalls(5);
+        props.setWaitDurationInOpenStateSeconds(30);
+        props.setSlidingWindowSize(20);
+        return new LlmCircuitBreaker(props);
+    }
+
+    @Test
+    @DisplayName("Circuit breaker CLOSED allows batch embedding to proceed")
+    void createEmbeddingsBatch_circuitBreakerClosed_allowsEmbedding() {
+        LlmCircuitBreaker cb = createEnabledCircuitBreaker();
+        EmbeddingBatchService cbService = new EmbeddingBatchService(embeddingModel, 10, cb);
+
+        float[] vec = {0.1f, 0.2f};
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenReturn(mockBatchResponse(vec, vec));
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                cbService.createEmbeddingsBatch(List.of("text1", "text2"));
+
+        assertEquals(2, results.size());
+        assertTrue(results.get(0).isSuccess());
+        assertEquals(LlmCircuitBreaker.State.CLOSED, cb.getState());
+    }
+
+    @Test
+    @DisplayName("Circuit breaker OPEN rejects batch immediately without calling embedding API")
+    void createEmbeddingsBatch_circuitBreakerOpen_rejectsImmediately() {
+        LlmCircuitBreaker cb = createEnabledCircuitBreaker();
+        // Force OPEN state by recording failures
+        for (int i = 0; i < 15; i++) {
+            cb.recordFailure();
+        }
+        assertEquals(LlmCircuitBreaker.State.OPEN, cb.getState());
+
+        EmbeddingBatchService cbService = new EmbeddingBatchService(embeddingModel, 10, cb);
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                cbService.createEmbeddingsBatch(List.of("text1", "text2"));
+
+        assertEquals(2, results.size());
+        assertFalse(results.get(0).isSuccess());
+        assertTrue(results.get(0).getError().contains("circuit breaker open"));
+        verify(embeddingModel, never()).call(any(EmbeddingRequest.class));
+    }
+
+    @Test
+    @DisplayName("Circuit breaker records failure on batch API error")
+    void createEmbeddingsBatch_batchApiFailure_recordsFailure() {
+        LlmCircuitBreaker cb = createEnabledCircuitBreaker();
+        EmbeddingBatchService cbService = new EmbeddingBatchService(embeddingModel, 10, cb);
+
+        // Batch API fails; sequential fallback succeeds
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenThrow(new RuntimeException("Batch error"));
+        when(embeddingModel.embed("text1")).thenReturn(new float[]{0.1f, 0.2f});
+        when(embeddingModel.embed("text2")).thenReturn(new float[]{0.3f, 0.4f});
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                cbService.createEmbeddingsBatch(List.of("text1", "text2"));
+
+        // Sequential fallback succeeds for both items
+        assertTrue(results.get(0).isSuccess());
+        assertTrue(results.get(1).isSuccess());
+        assertEquals(LlmCircuitBreaker.State.CLOSED, cb.getState());
+    }
+
+    @Test
+    @DisplayName("Service without circuit breaker still functions normally")
+    void createEmbeddingsBatch_noCircuitBreaker_worksNormally() {
+        EmbeddingBatchService noCbService = new EmbeddingBatchService(embeddingModel, 10, null);
+
+        float[] vec = {0.1f};
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenReturn(mockBatchResponse(vec));
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                noCbService.createEmbeddingsBatch(List.of("text"));
+
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isSuccess());
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
     }
 }

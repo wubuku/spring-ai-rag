@@ -1,5 +1,7 @@
 package com.springairag.core.retrieval;
 
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.Embedding;
@@ -11,7 +13,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -22,6 +23,7 @@ import java.util.List;
  *   <li>Calls {@link EmbeddingModel#call(EmbeddingRequest)} in batches of batchSize</li>
  *   <li>Reduces API call count, avoiding per-item network overhead</li>
  *   <li>Individual failures do not block the batch; automatic degradation to sequential retry</li>
+ *   <li>Circuit breaker prevents cascading failures when the embedding API is unhealthy</li>
  * </ul>
  *
  * <p>Compatible with Spring AI 1.1.x EmbeddingModel interface.
@@ -35,15 +37,27 @@ public class EmbeddingBatchService {
 
     private final EmbeddingModel embeddingModel;
     private final int batchSize;
+    private final LlmCircuitBreaker circuitBreaker;
 
     @Autowired
-    public EmbeddingBatchService(EmbeddingModel embeddingModel) {
-        this(embeddingModel, DEFAULT_BATCH_SIZE);
+    public EmbeddingBatchService(EmbeddingModel embeddingModel, RagProperties ragProperties) {
+        this(embeddingModel, DEFAULT_BATCH_SIZE,
+                ragProperties.getEmbeddingCircuitBreaker().isEnabled()
+                        ? new LlmCircuitBreaker(ragProperties.getEmbeddingCircuitBreaker())
+                        : null);
     }
 
     public EmbeddingBatchService(EmbeddingModel embeddingModel, int batchSize) {
+        this(embeddingModel, batchSize, null);
+    }
+
+    public EmbeddingBatchService(EmbeddingModel embeddingModel, int batchSize, LlmCircuitBreaker circuitBreaker) {
         this.embeddingModel = embeddingModel;
         this.batchSize = batchSize > 0 ? batchSize : DEFAULT_BATCH_SIZE;
+        this.circuitBreaker = circuitBreaker;
+        if (this.circuitBreaker != null) {
+            log.info("Embedding circuit breaker enabled: {}", this.circuitBreaker.getStats());
+        }
     }
 
     /**
@@ -92,9 +106,19 @@ public class EmbeddingBatchService {
     }
 
     /**
-     * Process one batch: try batch API first, degrade to sequential on failure.
+     * Process one batch: circuit breaker check → try batch API → sequential fallback on failure.
      */
     private void processBatch(List<String> batch, List<EmbeddingResult> results) {
+        // Circuit breaker: reject immediately if OPEN
+        if (circuitBreaker != null && !circuitBreaker.allowCall()) {
+            log.warn("Embedding circuit breaker is OPEN, rejecting batch of {} items", batch.size());
+            for (String text : batch) {
+                results.add(new EmbeddingResult(text, null,
+                        "Embedding service unavailable (circuit breaker open)"));
+            }
+            return;
+        }
+
         try {
             EmbeddingRequest request = new EmbeddingRequest(batch, EmbeddingOptions.builder().build());
             EmbeddingResponse response = embeddingModel.call(request);
@@ -111,15 +135,29 @@ public class EmbeddingBatchService {
                     results.add(new EmbeddingResult(batch.get(j), null, "Batch response missing embedding at index " + j));
                 }
             }
+            if (circuitBreaker != null) {
+                circuitBreaker.recordSuccess();
+            }
         } catch (Exception batchError) { // Resilience: batch → sequential fallback
-            log.warn("Batch embedding failed, falling back to sequential: {}", batchError.getMessage());
+            if (circuitBreaker != null) {
+                circuitBreaker.recordFailure();
+            }
+            log.warn("Batch embedding failed (cb={}), falling back to sequential: {}",
+                    circuitBreaker != null ? circuitBreaker.getState() : "disabled",
+                    batchError.getMessage());
             for (String text : batch) {
                 try {
                     float[] embedding = embeddingModel.embed(text);
                     results.add(new EmbeddingResult(text, embedding, null));
+                    if (circuitBreaker != null) {
+                        circuitBreaker.recordSuccess();
+                    }
                 } catch (Exception e) { // Individual item failure, continue batch
                     log.error("Failed to generate embedding: {}", e.getMessage());
                     results.add(new EmbeddingResult(text, null, e.getMessage()));
+                    if (circuitBreaker != null) {
+                        circuitBreaker.recordFailure();
+                    }
                 }
             }
         }

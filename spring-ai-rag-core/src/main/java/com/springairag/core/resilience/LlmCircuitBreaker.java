@@ -1,5 +1,6 @@
 package com.springairag.core.resilience;
 
+import com.springairag.core.config.EmbeddingCircuitBreakerProperties;
 import com.springairag.core.config.RagCircuitBreakerProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +47,18 @@ public class LlmCircuitBreaker {
     private final int windowSize;
 
     public LlmCircuitBreaker(RagCircuitBreakerProperties config) {
+        this.windowSize = config.getSlidingWindowSize() > 0 ? config.getSlidingWindowSize() : 20;
+        this.results = new boolean[windowSize];
+        this.failureRateThreshold = config.getFailureRateThreshold();
+        this.minimumNumberOfCalls = config.getMinimumNumberOfCalls();
+        this.waitDurationInOpenStateMillis = config.getWaitDurationInOpenStateSeconds() * 1000L;
+    }
+
+    /**
+     * Constructor for embedding circuit breaker, accepting EmbeddingCircuitBreakerProperties.
+     * Both property types have identical structure, so the logic is identical.
+     */
+    public LlmCircuitBreaker(EmbeddingCircuitBreakerProperties config) {
         this.windowSize = config.getSlidingWindowSize() > 0 ? config.getSlidingWindowSize() : 20;
         this.results = new boolean[windowSize];
         this.failureRateThreshold = config.getFailureRateThreshold();
