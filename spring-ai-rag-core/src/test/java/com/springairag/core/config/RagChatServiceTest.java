@@ -118,7 +118,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("构造函数正确构建 ChatClient")
+    @DisplayName("Constructor builds ChatClient correctly")
     void constructor_buildsChatClientWithAdvisors() {
         RagChatService service = createService();
 
@@ -128,7 +128,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 方法返回回答并保存历史")
+    @DisplayName("chat method returns answer and saves history")
     void chat_returnsAnswerAndSavesHistory() {
         RagChatService service = createService();
 
@@ -147,7 +147,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 带 metadata 保存时包含元数据")
+    @DisplayName("chat with metadata saves includes metadata")
     void chat_withMetadata_savesWithMetadata() {
         RagChatService service = createService();
 
@@ -168,7 +168,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 从 ChatRequest 构建返回含 sources 的 ChatResponse")
+    @DisplayName("chat from ChatRequest builds ChatResponse containing sources")
     void chat_fromChatRequest_returnsChatResponseWithSources() {
         RagChatService service = createService();
 
@@ -210,7 +210,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 无检索结果时 sources 为 null")
+    @DisplayName("chat without retrieval results returns null sources")
     void chat_withoutRetrievalResults_sourcesIsNull() {
         RagChatService service = createService();
 
@@ -231,7 +231,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 设置 MDC traceId 时，响应包含 traceId")
+    @DisplayName("chat with MDC traceId set includes traceId in response")
     void chat_withMdcTraceId_setsTraceIdInResponse() {
         RagChatService service = createService();
 
@@ -253,7 +253,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat MDC 无 traceId 时，响应 traceId 为 null")
+    @DisplayName("chat without MDC traceId returns null traceId")
     void chat_withoutMdcTraceId_traceIdIsNull() {
         RagChatService service = createService();
         MDC.remove(RequestTraceFilter.TRACE_ID_KEY);
@@ -272,7 +272,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chatStream 返回 Flux")
+    @DisplayName("chatStream returns Flux")
     void chatStream_returnsFlux() {
         RagChatService service = createService();
 
@@ -290,7 +290,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("有自定义 RagAdvisorProvider 时也构建成功")
+    @DisplayName("Builds successfully with custom RagAdvisorProvider")
     void constructor_withCustomAdvisors_buildsSuccessfully() {
         com.springairag.api.service.RagAdvisorProvider mockProvider = mock(com.springairag.api.service.RagAdvisorProvider.class);
         BaseAdvisor mockAdvisor = mock(BaseAdvisor.class);
@@ -319,7 +319,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat 异常时记录失败指标")
+    @DisplayName("chat records failure metric on exception")
     void chat_exception_recordsFailureMetric() {
         RagChatService service = createService();
 
@@ -335,7 +335,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("buildSystemPrompt 有扩展无定制器时使用模板作为系统提示词")
+    @DisplayName("buildSystemPrompt uses template as system prompt when extensions exist without customizer")
     void buildSystemPrompt_withExtensionButNoCustomizer_setsSystemPrompt() {
         // 覆盖 BeforeEach 的默认值
         when(domainExtensionRegistry.hasExtensions()).thenReturn(true);
@@ -361,7 +361,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("buildSystemPrompt 有扩展且有定制器时使用定制后的系统提示词")
+    @DisplayName("buildSystemPrompt uses customized system prompt when extensions and customizer exist")
     void buildSystemPrompt_withExtensionAndCustomizer_setsCustomizedSystemPrompt() {
         when(domainExtensionRegistry.hasExtensions()).thenReturn(true);
         when(domainExtensionRegistry.getSystemPromptTemplate(isNull())).thenReturn("原始模板");
@@ -388,7 +388,7 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("customizeUserMessage 有定制器时使用定制后的用户消息")
+    @DisplayName("customizeUserMessage uses customized user message when customizer exists")
     void customizeUserMessage_withCustomizer_setsCustomizedUserMessage() {
         when(promptCustomizerChain.hasCustomizers()).thenReturn(true);
         when(promptCustomizerChain.customizeUserMessage(eq("原始用户消息"), any())).thenReturn("【定制】原始用户消息");
