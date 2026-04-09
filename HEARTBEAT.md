@@ -2115,3 +2115,5 @@
   - EmbeddingModelRouter 新增 package-private 构造函数 `EmbeddingModelRouter(ModelRegistry, Map<String, EmbeddingModel>)` 供测试直接注入模型
   - 所有 1484+ tests 全通过，BUILD SUCCESS
   - commit 492f11f 已推送
+
+- 2026-04-10 02:22 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
