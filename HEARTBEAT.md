@@ -2151,3 +2151,13 @@
 ## Cron 进度（2026-04-10 06:13 — DocumentMapper 工具类提取）
 
 - 2026-04-10 06:13 — ✅ DocumentMapper 工具类提取：RagDocumentController.documentToMap+versionToMap 方法（112行重复代码）提取为 com.springairag.core.util.DocumentMapper 独立类，消除两处映射逻辑重复；RagDocumentController 845→~730行（-115行）；10 个单元测试覆盖 batch/single-document variant + version mapping；1562 测试全通过；commit 0014ef5 已推送
+
+## 进度日志（2026-04-10 06:45 — 后端：@Version 乐观锁覆盖 6 实体）
+
+- 2026-04-10 06:45 — ✅ @Version 乐观锁覆盖 6 核心可变实体（RagCollection/RagDocument/RagAlert/RagAbExperiment/RagSilenceSchedule/RagSloConfig/RagUserFeedback）：@Version 注解防止并发更新丢失（lost update）；V17__add_optimistic_locking_version.sql 添加 version 列 BIGINT NOT NULL DEFAULT 0 + 版本索引；1422 测试全通过，零失败零错误；commit f221d66 已推送
+
+## 待办（数据完整性 — 2026-04-10）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| OL1 | @Version 乐观锁：6 个可变实体 + Flyway V17 | 数据完整性 | ✅ 2026-04-10 |
