@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("RagLivenessIndicator 测试")
+@DisplayName("RagLivenessIndicator Tests")
 class RagLivenessIndicatorTest {
 
     @Mock
@@ -27,7 +27,7 @@ class RagLivenessIndicatorTest {
     }
 
     @Test
-    @DisplayName("数据库可达时返回 UP")
+    @DisplayName("Returns UP when database is reachable")
     void health_databaseReachable_returnsUp() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
 
@@ -40,7 +40,7 @@ class RagLivenessIndicatorTest {
     }
 
     @Test
-    @DisplayName("数据库不可达时返回 DOWN")
+    @DisplayName("Returns DOWN when database is not reachable")
     void health_databaseUnreachable_returnsDown() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                 .thenThrow(new RuntimeException("Connection refused"));

@@ -34,7 +34,7 @@ class RagHealthIndicatorTest {
     }
 
     @Test
-    @DisplayName("所有组件正常时返回 UP")
+    @DisplayName("Returns UP when all components are healthy")
     void healthy_returnsUp() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
         when(jdbcTemplate.queryForObject(any(String.class), eq(String.class))).thenReturn("0.7.4");
@@ -55,7 +55,7 @@ class RagHealthIndicatorTest {
     }
 
     @Test
-    @DisplayName("数据库不可用时返回 DOWN")
+    @DisplayName("Returns DOWN when database is unavailable")
     void databaseDown_returnsDown() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                 .thenThrow(new RuntimeException("Connection refused"));
@@ -66,7 +66,7 @@ class RagHealthIndicatorTest {
     }
 
     @Test
-    @DisplayName("pgvector 不可用时返回 DEGRADED")
+    @DisplayName("Returns DEGRADED when pgvector is unavailable")
     void pgvectorDown_returnsDegraded() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
         when(jdbcTemplate.queryForObject(any(String.class), eq(String.class)))

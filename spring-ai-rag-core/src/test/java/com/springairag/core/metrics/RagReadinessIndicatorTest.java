@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("RagReadinessIndicator 测试")
+@DisplayName("RagReadinessIndicator Tests")
 class RagReadinessIndicatorTest {
 
     @Mock
@@ -33,7 +33,7 @@ class RagReadinessIndicatorTest {
     }
 
     @Test
-    @DisplayName("所有组件 UP 时返回 UP")
+    @DisplayName("Returns UP when all components are UP")
     void health_allUp_returnsUp() {
         Map<String, ComponentHealthService.ComponentStatus> components = new LinkedHashMap<>();
         components.put("database", new ComponentHealthService.ComponentStatus("UP",
@@ -62,7 +62,7 @@ class RagReadinessIndicatorTest {
     }
 
     @Test
-    @DisplayName("database DOWN 时返回 DOWN")
+    @DisplayName("Returns DOWN when database is DOWN")
     void health_databaseDown_returnsDown() {
         Map<String, ComponentHealthService.ComponentStatus> components = new LinkedHashMap<>();
         components.put("database", new ComponentHealthService.ComponentStatus("DOWN",
@@ -82,7 +82,7 @@ class RagReadinessIndicatorTest {
     }
 
     @Test
-    @DisplayName("pgvector DOWN 但 database UP 时返回 UP（DEGRADED 仍接受流量）")
+    @DisplayName("Returns UP when pgvector is DOWN but database is UP (DEGRADED still accepts traffic)")
     void health_pgvectorDown_returnsUpStill() {
         Map<String, ComponentHealthService.ComponentStatus> components = new LinkedHashMap<>();
         components.put("database", new ComponentHealthService.ComponentStatus("UP",

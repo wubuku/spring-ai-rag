@@ -12,7 +12,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-@DisplayName("ComponentHealthService — 组件级健康检查")
+@DisplayName("ComponentHealthService - Component-level Health Checks")
 class ComponentHealthServiceTest {
 
     private JdbcTemplate jdbcTemplate;
@@ -27,11 +27,11 @@ class ComponentHealthServiceTest {
     }
 
     @Nested
-    @DisplayName("数据库检查")
+    @DisplayName("Database Check")
     class DatabaseCheck {
 
         @Test
-        @DisplayName("正常连接返回 UP")
+        @DisplayName("Returns UP for normal connection")
         void normalConnection() {
             when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
 
@@ -43,7 +43,7 @@ class ComponentHealthServiceTest {
         }
 
         @Test
-        @DisplayName("连接失败返回 DOWN")
+        @DisplayName("Returns DOWN when connection fails")
         void connectionFailed() {
             when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                     .thenThrow(new RuntimeException("Connection refused"));
@@ -56,7 +56,7 @@ class ComponentHealthServiceTest {
     }
 
     @Nested
-    @DisplayName("pgvector 检查")
+    @DisplayName("pgvector Check")
     class PgVectorCheck {
 
         @Test
@@ -73,7 +73,7 @@ class ComponentHealthServiceTest {
         }
 
         @Test
-        @DisplayName("扩展不存在返回 DOWN")
+        @DisplayName("Returns DOWN when extension is missing")
         void extensionMissing() {
             when(jdbcTemplate.queryForObject(any(String.class), eq(String.class)))
                     .thenThrow(new RuntimeException("no data found"));
@@ -86,11 +86,11 @@ class ComponentHealthServiceTest {
     }
 
     @Nested
-    @DisplayName("表检查")
+    @DisplayName("Table Check")
     class TablesCheck {
 
         @Test
-        @DisplayName("所有表存在返回 UP + 计数")
+        @DisplayName("Returns UP with table counts when all tables exist")
         void allTablesExist() {
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_documents"), eq(Integer.class))).thenReturn(100);
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_embeddings"), eq(Integer.class))).thenReturn(500);
@@ -105,7 +105,7 @@ class ComponentHealthServiceTest {
         }
 
         @Test
-        @DisplayName("部分表缺失返回 DEGRADED")
+        @DisplayName("Returns DEGRADED when some tables are missing")
         void someTablesMissing() {
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_documents"), eq(Integer.class))).thenReturn(100);
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_embeddings"), eq(Integer.class)))
@@ -121,11 +121,11 @@ class ComponentHealthServiceTest {
     }
 
     @Nested
-    @DisplayName("缓存检查")
+    @DisplayName("Cache Check")
     class CacheCheck {
 
         @Test
-        @DisplayName("有缓存指标时返回 hitRate")
+        @DisplayName("Returns hitRate when cache metrics are available")
         void withCacheMetrics() {
             when(cacheMetricsService.getStats()).thenReturn(Map.of(
                     "hitCount", 80L, "missCount", 20L, "totalCount", 100L, "hitRate", "80.0%"));
@@ -137,7 +137,7 @@ class ComponentHealthServiceTest {
         }
 
         @Test
-        @DisplayName("CacheMetricsService 为 null 时返回 enabled=false")
+        @DisplayName("Returns enabled=false when CacheMetricsService is null")
         void nullCacheMetrics() {
             ComponentHealthService service = new ComponentHealthService(jdbcTemplate, null);
 
@@ -149,11 +149,11 @@ class ComponentHealthServiceTest {
     }
 
     @Nested
-    @DisplayName("综合状态")
+    @DisplayName("Overall Status")
     class OverallStatus {
 
         @Test
-        @DisplayName("全部 UP 时整体 UP")
+        @DisplayName("Returns UP overall when all components are UP")
         void allUp() {
             when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
             when(jdbcTemplate.queryForObject(any(String.class), eq(String.class))).thenReturn("0.7.4");
@@ -168,7 +168,7 @@ class ComponentHealthServiceTest {
         }
 
         @Test
-        @DisplayName("数据库 DOWN 时整体 DOWN")
+        @DisplayName("Returns DOWN overall when database is DOWN")
         void dbDown() {
             when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                     .thenThrow(new RuntimeException("fail"));
