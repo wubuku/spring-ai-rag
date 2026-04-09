@@ -15,18 +15,18 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 
 /**
- * API Key 认证过滤器
+ * API Key authentication filter
  *
- * <p>检查请求头 X-API-Key 是否与配置的 API Key 匹配。
- * 认证关闭或 API Key 为空时直接放行。
+ * <p>Checks whether the X-API-Key request header matches the configured API key.
+ * Passes through when authentication is disabled or API key is empty.
  *
- * <p>排除路径（不需要认证）：
+ * <p>Excluded paths (no authentication required):
  * <ul>
- *   <li>/actuator/** — 健康检查</li>
- *   <li>/swagger-ui/** — API 文档</li>
- *   <li>/v3/api-docs — OpenAPI 规范</li>
- *   <li>/health — 健康检查</li>
- *   <li>/error — Spring 错误页</li>
+ *   <li>/actuator/** — health checks</li>
+ *   <li>/swagger-ui/** — API documentation</li>
+ *   <li>/v3/api-docs — OpenAPI specification</li>
+ *   <li>/health — health check</li>
+ *   <li>/error — Spring error page</li>
  * </ul>
  */
 public class ApiKeyAuthFilter extends OncePerRequestFilter {
@@ -35,7 +35,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** 请求属性：认证成功后的 API Key 标识（供 RateLimitFilter 等下游组件使用） */
+    /** Request attribute: API key identity after successful auth (used by downstream like RateLimitFilter) */
     public static final String AUTHENTICATED_KEY_ATTRIBUTE = "authenticatedApiKey";
 
     private final String configuredApiKey;
@@ -64,19 +64,19 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         String requestApiKey = request.getHeader(API_KEY_HEADER);
 
         if (requestApiKey == null || requestApiKey.isBlank()) {
-            log.warn("API Key 缺失: {} {}", request.getMethod(), path);
+            log.warn("API Key missing: {} {}", request.getMethod(), path);
             sendUnauthorized(response, "Missing API Key. Provide X-API-Key header.");
             return;
         }
 
         if (!configuredApiKey.equals(requestApiKey)) {
-            log.warn("API Key 无效: {} {}", request.getMethod(), path);
+            log.warn("API Key invalid: {} {}", request.getMethod(), path);
             sendUnauthorized(response, "Invalid API Key.");
             return;
         }
 
-        log.debug("API Key 验证通过: {} {}", request.getMethod(), path);
-        // 设置已认证标识，供下游 RateLimitFilter 等组件使用
+        log.debug("API Key validated: {} {}", request.getMethod(), path);
+        // Set authenticated identity for downstream RateLimitFilter and other components
         request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, requestApiKey);
         filterChain.doFilter(request, response);
     }

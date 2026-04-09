@@ -6,16 +6,16 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 
 /**
- * API 版本管理自动配置
+ * API version management auto-configuration
  *
- * <p>注册 {@link ApiVersionRequestMappingHandlerMapping} 替代默认的处理器映射，
- * 实现基于 {@link ApiVersion} 注解的路径自动版本化。
+ * <p>Registers {@link ApiVersionRequestMappingHandlerMapping} to replace default handler mapping,
+ * enabling automatic path versioning based on {@link ApiVersion} annotation.
  */
 @Configuration
 public class ApiVersionConfig {
 
     /**
-     * 自定义 WebMvcRegistrations 覆盖默认的 RequestMappingHandlerMapping
+     * Custom WebMvcRegistrations to override default RequestMappingHandlerMapping
      */
     @Bean
     public WebMvcRegistrations webMvcRegistrations() {

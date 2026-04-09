@@ -65,7 +65,7 @@ public class HybridRetrieverService {
     }
 
     /**
-     * 检测查询语言并选择全文检索策略
+     * Detect query language and select the full-text search strategy.
      */
     private FulltextSearchProvider selectFulltextProvider(String query) {
         if (fulltextProviderFactory == null) {
@@ -76,7 +76,7 @@ public class HybridRetrieverService {
     }
 
     /**
-     * 是否应使用全文检索
+     * Determines whether full-text search should be used.
      */
     private boolean isFulltextAvailable(RetrievalConfig config, FulltextSearchProvider provider) {
         if (!retrieval.isFulltextEnabled()) return false;
@@ -85,7 +85,7 @@ public class HybridRetrieverService {
     }
 
     /**
-     * 混合检索入口
+     * Hybrid search entry point.
      */
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                          List<Long> excludeIds, int limit) {
@@ -94,14 +94,14 @@ public class HybridRetrieverService {
     }
 
     /**
-     * 混合检索入口（带配置）
+     * Hybrid search entry point with retrieval config.
      */
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                          List<Long> excludeIds, int limit,
                                          RetrievalConfig config) {
         log.debug("Executing hybrid search for query: {}", query);
 
-        // 检测语言并选择全文检索 Provider
+        // Detect language and select fulltext provider
         FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
         log.debug("Selected fulltext provider for query '{}': {}", query, fulltextProvider.getName());
 
@@ -144,7 +144,7 @@ public class HybridRetrieverService {
     }
 
     /**
-     * 向量检索
+     * Vector search.
      */
     private List<RetrievalResult> vectorSearch(String query, List<Long> documentIds,
                                                List<Long> excludeIds, int limit) {

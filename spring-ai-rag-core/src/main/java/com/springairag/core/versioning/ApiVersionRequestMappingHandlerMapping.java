@@ -7,16 +7,16 @@ import java.lang.reflect.Method;
 import java.util.Set;
 
 /**
- * API 版本路由映射
+ * API version routing mapping
  *
- * <p>自定义 {@link RequestMappingHandlerMapping}，扫描 {@link ApiVersion} 注解，
- * 自动为请求路径添加 /api/{version}/ 前缀。
+ * <p>Custom {@link RequestMappingHandlerMapping} that scans {@link ApiVersion} annotations,
+ * automatically adding /api/{version}/ prefix to request paths.
  *
- * <p>工作原理：
+ * <p>How it works:
  * <ol>
- *   <li>检测类或方法上的 {@link ApiVersion} 注解</li>
- *   <li>为每个版本生成独立的路径映射（如 /api/v1/rag/documents）</li>
- *   <li>无版本注解的路径保持原样（如 /actuator/*）</li>
+ *   <li>Detects {@link ApiVersion} annotation on class or method</li>
+ *   <li>Generates independent path mapping for each version (e.g., /api/v1/rag/documents)</li>
+ *   <li>Paths without version annotation remain unchanged (e.g., /actuator/*)</li>
  * </ol>
  */
 public class ApiVersionRequestMappingHandlerMapping extends RequestMappingHandlerMapping {

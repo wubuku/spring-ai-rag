@@ -48,24 +48,26 @@ public class QueryRewritingService {
     private RagQueryRewriteProperties config;
 
     /**
-     * 运行时可变的同义词词典（优先级高于配置文件）
+     * Runtime-mutable synonym dictionary (higher priority than config file).
+     * Maps keywords to arrays of synonyms.
      */
     private Map<String, String[]> synonymDictionary = Collections.emptyMap();
 
     /**
-     * 运行时可变的领域限定词（优先级高于配置文件）
+     * Runtime-mutable domain qualifiers (higher priority than config file).
+     * Qualifiers are appended to queries to narrow the domain.
      */
     private List<String> domainQualifiers = Collections.emptyList();
 
     /**
-     * 无参构造器（兼容 Spring 框架）
+     * No-arg constructor (for Spring framework compatibility).
      */
     public QueryRewritingService() {
     }
 
     /**
-     * 单参数构造器（用于测试和手动装配）。
-     * 注意：生产代码中请使用字段注入 + @PostConstruct 方式。
+     * Single-parameter constructor (for testing and manual wiring).
+     * Note: Use field injection + @PostConstruct in production code.
      */
     public QueryRewritingService(RagProperties ragProperties) {
         this.ragProperties = ragProperties;
@@ -74,8 +76,8 @@ public class QueryRewritingService {
     }
 
     /**
-     * 双参数构造器（用于测试）。
-     * 注意：生产代码中请使用字段注入 + @PostConstruct 方式。
+     * Two-parameter constructor (for testing).
+     * Note: Use field injection + @PostConstruct in production code.
      */
     public QueryRewritingService(RagProperties ragProperties, ChatModel chatModel) {
         this.ragProperties = ragProperties;
@@ -84,8 +86,8 @@ public class QueryRewritingService {
     }
 
     /**
-     * 初始化配置（在字段注入后由 Spring 调用，或由单参数构造器直接调用）。
-     * 即使 ragProperties 为 null 也使用默认配置，保证服务可正常降级运行。
+     * Initialize configuration (called by Spring after field injection, or directly by single-parameter constructor).
+     * Uses default configuration even if ragProperties is null, ensuring graceful degradation.
      */
     @PostConstruct
     public void init() {
@@ -104,14 +106,14 @@ public class QueryRewritingService {
     }
 
     /**
-     * 设置同义词词典（运行时覆盖配置文件值）
+     * Set synonym dictionary (runtime override, higher priority than config file).
      */
     public void setSynonymDictionary(Map<String, String[]> dictionary) {
         this.synonymDictionary = dictionary != null ? dictionary : Collections.emptyMap();
     }
 
     /**
-     * 设置领域限定词列表（运行时覆盖配置文件值）
+     * Set domain qualifier list (runtime override, higher priority than config file).
      */
     public void setDomainQualifiers(List<String> qualifiers) {
         this.domainQualifiers = qualifiers != null ? qualifiers : Collections.emptyList();
@@ -133,28 +135,28 @@ public class QueryRewritingService {
         List<String> queries = new ArrayList<>();
         queries.add(originalQuery);
 
-        // 1. 同义词扩展
+        // 1. Synonym expansion
         queries.addAll(expandWithSynonyms(originalQuery));
 
-        // 2. 领域限定词扩展
+        // 2. Domain qualifier expansion
         queries.addAll(expandWithDomainQualifiers(originalQuery));
 
-        // 3. LLM 辅助改写（可选）
+        // 3. LLM-assisted rewrite (optional)
         if (config.isLlmEnabled()) {
             queries.addAll(llmRewrite(originalQuery));
         }
 
-        // 去重
+        // Deduplicate
         return queries.stream().distinct().toList();
     }
 
     /**
-     * LLM 辅助查询改写
+     * LLM-assisted query rewriting
      *
-     * <p>调用 ChatModel 将用户查询改写为多种表述，提升检索召回率。
-     * 失败时静默降级，不影响规则改写结果。
+     * <p>Calls ChatModel to rewrite the user query into multiple expressions, improving search recall.
+     * Silently degrades on failure; rule rewriting results are still returned.
      *
-     * @param originalQuery 原始查询
+     * @param originalQuery the original query
      * @return list of LLM-generated rewritten queries
      */
     public List<String> llmRewrite(String originalQuery) {
@@ -224,7 +226,7 @@ public class QueryRewritingService {
     }
 
     /**
-     * 使用同义词扩展查询
+     * Expand query using synonym dictionary.
      */
     private List<String> expandWithSynonyms(String query) {
         List<String> expanded = new ArrayList<>();
@@ -249,7 +251,7 @@ public class QueryRewritingService {
     }
 
     /**
-     * 添加领域限定词扩展查询
+     * Expand query with domain qualifiers.
      */
     private List<String> expandWithDomainQualifiers(String query) {
         List<String> expanded = new ArrayList<>();
@@ -264,10 +266,10 @@ public class QueryRewritingService {
     }
 
     /**
-     * 生成 Padding 查询（用于并行检索）
+     * Generate padding queries for parallel retrieval.
      *
-     * @param query 原始查询
-     * @return 扩展查询列表
+     * @param query the original query
+     * @return list of expanded queries
      */
     public List<String> generatePaddingQueries(String query) {
         List<String> paddingQueries = new ArrayList<>();
@@ -276,7 +278,7 @@ public class QueryRewritingService {
             return paddingQueries;
         }
 
-        // 1. 添加疑问前缀
+        // 1. Add interrogative prefixes
         String[] prefixes = {"如何", "怎么", "怎样", "什么"};
         for (String prefix : prefixes) {
             if (!query.startsWith(prefix)) {
@@ -284,7 +286,7 @@ public class QueryRewritingService {
             }
         }
 
-        // 2. 提取关键词两两组合
+        // 2. Extract keywords and pair them
         List<String> keywords = extractKeywords(query);
         if (keywords.size() > 1) {
             for (int i = 0; i < keywords.size(); i++) {
@@ -294,7 +296,7 @@ public class QueryRewritingService {
             }
         }
 
-        // 3. 添加解决方案后缀
+        // 3. Add solution suffixes
         String[] suffixes = {"怎么办", "如何解决", "用什么"};
         for (String suffix : suffixes) {
             if (!query.contains(suffix)) {
@@ -306,7 +308,7 @@ public class QueryRewritingService {
     }
 
     /**
-     * 从查询中提取关键词
+     * Extract keywords from query.
      */
     private List<String> extractKeywords(String query) {
         List<String> keywords = new ArrayList<>();
@@ -323,7 +325,7 @@ public class QueryRewritingService {
     }
 
     /**
-     * 清理查询文本
+     * Clean query text.
      */
     public String cleanQuery(String query) {
         if (query == null) {

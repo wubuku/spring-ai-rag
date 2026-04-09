@@ -9,13 +9,13 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * LLM 调用的熔断器
+ * Circuit breaker for LLM calls
  *
- * <p>三状态自动机：
+ * <p>Three-state state machine:
  * <ul>
- *   <li>CLOSED — 正常，允许调用；失败计数器达到阈值则转入 OPEN</li>
- *   <li>OPEN — 熔断中，立即拒绝调用；等待冷却时间后转入 HALF_OPEN</li>
- *   <li>HALF_OPEN — 探测状态；允许一个测试调用：成功→CLOSED，失败→OPEN</li>
+ *   <li>CLOSED — normal, allows calls; failure count threshold triggers OPEN</li>
+ *   <li>OPEN — open, immediately rejects calls; cooldown expires transitions to HALF_OPEN</li>
+ *   <li>HALF_OPEN — probing; allows one test call: success→CLOSED, failure→OPEN</li>
  * </ul>
  */
 public class LlmCircuitBreaker {
@@ -53,7 +53,7 @@ public class LlmCircuitBreaker {
         this.waitDurationInOpenStateMillis = config.getWaitDurationInOpenStateSeconds() * 1000L;
     }
 
-    /** 尝试获取执行许可 */
+    /** Attempt to acquire execution permit */
     public boolean allowCall() {
         State current = state.get();
         if (current == State.CLOSED) {
@@ -77,7 +77,7 @@ public class LlmCircuitBreaker {
         return System.currentTimeMillis() - lastFailureTime.get() >= waitDurationInOpenStateMillis;
     }
 
-    /** 记录成功 */
+    /** Record success */
     public void recordSuccess() {
         State current = state.get();
         if (current == State.HALF_OPEN) {
@@ -90,7 +90,7 @@ public class LlmCircuitBreaker {
         }
     }
 
-    /** 记录失败 */
+    /** Record failure */
     public void recordFailure() {
         lastFailureTime.set(System.currentTimeMillis());
         State current = state.get();
@@ -178,9 +178,9 @@ public class LlmCircuitBreaker {
     }
 
     /**
-     * 获取最近一次失败的时间戳（毫秒）
+     * Get timestamp of most recent failure (milliseconds)
      *
-     * @return 最近失败时间戳，如果从未失败则返回 0
+     * @return Most recent failure timestamp, or 0 if never failed
      */
     public long getLastFailureTimeMillis() {
         return lastFailureTime.get();

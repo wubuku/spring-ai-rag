@@ -7,12 +7,12 @@ import org.springframework.stereotype.Component;
 import java.util.Locale;
 
 /**
- * 国际化消息解析工具
+ * Internationalized message resolution utility
  *
- * <p>封装 MessageSource 调用，根据当前请求的 Locale 自动选择语言。
- * 支持参数替换和默认消息降级。
+ * <p>Wraps MessageSource calls, automatically selecting language based on the current request Locale.
+ * Supports parameter substitution and default message fallback.
  *
- * <p>使用方式：
+ * <p>Usage:
  * <pre>
  * messageResolver.resolve("error.rate_limit_exceeded")
  * messageResolver.resolve("error.document_not_found", "doc-123")
@@ -28,11 +28,11 @@ public class MessageResolver {
     }
 
     /**
-     * 解析国际化消息
+     * Resolve internationalized message
      *
-     * @param code 消息代码（如 "error.rate_limit_exceeded"）
-     * @param args 消息参数（替换 {0}, {1} 等占位符）
-     * @return 本地化后的消息
+     * @param code message code (e.g., "error.rate_limit_exceeded")
+     * @param args message arguments (replaces {0}, {1}, etc. placeholders)
+     * @return localized message
      */
     public String resolve(String code, Object... args) {
         Locale locale = LocaleContextHolder.getLocale();
@@ -40,12 +40,12 @@ public class MessageResolver {
     }
 
     /**
-     * 解析国际化消息（指定 Locale）
+     * Resolve internationalized message (with specified Locale)
      *
-     * @param code   消息代码
-     * @param locale 目标语言
-     * @param args   消息参数
-     * @return 本地化后的消息
+     * @param code   message code
+     * @param locale target locale
+     * @param args   message arguments
+     * @return localized message
      */
     public String resolve(String code, Locale locale, Object... args) {
         return messageSource.getMessage(code, args, code, locale);

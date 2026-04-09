@@ -35,7 +35,7 @@ public class SearchCapabilities {
     private boolean hasTrgmIndex;   // trigram GIN index
 
     /**
-     * 主要构造函数(Spring DI 使用)
+     * Primary constructor (used by Spring DI)
      */
     public SearchCapabilities(JdbcTemplate jdbcTemplate) {
         this(jdbcTemplate, true);
@@ -109,7 +109,7 @@ public class SearchCapabilities {
      */
     private void detectIndexes() {
         try {
-            // 检测 jieba tsvector GIN 索引(search_vector_zh 列)
+            // Detect jieba tsvector GIN index (search_vector_zh column)
             hasZhIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
@@ -118,7 +118,7 @@ public class SearchCapabilities {
                     "  AND indexdef ILIKE '%search_vector_zh%gin%')",
                     Boolean.class));
 
-            // 检测 english tsvector GIN 索引(search_vector_en 列)
+            // Detect english tsvector GIN index (search_vector_en column)
             hasEnIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
@@ -127,7 +127,7 @@ public class SearchCapabilities {
                     "  AND indexdef ILIKE '%search_vector_en%gin%')",
                     Boolean.class));
 
-            // 检测 trigram GIN 索引
+            // Detect trigram GIN index
             hasTrgmIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +

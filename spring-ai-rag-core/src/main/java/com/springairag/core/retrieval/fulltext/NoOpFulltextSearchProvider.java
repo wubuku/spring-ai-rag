@@ -6,10 +6,10 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 空全文检索策略
+ * No-op full-text search strategy
  *
- * <p>当 pg_trgm 和 pg_jieba 都不可用时的降级方案。
- * 所有检索返回空列表，系统退化为纯向量检索。
+ * <p>Fallback when neither pg_trgm nor pg_jieba is available.
+ * All searches return empty list; system degrades to pure vector search.
  */
 public class NoOpFulltextSearchProvider implements FulltextSearchProvider {
 
@@ -20,7 +20,7 @@ public class NoOpFulltextSearchProvider implements FulltextSearchProvider {
 
     @Override
     public boolean isAvailable() {
-        return true; // 始终可用（返回空结果）
+        return true; // Always available (returns empty results)
     }
 
     @Override

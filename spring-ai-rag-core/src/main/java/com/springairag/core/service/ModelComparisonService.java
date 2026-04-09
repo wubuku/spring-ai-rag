@@ -43,15 +43,15 @@ public class ModelComparisonService {
     }
 
     /**
-     * 并行对比多个模型
+     * Compare multiple models in parallel
      *
-     * <p>使用共享线程池，避免每次调用创建新 ExecutorService。
-     * 单个模型超时或异常时不影响其他模型，结果降级为失败记录。
+     * <p>Uses shared thread pool, avoids creating new ExecutorService for each call.
+     * Single model timeout or exception does not affect other models; result degrades to failure record.
      *
-     * @param query   查询文本
-     * @param models  模型名称 → ChatModel 映射
-     * @param timeoutSeconds 单个模型超时（秒）
-     * @return 对比结果列表（按提交顺序）
+     * @param query   query text
+     * @param models  model name → ChatModel mapping
+     * @param timeoutSeconds per-model timeout (seconds)
+     * @return comparison result list (in submission order)
      */
     public List<ModelComparisonResult> compareModels(String query,
                                                       Map<String, ChatModel> models,
@@ -88,12 +88,12 @@ public class ModelComparisonService {
     }
 
     /**
-     * 并行对比多个 provider（通过 ModelRegistry 解析）
+     * Compare multiple providers in parallel (resolved via ModelRegistry)
      *
-     * @param query 查询文本
-     * @param providers 要对比的 provider 列表（如 ["openai", "minimax"]）
-     * @param timeoutSeconds 单个模型超时（秒）
-     * @return 对比结果列表（按提交顺序）
+     * @param query query text
+     * @param providers provider list to compare (e.g., ["openai", "minimax"])
+     * @param timeoutSeconds per-model timeout (seconds)
+     * @return comparison result list (in submission order)
      */
     public List<ModelComparisonResult> compareProviders(String query,
                                                        List<String> providers,
@@ -110,7 +110,7 @@ public class ModelComparisonService {
     }
 
     /**
-     * 对比所有已注册的 provider
+     * Compare all registered providers
      */
     public List<ModelComparisonResult> compareAllProviders(String query, int timeoutSeconds) {
         Map<String, ChatModel> models = new LinkedHashMap<>();
@@ -162,7 +162,7 @@ public class ModelComparisonService {
     }
 
     /**
-     * 模型对比结果
+     * Model comparison result
      */
     public static class ModelComparisonResult {
         private final String modelName;

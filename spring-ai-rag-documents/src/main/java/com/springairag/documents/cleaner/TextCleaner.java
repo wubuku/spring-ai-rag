@@ -3,14 +3,14 @@ package com.springairag.documents.cleaner;
 import java.util.regex.Pattern;
 
 /**
- * 文本清洗工具类
+ * Text cleaning utility class
  *
- * <p>提供全面的文本清洗功能：
+ * <p>Provides comprehensive text cleaning:
  * <ul>
- *   <li>移除多余空格和换行</li>
- *   <li>移除 Markdown 标题前缀</li>
- *   <li>规范化标点符号</li>
- *   <li>移除控制字符</li>
+ *   <li>Remove extra spaces and newlines</li>
+ *   <li>Remove Markdown heading prefixes</li>
+ *   <li>Normalize punctuation</li>
+ *   <li>Remove control characters</li>
  * </ul>
  */
 public final class TextCleaner {
@@ -23,10 +23,10 @@ public final class TextCleaner {
     private TextCleaner() {}
 
     /**
-     * 完整清洗流程
+     * Full cleaning flow
      *
-     * @param input 原始文本
-     * @return 清洗后的文本
+     * @param input raw text
+     * @return cleaned text
      */
     public static String clean(String input) {
         if (input == null || input.isEmpty()) {
@@ -35,26 +35,26 @@ public final class TextCleaner {
 
         String result = input;
 
-        // 1. 移除控制字符（保留换行和回车）
+        // 1. Remove control characters (preserve newlines and carriage returns)
         result = CONTROL_CHARS.matcher(result).replaceAll("");
 
-        // 2. 移除多余空格
+        // 2. Remove extra spaces
         result = MULTIPLE_SPACES.matcher(result).replaceAll(" ");
 
-        // 3. 规范化换行（多个换行合并为两个）
+        // 3. Normalize newlines (merge multiple newlines into two)
         result = MULTIPLE_NEWLINES.matcher(result).replaceAll("\n\n");
 
-        // 4. 移除行尾 Markdown 标题标记
+        // 4. Remove trailing Markdown heading markers
         result = MARKDOWN_HEADER_END.matcher(result).replaceAll("");
 
-        // 5. 去除首尾空白
+        // 5. Trim leading and trailing whitespace
         result = result.trim();
 
         return result;
     }
 
     /**
-     * 清洗但保留标题结构
+     * Clean while preserving heading structure
      */
     public static String cleanPreserveHeaders(String input) {
         if (input == null || input.isEmpty()) {
@@ -69,7 +69,7 @@ public final class TextCleaner {
     }
 
     /**
-     * 仅移除多余空白
+     * Only remove extra spaces
      */
     public static String trimWhitespace(String input) {
         if (input == null || input.isEmpty()) {
@@ -79,7 +79,7 @@ public final class TextCleaner {
     }
 
     /**
-     * 规范化换行符
+     * Normalize line endings
      */
     public static String normalizeLineBreaks(String input) {
         if (input == null || input.isEmpty()) {

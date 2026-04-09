@@ -32,42 +32,42 @@ public class AuditLogService {
 
     private static final Logger log = LoggerFactory.getLogger(AuditLogService.class);
 
-    /** 操作类型：创建 */
+    /** Operation type: create */
     public static final String OP_CREATE = "CREATE";
-    /** 操作类型：更新 */
+    /** Operation type: update */
     public static final String OP_UPDATE = "UPDATE";
-    /** 操作类型：删除 */
+    /** Operation type: delete */
     public static final String OP_DELETE = "DELETE";
-    /** 操作类型：导入 */
+    /** Operation type: import */
     public static final String OP_IMPORT = "IMPORT";
-    /** 操作类型：嵌入 */
+    /** Operation type: embed */
     public static final String OP_EMBED = "EMBED";
-    /** 操作类型：清除缓存 */
+    /** Operation type: clear cache */
     public static final String OP_CACHE_CLEAR = "CACHE_CLEAR";
-    /** 操作类型：触发告警 */
+    /** Operation type: fire alert */
     public static final String OP_ALERT_FIRE = "ALERT_FIRE";
-    /** 操作类型：解决告警 */
+    /** Operation type: resolve alert */
     public static final String OP_ALERT_RESOLVE = "ALERT_RESOLVE";
-    /** 操作类型：静默告警 */
+    /** Operation type: silence alert */
     public static final String OP_ALERT_SILENCE = "ALERT_SILENCE";
 
-    /** 实体类型：集合 */
+    /** Entity type: collection */
     public static final String ENTITY_COLLECTION = "Collection";
-    /** 实体类型：文档 */
+    /** Entity type: document */
     public static final String ENTITY_DOCUMENT = "Document";
-    /** 实体类型：会话历史 */
+    /** Entity type: chat history */
     public static final String ENTITY_CHAT_HISTORY = "ChatHistory";
-    /** 实体类型：A/B 实验 */
+    /** Entity type: A/B experiment */
     public static final String ENTITY_AB_TEST = "AbTest";
-    /** 实体类型：告警 */
+    /** Entity type: alert */
     public static final String ENTITY_ALERT = "Alert";
-    /** 实体类型：SLO 配置 */
+    /** Entity type: SLO config */
     public static final String ENTITY_SLO_CONFIG = "SloConfig";
-    /** 实体类型：静默计划 */
+    /** Entity type: silence schedule */
     public static final String ENTITY_SILENCE_SCHEDULE = "SilenceSchedule";
-    /** 实体类型：嵌入缓存 */
+    /** Entity type: embed cache */
     public static final String ENTITY_EMBED_CACHE = "EmbedCache";
-    /** 实体类型：用户反馈 */
+    /** Entity type: user feedback */
     public static final String ENTITY_USER_FEEDBACK = "UserFeedback";
 
     private final RagAuditLogRepository repository;
@@ -80,42 +80,42 @@ public class AuditLogService {
     }
 
     /**
-     * 记录创建操作
+     * Log a create operation.
      */
     public void logCreate(String entityType, String entityId, String description) {
         logAudit(OP_CREATE, entityType, entityId, description, null, null);
     }
 
     /**
-     * 记录创建操作（含额外属性）
+     * Log a create operation with extra details.
      */
     public void logCreate(String entityType, String entityId, String description, Map<String, Object> details) {
         logAudit(OP_CREATE, entityType, entityId, description, details, null);
     }
 
     /**
-     * 记录更新操作
+     * Log an update operation.
      */
     public void logUpdate(String entityType, String entityId, String description) {
         logAudit(OP_UPDATE, entityType, entityId, description, null, null);
     }
 
     /**
-     * 记录更新操作（含额外属性）
+     * Log an update operation with extra details.
      */
     public void logUpdate(String entityType, String entityId, String description, Map<String, Object> details) {
         logAudit(OP_UPDATE, entityType, entityId, description, details, null);
     }
 
     /**
-     * 记录删除操作
+     * Log a delete operation.
      */
     public void logDelete(String entityType, String entityId, String description) {
         logAudit(OP_DELETE, entityType, entityId, description, null, null);
     }
 
     /**
-     * 记录删除操作（含额外属性）
+     * Log a delete operation with extra details.
      */
     public void logDelete(String entityType, String entityId, String description, Map<String, Object> details) {
         logAudit(OP_DELETE, entityType, entityId, description, details, null);
@@ -144,7 +144,7 @@ public class AuditLogService {
     }
 
     /**
-     * 查询实体的审计历史
+     * Query audit history for an entity.
      */
     public Page<RagAuditLog> getEntityHistory(String entityType, String entityId, int page, int size) {
         return repository.findByEntityTypeAndEntityIdOrderByCreatedAtDesc(
@@ -152,21 +152,21 @@ public class AuditLogService {
     }
 
     /**
-     * 查询会话的审计记录
+     * Query audit records for a session.
      */
     public Page<RagAuditLog> getSessionHistory(String sessionId, int page, int size) {
         return repository.findBySessionIdOrderByCreatedAtDesc(sessionId, PageRequest.of(page, size));
     }
 
     /**
-     * 查询最近的审计记录
+     * Query recent audit records.
      */
     public List<RagAuditLog> getRecentAuditLogs(int limit) {
         return repository.findTop20ByOrderByCreatedAtDesc();
     }
 
     /**
-     * 清理指定时间之前的审计日志
+     * Clean up audit logs older than the cutoff time.
      */
     public long cleanup(ZonedDateTime cutoff) {
         return repository.deleteByCreatedAtBefore(cutoff);

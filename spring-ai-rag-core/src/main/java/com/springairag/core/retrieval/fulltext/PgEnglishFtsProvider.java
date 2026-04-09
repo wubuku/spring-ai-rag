@@ -9,16 +9,16 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * PostgreSQL 内置英文全文检索策略
+ * PostgreSQL built-in English full-text search strategy
  *
- * <p>使用 PostgreSQL 内置的 'english' 文本搜索配置，
- * 通过预建的 search_vector_en GENERATED 列和 GIN 索引实现高效英文全文检索。
+ * <p>Uses PostgreSQL built-in 'english' text search configuration,
+ * providing efficient English full-text search via pre-built search_vector_en GENERATED column and GIN index.
  *
- * <p>特点：
+ * <p>Features:
  * <ul>
- *   <li>使用内置 english 配置，无需额外扩展</li>
- *   <li>依赖 search_vector_en GENERATED 列和 GIN 索引</li>
- *   <li>使用 websearch_to_tsquery 支持 Google 风格搜索语法</li>
+ *   <li>Uses built-in english config, no extra extension needed</li>
+ *   <li>Depends on search_vector_en GENERATED column and GIN index</li>
+ *   <li>Uses websearch_to_tsquery supporting Google-style search syntax</li>
  * </ul>
  */
 public class PgEnglishFtsProvider implements FulltextSearchProvider {
@@ -39,7 +39,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
     
     private boolean detectAvailability() {
         try {
-            // 检测 english tsvector GIN 索引
+            // Detect english tsvector GIN index
             Boolean hasIndex = jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +

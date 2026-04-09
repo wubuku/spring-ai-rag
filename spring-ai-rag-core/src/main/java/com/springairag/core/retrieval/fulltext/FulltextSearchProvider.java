@@ -5,38 +5,38 @@ import com.springairag.api.dto.RetrievalResult;
 import java.util.List;
 
 /**
- * 全文检索策略接口
+ * Full-text search provider interface
  *
- * <p>抽象不同的全文检索后端（pg_trgm、pg_jieba 等），
- * 由 {@link FulltextSearchProviderFactory} 根据数据库扩展可用性自动选择。
+ * <p>Abstracts different full-text search backends (pg_trgm, pg_jieba, etc.),
+ * automatically selected by {@link FulltextSearchProviderFactory} based on database extension availability.
  *
- * <p>实现要求：
+ * <p>Implementation requirements:
  * <ul>
- *   <li>不可用时应返回空列表，不应抛出异常</li>
- *   <li>结果通过 {@link RetrievalResult#setFulltextScore(double)} 设置相关分数</li>
+ *   <li>Should return empty list when unavailable, not throw exceptions</li>
+ *   <li>Results set relevance score via {@link RetrievalResult#setFulltextScore(double)}</li>
  * </ul>
  */
 public interface FulltextSearchProvider {
 
     /**
-     * 提供者名称（用于日志和配置）
+     * Provider name (used for logging and configuration)
      */
     String getName();
 
     /**
-     * 是否可用（启动时检测，结果缓存）
+     * Whether available (detected at startup, result cached)
      */
     boolean isAvailable();
 
     /**
-     * 执行全文检索
+     * Execute full-text search
      *
-     * @param query        查询文本
-     * @param documentIds  限定文档ID（null 表示搜索全部）
-     * @param excludeIds   排除的嵌入ID
-     * @param limit        返回结果数量
-     * @param minScore     最低相关分数阈值
-     * @return 检索结果列表（按相关度降序）
+     * @param query        query text
+     * @param documentIds  document ID filter (null means search all)
+     * @param excludeIds   embedding IDs to exclude
+     * @param limit        max results to return
+     * @param minScore     minimum relevance score threshold
+     * @return retrieval results list (sorted by relevance descending)
      */
     List<RetrievalResult> search(String query, List<Long> documentIds,
                                  List<Long> excludeIds, int limit, double minScore);

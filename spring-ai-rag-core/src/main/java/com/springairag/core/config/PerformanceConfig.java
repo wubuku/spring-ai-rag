@@ -85,7 +85,7 @@ public class PerformanceConfig {
     }
 
     /**
-     * 缓存包装的 EmbeddingModel — 带 Micrometer 命中率追踪
+     * Cached wrapper for EmbeddingModel — with Micrometer cache hit rate tracking
      */
     static class CachingEmbeddingModel implements EmbeddingModel {
 

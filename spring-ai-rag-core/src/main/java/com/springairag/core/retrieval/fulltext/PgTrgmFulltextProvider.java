@@ -9,19 +9,19 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * pg_trgm 模糊全文检索策略
+ * pg_trgm fuzzy full-text search strategy
  *
- * <p>使用 PostgreSQL pg_trgm 扩展的 trigram 匹配能力，
- * 通过 similarity() 函数和 % 操作符实现模糊搜索。
+ * <p>Uses PostgreSQL pg_trgm extension trigram matching capability,
+ * providing fuzzy search via similarity() function and % operator.
  *
- * <p>特点：
+ * <p>Features:
  * <ul>
- *   <li>字符级匹配，不依赖语言分词</li>
- *   <li>支持短词、部分匹配、轻微拼写错误</li>
- *   <li>需要 gin_trgm_ops 索引才能高效</li>
+ *   <li>Character-level matching, language-independent</li>
+ *   <li>Supports short words, partial match, minor spelling errors</li>
+ *   <li>Requires gin_trgm_ops index for efficiency</li>
  * </ul>
  *
- * <p>作为降级策略，当 FTS 不可用时提供文本检索能力。
+ * <p>As fallback strategy, provides text search when FTS is unavailable.
  */
 public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     
@@ -41,10 +41,10 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     
     private boolean detectAvailability() {
         try {
-            // 检测 pg_trgm 扩展
+            // Detect pg_trgm extension
             jdbcTemplate.queryForObject(
                     "SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'", Integer.class);
-            // 检测 gin_trgm_ops 索引
+            // Detect gin_trgm_ops index
             Boolean hasIndex = jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
@@ -77,7 +77,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
         if (query == null || query.isBlank()) return Collections.emptyList();
         
         try {
-            // 设置低阈值以获得更多结果
+            // Set low threshold to get more results
             jdbcTemplate.update("SET pg_trgm.similarity_threshold = ?", SIMILARITY_THRESHOLD);
             
             List<Map<String, Object>> rows = executeSearch(query.trim(), documentIds, limit);

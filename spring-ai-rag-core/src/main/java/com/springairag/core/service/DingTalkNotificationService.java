@@ -23,7 +23,7 @@ import java.util.Map.Entry;
 
 /**
  * DingTalk robot webhook notification service.
- * Supports DingTalk's secret signature mode (加签) for enhanced security.
+ * Supports DingTalk's secret signature mode (secret signature mode (HmacSHA256)) for enhanced security.
  *
  * <p>DingTalk webhook format:
  * <pre>

@@ -43,26 +43,26 @@ public class BatchDocumentService {
     }
 
     /**
-     * 批量创建文档（自动去重）
+     * Batch create documents (automatic deduplication)
      *
-     * <p>默认不嵌入向量。如需创建后自动嵌入，请使用
-     * {@link #batchCreateDocuments(List, boolean, Long, boolean)} 并传入 embed=true。
+     * <p>By default, vectors are not embedded. To embed automatically after creation, use
+     * {@link #batchCreateDocuments(List, boolean, Long, boolean)} and pass embed=true.
      *
-     * @param requests 文档请求列表
-     * @return 批量创建结果
+     * @param requests document request list
+     * @return batch creation result
      */
     public BatchCreateResponse batchCreateDocuments(List<DocumentRequest> requests) {
         return batchCreateDocuments(requests, false, null, false);
     }
 
     /**
-     * 批量创建文档（支持创建后自动嵌入向量）
+     * Batch create documents (with optional auto-embedding after creation)
      *
-     * @param requests     文档请求列表
-     * @param embed        是否在创建后自动嵌入向量
-     * @param collectionId 关联的知识库 ID（仅 embed=true 时生效，可为 null）
-     * @param force        是否强制重嵌入（仅 embed=true 时生效）
-     * @return 批量创建结果
+     * @param requests     document request list
+     * @param embed        whether to embed vectors after creation
+     * @param collectionId associated collection ID (effective only when embed=true, can be null)
+     * @param force        whether to force re-embedding (effective only when embed=true)
+     * @return batch creation result
      */
     public BatchCreateResponse batchCreateDocuments(List<DocumentRequest> requests,
                                                      boolean embed,
@@ -122,7 +122,7 @@ public class BatchDocumentService {
                 log.info("Document created: id={}", doc.getId());
             }
 
-            // 嵌入向量（仅针对新建的或 force=true 的文档）
+            // Embed vectors (only for newly created or force=true documents)
             if (embed && (newlyCreated || force)) {
                 Map<String, Object> embedResult = documentEmbedService.embedDocument(doc.getId(), force);
                 String status = (String) embedResult.get("status");
@@ -145,10 +145,10 @@ public class BatchDocumentService {
     }
 
     /**
-     * 删除单个文档（级联删除嵌入向量）
+     * Delete a single document (cascades to delete embedding vectors)
      *
-     * @param id 文档 ID
-     * @return 删除结果（含嵌入向量删除数量）
+     * @param id document ID
+     * @return deletion result (including number of embedding vectors deleted)
      */
     @Transactional
     public Map<String, String> deleteDocument(Long id) {
@@ -172,10 +172,10 @@ public class BatchDocumentService {
     }
 
     /**
-     * 批量删除文档（级联删除嵌入向量）
+     * Batch delete documents (cascades to delete embedding vectors)
      *
-     * @param ids 文档 ID 列表
-     * @return 批量操作结果
+     * @param ids document ID list
+     * @return batch operation result
      */
     @Transactional
     public Map<String, Object> batchDeleteDocuments(List<Long> ids) {
@@ -187,7 +187,7 @@ public class BatchDocumentService {
 
         List<Map<String, Object>> results = new ArrayList<>(ids.size());
 
-        // 批量删除嵌入向量
+        // Batch delete embedding vectors
         embeddingRepository.deleteByDocumentIdIn(ids);
 
         for (Long id : ids) {
@@ -223,7 +223,7 @@ public class BatchDocumentService {
     }
 
     /**
-     * 计算文本的 SHA-256 哈希值
+     * Calculate SHA-256 hash of text
      */
     public static String computeSha256(String content) {
         try {

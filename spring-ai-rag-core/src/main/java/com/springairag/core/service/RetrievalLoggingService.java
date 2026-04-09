@@ -35,15 +35,15 @@ public class RetrievalLoggingService {
     }
 
     /**
-     * 记录检索操作
+     * Record retrieval operation
      *
-     * @param sessionId           会话 ID（可为 null）
-     * @param query               查询文本
-     * @param strategy            检索策略（hybrid/vector/fulltext）
-     * @param vectorSearchTimeMs  向量检索耗时
-     * @param fulltextSearchTimeMs 全文检索耗时
-     * @param rerankTimeMs        重排序耗时
-     * @param results             检索结果列表
+     * @param sessionId           session ID (can be null)
+     * @param query               query text
+     * @param strategy            retrieval strategy (hybrid/vector/fulltext)
+     * @param vectorSearchTimeMs  vector search time (ms)
+     * @param fulltextSearchTimeMs full-text search time (ms)
+     * @param rerankTimeMs        reranking time (ms)
+     * @param results             retrieval results list
      */
     public void logRetrieval(String sessionId, String query, String strategy,
                              long vectorSearchTimeMs, long fulltextSearchTimeMs,
@@ -80,24 +80,24 @@ public class RetrievalLoggingService {
     }
 
     /**
-     * 查询指定时间段的平均总耗时
+     * Query average total time for specified period
      */
     public Double getAvgTotalTime(ZonedDateTime start, ZonedDateTime end) {
         return repository.findAvgTotalTime(start, end);
     }
 
     /**
-     * 查询指定时间段的日志总数
+     * Query total log count for specified period
      */
     public long count(ZonedDateTime start, ZonedDateTime end) {
         return repository.countByCreatedAtBetween(start, end);
     }
 
     /**
-     * 清理指定时间之前的日志
+     * Clean up logs before specified time
      *
-     * @param cutoff 截止时间
-     * @return 删除的记录数
+     * @param cutoff cutoff time
+     * @return number of records deleted
      */
     public long cleanup(ZonedDateTime cutoff) {
         return repository.deleteByCreatedAtBefore(cutoff);

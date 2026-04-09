@@ -26,11 +26,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 
 /**
- * 通用 RAG 服务自动配置
+ * General RAG service auto-configuration
  *
- * <p>通过 Spring Boot 的 {@link AutoConfiguration} + {@code AutoConfiguration.imports} 自动加载。
- * {@code RagProperties} 和 {@code GeneralRagProperties} 通过 {@link @EnableConfigurationProperties}
- * 显式注册为 Bean，确保在任何 {@code @Service} 之前可用。
+ * <p>Auto-loaded via Spring Boot {@link AutoConfiguration} + {@code AutoConfiguration.imports}.
+ * {@code RagProperties} and {@code GeneralRagProperties} via {@link @EnableConfigurationProperties}
+ * Explicitly registered as Bean, ensuring availability before any {@code @Service}.
  */
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
@@ -40,9 +40,9 @@ import org.springframework.context.annotation.Import;
 public class GeneralRagAutoConfiguration {
 
     /**
-     * 显式注册 RagProperties Bean，确保在任何 @Service 之前就绪。
-     * 使用 @Bean 方法而非 @EnableConfigurationProperties(RagProperties.class)，
-     * 避免 Spring Boot 的 @ConfigurationProperties 后处理器时序问题。
+     * Explicitly register RagProperties Bean, ensuring readiness before any @Service.
+     * Uses @Bean method instead of @EnableConfigurationProperties(RagProperties.class),
+     * avoiding Spring Boot @ConfigurationProperties post-processor timing issues.
      */
     @Bean
     public RagProperties ragProperties() {
@@ -50,7 +50,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * 默认领域扩展（当用户未注册任何 DomainRagExtension 时生效）
+     * Default domain extension (active when user has not registered any DomainRagExtension)
      */
     @Bean
     @ConditionalOnMissingBean(DomainRagExtension.class)
@@ -59,7 +59,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * RAG 指标服务（需要 Micrometer / Actuator 在 classpath）
+     * RAG metrics service (requires Micrometer/Actuator on classpath)
      */
     @Bean
     @ConditionalOnClass(name = "io.micrometer.core.instrument.MeterRegistry")
@@ -69,7 +69,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * API Key 认证过滤器
+     * API Key authentication filter
      */
     @Bean
     public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
@@ -85,7 +85,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * API 限流过滤器
+     * API rate limit filter
      */
     @Bean
     public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
@@ -103,7 +103,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * 分布式追踪配置刷新
+     * Distributed tracing config refresh
      */
     @Bean
     public Object tracingConfigurer(RequestTraceFilter traceFilter,
@@ -117,7 +117,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * 组件级健康检查服务
+     * Component-level health check service
      */
     @Bean
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
@@ -129,7 +129,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * RAG 健康检查指示器
+     * RAG health check indicator
      */
     @Bean("ragService")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
@@ -143,7 +143,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * RAG Liveness 健康探针
+     * RAG Liveness health probe
      */
     @Bean("ragLiveness")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
@@ -153,7 +153,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * RAG Readiness 健康探针
+     * RAG Readiness health probe
      */
     @Bean("ragReadiness")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")
@@ -167,7 +167,7 @@ public class GeneralRagAutoConfiguration {
     }
 
     /**
-     * LLM 熔断器健康探针
+     * LLM circuit breaker health probe
      */
     @Bean("llmCircuitBreaker")
     @ConditionalOnClass(name = "org.springframework.boot.actuate.health.HealthIndicator")

@@ -65,7 +65,7 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 测试用构造函数（注入 SearchCapabilities 以便精确控制能力探测结果）
+     * Test constructor (injects SearchCapabilities for precise capability detection control)
      */
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, String configuredStrategy,
                                          SearchCapabilities capabilities) {
@@ -73,7 +73,7 @@ public class FulltextSearchProviderFactory {
         this.configuredStrategy = configuredStrategy;
         this.capabilities = capabilities;
         
-        // 初始化各语言的 Provider
+        // Initialize providers for each language
         initProviders();
     }
     
@@ -87,7 +87,7 @@ public class FulltextSearchProviderFactory {
     }
 
     /**
-     * 完全可控的构造函数（用于测试注入 spy/fake providers）
+     * Fully controllable constructor (for testing with spy/fake providers)
      */
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, String configuredStrategy,
                                         SearchCapabilities capabilities,
@@ -103,10 +103,10 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 获取指定语言的全文检索 Provider
+     * Get full-text search provider for specified language
      *
-     * @param lang 检测到的语言
-     * @return 对应语言的全文检索 Provider
+     * @param lang detected language
+     * @return full-text search provider for the corresponding language
      */
     public FulltextSearchProvider getProvider(QueryLang lang) {
         log.info("GET_PROVIDER called: configuredStrategy={}, lang={}", configuredStrategy, lang);
@@ -118,7 +118,7 @@ public class FulltextSearchProviderFactory {
             return autoDetectForLang(lang);
         }
         
-        // 固定策略配置
+        // Fixed strategy configuration
         return getFixedProvider();
     }
     
@@ -174,7 +174,7 @@ public class FulltextSearchProviderFactory {
     }
 
     /**
-     * 获取固定策略的 Provider
+     * Get provider for fixed strategy
      */
     private FulltextSearchProvider getFixedProvider() {
         return switch (configuredStrategy) {
@@ -204,14 +204,14 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 是否为显式策略配置（非 auto）
+     * Whether this is an explicit strategy configuration (not auto)
      */
     private boolean isExplicitStrategy() {
         return "pg_jieba".equals(configuredStrategy) || "pg_trgm".equals(configuredStrategy);
     }
     
     /**
-     * 获取当前活跃的全文检索策略（用于兼容旧代码）
+     * Get currently active full-text search strategy (for legacy code compatibility)
      */
     public FulltextSearchProvider getProvider() {
         if ("none".equals(configuredStrategy)) {
@@ -224,14 +224,14 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 获取能力探测实例
+     * Get capability detection instance
      */
     public SearchCapabilities getCapabilities() {
         return capabilities;
     }
     
     /**
-     * 检测查询语言
+     * Detect query language
      */
     public QueryLang detectLang(String text) {
         if (text == null || text.isBlank()) {
@@ -246,7 +246,7 @@ public class FulltextSearchProviderFactory {
     }
     
     /**
-     * 获取策略显示名称
+     * Get strategy display name
      */
     public static String getStrategyLabel(String strategy) {
         return STRATEGY_LABELS.getOrDefault(strategy, strategy);

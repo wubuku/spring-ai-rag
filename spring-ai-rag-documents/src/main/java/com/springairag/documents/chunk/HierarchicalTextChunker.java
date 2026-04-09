@@ -7,17 +7,17 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 层级式文档分块器
+ * Hierarchical document chunker
  *
- * <p>支持：
+ * <p>Supports:
  * <ul>
- *   <li>多层次 Markdown 标题递归切分（# - ######）</li>
- *   <li>表格完整性保留</li>
- *   <li>标题继承机制（子标题继承父标题上下文）</li>
- *   <li>句子级精细切分（超长段落兜底切分）</li>
+ *   <li>Multi-level Markdown heading recursive splitting (# - ######)</li>
+ *   <li>Table integrity preservation</li>
+ *   <li>Heading inheritance mechanism (child headings inherit parent heading context)</li>
+ *   <li>Sentence-level fine splitting (fallback for overly long paragraphs)</li>
  * </ul>
  *
- * <p>参考 MaxKB4j 文档分块策略。
+ * <p>Based on MaxKB4j document chunking strategy.
  */
 public class HierarchicalTextChunker {
 
@@ -47,24 +47,24 @@ public class HierarchicalTextChunker {
     }
 
     /**
-     * 执行层级式分块
+     * Execute hierarchical chunking
      *
-     * @param content 原始文档内容
-     * @return 分块列表（按原文位置排序）
+     * @param content raw document content
+     * @return chunk list (sorted by original text position)
      */
     public List<TextChunk> split(String content) {
         if (content == null || content.isBlank()) {
             return new ArrayList<>();
         }
 
-        // 1. 提取并保留表格
+        // 1. Extract and preserve tables
         List<TableBlock> tables = extractTables(content);
         String contentWithoutTables = MD_TABLE_PATTERN.matcher(content).replaceAll("");
 
-        // 2. 按标题层级递归切分
+        // 2. Split recursively by heading level
         List<SectionBlock> sections = splitByHeaders(contentWithoutTables);
 
-        // 3. 对超长段落按句子级进一步切分
+        // 3. Further split oversized paragraphs by sentence
         List<TextChunk> chunks = new ArrayList<>();
         for (SectionBlock section : sections) {
             if (section.content.length() > maxChunkSize) {
@@ -82,15 +82,15 @@ public class HierarchicalTextChunker {
             }
         }
 
-        // 4. 插入表格块
+        // 4. Insert table blocks
         chunks.addAll(convertTablesToChunks(tables));
 
-        // 5. 过滤过短碎片并排序
+        // 5. Filter out too-short fragments and sort
         return filterAndSortChunks(chunks);
     }
 
     /**
-     * 静态工厂方法
+     * Static factory method
      */
     public static List<TextChunk> split(String content, int chunkSize, int chunkOverlap) {
         return new HierarchicalTextChunker(chunkSize, 10, chunkOverlap).split(content);
@@ -211,7 +211,7 @@ public class HierarchicalTextChunker {
                         : titleContext + "\n" + currentChunk.toString();
                 chunks.add(new TextChunk(chunkText.trim(), chunkStart, chunkStart + currentChunk.length()));
 
-                // 重叠处理
+                // Overlap handling
                 int overlapStart = Math.max(0, currentChunk.length() - chunkOverlap);
                 String overlapText = currentChunk.substring(overlapStart);
                 currentChunk = new StringBuilder(overlapText);

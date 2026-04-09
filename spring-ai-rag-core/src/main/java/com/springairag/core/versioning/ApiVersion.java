@@ -6,25 +6,25 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * API 版本注解
+ * API version annotation
  *
- * <p>标记控制器或方法支持的 API 版本。配合 {@link ApiVersionRequestMappingHandlerMapping} 使用，
- * 自动为请求映射添加 /api/{version}/ 前缀。
+ * <p>Marks the API version supported by a controller or method. Used with {@link ApiVersionRequestMappingHandlerMapping},
+ * automatically adding /api/{version}/ prefix to request mappings.
  *
- * <p>使用方式：
+ * <p>Usage:
  * <pre>
  * {@literal @}RestController
  * {@literal @}ApiVersion("v1")
  * {@literal @}RequestMapping("/rag/documents")
  * public class RagDocumentController { ... }
  *
- * // 最终路径: /api/v1/rag/documents
+ * // Final path: /api/v1/rag/documents
  * </pre>
  *
- * <p>支持多版本共存：
+ * <p>Supports multiple versions coexisting:
  * <pre>
  * {@literal @}ApiVersion({"v1", "v2"})
- * // 同时匹配 /api/v1/... 和 /api/v2/...
+ * // Matches both /api/v1/... and /api/v2/...
  * </pre>
  */
 @Target({ElementType.TYPE, ElementType.METHOD})
@@ -32,12 +32,12 @@ import java.lang.annotation.Target;
 public @interface ApiVersion {
 
     /**
-     * 支持的 API 版本数组（如 "v1", "v2"）
+     * Supported API version array (e.g., "v1", "v2")
      */
     String[] value();
 
     /**
-     * 是否废弃此版本（将在响应头中添加 Deprecation 提示）
+     * Whether this version is deprecated (will add Deprecation hint in response header)
      */
     boolean deprecated() default false;
 }

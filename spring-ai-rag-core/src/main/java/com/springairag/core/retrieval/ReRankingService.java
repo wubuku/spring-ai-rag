@@ -15,12 +15,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * 结果重排序服务
+ * Result reranking service
  *
- * <p>基于多维度相关性（关键词匹配、位置权重）和多样性评分，
- * 对检索结果进行二次排序，提升最终召回质量。
+ * <p>Multi-dimensional relevance scoring (keyword matching, position weighting) and diversity scoring,
+ * to resort retrieval results and improve final recall quality.
  *
- * <p>此服务无外部依赖，可直接迁移使用。
+ * <p>This service has no external dependencies and can be migrated directly.
  */
 @Service
 public class ReRankingService {
@@ -34,19 +34,19 @@ public class ReRankingService {
     }
 
     /**
-     * 对检索结果进行重排序
+     * Rerank retrieval results
      *
-     * @param query 原始查询
-     * @param results 初始检索结果
-     * @param maxResults 返回结果数量
-     * @return 重排序后的结果列表（按最终得分降序）
+     * @param query original query
+     * @param results initial retrieval results
+     * @param maxResults max results
+     * @return reranked result list (sorted by final score descending)
      */
     public List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults) {
         if (!config.isEnabled() || results == null || results.isEmpty()) {
             return results;
         }
 
-        // 计算各维度得分并合并
+        // Calculate dimension scores and merge
         List<RetrievalResult> scored = results.stream()
                 .map(r -> {
                     float relevance = calculateRelevanceScore(query, r.getChunkText());
@@ -77,7 +77,7 @@ public class ReRankingService {
     }
 
     /**
-     * 计算查询与文本的相关性得分（关键词匹配 + 位置权重）
+     * Calculate query-text relevance score (keyword matching + position weighting)
      */
     float calculateRelevanceScore(String query, String text) {
         if (query == null || text == null) {
@@ -107,7 +107,7 @@ public class ReRankingService {
     }
 
     /**
-     * 计算多样性得分（与最相似结果的差异化程度）
+     * Calculate diversity score (difference from most similar result)
      */
     float calculateDiversityScore(String text, List<RetrievalResult> allResults) {
         if (allResults.size() <= 1) {
@@ -126,7 +126,7 @@ public class ReRankingService {
     }
 
     /**
-     * 计算两段文本的相似度（Jaccard 相似度，基于关键词重叠）
+     * Calculate similarity between two texts (Jaccard similarity based on keyword overlap)
      */
     float calculateTextSimilarity(String text1, String text2) {
         if (text1 == null || text2 == null) {
