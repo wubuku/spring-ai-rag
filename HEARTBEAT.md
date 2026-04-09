@@ -1987,3 +1987,15 @@
   - 125 个测试文件（113 core + 8 api + 4 starter）
   - 161 源文件 / 125 测试文件
   - git 工作区干净（无变更）；后端项目处于生产级成熟状态
+
+## Cron 进度（2026-04-09 13:48 — i18n：ChatMemoryMultiTurnTest @DisplayName 国际化）
+
+- 2026-04-09 13:48 — ✅ i18n 国际化（ChatMemoryMultiTurnTest）：
+  - Class Javadoc: 对话记忆多轮验证 → Chat Memory Multi-Turn Test
+  - Class @DisplayName: 对话记忆多轮验证 → Chat Memory Multi-Turn Test
+  - 全部 14 个 @DisplayName 注解：中文 → English
+  - 全部内联注释（inline comments）：中文 → English
+  - 测试数据字符串（"第一轮问题"/"会话A的问题"等）保留原样（test fixture，非用户可见）
+  - ChatMemoryMultiTurnTest 14 tests ✅；全量测试 1421 tests ✅
+  - commit c22342a 已推送
+  - 仍有 3 个测试文件含中文（RagChatServiceTest / MultiModelConfigLoaderTest / 1 个其他），继续推进
