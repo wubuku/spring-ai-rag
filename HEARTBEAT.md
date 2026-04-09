@@ -2012,3 +2012,6 @@
   - RagChatServiceTest 16 tests ✅；全量测试 ✅
   - commit e841c54 已推送
   - 后端项目处于生产级成熟状态
+
+## Cron 进度（2026-04-09 15:33 — ApiVersionConfig 单元测试补全）
+- 2026-04-09 15:33 — ✅ ApiVersionConfig 单元测试补全：`ApiVersionConfigTest.java` 3 个测试覆盖 `webMvcRegistrations()` bean 创建/返回类型/实例可复用性；+3 tests，零失败零错误；mvn test ✅（BUILD SUCCESS）；commit 45d064f 已推送
