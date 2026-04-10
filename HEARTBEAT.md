@@ -2245,6 +2245,12 @@
   - `RagRetrievalEvaluationTest`: 12 tests（all fields/precisionAtK/recallAtK/mrr/ndcg/hitRate/evaluationResult/metadata）
   - 65 new tests；1621 tests 全通过（1556→1621）；commit ba6a991 已推送
   - 后端实体测试覆盖率 100%（15/15 entities have tests）
+- **2026-04-11 02:11 AM** — 国际化推进：4 个集成测试基类中文注释 → 英文
+  - `AbstractIntegrationTest`: class Javadoc + method comments → English
+  - `AdvisorChainIntegrationTest`: all Chinese comments, method names, test data → English
+  - `RagControllerIntegrationTest`: class Javadoc → English, mock reply text → English
+  - `DomainExtensionPipelineIntegrationTest`: class Javadoc → English
+  - commit 6ba0310 已推送；1621 tests 全通过
 
 ## 待办（实体测试全覆盖 — 2026-04-11）
 
@@ -2266,6 +2272,7 @@
 | QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
 | QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
 | T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ✅ 2026-04-11（T1 完成，RagUserFeedbackRepositoryTest 12 tests，1621 tests total） |
+| T3 | Integration test base classes i18n: 4 files Chinese→English | 测试覆盖 | ✅ 2026-04-11（4 files, 148 lines changed, 1621 tests pass） |
 | T2 | 控制器端到端集成测试：AlertController SSE 端点 | 测试覆盖 | ⏳ |
 | M1 | 文档全文搜索增强（按 keyword + date + type 过滤） | 功能 | ⏳ |
 | M2 | Collection 多文档批量 SSE 嵌入（进度实时推送） | 性能 | ⏳ |
