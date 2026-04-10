@@ -2225,3 +2225,44 @@
 ## Cron 进度（2026-04-10 14:24 — WebUI 常规发布）
 
 - 2026-04-10 15:20 — ✅ DigestUtils 提取：RagDocumentController 内的 `computeSha256()` 方法提取为 `com.springairag.core.util.DigestUtils.sha256()` 工具类，消除重复实现；`RagDocumentController` 减少 17 行；新增 `DigestUtilsTest`（6 tests：empty/string/unicode/long/deterministic/different inputs）；1556 tests 全通过（+6）；commit 7d340d0 已推送
+
+## Cron 进度（2026-04-11 00:21 — 后端：实体测试覆盖补全）
+
+- 2026-04-11 00:21 — ✅ 实体测试覆盖补全（7 个缺失实体）：
+  - `RagSilenceScheduleTest`: 8 tests（defaults/enabled=true/metadata/silenceTypes ONE_TIME+RECURRING/optional fields）
+  - `RagChatHistoryTest`: 8 tests（all fields/session/query/response/relatedDocumentIds/metadata）
+  - `RagUserFeedbackTest`: 8 tests（all fields/feedbackTypes/rating/dwellTime/metadata）
+  - `RagClientErrorTest`: 10 tests（all fields/two-arg constructor/onCreate hook/stackTrace/long URLs）
+  - `RagAuditLogTest`: 10 tests（all fields/operationTypes/entityTypes/onCreate hook/clientIp IPv4+IPv6）
+  - `RagAbResultTest`: 9 tests（all fields/variantNames/conversionFlag/metrics/experiment relationship）
+  - `RagRetrievalEvaluationTest`: 12 tests（all fields/precisionAtK/recallAtK/mrr/ndcg/hitRate/evaluationResult/metadata）
+  - 65 new tests；1621 tests 全通过（1556→1621）；commit ba6a991 已推送
+  - 后端实体测试覆盖率 100%（15/15 entities have tests）
+
+## 待办（实体测试全覆盖 — 2026-04-11）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| ET1 | RagSilenceScheduleTest（8 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET2 | RagChatHistoryTest（8 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET3 | RagUserFeedbackTest（8 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET4 | RagClientErrorTest（10 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET5 | RagAuditLogTest（10 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET6 | RagAbResultTest（9 tests） | 测试覆盖 | ✅ 2026-04-11 |
+| ET7 | RagRetrievalEvaluationTest（12 tests） | 测试覆盖 | ✅ 2026-04-11 |
+
+## 待办（后续改进）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ⏳ |
+| QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
+| QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
+| T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ⏳ |
+| T2 | 控制器端到端集成测试：AlertController SSE 端点 | 测试覆盖 | ⏳ |
+| M1 | 文档全文搜索增强（按 keyword + date + type 过滤） | 功能 | ⏳ |
+| M2 | Collection 多文档批量 SSE 嵌入（进度实时推送） | 性能 | ⏳ |
+| S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ⏳ |
+| S2 | WebUI API Key 管理页面 | UX | ⏳ |
+
+**推进原则**：每轮完成 1 个代码任务；任务完成立即 commit push；HEARTBEAT 保持 ≥10 个 ⏳ 待办。
