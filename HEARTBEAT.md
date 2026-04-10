@@ -2161,6 +2161,16 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | OL1 | @Version 乐观锁：6 个可变实体 + Flyway V17 | 数据完整性 | ✅ 2026-04-10 |
+| OL2 | SseEmitters.sendError() 修复：成功发送后调用 complete()，失败才 completeWithError | 可靠性 | ✅ 2026-04-10 |
+| OL3 | SseEmitters.sendHeartbeat() 使用 .comment() API 发送标准 SSE comment 格式 | 可靠性 | ✅ 2026-04-10 |
+
+## 进度日志（2026-04-10 08:08 — 后端：SSE Emitter 可靠性修复）
+
+- 2026-04-10 08:08 — ✅ OL2+OL3 SseEmitters 可靠性修复：
+  - `sendError()`: 成功发送错误事件后调用 `emitter.complete()` 正常完成；仅在发送失败时才调用 `completeWithError()` 作为兜底
+  - `sendHeartbeat()`: 改用 `SseEmitter.event().comment(": heartbeat")` API，发送标准 SSE comment 格式（之前用 `.data()` 包装导致格式错误 `data: : heartbeat`）
+  - SseEmittersTest 新增 `sendError_successCompletesNormally` 测试验证成功发送后 onError 不被调用
+  - 1462 测试全通过，零失败零错误；commits 950efd1 + 2d88f34 已推送
 
 ## 进度日志（WebUI — 2026-04-10 06:49）
 
