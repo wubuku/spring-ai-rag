@@ -2167,6 +2167,7 @@
 | OL1 | @Version 乐观锁：6 个可变实体 + Flyway V17 | 数据完整性 | ✅ 2026-04-10 |
 | OL2 | SseEmitters.sendError() 修复：成功发送后调用 complete()，失败才 completeWithError | 可靠性 | ✅ 2026-04-10 |
 | OL3 | SseEmitters.sendHeartbeat() 使用 .comment() API 发送标准 SSE comment 格式 | 可靠性 | ✅ 2026-04-10 |
+| C44 | ModelControllerTest 补强：multiModelEnabled=false 单模型路径覆盖 | 测试覆盖 | ✅ 2026-04-10 |
 
 ## 进度日志（2026-04-10 08:08 — 后端：SSE Emitter 可靠性修复）
 
@@ -2183,3 +2184,11 @@
 ## 进度日志（WebUI — 2026-04-10 08:18）
 
 - 2026-04-10 08:18 — ✅ useSearchHistory test 修复：useSearchHistory.test.ts 'removes item by timestamp' 测试 flakiness 修复——React 18+ 在同一同步 act() 块中批量 setState，两次 addQuery 都看到 prev=[] 初始状态，获得相同 Date.now() 时间戳，导致第二次去重逻辑误删第一次条目；修复：两次 addQuery 之间添加 waitFor + 独立 act() 块确保第一次状态更新先提交；142 vitest ✅ / npm run build ✅ / E2E 12/12 ✅；commit dc858a9 已推送
+
+## 进度日志（2026-04-10 10:48 — 后端：ModelController 测试补强）
+
+- 2026-04-10 10:48 — ✅ ModelControllerTest 补强：
+  - 新增 `testListModels_singleModel_disabledMultiModel` 测试覆盖 `isMultiModelEnabled=false` 路径
+  - 验证 single-model 模式下 `defaultProvider` 正确解析为空列表后的第一个可用 provider，`fallbackChain=null`，`models=[]`
+  - 类级 Javadoc 从中文翻译为英文
+  - ModelControllerTest 7 测试全通过（+1），全量测试通过，commit 307c20d 已推送
