@@ -99,7 +99,13 @@ describe('useSearchHistory', () => {
     });
     const tsToRemove = result.current.history[0].timestamp;
 
-    // Add second item with useHybrid=false — different flag means no deduplication conflict
+    // Add second item in a SEPARATE act() to ensure a different timestamp.
+    // React 18+ batches setState calls within the same synchronous act() block,
+    // so without this separation both addQuery calls see the same prev=[] state
+    // and get identical Date.now() timestamps, causing deduplication to misfire.
+    await waitFor(() => {
+      expect(result.current.history).toHaveLength(1);
+    });
     act(() => {
       result.current.addQuery('second query', false);
     });
