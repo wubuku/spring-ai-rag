@@ -2306,3 +2306,7 @@
 ## Cron 进度（后端 — 2026-04-11 05:06 — 主动巡检）
 
 - 2026-04-11 05:06 — ✅ T4 NotificationConfig 单元测试：11 个测试覆盖 DingTalk/Email 双通道配置（webhookUrl/secret/alertTypes/host/port/username/password/from/to）+ 默认值 + 多通道支持；NotificationConfig 覆盖率 0%→100%；mvn test ✅（全通过，零失败零错误）；commit 65d5a5f 已推送
+
+## Cron 进度（后端 — 2026-04-11 06:14 — CollectionMapper 工具类提取）
+
+- 2026-04-11 06:14 — ✅ 提取 CollectionMapper 工具类：新建 `util/CollectionMapper.java`，将 RagCollectionController 中的 `toMap(RagCollection, long)` 方法抽取为独立工具类（与 DocumentMapper 保持一致）；更新 5 处调用点使用 `CollectionMapper.toMap()`；移除 RagCollectionController 中冗余的 private toMap 方法；mvn test ✅（1649 测试全通过，零失败零错误）；commit 8bf682a 已推送
