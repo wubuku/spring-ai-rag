@@ -128,13 +128,17 @@ public final class SseEmitters {
 
     /**
      * Sends a heartbeat comment to keep the connection alive through proxies/load balancers.
-     * Heartbeat is sent as an unnamed comment line: {@code : heartbeat\n\n}
+     * Heartbeat is sent as a comment line: {@code : heartbeat\n\n}
      * Proxies may close idle connections after ~60s, so a heartbeat every 30s is recommended.
      *
      * @param emitter the SSE emitter
      */
     public static void sendHeartbeat(SseEmitter emitter) {
-        sendRaw(emitter, null, ": heartbeat", "heartbeat");
+        try {
+            emitter.send(SseEmitter.event().comment(": heartbeat"));
+        } catch (Exception ex) {
+            log.warn("SSE heartbeat failed: {}", ex.getMessage());
+        }
     }
 
     /**
