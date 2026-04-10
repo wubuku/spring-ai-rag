@@ -2148,6 +2148,10 @@
 
 - 2026-04-10 05:52 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 内容与已提交版本完全一致（无增量变更）；后端服务 8081 UP；git 工作区干净；WebUI 项目处于生产级成熟状态
 
+## Cron 进度（2026-04-10 08:44 — 后端：RagAlert + RagAbExperiment 实体测试）
+
+- 2026-04-10 08:44 — ✅ 实体测试补强（RagAlert + RagAbExperiment）：新增 RagAlertTest（9 tests：default values/status/metrics JSON/alert types/severity/null handling）+ RagAbExperimentTest（8 tests：default values/all fields/trafficSplit/status transitions/minSampleSize/metadata/null handling）；17 个新测试；全量测试通过；commit 95231f7 已推送
+
 ## Cron 进度（2026-04-10 06:13 — DocumentMapper 工具类提取）
 
 - 2026-04-10 06:13 — ✅ DocumentMapper 工具类提取：RagDocumentController.documentToMap+versionToMap 方法（112行重复代码）提取为 com.springairag.core.util.DocumentMapper 独立类，消除两处映射逻辑重复；RagDocumentController 845→~730行（-115行）；10 个单元测试覆盖 batch/single-document variant + version mapping；1562 测试全通过；commit 0014ef5 已推送
