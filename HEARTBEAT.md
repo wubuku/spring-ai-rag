@@ -2280,6 +2280,10 @@
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
 | F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
 
+## Cron 进度（2026-04-11 04:20 — 后端 SseEmitters 注释规范化）
+
+- 2026-04-11 04:20 — ✅ SseEmitters catch 块注释规范化：5 个 bare `catch (Exception ex/e)` 添加内联注释说明意图（`// best-effort: client likely disconnected` / `// best-effort: heartbeat is optional` / `// SSE error: propagate to caller`），与 ComponentHealthService 注释风格保持一致；mvn test ✅（全通过，零失败零错误）；commit fe6dc90 已推送
+
 ## Cron 进度（2026-04-11 03:13 — WebUI 常规发布）
 
 - 2026-04-11 03:13 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
