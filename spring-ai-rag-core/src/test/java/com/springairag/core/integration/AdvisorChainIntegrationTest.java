@@ -2,7 +2,6 @@ package com.springairag.core.integration;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.advisor.AdvisorMetrics;
-import com.springairag.core.advisor.AdvisorUtils;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
@@ -33,17 +32,18 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * Advisor 链集成测试
+ * Advisor chain integration tests.
  *
- * <p>验证 QueryRewriteAdvisor → HybridSearchAdvisor → RerankAdvisor 三个 Advisor 的端到端协作：
+ * <p>Verifies end-to-end collaboration of QueryRewriteAdvisor, HybridSearchAdvisor, and RerankAdvisor:
  * <ul>
- *   <li>查询改写结果通过 context 传递给下游</li>
- *   <li>混合检索结果通过 context 传递给重排</li>
- *   <li>重排结果注入系统消息并存入 response context</li>
- *   <li>各阶段异常时的降级行为</li>
+ *   <li>Query rewrite results are passed to downstream via context</li>
+ *   <li>Hybrid search results are passed to reranking via context</li>
+ *   <li>Reranked results are injected into system message and stored in response context</li>
+ *   <li>Graceful degradation when exceptions occur at each stage</li>
  * </ul>
  *
- * <p>使用真实 Advisor 实例，Mock 底层服务（QueryRewritingService / HybridRetrieverService / ReRankingService）。
+ * <p>Uses real Advisor instances with mocked underlying services
+ * (QueryRewritingService / HybridRetrieverService / ReRankingService).
  */
 class AdvisorChainIntegrationTest {
 
@@ -65,11 +65,16 @@ class AdvisorChainIntegrationTest {
 
         queryRewriteAdvisor = new QueryRewriteAdvisor(queryRewritingService, mock(AdvisorMetrics.class));
         hybridSearchAdvisor = new HybridSearchAdvisor(hybridRetrieverService, mock(AdvisorMetrics.class));
-        rerankAdvisor = new RerankAdvisor(rerankingService, new com.springairag.core.adapter.ApiAdapterFactory() { public com.springairag.core.adapter.ApiCompatibilityAdapter getAdapter(String u) { return new com.springairag.core.adapter.OpenAiCompatibleAdapter(); } }, mock(AdvisorMetrics.class), "https://api.example.com");
+        rerankAdvisor = new RerankAdvisor(rerankingService,
+                new com.springairag.core.adapter.ApiAdapterFactory() {
+                    public com.springairag.core.adapter.ApiCompatibilityAdapter getAdapter(String u) {
+                        return new com.springairag.core.adapter.OpenAiCompatibleAdapter();
+                    }
+                }, mock(AdvisorMetrics.class), "https://api.example.com");
     }
 
     /**
-     * 构建包含用户消息的 ChatClientRequest
+     * Builds a ChatClientRequest with a user message.
      */
     private ChatClientRequest buildRequest(String userMessage) {
         Prompt prompt = new Prompt(List.of(new UserMessage(userMessage)));
@@ -80,7 +85,7 @@ class AdvisorChainIntegrationTest {
     }
 
     /**
-     * 构建包含系统消息和用户消息的 ChatClientRequest
+     * Builds a ChatClientRequest with system and user messages.
      */
     private ChatClientRequest buildRequestWithSystem(String systemMessage, String userMessage) {
         Prompt prompt = new Prompt(List.of(
@@ -96,30 +101,30 @@ class AdvisorChainIntegrationTest {
     // ==================== QueryRewriteAdvisor ====================
 
     @Test
-    @DisplayName("QueryRewriteAdvisor: 同义词扩展后存入 context")
+    @DisplayName("QueryRewriteAdvisor: stores rewritten queries in context after synonym expansion")
     void queryRewrite_storesRewrittenQueriesInContext() {
-        when(queryRewritingService.rewriteQuery("敏感皮肤怎么办"))
-                .thenReturn(List.of("敏感皮肤怎么办", "过敏皮肤怎么办", "易敏皮肤怎么办"));
+        when(queryRewritingService.rewriteQuery("sensitive skin what to do"))
+                .thenReturn(List.of("sensitive skin what to do", "allergy skin what to do", "reactive skin what to do"));
 
-        ChatClientRequest request = buildRequest("敏感皮肤怎么办");
+        ChatClientRequest request = buildRequest("sensitive skin what to do");
         ChatClientRequest result = queryRewriteAdvisor.before(request, advisorChain);
 
-        // 原始查询和改写查询都应存入 context
-        assertEquals("敏感皮肤怎么办", result.context().get(QueryRewriteAdvisor.CTX_ORIGINAL_QUERY));
+        // Both original and rewritten queries should be stored in context
+        assertEquals("sensitive skin what to do", result.context().get(QueryRewriteAdvisor.CTX_ORIGINAL_QUERY));
         @SuppressWarnings("unchecked")
         List<String> queries = (List<String>) result.context().get(QueryRewriteAdvisor.CTX_REWRITE_QUERIES);
         assertNotNull(queries);
         assertEquals(3, queries.size());
-        assertEquals("敏感皮肤怎么办", queries.get(0));
-        assertTrue(queries.contains("过敏皮肤怎么办"));
+        assertEquals("sensitive skin what to do", queries.get(0));
+        assertTrue(queries.contains("allergy skin what to do"));
     }
 
     @Test
-    @DisplayName("QueryRewriteAdvisor: 禁用时不改写，context 中无改写结果")
+    @DisplayName("QueryRewriteAdvisor: disabled - no rewrite, context has no rewrite data")
     void queryRewrite_disabled_noContextData() {
         queryRewriteAdvisor.setEnabled(false);
 
-        ChatClientRequest request = buildRequest("测试查询");
+        ChatClientRequest request = buildRequest("test query");
         ChatClientRequest result = queryRewriteAdvisor.before(request, advisorChain);
 
         assertNull(result.context().get(QueryRewriteAdvisor.CTX_REWRITE_QUERIES));
@@ -127,22 +132,22 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("QueryRewriteAdvisor: 无同义词时只返回原始查询")
+    @DisplayName("QueryRewriteAdvisor: no synonyms - returns only original query")
     void queryRewrite_noSynonyms_returnsOriginalOnly() {
-        when(queryRewritingService.rewriteQuery("普通查询"))
-                .thenReturn(List.of("普通查询"));
+        when(queryRewritingService.rewriteQuery("plain query"))
+                .thenReturn(List.of("plain query"));
 
-        ChatClientRequest request = buildRequest("普通查询");
+        ChatClientRequest request = buildRequest("plain query");
         ChatClientRequest result = queryRewriteAdvisor.before(request, advisorChain);
 
         @SuppressWarnings("unchecked")
         List<String> queries = (List<String>) result.context().get(QueryRewriteAdvisor.CTX_REWRITE_QUERIES);
         assertEquals(1, queries.size());
-        assertEquals("普通查询", queries.get(0));
+        assertEquals("plain query", queries.get(0));
     }
 
     @Test
-    @DisplayName("QueryRewriteAdvisor: order 为 HIGHEST_PRECEDENCE + 10")
+    @DisplayName("QueryRewriteAdvisor: order is HIGHEST_PRECEDENCE + 10")
     void queryRewrite_order() {
         assertEquals(Ordered.HIGHEST_PRECEDENCE + 10, queryRewriteAdvisor.getOrder());
     }
@@ -150,16 +155,16 @@ class AdvisorChainIntegrationTest {
     // ==================== HybridSearchAdvisor ====================
 
     @Test
-    @DisplayName("HybridSearchAdvisor: 检索结果存入 context")
+    @DisplayName("HybridSearchAdvisor: search results are stored in context")
     void hybridSearch_storesResultsInContext() {
         List<RetrievalResult> mockResults = List.of(
-                createResult("doc-1", "敏感皮肤应使用温和洁面产品", 0.92),
-                createResult("doc-2", "护肤品成分选择指南", 0.85)
+                createResult("doc-1", "Sensitive skin should use gentle cleanser", 0.92),
+                createResult("doc-2", "Skincare ingredient selection guide", 0.85)
         );
-        when(hybridRetrieverService.search(eq("敏感皮肤怎么办"), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(eq("sensitive skin what to do"), isNull(), isNull(), eq(10)))
                 .thenReturn(mockResults);
 
-        ChatClientRequest request = buildRequest("敏感皮肤怎么办");
+        ChatClientRequest request = buildRequest("sensitive skin what to do");
         ChatClientRequest result = hybridSearchAdvisor.before(request, advisorChain);
 
         @SuppressWarnings("unchecked")
@@ -172,11 +177,11 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("HybridSearchAdvisor: 禁用时不执行检索")
+    @DisplayName("HybridSearchAdvisor: disabled - no search executed")
     void hybridSearch_disabled_noSearch() {
         hybridSearchAdvisor.setEnabled(false);
 
-        ChatClientRequest request = buildRequest("测试");
+        ChatClientRequest request = buildRequest("test");
         ChatClientRequest result = hybridSearchAdvisor.before(request, advisorChain);
 
         assertNull(result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY));
@@ -184,7 +189,7 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("HybridSearchAdvisor: 空查询跳过检索")
+    @DisplayName("HybridSearchAdvisor: empty query skips search")
     void hybridSearch_emptyQuery_skipsSearch() {
         ChatClientRequest request = buildRequest("");
         ChatClientRequest result = hybridSearchAdvisor.before(request, advisorChain);
@@ -194,7 +199,7 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("HybridSearchAdvisor: order 为 HIGHEST_PRECEDENCE + 20")
+    @DisplayName("HybridSearchAdvisor: order is HIGHEST_PRECEDENCE + 20")
     void hybridSearch_order() {
         assertEquals(Ordered.HIGHEST_PRECEDENCE + 20, hybridSearchAdvisor.getOrder());
     }
@@ -202,23 +207,23 @@ class AdvisorChainIntegrationTest {
     // ==================== RerankAdvisor ====================
 
     @Test
-    @DisplayName("RerankAdvisor: 从 context 读取检索结果并重排，注入系统消息")
+    @DisplayName("RerankAdvisor: reads retrieval results from context, reranks, and injects system message")
     void rerank_augmentsSystemMessage() {
         List<RetrievalResult> searchResults = List.of(
-                createResult("doc-1", "皮肤类型分为干性、油性、混合性", 0.92),
-                createResult("doc-2", "敏感肌护理建议", 0.85),
-                createResult("doc-3", "日常护肤步骤", 0.78)
+                createResult("doc-1", "Skin types include dry, oily, combination", 0.92),
+                createResult("doc-2", "Sensitive skin care recommendations", 0.85),
+                createResult("doc-3", "Daily skincare routine", 0.78)
         );
 
         List<RetrievalResult> rerankedResults = List.of(
-                createResult("doc-1", "皮肤类型分为干性、油性、混合性", 0.95),
-                createResult("doc-2", "敏感肌护理建议", 0.88)
+                createResult("doc-1", "Skin types include dry, oily, combination", 0.95),
+                createResult("doc-2", "Sensitive skin care recommendations", 0.88)
         );
-        when(rerankingService.rerank(eq("皮肤类型"), anyList(), eq(5)))
+        when(rerankingService.rerank(eq("skin types"), anyList(), eq(5)))
                 .thenReturn(rerankedResults);
 
-        // 构建带有 HybridSearch 结果的 request
-        Prompt prompt = new Prompt(List.of(new UserMessage("皮肤类型")));
+        // Build request with HybridSearch results in context
+        Prompt prompt = new Prompt(List.of(new UserMessage("skin types")));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(Map.of(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults))
@@ -226,15 +231,17 @@ class AdvisorChainIntegrationTest {
 
         ChatClientRequest result = rerankAdvisor.before(request, advisorChain);
 
-        // OpenAi 兼容适配器使用 augmentSystemMessage 注入上下文
+        // OpenAI-compatible adapter uses augmentSystemMessage to inject context
         String allText = result.prompt().getInstructions().stream()
                 .map(org.springframework.ai.chat.messages.Message::getText)
                 .collect(java.util.stream.Collectors.joining("\n"));
         assertTrue(allText.contains("references"), "Message should contain references hint");
-        assertTrue(allText.contains("皮肤类型分为干性、油性、混合性"), "应包含重排后的 top-1 结果");
-        assertTrue(allText.contains("敏感肌护理建议"), "应包含重排后的 top-2 结果");
+        assertTrue(allText.contains("Skin types include dry, oily, combination"),
+                "Should contain reranked top-1 result");
+        assertTrue(allText.contains("Sensitive skin care recommendations"),
+                "Should contain reranked top-2 result");
 
-        // 验证 reranked results 存入 context
+        // Verify reranked results stored in context
         @SuppressWarnings("unchecked")
         List<RetrievalResult> stored = (List<RetrievalResult>) result.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
@@ -244,20 +251,20 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("RerankAdvisor: context 中无检索结果时跳过重排")
+    @DisplayName("RerankAdvisor: no retrieval results in context skips rerank")
     void rerank_noSearchResults_skipsRerank() {
-        ChatClientRequest request = buildRequest("测试");
+        ChatClientRequest request = buildRequest("test");
         ChatClientRequest result = rerankAdvisor.before(request, advisorChain);
 
-        // 应透传，不调用 rerankingService
+        // Should pass through without calling rerankingService
         verify(rerankingService, never()).rerank(anyString(), anyList(), anyInt());
         assertNull(result.context().get(RerankAdvisor.RERANKED_RESULTS_KEY));
     }
 
     @Test
-    @DisplayName("RerankAdvisor: 检索结果为空时跳过重排")
+    @DisplayName("RerankAdvisor: empty retrieval results skips rerank")
     void rerank_emptySearchResults_skipsRerank() {
-        Prompt prompt = new Prompt(List.of(new UserMessage("测试")));
+        Prompt prompt = new Prompt(List.of(new UserMessage("test")));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(Map.of(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, List.of()))
@@ -269,15 +276,15 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("RerankAdvisor: 禁用时不执行重排")
+    @DisplayName("RerankAdvisor: disabled - no reranking executed")
     void rerank_disabled_skipsRerank() {
         rerankAdvisor.setEnabled(false);
 
-        Prompt prompt = new Prompt(List.of(new UserMessage("测试")));
+        Prompt prompt = new Prompt(List.of(new UserMessage("test")));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(Map.of(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY,
-                        List.of(createResult("doc-1", "测试", 0.9))))
+                        List.of(createResult("doc-1", "test", 0.9))))
                 .build();
 
         ChatClientRequest result = rerankAdvisor.before(request, advisorChain);
@@ -286,46 +293,46 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("RerankAdvisor: order 为 HIGHEST_PRECEDENCE + 30")
+    @DisplayName("RerankAdvisor: order is HIGHEST_PRECEDENCE + 30")
     void rerank_order() {
         assertEquals(Ordered.HIGHEST_PRECEDENCE + 30, rerankAdvisor.getOrder());
     }
 
-    // ==================== 端到端链路 ====================
+    // ==================== End-to-End Chain ====================
 
     @Test
-    @DisplayName("端到端: QueryRewrite → HybridSearch → Rerank 完整链路")
+    @DisplayName("End-to-end: QueryRewrite → HybridSearch → Rerank full chain")
     void fullChain_endToEnd() {
-        // Step 1: QueryRewrite 返回改写查询
-        when(queryRewritingService.rewriteQuery("敏感皮肤怎么办"))
-                .thenReturn(List.of("敏感皮肤怎么办", "过敏皮肤怎么办"));
+        // Step 1: QueryRewrite returns rewritten queries
+        when(queryRewritingService.rewriteQuery("sensitive skin what to do"))
+                .thenReturn(List.of("sensitive skin what to do", "allergy skin what to do"));
 
-        // Step 2: HybridSearch 返回检索结果
+        // Step 2: HybridSearch returns search results
         List<RetrievalResult> searchResults = List.of(
-                createResult("doc-1", "敏感皮肤应使用无香料护肤品", 0.93),
-                createResult("doc-2", "过敏性皮肤护理方案", 0.87),
-                createResult("doc-3", "皮肤屏障修复方法", 0.81)
+                createResult("doc-1", "Sensitive skin should use fragrance-free skincare", 0.93),
+                createResult("doc-2", "Allergic skin care plan", 0.87),
+                createResult("doc-3", "Skin barrier repair methods", 0.81)
         );
-        when(hybridRetrieverService.search(eq("敏感皮肤怎么办"), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(eq("sensitive skin what to do"), isNull(), isNull(), eq(10)))
                 .thenReturn(searchResults);
 
-        // Step 3: Rerank 返回重排结果
+        // Step 3: Rerank returns reranked results
         List<RetrievalResult> rerankedResults = List.of(
-                createResult("doc-2", "过敏性皮肤护理方案", 0.95),
-                createResult("doc-1", "敏感皮肤应使用无香料护肤品", 0.90)
+                createResult("doc-2", "Allergic skin care plan", 0.95),
+                createResult("doc-1", "Sensitive skin should use fragrance-free skincare", 0.90)
         );
-        when(rerankingService.rerank(eq("敏感皮肤怎么办"), anyList(), eq(5)))
+        when(rerankingService.rerank(eq("sensitive skin what to do"), anyList(), eq(5)))
                 .thenReturn(rerankedResults);
 
-        // 执行链路
-        ChatClientRequest request = buildRequest("敏感皮肤怎么办");
+        // Execute chain
+        ChatClientRequest request = buildRequest("sensitive skin what to do");
 
         // Advisor 1: QueryRewrite
         ChatClientRequest afterRewrite = queryRewriteAdvisor.before(request, advisorChain);
         @SuppressWarnings("unchecked")
         List<String> rewrittenQueries = (List<String>) afterRewrite.context()
                 .get(QueryRewriteAdvisor.CTX_REWRITE_QUERIES);
-        assertNotNull(rewrittenQueries, "改写查询应存入 context");
+        assertNotNull(rewrittenQueries, "Rewritten queries should be stored in context");
         assertEquals(2, rewrittenQueries.size());
 
         // Advisor 2: HybridSearch
@@ -333,54 +340,54 @@ class AdvisorChainIntegrationTest {
         @SuppressWarnings("unchecked")
         List<RetrievalResult> searchResult = (List<RetrievalResult>) afterSearch.context()
                 .get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
-        assertNotNull(searchResult, "检索结果应存入 context");
+        assertNotNull(searchResult, "Search results should be stored in context");
         assertEquals(3, searchResult.size());
 
         // Advisor 3: Rerank
         ChatClientRequest afterRerank = rerankAdvisor.before(afterSearch, advisorChain);
 
-        // 验证最终结果 — OpenAi 适配器使用 augmentSystemMessage 注入上下文
+        // Verify final results - OpenAI adapter uses augmentSystemMessage to inject context
         String allText = afterRerank.prompt().getInstructions().stream()
                 .map(org.springframework.ai.chat.messages.Message::getText)
                 .collect(java.util.stream.Collectors.joining("\n"));
-        assertTrue(allText.contains("过敏性皮肤护理方案"), "重排后 top-1 应注入消息");
-        assertTrue(allText.contains("敏感皮肤应使用无香料护肤品"), "重排后 top-2 应注入消息");
+        assertTrue(allText.contains("Allergic skin care plan"), "Reranked top-1 should be injected into message");
+        assertTrue(allText.contains("fragrance-free skincare"), "Reranked top-2 should be injected into message");
 
         @SuppressWarnings("unchecked")
         List<RetrievalResult> finalResults = (List<RetrievalResult>) afterRerank.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
-        assertNotNull(finalResults, "重排结果应存入 context");
+        assertNotNull(finalResults, "Reranked results should be stored in context");
         assertEquals(2, finalResults.size());
-        assertEquals("doc-2", finalResults.get(0).getDocumentId(), "重排后 doc-2 应排第一");
+        assertEquals("doc-2", finalResults.get(0).getDocumentId(), "After reranking, doc-2 should be first");
         assertEquals("doc-1", finalResults.get(1).getDocumentId());
 
-        // 验证 Pipeline 可观测指标：3 个步骤都应被记录
+        // Verify Pipeline observability metrics: all 3 steps should be recorded
         com.springairag.core.advisor.RagPipelineMetrics metrics =
                 com.springairag.core.advisor.RagPipelineMetrics.get(afterRerank.context());
-        assertNotNull(metrics, "Pipeline 指标应存在于 context 中");
-        assertEquals(3, metrics.getStepCount(), "应有 3 个步骤指标");
+        assertNotNull(metrics, "Pipeline metrics should exist in context");
+        assertEquals(3, metrics.getStepCount(), "Should have 3 step metrics");
         assertEquals("QueryRewrite", metrics.getSteps().get(0).stepName());
         assertEquals("HybridSearch", metrics.getSteps().get(1).stepName());
         assertEquals("Rerank", metrics.getSteps().get(2).stepName());
-        assertTrue(metrics.getTotalDurationMs() >= 0, "总耗时应 >= 0");
+        assertTrue(metrics.getTotalDurationMs() >= 0, "Total duration should be >= 0");
     }
 
     @Test
-    @DisplayName("端到端: 保留已有用户消息，追加上下文")
+    @DisplayName("End-to-end: preserves existing user message, appends context")
     void fullChain_preservesExistingSystemMessage() {
-        when(queryRewritingService.rewriteQuery("测试")).thenReturn(List.of("测试"));
+        when(queryRewritingService.rewriteQuery("test")).thenReturn(List.of("test"));
         when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
-                .thenReturn(List.of(createResult("doc-1", "测试文档", 0.9)));
+                .thenReturn(List.of(createResult("doc-1", "test document", 0.9)));
         when(rerankingService.rerank(anyString(), anyList(), eq(5)))
-                .thenReturn(List.of(createResult("doc-1", "测试文档", 0.95)));
+                .thenReturn(List.of(createResult("doc-1", "test document", 0.95)));
 
-        ChatClientRequest request = buildRequestWithSystem("你是一个专业的皮肤科医生", "测试");
+        ChatClientRequest request = buildRequestWithSystem("You are a professional dermatologist", "test");
 
         ChatClientRequest afterRewrite = queryRewriteAdvisor.before(request, advisorChain);
         ChatClientRequest afterSearch = hybridSearchAdvisor.before(afterRewrite, advisorChain);
         ChatClientRequest afterRerank = rerankAdvisor.before(afterSearch, advisorChain);
 
-        // OpenAi 适配器使用 augmentSystemMessage 注入上下文
+        // OpenAI adapter uses augmentSystemMessage to inject context
         String allText = afterRerank.prompt().getInstructions().stream()
                 .map(org.springframework.ai.chat.messages.Message::getText)
                 .collect(java.util.stream.Collectors.joining("\n"));
@@ -388,23 +395,23 @@ class AdvisorChainIntegrationTest {
     }
 
     @Test
-    @DisplayName("端到端: context 从 request 传递到 response")
+    @DisplayName("End-to-end: context propagates from request to response")
     void fullChain_contextPropagatesToResponse() {
-        when(queryRewritingService.rewriteQuery("测试")).thenReturn(List.of("测试"));
+        when(queryRewritingService.rewriteQuery("test")).thenReturn(List.of("test"));
         when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
-                .thenReturn(List.of(createResult("doc-1", "测试内容", 0.9)));
+                .thenReturn(List.of(createResult("doc-1", "test content", 0.9)));
         when(rerankingService.rerank(anyString(), anyList(), eq(5)))
-                .thenReturn(List.of(createResult("doc-1", "测试内容", 0.95)));
+                .thenReturn(List.of(createResult("doc-1", "test content", 0.95)));
 
-        ChatClientRequest request = buildRequest("测试");
+        ChatClientRequest request = buildRequest("test");
         ChatClientRequest afterRewrite = queryRewriteAdvisor.before(request, advisorChain);
         ChatClientRequest afterSearch = hybridSearchAdvisor.before(afterRewrite, advisorChain);
         ChatClientRequest afterRerank = rerankAdvisor.before(afterSearch, advisorChain);
 
-        // 构建 response，验证 context 包含 reranked results
+        // Build response, verify context contains reranked results
         ChatResponse mockChatResponse = mock(ChatResponse.class);
         Generation mockGeneration = mock(Generation.class);
-        when(mockGeneration.getOutput()).thenReturn(new AssistantMessage("回答"));
+        when(mockGeneration.getOutput()).thenReturn(new AssistantMessage("answer"));
         when(mockChatResponse.getResult()).thenReturn(mockGeneration);
 
         ChatClientResponse response = ChatClientResponse.builder()
@@ -415,67 +422,67 @@ class AdvisorChainIntegrationTest {
         @SuppressWarnings("unchecked")
         List<RetrievalResult> reranked = (List<RetrievalResult>) response.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
-        assertNotNull(reranked, "response context 应包含重排结果");
+        assertNotNull(reranked, "response context should contain reranked results");
         assertEquals(1, reranked.size());
         assertEquals("doc-1", reranked.get(0).getDocumentId());
     }
 
-    // ==================== Advisor 顺序验证 ====================
+    // ==================== Advisor Order Verification ====================
 
     @Test
-    @DisplayName("Advisor 顺序: QueryRewrite(+10) < HybridSearch(+20) < Rerank(+30)")
+    @DisplayName("Advisor order: QueryRewrite(+10) < HybridSearch(+20) < Rerank(+30)")
     void advisorOrder_isCorrect() {
         assertTrue(queryRewriteAdvisor.getOrder() < hybridSearchAdvisor.getOrder(),
-                "QueryRewrite 应在 HybridSearch 之前");
+                "QueryRewrite should come before HybridSearch");
         assertTrue(hybridSearchAdvisor.getOrder() < rerankAdvisor.getOrder(),
-                "HybridSearch 应在 Rerank 之前");
+                "HybridSearch should come before Rerank");
     }
 
-    // ==================== 异常降级 ====================
+    // ==================== Exception Degradation ====================
 
     @Test
-    @DisplayName("端到端: QueryRewrite 异常时不应阻塞整个链路")
+    @DisplayName("End-to-end: QueryRewrite exception should not block the chain")
     void fullChain_queryRewriteThrows_propagatesException() {
         when(queryRewritingService.rewriteQuery(anyString()))
-                .thenThrow(new RuntimeException("同义词服务不可用"));
+                .thenThrow(new RuntimeException("Synonym service unavailable"));
 
-        ChatClientRequest request = buildRequest("测试查询");
+        ChatClientRequest request = buildRequest("test query");
 
-        // QueryRewriteAdvisor 应抛出异常
+        // QueryRewriteAdvisor should throw exception
         assertThrows(RuntimeException.class, () ->
                 queryRewriteAdvisor.before(request, advisorChain));
     }
 
     @Test
-    @DisplayName("端到端: HybridSearch 异常时应传播")
+    @DisplayName("End-to-end: HybridSearch exception should propagate")
     void fullChain_hybridSearchThrows_propagatesException() {
         when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
-                .thenThrow(new RuntimeException("数据库连接失败"));
+                .thenThrow(new RuntimeException("Database connection failed"));
 
-        ChatClientRequest request = buildRequest("测试查询");
+        ChatClientRequest request = buildRequest("test query");
 
         assertThrows(RuntimeException.class, () ->
                 hybridSearchAdvisor.before(request, advisorChain));
     }
 
     @Test
-    @DisplayName("端到端: Rerank 异常时应传播")
+    @DisplayName("End-to-end: Rerank exception should propagate")
     void fullChain_rerankThrows_propagatesException() {
         when(rerankingService.rerank(anyString(), anyList(), eq(5)))
-                .thenThrow(new RuntimeException("重排服务异常"));
+                .thenThrow(new RuntimeException("Reranking service error"));
 
-        Prompt prompt = new Prompt(List.of(new UserMessage("测试")));
+        Prompt prompt = new Prompt(List.of(new UserMessage("test")));
         ChatClientRequest request = ChatClientRequest.builder()
                 .prompt(prompt)
                 .context(Map.of(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY,
-                        List.of(createResult("doc-1", "测试", 0.9))))
+                        List.of(createResult("doc-1", "test", 0.9))))
                 .build();
 
         assertThrows(RuntimeException.class, () ->
                 rerankAdvisor.before(request, advisorChain));
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helper Methods ====================
 
     private RetrievalResult createResult(String docId, String chunkText, double score) {
         RetrievalResult r = new RetrievalResult();

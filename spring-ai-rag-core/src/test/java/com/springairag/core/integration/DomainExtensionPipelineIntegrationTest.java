@@ -12,21 +12,21 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 领域扩展管道集成测试
+ * Domain Extension Pipeline Integration Tests
  *
- * <p>验证领域扩展的核心行为，包括 DomainExtensionRegistry 和 DefaultDomainRagExtension：
+ * <p>Verifies core domain extension behavior, including DomainExtensionRegistry and DefaultDomainRagExtension:
  * <ol>
- *   <li>DomainExtensionRegistry 正确注册和查找扩展</li>
- *   <li>DefaultDomainRagExtension 在无 domainId 时作为默认</li>
- *   <li>各扩展的 isApplicable() 正确过滤查询</li>
- *   <li>PromptCustomizer 链按 order 顺序执行</li>
- *   <li>模拟医疗领域扩展的行为验证（与 MedicalRagExtension 行为一致）</li>
+ *   <li>DomainExtensionRegistry correctly registers and looks up extensions</li>
+ *   <li>DefaultDomainRagExtension serves as default when no domainId is provided</li>
+ *   <li>Each extension isApplicable() correctly filters queries</li>
+ *   <li>PromptCustomizer chain executes in order</li>
+ *   <li>Simulates medical domain extension behavior verification (consistent with MedicalRagExtension behavior)</li>
  * </ol>
  */
 class DomainExtensionPipelineIntegrationTest {
 
     // ─────────────────────────────────────────────
-    // 1. DefaultDomainRagExtension 行为验证
+    // 1. DefaultDomainRagExtension behavior verification
     // ─────────────────────────────────────────────
 
     @Test

@@ -40,17 +40,17 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * REST 控制器集成测试
+ * REST Controller Integration Tests
  *
- * <p>使用 @WebMvcTest 只加载 Web 层，验证：
+ * <p>Uses @WebMvcTest to load only the Web layer, verifying:
  * <ul>
- *   <li>请求路由正确（URL → Controller 方法）</li>
- *   <li>JSON 序列化/反序列化正常</li>
- *   <li>Bean Validation 生效</li>
- *   <li>错误处理响应结构正确</li>
+ *   <li>Request routing is correct (URL → Controller method)</li>
+ *   <li>JSON serialization/deserialization is normal</li>
+ *   <li>Bean Validation is enforced</li>
+ *   <li>Error handling response structure is correct</li>
  * </ul>
  *
- * <p>所有 Service/Repository 通过 @MockBean 模拟，聚焦 Web 层行为。
+ * <p>All Service/Repository are mocked via @MockBean, focusing on Web layer behavior.
  */
 @WebMvcTest({
         RagChatController.class,
@@ -140,7 +140,7 @@ class RagControllerIntegrationTest {
         void chatAsk_returnsResponse() throws Exception {
             com.springairag.api.dto.ChatResponse mockResponse =
                     com.springairag.api.dto.ChatResponse.builder()
-                            .answer("模拟回复")
+                            .answer("mock reply")
                             .build();
             when(ragChatService.chat(any(com.springairag.api.dto.ChatRequest.class)))
                     .thenReturn(mockResponse);
@@ -154,7 +154,7 @@ class RagControllerIntegrationTest {
                                     }
                                     """))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.answer").value("模拟回复"));
+                    .andExpect(jsonPath("$.answer").value("mock reply"));
         }
 
         @Test
