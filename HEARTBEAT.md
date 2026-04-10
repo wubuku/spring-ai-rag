@@ -2175,3 +2175,7 @@
 ## 进度日志（WebUI — 2026-04-10 06:49）
 
 - 2026-04-10 06:49 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## 进度日志（WebUI — 2026-04-10 08:18）
+
+- 2026-04-10 08:18 — ✅ useSearchHistory test 修复：useSearchHistory.test.ts 'removes item by timestamp' 测试 flakiness 修复——React 18+ 在同一同步 act() 块中批量 setState，两次 addQuery 都看到 prev=[] 初始状态，获得相同 Date.now() 时间戳，导致第二次去重逻辑误删第一次条目；修复：两次 addQuery 之间添加 waitFor + 独立 act() 块确保第一次状态更新先提交；142 vitest ✅ / npm run build ✅ / E2E 12/12 ✅；commit dc858a9 已推送
