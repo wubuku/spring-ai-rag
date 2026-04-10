@@ -150,6 +150,30 @@ class DingTalkNotificationServiceTest {
     }
 
     @Test
+    @DisplayName("escapeJson escapes backslash before other chars to prevent corruption")
+    void escapeJson_escapesBackslashFirst() throws Exception {
+        // Use reflection to access the private escapeJson method
+        var method = DingTalkNotificationService.class.getDeclaredMethod("escapeJson", String.class);
+        method.setAccessible(true);
+
+        // Backslash must be escaped FIRST; otherwise "C:\n" would have its backslash
+        // consumed by the newline escape (producing C:\ followed by literal newline),
+        // corrupting the JSON string.
+        String input = "C:\\Users\\test";
+        String result = (String) method.invoke(service, input);
+        assertEquals("C:\\\\Users\\\\test", result);
+
+        // Verify backslash before 'n' produces \\n not consumed-as-escape-sequence
+        String input2 = "line1\\n";
+        String result2 = (String) method.invoke(service, input2);
+        assertEquals("line1\\\\n", result2);
+
+        // Null input returns empty string
+        String nullResult = (String) method.invoke(service, (String) null);
+        assertEquals("", nullResult);
+    }
+
+    @Test
     @DisplayName("buildMarkdownBody escapes JSON special characters")
     void buildMarkdownBody_escapesJsonSpecialChars() {
         String body = service.buildMarkdownBody("SLO_BREACH", "Test Alert \"CRITICAL\"",
@@ -158,6 +182,20 @@ class DingTalkNotificationServiceTest {
         assertNotNull(body);
         assertTrue(body.contains("\"msgtype\": \"markdown\""));
         assertTrue(body.contains("CRITICAL"));
+    }
+
+    @Test
+    @DisplayName("sendAlert retries on transient failure and succeeds on second attempt")
+    void sendAlert_retriesOnTransientFailure_succeedsOnRetry() {
+        // First call fails, second succeeds
+        when(restTemplate.postForEntity(any(String.class), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RuntimeException("Connection refused"))
+                .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
+
+        boolean result = service.sendAlert("SLO_BREACH", "SLO Breach", "CRITICAL", "P99 exceeded", Map.of());
+        assertTrue(result);
+        // Should have been called twice (1 failure + 1 success)
+        verify(restTemplate, times(2)).postForEntity(any(String.class), any(HttpEntity.class), eq(String.class));
     }
 
     @Test

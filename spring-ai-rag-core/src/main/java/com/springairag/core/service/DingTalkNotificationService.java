@@ -78,6 +78,9 @@ public class DingTalkNotificationService implements NotificationService {
         return false;
     }
 
+    private static final int MAX_RETRIES = 3;
+    private static final long INITIAL_BACKOFF_MS = 500;
+
     private void sendToDingTalk(NotificationConfig.DingTalkConfig config,
                                  String alertType, String alertName, String severity,
                                  String message, Map<String, Object> metadata) {
@@ -88,7 +91,25 @@ public class DingTalkNotificationService implements NotificationService {
         headers.setContentType(MediaType.APPLICATION_JSON);
         HttpEntity<String> request = new HttpEntity<>(body, headers);
 
-        restTemplate.postForEntity(url, request, String.class);
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                restTemplate.postForEntity(url, request, String.class);
+                return;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    try {
+                        long sleepMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1));
+                        Thread.sleep(sleepMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted during retry backoff", ie);
+                    }
+                }
+            }
+        }
+        throw new RuntimeException("DingTalk API failed after " + MAX_RETRIES + " attempts", lastException);
     }
 
     String buildWebhookUrl(NotificationConfig.DingTalkConfig config) {
@@ -140,10 +161,19 @@ public class DingTalkNotificationService implements NotificationService {
     }
 
     private String escapeJson(String s) {
-        return s.replace("\\", "\\\\")
-                .replace("\"", "\\\"")
-                .replace("\n", "\\n")
-                .replace("\r", "\\r")
-                .replace("\t", "\\t");
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length() + 16);
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '\\' -> sb.append("\\\\");
+                case '"'  -> sb.append("\\\"");
+                case '\n' -> sb.append("\\n");
+                case '\r' -> sb.append("\\r");
+                case '\t' -> sb.append("\\t");
+                default   -> sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }
