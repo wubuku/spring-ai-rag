@@ -90,7 +90,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                     })
                     .filter(r -> r.getScore() >= minScore)
                     .limit(limit)
-                    .collect(Collectors.toList());
+                    .toList();
         } catch (Exception e) {
             log.warn("pg_trgm search failed for query '{}': {}", query, e.getMessage());
             return Collections.emptyList();

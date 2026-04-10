@@ -20,7 +20,7 @@ import jakarta.annotation.PostConstruct;
 import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
+
 
 /**
  * Retrieval evaluation service implementation.
@@ -128,7 +128,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         return cases.stream()
                 .map(c -> evaluate(c.getQuery(), c.getRetrievedDocIds(), c.getRelevantDocIds(),
                         c.getEvaluationMethod(), c.getEvaluatorId()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     @Override

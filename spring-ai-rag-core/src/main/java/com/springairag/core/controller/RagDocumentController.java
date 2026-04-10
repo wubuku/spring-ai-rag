@@ -209,7 +209,7 @@ public class RagDocumentController {
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
                 .map(doc -> DocumentMapper.toMap(doc, collectionNameMap, embeddingRepository))
-                .collect(Collectors.toList());
+                .toList();
 
         return ResponseEntity.ok(Map.of(
                 "documents", docs,
@@ -718,7 +718,7 @@ public class RagDocumentController {
         result.put("totalVersions", versions.getTotalElements());
         result.put("page", page);
         result.put("size", size);
-        result.put("versions", versions.getContent().stream().map(DocumentMapper::toVersionMap).collect(Collectors.toList()));
+        result.put("versions", versions.getContent().stream().map(DocumentMapper::toVersionMap).toList());
         return ResponseEntity.ok(result);
     }
 

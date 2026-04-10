@@ -90,7 +90,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     })
                     .filter(r -> r.getScore() >= minScore)
                     .limit(limit)
-                    .collect(Collectors.toList());
+                    .toList();
         } catch (Exception e) { // Resilience: return empty on search failure
             log.warn("pg_jieba search failed for query '{}': {}", query, e.getMessage());
             return Collections.emptyList();

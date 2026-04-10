@@ -30,7 +30,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 
 /**
  * Document collection (knowledge base) management controller.
@@ -129,7 +129,7 @@ public class RagCollectionController {
                     long docCount = documentRepository.countByCollectionId(c.getId());
                     return toMap(c, docCount);
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         return ResponseEntity.ok(Map.of(
                 "collections", items,
@@ -266,7 +266,7 @@ public class RagCollectionController {
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
                 .map(this::toDocumentSummary)
-                .collect(Collectors.toList());
+                .toList();
 
         return ResponseEntity.ok(Map.of(
                 "collectionId", id,
@@ -359,7 +359,7 @@ public class RagCollectionController {
                     m.put("size", doc.getSize());
                     return m;
                 })
-                .collect(Collectors.toList());
+                .toList();
 
         Map<String, Object> exportData = new HashMap<>();
         exportData.put("name", collection.getName());

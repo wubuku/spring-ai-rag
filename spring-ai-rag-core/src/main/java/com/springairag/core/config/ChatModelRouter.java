@@ -14,7 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+
 
 /**
  * ChatModel Router: supports primary model + Fallback chain.
@@ -94,7 +94,7 @@ public class ChatModelRouter {
         return fallbackNames.stream()
                 .map(this::resolve)
                 .filter(m -> m != null)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

@@ -12,7 +12,7 @@ import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.stream.Collectors;
+
 
 /**
  * Result reranking service
@@ -70,7 +70,7 @@ public class ReRankingService {
                 })
                 .sorted(Comparator.comparingDouble(RetrievalResult::getScore).reversed())
                 .limit(maxResults)
-                .collect(Collectors.toList());
+                .toList();
 
         log.debug("Reranked {} results (enabled={})", scored.size(), config.isEnabled());
         return scored;

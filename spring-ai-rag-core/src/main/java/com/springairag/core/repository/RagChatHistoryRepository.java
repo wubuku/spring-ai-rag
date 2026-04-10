@@ -10,7 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
+
 
 /**
  * RAG chat history repository (business audit table).
@@ -68,7 +68,7 @@ public class RagChatHistoryRepository {
                 sessionId, PageRequest.of(0, limit));
         return results.stream()
                 .map(this::toMap)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**

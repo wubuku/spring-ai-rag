@@ -192,7 +192,7 @@ public class HybridRetrieverService {
                     double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
                     return toRetrievalResult(row, score, score, 0.0);
                 })
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private boolean isNotExcluded(Map<String, Object> row, List<Long> excludeIds) {

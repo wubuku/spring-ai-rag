@@ -10,7 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
+
 
 /**
  * EmbeddingModel Router: supports primary model + Fallback chain.
@@ -92,7 +92,7 @@ public class EmbeddingModelRouter {
         return fallbackNames.stream()
                 .map(this::resolve)
                 .filter(m -> m != null)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     /**
