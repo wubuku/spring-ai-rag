@@ -2220,4 +2220,4 @@
 
 ## Cron 进度（2026-04-10 14:24 — WebUI 常规发布）
 
-- 2026-04-10 14:24 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-10 15:20 — ✅ DigestUtils 提取：RagDocumentController 内的 `computeSha256()` 方法提取为 `com.springairag.core.util.DigestUtils.sha256()` 工具类，消除重复实现；`RagDocumentController` 减少 17 行；新增 `DigestUtilsTest`（6 tests：empty/string/unicode/long/deterministic/different inputs）；1556 tests 全通过（+6）；commit 7d340d0 已推送
