@@ -2314,3 +2314,7 @@
 ## Cron 进度（后端 — 2026-04-11 06:14 — CollectionMapper 工具类提取）
 
 - 2026-04-11 06:14 — ✅ 提取 CollectionMapper 工具类：新建 `util/CollectionMapper.java`，将 RagCollectionController 中的 `toMap(RagCollection, long)` 方法抽取为独立工具类（与 DocumentMapper 保持一致）；更新 5 处调用点使用 `CollectionMapper.toMap()`；移除 RagCollectionController 中冗余的 private toMap 方法；mvn test ✅（1649 测试全通过，零失败零错误）；commit 8bf682a 已推送
+
+## Cron 进度（后端 — 2026-04-11 07:22 — API 响应标准化）
+
+- 2026-04-11 07:22 — ✅ RagDocumentController badRequest 响应标准化：`embedDocument()` 和 `embedDocumentViaVectorStore()` 的 3 处 `ResponseEntity.badRequest().body(Map.of("error", ...))` 替换为 `ErrorResponse.of(detail)`（RFC 7807 统一格式）；方法返回类型从 `ResponseEntity<Map<String,Object>>` 改为 `ResponseEntity<Object>`；RagDocumentControllerTest 4 个测试同步更新（`ResponseEntity<?>` + `ErrorResponse.getDetail()` 断言）；1649 测试全通过，零失败零错误；commit e201204 已推送
