@@ -24,9 +24,10 @@ import java.util.Map;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.hamcrest.Matchers.*;
 
 /**
- * ModelController 单元测试
+ * ModelController unit tests.
  */
 @WebMvcTest(ModelController.class)
 @Import({ApiVersionConfig.class, ModelControllerTest.RagPropertiesTestConfig.class})
@@ -115,6 +116,22 @@ class ModelControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testListModels_singleModel_disabledMultiModel() throws Exception {
+        when(modelRouter.isMultiModelEnabled()).thenReturn(false);
+        when(modelRouter.getAvailableProviders()).thenReturn(List.of("openai"));
+        when(modelRouter.getFallbackChain()).thenReturn(null);
+        when(modelRegistry.getAllModelsInfo()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/rag/models"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.multiModelEnabled").value(false))
+                .andExpect(jsonPath("$.defaultProvider").value("openai"))
+                .andExpect(jsonPath("$.availableProviders[0]").value("openai"))
+                .andExpect(jsonPath("$.fallbackChain").value(nullValue()))
+                .andExpect(jsonPath("$.models").isEmpty());
     }
 
     @TestConfiguration
