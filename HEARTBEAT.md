@@ -1591,6 +1591,10 @@
 
 - 2026-04-08 06:31 — ✅ 后端国际化查漏第八轮（RagMetricsService）：RagMetricsService.java 类级 Javadoc + Micrometer descriptions（rag.requests.total/success/failed/response.time）+ 全部方法 Javadoc（recordSuccess/recordFailure/recordLlmTokens/getTotalRequests/getSuccessfulRequests/getFailedRequests/getSuccessRate/getTotalRetrievalResults/getTotalLlmTokens）英文化；1 file，28 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit f944520 已推送
 
+## Cron 进度（2026-04-11 05:43 — WebUI 常规发布）
+
+- 2026-04-11 05:43 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.27s）/ npm run build ✅（97KB index gzipped，28 chunks，205ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
 ## Cron 进度（2026-04-10 15:27 — WebUI 常规发布）
 
 - 2026-04-10 15:27 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
