@@ -1,9 +1,11 @@
 package com.springairag.core.service;
 
 import com.springairag.core.entity.RagAlert;
+import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.repository.AlertRepository;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
 import com.springairag.core.repository.RagRetrievalLogRepository;
+import com.springairag.core.repository.RagSilenceScheduleRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -36,13 +38,16 @@ class AlertServiceImplTest {
     private RagRetrievalEvaluationRepository evaluationRepository;
 
     @Mock
+    private RagSilenceScheduleRepository silenceScheduleRepository;
+
+    @Mock
     private NotificationService notificationService;
 
     private AlertService alertService;
 
     @BeforeEach
     void setUp() {
-        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, List.of(notificationService));
+        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, silenceScheduleRepository, List.of(notificationService));
     }
 
     // ==================== shouldAlert ====================
@@ -570,5 +575,85 @@ class AlertServiceImplTest {
         assertEquals("ACTIVE", r.getStatus());
         assertNotNull(r.getMetrics());
         assertNotNull(r.getFiredAt());
+    }
+
+    // ==================== Silence Schedule Integration ====================
+
+    @Test
+    @DisplayName("shouldAlert returns false when alert is silenced by active ONE_TIME schedule")
+    void shouldAlert_silencedBySchedule() {
+        ZonedDateTime now = ZonedDateTime.now();
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setSilenceType("ONE_TIME");
+        schedule.setStartTime(now.minusHours(1).toString());
+        schedule.setEndTime(now.plusHours(1).toString());
+        schedule.setEnabled(true);
+
+        when(silenceScheduleRepository.findByAlertKeyAndEnabledTrue("THRESHOLD_HIGH:latency"))
+                .thenReturn(List.of(schedule));
+
+        assertFalse(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
+    }
+
+    @Test
+    @DisplayName("shouldAlert returns true when schedule is expired")
+    void shouldAlert_scheduleExpired() {
+        ZonedDateTime now = ZonedDateTime.now();
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setSilenceType("ONE_TIME");
+        schedule.setStartTime(now.minusHours(2).toString());
+        schedule.setEndTime(now.minusHours(1).toString());
+        schedule.setEnabled(true);
+
+        when(silenceScheduleRepository.findByAlertKeyAndEnabledTrue("THRESHOLD_HIGH:latency"))
+                .thenReturn(List.of(schedule));
+
+        assertTrue(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
+    }
+
+    @Test
+    @DisplayName("shouldAlert returns false for wildcard schedule (null alertKey) covering all alerts")
+    void shouldAlert_wildcardSchedule() {
+        ZonedDateTime now = ZonedDateTime.now();
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setSilenceType("ONE_TIME");
+        schedule.setStartTime(now.minusHours(1).toString());
+        schedule.setEndTime(now.plusHours(1).toString());
+        schedule.setEnabled(true);
+
+        when(silenceScheduleRepository.findByAlertKeyAndEnabledTrue("THRESHOLD_HIGH:latency"))
+                .thenReturn(List.of());
+        when(silenceScheduleRepository.findByAlertKeyAndEnabledTrue(null))
+                .thenReturn(List.of(schedule));
+
+        assertFalse(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
+    }
+
+    @Test
+    @DisplayName("fireAlert returns null when alert is silenced by schedule")
+    void fireAlert_silencedBySchedule() {
+        ZonedDateTime now = ZonedDateTime.now();
+        RagSilenceSchedule schedule = new RagSilenceSchedule();
+        schedule.setSilenceType("ONE_TIME");
+        schedule.setStartTime(now.minusHours(1).toString());
+        schedule.setEndTime(now.plusHours(1).toString());
+        schedule.setEnabled(true);
+
+        when(silenceScheduleRepository.findByAlertKeyAndEnabledTrue("THRESHOLD_HIGH:latency"))
+                .thenReturn(List.of(schedule));
+
+        Long alertId = alertService.fireAlert("THRESHOLD_HIGH", "latency",
+                "P99 exceeded", "WARNING", Map.of());
+
+        assertNull(alertId);
+        verify(alertRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("shouldAlert skips schedule check when repository is null (defensive)")
+    void shouldAlert_nullRepository() {
+        AlertServiceImpl serviceWithoutRepo = new AlertServiceImpl(
+                alertRepository, retrievalLogRepository, evaluationRepository, null, List.of());
+        assertTrue(serviceWithoutRepo.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
     }
 }

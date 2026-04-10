@@ -1,9 +1,11 @@
 package com.springairag.core.service;
 
 import com.springairag.core.entity.RagAlert;
+import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.repository.AlertRepository;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
 import com.springairag.core.repository.RagRetrievalLogRepository;
+import com.springairag.core.repository.RagSilenceScheduleRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -52,23 +54,31 @@ public class AlertServiceImpl implements AlertService {
     private final AlertRepository alertRepository;
     private final RagRetrievalLogRepository retrievalLogRepository;
     private final RagRetrievalEvaluationRepository evaluationRepository;
+    private final RagSilenceScheduleRepository silenceScheduleRepository;
     private final List<NotificationService> notificationServices;
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
                            RagRetrievalEvaluationRepository evaluationRepository,
+                           RagSilenceScheduleRepository silenceScheduleRepository,
                            List<NotificationService> notificationServices) {
         this.alertRepository = alertRepository;
         this.retrievalLogRepository = retrievalLogRepository;
         this.evaluationRepository = evaluationRepository;
+        this.silenceScheduleRepository = silenceScheduleRepository;
         this.notificationServices = notificationServices != null ? notificationServices : List.of();
     }
 
     @Override
     public boolean shouldAlert(String alertType, String metricName,
                                double currentValue, double threshold) {
-        // Check if silenced
+        // Check if silenced by schedule (database-backed)
         String alertKey = alertType + ":" + metricName;
+        if (isSilencedBySchedule(alertKey)) {
+            return false;
+        }
+
+        // Check if silenced (in-memory)
         ZonedDateTime silencedUntil = silencedAlerts.get(alertKey);
         if (silencedUntil != null && ZonedDateTime.now().isBefore(silencedUntil)) {
             return false;
@@ -92,13 +102,20 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     @Transactional
-    public Long fireAlert(String alertType, String alertName, String message,
+    public Long fireAlert(String alertType, String metricName, String message,
                           String severity, Map<String, Object> metrics) {
-        log.warn("Alert triggered: {} - {} - {}", alertName, severity, message);
+        // Final silence check as safeguard (schedule may have been activated since shouldAlert)
+        String alertKey = alertType + ":" + metricName;
+        if (isSilencedBySchedule(alertKey)) {
+            log.info("Alert {} silenced by schedule, skipping fire", alertKey);
+            return null;
+        }
+
+        log.warn("Alert triggered: {} - {} - {}", alertType + ":" + metricName, severity, message);
 
         RagAlert alert = new RagAlert();
         alert.setAlertType(alertType);
-        alert.setAlertName(alertName);
+        alert.setAlertName(metricName);
         alert.setMessage(message);
         alert.setSeverity(severity);
         alert.setMetrics(metrics);
@@ -111,11 +128,11 @@ public class AlertServiceImpl implements AlertService {
         if (!notificationServices.isEmpty()) {
             for (NotificationService ns : notificationServices) {
                 try {
-                    ns.sendAlert(alertType, alertName, severity, message, metrics);
+                    ns.sendAlert(alertType, metricName, severity, message, metrics);
                 } catch (Exception e) {
                     // Resilience: one channel failure must not block others
                     log.warn("Notification channel {} failed for alert {}: {}",
-                            ns.getClass().getSimpleName(), alertName, e.getMessage());
+                            ns.getClass().getSimpleName(), metricName, e.getMessage());
                 }
             }
         }
@@ -209,6 +226,58 @@ public class AlertServiceImpl implements AlertService {
     private void cleanupExpiredSilenceRecords() {
         ZonedDateTime now = ZonedDateTime.now();
         silencedAlerts.entrySet().removeIf(entry -> entry.getValue().isBefore(now));
+    }
+
+    /**
+     * Check if the given alert key is currently silenced by an active schedule.
+     * Supports ONE_TIME silence: alert is silenced if current time is within [startTime, endTime].
+     * Supports wildcard silence: schedule with alertKey=null silences all alerts.
+     *
+     * @param alertKey alert key (format: alertType:metricName)
+     * @return true if silenced by an active schedule
+     */
+    private boolean isSilencedBySchedule(String alertKey) {
+        if (silenceScheduleRepository == null) {
+            return false;
+        }
+        try {
+            ZonedDateTime now = ZonedDateTime.now();
+            // Check schedules matching the specific alert key
+            List<RagSilenceSchedule> schedules = silenceScheduleRepository.findByAlertKeyAndEnabledTrue(alertKey);
+            for (RagSilenceSchedule schedule : schedules) {
+                if (isCurrentlySilent(schedule, now)) {
+                    return true;
+                }
+            }
+            // Check wildcard schedules (null alertKey silences all)
+            List<RagSilenceSchedule> wildcardSchedules = silenceScheduleRepository.findByAlertKeyAndEnabledTrue(null);
+            for (RagSilenceSchedule schedule : wildcardSchedules) {
+                if (isCurrentlySilent(schedule, now)) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            // Best-effort: schedule check failure must not block alerting
+            log.debug("Failed to check silence schedule for alert {}: {}", alertKey, e.getMessage());
+        }
+        return false;
+    }
+
+    /**
+     * Check if a schedule is currently active based on its type.
+     */
+    private boolean isCurrentlySilent(RagSilenceSchedule schedule, ZonedDateTime now) {
+        if (schedule == null || !"ONE_TIME".equals(schedule.getSilenceType())) {
+            return false;
+        }
+        try {
+            ZonedDateTime start = ZonedDateTime.parse(schedule.getStartTime());
+            ZonedDateTime end = ZonedDateTime.parse(schedule.getEndTime());
+            return !now.isBefore(start) && !now.isAfter(end);
+        } catch (Exception e) {
+            log.debug("Failed to parse silence schedule times: {}", e.getMessage());
+            return false;
+        }
     }
 
     private AlertRecord toAlertRecord(RagAlert alert) {

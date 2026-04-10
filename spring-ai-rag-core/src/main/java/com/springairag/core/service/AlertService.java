@@ -36,13 +36,13 @@ public interface AlertService {
      * Fire an alert.
      *
      * @param alertType  alert type
-     * @param alertName  alert name
+     * @param metricName metric name (used to construct alertKey for silencing: alertType:metricName)
      * @param message    alert message
      * @param severity   severity (INFO / WARNING / CRITICAL)
      * @param metrics    associated metric data
-     * @return alert record ID
+     * @return alert record ID, or null if silenced by schedule
      */
-    Long fireAlert(String alertType, String alertName, String message,
+    Long fireAlert(String alertType, String metricName, String message,
                    String severity, Map<String, Object> metrics);
 
     /**
