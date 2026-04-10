@@ -7,6 +7,7 @@ import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
@@ -230,7 +231,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @PostMapping("/{id}/embed")
-    public ResponseEntity<Map<String, Object>> embedDocument(
+    public ResponseEntity<Object> embedDocument(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
@@ -245,10 +246,7 @@ public class RagDocumentController {
 
             return ResponseEntity.ok(result);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", e.getMessage(),
-                    "documentId", id
-            ));
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         }
     }
 
@@ -382,7 +380,7 @@ public class RagDocumentController {
     @Operation(summary = "Generate embedding vectors via VectorStore",
             description = "Use VectorStore.add() to automatically generate and store embeddings with simpler code. Stored in rag_vector_store table. Skips existing embeddings by default; set force=true to re-embed.")
     @PostMapping("/{id}/embed/vs")
-    public ResponseEntity<Map<String, Object>> embedDocumentViaVectorStore(
+    public ResponseEntity<Object> embedDocumentViaVectorStore(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
             @RequestParam(defaultValue = "false") boolean force) {
@@ -390,15 +388,9 @@ public class RagDocumentController {
             Map<String, Object> result = documentEmbedService.embedDocumentViaVectorStore(id, force);
             return ResponseEntity.ok(result);
         } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", e.getMessage(),
-                    "documentId", id
-            ));
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(Map.of(
-                    "error", e.getMessage(),
-                    "documentId", id
-            ));
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         }
     }
 

@@ -6,6 +6,7 @@ import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDeleteSummary;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.ReembedMissingResponse;
 import com.springairag.api.dto.ReembedResultResponse;
 import com.springairag.core.entity.RagDocument;
@@ -308,10 +309,12 @@ class RagDocumentControllerTest {
                 "status", "COMPLETED"
         ));
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L, false);
+        ResponseEntity<?> response = controller.embedDocument(1L, false);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("COMPLETED", response.getBody().get("status"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals("COMPLETED", body.get("status"));
     }
 
     @Test
@@ -325,18 +328,18 @@ class RagDocumentControllerTest {
     @Test
     void embedDocument_emptyContent_returns400() {
         when(documentEmbedService.embedDocument(1L, false))
-                .thenThrow(new IllegalArgumentException("文档内容为空: documentId=1"));
+                .thenThrow(new IllegalArgumentException("Content is empty: documentId=1"));
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocument(1L, false);
+        ResponseEntity<?> response = controller.embedDocument(1L, false);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("文档内容为空: documentId=1", response.getBody().get("error"));
+        assertEquals("Content is empty: documentId=1", ((ErrorResponse) response.getBody()).getDetail());
     }
 
     @Test
     void embedDocumentViaVectorStore_success() {
         when(documentEmbedService.embedDocumentViaVectorStore(1L, false)).thenReturn(Map.of(
-                "message", "嵌入向量生成完成（VectorStore 路径）",
+                "message", "VectorStore embed completed",
                 "documentId", 1L,
                 "chunksCreated", 5,
                 "embeddingsStored", 5,
@@ -344,23 +347,25 @@ class RagDocumentControllerTest {
                 "status", "COMPLETED"
         ));
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L, false);
+        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(5, response.getBody().get("chunksCreated"));
-        assertEquals("rag_vector_store", response.getBody().get("storageTable"));
-        assertEquals("COMPLETED", response.getBody().get("status"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (Map<String, Object>) response.getBody();
+        assertEquals(5, body.get("chunksCreated"));
+        assertEquals("rag_vector_store", body.get("storageTable"));
+        assertEquals("COMPLETED", body.get("status"));
     }
 
     @Test
     void embedDocumentViaVectorStore_noVectorStore_returns400() {
         when(documentEmbedService.embedDocumentViaVectorStore(1L, false))
-                .thenThrow(new IllegalStateException("VectorStore 未配置，请使用 embedDocument 方法"));
+                .thenThrow(new IllegalStateException("VectorStore not configured, use embedDocument instead"));
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L, false);
+        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
 
         assertEquals(400, response.getStatusCode().value());
-        assertTrue(response.getBody().get("error").toString().contains("VectorStore 未配置"));
+        assertTrue(((ErrorResponse) response.getBody()).getDetail().contains("VectorStore not configured"));
     }
 
     @Test
@@ -374,12 +379,12 @@ class RagDocumentControllerTest {
     @Test
     void embedDocumentViaVectorStore_emptyContent_returns400() {
         when(documentEmbedService.embedDocumentViaVectorStore(1L, false))
-                .thenThrow(new IllegalArgumentException("文档内容为空"));
+                .thenThrow(new IllegalArgumentException("Content is empty"));
 
-        ResponseEntity<Map<String, Object>> response = controller.embedDocumentViaVectorStore(1L, false);
+        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
 
         assertEquals(400, response.getStatusCode().value());
-        assertEquals("文档内容为空", response.getBody().get("error"));
+        assertEquals("Content is empty", ((ErrorResponse) response.getBody()).getDetail());
     }
 
     // ==================== 批量操作测试 ====================
