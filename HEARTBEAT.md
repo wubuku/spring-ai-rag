@@ -2262,7 +2262,7 @@
 | QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ⏳ |
 | QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
 | QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
-| T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ⏳ |
+| T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ✅ 2026-04-11（T1 完成，RagUserFeedbackRepositoryTest 12 tests，1621 tests total） |
 | T2 | 控制器端到端集成测试：AlertController SSE 端点 | 测试覆盖 | ⏳ |
 | M1 | 文档全文搜索增强（按 keyword + date + type 过滤） | 功能 | ⏳ |
 | M2 | Collection 多文档批量 SSE 嵌入（进度实时推送） | 性能 | ⏳ |
