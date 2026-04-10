@@ -2278,5 +2278,6 @@
 | M2 | Collection 多文档批量 SSE 嵌入（进度实时推送） | 性能 | ⏳ |
 | S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ⏳ |
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
+| F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
 
 **推进原则**：每轮完成 1 个代码任务；任务完成立即 commit push；HEARTBEAT 保持 ≥10 个 ⏳ 待办。
