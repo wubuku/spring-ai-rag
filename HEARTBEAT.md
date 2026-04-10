@@ -2217,3 +2217,7 @@
   - **HTTP retry**：sendToDingTalk 新增 3 次重试 + 指数退避（500ms/1s），覆盖网络瞬时抖动场景；退避期间 interrupted 则抛出 RuntimeException 供调用方处理
   - **新增测试**：`escapeJson_escapesBackslashFirst`（反射测试 `\\n` → `\\\\n` + null→空串）、`sendAlert_retriesOnTransientFailure_succeedsOnRetry`（2 次调用验证重试后成功）
   - DingTalkNotificationServiceTest：11→13 tests；全量测试通过；commit 0cc0d55 已推送
+
+## Cron 进度（2026-04-10 14:24 — WebUI 常规发布）
+
+- 2026-04-10 14:24 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
