@@ -2207,3 +2207,11 @@
     RetrievalEvaluationServiceImpl
   - 移除无用的 `Collectors` 导入（仅用于 `toList()` 时）
   - 全量测试通过，commit 64d7e7d 已推送
+
+## 进度日志（2026-04-10 12:38 — 后端：DingTalkNotificationService 韧性增强）
+
+- 2026-04-10 12:38 — ✅ DingTalkNotificationService 韧性增强：
+  - **escapeJson 修复**：原 `.replace().replace()...` 链式调用的顺序有缺陷——backslash 放在最后替换，字符串中若含 `\\n`（字面反斜杠+n）会被后续的 newline replacement 误处理；改为 StringBuilder + switch 显式逐字符转义，backslash 最先处理
+  - **HTTP retry**：sendToDingTalk 新增 3 次重试 + 指数退避（500ms/1s），覆盖网络瞬时抖动场景；退避期间 interrupted 则抛出 RuntimeException 供调用方处理
+  - **新增测试**：`escapeJson_escapesBackslashFirst`（反射测试 `\\n` → `\\\\n` + null→空串）、`sendAlert_retriesOnTransientFailure_succeedsOnRetry`（2 次调用验证重试后成功）
+  - DingTalkNotificationServiceTest：11→13 tests；全量测试通过；commit 0cc0d55 已推送
