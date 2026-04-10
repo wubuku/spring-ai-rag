@@ -2196,3 +2196,14 @@
   - 验证 single-model 模式下 `defaultProvider` 正确解析为空列表后的第一个可用 provider，`fallbackChain=null`，`models=[]`
   - 类级 Javadoc 从中文翻译为英文
   - ModelControllerTest 7 测试全通过（+1），全量测试通过，commit 307c20d 已推送
+
+## 进度日志（2026-04-10 11:54 — 后端：Java 21 .toList() 风格现代化）
+
+- 2026-04-10 11:54 — ✅ Java 21 `.toList()` 风格现代化：
+  - 11 个文件中 `Collectors.toList()` → `Stream.toList()`（Java 21 原生 API，更简洁）
+  - 受影响文件：RagChatHistoryRepository, ChatModelRouter, EmbeddingModelRouter,
+    RagCollectionController(3处), RagDocumentController(2处), HybridRetrieverService,
+    ReRankingService, PgEnglishFtsProvider, PgJiebaFulltextProvider, PgTrgmFulltextProvider,
+    RetrievalEvaluationServiceImpl
+  - 移除无用的 `Collectors` 导入（仅用于 `toList()` 时）
+  - 全量测试通过，commit 64d7e7d 已推送
