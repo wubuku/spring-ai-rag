@@ -9,6 +9,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.util.CollectionMapper;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RagCollectionService;
@@ -85,7 +86,7 @@ public class RagCollectionController {
                 String.valueOf(collection.getId()),
                 "Collection created: " + collection.getName());
 
-        return ResponseEntity.ok(toMap(collection, 0));
+        return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
     }
 
     /**
@@ -103,7 +104,7 @@ public class RagCollectionController {
         return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(id);
-                    return ResponseEntity.ok(toMap(c, docCount));
+                    return ResponseEntity.ok(CollectionMapper.toMap(c, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -127,7 +128,7 @@ public class RagCollectionController {
         List<Map<String, Object>> items = pageResult.getContent().stream()
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(c.getId());
-                    return toMap(c, docCount);
+                    return CollectionMapper.toMap(c, docCount);
                 })
                 .toList();
 
@@ -168,7 +169,7 @@ public class RagCollectionController {
                     auditUpdate(AuditLogService.ENTITY_COLLECTION,
                             String.valueOf(id),
                             "Collection updated: " + existing.getName());
-                    return ResponseEntity.ok(toMap(saved, docCount));
+                    return ResponseEntity.ok(CollectionMapper.toMap(saved, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -206,7 +207,7 @@ public class RagCollectionController {
         return collectionService.restoreCollection(id)
                 .map(result -> {
                     long docCount = documentRepository.countByCollectionId(result.collection().getId());
-                    return ResponseEntity.ok(toMap(result.collection(), docCount));
+                    return ResponseEntity.ok(CollectionMapper.toMap(result.collection(), docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -399,7 +400,7 @@ public class RagCollectionController {
                 "Collection imported: " + name + ", documents: " + importedDocs,
                 Map.of("importedDocuments", importedDocs));
 
-        Map<String, Object> result = toMap(collection, importedDocs);
+        Map<String, Object> result = CollectionMapper.toMap(collection, importedDocs);
         result.put("importedDocuments", importedDocs);
         return ResponseEntity.ok(result);
     }
@@ -450,23 +451,6 @@ public class RagCollectionController {
             return (Map<String, Object>) obj;
         }
         return null;
-    }
-
-    private Map<String, Object> toMap(RagCollection c, long documentCount) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", c.getId());
-        map.put("name", c.getName());
-        map.put("description", c.getDescription());
-        map.put("embeddingModel", c.getEmbeddingModel());
-        map.put("dimensions", c.getDimensions());
-        map.put("enabled", c.getEnabled());
-        map.put("metadata", c.getMetadata());
-        map.put("createdAt", c.getCreatedAt());
-        map.put("updatedAt", c.getUpdatedAt());
-        map.put("deleted", c.getDeleted());
-        map.put("deletedAt", c.getDeletedAt());
-        map.put("documentCount", documentCount);
-        return map;
     }
 
     // Null-safe audit logging helpers (AuditLogService is optional)
