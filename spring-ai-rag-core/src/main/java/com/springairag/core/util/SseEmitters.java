@@ -46,7 +46,7 @@ public final class SseEmitters {
     public static void sendProgress(SseEmitter emitter, String eventName, Object data, String context) {
         try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
-        } catch (Exception ex) {
+        } catch (Exception ex) { // best-effort: client likely disconnected
             log.warn("SSE send failed for {}: {}", context, ex.getMessage());
         }
     }
@@ -61,7 +61,7 @@ public final class SseEmitters {
         try {
             emitter.send(SseEmitter.event().name("done").data(data));
             emitter.complete();
-        } catch (Exception ex) {
+        } catch (Exception ex) { // best-effort: client likely disconnected
             log.warn("SSE done send failed: {}", ex.getMessage());
             emitter.completeWithError(ex);
         }
@@ -100,7 +100,7 @@ public final class SseEmitters {
             sendDone(emitter, doneData);
         } catch (IllegalArgumentException e) {
             sendError(emitter, e.getMessage(), Map.of());
-        } catch (Exception e) {
+        } catch (Exception e) { // SSE error: propagate to caller
             emitter.completeWithError(e);
         }
     }
@@ -121,7 +121,7 @@ public final class SseEmitters {
                 event.name(eventName);
             }
             emitter.send(event);
-        } catch (Exception ex) {
+        } catch (Exception ex) { // best-effort: client likely disconnected
             log.warn("SSE raw send failed for {}: {}", context, ex.getMessage());
         }
     }
@@ -136,7 +136,7 @@ public final class SseEmitters {
     public static void sendHeartbeat(SseEmitter emitter) {
         try {
             emitter.send(SseEmitter.event().comment(": heartbeat"));
-        } catch (Exception ex) {
+        } catch (Exception ex) { // best-effort: heartbeat is optional
             log.warn("SSE heartbeat failed: {}", ex.getMessage());
         }
     }
