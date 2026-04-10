@@ -23,6 +23,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
@@ -74,19 +75,6 @@ public class RagDocumentController {
     private final DocumentVersionService documentVersionService;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
-    // SHA256 utility for content hashing (breaks circular dependency)
-    private static String computeSha256(String content) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(content.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (byte b : hash) hex.append(String.format("%02x", b));
-            return hex.toString();
-        } catch (Exception e) {
-            throw new RuntimeException("SHA-256 compute failed", e);
-        }
-    }
-
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
                                   RagCollectionRepository collectionRepository,
@@ -115,7 +103,7 @@ public class RagDocumentController {
         log.info("Creating document: title={}", request.getTitle());
 
         String content = request.getContent();
-        String contentHash = computeSha256(content);
+        String contentHash = DigestUtils.sha256(content);
 
         // Deduplication check
         List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
