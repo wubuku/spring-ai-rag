@@ -2230,6 +2230,9 @@
 
 - 2026-04-11 00:51 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；修复 V17__add_optimistic_locking_version.sql 迁移文件表名错误（`rag_document`→`rag_documents`，`rag_alert`→`rag_alerts` 等 5 处）；迁移成功应用至 V17；commit 95431a5 已推送
 
+## Cron 进度（2026-04-11 01:48 — WebUI 常规发布）
+- 2026-04-11 01:48 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
 ## Cron 进度（2026-04-11 00:21 — 后端：实体测试覆盖补全）
 
 - 2026-04-11 00:21 — ✅ 实体测试覆盖补全（7 个缺失实体）：
