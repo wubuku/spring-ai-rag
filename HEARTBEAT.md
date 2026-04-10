@@ -2210,6 +2210,8 @@
 
 ## 进度日志（2026-04-10 12:38 — 后端：DingTalkNotificationService 韧性增强）
 
+- 2026-04-10 14:16 — ✅ RagRetrievalLog 实体测试补全：RagRetrievalLogTest 7 个测试覆盖默认构造（createdAt 初始化）、setters/getters 全字段、metadata JSON 混合类型（HashMap null/array/double/bool）、resultScores 分数映射、空 timing 字段（跳过步骤）、零结果计数、有效检索策略名称；全量测试通过；commit 5d13894 已推送
+
 - 2026-04-10 12:38 — ✅ DingTalkNotificationService 韧性增强：
   - **escapeJson 修复**：原 `.replace().replace()...` 链式调用的顺序有缺陷——backslash 放在最后替换，字符串中若含 `\\n`（字面反斜杠+n）会被后续的 newline replacement 误处理；改为 StringBuilder + switch 显式逐字符转义，backslash 最先处理
   - **HTTP retry**：sendToDingTalk 新增 3 次重试 + 指数退避（500ms/1s），覆盖网络瞬时抖动场景；退避期间 interrupted 则抛出 RuntimeException 供调用方处理
