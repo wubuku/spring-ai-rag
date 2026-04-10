@@ -124,6 +124,17 @@ class SseEmittersTest {
     }
 
     @Test
+    @DisplayName("sendError calls complete() on success, not completeWithError")
+    void sendError_successCompletesNormally() {
+        SseEmitter emitter = SseEmitters.create();
+        final boolean[] completedWithError = {false};
+        emitter.onCompletion(() -> { /* normal completion */ });
+        emitter.onError(cause -> completedWithError[0] = true);
+        SseEmitters.sendError(emitter, "test error", Map.of("key", "value"));
+        assertFalse(completedWithError[0], "onError should not be called when send succeeds");
+    }
+
+    @Test
     @DisplayName("execute with normal operation does not throw")
     void execute_normalOperation() {
         SseEmitter emitter = SseEmitters.create();

@@ -78,10 +78,11 @@ public final class SseEmitters {
     public static void sendError(SseEmitter emitter, String error, Map<String, Object> extra) {
         try {
             emitter.send(SseEmitter.event().name("error").data(buildErrorData(error, extra)));
+            emitter.complete();
         } catch (Exception ex) {
-            /* best-effort: error already sent via completeWithError */
+            /* best-effort: error event could not be sent, complete with error as fallback */
+            emitter.completeWithError(new RuntimeException(error));
         }
-        emitter.completeWithError(new RuntimeException(error));
     }
 
     /**
