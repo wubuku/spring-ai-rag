@@ -2280,4 +2280,8 @@
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
 | F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
 
+## Cron 进度（2026-04-11 03:13 — WebUI 常规发布）
+
+- 2026-04-11 03:13 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
 **推进原则**：每轮完成 1 个代码任务；任务完成立即 commit push；HEARTBEAT 保持 ≥10 个 ⏳ 待办。
