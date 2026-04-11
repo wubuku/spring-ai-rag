@@ -2347,6 +2347,7 @@
 | M3 | Collection 详情页文档列表（Collection 点击→展示该 Collection 下所有文档） | 功能 | ⏳ |
 | W1 | WebUI E2E Playwright 测试（Dashboard/Search/Collections 深度交互） | 测试覆盖 | ⏳ |
 | W2 | spring-ai-rag-starter 模块 JaCoCo 覆盖率提升（当前 0%） | 测试覆盖 | ⏳ |
+| S4 | ApiKeyManagementService 验证缓存（Caffeine 30s TTL，避免每次认证都查 DB） | 性能 | ✅ 2026-04-12 |
 | T1 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
 | T2 | Integration test base classes i18n: 4 files Chinese→English | 测试覆盖 | ✅ 2026-04-11（4 files, 148 lines changed, 1621 tests pass） |
 | T3 | AlertController SSE 端点（AlertController 无 SSE；RagDocumentController.batchEmbedDocumentsStream 已实现） | 测试覆盖 | ✅ 2026-04-11 |
@@ -2518,3 +2519,6 @@
 
 ## Cron 进度（2026-04-12 05:47 — WebUI 常规巡检）
 - 2026-04-12 05:47 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-12 07:08 — 后端：ApiKeyManagementService 30s 验证缓存）
+- 2026-04-12 07:08 — ✅ ApiKeyManagementService 验证缓存：新增 Caffeine `VALIDATED_KEY_CACHE`（maxSize=1000，TTL=30s），`validateKeyEntity()` 新增缓存逻辑——缓存命中跳过 DB 查询；缓存未命中查询 DB 并缓存有效结果；不缓存无效结果（支持快速 un-revoke）；`revokeKey()`/`rotateKey()` 调用 `invalidateAll()` 清空缓存；非 `rag_sk_` 前缀 key 在入口直接返回（legacy 路径，不走缓存）；`ApiKeyManagementServiceTest` 新增 5 个缓存测试（cacheHit 跳过DB/DBLookup 缓存未命中/revokeKey 清空缓存/nonPrefix 直接返回）；1761 tests 全通过，零失败零错误；commit a6c2117 已推送
