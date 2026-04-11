@@ -8,7 +8,8 @@
     "metrics": "指标",
     "alerts": "告警",
     "abtest": "A/B 测试",
-    "settings": "设置"
+    "settings": "设置",
+    "apiKeys": "API 密钥"
   },
   "common": {
     "loading": "加载中…",
@@ -246,5 +247,36 @@
     "metricPrecision": "检索精度",
     "metricRecall": "检索召回",
     "metricSatisfaction": "用户满意度"
+  },
+  "apiKeys": {
+    "title": "API 密钥",
+    "createKey": "创建密钥",
+    "createFirst": "创建您的第一个 API 密钥",
+    "noKeys": "未找到 API 密钥",
+    "name": "名称",
+    "keyId": "密钥 ID",
+    "created": "创建时间",
+    "lastUsed": "最后使用",
+    "expires": "过期时间",
+    "status": "状态",
+    "rawKey": "原始密钥（仅显示一次）",
+    "namePlaceholder": "例如：生产环境服务器",
+    "expiresAt": "过期时间",
+    "expiresAtHint": "留空表示永不过期",
+    "create": "创建",
+    "createError": "创建 API 密钥失败",
+    "keyCreated": "API 密钥创建成功",
+    "revoke": "撤销",
+    "revoked": "已撤销",
+    "revokeError": "撤销 API 密钥失败",
+    "rotate": "轮换",
+    "rotateTooltip": "撤销当前密钥并生成新密钥",
+    "rotateKey": "轮换 API 密钥",
+    "rotateInfo": "这将禁用当前密钥并生成一个新的同名、同过期时间的新密钥。新密钥仅显示一次。",
+    "rotateConfirm": "确认轮换",
+    "rotateError": "轮换 API 密钥失败",
+    "keyRotated": "API 密钥轮换成功",
+    "active": "有效",
+    "expired": "已过期"
   }
 }

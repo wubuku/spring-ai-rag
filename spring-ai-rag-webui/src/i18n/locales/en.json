@@ -8,7 +8,8 @@
     "metrics": "Metrics",
     "alerts": "Alerts",
     "abtest": "A/B Test",
-    "settings": "Settings"
+    "settings": "Settings",
+    "apiKeys": "API Keys"
   },
   "common": {
     "loading": "Loading…",
@@ -57,10 +58,8 @@
     "uploaded": "Document uploaded successfully",
     "deleted": "Document deleted",
     "deleteError": "Failed to delete document",
-    "noDocuments": "No documents found",
-    "totalDocuments": "Total",
-    "deleteConfirm": "Delete this document?",
     "totalDocuments": "Total Documents",
+    "deleteConfirm": "Delete this document?",
     "pending": "Pending",
     "embedded": "Embedded",
     "failed": "Failed",
@@ -248,5 +247,36 @@
     "metricPrecision": "Retrieval Precision",
     "metricRecall": "Retrieval Recall",
     "metricSatisfaction": "User Satisfaction"
+  },
+  "apiKeys": {
+    "title": "API Keys",
+    "createKey": "Create Key",
+    "createFirst": "Create your first API key",
+    "noKeys": "No API keys found",
+    "name": "Name",
+    "keyId": "Key ID",
+    "created": "Created",
+    "lastUsed": "Last Used",
+    "expires": "Expires",
+    "status": "Status",
+    "rawKey": "Raw Key (shown only once)",
+    "namePlaceholder": "e.g. Production Server",
+    "expiresAt": "Expiration Date",
+    "expiresAtHint": "Leave empty for no expiration",
+    "create": "Create",
+    "createError": "Failed to create API key",
+    "keyCreated": "API key created successfully",
+    "revoke": "Revoke",
+    "revoked": "Revoked",
+    "revokeError": "Failed to revoke API key",
+    "rotate": "Rotate",
+    "rotateTooltip": "Revoke current and generate a new key",
+    "rotateKey": "Rotate API Key",
+    "rotateInfo": "This will disable the current key and generate a new one with the same name and expiration. The new raw key will be shown only once.",
+    "rotateConfirm": "Rotate Key",
+    "rotateError": "Failed to rotate API key",
+    "keyRotated": "API key rotated successfully",
+    "active": "Active",
+    "expired": "Expired"
   }
 }

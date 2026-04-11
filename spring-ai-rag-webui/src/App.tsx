@@ -17,6 +17,7 @@ const Search = lazy(() => import('./pages/Search').then(m => ({ default: m.Searc
 const Metrics = lazy(() => import('./pages/Metrics').then(m => ({ default: m.Metrics })));
 const Alerts = lazy(() => import('./pages/Alerts').then(m => ({ default: m.Alerts })));
 const ABTest = lazy(() => import('./pages/ABTest').then(m => ({ default: m.ABTest })));
+const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.ApiKeys })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 
 const queryClient = new QueryClient({
@@ -127,6 +128,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageFallback />}>
                     <ABTest />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="api-keys"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <ApiKeys />
                   </Suspense>
                 }
               />
