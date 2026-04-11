@@ -2336,3 +2336,7 @@
 ## Cron 进度（后端 — 2026-04-11 09:08 — ModelRegistry 测试覆盖率增强）
 
 - 2026-04-11 09:08 — ✅ ModelRegistry 测试覆盖率增强：扫描发现 ModelRegistry（10 tests → 37 tests，+27）存在大量未测试方法——getPrimaryChatModelName/getFallbackChatModelNames/getPrimaryEmbeddingModelName/getFallbackEmbeddingModelNames/getProviderByName/getAllProviders/getProviderByModelRef/getModelItem；新增 27 个测试覆盖 multiModelProperties null/有值/fallback 全部路径、case-insensitive provider 查找、hardcoded provider fallback、embedding model routing 等全部分支；mvn test ✅（1718 测试全通过，零失败零错误）；commit 539f96e 已推送
+
+## Cron 进度（WebUI — 2026-04-11 10:41 — WebUI 常规巡检）
+
+- 2026-04-11 10:41 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过，1.95s）/ npm run build ✅（97KB index gzipped，28 chunks，173ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态

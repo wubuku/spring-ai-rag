@@ -47,6 +47,8 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.time.LocalDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.List;
@@ -178,12 +180,21 @@ public class RagDocumentController {
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String processingStatus,
             @RequestParam(required = false) Boolean enabled,
-            @RequestParam(required = false) Long collectionId) {
+            @RequestParam(required = false) Long collectionId,
+            @Parameter(description = "Filter documents created at or after this timestamp (ISO-8601, e.g. 2024-01-01T00:00:00)")
+            @RequestParam(required = false) String createdAfter,
+            @Parameter(description = "Filter documents created at or before this timestamp (ISO-8601, e.g. 2024-12-31T23:59:59)")
+            @RequestParam(required = false) String createdBefore) {
 
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        LocalDateTime createdAfterDt = parseDateParam(createdAfter);
+        LocalDateTime createdBeforeDt = parseDateParam(createdBefore);
+
         var pageResult = documentRepository.searchDocuments(
-                title, documentType, processingStatus, enabled, collectionId, pageable);
+                title, documentType, processingStatus, enabled, collectionId,
+                createdAfterDt, createdBeforeDt, pageable);
 
         // Batch-fetch collection names to avoid N+1 queries (one findById per document)
         List<Long> collectionIds = pageResult.getContent().stream()
@@ -731,5 +742,24 @@ public class RagDocumentController {
     }
     private void auditDelete(String entityType, String entityId, String message, Map<String, Object> details) {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message, details);
+    }
+
+    // ==================== Date Parsing Helper ====================
+
+    /**
+     * Parse ISO-8601 date-time string to LocalDateTime.
+     * Returns null if the input is null or blank.
+     * Invalid format is ignored (filter skipped) rather than throwing.
+     */
+    private LocalDateTime parseDateParam(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDateTime.parse(value);
+        } catch (DateTimeParseException e) {
+            log.warn("Invalid date-time format '{}': {}", value, e.getMessage());
+            return null;
+        }
     }
 }

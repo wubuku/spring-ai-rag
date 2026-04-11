@@ -189,10 +189,10 @@ class RagDocumentControllerTest {
                 createDoc(2L, "文档2", "内容2")
         );
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 2);
-        when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2L, response.getBody().get("total"));
@@ -204,10 +204,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByTitle() {
         List<RagDocument> docs = List.of(createDoc(1L, "Spring AI 入门", "内容"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", null, null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -219,10 +219,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByDocumentType() {
         List<RagDocument> docs = List.of(createDoc(1L, "文档", "内容", "markdown", "COMPLETED"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, "markdown", null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, "markdown", null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -232,10 +232,10 @@ class RagDocumentControllerTest {
     void listDocuments_filterByStatus() {
         List<RagDocument> docs = List.of(createDoc(1L, "文档", "内容", "txt", "PENDING"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -245,10 +245,10 @@ class RagDocumentControllerTest {
     void listDocuments_combinedFilters() {
         List<RagDocument> docs = List.of(createDoc(1L, "Spring Boot 教程", "内容", "markdown", "COMPLETED"));
         Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
-        when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1L, response.getBody().get("total"));
@@ -257,15 +257,85 @@ class RagDocumentControllerTest {
     @Test
     void listDocuments_emptyResult() {
         Page<RagDocument> page = new PageImpl<>(List.of(), PageRequest.of(0, 20), 0);
-        when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
+        when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null);
+        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(0L, response.getBody().get("total"));
         List<?> resultDocs = (List<?>) response.getBody().get("documents");
         assertEquals(0, resultDocs.size());
+    }
+
+    @Test
+    void listDocuments_filterByCreatedAfter() {
+        List<RagDocument> docs = List.of(createDoc(1L, "Recent Doc", "内容"));
+        Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
+        when(documentRepository.searchDocuments(
+                isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(LocalDateTime.parse("2024-01-01T00:00:00")), isNull(),
+                any(PageRequest.class)))
+                .thenReturn(page);
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1L, response.getBody().get("total"));
+    }
+
+    @Test
+    void listDocuments_filterByCreatedBefore() {
+        List<RagDocument> docs = List.of(createDoc(1L, "Old Doc", "内容"));
+        Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
+        when(documentRepository.searchDocuments(
+                isNull(), isNull(), isNull(), isNull(), isNull(),
+                isNull(), eq(LocalDateTime.parse("2024-12-31T23:59:59")),
+                any(PageRequest.class)))
+                .thenReturn(page);
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.listDocuments(0, 20, null, null, null, null, null, null, "2024-12-31T23:59:59");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1L, response.getBody().get("total"));
+    }
+
+    @Test
+    void listDocuments_filterByDateRange() {
+        List<RagDocument> docs = List.of(createDoc(1L, "Doc in range", "内容"));
+        Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
+        when(documentRepository.searchDocuments(
+                isNull(), isNull(), isNull(), isNull(), isNull(),
+                eq(LocalDateTime.parse("2024-01-01T00:00:00")),
+                eq(LocalDateTime.parse("2024-12-31T23:59:59")),
+                any(PageRequest.class)))
+                .thenReturn(page);
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", "2024-12-31T23:59:59");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1L, response.getBody().get("total"));
+    }
+
+    @Test
+    void listDocuments_invalidCreatedAfter_ignored() {
+        List<RagDocument> docs = List.of(createDoc(1L, "Doc", "内容"));
+        Page<RagDocument> page = new PageImpl<>(docs, PageRequest.of(0, 20), 1);
+        // Invalid date format is treated as null — skips date filter
+        when(documentRepository.searchDocuments(
+                isNull(), isNull(), isNull(), isNull(), isNull(),
+                isNull(), isNull(),
+                any(PageRequest.class)))
+                .thenReturn(page);
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.listDocuments(0, 20, null, null, null, null, null, "not-a-date", null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1L, response.getBody().get("total"));
     }
 
     @Test

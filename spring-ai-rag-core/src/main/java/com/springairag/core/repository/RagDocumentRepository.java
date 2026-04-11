@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -68,12 +69,16 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
            "(COALESCE(:documentType, '') = '' OR d.documentType = :documentType) AND " +
            "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus) AND " +
            "(:enabled IS NULL OR d.enabled = :enabled) AND " +
-           "(:collectionId IS NULL OR d.collectionId = :collectionId)")
+           "(:collectionId IS NULL OR d.collectionId = :collectionId) AND " +
+           "(:createdAfter IS NULL OR d.createdAt >= :createdAfter) AND " +
+           "(:createdBefore IS NULL OR d.createdAt <= :createdBefore)")
     Page<RagDocument> searchDocuments(@Param("title") String title,
                                        @Param("documentType") String documentType,
                                        @Param("processingStatus") String processingStatus,
                                        @Param("enabled") Boolean enabled,
                                        @Param("collectionId") Long collectionId,
+                                       @Param("createdAfter") LocalDateTime createdAfter,
+                                       @Param("createdBefore") LocalDateTime createdBefore,
                                        Pageable pageable);
 
     /**
