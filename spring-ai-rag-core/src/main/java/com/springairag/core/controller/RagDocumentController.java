@@ -329,7 +329,7 @@ public class RagDocumentController {
                     ((Number) result.getOrDefault("chunksCreated", 0)).intValue(),
                     String.valueOf(result.getOrDefault("message", ""))
             );
-        } catch (Exception e) {
+        } catch (Exception e) { // Best-effort: individual document errors do not affect other documents in the batch
             log.warn("Failed to re-embed document {}: {}", doc.getId(), e.getMessage());
             return new ReembedResultResponse(
                     doc.getId(),
@@ -382,7 +382,7 @@ public class RagDocumentController {
             SseEmitters.sendDone(emitter, Map.of("documentId", id));
         } catch (IllegalArgumentException e) {
             SseEmitters.sendError(emitter, e.getMessage(), Map.of("documentId", id));
-        } catch (Exception e) {
+        } catch (Exception e) { // SSE resilience: unexpected errors terminate the stream gracefully
             emitter.completeWithError(e);
         }
         return emitter;
@@ -505,7 +505,7 @@ public class RagDocumentController {
             SseEmitters.sendDone(emitter, Map.of("total", ids.size(), "status", "completed"));
         } catch (IllegalArgumentException e) {
             SseEmitters.sendError(emitter, e.getMessage(), Map.of());
-        } catch (Exception e) {
+        } catch (Exception e) { // SSE resilience: unexpected errors terminate the stream gracefully
             emitter.completeWithError(e);
         }
         return emitter;
@@ -627,7 +627,7 @@ public class RagDocumentController {
                         r.error() != null ? r.error() : "Creation failed");
             }
 
-        } catch (Exception e) {
+        } catch (Exception e) { // Best-effort: file processing errors return a failure result without throwing
             log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
             return new FileUploadResponse.FileResult(
                     filename, null, null, false, 0,
@@ -659,7 +659,7 @@ public class RagDocumentController {
         if (!isText && !file.isEmpty()) {
             try {
                 file.getBytes();
-            } catch (Exception e) {
+            } catch (Exception e) { // Best-effort: non-text files throw in getBytes(); mark as invalid
                 return new FileValidationResult(false, extension,
                         "Unsupported file type: " + contentType + ", only text files supported (txt/md/json/xml/html/csv/log)");
             }
