@@ -2352,3 +2352,7 @@
 ## Cron 进度（后端 — 2026-04-11 11:29 — 文档列表日期范围过滤）
 
 - 2026-04-11 11:29 — ✅ 文档列表日期范围过滤：`GET /api/v1/rag/documents` 新增 `createdAfter` 和 `createdBefore` 查询参数（ISO-8601 格式），支持按创建时间范围过滤文档列表；`RagDocumentRepository.searchDocuments` 新增 `createdAfter/createdBefore LocalDateTime` 参数；`RagDocumentController.parseDateParam()` 空安全解析 + 格式错误静默忽略（不抛异常）；`RagDocumentControllerTest` 更新 6 个现有 mock + 新增 4 个日期过滤测试（createdAfter/createdBefore/dateRange/invalidFormat_ignored）；全量测试通过，commit 5641c85 已推送
+
+## Cron 进度（WebUI — 2026-04-11 12:02 — WebUI 常规巡检）
+
+- 2026-04-11 12:02 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过，2.02s）/ npm run build ✅（97KB index gzipped，28 chunks，166ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP, tables=DEGRADED）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
