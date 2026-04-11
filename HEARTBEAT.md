@@ -2279,6 +2279,7 @@
 | QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ⏳ |
 | QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
 | QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
+| T5 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
 | T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ✅ 2026-04-11（T1 完成，RagUserFeedbackRepositoryTest 12 tests，1621 tests total） |
 | T4 | NotificationConfig 单元测试（11 tests） | 测试覆盖 | ✅ 2026-04-11（T4 完成，NotificationConfig 0%→100%，11 tests） |
 | T3 | Integration test base classes i18n: 4 files Chinese→English | 测试覆盖 | ✅ 2026-04-11（4 files, 148 lines changed, 1621 tests pass） |
@@ -2329,3 +2330,7 @@
 ## Cron 进度（WebUI — 2026-04-11 08:24 — 常规发布）
 
 - 2026-04-11 08:24 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.09s）/ npm run build ✅（97KB index gzipped，28 chunks，159ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（后端 — 2026-04-11 09:08 — ModelRegistry 测试覆盖率增强）
+
+- 2026-04-11 09:08 — ✅ ModelRegistry 测试覆盖率增强：扫描发现 ModelRegistry（10 tests → 37 tests，+27）存在大量未测试方法——getPrimaryChatModelName/getFallbackChatModelNames/getPrimaryEmbeddingModelName/getFallbackEmbeddingModelNames/getProviderByName/getAllProviders/getProviderByModelRef/getModelItem；新增 27 个测试覆盖 multiModelProperties null/有值/fallback 全部路径、case-insensitive provider 查找、hardcoded provider fallback、embedding model routing 等全部分支；mvn test ✅（1718 测试全通过，零失败零错误）；commit 539f96e 已推送
