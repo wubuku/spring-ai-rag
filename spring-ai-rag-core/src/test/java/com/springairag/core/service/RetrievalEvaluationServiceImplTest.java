@@ -445,4 +445,66 @@ class RetrievalEvaluationServiceImplTest {
 
         exec.shutdownNow();
     }
+
+    @DisplayName("evaluateAnswerQuality: TimeoutException returns fallback result")
+    void evaluateAnswerQuality_timeoutException_returnsFallback() {
+        // Mock ChatClient chain where call() throws TimeoutException synchronously.
+        // CompletableFuture.supplyAsync wraps it in CompletionException;
+        // CompletableFuture.get() unwraps it back to TimeoutException.
+        ChatClient mockClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        when(chatClientBuilder.build()).thenReturn(mockClient);
+        when(mockClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        // Throw TimeoutException from the call — supplyAsync wraps it in CompletionException
+        when(mockRequestSpec.call()).thenThrow(new java.util.concurrent.TimeoutException("LLM call timed out"));
+
+        java.util.concurrent.ExecutorService exec =
+                java.util.concurrent.Executors.newSingleThreadExecutor();
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder, exec);
+        svc.initMetrics();
+
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svc.evaluateAnswerQuality("query", "context", "answer");
+
+        assertEquals(3, result.getGroundedness());
+        assertEquals(3, result.getRelevance());
+        assertEquals(3, result.getHelpfulness());
+        assertTrue(result.getReasoning().contains("timed out") || result.getReasoning().contains("unavailable"));
+        assertEquals("REVISION", result.getRecommendation());
+
+        exec.shutdownNow();
+    }
+
+    @DisplayName("evaluateAnswerQuality: InterruptedException returns fallback result")
+    void evaluateAnswerQuality_interruptedException_returnsFallback() {
+        // Mock ChatClient chain where call() throws InterruptedException.
+        // Since Thread.interrupted()=false when supplier runs, asyncSupply does not treat it specially.
+        ChatClient mockClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        when(chatClientBuilder.build()).thenReturn(mockClient);
+        when(mockClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.call()).thenThrow(new InterruptedException("LLM call interrupted"));
+
+        java.util.concurrent.ExecutorService exec =
+                java.util.concurrent.Executors.newSingleThreadExecutor();
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder, exec);
+        svc.initMetrics();
+
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svc.evaluateAnswerQuality("query", "context", "answer");
+
+        assertEquals(3, result.getGroundedness());
+        assertEquals(3, result.getRelevance());
+        assertEquals(3, result.getHelpfulness());
+        assertTrue(result.getReasoning().contains("interrupted"));
+        assertEquals("REVISION", result.getRecommendation());
+
+        exec.shutdownNow();
+    }
 }
