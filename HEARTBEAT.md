@@ -1593,6 +1593,14 @@
 
 - 2026-04-08 06:31 — ✅ 后端国际化查漏第八轮（RagMetricsService）：RagMetricsService.java 类级 Javadoc + Micrometer descriptions（rag.requests.total/success/failed/response.time）+ 全部方法 Javadoc（recordSuccess/recordFailure/recordLlmTokens/getTotalRequests/getSuccessfulRequests/getFailedRequests/getSuccessRate/getTotalRetrievalResults/getTotalLlmTokens）英文化；1 file，28 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit f944520 已推送
 
+## Cron 进度（2026-04-11 11:59 — ApiCompatibilityAdapter 测试补强）
+
+- 2026-04-11 11:59 — ✅ ApiCompatibilityAdapter 测试补强：新增 8 个边缘测试（6→14 tests）——
+  - `SystemToUserConversionTests`（3 tests）：`supportsSystemMessage()=false` 时 system→user 转换 + `[System]` 前缀
+  - `SystemFirstReorderTests`（3 tests）：`requiresSystemMessageFirst()=true` 但 system 不在首位时的重排逻辑
+  - `MixedAdaptationTests`（2 tests）：`supportsSystem=false + supportsMultiple=false`（先转换再合并）以及 `supportsSystem=false + requiresFirst=true`（先转换再重排）
+  - mvn test ✅（1726 tests 全通过，零失败零错误）；commit 7b6bf79 已推送
+
 ## Cron 进度（2026-04-11 05:43 — WebUI 常规发布）
 
 - 2026-04-11 05:43 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.27s）/ npm run build ✅（97KB index gzipped，28 chunks，205ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
