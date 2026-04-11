@@ -2316,8 +2316,8 @@
 | S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ⏳ |
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
 | E1 | ChatExportService CSV 导出支持 | 功能 | ✅ 2026-04-12 (commit c04d742) |
-| E2 | DocumentListItem 内容摘要预览（长 content 截断显示） | UX | ⏳ |
-| E3 | RagCollectionController 批量删除保护（soft-delete + 恢复）| 安全 | ⏳ |
+| E2 | DocumentListItem 内容摘要预览（长 content 截断显示） | UX | ✅ 2026-04-12 (commit 391e4bd) |
+| E3 | RagCollectionController 批量删除保护（soft-delete + 恢复）| 安全 | ✅ 2026-04-06 (C18 同实现) |
 | F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
 
 ## Cron 进度（2026-04-11 04:20 — 后端 SseEmitters 注释规范化）
@@ -2459,6 +2459,16 @@
 
 ## Cron 进度（2026-04-12 02:27 — 后端国际化收尾：application.yml 中文注释英文化）
 - 2026-04-12 02:27 — ✅ application.yml i18n 收尾：扫描发现 `spring-ai-rag-core/src/main/resources/application.yml` 残留 3 处中文注释（⚠️ 重要说明 Spring AI base-url 自动追加 /v1 行为），翻译为英文（openai/minimax/embedding 三处配置节）；mvn test ✅（全通过）；commit 9d51bee 已推送
+
+## Cron 进度（2026-04-12 03:28 — E2 Document list content preview + compilation fix）
+- 2026-04-12 03:28 — ✅ E2 Document list content preview + build fix：
+  - `DocumentMapper.toListMap()`: new method returns `contentPreview` (200 chars + "...") instead of full `content`
+  - `DocumentMapper.truncate()`: helper for string truncation with ellipsis
+  - `RagDocumentController.listDocuments()`: switched to `toListMap()`
+  - `DocumentMapperTest`: +9 new tests (toListMap 5 + truncate 4)
+  - Revert broken CollectionController DTO refactoring (239c95e → 2595be6): restored CollectionResponse (ZonedDateTime, no deleted fields), CollectionExportResponse, removed CollectionDocumentListResponse, restored RagCollectionController to working state
+  - Compilation errors fixed: 1741 tests pass, exit 0
+  - commit 391e4bd 已推送
 
 ## Cron 进度（2026-04-12 02:58 — WebUI 常规巡检）
 - 2026-04-12 02:58 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
