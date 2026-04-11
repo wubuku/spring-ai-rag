@@ -76,9 +76,9 @@ spring:
   # Zhipu example: base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
   openai:
     api-key: ${SPRING_AI_OPENAI_API_KEY:${OPENAI_API_KEY:dummy}}
-    # ⚠️ 重要：Spring AI OpenAiApi 会自动追加 /v1/chat/completions
-    # base-url 不要包含 /v1，避免 /v1/v1 重复路径导致 401/404
-    # 参考：https://github.com/spring-projects/spring-ai/issues/710
+    # ⚠️ IMPORTANT: Spring AI OpenAiApi automatically appends /v1/chat/completions
+    # base-url must NOT include /v1, otherwise results in duplicate path /v1/v1 → 401/404
+    # Ref: https://github.com/spring-projects/spring-ai/issues/710
     base-url: ${SPRING_AI_OPENAI_BASE_URL:${OPENAI_BASE_URL:https://api.siliconflow.cn}}
     chat:
       # DISABLED — ChatModel beans are manually created by SpringAiConfig
@@ -99,7 +99,7 @@ spring:
         max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 
   # Spring AI MiniMax model configuration (optional, enabled when provider=minimax)
-  # ⚠️ 重要：base-url 不要包含 /v1，Spring AI MiniMaxApi 会自动追加 /v1/chat/completions
+  # ⚠️ IMPORTANT: base-url must NOT include /v1, Spring AI MiniMaxApi automatically appends /v1/chat/completions
   minimax:
     api-key: ${MINIMAX_API_KEY:dummy}
     base-url: ${MINIMAX_BASE_URL:https://api.minimaxi.com}
@@ -237,8 +237,8 @@ app:
 rag:
   embedding:
     api-key: ${SILICONFLOW_API_KEY:}
-    # ⚠️ 重要：Spring AI OpenAiEmbeddingModel 会自动追加 /v1/embeddings
-    # base-url 不要包含 /v1，避免 /v1/v1 重复路径导致 404
+    # ⚠️ IMPORTANT: Spring AI OpenAiEmbeddingModel automatically appends /v1/embeddings
+    # base-url must NOT include /v1, otherwise results in duplicate path /v1/v1 → 404
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
