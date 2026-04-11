@@ -1617,6 +1617,10 @@
 
 - 2026-04-11 05:43 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.27s）/ npm run build ✅（97KB index gzipped，28 chunks，205ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
+## Cron 进度（2026-04-12 00:10 — 后端测试覆盖增强）
+
+- 2026-04-12 00:10 — ✅ C47 CollectionMapper 单元测试：新增 `CollectionMapperTest.java`（7 个测试用例，覆盖全部字段/零文档数/禁用集合/软删除/空 embedding model/可变返回 Map/metadata 保留）；1469 测试全通过，零失败零错误；commit a8ec16c 已推送
+
 ## Cron 进度（2026-04-10 15:27 — WebUI 常规发布）
 
 - 2026-04-10 15:27 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
