@@ -2365,6 +2365,10 @@
 
 - 2026-04-11 13:17 — ✅ `evaluateAnswerQuality` LLM 判断调用添加超时保护：`RetrievalEvaluationServiceImpl.evaluateAnswerQuality()` 使用 `CompletableFuture.supplyAsync()` + `future.get(30s, TimeUnit.SECONDS)` 包装 LLM 调用；超时 → `TimeoutException` → 返回 `AnswerQualityResult(3,3,3,"Evaluation timed out, service unavailable","REVISION")`；中断 → `InterruptedException` → 返回 `"Evaluation interrupted"`；LLM 失败 → `ExecutionException` → 返回 `"Evaluation failed: <msg>"`；当 `ExecutorService` 为 null 时退化为同步无超时调用（向后兼容）；`RetrievalEvaluationServiceImplTest` 新增 2 个测试（no-executor 同步路径 + ExecutionException fallback）；2 个测试文件共 1696 测试全通过，零失败零错误；commit d9c0de7 已推送
 
+## Cron 进度（后端 — 2026-04-11 16:10 — CHANGELOG 同步）
+
+- 2026-04-11 16:10 — ✅ CHANGELOG 同步：扫描发现 CHANGELOG.md 自 2026-04-05 后未更新（6 天，200+ commits），新增 Apr 5-11 全部变更日志，涵盖：evaluateAnswerQuality 超时+fallback、EmailNotificationService 指数退避重试、文档日期范围过滤、@Version 乐观锁、SSE 心跳、k6 梯度压测、WebUI W12/W13/W14、EmbeddingCircuitBreaker、listDocuments N+1 修复、ModelRegistry 测试增强、euclideanDistance+dotProduct、LLM-as-judge 评估、Mock LLM Server、Dockerfile <200MB 优化、Grafana 监控增强、ApiSloHandlerInterceptor 测试、SilenceSchedule 集成、Collection/CollectionMapper 提取、DocumentMapper 提取等；mvn test ✅（零失败零错误）；commit 61c2d61 已推送
+
 ## Cron 进度（WebUI — 2026-04-11 12:02 — WebUI 常规巡检）
 
 - 2026-04-11 12:02 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过，2.02s）/ npm run build ✅（97KB index gzipped，28 chunks，166ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP, tables=DEGRADED）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
