@@ -208,7 +208,7 @@ public class RagDocumentController {
                         .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
 
         List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(doc -> DocumentMapper.toMap(doc, collectionNameMap, embeddingRepository))
+                .map(doc -> DocumentMapper.toListMap(doc, collectionNameMap, embeddingRepository))
                 .toList();
 
         return ResponseEntity.ok(Map.of(

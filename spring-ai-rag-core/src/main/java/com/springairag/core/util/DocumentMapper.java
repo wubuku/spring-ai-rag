@@ -17,7 +17,43 @@ import java.util.Optional;
  */
 public final class DocumentMapper {
 
+    /** Maximum characters for content preview in list views. */
+    private static final int CONTENT_PREVIEW_MAX_LEN = 200;
+
     private DocumentMapper() {
+    }
+
+    /**
+     * List-friendly document-to-map conversion.
+     * Uses a pre-built collection-name map to avoid N+1 queries.
+     * Returns a content preview (truncated) instead of full content to reduce response size.
+     */
+    public static Map<String, Object> toListMap(RagDocument doc,
+                                                Map<Long, String> collectionNameMap,
+                                                RagEmbeddingRepository embeddingRepository) {
+        Map<String, Object> map = new HashMap<>();
+        putCoreFields(map, doc);
+
+        Long collectionId = doc.getCollectionId();
+        map.put("collectionId", collectionId);
+        if (collectionId != null) {
+            String name = collectionNameMap.get(collectionId);
+            if (name != null) map.put("collectionName", name);
+        }
+
+        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+        map.put("chunkCount", chunkCount);
+
+        // Content preview: truncated, not full content
+        if (doc.getContent() != null) {
+            map.put("contentPreview", truncate(doc.getContent(), CONTENT_PREVIEW_MAX_LEN));
+        }
+
+        if (doc.getMetadata() != null) {
+            map.put("metadata", doc.getMetadata());
+        }
+
+        return map;
     }
 
     /**
@@ -111,5 +147,16 @@ public final class DocumentMapper {
         if (doc.getMetadata() != null) {
             map.put("metadata", doc.getMetadata());
         }
+    }
+
+    /**
+     * Truncates a string to at most maxLen characters.
+     * If truncation occurs, appends "..." to indicate ellipsis.
+     */
+    static String truncate(String text, int maxLen) {
+        if (text == null || text.length() <= maxLen) {
+            return text;
+        }
+        return text.substring(0, maxLen) + "...";
     }
 }

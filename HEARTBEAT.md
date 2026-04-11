@@ -2459,3 +2459,6 @@
 
 ## Cron 进度（2026-04-12 02:27 — 后端国际化收尾：application.yml 中文注释英文化）
 - 2026-04-12 02:27 — ✅ application.yml i18n 收尾：扫描发现 `spring-ai-rag-core/src/main/resources/application.yml` 残留 3 处中文注释（⚠️ 重要说明 Spring AI base-url 自动追加 /v1 行为），翻译为英文（openai/minimax/embedding 三处配置节）；mvn test ✅（全通过）；commit 9d51bee 已推送
+
+## Cron 进度（2026-04-12 02:58 — WebUI 常规巡检）
+- 2026-04-12 02:58 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态

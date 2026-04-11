@@ -2,7 +2,7 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
-import java.time.LocalDateTime;
+import java.time.ZonedDateTime;
 import java.util.Map;
 
 /**
@@ -32,16 +32,10 @@ public record CollectionResponse(
         Map<String, Object> metadata,
 
         @Schema(description = "Creation timestamp")
-        LocalDateTime createdAt,
+        ZonedDateTime createdAt,
 
         @Schema(description = "Last update timestamp")
-        LocalDateTime updatedAt,
-
-        @Schema(description = "Whether the collection is soft-deleted")
-        boolean deleted,
-
-        @Schema(description = "Soft-delete timestamp")
-        LocalDateTime deletedAt,
+        ZonedDateTime updatedAt,
 
         @Schema(description = "Number of documents")
         long documentCount

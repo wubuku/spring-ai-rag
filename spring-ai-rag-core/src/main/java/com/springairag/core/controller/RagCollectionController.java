@@ -3,17 +3,13 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
-import com.springairag.api.dto.CollectionDocumentListResponse;
-import com.springairag.api.dto.CollectionExportResponse;
 import com.springairag.api.dto.CollectionImportResponse;
-import com.springairag.api.dto.CollectionListResponse;
 import com.springairag.api.dto.CollectionRequest;
-import com.springairag.api.dto.CollectionResponse;
-import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.util.CollectionMapper;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RagCollectionService;
@@ -32,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -72,7 +68,7 @@ public class RagCollectionController {
     @Operation(summary = "Create collection", description = "Create a new document collection (knowledge base).")
     @ApiResponse(responseCode = "200", description = "Collection created, returns collection info")
     @PostMapping
-    public ResponseEntity<CollectionResponse> create(@Valid @RequestBody CollectionRequest request) {
+    public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
         log.info("Creating collection: name={}", request.getName());
 
         RagCollection collection = new RagCollection();
@@ -90,19 +86,7 @@ public class RagCollectionController {
                 String.valueOf(collection.getId()),
                 "Collection created: " + collection.getName());
 
-        return ResponseEntity.ok(new CollectionResponse(
-                collection.getId(),
-                collection.getName(),
-                collection.getDescription(),
-                collection.getEmbeddingModel(),
-                collection.getDimensions(),
-                Boolean.TRUE.equals(collection.getEnabled()),
-                collection.getMetadata(),
-                collection.getCreatedAt(),
-                collection.getUpdatedAt(),
-                Boolean.TRUE.equals(collection.getDeleted()),
-                collection.getDeletedAt(),
-                0));
+        return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
     }
 
     /**
@@ -114,17 +98,13 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found or deleted")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<CollectionResponse> getById(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
         log.info("Getting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(id);
-                    return ResponseEntity.ok(new CollectionResponse(
-                            c.getId(), c.getName(), c.getDescription(),
-                            c.getEmbeddingModel(), c.getDimensions(), Boolean.TRUE.equals(c.getEnabled()),
-                            c.getMetadata(), c.getCreatedAt(), c.getUpdatedAt(),
-                            Boolean.TRUE.equals(c.getDeleted()), c.getDeletedAt(), docCount));
+                    return ResponseEntity.ok(CollectionMapper.toMap(c, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -134,7 +114,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "List collections", description = "Paginated collection list, sorted by creation time descending.")
     @GetMapping
-    public ResponseEntity<CollectionListResponse> list(
+    public ResponseEntity<Map<String, Object>> list(
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String name,
@@ -145,18 +125,18 @@ public class RagCollectionController {
 
         var pageResult = collectionRepository.searchCollections(name, enabled, pageable);
 
-        List<CollectionResponse> items = pageResult.getContent().stream()
+        List<Map<String, Object>> items = pageResult.getContent().stream()
                 .map(c -> {
                     long docCount = documentRepository.countByCollectionId(c.getId());
-                    return new CollectionResponse(
-                            c.getId(), c.getName(), c.getDescription(),
-                            c.getEmbeddingModel(), c.getDimensions(), Boolean.TRUE.equals(c.getEnabled()),
-                            c.getMetadata(), c.getCreatedAt(), c.getUpdatedAt(),
-                            Boolean.TRUE.equals(c.getDeleted()), c.getDeletedAt(), docCount);
+                    return CollectionMapper.toMap(c, docCount);
                 })
                 .toList();
 
-        return ResponseEntity.ok(new CollectionListResponse(items, pageResult.getTotalElements(), page, limit));
+        return ResponseEntity.ok(Map.of(
+                "collections", items,
+                "total", pageResult.getTotalElements(),
+                "offset", offset,
+                "limit", limit));
     }
 
     /**
@@ -164,7 +144,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Update collection", description = "Update collection name, description, etc.")
     @PutMapping("/{id}")
-    public ResponseEntity<CollectionResponse> update(
+    public ResponseEntity<Map<String, Object>> update(
             @PathVariable Long id,
             @Valid @RequestBody CollectionRequest request) {
         log.info("Updating collection: id={}", id);
@@ -189,11 +169,7 @@ public class RagCollectionController {
                     auditUpdate(AuditLogService.ENTITY_COLLECTION,
                             String.valueOf(id),
                             "Collection updated: " + existing.getName());
-                    return ResponseEntity.ok(new CollectionResponse(
-                            saved.getId(), saved.getName(), saved.getDescription(),
-                            saved.getEmbeddingModel(), saved.getDimensions(), Boolean.TRUE.equals(saved.getEnabled()),
-                            saved.getMetadata(), saved.getCreatedAt(), saved.getUpdatedAt(),
-                            Boolean.TRUE.equals(saved.getDeleted()), saved.getDeletedAt(), docCount));
+                    return ResponseEntity.ok(CollectionMapper.toMap(saved, docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -225,18 +201,13 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
     })
     @PostMapping("/{id}/restore")
-    public ResponseEntity<CollectionResponse> restore(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> restore(@PathVariable Long id) {
         log.info("Restoring collection: id={}", id);
 
         return collectionService.restoreCollection(id)
                 .map(result -> {
-                    RagCollection c = result.collection();
-                    long docCount = documentRepository.countByCollectionId(c.getId());
-                    return ResponseEntity.ok(new CollectionResponse(
-                            c.getId(), c.getName(), c.getDescription(),
-                            c.getEmbeddingModel(), c.getDimensions(), Boolean.TRUE.equals(c.getEnabled()),
-                            c.getMetadata(), c.getCreatedAt(), c.getUpdatedAt(),
-                            Boolean.TRUE.equals(c.getDeleted()), c.getDeletedAt(), docCount));
+                    long docCount = documentRepository.countByCollectionId(result.collection().getId());
+                    return ResponseEntity.ok(CollectionMapper.toMap(result.collection(), docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -263,7 +234,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "List documents in collection", description = "Query document list under the specified collection (paginated).")
     @GetMapping("/{id}/documents")
-    public ResponseEntity<CollectionDocumentListResponse> listDocuments(
+    public ResponseEntity<Map<String, Object>> listDocuments(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
@@ -294,19 +265,28 @@ public class RagCollectionController {
             pageResult = documentRepository.findByCollectionId(id, pageable);
         }
 
-        List<CollectionDocumentListResponse.DocumentSummary> docs = pageResult.getContent().stream()
-                .map(doc -> new CollectionDocumentListResponse.DocumentSummary(
-                        doc.getId(),
-                        doc.getTitle(),
-                        doc.getSource(),
-                        doc.getDocumentType(),
-                        doc.getProcessingStatus(),
-                        doc.getCreatedAt(),
-                        doc.getSize()))
+        List<Map<String, Object>> docs = pageResult.getContent().stream()
+                .map(this::toDocumentSummary)
                 .toList();
 
-        return ResponseEntity.ok(new CollectionDocumentListResponse(
-                id, docs, pageResult.getTotalElements(), offset, limit));
+        return ResponseEntity.ok(Map.of(
+                "collectionId", id,
+                "documents", docs,
+                "total", pageResult.getTotalElements(),
+                "offset", offset,
+                "limit", limit));
+    }
+
+    private Map<String, Object> toDocumentSummary(RagDocument doc) {
+        Map<String, Object> m = new HashMap<>();
+        m.put("id", doc.getId());
+        m.put("title", doc.getTitle());
+        m.put("source", doc.getSource());
+        m.put("document_type", doc.getDocumentType());
+        m.put("processing_status", doc.getProcessingStatus());
+        m.put("created_at", doc.getCreatedAt());
+        m.put("size", doc.getSize());
+        return m;
     }
 
     /**
@@ -318,7 +298,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @PostMapping("/{id}/documents")
-    public ResponseEntity<DocumentAddedResponse> addDocument(
+    public ResponseEntity<Map<String, Object>> addDocument(
             @PathVariable Long id,
             @RequestBody Map<String, Long> request) {
 
@@ -341,9 +321,11 @@ public class RagCollectionController {
                             String.valueOf(documentId),
                             "Document added to collection " + id,
                             Map.of("collectionId", id));
-                    return ResponseEntity.ok(new DocumentAddedResponse(
-                            "Document added to collection",
-                            id, documentId));
+                    Map<String, Object> result = new HashMap<>();
+                    result.put("message", "Document added to collection");
+                    result.put("collectionId", id);
+                    result.put("documentId", documentId);
+                    return ResponseEntity.ok(result);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
@@ -353,33 +335,44 @@ public class RagCollectionController {
      */
     @Operation(summary = "Export collection", description = "Export collection info and document metadata as JSON for backup and migration.")
     @GetMapping("/{id}/export")
-    public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {
+    public ResponseEntity<Map<String, Object>> exportCollection(@PathVariable Long id) {
         log.info("Exporting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
                     List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
-                    long docCount = documentRepository.countByCollectionId(id);
-                    CollectionResponse collectionResponse = new CollectionResponse(
-                            collection.getId(), collection.getName(), collection.getDescription(),
-                            collection.getEmbeddingModel(), collection.getDimensions(), Boolean.TRUE.equals(collection.getEnabled()),
-                            collection.getMetadata(), collection.getCreatedAt(), collection.getUpdatedAt(),
-                            Boolean.TRUE.equals(collection.getDeleted()), collection.getDeletedAt(), docCount);
-                    List<CollectionExportResponse.DocumentDetail> docDetails = docs.stream()
-                            .map(doc -> new CollectionExportResponse.DocumentDetail(
-                                    doc.getTitle(),
-                                    doc.getSource(),
-                                    doc.getContent(),
-                                    doc.getDocumentType(),
-                                    doc.getMetadata(),
-                                    doc.getSize()))
-                            .toList();
-                    CollectionExportResponse response = new CollectionExportResponse(
-                            collectionResponse, docs.size(), Instant.now(), docDetails);
+                    Map<String, Object> exportData = buildExportData(collection, docs);
                     log.info("Collection exported: id={}, documents={}", id, docs.size());
-                    return ResponseEntity.ok(response);
+                    return ResponseEntity.ok(exportData);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
+    }
+
+    private Map<String, Object> buildExportData(RagCollection collection, List<RagDocument> docs) {
+        List<Map<String, Object>> docList = docs.stream()
+                .map(doc -> {
+                    Map<String, Object> m = new HashMap<>();
+                    m.put("title", doc.getTitle());
+                    m.put("source", doc.getSource());
+                    m.put("content", doc.getContent());
+                    m.put("documentType", doc.getDocumentType());
+                    m.put("metadata", doc.getMetadata());
+                    m.put("size", doc.getSize());
+                    return m;
+                })
+                .toList();
+
+        Map<String, Object> exportData = new HashMap<>();
+        exportData.put("name", collection.getName());
+        exportData.put("description", collection.getDescription());
+        exportData.put("embeddingModel", collection.getEmbeddingModel());
+        exportData.put("dimensions", collection.getDimensions());
+        exportData.put("enabled", collection.getEnabled());
+        exportData.put("metadata", collection.getMetadata());
+        exportData.put("documents", docList);
+        exportData.put("exportedAt", java.time.Instant.now().toString());
+        exportData.put("documentCount", docs.size());
+        return exportData;
     }
 
     /**
@@ -387,7 +380,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Import collection", description = "Create a new collection and its documents from exported JSON data.")
     @PostMapping("/import")
-    public ResponseEntity<CollectionImportResponse> importCollection(@RequestBody Map<String, Object> importData) {
+    public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
         String name = (String) importData.get("name");
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name is required");
@@ -407,7 +400,9 @@ public class RagCollectionController {
                 "Collection imported: " + name + ", documents: " + importedDocs,
                 Map.of("importedDocuments", importedDocs));
 
-        return ResponseEntity.ok(CollectionImportResponse.of(collection.getId(), importedDocs, 0));
+        Map<String, Object> result = CollectionMapper.toMap(collection, importedDocs);
+        result.put("importedDocuments", importedDocs);
+        return ResponseEntity.ok(result);
     }
 
     private RagCollection buildCollectionFromImport(Map<String, Object> importData) {

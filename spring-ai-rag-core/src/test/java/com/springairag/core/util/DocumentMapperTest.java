@@ -178,6 +178,116 @@ class DocumentMapperTest {
     }
 
     @Nested
+    @DisplayName("toListMap (preview variant)")
+    class ListMapTests {
+
+        @Test
+        @DisplayName("includes contentPreview instead of full content")
+        void includesContentPreview() {
+            sampleDocument.setContent("A".repeat(500));
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toListMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertEquals("A".repeat(200) + "...", result.get("contentPreview"));
+            assertNull(result.get("content")); // full content not included
+        }
+
+        @Test
+        @DisplayName("truncates at word boundary approximation")
+        void truncatesLongContent() {
+            sampleDocument.setContent("Short text");
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toListMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertEquals("Short text", result.get("contentPreview"));
+            assertNull(result.get("content"));
+        }
+
+        @Test
+        @DisplayName("handles null content gracefully")
+        void handlesNullContent() {
+            sampleDocument.setContent(null);
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toListMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertNull(result.get("contentPreview"));
+            assertNull(result.get("content"));
+        }
+
+        @Test
+        @DisplayName("maps core fields correctly")
+        void mapsCoreFieldsCorrectly() {
+            sampleDocument.setContent("Preview content");
+            sampleDocument.setCollectionId(5L);
+            Map<Long, String> collectionMap = Map.of(5L, "Collection");
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(3L);
+
+            Map<String, Object> result = DocumentMapper.toListMap(sampleDocument, collectionMap, embeddingRepository);
+
+            assertEquals(1L, result.get("id"));
+            assertEquals("Test Document", result.get("title"));
+            assertEquals(3L, result.get("chunkCount"));
+            assertEquals(5L, result.get("collectionId"));
+            assertEquals("Collection", result.get("collectionName"));
+            assertEquals("Preview content", result.get("contentPreview"));
+        }
+
+        @Test
+        @DisplayName("does not include metadata when null")
+        void omitsNullMetadata() {
+            sampleDocument.setContent("Content");
+            sampleDocument.setMetadata(null);
+            Map<Long, String> emptyCollectionMap = new HashMap<>();
+            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+
+            Map<String, Object> result = DocumentMapper.toListMap(sampleDocument, emptyCollectionMap, embeddingRepository);
+
+            assertNull(result.get("metadata"));
+            assertNull(result.get("content"));
+        }
+    }
+
+    @Nested
+    @DisplayName("truncate utility")
+    class TruncateTests {
+
+        @Test
+        @DisplayName("returns null as-is")
+        void returnsNullAsIs() {
+            assertNull(DocumentMapper.truncate(null, 200));
+        }
+
+        @Test
+        @DisplayName("returns short text as-is")
+        void returnsShortTextAsIs() {
+            assertEquals("hello", DocumentMapper.truncate("hello", 200));
+        }
+
+        @Test
+        @DisplayName("truncates and appends ellipsis")
+        void truncatesAndAppendsEllipsis() {
+            String longText = "A".repeat(300);
+            String result = DocumentMapper.truncate(longText, 200);
+            assertEquals(203, result.length());
+            assertTrue(result.endsWith("..."));
+            assertEquals("A".repeat(200) + "...", result);
+        }
+
+        @Test
+        @DisplayName("handles exactly max length")
+        void handlesExactlyMaxLength() {
+            String text = "A".repeat(200);
+            assertEquals(text, DocumentMapper.truncate(text, 200));
+        }
+    }
+
+    @Nested
     @DisplayName("toVersionMap")
     class VersionMapTests {
 
