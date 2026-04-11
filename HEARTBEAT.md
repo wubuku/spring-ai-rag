@@ -2299,7 +2299,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ✅（batchEmbedDocumentsWithProgress 73→25 行，提取 5 个 helper 方法） |
-| QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
+| QA2 | RetrievalEvaluationServiceImpl 长方法审查（390→320 行，消除重复累加逻辑） | 代码质量 | ✅ 2026-04-11（evaluate() 提取 buildEvaluationEntity()/recordEvaluationMetrics()；getReport() 提取 buildReport() + computeStats() 复用；Accumulator→Stats；1697 core + 42 starter = 1739 tests pass） |
 | QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
 | T5 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
 | T1 | Repository 单元测试补强（RagSilenceScheduleRepository/RagUserFeedbackRepository） | 测试覆盖 | ✅ 2026-04-11（T1 完成，RagUserFeedbackRepositoryTest 12 tests，1621 tests total） |
@@ -2400,3 +2400,7 @@
 ## Cron 进度（2026-04-11 18:17 — RagDocumentController catch 注释规范化）
 
 - 2026-04-11 18:17 — ✅ RagDocumentController catch(Exception) 注释规范化：5 个 bare catch 块添加韧性策略注释——reembedMissing (best-effort 单文档错误不影响其他文档)、embedDocumentViaVectorStore SSE (SSE 韧性: 意外错误优雅终止流)、batchEmbedDocumentsStream SSE (同上)、processUploadedFile (best-effort: 文件处理错误返回失败结果不抛异常)、validateTextFile.getBytes (best-effort: 非文本文件标记为无效)；mvn test ✅（全通过）；commit 65331fd 已推送
+
+## Cron 进度（2026-04-11 19:41 — QA2 RetrievalEvaluationServiceImpl 重构）
+
+- 2026-04-11 19:41 — ✅ QA2 RetrievalEvaluationServiceImpl 重构：evaluate() 42→12 行（提取 buildEvaluationEntity() + recordEvaluationMetrics()）；getReport() 36→15 行（提取 buildReport() + 复用 computeStats()）；Accumulator→Stats record（更通用）；getAggregatedMetrics() 复用 computeStats() 消除重复累加逻辑；Stats 增加 countWithMetrics 字段修复原始 bug；390→320 行（-18%）；1697 core + 42 starter = 1739 tests 全通过，零失败零错误；commit d8c326e 已推送
