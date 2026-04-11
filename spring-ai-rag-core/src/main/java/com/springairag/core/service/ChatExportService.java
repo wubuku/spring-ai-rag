@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
- * Chat export service — exports session history as JSON or Markdown.
+ * Chat export service — exports session history as JSON, Markdown, or CSV.
  */
 @Service
 public class ChatExportService {
@@ -97,6 +97,32 @@ public class ChatExportService {
         return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
     }
 
+    /**
+     * Export chat history for a session as CSV bytes.
+     *
+     * @param sessionId the session ID
+     * @param limit max records to export (0 = unlimited)
+     * @return CSV string bytes
+     */
+    public byte[] exportAsCsv(String sessionId, int limit) {
+        List<RagChatHistory> records = fetchRecords(sessionId, limit);
+        StringBuilder sb = new StringBuilder();
+        sb.append("timestamp,role,content\n");
+
+        for (RagChatHistory r : records) {
+            sb.append(escapeCsv(formatTime(r.getCreatedAt()))).append(",");
+            sb.append("user,");
+            sb.append(escapeCsv(r.getUserMessage())).append("\n");
+            if (r.getAiResponse() != null && !r.getAiResponse().isBlank()) {
+                sb.append(escapeCsv(formatTime(r.getCreatedAt()))).append(",");
+                sb.append("assistant,");
+                sb.append(escapeCsv(r.getAiResponse())).append("\n");
+            }
+        }
+
+        return sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    }
+
     private List<RagChatHistory> fetchRecords(String sessionId, int limit) {
         List<RagChatHistory> allRecords = historyRepository.findBySessionIdAsc(sessionId);
         if (limit > 0 && limit < allRecords.size()) {
@@ -117,6 +143,13 @@ public class ChatExportService {
     private String escapeMarkdown(String s) {
         if (s == null) return "";
         return s.replace("```", "\\`\\`\\`");
+    }
+
+    private String escapeCsv(String s) {
+        if (s == null) return "";
+        boolean needsQuotes = s.contains(",") || s.contains("\"") || s.contains("\n") || s.contains("\r");
+        String escaped = s.replace("\"", "\"\"");
+        return needsQuotes ? "\"" + escaped + "\"" : escaped;
     }
 
     private String formatTime(java.time.LocalDateTime dt) {

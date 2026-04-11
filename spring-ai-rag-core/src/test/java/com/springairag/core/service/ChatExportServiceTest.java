@@ -218,6 +218,86 @@ class ChatExportServiceTest {
         assertTrue(md.contains("\\`\\`\\`java"));
     }
 
+    // ==================== CSV export ====================
+
+    @Test
+    void exportAsCsv_emptySession_returnsHeaderOnly() {
+        when(historyRepository.findBySessionIdAsc("empty")).thenReturn(Collections.emptyList());
+
+        byte[] result = service.exportAsCsv("empty", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertEquals("timestamp,role,content\n", csv);
+    }
+
+    @Test
+    void exportAsCsv_withRecords_returnsCorrectCsv() {
+        RagChatHistory record = createRecord(1L, "s1", "Hello", "Hi there", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        String[] lines = csv.split("\n");
+        assertEquals("timestamp,role,content", lines[0].trim());
+        assertTrue(lines[1].contains("user"));
+        assertTrue(lines[1].contains("Hello"));
+        assertTrue(lines[2].contains("assistant"));
+        assertTrue(lines[2].contains("Hi there"));
+    }
+
+    @Test
+    void exportAsCsv_withLimit_respectsLimit() {
+        RagChatHistory r1 = createRecord(1L, "s1", "Old", "Old answer", now());
+        RagChatHistory r2 = createRecord(2L, "s1", "New", "New answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2));
+
+        byte[] result = service.exportAsCsv("s1", 1);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertFalse(csv.contains("Old"));
+        assertTrue(csv.contains("New"));
+    }
+
+    @Test
+    void exportAsCsv_specialCharacters_areQuoted() {
+        RagChatHistory record = createRecord(1L, "s1", "Hello, world", "Say \"hi\"", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Comma and quote should trigger quoting
+        assertTrue(csv.contains("\"Hello, world\""));
+        assertTrue(csv.contains("\"Say \"\"hi\"\"\""));
+    }
+
+    @Test
+    void exportAsCsv_nullUserMessage_includesAssistantLine() {
+        RagChatHistory record = createRecord(1L, "s1", null, "Answer only", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("assistant"));
+        assertTrue(csv.contains("Answer only"));
+    }
+
+    @Test
+    void exportAsCsv_blankAiResponse_omitsAssistantLine() {
+        RagChatHistory record = createRecord(1L, "s1", "Question", "  ", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("user"));
+        // Only 2 lines: header + user row (blank AI omitted)
+        String[] csvLines = csv.split("\n");
+        assertEquals(2, csvLines.length, "header + user line only");
+    }
+
     // ==================== Helper ====================
 
     private RagChatHistory createRecord(Long id, String sessionId, String userMsg, String aiResp, LocalDateTime createdAt) {
