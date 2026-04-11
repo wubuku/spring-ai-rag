@@ -77,14 +77,6 @@ class SlowQueryMetricsServiceTest {
     }
 
     @Test
-    void getStatsSummary_noSessionFactory_returnsZeros() {
-        var summary = service.getStatsSummary();
-        assertEquals(0, summary.totalQueryCount());
-        assertEquals(0, summary.slowQueryCount());
-        assertEquals(0, summary.recentSlowQueries().size());
-    }
-
-    @Test
     void recordSlowQuery_masksSensitiveValuesInSql() {
         properties.getSlowQuery().setMaxRetained(10);
         service.recordSlowQuery("SELECT * FROM users WHERE api_key='sk-abc123'", 1500);
@@ -100,5 +92,35 @@ class SlowQueryMetricsServiceTest {
         service.recordSlowQuery("SELECT 1", 2000);
         assertEquals(1, service.getTotalSlowQueries());
         assertEquals(1, service.getRecentSlowQueries().size());
+    }
+
+    @Test
+    void getStatistics_noSessionFactory_returnsEmpty() {
+        assertTrue(service.getStatistics().isEmpty());
+    }
+
+    @Test
+    void getStatsSummary_noSessionFactory_returnsHardcodedZeros() {
+        // When SessionFactory is null (always in unit tests), getStatsSummary
+        // returns hardcoded zeros because it cannot access Hibernate statistics.
+        var summary = service.getStatsSummary();
+        assertEquals(0, summary.totalQueryCount());
+        assertEquals(0, summary.slowQueryCount());
+        assertEquals(0, summary.totalQueryDurationMs());
+        assertEquals(0, summary.averageQueryDurationMs());
+        assertEquals(0, summary.thresholdMs()); // hardcoded 0 in null-SessionFactory path
+    }
+
+    @Test
+    void recordSlowQuery_aboveThreshold_isRecorded() {
+        // Use a fresh properties + service to ensure clean state
+        RagProperties freshProps = new RagProperties();
+        freshProps.getSlowQuery().setThresholdMs(500); // threshold = 500ms
+        SlowQueryMetricsService freshService = new SlowQueryMetricsService(
+                freshProps, null, new SimpleMeterRegistry());
+        // 1500ms > 500ms threshold, should be recorded
+        freshService.recordSlowQuery("SELECT 1", 1500);
+        assertEquals(1, freshService.getTotalSlowQueries());
+        assertEquals(1, freshService.getRecentSlowQueries().size());
     }
 }
