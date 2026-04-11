@@ -85,6 +85,20 @@ class ChatExportServiceTest {
     }
 
     @Test
+    void exportAsJson_codeBlocks_areEscaped() {
+        // Backticks are not special in JSON strings, so they pass through unchanged
+        RagChatHistory record = createRecord(1L, "s1", "Code: ```java", "Answer: ```python", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsJson("s1", 0);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        // Backticks pass through (JSON does not require escaping them)
+        assertTrue(json.contains("```java"), "backticks should appear unescaped in JSON");
+        assertTrue(json.contains("```python"), "backticks should appear unescaped in JSON");
+    }
+
+    @Test
     void exportAsJson_specialCharacters_areEscaped() {
         RagChatHistory record = createRecord(1L, "s1", "Line1\nLine2", "Quote\"Here", now());
         when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
@@ -94,6 +108,59 @@ class ChatExportServiceTest {
 
         assertTrue(json.contains("Line1\\nLine2"));
         assertTrue(json.contains("Quote\\\"Here"));
+    }
+
+    @Test
+    void exportAsJson_blankAiResponse_omitsAssistantMessage() {
+        // Blank (non-null, whitespace-only) AI response should be treated same as null
+        RagChatHistory record = createRecord(1L, "s1", "Hello", "   ", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsJson("s1", 0);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(json.contains("\"content\": \"Hello\""));
+        assertFalse(json.contains("\"role\": \"assistant\""));
+    }
+
+    @Test
+    void exportAsJson_nullUserMessage_includesAssistantMessage() {
+        // Even with null user message, if AI response exists it should appear
+        RagChatHistory record = createRecord(1L, "s1", null, "Answer only", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsJson("s1", 0);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(json.contains("\"content\": \"Answer only\""));
+        assertTrue(json.contains("\"role\": \"assistant\""));
+    }
+
+    // ==================== Markdown edge cases ====================
+
+    @Test
+    void exportAsMarkdown_blankAiResponse_omitsAssistantSection() {
+        // Blank (non-null, whitespace-only) AI response should be omitted
+        RagChatHistory record = createRecord(1L, "s1", "Question", "  \n\t  ", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsMarkdown("s1", 0);
+        String md = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(md.contains("Question"));
+        assertFalse(md.contains("## Assistant"));
+    }
+
+    @Test
+    void exportAsMarkdown_nullUserMessage_stillRendersAssistant() {
+        RagChatHistory record = createRecord(1L, "s1", null, "Only the answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsMarkdown("s1", 0);
+        String md = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(md.contains("## Assistant"));
+        assertTrue(md.contains("Only the answer"));
     }
 
     // ==================== Markdown export ====================
