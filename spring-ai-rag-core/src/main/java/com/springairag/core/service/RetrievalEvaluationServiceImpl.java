@@ -19,7 +19,11 @@ import org.springframework.transaction.annotation.Transactional;
 import jakarta.annotation.PostConstruct;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 /**
@@ -33,11 +37,15 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
     private static final Logger log = LoggerFactory.getLogger(RetrievalEvaluationServiceImpl.class);
     private static final int DEFAULT_K = 10;
+    /** Timeout for answer quality LLM judgment calls. */
+    private static final int ANSWER_QUALITY_TIMEOUT_SECONDS = 30;
 
     private final RagRetrievalEvaluationRepository evaluationRepository;
     private final ObjectMapper objectMapper;
     private final MeterRegistry meterRegistry;
     private final ChatClient.Builder chatClientBuilder;
+    /** Optional executor for bounded-time LLM calls (null when AsyncConfig taskExecutor is unavailable). */
+    private final ExecutorService executorService;
 
     private Timer evaluateTimer;
     private Counter evaluationCounter;
@@ -48,11 +56,13 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     public RetrievalEvaluationServiceImpl(RagRetrievalEvaluationRepository evaluationRepository,
                                           ObjectMapper objectMapper,
                                           MeterRegistry meterRegistry,
-                                          @Autowired(required = false) ChatClient.Builder chatClientBuilder) {
+                                          @Autowired(required = false) ChatClient.Builder chatClientBuilder,
+                                          @Autowired(required = false) ExecutorService executorService) {
         this.evaluationRepository = evaluationRepository;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
         this.chatClientBuilder = chatClientBuilder;
+        this.executorService = executorService;
     }
 
     @PostConstruct
@@ -274,13 +284,43 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
         String judgePrompt = buildJudgePrompt(query, context, answer);
 
-        String responseText = chatClientBuilder.build()
-                .prompt()
-                .user(judgePrompt)
-                .call()
-                .content();
-
-        return parseJudgeResponse(responseText);
+        // Run LLM call with a bounded timeout to prevent indefinite blocking.
+        // If no executor is available, fall back to a synchronous unbounded call.
+        if (executorService != null) {
+            try {
+                String responseText = CompletableFuture.supplyAsync(
+                                () -> chatClientBuilder.build()
+                                        .prompt()
+                                        .user(judgePrompt)
+                                        .call()
+                                        .content(),
+                                executorService)
+                        .get(ANSWER_QUALITY_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+                return parseJudgeResponse(responseText);
+            } catch (TimeoutException e) {
+                log.warn("Answer quality evaluation timed out after {}s for query: {}",
+                        ANSWER_QUALITY_TIMEOUT_SECONDS, query);
+                return new AnswerQualityResult(3, 3, 3,
+                        "Evaluation timed out, service unavailable", "REVISION");
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("Answer quality evaluation interrupted for query: {}", query);
+                return new AnswerQualityResult(3, 3, 3,
+                        "Evaluation interrupted", "REVISION");
+            } catch (ExecutionException e) {
+                log.error("Answer quality evaluation failed for query: {}", query, e.getCause());
+                return new AnswerQualityResult(3, 3, 3,
+                        "Evaluation failed: " + e.getCause().getMessage(), "REVISION");
+            }
+        } else {
+            // No executor — run synchronously without timeout (backward-compatible fallback)
+            String responseText = chatClientBuilder.build()
+                    .prompt()
+                    .user(judgePrompt)
+                    .call()
+                    .content();
+            return parseJudgeResponse(responseText);
+        }
     }
 
     private String buildJudgePrompt(String query, String context, String answer) {

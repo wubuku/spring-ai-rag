@@ -22,6 +22,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
@@ -40,7 +41,7 @@ class RetrievalEvaluationServiceImplTest {
 
     @BeforeEach
     void setUp() {
-        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry(), null);
+        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry(), null, null);
         service.initMetrics();
     }
 
@@ -323,7 +324,7 @@ class RetrievalEvaluationServiceImplTest {
     void evaluateAnswerQuality_validJson_parsesCorrectly() {
         RetrievalEvaluationServiceImpl svcWithChatClient =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder);
+                        new SimpleMeterRegistry(), chatClientBuilder, null);
         svcWithChatClient.initMetrics();
 
         // Use the same mocking pattern as RagChatServiceTest:
@@ -360,7 +361,7 @@ class RetrievalEvaluationServiceImplTest {
     void evaluateAnswerQuality_invalidJson_returnsDefaults() {
         RetrievalEvaluationServiceImpl svcWithChatClient =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder);
+                        new SimpleMeterRegistry(), chatClientBuilder, null);
         svcWithChatClient.initMetrics();
 
         ChatClient mockClient = mock(ChatClient.class);
@@ -381,5 +382,67 @@ class RetrievalEvaluationServiceImplTest {
         assertEquals(3, result.getHelpfulness());
         assertTrue(result.getReasoning().contains("failed to parse"));
         assertEquals("REVISION", result.getRecommendation());
+    }
+
+    @Test
+    @DisplayName("evaluateAnswerQuality: null ExecutorService falls back to synchronous call")
+    void evaluateAnswerQuality_noExecutorService_fallsBackToSynchronous() {
+        // When executorService is null, the service falls back to synchronous call (no timeout)
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder, null);
+        svc.initMetrics();
+
+        ChatClient mockClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        ChatClient.CallResponseSpec mockCallResponse = mock(ChatClient.CallResponseSpec.class);
+        when(chatClientBuilder.build()).thenReturn(mockClient);
+        when(mockClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.call()).thenReturn(mockCallResponse);
+        when(mockCallResponse.content()).thenReturn("""
+            { "groundedness": 5, "relevance": 5, "helpfulness": 5,
+              "reasoning": "Perfect answer.", "recommendation": "ACCEPT" }""");
+
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svc.evaluateAnswerQuality("query", "context", "answer");
+
+        // With a real response the service returns the parsed result
+        assertEquals(5, result.getGroundedness());
+        assertEquals("ACCEPT", result.getRecommendation());
+        // The no-executor synchronous path was used (no timeout, no fallback)
+        assertFalse(result.getReasoning().contains("timed out"));
+        assertFalse(result.getReasoning().contains("failed"));
+    }
+
+    @Test
+    @DisplayName("evaluateAnswerQuality: ExecutionException (LLM failure) returns fallback result")
+    void evaluateAnswerQuality_executionException_returnsFallback() throws Exception {
+        // Use the field-level chatClientBuilder mock with a dedicated executor
+        ChatClient failingClient = mock(ChatClient.class);
+        ChatClient.ChatClientRequestSpec mockRequestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        when(failingClient.prompt()).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
+        when(mockRequestSpec.call()).thenThrow(new RuntimeException("LLM service unavailable"));
+        when(chatClientBuilder.build()).thenReturn(failingClient);
+
+        java.util.concurrent.ExecutorService exec =
+                java.util.concurrent.Executors.newSingleThreadExecutor();
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), chatClientBuilder, exec);
+        svc.initMetrics();
+
+        // ExecutionException should be caught and fallback returned
+        RetrievalEvaluationService.AnswerQualityResult result =
+                svc.evaluateAnswerQuality("query", "context", "answer");
+
+        assertEquals(3, result.getGroundedness());
+        assertEquals(3, result.getRelevance());
+        assertEquals(3, result.getHelpfulness());
+        assertTrue(result.getReasoning().contains("failed") || result.getReasoning().contains("LLM"));
+        assertEquals("REVISION", result.getRecommendation());
+
+        exec.shutdownNow();
     }
 }
