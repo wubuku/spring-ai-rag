@@ -22,6 +22,8 @@ import java.util.Map;
 public class EmailNotificationService implements NotificationService {
 
     private static final Logger log = LoggerFactory.getLogger(EmailNotificationService.class);
+    private static final int MAX_RETRIES = 3;
+    private static final long INITIAL_BACKOFF_MS = 500;
 
     private final NotificationConfig notificationConfig;
     private final JavaMailSender mailSender;
@@ -45,16 +47,30 @@ public class EmailNotificationService implements NotificationService {
             return false;
         }
 
-        try {
-            sendEmail(emailConfig, alertType, alertName, severity, message, metadata);
-            log.info("Email notification sent: alertType={} alertName={} to={}",
-                    alertType, alertName, emailConfig.getTo());
-            return true;
-        } catch (Exception e) {
-            log.warn("Failed to send email notification: alertType={} error={}",
-                    alertType, e.getMessage());
-            return false;
+        Exception lastException = null;
+        for (int attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                sendEmail(emailConfig, alertType, alertName, severity, message, metadata);
+                log.info("Email notification sent: alertType={} alertName={} to={}",
+                        alertType, alertName, emailConfig.getTo());
+                return true;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < MAX_RETRIES) {
+                    try {
+                        long sleepMs = INITIAL_BACKOFF_MS * (1L << (attempt - 1));
+                        Thread.sleep(sleepMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        log.warn("Email notification interrupted during retry backoff: alertType={}", alertType);
+                        return false;
+                    }
+                }
+            }
         }
+        log.warn("Failed to send email notification after {} attempts: alertType={} error={}",
+                MAX_RETRIES, alertType, lastException != null ? lastException.getMessage() : "unknown");
+        return false;
     }
 
     private void sendEmail(NotificationConfig.EmailConfig config,

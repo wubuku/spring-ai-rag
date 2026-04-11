@@ -77,7 +77,7 @@ class EmailNotificationServiceTest {
     }
 
     @Test
-    void sendAlert_mailSenderThrows_returnsFalse() throws Exception {
+    void sendAlert_mailSenderThrowsAll3Attempts_returnsFalse() throws Exception {
         notificationConfig.getEmail().setEnabled(true);
         notificationConfig.getEmail().setHost("smtp.example.com");
         notificationConfig.getEmail().setPort(587);
@@ -90,6 +90,29 @@ class EmailNotificationServiceTest {
                 "P99 exceeds threshold", Map.of());
 
         assertFalse(result);
+        // Retry logic: 3 attempts before giving up
+        verify(mailSender, times(3)).createMimeMessage();
+    }
+
+    @Test
+    void sendAlert_succeedsOnSecondAttempt_returnsTrue() throws Exception {
+        notificationConfig.getEmail().setEnabled(true);
+        notificationConfig.getEmail().setHost("smtp.example.com");
+        notificationConfig.getEmail().setPort(587);
+        notificationConfig.getEmail().setFrom("noreply@example.com");
+        notificationConfig.getEmail().setTo(java.util.List.of("admin@example.com"));
+
+        // First attempt fails, second succeeds
+        when(mailSender.createMimeMessage())
+                .thenThrow(new RuntimeException("SMTP error"))
+                .thenReturn(new MimeMessage((Session) null));
+
+        boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
+                "P99 exceeds threshold", Map.of());
+
+        assertTrue(result);
+        verify(mailSender, times(2)).createMimeMessage();
+        verify(mailSender).send(any(MimeMessage.class));
     }
 
     @Test
