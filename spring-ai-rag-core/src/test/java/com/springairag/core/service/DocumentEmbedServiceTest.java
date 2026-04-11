@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -473,5 +474,104 @@ class DocumentEmbedServiceTest {
         // EMBEDDING 阶段应触发 1 次（1 个 chunk）
         assertEquals(1, phases.stream().filter(p -> p.equals("EMBEDDING")).count(),
                 "EMBEDDING 应触发 1 次: " + phases);
+    }
+
+    // ==================== batchEmbedDocumentsWithProgress ====================
+
+    @Test
+    @DisplayName("batchEmbedDocumentsWithProgress: 3 docs 全部命中缓存，counter 正确累加")
+    void batchWithProgress_allCached_countersCorrect() {
+        List<Long> ids = List.of(1L, 2L, 3L);
+        for (Long id : ids) {
+            RagDocument doc = createDocumentWithHash(id, "内容" + id, "hash" + id);
+            doc.setProcessingStatus("COMPLETED");
+            doc.setEmbeddedContentHash("hash" + id);
+            when(documentRepository.findById(id)).thenReturn(Optional.of(doc));
+            when(embeddingRepository.countByDocumentId(id)).thenReturn(3L); // cache hit
+        }
+
+        List<BatchEmbedProgressEvent> events = new java.util.ArrayList<>();
+        Map<String, Object> result = service.batchEmbedDocumentsWithProgress(ids, events::add);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) result.get("summary");
+        assertEquals(3, summary.get("cached"));
+        assertEquals(0, summary.get("success"));
+        assertEquals(0, summary.get("failed"));
+        assertEquals(0, summary.get("skipped"));
+        assertEquals(3, summary.get("total"));
+        // PREPARING + CACHED per doc = 6 events
+        assertEquals(6, events.size(), "3 docs × 2 events each: " + events);
+    }
+
+    @Test
+    @DisplayName("batchEmbedDocumentsWithProgress: 混合状态（COMPLETED/CACHED/SKIPPED）")
+    void batchWithProgress_mixedStatuses_countersCorrect() {
+        // doc1: NOT_FOUND (no mock for findById(1L)) → status unset → SKIPPED via default
+        // doc2: CACHED
+        RagDocument doc2 = createDocumentWithHash(2L, "cached content that is long enough to chunk", "h2");
+        doc2.setProcessingStatus("COMPLETED");
+        doc2.setEmbeddedContentHash("h2");
+        when(documentRepository.findById(2L)).thenReturn(Optional.of(doc2));
+        when(embeddingRepository.countByDocumentId(2L)).thenReturn(5L);
+        // doc3: COMPLETED (must exceed minChunkSize=100, use ~200 chars)
+        RagDocument doc3 = createDocumentWithHash(3L, "third doc content that is definitely long enough to meet the minimum chunk size requirement of at least 100 characters. Adding more content here to ensure it is well above the threshold.", "h3");
+        doc3.setProcessingStatus("COMPLETED");
+        doc3.setEmbeddedContentHash("h3");
+        when(documentRepository.findById(3L)).thenReturn(Optional.of(doc3));
+        when(embeddingRepository.countByDocumentId(3L)).thenReturn(0L);
+        float[] vec = new float[1024];
+        when(embeddingBatchService.createEmbeddingsBatch(anyList()))
+                .thenReturn(List.of(new EmbeddingBatchService.EmbeddingResult("c", vec, null)));
+
+        List<BatchEmbedProgressEvent> events = new java.util.ArrayList<>();
+        Map<String, Object> result = service.batchEmbedDocumentsWithProgress(List.of(1L, 2L, 3L), events::add);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) result.get("summary");
+        assertEquals(1, summary.get("success"), "doc3 COMPLETED: " + summary);
+        assertEquals(0, summary.get("failed"));
+        assertEquals(1, summary.get("cached"), "doc2 CACHED: " + summary);
+        assertEquals(1, summary.get("skipped"), "doc1 NOT_FOUND: " + summary);
+
+        // Verify phases
+        List<String> phases = events.stream().map(BatchEmbedProgressEvent::phase).toList();
+        assertTrue(phases.contains("CACHED"), "应包含 CACHED: " + phases);
+        assertTrue(phases.contains("COMPLETED"), "应包含 COMPLETED: " + phases);
+        assertTrue(phases.contains("SKIPPED"), "应包含 SKIPPED: " + phases);
+    }
+
+    @Test
+    @DisplayName("batchEmbedDocumentsWithProgress: null callback 不抛异常（maybeEmit null-safe）")
+    void batchWithProgress_nullCallback_noException() {
+        RagDocument doc = createDocumentWithHash(1L, "内容", "hash1");
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash("hash1");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(3L);
+
+        // Should not throw
+        Map<String, Object> result = service.batchEmbedDocumentsWithProgress(List.of(1L), null);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) result.get("summary");
+        assertEquals(1, summary.get("total"));
+    }
+
+    @Test
+    @DisplayName("batchEmbedDocumentsWithProgress: 单文档返回正确 batch result")
+    void batchWithProgress_singleDoc_buildBatchResultCorrect() {
+        RagDocument doc = createDocumentWithHash(1L, "single", "h1");
+        doc.setProcessingStatus("COMPLETED");
+        doc.setEmbeddedContentHash("h1");
+        when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(embeddingRepository.countByDocumentId(1L)).thenReturn(3L);
+
+        Map<String, Object> result = service.batchEmbedDocumentsWithProgress(List.of(1L), null);
+
+        assertNotNull(result.get("results"));
+        assertNotNull(result.get("summary"));
+        @SuppressWarnings("unchecked")
+        Map<String, Object> summary = (Map<String, Object>) result.get("summary");
+        assertEquals(1, summary.get("total"));
     }
 }

@@ -261,66 +261,91 @@ public class DocumentEmbedService {
         log.info("Batch embedding with progress: {} documents", documentIds.size());
 
         List<Map<String, Object>> results = new java.util.ArrayList<>(documentIds.size());
-        int success = 0, failed = 0, skipped = 0, cached = 0;
+        int[] counters = {0, 0, 0, 0}; // success, failed, skipped, cached
 
         for (int i = 0; i < documentIds.size(); i++) {
             Long id = documentIds.get(i);
-            final int docIndex = i;
-
-            // Send "preparing" event
-            sendProgress(progressCallback, docIndex, documentIds.size(), id, "PREPARING", 0, 0,
-                    "Preparing document " + (docIndex + 1) + "/" + documentIds.size(),
-                    success, failed, cached);
-
             Map<String, Object> itemResult = embedSingleDocument(id);
-            String status = (String) itemResult.get("status");
-            int chunksTotal = (int) itemResult.getOrDefault("chunksCreated", 0);
-
-            switch (status) {
-                case "COMPLETED" -> {
-                    success++;
-                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "COMPLETED",
-                            chunksTotal, chunksTotal,
-                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " completed",
-                            success, failed, cached);
-                }
-                case "FAILED" -> {
-                    failed++;
-                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "FAILED",
-                            0, 0,
-                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " failed: " + itemResult.get("error"),
-                            success, failed, cached);
-                }
-                case "CACHED" -> {
-                    cached++;
-                    int stored = (int) itemResult.getOrDefault("embeddingsStored", 0);
-                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "CACHED",
-                            stored, stored,
-                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " (cached)",
-                            success, failed, cached);
-                }
-                default -> {
-                    skipped++;
-                    sendProgress(progressCallback, docIndex, documentIds.size(), id, "SKIPPED",
-                            0, 0,
-                            "Document " + (docIndex + 1) + "/" + documentIds.size() + " skipped",
-                            success, failed, cached);
-                }
-            }
             results.add(itemResult);
+
+            counters = updateBatchCounters(itemResult, counters);
+            sendDocumentProgress(progressCallback, i, documentIds.size(), id, itemResult, counters);
         }
 
         log.info("Batch embed with progress completed: {} success, {} cached, {} failed, {} skipped",
-                success, cached, failed, skipped);
+                counters[3], counters[0], counters[1], counters[2]);
 
+        return buildBatchResult(documentIds.size(), results, counters);
+    }
+
+    /** Updates running counters {success, failed, skipped, cached} from itemResult, returns updated array */
+    private int[] updateBatchCounters(Map<String, Object> itemResult, int[] counters) {
+        int[] updated = counters.clone();
+        String status = (String) itemResult.get("status");
+        switch (status) {
+            case "COMPLETED" -> updated[0]++;
+            case "FAILED" -> updated[1]++;
+            case "CACHED" -> updated[3]++;
+            default -> updated[2]++; // SKIPPED or other
+        }
+        return updated;
+    }
+
+    /** Sends PREPARING event and final phase event for a single document in batch */
+    private void sendDocumentProgress(Consumer<BatchEmbedProgressEvent> callback, int docIndex,
+                                      int totalDocs, Long docId, Map<String, Object> itemResult,
+                                      int[] counters) {
+        String status = (String) itemResult.get("status");
+        int success = counters[0], failed = counters[1], skipped = counters[2], cached = counters[3];
+        int docNum = docIndex + 1;
+        String phase = phaseForStatus(status);
+
+        // Send PREPARING event before processing
+        sendProgress(callback, docIndex, totalDocs, docId, "PREPARING", 0, 0,
+                "Preparing document " + docNum + "/" + totalDocs, success, failed, cached);
+
+        // Send final phase event
+        int current = 0, total = 0;
+        String message = phaseMessage(status, itemResult, docNum, totalDocs);
+        if ("COMPLETED".equals(status) || "CACHED".equals(status)) {
+            Object chunksOrStored = itemResult.getOrDefault("chunksCreated",
+                    itemResult.getOrDefault("embeddingsStored", 0));
+            current = total = (chunksOrStored instanceof Number n) ? n.intValue() : 0;
+        }
+        sendProgress(callback, docIndex, totalDocs, docId, phase, current, total,
+                message, success, failed, cached);
+    }
+
+    /** Maps status string to SSE phase name */
+    private String phaseForStatus(String status) {
+        return switch (status) {
+            case "COMPLETED" -> "COMPLETED";
+            case "FAILED" -> "FAILED";
+            case "CACHED" -> "CACHED";
+            default -> "SKIPPED";
+        };
+    }
+
+    /** Builds user-friendly message for a batch document progress event */
+    private String phaseMessage(String status, Map<String, Object> itemResult, int docNum, int totalDocs) {
+        return switch (status) {
+            case "COMPLETED" -> "Document " + docNum + "/" + totalDocs + " completed";
+            case "FAILED" -> "Document " + docNum + "/" + totalDocs + " failed: " + itemResult.get("error");
+            case "CACHED" -> "Document " + docNum + "/" + totalDocs + " (cached)";
+            default -> "Document " + docNum + "/" + totalDocs + " skipped";
+        };
+    }
+
+    /** Builds the final batch result Map from counters */
+    private Map<String, Object> buildBatchResult(int total, List<Map<String, Object>> results, int[] counters) {
         return Map.of(
                 "results", results,
                 "summary", Map.of(
-                        "total", documentIds.size(),
-                        "success", success,
-                        "cached", cached,
-                        "failed", failed,
-                        "skipped", skipped
+                        "total", total,
+                        "success", counters[0],
+                        "cached", counters[3],
+                        "failed", counters[1],
+                        "skipped", counters[2]
                 )
         );
     }
