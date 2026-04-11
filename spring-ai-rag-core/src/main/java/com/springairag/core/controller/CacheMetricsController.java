@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CacheInvalidateResponse;
 import com.springairag.api.dto.CacheStatsResponse;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
@@ -58,7 +59,7 @@ public class CacheMetricsController {
     @Operation(summary = "Clear embedding cache", description = "Admin endpoint: clears Caffeine local embedding cache, forcing re-embedding. Returns the number of cache entries cleared.")
     @ApiResponse(responseCode = "200", description = "Returns the number of cache entries cleared")
     @DeleteMapping("/invalidate")
-    public ResponseEntity<Map<String, Object>> invalidateCache() {
+    public ResponseEntity<CacheInvalidateResponse> invalidateCache() {
         int cleared = cacheMetricsService.clearCache();
 
         if (auditLogService != null) {
@@ -68,9 +69,6 @@ public class CacheMetricsController {
                     Map.of("cleared", cleared));
         }
 
-        return ResponseEntity.ok(Map.of(
-                "cleared", cleared,
-                "message", cleared > 0 ? "Cache invalidated" : "No entries to clear"
-        ));
+        return ResponseEntity.ok(CacheInvalidateResponse.from(cleared));
     }
 }

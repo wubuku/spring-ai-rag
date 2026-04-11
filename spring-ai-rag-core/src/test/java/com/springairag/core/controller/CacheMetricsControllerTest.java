@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CacheInvalidateResponse;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
@@ -17,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -69,6 +71,26 @@ class CacheMetricsControllerTest {
                 .andExpect(jsonPath("$.hitCount").value(0))
                 .andExpect(jsonPath("$.totalCount").value(0))
                 .andExpect(jsonPath("$.hitRate").value("N/A"));
+    }
+
+    @Test
+    void invalidateCache_clearsEntries_returnsClearedCount() throws Exception {
+        when(cacheMetricsService.clearCache()).thenReturn(5);
+
+        mockMvc.perform(delete("/api/v1/rag/cache/invalidate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cleared").value(5))
+                .andExpect(jsonPath("$.message").value("Cache invalidated"));
+    }
+
+    @Test
+    void invalidateCache_noEntries_returnsZero() throws Exception {
+        when(cacheMetricsService.clearCache()).thenReturn(0);
+
+        mockMvc.perform(delete("/api/v1/rag/cache/invalidate"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cleared").value(0))
+                .andExpect(jsonPath("$.message").value("No entries to clear"));
     }
 
     @TestConfiguration
