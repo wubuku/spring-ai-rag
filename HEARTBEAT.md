@@ -2318,3 +2318,7 @@
 ## Cron 进度（后端 — 2026-04-11 07:22 — API 响应标准化）
 
 - 2026-04-11 07:22 — ✅ RagDocumentController badRequest 响应标准化：`embedDocument()` 和 `embedDocumentViaVectorStore()` 的 3 处 `ResponseEntity.badRequest().body(Map.of("error", ...))` 替换为 `ErrorResponse.of(detail)`（RFC 7807 统一格式）；方法返回类型从 `ResponseEntity<Map<String,Object>>` 改为 `ResponseEntity<Object>`；RagDocumentControllerTest 4 个测试同步更新（`ResponseEntity<?>` + `ErrorResponse.getDetail()` 断言）；1649 测试全通过，零失败零错误；commit e201204 已推送
+
+## Cron 进度（WebUI — 2026-04-11 07:41 — 常规发布）
+
+- 2026-04-11 07:41 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.07s）/ npm run build ✅（97KB index gzipped，28 chunks，159ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（health UP，database UP，pgvector UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
