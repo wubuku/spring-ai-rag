@@ -2408,3 +2408,13 @@
 ## Cron 进度（2026-04-11 20:29 — SlowQueryMetricsService 测试补全）
 
 - 2026-04-11 20:29 — ✅ SlowQueryMetricsService 测试补全：新增 3 个单元测试——getStatistics_noSessionFactory_returnsEmpty（验证 Optional.empty() when SessionFactory=null）、getStatsSummary_noSessionFactory_returnsHardcodedZeros（验证 null-SessionFactory 路径返回硬编码零值，包括 thresholdMs=0 因为该路径不调用 getThresholdMs()）、recordSlowQuery_aboveThreshold_isRecorded（隔离 service 实例避免共享 properties 状态污染，验证 1500ms>500ms 阈值被正确记录）；移除错误假设的旧测试（getStatsSummary 假设 thresholdMs=1000 但实现返回 0）；1741 tests 全通过，零失败零错误；commit 18009cc 已推送
+
+## Cron 进度（2026-04-11 21:26 — WebUI 常规发布）
+
+- 2026-04-11 21:26 — ✅ WebUI 常规发布：
+  - npm test 142 ✅（22 test files，142 passed，全通过）
+  - npm run build ✅（97KB index gzipped，28 chunks，BarChart 102KB 按需加载）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - git 工作区干净（无变更）
