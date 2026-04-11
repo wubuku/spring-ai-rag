@@ -98,7 +98,20 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     public RagRetrievalEvaluation evaluate(String query, List<Long> retrievedDocIds, List<Long> relevantDocIds,
                                            String evaluationMethod, String evaluatorId) {
         EvaluationMetrics metrics = calculateMetrics(retrievedDocIds, relevantDocIds, DEFAULT_K);
+        RagRetrievalEvaluation evaluation = buildEvaluationEntity(
+                query, retrievedDocIds, relevantDocIds, metrics, evaluationMethod, evaluatorId);
+        long start = System.currentTimeMillis();
+        RagRetrievalEvaluation saved = evaluationRepository.save(evaluation);
+        evaluateTimer.record(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
+        recordEvaluationMetrics(metrics);
+        log.info("[RetrievalEval] query=\"{}\", MRR={}, NDCG={}, hitRate={}",
+                query, metrics.getMrr(), metrics.getNdcg(), metrics.getHitRate());
+        return saved;
+    }
 
+    private RagRetrievalEvaluation buildEvaluationEntity(String query, List<Long> retrievedDocIds,
+            List<Long> relevantDocIds, EvaluationMetrics metrics,
+            String evaluationMethod, String evaluatorId) {
         RagRetrievalEvaluation evaluation = new RagRetrievalEvaluation();
         evaluation.setQuery(query);
         evaluation.setRetrievedDocumentIds(toJson(retrievedDocIds));
@@ -110,24 +123,20 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         evaluation.setHitRate(metrics.getHitRate());
         evaluation.setEvaluationMethod(evaluationMethod);
         evaluation.setEvaluatorId(evaluatorId);
-
         Map<String, Object> evalResult = new HashMap<>();
         evalResult.put("precisionAt10", metrics.getPrecisionAtK().getOrDefault(DEFAULT_K, 0.0));
         evalResult.put("recallAt10", metrics.getRecallAtK().getOrDefault(DEFAULT_K, 0.0));
         evaluation.setEvaluationResult(evalResult);
+        return evaluation;
+    }
 
-        long start = System.currentTimeMillis();
-        RagRetrievalEvaluation saved = evaluationRepository.save(evaluation);
-        evaluateTimer.record(System.currentTimeMillis() - start, TimeUnit.MILLISECONDS);
+    private void recordEvaluationMetrics(EvaluationMetrics metrics) {
         evaluationCounter.increment();
         if (metrics.getHitRate() > 0) {
             evaluationHitCounter.increment();
         } else {
             evaluationMissCounter.increment();
         }
-        log.info("[RetrievalEval] query=\"{}\", MRR={}, NDCG={}, hitRate={}",
-                query, metrics.getMrr(), metrics.getNdcg(), metrics.getHitRate());
-        return saved;
     }
 
     @Override
@@ -214,38 +223,23 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     public EvaluationReport getReport(ZonedDateTime startDate, ZonedDateTime endDate) {
         List<RagRetrievalEvaluation> evaluations =
                 evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
+        return buildReport(evaluations);
+    }
 
+    private EvaluationReport buildReport(List<RagRetrievalEvaluation> evaluations) {
         EvaluationReport report = new EvaluationReport();
         report.setTotalEvaluations(evaluations.size());
-
         if (evaluations.isEmpty()) {
             return report;
         }
 
-        double sumMrr = 0, sumNdcg = 0, sumHitRate = 0;
-        double sumPrecisionAt10 = 0, sumRecallAt10 = 0;
-        int countWithMetrics = 0;
-
-        for (RagRetrievalEvaluation e : evaluations) {
-            if (e.getMrr() != null) sumMrr += e.getMrr();
-            if (e.getNdcg() != null) sumNdcg += e.getNdcg();
-            if (e.getHitRate() != null) sumHitRate += e.getHitRate();
-            if (e.getPrecisionAtK() != null && e.getPrecisionAtK().containsKey(DEFAULT_K)) {
-                sumPrecisionAt10 += e.getPrecisionAtK().get(DEFAULT_K);
-                countWithMetrics++;
-            }
-            if (e.getRecallAtK() != null && e.getRecallAtK().containsKey(DEFAULT_K)) {
-                sumRecallAt10 += e.getRecallAtK().get(DEFAULT_K);
-            }
-        }
-
+        Stats stats = computeStats(evaluations);
         int n = evaluations.size();
-        report.setAvgMrr(sumMrr / n);
-        report.setAvgNdcg(sumNdcg / n);
-        report.setAvgHitRate(sumHitRate / n);
-        report.setAvgPrecision(countWithMetrics > 0 ? sumPrecisionAt10 / countWithMetrics : 0);
-        report.setAvgRecall(countWithMetrics > 0 ? sumRecallAt10 / countWithMetrics : 0);
-
+        report.setAvgMrr(stats.sumMrr / n);
+        report.setAvgNdcg(stats.sumNdcg / n);
+        report.setAvgHitRate(stats.sumHitRate / n);
+        report.setAvgPrecision(stats.countWithMetrics > 0 ? stats.sumPrecisionAtK.getOrDefault(DEFAULT_K, 0.0) / stats.countWithMetrics : 0);
+        report.setAvgRecall(stats.countWithMetrics > 0 ? stats.sumRecallAtK.getOrDefault(DEFAULT_K, 0.0) / stats.countWithMetrics : 0);
         return report;
     }
 
@@ -261,17 +255,13 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     public AggregatedMetrics getAggregatedMetrics(ZonedDateTime startDate, ZonedDateTime endDate) {
         List<RagRetrievalEvaluation> evaluations =
                 evaluationRepository.findByCreatedAtBetweenOrderByCreatedAtDesc(startDate, endDate);
-
         AggregatedMetrics metrics = new AggregatedMetrics();
         metrics.setTotalEvaluations((long) evaluations.size());
-
         if (evaluations.isEmpty()) {
             return metrics;
         }
-
-        int count = evaluations.size();
-        Accumulator acc = accumulateMetrics(evaluations);
-        applyAverages(metrics, acc, count);
+        Stats stats = computeStats(evaluations);
+        applyAggregatedAverages(metrics, stats, evaluations.size());
         return metrics;
     }
 
@@ -365,22 +355,24 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         }
     }
 
-    private record Accumulator(
+    private record Stats(
             double sumMrr, double sumNdcg, double sumHitRate,
-            Map<Integer, Double> sumPrecisionAtK, Map<Integer, Double> sumRecallAtK
+            Map<Integer, Double> sumPrecisionAtK, Map<Integer, Double> sumRecallAtK,
+            int countWithMetrics
     ) {}
 
-    private Accumulator accumulateMetrics(List<RagRetrievalEvaluation> evaluations) {
+    private Stats computeStats(List<RagRetrievalEvaluation> evaluations) {
         double sumMrr = 0, sumNdcg = 0, sumHitRate = 0;
         Map<Integer, Double> sumPrecisionAtK = new HashMap<>();
         Map<Integer, Double> sumRecallAtK = new HashMap<>();
+        int countWithMetrics = 0;
 
         for (RagRetrievalEvaluation e : evaluations) {
             if (e.getMrr() != null) sumMrr += e.getMrr();
             if (e.getNdcg() != null) sumNdcg += e.getNdcg();
             if (e.getHitRate() != null) sumHitRate += e.getHitRate();
-
-            if (e.getPrecisionAtK() != null) {
+            if (e.getPrecisionAtK() != null && !e.getPrecisionAtK().isEmpty()) {
+                countWithMetrics++;
                 for (var entry : e.getPrecisionAtK().entrySet()) {
                     sumPrecisionAtK.merge(entry.getKey(), entry.getValue(), Double::sum);
                 }
@@ -391,21 +383,21 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
                 }
             }
         }
-        return new Accumulator(sumMrr, sumNdcg, sumHitRate, sumPrecisionAtK, sumRecallAtK);
+        return new Stats(sumMrr, sumNdcg, sumHitRate, sumPrecisionAtK, sumRecallAtK, countWithMetrics);
     }
 
-    private void applyAverages(AggregatedMetrics metrics, Accumulator acc, int count) {
+    private void applyAggregatedAverages(AggregatedMetrics metrics, Stats stats, int count) {
         double c = count;
-        metrics.setAvgMrr(acc.sumMrr() / c);
-        metrics.setAvgNdcg(acc.sumNdcg() / c);
-        metrics.setAvgHitRate(acc.sumHitRate() / c);
+        metrics.setAvgMrr(stats.sumMrr() / c);
+        metrics.setAvgNdcg(stats.sumNdcg() / c);
+        metrics.setAvgHitRate(stats.sumHitRate() / c);
 
         Map<Integer, Double> avgPrecision = new HashMap<>();
-        acc.sumPrecisionAtK().forEach((k, v) -> avgPrecision.put(k, v / c));
+        stats.sumPrecisionAtK().forEach((k, v) -> avgPrecision.put(k, v / c));
         metrics.setAvgPrecisionAtK(avgPrecision);
 
         Map<Integer, Double> avgRecall = new HashMap<>();
-        acc.sumRecallAtK().forEach((k, v) -> avgRecall.put(k, v / c));
+        stats.sumRecallAtK().forEach((k, v) -> avgRecall.put(k, v / c));
         metrics.setAvgRecallAtK(avgRecall);
     }
 
