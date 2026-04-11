@@ -145,6 +145,15 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
+    void listKeys_empty_returnsEmptyList() {
+        when(apiKeyRepository.findAll()).thenReturn(List.of());
+
+        List<ApiKeyResponse> result = service.listKeys();
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
     void validateKeyEntity_validKey_returnsKeyAndUpdatesLastUsed() {
         String rawKey = "rag_sk_testkey123";
         String hash = sha256(rawKey);
