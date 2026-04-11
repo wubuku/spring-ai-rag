@@ -5,6 +5,7 @@ import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.repository.RagApiKeyRepository;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -31,6 +32,24 @@ class ApiKeyManagementServiceTest {
     @BeforeEach
     void setUp() {
         service = new ApiKeyManagementService(apiKeyRepository);
+        // Clear static validation cache between tests to avoid cross-test pollution
+        ApiKeyManagementServiceTest.clearValidationCache();
+    }
+
+    @AfterEach
+    void tearDown() {
+        ApiKeyManagementServiceTest.clearValidationCache();
+    }
+
+    // Visible for test cleanup — clears the static VALIDATED_KEY_CACHE
+    static void clearValidationCache() {
+        try {
+            var field = ApiKeyManagementService.class.getDeclaredField("VALIDATED_KEY_CACHE");
+            field.setAccessible(true);
+            ((com.github.benmanes.caffeine.cache.Cache<?, ?>) field.get(null)).invalidateAll();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
@@ -310,6 +329,87 @@ class ApiKeyManagementServiceTest {
     @Test
     void validateKey_blankKey_returnsNull() {
         assertNull(service.validateKey("   "));
+    }
+
+    @Test
+    void validateKeyEntity_cacheHit_skipsDbLookup() {
+        // First call: populates cache
+        String rawKey = "rag_sk_cachekey";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_cache");
+        key.setKeyHash(hash);
+        key.setEnabled(true);
+        key.setExpiresAt(null);
+
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        RagApiKey first = service.validateKeyEntity(rawKey);
+        assertNotNull(first);
+        assertEquals("rag_k_cache", first.getKeyId());
+
+        // Second call: should hit cache, not call DB
+        RagApiKey second = service.validateKeyEntity(rawKey);
+        assertNotNull(second);
+        assertEquals("rag_k_cache", second.getKeyId());
+
+        // DB should only be called once (cache hit on second call)
+        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
+        // But lastUsed is updated on each call
+        verify(apiKeyRepository, times(2)).updateLastUsed(eq("rag_k_cache"), any(LocalDateTime.class));
+    }
+
+    @Test
+    void validateKeyEntity_cacheMiss_queriesDb() {
+        String rawKey = "rag_sk_miss";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_miss");
+        key.setKeyHash(hash);
+        key.setEnabled(true);
+
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        RagApiKey result = service.validateKeyEntity(rawKey);
+
+        assertNotNull(result);
+        assertEquals("rag_k_miss", result.getKeyId());
+        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
+    }
+
+    @Test
+    void revokeKey_invalidatesValidationCache() {
+        // Pre-populate cache with a key
+        String rawKey = "rag_sk_willrevoke";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_revoke");
+        key.setKeyHash(hash);
+        key.setEnabled(true);
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        RagApiKey first = service.validateKeyEntity(rawKey);
+        assertNotNull(first);
+        assertEquals("rag_k_revoke", first.getKeyId());
+        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
+
+        // Revoke: should invalidate cache, and key is now disabled in DB
+        when(apiKeyRepository.disableByKeyId("rag_k_revoke")).thenReturn(1);
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty()); // key no longer valid
+        boolean result = service.revokeKey("rag_k_revoke");
+        assertTrue(result);
+
+        // Next validateKeyEntity call should query DB (cache was cleared) and return null
+        RagApiKey afterRevoke = service.validateKeyEntity(rawKey);
+        assertNull(afterRevoke);
+        verify(apiKeyRepository, times(2)).findByKeyHash(hash);
+    }
+
+    @Test
+    void validateKeyEntity_nonRagSkPrefix_returnsNullWithoutCacheLookup() {
+        // Non rag_sk_ prefix keys skip validation entirely (legacy path)
+        service.validateKeyEntity("some-legacy-key");
+        verifyNoInteractions(apiKeyRepository);
     }
 
     private String sha256(String input) {

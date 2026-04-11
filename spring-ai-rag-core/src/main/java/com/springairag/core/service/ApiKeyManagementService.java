@@ -1,5 +1,7 @@
 package com.springairag.core.service;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
@@ -18,6 +20,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * API Key management service.
@@ -30,6 +33,11 @@ public class ApiKeyManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyManagementService.class);
     private static final String KEY_PREFIX = "rag_sk_";
+    /** Short-lived cache for validated keys: avoids DB round-trip on every authenticated request. */
+    private static final Cache<String, RagApiKey> VALIDATED_KEY_CACHE = Caffeine.newBuilder()
+            .maximumSize(1_000)
+            .expireAfterWrite(30, TimeUnit.SECONDS)
+            .build();
 
     private final RagApiKeyRepository apiKeyRepository;
 
@@ -72,6 +80,8 @@ public class ApiKeyManagementService {
     public boolean revokeKey(String keyId) {
         int updated = apiKeyRepository.disableByKeyId(keyId);
         if (updated > 0) {
+            // Invalidate cache entries for this keyId (we invalidate all since we don't store reverse mapping)
+            VALIDATED_KEY_CACHE.invalidateAll();
             log.info("API key revoked: keyId={}", keyId);
             return true;
         }
@@ -93,6 +103,8 @@ public class ApiKeyManagementService {
 
         // Disable the old key
         apiKeyRepository.disableByKeyId(keyId);
+        // Invalidate cache entries for this keyId (short TTL makes this acceptable)
+        VALIDATED_KEY_CACHE.invalidateAll();
         log.info("API key rotated (old key disabled): keyId={}", keyId);
 
         // Create a new key with the same name and expiration
@@ -139,21 +151,45 @@ public class ApiKeyManagementService {
 
     /**
      * Validate a raw key and return the RagApiKey entity if valid.
-     * Uses indexed keyHash lookup for O(log n) performance.
+     * Uses short-lived in-memory cache (30s TTL) to avoid repeated DB lookups.
+     *
+     * @param rawKey the raw key value from the request header
+     * @return RagApiKey entity if valid, null if invalid, disabled, or expired
      */
     @Transactional
     public RagApiKey validateKeyEntity(String rawKey) {
         if (rawKey == null || rawKey.isBlank()) {
             return null;
         }
+        if (!rawKey.startsWith(KEY_PREFIX)) {
+            return null;
+        }
         String keyHash = sha256(rawKey);
-        return apiKeyRepository.findByKeyHash(keyHash)
-                .filter(k -> k.getEnabled() && !isExpired(k))
-                .map(k -> {
-                    touchLastUsed(k);
-                    return k;
-                })
-                .orElse(null);
+
+        // Check cache first
+        RagApiKey cached = VALIDATED_KEY_CACHE.getIfPresent(keyHash);
+        if (cached != null) {
+            if (cached.getEnabled() && !isExpired(cached)) {
+                touchLastUsed(cached);
+                return cached;
+            }
+            // Cached as invalid — short-circuit DB lookup
+            return null;
+        }
+
+        // Cache miss: query DB
+        Optional<RagApiKey> result = apiKeyRepository.findByKeyHash(keyHash)
+                .filter(k -> k.getEnabled() && !isExpired(k));
+
+        if (result.isPresent()) {
+            RagApiKey validKey = result.get();
+            VALIDATED_KEY_CACHE.put(keyHash, validKey);
+            touchLastUsed(validKey);
+            return validKey;
+        }
+
+        // Do NOT cache invalid results — next request goes to DB again (allows quick un-revoke)
+        return null;
     }
 
     private void touchLastUsed(RagApiKey key) {
