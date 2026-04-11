@@ -1453,6 +1453,10 @@
 | HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ✅ 2026-04-07（PgJiebaFulltextProvider 已使用 websearch_to_tsquery + search_vector_zh 预建列，SearchCapabilitiesTest 15 tests 验证能力探测） |
 | HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
 
+## Cron 进度（2026-04-11 14:58 — RetrievalEvaluationService 异常路径测试补全）
+
+- 2026-04-11 14:58 — ✅ evaluateAnswerQuality 超时/中断异常测试补全：新增 2 个单元测试覆盖 `evaluateAnswerQuality` TimeoutException 和 InterruptedException 异常路径——TimeoutException 返回 AnswerQualityResult(3,3,3,"timed out","REVISION")，InterruptedException 返回 AnswerQualityResult(3,3,3,"interrupted","REVISION")；均使用 ChatClient mock chain + single-thread executor，匹配现有 ExecutionException 测试模式；21 RetrievalEvaluationServiceImplTest 全通过；全量测试通过；commit 67411f8 已推送
+
 ## Cron 进度（2026-04-07 06:54）
 
 - 2026-04-07 06:54 — ✅ HS3-1 + SearchCapabilitiesTest 完成：
