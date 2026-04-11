@@ -1454,6 +1454,23 @@
 | HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ✅ 2026-04-07（PgJiebaFulltextProvider 已使用 websearch_to_tsquery + search_vector_zh 预建列，SearchCapabilitiesTest 15 tests 验证能力探测） |
 | HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
 
+## Cron 进度（2026-04-12 03:54 — S1 API Key Management Backend）
+
+- 2026-04-12 03:54 — ✅ S1 API Key Management Backend 完成：
+  - `RagApiKey` entity: keyId (rag_k_xxx), keyHash (SHA-256), name, expiresAt, lastUsedAt, enabled
+  - `RagApiKeyRepository`: JPA with findByKeyId, updateLastUsed, disableByKeyId
+  - `ApiKeyManagementService`: generate/revoke/rotate/list/validate (raw key shown only at creation)
+  - `ApiKeyController` REST: POST /api/v1/rag/api-keys (create), GET /api/v1/rag/api-keys (list), DELETE /api/v1/rag/api-keys/{keyId} (revoke), POST /api/v1/rag/api-keys/{keyId}/rotate
+  - `ApiKeyAuthFilter` updated: checks DB keys first, falls back to legacy static key
+  - Flyway V18: rag_api_key table
+  - Backward compatible: legacy `general.rag.security.api-key` static key still works
+  - ApiKeyControllerTest: 7 tests (create/list/revoke/rotate + 404 cases)
+  - ApiKeyManagementServiceTest: 13 tests (all CRUD paths + expired/disabled/invalid/null/blank)
+  - OpenApiContractTest: +MockBean for new repository + service
+  - GeneralRagAutoConfiguration: injects ApiKeyManagementService into filter
+  - GeneralRagAutoConfigurationBeanTest + IntegrationTest: updated method signature
+  - 1754 tests 全通过；commit 665fcf8 已推送
+
 ## Cron 进度（2026-04-11 14:58 — RetrievalEvaluationService 异常路径测试补全）
 
 - 2026-04-11 14:58 — ✅ evaluateAnswerQuality 超时/中断异常测试补全：新增 2 个单元测试覆盖 `evaluateAnswerQuality` TimeoutException 和 InterruptedException 异常路径——TimeoutException 返回 AnswerQualityResult(3,3,3,"timed out","REVISION")，InterruptedException 返回 AnswerQualityResult(3,3,3,"interrupted","REVISION")；均使用 ChatClient mock chain + single-thread executor，匹配现有 ExecutionException 测试模式；21 RetrievalEvaluationServiceImplTest 全通过；全量测试通过；commit 67411f8 已推送
@@ -2313,7 +2330,7 @@
 | T2 | AlertController SSE 端点（AlertController 无 SSE；RagDocumentController.batchEmbedDocumentsStream 已实现） | 测试覆盖 | ✅ 2026-04-11 |
 | M1 | 文档全文搜索增强（listDocuments 支持 createdAfter/before + keyword + type/status/enabled/collectionId） | 功能 | ✅ 2026-04-11 |
 | M2 | Collection 多文档批量 SSE 嵌入（RagDocumentController.batchEmbedDocumentsStream 已实现） | 性能 | ✅ 2026-04-11 |
-| S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ⏳ |
+| S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ✅ 2026-04-12（commit 665fcf8，+20 tests，1754 total） |
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
 | E1 | ChatExportService CSV 导出支持 | 功能 | ✅ 2026-04-12 (commit c04d742) |
 | E2 | DocumentListItem 内容摘要预览（长 content 截断显示） | UX | ✅ 2026-04-12 (commit 391e4bd) |
