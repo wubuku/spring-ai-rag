@@ -167,6 +167,7 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-12 05:23 — ✅ ApiKeyManagementService 测试补强：新增 `listKeys_empty_returnsEmptyList` 测试覆盖空列表场景，确保 `listKeys()` 无 API Key 时返回空列表而非 NPE；1755 测试全通过；commit a245a5d 已推送
 - 2026-04-09 12:18 — ✅ listDocuments N+1 查询消除：RagDocumentController.listDocuments() 批量预取 collection 名称——收集所有 document 的 collectionId，findAllById() 一次查询替代逐条 findById()，O(N)→O(1) DB 往返；新增重载 documentToMap(doc, collectionNameMap)；39 RagDocumentControllerTest 全通过；1422 测试全通过；commit 765919c 已推送
 - 2026-04-09 19:34 — ✅ OpenApiConfig.exampleResponseCustomizer 重构：9 个重复 if 块 → table-driven switch expression + ExampleDef record；140 行 → 30 行，逻辑完全不变；4 OpenApiConfigTest 全通过；1422 测试全通过；commit dfb7169 已推送
 - 2026-04-12 00:40 — ✅ WebUI 常规巡检（cron）：npm test 142 ✅（22 test files，142 vitest 全通过）/ npm run build ✅（97KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
