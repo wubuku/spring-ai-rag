@@ -2322,3 +2322,6 @@
 ## Cron 进度（WebUI — 2026-04-11 07:41 — 常规发布）
 
 - 2026-04-11 07:41 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.07s）/ npm run build ✅（97KB index gzipped，28 chunks，159ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（health UP，database UP，pgvector UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+## Cron 进度（后端 — 2026-04-11 08:08 — 代码库清理）
+
+- 2026-04-11 08:08 — ✅ 代码库清理：删除遗留孤立目录 `demos/demo-basic-rag/demo-basic-rag/`（无 pom.xml，test files 从未被 Maven 执行）；清理 4 个无用 test files（BasicRagDemoApplicationTest/DemoControllerTest/DemoTestConfig/MockAiConfig）+ 1 个 orphan application-test.yml；保留正确的 `demos/demo-basic-rag/`（有 pom.xml + 有效测试）；mvn test ✅（1649 测试全通过，零失败零错误）；commit 9162540 已推送
