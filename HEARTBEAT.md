@@ -1601,6 +1601,10 @@
   - `MixedAdaptationTests`（2 tests）：`supportsSystem=false + supportsMultiple=false`（先转换再合并）以及 `supportsSystem=false + requiresFirst=true`（先转换再重排）
   - mvn test ✅（1726 tests 全通过，零失败零错误）；commit 7b6bf79 已推送
 
+## Cron 进度（2026-04-11 14:02 — EmailNotificationService 指数退避重试）
+
+- 2026-04-11 14:02 — ✅ EmailNotificationService 重试机制：EmailNotificationService 添加指数退避重试逻辑（MAX_RETRIES=3，初始间隔 500ms，指数增长 500ms/1000ms/2000ms），与 DingTalkNotificationService 保持一致；中断时正确恢复中断标志；更新现有测试验证 3 次重试行为；新增成功于第二次重试测试；1737 tests 全通过，零失败零错误；commit bf8f533 已推送
+
 ## Cron 进度（2026-04-11 05:43 — WebUI 常规发布）
 
 - 2026-04-11 05:43 — ✅ WebUI 常规发布：npm test 142 ✅（22 test files，142 vitest 全通过，2.27s）/ npm run build ✅（97KB index gzipped，28 chunks，205ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
