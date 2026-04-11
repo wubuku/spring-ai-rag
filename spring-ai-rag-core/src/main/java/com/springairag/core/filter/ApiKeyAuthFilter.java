@@ -116,7 +116,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 path.startsWith("/swagger-ui") ||
                 path.startsWith("/v3/api-docs") ||
                 path.startsWith("/health") ||
-                path.startsWith("/api/v1/rag/cache") || // Cache metrics/invalidate - admin read-only
+                // Cache stats is a read-only admin monitoring endpoint (public for convenience)
+                // Cache invalidate (DELETE) requires authentication and is handled separately
+                path.equals("/api/v1/rag/cache/stats") ||
                 path.startsWith("/error");
     }
 

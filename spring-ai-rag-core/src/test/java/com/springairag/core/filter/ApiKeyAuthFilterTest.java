@@ -159,4 +159,43 @@ class ApiKeyAuthFilterTest {
         assertEquals(401, response.getStatus());
         verify(filterChain, never()).doFilter(any(), any());
     }
+
+    @Test
+    void excludedPath_cacheStats_passesThrough() throws ServletException, IOException {
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("secret", true);
+        request.setRequestURI("/api/v1/rag/cache/stats");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+    }
+
+    @Test
+    void cacheInvalidate_requiresAuth_returns401() throws ServletException, IOException {
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("secret", true);
+        request.setRequestURI("/api/v1/rag/cache/invalidate");
+        request.setMethod("DELETE");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+
+        ErrorResponse error = objectMapper.readValue(response.getContentAsString(), ErrorResponse.class);
+        assertEquals("UNAUTHORIZED", error.getError());
+        assertTrue(error.getMessage().contains("Missing API Key"));
+    }
+
+    @Test
+    void cacheInvalidate_withValidKey_passesThrough() throws ServletException, IOException {
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("secret", true);
+        request.setRequestURI("/api/v1/rag/cache/invalidate");
+        request.setMethod("DELETE");
+        request.addHeader("X-API-Key", "secret");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertEquals(200, response.getStatus());
+    }
 }
