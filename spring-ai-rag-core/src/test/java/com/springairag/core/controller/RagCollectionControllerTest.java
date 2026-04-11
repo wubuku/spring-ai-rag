@@ -1,6 +1,12 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CollectionDocumentListResponse;
+import com.springairag.api.dto.CollectionExportResponse;
+import com.springairag.api.dto.CollectionImportResponse;
+import com.springairag.api.dto.CollectionListResponse;
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.CollectionResponse;
+import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -64,12 +70,12 @@ class RagCollectionControllerTest {
         req.setName("测试知识库");
         req.setDescription("这是一个测试知识库");
 
-        ResponseEntity<Map<String, Object>> response = controller.create(req);
+        ResponseEntity<CollectionResponse> response = controller.create(req);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("id"));
-        assertEquals("测试知识库", response.getBody().get("name"));
-        assertEquals(1024, response.getBody().get("dimensions"));
+        assertEquals(1L, response.getBody().id());
+        assertEquals("测试知识库", response.getBody().name());
+        assertEquals(1024, response.getBody().dimensions());
     }
 
     @Test
@@ -78,18 +84,18 @@ class RagCollectionControllerTest {
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
         when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
 
-        ResponseEntity<Map<String, Object>> response = controller.getById(1L);
+        ResponseEntity<CollectionResponse> response = controller.getById(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("知识库A", response.getBody().get("name"));
-        assertEquals(5L, response.getBody().get("documentCount"));
+        assertEquals("知识库A", response.getBody().name());
+        assertEquals(5L, response.getBody().documentCount());
     }
 
     @Test
     void getById_nonExisting_returns404() {
         when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.getById(999L);
+        ResponseEntity<CollectionResponse> response = controller.getById(999L);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -103,7 +109,7 @@ class RagCollectionControllerTest {
         when(collectionRepository.findById(1L)).thenReturn(Optional.of(c));
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.getById(1L);
+        ResponseEntity<CollectionResponse> response = controller.getById(1L);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -119,12 +125,11 @@ class RagCollectionControllerTest {
         when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
         when(documentRepository.countByCollectionId(2L)).thenReturn(7L);
 
-        ResponseEntity<Map<String, Object>> response = controller.list(0, 20, null, null);
+        ResponseEntity<CollectionListResponse> response = controller.list(0, 20, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        List<?> collections = (List<?>) response.getBody().get("collections");
-        assertEquals(2, collections.size());
-        assertEquals(2L, response.getBody().get("total"));
+        assertEquals(2, response.getBody().collections().size());
+        assertEquals(2L, response.getBody().total());
     }
 
     @Test
@@ -136,11 +141,10 @@ class RagCollectionControllerTest {
                 .thenReturn(page);
         when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
-        ResponseEntity<Map<String, Object>> response = controller.list(0, 20, "RAG", null);
+        ResponseEntity<CollectionListResponse> response = controller.list(0, 20, "RAG", null);
 
         assertEquals(200, response.getStatusCode().value());
-        List<?> collections = (List<?>) response.getBody().get("collections");
-        assertEquals(1, collections.size());
+        assertEquals(1, response.getBody().collections().size());
     }
 
     @Test
@@ -154,11 +158,11 @@ class RagCollectionControllerTest {
         req.setName("新名称");
         req.setDescription("新描述");
 
-        ResponseEntity<Map<String, Object>> response = controller.update(1L, req);
+        ResponseEntity<CollectionResponse> response = controller.update(1L, req);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("新名称", response.getBody().get("name"));
-        assertEquals("新描述", response.getBody().get("description"));
+        assertEquals("新名称", response.getBody().name());
+        assertEquals("新描述", response.getBody().description());
     }
 
     @Test
@@ -168,7 +172,7 @@ class RagCollectionControllerTest {
         CollectionRequest req = new CollectionRequest();
         req.setName("test");
 
-        ResponseEntity<Map<String, Object>> response = controller.update(999L, req);
+        ResponseEntity<CollectionResponse> response = controller.update(999L, req);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -226,11 +230,11 @@ class RagCollectionControllerTest {
         // The controller also calls documentRepository.countByCollectionId for the response map
         when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
 
-        ResponseEntity<Map<String, Object>> response = controller.restore(1L);
+        ResponseEntity<CollectionResponse> response = controller.restore(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Restored Collection", response.getBody().get("name"));
-        assertEquals(3L, response.getBody().get("documentCount"));
+        assertEquals("Restored Collection", response.getBody().name());
+        assertEquals(3L, response.getBody().documentCount());
         verify(collectionService).restoreCollection(1L);
     }
 
@@ -238,7 +242,7 @@ class RagCollectionControllerTest {
     void restore_nonExisting_returns404() {
         when(collectionService.restoreCollection(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.restore(999L);
+        ResponseEntity<CollectionResponse> response = controller.restore(999L);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -255,19 +259,18 @@ class RagCollectionControllerTest {
 
         when(documentRepository.findByCollectionId(eq(1L), any(Pageable.class))).thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(1L, 0, 20, null, null, null);
+        ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(1L, 0, 20, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("collectionId"));
-        List<?> docs = (List<?>) response.getBody().get("documents");
-        assertEquals(1, docs.size());
+        assertEquals(1L, response.getBody().collectionId());
+        assertEquals(1, response.getBody().documents().size());
     }
 
     @Test
     void listDocuments_collectionNotExists_returns404() {
         when(collectionRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(999L, 0, 20, null, null, null);
+        ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(999L, 0, 20, null, null, null);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -280,12 +283,12 @@ class RagCollectionControllerTest {
         when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of("documentId", 10L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 10L));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Document added to collection", response.getBody().get("message"));
-        assertEquals(1L, response.getBody().get("collectionId"));
-        assertEquals(10L, response.getBody().get("documentId"));
+        assertEquals("Document added to collection", response.getBody().message());
+        assertEquals(1L, response.getBody().collectionId());
+        assertEquals(10L, response.getBody().documentId());
     }
 
     @Test
@@ -298,7 +301,7 @@ class RagCollectionControllerTest {
     void addDocument_collectionNotExists_returns404() {
         when(collectionRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(999L, Map.of("documentId", 10L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(999L, Map.of("documentId", 10L));
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -308,7 +311,7 @@ class RagCollectionControllerTest {
         when(collectionRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of("documentId", 999L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 999L));
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -319,6 +322,7 @@ class RagCollectionControllerTest {
     void exportCollection_returnsCollectionAndDocuments() {
         RagCollection c = createCollection(1L, "知识库A");
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(1L);
 
         RagDocument doc = new RagDocument();
         doc.setTitle("文档1");
@@ -327,25 +331,23 @@ class RagCollectionControllerTest {
         doc.setSize(100L);
         when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc));
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        CollectionExportResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals("知识库A", body.get("name"));
-        assertEquals(1, body.get("documentCount"));
-        assertNotNull(body.get("exportedAt"));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
-        assertEquals(1, docs.size());
-        assertEquals("文档1", docs.get(0).get("title"));
+        assertEquals("知识库A", body.collection().name());
+        assertEquals(1, body.documentCount());
+        assertNotNull(body.exportedAt());
+        assertEquals(1, body.documents().size());
+        assertEquals("文档1", body.documents().get(0).title());
     }
 
     @Test
     void exportCollection_multipleDocuments_exportsAllCorrectly() {
         RagCollection c = createCollection(1L, "多文档知识库");
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(c));
+        when(documentRepository.countByCollectionId(1L)).thenReturn(2L);
 
         RagDocument doc1 = new RagDocument();
         doc1.setTitle("文档A");
@@ -363,27 +365,24 @@ class RagCollectionControllerTest {
 
         when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        CollectionExportResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals(2, body.get("documentCount"));
-
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
-        assertEquals(2, docs.size());
-        assertEquals("文档A", docs.get(0).get("title"));
-        assertEquals("PDF", docs.get(0).get("documentType"));
-        assertEquals("Alice", ((Map<?, ?>) docs.get(0).get("metadata")).get("author"));
-        assertEquals("文档B", docs.get(1).get("title"));
+        assertEquals(2, body.documentCount());
+        assertEquals(2, body.documents().size());
+        assertEquals("文档A", body.documents().get(0).title());
+        assertEquals("PDF", body.documents().get(0).documentType());
+        assertEquals("Alice", body.documents().get(0).metadata().get("author"));
+        assertEquals("文档B", body.documents().get(1).title());
     }
 
     @Test
     void exportCollection_deletedCollection_returns404() {
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -411,9 +410,11 @@ class RagCollectionControllerTest {
         docs.add(docData);
         importData.put("documents", docs);
 
-        ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
+        ResponseEntity<CollectionImportResponse> response = controller.importCollection(importData);
 
         assertEquals(200, response.getStatusCode().value());
+        assertEquals(1L, response.getBody().collectionId());
+        assertEquals(1, response.getBody().imported());
         verify(collectionRepository).save(any(RagCollection.class));
         verify(documentRepository).save(any(RagDocument.class));
     }
