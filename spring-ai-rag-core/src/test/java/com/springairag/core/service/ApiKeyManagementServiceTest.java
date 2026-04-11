@@ -154,7 +154,7 @@ class ApiKeyManagementServiceTest {
         key.setEnabled(true);
         key.setExpiresAt(null);
 
-        when(apiKeyRepository.findAll()).thenReturn(List.of(key));
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
 
         RagApiKey result = service.validateKeyEntity(rawKey);
 
@@ -173,7 +173,7 @@ class ApiKeyManagementServiceTest {
         key.setEnabled(true);
         key.setExpiresAt(LocalDateTime.of(2020, 1, 1, 0, 0)); // expired
 
-        when(apiKeyRepository.findAll()).thenReturn(List.of(key));
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
 
         RagApiKey result = service.validateKeyEntity(rawKey);
 
@@ -189,7 +189,7 @@ class ApiKeyManagementServiceTest {
         key.setKeyHash(hash);
         key.setEnabled(false);
 
-        when(apiKeyRepository.findAll()).thenReturn(List.of(key));
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
 
         RagApiKey result = service.validateKeyEntity(rawKey);
 
@@ -198,7 +198,8 @@ class ApiKeyManagementServiceTest {
 
     @Test
     void validateKeyEntity_invalidKey_returnsNull() {
-        when(apiKeyRepository.findAll()).thenReturn(List.of());
+        String hash = sha256("rag_sk_notexist");
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty());
 
         RagApiKey result = service.validateKeyEntity("rag_sk_notexist");
 
@@ -213,8 +214,93 @@ class ApiKeyManagementServiceTest {
 
     @Test
     void validateKeyEntity_blankRawKey_returnsNull() {
-        RagApiKey result = service.validateKeyEntity("  ");
+        RagApiKey result = service.validateKeyEntity("   ");
         assertNull(result);
+    }
+
+    // ==================== validateKey tests ====================
+
+    @Test
+    void validateKey_validKey_returnsKeyId() {
+        String rawKey = "rag_sk_validkey";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_valid");
+        key.setKeyHash(hash);
+        key.setEnabled(true);
+        key.setExpiresAt(null);
+
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        String result = service.validateKey(rawKey);
+
+        assertNotNull(result);
+        assertEquals("rag_k_valid", result);
+        verify(apiKeyRepository).updateLastUsed(eq("rag_k_valid"), any(LocalDateTime.class));
+    }
+
+    @Test
+    void validateKey_nonPrefixKey_returnsNull() {
+        // Keys without rag_sk_ prefix are legacy/plain-text keys handled by the filter
+        assertNull(service.validateKey("some-plain-key"));
+        assertNull(service.validateKey("sk_another"));
+        verifyNoInteractions(apiKeyRepository);
+    }
+
+    @Test
+    void validateKey_disabledKey_returnsNull() {
+        String rawKey = "rag_sk_disabled2";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_disabled2");
+        key.setKeyHash(hash);
+        key.setEnabled(false);
+
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        String result = service.validateKey(rawKey);
+
+        assertNull(result);
+        // lastUsed should NOT be updated for disabled keys
+        verify(apiKeyRepository, never()).updateLastUsed(anyString(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void validateKey_expiredKey_returnsNull() {
+        String rawKey = "rag_sk_expired2";
+        String hash = sha256(rawKey);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_expired2");
+        key.setKeyHash(hash);
+        key.setEnabled(true);
+        key.setExpiresAt(LocalDateTime.of(2020, 1, 1, 0, 0));
+
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
+
+        String result = service.validateKey(rawKey);
+
+        assertNull(result);
+        verify(apiKeyRepository, never()).updateLastUsed(anyString(), any(LocalDateTime.class));
+    }
+
+    @Test
+    void validateKey_notFound_returnsNull() {
+        String hash = sha256("rag_sk_unknown");
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty());
+
+        String result = service.validateKey("rag_sk_unknown");
+
+        assertNull(result);
+    }
+
+    @Test
+    void validateKey_nullKey_returnsNull() {
+        assertNull(service.validateKey(null));
+    }
+
+    @Test
+    void validateKey_blankKey_returnsNull() {
+        assertNull(service.validateKey("   "));
     }
 
     private String sha256(String input) {

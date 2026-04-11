@@ -14,7 +14,8 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "rag_api_key", indexes = {
     @Index(name = "idx_rag_api_key_key_id", columnList = "key_id", unique = true),
-    @Index(name = "idx_rag_api_key_enabled", columnList = "enabled")
+    @Index(name = "idx_rag_api_key_enabled", columnList = "enabled"),
+    @Index(name = "idx_rag_api_key_hash", columnList = "key_hash", unique = true)
 })
 public class RagApiKey {
 

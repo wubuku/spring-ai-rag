@@ -34,4 +34,9 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
     @Modifying
     @Query("UPDATE RagApiKey k SET k.enabled = false WHERE k.keyId = :keyId")
     int disableByKeyId(@Param("keyId") String keyId);
+
+    /**
+     * Find a key by its SHA-256 hash (O(log n) via index instead of O(n) full scan).
+     */
+    Optional<RagApiKey> findByKeyHash(String keyHash);
 }

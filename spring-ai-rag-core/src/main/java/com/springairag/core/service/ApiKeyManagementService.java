@@ -122,25 +122,24 @@ public class ApiKeyManagementService {
         if (rawKey == null || rawKey.isBlank()) {
             return null;
         }
-        String keyHash = sha256(rawKey);
-
-        // Try exact hash match (legacy keys may have different format)
-        if (rawKey.startsWith(KEY_PREFIX)) {
-            Optional<RagApiKey> key = apiKeyRepository.findAll().stream()
-                    .filter(k -> k.getEnabled() && !isExpired(k) && sha256(rawKey).equals(k.getKeyHash()))
-                    .findFirst();
-            if (key.isPresent()) {
-                touchLastUsed(key.get());
-                return key.get().getKeyId();
-            }
+        // Only DB-stored keys (rag_sk_ prefix) use hash lookup;
+        // legacy configured keys are handled by ApiKeyAuthFilter directly
+        if (!rawKey.startsWith(KEY_PREFIX)) {
+            return null;
         }
-
-        // Also check legacy configured API key (plain text match for backward compatibility)
-        return null;
+        String keyHash = sha256(rawKey);
+        return apiKeyRepository.findByKeyHash(keyHash)
+                .filter(k -> k.getEnabled() && !isExpired(k))
+                .map(k -> {
+                    touchLastUsed(k);
+                    return k.getKeyId();
+                })
+                .orElse(null);
     }
 
     /**
      * Validate a raw key and return the RagApiKey entity if valid.
+     * Uses indexed keyHash lookup for O(log n) performance.
      */
     @Transactional
     public RagApiKey validateKeyEntity(String rawKey) {
@@ -148,10 +147,8 @@ public class ApiKeyManagementService {
             return null;
         }
         String keyHash = sha256(rawKey);
-
-        return apiKeyRepository.findAll().stream()
-                .filter(k -> k.getEnabled() && !isExpired(k) && keyHash.equals(k.getKeyHash()))
-                .findFirst()
+        return apiKeyRepository.findByKeyHash(keyHash)
+                .filter(k -> k.getEnabled() && !isExpired(k))
                 .map(k -> {
                     touchLastUsed(k);
                     return k;
