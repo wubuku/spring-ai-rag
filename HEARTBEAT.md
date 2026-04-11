@@ -145,6 +145,8 @@
 | 65 | 嵌入模型断路器（EmbeddingCircuitBreaker） | 弹性 | ✅ 2026-04-09 |
 | 66 | DocumentMapper 工具类提取（RagDocumentController 映射逻辑解耦） | 代码质量 | ✅ 2026-04-10 |
 
+- 2026-04-11 10:29 — ✅ QA1 DocumentEmbedService 长方法重构：`batchEmbedDocumentsWithProgress` 73行 → 25行，提取 `sendDocumentProgress`/`updateBatchCounters`/`phaseForStatus`/`phaseMessage`/`buildBatchResult`；修复 ClassCastException（`embeddingsStored` 从 `countByDocumentId` 返回 Long，直接 cast int 失败）；新增 4 个测试（allCached/mixedStatuses/nullCallback/singleDoc）；1680 测试全通过；commit c792160 已推送
+
 - 2026-04-04 06:45 — 🔍 主动巡检（cron）：mvn clean compile ✅，JaCoCo 覆盖率分析——Core 模块 91% 指令/78% 分支，config.logging 43% 分支（regex 分支正常）；EmbeddingModelConfig/VectorStoreConfig 0%（@ConditionalOnProperty 路径，测试环境不激活属于正常）；无待处理变更，无 ⏳ 待办，项目处于生产级成熟状态
 
 - 2026-04-03 06:39 — ✅ 主动巡检（cron）：ApiCompatibilityAdapter.normalizeMessages() 默认方法补 6 个单元测试（单 system 合并/不变/无 system/空列表、多 system 模式透传、ChatMessage record），825 测试全通过
@@ -2276,7 +2278,7 @@
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ⏳ |
+| QA1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ✅（batchEmbedDocumentsWithProgress 73→25 行，提取 5 个 helper 方法） |
 | QA2 | RetrievalEvaluationServiceImpl 长方法审查（390 行） | 代码质量 | ⏳ |
 | QA3 | AlertServiceImpl 长方法审查（300 行） | 代码质量 | ⏳ |
 | T5 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
