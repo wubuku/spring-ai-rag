@@ -2314,7 +2314,7 @@
 | M2 | Collection 多文档批量 SSE 嵌入（RagDocumentController.batchEmbedDocumentsStream 已实现） | 性能 | ✅ 2026-04-11 |
 | S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ⏳ |
 | S2 | WebUI API Key 管理页面 | UX | ⏳ |
-| E1 | ChatExportService CSV 导出支持 | 功能 | ⏳ |
+| E1 | ChatExportService CSV 导出支持 | 功能 | ✅ 2026-04-12 (commit c04d742) |
 | E2 | DocumentListItem 内容摘要预览（长 content 截断显示） | UX | ⏳ |
 | E3 | RagCollectionController 批量删除保护（soft-delete + 恢复）| 安全 | ⏳ |
 | F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
@@ -2436,5 +2436,6 @@
   - WebUI 项目处于生产级成熟状态
 
 ## Cron 进度（2026-04-11 22:40 — 后端巡检：ChatExportService 边界测试补全）
+- 2026-04-12 00:38 — ✅ E1 ChatExportService CSV 导出支持：exportAsCsv(sessionId, limit) 方法实现（timestamp,role,content 三列）；escapeCsv() RFC 4180 标准引号转义（逗号/引号/换行触发引号包裹）；新增 6 个单元测试（empty/records/limit/special-chars/null-user/blank-ai）；ChatExportServiceTest 14→20 tests；1741 tests 全通过，零失败零错误；commit c04d742 已推送
 
 - 2026-04-11 22:40 — ✅ ChatExportService 边界测试补全：新增 4 个单元测试覆盖空白/空值 AI 响应边界情况——`exportAsJson_blankAiResponse_omitsAssistantMessage`（空白 AI 响应视为空值）、`exportAsJson_nullUserMessage_includesAssistantMessage`（空用户消息但有效 AI 仍渲染）、`exportAsMarkdown_blankAiResponse_omitsAssistantSection`（空白 AI 响应从 Markdown 省略）、`exportAsMarkdown_nullUserMessage_stillRendersAssistant`（空用户消息但有效 AI 仍渲染）；ChatExportServiceTest: 10→14 tests；全量 1741 tests 全通过，零失败零错误；commit 9fd621f 已推送
