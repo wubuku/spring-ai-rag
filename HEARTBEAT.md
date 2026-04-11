@@ -2456,3 +2456,6 @@
   - RagCollectionControllerTest 全部更新（10 个测试用例改用 DTO accessor）
   - BUILD SUCCESS；全量测试通过
   - commit 239c95e 已推送
+
+## Cron 进度（2026-04-12 02:27 — 后端国际化收尾：application.yml 中文注释英文化）
+- 2026-04-12 02:27 — ✅ application.yml i18n 收尾：扫描发现 `spring-ai-rag-core/src/main/resources/application.yml` 残留 3 处中文注释（⚠️ 重要说明 Spring AI base-url 自动追加 /v1 行为），翻译为英文（openai/minimax/embedding 三处配置节）；mvn test ✅（全通过）；commit 9d51bee 已推送
