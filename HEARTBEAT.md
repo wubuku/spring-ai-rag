@@ -2392,3 +2392,7 @@
 ## Cron 进度（WebUI — 2026-04-11 16:40 — WebUI 常规巡检）
 
 - 2026-04-11 16:40 — ✅ WebUI 常规巡检：npm test 142 ✅（22 test files，142 vitest 全通过，4.01s）/ npm run build ✅（97KB index gzipped，28 chunks，199ms）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP, pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-11 18:17 — RagDocumentController catch 注释规范化）
+
+- 2026-04-11 18:17 — ✅ RagDocumentController catch(Exception) 注释规范化：5 个 bare catch 块添加韧性策略注释——reembedMissing (best-effort 单文档错误不影响其他文档)、embedDocumentViaVectorStore SSE (SSE 韧性: 意外错误优雅终止流)、batchEmbedDocumentsStream SSE (同上)、processUploadedFile (best-effort: 文件处理错误返回失败结果不抛异常)、validateTextFile.getBytes (best-effort: 非文本文件标记为无效)；mvn test ✅（全通过）；commit 65331fd 已推送
