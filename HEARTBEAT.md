@@ -2404,3 +2404,7 @@
 ## Cron 进度（2026-04-11 19:41 — QA2 RetrievalEvaluationServiceImpl 重构）
 
 - 2026-04-11 19:41 — ✅ QA2 RetrievalEvaluationServiceImpl 重构：evaluate() 42→12 行（提取 buildEvaluationEntity() + recordEvaluationMetrics()）；getReport() 36→15 行（提取 buildReport() + 复用 computeStats()）；Accumulator→Stats record（更通用）；getAggregatedMetrics() 复用 computeStats() 消除重复累加逻辑；Stats 增加 countWithMetrics 字段修复原始 bug；390→320 行（-18%）；1697 core + 42 starter = 1739 tests 全通过，零失败零错误；commit d8c326e 已推送
+
+## Cron 进度（2026-04-11 20:29 — SlowQueryMetricsService 测试补全）
+
+- 2026-04-11 20:29 — ✅ SlowQueryMetricsService 测试补全：新增 3 个单元测试——getStatistics_noSessionFactory_returnsEmpty（验证 Optional.empty() when SessionFactory=null）、getStatsSummary_noSessionFactory_returnsHardcodedZeros（验证 null-SessionFactory 路径返回硬编码零值，包括 thresholdMs=0 因为该路径不调用 getThresholdMs()）、recordSlowQuery_aboveThreshold_isRecorded（隔离 service 实例避免共享 properties 状态污染，验证 1500ms>500ms 阈值被正确记录）；移除错误假设的旧测试（getStatsSummary 假设 thresholdMs=1000 但实现返回 0）；1741 tests 全通过，零失败零错误；commit 18009cc 已推送
