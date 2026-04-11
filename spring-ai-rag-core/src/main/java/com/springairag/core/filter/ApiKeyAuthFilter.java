@@ -1,6 +1,8 @@
 package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.service.ApiKeyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -17,8 +19,11 @@ import java.io.IOException;
 /**
  * API Key authentication filter
  *
- * <p>Checks whether the X-API-Key request header matches the configured API key.
- * Passes through when authentication is disabled or API key is empty.
+ * <p>Checks whether the X-API-Key request header matches:
+ * <ol>
+ *   <li>A valid database-stored API key (new path, checked first)</li>
+ *   <li>The configured static API key (legacy path, backward compatible)</li>
+ * </ol>
  *
  * <p>Excluded paths (no authentication required):
  * <ul>
@@ -40,10 +45,23 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
     private final String configuredApiKey;
     private final boolean authEnabled;
+    private final ApiKeyManagementService apiKeyService;
 
-    public ApiKeyAuthFilter(String configuredApiKey, boolean authEnabled) {
+    /**
+     * @param configuredApiKey legacy static API key from configuration (may be blank)
+     * @param authEnabled      whether authentication is enabled
+     * @param apiKeyService    optional API key management service (null means database keys unavailable)
+     */
+    public ApiKeyAuthFilter(String configuredApiKey, boolean authEnabled,
+                            ApiKeyManagementService apiKeyService) {
         this.configuredApiKey = configuredApiKey;
         this.authEnabled = authEnabled;
+        this.apiKeyService = apiKeyService;
+    }
+
+    /** Backward-compatible constructor (no database key service). */
+    public ApiKeyAuthFilter(String configuredApiKey, boolean authEnabled) {
+        this(configuredApiKey, authEnabled, null);
     }
 
     @Override
@@ -69,16 +87,28 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             return;
         }
 
-        if (!configuredApiKey.equals(requestApiKey)) {
-            log.warn("API Key invalid: {} {}", request.getMethod(), path);
-            sendUnauthorized(response, "Invalid API Key.");
+        // 1. Check database-stored API keys (new path, checked first)
+        if (apiKeyService != null) {
+            RagApiKey validatedKey = apiKeyService.validateKeyEntity(requestApiKey);
+            if (validatedKey != null) {
+                log.debug("API Key validated (database): keyId={}, {} {}",
+                        validatedKey.getKeyId(), request.getMethod(), path);
+                request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, validatedKey.getKeyId());
+                filterChain.doFilter(request, response);
+                return;
+            }
+        }
+
+        // 2. Fall back to legacy configured static key (backward compatibility)
+        if (configuredApiKey.equals(requestApiKey)) {
+            log.debug("API Key validated (legacy): {} {}", request.getMethod(), path);
+            request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, requestApiKey);
+            filterChain.doFilter(request, response);
             return;
         }
 
-        log.debug("API Key validated: {} {}", request.getMethod(), path);
-        // Set authenticated identity for downstream RateLimitFilter and other components
-        request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, requestApiKey);
-        filterChain.doFilter(request, response);
+        log.warn("API Key invalid: {} {}", request.getMethod(), path);
+        sendUnauthorized(response, "Invalid API Key.");
     }
 
     private boolean isExcludedPath(String path) {

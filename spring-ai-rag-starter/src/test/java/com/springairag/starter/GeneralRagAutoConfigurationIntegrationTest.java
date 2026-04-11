@@ -129,7 +129,8 @@ class GeneralRagAutoConfigurationIntegrationTest {
         void filterBean() throws Exception {
             var method = GeneralRagAutoConfiguration.class
                     .getMethod("apiKeyAuthFilterRegistration",
-                            com.springairag.core.config.RagProperties.class);
+                            com.springairag.core.config.RagProperties.class,
+                            com.springairag.core.service.ApiKeyManagementService.class);
             assertNotNull(method.getAnnotation(Bean.class));
             assertEquals(FilterRegistrationBean.class, method.getReturnType());
         }

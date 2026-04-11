@@ -11,6 +11,7 @@ import com.springairag.core.extension.DefaultDomainRagExtension;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.RequestTraceFilter;
+import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.metrics.RagMetricsService;
@@ -73,11 +74,13 @@ public class GeneralRagAutoConfiguration {
      */
     @Bean
     public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
-            @Autowired(required = false) RagProperties properties) {
+            @Autowired(required = false) RagProperties properties,
+            @Autowired(required = false) ApiKeyManagementService apiKeyManagementService) {
         RagSecurityProperties security =
                 properties != null ? properties.getSecurity()
                         : new RagSecurityProperties();
-        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(security.getApiKey(), security.isEnabled());
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(
+                security.getApiKey(), security.isEnabled(), apiKeyManagementService);
         FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
         registration.addUrlPatterns("/api/*");
         registration.setOrder(1);

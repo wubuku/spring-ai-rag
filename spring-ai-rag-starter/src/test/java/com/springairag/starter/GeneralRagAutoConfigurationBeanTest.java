@@ -73,7 +73,7 @@ class GeneralRagAutoConfigurationBeanTest {
         @DisplayName("返回 FilterRegistrationBean<ApiKeyAuthFilter>")
         void returnsFilterRegistration() {
             RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties);
+            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
             assertNotNull(registration);
             assertInstanceOf(FilterRegistrationBean.class, registration);
         }
@@ -82,7 +82,7 @@ class GeneralRagAutoConfigurationBeanTest {
         @DisplayName("URL 模式包含 /api/*")
         void urlPatternIncludesApi() {
             RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties);
+            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
             assertTrue(registration.getUrlPatterns().contains("/api/*"));
         }
 
@@ -90,7 +90,7 @@ class GeneralRagAutoConfigurationBeanTest {
         @DisplayName("Order 为 1（认证在限流之后）")
         void orderIs1() {
             RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties);
+            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
             assertEquals(1, registration.getOrder());
         }
     }
