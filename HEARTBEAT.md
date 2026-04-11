@@ -2440,3 +2440,16 @@
 - 2026-04-12 00:38 — ✅ E1 ChatExportService CSV 导出支持：exportAsCsv(sessionId, limit) 方法实现（timestamp,role,content 三列）；escapeCsv() RFC 4180 标准引号转义（逗号/引号/换行触发引号包裹）；新增 6 个单元测试（empty/records/limit/special-chars/null-user/blank-ai）；ChatExportServiceTest 14→20 tests；1741 tests 全通过，零失败零错误；commit c04d742 已推送
 
 - 2026-04-11 22:40 — ✅ ChatExportService 边界测试补全：新增 4 个单元测试覆盖空白/空值 AI 响应边界情况——`exportAsJson_blankAiResponse_omitsAssistantMessage`（空白 AI 响应视为空值）、`exportAsJson_nullUserMessage_includesAssistantMessage`（空用户消息但有效 AI 仍渲染）、`exportAsMarkdown_blankAiResponse_omitsAssistantSection`（空白 AI 响应从 Markdown 省略）、`exportAsMarkdown_nullUserMessage_stillRendersAssistant`（空用户消息但有效 AI 仍渲染）；ChatExportServiceTest: 10→14 tests；全量 1741 tests 全通过，零失败零错误；commit 9fd621f 已推送
+
+## Cron 进度（2026-04-12 01:20 — 后端巡检：RagCollectionController DTO 化）
+- 2026-04-12 01:27 — ✅ RagCollectionController API 响应 DTO 化：
+  - CollectionResponse 新增 deleted/deletedAt 字段（与实体对齐）
+  - 9 个 `ResponseEntity<Map<String, Object>>` → 强类型 DTO：`create/getById/list/update/restore` → CollectionResponse；`list` → CollectionListResponse；`listDocuments` → CollectionDocumentListResponse；`exportCollection` → CollectionExportResponse；`importCollection` → CollectionImportResponse；`addDocument` → DocumentAddedResponse
+  - 新增 CollectionDocumentListResponse（含内嵌 DocumentSummary record）
+  - CollectionExportResponse 新增 exportedAt + documents 字段
+  - 移除 CollectionMapper.toMap() 调用（9 处）+ buildExportData() 私有方法
+  - 修复 Boolean.TRUE.equals() 调用（Boolean 包装类型 vs boolean 原语）
+  - CollectionResponse 改用 LocalDateTime 与实体保持一致
+  - RagCollectionControllerTest 全部更新（10 个测试用例改用 DTO accessor）
+  - BUILD SUCCESS；全量测试通过
+  - commit 239c95e 已推送
