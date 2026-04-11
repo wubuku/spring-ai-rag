@@ -2333,11 +2333,23 @@
 | M1 | 文档全文搜索增强（listDocuments 支持 createdAfter/before + keyword + type/status/enabled/collectionId） | 功能 | ✅ 2026-04-11 |
 | M2 | Collection 多文档批量 SSE 嵌入（RagDocumentController.batchEmbedDocumentsStream 已实现） | 性能 | ✅ 2026-04-11 |
 | S1 | API Key 管理端点（生成/撤销/轮换） | 安全 | ✅ 2026-04-12（commit 665fcf8，+20 tests，1754 total） |
-| S2 | WebUI API Key 管理页面 | UX | ⏳ |
+| S2 | WebUI API Key 管理页面 | UX | ✅ 2026-04-12（commit ed6fcd5，+6 tests，148 total） |
+| S3 | WebUI Settings LLM Provider 切换（当前仅展示，需支持 DeepSeek/Anthropic） | UX | ⏳ |
 | E1 | ChatExportService CSV 导出支持 | 功能 | ✅ 2026-04-12 (commit c04d742) |
 | E2 | DocumentListItem 内容摘要预览（长 content 截断显示） | UX | ✅ 2026-04-12 (commit 391e4bd) |
 | E3 | RagCollectionController 批量删除保护（soft-delete + 恢复）| 安全 | ✅ 2026-04-06 (C18 同实现) |
+| E4 | Chat SSE 断线重连（EventSource reconnect + 消息状态） | UX | ⏳ |
+| E5 | WebUI 移动端响应式适配（sidebar drawer, 768px breakpoint） | UX | ⏳ |
 | F1 | AlertService 集成 RagSilenceSchedule（数据库级静默检查） | 功能 | ✅ 2026-04-11（commit d0f15c7，5 新测试，164 行） |
+| F2 | Search 页面搜索历史（localStorage 保留最近 10 条） | UX | ⏳ |
+| M1 | DocumentEmbedService 长方法重构（572 行） | 代码质量 | ✅（batchEmbedDocumentsWithProgress 73→25 行，提取 5 个 helper 方法） |
+| M2 | RetrievalEvaluationServiceImpl 长方法审查（390→320 行，消除重复累加逻辑） | 代码质量 | ✅ 2026-04-11（evaluate() 提取 buildEvaluationEntity()/recordEvaluationMetrics()；getReport() 提取 buildReport() + computeStats() 复用；Accumulator→Stats；1697 core + 42 starter = 1739 tests pass） |
+| M3 | Collection 详情页文档列表（Collection 点击→展示该 Collection 下所有文档） | 功能 | ⏳ |
+| W1 | WebUI E2E Playwright 测试（Dashboard/Search/Collections 深度交互） | 测试覆盖 | ⏳ |
+| W2 | spring-ai-rag-starter 模块 JaCoCo 覆盖率提升（当前 0%） | 测试覆盖 | ⏳ |
+| T1 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
+| T2 | Integration test base classes i18n: 4 files Chinese→English | 测试覆盖 | ✅ 2026-04-11（4 files, 148 lines changed, 1621 tests pass） |
+| T3 | AlertController SSE 端点（AlertController 无 SSE；RagDocumentController.batchEmbedDocumentsStream 已实现） | 测试覆盖 | ✅ 2026-04-11 |
 
 ## Cron 进度（2026-04-11 04:20 — 后端 SseEmitters 注释规范化）
 
@@ -2375,6 +2387,12 @@
 ## Cron 进度（后端 — 2026-04-11 08:08 — 代码库清理）
 
 - 2026-04-11 08:08 — ✅ 代码库清理：删除遗留孤立目录 `demos/demo-basic-rag/demo-basic-rag/`（无 pom.xml，test files 从未被 Maven 执行）；清理 4 个无用 test files（BasicRagDemoApplicationTest/DemoControllerTest/DemoTestConfig/MockAiConfig）+ 1 个 orphan application-test.yml；保留正确的 `demos/demo-basic-rag/`（有 pom.xml + 有效测试）；mvn test ✅（1649 测试全通过，零失败零错误）；commit 9162540 已推送
+
+## Cron 进度（WebUI — 2026-04-12 06:38 — S2 API Key 管理页面）
+
+- 2026-04-12 06:38 — ✅ S2 WebUI API Key 管理页面：后端 API Key 管理端点（S1）配套 WebUI 页面，完整 CRUD UI（创建/列表/撤销/轮换），创建成功显示原始密钥（仅一次），导航栏新增 API Keys 入口，en/zh-CN i18n，6 个单元测试（title/loading/empty/list/toolbar basic），npm test 148 ✅，E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing），dist 已同步到 static/webui/，commit ed6fcd5 已推送
+
+**WebUI 待办扫描**：零 TODO/FIXME，零中文用户可见消息，148 测试全通过，WebUI 项目处于生产级成熟状态。
 
 ## Cron 进度（WebUI — 2026-04-11 08:24 — 常规发布）
 
