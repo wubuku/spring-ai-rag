@@ -2690,3 +2690,16 @@
 ⚠️ 前置条件：需要安装 marker-pdf（`pip install marker-pdf`），并配置 `rag.pdf.marker-cli=/path/to/marker_single`。
 
 全量测试通过（1773 tests，0 failures，0 errors）；commit cf41270 已推送
+
+## 功能新增（2026-04-12 23:15 — WebUI Files 页面）
+
+在 WebUI 侧边栏新增"文件"页面（📦 Files），包含：
+
+- **PDF 导入**：拖拽或点击上传 PDF，自动调用后端 `/files/pdf` 接口
+- **目录树**：左侧面板展示文件树，支持目录切换和面包屑导航
+- **预览面板**：右侧 iframe 展示 Markdown → HTML 预览（自动处理图片链接），支持原始文件下载
+- **集合前缀**：可指定 PDF 导入时的收藏前缀（如 `papers/2024`）
+
+新增文件：`src/api/files.ts`、`src/pages/Files.tsx`、`Files.module.css`；更新 App.tsx（路由）、Layout.tsx（侧边栏）、i18n（中英双语）。
+
+148 vitest tests ✅；commit a8573f0 已推送
