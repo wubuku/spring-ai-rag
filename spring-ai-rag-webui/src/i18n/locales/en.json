@@ -9,7 +9,8 @@
     "alerts": "Alerts",
     "abtest": "A/B Test",
     "settings": "Settings",
-    "apiKeys": "API Keys"
+    "apiKeys": "API Keys",
+    "files": "Files"
   },
   "common": {
     "loading": "Loading…",
@@ -278,5 +279,25 @@
     "keyRotated": "API key rotated successfully",
     "active": "Active",
     "expired": "Expired"
+  },
+  "files": {
+    "title": "Files",
+    "uploadBtn": "Import PDF",
+    "uploadTitle": "Import PDF",
+    "uploadHint": "Drop PDF here or click to import",
+    "onlyPdf": "Only PDF files are supported",
+    "importing": "Importing…",
+    "importDone": "Import complete!",
+    "importSuccess": "{{name}} imported — {{count}} file(s) stored",
+    "importError": "Import failed: {{error}}",
+    "previewTitle": "Preview",
+    "selectFile": "Select a file from the tree to preview",
+    "openDirectory": "Double-click to open 「{{name}}」",
+    "openRaw": "Raw",
+    "refresh": "Refresh",
+    "empty": "This directory is empty",
+    "root": "Root",
+    "collectionPrefix": "Collection prefix",
+    "collectionPrefixPlaceholder": "e.g. papers/2024"
   }
 }

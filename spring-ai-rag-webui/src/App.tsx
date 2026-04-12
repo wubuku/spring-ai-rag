@@ -19,6 +19,7 @@ const Alerts = lazy(() => import('./pages/Alerts').then(m => ({ default: m.Alert
 const ABTest = lazy(() => import('./pages/ABTest').then(m => ({ default: m.ABTest })));
 const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.ApiKeys })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const Files = lazy(() => import('./pages/Files').then(m => ({ default: m.Files })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -136,6 +137,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageFallback />}>
                     <ApiKeys />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="files"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <Files />
                   </Suspense>
                 }
               />

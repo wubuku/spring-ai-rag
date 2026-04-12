@@ -9,7 +9,8 @@
     "alerts": "告警",
     "abtest": "A/B 测试",
     "settings": "设置",
-    "apiKeys": "API 密钥"
+    "apiKeys": "API 密钥",
+    "files": "文件"
   },
   "common": {
     "loading": "加载中…",
@@ -278,5 +279,25 @@
     "keyRotated": "API 密钥轮换成功",
     "active": "有效",
     "expired": "已过期"
+  },
+  "files": {
+    "title": "文件管理",
+    "uploadBtn": "导入 PDF",
+    "uploadTitle": "导入 PDF",
+    "uploadHint": "拖拽 PDF 到此处或点击导入",
+    "onlyPdf": "仅支持 PDF 文件",
+    "importing": "导入中…",
+    "importDone": "导入完成！",
+    "importSuccess": "「{{name}}」已导入 — 存储了 {{count}} 个文件",
+    "importError": "导入失败：{{error}}",
+    "previewTitle": "预览",
+    "selectFile": "从左侧目录树选择文件进行预览",
+    "openDirectory": "双击打开「{{name}}」",
+    "openRaw": "原始文件",
+    "refresh": "刷新",
+    "empty": "此目录为空",
+    "root": "根目录",
+    "collectionPrefix": "集合前缀",
+    "collectionPrefixPlaceholder": "例如：papers/2024"
   }
 }

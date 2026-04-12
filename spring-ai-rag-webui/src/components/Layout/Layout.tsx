@@ -15,6 +15,7 @@ const NAV_ITEMS = [
   { to: '/alerts', labelKey: 'nav.alerts', icon: '🔔' },
   { to: '/abtest', labelKey: 'nav.abtest', icon: '🧪' },
   { to: '/api-keys', labelKey: 'nav.apiKeys', icon: '🔑' },
+  { to: '/files', labelKey: 'nav.files', icon: '📦' },
   { to: '/settings', labelKey: 'nav.settings', icon: '⚙️' },
 ];
 
