@@ -2522,3 +2522,6 @@
 
 ## Cron 进度（2026-04-12 07:08 — 后端：ApiKeyManagementService 30s 验证缓存）
 - 2026-04-12 07:08 — ✅ ApiKeyManagementService 验证缓存：新增 Caffeine `VALIDATED_KEY_CACHE`（maxSize=1000，TTL=30s），`validateKeyEntity()` 新增缓存逻辑——缓存命中跳过 DB 查询；缓存未命中查询 DB 并缓存有效结果；不缓存无效结果（支持快速 un-revoke）；`revokeKey()`/`rotateKey()` 调用 `invalidateAll()` 清空缓存；非 `rag_sk_` 前缀 key 在入口直接返回（legacy 路径，不走缓存）；`ApiKeyManagementServiceTest` 新增 5 个缓存测试（cacheHit 跳过DB/DBLookup 缓存未命中/revokeKey 清空缓存/nonPrefix 直接返回）；1761 tests 全通过，零失败零错误；commit a6c2117 已推送
+
+## Cron 进度（2026-04-12 07:57 — 后端：死代码清理 + 零TODO/FIXME 确认）
+- 2026-04-12 07:57 — ✅ ApiKeyManagementService 死代码清理：`isEnabled(RagApiKey)` 私有方法定义但从未被调用（过滤逻辑直接使用 `k.getEnabled()` 内联判断），移除该死方法；全量测试通过；commit dbb9184 已推送；项目零 TODO/FIXME，1754+ tests 全通过
