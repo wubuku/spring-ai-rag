@@ -2603,6 +2603,10 @@
   - 29 RagCollectionControllerTest 全通过；全量测试通过（BUILD SUCCESS）
   - commit 69d70ab 已推送
 
+## Cron 进度（2026-04-12 15:25 — OpenAPI DTO Schema 注解补全）
+
+- 2026-04-12 15:25 — ✅ OpenAPI DTO Schema 注解补全（后端）：扫描发现 12 个 API DTO 缺少 @Schema 注解，影响 SpringDoc OpenAPI 文档质量。为全部 12 个 DTO 补充 @Schema(description=...) 和 @Schema(example=...) 注解：ErrorResponse（类级 + 9 字段）、AlertActionResponse（record + 2 字段）、CacheInvalidateResponse（record + 2 字段）、CacheStatsResponse（record + 5 字段）、ComponentHealthResponse（record + 3 字段）、HealthResponse（record + 3 字段）、ModelCompareResponse（record + 内部 ModelCompareResult）、ModelDetailResponse（record + 2 字段）、ModelListResponse（record + 5 字段）、ModelMetricsResponse（record + 内部 ModelMetric）、SlowQueryStatsResponse（record + 内部 SlowQueryRecordDto）、VariantResponse（record + 字段）。1761 后端测试全通过；commit db8c171 已推送
+
 ## WebUI 常规巡检（2026-04-12 14:59 — cron）
 
 - 2026-04-12 14:59 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（309KB index gzipped 99KB，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP/pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
