@@ -1606,6 +1606,17 @@
 
 - 2026-04-08 04:55 — ✅ API DTO @Schema 国际化收尾（第二轮）：扫描发现 35 个 DTO 文件残留中文 @Schema descriptions（Javadoc/description/example），全部翻译为英文（AlertActionResponse/BatchCreateAndEmbedRequest/BatchCreateAndEmbedResponse/BatchCreateResponse/BatchDocumentRequest/BatchEmbedProgressEvent/ChatResponse/ClearHistoryResponse/CollectionCreatedResponse/CollectionDeleteResponse/CollectionExportResponse/CollectionImportResponse/CollectionListResponse/CollectionResponse/DocumentAddedResponse/DocumentListResponse/EmbedProgressEvent/EvaluateRequest/FeedbackRequest/FileUploadResponse/FireAlertRequest/FireAlertResponse/ModelCompareResponse/ModelDetailResponse/ModelListResponse/ModelMetricsResponse/RagMetricsSummary/ResolveAlertRequest/RetrievalConfig/RetrievalResult/SearchRequest/SearchResponse/SilenceAlertRequest/SilenceScheduleRequest/SloConfigRequest/VariantResponse）；35 files，207 行变更；1462 tests 全通过，零失败零错误；commit 2595be6 已推送
 
+## Cron 进度（2026-04-12 11:34 — WebUI 常规发布 + Documents API DATABASE_ERROR 修复）
+
+- 2026-04-12 11:34 — ✅ WebUI 常规发布 + critical bug 修复：
+  - WebUI npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（98KB index gzipped）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - **Root cause**：Hibernate 生成的分页 count 查询中，`COALESCE(:createdBefore, '')` 中 `createdBefore` 为 null 时，PostgreSQL 无法确定参数类型，导致 `could not determine data type of parameter $11`
+  - **Fix**：`CAST(:createdAfter/Before AS timestamp) IS NULL` 替代 `COALESCE(..., '') = ''` + 移除对 null 日期参数的 COALESCE 包装
+  - **E2E test fix**：`networkidle` 触发时 skeleton 仍可见 → 增加 15s 等待 table 出现
+  - 手动补充缺失的 `rag_audit_log` 和 `rag_client_error` 表（V10/V14 迁移标记成功但表不存在）
+  - 后端重启；commit 3458ad6 已推送；dist 已同步到 static/webui/；后端服务 8081 UP
+
 ## Cron 进度（2026-04-12 09:25 — WebUI 常规发布 + ExecutorService bean 修复）
 
 - 2026-04-12 09:25 — ✅ WebUI 常规发布 + critical bug 修复：
