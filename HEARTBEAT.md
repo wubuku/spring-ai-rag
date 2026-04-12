@@ -2631,3 +2631,7 @@
   - 新增 1 个边界测试：`resolve_noHyphen_noProviders`（无连字符模型 ID + 无注册 providers → inferProviderFromModelId 返回 null → resolve 返回 null）
   - `inferProviderFromModelId` 的已知模型模式（gpt/claude/deepseek/minimax）测试需要 `AnthropicChatModel` 等类，不在 spring-ai-openai 依赖中，留待集成测试覆盖
   - 全量测试通过（BUILD SUCCESS）；commit 7d2a1b3 已推送
+
+## Cron 进度（WebUI — 2026-04-12 18:37）
+
+- 2026-04-12 18:37 — ✅ WebUI 常规巡检：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（98KB index gzipped，16 chunks）/ E2E 11/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；Search 测试失败：数据库为空（环境问题，非代码 bug）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
