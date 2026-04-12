@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,7 +58,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
                                           ObjectMapper objectMapper,
                                           MeterRegistry meterRegistry,
                                           @Autowired(required = false) ChatClient.Builder chatClientBuilder,
-                                          @Autowired(required = false) ExecutorService executorService) {
+                                          @Qualifier("modelComparisonExecutor") @Autowired(required = false) ExecutorService executorService) {
         this.evaluationRepository = evaluationRepository;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
