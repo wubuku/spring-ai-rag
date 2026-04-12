@@ -1,5 +1,7 @@
 package com.springairag.starter;
 
+import com.springairag.api.dto.ApiSloComplianceResponse;
+import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
@@ -249,6 +251,60 @@ class GeneralRagAutoConfigurationBeanTest {
 
             assertNotNull(indicator);
             assertInstanceOf(CircuitBreakerHealthIndicator.class, indicator);
+        }
+    }
+
+    @Nested
+    @DisplayName("ragProperties()")
+    class RagPropertiesBeanTest {
+
+        @Test
+        @DisplayName("返回非 null RagProperties 实例")
+        void returnsNonNullRagProperties() {
+            RagProperties props = config.ragProperties();
+            assertNotNull(props);
+            assertInstanceOf(RagProperties.class, props);
+        }
+
+        @Test
+        @DisplayName("每次调用返回新实例")
+        void returnsNewInstanceEachTime() {
+            RagProperties props1 = config.ragProperties();
+            RagProperties props2 = config.ragProperties();
+            assertNotSame(props1, props2);
+        }
+
+        @Test
+        @DisplayName("RagProperties 子配置可访问")
+        void ragPropertiesSubConfigsAccessible() {
+            RagProperties props = config.ragProperties();
+            assertNotNull(props.getRetrieval());
+            assertNotNull(props.getEmbedding());
+            assertNotNull(props.getSecurity());
+        }
+    }
+
+    @Nested
+    @DisplayName("apiSloTrackerService()")
+    class ApiSloTrackerServiceBeanTest {
+
+        @Test
+        @DisplayName("使用 ApiSloProperties 创建 ApiSloTrackerService")
+        void createsWithApiSloProperties() {
+            ApiSloProperties apiSloProperties = new ApiSloProperties();
+            com.springairag.core.metrics.ApiSloTrackerService service =
+                    config.apiSloTrackerService(apiSloProperties);
+            assertNotNull(service);
+            assertInstanceOf(com.springairag.core.metrics.ApiSloTrackerService.class, service);
+        }
+
+        @Test
+        @DisplayName("服务默认启用")
+        void serviceEnabledByDefault() {
+            ApiSloProperties apiSloProperties = new ApiSloProperties();
+            com.springairag.core.metrics.ApiSloTrackerService service =
+                    config.apiSloTrackerService(apiSloProperties);
+            assertNotNull(service);
         }
     }
 }
