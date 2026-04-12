@@ -2824,3 +2824,26 @@ PDF 端点测试（Section 16，9 tests）：
   - 后端服务 8081 UP
   - **紧急修复**：发现 `V18__dummy_migration.sql` 与 `V18__add_api_key_table.sql` 版本号冲突，导致 Flyway 启动失败；删除 V18__dummy_migration.sql；mvn clean 后重启服务正常
   - commit 0799bb2 已推送
+
+## Cron 进度（2026-04-13 02:34 — MarkdownRendererService 测试覆盖）
+
+- 2026-04-13 02:34 — ✅ MarkdownRendererService 单元测试补全：
+  - `MarkdownRendererServiceTest.java`：17 个测试覆盖 `renderToHtml(String, String)` 和 `renderToHtml(FsFile)` 全部路径
+  - `renderToHtml(String, String)`：null/blank/empty content → 空段落；简单 heading/paragraph 渲染；相对图片路径→/files/raw API rewrite；HTTP/HTTPS URL 保留不重写；`./` 前缀处理；虚拟目录拼接；多图片同一文档；无图片文档渲染；代码块渲染
+  - `renderToHtml(FsFile)`：null file → File not found；textContent 渲染；binaryContent 回退；虚拟目录用于图片重写
+  - `@AfterEach` 清理 ThreadLocal 状态避免测试间污染
+  - 全量测试通过（+17 tests）；commit 3c7ede9 已推送
+
+## 待办（新周期 — 2026-04-13）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| T6 | NoOpFulltextSearchProvider 单元测试 | 测试覆盖 | ⏳ |
+| T7 | PdfImportService 单元测试 | 测试覆盖 | ⏳ |
+| T8 | FsFileRepository 集成测试 | 测试覆盖 | ⏳ |
+| T9 | QueryLang enum 单元测试（fulltext 模块） | 测试覆盖 | ⏳ |
+| T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ⏳ |
+| T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
+| T12 | RetrievalEvaluationService 覆盖率提升（评测阈值边界） | 测试覆盖 | ⏳ |
+| T13 | ApiKeyManagementService 加密相关测试 | 安全 | ⏳ |
+| T14 | SseEmitters 单元测试（Error/Heartbeat 路径） | 测试覆盖 | ⏳ |
