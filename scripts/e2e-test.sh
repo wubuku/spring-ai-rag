@@ -351,58 +351,151 @@ echo ""
 
 # ────────────────────────────────────────
 # 16. PDF 文件导入与预览（fs_files 表）
+# 使用 Apache PDFBox 提取文本，UUID 虚拟目录布局
 # ────────────────────────────────────────
 echo "1️⃣6️⃣  PDF 文件导入与预览"
 
-# 16a. GET /files/tree - 根目录（空）
-echo "- 16a. GET /files/tree (empty root)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree")
+# 创建测试 PDF 文件（最小有效 PDF）
+TESTPDF="/tmp/e2e-test-pdf-$$.pdf"
+cat > "$TESTPDF" << 'PDFEOF'
+%PDF-1.4
+1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
+2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj
+3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 612 792]
+/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
+4 0 obj<</Length 44>>
+stream
+BT
+/F1 12 Tf
+100 700 Td
+(Hello from E2E test PDF) Tj
+ET
+endstream
+endobj
+5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
+xref
+0 6
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000268 00000 n
+0000000359 00000 n
+trailer<</Size 6/Root 1 0 R>>
+startxref
+434
+%%EOF
+PDFEOF
+
+# 16a. POST /files/pdf - 上传测试 PDF，获取 UUID
+echo "- 16a. POST /files/pdf (upload test PDF, get UUID)"
+RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
+    -F "file=@$TESTPDF")
+rm -f "$TESTPDF"
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
-assert_status "GET /files/tree" "200" "$CODE"
-if echo "$BODY" | grep -q '"total"'; then
-    echo -e "  ${GREEN}✅ PASS${NC} files/tree returns JSON with 'total' field"
+assert_status "POST /files/pdf" "200" "$CODE"
+if echo "$BODY" | grep -q '"uuid"'; then
+    UUID=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('uuid',''))" 2>/dev/null)
+    ENTRY_MD=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('entryMarkdown',''))" 2>/dev/null)
+    FILES_STORED=$(echo "$BODY" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('filesStored',''))" 2>/dev/null)
+    echo -e "  ${GREEN}✅ PASS${NC} PDF imported: uuid=$UUID filesStored=$FILES_STORED"
     PASS=$((PASS + 1))
 else
-    echo -e "  ${RED}❌ FAIL${NC} files/tree unexpected body: $BODY"
+    echo -e "  ${RED}❌ FAIL${NC} Unexpected response: $BODY"
+    FAIL=$((FAIL + 1))
+    UUID=""
+fi
+
+# 16b. GET /files/tree - 根目录（有 UUID 目录）
+echo "- 16b. GET /files/tree (should contain UUID dir)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /files/tree" "200" "$CODE"
+if [ -n "$UUID" ] && echo "$RESP" | grep -q "$UUID"; then
+    echo -e "  ${GREEN}✅ PASS${NC} UUID directory visible in tree"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}❌ FAIL${NC} UUID not in tree"
     FAIL=$((FAIL + 1))
 fi
 
-# 16b. GET /files/tree?path=test/ - 子目录（空）
-echo "- 16b. GET /files/tree?path=test/"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree?path=test/")
-CODE=$(echo "$RESP" | tail -1)
-assert_status "GET /files/tree?path=test/" "200" "$CODE"
-echo -e "  ${GREEN}✅ PASS${NC} files/tree with path returns 200"
-PASS=$((PASS + 1))
+# 16c. GET /files/tree?path={UUID}/ - UUID 目录内容
+echo "- 16c. GET /files/tree?path={UUID}/ (UUID dir contents)"
+if [ -n "$UUID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree?path=${UUID}/")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "GET /files/tree?path={UUID}/" "200" "$CODE"
+    if echo "$BODY" | grep -q '"default.md"' && echo "$BODY" | grep -q '"original.pdf"'; then
+        echo -e "  ${GREEN}✅ PASS${NC} default.md and original.pdf found"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}❌ FAIL${NC} Expected default.md and original.pdf: $BODY"
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} No UUID (previous step failed)"
+fi
 
-# 16c. GET /files/preview/html?path=nonexistent.pdf - 应返回 404
-echo "- 16c. GET /files/preview/html?path=nonexistent.pdf (expect 404)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=nonexistent.pdf")
+# 16d. GET /files/preview/html?path={UUID}/original.pdf - Markdown→HTML 渲染
+echo "- 16d. GET /files/preview/html?path={UUID}/original.pdf"
+if [ -n "$UUID" ]; then
+    ORIG_PATH="${UUID}/original.pdf"
+    ORIG_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$ORIG_PATH'))")
+    RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=$ORIG_ENC")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "GET /files/preview/html (rendered)" "200" "$CODE"
+    if echo "$BODY" | grep -q '<h1>'; then
+        echo -e "  ${GREEN}✅ PASS${NC} Markdown→HTML rendered with <h1>"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}❌ FAIL${NC} Expected <h1> in HTML: ${BODY:0:100}"
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC}"
+fi
+
+# 16e. GET /files/raw?path={UUID}/default.md - 原始 Markdown 下载
+echo "- 16e. GET /files/raw?path={UUID}/default.md"
+if [ -n "$UUID" ]; then
+    MD_PATH="${UUID}/default.md"
+    MD_ENC=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$MD_PATH'))")
+    RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=$MD_ENC")
+    CODE=$(echo "$RESP" | tail -1)
+    assert_status "GET /files/raw (markdown)" "200" "$CODE"
+    if echo "$RESP" | grep -q '#'; then
+        echo -e "  ${GREEN}✅ PASS${NC} Raw markdown download (contains #)"
+        PASS=$((PASS + 1))
+    else
+        echo -e "  ${RED}❌ FAIL${NC} Expected markdown content"
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC}"
+fi
+
+# 16f. GET /files/preview/html?path=nonexistent - 不存在的文件应返回 404
+echo "- 16f. GET /files/preview/html?path=nonexistent (expect 404)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=nonexistent-$$-file.pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "GET /files/preview/html (not found)" "404" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} preview/html returns 404 for non-existent file"
 PASS=$((PASS + 1))
 
-# 16d. GET /files/raw?path=nonexistent.pdf - 应返回 404
-echo "- 16d. GET /files/raw?path=nonexistent.pdf (expect 404)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=nonexistent.pdf")
+# 16g. GET /files/raw?path=nonexistent - 不存在的文件应返回 404
+echo "- 16g. GET /files/raw?path=nonexistent (expect 404)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=nonexistent-$$-file.pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "GET /files/raw (not found)" "404" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} files/raw returns 404 for non-existent file"
 PASS=$((PASS + 1))
 
-# 16e. GET /files/preview?path=nonexistent.pdf - 应返回 404（完整 HTML 页面）
-echo "- 16e. GET /files/preview?path=nonexistent.pdf (expect 404)"
-RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview?path=nonexistent.pdf")
-CODE=$(echo "$RESP" | tail -1)
-assert_status "GET /files/preview (not found)" "404" "$CODE"
-echo -e "  ${GREEN}✅ PASS${NC} files/preview returns 404 for non-existent file"
-PASS=$((PASS + 1))
-
-# 16f. POST /files/pdf - 非 PDF 文件应被拒绝
-echo "- 16f. POST /files/pdf (non-PDF file, expect 400)"
-TMPFILE=$(mktemp)
+# 16h. POST /files/pdf - 非 PDF 文件应返回 400
+echo "- 16h. POST /files/pdf (non-PDF file, expect 400)"
+TMPFILE="/tmp/e2e-non-pdf-$$.txt"
 echo "not a pdf" > "$TMPFILE"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
     -F "file=@$TMPFILE")
@@ -412,8 +505,8 @@ assert_status "POST /files/pdf (non-PDF)" "400" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} files/pdf rejects non-PDF files"
 PASS=$((PASS + 1))
 
-# 16g. POST /files/pdf - 无文件应返回 400
-echo "- 16g. POST /files/pdf (no file, expect 400)"
+# 16i. POST /files/pdf - 无文件应返回 400
+echo "- 16i. POST /files/pdf (no file, expect 400)"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf")
 CODE=$(echo "$RESP" | tail -1)
 assert_status "POST /files/pdf (no file)" "400" "$CODE"
