@@ -1220,10 +1220,12 @@ Get the total number of recorded client-side errors.
 
 ```json
 {
-  "type": "about:blank",
-  "title": "Total client errors: 42",
-  "status": 200
+  "count": 42
 }
 ```
 
-**Note:** The response uses RFC 7807 format with the count embedded in the `title` field.
+**Response fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `count` | integer | Total number of recorded client errors |

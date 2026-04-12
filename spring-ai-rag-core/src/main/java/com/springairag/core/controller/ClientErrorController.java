@@ -1,7 +1,7 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ClientErrorCountResponse;
 import com.springairag.api.dto.ClientErrorRequest;
-import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.service.ClientErrorService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
@@ -55,8 +55,8 @@ public class ClientErrorController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Total error count returned")
     })
-    public ResponseEntity<ErrorResponse> getErrorCount() {
+    public ResponseEntity<ClientErrorCountResponse> getErrorCount() {
         long count = clientErrorService.getErrorCount();
-        return ResponseEntity.ok(ErrorResponse.of("Total client errors: " + count));
+        return ResponseEntity.ok(new ClientErrorCountResponse(count));
     }
 }

@@ -121,7 +121,7 @@ class ClientErrorControllerTest {
 
         mockMvc.perform(get("/api/v1/rag/client-errors/count"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.detail").value("Total client errors: 42"));
+                .andExpect(jsonPath("$.count").value(42));
 
         verify(clientErrorService).getErrorCount();
     }
