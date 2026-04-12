@@ -2769,3 +2769,32 @@ E2E 结果（真实数据库 spring_ai_rag_dev，真实 PDF 988KB）：
 - mvn test 1788 ✅
 
 commit 重新推送
+
+## 完整 E2E 验证（2026-04-13 01:10 — 真实数据库 + 真实服务）
+
+后端：`mvn spring-boot:run -pl spring-ai-rag-core` → `http://localhost:8081`
+数据库：`spring_ai_rag_dev`（postgres/123456）
+
+E2E 结果（`bash scripts/e2e-test.sh`）：
+- 66 tests: 51 pass / 2 fail / 13 skip
+- 2 个失败：MiniMax 流式/非流式（历史遗留，与 PDF 功能无关）
+- **9 个 PDF 新测试：全部通过**
+
+PDF 端点测试（Section 16，9 tests）：
+| # | 测试 | 结果 |
+|---|------|------|
+| 16a | POST /files/pdf (UUID 架构) | ✅ uuid=xxx, filesStored=2 |
+| 16b | GET /files/tree (UUID 可见) | ✅ |
+| 16c | GET /files/tree?path={UUID}/ (default.md + original.pdf) | ✅ |
+| 16d | GET /files/preview/html (Markdown→HTML + h1) | ✅ |
+| 16e | GET /files/raw (原始 Markdown，含 #) | ✅ |
+| 16f | GET /files/preview/html (不存在的文件 → 404) | ✅ |
+| 16g | GET /files/raw (不存在的文件 → 404) | ✅ |
+| 16h | POST /files/pdf (非 PDF → 400) | ✅ |
+| 16i | POST /files/pdf (无文件 → 400) | ✅ |
+
+真实 PDF 导入测试（988KB `-all-in-blockchain.pdf`）：
+- UUID=`fbd04f79-eec2-42d7-9aee-03b7e2c8da5f`
+- `default.md`：正确 Markdown（含标题 "All-in Blockchain"）
+- `original.pdf`：原始 PDF 二进制
+- HTML 预览：正确渲染 Markdown → HTML，`<h1>` 标签存在
