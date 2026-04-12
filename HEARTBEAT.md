@@ -2718,3 +2718,22 @@
 
 全量测试通过（mvn test，BUILD SUCCESS）；commit e50dd7d 已推送
 
+
+## 功能改进（2026-04-13 00:25 — commonmark-java + E2E + iframe 移除）
+
+捷锋反馈：
+1. Markdown 渲染用正则"重新发明轮子" → 改用 commonmark-java（符合 CommonMark 标准，线程安全）
+2. WebUI Files 页面用 iframe 渲染 HTML 是反模式 → 改用 fetch + innerHTML
+3. 缺少真实数据库 + shell E2E 验证 → 完成
+
+改动：
+- `MarkdownRendererService`：正则 `markdownToHtml()` → `org.commonmark.*`（标准解析器 + `RewriteImagePathAttributeProvider`）
+- `PdfImportController`：新增 `GET /files/preview/html`（返回纯 HTML 片段，无 `<html>` 包装）
+- `GlobalExceptionHandler`：新增 `HttpMediaTypeNotSupportedException` → 400，`MissingServletRequestPartException` → 400
+- `e2e-test.sh`：新增 Section 16 — PDF 文件导入与预览，7 个 E2E 测试
+- WebUI Files 页面：`iframe` → `fetch + dangerouslySetInnerHTML`
+
+E2E 结果（真实数据库 spring_ai_rag_dev）：
+- GET /files/tree ✅ /files/preview ✅ /files/preview/html ✅ /files/raw ✅
+- POST /files/pdf (非PDF) ✅ /files/pdf (无文件) ✅
+- mvn test 全部通过；commit f79d958 已推送
