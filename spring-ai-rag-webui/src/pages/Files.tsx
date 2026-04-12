@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { filesApi, type TreeEntry } from '../api/files';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { FilePreview } from '../components/FilePreview/FilePreview';
 import styles from './Files.module.css';
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -14,6 +15,7 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+/** Build breadcrumb segments from a path string */
 function pathSegments(virtualPath: string): { label: string; path: string }[] {
   if (!virtualPath) return [];
   return virtualPath.split('/').filter(Boolean).map((segment, idx, arr) => ({
@@ -33,93 +35,23 @@ function FileIcon({ entry }: { entry: TreeEntry }) {
   return <span className={styles.treeIcon}>📎</span>;
 }
 
-// ─── PreviewContent (fetch + innerHTML, no iframe) ─────────────────────────
-
-interface PreviewContentProps {
-  entry: TreeEntry;
-}
-
-function PreviewContent({ entry }: PreviewContentProps) {
-  const [html, setHtml] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
-
-  const fetchPreview = useCallback(async (path: string) => {
-    // Cancel any in-flight request
-    abortRef.current?.abort();
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      // Use the /preview/html endpoint that returns an HTML fragment (no wrapper)
-      const url = `/api/v1/rag/files/preview/html?path=${encodeURIComponent(path)}`;
-      const resp = await fetch(url, { signal: ctrl.signal });
-      if (!resp.ok) {
-        throw new Error(`HTTP ${resp.status}`);
-      }
-      const text = await resp.text();
-      setHtml(text);
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      setError((err as Error).message ?? 'Failed to load preview');
-      setHtml(null);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Fetch when entry changes
-  useState(() => {
-    fetchPreview(entry.path);
-  });
-
-  if (loading) {
-    return (
-      <div className={styles.previewLoading}>
-        <div className={styles.spinner} />
-        <span>Loading preview…</span>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={styles.errorBox}>
-        {error}
-      </div>
-    );
-  }
-
-  if (!html) return null;
-
-  // Render HTML fragment via dangerouslySetInnerHTML (same-origin API, trusted content)
-  return (
-    <div
-      className={styles.previewContent}
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
-
 // ─── Main Component ─────────────────────────────────────────────────────────
 
 export function Files() {
   const { t } = useTranslation();
   const { showToast } = useToast();
 
+  // Current directory path (trailing slash for directories)
   const [currentPath, setCurrentPath] = useState('');
   const [selectedEntry, setSelectedEntry] = useState<TreeEntry | null>(null);
+  const [previewKey, setPreviewKey] = useState(0); // force preview reload
   const [dragOver, setDragOver] = useState(false);
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadError, setUploadError] = useState('');
   const [collectionPrefix, setCollectionPrefix] = useState('');
-  const [previewKey, setPreviewKey] = useState(0); // force re-render on entry change
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Fetch tree for current path
   const { data: treeData, isPending, error, refetch } = useQuery({
     queryKey: ['files-tree', currentPath],
     queryFn: () => filesApi.listTree(currentPath || undefined),
@@ -131,7 +63,6 @@ export function Files() {
   const navigateTo = useCallback((path: string) => {
     setCurrentPath(path);
     setSelectedEntry(null);
-    setPreviewKey(k => k + 1);
   }, []);
 
   const handleEntryClick = useCallback((entry: TreeEntry) => {
@@ -139,7 +70,6 @@ export function Files() {
       navigateTo(entry.path);
     } else {
       setSelectedEntry(entry);
-      setPreviewKey(k => k + 1);
     }
   }, [navigateTo]);
 
@@ -152,6 +82,7 @@ export function Files() {
       const result = await filesApi.importPdf(file, collection);
       setUploadState('done');
       showToast(t('files.importSuccess', { name: file.name, count: result.filesImported }), 'success');
+      // Navigate to the parent directory and refresh
       const parentPath = result.virtualRoot.substring(0, result.virtualRoot.lastIndexOf('/') + 1);
       setCurrentPath(parentPath);
       refetch();
@@ -179,7 +110,19 @@ export function Files() {
     handleFilesSelected(e.dataTransfer.files);
   }, [handleFilesSelected]);
 
-  // ── Breadcrumb ───────────────────────────────────────────────────────────
+  // ── Preview ──────────────────────────────────────────────────────────────
+
+  const handleRefresh = useCallback(() => {
+    setPreviewKey(k => k + 1);
+  }, []);
+
+  const handleOpenRaw = useCallback(() => {
+    if (selectedEntry) {
+      window.open(filesApi.rawFileUrl(selectedEntry.path), '_blank');
+    }
+  }, [selectedEntry]);
+
+  // ── Breadcrumb ────────────────────────────────────────────────────────────
 
   const breadcrumbs = pathSegments(currentPath);
 
@@ -191,6 +134,7 @@ export function Files() {
         <h1 className="page-title">{t('files.title')}</h1>
 
         <div className={styles.actions}>
+          {/* Collection prefix input */}
           <div className={styles.collectionInput}>
             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #6b7280)' }}>
               {t('files.collectionPrefix')}:
@@ -203,6 +147,7 @@ export function Files() {
             />
           </div>
 
+          {/* Upload button / area */}
           <div
             className={`${styles.uploadArea} ${dragOver ? styles.dragOver : ''}`}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
@@ -220,7 +165,7 @@ export function Files() {
             />
             {uploadState === 'uploading' ? (
               <div className={styles.uploadProgress}>
-                <div className={styles.spinner} />
+                <div className={styles.uploadSpinner} />
                 <span>{t('files.importing')}</span>
               </div>
             ) : uploadState === 'done' ? (
@@ -235,6 +180,7 @@ export function Files() {
         </div>
       </div>
 
+      {/* Upload error */}
       {uploadState === 'error' && (
         <div className={styles.errorBox}>
           {t('files.importError', { error: uploadError })}
@@ -286,11 +232,12 @@ export function Files() {
                 {String(error)}
               </div>
             ) : treeData?.data?.entries?.length === 0 ? (
-              <div className={styles.emptyTree}>
+              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
                 {t('files.empty')}
               </div>
             ) : (
               <>
+                {/* Up one level */}
                 {currentPath && (
                   <div
                     className={styles.treeItem}
@@ -334,24 +281,10 @@ export function Files() {
             </span>
             {selectedEntry && (
               <div className={styles.previewActions}>
-                <button
-                  className={styles.previewBtn}
-                  onClick={() => {
-                    setPreviewKey(k => k + 1);
-                    // Re-trigger fetch by toggling selectedEntry
-                    const entry = selectedEntry;
-                    setSelectedEntry(null);
-                    setTimeout(() => setSelectedEntry(entry), 0);
-                  }}
-                  title={t('files.refresh')}
-                >
+                <button className={styles.previewBtn} onClick={handleRefresh} title={t('files.refresh')}>
                   🔄
                 </button>
-                <button
-                  className={styles.previewBtn}
-                  onClick={() => window.open(filesApi.rawFileUrl(selectedEntry.path), '_blank')}
-                  title={t('files.openRaw')}
-                >
+                <button className={styles.previewBtn} onClick={handleOpenRaw} title={t('files.openRaw')}>
                   {t('files.openRaw')}
                 </button>
               </div>
@@ -369,9 +302,11 @@ export function Files() {
               <span>{t('files.openDirectory', { name: selectedEntry.name })}</span>
             </div>
           ) : (
-            <div key={previewKey} className={styles.previewBody}>
-              <PreviewContent entry={selectedEntry} />
-            </div>
+            <FilePreview
+              key={previewKey}
+              entry={selectedEntry}
+              reloadKey={previewKey}
+            />
           )}
         </div>
       </div>
