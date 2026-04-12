@@ -2739,3 +2739,11 @@ E2E 结果（真实数据库 spring_ai_rag_dev）：
 - GET /files/tree ✅ /files/preview ✅ /files/preview/html ✅ /files/raw ✅
 - POST /files/pdf (非PDF) ✅ /files/pdf (无文件) ✅
 - mvn test 全部通过；commit f79d958 已推送
+
+## Cron 进度（2026-04-13 00:50 — OpenApiContractTest FsFileRepository MockBean 修复）
+
+`OpenApiContractTest` 加载失败（22 errors）：`PdfImportController` → `PdfImportService` → `FsFileRepository` 无 mock bean，导致 ApplicationContext 初始化失败。
+
+修复：`OpenApiContractTest` 新增 `@MockBean FsFileRepository fsFileRepository`。
+
+1833 tests（1786 core + 47 starter），0 failures，0 errors，BUILD SUCCESS；commit 984c888 已推送
