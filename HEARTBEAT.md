@@ -2840,7 +2840,7 @@ PDF 端点测试（Section 16，9 tests）：
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | T6 | NoOpFulltextSearchProvider 单元测试 | 测试覆盖 | ⏳ |
-| T7 | PdfImportService 单元测试 | 测试覆盖 | ⏳ |
+| T7 | PdfImportService 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
 | T8 | FsFileRepository 集成测试 | 测试覆盖 | ⏳ |
 | T9 | QueryLang enum 单元测试（fulltext 模块） | 测试覆盖 | ⏳ |
 | T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ⏳ |
@@ -2848,3 +2848,14 @@ PDF 端点测试（Section 16，9 tests）：
 | T12 | RetrievalEvaluationService 覆盖率提升（评测阈值边界） | 测试覆盖 | ⏳ |
 | T13 | ApiKeyManagementService 加密相关测试 | 安全 | ⏳ |
 | T14 | SseEmitters 单元测试（Error/Heartbeat 路径） | 测试覆盖 | ⏳ |
+
+## Cron 进度（2026-04-13 03:47 — PdfImportService 单元测试）
+
+- 2026-04-13 03:47 — ✅ PdfImportService 单元测试补全：
+  - `PdfImportServiceTest.java`：27 个测试覆盖 `importPdf`/`extractTextFromPdf`/`buildMarkdown`/`getFile`/`listChildren`/`loadFileAsResource` 全部路径
+  - `importPdf`：disabled flag、blank/non-PDF filename 校验；成功场景（PDF+Markdown 双 FsFile）；中文文件名；下划线/连字符归一化
+  - `extractTextFromPdf`：真实 PDFBox 文档（多行文本）；空 PDF；无效 bytes → RuntimeException
+  - `buildMarkdown`：真实内容、空内容、null 内容；`.pdf` 后缀移除；下划线/连字符/方括号归一化；双换行分段
+  - `getFile`/`listChildren`/`loadFileAsResource`：found+notFound；反斜杠路径归一化；空目录
+  - 全量测试通过（+27 tests）；commit 98bfd00 已推送
+  - 总测试量：1831 (core) + 47 (starter) = 1878 tests，0 failures
