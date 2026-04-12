@@ -1,5 +1,7 @@
 package com.springairag.core.controller;
 
+import java.util.HashMap;
+
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.PdfImportResponse;
 import com.springairag.core.entity.FsFile;
@@ -121,7 +123,48 @@ public class PdfImportController {
 
     // ==================== Preview (Markdown → HTML) ====================
 
-    @Operation(summary = "Preview entry Markdown as HTML",
+    /**
+     * Return only the rendered HTML fragment (no wrapper page).
+     * Used by the WebUI Files page for direct innerHTML rendering (no iframe).
+     */
+    @Operation(summary = "Render Markdown to HTML fragment (no wrapper page)",
+               description = "Renders the Markdown entry file to HTML and returns only the HTML fragment "
+                           + "(no &lt;html&gt;, &lt;head&gt;, or &lt;body&gt; tags). "
+                           + "Image links are rewritten to /files/raw. "
+                           + "Designed for WebUI fetch + innerHTML rendering.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "HTML fragment"),
+            @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
+    })
+    @GetMapping(value = "/preview/html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> previewHtmlFragment(
+            @Parameter(description = "Virtual path of the imported PDF (URL-encoded)")
+            @RequestParam("path") String path) {
+
+        String decodedPath = urlDecode(path);
+        String markdownPath = deriveMarkdownPath(decodedPath);
+        log.debug("Preview HTML fragment requested: pdfPath={}, markdownPath={}", decodedPath, markdownPath);
+
+        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        if (markdownFile.isEmpty()) {
+            markdownFile = pdfImportService.getFile(replaceLast(decodedPath, ".pdf", ".md", 1));
+        }
+        if (markdownFile.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String html = markdownRendererService.renderToHtml(markdownFile.get());
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(html);
+    }
+
+    /**
+     * Preview entry Markdown as a standalone HTML page (full page with CSS styling).
+     * Intended for direct browser navigation or embedding in an iframe.
+     */
+    @Operation(summary = "Preview entry Markdown as a standalone HTML page",
                description = "Locates the entry Markdown file for the given virtual PDF path, "
                            + "renders it as HTML, and rewrites image links to point to /files/raw. "
                            + "The Markdown entry path is derived by replacing the .pdf extension with .md.")
@@ -130,7 +173,7 @@ public class PdfImportController {
             @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
     })
     @GetMapping(value = "/preview", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> previewHtml(
+    public ResponseEntity<String> previewHtmlPage(
             @Parameter(description = "Virtual path of the imported PDF (URL-encoded)", example = "papers%2F%E8%AE%BA%E6%96%87.pdf")
             @RequestParam("path") String path) {
 
@@ -353,13 +396,13 @@ public class PdfImportController {
 
         // Add synthetic directory entries
         for (String dir : dirs) {
-            entries.add(Map.of(
-                    "name", dir,
-                    "path", parentPath + dir + "/",
-                    "type", "directory",
-                    "mimeType", null,
-                    "size", 0
-            ));
+            Map<String, Object> dirEntry = new HashMap<>();
+            dirEntry.put("name", dir);
+            dirEntry.put("path", parentPath + dir + "/");
+            dirEntry.put("type", "directory");
+            dirEntry.put("mimeType", null); // directories have no MIME type
+            dirEntry.put("size", 0);
+            entries.add(dirEntry);
         }
 
         // Sort: directories first, then files

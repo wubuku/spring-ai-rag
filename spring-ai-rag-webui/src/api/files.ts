@@ -20,6 +20,8 @@ export interface PdfImportResponse {
   filesImported: number;
 }
 
+const BASE_URL = '/api/v1/rag/files';
+
 export const filesApi = {
   /**
    * List direct children under a virtual path prefix.
@@ -47,12 +49,12 @@ export const filesApi = {
   },
 
   /**
-   * Get the raw file content for embedding/preview.
+   * Get the raw file content URL for embedding/preview.
    * @param path URL-encoded virtual file path
    */
   rawFileUrl: (path: string): string => {
     const encoded = encodeURIComponent(path);
-    return `/api/v1/rag/files/raw?path=${encoded}`;
+    return `${BASE_URL}/raw?path=${encoded}`;
   },
 
   /**
@@ -61,6 +63,6 @@ export const filesApi = {
    */
   previewUrl: (path: string): string => {
     const encoded = encodeURIComponent(path);
-    return `/api/v1/rag/files/preview?path=${encoded}`;
+    return `${BASE_URL}/preview?path=${encoded}`;
   },
 };
