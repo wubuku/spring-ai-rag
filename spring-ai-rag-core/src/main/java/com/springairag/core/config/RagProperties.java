@@ -55,6 +55,7 @@ public class RagProperties {
     private final RagProxyProperties proxy = new RagProxyProperties();
     private final RagSlowQueryProperties slowQuery = new RagSlowQueryProperties();
     private final RagSseProperties sse = new RagSseProperties();
+    private final RagPdfProperties pdf = new RagPdfProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;

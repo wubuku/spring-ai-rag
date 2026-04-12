@@ -294,6 +294,16 @@ rag:
                                     # Proxies may close idle connections after ~60s, so 30s recommended.
                                     # Set to 0 to disable heartbeat.
 
+  # PDF import configuration
+  # Requires marker-pdf (marker_single CLI) to be installed on the host.
+  # Installation: pip install marker-pdf  (or: brew install marker-pdf on macOS)
+  pdf:
+    enabled: true
+    marker-cli: ${RAG_PDF_MARKER_CLI:marker_single}  # Path to marker_single executable
+    langs: ${RAG_PDF_LANGS:zh}                       # Language hint for PDF OCR (comma-separated, e.g., "zh,en")
+    output-base-dir: ${RAG_PDF_OUTPUT_DIR:/tmp/spring-ai-rag/pdf-imports}  # Temp working directory
+    extra-args: ${RAG_PDF_EXTRA_ARGS:}               # Additional CLI args (e.g., "--no-markdown-template")
+
   # HTTP proxy configuration for LLM API calls
   # By default, proxy is disabled (enabled: false) to avoid dev environment interference
   # Set enabled: true and configure host/port when running behind a corporate proxy
