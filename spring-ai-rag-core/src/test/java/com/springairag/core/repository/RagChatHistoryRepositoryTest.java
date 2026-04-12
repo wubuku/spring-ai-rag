@@ -151,4 +151,50 @@ class RagChatHistoryRepositoryTest {
         // Resilience: 即使 ChatMemory 清理失败，仍返回 JPA 删除数量
         assertEquals(5, deleted);
     }
+
+    // ─── deleteOlderThan ───────────────────────────────────────────────
+
+    @Test
+    void deleteOlderThan_nullCutoff_returnsZero() {
+        int deleted = repository.deleteOlderThan(null);
+        assertEquals(0, deleted);
+        verify(jpaRepository, never()).deleteOlderThan(any());
+    }
+
+    @Test
+    void deleteOlderThan_validCutoff_delegatesToJpaRepository() {
+        LocalDateTime cutoff = LocalDateTime.of(2024, 1, 1, 0, 0);
+        when(jpaRepository.deleteOlderThan(cutoff)).thenReturn(7);
+
+        int deleted = repository.deleteOlderThan(cutoff);
+
+        assertEquals(7, deleted);
+        verify(jpaRepository).deleteOlderThan(cutoff);
+    }
+
+    // ─── toDto exception path ─────────────────────────────────────────
+
+    @Test
+    void findBySessionId_withMalformedRelatedDocumentIds_stillReturnsDto() {
+        // relatedDocumentIds 包含非法 JSON → toDto 应捕获异常，docIds = null
+        RagChatHistory entity = new RagChatHistory();
+        entity.setId(2L);
+        entity.setSessionId("session-bad");
+        entity.setUserMessage("q");
+        entity.setAiResponse("a");
+        entity.setRelatedDocumentIds("{not-valid-json}");
+        entity.setMetadata(Map.of("key", "value"));
+        entity.setCreatedAt(LocalDateTime.now());
+
+        when(jpaRepository.findBySessionIdOrderByCreatedAtDesc(eq("session-bad"), any(PageRequest.class)))
+                .thenReturn(List.of(entity));
+
+        List<ChatHistoryResponse> results = repository.findBySessionId("session-bad", 20);
+
+        assertEquals(1, results.size());
+        // docIds should be null because JSON parsing failed
+        assertNull(results.get(0).relatedDocumentIds());
+        assertEquals("q", results.get(0).userMessage());
+        assertEquals("a", results.get(0).aiResponse());
+    }
 }
