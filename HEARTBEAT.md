@@ -2703,3 +2703,18 @@
 新增文件：`src/api/files.ts`、`src/pages/Files.tsx`、`Files.module.css`；更新 App.tsx（路由）、Layout.tsx（侧边栏）、i18n（中英双语）。
 
 148 vitest tests ✅；commit a8573f0 已推送
+
+## Cron 进度（WebUI — 2026-04-12 23:50 — 常规发布）
+
+- 2026-04-12 23:50 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，16 chunks）/ E2E 11/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；Search 失败：数据库为空（环境问题，非代码 bug）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP/pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-13 00:10 — PdfImportController 完整测试覆盖 + NPE 修复）
+
+**问题发现**：HEARTBEAT 扫代码发现 `PdfImportController.buildTreeEntries()` 对目录 entry 使用 `Map.of(mimeType, null)` —— Java `Map.of()` 不接受 null value，导致 NPE。
+
+**修复**：
+- `PdfImportController.java`：目录 entry 改用 `HashMap` 构建，保留 `mimeType=null`（目录无 MIME type）
+- `PdfImportControllerTest.java`：新增纯单元测试，13 个 case 覆盖全部 4 个端点（`importPdf`、`previewHtmlPage`、`getRawFile`、`listTree`）
+
+全量测试通过（mvn test，BUILD SUCCESS）；commit e50dd7d 已推送
+
