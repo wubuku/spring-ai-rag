@@ -2575,3 +2575,17 @@
   - `ChatMemoryMultiTurnTest`/`RagChatControllerTest`/`RagChatHistoryRepositoryTest`/`RagControllerIntegrationTest` 同步更新
   - 全量测试通过（exit 0）；commit 448bf7d 已推送
 
+
+## Cron 进度（2026-04-12 13:30 — 后端：POST /documents 强类型 DTO 重构）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 97 | DocumentCreateResponse DTO 替换 Map<String,Object> | API 质量 | ✅ 2026-04-12 |
+
+- 2026-04-12 13:30 — ✅ #97 POST /documents 强类型 DTO 重构：
+  - 新增 `DocumentCreateResponse` record（spring-ai-rag-api）：id/title/status/message/contentHash/existingDocumentId
+  - 覆盖 CREATED 和 DUPLICATE 两种情况，静态工厂方法 `created()` 和 `duplicate()`
+  - Swagger @Schema 注解支持 OpenAPI 文档生成
+  - `RagDocumentController.createDocument()` 返回类型从 `ResponseEntity<Map<String, Object>>` 改为 `ResponseEntity<DocumentCreateResponse>`
+  - `RagDocumentControllerTest` 更新为使用 DTO accessor 方法（.id()/.title() 等）
+  - 全量测试通过（BUILD SUCCESS）；commit 30385fd 已推送
