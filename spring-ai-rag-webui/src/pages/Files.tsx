@@ -81,10 +81,9 @@ export function Files() {
     try {
       const result = await filesApi.importPdf(file, collection);
       setUploadState('done');
-      showToast(t('files.importSuccess', { name: file.name, count: result.filesImported }), 'success');
+      showToast(t('files.importSuccess', { name: file.name, count: result.filesStored }), 'success');
       // Navigate to the parent directory and refresh
-      const parentPath = result.virtualRoot.substring(0, result.virtualRoot.lastIndexOf('/') + 1);
-      setCurrentPath(parentPath);
+      setCurrentPath(result.uuid + '/');
       refetch();
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
@@ -303,7 +302,6 @@ export function Files() {
             </div>
           ) : (
             <FilePreview
-              key={previewKey}
               entry={selectedEntry}
               reloadKey={previewKey}
             />

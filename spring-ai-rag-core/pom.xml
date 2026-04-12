@@ -210,6 +210,13 @@
             <artifactId>commonmark</artifactId>
             <version>0.22.0</version>
         </dependency>
+
+        <!-- PDF text extraction (pure Java, replaces external marker CLI) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.3</version>
+        </dependency>
     </dependencies>
 
     <build>

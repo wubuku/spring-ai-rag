@@ -15,9 +15,9 @@ export interface TreeResponse {
 }
 
 export interface PdfImportResponse {
-  virtualRoot: string;
+  uuid: string;
   entryMarkdown: string;
-  filesImported: number;
+  filesStored: number;
 }
 
 const BASE_URL = '/api/v1/rag/files';

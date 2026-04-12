@@ -42,14 +42,14 @@ class PdfImportControllerTest {
                 "file", "test.pdf", "application/pdf", "PDF content".getBytes());
 
         PdfImportService.PdfImportResult result =
-                new PdfImportService.PdfImportResult("test.pdf", "test.md", 5, 5);
+                new PdfImportService.PdfImportResult("test-uuid", "test-uuid/default.md", 2);
         when(pdfImportService.importPdf(any(), eq("papers"))).thenReturn(result);
 
         ResponseEntity<Object> response = controller.importPdf(pdfFile, "papers");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertTrue(response.getBody().toString().contains("virtualRoot=test.pdf"));
+        assertTrue(response.getBody().toString().contains("uuid=test-uuid"));
     }
 
     @Test

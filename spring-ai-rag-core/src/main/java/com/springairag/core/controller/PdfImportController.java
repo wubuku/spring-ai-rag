@@ -101,13 +101,13 @@ public class PdfImportController {
         try {
             PdfImportService.PdfImportResult result = pdfImportService.importPdf(file, collection);
 
-            log.info("PDF imported: virtualRoot={}, entryMarkdown={}, files={}",
-                    result.virtualRoot(), result.entryMarkdown(), result.filesImported());
+            log.info("PDF imported: uuid={}, entryMarkdown={}, files={}",
+                    result.uuid(), result.entryMarkdown(), result.filesStored());
 
             return ResponseEntity.ok(new PdfImportResponse(
-                    result.virtualRoot(),
+                    result.uuid(),
                     result.entryMarkdown(),
-                    result.filesImported()
+                    result.filesStored()
             ));
 
         } catch (IllegalArgumentException e) {
