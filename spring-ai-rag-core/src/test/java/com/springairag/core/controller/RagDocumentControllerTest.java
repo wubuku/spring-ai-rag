@@ -4,6 +4,7 @@ import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDeleteItem;
 import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDeleteSummary;
+import com.springairag.api.dto.DocumentCreateResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.ErrorResponse;
@@ -97,13 +98,13 @@ class RagDocumentControllerTest {
         req.setContent("这是测试内容");
         req.setSource("unit-test");
 
-        ResponseEntity<Map<String, Object>> response = controller.createDocument(req);
+        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(42L, response.getBody().get("id"));
-        assertEquals("测试文档", response.getBody().get("title"));
-        assertEquals("CREATED", response.getBody().get("status"));
-        assertNotNull(response.getBody().get("contentHash"));
+        assertEquals(42L, response.getBody().id());
+        assertEquals("测试文档", response.getBody().title());
+        assertEquals("CREATED", response.getBody().status());
+        assertNotNull(response.getBody().contentHash());
     }
 
     @Test
@@ -117,12 +118,12 @@ class RagDocumentControllerTest {
         req.setTitle("新标题");
         req.setContent("重复内容");
 
-        ResponseEntity<Map<String, Object>> response = controller.createDocument(req);
+        ResponseEntity<DocumentCreateResponse> response = controller.createDocument(req);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(10L, response.getBody().get("id"));
-        assertEquals("DUPLICATE", response.getBody().get("status"));
-        assertEquals(10L, response.getBody().get("existingDocumentId"));
+        assertEquals(10L, response.getBody().id());
+        assertEquals("DUPLICATE", response.getBody().status());
+        assertEquals(10L, response.getBody().existingDocumentId());
         verify(documentRepository, never()).save(any());
     }
 

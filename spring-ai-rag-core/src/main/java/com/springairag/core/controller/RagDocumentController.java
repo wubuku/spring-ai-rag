@@ -5,6 +5,7 @@ import com.springairag.api.dto.BatchCreateAndEmbedResponse;
 import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
+import com.springairag.api.dto.DocumentCreateResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.ErrorResponse;
@@ -102,7 +103,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
-    public ResponseEntity<Map<String, Object>> createDocument(@Valid @RequestBody DocumentRequest request) {
+    public ResponseEntity<DocumentCreateResponse> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
 
         String content = request.getContent();
@@ -113,14 +114,7 @@ public class RagDocumentController {
         if (!existing.isEmpty()) {
             RagDocument dup = existing.get(0);
             log.info("Duplicate content detected: existing doc id={}, hash={}", dup.getId(), contentHash);
-            return ResponseEntity.ok(Map.of(
-                    "id", dup.getId(),
-                    "title", dup.getTitle(),
-                    "status", "DUPLICATE",
-                    "message", "Content already exists, documentId: " + dup.getId(),
-                    "existingDocumentId", dup.getId(),
-                    "contentHash", contentHash
-            ));
+            return ResponseEntity.ok(DocumentCreateResponse.duplicate(dup.getId(), dup.getTitle(), dup.getContentHash()));
         }
 
         RagDocument doc = new RagDocument();
@@ -137,13 +131,7 @@ public class RagDocumentController {
                 String.valueOf(doc.getId()),
                 "Document created: " + doc.getTitle());
 
-        return ResponseEntity.ok(Map.of(
-                "id", doc.getId(),
-                "title", doc.getTitle(),
-                "status", "CREATED",
-                "message", "Document created, to generate embedding call POST /api/v1/rag/documents/{id}/embed",
-                "contentHash", contentHash
-        ));
+        return ResponseEntity.ok(DocumentCreateResponse.created(doc.getId(), doc.getTitle(), contentHash));
     }
 
     @Operation(summary = "Get document details", description = "Query document content, metadata, and embedding vector count.")
