@@ -2544,3 +2544,18 @@
 
 ## Cron 进度（2026-04-12 07:57 — 后端：死代码清理 + 零TODO/FIXME 确认）
 - 2026-04-12 07:57 — ✅ ApiKeyManagementService 死代码清理：`isEnabled(RagApiKey)` 私有方法定义但从未被调用（过滤逻辑直接使用 `k.getEnabled()` 内联判断），移除该死方法；全量测试通过；commit dbb9184 已推送；项目零 TODO/FIXME，1754+ tests 全通过
+
+## Cron 进度（2026-04-12 10:34 — 后端：GET /chat/history 强类型 DTO 重构）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| 96 | ChatHistoryResponse DTO 替换 Map&lt;String,Object&gt; | API 质量 | ✅ 2026-04-12 |
+
+- 2026-04-12 10:34 — ✅ #96 GET /chat/history 强类型 DTO 重构：
+  - 新增 `ChatHistoryResponse` record（spring-ai-rag-api）：id/sessionId/userMessage/aiResponse/relatedDocumentIds(List&lt;Long&gt;)/metadata/createdAt，带 Swagger 注释
+  - `RagChatHistoryRepository.findBySessionId()` 返回 `List&lt;ChatHistoryResponse&gt;`（toDto 替换 toMap）
+  - `RagChatController.getHistory()` 返回 `List&lt;ChatHistoryResponse&gt;`（API 响应强类型化）
+  - `toDto()` 中使用 `ObjectMapper` 解析 JSON String → `List&lt;Long&gt;`（relatedDocumentIds 存储为 TEXT/JSON）
+  - `ChatMemoryMultiTurnTest`/`RagChatControllerTest`/`RagChatHistoryRepositoryTest`/`RagControllerIntegrationTest` 同步更新
+  - 全量测试通过（exit 0）；commit 448bf7d 已推送
+
