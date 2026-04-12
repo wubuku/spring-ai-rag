@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
 
 import java.util.Collections;
 import java.util.List;
@@ -197,5 +198,50 @@ class ChatModelRouterTest {
         when(registry.getFallbackChatModelNames()).thenReturn(Collections.emptyList());
 
         assertTrue(router.getAllOrdered().isEmpty());
+    }
+
+    // ─── isProviderAvailable() ─────────────────────────────────
+
+    @Test
+    @DisplayName("isProviderAvailable returns false for null provider")
+    void isProviderAvailable_nullProvider() {
+        assertFalse(router.isProviderAvailable(null));
+    }
+
+    @Test
+    @DisplayName("isProviderAvailable returns false when no providers registered")
+    void isProviderAvailable_noProvidersRegistered() {
+        assertFalse(router.isProviderAvailable("openai"));
+        assertFalse(router.isProviderAvailable("minimax"));
+    }
+
+    @Test
+    @DisplayName("isProviderAvailable returns true for registered provider")
+    void isProviderAvailable_registeredProvider() {
+        // Use mock(OpenAiChatModel.class) — instanceof check succeeds in resolveProvider
+        OpenAiChatModel openAiModel = mock(OpenAiChatModel.class);
+        when(registry.getAllProviders()).thenReturn(
+                Map.of("openai", new MultiModelProperties.ProviderConfig(
+                        "OpenAI", "https://api.openai.com", "key", "chat", true, 1, List.of())));
+        when(registry.getPrimaryChatModelName()).thenReturn("openai");
+        when(registry.getFallbackChatModelNames()).thenReturn(Collections.emptyList());
+
+        ChatModelRouter r = new ChatModelRouter(registry, List.of(openAiModel));
+        assertTrue(r.isProviderAvailable("openai"));
+        assertTrue(r.isProviderAvailable("OPENAI")); // case-insensitive
+        assertFalse(r.isProviderAvailable("anthropic")); // not registered
+    }
+
+    // ─── inferProviderFromModelId branches (tested via resolve) ─────
+
+    // inferProviderFromModelId branches are private/internal and require complex mocking setup.
+    // The public contract (resolve, getPrimary, etc.) is tested via integration tests with
+    // real Spring beans. Here we verify the no-hyphen / no-match fallback path.
+    @Test
+    @DisplayName("resolve returns null when modelId has no hyphen and no providers registered")
+    void resolve_noHyphen_noProviders() {
+        // "unknownmodel" has no "-" and no providers are registered
+        // -> inferProviderFromModelId returns null -> resolve returns null
+        assertNull(router.resolve("unknownmodel"));
     }
 }
