@@ -2376,6 +2376,7 @@
 | W1 | WebUI E2E Playwright 测试（Dashboard/Search/Collections 深度交互） | 测试覆盖 | ⏳ |
 | W2 | spring-ai-rag-starter 模块 JaCoCo 覆盖率提升（当前 0%） | 测试覆盖 | ⏳ |
 | S4 | ApiKeyManagementService 验证缓存（Caffeine 30s TTL，避免每次认证都查 DB） | 性能 | ✅ 2026-04-12 |
+| S5 | GET /client-errors/count 返回 ErrorResponse 语义修复（→ ClientErrorCountResponse DTO） | API 质量 | ✅ 2026-04-12（commit 82256c2） |
 | T1 | ModelRegistry 多模型路由方法测试（10→37 tests） | 测试覆盖 | ✅ 2026-04-11（T5 完成，+27 tests，1718 total） |
 | T2 | Integration test base classes i18n: 4 files Chinese→English | 测试覆盖 | ✅ 2026-04-11（4 files, 148 lines changed, 1621 tests pass） |
 | T3 | AlertController SSE 端点（AlertController 无 SSE；RagDocumentController.batchEmbedDocumentsStream 已实现） | 测试覆盖 | ✅ 2026-04-11 |
@@ -2609,6 +2610,10 @@
 ## Cron 进度（2026-04-12 15:25 — OpenAPI DTO Schema 注解补全）
 
 - 2026-04-12 15:25 — ✅ OpenAPI DTO Schema 注解补全（后端）：扫描发现 12 个 API DTO 缺少 @Schema 注解，影响 SpringDoc OpenAPI 文档质量。为全部 12 个 DTO 补充 @Schema(description=...) 和 @Schema(example=...) 注解：ErrorResponse（类级 + 9 字段）、AlertActionResponse（record + 2 字段）、CacheInvalidateResponse（record + 2 字段）、CacheStatsResponse（record + 5 字段）、ComponentHealthResponse（record + 3 字段）、HealthResponse（record + 3 字段）、ModelCompareResponse（record + 内部 ModelCompareResult）、ModelDetailResponse（record + 2 字段）、ModelListResponse（record + 5 字段）、ModelMetricsResponse（record + 内部 ModelMetric）、SlowQueryStatsResponse（record + 内部 SlowQueryRecordDto）、VariantResponse（record + 字段）。1761 后端测试全通过；commit db8c171 已推送
+
+## Cron 进度（2026-04-12 17:17 — 后端 API 修复：ClientErrorCountResponse DTO）
+
+- 2026-04-12 17:17 — ✅ GET /client-errors/count API 语义修复：修复 `GET /client-errors/count` 返回 RFC 7807 ErrorResponse（count 嵌入 title=Bad Request）的语义错误。新增 `ClientErrorCountResponse` record（count 字段），更新 `ClientErrorController.getErrorCount()` 返回正确 200 OK + `{count: N}` 格式；更新 `rest-api.md` 文档；`ClientErrorControllerTest` 断言改为 `$.count`；全量测试通过；commit 82256c2 已推送
 
 ## WebUI 常规巡检（2026-04-12 14:59 — cron）
 
