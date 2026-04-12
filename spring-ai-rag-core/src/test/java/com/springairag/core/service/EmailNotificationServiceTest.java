@@ -9,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mail.javamail.JavaMailSender;
 
-import jakarta.mail.Session;
 import jakarta.mail.internet.MimeMessage;
 import jakarta.mail.MessagingException;
 import java.util.Map;
@@ -67,7 +66,9 @@ class EmailNotificationServiceTest {
         notificationConfig.getEmail().setFrom("noreply@example.com");
         notificationConfig.getEmail().setTo(java.util.List.of("admin@example.com"));
 
-        when(mailSender.createMimeMessage()).thenReturn(new MimeMessage((Session) null));
+        // Use mock MimeMessage to avoid NPE from null Session in real MimeMessage
+        MimeMessage mockMimeMessage = mock(MimeMessage.class);
+        when(mailSender.createMimeMessage()).thenReturn(mockMimeMessage);
 
         boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
                 "P99 exceeds threshold", Map.of("p99_ms", 2500, "slo_threshold_ms", 1000));
@@ -102,10 +103,12 @@ class EmailNotificationServiceTest {
         notificationConfig.getEmail().setFrom("noreply@example.com");
         notificationConfig.getEmail().setTo(java.util.List.of("admin@example.com"));
 
+        // Use mock MimeMessage to avoid NPE from null Session in real MimeMessage
+        MimeMessage mockMimeMessage = mock(MimeMessage.class);
         // First attempt fails, second succeeds
         when(mailSender.createMimeMessage())
                 .thenThrow(new RuntimeException("SMTP error"))
-                .thenReturn(new MimeMessage((Session) null));
+                .thenReturn(mockMimeMessage);
 
         boolean result = emailService.sendAlert("CRITICAL", "P99 Latency", "CRITICAL",
                 "P99 exceeds threshold", Map.of());

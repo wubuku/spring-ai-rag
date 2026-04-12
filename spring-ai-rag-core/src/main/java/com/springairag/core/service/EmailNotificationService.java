@@ -69,8 +69,27 @@ public class EmailNotificationService implements NotificationService {
             }
         }
         log.warn("Failed to send email notification after {} attempts: alertType={} error={}",
-                MAX_RETRIES, alertType, lastException != null ? lastException.getMessage() : "unknown");
+                MAX_RETRIES, alertType, lastException != null ? unwrapMailException(lastException) : "unknown");
         return false;
+    }
+
+    /**
+     * Unwraps nested mail exceptions to provide a meaningful error message.
+     * RuntimeException from mock JavaMailSender often wraps MessagingException with NPE details.
+     */
+    private String unwrapMailException(Exception e) {
+        Throwable t = e;
+        while (t != null) {
+            if (t instanceof MessagingException me) {
+                String msg = me.getMessage();
+                if (msg != null && msg.contains("mimeMessage")) {
+                    return "JavaMail configuration error (MimeMessage not properly initialized)";
+                }
+                return msg != null ? msg : "MessagingException";
+            }
+            t = t.getCause();
+        }
+        return e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
     }
 
     private void sendEmail(NotificationConfig.EmailConfig config,
