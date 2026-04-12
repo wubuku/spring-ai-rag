@@ -2594,6 +2594,14 @@
   - `RagDocumentControllerTest` 更新为使用 DTO accessor 方法（.id()/.title() 等）
   - 全量测试通过（BUILD SUCCESS）；commit 30385fd 已推送
 
+## 后端 JaCoCo 覆盖率提升（2026-04-12 19:48 — cron）
+
+- 2026-04-12 19:48 — ✅ JaCoCo 覆盖率提升：RagChatHistoryRepository 新增 3 个测试用例：
+  - `deleteOlderThan(null)` 返回 0，不调用 JPA
+  - `deleteOlderThan(cutoff)` 委托 JPA 并返回删除数量
+  - `findBySessionId_withMalformedRelatedDocumentIds_stillReturnsDto`：toDto() 异常路径（JSON 解析失败时 docIds=null，仍返回 DTO）
+  - 全量测试通过（exit 0）；commit d8c5176 已推送
+
 ## WebUI 常规巡检（2026-04-12 13:33 — cron）
 
 - 2026-04-12 13:33 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（309KB index gzipped 99KB，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP/pgvector=UP）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
