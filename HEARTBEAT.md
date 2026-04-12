@@ -2647,3 +2647,10 @@
 ## Cron 进度（WebUI — 2026-04-12 19:51）
 
 - 2026-04-12 19:51 — ✅ WebUI 常规巡检：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（98KB index gzipped，16 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（Spring Boot 3.5.3 / Java 25）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-12 21:06 — EmailNotificationService 错误消息改进）
+
+- 2026-04-12 21:06 — ✅ EmailNotificationService 错误消息改进：
+  - `EmailNotificationService.sendAlert()` 新增 `unwrapMailException()` 方法，从嵌套 MessagingException 中提取有意义的错误消息（如 "JavaMail configuration error (MimeMessage not properly initialized)"），避免暴露低级别 NPE 细节
+  - `EmailNotificationServiceTest`：`new MimeMessage((Session) null)` 替换为 `mock(MimeMessage.class)` 避免测试设置时 NPE；移除未使用的 `jakarta.mail.Session` import
+  - 全量测试通过（1754 tests，0 failures，0 errors）；commit bbe0e68 已推送
