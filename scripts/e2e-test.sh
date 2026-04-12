@@ -298,6 +298,58 @@ fi
 echo ""
 
 # ────────────────────────────────────────
+# 1️⃣5️⃣ API Key 管理
+# ────────────────────────────────────────
+echo "1️⃣5️⃣  API Key 管理"
+# 1. List API Keys (should have at least the static key or generated keys)
+RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "GET /api-keys (list)" "200" "$CODE"
+echo ""
+
+# 2. Create a new API Key
+RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/api-keys" \
+    -H "Content-Type: application/json" \
+    -d '{"name":"e2e-test-key","expiresAt":"2027-01-01T00:00:00Z"}')
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "POST /api-keys (create)" "201" "$CODE"
+# Extract keyId from response (format: {"keyId":"rag_k_...","name":"e2e-test-key",...})
+KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
+echo "  Created keyId: $KEY_ID"
+echo ""
+
+# 3. List again and verify new key appears
+RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /api-keys (verify new key)" "200" "$CODE"
+echo ""
+
+# 4. Revoke the test key
+if [ -n "$KEY_ID" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/api-keys/$KEY_ID")
+    CODE=$(echo "$RESP" | tail -1)
+    assert_status "DELETE /api-keys/{keyId} (revoke)" "200" "$CODE"
+    echo ""
+
+    # 5. Verify revoked key no longer appears in list
+    RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    if echo "$BODY" | grep -q "$KEY_ID"; then
+        echo -e "  ${RED}❌ FAIL${NC} Revoked key still appears in list"
+        FAIL=$((FAIL + 1))
+    else
+        echo -e "  ${GREEN}✅ PASS${NC} Revoked key removed from list"
+        PASS=$((PASS + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} No key ID to test revocation"
+fi
+echo ""
+
+# ────────────────────────────────────────
 # 汇总
 # ────────────────────────────────────────
 echo "=========================================="
