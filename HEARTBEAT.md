@@ -2658,3 +2658,35 @@
 ## Cron 进度（WebUI — 2026-04-12 21:09 — 常规发布）
 
 - 2026-04-12 21:09 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过，2.40s）/ npm run build ✅（98KB index gzipped，16 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP（database=UP/pgvector=UP/tables=DEGRADED）；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## 功能新增（2026-04-12 22:34 — PDF 文档导入 + 目录树 + 预览）
+
+实现以下三个任务（来自捷锋指令）：
+
+1. **PDF 文档导入**：POST `/rag/files/pdf`
+   - 上传 PDF MultipartFile，调用外部 CLI（marker_single）将 PDF 转换为 Markdown + 图片
+   - 转换产物整体存入 `fs_files` 表（V20 迁移）：原始 PDF、入口 Markdown（约定：同名 .md）、图片文件
+   - 配置项 `rag.pdf.*`：marker-cli 路径、语言提示、临时工作目录
+
+2. **自动生成目录树**：导入后 `fs_files` 表中即存在完整的目录树结构
+   - 路径即主键，无层级表，按 `/` 切分路径还原目录
+   - GET `/rag/files/tree?path=` — 列出直接子项（文件和目录）
+   - 目录条目为虚拟合成（非实际存储）
+
+3. **PDF 预览**：GET `/rag/files/preview?path=<pdf_virtual_path>`
+   - 自动定位入口 Markdown（将 `.pdf` 替换为 `.md`）
+   - Markdown → HTML 渲染，图片链接改写为 `/rag/files/raw?path=...`
+   - HTML 包含 CSS 样式（代码块、表格、引用等）
+
+新增文件：
+- `FsFile` entity + `FsFileRepository`（路径 PK，扁平存储）
+- `PdfImportService`：marker_single CLI 调用 + 目录树遍历导入
+- `MarkdownRendererService`：Markdown → HTML + 图片路径重写
+- `PdfImportController`：4 个端点（/pdf POST、/preview GET、/raw GET、/tree GET）
+- `RagPdfProperties`（rag.pdf.* 配置）
+- `V20__add_fs_files.sql` Flyway 迁移
+- `PdfImportResponse` API DTO
+
+⚠️ 前置条件：需要安装 marker-pdf（`pip install marker-pdf`），并配置 `rag.pdf.marker-cli=/path/to/marker_single`。
+
+全量测试通过（1773 tests，0 failures，0 errors）；commit cf41270 已推送
