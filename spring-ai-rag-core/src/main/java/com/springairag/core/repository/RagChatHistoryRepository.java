@@ -1,5 +1,8 @@
 package com.springairag.core.repository;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.core.entity.RagChatHistory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -27,11 +30,14 @@ public class RagChatHistoryRepository {
 
     private final RagChatHistoryJpaRepository jpaRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final ObjectMapper objectMapper;
 
     public RagChatHistoryRepository(RagChatHistoryJpaRepository jpaRepository,
-                                   JdbcTemplate jdbcTemplate) {
+                                   JdbcTemplate jdbcTemplate,
+                                   ObjectMapper objectMapper) {
         this.jpaRepository = jpaRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -63,18 +69,18 @@ public class RagChatHistoryRepository {
     /**
      * Query chat history by session ID.
      */
-    public List<Map<String, Object>> findBySessionId(String sessionId, int limit) {
+    public List<ChatHistoryResponse> findBySessionId(String sessionId, int limit) {
         List<RagChatHistory> results = jpaRepository.findBySessionIdOrderByCreatedAtDesc(
                 sessionId, PageRequest.of(0, limit));
         return results.stream()
-                .map(this::toMap)
+                .map(this::toDto)
                 .toList();
     }
 
     /**
      * Query chat history by session ID (default 50 records).
      */
-    public List<Map<String, Object>> findBySessionId(String sessionId) {
+    public List<ChatHistoryResponse> findBySessionId(String sessionId) {
         return findBySessionId(sessionId, 50);
     }
 
@@ -114,21 +120,26 @@ public class RagChatHistoryRepository {
     }
 
     /**
-     * Convert entity to Map (maintains backward compatibility).
+     * Convert entity to DTO.
      */
-    private Map<String, Object> toMap(RagChatHistory entity) {
-        Map<String, Object> map = new java.util.LinkedHashMap<>();
-        map.put("id", entity.getId());
-        map.put("session_id", entity.getSessionId());
-        map.put("user_message", entity.getUserMessage());
-        map.put("ai_response", entity.getAiResponse());
-        if (entity.getRelatedDocumentIds() != null) {
-            map.put("related_document_ids", entity.getRelatedDocumentIds());
+    private ChatHistoryResponse toDto(RagChatHistory entity) {
+        List<Long> docIds = null;
+        if (entity.getRelatedDocumentIds() != null && !entity.getRelatedDocumentIds().isBlank()) {
+            try {
+                docIds = objectMapper.readValue(entity.getRelatedDocumentIds(),
+                        new TypeReference<List<Long>>() {});
+            } catch (Exception e) {
+                log.debug("Failed to parse relatedDocumentIds JSON: {}", entity.getRelatedDocumentIds());
+            }
         }
-        if (entity.getMetadata() != null) {
-            map.put("metadata", entity.getMetadata());
-        }
-        map.put("created_at", entity.getCreatedAt());
-        return map;
+        return new ChatHistoryResponse(
+                entity.getId(),
+                entity.getSessionId(),
+                entity.getUserMessage(),
+                entity.getAiResponse(),
+                docIds,
+                entity.getMetadata(),
+                entity.getCreatedAt()
+        );
     }
 }

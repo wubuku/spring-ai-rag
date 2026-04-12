@@ -1,5 +1,7 @@
 package com.springairag.core.repository;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.core.entity.RagChatHistory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -30,7 +32,8 @@ class RagChatHistoryRepositoryTest {
     void setUp() {
         jpaRepository = mock(RagChatHistoryJpaRepository.class);
         jdbcTemplate = mock(JdbcTemplate.class);
-        repository = new RagChatHistoryRepository(jpaRepository, jdbcTemplate);
+        ObjectMapper objectMapper = new ObjectMapper();
+        repository = new RagChatHistoryRepository(jpaRepository, jdbcTemplate, objectMapper);
     }
 
     @Test
@@ -82,7 +85,7 @@ class RagChatHistoryRepositoryTest {
     }
 
     @Test
-    void findBySessionId_returnsMaps() {
+    void findBySessionId_returnsDtos() {
         RagChatHistory entity = new RagChatHistory();
         entity.setId(1L);
         entity.setSessionId("session-1");
@@ -93,13 +96,13 @@ class RagChatHistoryRepositoryTest {
         when(jpaRepository.findBySessionIdOrderByCreatedAtDesc(eq("session-1"), any(PageRequest.class)))
                 .thenReturn(List.of(entity));
 
-        List<Map<String, Object>> results = repository.findBySessionId("session-1", 10);
+        List<ChatHistoryResponse> results = repository.findBySessionId("session-1", 10);
 
         assertEquals(1, results.size());
-        assertEquals(1L, results.get(0).get("id"));
-        assertEquals("session-1", results.get(0).get("session_id"));
-        assertEquals("test", results.get(0).get("user_message"));
-        assertEquals("response", results.get(0).get("ai_response"));
+        assertEquals(1L, results.get(0).id());
+        assertEquals("session-1", results.get(0).sessionId());
+        assertEquals("test", results.get(0).userMessage());
+        assertEquals("response", results.get(0).aiResponse());
     }
 
     @Test
@@ -107,7 +110,7 @@ class RagChatHistoryRepositoryTest {
         when(jpaRepository.findBySessionIdOrderByCreatedAtDesc(eq("session-1"), any(PageRequest.class)))
                 .thenReturn(List.of());
 
-        List<Map<String, Object>> results = repository.findBySessionId("session-1");
+        List<ChatHistoryResponse> results = repository.findBySessionId("session-1");
 
         assertTrue(results.isEmpty());
     }

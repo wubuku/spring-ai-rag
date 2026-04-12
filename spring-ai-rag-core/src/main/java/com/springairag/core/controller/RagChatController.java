@@ -1,8 +1,9 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
-import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagSseProperties;
@@ -207,10 +208,10 @@ public class RagChatController {
     @Operation(summary = "Get session history", description = "Query chat history for the specified session, returned in reverse chronological order.")
     @ApiResponse(responseCode = "200", description = "Session history records returned")
     @GetMapping("/history/{sessionId}")
-    public ResponseEntity<List<Map<String, Object>>> getHistory(
+    public ResponseEntity<List<ChatHistoryResponse>> getHistory(
             @PathVariable String sessionId,
             @RequestParam(defaultValue = "50") int limit) {
-        List<Map<String, Object>> history = historyRepository.findBySessionId(sessionId, limit);
+        List<ChatHistoryResponse> history = historyRepository.findBySessionId(sessionId, limit);
         return ResponseEntity.ok(history);
     }
 

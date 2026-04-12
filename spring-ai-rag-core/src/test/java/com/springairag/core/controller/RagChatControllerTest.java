@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
@@ -16,6 +17,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -136,25 +138,25 @@ class RagChatControllerTest {
 
     @Test
     void getHistory_returnsHistory() {
-        List<Map<String, Object>> history = List.of(
-                Map.of("user_message", "你好", "ai_response", "你好！"),
-                Map.of("user_message", "再见", "ai_response", "再见！")
+        List<ChatHistoryResponse> history = List.of(
+                new ChatHistoryResponse(1L, "session-001", "你好", "你好！", null, null, LocalDateTime.now()),
+                new ChatHistoryResponse(2L, "session-001", "再见", "再见！", null, null, LocalDateTime.now())
         );
 
         when(historyRepository.findBySessionId("session-001", 50)).thenReturn(history);
 
-        ResponseEntity<List<Map<String, Object>>> response = controller.getHistory("session-001", 50);
+        ResponseEntity<List<ChatHistoryResponse>> response = controller.getHistory("session-001", 50);
 
         assertEquals(200, response.getStatusCode().value());
         assertEquals(2, response.getBody().size());
-        assertEquals("你好", response.getBody().get(0).get("user_message"));
+        assertEquals("你好", response.getBody().get(0).userMessage());
     }
 
     @Test
     void getHistory_customLimit() {
         when(historyRepository.findBySessionId("session-001", 10)).thenReturn(List.of());
 
-        ResponseEntity<List<Map<String, Object>>> response = controller.getHistory("session-001", 10);
+        ResponseEntity<List<ChatHistoryResponse>> response = controller.getHistory("session-001", 10);
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());

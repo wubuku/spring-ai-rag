@@ -1,5 +1,6 @@
 package com.springairag.core.config;
 
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.core.advisor.HybridSearchAdvisor;
@@ -16,6 +17,7 @@ import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -286,28 +288,28 @@ class ChatMemoryMultiTurnTest {
     @Test
     @DisplayName("history query: returns all records for a sessionId")
     void historyQuery_returnsSessionRecords() {
-        List<Map<String, Object>> mockHistory = List.of(
-                Map.of("user_message", "Q1", "ai_response", "A1"),
-                Map.of("user_message", "Q2", "ai_response", "A2")
+        List<ChatHistoryResponse> mockHistory = List.of(
+                new ChatHistoryResponse(1L, "s1", "Q1", "A1", null, null, LocalDateTime.now()),
+                new ChatHistoryResponse(2L, "s1", "Q2", "A2", null, null, LocalDateTime.now())
         );
         when(historyRepository.findBySessionId("s1", 50)).thenReturn(mockHistory);
 
-        List<Map<String, Object>> result = historyRepository.findBySessionId("s1", 50);
+        List<ChatHistoryResponse> result = historyRepository.findBySessionId("s1", 50);
 
         assertEquals(2, result.size());
-        assertEquals("Q1", result.get(0).get("user_message"));
-        assertEquals("A2", result.get(1).get("ai_response"));
+        assertEquals("Q1", result.get(0).userMessage());
+        assertEquals("A2", result.get(1).aiResponse());
     }
 
     @Test
     @DisplayName("history query: limit parameter controls the number of results")
     void historyQuery_respectsLimit() {
         when(historyRepository.findBySessionId("s1", 2)).thenReturn(List.of(
-                Map.of("user_message", "最近的Q1", "ai_response", "A1"),
-                Map.of("user_message", "最近的Q2", "ai_response", "A2")
+                new ChatHistoryResponse(1L, "s1", "最近的Q1", "A1", null, null, LocalDateTime.now()),
+                new ChatHistoryResponse(2L, "s1", "最近的Q2", "A2", null, null, LocalDateTime.now())
         ));
 
-        List<Map<String, Object>> result = historyRepository.findBySessionId("s1", 2);
+        List<ChatHistoryResponse> result = historyRepository.findBySessionId("s1", 2);
 
         assertEquals(2, result.size());
         verify(historyRepository).findBySessionId("s1", 2);

@@ -1,5 +1,6 @@
 package com.springairag.core.integration;
 
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.config.RagChatService;
@@ -30,6 +31,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 import java.util.*;
 
@@ -207,8 +209,8 @@ class RagControllerIntegrationTest {
 
         @Test
         void chatHistory_returnsRecords() throws Exception {
-            List<Map<String, Object>> history = List.of(
-                    Map.of("user_message", "你好", "ai_response", "你好！")
+            List<ChatHistoryResponse> history = List.of(
+                    new ChatHistoryResponse(1L, "session-001", "你好", "你好！", null, null, LocalDateTime.now())
             );
             when(historyRepository.findBySessionId("session-001", 50))
                     .thenReturn(history);
@@ -217,7 +219,7 @@ class RagControllerIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$").isArray())
                     .andExpect(jsonPath("$.length()").value(1))
-                    .andExpect(jsonPath("$[0].user_message").value("你好"));
+                    .andExpect(jsonPath("$[0].userMessage").value("你好"));
         }
 
         @Test
