@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 
 /**
@@ -8,9 +10,10 @@ import java.util.List;
  * @param multiModelEnabled Whether multi-model is enabled
  * @param models Metrics data for each model
  */
+@Schema(description = "Per-model call metrics (call count, errors, latency)")
 public record ModelMetricsResponse(
-        boolean multiModelEnabled,
-        List<ModelMetric> models
+        @Schema(description = "Whether multi-model support is enabled", example = "true") boolean multiModelEnabled,
+        @Schema(description = "Metrics for each model") List<ModelMetric> models
 ) {
     /**
      * Single model metrics
@@ -21,11 +24,12 @@ public record ModelMetricsResponse(
      * @param errorRate Error rate
      * @param displayName Display name
      */
+    @Schema(description = "Metrics for a single model/provider")
     public record ModelMetric(
-            String provider,
-            long calls,
-            long errors,
-            double errorRate,
-            String displayName
+            @Schema(description = "Provider name", example = "openai") String provider,
+            @Schema(description = "Total number of calls", example = "1523") long calls,
+            @Schema(description = "Number of failed calls", example = "12") long errors,
+            @Schema(description = "Error rate as a fraction", example = "0.0079") double errorRate,
+            @Schema(description = "Human-readable display name", example = "OpenAI GPT-4o") String displayName
     ) {}
 }

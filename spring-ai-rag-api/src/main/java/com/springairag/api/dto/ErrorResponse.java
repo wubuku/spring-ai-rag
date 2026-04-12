@@ -1,6 +1,7 @@
 package com.springairag.api.dto;
 
 import com.springairag.api.enums.ErrorCode;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 
@@ -24,33 +25,43 @@ import java.time.Instant;
  *   <li>{@code path} — Request path (same as instance, backward-compatible alias)</li>
  * </ul>
  */
+@Schema(description = "RFC 7807 Problem Detail error response — all API errors use this format")
 public class ErrorResponse {
 
     /** RFC 7807: problem type URI */
+    @Schema(description = "URI identifying the problem type (e.g. https://springairag.dev/problems/validation-failed)")
     private String type;
 
     /** RFC 7807: problem title (alias for 'error' field, backward-compatible) */
+    @Schema(description = "Short description of the problem type", example = "Validation Failed")
     private String title;
 
     /** RFC 7807: HTTP status code */
+    @Schema(description = "HTTP status code", example = "400")
     private Integer status;
 
     /** RFC 7807: detailed description (alias for 'message' field, backward-compatible) */
+    @Schema(description = "Specific error message describing what went wrong", example = "Query must not be blank")
     private String detail;
 
     /** RFC 7807: problem instance URI (alias for 'path' field, backward-compatible) */
+    @Schema(description = "Request path where the problem occurred", example = "/api/v1/rag/chat/ask")
     private String instance;
 
     /** Error code (same as title, backward-compatible) */
+    @Schema(description = "Error code identifier", example = "VALIDATION_FAILED")
     private String error;
 
     /** Human-readable error message (same as detail, backward-compatible) */
+    @Schema(description = "Human-readable error message", example = "Query must not be blank")
     private String message;
 
     /** Error occurrence time (ISO-8601) */
+    @Schema(description = "ISO-8601 timestamp when the error occurred", example = "2026-04-12T07:20:00Z")
     private String timestamp;
 
     /** Optional: request path (same as instance, backward-compatible) */
+    @Schema(description = "Request path where the error occurred", example = "/api/v1/rag/chat/ask")
     private String path;
 
     /** Default problem type URI prefix */

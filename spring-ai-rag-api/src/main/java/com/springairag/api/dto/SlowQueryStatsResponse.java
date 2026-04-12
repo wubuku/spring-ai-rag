@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
+
 import java.util.List;
 
 /**
@@ -12,13 +14,14 @@ import java.util.List;
  * @param averageDurationMs average query duration in milliseconds
  * @param recentSlowQueries list of recent slow query records
  */
+@Schema(description = "Slow query statistics from HikariCP connection pool")
 public record SlowQueryStatsResponse(
-        boolean enabled,
-        long thresholdMs,
-        long totalQueryCount,
-        long slowQueryCount,
-        long averageDurationMs,
-        List<SlowQueryRecordDto> recentSlowQueries
+        @Schema(description = "Whether slow query monitoring is enabled", example = "true") boolean enabled,
+        @Schema(description = "Configured threshold in milliseconds", example = "1000") long thresholdMs,
+        @Schema(description = "Total number of queries since startup", example = "12450") long totalQueryCount,
+        @Schema(description = "Number of queries exceeding the threshold", example = "23") long slowQueryCount,
+        @Schema(description = "Average query duration in milliseconds", example = "45") long averageDurationMs,
+        @Schema(description = "Most recent slow query records") List<SlowQueryRecordDto> recentSlowQueries
 ) {
     /**
      * Individual slow query record.
@@ -27,9 +30,10 @@ public record SlowQueryStatsResponse(
      * @param durationMs how long the query took (ms)
      * @param sql the SQL query (sensitive values masked)
      */
+    @Schema(description = "Individual slow query record")
     public record SlowQueryRecordDto(
-            long timestampMs,
-            long durationMs,
-            String sql
+            @Schema(description = "Epoch timestamp in milliseconds", example = "1712899200000") long timestampMs,
+            @Schema(description = "Query duration in milliseconds", example = "1523") long durationMs,
+            @Schema(description = "SQL query with sensitive values masked", example = "SELECT * FROM rag_documents WHERE id = ?") String sql
     ) {}
 }
