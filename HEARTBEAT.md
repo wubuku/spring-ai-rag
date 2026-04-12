@@ -2815,3 +2815,12 @@ PDF 端点测试（Section 16，9 tests）：
 **文件变更**：`RerankAdvisor.java` (+61 行)、`RerankAdvisorTest.java` (+43 行)
 
 **测试**：新增 `before_withMiniMaxAdapter_normalizesExistingSystemMessages` 验证 system→user 转换；全部 1755 测试通过 ✅
+
+- 2026-04-13 01:58 — ✅ WebUI 常规发布 + Flyway 修复：
+  - npm test 148 ✅（23 test files，148 vitest 全通过）
+  - npm run build ✅（99KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP
+  - **紧急修复**：发现 `V18__dummy_migration.sql` 与 `V18__add_api_key_table.sql` 版本号冲突，导致 Flyway 启动失败；删除 V18__dummy_migration.sql；mvn clean 后重启服务正常
+  - commit 0799bb2 已推送
