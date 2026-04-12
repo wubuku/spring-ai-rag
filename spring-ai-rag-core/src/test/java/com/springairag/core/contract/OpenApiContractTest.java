@@ -183,6 +183,9 @@ class OpenApiContractTest {
     @MockBean
     private org.springframework.ai.embedding.EmbeddingModel embeddingModel;
 
+    @MockBean
+    private com.springairag.core.repository.FsFileRepository fsFileRepository;
+
     @Nested
     @DisplayName("Spec Accessibility")
     class SpecAccessibility {
