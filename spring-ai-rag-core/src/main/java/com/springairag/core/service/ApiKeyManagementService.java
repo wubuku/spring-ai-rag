@@ -200,10 +200,6 @@ public class ApiKeyManagementService {
         return key.getExpiresAt() != null && key.getExpiresAt().isBefore(LocalDateTime.now());
     }
 
-    private boolean isEnabled(RagApiKey key) {
-        return Boolean.TRUE.equals(key.getEnabled());
-    }
-
     private ApiKeyResponse toResponse(RagApiKey entity) {
         return new ApiKeyResponse(
                 entity.getKeyId(),
