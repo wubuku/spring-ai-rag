@@ -167,6 +167,8 @@
 - 2026-04-03 05:52 — ✅ 主动巡检（cron）：嵌入缓存命中率指标追踪——CachingEmbeddingModel 新增 Micrometer hit/miss 计数器，CacheMetricsService 提供 getHitRate/getStats 统计，CacheMetricsController 暴露 GET /api/v1/cache/stats 端点，15 个新测试，817 测试全通过，commit fd1d082
 
 ## 进度日志
+- 2026-04-13 00:45 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；commit e3683ea 已推送；WebUI 项目处于生产级成熟状态
+
 - 2026-04-12 16:10 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（98KB index gzipped，14 chunks）/ E2E 11/12 ✅（Search 失败：数据库为空环境问题，非代码 bug；Dashboard/Documents/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全通过）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
 - 2026-04-12 16:07 — ✅ E2E API Key 管理测试补强：`scripts/e2e-test.sh` 新增 section 15（API Key 管理）—— GET /api-keys 列表、POST /api-keys 创建、验证新 Key 出现在列表、DELETE /api-keys/{keyId} 撤销、验证撤销后 Key 不再出现；E2E 测试覆盖率从 14 增至 19 步骤；脚本语法验证通过；1754 tests 全通过；commit 27f4a8d 已推送
