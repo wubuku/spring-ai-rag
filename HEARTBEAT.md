@@ -2747,3 +2747,25 @@ E2E 结果（真实数据库 spring_ai_rag_dev）：
 修复：`OpenApiContractTest` 新增 `@MockBean FsFileRepository fsFileRepository`。
 
 1833 tests（1786 core + 47 starter），0 failures，0 errors，BUILD SUCCESS；commit 984c888 已推送
+
+## 重构（2026-04-13 00:25 — marker CLI → Apache PDFBox，UUID 虚拟目录）
+
+marker CLI（Python）依赖问题：pydantic_core/onnxruntime 架构冲突 + pdftext/pypdfium2 版本不兼容，导致 marker 根本无法运行。
+
+新架构（遵循捷锋设计）：
+- PDFBox 3.0.3（纯 Java）替换 marker_single CLI
+- path = UUID（虚拟目录名），无需 URL 改写
+- 入口 Markdown = `{uuid}/default.md`
+- 预览 URL = `/files/preview?path={uuid}/original.pdf`（自动推导 default.md）
+
+E2E 结果（真实数据库 spring_ai_rag_dev，真实 PDF 988KB）：
+- POST /files/pdf ✅ (UUID=2dc5fc0c-..., 2 files stored)
+- GET /files/tree ✅ (UUID 目录可见)
+- GET /files/tree?path={UUID}/ ✅ (default.md + original.pdf)
+- GET /files/preview/html ✅ (Markdown → HTML 渲染)
+- GET /files/raw ✅ (原始 Markdown 下载)
+- POST /files/pdf (non-PDF) → 400 ✅
+- POST /files/pdf (no file) → 400 ✅
+- mvn test 1788 ✅
+
+commit 重新推送
