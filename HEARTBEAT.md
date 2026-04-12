@@ -1605,6 +1605,15 @@
 
 - 2026-04-08 04:55 — ✅ API DTO @Schema 国际化收尾（第二轮）：扫描发现 35 个 DTO 文件残留中文 @Schema descriptions（Javadoc/description/example），全部翻译为英文（AlertActionResponse/BatchCreateAndEmbedRequest/BatchCreateAndEmbedResponse/BatchCreateResponse/BatchDocumentRequest/BatchEmbedProgressEvent/ChatResponse/ClearHistoryResponse/CollectionCreatedResponse/CollectionDeleteResponse/CollectionExportResponse/CollectionImportResponse/CollectionListResponse/CollectionResponse/DocumentAddedResponse/DocumentListResponse/EmbedProgressEvent/EvaluateRequest/FeedbackRequest/FileUploadResponse/FireAlertRequest/FireAlertResponse/ModelCompareResponse/ModelDetailResponse/ModelListResponse/ModelMetricsResponse/RagMetricsSummary/ResolveAlertRequest/RetrievalConfig/RetrievalResult/SearchRequest/SearchResponse/SilenceAlertRequest/SilenceScheduleRequest/SloConfigRequest/VariantResponse）；35 files，207 行变更；1462 tests 全通过，零失败零错误；commit 2595be6 已推送
 
+## Cron 进度（2026-04-12 09:25 — WebUI 常规发布 + ExecutorService bean 修复）
+
+- 2026-04-12 09:25 — ✅ WebUI 常规发布 + critical bug 修复：
+  - WebUI npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（96KB index gzipped）
+  - E2E 11/12 ✅（Dashboard/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - 发现并修复：`RetrievalEvaluationServiceImpl` 构造器 `ExecutorService` 参数与 `PerformanceConfig` 两个 bean（`ragSearchExecutor` / `modelComparisonExecutor`）产生歧义，添加 `@Qualifier("modelComparisonExecutor")` 注解
+  - 1761 backend tests 全通过；commit 8f06de8 已推送
+  - dist 已同步到 static/webui/；后端服务 8081 UP
+
 ## Cron 进度（2026-04-08 05:15 — 后端国际化查漏第七轮：Service Javadoc）
 
 - 2026-04-08 05:15 — ✅ Service 接口/实现 Javadoc 国际化（第七轮）：翻译 4 个文件全部中文 Javadoc 为英文——RetrievalEvaluationService（接口类+方法 Javadoc）、RetrievalEvaluationServiceImpl（类 Javadoc + inline comments: 累计命中/补齐/NDCG）、UserFeedbackService（接口类+方法 Javadoc）、DocumentVersionService（类+方法 Javadoc + inline comments）；4 files，82 行变更（等量替换）；1462 tests 全通过，零失败零错误；commit 66b49fe 已推送
