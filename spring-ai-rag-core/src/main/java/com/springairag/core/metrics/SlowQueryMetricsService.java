@@ -159,7 +159,7 @@ public class SlowQueryMetricsService {
     public SlowQueryStatsSummary getStatsSummary() {
         SessionFactory sf = getSessionFactory();
         if (sf == null) {
-            return new SlowQueryStatsSummary(0, 0, 0, 0, 0, Collections.emptyList());
+            return new SlowQueryStatsSummary(0, 0, 0, getThresholdMs(), 0, Collections.emptyList());
         }
 
         Statistics stats = sf.getStatistics();

@@ -100,15 +100,15 @@ class SlowQueryMetricsServiceTest {
     }
 
     @Test
-    void getStatsSummary_noSessionFactory_returnsHardcodedZeros() {
+    void getStatsSummary_noSessionFactory_returnsThresholdFromProperties() {
         // When SessionFactory is null (always in unit tests), getStatsSummary
-        // returns hardcoded zeros because it cannot access Hibernate statistics.
+        // returns zeros for query stats but preserves the configured threshold.
         var summary = service.getStatsSummary();
         assertEquals(0, summary.totalQueryCount());
         assertEquals(0, summary.slowQueryCount());
         assertEquals(0, summary.totalQueryDurationMs());
         assertEquals(0, summary.averageQueryDurationMs());
-        assertEquals(0, summary.thresholdMs()); // hardcoded 0 in null-SessionFactory path
+        assertEquals(service.getThresholdMs(), summary.thresholdMs()); // uses configured threshold, not 0
     }
 
     @Test
