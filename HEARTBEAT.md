@@ -2798,3 +2798,20 @@ PDF 端点测试（Section 16，9 tests）：
 - `default.md`：正确 Markdown（含标题 "All-in Blockchain"）
 - `original.pdf`：原始 PDF 二进制
 - HTML 预览：正确渲染 Markdown → HTML，`<h1>` 标签存在
+
+---
+
+## 2026-04-13 01:53 (commit 152b502) — MiniMax API system 消息兼容性修复
+
+**问题**：`ApiCompatibilityAdapter.normalizeMessages()` 方法已定义但从未被调用。当使用 MiniMax provider 时，所有 system 消息直接发送给 LLM，MiniMax 会返回 400 error `invalid message role: system`。
+
+**修复**：`RerankAdvisor.before()` 中，当 `!adapter.supportsSystemMessage()` 时，在 advisor chain 执行完成后调用 `normalizeSystemMessagesIfNeeded()` 将所有 system 消息转换为 user 消息（带 `[System]` 前缀）。流程：
+
+1. `chain.next(request)` 执行所有 advisor（包括 `MessageChatMemoryAdvisor`）
+2. `injectRerankedContext()` 注入 rerank 结果
+3. `normalizeSystemMessagesIfNeeded()` 将剩余 system 消息转为 user 消息
+4. 返回给 `ChatClient` 执行 LLM 调用
+
+**文件变更**：`RerankAdvisor.java` (+61 行)、`RerankAdvisorTest.java` (+43 行)
+
+**测试**：新增 `before_withMiniMaxAdapter_normalizesExistingSystemMessages` 验证 system→user 转换；全部 1755 测试通过 ✅
