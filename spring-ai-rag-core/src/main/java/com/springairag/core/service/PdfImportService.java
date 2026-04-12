@@ -5,7 +5,6 @@ import com.springairag.core.entity.FsFile;
 import com.springairag.core.repository.FsFileRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.UrlResource;
 import org.springframework.stereotype.Service;
@@ -39,7 +38,6 @@ import java.util.stream.Stream;
  * The PDF itself is stored at the same level with its original filename.
  */
 @Service
-@ConditionalOnBean(FsFileRepository.class)
 public class PdfImportService {
 
     private static final Logger log = LoggerFactory.getLogger(PdfImportService.class);

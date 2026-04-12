@@ -350,6 +350,77 @@ fi
 echo ""
 
 # ────────────────────────────────────────
+# 16. PDF 文件导入与预览（fs_files 表）
+# ────────────────────────────────────────
+echo "1️⃣6️⃣  PDF 文件导入与预览"
+
+# 16a. GET /files/tree - 根目录（空）
+echo "- 16a. GET /files/tree (empty root)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree")
+CODE=$(echo "$RESP" | tail -1)
+BODY=$(echo "$RESP" | sed '$d')
+assert_status "GET /files/tree" "200" "$CODE"
+if echo "$BODY" | grep -q '"total"'; then
+    echo -e "  ${GREEN}✅ PASS${NC} files/tree returns JSON with 'total' field"
+    PASS=$((PASS + 1))
+else
+    echo -e "  ${RED}❌ FAIL${NC} files/tree unexpected body: $BODY"
+    FAIL=$((FAIL + 1))
+fi
+
+# 16b. GET /files/tree?path=test/ - 子目录（空）
+echo "- 16b. GET /files/tree?path=test/"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/tree?path=test/")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /files/tree?path=test/" "200" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} files/tree with path returns 200"
+PASS=$((PASS + 1))
+
+# 16c. GET /files/preview/html?path=nonexistent.pdf - 应返回 404
+echo "- 16c. GET /files/preview/html?path=nonexistent.pdf (expect 404)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview/html?path=nonexistent.pdf")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /files/preview/html (not found)" "404" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} preview/html returns 404 for non-existent file"
+PASS=$((PASS + 1))
+
+# 16d. GET /files/raw?path=nonexistent.pdf - 应返回 404
+echo "- 16d. GET /files/raw?path=nonexistent.pdf (expect 404)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/raw?path=nonexistent.pdf")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /files/raw (not found)" "404" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} files/raw returns 404 for non-existent file"
+PASS=$((PASS + 1))
+
+# 16e. GET /files/preview?path=nonexistent.pdf - 应返回 404（完整 HTML 页面）
+echo "- 16e. GET /files/preview?path=nonexistent.pdf (expect 404)"
+RESP=$(curl -s -w "\n%{http_code}" "$API/files/preview?path=nonexistent.pdf")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "GET /files/preview (not found)" "404" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} files/preview returns 404 for non-existent file"
+PASS=$((PASS + 1))
+
+# 16f. POST /files/pdf - 非 PDF 文件应被拒绝
+echo "- 16f. POST /files/pdf (non-PDF file, expect 400)"
+TMPFILE=$(mktemp)
+echo "not a pdf" > "$TMPFILE"
+RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
+    -F "file=@$TMPFILE")
+rm -f "$TMPFILE"
+CODE=$(echo "$RESP" | tail -1)
+assert_status "POST /files/pdf (non-PDF)" "400" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} files/pdf rejects non-PDF files"
+PASS=$((PASS + 1))
+
+# 16g. POST /files/pdf - 无文件应返回 400
+echo "- 16g. POST /files/pdf (no file, expect 400)"
+RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf")
+CODE=$(echo "$RESP" | tail -1)
+assert_status "POST /files/pdf (no file)" "400" "$CODE"
+echo -e "  ${GREEN}✅ PASS${NC} files/pdf returns 400 when no file uploaded"
+PASS=$((PASS + 1))
+
+# ────────────────────────────────────────
 # 汇总
 # ────────────────────────────────────────
 echo "=========================================="

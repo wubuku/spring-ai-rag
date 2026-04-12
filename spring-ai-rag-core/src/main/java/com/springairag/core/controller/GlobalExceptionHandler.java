@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
@@ -47,6 +48,20 @@ public class GlobalExceptionHandler {
                                                             HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER",
                 "Missing required parameter: " + e.getParameterName(), request);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<ErrorResponse> handleMediaTypeNotSupported(HttpMediaTypeNotSupportedException e,
+                                                                      HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "UNSUPPORTED_MEDIA_TYPE",
+                "Content-Type not supported: " + e.getMessage(), request);
+    }
+
+    @ExceptionHandler(org.springframework.web.multipart.support.MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(org.springframework.web.multipart.support.MissingServletRequestPartException e,
+                                                           HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PART",
+                "Missing required file part: " + e.getRequestPartName(), request);
     }
 
     @ExceptionHandler(HttpMessageNotReadableException.class)

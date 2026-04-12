@@ -9,7 +9,6 @@ import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.versioning.ApiVersion;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -57,7 +56,6 @@ import java.util.TreeSet;
 @RestController
 @RequestMapping("/rag/files")
 @Tag(name = "File System Import", description = "PDF import, directory tree management, and file preview")
-@ConditionalOnBean(FsFileRepository.class)
 public class PdfImportController {
 
     private static final Logger log = LoggerFactory.getLogger(PdfImportController.class);
