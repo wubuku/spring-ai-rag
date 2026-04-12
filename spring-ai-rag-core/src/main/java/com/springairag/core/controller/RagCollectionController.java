@@ -5,6 +5,7 @@ import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
 import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -201,13 +202,16 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
     })
     @PostMapping("/{id}/restore")
-    public ResponseEntity<Map<String, Object>> restore(@PathVariable Long id) {
+    public ResponseEntity<CollectionRestoreResponse> restore(@PathVariable Long id) {
         log.info("Restoring collection: id={}", id);
 
         return collectionService.restoreCollection(id)
                 .map(result -> {
                     long docCount = documentRepository.countByCollectionId(result.collection().getId());
-                    return ResponseEntity.ok(CollectionMapper.toMap(result.collection(), docCount));
+                    return ResponseEntity.ok(CollectionRestoreResponse.of(
+                            result.collection().getId(),
+                            result.collection().getName(),
+                            docCount));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }

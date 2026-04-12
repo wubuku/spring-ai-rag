@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -226,11 +227,13 @@ class RagCollectionControllerTest {
         // The controller also calls documentRepository.countByCollectionId for the response map
         when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
 
-        ResponseEntity<Map<String, Object>> response = controller.restore(1L);
+        ResponseEntity<CollectionRestoreResponse> response = controller.restore(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Restored Collection", response.getBody().get("name"));
-        assertEquals(3L, response.getBody().get("documentCount"));
+        assertNotNull(response.getBody());
+        assertEquals("Restored Collection", response.getBody().name());
+        assertEquals(3L, response.getBody().documentCount());
+        assertEquals("Collection restored", response.getBody().message());
         verify(collectionService).restoreCollection(1L);
     }
 
@@ -238,7 +241,7 @@ class RagCollectionControllerTest {
     void restore_nonExisting_returns404() {
         when(collectionService.restoreCollection(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.restore(999L);
+        ResponseEntity<CollectionRestoreResponse> response = controller.restore(999L);
 
         assertEquals(404, response.getStatusCode().value());
     }
