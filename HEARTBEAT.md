@@ -1478,6 +1478,10 @@
 
 - 2026-04-11 14:58 — ✅ evaluateAnswerQuality 超时/中断异常测试补全：新增 2 个单元测试覆盖 `evaluateAnswerQuality` TimeoutException 和 InterruptedException 异常路径——TimeoutException 返回 AnswerQualityResult(3,3,3,"timed out","REVISION")，InterruptedException 返回 AnswerQualityResult(3,3,3,"interrupted","REVISION")；均使用 ChatClient mock chain + single-thread executor，匹配现有 ExecutionException 测试模式；21 RetrievalEvaluationServiceImplTest 全通过；全量测试通过；commit 67411f8 已推送
 
+## Cron 进度（2026-04-12 12:44 — SlowQueryMetricsService Bug Fix）
+
+- 2026-04-12 12:44 — ✅ SlowQueryMetricsService Bug Fix：`getStatsSummary()` 在 SessionFactory 不可用时（单元测试环境），`thresholdMs` 不再返回硬编码 0，而是返回配置的实际阈值 `getThresholdMs()`，确保 REST 响应始终报告正确配置的阈值；`SlowQueryMetricsServiceTest` 测试重命名并更新断言；全量测试通过；commit 890b608 已推送
+
 ## Cron 进度（2026-04-11 17:19 — Cache API DTO 一致性改造）
 
 - 2026-04-11 17:19 — ✅ API response DTO 一致性：CacheMetricsController `invalidateCache()` 返回类型从 `Map<String, Object>` 替换为 `CacheInvalidateResponse` record（cleared + message 字段）；新增 `CacheInvalidateResponse.java` 到 spring-ai-rag-api DTO；CacheMetricsControllerTest 新增 2 个测试（clearsEntries/returnsZero）；全量测试通过；commit e4b9e91 已推送
