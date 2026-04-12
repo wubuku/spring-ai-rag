@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.messages.MessageType;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
@@ -113,6 +114,48 @@ class RerankAdvisorTest {
                 .filter(m -> m.getMessageType() == MessageType.USER)
                 .anyMatch(m -> m.getText().contains("Spring Boot 是一个框架"));
         assertTrue(hasContextInUserMsg, "上下文应合并到用户消息中");
+    }
+
+    @Test
+    void before_withMiniMaxAdapter_normalizesExistingSystemMessages() {
+        // MiniMax 不支持 role:system，现有系统消息应被转换为 role:user
+        RerankAdvisor advisor = createAdvisor(miniMaxAdapter);
+
+        List<RetrievalResult> searchResults = List.of(
+                createResult("doc-1", "Spring Boot 框架", 0.9)
+        );
+        when(rerankingService.rerank(eq("什么是 Spring"), anyList(), eq(5)))
+                .thenReturn(searchResults);
+
+        // 构造一个包含 SYSTEM 消息的 prompt（模拟 MessageChatMemoryAdvisor 添加的系统消息）
+        Prompt prompt = new Prompt(List.of(
+                new org.springframework.ai.chat.messages.SystemMessage("你是一个有帮助的助手"),
+                new UserMessage("什么是 Spring")
+        ));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY, searchResults)
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        // 所有 system 消息应被转换为 user 消息（带 [System] 前缀）
+        List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
+        boolean hasSystemMessage = messages.stream()
+                .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
+        assertFalse(hasSystemMessage, "MiniMax 适配器应将 system 消息转换为 user 消息");
+
+        // 验证 [System] 前缀被添加
+        boolean hasSystemPrefix = messages.stream()
+                .filter(m -> m instanceof UserMessage)
+                .anyMatch(m -> m.getText().startsWith("[System]"));
+        assertTrue(hasSystemPrefix, "转换后的 user 消息应包含 [System] 前缀");
+
+        // 原始系统消息内容应被保留
+        boolean hasOriginalContent = messages.stream()
+                .filter(m -> m instanceof UserMessage)
+                .anyMatch(m -> m.getText().contains("你是一个有帮助的助手"));
+        assertTrue(hasOriginalContent, "原始系统消息内容应被保留在 user 消息中");
     }
 
     @Test

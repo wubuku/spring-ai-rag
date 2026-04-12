@@ -8,11 +8,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -106,7 +111,16 @@ public class RerankAdvisor extends AbstractRagAdvisor {
                 .recordStep("Rerank", elapsedMs, reranked.size());
         advisorMetrics.record("Rerank", elapsedMs, reranked.size());
 
-        return injectRerankedContext(request, reranked);
+        ChatClientRequest result = injectRerankedContext(request, reranked);
+
+        // MiniMax and similar APIs don't support role:system — normalize system → user
+        // This must run AFTER the full advisor chain (including MessageChatMemoryAdvisor)
+        // so that all system messages in the prompt are converted before the LLM call.
+        if (!adapter.supportsSystemMessage()) {
+            result = normalizeSystemMessagesIfNeeded(result);
+        }
+
+        return result;
     }
 
     /** Retrieves retrieval results from context; returns null if no results */
@@ -140,6 +154,51 @@ public class RerankAdvisor extends AbstractRagAdvisor {
             log.debug("[RerankAdvisor] using augmentUserMessage to inject context (API does not support multiple system messages)");
         }
         return mutated.build();
+    }
+
+    /**
+     * Normalizes system messages to user messages when the target API does not support role:system.
+     *
+     * <p>This converts all {@link SystemMessage} objects in the prompt to {@link UserMessage} objects
+     * with a "[System] " prefix, ensuring compatibility with MiniMax and similar APIs that
+     * reject or mishandle the system message role.
+     *
+     * <p>Run after {@link #injectRerankedContext} so that all advisors (including
+     * {@code MessageChatMemoryAdvisor}) have added their messages.
+     */
+    private ChatClientRequest normalizeSystemMessagesIfNeeded(ChatClientRequest request) {
+        Prompt prompt = request.prompt();
+        List<Message> instructions = prompt.getInstructions();
+        if (instructions == null || instructions.isEmpty()) {
+            return request;
+        }
+
+        // Convert Spring AI messages → adapter ChatMessage list
+        List<ApiCompatibilityAdapter.ChatMessage> adapterMessages = new ArrayList<>();
+        for (Message msg : instructions) {
+            adapterMessages.add(new ApiCompatibilityAdapter.ChatMessage(
+                    msg.getMessageType().toString().toLowerCase(), msg.getText()));
+        }
+
+        // Normalize (system → user conversion handled by adapter)
+        List<ApiCompatibilityAdapter.ChatMessage> normalized = adapter.normalizeMessages(adapterMessages);
+
+        // Convert back to Spring AI messages and rebuild prompt
+        List<Message> normalizedMessages = new ArrayList<>();
+        for (ApiCompatibilityAdapter.ChatMessage am : normalized) {
+            normalizedMessages.add(switch (am.role()) {
+                case "system" -> new SystemMessage(am.content());
+                case "user" -> new UserMessage(am.content());
+                case "assistant" -> new AssistantMessage(am.content());
+                default -> new UserMessage(am.content()); // fallback for function/code roles
+            });
+        }
+
+        Prompt normalizedPrompt = new Prompt(normalizedMessages);
+        log.debug("[RerankAdvisor] normalized {} messages for API compatibility (system → user)",
+                normalizedMessages.stream().filter(m -> m instanceof UserMessage).count());
+
+        return request.mutate().prompt(normalizedPrompt).build();
     }
 
     /**
