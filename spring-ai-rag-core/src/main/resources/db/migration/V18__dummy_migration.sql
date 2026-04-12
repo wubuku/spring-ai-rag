@@ -1,2 +1,0 @@
--- V18: Placeholder migration to align with downstream version numbering.
--- No schema changes; preserves the existing database structure.
