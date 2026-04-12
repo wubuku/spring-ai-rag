@@ -136,9 +136,22 @@ async function testDocuments(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/documents`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
     { selector: 'input[type="file"]', description: 'File upload input', state: 'visible' },
-    { selector: 'table', description: 'Documents table (or empty state)', state: 'visible' },
   ]);
   
+  // Wait for loading skeleton to disappear and table to appear (up to 15s for API)
+  console.log('  → Waiting for documents table to load...');
+  try {
+    await page.waitForSelector('table', { state: 'visible', timeout: 15000 });
+    console.log('  → Documents table visible');
+  } catch {
+    // Check if there's an error state visible instead
+    const hasError = await page.locator('text=/error|Error|failed|Failed/').isVisible().catch(() => false);
+    if (hasError) {
+      throw new Error('Documents page shows error state instead of table');
+    }
+    throw new Error('Documents table did not appear within 15 seconds');
+  }
+
   // Verify the page title says "Documents"
   const title = await page.locator('h1').textContent();
   if (!title.includes('Documents')) {

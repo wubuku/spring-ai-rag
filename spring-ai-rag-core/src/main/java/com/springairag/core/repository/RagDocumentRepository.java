@@ -70,8 +70,8 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
            "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus) AND " +
            "(:enabled IS NULL OR d.enabled = :enabled) AND " +
            "(:collectionId IS NULL OR d.collectionId = :collectionId) AND " +
-           "(:createdAfter IS NULL OR d.createdAt >= :createdAfter) AND " +
-           "(:createdBefore IS NULL OR d.createdAt <= :createdBefore)")
+           "(CAST(:createdAfter AS timestamp) IS NULL OR d.createdAt >= :createdAfter) AND " +
+           "(CAST(:createdBefore AS timestamp) IS NULL OR d.createdAt <= :createdBefore)")
     Page<RagDocument> searchDocuments(@Param("title") String title,
                                        @Param("documentType") String documentType,
                                        @Param("processingStatus") String processingStatus,
