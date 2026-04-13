@@ -1,7 +1,9 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CollectionDocumentListResponse;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
+import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -258,19 +260,18 @@ class RagCollectionControllerTest {
 
         when(documentRepository.findByCollectionId(eq(1L), any(Pageable.class))).thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(1L, 0, 20, null, null, null);
+        ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(1L, 0, 20, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("collectionId"));
-        List<?> docs = (List<?>) response.getBody().get("documents");
-        assertEquals(1, docs.size());
+        assertEquals(1L, response.getBody().collectionId());
+        assertEquals(1, response.getBody().documents().size());
     }
 
     @Test
     void listDocuments_collectionNotExists_returns404() {
         when(collectionRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(999L, 0, 20, null, null, null);
+        ResponseEntity<CollectionDocumentListResponse> response = controller.listDocuments(999L, 0, 20, null, null, null);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -283,12 +284,12 @@ class RagCollectionControllerTest {
         when(documentRepository.findById(10L)).thenReturn(Optional.of(doc));
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of("documentId", 10L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 10L));
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals("Document added to collection", response.getBody().get("message"));
-        assertEquals(1L, response.getBody().get("collectionId"));
-        assertEquals(10L, response.getBody().get("documentId"));
+        assertEquals("Document added to collection", response.getBody().message());
+        assertEquals(1L, response.getBody().collectionId());
+        assertEquals(10L, response.getBody().documentId());
     }
 
     @Test
@@ -301,7 +302,7 @@ class RagCollectionControllerTest {
     void addDocument_collectionNotExists_returns404() {
         when(collectionRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(999L, Map.of("documentId", 10L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(999L, Map.of("documentId", 10L));
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -311,7 +312,7 @@ class RagCollectionControllerTest {
         when(collectionRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.addDocument(1L, Map.of("documentId", 999L));
+        ResponseEntity<DocumentAddedResponse> response = controller.addDocument(1L, Map.of("documentId", 999L));
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -341,7 +342,6 @@ class RagCollectionControllerTest {
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
-        assertEquals(1, docs.size());
         assertEquals("文档1", docs.get(0).get("title"));
     }
 

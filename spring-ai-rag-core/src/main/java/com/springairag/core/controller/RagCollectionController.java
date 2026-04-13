@@ -3,9 +3,12 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
+import com.springairag.api.dto.CollectionDocumentListResponse;
 import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
+import com.springairag.api.dto.DocumentAddedResponse;
+import com.springairag.api.dto.DocumentSummary;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -238,7 +241,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "List documents in collection", description = "Query document list under the specified collection (paginated).")
     @GetMapping("/{id}/documents")
-    public ResponseEntity<Map<String, Object>> listDocuments(
+    public ResponseEntity<CollectionDocumentListResponse> listDocuments(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
@@ -269,28 +272,23 @@ public class RagCollectionController {
             pageResult = documentRepository.findByCollectionId(id, pageable);
         }
 
-        List<Map<String, Object>> docs = pageResult.getContent().stream()
+        List<DocumentSummary> docs = pageResult.getContent().stream()
                 .map(this::toDocumentSummary)
                 .toList();
 
-        return ResponseEntity.ok(Map.of(
-                "collectionId", id,
-                "documents", docs,
-                "total", pageResult.getTotalElements(),
-                "offset", offset,
-                "limit", limit));
+        return ResponseEntity.ok(new CollectionDocumentListResponse(
+                id, docs, pageResult.getTotalElements(), offset, limit));
     }
 
-    private Map<String, Object> toDocumentSummary(RagDocument doc) {
-        Map<String, Object> m = new HashMap<>();
-        m.put("id", doc.getId());
-        m.put("title", doc.getTitle());
-        m.put("source", doc.getSource());
-        m.put("document_type", doc.getDocumentType());
-        m.put("processing_status", doc.getProcessingStatus());
-        m.put("created_at", doc.getCreatedAt());
-        m.put("size", doc.getSize());
-        return m;
+    private DocumentSummary toDocumentSummary(RagDocument doc) {
+        return new DocumentSummary(
+                doc.getId(),
+                doc.getTitle(),
+                doc.getSource(),
+                doc.getDocumentType(),
+                doc.getProcessingStatus(),
+                doc.getCreatedAt(),
+                doc.getSize());
     }
 
     /**
@@ -302,7 +300,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @PostMapping("/{id}/documents")
-    public ResponseEntity<Map<String, Object>> addDocument(
+    public ResponseEntity<DocumentAddedResponse> addDocument(
             @PathVariable Long id,
             @RequestBody Map<String, Long> request) {
 
@@ -325,11 +323,7 @@ public class RagCollectionController {
                             String.valueOf(documentId),
                             "Document added to collection " + id,
                             Map.of("collectionId", id));
-                    Map<String, Object> result = new HashMap<>();
-                    result.put("message", "Document added to collection");
-                    result.put("collectionId", id);
-                    result.put("documentId", documentId);
-                    return ResponseEntity.ok(result);
+                    return ResponseEntity.ok(DocumentAddedResponse.of(id, documentId));
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
