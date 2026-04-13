@@ -220,7 +220,7 @@ class FulltextSearchProviderFactoryTest {
     }
 }
 
-@DisplayName("NoOpFulltextSearchProvider 空全文检索策略")
+@DisplayName("NoOpFulltextSearchProvider Unit Tests")
 class NoOpFulltextSearchProviderTest {
 
     private NoOpFulltextSearchProvider provider;
@@ -231,19 +231,20 @@ class NoOpFulltextSearchProviderTest {
     }
 
     @Test
-    @DisplayName("名称为 none")
+    @DisplayName("getName returns 'none'")
     void nameIsNone() {
         assertEquals("none", provider.getName());
     }
 
     @Test
-    @DisplayName("始终可用")
+    @DisplayName("isAvailable always returns true (safe fallback)")
     void alwaysAvailable() {
-        assertTrue(provider.isAvailable());
+        assertTrue(provider.isAvailable(),
+                "NoOp provider must always be available to serve as safe fallback");
     }
 
     @Test
-    @DisplayName("搜索返回空列表")
+    @DisplayName("search returns empty list for any query")
     void searchReturnsEmpty() {
         List<RetrievalResult> results = provider.search("test query", null, null, 10, 0.3);
         assertNotNull(results);
@@ -251,11 +252,40 @@ class NoOpFulltextSearchProviderTest {
     }
 
     @Test
-    @DisplayName("带文档ID限制搜索返回空列表")
+    @DisplayName("search returns empty list with document ID and exclude ID filters")
     void searchWithDocumentIdsReturnsEmpty() {
         List<RetrievalResult> results = provider.search("test",
                 List.of(1L, 2L), List.of(3L), 5, 0.5);
         assertNotNull(results);
         assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("search returns empty list for null query")
+    void searchNullQueryReturnsEmpty() {
+        List<RetrievalResult> results = provider.search(null, null, null, 10, 0.0);
+        assertNotNull(results);
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("search returns empty list when limit is zero")
+    void searchZeroLimitReturnsEmpty() {
+        List<RetrievalResult> results = provider.search("anything", null, null, 0, 0.0);
+        assertNotNull(results);
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("search result is unmodifiable")
+    void searchResultIsUnmodifiable() {
+        List<RetrievalResult> results = provider.search("query", null, null, 10, 0.5);
+        assertThrows(UnsupportedOperationException.class, () -> results.add(null));
+    }
+
+    @Test
+    @DisplayName("implements FulltextSearchProvider interface")
+    void implementsFulltextSearchProviderInterface() {
+        assertInstanceOf(FulltextSearchProvider.class, provider);
     }
 }
