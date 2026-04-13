@@ -2863,8 +2863,19 @@ PDF 端点测试（Section 16，9 tests）：
 
 ## Cron 进度（2026-04-13 18:17 — T6+T9 测试覆盖补强）
 
-- 2026-04-13 18:17 — ✅ T6 NoOpFulltextSearchProvider 测试增强 + T9 QueryLang 测试新增：
-  - `NoOpFulltextSearchProviderTest`（在 FulltextSearchProviderFactoryTest.java）：4→8 tests，i18n DisplayName 英文化 + 4 个新测试（null 查询/零 limit/不可修改列表/instanceof 检查）
-  - `QueryLangTest`（新文件）：8 个测试覆盖 ZH/EN_OR_OTHER 常量、values() 数量、valueOf()、ordinal、不等性
-  - 1843 core + 47 starter = 1890 tests，0 failures，0 errors
-  - commit 4e5a2ef 已推送
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C22 | API response DTO 一致性（Map→record 改造） | 代码质量 | ✅ 2026-04-13（C22 进行中：CollectionDocumentListResponse + DocumentSummary + DocumentAddedResponse 替换 Map；2 endpoints 改造；1890 tests 全通过；commit d259d90） |
+
+## Cron 后续任务
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| C22-2 | RagCollectionController.exportCollection DTO 化（CollectionExportResponse） | 代码质量 | ⏳ |
+| C22-3 | RagCollectionController.buildExportData DTO 化 | 代码质量 | ⏳ |
+| C22-4 | PdfImportController Map→DTO 改造 | 代码质量 | ⏳ |
+| C22-5 | RagDocumentController Map→DTO 改造 | 代码质量 | ⏳ |
+
+- 2026-04-13 19:14 — ✅ C22 API response DTO 一致性（第一批）：新增 DocumentSummary record + CollectionDocumentListResponse record 替换 RagCollectionController.listDocuments() 的 Map 返回；替换 addDocument() 返回 DocumentAddedResponse；RagCollectionControllerTest 更新；1890 tests 全通过；commit d259d90 已推送
+
+
