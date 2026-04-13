@@ -2840,10 +2840,10 @@ PDF 端点测试（Section 16，9 tests）：
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| T6 | NoOpFulltextSearchProvider 单元测试 | 测试覆盖 | ⏳ |
+| T6 | NoOpFulltextSearchProvider 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
 | T7 | PdfImportService 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
 | T8 | FsFileRepository 集成测试 | 测试覆盖 | ⏳ |
-| T9 | QueryLang enum 单元测试（fulltext 模块） | 测试覆盖 | ⏳ |
+| T9 | QueryLang enum 单元测试（fulltext 模块） | 测试覆盖 | ✅ 2026-04-13 |
 | T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ⏳ |
 | T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
 | T12 | RetrievalEvaluationService 覆盖率提升（评测阈值边界） | 测试覆盖 | ⏳ |
@@ -2860,3 +2860,11 @@ PDF 端点测试（Section 16，9 tests）：
   - `getFile`/`listChildren`/`loadFileAsResource`：found+notFound；反斜杠路径归一化；空目录
   - 全量测试通过（+27 tests）；commit 98bfd00 已推送
   - 总测试量：1831 (core) + 47 (starter) = 1878 tests，0 failures
+
+## Cron 进度（2026-04-13 18:17 — T6+T9 测试覆盖补强）
+
+- 2026-04-13 18:17 — ✅ T6 NoOpFulltextSearchProvider 测试增强 + T9 QueryLang 测试新增：
+  - `NoOpFulltextSearchProviderTest`（在 FulltextSearchProviderFactoryTest.java）：4→8 tests，i18n DisplayName 英文化 + 4 个新测试（null 查询/零 limit/不可修改列表/instanceof 检查）
+  - `QueryLangTest`（新文件）：8 个测试覆盖 ZH/EN_OR_OTHER 常量、values() 数量、valueOf()、ordinal、不等性
+  - 1843 core + 47 starter = 1890 tests，0 failures，0 errors
+  - commit 4e5a2ef 已推送
