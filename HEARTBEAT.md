@@ -2878,6 +2878,17 @@ PDF 端点测试（Section 16，9 tests）：
 
 - 2026-04-13 19:14 — ✅ C22 API response DTO 一致性（第一批）：新增 DocumentSummary record + CollectionDocumentListResponse record 替换 RagCollectionController.listDocuments() 的 Map 返回；替换 addDocument() 返回 DocumentAddedResponse；RagCollectionControllerTest 更新；1890 tests 全通过；commit d259d90 已推送
 
+## Cron 进度（2026-04-14 12:53 — WebUI 常规发布）
+
+- 2026-04-14 12:53 — ✅ WebUI 常规发布：
+  - npm test: 148 vitest tests ✅（23 test files，148 passed，全通过，2.12s）
+  - npm run build ✅（99KB index gzipped，28 chunks，BarChart 102KB 按需加载）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP）
+  - git 工作区干净（无变更）
+  - WebUI 项目处于生产级成熟状态
+
 ## Cron 进度（2026-04-14 09:28 — WebUI 常规发布）
 
 - 2026-04-14 09:28 — ✅ WebUI 常规发布：
