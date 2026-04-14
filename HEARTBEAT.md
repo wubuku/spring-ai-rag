@@ -2903,3 +2903,5 @@ PDF 端点测试（Section 16，9 tests）：
   - 全量测试通过（mvn test ✅）；commit 1d84fd4 已推送
 
 
+
+- 2026-04-14 04:50 — ✅ 配置化检索评估参数：RagRetrievalProperties 新增 evaluationK（默认10）和 answerQualityTimeoutSeconds（默认30），替换 RetrievalEvaluationServiceImpl 中的硬编码常量；evalResult 键名动态化（precisionAtK/recallAtK 而非固定 precisionAt10/recallAt10）；application.yml 新增 rag.retrieval.evaluation-k 和 rag.retrieval.answer-quality-timeout-seconds 配置项；RetrievalEvaluationServiceImplTest 全部 21 个测试通过；全量测试 1985 通过（零失败零错误）；commit 203c9e3 已推送
