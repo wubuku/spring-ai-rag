@@ -173,7 +173,8 @@
 - 2026-04-03 05:52 - ✅ 主动巡检(cron):嵌入缓存命中率指标追踪--CachingEmbeddingModel 新增 Micrometer hit/miss 计数器,CacheMetricsService 提供 getHitRate/getStats 统计,CacheMetricsController 暴露 GET /api/v1/cache/stats 端点,15 个新测试,817 测试全通过,commit fd1d082
 
 ## 进度日志
-> - 2026-04-15 06:08 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-15 07:48 — ✅ 后端主动巡检(cron):PdfImportController CSS 重构——提取 duplicated CSS(~44行) → PREVIEW_CSS 常量 + buildHtmlShell() 辅助方法;escapeHtml() replaceAll→replace(避免 regex 开销);580→556行(-24);escapeHtml() 性能提升;mvn test ✅;commit f15f686 已推送
+- 2026-04-15 06:08 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-15 04:42 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-15 02:56 — 🔍 后端主动巡检（cron)：mvn test ✅（1853 测试全通过）；扫描 PdfImportService.loadFileAsResource 防御性修复——path 末尾斜杠导致 substring 返回空字符串 → 降级为 "file"；代码库无 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 完成；commit 5ecf1b9 已推送
 
