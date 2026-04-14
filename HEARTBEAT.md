@@ -1198,6 +1198,13 @@
 | N42 | API 文档自动生成示例代码（SpringDoc snippets） | 文档 | ✅ 2026-04-06 |
 | N43 | N18 AuditLogService 增强：AbTestController + EvaluationController 审计覆盖 | 安全 | ✅ 2026-04-06（N43 完成：AbTestController 6个写操作 + EvaluationController POST /feedback 审计日志；USER_FEEDBACK entity 类型；测试更新；1079 tests ✅，commit 15bbf53） |
 
+## 待办（新一波改进 N44-N50）
+
+| # | 改进项 | 类型 | 状态 |
+|---|--------|------|------|
+| N44 | API Response DTO 测试覆盖补全（DocumentDetailResponse/BatchEmbedResponse/CacheStatsResponse/CollectionExportResponse 等） | 测试覆盖 | ✅ 2026-04-15（N44 完成：DtoTest 25→41 tests，+16 新测试覆盖 8 个 Response DTO，spring-ai-rag-api 82 tests 全通过，commit e3f038e） |
+| N45 | HEARTBEAT 主动扫描：api/dto 目录测试覆盖率 | 测试覆盖 | ⏳ |
+
 ## 待办（Cron 持续推进 — 永不空转）
 
 | # | 改进项 | 类型 | 状态 | Cron 执行优先级 |
@@ -1465,6 +1472,19 @@
 | HS2-2 | V16: trigram 索引（条件执行） | 数据库 | ✅ 2026-04-07（V16 migration exists） |
 | HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ✅ 2026-04-07（PgJiebaFulltextProvider 已使用 websearch_to_tsquery + search_vector_zh 预建列，SearchCapabilitiesTest 15 tests 验证能力探测） |
 | HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
+
+## Cron 进度（2026-04-15 00:09 — API Response DTO 测试补全）
+
+- 2026-04-15 00:09 — ✅ API Response DTO 单元测试补全：DtoTest 25→41 tests（+16 新测试）
+  - DocumentDetailResponse: constructor + getters
+  - DocumentStatsResponse: constructor + empty byStatus
+  - EmbeddingStatusResponse: hasMissing=true/false 两种场景
+  - BatchEmbedResponse: outer + BatchEmbedResultItem + BatchEmbedSummary（COMPLETED/CACHED/FAILED/NOT_FOUND/SKIPPED）
+  - CacheStatsResponse: constructor + from() factory + from() defaults
+  - CollectionExportResponse: constructor + ExportedDocumentSummary inner record
+  - VersionHistoryResponse: constructor with nested DocumentVersionResponse
+  - DocumentVersionResponse: constructor + nullContentSnapshot
+  - spring-ai-rag-api: 82 tests 全通过；全项目测试通过；commit e3f038e 已推送
 
 ## Cron 进度（2026-04-14 23:03 — C22-2/3/5 DTO Consistency: RagDocumentController）
 
