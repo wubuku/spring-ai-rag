@@ -1263,6 +1263,7 @@
 | C38 | 数据库连接池生产环境调优:压测后确定 optimal pool size | 性能 | ✅ 2026-04-06(C38 完成:validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache;1280 tests ✅,commit a42e4f2) | P2 |
 | C39 | 第三方 LLM API Mock Server:Node.js mock server,/v1/chat/completions + /v1/embeddings,支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06(C39 完成:scripts/mock-llm-server.js + run-mock-llm.sh,8086默认端口,零依赖,commit d6c2665) | P2 |
 | C40 | CI 缓存优化:Maven/npm 依赖缓存策略改进 | DevOps | ✅ 2026-04-06(actions/setup-java cache=maven 已覆盖,无需额外配置) | P3 |
+| C41 | Repository 单元测试补全:AlertRepository(18 tests) + RagRetrievalEvaluationRepository(22 tests) | 测试覆盖 | ✅ 2026-04-15(C41 完成:AlertRepository 18 tests + RagRetrievalEvaluationRepository 22 tests;剩余待测:FsFileRepository/RagAbExperimentRepository/RagAbResultRepository/RagApiKeyRepository/RagAuditLogRepository/RagChatHistoryJpaRepository/RagClientErrorRepository/RagCollectionRepository/RagDocumentRepository/RagDocumentVersionRepository/RagEmbeddingRepository/SloConfigRepository 已测) | P2 |
 
 **Cron 执行保证**:每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前,cron 永不停止。
 
@@ -3016,4 +3017,14 @@ PDF 端点测试(Section 16,9 tests):
   - `findByStatusOrderByFiredAtDesc`、`countBySeverity`、`countActiveAlerts`、`countByFiredAtBetween`、`deleteOldResolvedAlerts`
   - JPA 继承方法:findById/save/delete/findAll
   - 1853 tests 全通过,零失败零错误;commit fb40c55 已推送
+
+- 2026-04-15 03:35 - ✅ RagRetrievalEvaluationRepository 单元测试补全:
+  - 新增 `RagRetrievalEvaluationRepositoryTest.java`,22 个测试覆盖所有自定义查询方法
+  - `findByCreatedAtBetweenOrderByCreatedAtDesc`:时间范围过滤(3 tests)
+  - `findAllByOrderByCreatedAtDesc`:分页查询(3 tests)
+  - `countByCreatedAtBetween`:时间范围计数(2 tests)
+  - JPQL AVG 查询:`findAvgMrr`/`findAvgNdcg`/`findAvgHitRate`(6 tests,含 null 处理)
+  - JPA 继承方法:save/findById/existsById/deleteById/count(6 tests)
+  - 边界用例:all-null metrics / 不同 evaluation methods(2 tests)
+  - 1868 tests 全通过,零失败零错误;commit e10b365 已推送
 
