@@ -380,6 +380,7 @@ public class RagChatService {
         for (RetrievalResult r : reranked) {
             ChatResponse.SourceDocument doc = new ChatResponse.SourceDocument();
             doc.setDocumentId(r.getDocumentId());
+            doc.setTitle(r.getTitle() != null ? r.getTitle() : r.getDocumentId());
             doc.setChunkText(r.getChunkText());
             doc.setScore(r.getScore());
             sources.add(doc);

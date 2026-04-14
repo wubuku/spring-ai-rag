@@ -216,6 +216,7 @@ public final class RetrievalUtils {
                                                 int chunkIndex, double score) {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId(docId);
+        r.setTitle(docId);
         r.setChunkText(chunkText);
         r.setChunkIndex(chunkIndex);
         r.setScore(score);
@@ -228,6 +229,7 @@ public final class RetrievalUtils {
         RetrievalResult r = e.original;
         RetrievalResult out = new RetrievalResult();
         out.setDocumentId(r.getDocumentId());
+        out.setTitle(r.getTitle());
         out.setChunkText(r.getChunkText());
         out.setScore(e.fusedScore);
         out.setVectorScore(e.vectorScore);

@@ -191,7 +191,7 @@ public class DocumentEmbedService {
         doc.setProcessingStatus("PROCESSING");
         documentRepository.save(doc);
 
-        vectorStore.add(buildVectorStoreDocuments(documentId, chunks));
+        vectorStore.add(buildVectorStoreDocuments(documentId, doc.getTitle(), chunks));
         completeEmbedding(doc, chunks.size());
 
         log.info("Document {} embedding via VectorStore completed: {} chunks stored", documentId, chunks.size());
@@ -522,8 +522,9 @@ public class DocumentEmbedService {
         return stored;
     }
 
-    private List<Document> buildVectorStoreDocuments(Long documentId, List<TextChunk> chunks) {
+    private List<Document> buildVectorStoreDocuments(Long documentId, String documentTitle, List<TextChunk> chunks) {
         List<Document> documents = new java.util.ArrayList<>(chunks.size());
+        String title = documentTitle != null ? documentTitle : String.valueOf(documentId);
         for (int i = 0; i < chunks.size(); i++) {
             TextChunk chunk = chunks.get(i);
             documents.add(Document.builder()
@@ -531,6 +532,7 @@ public class DocumentEmbedService {
                     .text(chunk.text())
                     .metadata(Map.of(
                             "documentId", String.valueOf(documentId),
+                            "title", title,
                             "chunkIndex", String.valueOf(i),
                             "chunkStartPos", String.valueOf(chunk.startPos()),
                             "chunkEndPos", String.valueOf(chunk.endPos())

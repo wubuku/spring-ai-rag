@@ -60,6 +60,7 @@ public class ReRankingService {
 
                     RetrievalResult out = new RetrievalResult();
                     out.setDocumentId(r.getDocumentId());
+                    out.setTitle(r.getTitle());
                     out.setChunkText(r.getChunkText());
                     out.setScore(finalScore);
                     out.setVectorScore(r.getVectorScore());

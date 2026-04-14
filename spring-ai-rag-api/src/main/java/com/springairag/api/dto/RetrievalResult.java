@@ -28,6 +28,9 @@ public class RetrievalResult {
     @Schema(description = "Text chunk index within document", example = "2")
     private int chunkIndex;
 
+    @Schema(description = "Source document title", example = "Spring AI Reference")
+    private String title;
+
     @Schema(description = "Additional metadata")
     private Map<String, Object> metadata;
 
@@ -50,6 +53,9 @@ public class RetrievalResult {
 
     public int getChunkIndex() { return chunkIndex; }
     public void setChunkIndex(int chunkIndex) { this.chunkIndex = chunkIndex; }
+
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

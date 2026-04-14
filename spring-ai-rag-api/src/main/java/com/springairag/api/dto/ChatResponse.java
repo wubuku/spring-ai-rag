@@ -100,6 +100,9 @@ public class ChatResponse {
         @Schema(description = "Source document ID", example = "doc-456")
         private String documentId;
 
+        @Schema(description = "Source document title", example = "Spring AI Reference")
+        private String title;
+
         @Schema(description = "Matched text snippet", example = "Return policy: Within 7 days of receiving the product...")
         private String chunkText;
 
@@ -110,6 +113,9 @@ public class ChatResponse {
 
         public String getDocumentId() { return documentId; }
         public void setDocumentId(String documentId) { this.documentId = documentId; }
+
+        public String getTitle() { return title; }
+        public void setTitle(String title) { this.title = title; }
 
         public String getChunkText() { return chunkText; }
         public void setChunkText(String chunkText) { this.chunkText = chunkText; }

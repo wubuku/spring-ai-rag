@@ -149,6 +149,10 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             @SuppressWarnings("unchecked")
             Map<String, Object> meta = (Map<String, Object>) metadata;
             r.setMetadata(meta);
+            Object title = meta.get("title");
+            if (title instanceof String && !((String) title).isBlank()) {
+                r.setTitle((String) title);
+            }
         }
         return r;
     }

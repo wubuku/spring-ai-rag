@@ -211,7 +211,14 @@ public class HybridRetrieverService {
         r.setChunkIndex(((Number) row.get("chunk_index")).intValue());
         Object metadata = row.get("metadata");
         if (metadata instanceof Map) {
-            r.setMetadata((Map<String, Object>) metadata);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> metaMap = (Map<String, Object>) metadata;
+            r.setMetadata(metaMap);
+            // Title stored in embedding metadata (set by DocumentEmbedService when creating embeddings)
+            Object title = metaMap.get("title");
+            if (title instanceof String && !((String) title).isBlank()) {
+                r.setTitle((String) title);
+            }
         }
         return r;
     }
