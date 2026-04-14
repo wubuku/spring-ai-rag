@@ -16,6 +16,10 @@ public class RagRetrievalProperties {
     private boolean fulltextEnabled = true;
     /** Full-text search strategy: auto (auto-detect) / pg_jieba / pg_trgm / none */
     private String fulltextStrategy = "auto";
+    /** K value for precision@k and recall@k metrics (default: 10) */
+    private int evaluationK = 10;
+    /** Timeout in seconds for LLM-based answer quality evaluation (default: 30) */
+    private int answerQualityTimeoutSeconds = 30;
 
     public float getVectorWeight() {
         return vectorWeight;
@@ -63,5 +67,21 @@ public class RagRetrievalProperties {
 
     public void setMinScore(float minScore) {
         this.minScore = minScore;
+    }
+
+    public int getEvaluationK() {
+        return evaluationK;
+    }
+
+    public void setEvaluationK(int evaluationK) {
+        this.evaluationK = evaluationK;
+    }
+
+    public int getAnswerQualityTimeoutSeconds() {
+        return answerQualityTimeoutSeconds;
+    }
+
+    public void setAnswerQualityTimeoutSeconds(int answerQualityTimeoutSeconds) {
+        this.answerQualityTimeoutSeconds = answerQualityTimeoutSeconds;
     }
 }

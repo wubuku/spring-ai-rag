@@ -249,6 +249,10 @@ rag:
     fulltext-weight: 0.5
     default-limit: 10
     min-score: 0.3
+    # K value for precision@k and recall@k metrics
+    evaluation-k: 10
+    # Timeout in seconds for LLM-based answer quality evaluation
+    answer-quality-timeout-seconds: 30
 
   # Query rewriting configuration
   query-rewrite:
