@@ -2973,3 +2973,13 @@ PDF 端点测试（Section 16，9 tests）：
   - `PdfImportServiceTest`：验证改为 `saveAll()`（修复 `importPdf_storesOriginalPdf` 失败）
   - 1835 tests 全通过，零失败零错误；commit 567d0ac 已推送
   - 所有 ⏳ 待办均已清零；后端代码库零 TODO/FIXME
+
+## Cron 进度（2026-04-14 23:25 — WebUI 常规发布）
+
+- 2026-04-14 23:25 — ✅ WebUI 常规发布：
+  - npm test: 148 ✅（23 test files，148 vitest 全通过）
+  - npm run build: ✅（99KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist/ 已同步到 static/webui/
+  - 后端服务 8081 UP
+  - git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
