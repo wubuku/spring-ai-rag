@@ -2938,8 +2938,11 @@ PDF 端点测试（Section 16，9 tests）：
 
 ## Cron 进度（2026-04-14 16:20 — T10 ChatExportService CSV 边界测试）
 
-- 2026-04-14 16:20 — ✅ T10 ChatExportService CSV 导出边界测试完成：
-  - `ChatExportServiceTest` 新增 9 个边界测试（20→29 tests）：CR 字符触发 CSV quoting / null userMessage 含 assistant 行 / null 双字段优雅处理 / 多特殊字符组合（comma+quote+newline）/ blank 空格内容 / 多记录全字段 / JSON CR 转义 / JSON Tab 转义 / Markdown CR 处理
-  - 29 tests 全通过，零失败零错误
-  - commit dd63d92 已推送
-  - T10 → ✅
+- 2026-04-14 17:32 — ✅ WebUI 常规发布 + 关键启动修复：
+  - npm test: 148 ✅（23 test files，148 vitest 全通过）
+  - npm run build: ✅（99KB index gzipped，28 chunks）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist/ 已同步到 static/webui/
+  - 关键修复：RetrievalEvaluationServiceImpl 启动失败（`RagRetrievalProperties` 非 Spring Bean）→ 改为 `RagProperties` 注入，`ragProperties.getRetrieval()` 访问配置；21 测试全通过；commit 22b6e48 已推送
+  - 后端服务 8081 UP
+  - ⚠️ PDF 导入相关变更（pdf/ 目录 + PdfImportController 等）暂存待后端 cron 处理
