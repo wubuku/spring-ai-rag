@@ -262,7 +262,11 @@ public class PdfImportService {
         return fsFileRepository.findById(path)
                 .map(file -> {
                     try {
-                        Path tempFile = Files.createTempFile("fsfile-", "-" + path.substring(path.lastIndexOf('/') + 1));
+                        String filename = path.substring(path.lastIndexOf('/') + 1);
+                        if (filename.isEmpty()) {
+                            filename = "file";
+                        }
+                        Path tempFile = Files.createTempFile("fsfile-", "-" + filename);
                         tempFile.toFile().deleteOnExit();
                         Files.write(tempFile, file.getContentBin());
                         return new UrlResource(tempFile.toUri());

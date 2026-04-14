@@ -3,6 +3,7 @@
 > ## 🚨 核心铁律（永久生效，不可删除，不可弱化）
 > **任务永不清零，待办永远有内容。**
 > - 每次 cron 唤醒时：若 ⏳ 待办已清零，**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
+- 2026-04-15 02:28 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，99KB index gzipped，18 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 - 2026-04-15 01:40 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端 PDF 导入功能变更（归属后端 cron）；WebUI 项目处于生产级成熟状态
 > - 绝不允许出现"无任务可做"的空闲状态
 - 2026-04-14 15:47 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
