@@ -3038,3 +3038,13 @@ PDF 端点测试(Section 16,9 tests):
   - 边界用例:all-null metrics / 不同 evaluation methods(2 tests)
   - 1868 tests 全通过,零失败零错误;commit e10b365 已推送
 
+## Cron 进度(2026-04-15 05:28 - WebUI 常规巡检)
+
+- 2026-04-15 05:28 - ✅ WebUI 常规巡检:
+  - npm test: 148 ✅(23 test files,148 vitest 全通过)
+  - npm run build: ✅(99KB index gzipped,34 chunks)
+  - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
+  - dist/ 已同步到 static/webui/
+  - 后端服务 8081 UP
+  - git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
