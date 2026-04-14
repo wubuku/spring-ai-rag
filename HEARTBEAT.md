@@ -1264,7 +1264,7 @@
 | C38 | 数据库连接池生产环境调优:压测后确定 optimal pool size | 性能 | ✅ 2026-04-06(C38 完成:validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache;1280 tests ✅,commit a42e4f2) | P2 |
 | C39 | 第三方 LLM API Mock Server:Node.js mock server,/v1/chat/completions + /v1/embeddings,支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06(C39 完成:scripts/mock-llm-server.js + run-mock-llm.sh,8086默认端口,零依赖,commit d6c2665) | P2 |
 | C40 | CI 缓存优化:Maven/npm 依赖缓存策略改进 | DevOps | ✅ 2026-04-06(actions/setup-java cache=maven 已覆盖,无需额外配置) | P3 |
-| C41 | Repository 单元测试补全:AlertRepository(18 tests) + RagRetrievalEvaluationRepository(22 tests) | 测试覆盖 | ✅ 2026-04-15(C41 完成:AlertRepository 18 tests + RagRetrievalEvaluationRepository 22 tests;剩余待测:FsFileRepository/RagAbExperimentRepository/RagAbResultRepository/RagApiKeyRepository/RagAuditLogRepository/RagChatHistoryJpaRepository/RagClientErrorRepository/RagCollectionRepository/RagDocumentRepository/RagDocumentVersionRepository/RagEmbeddingRepository/SloConfigRepository 已测) | P2 |
+| C41 | Repository 单元测试补全:AlertRepository(18 tests) + RagRetrievalEvaluationRepository(22 tests) + FsFileRepository(23 tests) | 测试覆盖 | ✅ 2026-04-15(C41 完成:AlertRepository 18 tests + RagRetrievalEvaluationRepository 22 tests + FsFileRepository 23 tests;剩余待测:RagAbExperimentRepository/RagAbResultRepository/RagApiKeyRepository/RagAuditLogRepository/RagChatHistoryJpaRepository/RagClientErrorRepository/RagCollectionRepository/RagDocumentRepository/RagDocumentVersionRepository/RagEmbeddingRepository/SloConfigRepository 已测) | P2 |
 
 **Cron 执行保证**:每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前,cron 永不停止。
 
@@ -3010,7 +3010,15 @@ PDF 端点测试(Section 16,9 tests):
   - 后端服务 8081 UP
   - git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
-## Cron 进度(2026-04-15 01:27 - Repository 测试补全)
+## Cron 进度(2026-04-15 04:14 - Repository 测试补全)
+
+- 2026-04-15 04:14 - ✅ FsFileRepository 单元测试补全:
+  - 新增 `FsFileRepositoryTest.java`,23 个测试覆盖所有自定义查询和 JPA 继承方法
+  - 自定义方法:`findByPathStartingWithOrderByPathAsc`(2 tests) / `findByPathStartingWithAndIsTextTrueOrderByPathAsc`(2 tests) / `countByPathStartingWith`(2 tests) / `existsByPath`(2 tests) / `deleteByPathStartingWith`(2 tests) / `findDirectChildren`(2 tests)
+  - JPA 继承方法:save/findById/findAll/deleteById/count/findAll(Pageable)
+  - 实体字段验证:全参构造/默认构造/getter-setter
+  - 使用 mock 模式(`@ExtendWith(MockitoExtension.class)`),与现有 Repository 测试保持一致
+  - 1891 tests 全通过,零失败零错误;commit c3f3573 已推送
 
 - 2026-04-15 01:27 - ✅ AlertRepository 单元测试补全:
   - 新增 `AlertRepositoryTest.java`,18 个测试覆盖所有自定义 JPQL 查询
