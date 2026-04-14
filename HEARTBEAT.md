@@ -3004,3 +3004,13 @@ PDF 端点测试（Section 16，9 tests）：
   - dist/ 已同步到 static/webui/
   - 后端服务 8081 UP
   - git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-15 01:27 — Repository 测试补全）
+
+- 2026-04-15 01:27 — ✅ AlertRepository 单元测试补全：
+  - 新增 `AlertRepositoryTest.java`，18 个测试覆盖所有自定义 JPQL 查询
+  - `findAlertHistory`：时间范围/severity/alertType 组合过滤
+  - `findByStatusOrderByFiredAtDesc`、`countBySeverity`、`countActiveAlerts`、`countByFiredAtBetween`、`deleteOldResolvedAlerts`
+  - JPA 继承方法：findById/save/delete/findAll
+  - 1853 tests 全通过，零失败零错误；commit fb40c55 已推送
+
