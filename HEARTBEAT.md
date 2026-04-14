@@ -2878,4 +2878,28 @@ PDF 端点测试（Section 16，9 tests）：
 
 - 2026-04-13 19:14 — ✅ C22 API response DTO 一致性（第一批）：新增 DocumentSummary record + CollectionDocumentListResponse record 替换 RagCollectionController.listDocuments() 的 Map 返回；替换 addDocument() 返回 DocumentAddedResponse；RagCollectionControllerTest 更新；1890 tests 全通过；commit d259d90 已推送
 
+## Cron 进度（2026-04-14 09:28 — WebUI 常规发布）
+
+- 2026-04-14 09:28 — ✅ WebUI 常规发布：
+  - npm test: 148 vitest tests ✅（23 test files，148 passed，全通过，2.06s）
+  - npm run build ✅（99KB index gzipped，28 chunks，BarChart 102KB 按需加载）
+  - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP（health: UP，database: UP，pgvector: UP，tables: DEGRADED）
+  - git 工作区干净（无变更，static/webui 在 .gitignore 中）
+  - WebUI 项目处于生产级成熟状态（W1-W14 全部完成）
+
+## Cron 进度（2026-04-14 10:57 — 后端：检索结果文档标题字段）
+
+- 2026-04-14 10:57 — ✅ 检索结果文档标题字段补全：
+  - `RetrievalResult`：新增 `title` 字段（getter/setter/@Schema）+ `ChatResponse.SourceDocument` 新增 `title` 字段
+  - `DocumentEmbedService.buildVectorStoreDocuments`：存储 `title` 到 embedding metadata（`Map.of("title", doc.getTitle())`）
+  - `HybridRetrieverService.toRetrievalResult`：从 embedding metadata 提取 `title`
+  - `PgEnglishFtsProvider/PgJiebaFulltextProvider/PgTrgmFulltextProvider`：各自 `toResult()` 从 metadata 提取 `title`
+  - `ReRankingService`：`out.setTitle(r.getTitle())` 将 title 透传到重排结果
+  - `RetrievalUtils`：`createResult()` 和 `toRetrievalResult()` 透传 title
+  - `RagChatService.extractSources`：从 `RetrievalResult.title` 填充 `ChatResponse.SourceDocument.title`，无 title 时 fallback 到 documentId
+  - WebUI `ChatSource.title` 原来从 API 收到 null，现后端完整提供 document title
+  - 全量测试通过（mvn test ✅）；commit 1d84fd4 已推送
+
 
