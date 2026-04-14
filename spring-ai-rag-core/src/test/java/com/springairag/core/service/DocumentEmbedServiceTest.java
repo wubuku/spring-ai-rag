@@ -10,6 +10,8 @@ import com.springairag.core.retrieval.EmbeddingBatchService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.jdbc.core.JdbcTemplate;
 
@@ -169,6 +171,25 @@ class DocumentEmbedServiceTest {
 
         assertEquals(0, output.get("chunksCreated"));
         verifyNoInteractions(vectorStore);
+    }
+
+    @Test
+    @DisplayName("embedDocumentViaVectorStore: title stored in embedding metadata")
+    void embedDocumentViaVectorStore_titleStoredInMetadata() {
+        RagDocument doc = createDocument(2L, "测试标题内容。".repeat(50));
+        doc.setTitle("My Test Document Title");
+        when(documentRepository.findById(2L)).thenReturn(Optional.of(doc));
+
+        service.embedDocumentViaVectorStore(2L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Document>> captor = ArgumentCaptor.forClass(List.class);
+        verify(vectorStore).add(captor.capture());
+        List<Document> capturedDocs = captor.getValue();
+        assertFalse(capturedDocs.isEmpty());
+        Document firstDoc = capturedDocs.get(0);
+        assertEquals("My Test Document Title", firstDoc.getMetadata().get("title"));
+        assertEquals("2", firstDoc.getMetadata().get("documentId"));
     }
 
     // ==================== batchEmbedDocuments ====================
