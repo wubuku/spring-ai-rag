@@ -6,10 +6,10 @@ import java.time.LocalDateTime;
 import java.util.Map;
 
 /**
- * Document summary in list/detail context (list view uses contentPreview instead of full content).
+ * Full document detail response (single document GET endpoint).
  */
-@Schema(description = "Document summary")
-public record DocumentSummary(
+@Schema(description = "Document detail response")
+public record DocumentDetailResponse(
         @Schema(description = "Document ID", example = "1")
         Long id,
 
@@ -28,6 +28,9 @@ public record DocumentSummary(
         @Schema(description = "Creation timestamp")
         LocalDateTime createdAt,
 
+        @Schema(description = "Last update timestamp")
+        LocalDateTime updatedAt,
+
         @Schema(description = "Document size in bytes", example = "4096")
         Long size,
 
@@ -36,9 +39,6 @@ public record DocumentSummary(
 
         @Schema(description = "Whether the document is enabled", example = "true")
         boolean enabled,
-
-        @Schema(description = "Last update timestamp")
-        LocalDateTime updatedAt,
 
         @Schema(description = "Associated collection ID", example = "1")
         Long collectionId,
@@ -49,10 +49,7 @@ public record DocumentSummary(
         @Schema(description = "Number of embedding chunks", example = "5")
         long chunkCount,
 
-        @Schema(description = "Content preview (truncated to 200 chars), present in list view")
-        String contentPreview,
-
-        @Schema(description = "Full content, present in detail view")
+        @Schema(description = "Full content")
         String content,
 
         @Schema(description = "Additional metadata")

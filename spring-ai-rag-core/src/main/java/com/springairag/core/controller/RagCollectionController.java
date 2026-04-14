@@ -290,7 +290,16 @@ public class RagCollectionController {
                 doc.getDocumentType(),
                 doc.getProcessingStatus(),
                 doc.getCreatedAt(),
-                doc.getSize());
+                doc.getSize(),
+                doc.getContentHash(),
+                doc.getEnabled(),
+                doc.getUpdatedAt(),
+                null, // collectionId - not available in this context
+                null, // collectionName
+                0L,   // chunkCount - not available without embeddingRepository
+                null, // contentPreview
+                null, // content
+                doc.getMetadata());
     }
 
     /**

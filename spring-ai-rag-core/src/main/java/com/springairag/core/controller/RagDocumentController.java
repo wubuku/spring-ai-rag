@@ -5,11 +5,19 @@ import com.springairag.api.dto.BatchCreateAndEmbedResponse;
 import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDocumentRequest;
+import com.springairag.api.dto.BatchEmbedResponse;
 import com.springairag.api.dto.DocumentCreateResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
+import com.springairag.api.dto.DocumentDetailResponse;
+import com.springairag.api.dto.DocumentListResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.DocumentStatsResponse;
+import com.springairag.api.dto.DocumentSummary;
+import com.springairag.api.dto.EmbeddingStatusResponse;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.FileUploadResponse;
+import com.springairag.api.dto.VersionHistoryResponse;
+import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.api.dto.ReembedMissingResponse;
@@ -140,12 +148,18 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}")
-    public ResponseEntity<Map<String, Object>> getDocument(@PathVariable Long id) {
+    public ResponseEntity<DocumentDetailResponse> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
 
         return documentRepository.findById(id)
                 .map(doc -> {
-                    Map<String, Object> result = DocumentMapper.toMap(doc, collectionRepository, embeddingRepository);
+                    Long collectionId = doc.getCollectionId();
+                    Map<Long, String> collectionNameMap = collectionId != null
+                            ? Map.of(collectionId, collectionRepository.findById(collectionId)
+                                    .map(RagCollection::getName).orElse(null))
+                            : Map.of();
+                    DocumentDetailResponse result = DocumentMapper.toDetailResponse(
+                            doc, collectionNameMap, embeddingRepository);
                     return ResponseEntity.ok(result);
                 })
                 .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -161,7 +175,7 @@ public class RagDocumentController {
     @Operation(summary = "List documents", description = "Paginated document list with filtering by title/type/status and sorting by creation time descending.")
     @ApiResponse(responseCode = "200", description = "Paginated document list returned")
     @GetMapping
-    public ResponseEntity<Map<String, Object>> listDocuments(
+    public ResponseEntity<DocumentListResponse> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String title,
@@ -195,21 +209,21 @@ public class RagDocumentController {
                 : collectionRepository.findAllById(collectionIds).stream()
                         .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
 
-        List<Map<String, Object>> docs = pageResult.getContent().stream()
-                .map(doc -> DocumentMapper.toListMap(doc, collectionNameMap, embeddingRepository))
+        List<DocumentSummary> docs = pageResult.getContent().stream()
+                .map(doc -> DocumentMapper.toSummary(doc, collectionNameMap, embeddingRepository))
                 .toList();
 
-        return ResponseEntity.ok(Map.of(
-                "documents", docs,
-                "total", pageResult.getTotalElements(),
-                "offset", offset,
-                "limit", limit
+        return ResponseEntity.ok(new DocumentListResponse(
+                docs,
+                pageResult.getTotalElements(),
+                offset,
+                limit
         ));
     }
 
     @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")
     @GetMapping("/stats")
-    public ResponseEntity<Map<String, Object>> getDocumentStats() {
+    public ResponseEntity<DocumentStatsResponse> getDocumentStats() {
         List<Object[]> statusCounts = documentRepository.countByProcessingStatus();
         Map<String, Long> counts = new HashMap<>();
         long total = 0;
@@ -219,7 +233,7 @@ public class RagDocumentController {
             counts.put(status != null ? status : "UNKNOWN", count);
             total += count;
         }
-        return ResponseEntity.ok(Map.of("total", total, "byStatus", counts));
+        return ResponseEntity.ok(new DocumentStatsResponse(total, counts));
     }
 
     // ==================== Embedding Vectors ====================
@@ -254,16 +268,12 @@ public class RagDocumentController {
      */
     @Operation(summary = "Embedding vector status", description = "Query how many documents lack embedding vectors, to help determine if re-embedding is needed")
     @GetMapping("/embed-vector-status")
-    public ResponseEntity<Map<String, Object>> embeddingStatus() {
+    public ResponseEntity<EmbeddingStatusResponse> embeddingStatus() {
         long total = documentRepository.count();
         long withoutEmbedding = documentRepository.countDocumentsWithoutEmbeddings();
         long withEmbedding = total - withoutEmbedding;
-        return ResponseEntity.ok(Map.of(
-                "totalDocuments", total,
-                "withEmbeddings", withEmbedding,
-                "withoutEmbeddings", withoutEmbedding,
-                "hasMissing", withoutEmbedding > 0
-        ));
+        return ResponseEntity.ok(new EmbeddingStatusResponse(
+                total, withEmbedding, withoutEmbedding, withoutEmbedding > 0));
     }
 
     /**
@@ -448,7 +458,7 @@ public class RagDocumentController {
 
     @Operation(summary = "Batch generate embedding vectors", description = "Batch chunk and generate embeddings for multiple documents. Single document failure doesn't affect others.")
     @PostMapping("/batch/embed")
-    public ResponseEntity<Map<String, Object>> batchEmbedDocuments(
+    public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
@@ -457,15 +467,38 @@ public class RagDocumentController {
         if (ids.size() > 50) {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
-        Map<String, Object> result = documentEmbedService.batchEmbedDocuments(ids);
+        Map<String, Object> raw = documentEmbedService.batchEmbedDocuments(ids);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> rawResults = (List<Map<String, Object>>) raw.get("results");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> rawSummary = (Map<String, Object>) raw.get("summary");
+
+        List<BatchEmbedResponse.BatchEmbedResultItem> items = rawResults.stream()
+                .map(r -> new BatchEmbedResponse.BatchEmbedResultItem(
+                        ((Number) r.get("documentId")).longValue(),
+                        (String) r.get("status"),
+                        r.get("chunksCreated") != null ? ((Number) r.get("chunksCreated")).intValue() : null,
+                        r.get("embeddingsStored") != null ? ((Number) r.get("embeddingsStored")).intValue() : null,
+                        (String) r.get("error"),
+                        (String) r.get("reason")))
+                .toList();
+
+        BatchEmbedResponse.BatchEmbedSummary summary = new BatchEmbedResponse.BatchEmbedSummary(
+                ((Number) rawSummary.get("total")).intValue(),
+                ((Number) rawSummary.get("success")).intValue(),
+                ((Number) rawSummary.get("cached")).intValue(),
+                ((Number) rawSummary.get("failed")).intValue(),
+                ((Number) rawSummary.get("skipped")).intValue()
+        );
 
         auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
                 "batch:" + ids.size(),
                 "Batch embed: " + ids.size() + " documents",
-                Map.of("succeeded", result.getOrDefault("succeeded", 0),
-                        "failed", result.getOrDefault("failed", 0)));
+                Map.of("succeeded", summary.success(),
+                        "failed", summary.failed()));
 
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(new BatchEmbedResponse(items, summary));
     }
 
     @Operation(summary = "Batch generate embeddings via SSE streaming with progress",
@@ -682,7 +715,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}/versions")
-    public ResponseEntity<Map<String, Object>> getVersionHistory(
+    public ResponseEntity<VersionHistoryResponse> getVersionHistory(
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size") @RequestParam(defaultValue = "20") int size) {
@@ -692,13 +725,15 @@ public class RagDocumentController {
         }
 
         var versions = documentVersionService.getVersionHistory(id, PageRequest.of(page, size));
-        Map<String, Object> result = new HashMap<>();
-        result.put("documentId", id);
-        result.put("totalVersions", versions.getTotalElements());
-        result.put("page", page);
-        result.put("size", size);
-        result.put("versions", versions.getContent().stream().map(DocumentMapper::toVersionMap).toList());
-        return ResponseEntity.ok(result);
+        return ResponseEntity.ok(new VersionHistoryResponse(
+                id,
+                versions.getTotalElements(),
+                page,
+                size,
+                versions.getContent().stream()
+                        .map(DocumentMapper::toVersionResponse)
+                        .toList()
+        ));
     }
 
     @Operation(summary = "Get specific version", description = "Query specific version details of a document (including content snapshot).")
@@ -707,12 +742,12 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Version not found")
     })
     @GetMapping("/{id}/versions/{versionNumber}")
-    public ResponseEntity<Map<String, Object>> getVersion(
+    public ResponseEntity<DocumentVersionResponse> getVersion(
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Version number") @PathVariable int versionNumber) {
 
         return documentVersionService.getVersion(id, versionNumber)
-                .map(v -> ResponseEntity.ok(DocumentMapper.toVersionMap(v)))
+                .map(v -> ResponseEntity.ok(DocumentMapper.toVersionResponse(v)))
                 .orElse(ResponseEntity.notFound().build());
     }
 

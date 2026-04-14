@@ -5,14 +5,20 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.List;
 
 /**
- * Collection document list response
+ * Paginated document list response
  */
-@Schema(description = "Collection document list response")
+@Schema(description = "Paginated document list response")
 public record DocumentListResponse(
         @Schema(description = "Document list")
-        List<?> documents,
+        List<DocumentSummary> documents,
 
         @Schema(description = "Total count", example = "25")
-        long total
+        long total,
+
+        @Schema(description = "Current offset", example = "0")
+        int offset,
+
+        @Schema(description = "Page size limit", example = "20")
+        int limit
 ) {
 }

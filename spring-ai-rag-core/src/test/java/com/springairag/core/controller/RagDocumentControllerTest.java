@@ -4,12 +4,19 @@ import com.springairag.api.dto.BatchCreateResponse;
 import com.springairag.api.dto.BatchDeleteItem;
 import com.springairag.api.dto.BatchDeleteResponse;
 import com.springairag.api.dto.BatchDeleteSummary;
+import com.springairag.api.dto.BatchEmbedResponse;
 import com.springairag.api.dto.DocumentCreateResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
+import com.springairag.api.dto.DocumentDetailResponse;
+import com.springairag.api.dto.DocumentListResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.DocumentStatsResponse;
+import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.ReembedMissingResponse;
 import com.springairag.api.dto.ReembedResultResponse;
+import com.springairag.api.dto.VersionHistoryResponse;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagCollectionRepository;
@@ -62,6 +69,7 @@ class RagDocumentControllerTest {
         // Default mock behavior for documentToMap calls
         when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);
         when(collectionRepository.findById(any())).thenReturn(Optional.empty());
+        when(collectionRepository.findAllById(anyIterable())).thenReturn(List.of());
     }
 
     private RagDocument createDoc(Long id, String title, String content) {
@@ -82,6 +90,17 @@ class RagDocumentControllerTest {
         doc.setDocumentType(documentType);
         doc.setProcessingStatus(processingStatus);
         return doc;
+    }
+
+    private RagCollection createCollection(Long id, String name) {
+        RagCollection c = new RagCollection();
+        c.setId(id);
+        c.setName(name);
+        c.setDescription("测试集合 " + name);
+        c.setEmbeddingModel("bge-m3");
+        c.setDimensions(1024);
+        c.setEnabled(true);
+        return c;
     }
 
     @Test
@@ -145,14 +164,16 @@ class RagDocumentControllerTest {
     @Test
     void getDocument_found() {
         RagDocument doc = createDoc(1L, "文档标题", "内容");
+        doc.setCollectionId(1L);
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
+        when(collectionRepository.findById(1L)).thenReturn(Optional.of(createCollection(1L, "知识库A")));
         when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
 
-        ResponseEntity<Map<String, Object>> response = controller.getDocument(1L);
+        ResponseEntity<DocumentDetailResponse> response = controller.getDocument(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(5L, response.getBody().get("chunkCount"));
-        assertEquals("文档标题", response.getBody().get("title"));
+        assertEquals(5L, response.getBody().chunkCount());
+        assertEquals("文档标题", response.getBody().title());
     }
 
     @Test
@@ -193,11 +214,11 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(2L, response.getBody().get("total"));
-        List<?> resultDocs = (List<?>) response.getBody().get("documents");
+        assertEquals(2L, response.getBody().total());
+        List<?> resultDocs = response.getBody().documents();
         assertEquals(2, resultDocs.size());
     }
 
@@ -208,11 +229,11 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("Spring"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
-        List<?> resultDocs = (List<?>) response.getBody().get("documents");
+        assertEquals(1L, response.getBody().total());
+        List<?> resultDocs = response.getBody().documents();
         assertEquals(1, resultDocs.size());
     }
 
@@ -223,10 +244,10 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), eq("markdown"), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, "markdown", null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, "markdown", null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -236,10 +257,10 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(isNull(), isNull(), eq("PENDING"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, null, null, "PENDING", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -249,10 +270,10 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("Spring"), eq("markdown"), eq("COMPLETED"), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "Spring", "markdown", "COMPLETED", null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -261,11 +282,11 @@ class RagDocumentControllerTest {
         when(documentRepository.searchDocuments(eq("不存在的标题"), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null, null, null);
+        ResponseEntity<DocumentListResponse> response = controller.listDocuments(0, 20, "不存在的标题", null, null, null, null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(0L, response.getBody().get("total"));
-        List<?> resultDocs = (List<?>) response.getBody().get("documents");
+        assertEquals(0L, response.getBody().total());
+        List<?> resultDocs = response.getBody().documents();
         assertEquals(0, resultDocs.size());
     }
 
@@ -279,11 +300,11 @@ class RagDocumentControllerTest {
                 any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response =
+        ResponseEntity<DocumentListResponse> response =
                 controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -296,11 +317,11 @@ class RagDocumentControllerTest {
                 any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response =
+        ResponseEntity<DocumentListResponse> response =
                 controller.listDocuments(0, 20, null, null, null, null, null, null, "2024-12-31T23:59:59");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -314,11 +335,11 @@ class RagDocumentControllerTest {
                 any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response =
+        ResponseEntity<DocumentListResponse> response =
                 controller.listDocuments(0, 20, null, null, null, null, null, "2024-01-01T00:00:00", "2024-12-31T23:59:59");
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -332,11 +353,11 @@ class RagDocumentControllerTest {
                 any(PageRequest.class)))
                 .thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response =
+        ResponseEntity<DocumentListResponse> response =
                 controller.listDocuments(0, 20, null, null, null, null, null, "not-a-date", null);
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(1L, response.getBody().get("total"));
+        assertEquals(1L, response.getBody().total());
     }
 
     @Test
@@ -348,26 +369,24 @@ class RagDocumentControllerTest {
         );
         when(documentRepository.countByProcessingStatus()).thenReturn(statusCounts);
 
-        ResponseEntity<Map<String, Object>> response = controller.getDocumentStats();
+        ResponseEntity<DocumentStatsResponse> response = controller.getDocumentStats();
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(14L, response.getBody().get("total"));
-        Map<?, ?> byStatus = (Map<?, ?>) response.getBody().get("byStatus");
-        assertEquals(10L, byStatus.get("COMPLETED"));
-        assertEquals(3L, byStatus.get("PENDING"));
-        assertEquals(1L, byStatus.get("FAILED"));
+        assertEquals(14L, response.getBody().total());
+        assertEquals(10L, response.getBody().byStatus().get("COMPLETED"));
+        assertEquals(3L, response.getBody().byStatus().get("PENDING"));
+        assertEquals(1L, response.getBody().byStatus().get("FAILED"));
     }
 
     @Test
     void getDocumentStats_empty() {
         when(documentRepository.countByProcessingStatus()).thenReturn(List.of());
 
-        ResponseEntity<Map<String, Object>> response = controller.getDocumentStats();
+        ResponseEntity<DocumentStatsResponse> response = controller.getDocumentStats();
 
         assertEquals(200, response.getStatusCode().value());
-        assertEquals(0L, response.getBody().get("total"));
-        Map<?, ?> byStatus = (Map<?, ?>) response.getBody().get("byStatus");
-        assertTrue(byStatus.isEmpty());
+        assertEquals(0L, response.getBody().total());
+        assertTrue(response.getBody().byStatus().isEmpty());
     }
 
     @Test
@@ -576,46 +595,43 @@ class RagDocumentControllerTest {
                         Map.of("documentId", 1L, "status", "COMPLETED", "chunksCreated", 5, "embeddingsStored", 5),
                         Map.of("documentId", 2L, "status", "COMPLETED", "chunksCreated", 3, "embeddingsStored", 3)
                 ),
-                "summary", Map.of("total", 2, "success", 2, "failed", 0, "skipped", 0)
+                "summary", Map.of("total", 2, "success", 2, "failed", 0, "skipped", 0, "cached", 0)
         ));
 
-        ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
+        ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(1L, 2L)));
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(2, summary.get("total"));
-        assertEquals(2, summary.get("success"));
+        assertEquals(2, response.getBody().summary().total());
+        assertEquals(2, response.getBody().summary().success());
     }
 
     @Test
     void batchEmbedDocuments_notFound_skipped() {
         when(documentEmbedService.batchEmbedDocuments(List.of(999L))).thenReturn(Map.of(
                 "results", List.of(Map.of("documentId", 999L, "status", "NOT_FOUND")),
-                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1)
+                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1, "cached", 0)
         ));
 
-        ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
+        ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(999L)));
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(1, summary.get("skipped"));
+        assertEquals(1, response.getBody().summary().skipped());
     }
 
     @Test
     void batchEmbedDocuments_emptyContent_skipped() {
         when(documentEmbedService.batchEmbedDocuments(List.of(1L))).thenReturn(Map.of(
                 "results", List.of(Map.of("documentId", 1L, "status", "SKIPPED", "reason", "内容为空")),
-                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1)
+                "summary", Map.of("total", 1, "success", 0, "failed", 0, "skipped", 1, "cached", 0)
         ));
 
-        ResponseEntity<Map<String, Object>> response = controller.batchEmbedDocuments(
+        ResponseEntity<BatchEmbedResponse> response = controller.batchEmbedDocuments(
                 Map.of("ids", List.of(1L)));
 
         assertEquals(200, response.getStatusCode().value());
-        Map<?, ?> summary = (Map<?, ?>) response.getBody().get("summary");
-        assertEquals(1, summary.get("skipped"));
+        assertEquals(1, response.getBody().summary().skipped());
     }
 
     @Test
@@ -642,7 +658,7 @@ class RagDocumentControllerTest {
     void getVersionHistory_documentNotFound_returns404() {
         when(documentRepository.existsById(999L)).thenReturn(false);
 
-        ResponseEntity<Map<String, Object>> response = controller.getVersionHistory(999L, 0, 20);
+        ResponseEntity<VersionHistoryResponse> response = controller.getVersionHistory(999L, 0, 20);
 
         assertEquals(404, response.getStatusCode().value());
     }
@@ -660,15 +676,14 @@ class RagDocumentControllerTest {
         Page<com.springairag.core.entity.RagDocumentVersion> page = new PageImpl<>(List.of(v1));
         when(documentVersionService.getVersionHistory(eq(1L), any(PageRequest.class))).thenReturn(page);
 
-        ResponseEntity<Map<String, Object>> response = controller.getVersionHistory(1L, 0, 20);
+        ResponseEntity<VersionHistoryResponse> response = controller.getVersionHistory(1L, 0, 20);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        VersionHistoryResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals(1L, body.get("documentId"));
-        assertEquals(1L, body.get("totalVersions"));
-        List<?> versions = (List<?>) body.get("versions");
-        assertEquals(1, versions.size());
+        assertEquals(1L, body.documentId());
+        assertEquals(1L, body.totalVersions());
+        assertEquals(1, body.versions().size());
     }
 
     @Test
@@ -683,20 +698,20 @@ class RagDocumentControllerTest {
         v1.setSize(200L);
         when(documentVersionService.getVersion(1L, 2)).thenReturn(Optional.of(v1));
 
-        ResponseEntity<Map<String, Object>> response = controller.getVersion(1L, 2);
+        ResponseEntity<DocumentVersionResponse> response = controller.getVersion(1L, 2);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        DocumentVersionResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals(2, body.get("versionNumber"));
-        assertEquals("内容快照", body.get("contentSnapshot"));
+        assertEquals(2, body.versionNumber());
+        assertEquals("内容快照", body.contentSnapshot());
     }
 
     @Test
     void getVersion_notFound_returns404() {
         when(documentVersionService.getVersion(1L, 99)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.getVersion(1L, 99);
+        ResponseEntity<DocumentVersionResponse> response = controller.getVersion(1L, 99);
 
         assertEquals(404, response.getStatusCode().value());
     }

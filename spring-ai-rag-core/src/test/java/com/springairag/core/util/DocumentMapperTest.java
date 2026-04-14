@@ -1,5 +1,6 @@
 package com.springairag.core.util;
 
+import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -288,7 +289,7 @@ class DocumentMapperTest {
     }
 
     @Nested
-    @DisplayName("toVersionMap")
+    @DisplayName("toVersionResponse")
     class VersionMapTests {
 
         @Test
@@ -305,16 +306,16 @@ class DocumentMapperTest {
             version.setCreatedAt(LocalDateTime.now());
             version.setContentSnapshot("Full content at this version");
 
-            Map<String, Object> result = DocumentMapper.toVersionMap(version);
+            DocumentVersionResponse result = DocumentMapper.toVersionResponse(version);
 
-            assertEquals(100L, result.get("id"));
-            assertEquals(1L, result.get("documentId"));
-            assertEquals(2, result.get("versionNumber"));
-            assertEquals("hash-v2", result.get("contentHash"));
-            assertEquals(2048L, result.get("size"));
-            assertEquals("UPDATE", result.get("changeType"));
-            assertEquals("Updated content", result.get("changeDescription"));
-            assertEquals("Full content at this version", result.get("contentSnapshot"));
+            assertEquals(100L, result.id());
+            assertEquals(1L, result.documentId());
+            assertEquals(2, result.versionNumber());
+            assertEquals("hash-v2", result.contentHash());
+            assertEquals(2048L, result.size());
+            assertEquals("UPDATE", result.changeType());
+            assertEquals("Updated content", result.changeDescription());
+            assertEquals("Full content at this version", result.contentSnapshot());
         }
 
         @Test
@@ -331,10 +332,9 @@ class DocumentMapperTest {
             version.setCreatedAt(LocalDateTime.now());
             version.setContentSnapshot(null);
 
-            Map<String, Object> result = DocumentMapper.toVersionMap(version);
+            DocumentVersionResponse result = DocumentMapper.toVersionResponse(version);
 
-            assertNull(result.get("contentSnapshot"));
-            assertFalse(result.containsKey("contentSnapshot"));
+            assertNull(result.contentSnapshot());
         }
     }
 }

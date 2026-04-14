@@ -1,5 +1,8 @@
 package com.springairag.core.util;
 
+import com.springairag.api.dto.DocumentDetailResponse;
+import com.springairag.api.dto.DocumentSummary;
+import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -108,23 +111,79 @@ public final class DocumentMapper {
     }
 
     /**
-     * Converts a document version entity to a Map.
+     * Converts a document version entity to a typed response DTO.
      */
-    public static Map<String, Object> toVersionMap(RagDocumentVersion v) {
-        Map<String, Object> map = new HashMap<>();
-        map.put("id", v.getId());
-        map.put("documentId", v.getDocumentId());
-        map.put("versionNumber", v.getVersionNumber());
-        map.put("contentHash", v.getContentHash());
-        map.put("size", v.getSize());
-        map.put("changeType", v.getChangeType());
-        map.put("changeDescription", v.getChangeDescription());
-        map.put("createdAt", v.getCreatedAt());
-        // Content snapshot only returned in single version details, omitted in list to save bandwidth
-        if (v.getContentSnapshot() != null) {
-            map.put("contentSnapshot", v.getContentSnapshot());
-        }
-        return map;
+    public static DocumentVersionResponse toVersionResponse(RagDocumentVersion v) {
+        return new DocumentVersionResponse(
+                v.getId(),
+                v.getDocumentId(),
+                v.getVersionNumber(),
+                v.getContentHash(),
+                v.getSize(),
+                v.getChangeType(),
+                v.getChangeDescription(),
+                v.getCreatedAt(),
+                v.getContentSnapshot()
+        );
+    }
+
+    /**
+     * Converts a RagDocument to DocumentSummary (list/detail view, contentPreview not full content).
+     */
+    public static DocumentSummary toSummary(RagDocument doc,
+                                           Map<Long, String> collectionNameMap,
+                                           RagEmbeddingRepository embeddingRepository) {
+        Long collectionId = doc.getCollectionId();
+        String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
+        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+
+        return new DocumentSummary(
+                doc.getId(),
+                doc.getTitle(),
+                doc.getSource(),
+                doc.getDocumentType(),
+                doc.getProcessingStatus(),
+                doc.getCreatedAt(),
+                doc.getSize(),
+                doc.getContentHash(),
+                doc.getEnabled(),
+                doc.getUpdatedAt(),
+                collectionId,
+                collectionName,
+                chunkCount,
+                doc.getContent() != null ? truncate(doc.getContent(), CONTENT_PREVIEW_MAX_LEN) : null,
+                null, // content is null in list view
+                doc.getMetadata()
+        );
+    }
+
+    /**
+     * Converts a RagDocument to DocumentDetailResponse (full detail view).
+     */
+    public static DocumentDetailResponse toDetailResponse(RagDocument doc,
+                                                          Map<Long, String> collectionNameMap,
+                                                          RagEmbeddingRepository embeddingRepository) {
+        Long collectionId = doc.getCollectionId();
+        String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
+        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+
+        return new DocumentDetailResponse(
+                doc.getId(),
+                doc.getTitle(),
+                doc.getSource(),
+                doc.getDocumentType(),
+                doc.getProcessingStatus(),
+                doc.getCreatedAt(),
+                doc.getUpdatedAt(),
+                doc.getSize(),
+                doc.getContentHash(),
+                doc.getEnabled(),
+                collectionId,
+                collectionName,
+                chunkCount,
+                doc.getContent(),
+                doc.getMetadata()
+        );
     }
 
     private static void putCoreFields(Map<String, Object> map, RagDocument doc) {
