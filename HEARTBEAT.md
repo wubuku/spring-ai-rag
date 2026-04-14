@@ -1466,6 +1466,24 @@
 | HS3-1 | pg_jieba 改进（websearch_to_tsquery 评估） | 性能 | ✅ 2026-04-07（PgJiebaFulltextProvider 已使用 websearch_to_tsquery + search_vector_zh 预建列，SearchCapabilitiesTest 15 tests 验证能力探测） |
 | HS4-* | 测试补强（PgEnglishFtsProviderTest 等） | 测试 | ✅ 2026-04-07（PgEnglishFtsProviderTest 10 tests） |
 
+## Cron 进度（2026-04-14 23:03 — C22-2/3/5 DTO Consistency: RagDocumentController）
+
+- 2026-04-14 23:03 — ✅ C22-2/3/5 API response DTO consistency:
+  - C22-2: RagCollectionController.exportCollection → CollectionExportResponse record
+  - C22-3: RagCollectionController.buildExportData → CollectionExportResponse record
+  - C22-4: PdfImportController path /rag/files → /files + robust deriveMarkdownPath
+  - C22-5: RagDocumentController 7 Map→DTO endpoints:
+    - getDocument → DocumentDetailResponse
+    - listDocuments → DocumentListResponse (with offset/limit + DocumentSummary items)
+    - getDocumentStats → DocumentStatsResponse
+    - embeddingStatus → EmbeddingStatusResponse
+    - batchEmbedDocuments → BatchEmbedResponse
+    - getVersionHistory → VersionHistoryResponse
+    - getVersion → DocumentVersionResponse
+  - DocumentSummary expanded with 16 fields (contentHash, enabled, updatedAt, collectionId/Name, chunkCount, contentPreview, content, metadata)
+  - DocumentMapper: added toDetailResponse(), toVersionResponse(), toSummary()
+  - 1835 tests ✅；commit 639d943 已推送
+
 ## Cron 进度（2026-04-12 03:54 — S1 API Key Management Backend）
 
 - 2026-04-12 03:54 — ✅ S1 API Key Management Backend 完成：
@@ -2877,10 +2895,10 @@ PDF 端点测试（Section 16，9 tests）：
 
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
-| C22-2 | RagCollectionController.exportCollection DTO 化（CollectionExportResponse） | 代码质量 | ⏳ |
-| C22-3 | RagCollectionController.buildExportData DTO 化 | 代码质量 | ⏳ |
+| C22-2 | RagCollectionController.exportCollection DTO 化（CollectionExportResponse） | 代码质量 | ✅ 2026-04-14 |
+| C22-3 | RagCollectionController.buildExportData DTO 化 | 代码质量 | ✅ 2026-04-14 |
 | C22-4 | PdfImportController Map→DTO 改造 | 代码质量 | ✅ 2026-04-14 |
-| C22-5 | RagDocumentController Map→DTO 改造 | 代码质量 | ⏳ |
+| C22-5 | RagDocumentController Map→DTO 改造（7个端点） | 代码质量 | ✅ 2026-04-14 |
 
 - 2026-04-13 19:14 — ✅ C22 API response DTO 一致性（第一批）：新增 DocumentSummary record + CollectionDocumentListResponse record 替换 RagCollectionController.listDocuments() 的 Map 返回；替换 addDocument() 返回 DocumentAddedResponse；RagCollectionControllerTest 更新；1890 tests 全通过；commit d259d90 已推送
 
