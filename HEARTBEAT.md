@@ -2946,3 +2946,12 @@ PDF 端点测试（Section 16，9 tests）：
   - 关键修复：RetrievalEvaluationServiceImpl 启动失败（`RagRetrievalProperties` 非 Spring Bean）→ 改为 `RagProperties` 注入，`ragProperties.getRetrieval()` 访问配置；21 测试全通过；commit 22b6e48 已推送
   - 后端服务 8081 UP
   - ⚠️ PDF 导入相关变更（pdf/ 目录 + PdfImportController 等）暂存待后端 cron 处理
+
+## Cron 进度（2026-04-14 19:24 — PDF Converter 重构 + Test 修复）
+
+- ✅ PDF Converter 重构：marker-pdf CLI（Python，依赖损坏）→ Apache PDFBox 3.0.3
+  - `PdfConverter` 接口 + `PdfBoxConverter`（生产）+ `MarkerPdfConverter`（桩）
+  - `PdfImportService` 改用 `saveAll()` 批量存储 FsFile
+  - `PdfImportServiceTest`：验证改为 `saveAll()`（修复 `importPdf_storesOriginalPdf` 失败）
+  - 1835 tests 全通过，零失败零错误；commit 567d0ac 已推送
+  - 所有 ⏳ 待办均已清零；后端代码库零 TODO/FIXME
