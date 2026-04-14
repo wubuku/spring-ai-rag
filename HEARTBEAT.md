@@ -3,7 +3,8 @@
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
-- 2026-04-15 02:28 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+- 2026-04-15 05:11 - ✅ 后端巡检(cron):mvn test ✅(全量测试通过);spring-ai-rag-documents TextChunk 独立测试补强--新增 TextChunkTest.java(12 tests:record创建/位置边界/空文本/单字符/equals/hashCode/toString/null/长度一致性);commit 54d87e0 已推送
+- 2026-04-15 02:28 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-15 01:40 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区有后端 PDF 导入功能变更(归属后端 cron);WebUI 项目处于生产级成熟状态
 > - 绝不允许出现"无任务可做"的空闲状态
 - 2026-04-14 15:47 - ✅ WebUI 常规发布:npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
@@ -170,7 +171,7 @@
 - 2026-04-03 05:52 - ✅ 主动巡检(cron):嵌入缓存命中率指标追踪--CachingEmbeddingModel 新增 Micrometer hit/miss 计数器,CacheMetricsService 提供 getHitRate/getStats 统计,CacheMetricsController 暴露 GET /api/v1/cache/stats 端点,15 个新测试,817 测试全通过,commit fd1d082
 
 ## 进度日志
-- 2026-04-15 03:36 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+- 2026-04-15 04:42 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-15 02:56 — 🔍 后端主动巡检（cron)：mvn test ✅（1853 测试全通过）；扫描 PdfImportService.loadFileAsResource 防御性修复——path 末尾斜杠导致 substring 返回空字符串 → 降级为 "file"；代码库无 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 完成；commit 5ecf1b9 已推送
 
 - 2026-04-15 00:33 — 🔍 WebUI 常规巡检（cron)：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，99KB index gzipped）；E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
