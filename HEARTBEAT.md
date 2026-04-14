@@ -2845,7 +2845,7 @@ PDF 端点测试（Section 16，9 tests）：
 | T7 | PdfImportService 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
 | T8 | FsFileRepository 集成测试 | 测试覆盖 | ⏳ |
 | T9 | QueryLang enum 单元测试（fulltext 模块） | 测试覆盖 | ✅ 2026-04-13 |
-| T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ⏳ |
+| T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ✅ 2026-04-14 |
 | T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
 | T12 | RetrievalEvaluationService 覆盖率提升（评测阈值边界） | 测试覆盖 | ⏳ |
 | T13 | ApiKeyManagementService 加密相关测试 | 安全 | ⏳ |
@@ -2930,3 +2930,11 @@ PDF 端点测试（Section 16，9 tests）：
   - 移除 5 个未使用 import（HashMap/Map/HttpResource/FsFileRepository/unused HttpResource）
   - `PdfImportControllerTest` 更新：3 个 listTree 测试方法改用 `.total()` accessor
   - 1844 tests 全通过，零失败零错误；commit 5104f01 已推送
+
+## Cron 进度（2026-04-14 16:20 — T10 ChatExportService CSV 边界测试）
+
+- 2026-04-14 16:20 — ✅ T10 ChatExportService CSV 导出边界测试完成：
+  - `ChatExportServiceTest` 新增 9 个边界测试（20→29 tests）：CR 字符触发 CSV quoting / null userMessage 含 assistant 行 / null 双字段优雅处理 / 多特殊字符组合（comma+quote+newline）/ blank 空格内容 / 多记录全字段 / JSON CR 转义 / JSON Tab 转义 / Markdown CR 处理
+  - 29 tests 全通过，零失败零错误
+  - commit dd63d92 已推送
+  - T10 → ✅
