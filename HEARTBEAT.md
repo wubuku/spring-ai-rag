@@ -2873,7 +2873,7 @@ PDF 端点测试（Section 16，9 tests）：
 |---|--------|------|------|
 | C22-2 | RagCollectionController.exportCollection DTO 化（CollectionExportResponse） | 代码质量 | ⏳ |
 | C22-3 | RagCollectionController.buildExportData DTO 化 | 代码质量 | ⏳ |
-| C22-4 | PdfImportController Map→DTO 改造 | 代码质量 | ⏳ |
+| C22-4 | PdfImportController Map→DTO 改造 | 代码质量 | ✅ 2026-04-14 |
 | C22-5 | RagDocumentController Map→DTO 改造 | 代码质量 | ⏳ |
 
 - 2026-04-13 19:14 — ✅ C22 API response DTO 一致性（第一批）：新增 DocumentSummary record + CollectionDocumentListResponse record 替换 RagCollectionController.listDocuments() 的 Map 返回；替换 addDocument() 返回 DocumentAddedResponse；RagCollectionControllerTest 更新；1890 tests 全通过；commit d259d90 已推送
@@ -2916,3 +2916,16 @@ PDF 端点测试（Section 16，9 tests）：
 
 
 - 2026-04-14 04:50 — ✅ 配置化检索评估参数：RagRetrievalProperties 新增 evaluationK（默认10）和 answerQualityTimeoutSeconds（默认30），替换 RetrievalEvaluationServiceImpl 中的硬编码常量；evalResult 键名动态化（precisionAtK/recallAtK 而非固定 precisionAt10/recallAt10）；application.yml 新增 rag.retrieval.evaluation-k 和 rag.retrieval.answer-quality-timeout-seconds 配置项；RetrievalEvaluationServiceImplTest 全部 21 个测试通过；全量测试 1985 通过（零失败零错误）；commit 203c9e3 已推送
+
+- 2026-04-14 13:56 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+
+## Cron 进度（2026-04-14 14:55 — C22-4 PdfImportController Map→DTO 改造）
+
+- 2026-04-14 14:55 — ✅ C22-4 PdfImportController Map→DTO 改造：
+  - 新增 `FileTreeEntryResponse` record（name/path/type/mimeType/size，含 @Schema 注解）
+  - 新增 `FileTreeResponse` record（path/entries/total）
+  - `PdfImportController.listTree()` 返回类型从 `ResponseEntity<Map<String,Object>>` 改为 `ResponseEntity<FileTreeResponse>`
+  - `buildTreeEntries()` 返回 `List<FileTreeEntryResponse>`，消除 HashMap + Map 直接构造
+  - 移除 5 个未使用 import（HashMap/Map/HttpResource/FsFileRepository/unused HttpResource）
+  - `PdfImportControllerTest` 更新：3 个 listTree 测试方法改用 `.total()` accessor
+  - 1844 tests 全通过，零失败零错误；commit 5104f01 已推送
