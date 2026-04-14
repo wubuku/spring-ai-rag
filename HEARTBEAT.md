@@ -3,6 +3,7 @@
 > ## 🚨 核心铁律（永久生效，不可删除，不可弱化）
 > **任务永不清零，待办永远有内容。**
 > - 每次 cron 唤醒时：若 ⏳ 待办已清零，**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
+- 2026-04-14 16:47 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端 PDF 导入功能变更（归属后端 cron）；WebUI 项目处于生产级成熟状态
 > - 绝不允许出现"无任务可做"的空闲状态
 - 2026-04-14 15:47 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 > - cron 是永不停歇的守护者，24/7 推进项目向生产级成熟度演进
@@ -1590,6 +1591,10 @@
 ## Cron 进度（2026-04-08 02:50 — C34 向量相似度算法补全）
 
 - 2026-04-08 02:50 — ✅ C34 向量相似度算法补全：`RetrievalUtils` 新增 `euclideanDistance(float[], float[])` L2 距离（维度不匹配返回 Double.MAX_VALUE）和 `dotProduct(float[], float[])` 内积（用于 max-inner-product 搜索，pgvector `<#>` 操作符对应）；所有 Javadoc 翻译为英文；`RetrievalUtilsTest` 新增 20 个测试覆盖 identical/orthogonal/opposite/null/empty/high-dimensional 场景；28→48 tests；mvn test ✅；commit 4e26e2c 已推送
+
+## Cron 进度（2026-04-14 17:15 — PdfImportServiceTest 修复）
+
+- 2026-04-14 17:15 — ✅ PdfImportServiceTest mock converter 修复：发现 2 个测试失败（`importPdf_storesOriginalPdf` / `importPdf_success_storesFiles`）—— mock converter 返回 `true` 但未创建 `outputDir`，导致 `Files.walkFileTree()` 抛出 `NoSuchFileException`；修复：mock 使用 `doAnswer` 调用 `Files.createDirectories(outputDir)`，与真实 PdfBoxConverter/MarkerPdfConverter 行为一致；全量 1837 测试通过，零失败零错误；commit e66bfc0 已推送
 
 ## Cron 进度（2026-04-08 02:03 — 控制器 Javadoc 国际化第四轮）
 
