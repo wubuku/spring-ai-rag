@@ -588,4 +588,423 @@ class DtoTest {
         assertNull(response.contentSnapshot());
         assertEquals("CREATED", response.changeType());
     }
+
+    // ========== AlertActionResponse ==========
+
+    @Test
+    void alertActionResponse_okFactory() {
+        var r = AlertActionResponse.ok("Alert silenced for 2 hours");
+        assertTrue(r.success());
+        assertEquals("Alert silenced for 2 hours", r.message());
+    }
+
+    @Test
+    void alertActionResponse_failFactory() {
+        var r = AlertActionResponse.fail("Alert not found");
+        assertFalse(r.success());
+        assertEquals("Alert not found", r.message());
+    }
+
+    @Test
+    void alertActionResponse_constructor() {
+        var r = new AlertActionResponse(true, "Operation succeeded");
+        assertTrue(r.success());
+        assertEquals("Operation succeeded", r.message());
+    }
+
+    // ========== VariantResponse ==========
+
+    @Test
+    void variantResponse_ofFactory() {
+        var r = VariantResponse.of("control");
+        assertEquals("control", r.variant());
+    }
+
+    @Test
+    void variantResponse_constructor() {
+        var r = new VariantResponse("treatment");
+        assertEquals("treatment", r.variant());
+    }
+
+    // ========== BatchDeleteItem ==========
+
+    @Test
+    void batchDeleteItem_constructor() {
+        var item = new BatchDeleteItem(42L, "DELETED");
+        assertEquals(42L, item.id());
+        assertEquals("DELETED", item.status());
+    }
+
+    @Test
+    void batchDeleteItem_notFound() {
+        var item = new BatchDeleteItem(99L, "NOT_FOUND");
+        assertEquals(99L, item.id());
+        assertEquals("NOT_FOUND", item.status());
+    }
+
+    // ========== BatchDeleteSummary ==========
+
+    @Test
+    void batchDeleteSummary_constructor() {
+        var s = new BatchDeleteSummary(10, 8, 2);
+        assertEquals(10, s.total());
+        assertEquals(8, s.deleted());
+        assertEquals(2, s.notFound());
+    }
+
+    @Test
+    void batchDeleteSummary_allDeleted() {
+        var s = new BatchDeleteSummary(5, 5, 0);
+        assertEquals(5, s.total());
+        assertEquals(5, s.deleted());
+        assertEquals(0, s.notFound());
+    }
+
+    // ========== BatchDeleteResponse ==========
+
+    @Test
+    void batchDeleteResponse_constructor() {
+        var item = new BatchDeleteItem(1L, "DELETED");
+        var summary = new BatchDeleteSummary(10, 8, 2);
+        var r = new BatchDeleteResponse(List.of(item), summary);
+        assertEquals(1, r.results().size());
+        assertEquals(10, r.summary().total());
+        assertEquals(8, r.summary().deleted());
+        assertEquals(2, r.summary().notFound());
+    }
+
+    @Test
+    void batchDeleteResponse_emptyResults() {
+        var summary = new BatchDeleteSummary(0, 0, 0);
+        var r = new BatchDeleteResponse(List.of(), summary);
+        assertTrue(r.results().isEmpty());
+        assertEquals(0, r.summary().total());
+    }
+
+    // ========== FireAlertResponse ==========
+
+    @Test
+    void fireAlertResponse_ofFactory() {
+        var r = FireAlertResponse.of(42L);
+        assertEquals(42L, r.alertId());
+        assertEquals("Alert triggered", r.message());
+    }
+
+    @Test
+    void fireAlertResponse_constructor() {
+        var r = new FireAlertResponse(99L, "Custom message");
+        assertEquals(99L, r.alertId());
+        assertEquals("Custom message", r.message());
+    }
+
+    // ========== DocumentDeleteResponse ==========
+
+    @Test
+    void documentDeleteResponse_constructor() {
+        var r = new DocumentDeleteResponse("Document deleted", 42L, 5L);
+        assertEquals("Document deleted", r.message());
+        assertEquals(42L, r.id());
+        assertEquals(5L, r.embeddingsRemoved());
+    }
+
+    @Test
+    void documentDeleteResponse_zeroEmbeddings() {
+        var r = new DocumentDeleteResponse("Not found", 99L, 0L);
+        assertEquals(0L, r.embeddingsRemoved());
+    }
+
+    // ========== ClearHistoryResponse ==========
+
+    @Test
+    void clearHistoryResponse_ofFactory() {
+        var r = ClearHistoryResponse.of("session-abc", 10);
+        assertEquals("Session history cleared", r.message());
+        assertEquals("session-abc", r.sessionId());
+        assertEquals(10, r.deletedCount());
+    }
+
+    @Test
+    void clearHistoryResponse_constructor() {
+        var r = new ClearHistoryResponse("History purged", "session-xyz", 5);
+        assertEquals("History purged", r.message());
+        assertEquals("session-xyz", r.sessionId());
+        assertEquals(5, r.deletedCount());
+    }
+
+    // ========== ClientErrorCountResponse ==========
+
+    @Test
+    void clientErrorCountResponse_constructor() {
+        var r = new ClientErrorCountResponse(42);
+        assertEquals(42, r.count());
+    }
+
+    @Test
+    void clientErrorCountResponse_zero() {
+        var r = new ClientErrorCountResponse(0);
+        assertEquals(0, r.count());
+    }
+
+    // ========== PdfImportResponse ==========
+
+    @Test
+    void pdfImportResponse_constructor() {
+        var r = new PdfImportResponse("uuid-123", "uuid-123/default.md", 2);
+        assertEquals("uuid-123", r.uuid());
+        assertEquals("uuid-123/default.md", r.entryMarkdown());
+        assertEquals(2, r.filesStored());
+    }
+
+    @Test
+    void pdfImportResponse_singleFile() {
+        var r = new PdfImportResponse("uuid-456", "uuid-456/default.md", 1);
+        assertEquals(1, r.filesStored());
+    }
+
+    // ========== ReembedResultResponse ==========
+
+    @Test
+    void reembedResultResponse_constructor() {
+        var r = new ReembedResultResponse(42L, "Doc Title", "COMPLETED", 10, "Success");
+        assertEquals(42L, r.documentId());
+        assertEquals("Doc Title", r.title());
+        assertEquals("COMPLETED", r.status());
+        assertEquals(10, r.chunks());
+        assertEquals("Success", r.message());
+    }
+
+    @Test
+    void reembedResultResponse_failed() {
+        var r = new ReembedResultResponse(99L, "Fail Doc", "FAILED", null, "Connection timeout");
+        assertEquals("FAILED", r.status());
+        assertNull(r.chunks());
+    }
+
+    // ========== ReembedMissingResponse ==========
+
+    @Test
+    void reembedMissingResponse_constructor() {
+        var result = new ReembedResultResponse(42L, "Title", "COMPLETED", 10, "OK");
+        var r = new ReembedMissingResponse(5, 4, 1, List.of(result));
+        assertEquals(5, r.total());
+        assertEquals(4, r.success());
+        assertEquals(1, r.failed());
+        assertEquals(1, r.results().size());
+    }
+
+    @Test
+    void reembedMissingResponse_emptyResults() {
+        var r = new ReembedMissingResponse(0, 0, 0, List.of());
+        assertEquals(0, r.total());
+        assertTrue(r.results().isEmpty());
+    }
+
+    // ========== CollectionResponse ==========
+
+    @Test
+    void collectionResponse_constructor() {
+        var now = java.time.ZonedDateTime.now();
+        var r = new CollectionResponse(1L, "My Collection", "A test collection",
+                "BGE-M3", 1024, true, Map.of("key", "val"), now, now, 25);
+        assertEquals(1L, r.id());
+        assertEquals("My Collection", r.name());
+        assertEquals("A test collection", r.description());
+        assertEquals("BGE-M3", r.embeddingModel());
+        assertEquals(1024, r.dimensions());
+        assertTrue(r.enabled());
+        assertEquals("val", r.metadata().get("key"));
+        assertEquals(now, r.createdAt());
+        assertEquals(25, r.documentCount());
+    }
+
+    // ========== CollectionListResponse ==========
+
+    @Test
+    void collectionListResponse_constructor() {
+        var r = new CollectionListResponse(List.of(), 0, 0, 10);
+        assertEquals(0, r.total());
+        assertEquals(0, r.page());
+        assertEquals(10, r.pageSize());
+        assertTrue(r.collections().isEmpty());
+    }
+
+    @Test
+    void collectionListResponse_withCollections() {
+        var now = java.time.ZonedDateTime.now();
+        var coll = new CollectionResponse(1L, "Col1", null, "BGE-M3", 1024, true, null, now, now, 5);
+        var r = new CollectionListResponse(List.of(coll), 1, 0, 10);
+        assertEquals(1, r.total());
+        assertEquals(1, r.collections().size());
+    }
+
+    // ========== CollectionDocumentListResponse ==========
+
+    @Test
+    void collectionDocumentListResponse_constructor() {
+        var r = new CollectionDocumentListResponse(1L, List.of(), 0, 0, 20);
+        assertEquals(1L, r.collectionId());
+        assertEquals(0, r.total());
+        assertEquals(0, r.offset());
+        assertEquals(20, r.limit());
+        assertTrue(r.documents().isEmpty());
+    }
+
+    // ========== DocumentCreateResponse ==========
+
+    @Test
+    void documentCreateResponse_created() {
+        var r = DocumentCreateResponse.created(42L, "New Doc", "sha256:abc");
+        assertEquals(42L, r.id());
+        assertEquals("New Doc", r.title());
+        assertEquals("CREATED", r.status());
+        assertEquals("sha256:abc", r.contentHash());
+        assertNull(r.existingDocumentId());
+    }
+
+    @Test
+    void documentCreateResponse_duplicate() {
+        var r = DocumentCreateResponse.duplicate(99L, "Existing Doc", "sha256:xyz");
+        assertEquals(99L, r.id());
+        assertEquals("Existing Doc", r.title());
+        assertEquals("DUPLICATE", r.status());
+        assertEquals("sha256:xyz", r.contentHash());
+        assertEquals(99L, r.existingDocumentId());
+    }
+
+    @Test
+    void documentCreateResponse_constructor() {
+        var r = new DocumentCreateResponse(1L, "Title", "STATUS", "msg", "hash", null);
+        assertEquals(1L, r.id());
+        assertEquals("Title", r.title());
+        assertEquals("STATUS", r.status());
+        assertEquals("msg", r.message());
+        assertEquals("hash", r.contentHash());
+        assertNull(r.existingDocumentId());
+    }
+
+    // ========== ApiKeyCreateRequest ==========
+
+    @Test
+    void apiKeyCreateRequest_constructor() {
+        var expiry = java.time.LocalDateTime.of(2027, 1, 1, 0, 0);
+        var r = new ApiKeyCreateRequest("Prod Key", expiry);
+        assertEquals("Prod Key", r.getName());
+        assertEquals(expiry, r.getExpiresAt());
+    }
+
+    @Test
+    void apiKeyCreateRequest_defaultConstructor() {
+        var r = new ApiKeyCreateRequest();
+        assertNull(r.getName());
+        assertNull(r.getExpiresAt());
+        r.setName("Test Key");
+        r.setExpiresAt(null);
+        assertEquals("Test Key", r.getName());
+    }
+
+    // ========== ApiKeyResponse ==========
+
+    @Test
+    void apiKeyResponse_constructor() {
+        var created = java.time.LocalDateTime.of(2026, 4, 12, 3, 50);
+        var lastUsed = java.time.LocalDateTime.of(2026, 4, 12, 10, 0);
+        var expiry = java.time.LocalDateTime.of(2027, 1, 1, 0, 0);
+        var r = new ApiKeyResponse("rag_k_abc", "Prod Server", created, lastUsed, expiry, true);
+        assertEquals("rag_k_abc", r.getKeyId());
+        assertEquals("Prod Server", r.getName());
+        assertEquals(created, r.getCreatedAt());
+        assertEquals(lastUsed, r.getLastUsedAt());
+        assertEquals(expiry, r.getExpiresAt());
+        assertTrue(r.getEnabled());
+    }
+
+    @Test
+    void apiKeyResponse_defaultConstructor() {
+        var r = new ApiKeyResponse();
+        assertNull(r.getKeyId());
+        r.setKeyId("rag_k_xyz");
+        r.setEnabled(false);
+        assertEquals("rag_k_xyz", r.getKeyId());
+        assertFalse(r.getEnabled());
+    }
+
+    // ========== ApiKeyCreatedResponse ==========
+
+    @Test
+    void apiKeyCreatedResponse_constructor() {
+        var expiry = java.time.LocalDateTime.of(2027, 1, 1, 0, 0);
+        var r = new ApiKeyCreatedResponse("rag_k_abc", "rag_sk_xxx", "Prod Server", expiry);
+        assertEquals("rag_k_abc", r.getKeyId());
+        assertEquals("rag_sk_xxx", r.getRawKey());
+        assertEquals("Prod Server", r.getName());
+        assertEquals(expiry, r.getExpiresAt());
+        assertNotNull(r.getWarning());
+    }
+
+    @Test
+    void apiKeyCreatedResponse_defaultConstructor() {
+        var r = new ApiKeyCreatedResponse();
+        assertNull(r.getKeyId());
+        r.setKeyId("rag_k_new");
+        assertEquals("rag_k_new", r.getKeyId());
+    }
+
+    // ========== BatchCreateResponse ==========
+
+    @Test
+    void batchCreateResponse_constructor() {
+        var docResult = new BatchCreateResponse.DocumentResult(42L, "Test Doc", true, null);
+        var r = new BatchCreateResponse(10, 2, 0, List.of(docResult));
+        assertEquals(10, r.created());
+        assertEquals(2, r.skipped());
+        assertEquals(0, r.failed());
+        assertEquals(1, r.results().size());
+    }
+
+    @Test
+    void batchCreateResponse_documentResult() {
+        var result = new BatchCreateResponse.DocumentResult(99L, "Fail Doc", false, "Embedding error");
+        assertEquals(99L, result.documentId());
+        assertEquals("Fail Doc", result.title());
+        assertFalse(result.newlyCreated());
+        assertEquals("Embedding error", result.error());
+    }
+
+    @Test
+    void batchCreateResponse_allFields() {
+        var r = new BatchCreateResponse(5, 3, 2, List.of());
+        assertEquals(5, r.created());
+        assertEquals(3, r.skipped());
+        assertEquals(2, r.failed());
+    }
+
+    // ========== RetrievalResult ==========
+
+    @Test
+    void retrievalResult_defaultConstructor() {
+        var r = new RetrievalResult();
+        assertNull(r.getDocumentId());
+    }
+
+    @Test
+    void retrievalResult_gettersAndSetters() {
+        var r = new RetrievalResult();
+        r.setDocumentId("doc-123");
+        r.setChunkText("Spring AI is a framework...");
+        r.setScore(0.85);
+        r.setVectorScore(0.90);
+        r.setFulltextScore(0.80);
+        r.setChunkIndex(3);
+        r.setTitle("Spring AI Guide");
+        r.setMetadata(Map.of("source", "manual"));
+
+        assertEquals("doc-123", r.getDocumentId());
+        assertEquals("Spring AI is a framework...", r.getChunkText());
+        assertEquals(0.85, r.getScore());
+        assertEquals(0.90, r.getVectorScore());
+        assertEquals(0.80, r.getFulltextScore());
+        assertEquals(3, r.getChunkIndex());
+        assertEquals("Spring AI Guide", r.getTitle());
+        assertEquals("manual", r.getMetadata().get("source"));
+    }
 }
