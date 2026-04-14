@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
@@ -11,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -185,29 +185,29 @@ class PdfImportControllerTest {
 
         when(pdfImportService.listChildren(anyString())).thenReturn(List.of(subdirFile, mdFile));
 
-        ResponseEntity<Map<String, Object>> response = controller.listTree("/papers");
+        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals(2, response.getBody().get("total"));
+        assertEquals(2, response.getBody().total());
     }
 
     @Test
     void listTree_emptyDirectory_returnsEmptyList() {
         when(pdfImportService.listChildren(anyString())).thenReturn(List.of());
 
-        ResponseEntity<Map<String, Object>> response = controller.listTree("/papers");
+        ResponseEntity<FileTreeResponse> response = controller.listTree("/papers");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertEquals(0, response.getBody().get("total"));
+        assertEquals(0, response.getBody().total());
     }
 
     @Test
     void listTree_nullPath_defaultsToRoot() {
         when(pdfImportService.listChildren("/")).thenReturn(List.of());
 
-        ResponseEntity<Map<String, Object>> response = controller.listTree(null);
+        ResponseEntity<FileTreeResponse> response = controller.listTree(null);
 
         assertEquals(200, response.getStatusCode().value());
         verify(pdfImportService).listChildren("/");

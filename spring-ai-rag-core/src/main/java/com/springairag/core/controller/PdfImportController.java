@@ -1,11 +1,11 @@
 package com.springairag.core.controller;
 
-import java.util.HashMap;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.dto.FileTreeEntryResponse;
+import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfImportResponse;
 import com.springairag.core.entity.FsFile;
-import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.versioning.ApiVersion;
@@ -22,13 +22,11 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.resource.HttpResource;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -251,7 +249,7 @@ public class PdfImportController {
             @ApiResponse(responseCode = "200", description = "Directory listing returned")
     })
     @GetMapping("/tree")
-    public ResponseEntity<Map<String, Object>> listTree(
+    public ResponseEntity<FileTreeResponse> listTree(
             @Parameter(description = "Virtual path prefix to list (URL-encoded, trailing slash optional). "
                                     + "Omit or use empty string to list root.")
             @RequestParam(value = "path", required = false) String path) {
@@ -266,13 +264,10 @@ public class PdfImportController {
 
         // Distinguish files from directories: a "directory" entry ends with "/" and has no stored content
         // But since we store flat files, we synthesize directory entries from paths
-        List<Map<String, Object>> entries = buildTreeEntries(children, normalized);
+        List<FileTreeEntryResponse> entries = buildTreeEntries(children, normalized);
+        String displayPath = normalized.isEmpty() ? "/" : normalized;
 
-        return ResponseEntity.ok(Map.of(
-                "path", normalized.isEmpty() ? "/" : normalized,
-                "entries", entries,
-                "total", entries.size()
-        ));
+        return ResponseEntity.ok(new FileTreeResponse(displayPath, entries, entries.size()));
     }
 
     // ==================== Internal Helpers ====================
@@ -367,10 +362,10 @@ public class PdfImportController {
         return "application/octet-stream";
     }
 
-    private List<Map<String, Object>> buildTreeEntries(List<FsFile> files, String parentPath) {
+    private List<FileTreeEntryResponse> buildTreeEntries(List<FsFile> files, String parentPath) {
         // Collect synthetic directory entries from file paths
         Set<String> dirs = new TreeSet<>();
-        List<Map<String, Object>> entries = new ArrayList<>();
+        List<FileTreeEntryResponse> entries = new ArrayList<>();
 
         for (FsFile f : files) {
             String relative = f.getPath().substring(parentPath.length());
@@ -378,12 +373,12 @@ public class PdfImportController {
 
             if (slashIdx == -1) {
                 // Direct file
-                entries.add(Map.of(
-                        "name", relative,
-                        "path", f.getPath(),
-                        "type", "file",
-                        "mimeType", f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
-                        "size", f.getFileSize() != null ? f.getFileSize() : 0
+                entries.add(new FileTreeEntryResponse(
+                        relative,
+                        f.getPath(),
+                        "file",
+                        f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
+                        f.getFileSize() != null ? f.getFileSize() : 0
                 ));
             } else {
                 // First segment is a subdirectory
@@ -392,25 +387,23 @@ public class PdfImportController {
             }
         }
 
-        // Add synthetic directory entries
+        // Add synthetic directory entries (directories have no MIME type)
         for (String dir : dirs) {
-            Map<String, Object> dirEntry = new HashMap<>();
-            dirEntry.put("name", dir);
-            dirEntry.put("path", parentPath + dir + "/");
-            dirEntry.put("type", "directory");
-            dirEntry.put("mimeType", null); // directories have no MIME type
-            dirEntry.put("size", 0);
-            entries.add(dirEntry);
+            entries.add(new FileTreeEntryResponse(
+                    dir,
+                    parentPath + dir + "/",
+                    "directory",
+                    null,
+                    0
+            ));
         }
 
         // Sort: directories first, then files
         entries.sort((a, b) -> {
-            String typeA = (String) a.get("type");
-            String typeB = (String) b.get("type");
-            if (!typeA.equals(typeB)) {
-                return typeA.equals("directory") ? -1 : 1;
+            if (!a.type().equals(b.type())) {
+                return a.type().equals("directory") ? -1 : 1;
             }
-            return ((String) a.get("name")).compareTo((String) b.get("name"));
+            return a.name().compareTo(b.name());
         });
 
         return entries;
