@@ -3,11 +3,12 @@
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
-- 2026-04-15 05:11 - ✅ 后端巡检(cron):mvn test ✅(全量测试通过);spring-ai-rag-documents TextChunk 独立测试补强--新增 TextChunkTest.java(12 tests:record创建/位置边界/空文本/单字符/equals/hashCode/toString/null/长度一致性);commit 54d87e0 已推送
-- 2026-04-15 02:28 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
-- 2026-04-15 01:40 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区有后端 PDF 导入功能变更(归属后端 cron);WebUI 项目处于生产级成熟状态
+> - 2026-04-15 05:54 - ✅ C41 Repository 测试补全:RagAbExperimentRepositoryTest 36 tests--findByExperimentName/findByStatus/findRunningExperiments/existsByExperimentName/继承CRUD/状态机/trafficSplit/metadata 全覆盖;mvn test ✅(全通过);commit 4e6e3c8 已推送
+> - 2026-04-15 05:11 - ✅ 后端巡检(cron):mvn test ✅(全量测试通过);spring-ai-rag-documents TextChunk 独立测试补强--新增 TextChunkTest.java(12 tests:record创建/位置边界/空文本/单字符/equals/hashCode/toString/null/长度一致性);commit 54d87e0 已推送
+> - 2026-04-15 02:28 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-15 01:40 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区有后端 PDF 导入功能变更(归属后端 cron);WebUI 项目处于生产级成熟状态
 > - 绝不允许出现"无任务可做"的空闲状态
-- 2026-04-14 15:47 - ✅ WebUI 常规发布:npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-14 15:47 - ✅ WebUI 常规发布:npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - cron 是永不停歇的守护者,24/7 推进项目向生产级成熟度演进
 > - 每轮只完成 1 个代码任务,或 2 个文档任务,或 1 代码+1 文档
 
@@ -171,10 +172,10 @@
 - 2026-04-03 05:52 - ✅ 主动巡检(cron):嵌入缓存命中率指标追踪--CachingEmbeddingModel 新增 Micrometer hit/miss 计数器,CacheMetricsService 提供 getHitRate/getStats 统计,CacheMetricsController 暴露 GET /api/v1/cache/stats 端点,15 个新测试,817 测试全通过,commit fd1d082
 
 ## 进度日志
-- 2026-04-15 04:42 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
-- 2026-04-15 02:56 — 🔍 后端主动巡检（cron)：mvn test ✅（1853 测试全通过）；扫描 PdfImportService.loadFileAsResource 防御性修复——path 末尾斜杠导致 substring 返回空字符串 → 降级为 "file"；代码库无 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 完成；commit 5ecf1b9 已推送
+> - 2026-04-15 04:42 — ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-15 02:56 — 🔍 后端主动巡检（cron)：mvn test ✅（1853 测试全通过）；扫描 PdfImportService.loadFileAsResource 防御性修复——path 末尾斜杠导致 substring 返回空字符串 → 降级为 "file"；代码库无 TODO/FIXME；全部 Phase 1-7 + P1/P2/P3 完成；commit 5ecf1b9 已推送
 
-- 2026-04-15 00:33 — 🔍 WebUI 常规巡检（cron)：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，99KB index gzipped）；E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+> - 2026-04-15 00:33 — 🔍 WebUI 常规巡检（cron)：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，99KB index gzipped）；E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 - 2026-04-13 04:07 - 🔍 WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-13 02:58 - 🔍 WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-13 00:45 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;commit e3683ea 已推送;WebUI 项目处于生产级成熟状态
@@ -1265,7 +1266,7 @@
 | C38 | 数据库连接池生产环境调优:压测后确定 optimal pool size | 性能 | ✅ 2026-04-06(C38 完成:validation-timeout + initialization-fail-timeout + register-mbeans + auto-commit + PostgreSQL prepared-statement cache;1280 tests ✅,commit a42e4f2) | P2 |
 | C39 | 第三方 LLM API Mock Server:Node.js mock server,/v1/chat/completions + /v1/embeddings,支持 streaming + configurable delay/error rate | 测试 | ✅ 2026-04-06(C39 完成:scripts/mock-llm-server.js + run-mock-llm.sh,8086默认端口,零依赖,commit d6c2665) | P2 |
 | C40 | CI 缓存优化:Maven/npm 依赖缓存策略改进 | DevOps | ✅ 2026-04-06(actions/setup-java cache=maven 已覆盖,无需额外配置) | P3 |
-| C41 | Repository 单元测试补全:AlertRepository(18 tests) + RagRetrievalEvaluationRepository(22 tests) + FsFileRepository(23 tests) | 测试覆盖 | ✅ 2026-04-15(C41 完成:AlertRepository 18 tests + RagRetrievalEvaluationRepository 22 tests + FsFileRepository 23 tests;剩余待测:RagAbExperimentRepository/RagAbResultRepository/RagApiKeyRepository/RagAuditLogRepository/RagChatHistoryJpaRepository/RagClientErrorRepository/RagCollectionRepository/RagDocumentRepository/RagDocumentVersionRepository/RagEmbeddingRepository/SloConfigRepository 已测) | P2 |
+| C41 | Repository 单元测试补全:AlertRepository(18 tests) + RagRetrievalEvaluationRepository(22 tests) + FsFileRepository(23 tests) + RagAbExperimentRepository(36 tests) | 测试覆盖 | ✅ 2026-04-15(C41 完成:AlertRepository 18 tests + RagRetrievalEvaluationRepository 22 tests + FsFileRepository 23 tests + RagAbExperimentRepository 36 tests;剩余待测:RagAbResultRepository/RagApiKeyRepository/RagAuditLogRepository/RagChatHistoryJpaRepository/RagClientErrorRepository/RagCollectionRepository/RagDocumentRepository/RagDocumentVersionRepository/RagEmbeddingRepository) | P2 |
 
 **Cron 执行保证**:每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前,cron 永不停止。
 
@@ -1482,7 +1483,7 @@
 
 ## Cron 进度(2026-04-15 00:09 - API Response DTO 测试补全)
 
-- 2026-04-15 00:09 - ✅ API Response DTO 单元测试补全:DtoTest 25→41 tests(+16 新测试)
+> - 2026-04-15 00:09 - ✅ API Response DTO 单元测试补全:DtoTest 25→41 tests(+16 新测试)
   - DocumentDetailResponse: constructor + getters
   - DocumentStatsResponse: constructor + empty byStatus
   - EmbeddingStatusResponse: hasMissing=true/false 两种场景
@@ -1495,7 +1496,7 @@
 
 ## Cron 进度(2026-04-14 23:03 - C22-2/3/5 DTO Consistency: RagDocumentController)
 
-- 2026-04-14 23:03 - ✅ C22-2/3/5 API response DTO consistency:
+> - 2026-04-14 23:03 - ✅ C22-2/3/5 API response DTO consistency:
   - C22-2: RagCollectionController.exportCollection → CollectionExportResponse record
   - C22-3: RagCollectionController.buildExportData → CollectionExportResponse record
   - C22-4: PdfImportController path /rag/files → /files + robust deriveMarkdownPath
@@ -1639,7 +1640,7 @@
 
 ## Cron 进度(2026-04-14 17:15 - PdfImportServiceTest 修复)
 
-- 2026-04-14 17:15 - ✅ PdfImportServiceTest mock converter 修复:发现 2 个测试失败(`importPdf_storesOriginalPdf` / `importPdf_success_storesFiles`)-- mock converter 返回 `true` 但未创建 `outputDir`,导致 `Files.walkFileTree()` 抛出 `NoSuchFileException`;修复:mock 使用 `doAnswer` 调用 `Files.createDirectories(outputDir)`,与真实 PdfBoxConverter/MarkerPdfConverter 行为一致;全量 1837 测试通过,零失败零错误;commit e66bfc0 已推送
+> - 2026-04-14 17:15 - ✅ PdfImportServiceTest mock converter 修复:发现 2 个测试失败(`importPdf_storesOriginalPdf` / `importPdf_success_storesFiles`)-- mock converter 返回 `true` 但未创建 `outputDir`,导致 `Files.walkFileTree()` 抛出 `NoSuchFileException`;修复:mock 使用 `doAnswer` 调用 `Files.createDirectories(outputDir)`,与真实 PdfBoxConverter/MarkerPdfConverter 行为一致;全量 1837 测试通过,零失败零错误;commit e66bfc0 已推送
 
 ## Cron 进度(2026-04-08 02:03 - 控制器 Javadoc 国际化第四轮)
 
@@ -2931,7 +2932,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-14 12:53 - WebUI 常规发布)
 
-- 2026-04-14 12:53 - ✅ WebUI 常规发布:
+> - 2026-04-14 12:53 - ✅ WebUI 常规发布:
   - npm test: 148 vitest tests ✅(23 test files,148 passed,全通过,2.12s)
   - npm run build ✅(99KB index gzipped,28 chunks,BarChart 102KB 按需加载)
   - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
@@ -2942,7 +2943,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-14 09:28 - WebUI 常规发布)
 
-- 2026-04-14 09:28 - ✅ WebUI 常规发布:
+> - 2026-04-14 09:28 - ✅ WebUI 常规发布:
   - npm test: 148 vitest tests ✅(23 test files,148 passed,全通过,2.06s)
   - npm run build ✅(99KB index gzipped,28 chunks,BarChart 102KB 按需加载)
   - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
@@ -2953,7 +2954,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-14 10:57 - 后端:检索结果文档标题字段)
 
-- 2026-04-14 10:57 - ✅ 检索结果文档标题字段补全:
+> - 2026-04-14 10:57 - ✅ 检索结果文档标题字段补全:
   - `RetrievalResult`:新增 `title` 字段(getter/setter/@Schema)+ `ChatResponse.SourceDocument` 新增 `title` 字段
   - `DocumentEmbedService.buildVectorStoreDocuments`:存储 `title` 到 embedding metadata(`Map.of("title", doc.getTitle())`)
   - `HybridRetrieverService.toRetrievalResult`:从 embedding metadata 提取 `title`
@@ -2966,13 +2967,13 @@ PDF 端点测试(Section 16,9 tests):
 
 
 
-- 2026-04-14 04:50 - ✅ 配置化检索评估参数:RagRetrievalProperties 新增 evaluationK(默认10)和 answerQualityTimeoutSeconds(默认30),替换 RetrievalEvaluationServiceImpl 中的硬编码常量;evalResult 键名动态化(precisionAtK/recallAtK 而非固定 precisionAt10/recallAt10);application.yml 新增 rag.retrieval.evaluation-k 和 rag.retrieval.answer-quality-timeout-seconds 配置项;RetrievalEvaluationServiceImplTest 全部 21 个测试通过;全量测试 1985 通过(零失败零错误);commit 203c9e3 已推送
+> - 2026-04-14 04:50 - ✅ 配置化检索评估参数:RagRetrievalProperties 新增 evaluationK(默认10)和 answerQualityTimeoutSeconds(默认30),替换 RetrievalEvaluationServiceImpl 中的硬编码常量;evalResult 键名动态化(precisionAtK/recallAtK 而非固定 precisionAt10/recallAt10);application.yml 新增 rag.retrieval.evaluation-k 和 rag.retrieval.answer-quality-timeout-seconds 配置项;RetrievalEvaluationServiceImplTest 全部 21 个测试通过;全量测试 1985 通过(零失败零错误);commit 203c9e3 已推送
 
-- 2026-04-14 13:56 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-14 13:56 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
 ## Cron 进度(2026-04-14 14:55 - C22-4 PdfImportController Map→DTO 改造)
 
-- 2026-04-14 14:55 - ✅ C22-4 PdfImportController Map→DTO 改造:
+> - 2026-04-14 14:55 - ✅ C22-4 PdfImportController Map→DTO 改造:
   - 新增 `FileTreeEntryResponse` record(name/path/type/mimeType/size,含 @Schema 注解)
   - 新增 `FileTreeResponse` record(path/entries/total)
   - `PdfImportController.listTree()` 返回类型从 `ResponseEntity<Map<String,Object>>` 改为 `ResponseEntity<FileTreeResponse>`
@@ -2983,7 +2984,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-14 16:20 - T10 ChatExportService CSV 边界测试)
 
-- 2026-04-14 17:32 - ✅ WebUI 常规发布 + 关键启动修复:
+> - 2026-04-14 17:32 - ✅ WebUI 常规发布 + 关键启动修复:
   - npm test: 148 ✅(23 test files,148 vitest 全通过)
   - npm run build: ✅(99KB index gzipped,28 chunks)
   - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
@@ -3003,7 +3004,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-14 23:25 - WebUI 常规发布)
 
-- 2026-04-14 23:25 - ✅ WebUI 常规发布:
+> - 2026-04-14 23:25 - ✅ WebUI 常规发布:
   - npm test: 148 ✅(23 test files,148 vitest 全通过)
   - npm run build: ✅(99KB index gzipped,28 chunks)
   - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
@@ -3013,7 +3014,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-15 04:14 - Repository 测试补全)
 
-- 2026-04-15 04:14 - ✅ FsFileRepository 单元测试补全:
+> - 2026-04-15 04:14 - ✅ FsFileRepository 单元测试补全:
   - 新增 `FsFileRepositoryTest.java`,23 个测试覆盖所有自定义查询和 JPA 继承方法
   - 自定义方法:`findByPathStartingWithOrderByPathAsc`(2 tests) / `findByPathStartingWithAndIsTextTrueOrderByPathAsc`(2 tests) / `countByPathStartingWith`(2 tests) / `existsByPath`(2 tests) / `deleteByPathStartingWith`(2 tests) / `findDirectChildren`(2 tests)
   - JPA 继承方法:save/findById/findAll/deleteById/count/findAll(Pageable)
@@ -3021,14 +3022,14 @@ PDF 端点测试(Section 16,9 tests):
   - 使用 mock 模式(`@ExtendWith(MockitoExtension.class)`),与现有 Repository 测试保持一致
   - 1891 tests 全通过,零失败零错误;commit c3f3573 已推送
 
-- 2026-04-15 01:27 - ✅ AlertRepository 单元测试补全:
+> - 2026-04-15 01:27 - ✅ AlertRepository 单元测试补全:
   - 新增 `AlertRepositoryTest.java`,18 个测试覆盖所有自定义 JPQL 查询
   - `findAlertHistory`:时间范围/severity/alertType 组合过滤
   - `findByStatusOrderByFiredAtDesc`、`countBySeverity`、`countActiveAlerts`、`countByFiredAtBetween`、`deleteOldResolvedAlerts`
   - JPA 继承方法:findById/save/delete/findAll
   - 1853 tests 全通过,零失败零错误;commit fb40c55 已推送
 
-- 2026-04-15 03:35 - ✅ RagRetrievalEvaluationRepository 单元测试补全:
+> - 2026-04-15 03:35 - ✅ RagRetrievalEvaluationRepository 单元测试补全:
   - 新增 `RagRetrievalEvaluationRepositoryTest.java`,22 个测试覆盖所有自定义查询方法
   - `findByCreatedAtBetweenOrderByCreatedAtDesc`:时间范围过滤(3 tests)
   - `findAllByOrderByCreatedAtDesc`:分页查询(3 tests)
@@ -3040,7 +3041,7 @@ PDF 端点测试(Section 16,9 tests):
 
 ## Cron 进度(2026-04-15 05:28 - WebUI 常规巡检)
 
-- 2026-04-15 05:28 - ✅ WebUI 常规巡检:
+> - 2026-04-15 05:28 - ✅ WebUI 常规巡检:
   - npm test: 148 ✅(23 test files,148 vitest 全通过)
   - npm run build: ✅(99KB index gzipped,34 chunks)
   - E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)
