@@ -392,80 +392,56 @@ public class PdfImportController {
         }
     }
 
+    /** Shared CSS for Markdown preview pages. */
+    private static final String PREVIEW_CSS =
+            "body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
+            "       max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }\n" +
+            "h1,h2,h3 { color: #1a1a1a; margin-top: 1.5em; }\n" +
+            "h1 { font-size: 1.8em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }\n" +
+            "h2 { font-size: 1.4em; }\n" +
+            "h3 { font-size: 1.1em; }\n" +
+            "pre { background: #f6f8fa; border-radius: 6px; padding: 1em; overflow-x: auto; }\n" +
+            "code { background: #f0f0f0; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }\n" +
+            "pre code { background: none; padding: 0; }\n" +
+            "blockquote { border-left: 4px solid #dfe2e5; margin: 1em 0; padding: 0.5em 1em; color: #6a737d; }\n" +
+            "img { max-width: 100%; height: auto; border-radius: 4px; }\n" +
+            "table { border-collapse: collapse; width: 100%; margin: 1em 0; }\n" +
+            "th, td { border: 1px solid #dfe2e5; padding: 0.5em 0.8em; text-align: left; }\n" +
+            "th { background: #f6f8fa; }\n" +
+            "hr { border: none; border-top: 1px solid #dfe2e5; margin: 2em 0; }\n" +
+            "ul, ol { padding-left: 1.5em; }\n" +
+            "li { margin: 0.3em 0; }\n" +
+            "a { color: #0366d6; }";
+
+    private String buildHtmlShell(String lang, String title, String baseTag, String css, String bodyHtml) {
+        StringBuilder sb = new StringBuilder(512);
+        sb.append("<!DOCTYPE html>\n");
+        sb.append("<html lang=\"").append(lang).append("\">\n");
+        sb.append("<head>\n");
+        sb.append("  <meta charset=\"UTF-8\">\n");
+        sb.append("  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n");
+        if (baseTag != null) sb.append("  ").append(baseTag).append("\n");
+        sb.append("  <title>").append(escapeHtml(title)).append("</title>\n");
+        sb.append("  <style>\n").append(css).append("\n  </style>\n");
+        sb.append("</head>\n");
+        sb.append("<body>\n");
+        sb.append(bodyHtml).append("\n");
+        sb.append("</body>\n");
+        sb.append("</html>");
+        return sb.toString();
+    }
+
     private String wrapInHtmlPage(String title, String bodyHtml) {
-        return "<!DOCTYPE html>\n" +
-               "<html lang=\"zh\">\n" +
-               "<head>\n" +
-               "  <meta charset=\"UTF-8\">\n" +
-               "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
-               "  <title>" + escapeHtml(title) + "</title>\n" +
-               "  <style>\n" +
-               "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
-               "           max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }\n" +
-               "    h1,h2,h3 { color: #1a1a1a; margin-top: 1.5em; }\n" +
-               "    h1 { font-size: 1.8em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }\n" +
-               "    h2 { font-size: 1.4em; }\n" +
-               "    h3 { font-size: 1.1em; }\n" +
-               "    pre { background: #f6f8fa; border-radius: 6px; padding: 1em; overflow-x: auto; }\n" +
-               "    code { background: #f0f0f0; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }\n" +
-               "    pre code { background: none; padding: 0; }\n" +
-               "    blockquote { border-left: 4px solid #dfe2e5; margin: 1em 0; padding: 0.5em 1em; color: #6a737d; }\n" +
-               "    img { max-width: 100%; height: auto; border-radius: 4px; }\n" +
-               "    table { border-collapse: collapse; width: 100%; margin: 1em 0; }\n" +
-               "    th, td { border: 1px solid #dfe2e5; padding: 0.5em 0.8em; text-align: left; }\n" +
-               "    th { background: #f6f8fa; }\n" +
-               "    hr { border: none; border-top: 1px solid #dfe2e5; margin: 2em 0; }\n" +
-               "    ul, ol { padding-left: 1.5em; }\n" +
-               "    li { margin: 0.3em 0; }\n" +
-               "    a { color: #0366d6; }\n" +
-               "  </style>\n" +
-               "</head>\n" +
-               "<body>\n" +
-               bodyHtml + "\n" +
-               "</body>\n" +
-               "</html>";
+        return buildHtmlShell("zh", title, null, PREVIEW_CSS, bodyHtml);
     }
 
     /**
-     * Wrap HTML content in a full page with <base> tag for correct relative image resolution.
+     * Wrap HTML content in a full page with &lt;base&gt; tag for correct relative image resolution.
      * Relative image paths in the content will be resolved against /files/raw/{uuid}/.
      */
     private String wrapInHtmlPageWithBase(String uuid, String bodyHtml) {
-        // The base URL for resolving relative image paths
-        // Images should be at {uuid}/image_0.png, accessed via /files/raw/{uuid}/image_0.png
-        String baseHref = "/files/raw/" + uuid + "/";
-        return "<!DOCTYPE html>\n" +
-               "<html lang=\"zh\">\n" +
-               "<head>\n" +
-               "  <meta charset=\"UTF-8\">\n" +
-               "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
-               "  <base href=\"" + baseHref + "\">\n" +
-               "  <title>PDF Preview - " + escapeHtml(uuid) + "</title>\n" +
-               "  <style>\n" +
-               "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
-               "           max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }\n" +
-               "    h1,h2,h3 { color: #1a1a1a; margin-top: 1.5em; }\n" +
-               "    h1 { font-size: 1.8em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }\n" +
-               "    h2 { font-size: 1.4em; }\n" +
-               "    h3 { font-size: 1.1em; }\n" +
-               "    pre { background: #f6f8fa; border-radius: 6px; padding: 1em; overflow-x: auto; }\n" +
-               "    code { background: #f0f0f0; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }\n" +
-               "    pre code { background: none; padding: 0; }\n" +
-               "    blockquote { border-left: 4px solid #dfe2e5; margin: 1em 0; padding: 0.5em 1em; color: #6a737d; }\n" +
-               "    img { max-width: 100%; height: auto; border-radius: 4px; }\n" +
-               "    table { border-collapse: collapse; width: 100%; margin: 1em 0; }\n" +
-               "    th, td { border: 1px solid #dfe2e5; padding: 0.5em 0.8em; text-align: left; }\n" +
-               "    th { background: #f6f8fa; }\n" +
-               "    hr { border: none; border-top: 1px solid #dfe2e5; margin: 2em 0; }\n" +
-               "    ul, ol { padding-left: 1.5em; }\n" +
-               "    li { margin: 0.3em 0; }\n" +
-               "    a { color: #0366d6; }\n" +
-               "  </style>\n" +
-               "</head>\n" +
-               "<body>\n" +
-               bodyHtml + "\n" +
-               "</body>\n" +
-               "</html>";
+        String baseTag = "<base href=\"/files/raw/" + uuid + "/\">";
+        return buildHtmlShell("zh", "PDF Preview - " + uuid, baseTag, PREVIEW_CSS, bodyHtml);
     }
 
     /**
@@ -490,10 +466,10 @@ public class PdfImportController {
 
     private String escapeHtml(String text) {
         if (text == null) return "";
-        return text.replaceAll("&", "&amp;")
-                   .replaceAll("<", "&lt;")
-                   .replaceAll(">", "&gt;")
-                   .replaceAll("\"", "&quot;");
+        return text.replace("&", "&amp;")
+                   .replace("<", "&lt;")
+                   .replace(">", "&gt;")
+                   .replace("\"", "&quot;");
     }
 
     /**
