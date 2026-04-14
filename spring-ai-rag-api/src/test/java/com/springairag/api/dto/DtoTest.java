@@ -341,4 +341,251 @@ class DtoTest {
         assertEquals("hello", req.getMessage());
         assertEquals("session-1", req.getSessionId());
     }
+
+    // ========== DocumentDetailResponse ==========
+
+    @Test
+    void documentDetailResponse_constructorAndGetters() {
+        var response = new DocumentDetailResponse(
+                42L, "RAG Tutorial", "https://example.com/doc.pdf",
+                "PDF", "COMPLETED",
+                null, null,
+                4096L, "sha256:abc123", true,
+                1L, "My KB", 5L,
+                "Full content here", Map.of("author", "John")
+        );
+        assertEquals(42L, response.id());
+        assertEquals("RAG Tutorial", response.title());
+        assertEquals("https://example.com/doc.pdf", response.source());
+        assertEquals("PDF", response.documentType());
+        assertEquals("COMPLETED", response.processingStatus());
+        assertEquals(4096L, response.size());
+        assertEquals("sha256:abc123", response.contentHash());
+        assertTrue(response.enabled());
+        assertEquals(1L, response.collectionId());
+        assertEquals("My KB", response.collectionName());
+        assertEquals(5L, response.chunkCount());
+        assertEquals("Full content here", response.content());
+        assertEquals("John", response.metadata().get("author"));
+    }
+
+    // ========== DocumentStatsResponse ==========
+
+    @Test
+    void documentStatsResponse_constructorAndGetters() {
+        Map<String, Long> byStatus = Map.of("COMPLETED", 10L, "PENDING", 5L, "FAILED", 2L);
+        var response = new DocumentStatsResponse(17L, byStatus);
+        assertEquals(17L, response.total());
+        assertEquals(10L, response.byStatus().get("COMPLETED"));
+        assertEquals(5L, response.byStatus().get("PENDING"));
+        assertEquals(2L, response.byStatus().get("FAILED"));
+    }
+
+    @Test
+    void documentStatsResponse_emptyByStatus() {
+        var response = new DocumentStatsResponse(0L, Map.of());
+        assertEquals(0L, response.total());
+        assertTrue(response.byStatus().isEmpty());
+    }
+
+    // ========== EmbeddingStatusResponse ==========
+
+    @Test
+    void embeddingStatusResponse_constructorAndGetters() {
+        var response = new EmbeddingStatusResponse(100L, 80L, 20L, true);
+        assertEquals(100L, response.totalDocuments());
+        assertEquals(80L, response.withEmbeddings());
+        assertEquals(20L, response.withoutEmbeddings());
+        assertTrue(response.hasMissing());
+    }
+
+    @Test
+    void embeddingStatusResponse_noMissing() {
+        var response = new EmbeddingStatusResponse(50L, 50L, 0L, false);
+        assertEquals(50L, response.totalDocuments());
+        assertEquals(50L, response.withEmbeddings());
+        assertEquals(0L, response.withoutEmbeddings());
+        assertFalse(response.hasMissing());
+    }
+
+    // ========== BatchEmbedResponse ==========
+
+    @Test
+    void batchEmbedResponse_constructorAndGetters() {
+        var item1 = new BatchEmbedResponse.BatchEmbedResultItem(
+                1L, "COMPLETED", 5, 5, null, null);
+        var item2 = new BatchEmbedResponse.BatchEmbedResultItem(
+                2L, "CACHED", 0, 0, null, "Already embedded");
+        var item3 = new BatchEmbedResponse.BatchEmbedResultItem(
+                3L, "FAILED", 0, 0, "Connection timeout", null);
+        var item4 = new BatchEmbedResponse.BatchEmbedResultItem(
+                4L, "NOT_FOUND", 0, 0, null, "Document does not exist");
+        var item5 = new BatchEmbedResponse.BatchEmbedResultItem(
+                5L, "SKIPPED", 0, 0, null, "Empty content");
+
+        var summary = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+
+        var response = new BatchEmbedResponse(List.of(item1, item2, item3, item4, item5), summary);
+        assertEquals(5, response.results().size());
+        assertEquals(5, response.summary().total());
+        assertEquals(1, response.summary().success());
+        assertEquals(1, response.summary().cached());
+        assertEquals(1, response.summary().failed());
+        assertEquals(2, response.summary().skipped());
+
+        assertEquals("COMPLETED", response.results().get(0).status());
+        assertEquals(5, response.results().get(0).chunksCreated());
+        assertEquals("CACHED", response.results().get(1).status());
+        assertEquals("Already embedded", response.results().get(1).reason());
+        assertEquals("Connection timeout", response.results().get(2).error());
+    }
+
+    @Test
+    void batchEmbedResultItem_allFields() {
+        var item = new BatchEmbedResponse.BatchEmbedResultItem(
+                99L, "COMPLETED", 10, 10, null, null);
+        assertEquals(99L, item.documentId());
+        assertEquals("COMPLETED", item.status());
+        assertEquals(10, item.chunksCreated());
+        assertEquals(10, item.embeddingsStored());
+        assertNull(item.error());
+        assertNull(item.reason());
+    }
+
+    @Test
+    void batchEmbedSummary_allFields() {
+        var summary = new BatchEmbedResponse.BatchEmbedSummary(20, 15, 3, 1, 1);
+        assertEquals(20, summary.total());
+        assertEquals(15, summary.success());
+        assertEquals(3, summary.cached());
+        assertEquals(1, summary.failed());
+        assertEquals(1, summary.skipped());
+    }
+
+    // ========== CacheStatsResponse ==========
+
+    @Test
+    void cacheStatsResponse_constructorAndGetters() {
+        var response = new CacheStatsResponse(127L, 43L, 170L, "74.7%", Map.of("key1", "value1"));
+        assertEquals(127L, response.hitCount());
+        assertEquals(43L, response.missCount());
+        assertEquals(170L, response.totalCount());
+        assertEquals("74.7%", response.hitRate());
+        assertEquals("value1", response.details().get("key1"));
+    }
+
+    @Test
+    void cacheStatsResponse_fromFactoryMethod() {
+        Map<String, Object> stats = Map.of(
+                "hitCount", 100L,
+                "missCount", 50L,
+                "totalCount", 150L,
+                "hitRate", "66.7%"
+        );
+        var response = CacheStatsResponse.from(stats);
+        assertEquals(100L, response.hitCount());
+        assertEquals(50L, response.missCount());
+        assertEquals(150L, response.totalCount());
+        assertEquals("66.7%", response.hitRate());
+        assertEquals(150L, response.details().get("totalCount"));
+    }
+
+    @Test
+    void cacheStatsResponse_fromWithDefaults() {
+        Map<String, Object> emptyStats = Map.of();
+        var response = CacheStatsResponse.from(emptyStats);
+        assertEquals(0L, response.hitCount());
+        assertEquals(0L, response.missCount());
+        assertEquals(0L, response.totalCount());
+        assertEquals("N/A", response.hitRate());
+    }
+
+    // ========== CollectionExportResponse ==========
+
+    @Test
+    void collectionExportResponse_constructorAndGetters() {
+        var doc1 = new CollectionExportResponse.ExportedDocumentSummary(
+                "Doc 1", "https://example.com/1.pdf", "Content of doc 1",
+                "PDF", Map.of("author", "Alice"), 2048L);
+        var doc2 = new CollectionExportResponse.ExportedDocumentSummary(
+                "Doc 2", "https://example.com/2.pdf", "Content of doc 2",
+                "TXT", Map.of(), 1024L);
+        var response = new CollectionExportResponse(
+                "My KB", "RAG knowledge base", "BAAI/bge-m3", 1024, true,
+                Map.of("industry", "tech"),
+                List.of(doc1, doc2),
+                null, 2
+        );
+        assertEquals("My KB", response.name());
+        assertEquals("RAG knowledge base", response.description());
+        assertEquals("BAAI/bge-m3", response.embeddingModel());
+        assertEquals(1024, response.dimensions());
+        assertTrue(response.enabled());
+        assertEquals("tech", response.metadata().get("industry"));
+        assertEquals(2, response.documentCount());
+        assertEquals(2, response.documents().size());
+        assertEquals("Doc 1", response.documents().get(0).title());
+        assertEquals("Content of doc 1", response.documents().get(0).content());
+        assertEquals("Alice", response.documents().get(0).metadata().get("author"));
+    }
+
+    @Test
+    void exportedDocumentSummary_allFields() {
+        var doc = new CollectionExportResponse.ExportedDocumentSummary(
+                "Test Doc", "https://example.com/test.pdf", "Full text",
+                "PDF", Map.of("page", 5), 8192L);
+        assertEquals("Test Doc", doc.title());
+        assertEquals("https://example.com/test.pdf", doc.source());
+        assertEquals("Full text", doc.content());
+        assertEquals("PDF", doc.documentType());
+        assertEquals(5, doc.metadata().get("page"));
+        assertEquals(8192L, doc.size());
+    }
+
+    // ========== VersionHistoryResponse ==========
+
+    @Test
+    void versionHistoryResponse_constructorAndGetters() {
+        var v1 = new DocumentVersionResponse(1L, 42L, 1, "hash1", 1024L,
+                "CREATED", "Initial version", null, null);
+        var v2 = new DocumentVersionResponse(2L, 42L, 2, "hash2", 2048L,
+                "UPDATED", "Content updated", null, "Updated content");
+        var response = new VersionHistoryResponse(42L, 2L, 0, 20, List.of(v1, v2));
+        assertEquals(42L, response.documentId());
+        assertEquals(2L, response.totalVersions());
+        assertEquals(0, response.page());
+        assertEquals(20, response.size());
+        assertEquals(2, response.versions().size());
+        assertEquals(1, response.versions().get(0).versionNumber());
+        assertEquals("hash1", response.versions().get(0).contentHash());
+    }
+
+    // ========== DocumentVersionResponse ==========
+
+    @Test
+    void documentVersionResponse_constructorAndGetters() {
+        var response = new DocumentVersionResponse(
+                5L, 42L, 3, "sha256:xyz789", 4096L,
+                "UPDATED", "Content updated via batch import",
+                null, "Snapshot of updated content"
+        );
+        assertEquals(5L, response.id());
+        assertEquals(42L, response.documentId());
+        assertEquals(3, response.versionNumber());
+        assertEquals("sha256:xyz789", response.contentHash());
+        assertEquals(4096L, response.size());
+        assertEquals("UPDATED", response.changeType());
+        assertEquals("Content updated via batch import", response.changeDescription());
+        assertEquals("Snapshot of updated content", response.contentSnapshot());
+    }
+
+    @Test
+    void documentVersionResponse_nullContentSnapshot() {
+        var response = new DocumentVersionResponse(
+                1L, 42L, 1, "hash1", 1024L,
+                "CREATED", "Initial version", null, null
+        );
+        assertNull(response.contentSnapshot());
+        assertEquals("CREATED", response.changeType());
+    }
 }
