@@ -1204,7 +1204,7 @@
 | # | 改进项 | 类型 | 状态 |
 |---|--------|------|------|
 | N44 | API Response DTO 测试覆盖补全（DocumentDetailResponse/BatchEmbedResponse/CacheStatsResponse/CollectionExportResponse 等） | 测试覆盖 | ✅ 2026-04-15（N44 完成：DtoTest 25→41 tests，+16 新测试覆盖 8 个 Response DTO，spring-ai-rag-api 82 tests 全通过，commit e3f038e） |
-| N45 | HEARTBEAT 主动扫描：api/dto 目录测试覆盖率 | 测试覆盖 | ⏳ |
+| N45 | HEARTBEAT 主动扫描：api/dto 目录测试覆盖率 | 测试覆盖 | ✅ 2026-04-15（N45 完成：DtoTest 41→84 tests，+43 新测试覆盖 22 个未测 DTO——AlertActionResponse/VariantResponse/BatchDeleteItem+Summary+Response/FireAlertResponse/DocumentDeleteResponse/ClearHistoryResponse/ClientErrorCountResponse/PdfImportResponse/ReembedResultResponse/ReembedMissingResponse/CollectionResponse/ListResponse/DocumentListResponse/DocumentCreateResponse/ApiKeyCreateRequest/Response/CreatedResponse/BatchCreateResponse/RetrievalResult） |
 
 ## 待办（Cron 持续推进 — 永不空转）
 
