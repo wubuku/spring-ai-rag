@@ -298,6 +298,131 @@ class ChatExportServiceTest {
         assertEquals(2, csvLines.length, "header + user line only");
     }
 
+    @Test
+    void exportAsCsv_carriageReturnInContent_quoted() {
+        // CR (\\r) must trigger quoting to prevent CSV row splitting
+        RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "Answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Content with CR must be quoted to prevent row splitting
+        assertTrue(csv.contains("\"Line1\rLine2\""), "CR should trigger quoting");
+        // Should still produce exactly 2 data rows (header + user + assistant)
+        String[] lines = csv.split("\n");
+        assertEquals(3, lines.length, "header + user row + assistant row");
+    }
+
+    @Test
+    void exportAsCsv_nullUserMessage_stillIncludesAssistantLine() {
+        // When userMessage is null, user row should still appear (empty cell)
+        RagChatHistory record = createRecord(1L, "s1", null, "Answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Assistant row should be present even when user message is null
+        assertTrue(csv.contains("assistant"));
+        assertTrue(csv.contains("Answer"));
+    }
+
+    @Test
+    void exportAsCsv_nullContentFields_escapedGracefully() {
+        // Null content should render as empty string (not null)
+        RagChatHistory record = createRecord(1L, "s1", null, null, now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Header + one user row (assistant omitted because null), no NPE
+        String[] lines = csv.split("\n");
+        assertEquals(2, lines.length, "header + one user row (null content -> empty cell)");
+    }
+
+    @Test
+    void exportAsCsv_multipleSpecialChars_combined() {
+        // Content with comma, quote, AND newline must all be handled correctly
+        String content = "Hello, \"world\"\nnext line";
+        RagChatHistory record = createRecord(1L, "s1", content, "Answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Comma + quote + newline -> fully quoted with doubled quotes
+        assertTrue(csv.contains("\"Hello, \"\"world\"\"\nnext line\""));
+    }
+
+    @Test
+    void exportAsCsv_blankUserMessage_stillRendersUserRow() {
+        // Blank (non-null whitespace-only) user message still produces a user row
+        RagChatHistory record = createRecord(1L, "s1", "   ", "Answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(csv.contains("user"));
+        assertTrue(csv.contains("   "), "blank content should appear (unquoted — only comma/quote/newline/cr trigger quoting)");
+        assertTrue(csv.contains("assistant"));
+    }
+
+    @Test
+    void exportAsCsv_multipleRecords_allFieldsPresent() {
+        RagChatHistory r1 = createRecord(1L, "s1", "Q1", "A1", now());
+        RagChatHistory r2 = createRecord(2L, "s1", "Q2", "A2", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2));
+
+        byte[] result = service.exportAsCsv("s1", 0);
+        String csv = new String(result, StandardCharsets.UTF_8);
+
+        // Header + 2 user rows + 2 assistant rows = 5 lines
+        String[] lines = csv.split("\n");
+        assertEquals(5, lines.length, "header + 2*(user+assistant)");
+    }
+
+    // ==================== JSON boundary ====================
+
+    @Test
+    void exportAsJson_carriageReturnInContent_escapedAsRN() {
+        RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "R", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsJson("s1", 0);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(json.contains("Line1\\rLine2"));
+    }
+
+    @Test
+    void exportAsJson_tabInContent_escaped() {
+        RagChatHistory record = createRecord(1L, "s1", "col1\tcol2", "tab", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsJson("s1", 0);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        assertTrue(json.contains("col1\\tcol2"));
+    }
+
+    // ==================== Markdown boundary ====================
+
+    @Test
+    void exportAsMarkdown_carriageReturnInContent_escaped() {
+        RagChatHistory record = createRecord(1L, "s1", "Line1\rLine2", "Answer", now());
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(record));
+
+        byte[] result = service.exportAsMarkdown("s1", 0);
+        String md = new String(result, StandardCharsets.UTF_8);
+
+        // CR should not break Markdown sections
+        assertTrue(md.contains("## User ["));
+        assertTrue(md.contains("## Assistant ["));
+    }
+
     // ==================== Helper ====================
 
     private RagChatHistory createRecord(Long id, String sessionId, String userMsg, String aiResp, LocalDateTime createdAt) {

@@ -4,7 +4,7 @@
 > **任务永不清零，待办永远有内容。**
 > - 每次 cron 唤醒时：若 ⏳ 待办已清零，**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
 > - 绝不允许出现"无任务可做"的空闲状态
-- 2026-04-14 15:08 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-14 15:47 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 > - cron 是永不停歇的守护者，24/7 推进项目向生产级成熟度演进
 > - 每轮只完成 1 个代码任务，或 2 个文档任务，或 1 代码+1 文档
 
