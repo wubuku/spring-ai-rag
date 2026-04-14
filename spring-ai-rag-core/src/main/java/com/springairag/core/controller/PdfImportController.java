@@ -120,16 +120,95 @@ public class PdfImportController {
     // ==================== Preview (Markdown → HTML) ====================
 
     /**
+     * Preview entry Markdown as a standalone HTML page (full page with CSS styling).
+     * Uses path parameter so relative image paths in Markdown resolve correctly.
+     *
+     * URL pattern: GET /files/preview/{uuid}/default.html
+     *
+     * The Markdown content is rendered to HTML with a <base> tag set to the virtual
+     * directory path, ensuring relative image paths resolve correctly without path rewriting.
+     */
+    @Operation(summary = "Preview entry Markdown as a standalone HTML page",
+               description = "Locates the entry Markdown file for the given virtual PDF directory (UUID), "
+                           + "renders it as HTML with a <base> tag for correct relative image resolution. "
+                           + "Image links remain as relative paths and are resolved via the <base> tag.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "HTML preview rendered"),
+            @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
+    })
+    @GetMapping(value = "/preview/{uuid}/default.html", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> previewHtmlPage(
+            @Parameter(description = "Virtual directory UUID of the imported PDF")
+            @PathVariable("uuid") String uuid) {
+
+        String markdownPath = uuid + "/default.md";
+        log.debug("Preview requested: uuid={}, markdownPath={}", uuid, markdownPath);
+
+        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        if (markdownFile.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        String html = markdownRendererService.renderToHtml(markdownFile.get());
+
+        // Wrap in a minimal HTML page with <base> tag for correct relative image resolution
+        String page = wrapInHtmlPageWithBase(uuid, html);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(page);
+    }
+
+    /**
+     * Preview entry Markdown for legacy path format (e.g., /files/preview?path=xxx).
+     * @deprecated Use GET /files/preview/{uuid}/default.html instead
+     */
+    @Deprecated
+    @Operation(summary = "[Deprecated] Preview using query parameter",
+               description = "Legacy endpoint using query parameter. Use /files/preview/{uuid}/default.html instead.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "HTML preview rendered"),
+            @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
+    })
+    @GetMapping(value = "/preview", produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> previewHtmlPageLegacy(
+            @Parameter(description = "Virtual path of the imported PDF (URL-encoded)")
+            @RequestParam("path") String path) {
+
+        String decodedPath = urlDecode(path);
+        String markdownPath = deriveMarkdownPath(decodedPath);
+        log.debug("Legacy preview requested: pdfPath={}, markdownPath={}", decodedPath, markdownPath);
+
+        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
+        if (markdownFile.isEmpty()) {
+            markdownFile = pdfImportService.getFile(replaceLast(decodedPath, ".pdf", ".md", 1));
+        }
+        if (markdownFile.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Extract UUID from the path
+        String uuid = extractUuid(decodedPath);
+        String html = markdownRendererService.renderToHtml(markdownFile.get());
+        String page = wrapInHtmlPageWithBase(uuid, html);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_HTML)
+                .header("X-Content-Type-Options", "nosniff")
+                .body(page);
+    }
+
+    /**
      * Return only the rendered HTML fragment (no wrapper page).
      * Used by the WebUI Files page for direct innerHTML rendering (no iframe).
+     * Returns fragment with <base> tag for relative image resolution.
      */
-    @Operation(summary = "Render Markdown to HTML fragment (no wrapper page)",
-               description = "Renders the Markdown entry file to HTML and returns only the HTML fragment "
-                           + "(no &lt;html&gt;, &lt;head&gt;, or &lt;body&gt; tags). "
-                           + "Image links are rewritten to /files/raw. "
+    @Operation(summary = "Render Markdown to HTML fragment with <base> tag",
+               description = "Renders the Markdown entry file to HTML with a <base> tag. "
                            + "Designed for WebUI fetch + innerHTML rendering.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "HTML fragment"),
+            @ApiResponse(responseCode = "200", description = "HTML fragment with base tag"),
             @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
     })
     @GetMapping(value = "/preview/html", produces = MediaType.TEXT_HTML_VALUE)
@@ -149,50 +228,11 @@ public class PdfImportController {
             return ResponseEntity.notFound().build();
         }
 
+        String uuid = extractUuid(decodedPath);
         String html = markdownRendererService.renderToHtml(markdownFile.get());
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_HTML)
-                .header("X-Content-Type-Options", "nosniff")
-                .body(html);
-    }
-
-    /**
-     * Preview entry Markdown as a standalone HTML page (full page with CSS styling).
-     * Intended for direct browser navigation or embedding in an iframe.
-     */
-    @Operation(summary = "Preview entry Markdown as a standalone HTML page",
-               description = "Locates the entry Markdown file for the given virtual PDF path, "
-                           + "renders it as HTML, and rewrites image links to point to /files/raw. "
-                           + "The Markdown entry path is derived by replacing the .pdf extension with .md.")
-    @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "HTML preview rendered"),
-            @ApiResponse(responseCode = "404", description = "Entry Markdown file not found")
-    })
-    @GetMapping(value = "/preview", produces = MediaType.TEXT_HTML_VALUE)
-    public ResponseEntity<String> previewHtmlPage(
-            @Parameter(description = "Virtual path of the imported PDF (URL-encoded)", example = "papers%2F%E8%AE%BA%E6%96%87.pdf")
-            @RequestParam("path") String path) {
-
-        String decodedPath = urlDecode(path);
-
-        // Derive entry Markdown path: replace .pdf with .md
-        String markdownPath = deriveMarkdownPath(decodedPath);
-        log.debug("Preview requested: pdfPath={}, markdownPath={}", decodedPath, markdownPath);
-
-        Optional<FsFile> markdownFile = pdfImportService.getFile(markdownPath);
-        if (markdownFile.isEmpty()) {
-            // Fallback: try the pdf's parent dir + baseName.md
-            markdownFile = pdfImportService.getFile(
-                    replaceLast(decodedPath, ".pdf", ".md", 1));
-        }
-        if (markdownFile.isEmpty()) {
-            return ResponseEntity.notFound().build();
-        }
-
-        String html = markdownRendererService.renderToHtml(markdownFile.get());
-
-        // Wrap in a minimal HTML page
-        String page = wrapInHtmlPage(decodedPath, html);
+        // Wrap with minimal structure + base tag for correct image resolution
+        String wrapped = "<div>\n" + html + "\n</div>";
+        String page = wrapInHtmlPageWithBase(uuid, wrapped);
 
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_HTML)
@@ -202,10 +242,59 @@ public class PdfImportController {
 
     // ==================== Raw File Download ====================
 
-    @Operation(summary = "Download a raw file",
-               description = "Serve a raw file from fs_files by its virtual path. "
-                           + "Content-Type is inferred from the file extension / MIME type. "
-                           + "Images are typically served via this endpoint (rewritten in HTML previews).")
+    /**
+     * Download a raw file using path parameters.
+     * URL pattern: GET /files/raw/{uuid}/{filename}
+     *
+     * This is the preferred endpoint for accessing files like images in PDF previews.
+     * The base tag in preview HTML pages points to /files/raw/{uuid}/ so relative
+     * image paths resolve correctly.
+     */
+    @Operation(summary = "Download a raw file (path parameter)",
+               description = "Serve a raw file from fs_files using path parameters. "
+                           + "URL pattern: /files/raw/{uuid}/{filename}. "
+                           + "Content-Type is inferred from the file extension / MIME type.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "File content (binary or text)"),
+            @ApiResponse(responseCode = "404", description = "File not found")
+    })
+    @GetMapping("/raw/{uuid}/{filename:.+}")
+    public ResponseEntity<Resource> getRawFilePath(
+            @Parameter(description = "Virtual directory UUID")
+            @PathVariable("uuid") String uuid,
+            @Parameter(description = "Filename within the UUID directory")
+            @PathVariable("filename") String filename) {
+
+        String path = uuid + "/" + filename;
+        log.debug("Raw file requested (path param): uuid={}, filename={}, path={}", uuid, filename, path);
+
+        Optional<FsFile> file = pdfImportService.getFile(path);
+        if (file.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        FsFile fsFile = file.get();
+        Optional<Resource> resource = pdfImportService.loadFileAsResource(path);
+        if (resource.isEmpty()) {
+            return ResponseEntity.internalServerError().build();
+        }
+
+        String contentType = inferContentType(fsFile.getMimeType(), filename);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        "inline; filename=\"" + filename + "\"")
+                .body(resource.get());
+    }
+
+    /**
+     * Download a raw file using query parameter (legacy).
+     * @deprecated Use GET /files/raw/{uuid}/{filename} instead
+     */
+    @Deprecated
+    @Operation(summary = "[Deprecated] Download a raw file (query parameter)",
+               description = "Legacy endpoint using query parameter. Use /files/raw/{uuid}/{filename} instead.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "File content (binary or text)"),
             @ApiResponse(responseCode = "404", description = "File not found")
@@ -216,7 +305,7 @@ public class PdfImportController {
             @RequestParam("path") String path) {
 
         String decodedPath = urlDecode(path);
-        log.debug("Raw file requested: path={}", decodedPath);
+        log.debug("Raw file requested (query param): path={}", decodedPath);
 
         Optional<FsFile> file = pdfImportService.getFile(decodedPath);
         if (file.isEmpty()) {
@@ -335,6 +424,68 @@ public class PdfImportController {
                bodyHtml + "\n" +
                "</body>\n" +
                "</html>";
+    }
+
+    /**
+     * Wrap HTML content in a full page with <base> tag for correct relative image resolution.
+     * Relative image paths in the content will be resolved against /files/raw/{uuid}/.
+     */
+    private String wrapInHtmlPageWithBase(String uuid, String bodyHtml) {
+        // The base URL for resolving relative image paths
+        // Images should be at {uuid}/image_0.png, accessed via /files/raw/{uuid}/image_0.png
+        String baseHref = "/files/raw/" + uuid + "/";
+        return "<!DOCTYPE html>\n" +
+               "<html lang=\"zh\">\n" +
+               "<head>\n" +
+               "  <meta charset=\"UTF-8\">\n" +
+               "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+               "  <base href=\"" + baseHref + "\">\n" +
+               "  <title>PDF Preview - " + escapeHtml(uuid) + "</title>\n" +
+               "  <style>\n" +
+               "    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;\n" +
+               "           max-width: 900px; margin: 2rem auto; padding: 0 1rem; color: #333; }\n" +
+               "    h1,h2,h3 { color: #1a1a1a; margin-top: 1.5em; }\n" +
+               "    h1 { font-size: 1.8em; border-bottom: 2px solid #eee; padding-bottom: 0.3em; }\n" +
+               "    h2 { font-size: 1.4em; }\n" +
+               "    h3 { font-size: 1.1em; }\n" +
+               "    pre { background: #f6f8fa; border-radius: 6px; padding: 1em; overflow-x: auto; }\n" +
+               "    code { background: #f0f0f0; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }\n" +
+               "    pre code { background: none; padding: 0; }\n" +
+               "    blockquote { border-left: 4px solid #dfe2e5; margin: 1em 0; padding: 0.5em 1em; color: #6a737d; }\n" +
+               "    img { max-width: 100%; height: auto; border-radius: 4px; }\n" +
+               "    table { border-collapse: collapse; width: 100%; margin: 1em 0; }\n" +
+               "    th, td { border: 1px solid #dfe2e5; padding: 0.5em 0.8em; text-align: left; }\n" +
+               "    th { background: #f6f8fa; }\n" +
+               "    hr { border: none; border-top: 1px solid #dfe2e5; margin: 2em 0; }\n" +
+               "    ul, ol { padding-left: 1.5em; }\n" +
+               "    li { margin: 0.3em 0; }\n" +
+               "    a { color: #0366d6; }\n" +
+               "  </style>\n" +
+               "</head>\n" +
+               "<body>\n" +
+               bodyHtml + "\n" +
+               "</body>\n" +
+               "</html>";
+    }
+
+    /**
+     * Extract UUID from a file path like "uuid/original.pdf" or just "uuid".
+     */
+    private String extractUuid(String path) {
+        if (path == null || path.isEmpty()) {
+            return "";
+        }
+        // Remove trailing slashes
+        if (path.endsWith("/")) {
+            path = path.substring(0, path.length() - 1);
+        }
+        // If path contains "/", take the first segment
+        int slashIdx = path.indexOf('/');
+        if (slashIdx > 0) {
+            return path.substring(0, slashIdx);
+        }
+        // Otherwise return the whole path (might be the UUID itself)
+        return path;
     }
 
     private String escapeHtml(String text) {

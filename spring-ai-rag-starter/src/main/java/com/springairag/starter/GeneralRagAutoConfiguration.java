@@ -25,6 +25,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 
 /**
  * General RAG service auto-configuration
@@ -46,6 +47,7 @@ public class GeneralRagAutoConfiguration {
      * avoiding Spring Boot @ConfigurationProperties post-processor timing issues.
      */
     @Bean
+    @Primary
     public RagProperties ragProperties() {
         return new RagProperties();
     }

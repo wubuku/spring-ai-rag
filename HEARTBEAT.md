@@ -3,9 +3,9 @@
 > ## 🚨 核心铁律（永久生效，不可删除，不可弱化）
 > **任务永不清零，待办永远有内容。**
 > - 每次 cron 唤醒时：若 ⏳ 待办已清零，**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
-- 2026-04-14 16:47 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端 PDF 导入功能变更（归属后端 cron）；WebUI 项目处于生产级成熟状态
+- 2026-04-15 01:40 — ✅ WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区有后端 PDF 导入功能变更（归属后端 cron）；WebUI 项目处于生产级成熟状态
 > - 绝不允许出现"无任务可做"的空闲状态
-- 2026-04-14 15:47 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-14 15:47 — ✅ WebUI 常规发布：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 > - cron 是永不停歇的守护者，24/7 推进项目向生产级成熟度演进
 > - 每轮只完成 1 个代码任务，或 2 个文档任务，或 1 代码+1 文档
 
@@ -170,9 +170,9 @@
 
 ## 进度日志
 - 2026-04-15 00:33 — 🔍 WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，99KB index gzipped）；E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
-- 2026-04-13 04:07 — 🔍 WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
-- 2026-04-13 02:58 — 🔍 WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
-- 2026-04-13 00:45 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；commit e3683ea 已推送；WebUI 项目处于生产级成熟状态
+- 2026-04-13 04:07 — 🔍 WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-13 02:58 — 🔍 WebUI 常规巡检（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-13 00:45 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；commit e3683ea 已推送；WebUI 项目处于生产级成熟状态
 
 - 2026-04-12 16:10 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（98KB index gzipped，14 chunks）/ E2E 11/12 ✅（Search 失败：数据库为空环境问题，非代码 bug；Dashboard/Documents/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全通过）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
@@ -2865,7 +2865,7 @@ PDF 端点测试（Section 16，9 tests）：
 
 - 2026-04-13 01:58 — ✅ WebUI 常规发布 + Flyway 修复：
   - npm test 148 ✅（23 test files，148 vitest 全通过）
-  - npm run build ✅（99KB index gzipped，28 chunks）
+  - npm run build ✅（99KB index gzipped，34 chunks）
   - E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）
   - dist 已同步到 static/webui/
   - 后端服务 8081 UP
@@ -2962,7 +2962,7 @@ PDF 端点测试（Section 16，9 tests）：
 
 - 2026-04-14 04:50 — ✅ 配置化检索评估参数：RagRetrievalProperties 新增 evaluationK（默认10）和 answerQualityTimeoutSeconds（默认30），替换 RetrievalEvaluationServiceImpl 中的硬编码常量；evalResult 键名动态化（precisionAtK/recallAtK 而非固定 precisionAt10/recallAt10）；application.yml 新增 rag.retrieval.evaluation-k 和 rag.retrieval.answer-quality-timeout-seconds 配置项；RetrievalEvaluationServiceImplTest 全部 21 个测试通过；全量测试 1985 通过（零失败零错误）；commit 203c9e3 已推送
 
-- 2026-04-14 13:56 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，28 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
+- 2026-04-14 13:56 — ✅ WebUI 常规发布（cron）：npm test 148 ✅（23 test files，148 vitest 全通过）/ npm run build ✅（99KB index gzipped，34 chunks）/ E2E 12/12 ✅（Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing）；dist 已同步到 static/webui/；后端服务 8081 UP；git 工作区干净（无变更）；WebUI 项目处于生产级成熟状态
 
 ## Cron 进度（2026-04-14 14:55 — C22-4 PdfImportController Map→DTO 改造）
 

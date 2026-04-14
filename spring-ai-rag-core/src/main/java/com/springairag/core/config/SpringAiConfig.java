@@ -43,7 +43,7 @@ import java.util.List;
  * - chatModel: Main entry point, selects one from the above three if available
  */
 @Configuration
-@EnableConfigurationProperties({RagProperties.class, RagMemoryProperties.class, RagPdfProperties.class})
+@EnableConfigurationProperties({RagMemoryProperties.class, RagPdfProperties.class})
 public class SpringAiConfig {
 
     private static final Logger log = LoggerFactory.getLogger(SpringAiConfig.class);
