@@ -3,7 +3,7 @@ package com.springairag.core.service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.RagRetrievalProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
 import io.micrometer.core.instrument.Counter;
@@ -45,7 +45,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     private final ChatClient.Builder chatClientBuilder;
     /** Optional executor for bounded-time LLM calls (null when AsyncConfig taskExecutor is unavailable). */
     private final ExecutorService executorService;
-    private final RagRetrievalProperties retrievalProperties;
+    private final RagProperties ragProperties;
 
     private Timer evaluateTimer;
     private Counter evaluationCounter;
@@ -58,13 +58,13 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
                                           MeterRegistry meterRegistry,
                                           @Autowired(required = false) ChatClient.Builder chatClientBuilder,
                                           @Qualifier("modelComparisonExecutor") @Autowired(required = false) ExecutorService executorService,
-                                          RagRetrievalProperties retrievalProperties) {
+                                          RagProperties ragProperties) {
         this.evaluationRepository = evaluationRepository;
         this.objectMapper = objectMapper;
         this.meterRegistry = meterRegistry;
         this.chatClientBuilder = chatClientBuilder;
         this.executorService = executorService;
-        this.retrievalProperties = retrievalProperties;
+        this.ragProperties = ragProperties;
     }
 
     @PostConstruct
@@ -99,7 +99,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
     @Override
     public RagRetrievalEvaluation evaluate(String query, List<Long> retrievedDocIds, List<Long> relevantDocIds,
                                            String evaluationMethod, String evaluatorId) {
-        EvaluationMetrics metrics = calculateMetrics(retrievedDocIds, relevantDocIds, retrievalProperties.getEvaluationK());
+        EvaluationMetrics metrics = calculateMetrics(retrievedDocIds, relevantDocIds, ragProperties.getRetrieval().getEvaluationK());
         RagRetrievalEvaluation evaluation = buildEvaluationEntity(
                 query, retrievedDocIds, relevantDocIds, metrics, evaluationMethod, evaluatorId);
         long start = System.currentTimeMillis();
@@ -126,7 +126,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         evaluation.setEvaluationMethod(evaluationMethod);
         evaluation.setEvaluatorId(evaluatorId);
         Map<String, Object> evalResult = new HashMap<>();
-        int k = retrievalProperties.getEvaluationK();
+        int k = ragProperties.getRetrieval().getEvaluationK();
         evalResult.put("precisionAt" + k, metrics.getPrecisionAtK().getOrDefault(k, 0.0));
         evalResult.put("recallAt" + k, metrics.getRecallAtK().getOrDefault(k, 0.0));
         evaluation.setEvaluationResult(evalResult);
@@ -241,7 +241,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         report.setAvgMrr(stats.sumMrr / n);
         report.setAvgNdcg(stats.sumNdcg / n);
         report.setAvgHitRate(stats.sumHitRate / n);
-        int k = retrievalProperties.getEvaluationK();
+        int k = ragProperties.getRetrieval().getEvaluationK();
         report.setAvgPrecision(stats.countWithMetrics > 0 ? stats.sumPrecisionAtK.getOrDefault(k, 0.0) / stats.countWithMetrics : 0);
         report.setAvgRecall(stats.countWithMetrics > 0 ? stats.sumRecallAtK.getOrDefault(k, 0.0) / stats.countWithMetrics : 0);
         return report;
@@ -282,7 +282,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         // If no executor is available, fall back to a synchronous unbounded call.
         if (executorService != null) {
             try {
-                int timeout = retrievalProperties.getAnswerQualityTimeoutSeconds();
+                int timeout = ragProperties.getRetrieval().getAnswerQualityTimeoutSeconds();
                 String responseText = CompletableFuture.supplyAsync(
                                 () -> chatClientBuilder.build()
                                         .prompt()
@@ -294,7 +294,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
                 return parseJudgeResponse(responseText);
             } catch (TimeoutException e) {
                 log.warn("Answer quality evaluation timed out after {}s for query: {}",
-                        retrievalProperties.getAnswerQualityTimeoutSeconds(), query);
+                        ragProperties.getRetrieval().getAnswerQualityTimeoutSeconds(), query);
                 return new AnswerQualityResult(3, 3, 3,
                         "Evaluation timed out, service unavailable", "REVISION");
             } catch (InterruptedException e) {

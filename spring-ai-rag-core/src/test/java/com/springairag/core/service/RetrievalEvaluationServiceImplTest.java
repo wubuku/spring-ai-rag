@@ -1,7 +1,7 @@
 package com.springairag.core.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.springairag.core.config.RagRetrievalProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.repository.RagRetrievalEvaluationRepository;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -39,14 +39,14 @@ class RetrievalEvaluationServiceImplTest {
     private ChatClient.Builder chatClientBuilder;
 
     private RetrievalEvaluationServiceImpl service;
-    private RagRetrievalProperties properties;
+    private RagProperties ragProperties;
 
     @BeforeEach
     void setUp() {
-        properties = new RagRetrievalProperties();
-        properties.setEvaluationK(10);
-        properties.setAnswerQualityTimeoutSeconds(30);
-        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry(), null, null, properties);
+        ragProperties = new RagProperties();
+        ragProperties.getRetrieval().setEvaluationK(10);
+        ragProperties.getRetrieval().setAnswerQualityTimeoutSeconds(30);
+        service = new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(), new SimpleMeterRegistry(), null, null, ragProperties);
         service.initMetrics();
     }
 
@@ -329,7 +329,7 @@ class RetrievalEvaluationServiceImplTest {
     void evaluateAnswerQuality_validJson_parsesCorrectly() {
         RetrievalEvaluationServiceImpl svcWithChatClient =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, null, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, null, ragProperties);
         svcWithChatClient.initMetrics();
 
         // Use the same mocking pattern as RagChatServiceTest:
@@ -366,7 +366,7 @@ class RetrievalEvaluationServiceImplTest {
     void evaluateAnswerQuality_invalidJson_returnsDefaults() {
         RetrievalEvaluationServiceImpl svcWithChatClient =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, null, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, null, ragProperties);
         svcWithChatClient.initMetrics();
 
         ChatClient mockClient = mock(ChatClient.class);
@@ -395,7 +395,7 @@ class RetrievalEvaluationServiceImplTest {
         // When executorService is null, the service falls back to synchronous call (no timeout)
         RetrievalEvaluationServiceImpl svc =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, null, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, null, ragProperties);
         svc.initMetrics();
 
         ChatClient mockClient = mock(ChatClient.class);
@@ -435,7 +435,7 @@ class RetrievalEvaluationServiceImplTest {
                 java.util.concurrent.Executors.newSingleThreadExecutor();
         RetrievalEvaluationServiceImpl svc =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, exec, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, exec, ragProperties);
         svc.initMetrics();
 
         // ExecutionException should be caught and fallback returned
@@ -468,7 +468,7 @@ class RetrievalEvaluationServiceImplTest {
                 java.util.concurrent.Executors.newSingleThreadExecutor();
         RetrievalEvaluationServiceImpl svc =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, exec, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, exec, ragProperties);
         svc.initMetrics();
 
         RetrievalEvaluationService.AnswerQualityResult result =
@@ -498,7 +498,7 @@ class RetrievalEvaluationServiceImplTest {
                 java.util.concurrent.Executors.newSingleThreadExecutor();
         RetrievalEvaluationServiceImpl svc =
                 new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
-                        new SimpleMeterRegistry(), chatClientBuilder, exec, properties);
+                        new SimpleMeterRegistry(), chatClientBuilder, exec, ragProperties);
         svc.initMetrics();
 
         RetrievalEvaluationService.AnswerQualityResult result =
