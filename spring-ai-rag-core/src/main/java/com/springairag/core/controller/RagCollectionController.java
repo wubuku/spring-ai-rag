@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionCreatedResponse;
 import com.springairag.api.dto.CollectionDeleteResponse;
+import com.springairag.api.dto.CollectionExportResponse;
 import com.springairag.api.dto.CollectionDocumentListResponse;
 import com.springairag.api.dto.CollectionImportResponse;
 import com.springairag.api.dto.CollectionRequest;
@@ -32,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -333,48 +335,45 @@ public class RagCollectionController {
      */
     @Operation(summary = "Export collection", description = "Export collection info and document metadata as JSON for backup and migration.")
     @GetMapping("/{id}/export")
-    public ResponseEntity<Map<String, Object>> exportCollection(@PathVariable Long id) {
+    public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {
         log.info("Exporting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
                     List<RagDocument> docs = documentRepository.findAllByCollectionId(id);
-                    Map<String, Object> exportData = buildExportData(collection, docs);
+                    CollectionExportResponse response = buildExportResponse(collection, docs);
                     log.info("Collection exported: id={}, documents={}", id, docs.size());
-                    return ResponseEntity.ok(exportData);
+                    return ResponseEntity.ok(response);
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    private Map<String, Object> buildExportData(RagCollection collection, List<RagDocument> docs) {
-        List<Map<String, Object>> docList = docs.stream()
-                .map(doc -> {
-                    Map<String, Object> m = new HashMap<>();
-                    m.put("title", doc.getTitle());
-                    m.put("source", doc.getSource());
-                    m.put("content", doc.getContent());
-                    m.put("documentType", doc.getDocumentType());
-                    m.put("metadata", doc.getMetadata());
-                    m.put("size", doc.getSize());
-                    return m;
-                })
+    private CollectionExportResponse buildExportResponse(RagCollection collection, List<RagDocument> docs) {
+        List<CollectionExportResponse.ExportedDocumentSummary> docList = docs.stream()
+                .map(doc -> new CollectionExportResponse.ExportedDocumentSummary(
+                        doc.getTitle(),
+                        doc.getSource(),
+                        doc.getContent(),
+                        doc.getDocumentType(),
+                        doc.getMetadata(),
+                        doc.getSize()))
                 .toList();
 
-        Map<String, Object> exportData = new HashMap<>();
-        exportData.put("name", collection.getName());
-        exportData.put("description", collection.getDescription());
-        exportData.put("embeddingModel", collection.getEmbeddingModel());
-        exportData.put("dimensions", collection.getDimensions());
-        exportData.put("enabled", collection.getEnabled());
-        exportData.put("metadata", collection.getMetadata());
-        exportData.put("documents", docList);
-        exportData.put("exportedAt", java.time.Instant.now().toString());
-        exportData.put("documentCount", docs.size());
-        return exportData;
+        return new CollectionExportResponse(
+                collection.getName(),
+                collection.getDescription(),
+                collection.getEmbeddingModel(),
+                collection.getDimensions(),
+                collection.getEnabled(),
+                collection.getMetadata(),
+                docList,
+                Instant.now(),
+                docs.size());
     }
 
+
     /**
-     * Import collection (create new collection from JSON).
+     * Import collection (create new collection from exported JSON data).
      */
     @Operation(summary = "Import collection", description = "Create a new collection and its documents from exported JSON data.")
     @PostMapping("/import")

@@ -52,7 +52,7 @@ import java.util.TreeSet;
  */
 @ApiVersion("v1")
 @RestController
-@RequestMapping("/rag/files")
+@RequestMapping("/files")
 @Tag(name = "File System Import", description = "PDF import, directory tree management, and file preview")
 public class PdfImportController {
 
@@ -273,8 +273,26 @@ public class PdfImportController {
     // ==================== Internal Helpers ====================
 
     private String deriveMarkdownPath(String pdfPath) {
-        // pdfPath example: "papers/论文.pdf" → "papers/论文.md"
-        return replaceLast(pdfPath.toLowerCase(), ".pdf", ".md", 1);
+        // pdfPath can be:
+        // 1. UUID (virtual dir) -> UUID/default.md
+        // 2. UUID/original.pdf -> UUID/default.md
+        // 3. papers/论文.pdf -> papers/论文.md (legacy, keep for compatibility)
+        if (pdfPath.endsWith(".pdf")) {
+            // If it's UUID/original.pdf, convert to UUID/default.md
+            if (pdfPath.endsWith("/original.pdf") || pdfPath.endsWith("/original")) {
+                int idx = pdfPath.lastIndexOf("/original.pdf");
+                if (idx > 0) {
+                    return pdfPath.substring(0, idx) + "/default.md";
+                }
+            }
+            // Otherwise just replace .pdf with .md
+            return replaceLast(pdfPath, ".pdf", ".md", 1);
+        }
+        // If path is just UUID (no extension), append /default.md
+        if (!pdfPath.contains("/")) {
+            return pdfPath + "/default.md";
+        }
+        return pdfPath + ".md";
     }
 
     private String urlDecode(String path) {

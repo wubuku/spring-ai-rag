@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.CollectionDocumentListResponse;
+import com.springairag.api.dto.CollectionExportResponse;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.DocumentAddedResponse;
@@ -331,18 +332,16 @@ class RagCollectionControllerTest {
         doc.setSize(100L);
         when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc));
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        CollectionExportResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals("知识库A", body.get("name"));
-        assertEquals(1, body.get("documentCount"));
-        assertNotNull(body.get("exportedAt"));
+        assertEquals("知识库A", body.name());
+        assertEquals(1, body.documentCount());
+        assertNotNull(body.exportedAt());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
-        assertEquals("文档1", docs.get(0).get("title"));
+        assertEquals("文档1", body.documents().get(0).title());
     }
 
     @Test
@@ -366,27 +365,25 @@ class RagCollectionControllerTest {
 
         when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(200, response.getStatusCode().value());
-        Map<String, Object> body = response.getBody();
+        CollectionExportResponse body = response.getBody();
         assertNotNull(body);
-        assertEquals(2, body.get("documentCount"));
+        assertEquals(2, body.documentCount());
 
-        @SuppressWarnings("unchecked")
-        List<Map<String, Object>> docs = (List<Map<String, Object>>) body.get("documents");
-        assertEquals(2, docs.size());
-        assertEquals("文档A", docs.get(0).get("title"));
-        assertEquals("PDF", docs.get(0).get("documentType"));
-        assertEquals("Alice", ((Map<?, ?>) docs.get(0).get("metadata")).get("author"));
-        assertEquals("文档B", docs.get(1).get("title"));
+        assertEquals(2, body.documents().size());
+        assertEquals("文档A", body.documents().get(0).title());
+        assertEquals("PDF", body.documents().get(0).documentType());
+        assertEquals("Alice", body.documents().get(0).metadata().get("author"));
+        assertEquals("文档B", body.documents().get(1).title());
     }
 
     @Test
     void exportCollection_deletedCollection_returns404() {
         when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.empty());
 
-        ResponseEntity<Map<String, Object>> response = controller.exportCollection(1L);
+        ResponseEntity<CollectionExportResponse> response = controller.exportCollection(1L);
 
         assertEquals(404, response.getStatusCode().value());
     }
