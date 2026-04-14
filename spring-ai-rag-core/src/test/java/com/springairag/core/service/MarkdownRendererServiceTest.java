@@ -1,7 +1,6 @@
 package com.springairag.core.service;
 
 import com.springairag.core.entity.FsFile;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
@@ -12,18 +11,12 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Unit tests for MarkdownRendererService.
- * Tests Markdown-to-HTML rendering and image path rewriting.
+ * Tests Markdown-to-HTML rendering with relative image paths preserved.
  */
 @DisplayName("MarkdownRendererService Tests")
 class MarkdownRendererServiceTest {
 
     private final MarkdownRendererService service = new MarkdownRendererService();
-
-    @AfterEach
-    void tearDown() {
-        // Clear ThreadLocal state after each test
-        MarkdownRendererService.RewriteImagePathAttributeProvider.clearVirtualDir();
-    }
 
     // ==================== renderToHtml(String, String) Tests ====================
 
@@ -68,27 +61,24 @@ class MarkdownRendererServiceTest {
         }
 
         @Test
-        @DisplayName("rewrites relative image path to files API")
-        void relativeImagePath_rewrittenToFilesApi() {
+        @DisplayName("preserves relative image paths")
+        void relativeImagePath_preserved() {
             String markdown = "![alt text](image.png)";
             String result = service.renderToHtml(markdown, "docs/readme.md");
 
-            // Should be rewritten to /api/v1/rag/files/raw?path=...
-            assertTrue(result.contains("/api/v1/rag/files/raw"));
-            // The original relative path should not appear as-is in the src attribute
-            // (it may appear in alt text, so we check for the img tag with the rewritten src)
+            // Image src should remain as relative path (not rewritten)
             assertTrue(result.contains("<img"));
-            assertTrue(result.contains("src=\"/api/v1/rag/files/raw"));
+            assertTrue(result.contains("src=\"image.png\""));
         }
 
         @Test
-        @DisplayName("rewrites relative image path with ./ prefix")
-        void relativeImageWithDotSlash_rewrittenCorrectly() {
+        @DisplayName("preserves relative image paths with ./ prefix")
+        void relativeImageWithDotSlash_preserved() {
             String markdown = "![alt](./photo.jpg)";
             String result = service.renderToHtml(markdown, "notes.md");
 
-            // "./photo.jpg" should have "./" stripped and be rewritten
-            assertTrue(result.contains("/api/v1/rag/files/raw"));
+            assertTrue(result.contains("<img"));
+            assertTrue(result.contains("src=\"./photo.jpg\""));
         }
 
         @Test
@@ -98,7 +88,6 @@ class MarkdownRendererServiceTest {
             String result = service.renderToHtml(markdown, "test.md");
 
             assertTrue(result.contains("http://example.com/pic.png"));
-            assertFalse(result.contains("/api/v1/rag/files/raw"));
         }
 
         @Test
@@ -108,18 +97,6 @@ class MarkdownRendererServiceTest {
             String result = service.renderToHtml(markdown, "test.md");
 
             assertTrue(result.contains("https://cdn.example.com/logo.png"));
-            assertFalse(result.contains("/api/v1/rag/files/raw"));
-        }
-
-        @Test
-        @DisplayName("includes virtual directory in image path")
-        void imagePath_includesVirtualDirectory() {
-            String markdown = "![screenshot](screenshots/main.png)";
-            String result = service.renderToHtml(markdown, "project/docs/intro.md");
-
-            // Should contain the virtual directory "project/docs/"
-            assertTrue(result.contains("project%2Fdocs%2Fscreenshots%2Fmain.png") // URL encoded
-                    || result.contains("/api/v1/rag/files/raw"));
         }
 
         @Test
@@ -129,17 +106,6 @@ class MarkdownRendererServiceTest {
             String result = service.renderToHtml(markdown, "test.md");
 
             assertTrue(result.contains("<strong>Bold</strong>") || result.contains("Bold"));
-            assertFalse(result.contains("/api/v1/rag/files/raw"));
-        }
-
-        @Test
-        @DisplayName("handles multiple images in same document")
-        void multipleImages_allRewritten() {
-            String markdown = "![img1](a.png) and ![img2](b.jpg)";
-            String result = service.renderToHtml(markdown, "test.md");
-
-            // Both relative paths should be rewritten
-            assertTrue(result.contains("/api/v1/rag/files/raw"));
         }
 
         @Test
@@ -189,18 +155,6 @@ class MarkdownRendererServiceTest {
             String result = service.renderToHtml(file);
 
             assertTrue(result.contains("From Binary"));
-        }
-
-        @Test
-        @DisplayName("uses virtual path for image rewriting")
-        void virtualPath_usedForImageRewriting() {
-            FsFile file = new FsFile();
-            file.setPath("docs/guide/image.md");
-            file.setContentTxt("![shot](screenshot.png)");
-
-            String result = service.renderToHtml(file);
-
-            assertTrue(result.contains("/api/v1/rag/files/raw"));
         }
     }
 }

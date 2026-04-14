@@ -12,6 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.Resource;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
@@ -102,6 +103,7 @@ class PdfImportServiceTest {
             // Configure all converters to fail
             PdfConverter failingConverter = mock(PdfConverter.class);
             when(failingConverter.isAvailable()).thenReturn(true);
+            when(failingConverter.getName()).thenReturn("failing-converter");
             when(failingConverter.convert(any(), any())).thenReturn(false);
 
             pdfImportService = new PdfImportService(fsFileRepository, pdfProperties, List.of(failingConverter));
@@ -123,7 +125,7 @@ class PdfImportServiceTest {
 
         @Test
         @DisplayName("imports PDF with successful conversion")
-        void importPdf_success_storesFiles() {
+        void importPdf_success_storesFiles() throws IOException {
             byte[] pdfBytes = b("fake pdf content");
             MockMultipartFile file = new MockMultipartFile(
                     "file", "Test-Report.pdf", "application/pdf", pdfBytes);
@@ -143,7 +145,7 @@ class PdfImportServiceTest {
 
         @Test
         @DisplayName("stores original PDF as {uuid}/original.pdf")
-        void importPdf_storesOriginalPdf() {
+        void importPdf_storesOriginalPdf() throws IOException {
             byte[] pdfBytes = b("fake pdf content");
             MockMultipartFile file = new MockMultipartFile(
                     "file", "doc.pdf", "application/pdf", pdfBytes);
@@ -154,8 +156,8 @@ class PdfImportServiceTest {
             PdfImportService.PdfImportResult result =
                     pdfImportService.importPdf(file, null);
 
-            verify(fsFileRepository).save(argThat((FsFile f) ->
-                    f.getPath().equals(result.uuid() + "/original.pdf")));
+            verify(fsFileRepository).saveAll(argThat((List<FsFile> list) ->
+                    list.stream().anyMatch(f -> f.getPath().equals(result.uuid() + "/original.pdf"))));
         }
     }
 

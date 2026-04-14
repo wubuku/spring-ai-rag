@@ -11,6 +11,7 @@ import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockMultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,7 +38,7 @@ class PdfImportControllerTest {
     // ==================== importPdf tests ====================
 
     @Test
-    void importPdf_validPdf_returnsOk() {
+    void importPdf_validPdf_returnsOk() throws IOException {
         MockMultipartFile pdfFile = new MockMultipartFile(
                 "file", "test.pdf", "application/pdf", "PDF content".getBytes());
 
@@ -74,7 +75,7 @@ class PdfImportControllerTest {
     }
 
     @Test
-    void importPdf_serviceThrowsIllegalArgument_returnsBadRequest() {
+    void importPdf_serviceThrowsIllegalArgument_returnsBadRequest() throws IOException {
         MockMultipartFile pdfFile = new MockMultipartFile(
                 "file", "test.pdf", "application/pdf", "PDF content".getBytes());
 
@@ -87,7 +88,7 @@ class PdfImportControllerTest {
     }
 
     @Test
-    void importPdf_serviceThrowsRuntimeException_returnsInternalServerError() {
+    void importPdf_serviceThrowsRuntimeException_returnsInternalServerError() throws IOException {
         MockMultipartFile pdfFile = new MockMultipartFile(
                 "file", "test.pdf", "application/pdf", "PDF content".getBytes());
 

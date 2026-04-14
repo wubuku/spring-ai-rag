@@ -3,9 +3,7 @@ package com.springairag.core.service;
 import com.springairag.core.config.RagPdfProperties;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.repository.FsFileRepository;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
+import com.springairag.core.service.pdf.PdfConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.io.Resource;
@@ -14,7 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -23,15 +22,16 @@ import java.util.*;
 /**
  * PDF Import Service
  *
- * <p>Handles PDF file import into the {@code fs_files} table using Apache PDFBox
- * for text extraction. No external CLI dependencies required.
+ * <p>Handles PDF file import into the {@code fs_files} table using marker CLI
+ * for high-quality text extraction with layout preservation and image extraction.
  *
  * <p>Import pipeline:
  * <ol>
  *   <li>Generate a UUID as the virtual directory name</li>
- *   <li>Extract text from PDF using PDFBox</li>
- *   <li>Create a Markdown file from the extracted text</li>
- *   <li>Store the original PDF and Markdown as FsFile records</li>
+ *   <li>Copy uploaded PDF to temp location</li>
+ *   <li>Run marker CLI to convert PDF to Markdown + images in temp directory</li>
+ *   <li>Import entire directory tree (md + images) into fs_files table</li>
+ *   <li>Copy original PDF to {uuid}/original.pdf</li>
  *   <li>Return metadata about the imported files</li>
  * </ol>
  *
@@ -39,10 +39,12 @@ import java.util.*;
  * <ul>
  *   <li>{@code {uuid}/default.md} — entry Markdown file</li>
  *   <li>{@code {uuid}/original.pdf} — original PDF binary</li>
+ *   <li>{@code {uuid}/{image_0}.png} — extracted images (if any)</li>
+ *   <li>{@code {uuid}/{other_files} — any other output from marker</li>
  * </ul>
  *
- * <p>Preview URL: {@code GET /files/preview?path={uuid}/original.pdf}
- * Preview logic: replaces {@code original.pdf} with {@code default.md} to locate entry Markdown.
+ * <p>Preview URL: {@code GET /preview/{uuid}/default.html}
+ * <p>Image URL: {@code GET /preview/{uuid}/{imageName}}
  */
 @Service
 public class PdfImportService {
@@ -51,24 +53,31 @@ public class PdfImportService {
 
     private final FsFileRepository fsFileRepository;
     private final RagPdfProperties pdfProperties;
+    private final List<PdfConverter> converters;
 
-    public PdfImportService(FsFileRepository fsFileRepository, RagPdfProperties pdfProperties) {
+    public PdfImportService(FsFileRepository fsFileRepository,
+                            RagPdfProperties pdfProperties,
+                            List<PdfConverter> converters) {
         this.fsFileRepository = fsFileRepository;
         this.pdfProperties = pdfProperties;
+        // 按优先级排序：marker CLI 优先，然后 PDFBox
+        this.converters = converters.stream()
+                .sorted(Comparator.comparing(PdfConverter::getName))
+                .toList();
     }
 
     // ==================== Public API ====================
 
     /**
-     * Import a PDF file: extract text and store both PDF and Markdown entry in fs_files.
+     * Import a PDF file: convert with marker CLI and store all output in fs_files.
      *
      * @param pdfFile     the uploaded PDF file (multipart)
-     * @param collection  Optional collection/subdirectory path prefix (ignored for now;
+     * @param collection  Optional collection/subdirectory path prefix (ignored;
      *                    the UUID serves as the virtual directory)
      * @return import result containing the virtual directory UUID and file count
      */
     @Transactional
-    public PdfImportResult importPdf(MultipartFile pdfFile, String collection) {
+    public PdfImportResult importPdf(MultipartFile pdfFile, String collection) throws IOException {
         if (!pdfProperties.isEnabled()) {
             throw new IllegalStateException("PDF import is disabled (rag.pdf.enabled=false)");
         }
@@ -85,57 +94,143 @@ public class PdfImportService {
         String uuid = UUID.randomUUID().toString();
         log.info("Importing PDF: originalFilename={}, uuid={}", originalFilename, uuid);
 
-        // Read PDF bytes
-        byte[] pdfBytes;
+        // Create temp working directory
+        Path tempWorkDir;
         try {
-            pdfBytes = pdfFile.getBytes();
+            tempWorkDir = Files.createTempDirectory("pdf-import-");
         } catch (IOException e) {
-            throw new RuntimeException("Failed to read PDF bytes: " + e.getMessage(), e);
+            throw new RuntimeException("Failed to create temp working directory: " + e.getMessage(), e);
         }
 
-        // Extract text using PDFBox
-        String extractedText = extractTextFromPdf(pdfBytes, originalFilename);
+        try {
+            // Copy uploaded PDF to temp location
+            Path tempPdfPath = tempWorkDir.resolve(originalFilename);
+            Files.write(tempPdfPath, pdfFile.getBytes());
 
-        // Build Markdown content
-        String markdown = buildMarkdown(originalFilename, extractedText);
+            // Find first available converter
+            PdfConverter converter = findAvailableConverter();
+            if (converter == null) {
+                throw new RuntimeException("No PDF converter is available. " +
+                        "Please ensure marker CLI is installed or PDFBox is on the classpath.");
+            }
 
-        // Store files
-        List<FsFile> records = new ArrayList<>();
-        int[] count = {0};
+            log.info("Using converter: {}", converter.getName());
 
-        // Entry Markdown: {uuid}/default.md
-        FsFile mdFile = new FsFile(
-                uuid + "/default.md",
-                true,
-                markdown.getBytes(StandardCharsets.UTF_8),
-                markdown,
-                "text/markdown",
-                (long) markdown.length()
-        );
-        records.add(mdFile);
-        count[0]++;
+            // Convert PDF to Markdown + images
+            boolean success = converter.convert(tempPdfPath, tempWorkDir);
+            if (!success) {
+                throw new RuntimeException("PDF conversion failed using " + converter.getName());
+            }
 
-        // Original PDF: {uuid}/original.pdf
-        FsFile pdfFileRecord = new FsFile(
-                uuid + "/original.pdf",
-                false,
-                pdfBytes,
-                null,
-                "application/pdf",
-                (long) pdfBytes.length
-        );
-        records.add(pdfFileRecord);
-        count[0]++;
+            // marker 输出目录结构: {tempWorkDir}/{pdfName}/
+            String pdfBaseName = originalFilename;
+            if (pdfBaseName.toLowerCase().endsWith(".pdf")) {
+                pdfBaseName = pdfBaseName.substring(0, pdfBaseName.length() - 4);
+            }
+            Path markerOutputDir = tempWorkDir.resolve(pdfBaseName);
 
-        fsFileRepository.saveAll(records);
+            // 导入整个目录树到数据库
+            List<FsFile> records = new ArrayList<>();
+            int[] count = {0};
 
-        // The entry Markdown path for preview
-        String entryMarkdownPath = uuid + "/default.md";
+            // 存储 original PDF
+            byte[] pdfBytes = Files.readAllBytes(tempPdfPath);
+            FsFile pdfFileRecord = new FsFile(
+                    uuid + "/original.pdf",
+                    false,
+                    pdfBytes,
+                    null,
+                    "application/pdf",
+                    (long) pdfBytes.length
+            );
+            records.add(pdfFileRecord);
+            count[0]++;
 
-        log.info("PDF import completed: uuid={}, entryMarkdown={}, files={}",
-                uuid, entryMarkdownPath, count[0]);
+            // 遍历 marker 输出目录，导入所有文件
+            if (Files.exists(markerOutputDir)) {
+                try {
+                    Files.list(markerOutputDir).forEach(file -> {
+                        try {
+                            if (Files.isRegularFile(file)) {
+                                String filename = file.getFileName().toString();
+                                byte[] content = Files.readAllBytes(file);
 
-        return new PdfImportResult(uuid, entryMarkdownPath, count[0]);
+                                // Markdown 文件作为 entry (default.md)
+                                boolean isMarkdown = filename.toLowerCase().endsWith(".md");
+                                String recordPath = isMarkdown
+                                        ? uuid + "/default.md"  // 重命名为 default.md
+                                        : uuid + "/" + filename;
+
+                                String contentTxt = isMarkdown
+                                        ? new String(content, StandardCharsets.UTF_8)
+                                        : null;
+
+                                String mimeType = isMarkdown
+                                        ? "text/markdown"
+                                        : Files.probeContentType(file);
+
+                                FsFile fsFile = new FsFile(
+                                        recordPath,
+                                        isMarkdown,
+                                        content,
+                                        contentTxt,
+                                        mimeType != null ? mimeType : "application/octet-stream",
+                                        (long) content.length
+                                );
+                                records.add(fsFile);
+                                count[0]++;
+
+                                log.info("Imported file: {} -> {}", file, recordPath);
+                            }
+                        } catch (IOException e) {
+                            log.error("Failed to import file {}: {}", file, e.getMessage());
+                        }
+                    });
+                } catch (IOException e) {
+                    log.error("Failed to list marker output directory: {}", e.getMessage());
+                }
+            }
+
+            fsFileRepository.saveAll(records);
+
+            // The entry Markdown path for preview
+            String entryMarkdownPath = uuid + "/default.md";
+
+            log.info("PDF import completed: uuid={}, entryMarkdown={}, files={}",
+                    uuid, entryMarkdownPath, count[0]);
+
+            return new PdfImportResult(uuid, entryMarkdownPath, count[0]);
+
+        } finally {
+            // 清理 temp 目录
+            try {
+                Files.walk(tempWorkDir)
+                        .sorted(Comparator.reverseOrder())
+                        .forEach(p -> {
+                            try {
+                                Files.delete(p);
+                            } catch (IOException e) {
+                                log.warn("Failed to delete temp file: {}", p);
+                            }
+                        });
+            } catch (IOException e) {
+                log.warn("Failed to cleanup temp directory: {}", tempWorkDir);
+            }
+        }
+    }
+
+    /**
+     * Find the first available PDF converter.
+     */
+    private PdfConverter findAvailableConverter() {
+        for (PdfConverter converter : converters) {
+            if (converter.isAvailable()) {
+                log.info("Found available converter: {}", converter.getName());
+                return converter;
+            }
+        }
+        log.warn("No PDF converter is available");
+        return null;
     }
 
     /**
@@ -177,78 +272,6 @@ public class PdfImportService {
                 });
     }
 
-    // ==================== Internal ====================
-
-    /**
-     * Extract text from a PDF using Apache PDFBox.
-     *
-     * <p>Note: PDFBox text extraction does not preserve layout. For full layout
-     * preservation (headings, tables, images), consider using a dedicated OCR + layout
-     * analysis tool such as marker-pdf (marker_single CLI) when GPU is available.
-     *
-     * @param pdfBytes        raw PDF bytes
-     * @param originalFilename for error messages
-     * @return extracted plain text, never null
-     */
-    String extractTextFromPdf(byte[] pdfBytes, String originalFilename) {
-        try (PDDocument document = Loader.loadPDF(pdfBytes)) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            // Sort by reading order for better text coherence
-            stripper.setSortByPosition(true);
-            String text = stripper.getText(document);
-            return text != null ? text : "";
-        } catch (IOException e) {
-            log.error("PDFBox text extraction failed for '{}': {}", originalFilename, e.getMessage());
-            throw new RuntimeException("Failed to extract text from PDF: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Build Markdown content from extracted PDF text.
-     *
-     * <p>Creates a simple Markdown document with the original filename as title
-     * and the extracted text as body content.
-     */
-    String buildMarkdown(String originalFilename, String extractedText) {
-        // Derive a clean title from the filename
-        String title = originalFilename;
-        if (title.toLowerCase().endsWith(".pdf")) {
-            title = title.substring(0, title.length() - 4);
-        }
-        // Replace underscores/hyphens with spaces in title
-        title = title.replace('[', ' ').replace(']', ' ')
-                     .replace('_', ' ').replace('-', ' ')
-                     .replaceAll(" +", " ").trim();
-
-        StringBuilder md = new StringBuilder();
-        md.append("# ").append(title).append("\n\n");
-        md.append("*Extracted from PDF automatically. Layout may not be preserved.*\n\n");
-        md.append("## Content\n\n");
-
-        if (extractedText == null || extractedText.isBlank()) {
-            md.append("*No text content could be extracted from this PDF.*\n");
-        } else {
-            // Split by double newlines to form paragraphs
-            String[] paragraphs = extractedText.split("\n\\s*\n");
-            for (String para : paragraphs) {
-                String trimmed = para.trim();
-                if (trimmed.isEmpty()) continue;
-                // Avoid adding very short lines as separate paragraphs
-                if (trimmed.contains("\n") || trimmed.length() > 80) {
-                    // Multi-line block — preserve line breaks
-                    md.append(trimmed.replaceAll("\\n", "  \n")).append("\n\n");
-                } else {
-                    md.append(trimmed).append("\n\n");
-                }
-            }
-        }
-
-        md.append("\n---\n");
-        md.append("*Generated by spring-ai-rag PDF Import · ").append(new java.util.Date()).append("*\n");
-
-        return md.toString();
-    }
-
     // ==================== Result Record ====================
 
     public record PdfImportResult(
@@ -256,7 +279,7 @@ public class PdfImportService {
             String uuid,
             /** Path to the entry Markdown file, e.g. "{uuid}/default.md" */
             String entryMarkdown,
-            /** Total number of files stored (PDF + Markdown) */
+            /** Total number of files stored */
             int filesStored
     ) {}
 }
