@@ -1,0 +1,10 @@
+# E2E test profile — enables API key authentication with a known static key
+rag:
+  security:
+    enabled: true
+    api-key: "rag-test-admin-key-001"
+
+spring:
+  config:
+    activate:
+      on-profile: e2e

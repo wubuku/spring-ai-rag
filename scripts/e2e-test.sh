@@ -558,6 +558,58 @@ else
     echo -e "  ${YELLOW}⚠️ SKIP${NC} (no PDF_UUID from 16a)"
 fi
 
+
+# ────────────────────────────────────────
+# 1️⃣7️⃣  API Key 角色权限测试
+# rag.security.enabled=true 时：静态测试 key 为 ADMIN，可列出/创建/删除 keys
+# rag.security.enabled=false 时（默认）：跳过
+# ────────────────────────────────────────
+echo "1️⃣7️⃣  API Key 角色权限测试"
+
+# 检测 auth 是否开启：调用 /api-keys 不带 key，返回 401 则说明开启了认证
+RESP_NO_AUTH=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+CODE_NO_AUTH=$(echo "$RESP_NO_AUTH" | tail -1)
+
+if [ "$CODE_NO_AUTH" = "401" ] || [ "$CODE_NO_AUTH" = "403" ]; then
+    echo "  认证已开启（HTTP $CODE_NO_AUTH），运行角色权限测试..."
+    ADMIN_KEY="rag-test-admin-key-001"
+
+    # 1. Admin key 可列出所有 keys
+    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" "$API/api-keys")
+    CODE=$(echo "$RESP" | tail -1)
+    assert_status "GET /api-keys with admin key" "200" "$CODE"
+
+    # 2. Admin key 可创建新 key
+    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
+        -X POST "$API/api-keys" \
+        -H "Content-Type: application/json" \
+        -d '{"name":"e2e-role-test-key"}')
+    CODE=$(echo "$RESP" | tail -1)
+    BODY=$(echo "$RESP" | sed '$d')
+    assert_status "POST /api-keys with admin key (create key)" "201" "$CODE"
+    assert_contains "响应包含 role 字段" "$BODY" '"role"'
+    TEST_KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
+    echo "  Created role-test keyId: $TEST_KEY_ID"
+
+    # 3. Admin key 可删除 key
+    if [ -n "$TEST_KEY_ID" ]; then
+        RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" \
+            -X DELETE "$API/api-keys/$TEST_KEY_ID")
+        CODE=$(echo "$RESP" | tail -1)
+        assert_status "DELETE /api-keys/{id} with admin key" "204" "$CODE"
+    fi
+
+    # 4. 不带 key 访问 admin 端点 → 401
+    RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+    CODE=$(echo "$RESP" | tail -1)
+    assert_status "GET /api-keys without key → 401" "401" "$CODE"
+
+    echo ""
+else
+    echo "  ⚠️  跳过：API Key 认证未开启（rag.security.enabled=false）"
+    echo "     启动服务器时加 --spring.profiles.active=e2e 可开启认证"
+fi
+echo ""
 # ────────────────────────────────────────
 # 汇总
 # ────────────────────────────────────────

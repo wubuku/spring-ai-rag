@@ -89,8 +89,10 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         String requestApiKey = request.getHeader(API_KEY_HEADER);
 
         // Fallback: EventSource (SSE) does not support custom headers (W3C spec limitation),
-        // so we also accept apiKey as a query string parameter
-        if ((requestApiKey == null || requestApiKey.isBlank()) && "GET".equals(request.getMethod())) {
+        // so we accept apiKey as a query string parameter for ALL HTTP methods.
+        // SSE uses POST to /chat/stream?apiKey=xxx, and even GET endpoints benefit from
+        // this fallback when the header is not available.
+        if (requestApiKey == null || requestApiKey.isBlank()) {
             requestApiKey = request.getParameter("apiKey");
         }
 
