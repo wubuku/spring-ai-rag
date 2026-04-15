@@ -193,6 +193,19 @@ class EmailNotificationServiceTest {
     }
 
     @Test
+    void sendAlert_mailSenderNull_returnsFalse() {
+        // mailSender is null when JavaMailSender is not on classpath / not configured
+        EmailNotificationService serviceWithoutMail = new EmailNotificationService(notificationConfig, null);
+        notificationConfig.getEmail().setEnabled(true);
+        notificationConfig.getEmail().setAlertTypes(java.util.List.of("CRITICAL"));
+
+        boolean result = serviceWithoutMail.sendAlert("CRITICAL", "Test Alert", "CRITICAL",
+                "test message", Map.of());
+
+        assertFalse(result);
+    }
+
+    @Test
     void buildHtmlBody_severityColors() {
         String criticalHtml = emailService.buildHtmlBody("T1", "C", "CRITICAL", "m", null);
         assertTrue(criticalHtml.contains("dc3545")); // red
