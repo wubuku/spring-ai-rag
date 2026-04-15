@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.core.config.EmbeddingCircuitBreakerProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -306,6 +307,58 @@ class EmbeddingBatchServiceTest {
     @DisplayName("Service without circuit breaker still functions normally")
     void createEmbeddingsBatch_noCircuitBreaker_worksNormally() {
         EmbeddingBatchService noCbService = new EmbeddingBatchService(embeddingModel, 10, null);
+
+        float[] vec = {0.1f};
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenReturn(mockBatchResponse(vec));
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                noCbService.createEmbeddingsBatch(List.of("text"));
+
+        assertEquals(1, results.size());
+        assertTrue(results.get(0).isSuccess());
+        verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
+    }
+
+    // --- RagProperties Constructor Tests ---
+
+    private RagProperties createRagProperties(boolean cbEnabled) {
+        RagProperties ragProps = new RagProperties();
+        EmbeddingCircuitBreakerProperties cbProps = ragProps.getEmbeddingCircuitBreaker();
+        cbProps.setEnabled(cbEnabled);
+        cbProps.setFailureRateThreshold(50);
+        cbProps.setMinimumNumberOfCalls(5);
+        cbProps.setWaitDurationInOpenStateSeconds(30);
+        cbProps.setSlidingWindowSize(20);
+        return ragProps;
+    }
+
+    @Test
+    @DisplayName("RagProperties constructor — circuit breaker enabled creates LlmCircuitBreaker internally")
+    void constructor_withRagPropertiesAndCbEnabled_createsCircuitBreakerInternally() {
+        RagProperties props = createRagProperties(true);
+
+        EmbeddingBatchService cbService = new EmbeddingBatchService(embeddingModel, props);
+
+        float[] vec = {0.1f, 0.2f};
+        when(embeddingModel.call(any(EmbeddingRequest.class)))
+                .thenReturn(mockBatchResponse(vec, vec));
+
+        List<EmbeddingBatchService.EmbeddingResult> results =
+                cbService.createEmbeddingsBatch(List.of("text1", "text2"));
+
+        assertEquals(2, results.size());
+        assertTrue(results.get(0).isSuccess());
+        assertTrue(results.get(1).isSuccess());
+        verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
+    }
+
+    @Test
+    @DisplayName("RagProperties constructor — circuit breaker disabled uses null breaker")
+    void constructor_withRagPropertiesAndCbDisabled_usesNullBreaker() {
+        RagProperties props = createRagProperties(false);
+
+        EmbeddingBatchService noCbService = new EmbeddingBatchService(embeddingModel, props);
 
         float[] vec = {0.1f};
         when(embeddingModel.call(any(EmbeddingRequest.class)))
