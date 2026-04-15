@@ -3073,3 +3073,11 @@ PDF 端点测试(Section 16,9 tests):
     - `PdfImportController` line 274: `MediaType.TEXT_EVENT_STREAM_VALUE`(String) → `MediaType.TEXT_EVENT_STREAM`(MediaType)
     - `PdfImportController` line 244: `ragResult` lambda 捕获问题 → AtomicReference holder 模式
   - git commit 8ad15a1 已推送;WebUI 项目处于生产级成熟状态
+
+## Cron 进度(2026-04-15 18:24 - 后端:修复 PdfImportService/PdfImportController 目录列表测试)
+
+> - 2026-04-15 18:24 - ✅ 后端测试修复:发现并修复 2 个测试失败
+  - `PdfImportServiceTest.listChildren_nestedFiles_onlyReturnsDirect`: mock 用 `"dir/"` 但 service 传 `"dir"`(service 去掉末尾斜杠),改为 `"dir"` 匹配
+  - `PdfImportControllerTest.listTree_withFiles_returnsTree`: 测试期望 total=2 但返回 1,根因是 `buildTreeEntries` 的 offset 计算 `parentPath.length() - 1` 对带末尾斜杠的 parentPath 会多减一位,修复为 `parentPath.length()` 统一处理
+  - 同步修复了 PdfImportService 的 listChildren 过滤逻辑:之前对 `"uuid/default.md"` 这类 remainder 以 "/" 开头的直接子文件判断有误,改进为检查第二个 "/" 的位置
+  - 全量测试:2111 tests ✅(零失败零错误);commit f7dfd44 已推送;git 工作区干净
