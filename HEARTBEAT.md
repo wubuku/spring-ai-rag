@@ -3,6 +3,7 @@
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
+> - 2026-04-15 08:28 - ✅ EmailNotificationService null mailSender 测试:新增 sendAlert_mailSenderNull_returnsFalse 测试覆盖 JavaMailSender 未配置(null)时的降级路径;EmailNotificationServiceTest 14→15 tests;mvn test ✅(全模块 BUILD SUCCESS);commit 1994f10 已推送
 > - 2026-04-15 07:57 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-15 07:15 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-15 06:46 - ✅ C41 Repository 测试补全(全部完成):新增10个Repository测试类(RagAbResultRepository 16t + RagApiKeyRepository 14t + RagAuditLogRepository 11t + RagChatHistoryJpaRepository 14t + RagClientErrorRepository 17t + RagCollectionRepository 13t + RagDocumentRepository 18t + RagEmbeddingRepository 12t + RagDocumentVersionRepository 20t + SloConfigRepository 14t),mvn test ✅(2079+47全通过),commit e7c1d56 已推送
