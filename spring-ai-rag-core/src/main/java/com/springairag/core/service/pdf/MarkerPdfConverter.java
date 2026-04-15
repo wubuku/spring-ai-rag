@@ -43,6 +43,14 @@ public class MarkerPdfConverter implements PdfConverter {
 
     @Override
     public boolean convert(Path pdfPath, Path outputDir) {
+        if (pdfPath == null) {
+            log.error("pdfPath must not be null");
+            return false;
+        }
+        if (outputDir == null) {
+            log.error("outputDir must not be null");
+            return false;
+        }
         if (!isAvailable()) {
             log.warn("Marker CLI is not available: marker-cli={}", pdfProperties.getMarkerCli());
             return false;

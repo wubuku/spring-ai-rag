@@ -26,6 +26,14 @@ public class PdfBoxConverter implements PdfConverter {
 
     @Override
     public boolean convert(Path pdfPath, Path outputDir) {
+        if (pdfPath == null) {
+            log.error("pdfPath must not be null");
+            return false;
+        }
+        if (outputDir == null) {
+            log.error("outputDir must not be null");
+            return false;
+        }
         String pdfName = pdfPath.getFileName().toString();
         // 去除 .pdf 后缀
         if (pdfName.toLowerCase().endsWith(".pdf")) {
