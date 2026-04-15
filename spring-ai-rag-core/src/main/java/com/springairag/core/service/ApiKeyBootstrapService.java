@@ -50,6 +50,12 @@ public class ApiKeyBootstrapService implements ApplicationRunner {
         ApiKeyCreatedResponse admin = apiKeyManagementService.generateKey(
                 new ApiKeyCreateRequest("Admin Key (auto-generated)", null));
 
+        // Guard against null (e.g., database unavailable during bootstrap)
+        if (admin == null) {
+            log.error("Bootstrap failed: generateKey returned null — database may be unavailable");
+            return;
+        }
+
         // Update the role to ADMIN (generateKey does not set role since the field
         // was added later; this UPDATE runs in the same transaction)
         Optional<RagApiKey> entity = apiKeyRepository.findByKeyId(admin.getKeyId());
