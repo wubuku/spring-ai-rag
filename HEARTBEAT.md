@@ -4,6 +4,16 @@
 > **任务永不清零,待办永远有内容。**
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
 > - 2026-04-15 08:28 - ✅ EmailNotificationService null mailSender 测试:新增 sendAlert_mailSenderNull_returnsFalse 测试覆盖 JavaMailSender 未配置(null)时的降级路径;EmailNotificationServiceTest 14→15 tests;mvn test ✅(全模块 BUILD SUCCESS);commit 1994f10 已推送
+> - 2026-04-15 12:35 - ⚠️ WebUI 常规巡检(部分):
+>   - npm test 148 ✅(23 test files,148 vitest 全通过)
+>   - npm run build ✅(99KB index gzipped,34 chunks)
+>   - E2E 10/12 ⚠️(Documents Page + Search Page 失败:空数据库,无索引文档)
+>   - dist 已同步到 static/webui/
+>   - 后端服务 8081 UP(database=Docker cortex-ce-postgres:5433,pgvector=UP)
+>   - 环境问题:本地 PostgreSQL 5432 缺少 pgvector;Docker PostgreSQL 16 缺少 pg_jieba 扩展(pg_jieba 不在 apt 仓库);V15 迁移(jiebacfg)无法通过,使用 --spring.flyway.enabled=false + 手动注入 flyway_schema_history V1-V14 勉强启动
+>   - ⚠️ Documents/Search E2E 失败因空数据库,非 WebUI 代码问题(历史运行 12/12 全部通过)
+>   - git 工作区干净(无变更)
+>
 > - 2026-04-15 08:47 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-15 07:15 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-15 06:46 - ✅ C41 Repository 测试补全(全部完成):新增10个Repository测试类(RagAbResultRepository 16t + RagApiKeyRepository 14t + RagAuditLogRepository 11t + RagChatHistoryJpaRepository 14t + RagClientErrorRepository 17t + RagCollectionRepository 13t + RagDocumentRepository 18t + RagEmbeddingRepository 12t + RagDocumentVersionRepository 20t + SloConfigRepository 14t),mvn test ✅(2079+47全通过),commit e7c1d56 已推送
