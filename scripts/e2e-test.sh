@@ -513,6 +513,51 @@ assert_status "POST /files/pdf (no file)" "400" "$CODE"
 echo -e "  ${GREEN}✅ PASS${NC} files/pdf returns 400 when no file uploaded"
 PASS=$((PASS + 1))
 
+# 16j. POST /files/pdf-to-rag - 完整链路：PDF → Markdown → RagDocument → 嵌入
+# 上传一个小 PDF，验证完整链路（RagDocument 被创建，嵌入成功）
+echo "- 16j. POST /files/pdf-to-rag (full PDF→RAG→embed pipeline)"
+# 使用 /tmp 中的小测试 PDF（如果没有就用 16a 的同一个）
+if [ -n "$PDF_UUID" ]; then
+    # pdf-to-rag 需要新上传，截取一小段 PDF 字节作为测试
+    DD_CMD=$(command -v dd 2>/dev/null && echo "dd" || echo "head -c")
+    TMPPDF="/tmp/e2e-small-pdf-$$.pdf"
+    head -c 200 "$PDF_FILE" > "$TMPPDF" 2>/dev/null || cp "$PDF_FILE" "$TMPPDF"
+
+    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf-to-rag" \
+        -F "file=@$TMPPDF;type=application/pdf" \
+        -F "embed=true")
+    rm -f "$TMPPDF"
+    CODE=$(echo "$RESP" | tail -1)
+
+    if [ "$CODE" = "200" ] || echo "$RESP" | grep -q '"documentId"'; then
+        DOC_ID=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('documentId',''))" 2>/dev/null)
+        if [ -n "$DOC_ID" ] && [ "$DOC_ID" != "None" ]; then
+            echo -e "  ${GREEN}✅ PASS${NC} pdf-to-rag created RagDocument id=$DOC_ID"
+            PASS=$((PASS + 1))
+
+            # 16k. 验证 RagDocument 在 /documents 中存在且有 chunks
+            echo "- 16k. GET /documents/{id} - 验证 RagDocument 有 chunks"
+            DRESP=$(curl -s "$API/documents/$DOC_ID")
+            D_CHUNKS=$(echo "$DRESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('chunkCount',0))" 2>/dev/null)
+            if [ -n "$D_CHUNKS" ] && [ "$D_CHUNKS" != "0" ] && [ "$D_CHUNKS" != "None" ]; then
+                echo -e "  ${GREEN}✅ PASS${NC} RagDocument id=$DOC_ID has $D_CHUNKS chunks (embed succeeded)"
+                PASS=$((PASS + 1))
+            else
+                echo -e "  ${RED}❌ FAIL${NC} RagDocument id=$DOC_ID has 0 chunks (embed may have failed)"
+                FAIL=$((FAIL + 1))
+            fi
+        else
+            echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag returned 200 but no documentId: ${RESP:0:200}"
+            FAIL=$((FAIL + 1))
+        fi
+    else
+        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag failed (HTTP $CODE): ${RESP:0:200}"
+        FAIL=$((FAIL + 1))
+    fi
+else
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} (no PDF_UUID from 16a)"
+fi
+
 # ────────────────────────────────────────
 # 汇总
 # ────────────────────────────────────────
