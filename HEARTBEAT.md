@@ -1278,6 +1278,8 @@
 
 **Cron 执行保证**:每次唤醒至少完成 1 个 P1 或 P2 任务后汇报。所有 ⏳ 未完成前,cron 永不停止。
 
+- 2026-04-15 20:21 - ✅ 主动巡检:后端代码库扫描(零 TODO/FIXME,2158 测试全通过);RagCollectionController 审计方法重构--6 个 auditCreate/Update/Delete 重载方法 → 单一泛型 audit(AuditAction.CREATE/UPDATE/DELETE) switch 分发;AuditLogService 新增 AuditAction enum;6 methods → 2 methods(-4);mvn test 2158 ✅;commit 695b250 已推送
+
 ## 进度日志(WebUI i18n - 2026-04-06 05:17)
 
 - ✅ C29: WebUI 国际化框架搭建完成
