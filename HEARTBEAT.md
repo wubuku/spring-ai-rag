@@ -3056,3 +3056,16 @@ PDF 端点测试(Section 16,9 tests):
   - 后端服务 8081 UP
   - git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
+
+## Cron 进度(2026-04-15 14:11 - WebUI 常规巡检 + 后端编译修复)
+
+> - 2026-04-15 14:11 - ✅ WebUI 常规巡检:
+  - npm test: 148 ✅(23 test files,148 vitest 全通过)
+  - npm run build: ✅(99KB index gzipped, 18 chunks)
+  - E2E 11/12 ✅(Search 失败:数据库为空,已知环境问题,非代码 bug;其余 11 项全部通过)
+  - dist/ 已同步到 static/webui/
+  - 后端服务 8081 UP(重启后正常)
+  - 发现并修复 2 个编译错误:
+    - `PdfImportController` line 274: `MediaType.TEXT_EVENT_STREAM_VALUE`(String) → `MediaType.TEXT_EVENT_STREAM`(MediaType)
+    - `PdfImportController` line 244: `ragResult` lambda 捕获问题 → AtomicReference holder 模式
+  - git commit 8ad15a1 已推送;WebUI 项目处于生产级成熟状态
