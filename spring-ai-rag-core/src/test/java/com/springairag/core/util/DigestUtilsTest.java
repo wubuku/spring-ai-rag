@@ -58,4 +58,14 @@ class DigestUtilsTest {
         assertEquals(64, hash.length());
         assertTrue(hash.matches("[0-9a-f]{64}"));
     }
+
+    @Test
+    @DisplayName("sha256 throws IllegalArgumentException for null input")
+    void sha256_nullInput_throwsIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> DigestUtils.sha256(null)
+        );
+        assertEquals("Content must not be null", ex.getMessage());
+    }
 }

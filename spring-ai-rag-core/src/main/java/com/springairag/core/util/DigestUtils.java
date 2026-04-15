@@ -15,10 +15,14 @@ public final class DigestUtils {
     /**
      * Computes the SHA-256 hash of the given text.
      *
-     * @param content the text to hash
+     * @param content the text to hash (must not be null)
      * @return lowercase hex string (64 characters)
+     * @throws IllegalArgumentException if content is null
      */
     public static String sha256(String content) {
+        if (content == null) {
+            throw new IllegalArgumentException("Content must not be null");
+        }
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
