@@ -275,3 +275,15 @@
   align-items: center;
   gap: 0.5rem;
 }
+
+.badgeAdmin {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+}
+
+.badgeNormal {
+  background: #f3f4f6;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+}

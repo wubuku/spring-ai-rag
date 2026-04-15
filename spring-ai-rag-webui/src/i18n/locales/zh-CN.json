@@ -183,7 +183,8 @@
     "maxSize": "最大容量",
     "save": "保存设置",
     "saved": "设置已保存！",
-    "changesUnsaved": "您有未保存的更改"
+    "changesUnsaved": "您有未保存的更改",
+    "ragApiKey": "RAG API 密钥"
   },
   "theme": {
     "light": "浅色",
@@ -280,7 +281,10 @@
     "rotateError": "轮换 API 密钥失败",
     "keyRotated": "API 密钥轮换成功",
     "active": "有效",
-    "expired": "已过期"
+    "expired": "已过期",
+    "role": "角色",
+    "admin": "管理员",
+    "normal": "普通"
   },
   "files": {
     "title": "文件管理",

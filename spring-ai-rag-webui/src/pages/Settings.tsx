@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getApiKey, saveApiKey } from '../utils/apiKeyStorage';
 import styles from './Settings.module.css';
 
 interface RetrievalConfig {
@@ -19,7 +20,7 @@ const SETTINGS_KEY = 'user_settings';
 
 export function Settings() {
   const { t, i18n } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache' | 'language'>('llm');
+  const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache' | 'apikey' | 'language'>('llm');
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const lastSavedRef = useRef<{ retrieval: RetrievalConfig; cache: CacheConfig } | null>(null);
@@ -105,6 +106,7 @@ export function Settings() {
     { id: 'llm' as const, label: t('settings.llmProvider') },
     { id: 'retrieval' as const, label: t('settings.retrieval') },
     { id: 'cache' as const, label: t('settings.cache') },
+    { id: 'apikey' as const, label: t('settings.ragApiKey') },
     { id: 'language' as const, label: t('settings.title').split(' ')[0] === '设置' ? '语言' : 'Language' },
   ];
 
@@ -310,6 +312,54 @@ export function Settings() {
               <span className={styles.hint}>
                 {i18n.language === 'zh-CN' ? '缓存项最大数量' : 'Maximum number of cached items'}
               </span>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'apikey' && (
+          <div className={styles.section}>
+            <h2 className={styles.sectionTitle}>{t('settings.ragApiKey')}</h2>
+            <p className={styles.sectionDesc}>
+              {i18n.language === 'zh-CN'
+                ? '设置用于访问 RAG 后端服务的 API Key。首次启动后端时，日志中会打印 admin API Key。'
+                : 'Set the API key for accessing the RAG backend service. On first startup, the admin API key is printed in the backend logs.'}
+            </p>
+
+            <div className={styles.field}>
+              <label className={styles.label}>
+                {i18n.language === 'zh-CN' ? 'RAG API Key' : 'RAG API Key'}
+              </label>
+              <input
+                type="password"
+                className={styles.input}
+                id="rag-api-key-input"
+                autoComplete="off"
+                placeholder={i18n.language === 'zh-CN' ? 'rag_sk_...' : 'rag_sk_...'}
+                defaultValue={getApiKey()}
+              />
+              <span className={styles.hint}>
+                {i18n.language === 'zh-CN'
+                  ? 'API Key 仅存储在浏览器本地，不会发送到服务器以外的地方'
+                  : 'API key is stored locally in your browser only'}
+              </span>
+            </div>
+
+            <div className={styles.actions}>
+              <button
+                className={styles.saveBtn}
+                onClick={() => {
+                  const input = document.getElementById('rag-api-key-input') as HTMLInputElement;
+                  if (input) {
+                    const value = input.value.trim();
+                    saveApiKey(value);
+                    setSaved(true);
+                    setHasChanges(false);
+                    setTimeout(() => setSaved(false), 2000);
+                  }
+                }}
+              >
+                {saved ? '✓ ' + t('settings.saved') : t('settings.save')}
+              </button>
             </div>
           </div>
         )}

@@ -50,6 +50,7 @@ function KeyList() {
           <div className={styles.tableHead}>
             <span>{t('apiKeys.name')}</span>
             <span>{t('apiKeys.keyId')}</span>
+            <span>{t('apiKeys.role')}</span>
             <span>{t('apiKeys.created')}</span>
             <span>{t('apiKeys.lastUsed')}</span>
             <span>{t('apiKeys.status')}</span>
@@ -109,6 +110,7 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
     <div className={styles.tableRow}>
       <span className={styles.name}>{keyItem.name}</span>
       <span className={styles.keyId} title={keyItem.keyId}>{keyItem.keyId}</span>
+      <span>{getRoleBadge(keyItem.role, t)}</span>
       <span className={styles.date}>{formatDate(keyItem.createdAt)}</span>
       <span className={styles.date}>{formatDate(keyItem.lastUsedAt)}</span>
       <span>{statusBadge}</span>
@@ -134,6 +136,16 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
       </span>
     </div>
   );
+}
+
+function getRoleBadge(role: string | undefined, t: (key: string) => string) {
+  if (role === 'ADMIN') {
+    return <span className={`${styles.badge} ${styles.badgeAdmin}`}>{t('apiKeys.admin')}</span>;
+  }
+  if (role === 'NORMAL') {
+    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.normal')}</span>;
+  }
+  return <span className={`${styles.badge} ${styles.badgeNormal}`}>—</span>;
 }
 
 function getStatusBadge(key: ApiKeyResponse, t: (key: string) => string) {

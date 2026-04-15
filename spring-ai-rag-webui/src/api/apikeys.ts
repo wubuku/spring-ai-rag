@@ -3,6 +3,7 @@ import { apiClient } from './client';
 export interface ApiKeyResponse {
   keyId: string;
   name: string;
+  role?: string;
   createdAt: string;
   lastUsedAt?: string;
   expiresAt?: string;

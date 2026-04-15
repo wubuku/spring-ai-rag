@@ -181,7 +181,8 @@
     "maxSize": "Max Size",
     "save": "Save Settings",
     "saved": "Settings saved!",
-    "changesUnsaved": "You have unsaved changes"
+    "changesUnsaved": "You have unsaved changes",
+    "ragApiKey": "RAG API Key"
   },
   "theme": {
     "light": "Light",
@@ -278,7 +279,10 @@
     "rotateError": "Failed to rotate API key",
     "keyRotated": "API key rotated successfully",
     "active": "Active",
-    "expired": "Expired"
+    "expired": "Expired",
+    "role": "Role",
+    "admin": "Admin",
+    "normal": "Normal"
   },
   "files": {
     "title": "Files",

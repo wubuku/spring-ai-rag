@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { chatApi } from '../api/chat';
+import { getApiKey } from '../utils/apiKeyStorage';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
 
@@ -28,6 +29,7 @@ export function Chat() {
   addSessionRef.current = addSession;
 
   const { send, isConnected } = useChatSSE({
+    apiKey: getApiKey(),
     onChunk: (content: string) => {
       // Append chunk to the last streaming assistant message
       setMessages(prev => {
