@@ -5,7 +5,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * TextCleaner 测试
+ * TextCleaner Tests
  */
 class TextCleanerTest {
 
@@ -66,5 +66,30 @@ class TextCleanerTest {
         String input = "Line1\r\nLine2\rLine3\nLine4";
         String result = TextCleaner.normalizeLineBreaks(input);
         assertEquals("Line1\nLine2\nLine3\nLine4", result);
+    }
+
+    @Test
+    void normalizeLineBreaks_nullInput() {
+        assertEquals("", TextCleaner.normalizeLineBreaks(null));
+    }
+
+    @Test
+    void normalizeLineBreaks_emptyInput() {
+        assertEquals("", TextCleaner.normalizeLineBreaks(""));
+    }
+
+    @Test
+    void clean_whitespaceOnlyInput() {
+        assertEquals("", TextCleaner.clean("   \t\n\n   "));
+    }
+
+    @Test
+    void cleanPreserveHeaders_nullInput() {
+        assertEquals("", TextCleaner.cleanPreserveHeaders(null));
+    }
+
+    @Test
+    void cleanPreserveHeaders_emptyInput() {
+        assertEquals("", TextCleaner.cleanPreserveHeaders(""));
     }
 }
