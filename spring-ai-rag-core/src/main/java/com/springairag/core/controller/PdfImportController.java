@@ -57,7 +57,7 @@ import java.util.TreeSet;
  */
 @ApiVersion("v1")
 @RestController
-@RequestMapping("/files")
+@RequestMapping("/rag/files")
 @Tag(name = "File System Import", description = "PDF import, directory tree management, and file preview")
 public class PdfImportController {
 
