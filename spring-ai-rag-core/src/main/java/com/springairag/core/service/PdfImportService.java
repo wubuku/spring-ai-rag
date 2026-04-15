@@ -244,12 +244,32 @@ public class PdfImportService {
      * List direct children (files) under a virtual path prefix.
      */
     public List<FsFile> listChildren(String virtualPath) {
-        String normalizedRaw = virtualPath.replace('\\', '/');
-        final String normalized = normalizedRaw.endsWith("/") ? normalizedRaw : normalizedRaw + "/";
-        return fsFileRepository.findByPathStartingWithOrderByPathAsc(normalized)
+        String normalizedRaw = (virtualPath == null || virtualPath.isBlank()) ? "/" : virtualPath.replace('\\', '/');
+
+        // Root "/" or empty — DB paths lack leading "/", so findAll() and let
+        // buildTreeEntries synthesize directory entries from file paths
+        if (normalizedRaw.equals("/") || normalizedRaw.isEmpty()) {
+            return fsFileRepository.findAll();
+        }
+
+        // Strip trailing "/" then any whitespace; also strip leading "/" from the
+        // normalized path to build a clean DB query prefix (handles legacy paths)
+        final String normalized = normalizedRaw.endsWith("/")
+                ? normalizedRaw.substring(0, normalizedRaw.length() - 1).trim()
+                : normalizedRaw.trim();
+
+        // Defensive: query prefix strips leading "/" to match DB paths (e.g.
+        // DB has " e2242d5d..." with a leading space, so we strip "/" to match)
+        final String queryPrefix = normalized.startsWith("/")
+                ? normalized.substring(1).trim()
+                : normalized;
+
+        return fsFileRepository.findByPathStartingWithOrderByPathAsc(queryPrefix)
                 .stream()
                 .filter(f -> {
-                    String remainder = f.getPath().substring(normalized.length());
+                    // Handle leading whitespace in DB paths (legacy data)
+                    String cleanPath = f.getPath().trim();
+                    String remainder = cleanPath.substring(normalized.length());
                     return remainder.indexOf('/') == -1;
                 })
                 .toList();

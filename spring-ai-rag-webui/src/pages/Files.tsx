@@ -49,6 +49,8 @@ export function Files() {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadError, setUploadError] = useState('');
   const [collectionPrefix, setCollectionPrefix] = useState('');
+  const [embeddingState, setEmbeddingState] = useState<'idle' | 'embedding' | 'done' | 'error'>('idle');
+  const [embeddingMessage, setEmbeddingMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch tree for current path
@@ -120,6 +122,34 @@ export function Files() {
       window.open(filesApi.rawFileUrl(selectedEntry.path), '_blank');
     }
   }, [selectedEntry]);
+
+  // ── Trigger Embedding ────────────────────────────────────────────────────
+
+  const handleTriggerEmbedding = useCallback(async () => {
+    // Extract UUID from current path (e.g., "uuid/" -> "uuid")
+    const uuid = currentPath.replace(/\/$/, '');
+    if (!uuid) return;
+
+    setEmbeddingState('embedding');
+    setEmbeddingMessage('');
+    try {
+      const result = await filesApi.triggerEmbedding(uuid);
+      setEmbeddingState('done');
+      if (result.embedStatus === 'COMPLETED') {
+        showToast(t('files.embedSuccess', { chunks: result.chunksCreated }), 'success');
+      } else if (result.embedStatus === 'CACHED') {
+        showToast(t('files.embedCached'), 'info');
+      } else {
+        showToast(t('files.embedFailed', { message: result.embedMessage }), 'error');
+      }
+      setEmbeddingMessage(result.embedMessage || '');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setEmbeddingState('error');
+      setEmbeddingMessage(msg);
+      showToast(t('files.embedError', { error: msg }), 'error');
+    }
+  }, [currentPath, t, showToast]);
 
   // ── Breadcrumb ────────────────────────────────────────────────────────────
 
@@ -206,6 +236,30 @@ export function Files() {
               </span>
             </span>
           ))}
+        </div>
+      )}
+
+      {/* ── Add to RAG Button (shown when inside a PDF directory) ── */}
+      {currentPath && !currentPath.startsWith('/papers') && (
+        <div style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <button
+            className={styles.previewBtn}
+            onClick={handleTriggerEmbedding}
+            disabled={embeddingState === 'embedding'}
+            title={t('files.addToRagTitle')}
+          >
+            {embeddingState === 'embedding' ? t('files.embedding') : t('files.addToRag')}
+          </button>
+          {embeddingState === 'done' && embeddingMessage && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted, #6b7280)' }}>
+              {embeddingMessage}
+            </span>
+          )}
+          {embeddingState === 'error' && (
+            <span style={{ fontSize: '0.8rem', color: 'var(--color-error, #ef4444)' }}>
+              {embeddingMessage}
+            </span>
+          )}
         </div>
       )}
 

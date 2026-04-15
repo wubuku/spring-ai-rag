@@ -301,6 +301,13 @@
     "empty": "This directory is empty",
     "root": "Root",
     "collectionPrefix": "Collection prefix",
-    "collectionPrefixPlaceholder": "e.g. papers/2024"
+    "collectionPrefixPlaceholder": "e.g. papers/2024",
+    "addToRag": "Add to RAG",
+    "addToRagTitle": "Add this PDF to RAG knowledge base and trigger embedding",
+    "embedding": "Embedding…",
+    "embedSuccess": "Embedding completed — {{chunks}} chunks created",
+    "embedCached": "Document already embedded (cached)",
+    "embedFailed": "Embedding failed: {{message}}",
+    "embedError": "Failed to trigger embedding: {{error}}"
   }
 }

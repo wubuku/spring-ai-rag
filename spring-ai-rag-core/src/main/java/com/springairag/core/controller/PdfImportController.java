@@ -805,14 +805,16 @@ public class PdfImportController {
         List<FileTreeEntryResponse> entries = new ArrayList<>();
 
         for (FsFile f : files) {
-            String relative = f.getPath().substring(parentPath.length());
+            // DB paths may have leading whitespace (legacy import bug); trim for safe parsing
+            String cleanPath = f.getPath().trim();
+            String relative = cleanPath.substring(parentPath.length());
             int slashIdx = relative.indexOf('/');
 
             if (slashIdx == -1) {
                 // Direct file
                 entries.add(new FileTreeEntryResponse(
                         relative,
-                        f.getPath(),
+                        cleanPath,
                         "file",
                         f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
                         f.getFileSize() != null ? f.getFileSize() : 0

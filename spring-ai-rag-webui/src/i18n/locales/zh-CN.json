@@ -301,6 +301,13 @@
     "empty": "此目录为空",
     "root": "根目录",
     "collectionPrefix": "集合前缀",
-    "collectionPrefixPlaceholder": "例如：papers/2024"
+    "collectionPrefixPlaceholder": "例如：papers/2024",
+    "addToRag": "添加到 RAG",
+    "addToRagTitle": "将此 PDF 添加到 RAG 知识库并触发嵌入",
+    "embedding": "嵌入中…",
+    "embedSuccess": "嵌入完成 — 已创建 {{chunks}} 个文本块",
+    "embedCached": "文档已嵌入（缓存）",
+    "embedFailed": "嵌入失败：{{message}}",
+    "embedError": "触发嵌入失败：{{error}}"
   }
 }

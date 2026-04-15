@@ -20,6 +20,20 @@ export interface PdfImportResponse {
   filesStored: number;
 }
 
+/**
+ * Response from pdf-to-rag endpoint including RAG document info.
+ */
+export interface PdfToRagResponse {
+  documentId: number;
+  title: string;
+  newlyCreated: boolean;
+  embedStatus: string | null;
+  embedMessage: string | null;
+  chunksCreated: number | null;
+  uuid: string;
+  entryMarkdown: string;
+}
+
 const BASE_URL = '/api/v1/rag/files';
 
 export const filesApi = {
@@ -46,6 +60,43 @@ export const filesApi = {
     return apiClient.post<PdfImportResponse>('/files/pdf', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }).then(r => r.data);
+  },
+
+  /**
+   * Import a PDF file and add it to the RAG knowledge base.
+   * This is a convenience endpoint that combines import + RAG document creation.
+   * Optionally triggers embedding.
+   * @param file PDF File
+   * @param collectionId Optional collection ID to associate with
+   * @param embed Whether to trigger embedding (default: false - returns immediately)
+   */
+  importPdfToRag: (file: File, collectionId?: number, embed: boolean = false) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (collectionId !== undefined) {
+      formData.append('collectionId', String(collectionId));
+    }
+    formData.append('embed', String(embed));
+    return apiClient.post<PdfToRagResponse>('/files/pdf-to-rag', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }).then(r => r.data);
+  },
+
+  /**
+   * Trigger embedding for an already-imported PDF (Markdown already in fs_files).
+   * Uses sync mode for immediate JSON response.
+   * @param uuid Virtual directory UUID of the imported PDF
+   * @param collectionId Optional collection ID to associate
+   * @param forceReembed Whether to force re-embedding (default: false)
+   */
+  triggerEmbedding: (uuid: string, collectionId?: number, forceReembed: boolean = false) => {
+    const params = new URLSearchParams();
+    if (collectionId !== undefined) {
+      params.append('collectionId', String(collectionId));
+    }
+    params.append('embed', 'sync');
+    params.append('forceReembed', String(forceReembed));
+    return apiClient.post<PdfToRagResponse>(`/files/${uuid}/embed?${params.toString()}`, {}).then(r => r.data);
   },
 
   /**
