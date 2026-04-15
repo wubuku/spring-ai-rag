@@ -28,7 +28,9 @@
     "lastCheck": "最后检查",
     "actions": "操作",
     "optional": "（可选）",
-    "required": "（必填）"
+    "required": "（必填）",
+    "previous": "上一页",
+    "next": "下一页"
   },
   "dashboard": {
     "title": "仪表盘",
