@@ -281,6 +281,134 @@ public class PdfImportController {
                 .body(emitter);
     }
 
+    // ==================== Trigger Embedding for Already-Imported PDF ====================
+
+    /**
+     * Trigger embedding for an already-imported PDF.
+     *
+     * <p>This endpoint is for PDFs that were imported via {@code POST /files/pdf}
+     * (Markdown already exists in {@code fs_files}), and the user now wants to
+     * add it to the RAG knowledge base and/or trigger embedding.
+     *
+     * <p>Behavior:
+     * <ul>
+     *   <li>If the Markdown content already has a RagDocument (by content hash), reuses it</li>
+     *   <li>Otherwise creates a new RagDocument from the Markdown content</li>
+     *   <li>Then triggers embedding (or streams progress when embed=SSE)</li>
+     * </ul>
+     *
+     * <p>API design:
+     * <ul>
+     *   <li>POST /files/{uuid}/embed?embed=sync  — sync embedding, returns JSON result</li>
+     *   <li>POST /files/{uuid}/embed?embed=sse     — SSE stream, progress events + final result</li>
+     * </ul>
+     *
+     * @param uuid         virtual directory UUID of the imported PDF
+     * @param collectionId optional collection ID to associate
+     * @param embed       "sync" (default) for immediate JSON, "sse" for SSE progress stream
+     * @param forceReembed whether to force re-embedding (default: false)
+     * @return sync: JSON result | sse: SSE progress stream + final result
+     */
+    @Operation(summary = "Trigger embedding for an already-imported PDF",
+               description = "Finds the Markdown conversion result (from a previous PDF import) in fs_files, "
+                           + "creates or reuses the corresponding RagDocument, and triggers embedding. "
+                           + "Set embed=sync for immediate JSON response, embed=sse (default) for SSE progress stream.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Embedding triggered successfully (sync mode)"),
+            @ApiResponse(responseCode = "200", description = "SSE stream: embedding progress and final result (sse mode)"),
+            @ApiResponse(responseCode = "400", description = "UUID not found or Markdown has no content"),
+            @ApiResponse(responseCode = "500", description = "Internal error during embedding")
+    })
+    @PostMapping("/{uuid}/embed")
+    public Object triggerEmbedding(
+            @Parameter(description = "Virtual directory UUID of the imported PDF")
+            @PathVariable("uuid") String uuid,
+            @Parameter(description = "Optional collection ID to associate with the RAG document")
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @Parameter(description = "Embedding mode: 'sse' (default, SSE progress stream) or 'sync' (immediate JSON)")
+            @RequestParam(value = "embed", defaultValue = "sse") String embed,
+            @Parameter(description = "Force re-embedding even if content unchanged (default: false)")
+            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
+
+        if (uuid == null || uuid.isBlank()) {
+            return ResponseEntity.badRequest()
+                    .body(ErrorResponse.of("UUID must not be blank"));
+        }
+
+        if ("sync".equalsIgnoreCase(embed)) {
+            // Sync mode: return immediately with result
+            try {
+                PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
+                        uuid, collectionId, forceReembed);
+
+                return ResponseEntity.ok(new PdfToRagResponse(
+                        result.documentId(),
+                        result.title(),
+                        result.newlyCreated(),
+                        result.embedStatus(),
+                        result.embedMessage(),
+                        result.chunksCreated(),
+                        uuid,
+                        uuid + "/default.md"
+                ));
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+            } catch (Exception e) {
+                log.error("Trigger embedding failed for uuid={}: {}", uuid, e.getMessage());
+                return ResponseEntity.internalServerError()
+                        .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));
+            }
+        }
+
+        // SSE mode: stream progress, then final result
+        return streamEmbeddingWithProgress(uuid, collectionId, forceReembed);
+    }
+
+    /**
+     * Streams embedding progress via SSE, then sends the final result as "done" event.
+     */
+    private Object streamEmbeddingWithProgress(String uuid, Long collectionId, boolean forceReembed) {
+        SseEmitter emitter = SseEmitters.create();
+
+        Runnable task = () -> {
+            try {
+                PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbeddingWithProgress(
+                        uuid, collectionId, forceReembed,
+                        (progressEvent) -> {
+                            SseEmitters.sendProgress(emitter, "progress", progressEvent,
+                                    "trigger-embed uuid=" + uuid);
+                        }
+                );
+
+                PdfToRagResponse doneData = new PdfToRagResponse(
+                        result.documentId(),
+                        result.title(),
+                        result.newlyCreated(),
+                        result.embedStatus(),
+                        result.embedMessage(),
+                        result.chunksCreated(),
+                        uuid,
+                        uuid + "/default.md"
+                );
+                SseEmitters.sendDone(emitter, doneData);
+
+            } catch (IllegalArgumentException e) {
+                SseEmitters.sendError(emitter, e.getMessage(), Map.of("uuid", uuid));
+            } catch (Exception e) {
+                log.error("Trigger embedding SSE failed for uuid={}: {}", uuid, e.getMessage());
+                SseEmitters.sendError(emitter, e.getMessage(), Map.of("uuid", uuid));
+            }
+        };
+
+        Thread.ofVirtual().start(task);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .header("Cache-Control", "no-cache")
+                .header("X-Accel-Buffering", "no")
+                .body(emitter);
+    }
+
     // ==================== Preview (Markdown → HTML) ====================
 
     /**

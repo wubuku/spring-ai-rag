@@ -227,4 +227,129 @@ class PdfToRagServiceTest {
 
         verify(cb, times(2)).accept(any()); // PREPARING + COMPLETED
     }
+
+    // ==================== triggerEmbedding tests (already-imported PDF) ====================
+
+    @Test
+    void triggerEmbedding_newDocument_createsAndEmbeds() {
+        String uuid = "new-trigger-uuid";
+        String entryPath = uuid + "/default.md";
+        String markdown = "# New Doc\n\nContent to embed.";
+
+        FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 100L);
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
+            RagDocument d = inv.getArgument(0);
+            d.setId(55L);
+            return d;
+        });
+        when(documentEmbedService.embedDocument(eq(55L), eq(false)))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 4, "message", "OK"));
+
+        PdfToRagService.PdfToRagResult result = service.triggerEmbedding(uuid, null, false);
+
+        assertEquals(55L, result.documentId());
+        assertTrue(result.newlyCreated());
+        assertEquals("COMPLETED", result.embedStatus());
+        assertEquals(4, result.chunksCreated());
+
+        ArgumentCaptor<RagDocument> docCaptor = ArgumentCaptor.forClass(RagDocument.class);
+        verify(documentRepository).save(docCaptor.capture());
+        RagDocument saved = docCaptor.getValue();
+        assertEquals("pdf-import:" + entryPath, saved.getSource());
+        assertEquals("markdown", saved.getDocumentType());
+    }
+
+    @Test
+    void triggerEmbedding_existingDocument_reusesAndEmbeds() {
+        String uuid = "existing-uuid";
+        String entryPath = uuid + "/default.md";
+        String markdown = "# Existing Content";
+
+        FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 80L);
+        RagDocument existing = new RagDocument();
+        existing.setId(88L);
+        existing.setTitle("Already There");
+        existing.setContent(markdown);
+
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentEmbedService.embedDocument(eq(88L), eq(false)))
+                .thenReturn(Map.of("status", "CACHED", "chunksCreated", 3, "message", "already done"));
+
+        PdfToRagService.PdfToRagResult result = service.triggerEmbedding(uuid, null, false);
+
+        assertEquals(88L, result.documentId());
+        assertFalse(result.newlyCreated());
+        assertEquals("CACHED", result.embedStatus());
+        verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void triggerEmbedding_notFound_throwsException() {
+        when(fsFileRepository.findById("nonexistent/default.md")).thenReturn(Optional.empty());
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.triggerEmbedding("nonexistent", null, false));
+
+        assertTrue(ex.getMessage().contains("not found"));
+    }
+
+    @Test
+    void triggerEmbedding_withCollectionId_updatesCollectionId() {
+        String uuid = "col-uuid";
+        String entryPath = uuid + "/default.md";
+
+        FsFile fsFile = new FsFile(entryPath, true, null, "content", "text/markdown", 50L);
+        RagDocument existing = new RagDocument();
+        existing.setId(1L);
+        existing.setContent("content");
+        existing.setCollectionId(null);
+
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentRepository.save(any())).thenReturn(existing);
+        when(documentEmbedService.embedDocument(eq(1L), anyBoolean()))
+                .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 1));
+
+        PdfToRagService.PdfToRagResult result = service.triggerEmbedding(uuid, 99L, false);
+
+        assertEquals(1L, result.documentId());
+        assertFalse(result.newlyCreated());
+        verify(documentRepository).save(existing);
+        assertEquals(99L, existing.getCollectionId());
+    }
+
+    @Test
+    void triggerEmbeddingWithProgress_sseCallbackForwarded() {
+        String uuid = "sse-trigger";
+        String entryPath = uuid + "/default.md";
+        FsFile fsFile = new FsFile(entryPath, true, null, "Content", "text/markdown", 50L);
+
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
+            RagDocument d = inv.getArgument(0);
+            d.setId(20L);
+            return d;
+        });
+
+        @SuppressWarnings("unchecked")
+        Consumer<com.springairag.api.dto.EmbedProgressEvent> cb = mock(Consumer.class);
+        when(documentEmbedService.embedDocumentWithProgress(eq(20L), eq(true), any()))
+                .thenAnswer(inv -> {
+                    var callback = inv.getArgument(2, Consumer.class);
+                    callback.accept(new com.springairag.api.dto.EmbedProgressEvent("PREPARING", 0, 0, "prep", 20L));
+                    callback.accept(new com.springairag.api.dto.EmbedProgressEvent("COMPLETED", 2, 2, "done", 20L));
+                    return Map.of("status", "COMPLETED", "chunksCreated", 2, "message", "Done");
+                });
+
+        PdfToRagService.PdfToRagResult result = service.triggerEmbeddingWithProgress(
+                uuid, null, true, cb);
+
+        assertEquals(20L, result.documentId());
+        assertEquals("COMPLETED", result.embedStatus());
+        verify(cb, times(2)).accept(any());
+    }
 }

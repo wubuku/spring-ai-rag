@@ -299,4 +299,72 @@ class PdfImportControllerTest {
         assertTrue(response instanceof ResponseEntity);
         assertEquals(500, ((ResponseEntity<?>) response).getStatusCode().value());
     }
+
+    // ==================== triggerEmbedding tests ====================
+
+    @Test
+    void triggerEmbedding_syncMode_returnsJsonResult() {
+        PdfToRagService.PdfToRagResult ragResult =
+                new PdfToRagService.PdfToRagResult(42L, "Test Doc", true, "COMPLETED", "OK", 5);
+        when(pdfToRagService.triggerEmbedding(eq("uuid-123"), isNull(), eq(false)))
+                .thenReturn(ragResult);
+
+        Object response = controller.triggerEmbedding("uuid-123", null, "sync", false);
+
+        assertTrue(response instanceof ResponseEntity);
+        ResponseEntity<?> entity = (ResponseEntity<?>) response;
+        assertEquals(200, entity.getStatusCode().value());
+        assertTrue(entity.getBody() instanceof PdfToRagResponse);
+        PdfToRagResponse body = (PdfToRagResponse) entity.getBody();
+        assertEquals(42L, body.documentId());
+        assertEquals("COMPLETED", body.embedStatus());
+        assertEquals(5, body.chunksCreated());
+        assertEquals("uuid-123", body.uuid());
+    }
+
+    @Test
+    void triggerEmbedding_sseMode_returnsSseEmitter() {
+        // SSE mode returns an SseEmitter
+        Object response = controller.triggerEmbedding("uuid-456", null, "sse", false);
+
+        assertNotNull(response);
+        // The actual SSE thread runs async; we just verify it returns non-null
+    }
+
+    @Test
+    void triggerEmbedding_uuidNotFound_returnsBadRequest() {
+        when(pdfToRagService.triggerEmbedding(eq("nonexistent-uuid"), isNull(), eq(false)))
+                .thenThrow(new IllegalArgumentException("Entry Markdown file not found in fs_files"));
+
+        Object response = controller.triggerEmbedding("nonexistent-uuid", null, "sync", false);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(400, ((ResponseEntity<?>) response).getStatusCode().value());
+    }
+
+    @Test
+    void triggerEmbedding_serviceError_returnsInternalServerError() {
+        when(pdfToRagService.triggerEmbedding(eq("error-uuid"), isNull(), eq(false)))
+                .thenThrow(new RuntimeException("Database error"));
+
+        Object response = controller.triggerEmbedding("error-uuid", null, "sync", false);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(500, ((ResponseEntity<?>) response).getStatusCode().value());
+    }
+
+    @Test
+    void triggerEmbedding_withCollectionId_passesCollectionId() {
+        PdfToRagService.PdfToRagResult ragResult =
+                new PdfToRagService.PdfToRagResult(7L, "Doc", false, "CACHED", "already done", 3);
+        when(pdfToRagService.triggerEmbedding(eq("uuid-789"), eq(10L), eq(false)))
+                .thenReturn(ragResult);
+
+        Object response = controller.triggerEmbedding("uuid-789", 10L, "sync", false);
+
+        assertTrue(response instanceof ResponseEntity);
+        ResponseEntity<?> entity = (ResponseEntity<?>) response;
+        assertEquals(200, entity.getStatusCode().value());
+        verify(pdfToRagService).triggerEmbedding("uuid-789", 10L, false);
+    }
 }
