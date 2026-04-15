@@ -20,7 +20,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * BatchDocumentService 单元测试
+ * BatchDocumentService unit tests
  */
 class BatchDocumentServiceTest {
 
@@ -56,7 +56,7 @@ class BatchDocumentServiceTest {
     // ==================== batchCreateDocuments (embed=false) ====================
 
     @Test
-    @DisplayName("batchCreateDocuments: 正常创建文档（不嵌入）")
+    @DisplayName("batchCreateDocuments: creates document without embedding")
     void batchCreateDocuments_created() {
         DocumentRequest req = createRequest("标题1", "内容1");
         RagDocument savedDoc = createSavedDoc(1L, "标题1", null);
@@ -76,7 +76,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: 内容重复检测")
+    @DisplayName("batchCreateDocuments: detects duplicate content hash")
     void batchCreateDocuments_duplicate() {
         String content = "重复内容";
         DocumentRequest req = createRequest("标题", content);
@@ -95,7 +95,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: 多个文档混合结果")
+    @DisplayName("batchCreateDocuments: mixed results with multiple documents")
     void batchCreateDocuments_mixed() {
         DocumentRequest req1 = createRequest("新文档", "新内容");
         DocumentRequest req2 = createRequest("重复文档", "已有内容");
@@ -125,7 +125,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: 异常算 failed 继续处理")
+    @DisplayName("batchCreateDocuments: exceptions counted as failed, processing continues")
     void batchCreateDocuments_exceptionContinues() {
         DocumentRequest req1 = createRequest("bad", "内容1");
         DocumentRequest req2 = createRequest("good", "内容2");
@@ -154,7 +154,7 @@ class BatchDocumentServiceTest {
     // ==================== batchCreateDocuments (embed=true) ====================
 
     @Test
-    @DisplayName("batchCreateDocuments: embed=true 时创建后自动嵌入")
+    @DisplayName("batchCreateDocuments: auto-embeds after creation when embed=true")
     void batchCreateDocuments_withEmbed_success() {
         DocumentRequest req = createRequest("标题", "内容");
         RagDocument savedDoc = createSavedDoc(1L, "标题", null);
@@ -172,7 +172,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: embed=true 时已存在文档跳过嵌入")
+    @DisplayName("batchCreateDocuments: skips embedding when document already exists with embed=true")
     void batchCreateDocuments_withEmbed_existingSkipped() {
         String content = "已有内容";
         DocumentRequest req = createRequest("标题", content);
@@ -188,7 +188,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: embed=true + force=true 时强制重嵌入")
+    @DisplayName("batchCreateDocuments: forces re-embedding when embed=true and force=true")
     void batchCreateDocuments_withEmbedAndForce() {
         String content = "已有内容";
         DocumentRequest req = createRequest("标题", content);
@@ -207,7 +207,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchCreateDocuments: embed=true 时嵌入失败算 failed")
+    @DisplayName("batchCreateDocuments: counts embedding failure as failed when embed=true")
     void batchCreateDocuments_withEmbed_embedFails() {
         DocumentRequest req = createRequest("标题", "内容");
         RagDocument savedDoc = createSavedDoc(1L, "标题", null);
@@ -228,7 +228,7 @@ class BatchDocumentServiceTest {
     // ==================== deleteDocument ====================
 
     @Test
-    @DisplayName("deleteDocument: 正常删除")
+    @DisplayName("deleteDocument: deletes document successfully")
     void deleteDocument_success() {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
@@ -243,7 +243,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("deleteDocument: 文档不存在抛异常")
+    @DisplayName("deleteDocument: throws when document not found")
     void deleteDocument_notFound() {
         when(documentRepository.existsById(99L)).thenReturn(false);
 
@@ -255,7 +255,7 @@ class BatchDocumentServiceTest {
     // ==================== batchDeleteDocuments ====================
 
     @Test
-    @DisplayName("batchDeleteDocuments: 正常删除")
+    @DisplayName("batchDeleteDocuments: deletes multiple documents successfully")
     void batchDeleteDocuments_success() {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.existsById(2L)).thenReturn(true);
@@ -272,7 +272,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchDeleteDocuments: 文档不存在算 notFound")
+    @DisplayName("batchDeleteDocuments: non-existent IDs counted as notFound")
     void batchDeleteDocuments_notFound() {
         when(documentRepository.existsById(99L)).thenReturn(false);
 
@@ -285,7 +285,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchDeleteDocuments: 混合删除结果")
+    @DisplayName("batchDeleteDocuments: mixed results with some deleted and some not found")
     void batchDeleteDocuments_mixed() {
         when(documentRepository.existsById(1L)).thenReturn(true);
         when(documentRepository.existsById(2L)).thenReturn(false);
@@ -305,7 +305,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("batchDeleteDocuments: 超过 100 条限制抛异常")
+    @DisplayName("batchDeleteDocuments: throws when exceeding 100-item limit")
     void batchDeleteDocuments_exceedsLimit_throws() {
         List<Long> ids = java.util.stream.LongStream.rangeClosed(1, 101).boxed().toList();
         assertThrows(IllegalArgumentException.class, () -> service.batchDeleteDocuments(ids));
@@ -314,7 +314,7 @@ class BatchDocumentServiceTest {
     // ==================== computeSha256 ====================
 
     @Test
-    @DisplayName("computeSha256: 相同内容产生相同哈希")
+    @DisplayName("computeSha256: same content produces same hash")
     void computeSha256_sameContent_sameHash() {
         String h1 = BatchDocumentService.computeSha256("hello");
         String h2 = BatchDocumentService.computeSha256("hello");
@@ -322,7 +322,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("computeSha256: 不同内容产生不同哈希")
+    @DisplayName("computeSha256: different content produces different hash")
     void computeSha256_differentContent_differentHash() {
         String h1 = BatchDocumentService.computeSha256("hello");
         String h2 = BatchDocumentService.computeSha256("world");
@@ -330,7 +330,7 @@ class BatchDocumentServiceTest {
     }
 
     @Test
-    @DisplayName("computeSha256: 返回 64 字符十六进制字符串")
+    @DisplayName("computeSha256: returns 64-character hexadecimal string")
     void computeSha256_returnsHexString() {
         String hash = BatchDocumentService.computeSha256("test");
         assertEquals(64, hash.length());
