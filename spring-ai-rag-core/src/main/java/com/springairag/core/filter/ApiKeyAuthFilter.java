@@ -81,9 +81,15 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         String requestApiKey = request.getHeader(API_KEY_HEADER);
 
+        // Fallback: EventSource (SSE) does not support custom headers (W3C spec limitation),
+        // so we also accept apiKey as a query string parameter
+        if ((requestApiKey == null || requestApiKey.isBlank()) && "GET".equals(request.getMethod())) {
+            requestApiKey = request.getParameter("apiKey");
+        }
+
         if (requestApiKey == null || requestApiKey.isBlank()) {
             log.warn("API Key missing: {} {}", request.getMethod(), path);
-            sendUnauthorized(response, "Missing API Key. Provide X-API-Key header.");
+            sendUnauthorized(response, "Missing API Key. Provide X-API-Key header or ?apiKey= query parameter.");
             return;
         }
 
