@@ -297,6 +297,34 @@ class PdfToRagServiceTest {
     }
 
     @Test
+    void triggerEmbedding_cachedDocument_skipsEmbedding() {
+        // newlyCreated=false, forceReembed=false, embeddedContentHash matches contentHash
+        // → should return CACHED without calling embedDocument
+        String uuid = "cached-uuid";
+        String entryPath = uuid + "/default.md";
+        String markdown = "# Cached Content";
+
+        FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 50L);
+        RagDocument existing = new RagDocument();
+        existing.setId(5L);
+        existing.setContent(markdown);
+        existing.setContentHash("hash123");
+        existing.setEmbeddedContentHash("hash123"); // matches → cached
+        existing.setProcessingStatus("COMPLETED");
+
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+
+        PdfToRagService.PdfToRagResult result = service.triggerEmbedding(uuid, null, false);
+
+        assertEquals(5L, result.documentId());
+        assertFalse(result.newlyCreated());
+        assertEquals("CACHED", result.embedStatus());
+        assertTrue(result.embedMessage().contains("skipping"));
+        verify(documentEmbedService, never()).embedDocument(anyLong(), anyBoolean());
+    }
+
+    @Test
     void triggerEmbedding_withCollectionId_updatesCollectionId() {
         String uuid = "col-uuid";
         String entryPath = uuid + "/default.md";

@@ -412,10 +412,9 @@ public class PdfToRagService {
         try {
             // Skip embedding for unchanged cached documents unless force
             if (!newlyCreated && !forceReembed) {
-                long existingCount = doc.getEmbeddedContentHash() != null
-                        && doc.getContentHash().equals(doc.getEmbeddedContentHash())
-                        ? 1 : 0; // Simplified check
-                if ("COMPLETED".equals(doc.getProcessingStatus()) && existingCount > 0) {
+                boolean isCached = doc.getEmbeddedContentHash() != null
+                        && doc.getContentHash().equals(doc.getEmbeddedContentHash());
+                if ("COMPLETED".equals(doc.getProcessingStatus()) && isCached) {
                     return new EmbedResult("CACHED",
                             "Document already has embeddings, skipping (use forceReembed=true to re-embed)",
                             null);
