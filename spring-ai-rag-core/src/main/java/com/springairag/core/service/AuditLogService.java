@@ -70,6 +70,9 @@ public class AuditLogService {
     /** Entity type: user feedback */
     public static final String ENTITY_USER_FEEDBACK = "UserFeedback";
 
+    /** Audit action types for controller-level generic audit helpers */
+    public enum AuditAction { CREATE, UPDATE, DELETE }
+
     private final RagAuditLogRepository repository;
     private final ObjectMapper objectMapper;
 

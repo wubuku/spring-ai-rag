@@ -88,7 +88,7 @@ public class RagCollectionController {
         collection = collectionRepository.save(collection);
 
         log.info("Collection created: id={}, name={}", collection.getId(), collection.getName());
-        auditCreate(AuditLogService.ENTITY_COLLECTION,
+        audit(AuditLogService.AuditAction.CREATE, AuditLogService.ENTITY_COLLECTION,
                 String.valueOf(collection.getId()),
                 "Collection created: " + collection.getName());
 
@@ -172,7 +172,7 @@ public class RagCollectionController {
                     long docCount = documentRepository.countByCollectionId(id);
 
                     log.info("Collection updated: id={}", id);
-                    auditUpdate(AuditLogService.ENTITY_COLLECTION,
+                    audit(AuditLogService.AuditAction.UPDATE, AuditLogService.ENTITY_COLLECTION,
                             String.valueOf(id),
                             "Collection updated: " + existing.getName());
                     return ResponseEntity.ok(CollectionMapper.toMap(saved, docCount));
@@ -330,7 +330,7 @@ public class RagCollectionController {
                     documentRepository.save(doc);
 
                     log.info("Document {} added to collection {}", documentId, id);
-                    auditUpdate(AuditLogService.ENTITY_DOCUMENT,
+                    audit(AuditLogService.AuditAction.UPDATE, AuditLogService.ENTITY_DOCUMENT,
                             String.valueOf(documentId),
                             "Document added to collection " + id,
                             Map.of("collectionId", id));
@@ -401,7 +401,7 @@ public class RagCollectionController {
 
         log.info("Collection imported: id={}, name={}, documents={}",
                 collection.getId(), name, importedDocs);
-        auditCreate(AuditLogService.ENTITY_COLLECTION,
+        audit(AuditLogService.AuditAction.CREATE, AuditLogService.ENTITY_COLLECTION,
                 String.valueOf(collection.getId()),
                 "Collection imported: " + name + ", documents: " + importedDocs,
                 Map.of("importedDocuments", importedDocs));
@@ -459,23 +459,16 @@ public class RagCollectionController {
         return null;
     }
 
-    // Null-safe audit logging helpers (AuditLogService is optional)
-    private void auditCreate(String entityType, String entityId, String message) {
-        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message);
+    // Null-safe generic audit helper (AuditLogService is optional)
+    private void audit(AuditLogService.AuditAction action, String entityType, String entityId, String message) {
+        audit(action, entityType, entityId, message, null);
     }
-    private void auditCreate(String entityType, String entityId, String message, Map<String, Object> details) {
-        if (auditLogService != null) auditLogService.logCreate(entityType, entityId, message, details);
-    }
-    private void auditUpdate(String entityType, String entityId, String message) {
-        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message);
-    }
-    private void auditUpdate(String entityType, String entityId, String message, Map<String, Object> details) {
-        if (auditLogService != null) auditLogService.logUpdate(entityType, entityId, message, details);
-    }
-    private void auditDelete(String entityType, String entityId, String message) {
-        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
-    }
-    private void auditDelete(String entityType, String entityId, String message, Map<String, Object> details) {
-        if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message, details);
+    private void audit(AuditLogService.AuditAction action, String entityType, String entityId, String message, Map<String, Object> details) {
+        if (auditLogService == null) return;
+        switch (action) {
+            case CREATE -> auditLogService.logCreate(entityType, entityId, message, details);
+            case UPDATE -> auditLogService.logUpdate(entityType, entityId, message, details);
+            case DELETE -> auditLogService.logDelete(entityType, entityId, message, details);
+        }
     }
 }
