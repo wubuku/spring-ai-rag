@@ -1490,6 +1490,9 @@
 
 ## Cron 进度(2026-04-15 00:09 - API Response DTO 测试补全)
 
+## Cron 进度(2026-04-15 15:50 - WebUiConfigTest 单元测试补全)
+- 2026-04-15 15:50 - ✅ WebUiConfigTest 单元测试补全:WebUiConfig 是唯一无专属测试的配置类,SPA 路由(/ /webui /webui/ /webui/{path} /{path})缺乏测试覆盖。新增 WebUiConfigTest(7 tests: root/webui/index/chat/documents/search routes);@WebMvcTest + @MockBean RagProperties/CorsConfig 解决上下文依赖;7 tests 全通过;全量 2157 tests(2110+47),零失败零错误;commit 5113fd6 已推送
+
 > - 2026-04-15 00:09 - ✅ API Response DTO 单元测试补全:DtoTest 25→41 tests(+16 新测试)
   - DocumentDetailResponse: constructor + getters
   - DocumentStatsResponse: constructor + empty byStatus
