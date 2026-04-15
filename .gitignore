@@ -59,3 +59,4 @@ test-results
 spring-ai-rag-core/src/main/resources/static/webui/assets/
 spring-ai-rag-core/src/main/resources/static/webui/*.css
 .playwright-mcp
+CLAUDE.md

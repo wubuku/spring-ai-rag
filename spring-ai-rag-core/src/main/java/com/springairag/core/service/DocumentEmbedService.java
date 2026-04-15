@@ -134,11 +134,22 @@ public class DocumentEmbedService {
         int stored = storeEmbeddings(documentId, chunks, results);
 
         maybeEmit(progressCallback, EmbedProgressEvent.storing(documentId, stored, chunks.size()));
-        completeEmbedding(doc, chunks.size());
-        maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, chunks.size()));
 
-        log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
-        return buildSuccessResult(documentId, chunks.size(), stored, "COMPLETED");
+        // Only mark as COMPLETED if at least some embeddings were successfully stored
+        if (stored > 0) {
+            completeEmbedding(doc, chunks.size());
+            maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, stored));
+            log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
+            return buildSuccessResult(documentId, stored, stored, "COMPLETED");
+        } else {
+            // All embeddings failed - mark as FAILED, not COMPLETED
+            doc.setProcessingStatus("FAILED");
+            documentRepository.save(doc);
+            maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, 0));
+            log.warn("Document {} embedding failed: 0/{} chunks stored - check embedding service availability",
+                    documentId, chunks.size());
+            return buildSuccessResult(documentId, 0, 0, "FAILED");
+        }
     }
 
     /** Safely emits a progress callback (null-safe) */
@@ -399,11 +410,19 @@ public class DocumentEmbedService {
         int stored = storeEmbeddings(id, chunks,
                 embeddingBatchService.createEmbeddingsBatch(
                         chunks.stream().map(TextChunk::text).toList()));
-        completeEmbedding(doc, chunks.size());
 
-        result.put("status", "COMPLETED");
-        result.put("chunksCreated", chunks.size());
-        result.put("embeddingsStored", stored);
+        if (stored > 0) {
+            completeEmbedding(doc, chunks.size());
+            result.put("status", "COMPLETED");
+            result.put("chunksCreated", stored);
+            result.put("embeddingsStored", stored);
+        } else {
+            doc.setProcessingStatus("FAILED");
+            documentRepository.save(doc);
+            result.put("status", "FAILED");
+            result.put("chunksCreated", 0);
+            result.put("embeddingsStored", 0);
+        }
     }
 
     /** Finds document and checks cache; returns null when status already written to result */
