@@ -28,11 +28,12 @@ export interface UseChatSSEOptions {
   onSources?: (sources: Array<{documentId: string | number; title?: string; content?: string; score?: number}>, conversationId?: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
+  apiKey?: string;
 }
 
 export interface UseChatSSEReturn {
   isConnected: boolean;
-  send: (message: string, collectionId?: number, conversationId?: string) => void;
+  send: (message: string, collectionId?: number, conversationId?: string, apiKey?: string) => void;
   close: () => void;
 }
 
@@ -46,7 +47,7 @@ export interface UseChatSSEReturn {
  * - Error event:   event:error\ndata:{"error":{"message":"..."}}
  */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
-  const { onChunk, onSources, onError, onDone } = options;
+  const { onChunk, onSources, onError, onDone, apiKey } = options;
   const [isConnected, setIsConnected] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const accumulatedContentRef = useRef<string>('');
@@ -80,13 +81,21 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   }, []);
 
   const send = useCallback(
-    async (message: string, collectionId?: number, conversationId?: string) => {
+    async (message: string, collectionId?: number, conversationId?: string, apiKeyParam?: string) => {
       close();
       setIsConnected(true);
       accumulatedContentRef.current = '';
 
+      // Use API key from parameter, options, or fall back to empty string
+      const effectiveApiKey = apiKeyParam || apiKey || '';
+
       try {
-        const response = await fetch('/api/v1/rag/chat/stream', {
+        // Append apiKey to URL query string if available (for SSE auth compatibility)
+        const url = effectiveApiKey
+          ? `/api/v1/rag/chat/stream?apiKey=${encodeURIComponent(effectiveApiKey)}`
+          : '/api/v1/rag/chat/stream';
+
+        const response = await fetch(url, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -166,7 +175,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         readerRef.current = null;
       }
     },
-    [close]
+    [close, apiKey]
   );
 
   return { isConnected, send, close };

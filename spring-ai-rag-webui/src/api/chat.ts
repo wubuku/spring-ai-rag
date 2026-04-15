@@ -16,6 +16,7 @@ export interface ChatRequest {
   collectionId?: number;
   conversationId?: string;
   useHybridSearch?: boolean;
+  apiKey?: string;
 }
 
 export const chatApi = {
@@ -27,7 +28,7 @@ export const chatApi = {
 
   stream: (data: ChatRequest): EventSource =>
     new EventSource(
-      `/api/v1/rag/chat/stream?message=${encodeURIComponent(data.message)}&collectionId=${data.collectionId ?? ''}&conversationId=${data.conversationId ?? ''}`
+      `/api/v1/rag/chat/stream?apiKey=${encodeURIComponent(data.apiKey ?? '')}&message=${encodeURIComponent(data.message)}&collectionId=${data.collectionId ?? ''}&conversationId=${data.conversationId ?? ''}`
     ),
 
   getHistory: (conversationId: string, limit = 50) =>
