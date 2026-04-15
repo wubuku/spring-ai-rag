@@ -23,6 +23,9 @@ public final class CollectionMapper {
      * @return a map suitable for JSON serialization
      */
     public static Map<String, Object> toMap(RagCollection c, long documentCount) {
+        if (c == null) {
+            throw new IllegalArgumentException("Collection must not be null");
+        }
         Map<String, Object> map = new HashMap<>();
         map.put("id", c.getId());
         map.put("name", c.getName());

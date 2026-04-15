@@ -34,6 +34,9 @@ public final class DocumentMapper {
     public static Map<String, Object> toListMap(RagDocument doc,
                                                 Map<Long, String> collectionNameMap,
                                                 RagEmbeddingRepository embeddingRepository) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Map<String, Object> map = new HashMap<>();
         putCoreFields(map, doc);
 
@@ -66,6 +69,9 @@ public final class DocumentMapper {
     public static Map<String, Object> toMap(RagDocument doc,
                                             Map<Long, String> collectionNameMap,
                                             RagEmbeddingRepository embeddingRepository) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Map<String, Object> map = new HashMap<>();
         putCoreFields(map, doc);
 
@@ -91,6 +97,9 @@ public final class DocumentMapper {
     public static Map<String, Object> toMap(RagDocument doc,
                                             RagCollectionRepository collectionRepository,
                                             RagEmbeddingRepository embeddingRepository) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Map<String, Object> map = new HashMap<>();
         putCoreFields(map, doc);
 
@@ -114,6 +123,9 @@ public final class DocumentMapper {
      * Converts a document version entity to a typed response DTO.
      */
     public static DocumentVersionResponse toVersionResponse(RagDocumentVersion v) {
+        if (v == null) {
+            throw new IllegalArgumentException("Document version must not be null");
+        }
         return new DocumentVersionResponse(
                 v.getId(),
                 v.getDocumentId(),
@@ -133,6 +145,9 @@ public final class DocumentMapper {
     public static DocumentSummary toSummary(RagDocument doc,
                                            Map<Long, String> collectionNameMap,
                                            RagEmbeddingRepository embeddingRepository) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
         long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
@@ -163,6 +178,9 @@ public final class DocumentMapper {
     public static DocumentDetailResponse toDetailResponse(RagDocument doc,
                                                           Map<Long, String> collectionNameMap,
                                                           RagEmbeddingRepository embeddingRepository) {
+        if (doc == null) {
+            throw new IllegalArgumentException("Document must not be null");
+        }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
         long chunkCount = embeddingRepository.countByDocumentId(doc.getId());

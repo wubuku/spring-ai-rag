@@ -337,4 +337,51 @@ class DocumentMapperTest {
             assertNull(result.contentSnapshot());
         }
     }
+
+    @Nested
+    @DisplayName("null input validation")
+    class NullInputValidationTests {
+
+        @Test
+        @DisplayName("toListMap throws IllegalArgumentException for null document")
+        void toListMap_throwsOnNullDocument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toListMap(null, new HashMap<>(), embeddingRepository));
+        }
+
+        @Test
+        @DisplayName("toMap (batch) throws IllegalArgumentException for null document")
+        void toMapBatch_throwsOnNullDocument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toMap((RagDocument) null, new HashMap<>(), embeddingRepository));
+        }
+
+        @Test
+        @DisplayName("toMap (single) throws IllegalArgumentException for null document")
+        void toMapSingle_throwsOnNullDocument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toMap(null, collectionRepository, embeddingRepository));
+        }
+
+        @Test
+        @DisplayName("toVersionResponse throws IllegalArgumentException for null version")
+        void toVersionResponse_throwsOnNullVersion() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toVersionResponse(null));
+        }
+
+        @Test
+        @DisplayName("toSummary throws IllegalArgumentException for null document")
+        void toSummary_throwsOnNullDocument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toSummary(null, new HashMap<>(), embeddingRepository));
+        }
+
+        @Test
+        @DisplayName("toDetailResponse throws IllegalArgumentException for null document")
+        void toDetailResponse_throwsOnNullDocument() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> DocumentMapper.toDetailResponse(null, new HashMap<>(), embeddingRepository));
+        }
+    }
 }

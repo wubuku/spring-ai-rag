@@ -75,6 +75,14 @@ class CollectionMapperTest {
     }
 
     @Test
+    @DisplayName("toMap throws IllegalArgumentException when collection is null")
+    void toMap_nullCollection() {
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> CollectionMapper.toMap(null, 0L));
+        assertEquals("Collection must not be null", ex.getMessage());
+    }
+
+    @Test
     @DisplayName("toMap handles null embedding model")
     void toMap_nullEmbeddingModel() {
         RagCollection collection = createCollection(5L, "No Model", "No embedding model", null, 0, true);
