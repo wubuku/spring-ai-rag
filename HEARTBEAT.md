@@ -202,6 +202,8 @@
 - 2026-04-03 05:52 - ✅ 主动巡检(cron):嵌入缓存命中率指标追踪--CachingEmbeddingModel 新增 Micrometer hit/miss 计数器,CacheMetricsService 提供 getHitRate/getStats 统计,CacheMetricsController 暴露 GET /api/v1/cache/stats 端点,15 个新测试,817 测试全通过,commit fd1d082
 
 ## 进度日志
+> - 2026-04-16 07:54 — ✅ 后端主动巡检:ClientErrorServiceImpl null-safety——recordError() 添加 null request 参数验证(IllegalArgumentException);ClientErrorServiceImplTest 新增 null 测试;5 tests 全通过(4→5);全量测试通过;commit 5dbf2f8 已推送
+
 > - 2026-04-16 02:25 — ✅ WebUI 常规巡检:npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
 > - 2026-04-16 06:22 — ✅ WebUI 常规巡检:npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index+346KB BarChart chunk)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
