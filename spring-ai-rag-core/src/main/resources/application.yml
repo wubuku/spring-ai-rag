@@ -55,7 +55,7 @@ spring:
   # JPA / Hibernate configuration (Flyway manages schema, Hibernate does not modify DDL)
   jpa:
     hibernate:
-      ddl-auto: none
+      ddl-auto: validate   # Validate DB schema against entity mappings at startup. FAIL fast if columns missing.
     open-in-view: false
     show-sql: false
     properties:

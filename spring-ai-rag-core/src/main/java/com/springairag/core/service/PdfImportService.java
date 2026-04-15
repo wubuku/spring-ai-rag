@@ -152,7 +152,9 @@ public class PdfImportService {
                     Files.list(markerOutputDir).forEach(file -> {
                         try {
                             if (Files.isRegularFile(file)) {
-                                String filename = file.getFileName().toString();
+                                // Strip leading/trailing whitespace from filename to handle edge cases
+                                // where the converter may create files with extra spaces
+                                String filename = file.getFileName().toString().trim();
                                 byte[] content = Files.readAllBytes(file);
 
                                 // Markdown 文件作为 entry (default.md)
@@ -270,7 +272,19 @@ public class PdfImportService {
                     // Handle leading whitespace in DB paths (legacy data)
                     String cleanPath = f.getPath().trim();
                     String remainder = cleanPath.substring(normalized.length());
-                    return remainder.indexOf('/') == -1;
+                    // A direct child has no "/" in remainder (e.g. "default.md")
+                    // or remainder starts with "/" and has no more "/" (e.g. "/default.md")
+                    // The latter case is a direct file in the directory (e.g. "uuid/default.md")
+                    if (remainder.indexOf('/') == -1) {
+                        return true;
+                    }
+                    // If remainder starts with "/" (direct child), check if it's truly direct
+                    // e.g. "/subdir/file.md" has more "/" so it's not direct
+                    // but "/default.md" has no more "/" so it IS direct
+                    if (remainder.startsWith("/")) {
+                        return remainder.indexOf('/', 1) == -1;
+                    }
+                    return false;
                 })
                 .toList();
     }
