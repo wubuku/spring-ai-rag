@@ -98,4 +98,14 @@ class ClientErrorServiceImplTest {
 
         assertEquals(0L, count);
     }
+
+    @Test
+    void recordError_nullRequest_throwsIllegalArgumentException() {
+        IllegalArgumentException ex = assertThrows(
+                IllegalArgumentException.class,
+                () -> clientErrorService.recordError(null)
+        );
+        assertEquals("ClientErrorRequest must not be null", ex.getMessage());
+        verify(clientErrorRepository, never()).save(any());
+    }
 }

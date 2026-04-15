@@ -22,6 +22,9 @@ public class ClientErrorServiceImpl implements ClientErrorService {
     @Override
     @Transactional
     public void recordError(ClientErrorRequest request) {
+        if (request == null) {
+            throw new IllegalArgumentException("ClientErrorRequest must not be null");
+        }
         RagClientError error = new RagClientError();
         error.setErrorType(request.getErrorType());
         error.setErrorMessage(request.getErrorMessage());
