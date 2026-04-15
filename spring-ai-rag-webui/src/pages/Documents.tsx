@@ -99,8 +99,17 @@ export function Documents() {
     setPage(0);
   };
 
-  const handlePreview = (doc: { id: number; title: string; content: string }) => {
-    setPreviewDoc(doc);
+  const handlePreview = async (doc: { id: number; title: string; content: string }) => {
+    // First show modal with existing data (content may be null from list API)
+    setPreviewDoc({ id: doc.id, title: doc.title, content: doc.content || '' });
+    // Then fetch full document to get content
+    try {
+      const response = await documentsApi.get(doc.id);
+      const fullDoc = response.data;
+      setPreviewDoc({ id: fullDoc.id, title: fullDoc.title, content: fullDoc.content || '' });
+    } catch (err) {
+      console.error('Failed to fetch document content:', err);
+    }
   };
 
   const collections = collectionsData?.data?.collections ?? [];

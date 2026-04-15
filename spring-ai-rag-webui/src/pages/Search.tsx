@@ -10,6 +10,7 @@ export function Search() {
   const { t } = useTranslation();
   const [query, setQuery] = useState<string>('');
   const [useHybrid, setUseHybrid] = useState(true);
+  const [hasSearched, setHasSearched] = useState(false);
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
 
@@ -34,6 +35,7 @@ export function Search() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
+    setHasSearched(true);
     addQuery(query, useHybrid);
     refetch();
     setShowHistory(false);
@@ -122,7 +124,7 @@ export function Search() {
         </button>
       </form>
 
-      {isPending && <div className={styles.loading}>{t('common.loading')}</div>}
+      {hasSearched && isPending && <div className={styles.loading}>{t('common.loading')}</div>}
 
       {data?.data && (
         <SearchResults
