@@ -31,6 +31,7 @@
 - **监控可观测**：Micrometer 指标 + Actuator 健康检查 + 请求追踪（traceId）
 - **API Key 认证**：内建安全过滤器 + per-user 限流（滑动窗口）
 - **API 版本管理**：`@ApiVersion` 注解支持 `/api/v1/` 路径自动映射
+- **PDF 导入与预览**：使用 marker CLI 将 PDF 转换为 Markdown + 图片，支持浏览器预览（`<base>` 标签解决图片路径）
 
 ## 快速开始
 
@@ -183,6 +184,10 @@ spring-ai-rag/
 | A/B | `/api/v1/rag/ab-tests` | 实验管理 |
 | 告警 | `/api/v1/rag/alerts` | 监控告警 |
 | 缓存 | `GET /api/v1/rag/cache/stats` | 嵌入缓存命中率 |
+| **PDF** | `POST /api/v1/files/pdf` | 上传并转换 PDF 为 Markdown |
+| **PDF** | `GET /api/v1/files/preview/{uuid}/default.html` | 预览转换后的 HTML（使用 `<base>` 标签） |
+| **PDF** | `GET /api/v1/files/raw/{uuid}/{filename}` | 获取原始文件（图片、PDF 等） |
+| **PDF** | `GET /api/v1/files/tree` | 查看文件目录树 |
 | 健康 | `/actuator/health` | Actuator 健康检查 |
 
 ## 两种集成方式

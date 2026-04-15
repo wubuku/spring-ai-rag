@@ -77,6 +77,67 @@ grep -rn "@ComponentScan" src/
 
 ---
 
+### Duplicate RagProperties Bean
+
+**Symptom**: Application fails to start with error:
+```
+No qualifying bean of type 'com.springairag.core.config.RagProperties' available:
+expected single matching bean but found 2: rag-com.springairag.core.config.RagProperties,ragProperties
+```
+
+**Cause**: `RagProperties` is registered by multiple sources:
+1. `SpringAiConfig` via `@EnableConfigurationProperties(RagProperties.class)`
+2. `GeneralRagAutoConfiguration` via `@Bean public RagProperties ragProperties()`
+3. `BasicRagDemoApplication` via `@ConfigurationPropertiesScan`
+
+**Solution**:
+
+1. In `SpringAiConfig.java`, remove `RagProperties.class` from `@EnableConfigurationProperties`:
+```java
+@EnableConfigurationProperties({RagMemoryProperties.class, RagPdfProperties.class})
+// RagProperties 不再需要在这里注册
+```
+
+2. In `GeneralRagAutoConfiguration.java`, mark the bean as `@Primary`:
+```java
+@Bean
+@Primary
+public RagProperties ragProperties() {
+    return new RagProperties();
+}
+```
+
+**Startup Command Tips**:
+
+```bash
+# 正确方式：使用 && 链接命令（但需要注意环境变量加载）
+cd demos/demo-basic-rag && export $(cat ../../.env | grep -v '^#' | xargs) && mvn spring-boot:run
+
+# 如果 .env 文件格式有问题，直接导出环境变量
+export SPRING_PROFILES_ACTIVE=postgresql
+export OPENAI_API_KEY="your-key"
+export OPENAI_BASE_URL="https://api.siliconflow.cn"
+export SILICONFLOW_API_KEY="your-key"
+export POSTGRES_HOST="localhost"
+export POSTGRES_PORT="5432"
+export POSTGRES_DATABASE="spring_ai_rag_dev"
+export POSTGRES_USER="postgres"
+export POSTGRES_PASSWORD="123456"
+
+mvn spring-boot:run
+```
+
+**Debugging**: 如果启动失败，检查端口是否被占用：
+```bash
+# 查找占用端口的进程
+lsof -i:8080 -sTCP:LISTEN
+
+# 终止进程
+kill -9 <PID>
+```
+
+---
+
 ## Embedding Issues
 
 ### Embedding Request Timeout

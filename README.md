@@ -31,6 +31,7 @@ A general-purpose RAG (Retrieval-Augmented Generation) service framework built o
 - **Observability**: Micrometer metrics + Actuator health checks + request tracing (traceId)
 - **API Key Auth**: Built-in security filter + per-user rate limiting (sliding window)
 - **API Versioning**: `@ApiVersion` annotation for automatic `/api/v1/` path mapping
+- **PDF Import & Preview**: Convert PDF to Markdown + images using marker CLI, browser preview with `<base>` tag for image path resolution
 
 ## Quick Start
 
@@ -183,6 +184,10 @@ spring-ai-rag/
 | A/B | `/api/v1/rag/ab-tests` | Experiment management |
 | Alert | `/api/v1/rag/alerts` | Monitoring alerts |
 | Cache | `GET /api/v1/rag/cache/stats` | Embedding cache hit rate |
+| **PDF** | `POST /api/v1/files/pdf` | Upload and convert PDF to Markdown |
+| **PDF** | `GET /api/v1/files/preview/{uuid}/default.html` | Preview HTML (uses `<base>` tag) |
+| **PDF** | `GET /api/v1/files/raw/{uuid}/{filename}` | Get raw file (images, PDF) |
+| **PDF** | `GET /api/v1/files/tree` | List file directory tree |
 | Health | `/actuator/health` | Actuator health check |
 
 ## Two Integration Modes

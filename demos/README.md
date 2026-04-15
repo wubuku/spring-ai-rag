@@ -12,6 +12,7 @@
 - 只需添加 `spring-ai-rag-starter` 一个依赖
 - 所有 Bean 自动配置（`RagChatService`、`ChatClient` 等）
 - 提供完整 REST API（40+ 端点）
+- 支持 PDF 导入与预览（marker CLI 转换）
 
 **集成步骤**：
 
@@ -48,21 +49,55 @@ String answer = ragChatService.chat("你好", "session-001");
 ```
 
 **快速启动**：
+
 ```bash
-# 1. 安装 spring-ai-rag-starter 到本地仓库
-cd ../..
+# 1. 确保 PostgreSQL 数据库已创建并包含必要扩展
+createdb spring_ai_rag_dev
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
+psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
+
+# 2. 安装 spring-ai-rag-starter 到本地仓库
+cd ..
 mvn clean install -DskipTests
 
-# 2. 启动 demo
+# 3. 启动 demo
 cd demos/demo-basic-rag
-export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
-mvn spring-boot:run
 
-# 3. 测试
-curl "http://localhost:8080/demo/ask?q=什么是RAG"
-curl -X POST http://localhost:8080/demo/chat \
-  -H "Content-Type: application/json" \
-  -d '{"message": "你们的退换货政策是什么？"}'
+# 设置环境变量（直接导出，避免 .env 文件解析问题）
+export SPRING_PROFILES_ACTIVE=postgresql
+export OPENAI_API_KEY="your-api-key"
+export OPENAI_BASE_URL="https://api.siliconflow.cn"
+export SILICONFLOW_API_KEY="your-siliconflow-key"
+export POSTGRES_HOST="localhost"
+export POSTGRES_PORT="5432"
+export POSTGRES_DATABASE="spring_ai_rag_dev"
+export POSTGRES_USER="postgres"
+export POSTGRES_PASSWORD="123456"
+
+# 启动应用
+mvn spring-boot:run
+```
+
+**验证启动成功**：
+```bash
+# 健康检查
+curl http://localhost:8080/actuator/health
+
+# API 文档
+curl http://localhost:8080/v3/api-docs | python3 -c "import sys,json; d=json.load(sys.stdin); print('API Title:', d.get('info',{}).get('title'))"
+```
+
+**PDF 导入与预览**：
+```bash
+# 上传 PDF 文件
+curl -X POST http://localhost:8080/api/v1/files/pdf \
+  -F "file=@/path/to/document.pdf"
+
+# 预览返回的 HTML（使用 <base> 标签解决图片路径问题）
+# GET /api/v1/files/preview/{uuid}/default.html
+
+# 获取原始文件（图片、原始 PDF 等）
+# GET /api/v1/files/raw/{uuid}/{filename}
 ```
 
 ---
