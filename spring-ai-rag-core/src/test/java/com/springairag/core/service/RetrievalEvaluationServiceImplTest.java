@@ -27,7 +27,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 /**
- * RetrievalEvaluationServiceImpl 单元测试
+ * Unit tests for RetrievalEvaluationServiceImpl.
  */
 @ExtendWith(MockitoExtension.class)
 class RetrievalEvaluationServiceImplTest {
@@ -53,7 +53,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== calculateMetrics ====================
 
     @Test
-    @DisplayName("精确匹配：检索结果全中，Precision@K 和 Recall@K 均为 1.0")
+    @DisplayName("Perfect match: all retrieved docs are relevant, Precision@K and Recall@K both equal 1.0")
     void calculateMetrics_perfectMatch_allMetricsMaxed() {
         List<Long> retrieved = List.of(1L, 2L, 3L);
         List<Long> relevant = List.of(1L, 2L, 3L);
@@ -69,7 +69,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("无命中：所有指标为 0")
+    @DisplayName("No hit: all metrics are 0")
     void calculateMetrics_noHit_allMetricsZero() {
         List<Long> retrieved = List.of(4L, 5L, 6L);
         List<Long> relevant = List.of(1L, 2L, 3L);
@@ -83,7 +83,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("部分命中：第一个结果即相关，MRR=1.0")
+    @DisplayName("Partial hit: first result is relevant, MRR=1.0")
     void calculateMetrics_firstHit_mrrIsOne() {
         List<Long> retrieved = List.of(1L, 4L, 5L);
         List<Long> relevant = List.of(1L, 2L, 3L);
@@ -97,7 +97,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("第二个结果相关：MRR=0.5")
+    @DisplayName("Second result relevant: MRR=0.5")
     void calculateMetrics_secondHit_mrrIsHalf() {
         List<Long> retrieved = List.of(4L, 2L, 5L);
         List<Long> relevant = List.of(1L, 2L, 3L);
@@ -109,7 +109,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("空输入：返回零值指标")
+    @DisplayName("Empty input: returns zero metrics")
     void calculateMetrics_emptyInput_returnsZeros() {
         RetrievalEvaluationService.EvaluationMetrics metrics =
                 service.calculateMetrics(List.of(), List.of(1L), 5);
@@ -120,7 +120,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("null 输入：返回零值指标")
+    @DisplayName("Null input: returns zero metrics")
     void calculateMetrics_nullInput_returnsZeros() {
         RetrievalEvaluationService.EvaluationMetrics metrics =
                 service.calculateMetrics(null, null, 5);
@@ -129,7 +129,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("NDCG 计算：理想排序 NDCG=1.0")
+    @DisplayName("NDCG calculation: ideal ranking yields NDCG=1.0")
     void calculateMetrics_idealOrder_ndcgIsOne() {
         List<Long> retrieved = List.of(1L, 2L, 3L);
         List<Long> relevant = List.of(1L, 2L, 3L);
@@ -140,7 +140,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("Recall@K 超过检索数时保持最后值")
+    @DisplayName("Recall@K beyond retrieved count holds last value")
     void calculateMetrics_recallAtK_beyondRetrievedSize() {
         List<Long> retrieved = List.of(1L);  // 只检索到 1 个
         List<Long> relevant = List.of(1L, 2L, 3L);  // 3 个相关
@@ -155,7 +155,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== evaluate ====================
 
     @Test
-    @DisplayName("evaluate 保存评估记录到数据库")
+    @DisplayName("evaluate saves evaluation record to repository")
     void evaluate_savesToRepository() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -172,7 +172,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("evaluate 传递 evaluatorId")
+    @DisplayName("evaluate passes evaluatorId to repository")
     void evaluate_withEvaluatorId_storesIt() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -186,7 +186,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== batchEvaluate ====================
 
     @Test
-    @DisplayName("批量评估处理多条用例")
+    @DisplayName("batchEvaluate processes all cases")
     void batchEvaluate_processesAllCases() {
         when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
@@ -204,7 +204,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== getReport ====================
 
     @Test
-    @DisplayName("空数据段报告：totalEvaluations=0")
+    @DisplayName("Empty period report: totalEvaluations=0")
     void getReport_emptyPeriod_returnsZeroTotal() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -216,7 +216,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("有数据的报告计算平均值")
+    @DisplayName("Report with data computes averages correctly")
     void getReport_withData_computesAverages() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -250,7 +250,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== getHistory ====================
 
     @Test
-    @DisplayName("getHistory 返回分页结果")
+    @DisplayName("getHistory returns paginated results")
     void getHistory_returnsPageContent() {
         RagRetrievalEvaluation eval = new RagRetrievalEvaluation();
         eval.setQuery("test");
@@ -266,7 +266,7 @@ class RetrievalEvaluationServiceImplTest {
     // ==================== getAggregatedMetrics ====================
 
     @Test
-    @DisplayName("空数据聚合：totalEvaluations=0")
+    @DisplayName("Empty aggregation: totalEvaluations=0")
     void getAggregatedMetrics_empty_returnsZeroCount() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -280,7 +280,7 @@ class RetrievalEvaluationServiceImplTest {
     }
 
     @Test
-    @DisplayName("聚合指标计算平均 Precision@K 和 Recall@K")
+    @DisplayName("Aggregated metrics compute average Precision@K and Recall@K")
     void getAggregatedMetrics_computesAverages() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(1);
         ZonedDateTime end = ZonedDateTime.now();
@@ -451,6 +451,7 @@ class RetrievalEvaluationServiceImplTest {
         exec.shutdownNow();
     }
 
+    @Test
     @DisplayName("evaluateAnswerQuality: TimeoutException returns fallback result")
     void evaluateAnswerQuality_timeoutException_returnsFallback() {
         // Mock ChatClient chain where call() throws TimeoutException synchronously.
@@ -461,8 +462,9 @@ class RetrievalEvaluationServiceImplTest {
         when(chatClientBuilder.build()).thenReturn(mockClient);
         when(mockClient.prompt()).thenReturn(mockRequestSpec);
         when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
-        // Throw TimeoutException from the call — supplyAsync wraps it in CompletionException
-        when(mockRequestSpec.call()).thenThrow(new java.util.concurrent.TimeoutException("LLM call timed out"));
+        // TimeoutException is checked; wrap in RuntimeException since the actual call() doesn't declare it.
+        // The service catches generic Exception so the wrapped exception is still handled.
+        when(mockRequestSpec.call()).thenThrow(new RuntimeException(new java.util.concurrent.TimeoutException("LLM call timed out")));
 
         java.util.concurrent.ExecutorService exec =
                 java.util.concurrent.Executors.newSingleThreadExecutor();
@@ -483,6 +485,7 @@ class RetrievalEvaluationServiceImplTest {
         exec.shutdownNow();
     }
 
+    @Test
     @DisplayName("evaluateAnswerQuality: InterruptedException returns fallback result")
     void evaluateAnswerQuality_interruptedException_returnsFallback() {
         // Mock ChatClient chain where call() throws InterruptedException.
@@ -492,7 +495,8 @@ class RetrievalEvaluationServiceImplTest {
         when(chatClientBuilder.build()).thenReturn(mockClient);
         when(mockClient.prompt()).thenReturn(mockRequestSpec);
         when(mockRequestSpec.user(anyString())).thenReturn(mockRequestSpec);
-        when(mockRequestSpec.call()).thenThrow(new InterruptedException("LLM call interrupted"));
+        // InterruptedException is checked; wrap in RuntimeException since the actual call() doesn't declare it.
+        when(mockRequestSpec.call()).thenThrow(new RuntimeException(new InterruptedException("LLM call interrupted")));
 
         java.util.concurrent.ExecutorService exec =
                 java.util.concurrent.Executors.newSingleThreadExecutor();
