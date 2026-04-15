@@ -5,6 +5,7 @@ import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
@@ -25,6 +26,10 @@ import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
+import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.filter.ApiKeyAuthFilter;
+
 @WebMvcTest(ApiKeyController.class)
 @Import({ApiVersionConfig.class, ApiKeyControllerTest.RagPropertiesTestConfig.class})
 class ApiKeyControllerTest {
@@ -37,6 +42,26 @@ class ApiKeyControllerTest {
 
     @MockitoBean
     private ApiKeyManagementService apiKeyService;
+
+    @MockitoBean
+    private RagApiKeyRepository apiKeyRepository;
+
+    /**
+     * Creates a mock RagApiKey entity with the given role, for setting as a request attribute.
+     */
+    private static RagApiKey mockCaller(String keyId, ApiKeyRole role) {
+        RagApiKey key = new RagApiKey();
+        key.setKeyId(keyId);
+        key.setName("Test Key");
+        key.setRole(role);
+        key.setEnabled(true);
+        return key;
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor adminCaller() {
+        return req -> { req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                mockCaller("rag_k_admin", ApiKeyRole.ADMIN)); return req; };
+    }
 
     @TestConfiguration
     static class RagPropertiesTestConfig {
@@ -88,7 +113,9 @@ class ApiKeyControllerTest {
                 LocalDateTime.of(2026, 2, 1, 0, 0), LocalDateTime.of(2026, 3, 1, 0, 0), null, false);
         when(apiKeyService.listKeys()).thenReturn(List.of(key1, key2));
 
-        mockMvc.perform(get("/api/v1/rag/api-keys"))
+        mockMvc.perform(get("/api/v1/rag/api-keys")
+                        .with(req -> { req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                mockCaller("rag_k_admin", ApiKeyRole.ADMIN)); return req; }))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
                 .andExpect(jsonPath("$[0].keyId").value("rag_k_1"))
@@ -100,7 +127,9 @@ class ApiKeyControllerTest {
     void revokeKey_existing_returns204() throws Exception {
         when(apiKeyService.revokeKey("rag_k_abc")).thenReturn(true);
 
-        mockMvc.perform(delete("/api/v1/rag/api-keys/rag_k_abc"))
+        mockMvc.perform(delete("/api/v1/rag/api-keys/rag_k_abc")
+                        .with(req -> { req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                mockCaller("rag_k_admin", ApiKeyRole.ADMIN)); return req; }))
                 .andExpect(status().isNoContent());
 
         verify(apiKeyService).revokeKey("rag_k_abc");
@@ -110,7 +139,9 @@ class ApiKeyControllerTest {
     void revokeKey_nonExistent_returns404() throws Exception {
         when(apiKeyService.revokeKey("rag_k_unknown")).thenReturn(false);
 
-        mockMvc.perform(delete("/api/v1/rag/api-keys/rag_k_unknown"))
+        mockMvc.perform(delete("/api/v1/rag/api-keys/rag_k_unknown")
+                        .with(req -> { req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                mockCaller("rag_k_admin", ApiKeyRole.ADMIN)); return req; }))
                 .andExpect(status().isNotFound());
     }
 

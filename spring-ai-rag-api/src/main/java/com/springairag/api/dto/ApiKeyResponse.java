@@ -28,6 +28,9 @@ public class ApiKeyResponse {
     @Schema(description = "Whether the key is currently active", example = "true")
     private Boolean enabled;
 
+    @Schema(description = "Role of this key (ADMIN or NORMAL). May be null when role is not available.", example = "ADMIN")
+    private String role;
+
     public ApiKeyResponse() {
     }
 
@@ -58,4 +61,7 @@ public class ApiKeyResponse {
 
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
 }

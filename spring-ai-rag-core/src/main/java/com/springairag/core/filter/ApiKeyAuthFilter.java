@@ -43,6 +43,13 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     /** Request attribute: API key identity after successful auth (used by downstream like RateLimitFilter) */
     public static final String AUTHENTICATED_KEY_ATTRIBUTE = "authenticatedApiKey";
 
+    /**
+     * Request attribute: the full authenticated RagApiKey entity.
+     * Use this to access the caller's role without an extra DB lookup.
+     * (RateLimitFilter depends on AUTHENTICATED_KEY_ATTRIBUTE remaining a String keyId.)
+     */
+    public static final String AUTHENTICATED_API_KEY_ENTITY = "authenticatedApiKeyEntity";
+
     private final String configuredApiKey;
     private final boolean authEnabled;
     private final ApiKeyManagementService apiKeyService;
@@ -100,6 +107,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 log.debug("API Key validated (database): keyId={}, {} {}",
                         validatedKey.getKeyId(), request.getMethod(), path);
                 request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, validatedKey.getKeyId());
+                request.setAttribute(AUTHENTICATED_API_KEY_ENTITY, validatedKey);
                 filterChain.doFilter(request, response);
                 return;
             }

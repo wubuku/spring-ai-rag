@@ -49,6 +49,14 @@ public class RagApiKey {
     @Column(nullable = false)
     private Boolean enabled = true;
 
+    /**
+     * Role for permission layering (ADMIN or NORMAL).
+     * Defaults to NORMAL. Use ADMIN for keys that can manage other keys.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private ApiKeyRole role = ApiKeyRole.NORMAL;
+
     public RagApiKey() {
     }
 
@@ -75,4 +83,22 @@ public class RagApiKey {
 
     public Boolean getEnabled() { return enabled; }
     public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+
+    public ApiKeyRole getRole() { return role; }
+    public void setRole(ApiKeyRole role) { this.role = role; }
+
+    /** Returns primitive boolean for conditional expressions. */
+    public boolean isEnabled() { return Boolean.TRUE.equals(enabled); }
+
+    /**
+     * The raw API key value.
+     *
+     * <p>Stored so it can be returned exactly once at creation time.
+     * After that, only the hash is used for validation.
+     */
+    @Column(name = "api_key", length = 128)
+    private String apiKey;
+
+    public String getApiKey() { return apiKey; }
+    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
 }

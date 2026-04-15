@@ -201,7 +201,7 @@ public class ApiKeyManagementService {
     }
 
     private ApiKeyResponse toResponse(RagApiKey entity) {
-        return new ApiKeyResponse(
+        ApiKeyResponse r = new ApiKeyResponse(
                 entity.getKeyId(),
                 entity.getName(),
                 entity.getCreatedAt(),
@@ -209,6 +209,8 @@ public class ApiKeyManagementService {
                 entity.getExpiresAt(),
                 entity.getEnabled()
         );
+        r.setRole(entity.getRole() != null ? entity.getRole().name() : null);
+        return r;
     }
 
     private String generateRawKey() {

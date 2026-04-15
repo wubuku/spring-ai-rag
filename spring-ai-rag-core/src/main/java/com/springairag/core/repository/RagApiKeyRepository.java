@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -39,4 +40,9 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
      * Find a key by its SHA-256 hash (O(log n) via index instead of O(n) full scan).
      */
     Optional<RagApiKey> findByKeyHash(String keyHash);
+
+    /**
+     * List all keys ordered by creation time (newest first).
+     */
+    List<RagApiKey> findAllByOrderByCreatedAtDesc();
 }
