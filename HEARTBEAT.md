@@ -3,6 +3,7 @@
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
+> - 2026-04-15 17:39 - ✅ PdfToRagService.triggerEmbedding 缓存检查简化:existingCount(0/1,检查>0)→ boolean isCached;新增 triggerEmbedding_cachedDocument_skipsEmbedding 测试覆盖缓存命中路径;PdfToRagServiceTest 13→14 tests;mvn test ✅(2158 tests全通过,BUILD SUCCESS);commit c7e9c27 已推送
 > - 2026-04-15 08:28 - ✅ EmailNotificationService null mailSender 测试:新增 sendAlert_mailSenderNull_returnsFalse 测试覆盖 JavaMailSender 未配置(null)时的降级路径;EmailNotificationServiceTest 14→15 tests;mvn test ✅(全模块 BUILD SUCCESS);commit 1994f10 已推送
 > - 2026-04-15 12:59 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 10/12 ⚠️(Documents+Search 失败:空数据库,非代码 bug)/ dist 已同步到 static/webui/ / 后端服务 8081 UP(Docker cortex-ce-postgres:5433,pgvector=UP,Flyway disabled,手动 V1-V14 迁移) / git 工作区干净(无变更)
 >
