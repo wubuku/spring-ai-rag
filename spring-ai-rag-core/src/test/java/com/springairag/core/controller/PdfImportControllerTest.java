@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.FileTreeResponse;
+import com.springairag.api.dto.PdfToRagResponse;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
@@ -215,5 +216,87 @@ class PdfImportControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(pdfImportService).listChildren("/");
+    }
+
+    // ==================== importPdfToRag tests ====================
+
+    @Test
+    void importPdfToRag_embedFalse_createsDocumentWithoutEmbedding() throws IOException {
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "paper.pdf", "application/pdf", "PDF data".getBytes());
+
+        PdfImportService.PdfImportResult importResult =
+                new PdfImportService.PdfImportResult("new-uuid", "new-uuid/default.md", 2);
+        when(pdfImportService.importPdf(any(), isNull())).thenReturn(importResult);
+
+        PdfToRagService.PdfToRagResult ragResult =
+                new PdfToRagService.PdfToRagResult(7L, "paper", true, null, null, null);
+        when(pdfToRagService.importPdfToRag(eq("new-uuid/default.md"), eq("paper.pdf"),
+                isNull(), eq(false), eq(false))).thenReturn(ragResult);
+
+        Object response = controller.importPdfToRag(pdfFile, null, false);
+
+        assertTrue(response instanceof ResponseEntity);
+        ResponseEntity<?> entity = (ResponseEntity<?>) response;
+        assertEquals(200, entity.getStatusCode().value());
+        assertTrue(entity.getBody() instanceof PdfToRagResponse);
+        PdfToRagResponse body = (PdfToRagResponse) entity.getBody();
+        assertEquals(7L, body.documentId());
+        assertEquals("paper", body.title());
+        assertTrue(body.newlyCreated());
+        assertNull(body.embedStatus());
+        assertEquals("new-uuid", body.uuid());
+    }
+
+    @Test
+    void importPdfToRag_embedTrue_returnsSseEmitter() throws IOException {
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "embed.pdf", "application/pdf", "PDF data".getBytes());
+
+        PdfImportService.PdfImportResult importResult =
+                new PdfImportService.PdfImportResult("sse-uuid", "sse-uuid/default.md", 2);
+        when(pdfImportService.importPdf(any(), isNull())).thenReturn(importResult);
+
+        Object response = controller.importPdfToRag(pdfFile, null, true);
+
+        // embed=true returns SseEmitter (streamed response)
+        assertNotNull(response);
+    }
+
+    @Test
+    void importPdfToRag_noFile_returnsBadRequest() {
+        MockMultipartFile emptyFile = new MockMultipartFile(
+                "file", "", "application/pdf", new byte[0]);
+
+        Object response = controller.importPdfToRag(emptyFile, null, true);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(400, ((ResponseEntity<?>) response).getStatusCode().value());
+    }
+
+    @Test
+    void importPdfToRag_nonPdfFile_returnsBadRequest() {
+        MockMultipartFile docFile = new MockMultipartFile(
+                "file", "report.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                "content".getBytes());
+
+        Object response = controller.importPdfToRag(docFile, null, true);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(400, ((ResponseEntity<?>) response).getStatusCode().value());
+    }
+
+    @Test
+    void importPdfToRag_serviceThrows_returnsInternalServerError() throws IOException {
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "fail.pdf", "application/pdf", "PDF data".getBytes());
+
+        when(pdfImportService.importPdf(any(), isNull()))
+                .thenThrow(new RuntimeException("Converter failed"));
+
+        Object response = controller.importPdfToRag(pdfFile, null, true);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(500, ((ResponseEntity<?>) response).getStatusCode().value());
     }
 }
