@@ -5,9 +5,13 @@ import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.FileTreeEntryResponse;
 import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfImportResponse;
+import com.springairag.api.dto.PdfToRagResponse;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
+import com.springairag.core.service.PdfToRagService;
+import com.springairag.core.util.SseEmitters;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -27,6 +31,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
@@ -60,11 +65,14 @@ public class PdfImportController {
 
     private final PdfImportService pdfImportService;
     private final MarkdownRendererService markdownRendererService;
+    private final PdfToRagService pdfToRagService;
 
     public PdfImportController(PdfImportService pdfImportService,
-                               MarkdownRendererService markdownRendererService) {
+                               MarkdownRendererService markdownRendererService,
+                               PdfToRagService pdfToRagService) {
         this.pdfImportService = pdfImportService;
         this.markdownRendererService = markdownRendererService;
+        this.pdfToRagService = pdfToRagService;
     }
 
     // ==================== PDF Import ====================
@@ -115,6 +123,162 @@ public class PdfImportController {
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF import failed: " + e.getMessage()));
         }
+    }
+
+    // ==================== PDF Import → RAG Knowledge Base ====================
+
+    /**
+     * Import a PDF and add it to the RAG knowledge base (with optional embedding).
+     *
+     * <p>This is a convenience endpoint that combines {@code POST /files/pdf}
+     * (PDF → Markdown conversion + fs_files storage) with optional
+     * {@code POST /documents/{id}/embed} (embedding + RAG knowledge base registration).
+     *
+     * <p>When embed=true (default), returns an SSE stream of embedding progress
+     * followed by a "done" event with the final result.
+     * When embed=false, returns immediately with the document ID (no embedding).
+     *
+     * <p>API design:
+     * <ul>
+     *   <li>POST /files/pdf-to-rag?embed=true  — import + embed with SSE progress stream</li>
+     *   <li>POST /files/pdf-to-rag?embed=false — import only, returns immediately</li>
+     * </ul>
+     *
+     * @param file         the PDF file to import
+     * @param collectionId optional collection ID to associate with
+     * @param embed        whether to trigger embedding (default: true)
+     * @return SSE stream (embed=true) or JSON response (embed=false)
+     */
+    @Operation(summary = "Import PDF to RAG knowledge base",
+               description = "Convenience endpoint: imports a PDF (converts to Markdown), stores in fs_files, "
+                           + "creates a RagDocument entry, and optionally triggers embedding. "
+                           + "When embed=true (default), returns SSE progress stream followed by final result. "
+                           + "When embed=false, returns immediately with document ID.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "PDF imported and added to RAG (embed=false)"),
+            @ApiResponse(responseCode = "200", description = "SSE stream: PDF imported and embedding in progress (embed=true)"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "500", description = "Internal error during import or embedding")
+    })
+    @PostMapping(value = "/pdf-to-rag", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public Object importPdfToRag(
+            @Parameter(description = "PDF file to import")
+            @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Optional collection ID to associate with the RAG document")
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @Parameter(description = "Whether to trigger embedding (default: true). "
+                    + "When true, returns SSE progress stream; when false, returns immediately.")
+            @RequestParam(value = "embed", defaultValue = "true") boolean embed) {
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest()
+                    .body(ErrorResponse.of("No file uploaded"));
+        }
+
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
+            return ResponseEntity.badRequest()
+                    .body(ErrorResponse.of("Only PDF files are supported"));
+        }
+
+        try {
+            // Step 1: Import PDF to fs_files (get entry Markdown path)
+            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+
+            log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
+                    importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
+
+            if (!embed) {
+                // Step 2a: Create RagDocument WITHOUT embedding (fast, returns immediately)
+                PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
+                        importResult.entryMarkdown(),
+                        filename,
+                        collectionId,
+                        false,  // embed=false
+                        false   // forceReembed (irrelevant when embed=false)
+                );
+
+                return ResponseEntity.ok(new PdfToRagResponse(
+                        ragResult.documentId(),
+                        ragResult.title(),
+                        ragResult.newlyCreated(),
+                        null,   // no embedding
+                        null,   // no embedding
+                        null,   // no embedding
+                        importResult.uuid(),
+                        importResult.entryMarkdown()
+                ));
+            }
+
+            // Step 2b: Create RagDocument WITH embedding (returns SSE stream)
+            return streamPdfToRagWithEmbedding(importResult, filename, collectionId);
+
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (Exception e) {
+            log.error("PDF-to-RAG import failed for '{}': {}", filename, e.getMessage(), e);
+            return ResponseEntity.internalServerError()
+                    .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
+        }
+    }
+
+    /**
+     * Streams embedding progress via SSE, then sends the final result as "done" event.
+     */
+    private Object streamPdfToRagWithEmbedding(PdfImportService.PdfImportResult importResult,
+                                               String filename,
+                                               Long collectionId) {
+        SseEmitter emitter = SseEmitters.create();
+
+        // Run embedding in background thread so the HTTP response can stream
+        Runnable task = () -> {
+            try {
+                java.util.concurrent.atomic.AtomicReference<PdfToRagService.PdfToRagResult> ragResultRef =
+                        new java.util.concurrent.atomic.AtomicReference<>();
+                PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRagWithEmbedding(
+                        importResult.entryMarkdown(),
+                        filename,
+                        collectionId,
+                        false,  // forceReembed=false
+                        (progressEvent) -> {
+                            // Forward embedding progress as SSE events
+                            PdfToRagService.PdfToRagResult r = ragResultRef.get();
+                            SseEmitters.sendProgress(emitter, "progress", progressEvent,
+                                    "pdf-to-rag embed docId=" + (r != null ? r.documentId() : "pending"));
+                        }
+                );
+                ragResultRef.set(ragResult);
+
+                PdfToRagResponse doneData = new PdfToRagResponse(
+                        ragResult.documentId(),
+                        ragResult.title(),
+                        ragResult.newlyCreated(),
+                        ragResult.embedStatus(),
+                        ragResult.embedMessage(),
+                        ragResult.chunksCreated(),
+                        importResult.uuid(),
+                        importResult.entryMarkdown()
+                );
+
+                SseEmitters.sendDone(emitter, doneData);
+
+            } catch (Exception e) {
+                log.error("PDF-to-RAG SSE embedding failed: {}", e.getMessage());
+                SseEmitters.sendError(emitter, e.getMessage(), Map.of(
+                        "uuid", importResult.uuid(),
+                        "entryMarkdown", importResult.entryMarkdown()
+                ));
+            }
+        };
+
+        // Execute in virtual thread (Spring MVC uses async executor for SseEmitter)
+        Thread.ofVirtual().start(task);
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .header("Cache-Control", "no-cache")
+                .header("X-Accel-Buffering", "no")
+                .body(emitter);
     }
 
     // ==================== Preview (Markdown → HTML) ====================

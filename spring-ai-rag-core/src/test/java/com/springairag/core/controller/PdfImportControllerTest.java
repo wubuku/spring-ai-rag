@@ -4,6 +4,7 @@ import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
+import com.springairag.core.service.PdfToRagService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
@@ -26,13 +27,15 @@ class PdfImportControllerTest {
 
     private PdfImportService pdfImportService;
     private MarkdownRendererService markdownRendererService;
+    private PdfToRagService pdfToRagService;
     private PdfImportController controller;
 
     @BeforeEach
     void setUp() {
         pdfImportService = mock(PdfImportService.class);
         markdownRendererService = mock(MarkdownRendererService.class);
-        controller = new PdfImportController(pdfImportService, markdownRendererService);
+        pdfToRagService = mock(PdfToRagService.class);
+        controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService);
     }
 
     // ==================== importPdf tests ====================
