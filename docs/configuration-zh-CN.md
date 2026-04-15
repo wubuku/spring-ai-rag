@@ -96,6 +96,17 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
+| `rag.security.enabled` | `false` | 开启 API Key 认证（默认关闭） |
+| `rag.security.api-key` | `""` | 静态 API Key（单 key，与数据库 keys 二选一） |
+
+> 开启认证后，所有 `/api/*` 请求需要 `X-API-Key` header 或 `?apiKey=` query 参数。
+> SSE 请求（EventSource）不支持自定义 header，必须用 `?apiKey=` query 参数。
+
+**API Key 角色**：ADMIN（NORMAL 表中所有 key）可管理 keys；NORMAL 仅 RAG 功能 + 自助创建 NORMAL key。
+> 首次启动时 `ApiKeyBootstrapService` 会自动生成第一个 ADMIN key 并打印到日志。
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
 | `rag.embedding.api-key` | `""` | SiliconFlow API Key |
 | `rag.embedding.base-url` | `https://api.siliconflow.cn/v1` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |

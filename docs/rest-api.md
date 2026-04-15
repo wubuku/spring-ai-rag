@@ -12,13 +12,29 @@
 
 ### Authentication
 
-When API Key authentication is enabled, include the following header in requests:
+When API Key authentication is enabled (`rag.security.enabled=true`), include one of the following in requests:
 
 ```
-X-API-Key: your-api-key
+X-API-Key: your-api-key          # Header (recommended)
+?apiKey=your-api-key            # Query parameter (for SSE / EventSource)
 ```
 
-Configure via: `rag.security.api-keys` (comma-separated for multiple keys).
+> **Note**: SSE (Server-Sent Events) does not support custom headers due to W3C spec limitations.
+> The `useSSE.ts` frontend hook uses `?apiKey=` query parameter to authenticate POST requests.
+
+Configuration:
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.security.enabled` | `false` | Enable/disable API key authentication |
+| `rag.security.api-key` | — | Static API key (singular; use database keys for multi-key management) |
+
+**Role-based access** (when `rag.security.enabled=true`):
+
+| Key Role | `/api-keys` List | `/api-keys` Create | `/api-keys` Delete |
+|----------|-----------------|-------------------|-------------------|
+| ADMIN | ✅ List all | ✅ Create any role | ✅ Delete any key |
+| NORMAL | ❌ 403 | ✅ Create NORMAL key only (self-service) | ❌ 403 |
 
 ### Rate Limiting
 
@@ -220,6 +236,64 @@ Export chat conversation history as a downloadable file.
 ```markdown
 # Conversation: s1
 Exported: 2026-04-05
+
+---
+
+## API Keys — Key Management
+
+> Requires `rag.security.enabled=true`. ADMIN key required for list/delete; any valid key for create.
+
+### `GET /api/v1/rag/api-keys`
+
+List all API keys (ADMIN only).
+
+**Request**: `X-API-Key: admin-key` header or `?apiKey=admin-key` query
+
+**Response 200**:
+```json
+[{
+  "keyId": "rag_k_abc123",
+  "name": "Production Server",
+  "role": "ADMIN",
+  "enabled": true,
+  "createdAt": "2026-04-15T00:00:00",
+  "lastUsedAt": "2026-04-16T00:00:00",
+  "expiresAt": null
+}]
+```
+
+**Response 403**: Non-admin key
+
+### `POST /api/v1/rag/api-keys`
+
+Create a new API key. ADMIN can create any role; any valid key can create NORMAL keys (self-service).
+
+**Request body**:
+```json
+{
+  "name": "My API Key",
+  "expiresAt": "2027-01-01T00:00:00"   // optional
+}
+```
+
+**Response 201**:
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "rawKey": "rag_sk_a1b2c3d4-...",   // shown ONLY here — save it!
+  "name": "My API Key",
+  "role": "NORMAL",
+  "expiresAt": "2027-01-01T00:00:00"
+}
+```
+
+### `DELETE /api/v1/rag/api-keys/{keyId}`
+
+Revoke an API key (ADMIN only, cannot delete the last ADMIN key).
+
+**Response 204**: Deleted
+
+**Response 400**: Last ADMIN key cannot be deleted
 
 ---
 
