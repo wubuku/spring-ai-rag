@@ -807,11 +807,20 @@ public class PdfImportController {
         for (FsFile f : files) {
             // DB paths may have leading whitespace (legacy import bug); trim for safe parsing
             String cleanPath = f.getPath().trim();
-            // parentPath may end with "/" but DB paths don't start with "/"; subtract 1
-            // to keep the leading "/" of the relative path (e.g. "/default.md")
-            String relative = parentPath.isEmpty()
-                    ? cleanPath
-                    : cleanPath.substring(parentPath.length() - 1);
+            // Compute relative path from parentPath.
+            // parentPath may end with "/" (e.g. "uuid/") or not (e.g. "uuid").
+            // DB paths don't start with "/", so we need to adjust the offset accordingly.
+            // When parentPath ends with "/", parentPath.length() is the start of filename.
+            // When parentPath doesn't end with "/", parentPath.length() is also the start.
+            String relative;
+            if (parentPath.isEmpty()) {
+                relative = cleanPath;
+            } else {
+                int offset = parentPath.endsWith("/")
+                        ? parentPath.length()      // skip parentPath including trailing "/"
+                        : parentPath.length();     // same - skip parentPath
+                relative = cleanPath.substring(offset);
+            }
             int slashIdx = relative.indexOf('/');
 
             if (slashIdx == -1) {

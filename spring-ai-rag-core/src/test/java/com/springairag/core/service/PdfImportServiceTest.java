@@ -202,7 +202,7 @@ class PdfImportServiceTest {
             FsFile file1 = new FsFile("dir/file1.md", true, b("a"), "a", "text/markdown", 1L);
             FsFile file2 = new FsFile("dir/file2.pdf", false, b("b"), null, "application/pdf", 2L);
             FsFile deepFile = new FsFile("dir/sub/another.pdf", false, b("c"), null, "application/pdf", 3L);
-            when(fsFileRepository.findByPathStartingWithOrderByPathAsc("dir/"))
+            when(fsFileRepository.findByPathStartingWithOrderByPathAsc("dir"))
                     .thenReturn(List.of(file1, file2, deepFile));
 
             List<FsFile> children = pdfImportService.listChildren("dir");
