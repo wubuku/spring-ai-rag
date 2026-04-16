@@ -2964,7 +2964,7 @@ PDF 端点测试(Section 16,9 tests):
 | T9 | QueryLang enum 单元测试(fulltext 模块) | 测试覆盖 | ✅ 2026-04-13 |
 | T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ✅ 2026-04-14 |
 | T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
-| T12 | RetrievalEvaluationService 覆盖率提升(评测阈值边界) | 测试覆盖 | ⏳ |
+| T12 | RetrievalEvaluationService 覆盖率提升(评测阈值边界) | 测试覆盖 | ✅ 2026-04-16(T12 完成:+9 boundary tests,k=1/0/>retrieved/duplicates/NDCG edge + parseJudge score clamping+defaults;23→32 tests;2243 tests pass;k<=0 guard fix;commit 9f7b8a3)|
 | T13 | ApiKeyManagementService 加密相关测试 | 安全 | ⏳ |
 | T14 | SseEmitters 单元测试(Error/Heartbeat 路径) | 测试覆盖 | ✅ 2026-04-16(30 tests, sendProgress/sendDone/sendError/sendHeartbeat/execute/sendRaw/escapeJson 全覆盖) |
 
