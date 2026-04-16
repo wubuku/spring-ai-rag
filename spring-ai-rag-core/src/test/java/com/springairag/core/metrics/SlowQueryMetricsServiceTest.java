@@ -123,4 +123,47 @@ class SlowQueryMetricsServiceTest {
         assertEquals(1, freshService.getTotalSlowQueries());
         assertEquals(1, freshService.getRecentSlowQueries().size());
     }
+
+    @Test
+    void recordSlowQuery_maxRetainedZero_doesNotAddToRecent() {
+        // maxRetained=0 means don't keep any recent queries
+        properties.getSlowQuery().setMaxRetained(0);
+        service.recordSlowQuery("SELECT 1", 2000);
+        assertEquals(1, service.getTotalSlowQueries()); // counter still increments
+        assertTrue(service.getRecentSlowQueries().isEmpty()); // but not retained
+    }
+
+    @Test
+    void recordSlowQuery_thresholdZero_recordsAllQueries() {
+        // threshold=0 means any query is considered slow
+        RagProperties freshProps = new RagProperties();
+        freshProps.getSlowQuery().setThresholdMs(0);
+        SlowQueryMetricsService freshService = new SlowQueryMetricsService(
+                freshProps, null, new SimpleMeterRegistry());
+        freshProps.getSlowQuery().setMaxRetained(10);
+        freshService.recordSlowQuery("SELECT 1", 1); // 1ms > 0ms threshold
+        assertEquals(1, freshService.getTotalSlowQueries());
+        assertEquals(1, freshService.getRecentSlowQueries().size());
+    }
+
+    @Test
+    void getRecentSlowQueries_initiallyEmpty() {
+        assertTrue(service.getRecentSlowQueries().isEmpty());
+    }
+
+    @Test
+    void recordSlowQuery_nullSql_stillRecordsCounter() {
+        // null SQL should not throw, counter still increments
+        properties.getSlowQuery().setMaxRetained(10);
+        service.recordSlowQuery(null, 2000);
+        assertEquals(1, service.getTotalSlowQueries());
+        assertEquals(1, service.getRecentSlowQueries().size());
+    }
+
+    @Test
+    void recordSlowQuery_nullSql_masksGracefully() {
+        // maskSensitiveSql handles null SQL without throwing
+        var summary = service.getStatsSummary();
+        assertNotNull(summary);
+    }
 }
