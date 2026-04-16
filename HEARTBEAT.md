@@ -1,3 +1,5 @@
+> - 2026-04-17 03:30 - ✅ 后端国际化:demo README 英文化--翻译全部 4 个 demo README 为英文(demo-basic-rag/demo-multi-model/demo-component-level/demo-domain-extension);中文原版保留为 README-zh-CN.md;mvn test ✅(全通过);commit 912e881 已推送
+
 > - 2026-04-17 02:51 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP,tables=DEGRADED);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
 > - 2026-04-17 02:39 - ✅ 后端国际化:ApiCompatibilityAdapterTest @DisplayName 注解英文化--14个中文 @DisplayName 翻译为英文(single/multi-system message, system-to-user conversion, reordering, empty list, mixed adaptation);5个嵌套类 Javadoc → English;14 tests ✅;commit fc32361 已推送
