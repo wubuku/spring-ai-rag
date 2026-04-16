@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * CircuitBreakerHealthIndicator 单元测试
+ * CircuitBreakerHealthIndicator Unit Tests
  */
 class CircuitBreakerHealthIndicatorTest {
 
@@ -38,7 +38,7 @@ class CircuitBreakerHealthIndicatorTest {
         config.setSlidingWindowSize(20);
 
         LlmCircuitBreaker circuitBreaker = new LlmCircuitBreaker(config);
-        // 模拟一些成功调用
+        // Simulate some successful calls
         circuitBreaker.recordSuccess();
         circuitBreaker.recordSuccess();
 
@@ -64,12 +64,12 @@ class CircuitBreakerHealthIndicatorTest {
         config.setSlidingWindowSize(20);
 
         LlmCircuitBreaker circuitBreaker = new LlmCircuitBreaker(config);
-        // 模拟触发熔断：连续失败直到失败率达到阈值
+        // Simulate circuit breaker opening: consecutive failures until failure rate threshold
         for (int i = 0; i < 15; i++) {
             circuitBreaker.recordFailure();
         }
 
-        // 验证熔断器已打开
+        // Verify the circuit breaker is open
         assertEquals(LlmCircuitBreaker.State.OPEN, circuitBreaker.getState());
 
         RagChatService ragChatService = mock(RagChatService.class);
@@ -89,19 +89,19 @@ class CircuitBreakerHealthIndicatorTest {
         config.setEnabled(true);
         config.setFailureRateThreshold(50);
         config.setMinimumNumberOfCalls(5);
-        config.setWaitDurationInOpenStateSeconds(1);  // 1秒后进入 HALF_OPEN
+        config.setWaitDurationInOpenStateSeconds(1);  // Wait 1 second to enter HALF_OPEN
         config.setSlidingWindowSize(10);
 
         LlmCircuitBreaker circuitBreaker = new LlmCircuitBreaker(config);
-        // 触发熔断
+        // Trigger circuit breaker opening
         for (int i = 0; i < 6; i++) {
             circuitBreaker.recordFailure();
         }
         assertEquals(LlmCircuitBreaker.State.OPEN, circuitBreaker.getState());
 
-        // 等待冷却时间后尝试重置
+        // Wait for cooldown then attempt reset
         try { Thread.sleep(1100); } catch (InterruptedException ignored) {}
-        circuitBreaker.allowCall();  // 触发 OPEN -> HALF_OPEN
+        circuitBreaker.allowCall();  // Trigger OPEN -> HALF_OPEN
 
         assertEquals(LlmCircuitBreaker.State.HALF_OPEN, circuitBreaker.getState());
 
@@ -111,7 +111,7 @@ class CircuitBreakerHealthIndicatorTest {
         CircuitBreakerHealthIndicator indicator = new CircuitBreakerHealthIndicator(ragChatService);
         Health health = indicator.health();
 
-        // HALF_OPEN 返回 UNKNOWN（探测中）
+        // HALF_OPEN returns UNKNOWN (probing)
         assertEquals(Status.UNKNOWN, health.getStatus());
         assertEquals("HALF_OPEN", health.getDetails().get("state"));
     }

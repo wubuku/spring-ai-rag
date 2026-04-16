@@ -14,7 +14,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagHealthIndicator 单元测试
+ * RagHealthIndicator Unit Tests
  */
 class RagHealthIndicatorTest {
 
