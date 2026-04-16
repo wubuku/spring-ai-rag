@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.time.ZonedDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -1026,5 +1027,263 @@ class DtoTest {
     void resolveAlertRequest_emptyResolution() {
         var req = new ResolveAlertRequest("");
         assertEquals("", req.resolution());
+    }
+
+    // ========== AnswerQualityRequest ==========
+
+    @Test
+    void answerQualityRequest_constructorAndGetters() {
+        var req = new AnswerQualityRequest("What is RAG?", "RAG is retrieval.", "RAG is a technique.");
+        assertEquals("What is RAG?", req.getQuery());
+        assertEquals("RAG is retrieval.", req.getContext());
+        assertEquals("RAG is a technique.", req.getAnswer());
+    }
+
+    @Test
+    void answerQualityRequest_setters() {
+        var req = new AnswerQualityRequest();
+        req.setQuery("Query");
+        req.setContext("Context");
+        req.setAnswer("Answer");
+        assertEquals("Query", req.getQuery());
+        assertEquals("Context", req.getContext());
+        assertEquals("Answer", req.getAnswer());
+    }
+
+    // ========== AnswerQualityResponse ==========
+
+    @Test
+    void answerQualityResponse_constructorAndGetters() {
+        var evaluatedAt = ZonedDateTime.now();
+        var resp = new AnswerQualityResponse(4, 5, 4, "Reasoning", "ACCEPT", evaluatedAt);
+        assertEquals(4, resp.getGroundedness());
+        assertEquals(5, resp.getRelevance());
+        assertEquals(4, resp.getHelpfulness());
+        assertEquals("Reasoning", resp.getReasoning());
+        assertEquals("ACCEPT", resp.getRecommendation());
+        assertEquals(evaluatedAt, resp.getEvaluatedAt());
+    }
+
+    @Test
+    void answerQualityResponse_setters() {
+        var resp = new AnswerQualityResponse();
+        resp.setGroundedness(3);
+        resp.setRelevance(4);
+        resp.setHelpfulness(5);
+        resp.setReasoning("Needs revision");
+        resp.setRecommendation("REVISION");
+        resp.setEvaluatedAt(null);
+        assertEquals(3, resp.getGroundedness());
+        assertEquals(4, resp.getRelevance());
+        assertEquals(5, resp.getHelpfulness());
+        assertEquals("Needs revision", resp.getReasoning());
+        assertEquals("REVISION", resp.getRecommendation());
+        assertNull(resp.getEvaluatedAt());
+    }
+
+    // ========== ClientErrorRequest ==========
+
+    @Test
+    void clientErrorRequest_constructorAndGetters() {
+        var req = new ClientErrorRequest();
+        req.setErrorType("TypeError");
+        req.setErrorMessage("Cannot read property");
+        req.setStackTrace("at app.js:10");
+        assertEquals("TypeError", req.getErrorType());
+        assertEquals("Cannot read property", req.getErrorMessage());
+        assertEquals("at app.js:10", req.getStackTrace());
+    }
+
+    // ========== CollectionCreatedResponse ==========
+
+    @Test
+    void collectionCreatedResponse_constructor() {
+        var resp = new CollectionCreatedResponse("Collection created", 42L, "My KB");
+        assertEquals("Collection created", resp.message());
+        assertEquals(42L, resp.collectionId());
+        assertEquals("My KB", resp.name());
+    }
+
+    @Test
+    void collectionCreatedResponse_of() {
+        var resp = CollectionCreatedResponse.of(5L, "Test Collection");
+        assertEquals("Collection created", resp.message());
+        assertEquals(5L, resp.collectionId());
+        assertEquals("Test Collection", resp.name());
+    }
+
+    // ========== CollectionDeleteResponse ==========
+
+    @Test
+    void collectionDeleteResponse_constructor() {
+        var resp = new CollectionDeleteResponse("Collection deleted", 1L, 5L);
+        assertEquals("Collection deleted", resp.message());
+        assertEquals(1L, resp.id());
+        assertEquals(5, resp.documentsUnlinked());
+    }
+
+    @Test
+    void collectionDeleteResponse_of() {
+        var resp = CollectionDeleteResponse.of(3L, 10);
+        assertEquals("Collection deleted", resp.message());
+        assertEquals(3L, resp.id());
+        assertEquals(10, resp.documentsUnlinked());
+    }
+
+    // ========== CollectionImportResponse ==========
+
+    @Test
+    void collectionImportResponse_constructor() {
+        var resp = new CollectionImportResponse("Import completed", 1L, 20, 5);
+        assertEquals("Import completed", resp.message());
+        assertEquals(1L, resp.collectionId());
+        assertEquals(20, resp.imported());
+        assertEquals(5, resp.skipped());
+    }
+
+    @Test
+    void collectionImportResponse_of() {
+        var resp = CollectionImportResponse.of(7L, 15, 3);
+        assertEquals("Collection import completed", resp.message());
+        assertEquals(7L, resp.collectionId());
+        assertEquals(15, resp.imported());
+        assertEquals(3, resp.skipped());
+    }
+
+    // ========== CollectionRestoreResponse ==========
+
+    @Test
+    void collectionRestoreResponse_constructor() {
+        var resp = new CollectionRestoreResponse("Collection restored", 1L, "My KB", 10L);
+        assertEquals("Collection restored", resp.message());
+        assertEquals(1L, resp.collectionId());
+        assertEquals("My KB", resp.name());
+        assertEquals(10L, resp.documentCount());
+    }
+
+    @Test
+    void collectionRestoreResponse_of() {
+        var resp = CollectionRestoreResponse.of(2L, "Restored KB", 25L);
+        assertEquals("Collection restored", resp.message());
+        assertEquals(2L, resp.collectionId());
+        assertEquals("Restored KB", resp.name());
+        assertEquals(25L, resp.documentCount());
+    }
+
+    // ========== CollectionCloneResponse ==========
+
+    @Test
+    void collectionCloneResponse_constructor() {
+        var resp = new CollectionCloneResponse("Clone completed", 5L, "KB (Copy)", 1L, "Original KB", 10);
+        assertEquals("Clone completed", resp.message());
+        assertEquals(5L, resp.clonedCollectionId());
+        assertEquals("KB (Copy)", resp.clonedCollectionName());
+        assertEquals(1L, resp.sourceCollectionId());
+        assertEquals("Original KB", resp.sourceCollectionName());
+        assertEquals(10, resp.documentsCloned());
+    }
+
+    // ========== DocumentAddedResponse ==========
+
+    @Test
+    void documentAddedResponse_constructor() {
+        var resp = new DocumentAddedResponse("Document added to collection", 1L, 42L);
+        assertEquals("Document added to collection", resp.message());
+        assertEquals(1L, resp.collectionId());
+        assertEquals(42L, resp.documentId());
+    }
+
+    @Test
+    void documentAddedResponse_of() {
+        var resp = DocumentAddedResponse.of(3L, 99L);
+        assertEquals("Document added to collection", resp.message());
+        assertEquals(3L, resp.collectionId());
+        assertEquals(99L, resp.documentId());
+    }
+
+    // ========== ChatHistoryResponse ==========
+
+    @Test
+    void chatHistoryResponse_constructor() {
+        var resp = new ChatHistoryResponse(1L, "session-abc", "User message", "AI response", java.util.List.of(1L, 2L), java.util.Map.of(), null);
+        assertEquals(1L, resp.id());
+        assertEquals("session-abc", resp.sessionId());
+        assertEquals("User message", resp.userMessage());
+        assertEquals("AI response", resp.aiResponse());
+        assertEquals(java.util.List.of(1L, 2L), resp.relatedDocumentIds());
+    }
+
+    @Test
+    void chatHistoryResponse_withNullDocIds() {
+        var resp = new ChatHistoryResponse(2L, "session-xyz", "Hello", "Hi there", null, java.util.Map.of(), null);
+        assertEquals(2L, resp.id());
+        assertNull(resp.relatedDocumentIds());
+    }
+
+    // ========== BatchCreateAndEmbedRequest ==========
+
+    @Test
+    void batchCreateAndEmbedRequest_constructorAndGetters() {
+        var req = new BatchCreateAndEmbedRequest();
+        req.setCollectionId(1L);
+        req.setDocuments(java.util.List.of(new DocumentRequest("Test Doc", "Content here")));
+        req.setForce(true);
+        assertEquals(1L, req.getCollectionId());
+        assertEquals(1, req.getDocuments().size());
+        assertTrue(req.isForce());
+    }
+
+    @Test
+    void batchCreateAndEmbedRequest_defaults() {
+        var req = new BatchCreateAndEmbedRequest();
+        assertFalse(req.isForce());
+    }
+
+    // ========== BatchCreateAndEmbedResponse ==========
+
+    @Test
+    void batchCreateAndEmbedResponse_constructor() {
+        var item = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        var resp = new BatchCreateAndEmbedResponse(10, 8, 2, 0, java.util.List.of(item));
+        assertEquals(10, resp.created());
+        assertEquals(8, resp.embedded());
+        assertEquals(2, resp.skipped());
+        assertEquals(0, resp.failed());
+        assertEquals(1, resp.results().size());
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_documentResult() {
+        var result = new BatchCreateAndEmbedResponse.DocumentResult(99L, "Failed Doc", false, 0, "Embedding failed");
+        assertEquals(99L, result.documentId());
+        assertEquals("Failed Doc", result.title());
+        assertFalse(result.embedded());
+        assertEquals(0, result.chunks());
+        assertEquals("Embedding failed", result.error());
+    }
+
+    // ========== ApiSloComplianceResponse ==========
+
+    @Test
+    void apiSloComplianceResponse_constructor() {
+        var latencyStats = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var endpoint = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 98.0, 100, 98, 2, latencyStats);
+        var resp = new ApiSloComplianceResponse(true, 300, java.util.List.of(endpoint));
+        assertTrue(resp.enabled());
+        assertEquals(300, resp.windowSeconds());
+        assertEquals(1, resp.endpoints().size());
+    }
+
+    @Test
+    void apiSloComplianceResponse_endpointSlo() {
+        var latencyStats = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var endpoint = new ApiSloComplianceResponse.EndpointSlo("rag.chat.stream", "POST", 1000L, 100.0, 200, 200, 0, latencyStats);
+        assertEquals("rag.chat.stream", endpoint.endpoint());
+        assertEquals("POST", endpoint.method());
+        assertEquals(1000L, endpoint.thresholdMs());
+        assertEquals(100.0, endpoint.compliancePercent(), 0.001);
+        assertEquals(200, endpoint.requestCount());
+        assertEquals(200, endpoint.sloCount());
+        assertEquals(0, endpoint.breachCount());
     }
 }
