@@ -3165,6 +3165,24 @@ PDF 端点测试(Section 16,9 tests):
   - TimeoutException/InterruptedException 用 RuntimeException 包装(checked exception 不在 ChatClient.call() throws 列表中,Mockito strict mode 报错)
   - 23 tests 全部通过;全量测试 ✅;commit b7c51ae 已推送
 
+## Cron 进度(2026-04-16 22:39 - 后端: HierarchicalTextChunkerTest 边界覆盖补全)
+
+- 2026-04-16 22:39 - ✅ 后端测试补全:
+  - 发现 `HierarchicalTextChunkerTest` 的静态工厂方法仅有 1 个基础测试,缺少边界覆盖
+  - 新增 7 个边界测试:
+    - `staticFactoryMethod_nullInput`: null → empty list ✅
+    - `staticFactoryMethod_emptyInput`: "" → empty list ✅
+    - `staticFactoryMethod_whitespaceOnly`: "   \n\n  " → empty list ✅
+    - `staticFactoryMethod_exactChunkSize_singleChunk`: 50-char content with chunkSize=50 → single chunk ✅
+    - `staticFactoryMethod_overlappingChunks_preserveOverlap`: overlap preserves content ✅
+    - `split_sentenceLongerThanMax_triggersFixedSizeFallback`: no-terminator sentence → fixed-size fallback ✅
+    - `split_multipleSiblingsAtSameLevel`: sibling headers → independent sections ✅
+  - HierarchicalTextChunkerTest: 19 → 26 tests
+  - 全量测试:2592 tests ✅(零失败零错误)
+  - git commit b456388 已推送
+
 ## Cron 进度(WebUI - 2026-04-16 04:24 - 常规发布)
 
 - 2026-04-16 04:24 - ✅ WebUI 常规发布:cron 触发,npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
+> - 2026-04-16 21:23 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,311KB index + 346KB BarChart chunk)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
