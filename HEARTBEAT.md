@@ -1,3 +1,5 @@
+> - 2026-04-16 20:21 - ✅ T11 SlowQueryMetricsService 测试覆盖提升:扫描发现 SlowQueryMetricsServiceTest 缺失 5 个边界测试--maxRetained=0 跳过队列保留/threshold=0 记录所有查询/initially empty空列表/null SQL 计数器仍递增/null SQL 脱敏安全;12→17 tests;全量测试✅;commit b982ccf 已推送
+
 > - 2026-04-16 18:22 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,311KB index + 346KB BarChart chunk)/ E2E 11/12 ✅(Search 失败:数据库为空,已知环境问题,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP,tables=DEGRADED);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
 # HEARTBEAT.md - cron 任务指令
@@ -2969,10 +2971,10 @@ PDF 端点测试(Section 16,9 tests):
 |---|--------|------|------|
 | T6 | NoOpFulltextSearchProvider 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
 | T7 | PdfImportService 单元测试 | 测试覆盖 | ✅ 2026-04-13 |
-| T8 | FsFileRepository 集成测试 | 测试覆盖 | ⏳ |
+| T8 | FsFileRepository 集成测试 | 测试覆盖 | ✅ 2026-04-15 |
 | T9 | QueryLang enum 单元测试(fulltext 模块) | 测试覆盖 | ✅ 2026-04-13 |
 | T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ✅ 2026-04-14 |
-| T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
+| T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ✅ 2026-04-16(T11 完成:+5 edge case tests,maxRetained=0/threshold=0/null SQL/initially empty;12→17 tests;全量测试✅)
 | T12 | RetrievalEvaluationService 覆盖率提升(评测阈值边界) | 测试覆盖 | ✅ 2026-04-16(T12 完成:+9 boundary tests,k=1/0/>retrieved/duplicates/NDCG edge + parseJudge score clamping+defaults;23→32 tests;2243 tests pass;k<=0 guard fix;commit 9f7b8a3)|
 | T13 | ApiKeyManagementService 加密相关测试 | 安全 | ✅ 2026-04-16(T13 完成:+14 tests,sha256 consistency/format/diff + generateRawKey/KeyId format + isExpired boundary + expired/disabled not cached;25→39 tests;2257 tests pass;commit b5c42ba)|
 | T14 | SseEmitters 单元测试(Error/Heartbeat 路径) | 测试覆盖 | ✅ 2026-04-16(30 tests, sendProgress/sendDone/sendError/sendHeartbeat/execute/sendRaw/escapeJson 全覆盖) |
