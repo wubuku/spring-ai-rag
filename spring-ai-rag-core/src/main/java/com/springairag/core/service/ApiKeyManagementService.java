@@ -213,11 +213,11 @@ public class ApiKeyManagementService {
         return r;
     }
 
-    private String generateRawKey() {
+    String generateRawKey() {
         return KEY_PREFIX + UUID.randomUUID().toString().replace("-", "");
     }
 
-    private String generateKeyId() {
+    String generateKeyId() {
         return "rag_k_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
     }
 

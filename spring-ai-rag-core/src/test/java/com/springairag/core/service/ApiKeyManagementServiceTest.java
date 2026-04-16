@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import com.github.benmanes.caffeine.cache.Cache;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -418,6 +419,117 @@ class ApiKeyManagementServiceTest {
             byte[] hash = digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             return java.util.HexFormat.of().formatHex(hash);
         } catch (java.security.NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    // ==================== T13: Encryption / security boundary tests ====================
+
+    @Test
+    void sha256_producesConsistentHash() {
+        String hash1 = sha256("test_api_key_123");
+        String hash2 = sha256("test_api_key_123");
+        assertEquals(hash1, hash2);
+        assertEquals(64, hash1.length());
+        assertTrue(hash1.matches("[0-9a-f]{64}"));
+    }
+
+    @Test
+    void sha256_differentInputs_differentHashes() {
+        assertNotEquals(sha256("key_a"), sha256("key_b"));
+    }
+
+    @Test
+    void generateRawKey_hasCorrectPrefix() {
+        assertTrue(service.generateRawKey().startsWith("rag_sk_"));
+    }
+
+    @Test
+    void generateRawKey_uuidSuffixIs32HexChars() {
+        String rawKey = service.generateRawKey();
+        String uuidPart = rawKey.substring("rag_sk_".length());
+        assertEquals(32, uuidPart.length());
+        assertTrue(uuidPart.matches("[0-9a-f]{32}"));
+    }
+
+    @Test
+    void generateKeyId_startsWithRagKPrefix() {
+        assertTrue(service.generateKeyId().startsWith("rag_k_"));
+    }
+
+    @Test
+    void generateKeyId_is12HexCharsAfterPrefix() {
+        String keyId = service.generateKeyId();
+        assertEquals(12, keyId.substring("rag_k_".length()).length());
+    }
+
+    @Test
+    void isExpired_nullExpiresAt_isNotExpired() throws Exception {
+        RagApiKey key = new RagApiKey();
+        key.setExpiresAt(null);
+        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
+        method.setAccessible(true);
+        assertFalse((Boolean) method.invoke(service, key));
+    }
+
+    @Test
+    void isExpired_futureDate_isNotExpired() throws Exception {
+        RagApiKey key = new RagApiKey();
+        key.setExpiresAt(LocalDateTime.now().plusDays(30));
+        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
+        method.setAccessible(true);
+        assertFalse((Boolean) method.invoke(service, key));
+    }
+
+    @Test
+    void isExpired_pastDate_isExpired() throws Exception {
+        RagApiKey key = new RagApiKey();
+        key.setExpiresAt(LocalDateTime.now().minusDays(1));
+        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
+        method.setAccessible(true);
+        assertTrue((Boolean) method.invoke(service, key));
+    }
+
+    @Test
+    void validateKeyEntity_expiredKey_notCached() {
+        String rawKey = "rag_sk_expired_test_key_0000000000000";
+        String hash = sha256(rawKey);
+        RagApiKey expiredKey = new RagApiKey();
+        expiredKey.setKeyId("rag_k_expired00001");
+        expiredKey.setKeyHash(hash);
+        expiredKey.setName("expired-test");
+        expiredKey.setEnabled(true);
+        expiredKey.setExpiresAt(LocalDateTime.now().minusDays(1));
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(expiredKey));
+
+        assertNull(service.validateKeyEntity(rawKey));
+        assertNull(getValidationCache().getIfPresent(hash));
+    }
+
+    @Test
+    void validateKeyEntity_disabledKey_notCached() {
+        String rawKey = "rag_sk_disabled_test_key_00000000000";
+        String hash = sha256(rawKey);
+        RagApiKey disabledKey = new RagApiKey();
+        disabledKey.setKeyId("rag_k_disabled001");
+        disabledKey.setKeyHash(hash);
+        disabledKey.setName("disabled-test");
+        disabledKey.setEnabled(false);
+        disabledKey.setExpiresAt(null);
+        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(disabledKey));
+
+        assertNull(service.validateKeyEntity(rawKey));
+        assertNull(getValidationCache().getIfPresent(hash));
+    }
+
+    // Helper to access static VALIDATED_KEY_CACHE via reflection
+    @SuppressWarnings("unchecked")
+    private Cache<String, RagApiKey> getValidationCache() {
+        try {
+            var field = ApiKeyManagementService.class.getDeclaredField("VALIDATED_KEY_CACHE");
+            field.setAccessible(true);
+            return (Cache<String, RagApiKey>) field.get(null);
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }
