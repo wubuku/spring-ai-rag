@@ -7,7 +7,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * OpenAiCompatibleAdapter 单元测试
+ * OpenAiCompatibleAdapter Unit Tests
  */
 class OpenAiCompatibleAdapterTest {
 

@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * DefaultDomainRagExtension 单元测试
+ * DefaultDomainRagExtension Unit Tests
  */
 class DefaultDomainRagExtensionTest {
 

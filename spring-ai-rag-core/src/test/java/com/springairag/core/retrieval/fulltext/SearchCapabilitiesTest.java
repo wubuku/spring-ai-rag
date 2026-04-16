@@ -11,7 +11,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * SearchCapabilities 单元测试
+ * SearchCapabilities Unit Tests
  *
  * <p>覆盖：
  * <ul>

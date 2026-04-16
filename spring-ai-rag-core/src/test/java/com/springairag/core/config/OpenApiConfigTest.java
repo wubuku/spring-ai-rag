@@ -8,7 +8,7 @@ import org.springdoc.core.customizers.OpenApiCustomizer;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * OpenApiConfig 单元测试
+ * OpenApiConfig Unit Tests
  */
 class OpenApiConfigTest {
 

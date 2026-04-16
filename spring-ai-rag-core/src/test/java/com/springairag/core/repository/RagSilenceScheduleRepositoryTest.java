@@ -16,7 +16,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagSilenceScheduleRepository 单元测试（使用 Mock）
+ * RagSilenceScheduleRepository Unit Tests (with Mock)
  */
 @ExtendWith(MockitoExtension.class)
 @DisplayName("RagSilenceScheduleRepository Tests")

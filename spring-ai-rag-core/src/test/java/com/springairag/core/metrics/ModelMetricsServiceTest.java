@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ModelMetricsService 单元测试
+ * Unit tests for ModelMetricsService.
  */
 @DisplayName("ModelMetricsService Tests")
 class ModelMetricsServiceTest {

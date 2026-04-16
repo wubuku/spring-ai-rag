@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ApiAdapterFactory 单元测试
+ * ApiAdapterFactory Unit Tests
  */
 class ApiAdapterFactoryTest {
 

@@ -12,7 +12,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CacheMetricsService 单元测试
+ * Unit tests for CacheMetricsService.
  */
 @DisplayName("CacheMetricsService Tests")
 class CacheMetricsServiceTest {

@@ -26,7 +26,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * AlertController 单元测试
+ * AlertController Unit Tests
  */
 class AlertControllerTest {
 

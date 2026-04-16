@@ -8,7 +8,7 @@ import java.util.concurrent.Executor;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * AsyncConfig 单元测试
+ * AsyncConfig Unit Tests
  */
 class AsyncConfigTest {
 

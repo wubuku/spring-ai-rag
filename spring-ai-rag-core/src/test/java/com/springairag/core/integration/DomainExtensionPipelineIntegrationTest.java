@@ -30,7 +30,7 @@ class DomainExtensionPipelineIntegrationTest {
     // ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("DefaultDomainRagExtension 的系统提示词包含 {context}")
+    @DisplayName("system prompt contains {context} placeholder")
     void defaultExtension_promptContainsContext() {
         DefaultDomainRagExtension def = new DefaultDomainRagExtension();
         assertTrue(def.getSystemPromptTemplate().contains("{context}"),
@@ -38,7 +38,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension 的检索配置合理")
+    @DisplayName("retrieval config has reasonable defaults")
     void defaultExtension_retrievalConfig_reasonable() {
         DefaultDomainRagExtension def = new DefaultDomainRagExtension();
         RetrievalConfig config = def.getRetrievalConfig();
@@ -52,7 +52,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension.isApplicable 接受所有查询")
+    @DisplayName("isApplicable accepts all queries")
     void defaultExtension_isApplicable_acceptsAll() {
         DefaultDomainRagExtension def = new DefaultDomainRagExtension();
 
@@ -63,7 +63,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension.postProcessAnswer 原样返回")
+    @DisplayName("postProcessAnswer returns input unchanged")
     void defaultExtension_postProcessAnswer_noOp() {
         DefaultDomainRagExtension def = new DefaultDomainRagExtension();
         assertEquals("原始回答", def.postProcessAnswer("原始回答"));
@@ -74,7 +74,7 @@ class DomainExtensionPipelineIntegrationTest {
     // ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("空 registry 初始化 hasExtensions 为 false")
+    @DisplayName("empty registry initializes hasExtensions to false")
     void emptyRegistry_hasNoExtensions() {
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of());
         assertFalse(registry.hasExtensions());
@@ -82,14 +82,14 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("null registry 不抛异常")
+    @DisplayName("null registry does not throw")
     void nullRegistry_doesNotThrow() {
         DomainExtensionRegistry registry = new DomainExtensionRegistry(null);
         assertFalse(registry.hasExtensions());
     }
 
     @Test
-    @DisplayName("注册扩展后可按 domainId 查找")
+    @DisplayName("registered extension can be found by domainId")
     void registry_lookupByDomainId() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
@@ -100,7 +100,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("未知 domainId 返回 null")
+    @DisplayName("unknown domainId returns null")
     void registry_unknownDomain_returnsNull() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
@@ -110,7 +110,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("null domainId 返回第一个注册的扩展（默认）")
+    @DisplayName("null domainId returns first registered extension (default)")
     void registry_nullDomainId_returnsFirst() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
@@ -121,7 +121,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("空白 domainId 也返回默认扩展")
+    @DisplayName("blank domainId also returns default extension")
     void registry_blankDomain_returnsDefault() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
@@ -131,7 +131,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("空 domainId 的扩展被跳过")
+    @DisplayName("empty domainId extension is skipped")
     void registry_blankDomainId_skipped() {
         TestBlankDomainExtension blank = new TestBlankDomainExtension();
         TestMedicalDomainExtension valid = new TestMedicalDomainExtension();
@@ -143,7 +143,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("getSystemPromptTemplate 正确委托给扩展")
+    @DisplayName("getSystemPromptTemplate correctly delegates to extension")
     void registry_getSystemPromptTemplate_delegates() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         DomainExtensionRegistry registry = new DomainExtensionRegistry(List.of(medical));
@@ -152,7 +152,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("多个扩展各自可查")
+    @DisplayName("multiple extensions each can be looked up")
     void registry_multipleExtensions_allFound() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         TestLegalDomainExtension legal = new TestLegalDomainExtension();
@@ -170,7 +170,7 @@ class DomainExtensionPipelineIntegrationTest {
     // ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("医疗扩展 — 高召回检索配置")
+    @DisplayName("medical extension — high-recall retrieval config")
     void medicalExtension_usesHighRecallConfig() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         RetrievalConfig config = medical.getRetrievalConfig();
@@ -186,7 +186,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — isApplicable 识别医学症状")
+    @DisplayName("medical extension — isApplicable recognizes medical symptoms")
     void medicalExtension_isApplicable_medicalSymptoms() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
 
@@ -203,7 +203,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — isApplicable 过滤非医学问题")
+    @DisplayName("medical extension — isApplicable filters non-medical issues")
     void medicalExtension_isApplicable_nonMedical() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
 
@@ -218,7 +218,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — 系统提示词包含 {context} 占位符")
+    @DisplayName("medical extension — system prompt contains {context} placeholder")
     void medicalExtension_promptContainsContextPlaceholder() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         assertTrue(medical.getSystemPromptTemplate().contains("{context}"),
@@ -226,7 +226,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — postProcessAnswer 添加就医提醒")
+    @DisplayName("medical extension — postProcessAnswer adds medical consultation reminder")
     void medicalExtension_postProcessAnswer_addsDisclaimer() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
 
@@ -238,7 +238,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — 不重复添加免责声明")
+    @DisplayName("medical extension — does not add duplicate disclaimer")
     void medicalExtension_postProcessAnswer_noDuplicate() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
 
@@ -250,7 +250,7 @@ class DomainExtensionPipelineIntegrationTest {
     }
 
     @Test
-    @DisplayName("医疗扩展 — null 答案返回 null")
+    @DisplayName("medical extension — null answer returns null")
     void medicalExtension_postProcessAnswer_nullAnswer() {
         TestMedicalDomainExtension medical = new TestMedicalDomainExtension();
         assertNull(medical.postProcessAnswer(null));
@@ -260,7 +260,7 @@ class DomainExtensionPipelineIntegrationTest {
     // 测试辅助类
     // ─────────────────────────────────────────────
 
-    /** 模拟医疗领域扩展（与 demo-domain-extension/MedicalRagExtension 行为一致） */
+    /** Simulated medical domain extension (consistent with MedicalRagExtension behavior). */
     static class TestMedicalDomainExtension implements DomainRagExtension {
         @Override
         public String getDomainId() { return "medical"; }
@@ -302,7 +302,7 @@ class DomainExtensionPipelineIntegrationTest {
         }
     }
 
-    /** 模拟法律领域扩展 */
+    /** Simulated legal domain extension. */
     static class TestLegalDomainExtension implements DomainRagExtension {
         @Override
         public String getDomainId() { return "legal"; }
@@ -334,7 +334,7 @@ class DomainExtensionPipelineIntegrationTest {
         }
     }
 
-    /** 空 domainId 的测试扩展（应被跳过） */
+    /** Test extension with empty domainId (should be skipped). */
     static class TestBlankDomainExtension implements DomainRagExtension {
         @Override
         public String getDomainId() { return ""; }

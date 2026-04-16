@@ -7,7 +7,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * MiniMaxAdapter 单元测试
+ * MiniMaxAdapter Unit Tests
  *
  * <p>MiniMax API 不支持 role: system，所有 system 消息会转为 user 消息。
  */

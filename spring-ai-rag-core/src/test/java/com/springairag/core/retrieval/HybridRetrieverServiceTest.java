@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * HybridRetrieverService 单元测试
+ * HybridRetrieverService Unit Tests
  *
  * <p>通过 mock EmbeddingModel 和 JdbcTemplate 测试混合检索逻辑。
  * 全文检索通过 PgTrgmFulltextProvider（mocked jdbcTemplate）实现。

@@ -13,7 +13,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * PgTrgmFulltextProvider 单元测试
+ * PgTrgmFulltextProvider Unit Tests
  */
 class PgTrgmFulltextProviderTest {
 

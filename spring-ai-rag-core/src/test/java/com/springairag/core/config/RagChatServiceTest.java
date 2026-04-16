@@ -30,7 +30,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagChatService 单元测试
+ * RagChatService Unit Tests
  */
 class RagChatServiceTest {
 

@@ -7,7 +7,7 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * CorsConfig 单元测试
+ * CorsConfig Unit Tests
  */
 class CorsConfigTest {
 

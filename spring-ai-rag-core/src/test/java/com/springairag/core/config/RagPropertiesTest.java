@@ -8,7 +8,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RagProperties 单元测试
+ * RagProperties Unit Tests
  *
  * 验证默认值、setter/getter、嵌套类结构。
  */

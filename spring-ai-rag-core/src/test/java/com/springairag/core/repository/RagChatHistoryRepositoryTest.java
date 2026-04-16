@@ -18,7 +18,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagChatHistoryRepository 单元测试
+ * RagChatHistoryRepository Unit Tests
  *
  * <p>测试 JPA 封装层的行为，mock RagChatHistoryJpaRepository 和 JdbcTemplate。
  */

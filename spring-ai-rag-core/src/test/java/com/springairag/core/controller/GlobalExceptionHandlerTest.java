@@ -28,7 +28,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * GlobalExceptionHandler 单元测试 — 含 RFC 7807 字段验证
+ * GlobalExceptionHandler Unit Tests - including RFC 7807 field validation
  */
 class GlobalExceptionHandlerTest {
 
