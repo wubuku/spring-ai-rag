@@ -2,12 +2,16 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.CacheInvalidateResponse;
 import com.springairag.api.dto.CacheStatsResponse;
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import org.springframework.beans.factory.annotation.Autowired;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.ResponseEntity;
 
@@ -42,22 +46,33 @@ public class CacheMetricsController {
      *
      * @return cache hit/miss counts and hit rate
      */
-    @Operation(summary = "Get cache statistics", description = "Returns embedding cache hit/miss counts and hit rate")
-    @ApiResponse(responseCode = "200", description = "Returns cache statistics")
+    @Operation(summary = "Get cache statistics",
+               description = "Returns embedding cache hit/miss counts and hit rate.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Returns cache statistics"),
+        @ApiResponse(responseCode = "500", description = "Internal server error",
+                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @GetMapping("/stats")
     public ResponseEntity<CacheStatsResponse> getCacheStats() {
         return ResponseEntity.ok(CacheStatsResponse.from(cacheMetricsService.getStats()));
     }
 
     /**
-     * Clear embedding cache
+     * Clear embedding cache.
      *
-     * <p>Admin endpoint: clears Caffeine local cache, forcing subsequent embedding requests to call the API again.
+     * <p>Admin endpoint: clears Caffeine local cache, forcing subsequent embedding
+     * requests to call the external API again.
      *
      * @return the number of cache entries cleared
      */
-    @Operation(summary = "Clear embedding cache", description = "Admin endpoint: clears Caffeine local embedding cache, forcing re-embedding. Returns the number of cache entries cleared.")
-    @ApiResponse(responseCode = "200", description = "Returns the number of cache entries cleared")
+    @Operation(summary = "Clear embedding cache",
+               description = "Admin endpoint: clears Caffeine local embedding cache, forcing re-embedding. Returns the number of cache entries cleared.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Returns the number of cache entries cleared"),
+        @ApiResponse(responseCode = "500", description = "Internal server error",
+                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
     @DeleteMapping("/invalidate")
     public ResponseEntity<CacheInvalidateResponse> invalidateCache() {
         int cleared = cacheMetricsService.clearCache();

@@ -1,10 +1,13 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.ComponentHealthResponse;
+import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.HealthResponse;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.versioning.ApiVersion;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -40,9 +43,12 @@ public class RagHealthController {
     /**
      * Overall health check.
      */
-    @Operation(summary = "Health check", description = "Returns overall status and component summaries.")
+    @Operation(summary = "Health check",
+               description = "Returns overall status and component summaries (UP/DEGRADED/DOWN).")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns health status (UP/DEGRADED/DOWN) and each component status"),
+            @ApiResponse(responseCode = "500", description = "Internal server error",
+                         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/health")
     public ResponseEntity<HealthResponse> health() {
@@ -62,9 +68,12 @@ public class RagHealthController {
     /**
      * Component-level detailed health check.
      */
-    @Operation(summary = "Component detailed status", description = "Returns detailed health information for each component, including latency, version, table counts, etc.")
+    @Operation(summary = "Component detailed status",
+               description = "Returns detailed health information for each component, including latency, version, table counts, etc.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns detailed status info for each component (database/pgvector/tables/cache)"),
+            @ApiResponse(responseCode = "500", description = "Internal server error",
+                         content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @GetMapping("/health/components")
     public ResponseEntity<ComponentHealthResponse> healthComponents() {
