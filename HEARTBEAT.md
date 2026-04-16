@@ -1,3 +1,5 @@
+> - 2026-04-16 20:23 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,311KB index + 346KB BarChart chunk)/ E2E 11/12 ✅(Search 失败:数据库为空,已知环境问题,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
 > - 2026-04-16 20:21 - ✅ T11 SlowQueryMetricsService 测试覆盖提升:扫描发现 SlowQueryMetricsServiceTest 缺失 5 个边界测试--maxRetained=0 跳过队列保留/threshold=0 记录所有查询/initially empty空列表/null SQL 计数器仍递增/null SQL 脱敏安全;12→17 tests;全量测试✅;commit b982ccf 已推送
 
 > - 2026-04-16 18:22 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,311KB index + 346KB BarChart chunk)/ E2E 11/12 ✅(Search 失败:数据库为空,已知环境问题,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP,tables=DEGRADED);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
