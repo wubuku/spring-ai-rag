@@ -2965,7 +2965,7 @@ PDF 端点测试(Section 16,9 tests):
 | T10 | ChatExportService CSV 导出边界测试 | 测试覆盖 | ✅ 2026-04-14 |
 | T11 | SlowQueryMetricsService 测试覆盖提升 | 测试覆盖 | ⏳ |
 | T12 | RetrievalEvaluationService 覆盖率提升(评测阈值边界) | 测试覆盖 | ✅ 2026-04-16(T12 完成:+9 boundary tests,k=1/0/>retrieved/duplicates/NDCG edge + parseJudge score clamping+defaults;23→32 tests;2243 tests pass;k<=0 guard fix;commit 9f7b8a3)|
-| T13 | ApiKeyManagementService 加密相关测试 | 安全 | ⏳ |
+| T13 | ApiKeyManagementService 加密相关测试 | 安全 | ✅ 2026-04-16(T13 完成:+14 tests,sha256 consistency/format/diff + generateRawKey/KeyId format + isExpired boundary + expired/disabled not cached;25→39 tests;2257 tests pass;commit b5c42ba)|
 | T14 | SseEmitters 单元测试(Error/Heartbeat 路径) | 测试覆盖 | ✅ 2026-04-16(30 tests, sendProgress/sendDone/sendError/sendHeartbeat/execute/sendRaw/escapeJson 全覆盖) |
 
 ## Cron 进度(2026-04-13 03:47 - PdfImportService 单元测试)
