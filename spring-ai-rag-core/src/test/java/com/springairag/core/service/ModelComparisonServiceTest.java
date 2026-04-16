@@ -27,7 +27,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * ModelComparisonService 单元测试
+ * ModelComparisonService unit tests
  */
 class ModelComparisonServiceTest {
 
@@ -100,7 +100,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("单模型对比成功")
+    @DisplayName("Single model comparison succeeds")
     void compareModels_singleModel_success() {
         ChatModel model = mockModel("回答A", 0);
         Map<String, ChatModel> models = Map.of("deepseek", model);
@@ -117,7 +117,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("多模型并行对比——两个模型都成功")
+    @DisplayName("Parallel multi-model comparison - both models succeed")
     void compareModels_twoModels_bothSucceed() {
         ChatModel modelA = mockModel("DeepSeek 回答", 0);
         ChatModel modelB = mockModel("Claude 回答", 0);
@@ -137,7 +137,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("多模型对比——一个成功一个失败")
+    @DisplayName("Multi-model comparison - one succeeds, one fails")
     void compareModels_oneSuccessOneFailure() {
         ChatModel goodModel = mockModel("好的回答", 0);
         ChatModel badModel = mockFailingModel("API 错误");
@@ -157,7 +157,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("带 token 用量统计")
+    @DisplayName("Token usage statistics are recorded correctly")
     void compareModels_withTokenUsage() {
         ChatModel model = mockModelWithUsage("回答", 50, 100);
         Map<String, ChatModel> models = Map.of("gpt-4", model);
@@ -172,7 +172,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("延迟测量准确——响应慢的模型 latencyMs 更大")
+    @DisplayName("Latency measurement is accurate - slower model has larger latencyMs")
     void compareModels_latencyMeasured() {
         ChatModel fastModel = mockModel("快", 10);
         ChatModel slowModel = mockModel("慢", 100);
@@ -186,11 +186,11 @@ class ModelComparisonServiceTest {
 
         assertEquals(2, results.size());
         assertTrue(results.get(1).getLatencyMs() > results.get(0).getLatencyMs(),
-                "慢模型的延迟应该大于快模型");
+                "Slower model should have larger latency than faster model");
     }
 
     @Test
-    @DisplayName("空模型 Map 返回空结果")
+    @DisplayName("Empty model Map returns empty results")
     void compareModels_emptyModels_returnsEmpty() {
         List<ModelComparisonService.ModelComparisonResult> results =
                 service.compareModels("测试", Map.of(), 30);
@@ -198,7 +198,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("null 模型 Map 返回空结果")
+    @DisplayName("Null model Map returns empty results")
     void compareModels_nullModels_returnsEmpty() {
         List<ModelComparisonService.ModelComparisonResult> results =
                 service.compareModels("测试", null, 30);
@@ -206,7 +206,7 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("ModelComparisonResult.failure 工厂方法")
+    @DisplayName("ModelComparisonResult.failure factory method")
     void modelComparisonResult_failureFactory() {
         var r = ModelComparisonService.ModelComparisonResult.failure("test-model", "超时");
         assertFalse(r.isSuccess());
@@ -217,13 +217,13 @@ class ModelComparisonServiceTest {
     }
 
     @Test
-    @DisplayName("InterruptedException 时中断状态被恢复且结果降级为失败")
+    @DisplayName("InterruptedException restores interrupt status and degrades to failure")
     void compareModels_interruptedException_restoresInterruptAndFails() {
-        // 使用会立即抛出 InterruptedException 的 Callable
+        // Uses a Callable that throws InterruptedException immediately
         ExecutorService interruptingExecutor = mock(ExecutorService.class);
         Future<ModelComparisonService.ModelComparisonResult> future = mock(Future.class);
         try {
-            doThrow(new InterruptedException("线程被中断"))
+            doThrow(new InterruptedException("Thread was interrupted"))
                     .when(future).get(anyLong(), any(TimeUnit.class));
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -232,29 +232,29 @@ class ModelComparisonServiceTest {
 
         ModelComparisonService svc = new ModelComparisonService(interruptingExecutor, modelRegistry);
 
-        // 在调用前检查中断状态
+        // Check interrupt status before the call
         boolean beforeInterrupt = Thread.currentThread().isInterrupted();
         List<ModelComparisonService.ModelComparisonResult> results =
-                svc.compareModels("测试", Map.of("model-a", mock(ChatModel.class)), 5);
+                svc.compareModels("test", Map.of("model-a", mock(ChatModel.class)), 5);
 
         assertEquals(1, results.size());
         assertFalse(results.get(0).isSuccess());
         assertTrue(results.get(0).getError().contains("Interrupted"));
-        // InterruptedException 被 catch 后，interrupt() 被调用恢复中断状态
-        // 即便调用前未中断，catch 后也会设置为 true
+        // After InterruptedException is caught, interrupt() is called to restore interrupt status
+        // Even if not interrupted before, it will be set to true after catch
         assertTrue(Thread.currentThread().isInterrupted() || beforeInterrupt,
-                "中断状态应在处理后被恢复（设置为 true）");
-        // 清理：恢复中断状态以便后续测试
+                "Interrupt status should be restored (set to true) after handling");
+        // Cleanup: restore interrupt status for subsequent tests
         Thread.interrupted();
     }
 
     @Test
-    @DisplayName("TimeoutException 时结果降级为失败")
+    @DisplayName("TimeoutException degrades result to failure")
     void compareModels_timeoutException_returnsFailureResult() {
         ExecutorService timeoutExecutor = mock(ExecutorService.class);
         Future<ModelComparisonService.ModelComparisonResult> future = mock(Future.class);
         try {
-            doThrow(new TimeoutException("模型响应超时"))
+            doThrow(new TimeoutException("Model response timeout"))
                     .when(future).get(anyLong(), any(TimeUnit.class));
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -264,10 +264,10 @@ class ModelComparisonServiceTest {
         ModelComparisonService svc = new ModelComparisonService(timeoutExecutor, modelRegistry);
 
         List<ModelComparisonService.ModelComparisonResult> results =
-                svc.compareModels("测试", Map.of("model-x", mock(ChatModel.class)), 2);
+                svc.compareModels("test", Map.of("model-x", mock(ChatModel.class)), 2);
 
         assertEquals(1, results.size());
         assertFalse(results.get(0).isSuccess());
-        assertEquals("模型响应超时", results.get(0).getError());
+        assertEquals("Model response timeout", results.get(0).getError());
     }
 }
