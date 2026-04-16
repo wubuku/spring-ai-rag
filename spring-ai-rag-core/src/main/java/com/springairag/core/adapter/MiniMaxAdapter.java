@@ -9,8 +9,8 @@ package com.springairag.core.adapter;
  * to user because the system role is not supported.
  *
  * <p>Verified:
- * - ❌ role: system → 400 error "invalid message role: system"
- * - ✅ All system messages → converted to user messages
+ * - role: system is not supported (returns 400 "invalid message role: system")
+ * - All system messages are converted to user messages (with [System] prefix)
  */
 public class MiniMaxAdapter implements ApiCompatibilityAdapter {
 
