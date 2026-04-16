@@ -1,5 +1,6 @@
 # HEARTBEAT.md - cron 任务指令
 
+> - 2026-04-16 16:22 - ✅ 后端主动巡检:catch(Exception) 韧性注释补全--PdfImportController 6处(convert/import/SSE stream/SSE trigger/urlDecode)、RagDocumentController 1处(file read)、QueryRewritingService 1处(LLM retry exhausted);core 模块全部 catch(Exception) 现已携带意图注释;2166 tests 全通过;commit 5e9df71 已推送
 > - 2026-04-16 15:37 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 11/12 ❌(Search 失败:空数据库,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
