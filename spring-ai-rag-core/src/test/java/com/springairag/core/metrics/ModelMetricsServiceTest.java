@@ -1,10 +1,13 @@
 package com.springairag.core.metrics;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -128,5 +131,69 @@ class ModelMetricsServiceTest {
     @DisplayName("Error rate for non-existent provider should be zero")
     void errorRate_nonExistent_returnsZero() {
         assertEquals(0.0, modelMetricsService.getErrorRate("nonexistent"));
+    }
+
+    @Test
+    @DisplayName("Timer should accumulate count across multiple recordings")
+    void timer_accumulatesCountAcrossMultipleRecordings() {
+        modelMetricsService.recordSuccess("deepseek", 100);
+        modelMetricsService.recordSuccess("deepseek", 200);
+        modelMetricsService.recordSuccess("deepseek", 300);
+
+        Timer timer = meterRegistry.find("rag.model.latency").tag("provider", "deepseek").timer();
+        assertNotNull(timer);
+        assertEquals(3, timer.count()); // 3 recordings
+    }
+
+    @Test
+    @DisplayName("Timer should accumulate total time correctly")
+    void timer_accumulatesTotalTime() {
+        modelMetricsService.recordSuccess("deepseek", 100);
+        modelMetricsService.recordSuccess("deepseek", 200);
+        modelMetricsService.recordSuccess("deepseek", 300);
+
+        Timer timer = meterRegistry.find("rag.model.latency").tag("provider", "deepseek").timer();
+        assertNotNull(timer);
+        // Total time = 100 + 200 + 300 = 600ms
+        assertEquals(600, timer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS), 0.1);
+    }
+
+    @Test
+    @DisplayName("Zero-latency call should be recorded correctly")
+    void zeroLatency_call_recorded() {
+        modelMetricsService.recordSuccess("deepseek", 0);
+
+        assertEquals(1, modelMetricsService.getCallCount("deepseek"));
+        assertEquals(0.0, modelMetricsService.getErrorRate("deepseek"));
+    }
+
+    @Test
+    @DisplayName("Error call should also record latency")
+    void error_call_recordsLatency() {
+        modelMetricsService.recordError("anthropic", 500);
+
+        Timer timer = meterRegistry.find("rag.model.latency").tag("provider", "anthropic").timer();
+        assertNotNull(timer);
+        assertEquals(1, timer.count());
+        assertEquals(500, timer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS), 0.1);
+    }
+
+    @Test
+    @DisplayName("Multiple providers should each have independent timers")
+    void multipleProviders_independentTimers() {
+        modelMetricsService.recordSuccess("deepseek", 100);
+        modelMetricsService.recordSuccess("anthropic", 200);
+        modelMetricsService.recordSuccess("deepseek", 150);
+        modelMetricsService.recordError("anthropic", 300);
+
+        Timer deepseekTimer = meterRegistry.find("rag.model.latency").tag("provider", "deepseek").timer();
+        Timer anthropicTimer = meterRegistry.find("rag.model.latency").tag("provider", "anthropic").timer();
+
+        assertNotNull(deepseekTimer);
+        assertNotNull(anthropicTimer);
+        assertEquals(2, deepseekTimer.count()); // 2 deepseek calls
+        assertEquals(2, anthropicTimer.count()); // 2 anthropic calls (1 success + 1 error)
+        assertEquals(250, deepseekTimer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS), 0.1);
+        assertEquals(500, anthropicTimer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS), 0.1);
     }
 }
