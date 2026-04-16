@@ -1,6 +1,6 @@
 # HEARTBEAT.md - cron 任务指令
 
-> - 2026-04-16 14:50 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 11/12 ❌(Search 失败:空数据库,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-16 15:37 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 11/12 ❌(Search 失败:空数据库,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 2026-04-16 14:45 - ✅ 后端主动巡检:DTO 测试补全--为 12 个未测试的 Response/Request 类新增 24 个单元测试(AnswerQualityRequest/Response,ClientErrorRequest,Collection系列Response,DocumentAddedResponse,ChatHistoryResponse,BatchCreateAndEmbedRequest/Response,ApiSloComplianceResponse+EndpointSlo+LatencyStats);api module 128→152 tests(+24);mvn test ✅(全通过,BUILD SUCCESS);commit 9ca46e1 已推送
