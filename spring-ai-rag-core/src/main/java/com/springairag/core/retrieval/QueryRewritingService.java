@@ -205,7 +205,7 @@ public class QueryRewritingService {
                     }
                     return llmCall.get();
                 });
-            } catch (Exception e) {
+            } catch (Exception e) { // Resilience: retry exhausted, fall back to original query
                 Throwable cause = e.getCause() != null ? e.getCause() : e;
                 log.warn("LLM rewrite failed after retries: {}", cause.getMessage());
                 throw e instanceof RuntimeException ? (RuntimeException) e : new RuntimeException(cause);

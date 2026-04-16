@@ -702,7 +702,7 @@ public class RagDocumentController {
                 title = title.substring(0, title.lastIndexOf('.'));
             }
             return new FileContentResult(title, content, null);
-        } catch (Exception e) {
+        } catch (Exception e) { // best-effort: error already sent via completeWithError
             return new FileContentResult(null, null, "Failed to read file: " + e.getMessage());
         }
     }

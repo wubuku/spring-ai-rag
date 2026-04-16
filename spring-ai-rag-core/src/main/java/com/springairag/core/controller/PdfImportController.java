@@ -118,7 +118,7 @@ public class PdfImportController {
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: convert
             log.error("PDF import failed for '{}': {}", filename, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF import failed: " + e.getMessage()));
@@ -215,7 +215,7 @@ public class PdfImportController {
 
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: import
             log.error("PDF-to-RAG import failed for '{}': {}", filename, e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
@@ -262,7 +262,7 @@ public class PdfImportController {
 
                 SseEmitters.sendDone(emitter, doneData);
 
-            } catch (Exception e) {
+            } catch (Exception e) { // Resilience: SSE stream failure (client disconnected)
                 log.error("PDF-to-RAG SSE embedding failed: {}", e.getMessage());
                 SseEmitters.sendError(emitter, e.getMessage(), Map.of(
                         "uuid", importResult.uuid(),
@@ -353,7 +353,7 @@ public class PdfImportController {
                 ));
             } catch (IllegalArgumentException e) {
                 return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-            } catch (Exception e) {
+            } catch (Exception e) { // Resilience: trigger
                 log.error("Trigger embedding failed for uuid={}: {}", uuid, e.getMessage());
                 return ResponseEntity.internalServerError()
                         .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));
@@ -394,7 +394,7 @@ public class PdfImportController {
 
             } catch (IllegalArgumentException e) {
                 SseEmitters.sendError(emitter, e.getMessage(), Map.of("uuid", uuid));
-            } catch (Exception e) {
+            } catch (Exception e) { // Resilience: SSE trigger (client disconnected)
                 log.error("Trigger embedding SSE failed for uuid={}: {}", uuid, e.getMessage());
                 SseEmitters.sendError(emitter, e.getMessage(), Map.of("uuid", uuid));
             }
@@ -679,7 +679,7 @@ public class PdfImportController {
     private String urlDecode(String path) {
         try {
             return URLDecoder.decode(path, StandardCharsets.UTF_8);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: malformed URL encoding
             return path;
         }
     }
