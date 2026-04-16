@@ -155,7 +155,7 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
     @Override
     public EvaluationMetrics calculateMetrics(List<Long> retrieved, List<Long> relevant, int k) {
-        if (retrieved == null || relevant == null || retrieved.isEmpty() || relevant.isEmpty()) {
+        if (retrieved == null || relevant == null || retrieved.isEmpty() || relevant.isEmpty() || k <= 0) {
             return new EvaluationMetrics(Map.of(), Map.of(), 0.0, 0.0, 0.0);
         }
 

@@ -152,6 +152,147 @@ class RetrievalEvaluationServiceImplTest {
         assertEquals(1.0 / 3, metrics.getRecallAtK().get(5), 0.0001);
     }
 
+    // ==================== T12: Evaluation threshold boundary tests ====================
+
+    @Test
+    @DisplayName("calculateMetrics: evaluationK=1 returns single-position metrics only")
+    void calculateMetrics_evaluationK1_singlePosition() {
+        List<Long> retrieved = List.of(1L, 2L, 3L);
+        List<Long> relevant = List.of(1L, 2L, 3L);
+
+        RetrievalEvaluationService.EvaluationMetrics metrics = service.calculateMetrics(retrieved, relevant, 1);
+
+        assertEquals(1.0, metrics.getMrr());  // first result hit
+        assertEquals(1.0, metrics.getHitRate());
+        assertEquals(1, metrics.getPrecisionAtK().size());  // only k=1
+        assertEquals(1.0, metrics.getPrecisionAtK().get(1));
+    }
+
+    @Test
+    @DisplayName("calculateMetrics: evaluationK larger than retrieved list pads remaining positions")
+    void calculateMetrics_evaluationKLargerThanRetrieved_padsPositions() {
+        List<Long> retrieved = List.of(1L, 2L);  // only 2 results
+        List<Long> relevant = List.of(1L, 2L, 3L, 4L, 5L);  // 5 relevant
+
+        RetrievalEvaluationService.EvaluationMetrics metrics = service.calculateMetrics(retrieved, relevant, 10);
+
+        assertEquals(10, metrics.getPrecisionAtK().size());  // padded to k=10 positions
+        assertEquals(1.0, metrics.getPrecisionAtK().get(2));  // 2 hits / 2 positions = 1.0
+    }
+
+    @Test
+    @DisplayName("calculateMetrics: evaluationK=0 returns zero metrics")
+    void calculateMetrics_evaluationK0_returnsZeros() {
+        List<Long> retrieved = List.of(1L, 2L, 3L);
+        List<Long> relevant = List.of(1L, 2L, 3L);
+
+        RetrievalEvaluationService.EvaluationMetrics metrics = service.calculateMetrics(retrieved, relevant, 0);
+
+        assertEquals(0.0, metrics.getMrr());
+        assertEquals(0.0, metrics.getNdcg());
+        assertEquals(0.0, metrics.getHitRate());
+    }
+
+    @Test
+    @DisplayName("calculateMetrics: duplicate relevant docs in retrieved list")
+    void calculateMetrics_duplicateRelevantDocs_mrrLower() {
+        List<Long> retrieved = List.of(1L, 2L, 1L, 3L);
+        List<Long> relevant = List.of(1L, 2L, 3L);
+
+        RetrievalEvaluationService.EvaluationMetrics metrics = service.calculateMetrics(retrieved, relevant, 5);
+
+        assertEquals(1.0, metrics.getMrr());  // first relevant (1) at position 0 -> 1.0
+        assertEquals(1.0, metrics.getHitRate());
+    }
+
+    @Test
+    @DisplayName("calculateMetrics: relevant set smaller than k, NDCG computed correctly")
+    void calculateMetrics_relevantSmallerThanK_ndcgCorrect() {
+        List<Long> retrieved = List.of(1L, 2L, 3L);
+        List<Long> relevant = List.of(1L);  // only 1 relevant doc
+
+        RetrievalEvaluationService.EvaluationMetrics metrics = service.calculateMetrics(retrieved, relevant, 5);
+
+        assertEquals(1.0, metrics.getNdcg(), 0.0001);  // DCG=IDCG=1.0
+    }
+
+    @Test
+    @DisplayName("parseJudgeResponse: score below 1 is clamped to 1")
+    void parseJudgeResponse_scoreBelow1_clampedTo1() throws Exception {
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), null, null, ragProperties);
+        var method = RetrievalEvaluationServiceImpl.class.getDeclaredMethod(
+                "parseJudgeResponse", String.class);
+        method.setAccessible(true);
+
+        RetrievalEvaluationService.AnswerQualityResult result = (RetrievalEvaluationService.AnswerQualityResult) method.invoke(
+                svc, """
+                { "groundedness": 0, "relevance": -1, "helpfulness": 1,
+                  "reasoning": "Scores below 1 should be clamped.", "recommendation": "REJECT" }""");
+
+        assertEquals(1, result.getGroundedness());  // clamped from 0 to 1
+        assertEquals(1, result.getRelevance());    // clamped from -1 to 1
+        assertEquals(1, result.getHelpfulness());  // within range, unchanged
+    }
+
+    @Test
+    @DisplayName("parseJudgeResponse: score above 5 is clamped to 5")
+    void parseJudgeResponse_scoreAbove5_clampedTo5() throws Exception {
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), null, null, ragProperties);
+        var method = RetrievalEvaluationServiceImpl.class.getDeclaredMethod(
+                "parseJudgeResponse", String.class);
+        method.setAccessible(true);
+
+        RetrievalEvaluationService.AnswerQualityResult result = (RetrievalEvaluationService.AnswerQualityResult) method.invoke(
+                svc, """
+                { "groundedness": 10, "relevance": 6, "helpfulness": 100,
+                  "reasoning": "Scores above 5 should be clamped.", "recommendation": "ACCEPT" }""");
+
+        assertEquals(5, result.getGroundedness());  // clamped from 10 to 5
+        assertEquals(5, result.getRelevance());     // clamped from 6 to 5
+        assertEquals(5, result.getHelpfulness());   // clamped from 100 to 5
+    }
+
+    @Test
+    @DisplayName("parseJudgeResponse: missing scores default to 3")
+    void parseJudgeResponse_missingScores_defaultTo3() throws Exception {
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), null, null, ragProperties);
+        var method = RetrievalEvaluationServiceImpl.class.getDeclaredMethod(
+                "parseJudgeResponse", String.class);
+        method.setAccessible(true);
+
+        RetrievalEvaluationService.AnswerQualityResult result = (RetrievalEvaluationService.AnswerQualityResult) method.invoke(
+                svc, """
+                { "reasoning": "No scores provided.", "recommendation": "ACCEPT" }""");
+
+        assertEquals(3, result.getGroundedness());  // default 3
+        assertEquals(3, result.getRelevance());     // default 3
+        assertEquals(3, result.getHelpfulness());  // default 3
+    }
+
+    @Test
+    @DisplayName("parseJudgeResponse: recommendation missing defaults to REVISION")
+    void parseJudgeResponse_recommendationMissing_defaultsToRevision() throws Exception {
+        RetrievalEvaluationServiceImpl svc =
+                new RetrievalEvaluationServiceImpl(repository, new ObjectMapper(),
+                        new SimpleMeterRegistry(), null, null, ragProperties);
+        var method = RetrievalEvaluationServiceImpl.class.getDeclaredMethod(
+                "parseJudgeResponse", String.class);
+        method.setAccessible(true);
+
+        RetrievalEvaluationService.AnswerQualityResult result = (RetrievalEvaluationService.AnswerQualityResult) method.invoke(
+                svc, """
+                { "groundedness": 4, "relevance": 4, "helpfulness": 4,
+                  "reasoning": "No recommendation provided." }""");
+
+        assertEquals("REVISION", result.getRecommendation());  // default
+    }
+
     // ==================== evaluate ====================
 
     @Test
