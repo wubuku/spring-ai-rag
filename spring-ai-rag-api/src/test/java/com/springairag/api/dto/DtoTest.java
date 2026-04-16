@@ -1007,4 +1007,24 @@ class DtoTest {
         assertEquals("Spring AI Guide", r.getTitle());
         assertEquals("manual", r.getMetadata().get("source"));
     }
+
+    // ========== ResolveAlertRequest ==========
+
+    @Test
+    void resolveAlertRequest_constructorAndGetters() {
+        var req = new ResolveAlertRequest("Service restarted after upgrade");
+        assertEquals("Service restarted after upgrade", req.resolution());
+    }
+
+    @Test
+    void resolveAlertRequest_nullResolution() {
+        var req = new ResolveAlertRequest(null);
+        assertNull(req.resolution());
+    }
+
+    @Test
+    void resolveAlertRequest_emptyResolution() {
+        var req = new ResolveAlertRequest("");
+        assertEquals("", req.resolution());
+    }
 }
