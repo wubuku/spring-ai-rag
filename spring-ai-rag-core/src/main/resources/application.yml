@@ -25,6 +25,12 @@ spring:
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
 
+  # File upload configuration (20MB max per file)
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 100MB
+
   # DataSource + HikariCP connection pool tuning
   datasource:
     url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DATABASE:spring_ai_rag_dev}
