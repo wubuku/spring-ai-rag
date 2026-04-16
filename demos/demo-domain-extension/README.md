@@ -1,12 +1,12 @@
-# Demo: 领域扩展（Domain Extension）
+# Demo: Domain Extension
 
-展示如何通过 `DomainRagExtension` + `PromptCustomizer` 为通用 RAG 框架添加特定领域能力。
+Demonstrates how to add domain-specific capabilities to the generic RAG framework via `DomainRagExtension` + `PromptCustomizer`.
 
-本示例以**医疗问诊**为例，但相同的模式适用于任何领域。
+This example uses **medical consultation** as the domain, but the same pattern applies to any domain.
 
-## 三步添加新领域
+## Three Steps to Add a New Domain
 
-### 第 1 步：实现 DomainRagExtension
+### Step 1: Implement DomainRagExtension
 
 ```java
 @Component
@@ -14,28 +14,28 @@ public class MedicalRagExtension implements DomainRagExtension {
 
     @Override
     public String getDomainId() {
-        return "medical";  // 领域唯一标识
+        return "medical";  // Unique domain identifier
     }
 
     @Override
     public String getSystemPromptTemplate() {
         return """
-            你是一个专业的医疗问诊助手...
-            参考资料：{context}
-            """;  // 使用 {context} 占位符
+            You are a professional medical consultation assistant...
+            Reference materials: {context}
+            """;  // Use {context} placeholder
     }
 
     @Override
     public RetrievalConfig getRetrievalConfig() {
         return RetrievalConfig.builder()
-            .maxResults(15)     // 高召回率
+            .maxResults(15)     // High recall rate
             .minScore(0.3)
             .build();
     }
 }
 ```
 
-### 第 2 步（可选）：实现 PromptCustomizer
+### Step 2 (Optional): Implement PromptCustomizer
 
 ```java
 @Component
@@ -44,85 +44,85 @@ public class MedicalPromptCustomizer implements PromptCustomizer {
     @Override
     public String customizeUserMessage(String original, Map<String, Object> metadata) {
         if ("medical".equals(metadata.get("domainId"))) {
-            return "[问诊模式] 用户咨询：" + original;
+            return "[Consultation Mode] User inquiry: " + original;
         }
         return original;
     }
 }
 ```
 
-### 第 3 步：调用时传入 domainId
+### Step 3: Pass domainId When Calling
 
 ```java
-// 方式 1：通过 ChatRequest
+// Method 1: Via ChatRequest
 ChatRequest request = new ChatRequest();
-request.setMessage("头疼怎么办");
-request.setDomainId("medical");  // 指定领域
+request.setMessage("What should I do for a headache?");
+request.setDomainId("medical");  // Specify domain
 ChatResponse response = ragChatService.chat(request);
 
-// 方式 2：简洁调用
-String answer = ragChatService.chat("头疼怎么办", sessionId, "medical", null);
+// Method 2: Direct call
+String answer = ragChatService.chat("What should I do for a headache?", sessionId, "medical", null);
 ```
 
-## API 接口
+## API Endpoints
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/medical/consult` | 医疗问诊（完整模式，含引用来源） |
-| GET | `/api/v1/medical/quick?q=头疼` | 快速问诊（简版接口） |
-| POST | `/api/v1/medical/general` | 普通问答（不使用领域扩展，对比效果） |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/medical/consult` | Medical consultation (full mode with citations) |
+| GET | `/api/v1/medical/quick?q=headache` | Quick consultation (simplified) |
+| POST | `/api/v1/medical/general` | General Q&A (no domain extension, for comparison) |
 
-### 请求示例
+### Request Examples
 
 ```bash
-# 医疗问诊
+# Medical consultation
 curl -X POST http://localhost:8081/api/v1/medical/consult \
   -H "Content-Type: application/json" \
-  -d '{"message": "最近总是头疼，特别是下午，是怎么回事？"}'
+  -d '{"message": "I have been having headaches lately, especially in the afternoon. What could be the cause?"}'
 
-# 快速问诊
-curl "http://localhost:8081/api/v1/medical/quick?q=发烧38.5度怎么办"
+# Quick consultation
+curl "http://localhost:8081/api/v1/medical/quick?q=I have a fever of 38.5 degrees, what should I do?"
 
-# 对比：普通问答（无领域扩展）
+# Comparison: General Q&A (no domain extension)
 curl -X POST http://localhost:8081/api/v1/medical/general \
   -H "Content-Type: application/json" \
-  -d '{"message": "头疼是怎么回事？"}'
+  -d '{"message": "What causes headaches?"}'
 ```
 
-## 前置条件
+## Prerequisites
 
-与 [demo-basic-rag](../demo-basic-rag) 相同：
+Same as [demo-basic-rag](../demo-basic-rag):
 - PostgreSQL + pgvector
 - DeepSeek API Key
-- SiliconFlow API Key（嵌入模型）
+- SiliconFlow API Key (Embedding Model)
 
-## 启动
+## Startup
 
 ```bash
-# 先构建主项目并安装到本地仓库
+# First, build the main project and install to local repository
 cd /path/to/spring-ai-rag
 mvn clean install -DskipTests
 
-# 启动 demo
+# Start the demo
 cd demos/demo-domain-extension
 mvn spring-boot:run -Dspring-boot.run.arguments="--DEEPSEEK_API_KEY=sk-xxx --SILICONFLOW_API_KEY=sk-xxx"
 ```
 
-## 扩展更多领域
+## Extending to More Domains
 
-添加新领域只需：
-1. 新建 `XxxRagExtension implements DomainRagExtension`
-2. 添加 `@Component` 注解
-3. 调用时传入对应的 `domainId`
+Adding a new domain only requires:
+1. Create `XxxRagExtension implements DomainRagExtension`
+2. Add `@Component` annotation
+3. Pass the corresponding `domainId` when calling
 
-不需要修改任何框架代码。每个领域扩展独立开发、独立测试、独立部署。
+No framework code needs to be modified. Each domain extension is developed, tested, and deployed independently.
 
-## 扩展机制说明
+## Extension Mechanism
 
-| 组件 | 作用 | 自动发现 |
-|------|------|----------|
-| `DomainRagExtension` | 领域 Prompt 模板 + 检索配置 | @Component 自动注册 |
-| `PromptCustomizer` | Prompt 链式定制 | @Component 自动注册 |
-| `RagAdvisorProvider` | 自定义 Advisor 注入 | @Component 自动注册 |
+| Component | Role | Auto-discovery |
+|-----------|------|----------------|
+| `DomainRagExtension` | Domain Prompt template + retrieval config | @Component auto-registers |
+| `PromptCustomizer` | Prompt chain customization | @Component auto-registers |
+| `RagAdvisorProvider` | Custom Advisor injection | @Component auto-registers |
 
-多个实现按 `getOrder()` 排序，Starter 自动扫描并组装。
+Multiple implementations are sorted by `getOrder()`, and the Starter automatically scans and assembles them.

@@ -1,21 +1,21 @@
-# Multi-Model RAG — 演示
+# Multi-Model RAG — Demo
 
-> 展示 spring-ai-rag 的多模型能力：模型注册、动态路由、A/B 对比。
+> Demonstrates spring-ai-rag's multi-model capabilities: model registry, dynamic routing, and A/B comparison.
 
-## 功能说明
+## Features
 
-本演示展示三种多模型使用场景：
+This demo showcases three multi-model usage scenarios:
 
-### 1. 模型注册中心（ModelRegistry）
-查看所有已注册模型及其状态。
+### 1. Model Registry (ModelRegistry)
+View all registered models and their status.
 
 ```bash
 GET /demo/models
 GET /demo/models/{provider}
 ```
 
-### 2. 指定模型问答
-通过 `provider` 参数指定使用哪个模型回答。
+### 2. Specify Model for Q&A
+Use the `provider` parameter to select which model answers.
 
 ```bash
 POST /demo/chat?provider=openai
@@ -23,74 +23,74 @@ POST /demo/chat?provider=anthropic
 POST /demo/chat?provider=minimax
 ```
 
-### 3. 模型效果对比（Model Comparison）
-将同一问题并行发送给多个模型，对比回答质量和性能。
+### 3. Model Comparison
+Send the same question to multiple models in parallel and compare response quality and performance.
 
 ```bash
 POST /demo/compare
 ```
 
-## 快速开始
+## Quick Start
 
-### 1. 安装 spring-ai-rag 到本地仓库
+### 1. Install spring-ai-rag to local Maven repository
 
 ```bash
 cd ../..
 mvn clean install -DskipTests
 ```
 
-### 2. 配置环境变量
+### 2. Configure environment variables
 
 ```bash
-export DEEPSEEK_API_KEY=sk-xxx          # OpenAI 兼容模型（DeepSeek 等）
+export DEEPSEEK_API_KEY=sk-xxx          # OpenAI-compatible models (DeepSeek, etc.)
 export ANTHROPIC_API_KEY=sk-ant-xxx     # Anthropic Claude
 export MINIMAX_API_KEY=eyxxx            # MiniMax Text-01
-export SILICONFLOW_API_KEY=sk-xxx      # 嵌入模型
+export SILICONFLOW_API_KEY=sk-xxx      # Embedding Model
 ```
 
-### 3. 启动演示
+### 3. Start the demo
 
 ```bash
 cd demos/demo-multi-model
 mvn spring-boot:run
 ```
 
-### 4. 测试端点
+### 4. Test the endpoints
 
 ```bash
-# 查看所有可用模型
+# List all available models
 curl http://localhost:8080/demo/models
 
-# 使用 DeepSeek 回答
+# Ask using DeepSeek
 curl -X POST http://localhost:8080/demo/chat?provider=openai \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 RAG？"}'
+  -d '{"message": "What is RAG?"}'
 
-# 并行对比多个模型
+# Compare multiple models in parallel
 curl -X POST http://localhost:8080/demo/compare \
   -H "Content-Type: application/json" \
   -d '{
-    "query": "RAG 系统的核心组件有哪些？",
+    "query": "What are the core components of a RAG system?",
     "providers": ["openai", "anthropic"],
     "timeoutSeconds": 30
   }'
 ```
 
-## 支持的 Provider
+## Supported Providers
 
-| Provider | 说明 | API 兼容 |
-|----------|------|---------|
-| `openai` | DeepSeek、智谱等 OpenAI 兼容模型 | ✅ |
-| `anthropic` | Anthropic Claude 系列 | ✅ |
-| `minimax` | MiniMax Text-01（不支持 system 消息） | ⚠️ 自动转换 |
+| Provider | Description | API Compatible |
+|----------|-------------|----------------|
+| `openai` | DeepSeek, Zhipu, other OpenAI-compatible models | ✅ |
+| `anthropic` | Anthropic Claude series | ✅ |
+| `minimax` | MiniMax Text-01 (no system message support) | ⚠️ Auto-converted |
 
-## API 参考
+## API Reference
 
 ### GET /demo/models
 
-返回模型注册中心信息。
+Returns the model registry information.
 
-**响应示例：**
+**Response Example:**
 ```json
 {
   "availableProviders": ["openai", "anthropic"],
@@ -111,16 +111,16 @@ curl -X POST http://localhost:8080/demo/compare \
 
 ### POST /demo/chat
 
-使用指定模型进行问答。
+Q&A using a specified model.
 
-**参数：**
-- `provider`（query）：模型提供者（默认 `openai`）
-- `message`（body）：用户问题
+**Parameters:**
+- `provider` (query): Model provider (default `openai`)
+- `message` (body): User question
 
-**响应示例：**
+**Response Example:**
 ```json
 {
-  "answer": "RAG（检索增强生成）是一种结合检索系统和大型语言模型的技术...",
+  "answer": "RAG (Retrieval-Augmented Generation) is a technique that combines retrieval systems with large language models...",
   "sessionId": null,
   "sources": [],
   "stepMetrics": []
@@ -129,27 +129,27 @@ curl -X POST http://localhost:8080/demo/compare \
 
 ### POST /demo/compare
 
-并行对比多个模型。
+Compare multiple models in parallel.
 
-**请求体：**
+**Request Body:**
 ```json
 {
-  "query": "问题内容",
+  "query": "Question content",
   "providers": ["openai", "anthropic"],
   "timeoutSeconds": 30
 }
 ```
 
-**响应示例：**
+**Response Example:**
 ```json
 {
-  "query": "RAG 系统的核心组件有哪些？",
+  "query": "What are the core components of a RAG system?",
   "providers": ["openai", "anthropic"],
   "results": [
     {
       "provider": "openai",
       "success": true,
-      "response": "RAG 核心组件包括...",
+      "response": "Core RAG components include...",
       "latencyMs": 150,
       "promptTokens": 100,
       "completionTokens": 50,
@@ -170,12 +170,12 @@ curl -X POST http://localhost:8080/demo/compare \
 }
 ```
 
-## 故障排除
+## Troubleshooting
 
-### MiniMax 返回 "invalid message role: system"
+### MiniMax returns "invalid message role: system"
 
-MiniMax API 不支持 `role:system` 消息。spring-ai-rag 会自动将 system 消息转为 user 消息（添加 `[System]` 前缀）。
+MiniMax API does not support `role:system` messages. spring-ai-rag automatically converts system messages to user messages (adding `[System]` prefix).
 
-### 模型不可用
+### Model unavailable
 
-检查对应 Provider 的 API Key 是否正确配置在环境变量中。
+Check that the corresponding Provider's API Key is correctly configured in the environment variables.

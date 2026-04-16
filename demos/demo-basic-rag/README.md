@@ -1,18 +1,18 @@
-# Customer Service Bot — RAG 集成演示
+# Customer Service Bot — RAG Integration Demo
 
-> 场景：已有 Spring Boot 应用，通过引入 `spring-ai-rag-starter` 一行依赖获得完整 RAG 能力。
+> Scenario: An existing Spring Boot application gains full RAG capabilities by adding a single `spring-ai-rag-starter` dependency.
 
-## 快速开始
+## Quick Start
 
-### 1. 安装 spring-ai-rag-starter 到本地仓库
+### 1. Install spring-ai-rag-starter to local Maven repository
 
 ```bash
-# 在 spring-ai-rag 项目根目录
+# From the spring-ai-rag project root
 cd ../..
 mvn clean install -DskipTests
 ```
 
-### 2. 启动本 Demo
+### 2. Start this Demo
 
 ```bash
 cd demos/demo-basic-rag
@@ -21,25 +21,25 @@ export SILICONFLOW_API_KEY=sk-xxx
 mvn spring-boot:run
 ```
 
-### 3. 测试
+### 3. Test
 
 ```bash
-# 客服问答
+# Customer service Q&A
 curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "你们的退换货政策是什么？", "sessionId": "customer-001"}'
+  -d '{"message": "What is your return and exchange policy?", "sessionId": "customer-001"}'
 
-# 上传知识库文档
+# Upload a knowledge base document
 curl -X POST http://localhost:8080/api/v1/rag/documents \
   -H "Content-Type: application/json" \
-  -d '{"title": "退换货政策", "content": "自收到商品之日起7天内可申请退换货...", "source": "policy"}'
+  -d '{"title": "Return Policy", "content": "You may apply for returns or exchanges within 7 days of receiving the product...", "source": "policy"}'
 ```
 
 ---
 
-## 如何集成到现有项目
+## Integrating into an Existing Project
 
-### Step 1：添加 Maven 依赖
+### Step 1: Add Maven Dependency
 
 ```xml
 <dependency>
@@ -49,15 +49,15 @@ curl -X POST http://localhost:8080/api/v1/rag/documents \
 </dependency>
 ```
 
-### Step 2：配置 application.yml
+### Step 2: Configure application.yml
 
-参考 `src/main/resources/application.yml`，
-只需配置：
-- `spring.datasource.*`（PostgreSQL + pgvector）
-- `app.llm.*`（LLM Provider）
-- `siliconflow.*`（嵌入模型）
+See `src/main/resources/application.yml` for reference.
+Only configure:
+- `spring.datasource.*` (PostgreSQL + pgvector)
+- `app.llm.*` (LLM Provider)
+- `siliconflow.*` (Embedding Model)
 
-### Step 3：直接使用
+### Step 3: Use Directly
 
 ```java
 @RestController
@@ -76,20 +76,20 @@ public class CustomerServiceController {
 
 ---
 
-## 只需一行代码即可获得的能力
+## What You Get with One Line of Code
 
-| 功能 | 原本工作量 | 引入 starter 后 |
-|------|-----------|----------------|
-| 向量检索 | 写 JDBC SQL + HNSW | ✅ 自动 |
-| 全文检索 | 写分词 + 相似度 SQL | ✅ 自动 |
-| 查询改写 | 调用 LLM 改写 Query | ✅ 自动 |
-| 结果重排 | 自己实现 ReRank | ✅ 自动 |
-| 对话记忆 | 写表 + CRUD | ✅ 自动 |
-| REST API | 自己写 Controller | ✅ 40+ 端点 |
-| 健康检查 | 写 Probe | ✅ Actuator 自动 |
-| 文档嵌入 | 写嵌入逻辑 | ✅ 自动 |
+| Feature | Effort Without Starter | With Starter |
+|---------|----------------------|--------------|
+| Vector Search | Write JDBC SQL + HNSW | ✅ Automatic |
+| Full-text Search | Write tokenizer + similarity SQL | ✅ Automatic |
+| Query Rewrite | Call LLM to rewrite query | ✅ Automatic |
+| Reranking | Implement ReRank yourself | ✅ Automatic |
+| Chat Memory | Write tables + CRUD | ✅ Automatic |
+| REST API | Write Controller yourself | ✅ 40+ endpoints |
+| Health Checks | Write Probe | ✅ Actuator auto |
+| Document Embedding | Write embedding logic | ✅ Automatic |
 
-## 数据库准备
+## Database Setup
 
 ```bash
 createdb spring_ai_rag_dev
@@ -97,15 +97,15 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS vector;"
 psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 ```
 
-应用启动时 Flyway 会自动创建所有表（HNSW 索引、全文检索配置等）。
+Flyway automatically creates all tables on startup (HNSW indexes, full-text search configuration, etc.).
 
-## 切换 LLM Provider
+## Switching LLM Provider
 
 ```yaml
-# DeepSeek（默认）
+# DeepSeek (default)
 app.llm.provider: openai
 
-# 智谱 GLM
+# Zhipu GLM
 app.llm.provider: openai
 spring.ai.openai.base-url: https://open.bigmodel.cn/paas/v4
 

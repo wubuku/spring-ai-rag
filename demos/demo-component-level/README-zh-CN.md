@@ -1,21 +1,21 @@
 # Component-Level Demo
 
-> Demonstrates how to selectively import key RAG components without depending on the full Starter.
+> 展示如何选择性地引入 RAG 关键组件，不依赖完整 Starter。
 
-## Core Code
+## 核心代码
 
-See `src/main/java/com/springairag/demo/component/ComponentLevelDemoConfig.java`:
-- Manually create `HybridRetrieverService`, `QueryRewritingService`, `ReRankingService`
-- Manually create `HybridSearchAdvisor`, `QueryRewriteAdvisor`, `RerankAdvisor`
-- Mount Advisors to `ChatClient.builder().defaultAdvisors(...)`
+参考 `src/main/java/com/springairag/demo/component/ComponentLevelDemoConfig.java`：
+- 手动创建 `HybridRetrieverService`、`QueryRewritingService`、`ReRankingService`
+- 手动创建 `HybridSearchAdvisor`、`QueryRewriteAdvisor`、`RerankAdvisor`
+- 将 Advisors 挂载到 `ChatClient.builder().defaultAdvisors(...)`
 
-## Key Patterns
+## 关键模式
 
 ```java
-// Advisor chain (lower order values execute first)
+// Advisor 链（order 值越小越先执行）
 QueryRewriteAdvisor(+10) → HybridSearchAdvisor(+20) → RerankAdvisor(+30)
 
-// 1. Manually create the service
+// 1. 手动创建服务
 @Bean
 public HybridRetrieverService hybridRetrieverService(
         EmbeddingModel embeddingModel,
@@ -26,13 +26,13 @@ public HybridRetrieverService hybridRetrieverService(
             embeddingModel, jdbcTemplate, ragProperties, fulltextProviderFactory, null);
 }
 
-// 2. Manually create the Advisor
+// 2. 手动创建 Advisor
 @Bean
 public HybridSearchAdvisor hybridSearchAdvisor(HybridRetrieverService service) {
     return new HybridSearchAdvisor(service);
 }
 
-// 3. Mount to ChatClient
+// 3. 挂载到 ChatClient
 @Bean
 public ChatClient ragChatClient(OpenAiChatModel chatModel,
         QueryRewriteAdvisor queryRewriteAdvisor,
@@ -44,21 +44,21 @@ public ChatClient ragChatClient(OpenAiChatModel chatModel,
 }
 ```
 
-## Running
+## 运行
 
 ```bash
 export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
-mvn spring-boot:run  # Port 8081
+mvn spring-boot:run  # 端口 8081
 ```
 
-## Test Endpoints
+## 测试端点
 
 ```bash
-# Simple Q&A
-curl "http://localhost:8081/demo/component/ask?q=What is RAG"
+# 简单问答
+curl "http://localhost:8081/demo/component/ask?q=什么是RAG"
 
-# Multi-turn conversation
+# 多轮对话
 curl -X POST http://localhost:8081/demo/component/chat \
   -H "Content-Type: application/json" \
-  -d '{"message": "My name is John", "sessionId": "test-001"}'
+  -d '{"message": "我叫张三", "sessionId": "test-001"}'
 ```
