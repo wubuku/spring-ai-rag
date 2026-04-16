@@ -1,3 +1,11 @@
+> - 2026-04-17 02:39 - ✅ 后端国际化:ApiCompatibilityAdapterTest @DisplayName 注解英文化--14个中文 @DisplayName 翻译为英文(single/multi-system message, system-to-user conversion, reordering, empty list, mixed adaptation);5个嵌套类 Javadoc → English;14 tests ✅;commit fc32361 已推送
+
+> - 2026-04-17 02:21 - ✅ 后端国际化:ModelComparisonServiceTest @DisplayName 注解英文化--9个中文 @DisplayName 翻译为英文(single/multi-model comparison, token usage, latency, empty/null models, factory methods, exception handling);类 Javadoc '单元测试' → 'unit tests';Chinese comments → English;10 tests ✅;commit b170410 已推送
+
+> - 2026-04-17 01:28 - ✅ 后端国际化:ApiVersionRequestMappingHandlerMappingTest @DisplayName 注解英文化--5个中文 @DisplayName 翻译为英文(no annotation/class-level @ApiVersion/method-level override/multi-version array/deprecated attribute);类 Javadoc '单元测试' → 'unit tests';mvn test ✅(全通过);commit 413021a 已推送
+
+> - 2026-04-17 00:45 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
 > - 2026-04-16 23:32 - ✅ 后端国际化:UserFeedbackServiceImplTest @DisplayName 注解中文化--8个中文 @DisplayName 翻译为英文(submitFeedback_thumbsUp_savesCorrectly/rating_savesRating/thumbsDown_nullDocIds/getStats_calculatesSatisfactionRate/empty_returnsZeros/withRatings_calculatesAvgRating/getHistory_returnsPagedData/getByType_filtersCorrectly);类 Javadoc 注释同步英文化;2187 tests ✅;commit 870424b 已推送
 
 > - 2026-04-16 23:10 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
