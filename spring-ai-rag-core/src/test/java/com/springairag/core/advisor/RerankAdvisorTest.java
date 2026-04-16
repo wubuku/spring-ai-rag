@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RerankAdvisor 单元测试
+ * RerankAdvisor Unit Tests
  */
 class RerankAdvisorTest {
 
@@ -68,13 +68,13 @@ class RerankAdvisorTest {
 
         ChatClientRequest result = advisor.before(request, null);
 
-        // OpenAI 适配器支持多 system 消息，应该注入 system 消息
+        // OpenAI adapter supports multiple system messages, should inject system message
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasSystemMessage = messages.stream()
                 .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
-        assertTrue(hasSystemMessage, "OpenAI 适配器应该使用 augmentSystemMessage");
+        assertTrue(hasSystemMessage, "OpenAI adapter should use augmentSystemMessage");
 
-        // 验证 RERANKED_RESULTS_KEY
+        // Verify RERANKED_RESULTS_KEY
         @SuppressWarnings("unchecked")
         List<RetrievalResult> contextResults = (List<RetrievalResult>) result.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
@@ -103,22 +103,22 @@ class RerankAdvisorTest {
 
         ChatClientRequest result = advisor.before(request, null);
 
-        // MiniMax 适配器不支持多 system 消息，应该只有 user 消息（包含合并后的上下文）
+        // MiniMax adapter does not support multiple system messages, should only have user message (with merged context)
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasSystemMessage = messages.stream()
                 .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
-        assertFalse(hasSystemMessage, "MiniMax 适配器不应产生 system 消息");
+        assertFalse(hasSystemMessage, "MiniMax adapter should not produce system messages");
 
-        // 用户消息应包含参考资料
+        // User message should contain reference content
         boolean hasContextInUserMsg = messages.stream()
                 .filter(m -> m.getMessageType() == MessageType.USER)
                 .anyMatch(m -> m.getText().contains("Spring Boot 是一个框架"));
-        assertTrue(hasContextInUserMsg, "上下文应合并到用户消息中");
+        assertTrue(hasContextInUserMsg, "Context should be merged into user message");
     }
 
     @Test
     void before_withMiniMaxAdapter_normalizesExistingSystemMessages() {
-        // MiniMax 不支持 role:system，现有系统消息应被转换为 role:user
+        // MiniMax does not support role:system, existing system messages should be converted to role:user
         RerankAdvisor advisor = createAdvisor(miniMaxAdapter);
 
         List<RetrievalResult> searchResults = List.of(
@@ -127,7 +127,7 @@ class RerankAdvisorTest {
         when(rerankingService.rerank(eq("什么是 Spring"), anyList(), eq(5)))
                 .thenReturn(searchResults);
 
-        // 构造一个包含 SYSTEM 消息的 prompt（模拟 MessageChatMemoryAdvisor 添加的系统消息）
+        // Construct a prompt with SYSTEM message (simulating system message added by MessageChatMemoryAdvisor)
         Prompt prompt = new Prompt(List.of(
                 new org.springframework.ai.chat.messages.SystemMessage("你是一个有帮助的助手"),
                 new UserMessage("什么是 Spring")
@@ -139,23 +139,23 @@ class RerankAdvisorTest {
 
         ChatClientRequest result = advisor.before(request, null);
 
-        // 所有 system 消息应被转换为 user 消息（带 [System] 前缀）
+        // All system messages should be converted to user messages (with [System] prefix)
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasSystemMessage = messages.stream()
                 .anyMatch(m -> m.getMessageType() == MessageType.SYSTEM);
-        assertFalse(hasSystemMessage, "MiniMax 适配器应将 system 消息转换为 user 消息");
+        assertFalse(hasSystemMessage, "MiniMax adapter should convert system messages to user messages");
 
-        // 验证 [System] 前缀被添加
+        // Verify [System] prefix was added
         boolean hasSystemPrefix = messages.stream()
                 .filter(m -> m instanceof UserMessage)
                 .anyMatch(m -> m.getText().startsWith("[System]"));
-        assertTrue(hasSystemPrefix, "转换后的 user 消息应包含 [System] 前缀");
+        assertTrue(hasSystemPrefix, "Converted user message should contain [System] prefix");
 
-        // 原始系统消息内容应被保留
+        // Original system message content should be preserved
         boolean hasOriginalContent = messages.stream()
                 .filter(m -> m instanceof UserMessage)
                 .anyMatch(m -> m.getText().contains("你是一个有帮助的助手"));
-        assertTrue(hasOriginalContent, "原始系统消息内容应被保留在 user 消息中");
+        assertTrue(hasOriginalContent, "Original system message content should be preserved in user message");
     }
 
     @Test
@@ -188,12 +188,12 @@ class RerankAdvisorTest {
         List<org.springframework.ai.chat.messages.Message> messages = result.prompt().getInstructions();
         boolean hasContextMessage = messages.stream()
                 .anyMatch(m -> m.getText().contains("Spring AI"));
-        assertTrue(hasContextMessage, "应该注入包含参考资料的消息");
+        assertTrue(hasContextMessage, "Should inject message containing reference content");
 
         @SuppressWarnings("unchecked")
         List<RetrievalResult> contextResults = (List<RetrievalResult>) result.context()
                 .get(RerankAdvisor.RERANKED_RESULTS_KEY);
-        assertNotNull(contextResults, "RERANKED_RESULTS_KEY 应被设置到 context");
+        assertNotNull(contextResults, "RERANKED_RESULTS_KEY should be set in context");
         assertEquals(2, contextResults.size());
         assertEquals("doc-2", contextResults.get(0).getDocumentId());
     }
@@ -318,7 +318,7 @@ class RerankAdvisorTest {
         RerankAdvisor advisor = createAdvisor(openAiAdapter);
         HybridSearchAdvisor hybridSearch = new HybridSearchAdvisor(null, Mockito.mock(AdvisorMetrics.class));
         assertTrue(advisor.getOrder() > hybridSearch.getOrder(),
-                "RerankAdvisor 应在 HybridSearchAdvisor 之后执行");
+                "RerankAdvisor should execute after HybridSearchAdvisor");
     }
 
     private RetrievalResult createResult(String docId, String text, double score) {

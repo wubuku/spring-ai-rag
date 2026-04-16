@@ -160,7 +160,7 @@ class CircuitBreakerHealthIndicatorTest {
         CircuitBreakerHealthIndicator indicator = new CircuitBreakerHealthIndicator(ragChatService);
         Health health = indicator.health();
 
-        // CLOSED 状态 lastFailureAgeMs 应该是 0
+        // In CLOSED state, lastFailureAgeMs should be 0
         assertEquals(0L, health.getDetails().get("lastFailureAgeMs"));
     }
 }

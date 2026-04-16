@@ -21,7 +21,7 @@ class AbstractRagAdvisorTest {
 
     private static final Logger log = LoggerFactory.getLogger(AbstractRagAdvisorTest.class);
 
-    /** 测试用具体子类 */
+    /** Test concrete subclass */
     private TestAdvisor advisor;
 
     @BeforeEach
