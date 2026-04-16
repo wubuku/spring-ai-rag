@@ -9,12 +9,12 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ApiCompatibilityAdapter 默认方法测试
+ * Unit tests for {@link ApiCompatibilityAdapter} default methods.
  */
 class ApiCompatibilityAdapterTest {
 
     @Nested
-    @DisplayName("normalizeMessages - 单 system 消息模式")
+    @DisplayName("normalizeMessages - single system message mode")
     class SingleSystemMessageTests {
 
         private final ApiCompatibilityAdapter adapter = new ApiCompatibilityAdapter() {
@@ -26,7 +26,7 @@ class ApiCompatibilityAdapterTest {
         };
 
         @Test
-        @DisplayName("多个 system 消息应合并为一个")
+        @DisplayName("multiple system messages should be merged into one")
         void shouldMergeMultipleSystemMessages() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "你是助手"),
@@ -43,7 +43,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("单个 system 消息不改变")
+        @DisplayName("single system message is unchanged")
         void shouldKeepSingleSystemMessage() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "你是助手"),
@@ -57,7 +57,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("无 system 消息不改变")
+        @DisplayName("no system message passes through unchanged")
         void shouldPassThroughWhenNoSystem() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("user", "你好"),
@@ -70,7 +70,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("空列表返回空")
+        @DisplayName("empty list returns empty")
         void shouldReturnEmptyForEmptyInput() {
             List<ApiCompatibilityAdapter.ChatMessage> result = adapter.normalizeMessages(List.of());
             assertTrue(result.isEmpty());
@@ -78,7 +78,7 @@ class ApiCompatibilityAdapterTest {
     }
 
     @Nested
-    @DisplayName("normalizeMessages - 多 system 消息模式")
+    @DisplayName("normalizeMessages - multiple system messages mode")
     class MultiSystemMessageTests {
 
         private final ApiCompatibilityAdapter adapter = new ApiCompatibilityAdapter() {
@@ -90,7 +90,7 @@ class ApiCompatibilityAdapterTest {
         };
 
         @Test
-        @DisplayName("支持多 system 消息时不改变消息列表")
+        @DisplayName("messages unchanged when multiple system messages are supported")
         void shouldNotChangeMessagesWhenMultipleSupported() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "你是助手"),
@@ -106,7 +106,7 @@ class ApiCompatibilityAdapterTest {
     }
 
     @Test
-    @DisplayName("ChatMessage record 正常创建")
+    @DisplayName("ChatMessage record created normally")
     void chatMessageShouldWork() {
         var msg = new ApiCompatibilityAdapter.ChatMessage("user", "hello");
         assertEquals("user", msg.role());
@@ -114,7 +114,7 @@ class ApiCompatibilityAdapterTest {
     }
 
     @Nested
-    @DisplayName("supportsSystemMessage = false (system → user conversion)")
+    @DisplayName("supportsSystemMessage = false (system to user conversion)")
     class SystemToUserConversionTests {
 
         private final ApiCompatibilityAdapter adapter = new ApiCompatibilityAdapter() {
@@ -129,7 +129,7 @@ class ApiCompatibilityAdapterTest {
         };
 
         @Test
-        @DisplayName("system 消息应转换为 user 消息并添加 [System] 前缀")
+        @DisplayName("system message should be converted to user with [System] prefix")
         void shouldConvertSystemToUserWithPrefix() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "You are a helpful assistant"),
@@ -146,7 +146,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("多个 system 消息全部转换为 user")
+        @DisplayName("all system messages are converted to user")
         void shouldConvertAllSystemMessages() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "Sys1"),
@@ -165,7 +165,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("非 system 消息不受影响")
+        @DisplayName("non-system messages are unaffected")
         void shouldNotChangeNonSystemMessages() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("assistant", "回答"),
@@ -196,7 +196,7 @@ class ApiCompatibilityAdapterTest {
         };
 
         @Test
-        @DisplayName("system 消息不在首位时应重新排序到首位")
+        @DisplayName("system message not in first position should be reordered to first")
         void shouldReorderSystemToFirst() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("user", "Hello"),
@@ -214,7 +214,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("system 消息已在首位时不改变顺序")
+        @DisplayName("system message already first should not change order")
         void shouldNotReorderWhenSystemAlreadyFirst() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("system", "You are assistant"),
@@ -230,7 +230,7 @@ class ApiCompatibilityAdapterTest {
         }
 
         @Test
-        @DisplayName("无 system 消息时不改变顺序")
+        @DisplayName("no system message should not change order")
         void shouldNotReorderWhenNoSystem() {
             List<ApiCompatibilityAdapter.ChatMessage> messages = List.of(
                     new ApiCompatibilityAdapter.ChatMessage("user", "Hello"),
