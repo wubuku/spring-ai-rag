@@ -2,6 +2,7 @@
 
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
+> - 2026-04-16 07:56 - ✅ WebUI 常规巡检:cron npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
 > - 2026-04-16 07:12 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,99KB index+346KB BarChart chunk)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-16 07:07 - ✅ .env.example 同步修复:.env.example 与 .env 变量名对齐(SPRING_AI_OPENAI_API_KEY 替代 OPENAI_API_KEY);修复 POSTGRES_DATABASE(原 POSTGRES_DB) 与 application.yml 保持一致;修复 POSTGRES_PASSWORD 与 .env 一致(123456);全部中文注释翻译为英文;保留 base-url /v1 后缀 IMPORTANT 警告;commit eafed7e 已推送
