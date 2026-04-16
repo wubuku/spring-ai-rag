@@ -9,7 +9,7 @@ import java.lang.reflect.Method;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * ApiVersionRequestMappingHandlerMapping 单元测试
+ * ApiVersionRequestMappingHandlerMapping unit tests
  */
 class ApiVersionRequestMappingHandlerMappingTest {
 
@@ -17,7 +17,7 @@ class ApiVersionRequestMappingHandlerMappingTest {
             new ApiVersionRequestMappingHandlerMapping();
 
     @Test
-    @DisplayName("无 @ApiVersion 注解时返回原始映射")
+    @DisplayName("returns original mapping when no @ApiVersion annotation")
     void getMappingForMethod_noAnnotation_returnsOriginal() throws Exception {
         Method method = NoVersionController.class.getMethod("handle");
         RequestMappingInfo info = mapping.getMappingForMethod(method, NoVersionController.class);
@@ -26,7 +26,7 @@ class ApiVersionRequestMappingHandlerMappingTest {
     }
 
     @Test
-    @DisplayName("类级 @ApiVersion 生成 /api/v1/ 前缀")
+    @DisplayName("class-level @ApiVersion generates /api/v1/ prefix")
     void getMappingForMethod_classAnnotation_addsPrefix() throws Exception {
         Method method = V1Controller.class.getMethod("handle");
         // Debug: verify annotation is found
@@ -40,7 +40,7 @@ class ApiVersionRequestMappingHandlerMappingTest {
     }
 
     @Test
-    @DisplayName("方法级 @ApiVersion 优先于类级")
+    @DisplayName("method-level @ApiVersion takes precedence over class-level")
     void getMappingForMethod_methodAnnotationOverridesClass() throws Exception {
         Method method = OverrideController.class.getMethod("v2Only");
         RequestMappingInfo info = mapping.getMappingForMethod(method, OverrideController.class);
@@ -49,7 +49,7 @@ class ApiVersionRequestMappingHandlerMappingTest {
     }
 
     @Test
-    @DisplayName("多版本数组生成多个路径映射")
+    @DisplayName("multi-version array generates multiple path mappings")
     void getMappingForMethod_multipleVersions() throws Exception {
         Method method = MultiVersionController.class.getMethod("handle");
         RequestMappingInfo info = mapping.getMappingForMethod(method, MultiVersionController.class);
@@ -60,7 +60,7 @@ class ApiVersionRequestMappingHandlerMappingTest {
     }
 
     @Test
-    @DisplayName("@ApiVersion deprecated 属性可正确读取")
+    @DisplayName("@ApiVersion deprecated attribute is readable")
     void apiVersion_deprecated_readable() {
         ApiVersion ann = DeprecatedController.class.getAnnotation(ApiVersion.class);
         assertNotNull(ann);
