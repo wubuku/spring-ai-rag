@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * UserFeedbackServiceImpl 单元测试
+ * UserFeedbackServiceImpl Unit Tests
  */
 @ExtendWith(MockitoExtension.class)
 class UserFeedbackServiceImplTest {
@@ -40,7 +40,7 @@ class UserFeedbackServiceImplTest {
     // ==================== submitFeedback ====================
 
     @Test
-    @DisplayName("提交点赞反馈：字段正确保存")
+    @DisplayName("Submitting thumbs-up feedback saves all fields correctly")
     void submitFeedback_thumbsUp_savesCorrectly() {
         when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> {
             RagUserFeedback f = inv.getArgument(0);
@@ -68,7 +68,7 @@ class UserFeedbackServiceImplTest {
     }
 
     @Test
-    @DisplayName("提交评分反馈：评分字段正确保存")
+    @DisplayName("Submitting rating feedback saves rating field correctly")
     void submitFeedback_rating_savesRating() {
         when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> {
             RagUserFeedback f = inv.getArgument(0);
@@ -92,7 +92,7 @@ class UserFeedbackServiceImplTest {
     }
 
     @Test
-    @DisplayName("提交点踩反馈：空文档列表序列化为 null")
+    @DisplayName("Submitting thumbs-down feedback serializes empty doc list as null")
     void submitFeedback_thumbsDown_nullDocIds() {
         when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> inv.getArgument(0));
 
@@ -113,7 +113,7 @@ class UserFeedbackServiceImplTest {
     // ==================== getStats ====================
 
     @Test
-    @DisplayName("反馈统计：正确计算满意度")
+    @DisplayName("Feedback stats calculates satisfaction rate correctly")
     void getStats_calculatesSatisfactionRate() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -137,7 +137,7 @@ class UserFeedbackServiceImplTest {
     }
 
     @Test
-    @DisplayName("反馈统计：无数据时返回零值")
+    @DisplayName("Feedback stats returns zeros when no data")
     void getStats_empty_returnsZeros() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -153,7 +153,7 @@ class UserFeedbackServiceImplTest {
     }
 
     @Test
-    @DisplayName("反馈统计：包含评分数据时计算平均分")
+    @DisplayName("Feedback stats calculates average rating when rating data is present")
     void getStats_withRatings_calculatesAvgRating() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -175,7 +175,7 @@ class UserFeedbackServiceImplTest {
     // ==================== getHistory ====================
 
     @Test
-    @DisplayName("获取历史：分页返回数据")
+    @DisplayName("Get history returns paginated data")
     void getHistory_returnsPagedData() {
         RagUserFeedback f1 = createFeedback("THUMBS_UP", null, null);
         Page<RagUserFeedback> page = new PageImpl<>(List.of(f1));
@@ -190,7 +190,7 @@ class UserFeedbackServiceImplTest {
     // ==================== getByType ====================
 
     @Test
-    @DisplayName("按类型查询：返回指定类型数据")
+    @DisplayName("Get by type returns data of the specified type")
     void getByType_filtersCorrectly() {
         RagUserFeedback f1 = createFeedback("THUMBS_DOWN", null, null);
         when(repository.findByFeedbackTypeOrderByCreatedAtDesc(eq("THUMBS_DOWN"), any(Pageable.class)))
