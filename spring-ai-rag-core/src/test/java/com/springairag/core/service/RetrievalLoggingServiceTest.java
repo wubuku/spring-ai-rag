@@ -19,7 +19,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * RetrievalLoggingService 单元测试
+ * RetrievalLoggingService Unit Tests
  */
 @ExtendWith(MockitoExtension.class)
 class RetrievalLoggingServiceTest {
@@ -131,6 +131,26 @@ class RetrievalLoggingServiceTest {
 
         Double avg = service.getAvgTotalTime(start, end);
         assertEquals(150.0, avg);
+    }
+
+    @Test
+    void count_delegatesToRepository() {
+        ZonedDateTime start = ZonedDateTime.now().minusDays(7);
+        ZonedDateTime end = ZonedDateTime.now();
+        when(repository.countByCreatedAtBetween(start, end)).thenReturn(99L);
+
+        long count = service.count(start, end);
+        assertEquals(99L, count);
+    }
+
+    @Test
+    void count_returnsZeroWhenNoLogs() {
+        ZonedDateTime start = ZonedDateTime.now().minusDays(1);
+        ZonedDateTime end = ZonedDateTime.now();
+        when(repository.countByCreatedAtBetween(start, end)).thenReturn(0L);
+
+        long count = service.count(start, end);
+        assertEquals(0L, count);
     }
 
     @Test
