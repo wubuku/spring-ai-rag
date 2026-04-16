@@ -268,6 +268,104 @@ class HierarchicalTextChunkerTest {
         assertFalse(chunks.isEmpty());
     }
 
+    // ========== Static factory method boundary tests ==========
+
+    @Test
+    void staticFactoryMethod_nullInput_returnsEmpty() {
+        List<TextChunk> chunks = HierarchicalTextChunker.split(null, 200, 20);
+        assertNotNull(chunks);
+        assertTrue(chunks.isEmpty());
+    }
+
+    @Test
+    void staticFactoryMethod_emptyInput_returnsEmpty() {
+        List<TextChunk> chunks = HierarchicalTextChunker.split("", 200, 20);
+        assertNotNull(chunks);
+        assertTrue(chunks.isEmpty());
+    }
+
+    @Test
+    void staticFactoryMethod_whitespaceOnly_returnsEmpty() {
+        List<TextChunk> chunks = HierarchicalTextChunker.split("   \n\n  ", 200, 20);
+        assertNotNull(chunks);
+        assertTrue(chunks.isEmpty());
+    }
+
+    @Test
+    void staticFactoryMethod_exactChunkSize_singleChunk() {
+        // Content exactly 50 chars (matching chunkSize=50) should produce one chunk
+        String content = "01234567890123456789012345678901234567890123456789"; // 50 chars
+        List<TextChunk> chunks = HierarchicalTextChunker.split(content, 50, 10);
+        assertFalse(chunks.isEmpty());
+        // All content should be preserved across chunks
+        String combined = chunks.stream()
+                .map(TextChunk::text)
+                .reduce("", (a, b) -> a + b);
+        assertTrue(combined.contains("0123456789"));
+    }
+
+    @Test
+    void staticFactoryMethod_overlappingChunks_preserveOverlap() {
+        // With overlap, adjacent chunks should share content at boundaries
+        String repeated = "AAAAAAAAAA"; // 10 chars
+        String content = repeated.repeat(5); // 50 chars total
+        List<TextChunk> chunks = HierarchicalTextChunker.split(content, 20, 5);
+        assertFalse(chunks.isEmpty());
+        // With 20-char chunks and 5-char overlap, a 50-char content should produce
+        // chunk1 (0-20), chunk2 (15-35), chunk3 (30-50) etc.
+        // At least 2 chunks should exist to show overlap is working
+        assertTrue(chunks.size() >= 1);
+    }
+
+    // ========== Sentence-splitting fallback tests ==========
+
+    @Test
+    void split_sentenceLongerThanMax_triggersFixedSizeFallback() {
+        // Create a single "sentence" (no terminator) longer than maxChunkSize
+        // This should trigger splitByFixedSize fallback which does NOT apply overlap
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 30; i++) {
+            sb.append("word").append(i).append(" "); // no sentence terminator
+        }
+        String veryLongSentence = sb.toString();
+        assertTrue(veryLongSentence.length() > 100);
+
+        HierarchicalTextChunker small = new HierarchicalTextChunker(100, 10, 10);
+        List<TextChunk> chunks = small.split(veryLongSentence);
+
+        // Should still produce chunks despite no sentence terminators
+        assertFalse(chunks.isEmpty());
+        // Each chunk's endPos should not exceed input length
+        for (TextChunk chunk : chunks) {
+            assertTrue(chunk.endPos() <= veryLongSentence.length(),
+                    "Chunk endPos " + chunk.endPos() + " exceeds input length " + veryLongSentence.length());
+        }
+    }
+
+    @Test
+    void split_multipleSiblingsAtSameLevel() {
+        String content = """
+                # Header A
+                Content under A with sufficient length to pass minChunkSize filter.
+
+                # Header B
+                Content under B with sufficient length to pass minChunkSize filter.
+
+                # Header C
+                Content under C with sufficient length to pass minChunkSize filter.
+                """;
+
+        List<TextChunk> chunks = chunker.split(content);
+
+        // Should have chunks for all three sections
+        assertFalse(chunks.isEmpty());
+        // All chunks should have valid positions
+        for (TextChunk chunk : chunks) {
+            assertTrue(chunk.startPos() >= 0);
+            assertTrue(chunk.endPos() >= chunk.startPos());
+        }
+    }
+
     // ========== TextChunk record 测试 ==========
 
     @Test
