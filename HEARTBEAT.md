@@ -1,3 +1,5 @@
+> - 2026-04-16 23:32 - ✅ 后端国际化:UserFeedbackServiceImplTest @DisplayName 注解中文化--8个中文 @DisplayName 翻译为英文(submitFeedback_thumbsUp_savesCorrectly/rating_savesRating/thumbsDown_nullDocIds/getStats_calculatesSatisfactionRate/empty_returnsZeros/withRatings_calculatesAvgRating/getHistory_returnsPagedData/getByType_filtersCorrectly);类 Javadoc 注释同步英文化;2187 tests ✅;commit 870424b 已推送
+
 > - 2026-04-16 23:10 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 
 > - 2026-04-16 21:19 - ✅ Swagger @ApiResponses 补全(CacheMetricsController + RagHealthController):2个端点各补 @ApiResponse 500 错误文档(500 InternalServerError + ErrorResponse schema);CacheMetricsController (/stats + /invalidate) + RagHealthController (/health + /health/components) 全部 4 端点现已文档化;2187 tests ✅;BUILD SUCCESS;commit 992f501 已推送
