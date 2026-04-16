@@ -2,6 +2,7 @@
 
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
+> - 2026-04-16 13:57 - ✅ 后端主动巡检:ModelMetricsServiceTest Timer 统计验证补全--新增5个测试(timer count累积/总时间累积/零延迟记录/error调用记录延迟/多provider独立timer);12→17 tests;2163 tests pass;BUILD SUCCESS;commit 92b3ad4 已推送
 > - 2026-04-16 11:18 - ✅ 后端主动巡检:TextCleanerTest 边界覆盖补全--新增21个测试(markdown header removal/inline/tabs/newline mixed/whitespace/normalize double-breaks/full pipeline edge cases);15→36 tests(+21);mvn test ✅(全通过);commit 16cb04c 已推送
 > - 2026-04-16 07:56 - ✅ WebUI 常规巡检:cron npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 每次 cron 唤醒时:若 ⏳ 待办已清零,**立即**扫描代码库/用户体验/文档/测试/性能/安全主动补充新任务
