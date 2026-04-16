@@ -5,6 +5,8 @@
 > - 2026-04-16 17:24 - ✅ 后端主动巡检:Entity 测试补全--扫描发现 RagApiKey(104行)和 FsFile(119行)两个实体无专属单元测试;新增 RagApiKeyTest(11 tests)+FsFileTest(10 tests);覆盖:全字段getter/setter、默认值验证(role=NORMAL/enabled=TRUE/isText=FALSE)、isEnabled()空值安全、unicode路径;21 new tests;2187 tests 全通过;BUILD SUCCESS;commit 0b332be 已推送
 > - 2026-04-16 16:22 - ✅ 后端主动巡检:catch(Exception) 韧性注释补全--PdfImportController 6处(convert/import/SSE stream/SSE trigger/urlDecode)、RagDocumentController 1处(file read)、QueryRewritingService 1处(LLM retry exhausted);core 模块全部 catch(Exception) 现已携带意图注释;2166 tests 全通过;commit 5e9df71 已推送
 > - 2026-04-16 15:37 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,346KB BarChart chunk)/ E2E 11/12 ❌(Search 失败:空数据库,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+> - 2026-04-16 19:15 - ✅ 后端主动巡检:MiniMaxAdapter 代码注释美化(emoji → 纯文本);❌/✅ 装饰性符号替换为标准文字,生产代码无非 ASCII 字符;2187 tests ✅;commit f34aa68 已推送
+>
 > ## 🚨 核心铁律(永久生效,不可删除,不可弱化)
 > **任务永不清零,待办永远有内容。**
 > - 2026-04-16 14:45 - ✅ 后端主动巡检:DTO 测试补全--为 12 个未测试的 Response/Request 类新增 24 个单元测试(AnswerQualityRequest/Response,ClientErrorRequest,Collection系列Response,DocumentAddedResponse,ChatHistoryResponse,BatchCreateAndEmbedRequest/Response,ApiSloComplianceResponse+EndpointSlo+LatencyStats);api module 128→152 tests(+24);mvn test ✅(全通过,BUILD SUCCESS);commit 9ca46e1 已推送
