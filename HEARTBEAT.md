@@ -1,3 +1,5 @@
+> - 2026-04-17 02:51 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP,tables=DEGRADED);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
 > - 2026-04-17 02:39 - ✅ 后端国际化:ApiCompatibilityAdapterTest @DisplayName 注解英文化--14个中文 @DisplayName 翻译为英文(single/multi-system message, system-to-user conversion, reordering, empty list, mixed adaptation);5个嵌套类 Javadoc → English;14 tests ✅;commit fc32361 已推送
 
 > - 2026-04-17 02:21 - ✅ 后端国际化:ModelComparisonServiceTest @DisplayName 注解英文化--9个中文 @DisplayName 翻译为英文(single/multi-model comparison, token usage, latency, empty/null models, factory methods, exception handling);类 Javadoc '单元测试' → 'unit tests';Chinese comments → English;10 tests ✅;commit b170410 已推送
