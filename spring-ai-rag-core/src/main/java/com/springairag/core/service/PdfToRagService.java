@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.FsFileRepository;
@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
  * Service for importing converted Markdown (from PDF) into the RAG knowledge base.
@@ -28,7 +29,7 @@ import java.util.Optional;
  * <p>Design principle: this service does NOT depend on {@link DocumentEmbedService}
  * to avoid circular dependency risk. Instead, it prepares the {@link RagDocument}
  * entry and callers are responsible for triggering embedding separately, or use
- * {@link #importPdfToRagWithEmbedding(String, String, Long, boolean)} for the
+ * {@link #importPdfToRagWithEmbedding(String, String, Long, boolean, Consumer)} for the
  * combined operation.
  */
 @Service
@@ -48,15 +49,14 @@ public class PdfToRagService {
         this.documentEmbedService = documentEmbedService;
     }
 
+    // ---- Public API ----
+
     /**
      * Import a PDF conversion result (Markdown from fs_files) into the RAG knowledge base.
      *
-     * <p>Fetches the entry Markdown file from {@code fs_files} by its path,
-     * creates a {@link RagDocument} entry, and optionally triggers embedding.
-     *
-     * @param entryMarkdownPath  path to the entry Markdown file in fs_files,
-     *                           e.g. "{uuid}/default.md"
-     * @param originalFilename   original PDF filename (used as title and source)
+     * @param entryMarkdownPath path to the entry Markdown file in fs_files,
+     *                          e.g. "{uuid}/default.md"
+     * @param originalFilename  original PDF filename (used as title and source)
      * @param collectionId      optional collection ID to associate with
      * @param embed             whether to trigger embedding after document creation
      * @param forceReembed      whether to force re-embedding (ignored when embed=false)
@@ -72,69 +72,15 @@ public class PdfToRagService {
                 + "collectionId={}, embed={}, forceReembed={}",
                 entryMarkdownPath, originalFilename, collectionId, embed, forceReembed);
 
-        // 1. Fetch Markdown content from fs_files
-        Optional<FsFile> markdownFile = fsFileRepository.findById(entryMarkdownPath);
-        if (markdownFile.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file not found in fs_files: " + entryMarkdownPath);
-        }
-
-        FsFile fsFile = markdownFile.get();
-        String content = fsFile.getContentTxt();
-        if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file has no text content: " + entryMarkdownPath);
-        }
-
-        // 2. Derive title from original filename
         String title = deriveTitle(originalFilename);
+        DocumentBuildResult result = buildDocumentFromMarkdown(entryMarkdownPath, title, originalFilename, collectionId);
 
-        // 3. Compute content hash for deduplication
-        String contentHash = computeSha256(content);
-
-        // 4. Check for duplicate content
-        var existing = documentRepository.findByContentHash(contentHash);
-        RagDocument doc;
-        boolean newlyCreated;
-
-        if (!existing.isEmpty()) {
-            doc = existing.get(0);
-            newlyCreated = false;
-            log.info("Duplicate content detected, using existing document id={}", doc.getId());
-        } else {
-            doc = new RagDocument();
-            doc.setTitle(title);
-            doc.setContent(content);
-            doc.setSource("pdf-import:" + entryMarkdownPath);
-            doc.setDocumentType("markdown");
-            doc.setOriginalFilename(originalFilename);
-            doc.setContentHash(contentHash);
-            doc.setCollectionId(collectionId);
-            doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
-            doc.setMetadata(Map.of(
-                    "importedFrom", "pdf",
-                    "fsFilesPath", entryMarkdownPath,
-                    "uuid", extractUuid(entryMarkdownPath)
-            ));
-            doc = documentRepository.save(doc);
-            newlyCreated = true;
-            log.info("RAG document created: id={}", doc.getId());
-        }
-
-        // 5. Trigger embedding if requested
         EmbedResult embedResult = null;
         if (embed) {
-            embedResult = triggerEmbedding(doc, newlyCreated, forceReembed);
+            embedResult = doEmbed(result.doc(), result.newlyCreated(), forceReembed);
         }
 
-        return new PdfToRagResult(
-                doc.getId(),
-                doc.getTitle(),
-                newlyCreated,
-                embedResult != null ? embedResult.status() : null,
-                embedResult != null ? embedResult.message() : null,
-                embedResult != null ? embedResult.chunksCreated() : null
-        );
+        return toPdfToRagResult(result, embedResult);
     }
 
     /**
@@ -152,78 +98,25 @@ public class PdfToRagService {
                                                        String originalFilename,
                                                        Long collectionId,
                                                        boolean forceReembed,
-                                                       java.util.function.Consumer<com.springairag.api.dto.EmbedProgressEvent> progressCallback) {
+                                                       Consumer<EmbedProgressEvent> progressCallback) {
         log.info("Importing PDF to RAG with SSE embedding: entryMarkdownPath={}, originalFilename={}, "
                 + "collectionId={}, forceReembed={}",
                 entryMarkdownPath, originalFilename, collectionId, forceReembed);
 
-        // Create RagDocument first
-        Optional<FsFile> markdownFile = fsFileRepository.findById(entryMarkdownPath);
-        if (markdownFile.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file not found in fs_files: " + entryMarkdownPath);
-        }
-
-        FsFile fsFile = markdownFile.get();
-        String content = fsFile.getContentTxt();
-        if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file has no text content: " + entryMarkdownPath);
-        }
-
         String title = deriveTitle(originalFilename);
-        String contentHash = computeSha256(content);
+        DocumentBuildResult result = buildDocumentFromMarkdown(entryMarkdownPath, title, originalFilename, collectionId);
 
-        var existing = documentRepository.findByContentHash(contentHash);
-        RagDocument doc;
-        boolean newlyCreated;
-
-        if (!existing.isEmpty()) {
-            doc = existing.get(0);
-            newlyCreated = false;
-            log.info("Duplicate content detected, using existing document id={}", doc.getId());
-        } else {
-            doc = new RagDocument();
-            doc.setTitle(title);
-            doc.setContent(content);
-            doc.setSource("pdf-import:" + entryMarkdownPath);
-            doc.setDocumentType("markdown");
-            doc.setOriginalFilename(originalFilename);
-            doc.setContentHash(contentHash);
-            doc.setCollectionId(collectionId);
-            doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
-            doc.setMetadata(Map.of(
-                    "importedFrom", "pdf",
-                    "fsFilesPath", entryMarkdownPath,
-                    "uuid", extractUuid(entryMarkdownPath)
-            ));
-            doc = documentRepository.save(doc);
-            newlyCreated = true;
-            log.info("RAG document created: id={}", doc.getId());
-        }
-
-        // Trigger embedding with progress
         Map<String, Object> embedResult = documentEmbedService.embedDocumentWithProgress(
-                doc.getId(), forceReembed, progressCallback);
+                result.doc().getId(), forceReembed, progressCallback);
 
         String status = (String) embedResult.get("status");
         String message = (String) embedResult.getOrDefault("message", "");
-        Integer chunks = null;
-        if (embedResult.get("chunksCreated") instanceof Number n) {
-            chunks = n.intValue();
-        }
+        Integer chunks = embedResult.get("chunksCreated") instanceof Number n ? n.intValue() : null;
 
         return new PdfToRagResult(
-                doc.getId(),
-                doc.getTitle(),
-                newlyCreated,
-                status,
-                message,
-                chunks
-        );
+                result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
+                status, message, chunks);
     }
-
-    // ==================== Trigger Embedding for Already-Imported PDF ====================
 
     /**
      * Trigger embedding for an already-imported PDF (Markdown already exists in fs_files).
@@ -241,73 +134,12 @@ public class PdfToRagService {
         log.info("Triggering embedding for imported PDF: uuid={}, collectionId={}, forceReembed={}",
                 uuid, collectionId, forceReembed);
 
-        // 1. Fetch Markdown content from fs_files
-        Optional<FsFile> markdownFile = fsFileRepository.findById(entryPath);
-        if (markdownFile.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file not found in fs_files: " + entryPath
-                    + " (PDF may not have been imported yet)");
-        }
+        String title = deriveTitleFromMetadata(entryPath, uuid);
+        DocumentBuildResult result = buildDocumentFromMarkdown(entryPath, title, null, collectionId);
 
-        FsFile fsFile = markdownFile.get();
-        String content = fsFile.getContentTxt();
-        if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file has no text content: " + entryPath);
-        }
+        EmbedResult embedResult = doEmbed(result.doc(), result.newlyCreated(), forceReembed);
 
-        // 2. Derive title from metadata or fallback
-        String title = deriveTitleFromMetadata(fsFile) != null
-                ? deriveTitleFromMetadata(fsFile)
-                : "PDF Import " + uuid;
-
-        // 3. Compute content hash for deduplication
-        String contentHash = computeSha256(content);
-
-        // 4. Check for existing document (by content hash)
-        var existing = documentRepository.findByContentHash(contentHash);
-        RagDocument doc;
-        boolean newlyCreated;
-
-        if (!existing.isEmpty()) {
-            doc = existing.get(0);
-            newlyCreated = false;
-            log.info("Existing document found for this content: docId={}", doc.getId());
-            // Update collectionId if provided and different
-            if (collectionId != null && !collectionId.equals(doc.getCollectionId())) {
-                doc.setCollectionId(collectionId);
-                doc = documentRepository.save(doc);
-            }
-        } else {
-            doc = new RagDocument();
-            doc.setTitle(title);
-            doc.setContent(content);
-            doc.setSource("pdf-import:" + entryPath);
-            doc.setDocumentType("markdown");
-            doc.setOriginalFilename(fsFile.getPath()); // fallback filename
-            doc.setContentHash(contentHash);
-            doc.setCollectionId(collectionId);
-            doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
-            doc.setMetadata(Map.of(
-                    "importedFrom", "pdf",
-                    "fsFilesPath", entryPath,
-                    "uuid", uuid
-            ));
-            doc = documentRepository.save(doc);
-            newlyCreated = true;
-            log.info("RAG document created: id={}", doc.getId());
-        }
-
-        // 5. Trigger embedding
-        EmbedResult embedResult = triggerEmbedding(doc, newlyCreated, forceReembed);
-        return new PdfToRagResult(
-                doc.getId(),
-                doc.getTitle(),
-                newlyCreated,
-                embedResult.status(),
-                embedResult.message(),
-                embedResult.chunksCreated()
-        );
+        return toPdfToRagResult(result, embedResult);
     }
 
     /**
@@ -321,96 +153,88 @@ public class PdfToRagService {
      */
     public PdfToRagResult triggerEmbeddingWithProgress(String uuid, Long collectionId,
                                                         boolean forceReembed,
-                                                        java.util.function.Consumer<com.springairag.api.dto.EmbedProgressEvent> progressCallback) {
+                                                        Consumer<EmbedProgressEvent> progressCallback) {
         String entryPath = uuid + "/default.md";
         log.info("Triggering embedding with SSE for imported PDF: uuid={}", uuid);
 
-        // 1. Fetch Markdown
-        Optional<FsFile> markdownFile = fsFileRepository.findById(entryPath);
-        if (markdownFile.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file not found in fs_files: " + entryPath);
-        }
+        String title = deriveTitleFromMetadata(entryPath, uuid);
+        DocumentBuildResult result = buildDocumentFromMarkdown(entryPath, title, null, collectionId);
 
-        FsFile fsFile = markdownFile.get();
-        String content = fsFile.getContentTxt();
-        if (content == null || content.isBlank()) {
-            throw new IllegalArgumentException(
-                    "Entry Markdown file has no text content: " + entryPath);
-        }
-
-        String title = deriveTitleFromMetadata(fsFile) != null
-                ? deriveTitleFromMetadata(fsFile)
-                : "PDF Import " + uuid;
-        String contentHash = computeSha256(content);
-
-        var existing = documentRepository.findByContentHash(contentHash);
-        RagDocument doc;
-        boolean newlyCreated;
-
-        if (!existing.isEmpty()) {
-            doc = existing.get(0);
-            newlyCreated = false;
-            if (collectionId != null && !collectionId.equals(doc.getCollectionId())) {
-                doc.setCollectionId(collectionId);
-                doc = documentRepository.save(doc);
-            }
-        } else {
-            doc = new RagDocument();
-            doc.setTitle(title);
-            doc.setContent(content);
-            doc.setSource("pdf-import:" + entryPath);
-            doc.setDocumentType("markdown");
-            doc.setOriginalFilename(fsFile.getPath());
-            doc.setContentHash(contentHash);
-            doc.setCollectionId(collectionId);
-            doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
-            doc.setMetadata(Map.of(
-                    "importedFrom", "pdf",
-                    "fsFilesPath", entryPath,
-                    "uuid", uuid
-            ));
-            doc = documentRepository.save(doc);
-            newlyCreated = true;
-        }
-
-        // 6. Trigger embedding with progress
         Map<String, Object> embedResult = documentEmbedService.embedDocumentWithProgress(
-                doc.getId(), forceReembed, progressCallback);
+                result.doc().getId(), forceReembed, progressCallback);
 
         String status = (String) embedResult.get("status");
         String message = (String) embedResult.getOrDefault("message", "");
-        Integer chunks = null;
-        if (embedResult.get("chunksCreated") instanceof Number n) {
-            chunks = n.intValue();
-        }
+        Integer chunks = embedResult.get("chunksCreated") instanceof Number n ? n.intValue() : null;
 
         return new PdfToRagResult(
-                doc.getId(),
-                doc.getTitle(),
-                newlyCreated,
-                status,
-                message,
-                chunks
-        );
+                result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
+                status, message, chunks);
     }
+
+    // ---- Document building ----
 
     /**
-     * Derive title from fs_files metadata (originalFilename before renaming).
-     * Since we store files with UUID-based paths, we look at the originalFilename.
+     * Fetch the Markdown file from fs_files, deduplicate by content hash,
+     * and create or reuse a RagDocument entry.
+     *
+     * @param markdownPath      path in fs_files (e.g. "uuid/default.md")
+     * @param title             document title
+     * @param originalFilename  original PDF filename (null for triggerEmbedding path)
+     * @param collectionId      optional collection ID
      */
-    private String deriveTitleFromMetadata(FsFile fsFile) {
-        String path = fsFile.getPath(); // e.g., "uuid/default.md"
-        // Try to extract meaningful title from path - we don't store original name separately
-        // so we just use the UUID (not ideal but works)
-        return null; // Fallback to caller to provide title
+    private DocumentBuildResult buildDocumentFromMarkdown(String markdownPath,
+                                                          String title,
+                                                          String originalFilename,
+                                                          Long collectionId) {
+        FsFile fsFile = fsFileRepository.findById(markdownPath)
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Entry Markdown file not found in fs_files: " + markdownPath));
+
+        String content = fsFile.getContentTxt();
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Entry Markdown file has no text content: " + markdownPath);
+        }
+
+        String contentHash = computeSha256(content);
+        String uuid = extractUuid(markdownPath);
+
+        var existing = documentRepository.findByContentHash(contentHash);
+        if (!existing.isEmpty()) {
+            RagDocument doc = existing.get(0);
+            log.info("Duplicate content detected, using existing document id={}", doc.getId());
+            boolean updated = false;
+            if (collectionId != null && !collectionId.equals(doc.getCollectionId())) {
+                doc.setCollectionId(collectionId);
+                doc = documentRepository.save(doc);
+                updated = true;
+            }
+            return new DocumentBuildResult(doc, false, updated, uuid);
+        }
+
+        RagDocument doc = new RagDocument();
+        doc.setTitle(title);
+        doc.setContent(content);
+        doc.setSource("pdf-import:" + markdownPath);
+        doc.setDocumentType("markdown");
+        doc.setOriginalFilename(originalFilename != null ? originalFilename : fsFile.getPath());
+        doc.setContentHash(contentHash);
+        doc.setCollectionId(collectionId);
+        doc.setSize((long) content.getBytes(StandardCharsets.UTF_8).length);
+        doc.setMetadata(Map.of(
+                "importedFrom", "pdf",
+                "fsFilesPath", markdownPath,
+                "uuid", uuid));
+        doc = documentRepository.save(doc);
+        log.info("RAG document created: id={}", doc.getId());
+        return new DocumentBuildResult(doc, true, false, uuid);
     }
 
-    // ==================== Original Trigger Embedding ====================
+    // ---- Embedding ----
 
-    private EmbedResult triggerEmbedding(RagDocument doc, boolean newlyCreated, boolean forceReembed) {
+    private EmbedResult doEmbed(RagDocument doc, boolean newlyCreated, boolean forceReembed) {
         try {
-            // Skip embedding for unchanged cached documents unless force
             if (!newlyCreated && !forceReembed) {
                 boolean isCached = doc.getEmbeddedContentHash() != null
                         && doc.getContentHash().equals(doc.getEmbeddedContentHash());
@@ -420,14 +244,10 @@ public class PdfToRagService {
                             null);
                 }
             }
-
             Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), forceReembed);
             String status = (String) result.get("status");
             String message = (String) result.getOrDefault("message", "");
-            Integer chunks = null;
-            if (result.get("chunksCreated") instanceof Number n) {
-                chunks = n.intValue();
-            }
+            Integer chunks = result.get("chunksCreated") instanceof Number n ? n.intValue() : null;
             return new EmbedResult(status, message, chunks);
         } catch (Exception e) {
             log.error("Embedding failed for document {}: {}", doc.getId(), e.getMessage());
@@ -435,60 +255,85 @@ public class PdfToRagService {
         }
     }
 
+    // ---- Helpers ----
+
     private String deriveTitle(String originalFilename) {
         if (originalFilename == null || originalFilename.isBlank()) {
             return "Untitled";
         }
-        // Remove .pdf extension
         String name = originalFilename;
         if (name.toLowerCase().endsWith(".pdf")) {
             name = name.substring(0, name.length() - 4);
         }
-        // Truncate if too long
         if (name.length() > 200) {
             name = name.substring(0, 200);
         }
         return name;
     }
 
+    /**
+     * Derive title for an already-imported PDF using the virtual directory UUID as fallback.
+     * Since files are stored with UUID-based paths, the title defaults to "PDF Import {uuid}"
+     * when no meaningful metadata is available.
+     */
+    private String deriveTitleFromMetadata(String markdownPath, String uuid) {
+        // Files are stored with UUID-based paths; originalFilename metadata not persisted separately.
+        return "PDF Import " + uuid;
+    }
+
     private String extractUuid(String path) {
         if (path == null || path.isEmpty()) {
             return "";
         }
-        // Path format: {uuid}/default.md
         int slashIdx = path.indexOf('/');
-        if (slashIdx > 0) {
-            return path.substring(0, slashIdx);
-        }
-        return path;
+        return slashIdx > 0 ? path.substring(0, slashIdx) : path;
     }
 
     private static String computeSha256(String content) {
         try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(content.getBytes(StandardCharsets.UTF_8));
+            byte[] hash = MessageDigest.getInstance("SHA-256")
+                    .digest(content.getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(hash);
         } catch (NoSuchAlgorithmException e) {
             throw new RuntimeException("SHA-256 not available", e);
         }
     }
 
-    // ==================== Result Records ====================
+    private PdfToRagResult toPdfToRagResult(DocumentBuildResult build, EmbedResult embed) {
+        return new PdfToRagResult(
+                build.doc().getId(),
+                build.doc().getTitle(),
+                build.newlyCreated(),
+                embed != null ? embed.status() : null,
+                embed != null ? embed.message() : null,
+                embed != null ? embed.chunksCreated() : null);
+    }
+
+    // ---- Result types ----
 
     public record PdfToRagResult(
-            /** Created (or existing) RAG document ID */
             Long documentId,
-            /** Document title */
             String title,
-            /** Whether this was a newly created document (vs. existing duplicate) */
             boolean newlyCreated,
-            /** Embedding status: COMPLETED, CACHED, FAILED, null if embed=false */
             String embedStatus,
-            /** Embedding result message */
             String embedMessage,
-            /** Number of chunks created (null if embed=false or on failure) */
             Integer chunksCreated
     ) {}
 
     private record EmbedResult(String status, String message, Integer chunksCreated) {}
+
+    /**
+     * Result of building (or finding) a RagDocument from a Markdown file.
+     *
+     * @param doc           the RagDocument entity (saved if newly created)
+     * @param newlyCreated  true if this is a brand-new document
+     * @param collectionUpdated true if an existing document had its collectionId updated
+     * @param uuid          virtual directory UUID extracted from the Markdown path
+     */
+    private record DocumentBuildResult(
+            RagDocument doc,
+            boolean newlyCreated,
+            boolean collectionUpdated,
+            String uuid
+    ) {}
 }
