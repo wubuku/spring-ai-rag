@@ -19,7 +19,7 @@ public interface FsFileRepository extends JpaRepository<FsFile, String> {
      * Find all files whose path starts with the given prefix.
      * Used for listing all files under a virtual directory.
      *
-     * @param prefix path prefix (e.g., "papers/烟酰胺文献/" — trailing slash included)
+     * @param prefix path prefix (e.g., "papers/skin-care-research/" — trailing slash included)
      * @return list of matching files ordered by path
      */
     List<FsFile> findByPathStartingWithOrderByPathAsc(String prefix);
@@ -60,7 +60,7 @@ public interface FsFileRepository extends JpaRepository<FsFile, String> {
      * Finds entries whose path has no more than one "/" segment beyond basePrefix,
      * or entries that equal basePrefix.
      *
-     * @param basePrefix the base path prefix (e.g., "papers/烟酰胺文献/")
+     * @param basePrefix the base path prefix (e.g., "papers/skin-care-research/")
      * @return entries directly under the base prefix
      */
     @Query("""

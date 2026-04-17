@@ -14,19 +14,19 @@ import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 使用 marker CLI 进行 PDF 转 Markdown。
+ * PDF to Markdown converter using the marker CLI.
  *
- * <p>marker CLI 是基于深度学习的 PDF 转换工具，可以高质量地提取文本、保留布局，
- * 并且能够提取 PDF 中的图片。
+ * <p>marker CLI is a deep-learning-based PDF conversion tool that extracts text with
+ * high fidelity, preserves layout, and can extract images from PDFs.
  *
- * <p>使用方式：
+ * <p>Usage:
  * <pre>
- * marker_single &lt;PDF文件路径&gt; &lt;输出目录&gt; --langs 'zh'
+ * marker_single &lt;PDF_FILE_PATH&gt; &lt;OUTPUT_DIR&gt; --langs 'en'
  * </pre>
  *
- * <p>需要设置环境变量 {@code TORCH_DEVICE=mps} (macOS) 或 {@code TORCH_DEVICE=cuda} (Linux)。
+ * <p>Set the environment variable {@code TORCH_DEVICE=mps} (macOS) or {@code TORCH_DEVICE=cuda} (Linux).
  *
- * <p>输出结构：
+ * <p>Output structure:
  * {@code {outputDir}/{pdfName}/{pdfName}.md}
  * {@code {outputDir}/{pdfName}/{image_0}.png}
  */
@@ -59,7 +59,7 @@ public class MarkerPdfConverter implements PdfConverter {
         String markerCli = pdfProperties.getMarkerCli();
         String langs = pdfProperties.getLangs();
 
-        // 构建命令：marker_single <pdfPath> <outputDir> --langs <langs>
+        // Build command: marker_single <pdfPath> <outputDir> --langs <langs>
         ProcessBuilder pb = new ProcessBuilder(
                 markerCli,
                 pdfPath.toAbsolutePath().toString(),
@@ -67,10 +67,10 @@ public class MarkerPdfConverter implements PdfConverter {
                 "--langs", langs
         );
 
-        // 设置环境变量，使用 MPS 加速 (macOS)
+        // Set environment variable for MPS acceleration (macOS)
         pb.environment().put("TORCH_DEVICE", "mps");
 
-        // 合并错误流到标准流
+        // Merge stderr into stdout
         pb.redirectErrorStream(true);
 
         log.info("Running marker CLI: {} {} --langs {}", markerCli, pdfPath.toAbsolutePath(), langs);
@@ -78,7 +78,7 @@ public class MarkerPdfConverter implements PdfConverter {
         try {
             Process process = pb.start();
 
-            // 读取输出
+            // Read output
             StringBuilder output = new StringBuilder();
             try (var reader = new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8)) {
                 int ch;
@@ -87,7 +87,7 @@ public class MarkerPdfConverter implements PdfConverter {
                 }
             }
 
-            // 等待进程完成，最多5分钟
+            // Wait for process to complete, up to 5 minutes
             boolean finished = process.waitFor(5, TimeUnit.MINUTES);
 
             if (!finished) {
@@ -127,7 +127,7 @@ public class MarkerPdfConverter implements PdfConverter {
             pb.redirectErrorStream(true);
             Process process = pb.start();
 
-            // 等待最多10秒
+            // Wait up to 10 seconds
             boolean finished = process.waitFor(10, TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();

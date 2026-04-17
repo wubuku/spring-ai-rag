@@ -27,7 +27,7 @@ public class FsFile {
     /**
      * File path, used as primary key.
      * Uses forward-slash "/" as the directory separator convention.
-     * Example: "papers/烟酰胺文献/烟酰胺在化妆品中的应用_王洪滨.pdf"
+     * Example: "papers/skin-care-research/nicotinamide_in_cosmetics_smith.pdf"
      */
     @Id
     @Column(name = "path")

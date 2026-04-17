@@ -14,7 +14,7 @@ public record PdfToRagResponse(
         @Schema(description = "RAG document ID in the knowledge base", example = "42")
         Long documentId,
 
-        @Schema(description = "Document title (derived from original PDF filename)", example = "烟酰胺在化妆品中的应用")
+        @Schema(description = "Document title (derived from original PDF filename)", example = "nicotinamide_in_cosmetics")
         String title,
 
         @Schema(description = "Whether this was a newly created document. "
