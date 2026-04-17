@@ -60,7 +60,7 @@ public class PdfImportService {
                             List<PdfConverter> converters) {
         this.fsFileRepository = fsFileRepository;
         this.pdfProperties = pdfProperties;
-        // 按优先级排序：marker CLI 优先，然后 PDFBox
+        // Sort by priority: marker CLI first, then PDFBox
         this.converters = converters.stream()
                 .sorted(Comparator.comparing(PdfConverter::getName))
                 .toList();
@@ -122,18 +122,18 @@ public class PdfImportService {
                 throw new RuntimeException("PDF conversion failed using " + converter.getName());
             }
 
-            // marker 输出目录结构: {tempWorkDir}/{pdfName}/
+            // marker output directory structure: {tempWorkDir}/{pdfName}/
             String pdfBaseName = originalFilename;
             if (pdfBaseName.toLowerCase().endsWith(".pdf")) {
                 pdfBaseName = pdfBaseName.substring(0, pdfBaseName.length() - 4);
             }
             Path markerOutputDir = tempWorkDir.resolve(pdfBaseName);
 
-            // 导入整个目录树到数据库
+            // Import entire directory tree into database
             List<FsFile> records = new ArrayList<>();
             int[] count = {0};
 
-            // 存储 original PDF
+            // Store original PDF
             byte[] pdfBytes = Files.readAllBytes(tempPdfPath);
             FsFile pdfFileRecord = new FsFile(
                     uuid + "/original.pdf",
@@ -146,7 +146,7 @@ public class PdfImportService {
             records.add(pdfFileRecord);
             count[0]++;
 
-            // 遍历 marker 输出目录，导入所有文件
+            // Iterate through marker output directory, import all files
             if (Files.exists(markerOutputDir)) {
                 try {
                     Files.list(markerOutputDir).forEach(file -> {
@@ -157,10 +157,10 @@ public class PdfImportService {
                                 String filename = file.getFileName().toString().trim();
                                 byte[] content = Files.readAllBytes(file);
 
-                                // Markdown 文件作为 entry (default.md)
+                                // Markdown files become the entry (default.md)
                                 boolean isMarkdown = filename.toLowerCase().endsWith(".md");
                                 String recordPath = isMarkdown
-                                        ? uuid + "/default.md"  // 重命名为 default.md
+                                        ? uuid + "/default.md"  // Rename to default.md
                                         : uuid + "/" + filename;
 
                                 String contentTxt = isMarkdown
@@ -204,7 +204,7 @@ public class PdfImportService {
             return new PdfImportResult(uuid, entryMarkdownPath, count[0]);
 
         } finally {
-            // 清理 temp 目录
+            // Cleanup temp directory
             try {
                 Files.walk(tempWorkDir)
                         .sorted(Comparator.reverseOrder())

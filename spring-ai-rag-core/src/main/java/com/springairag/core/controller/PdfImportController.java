@@ -657,7 +657,7 @@ public class PdfImportController {
         // pdfPath can be:
         // 1. UUID (virtual dir) -> UUID/default.md
         // 2. UUID/original.pdf -> UUID/default.md
-        // 3. papers/论文.pdf -> papers/论文.md (legacy, keep for compatibility)
+        // 3. papers/paper.pdf -> papers/paper.md (legacy, keep for compatibility)
         if (pdfPath.endsWith(".pdf")) {
             // If it's UUID/original.pdf, convert to UUID/default.md
             if (pdfPath.endsWith("/original.pdf") || pdfPath.endsWith("/original")) {

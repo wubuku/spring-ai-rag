@@ -13,11 +13,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * 使用 Apache PDFBox 进行 PDF 转 Markdown。
+ * PDF to Markdown converter using Apache PDFBox.
  *
- * <p>这是纯 Java 实现，不需要外部依赖，但只能提取文本，无法保留布局和图片。
+ * <p>This is a pure Java implementation with no external dependencies. It can only
+ * extract text and cannot preserve layout or images.
  *
- * <p>输出：{@code {outputDir}/{pdfName}/{pdfName}.md}
+ * <p>Output: {@code {outputDir}/{pdfName}/{pdfName}.md}
  */
 @Component
 public class PdfBoxConverter implements PdfConverter {
@@ -35,19 +36,19 @@ public class PdfBoxConverter implements PdfConverter {
             return false;
         }
         String pdfName = pdfPath.getFileName().toString();
-        // 去除 .pdf 后缀
+        // Strip .pdf suffix
         if (pdfName.toLowerCase().endsWith(".pdf")) {
             pdfName = pdfName.substring(0, pdfName.length() - 4);
         }
 
-        // 创建输出子目录
+        // Create output subdirectory
         Path outputSubDir = outputDir.resolve(pdfName);
         Path outputMdFile = outputSubDir.resolve(pdfName + ".md");
 
         try {
             Files.createDirectories(outputSubDir);
 
-            // 读取 PDF
+            // Read PDF
             byte[] pdfBytes = Files.readAllBytes(pdfPath);
 
             try (PDDocument document = Loader.loadPDF(pdfBytes)) {
@@ -55,10 +56,10 @@ public class PdfBoxConverter implements PdfConverter {
                 stripper.setSortByPosition(true);
                 String text = stripper.getText(document);
 
-                // 构建 Markdown
+                // Build Markdown
                 String markdown = buildMarkdown(pdfName, text);
 
-                // 写入 Markdown 文件
+                // Write Markdown file
                 Files.writeString(outputMdFile, markdown, StandardCharsets.UTF_8);
 
                 log.info("PDFBox extracted text to: {}", outputMdFile);
@@ -73,7 +74,7 @@ public class PdfBoxConverter implements PdfConverter {
 
     @Override
     public boolean isAvailable() {
-        // PDFBox 总是可用的（作为 Spring Boot starter 依赖）
+        // PDFBox is always available (provided by Spring Boot starter dependency)
         return true;
     }
 
@@ -85,7 +86,7 @@ public class PdfBoxConverter implements PdfConverter {
     private String buildMarkdown(String title, String extractedText) {
         StringBuilder md = new StringBuilder();
 
-        // 标题
+        // Title
         md.append("# ").append(title).append("\n\n");
         md.append("*Extracted from PDF automatically. Layout may not be preserved.*\n\n");
         md.append("## Content\n\n");
@@ -93,7 +94,7 @@ public class PdfBoxConverter implements PdfConverter {
         if (extractedText == null || extractedText.isBlank()) {
             md.append("*No text content could be extracted from this PDF.*\n");
         } else {
-            // 按双换行分段
+            // Split by double newlines (paragraphs)
             String[] paragraphs = extractedText.split("\n\\s*\n");
             for (String para : paragraphs) {
                 String trimmed = para.trim();

@@ -3,41 +3,41 @@ package com.springairag.core.service.pdf;
 import java.nio.file.Path;
 
 /**
- * PDF 转 Markdown 的抽象接口。
+ * Abstract interface for PDF to Markdown conversion.
  *
- * <p>不同的实现使用不同的技术：
+ * <p>Different implementations use different techniques:
  * <ul>
- *   <li>{@link MarkerPdfConverter} — marker CLI (深度学习模型，高质量，但需要GPU)</li>
- *   <li>{@link PdfBoxConverter} — Apache PDFBox (纯Java，仅提取文本，无布局)</li>
+ *   <li>{@link MarkerPdfConverter} — marker CLI (deep learning model, high quality, but requires GPU)</li>
+ *   <li>{@link PdfBoxConverter} — Apache PDFBox (pure Java, text extraction only, no layout)</li>
  * </ul>
  */
 public interface PdfConverter {
 
     /**
-     * 将 PDF 文件转换为 Markdown。
+     * Converts a PDF file to Markdown.
      *
-     * <p>转换后的 Markdown 文件输出到：{@code {outputDir}/{pdfName}/{pdfName}.md}
-     * 图片文件输出到：{@code {outputDir}/{pdfName}/}
+     * <p>Output Markdown file: {@code {outputDir}/{pdfName}/{pdfName}.md}
+     * Image files (if any): {@code {outputDir}/{pdfName}/}
      *
-     * @param pdfPath   源 PDF 文件路径
-     * @param outputDir 输出目录（marker 会创建以 PDF 文件名为名称的子目录）
-     * @return true 转换成功，false 转换失败
+     * @param pdfPath   source PDF file path
+     * @param outputDir output directory (converter creates a subdirectory named after the PDF file)
+     * @return true if conversion succeeded, false if conversion failed
      */
     boolean convert(Path pdfPath, Path outputDir);
 
     /**
-     * 检查此转换器是否可用。
+     * Checks whether this converter is available.
      *
-     * <p>例如 MarkerPdfConverter 检查 marker CLI 是否已安装。
+     * <p>For example, MarkerPdfConverter checks whether the marker CLI is installed.
      *
-     * @return true 可用，false 不可用
+     * @return true if available, false if unavailable
      */
     boolean isAvailable();
 
     /**
-     * 获取转换器的名称，用于日志和错误信息。
+     * Gets the converter name for logging and error messages.
      *
-     * @return 转换器名称
+     * @return converter name
      */
     String getName();
 }
