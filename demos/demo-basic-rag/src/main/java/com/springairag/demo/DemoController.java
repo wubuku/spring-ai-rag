@@ -10,7 +10,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Demo 控制器 — 展示如何在自己的应用中使用 RagChatService
+ * Demo controller — shows how to use RagChatService in your own application.
  */
 @RestController
 @RequestMapping("/demo")
@@ -23,24 +23,24 @@ public class DemoController {
     }
 
     /**
-     * 最简单的问答：只需一行代码
+     * Simplest Q&amp;A: just one line of code.
      */
     @GetMapping("/ask")
     public ResponseEntity<String> quickAsk(@RequestParam String q) {
-        // 核心调用：传入问题，返回回答
+        // Core call: pass in the question, get the answer back.
         String answer = ragChatService.chat(q, UUID.randomUUID().toString());
         return ResponseEntity.ok(answer);
     }
 
     /**
-     * 完整问答：使用 ChatRequest，支持领域扩展和引用来源
+     * Full Q&amp;A: uses ChatRequest, supports domain extensions and source citations.
      */
     @PostMapping("/chat")
     public ResponseEntity<ChatResponse> fullChat(@RequestBody Map<String, String> body) {
         ChatRequest request = new ChatRequest();
         request.setMessage(body.get("message"));
         request.setSessionId(body.getOrDefault("sessionId", UUID.randomUUID().toString()));
-        request.setDomainId(body.get("domainId"));  // 可选：领域扩展
+        request.setDomainId(body.get("domainId"));  // Optional: domain extension
 
         ChatResponse response = ragChatService.chat(request);
         return ResponseEntity.ok(response);

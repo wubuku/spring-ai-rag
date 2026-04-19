@@ -8,14 +8,14 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Demo 配置验证测试
+ * Demo configuration validation tests.
  *
- * <p>验证 demo-basic-rag 的 application.yml 配置正确绑定了 spring-ai-rag-starter 的 RagProperties。
+ * <p>Verifies that demo-basic-rag's application.yml correctly binds to spring-ai-rag-starter's RagProperties.
  *
- * <p>这是 demo 项目的最低验证级别：
- * 不启动完整 Spring Context（需要真实 PostgreSQL / LLM），只验证配置类和数据传输对象。
+ * <p>This is the minimal validation level for the demo project:
+ * does not start a full Spring Context (requires real PostgreSQL / LLM), only validates configuration classes and DTOs.
  *
- * <p>完整 E2E 测试（在真实环境下运行）：
+ * <p>Full E2E tests (run in a real environment):
  * <pre>
  * cd demos/demo-basic-rag
  * export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
@@ -75,7 +75,7 @@ class DemoConfigurationTest {
         var constructors = controllerClass.getConstructors();
         assertTrue(constructors.length > 0, "DemoController should have at least one constructor");
 
-        // 验证至少有一个构造函数的参数类型包含 RagChatService
+        // Verify at least one constructor has a parameter type containing RagChatService.
         boolean foundRagChatService = false;
         for (var constructor : constructors) {
             for (var paramType : constructor.getParameterTypes()) {
@@ -92,8 +92,8 @@ class DemoConfigurationTest {
     @Test
     @DisplayName("spring-ai-rag-starter 依赖坐标正确")
     void starterDependency_coordinates() throws Exception {
-        // 验证 spring-ai-rag-starter 工件存在于 classpath
-        // （通过检查 RagChatService 类是否可加载来间接验证 starter 在 classpath 中）
+        // Verify spring-ai-rag-starter artifact exists on the classpath
+        // (verified indirectly by checking that RagChatService class is loadable).
         Class<?> ragChatServiceClass = Class.forName("com.springairag.core.config.RagChatService");
         assertNotNull(ragChatServiceClass);
     }

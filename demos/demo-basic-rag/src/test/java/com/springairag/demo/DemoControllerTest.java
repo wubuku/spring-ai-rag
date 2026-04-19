@@ -14,7 +14,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * DemoController 单元测试
+ * Unit tests for DemoController.
  */
 class DemoControllerTest {
 
@@ -45,7 +45,7 @@ class DemoControllerTest {
         controller.quickAsk("问题1");
         controller.quickAsk("问题1");
 
-        // 验证调用了两次，session ID 不同（通过参数捕获验证）
+        // Verify two calls with different session IDs (verified via argument capture).
         verify(ragChatService, times(2)).chat(anyString(), anyString());
     }
 
