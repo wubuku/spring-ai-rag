@@ -367,4 +367,94 @@ class PdfImportControllerTest {
         assertEquals(200, entity.getStatusCode().value());
         verify(pdfToRagService).triggerEmbedding("uuid-789", 10L, false);
     }
+
+    // ==================== previewHtmlFragment tests ====================
+
+    @Test
+    void previewHtmlFragment_existingMarkdown_returnsHtmlFragment() {
+        FsFile fsFile = new FsFile();
+        fsFile.setPath("/papers/test.pdf");
+        fsFile.setMimeType("text/markdown");
+
+        when(pdfImportService.getFile(anyString())).thenReturn(Optional.empty());
+        when(pdfImportService.getFile("/papers/test.md")).thenReturn(Optional.of(fsFile));
+        when(markdownRendererService.renderToHtml(any(FsFile.class)))
+                .thenReturn("<h1>Fragment Content</h1>");
+
+        ResponseEntity<String> response = controller.previewHtmlFragment("/papers/test.pdf");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().contains("<h1>Fragment Content</h1>"));
+        assertEquals("text/html", response.getHeaders().getContentType().toString());
+    }
+
+    @Test
+    void previewHtmlFragment_fileNotFound_returnsNotFound() {
+        when(pdfImportService.getFile(anyString())).thenReturn(Optional.empty());
+
+        ResponseEntity<String> response = controller.previewHtmlFragment("/papers/nonexistent.pdf");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    // ==================== getRawFilePath tests ====================
+
+    @Test
+    void getRawFilePath_existingFile_returnsFile() {
+        byte[] content = "Raw file content".getBytes();
+        Resource resource = new ByteArrayResource(content);
+
+        FsFile fsFile = new FsFile();
+        fsFile.setPath("/uuid-123/image.png");
+        fsFile.setMimeType("image/png");
+
+        when(pdfImportService.getFile("uuid-123/image.png")).thenReturn(Optional.of(fsFile));
+        when(pdfImportService.loadFileAsResource("uuid-123/image.png")).thenReturn(Optional.of(resource));
+
+        ResponseEntity<Resource> response = controller.getRawFilePath("uuid-123", "image.png");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("image/png", response.getHeaders().getContentType().toString());
+    }
+
+    @Test
+    void getRawFilePath_fileNotFound_returnsNotFound() {
+        when(pdfImportService.getFile(anyString())).thenReturn(Optional.empty());
+
+        ResponseEntity<Resource> response = controller.getRawFilePath("uuid-123", "missing.png");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
+
+    // ==================== previewHtmlPageLegacy tests ====================
+
+    @Test
+    void previewHtmlPageLegacy_existingMarkdown_returnsHtml() {
+        FsFile fsFile = new FsFile();
+        fsFile.setPath("/papers/legacy.pdf");
+        fsFile.setMimeType("text/markdown");
+
+        when(pdfImportService.getFile(anyString())).thenReturn(Optional.empty());
+        when(pdfImportService.getFile("/papers/legacy.md")).thenReturn(Optional.of(fsFile));
+        when(markdownRendererService.renderToHtml(any(FsFile.class)))
+                .thenReturn("<p>Legacy preview content</p>");
+
+        ResponseEntity<String> response = controller.previewHtmlPageLegacy("/papers/legacy.pdf");
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertTrue(response.getBody().contains("<p>Legacy preview content</p>"));
+        assertEquals("text/html", response.getHeaders().getContentType().toString());
+    }
+
+    @Test
+    void previewHtmlPageLegacy_fileNotFound_returnsNotFound() {
+        when(pdfImportService.getFile(anyString())).thenReturn(Optional.empty());
+
+        ResponseEntity<String> response = controller.previewHtmlPageLegacy("/papers/missing.pdf");
+
+        assertEquals(404, response.getStatusCode().value());
+    }
 }
