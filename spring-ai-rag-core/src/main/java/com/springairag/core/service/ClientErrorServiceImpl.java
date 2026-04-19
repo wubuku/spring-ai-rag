@@ -8,6 +8,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * Client Error Service Implementation
+ *
+ * <p>Records client-side errors reported by the WebUI via POST /client-errors endpoint.
+ * These errors are stored in the rag_client_error table for debugging and analytics.
+ * Error recording is best-effort: failures in recording do not propagate to the caller.
+ */
 @Service
 public class ClientErrorServiceImpl implements ClientErrorService {
 
@@ -19,6 +26,12 @@ public class ClientErrorServiceImpl implements ClientErrorService {
         this.clientErrorRepository = clientErrorRepository;
     }
 
+    /**
+     * Records a client-side error to the database.
+     *
+     * @param request the client error details (error type, message, stack trace, etc.)
+     * @throws IllegalArgumentException if request is null
+     */
     @Override
     @Transactional
     public void recordError(ClientErrorRequest request) {
@@ -44,6 +57,11 @@ public class ClientErrorServiceImpl implements ClientErrorService {
                 request.getSessionId());
     }
 
+    /**
+     * Returns the total number of recorded client errors.
+     *
+     * @return total error count in the database
+     */
     @Override
     public long getErrorCount() {
         return clientErrorRepository.count();
