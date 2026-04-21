@@ -196,4 +196,165 @@ class RagChatControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(0, response.getBody().deletedCount());
     }
+
+    // ==================== chat (POST /rag/chat) ====================
+
+    @Test
+    void chat_returnsOkWithResponse() {
+        ChatRequest request = new ChatRequest("What is RAG?", "chat-session-001");
+        ChatResponse expected = ChatResponse.builder()
+                .answer("RAG is retrieval-augmented generation.")
+                .build();
+
+        when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
+
+        ResponseEntity<ChatResponse> response = controller.chat(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("RAG is retrieval-augmented generation.", response.getBody().getAnswer());
+        verify(ragChatService).chat(argThat(r ->
+                "What is RAG?".equals(r.getMessage()) &&
+                "chat-session-001".equals(r.getSessionId())));
+    }
+
+    @Test
+    void chat_withDomainId_passesToService() {
+        ChatRequest request = new ChatRequest("Legal question", "chat-session-002");
+        request.setDomainId("legal");
+        ChatResponse expected = ChatResponse.builder().answer("Legal answer").build();
+
+        when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
+
+        ResponseEntity<ChatResponse> response = controller.chat(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(ragChatService).chat(argThat(r -> "legal".equals(r.getDomainId())));
+    }
+
+    @Test
+    void chat_withNullSessionId_generatesUuid() {
+        ChatRequest request = new ChatRequest("Question", null);
+        ChatResponse expected = ChatResponse.builder().answer("Answer").build();
+
+        when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
+
+        ResponseEntity<ChatResponse> response = controller.chat(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(request.getSessionId());
+        verify(ragChatService).chat(argThat(r -> r.getSessionId() != null && !r.getSessionId().isBlank()));
+    }
+
+    @Test
+    void chat_withBlankSessionId_generatesUuid() {
+        ChatRequest request = new ChatRequest("Question", "   ");
+        ChatResponse expected = ChatResponse.builder().answer("Answer").build();
+
+        when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
+
+        ResponseEntity<ChatResponse> response = controller.chat(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(request.getSessionId());
+    }
+
+    @Test
+    void chat_withSources_returnsInResponse() {
+        ChatRequest request = new ChatRequest("Question", "chat-session-003");
+
+        ChatResponse.SourceDocument source = new ChatResponse.SourceDocument();
+        source.setDocumentId("doc-chat-1");
+        source.setChunkText("Relevant chunk");
+        source.setScore(0.92);
+
+        ChatResponse expected = ChatResponse.builder()
+                .answer("Answer with sources")
+                .sources(List.of(source))
+                .build();
+
+        when(ragChatService.chat(any(ChatRequest.class))).thenReturn(expected);
+
+        ResponseEntity<ChatResponse> response = controller.chat(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody().getSources());
+        assertEquals(1, response.getBody().getSources().size());
+        assertEquals("doc-chat-1", response.getBody().getSources().get(0).getDocumentId());
+    }
+
+    // ==================== exportHistory ====================
+
+    @Test
+    void exportHistory_jsonFormat_returnsJsonResource() {
+        String sessionId = "export-session-001";
+        byte[] jsonContent = "{\"sessionId\":\"export-session-001\",\"messages\":[]}".getBytes();
+
+        when(chatExportService.exportAsJson(sessionId, 0)).thenReturn(jsonContent);
+
+        ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
+                controller.exportHistory(sessionId, "json", 0);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("attachment; filename=\"export-session-001.json\"",
+                response.getHeaders().getFirst("Content-Disposition"));
+        assertTrue(response.getHeaders().getFirst("Content-Type").contains("application/json"));
+        verify(chatExportService).exportAsJson(sessionId, 0);
+    }
+
+    @Test
+    void exportHistory_markdownFormat_returnsMdResource() {
+        String sessionId = "export-session-002";
+        byte[] mdContent = "# Chat Export\n\nSession: export-session-002".getBytes();
+
+        when(chatExportService.exportAsMarkdown(sessionId, 50)).thenReturn(mdContent);
+
+        ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
+                controller.exportHistory(sessionId, "md", 50);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("attachment; filename=\"export-session-002.md\"",
+                response.getHeaders().getFirst("Content-Disposition"));
+        assertTrue(response.getHeaders().getFirst("Content-Type").contains("text/markdown"));
+        verify(chatExportService).exportAsMarkdown(sessionId, 50);
+    }
+
+    @Test
+    void exportHistory_markdownCaseInsensitive_returnsMdResource() {
+        String sessionId = "export-session-003";
+        byte[] mdContent = "# Export".getBytes();
+
+        when(chatExportService.exportAsMarkdown(sessionId, 0)).thenReturn(mdContent);
+
+        ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
+                controller.exportHistory(sessionId, "MD", 0);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertTrue(response.getHeaders().getFirst("Content-Type").contains("text/markdown"));
+    }
+
+    @Test
+    void exportHistory_invalidFormat_throwsIllegalArgumentException() {
+        String sessionId = "export-session-004";
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class, () ->
+                controller.exportHistory(sessionId, "xml", 0));
+
+        assertTrue(ex.getMessage().contains("format must be 'json' or 'md'"));
+    }
+
+    @Test
+    void exportHistory_emptySessionId_passesToService() {
+        String sessionId = "";
+        byte[] jsonContent = "{}".getBytes();
+
+        when(chatExportService.exportAsJson(sessionId, 0)).thenReturn(jsonContent);
+
+        ResponseEntity<org.springframework.core.io.ByteArrayResource> response =
+                controller.exportHistory(sessionId, "json", 0);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(chatExportService).exportAsJson(sessionId, 0);
+    }
 }
