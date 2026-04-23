@@ -63,7 +63,7 @@ class DocumentEmbedServiceTest {
     // ==================== embedDocument ====================
 
     @Test
-    @DisplayName("embedDocument: 正常分块→嵌入→存储")
+    @DisplayName("embedDocument: chunk -> embed -> store")
     void embedDocument_success() {
         RagDocument doc = createDocument(1L, "这是第一段内容。这是第二段内容。".repeat(50));
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -88,14 +88,14 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocument: 文档不存在抛异常")
+    @DisplayName("embedDocument: throws when document not found")
     void embedDocument_notFound_throws() {
         when(documentRepository.findById(999L)).thenReturn(Optional.empty());
         assertThrows(DocumentNotFoundException.class, () -> service.embedDocument(999L));
     }
 
     @Test
-    @DisplayName("embedDocument: 内容为空抛异常")
+    @DisplayName("embedDocument: throws when content is empty")
     void embedDocument_emptyContent_throws() {
         RagDocument doc = createDocument(1L, "");
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -118,7 +118,7 @@ class DocumentEmbedServiceTest {
     // ==================== embedDocumentViaVectorStore ====================
 
     @Test
-    @DisplayName("embedDocumentViaVectorStore: 正常路径")
+    @DisplayName("embedDocumentViaVectorStore: happy path")
     void embedDocumentViaVectorStore_success() {
         RagDocument doc = createDocument(2L, "向量存储测试内容。".repeat(50));
         when(documentRepository.findById(2L)).thenReturn(Optional.of(doc));
@@ -135,7 +135,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentViaVectorStore: VectorStore 未配置抛异常")
+    @DisplayName("embedDocumentViaVectorStore: throws when VectorStore not configured")
     void embedDocumentViaVectorStore_noVectorStore_throws() {
         DocumentEmbedService noStoreService = new DocumentEmbedService(
                 documentRepository, embeddingRepository, embeddingBatchService,
@@ -145,7 +145,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentViaVectorStore: 文档不存在抛异常")
+    @DisplayName("embedDocumentViaVectorStore: throws when document not found")
     void embedDocumentViaVectorStore_notFound_throws() {
         when(documentRepository.findById(99L)).thenReturn(Optional.empty());
         assertThrows(DocumentNotFoundException.class,
@@ -153,7 +153,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentViaVectorStore: 内容为空抛异常")
+    @DisplayName("embedDocumentViaVectorStore: throws when content is empty")
     void embedDocumentViaVectorStore_emptyContent_throws() {
         RagDocument doc = createDocument(1L, null);
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -162,7 +162,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentViaVectorStore: 内容太短返回提示")
+    @DisplayName("embedDocumentViaVectorStore: returns skip when content too short")
     void embedDocumentViaVectorStore_contentTooShort_returnsSkipped() {
         RagDocument doc = createDocument(1L, "短");
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -195,7 +195,7 @@ class DocumentEmbedServiceTest {
     // ==================== batchEmbedDocuments ====================
 
     @Test
-    @DisplayName("batchEmbedDocuments: 批量嵌入全部成功")
+    @DisplayName("batchEmbedDocuments: all documents embed successfully")
     void batchEmbedDocuments_allSuccess() {
         RagDocument doc1 = createDocument(1L, "文档1内容。".repeat(50));
         RagDocument doc2 = createDocument(2L, "文档2内容。".repeat(50));
@@ -219,7 +219,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocuments: 文档不存在算 skipped")
+    @DisplayName("batchEmbedDocuments: missing documents counted as skipped")
     void batchEmbedDocuments_notFound_skipped() {
         when(documentRepository.findById(1L)).thenReturn(Optional.empty());
 
@@ -232,7 +232,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocuments: 内容为空算 skipped")
+    @DisplayName("batchEmbedDocuments: empty content counted as skipped")
     void batchEmbedDocuments_emptyContent_skipped() {
         RagDocument doc = createDocument(1L, "");
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -246,7 +246,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocuments: 嵌入异常算 failed")
+    @DisplayName("batchEmbedDocuments: embedding error counted as failed")
     void batchEmbedDocuments_exceptionFailed() {
         RagDocument doc = createDocument(1L, "有内容的文档。".repeat(50));
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -262,7 +262,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocuments: 超过 50 条限制抛异常")
+    @DisplayName("batchEmbedDocuments: throws when exceeding 50 document limit")
     void batchEmbedDocuments_exceedsLimit_throws() {
         List<Long> ids = java.util.stream.LongStream.rangeClosed(1, 51).boxed().toList();
         assertThrows(IllegalArgumentException.class,
@@ -270,7 +270,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocuments: 结果列表顺序与输入一致")
+    @DisplayName("batchEmbedDocuments: result order matches input order")
     void batchEmbedDocuments_resultOrderPreserved() {
         RagDocument doc1 = createDocument(10L, "内容1。".repeat(50));
         RagDocument doc2 = createDocument(20L, "内容2。".repeat(50));
@@ -297,13 +297,13 @@ class DocumentEmbedServiceTest {
     // ==================== isVectorStoreAvailable ====================
 
     @Test
-    @DisplayName("isVectorStoreAvailable: 有 VectorStore 返回 true")
+    @DisplayName("isVectorStoreAvailable: returns true when VectorStore present")
     void isVectorStoreAvailable_withStore() {
         assertTrue(service.isVectorStoreAvailable());
     }
 
     @Test
-    @DisplayName("isVectorStoreAvailable: 无 VectorStore 返回 false")
+    @DisplayName("isVectorStoreAvailable: returns false when VectorStore absent")
     void isVectorStoreAvailable_withoutStore() {
         DocumentEmbedService noStoreService = new DocumentEmbedService(
                 documentRepository, embeddingRepository, embeddingBatchService,
@@ -311,10 +311,10 @@ class DocumentEmbedServiceTest {
         assertFalse(noStoreService.isVectorStoreAvailable());
     }
 
-    // ==================== 内容哈希缓存 ====================
+    // ==================== Content Hash Cache ====================
 
     @Test
-    @DisplayName("嵌入缓存: 内容未变更(status=COMPLETED, 同哈希, 有嵌入) → 命中缓存")
+    @DisplayName("embed cache: content unchanged (status=COMPLETED, same hash, has embeddings) -> cache hit")
     void embedDocument_contentUnchanged_cacheHit() {
         String hash = "abc123";
         RagDocument doc = createDocumentWithHash(1L, "固定内容。".repeat(50), hash);
@@ -328,12 +328,12 @@ class DocumentEmbedServiceTest {
         assertEquals("CACHED", output.get("status"));
         assertEquals(true, output.get("cached"));
         assertEquals(5L, output.get("embeddingsStored"));
-        // 不应调用嵌入 API
+        // should not call embedding API
         verifyNoInteractions(embeddingBatchService);
     }
 
     @Test
-    @DisplayName("嵌入缓存: 内容已变更 → 重新嵌入")
+    @DisplayName("embed cache: content changed -> re-embed")
     void embedDocument_contentChanged_reEmbeds() {
         RagDocument doc = createDocumentWithHash(1L, "新内容。".repeat(50), "new_hash");
         doc.setProcessingStatus("COMPLETED");
@@ -354,11 +354,11 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入缓存: embeddedContentHash 为 null → 重新嵌入")
+    @DisplayName("embed cache: embeddedContentHash is null -> re-embed")
     void embedDocument_nullEmbeddedHash_reEmbeds() {
         RagDocument doc = createDocumentWithHash(1L, "内容。".repeat(50), "hash");
         doc.setProcessingStatus("COMPLETED");
-        // embeddedContentHash 未设置
+        // embeddedContentHash not set
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
 
         float[] vec = new float[3];
@@ -374,7 +374,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入缓存: 嵌入完成后更新 embeddedContentHash")
+    @DisplayName("embed cache: updates embeddedContentHash after embedding")
     void embedDocument_updatesEmbeddedHash() {
         String hash = "test_hash";
         RagDocument doc = createDocumentWithHash(1L, "测试内容。".repeat(50), hash);
@@ -394,7 +394,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入缓存: VectorStore 路径内容未变更 → 命中缓存")
+    @DisplayName("embed cache: VectorStore path content unchanged -> cache hit")
     void embedDocumentViaVectorStore_contentUnchanged_cacheHit() {
         String hash = "vs_hash";
         RagDocument doc = createDocumentWithHash(2L, "内容。".repeat(50), hash);
@@ -410,7 +410,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("嵌入缓存: force=true 跳过哈希检查，强制重嵌入")
+    @DisplayName("embed cache: force=true skips hash check, forces re-embed")
     void embedDocument_force_skipsCache() {
         String hash = "same_hash";
         RagDocument doc = createDocumentWithHash(1L, "内容。".repeat(50), hash);
@@ -434,7 +434,7 @@ class DocumentEmbedServiceTest {
     // ==================== embedDocumentWithProgress ====================
 
     @Test
-    @DisplayName("embedDocumentWithProgress: null callback 不抛异常（maybeEmit null-safe）")
+    @DisplayName("embedDocumentWithProgress: null callback does not throw (maybeEmit null-safe)")
     void embedDocumentWithProgress_nullCallback_noException() {
         RagDocument doc = createDocument(1L, "这是第一段内容。这是第二段内容。".repeat(50));
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
@@ -452,7 +452,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentWithProgress: 缓存命中时 chunks=null 不抛异常（maybeEmit null-safe）")
+    @DisplayName("embedDocumentWithProgress: cache hit with chunks=null does not throw")
     void embedDocumentWithProgress_cacheHit_chunksNull_noException() {
         RagDocument doc = createDocumentWithHash(1L, "短内容", "hash123");
         doc.setProcessingStatus("COMPLETED");
@@ -466,41 +466,41 @@ class DocumentEmbedServiceTest {
 
         assertEquals("CACHED", output.get("status"));
         assertEquals(List.of("PREPARING", "COMPLETED"), phases,
-                "缓存命中应触发 PREPARING + COMPLETED: " + phases);
+                "cache hit should trigger PREPARING + COMPLETED: " + phases);
     }
 
     @Test
-    @DisplayName("embedDocumentWithProgress: 进度回调正确触发各阶段（emitEmbeddingProgress）")
+    @DisplayName("embedDocumentWithProgress: progress callback fires each phase correctly")
     void embedDocumentWithProgress_progressCallback_allPhases() {
-        // 强制重嵌入（force=true），用 force=true 让内容哈希不匹配缓存
+        // Force re-embed: force=true bypasses content hash cache check
         RagDocument doc = createDocumentWithHash(1L, "这是一段很长的文档内容，用于测试嵌入进度回调是否正确触发各个阶段。".repeat(10), "forcehash");
         doc.setProcessingStatus("COMPLETED");
-        doc.setEmbeddedContentHash("otherhash"); // 不匹配，强制重嵌入
+        doc.setEmbeddedContentHash("otherhash"); // mismatch -> force re-embed
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
         when(documentRepository.save(any())).thenReturn(doc);
 
-        float[] vec = new float[1024]; // BGE-M3 维度
-        // mock 返回 1 个 embedding，chunker 产生的 chunk 数也会是 1
+        float[] vec = new float[1024]; // BGE-M3 dimensions
+        // mock returns 1 embedding, chunker also produces 1 chunk
         when(embeddingBatchService.createEmbeddingsBatch(anyList()))
                 .thenReturn(List.of(new EmbeddingBatchService.EmbeddingResult("chunk1", vec, null)));
 
         java.util.List<String> phases = new java.util.ArrayList<>();
         service.embedDocumentWithProgress(1L, true, event -> phases.add(event.phase()));
 
-        assertTrue(phases.contains("PREPARING"), "应包含 PREPARING: " + phases);
-        assertTrue(phases.contains("CHUNKING"), "应包含 CHUNKING: " + phases);
-        assertTrue(phases.contains("EMBEDDING"), "应包含 EMBEDDING: " + phases);
-        assertTrue(phases.contains("STORING"), "应包含 STORING: " + phases);
-        assertTrue(phases.contains("COMPLETED"), "应包含 COMPLETED: " + phases);
-        // EMBEDDING 阶段应触发 1 次（1 个 chunk）
+        assertTrue(phases.contains("PREPARING"), "should contain PREPARING: " + phases);
+        assertTrue(phases.contains("CHUNKING"), "should contain CHUNKING: " + phases);
+        assertTrue(phases.contains("EMBEDDING"), "should contain EMBEDDING: " + phases);
+        assertTrue(phases.contains("STORING"), "should contain STORING: " + phases);
+        assertTrue(phases.contains("COMPLETED"), "should contain COMPLETED: " + phases);
+        // EMBEDDING phase should fire once (1 chunk)
         assertEquals(1, phases.stream().filter(p -> p.equals("EMBEDDING")).count(),
-                "EMBEDDING 应触发 1 次: " + phases);
+                "EMBEDDING should fire once: " + phases);
     }
 
     // ==================== batchEmbedDocumentsWithProgress ====================
 
     @Test
-    @DisplayName("batchEmbedDocumentsWithProgress: 3 docs 全部命中缓存，counter 正确累加")
+    @DisplayName("batchEmbedDocumentsWithProgress: 3 docs all cache hit, counters accumulate correctly")
     void batchWithProgress_allCached_countersCorrect() {
         List<Long> ids = List.of(1L, 2L, 3L);
         for (Long id : ids) {
@@ -526,7 +526,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocumentsWithProgress: 混合状态（COMPLETED/CACHED/SKIPPED）")
+    @DisplayName("batchEmbedDocumentsWithProgress: mixed statuses (COMPLETED/CACHED/SKIPPED)")
     void batchWithProgress_mixedStatuses_countersCorrect() {
         // doc1: NOT_FOUND (no mock for findById(1L)) → status unset → SKIPPED via default
         // doc2: CACHED
@@ -557,13 +557,13 @@ class DocumentEmbedServiceTest {
 
         // Verify phases
         List<String> phases = events.stream().map(BatchEmbedProgressEvent::phase).toList();
-        assertTrue(phases.contains("CACHED"), "应包含 CACHED: " + phases);
-        assertTrue(phases.contains("COMPLETED"), "应包含 COMPLETED: " + phases);
-        assertTrue(phases.contains("SKIPPED"), "应包含 SKIPPED: " + phases);
+        assertTrue(phases.contains("CACHED"), "should contain CACHED: " + phases);
+        assertTrue(phases.contains("COMPLETED"), "should contain COMPLETED: " + phases);
+        assertTrue(phases.contains("SKIPPED"), "should contain SKIPPED: " + phases);
     }
 
     @Test
-    @DisplayName("batchEmbedDocumentsWithProgress: null callback 不抛异常（maybeEmit null-safe）")
+    @DisplayName("batchEmbedDocumentsWithProgress: null callback does not throw (maybeEmit null-safe)")
     void batchWithProgress_nullCallback_noException() {
         RagDocument doc = createDocumentWithHash(1L, "内容", "hash1");
         doc.setProcessingStatus("COMPLETED");
@@ -579,7 +579,7 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("batchEmbedDocumentsWithProgress: 单文档返回正确 batch result")
+    @DisplayName("batchEmbedDocumentsWithProgress: single document returns correct batch result")
     void batchWithProgress_singleDoc_buildBatchResultCorrect() {
         RagDocument doc = createDocumentWithHash(1L, "single", "h1");
         doc.setProcessingStatus("COMPLETED");
