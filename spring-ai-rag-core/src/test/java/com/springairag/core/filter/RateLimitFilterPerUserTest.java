@@ -15,7 +15,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RateLimitFilter — Per-user 限流增强")
+@DisplayName("RateLimitFilter — Per-user Rate Limiting")
 class RateLimitFilterPerUserTest {
 
     private static final int DEFAULT_LIMIT = 10;
@@ -35,11 +35,11 @@ class RateLimitFilterPerUserTest {
     }
 
     @Nested
-    @DisplayName("策略：ip（默认，向后兼容）")
+    @DisplayName("Strategy: ip (default, backward compatible)")
     class IpStrategy {
 
         @Test
-        @DisplayName("strategy=ip 时按 IP 限流")
+        @DisplayName("strategy=ip rates by IP")
         void ipStrategyUsesIp() throws Exception {
             RateLimitFilter filter = createFilter("ip", Map.of());
             request.addHeader("X-API-Key", "sk-test");
@@ -56,11 +56,11 @@ class RateLimitFilterPerUserTest {
             filter.doFilterInternal(request, response, chain);
 
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "IP 策略下即使有 API Key 也应按 IP 限流");
+                    "IP strategy should rate limit by IP even with API Key present");
         }
 
         @Test
-        @DisplayName("strategy=ip 时忽略 key-limits 配置")
+        @DisplayName("strategy=ip ignores key-limits config")
         void ipStrategyIgnoresKeyLimits() throws Exception {
             RateLimitFilter filter = createFilter("ip", Map.of("sk-vip", 100));
             request.addHeader("X-API-Key", "sk-vip");
@@ -80,11 +80,11 @@ class RateLimitFilterPerUserTest {
     }
 
     @Nested
-    @DisplayName("策略：api-key")
+    @DisplayName("Strategy: api-key")
     class ApiKeyStrategy {
 
         @Test
-        @DisplayName("携带 API Key 时按 Key 限流")
+        @DisplayName("with API Key present, rates by key")
         void apiKeyStrategyUsesKey() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());
             request.addHeader("X-API-Key", "sk-user-1");
@@ -103,7 +103,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("不同 API Key 各自独立计数")
+        @DisplayName("different API Keys are counted independently")
         void differentApiKeysIndependent() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());
 
@@ -123,11 +123,11 @@ class RateLimitFilterPerUserTest {
             chain = new MockFilterChain();
             filter.doFilterInternal(req2, response, chain);
             assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                    "不同 API Key 不应互相影响");
+                    "Different API Keys should not affect each other");
         }
 
         @Test
-        @DisplayName("未携带 API Key 时回退到 IP 限流")
+        @DisplayName("no API Key present, falls back to IP rate limiting")
         void fallsBackToIpWhenNoKey() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());
 
@@ -142,11 +142,11 @@ class RateLimitFilterPerUserTest {
             chain = new MockFilterChain();
             filter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "无 Key 时应按 IP 限流");
+                    "No Key should fall back to IP rate limiting");
         }
 
         @Test
-        @DisplayName("API Key 空白时回退到 IP")
+        @DisplayName("blank API Key falls back to IP")
         void fallsBackToIpWhenKeyBlank() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());
             request.addHeader("X-API-Key", "  ");
@@ -166,11 +166,11 @@ class RateLimitFilterPerUserTest {
     }
 
     @Nested
-    @DisplayName("自定义限额（key-limits）")
+    @DisplayName("Custom key-limits")
     class CustomKeyLimits {
 
         @Test
-        @DisplayName("VIP Key 使用自定义限额")
+        @DisplayName("VIP Key uses custom limit")
         void vipKeyUsesCustomLimit() throws Exception {
             RateLimitFilter filter = createFilter("api-key",
                     Map.of("sk-vip", 50, "sk-basic", 5));
@@ -190,7 +190,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("Basic Key 使用较低限额")
+        @DisplayName("Basic Key uses lower limit")
         void basicKeyUsesLowerLimit() throws Exception {
             RateLimitFilter filter = createFilter("api-key",
                     Map.of("sk-vip", 50, "sk-basic", 5));
@@ -210,7 +210,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("未注册 Key 使用默认限额")
+        @DisplayName("unregistered Key uses default limit")
         void unknownKeyUsesDefaultLimit() throws Exception {
             RateLimitFilter filter = createFilter("api-key",
                     Map.of("sk-vip", 50));
@@ -239,7 +239,7 @@ class RateLimitFilterPerUserTest {
             filter.doFilterInternal(request, response, chain);
 
             assertEquals("50", response.getHeader("X-RateLimit-Limit"),
-                    "限额响应头应反映 VIP 的 50 次限额");
+                    "Rate limit header should reflect VIP limit of 50");
             assertEquals("49", response.getHeader("X-RateLimit-Remaining"));
         }
 
@@ -259,16 +259,16 @@ class RateLimitFilterPerUserTest {
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus());
             var body = objectMapper.readTree(response.getContentAsString());
             assertTrue(body.get("message").asText().contains("2"),
-                    "错误消息应包含限额 2");
+                    "Error message should contain limit 2");
         }
     }
 
     @Nested
-    @DisplayName("标识符解析")
+    @DisplayName("Client ID Resolution")
     class ClientIdResolution {
 
         @Test
-        @DisplayName("请求属性包含限流标识符")
+        @DisplayName("request attribute contains rate limit client ID")
         void requestAttributeContainsClientId() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());
             request.addHeader("X-API-Key", "sk-test");
@@ -279,7 +279,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("IP 策略时属性为 IP")
+        @DisplayName("IP strategy sets attribute to client IP")
         void ipStrategyAttributeIsIp() throws Exception {
             RateLimitFilter filter = createFilter("ip", Map.of());
 
@@ -289,7 +289,7 @@ class RateLimitFilterPerUserTest {
         }
     }
 
-    // ==================== 辅助方法 ====================
+    // ==================== Helper Method ====================
 
     private RateLimitFilter createFilter(String strategy, Map<String, Integer> keyLimits) {
         RateLimitFilter filter = new RateLimitFilter(true, DEFAULT_LIMIT, strategy, keyLimits);
