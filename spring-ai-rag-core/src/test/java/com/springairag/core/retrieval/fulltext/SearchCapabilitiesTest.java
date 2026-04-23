@@ -116,7 +116,7 @@ class SearchCapabilitiesTest {
     class InitTrueTests {
 
         @Test
-        @DisplayName("正常检测扩展和索引")
+        @DisplayName("Detects extensions and indexes normally")
         void detectExtensionsAndIndexes() {
             jdbc = mock(JdbcTemplate.class);
             // 模拟扩展检测返回：只有 vector + pg_trgm

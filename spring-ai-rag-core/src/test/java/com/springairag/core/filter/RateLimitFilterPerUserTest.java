@@ -230,7 +230,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("限额响应头反映自定义限额")
+        @DisplayName("Rate limit response headers reflect custom limits")
         void responseHeadersReflectCustomLimit() throws Exception {
             RateLimitFilter filter = createFilter("api-key",
                     Map.of("sk-vip", 50));
@@ -244,7 +244,7 @@ class RateLimitFilterPerUserTest {
         }
 
         @Test
-        @DisplayName("429 响应消息包含自定义限额")
+        @DisplayName("429 response message contains custom limit info")
         void rateLimitMessageShowsCustomLimit() throws Exception {
             RateLimitFilter filter = createFilter("api-key",
                     Map.of("sk-basic", 2));

@@ -163,7 +163,7 @@ class FulltextSearchProviderFactoryTest {
     }
 
     @Nested
-    @DisplayName("显式策略选择")
+    @DisplayName("Explicit strategy selection")
     class ExplicitStrategy {
 
         @Test
