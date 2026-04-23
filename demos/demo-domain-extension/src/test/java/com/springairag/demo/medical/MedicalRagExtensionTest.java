@@ -14,19 +14,19 @@ class MedicalRagExtensionTest {
     private final MedicalRagExtension extension = new MedicalRagExtension();
 
     @Test
-    @DisplayName("domainId 为 medical")
+    @DisplayName("domainId is medical")
     void domainId_isMedical() {
         assertEquals("medical", extension.getDomainId());
     }
 
     @Test
-    @DisplayName("domainName 为医疗问诊")
+    @DisplayName("domainName is medical consultation")
     void domainName_isMedicalConsultation() {
         assertEquals("医疗问诊", extension.getDomainName());
     }
 
     @Test
-    @DisplayName("系统提示词包含 {context} 占位符")
+    @DisplayName("system prompt contains {context} placeholder")
     void systemPrompt_containsContextPlaceholder() {
         String prompt = extension.getSystemPromptTemplate();
         assertTrue(prompt.contains("{context}"), "提示词必须包含 {context} 占位符");

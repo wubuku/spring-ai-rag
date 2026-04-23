@@ -102,7 +102,7 @@ class MultiModelControllerTest {
     }
 
     @Test
-    @DisplayName("GET /demo/models/{provider} — provider 不存在时返回 404")
+    @DisplayName("GET /demo/models/{provider} - returns 404 when provider not found")
     void getModel_returns404_whenNotAvailable() throws Exception {
         when(modelRegistry.isAvailable("unknown")).thenReturn(false);
 
@@ -115,7 +115,7 @@ class MultiModelControllerTest {
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("POST /demo/chat — 使用 openai 模型回答")
+    @DisplayName("POST /demo/chat - uses openai model to answer")
     void chatWithProvider_returnsAnswer() throws Exception {
         when(modelRegistry.isAvailable("openai")).thenReturn(true);
         when(modelComparisonService.compareProviders(eq("什么是 RAG？"), anyList(), anyInt()))
@@ -133,7 +133,7 @@ class MultiModelControllerTest {
     }
 
     @Test
-    @DisplayName("POST /demo/chat — provider 不可用时返回 400")
+    @DisplayName("POST /demo/chat - returns 400 when provider unavailable")
     void chatWithProvider_throws_whenNotAvailable() throws Exception {
         when(modelRegistry.isAvailable("minimax")).thenReturn(false);
 
@@ -147,7 +147,7 @@ class MultiModelControllerTest {
     }
 
     @Test
-    @DisplayName("POST /demo/chat — 模型调用失败时抛出异常")
+    @DisplayName("POST /demo/chat - throws exception when model call fails")
     void chatWithProvider_throws_whenModelFails() throws Exception {
         when(modelRegistry.isAvailable("openai")).thenReturn(true);
         when(modelComparisonService.compareProviders(anyString(), anyList(), anyInt()))

@@ -29,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class DemoConfigurationTest {
 
     @Test
-    @DisplayName("ChatRequest 构造正常，可设置所有字段")
+    @DisplayName("ChatRequest constructs normally and can set all fields")
     void chatRequest_settersAndGetters() {
         ChatRequest request = new ChatRequest();
         request.setMessage("你好");
@@ -42,7 +42,7 @@ class DemoConfigurationTest {
     }
 
     @Test
-    @DisplayName("ChatRequest 默认值正确")
+    @DisplayName("ChatRequest default values are correct")
     void chatRequest_defaults() {
         ChatRequest request = new ChatRequest();
         assertNull(request.getMessage());
@@ -51,7 +51,7 @@ class DemoConfigurationTest {
     }
 
     @Test
-    @DisplayName("DemoApplication 类存在且有 @SpringBootApplication")
+    @DisplayName("DemoApplication class exists with @SpringBootApplication")
     void demoApplication_classExists() throws Exception {
         Class<?> appClass = Class.forName("com.springairag.demo.BasicRagDemoApplication");
         assertNotNull(appClass.getAnnotation(
@@ -59,7 +59,7 @@ class DemoConfigurationTest {
     }
 
     @Test
-    @DisplayName("DemoController 类存在且有 @RestController/@RequestMapping")
+    @DisplayName("DemoController class exists with @RestController/@RequestMapping")
     void demoController_classExists() throws Exception {
         Class<?> controllerClass = Class.forName("com.springairag.demo.DemoController");
         assertNotNull(controllerClass.getAnnotation(
@@ -90,7 +90,7 @@ class DemoConfigurationTest {
     }
 
     @Test
-    @DisplayName("spring-ai-rag-starter 依赖坐标正确")
+    @DisplayName("spring-ai-rag-starter dependency coordinates are correct")
     void starterDependency_coordinates() throws Exception {
         // Verify spring-ai-rag-starter artifact exists on the classpath
         // (verified indirectly by checking that RagChatService class is loadable).

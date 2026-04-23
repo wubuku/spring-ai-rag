@@ -36,7 +36,7 @@ class MedicalPromptCustomizerTest {
     }
 
     @Test
-    @DisplayName("无 domainId 时消息不修改")
+    @DisplayName("message unchanged when no domainId")
     void customizeUserMessage_noDomain_noChange() {
         Map<String, Object> metadata = Map.of();
         String original = "普通问题";
@@ -46,7 +46,7 @@ class MedicalPromptCustomizerTest {
     }
 
     @Test
-    @DisplayName("order 为 100")
+    @DisplayName("order is 100")
     void order_is100() {
         assertEquals(100, customizer.getOrder());
     }

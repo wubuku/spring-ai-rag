@@ -38,7 +38,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("POST /consult - 设置 domainId=medical")
+    @DisplayName("POST /consult - sets domainId to medical")
     void consult_setsDomainIdToMedical() {
         ChatResponse mockResponse = new ChatResponse("这是医疗问诊回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
@@ -62,7 +62,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("POST /consult - 无 sessionId 时自动生成")
+    @DisplayName("POST /consult - generates sessionId when not provided")
     void consult_generatesSessionId() {
         ChatResponse mockResponse = new ChatResponse("回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
@@ -81,7 +81,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("GET /quick - 返回纯文本")
+    @DisplayName("GET /quick - returns plain text")
     void quickConsult_returnsPlainText() {
         // Stub the 4-arg overload used by quickConsult
         when(ragChatService.chat(anyString(), anyString(), eq("medical"), isNull()))
@@ -101,7 +101,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("POST /general - 不设置 domainId，走通用 RAG")
+    @DisplayName("POST /general - without domainId, uses general RAG")
     void generalAsk_usesDefaultDomain() {
         ChatResponse mockResponse = new ChatResponse("通用回答");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
@@ -122,7 +122,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("POST /consult - ChatResponse 包含 answer")
+    @DisplayName("POST /consult - ChatResponse includes answer")
     void consult_includesAnswer() {
         ChatResponse mockResponse = new ChatResponse("回答内容");
         AtomicReference<ChatRequest> captured = new AtomicReference<>();
@@ -141,7 +141,7 @@ class MedicalRagControllerTest {
     }
 
     @Test
-    @DisplayName("GET /quick - 不同的医学问题都能正确路由")
+    @DisplayName("GET /quick - routes different medical questions correctly")
     void quickConsult_variousSymptoms() {
         when(ragChatService.chat(anyString(), anyString(), eq("medical"), isNull()))
                 .thenReturn("医学建议");
