@@ -69,7 +69,7 @@ class DemoConfigurationTest {
     }
 
     @Test
-    @DisplayName("DemoController 构造函数依赖 RagChatService")
+    @DisplayName("DemoController constructor depends on RagChatService")
     void demoController_dependsOnRagChatService() throws Exception {
         Class<?> controllerClass = Class.forName("com.springairag.demo.DemoController");
         var constructors = controllerClass.getConstructors();
