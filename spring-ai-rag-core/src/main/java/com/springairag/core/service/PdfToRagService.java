@@ -249,7 +249,7 @@ public class PdfToRagService {
             String message = (String) result.getOrDefault("message", "");
             Integer chunks = result.get("chunksCreated") instanceof Number n ? n.intValue() : null;
             return new EmbedResult(status, message, chunks);
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: embedding failure should not abort the overall import process
             log.error("Embedding failed for document {}: {}", doc.getId(), e.getMessage());
             return new EmbedResult("FAILED", e.getMessage(), null);
         }
