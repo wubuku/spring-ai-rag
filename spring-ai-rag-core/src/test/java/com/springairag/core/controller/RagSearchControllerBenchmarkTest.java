@@ -52,7 +52,7 @@ class RagSearchControllerBenchmarkTest {
     }
 
     @Test
-    @DisplayName("100 并发搜索请求 - 验证并发处理能力")
+    @DisplayName("100 concurrent search requests - verify concurrency handling")
     void search_concurrentRequests_allSucceed() throws Exception {
         int threadCount = 100;
         ExecutorService pool = Executors.newFixedThreadPool(threadCount);
@@ -100,7 +100,7 @@ class RagSearchControllerBenchmarkTest {
     }
 
     @Test
-    @DisplayName("50 并发搜索请求吞吐量 - 验证每批 < 1s")
+    @DisplayName("50 concurrent search request throughput - verify each batch < 1s")
     void search_concurrent50_throughputUnder1s() throws Exception {
         int threadCount = 50;
         ExecutorService pool = Executors.newFixedThreadPool(threadCount);

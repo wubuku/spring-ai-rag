@@ -794,7 +794,7 @@ class RagControllerIntegrationTest {
     // ========================================================================
 
     @Nested
-    @DisplayName("HTTP 协议层")
+    @DisplayName("HTTP Protocol Layer")
     class HttpProtocolTests {
 
         @Test

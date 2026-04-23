@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * LLM 熔断器完整测试
+ * Comprehensive tests for LLM Circuit Breaker
  */
 class LlmCircuitBreakerTest {
 
@@ -33,18 +33,18 @@ class LlmCircuitBreakerTest {
     // ==================== CLOSED state ====================
 
     @Nested
-    @DisplayName("CLOSED 状态")
+    @DisplayName("CLOSED State")
     class ClosedState {
 
         @Test
-        @DisplayName("初始允许调用")
+        @DisplayName("Allows calls initially")
         void allowCallInitially() {
             assertTrue(breaker.allowCall());
             assertEquals(LlmCircuitBreaker.State.CLOSED, breaker.getState());
         }
 
         @Test
-        @DisplayName("未达到最小调用数时不会熔断")
+        @DisplayName("Does not trip below minimum call count")
         void noTripBelowMinimumCalls() {
             for (int i = 0; i < 9; i++) {
                 breaker.recordFailure();
@@ -54,7 +54,7 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("失败率 50% 时熔断（>= 阈值触发）")
+        @DisplayName("Trips at 50% failure rate (>= threshold triggers)")
         void tripAtExactThreshold() {
             // 10 successes + 10 failures = 50% failure rate = threshold, so trips (>=)
             for (int i = 0; i < 10; i++) {
@@ -65,7 +65,7 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("失败率刚好低于阈值时不会熔断")
+        @DisplayName("Does not trip when failure rate is just below threshold")
         void noTripBelowExactThreshold() {
             // Use a fresh breaker with 51% threshold so 50% is below it
             RagCircuitBreakerProperties config = buildConfig(51, 10, 1, 20);
@@ -79,7 +79,7 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("失败率超过 50% 时熔断")
+        @DisplayName("Trips when failure rate exceeds 50%")
         void tripAboveThreshold() {
             // 10 failures before 10 successes → 100% failure rate
             for (int i = 0; i < 10; i++) {
@@ -90,7 +90,7 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("成功后失败计数重置")
+        @DisplayName("Success resets failure count")
         void successesResetAfterFailure() {
             breaker.recordFailure();
             breaker.recordFailure();
@@ -104,7 +104,7 @@ class LlmCircuitBreakerTest {
     // ==================== OPEN state ====================
 
     @Nested
-    @DisplayName("OPEN 状态")
+    @DisplayName("OPEN State")
     class OpenState {
 
         @BeforeEach
@@ -117,13 +117,13 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("OPEN 状态拒绝调用")
+        @DisplayName("Rejects calls in OPEN state")
         void rejectCallInOpenState() {
             assertFalse(breaker.allowCall());
         }
 
         @Test
-        @DisplayName("OPEN 状态经过等待时间后进入 HALF_OPEN")
+        @DisplayName("Transitions to HALF_OPEN after wait duration")
         void transitionToHalfOpenAfterWait() throws InterruptedException {
             // Wait for the 1 second wait duration
             Thread.sleep(1100);
@@ -135,7 +135,7 @@ class LlmCircuitBreakerTest {
     // ==================== HALF_OPEN state ====================
 
     @Nested
-    @DisplayName("HALF_OPEN 状态")
+    @DisplayName("HALF_OPEN State")
     class HalfOpenState {
 
         @BeforeEach
@@ -152,21 +152,21 @@ class LlmCircuitBreakerTest {
         }
 
         @Test
-        @DisplayName("HALF_OPEN 成功调用后回到 CLOSED")
+        @DisplayName("Returns to CLOSED after success in HALF_OPEN")
         void closeAfterSuccess() {
             breaker.recordSuccess();
             assertEquals(LlmCircuitBreaker.State.CLOSED, breaker.getState());
         }
 
         @Test
-        @DisplayName("HALF_OPEN 失败调用后回到 OPEN")
+        @DisplayName("Returns to OPEN after failure in HALF_OPEN")
         void reOpenAfterFailure() {
             breaker.recordFailure();
             assertEquals(LlmCircuitBreaker.State.OPEN, breaker.getState());
         }
 
         @Test
-        @DisplayName("HALF_OPEN 再次调用被拒绝（同时只允许一个测试调用）")
+        @DisplayName("Rejects second call in HALF_OPEN (single probing call only)")
         void secondCallRejectedInHalfOpen() {
             assertTrue(breaker.allowCall()); // First call allowed
             assertFalse(breaker.allowCall()); // Second rejected
@@ -176,7 +176,7 @@ class LlmCircuitBreakerTest {
     // ==================== getStats ====================
 
     @Test
-    @DisplayName("getStats 返回正确的统计信息")
+    @DisplayName("getStats returns correct statistics")
     void getStatsFormat() {
         String stats = breaker.getStats();
             assertTrue(stats.contains("state=CLOSED"));
@@ -185,7 +185,7 @@ class LlmCircuitBreakerTest {
     }
 
     @Test
-    @DisplayName("OPEN 状态下 getStats 包含 lastFailureAgeMs")
+    @DisplayName("getStats includes lastFailureAgeMs in OPEN state")
     void openStateStatsContainLastFailureAge() {
         for (int i = 0; i < 10; i++) {
             breaker.recordFailure();
@@ -198,11 +198,11 @@ class LlmCircuitBreakerTest {
     // ==================== Sliding window ====================
 
     @Nested
-    @DisplayName("滑动窗口边界")
+    @DisplayName("Sliding Window Boundaries")
     class SlidingWindow {
 
         @Test
-        @DisplayName("大窗口内重置计数防止溢出")
+        @DisplayName("Large window reset prevents overflow")
         void largeWindowResetPreventsOverflow() {
             RagCircuitBreakerProperties config = buildConfig(50, 100, 1, 20);
             LlmCircuitBreaker smallWindow = new LlmCircuitBreaker(config);

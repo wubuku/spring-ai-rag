@@ -35,7 +35,7 @@ class RagHealthControllerTest {
     }
 
     @Test
-    @DisplayName("健康检查返回各组件状态")
+    @DisplayName("Health check returns component statuses")
     void health_returnsComponentStatus() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
         when(jdbcTemplate.queryForObject(any(String.class), eq(String.class))).thenReturn("0.7.4");
@@ -53,7 +53,7 @@ class RagHealthControllerTest {
     }
 
     @Test
-    @DisplayName("数据库不可用时返回 DOWN")
+    @DisplayName("Returns DOWN when database is unavailable")
     void health_databaseDown() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class))
                 .thenThrow(new RuntimeException("Connection refused"));
@@ -65,7 +65,7 @@ class RagHealthControllerTest {
     }
 
     @Test
-    @DisplayName("组件详细端点返回完整信息")
+    @DisplayName("Component detail endpoint returns complete information")
     void healthComponents_returnsDetails() {
         when(jdbcTemplate.queryForObject("SELECT 1", Integer.class)).thenReturn(1);
         when(jdbcTemplate.queryForObject(any(String.class), eq(String.class))).thenReturn("0.7.4");
