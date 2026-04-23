@@ -143,6 +143,7 @@ public class BatchDocumentService {
             return new DocumentResult(doc.getId(), doc.getTitle(), newlyCreated, null);
 
         } catch (Exception e) {
+            // Resilience: individual document creation failure must not abort the entire batch
             log.error("Failed to create document at index {}: {}", index, e.getMessage());
             return new DocumentResult(null, req.getTitle(), false, e.getMessage());
         }

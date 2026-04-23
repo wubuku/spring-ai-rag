@@ -370,6 +370,7 @@ public class DocumentEmbedService {
                         docIndex, totalDocs, docId, phase, current, total,
                         message, success, failed, cached));
             } catch (Exception e) {
+                // Best-effort: progress reporting failure must not abort the batch operation
                 log.warn("Progress callback failed: {}", e.getMessage());
             }
         }
