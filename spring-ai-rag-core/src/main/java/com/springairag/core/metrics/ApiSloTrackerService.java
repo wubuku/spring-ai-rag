@@ -148,40 +148,57 @@ public class ApiSloTrackerService {
         Snapshot getSnapshot(long windowMillis) {
             lock.readLock().lock();
             try {
-                long cutoff = System.currentTimeMillis() - windowMillis;
-                List<Long> recent = samples.stream()
-                        .filter(s -> s.timestamp() >= cutoff)
-                        .map(LatencySample::latency)
-                        .sorted()
-                        .toList();
-
+                List<Long> recent = filterRecentSamples(windowMillis);
                 if (recent.isEmpty()) {
-                    return new Snapshot(0, 0, 0, 0, 0, 0, 0, 0);
+                    return emptySnapshot();
                 }
-
-                int n = recent.size();
-                int sloCount = 0;
-                for (Long lat : recent) {
-                    if (lat <= threshold) sloCount++;
-                }
-
-                double sum = 0;
-                for (Long lat : recent) sum += lat;
-                double avg = sum / n;
-
-                return new Snapshot(
-                        n,
-                        sloCount,
-                        n - sloCount,
-                        recent.get(0),                          // min
-                        recent.get(n - 1),                     // max
-                        avg,
-                        percentile(recent, 0.50),              // p50
-                        percentile(recent, 0.95)               // p95
-                );
+                return buildSnapshot(recent);
             } finally {
                 lock.readLock().unlock();
             }
+        }
+
+        private List<Long> filterRecentSamples(long windowMillis) {
+            long cutoff = System.currentTimeMillis() - windowMillis;
+            return samples.stream()
+                    .filter(s -> s.timestamp() >= cutoff)
+                    .map(LatencySample::latency)
+                    .sorted()
+                    .toList();
+        }
+
+        private Snapshot emptySnapshot() {
+            return new Snapshot(0, 0, 0, 0, 0, 0, 0, 0);
+        }
+
+        private Snapshot buildSnapshot(List<Long> recent) {
+            int n = recent.size();
+            int sloCount = countWithinThreshold(recent);
+            double avg = computeAverage(recent);
+            return new Snapshot(
+                    n,
+                    sloCount,
+                    n - sloCount,
+                    recent.get(0),                       // min
+                    recent.get(n - 1),                  // max
+                    avg,
+                    percentile(recent, 0.50),           // p50
+                    percentile(recent, 0.95)            // p95
+            );
+        }
+
+        private int countWithinThreshold(List<Long> sortedLatencies) {
+            int count = 0;
+            for (Long lat : sortedLatencies) {
+                if (lat <= threshold) count++;
+            }
+            return count;
+        }
+
+        private double computeAverage(List<Long> latencies) {
+            double sum = 0;
+            for (Long lat : latencies) sum += lat;
+            return sum / latencies.size();
         }
 
         private static double percentile(List<Long> sorted, double p) {
