@@ -385,4 +385,51 @@ class DingTalkNotificationServiceTest {
 
         assertTrue(result);
     }
+
+    @Test
+    void sendAlert_allRetriesFail_returnsFalse() {
+        when(notificationConfig.isEnabled()).thenReturn(true);
+
+        NotificationConfig.DingTalkConfig config = new NotificationConfig.DingTalkConfig();
+        config.setEnabled(true);
+        config.setWebhookUrl("https://oapi.dingtalk.com/robot/send?access_token=ABC");
+        config.setAlertTypes(List.of("THRESHOLD_HIGH"));
+        when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
+
+        // Simulate all 3 retry attempts failing
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RuntimeException("Connection timeout"));
+
+        boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
+                "test message", null);
+
+        assertFalse(result);
+        // Verify 3 attempts were made (MAX_RETRIES = 3)
+        verify(restTemplate, times(3))
+                .postForEntity(anyString(), any(HttpEntity.class), eq(String.class));
+    }
+
+    @Test
+    void sendAlert_secondAttemptSucceeds_returnsTrue() {
+        when(notificationConfig.isEnabled()).thenReturn(true);
+
+        NotificationConfig.DingTalkConfig config = new NotificationConfig.DingTalkConfig();
+        config.setEnabled(true);
+        config.setWebhookUrl("https://oapi.dingtalk.com/robot/send?access_token=ABC");
+        config.setAlertTypes(List.of("THRESHOLD_HIGH"));
+        when(notificationConfig.getDingtalk()).thenReturn(List.of(config));
+
+        // First attempt fails, second succeeds
+        when(restTemplate.postForEntity(anyString(), any(HttpEntity.class), eq(String.class)))
+                .thenThrow(new RuntimeException("Connection timeout"))
+                .thenReturn(new ResponseEntity<>("{\"errcode\":0}", HttpStatus.OK));
+
+        boolean result = service.sendAlert("THRESHOLD_HIGH", "Test Alert", "WARNING",
+                "test message", null);
+
+        assertTrue(result);
+        // Verify 2 attempts were made (failed once, succeeded on second)
+        verify(restTemplate, times(2))
+                .postForEntity(anyString(), any(HttpEntity.class), eq(String.class));
+    }
 }
