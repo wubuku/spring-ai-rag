@@ -36,7 +36,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("GET 检索返回 Map 包含 results/total/query")
+    @DisplayName("GET search returns response with results/total/query")
     void search_returnsMapWithResultsTotalQuery() {
         RetrievalResult r1 = new RetrievalResult();
         r1.setDocumentId("doc1");
@@ -58,7 +58,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("GET 检索空结果返回空列表")
+    @DisplayName("GET search empty results returns empty list")
     void search_emptyResults_returnsEmptyList() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
@@ -73,7 +73,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("GET 检索关闭混合检索时传递正确配置")
+    @DisplayName("GET search with hybrid disabled passes correct config")
     void search_withHybridDisabled_passesConfig() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
@@ -86,7 +86,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("POST 检索返回结果列表")
+    @DisplayName("POST search returns result list")
     void searchWithConfig_returnsResults() {
         RetrievalResult r1 = new RetrievalResult();
         r1.setDocumentId("doc1");
@@ -110,7 +110,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("GET 检索多条结果顺序正确")
+    @DisplayName("GET search multiple results order is correct")
     void search_multipleResults_orderCorrect() {
         List<RetrievalResult> results = List.of(
                 createResult("doc1", "chunk1", 0.95),
@@ -131,10 +131,10 @@ class RagSearchControllerTest {
         assertEquals("doc3", resultList.get(2).getDocumentId());
     }
 
-    // ========== 权重边界验证 ==========
+    // ========== Weight boundary validation ==========
 
     @Test
-    @DisplayName("vectorWeight > 1.0 返回 400")
+    @DisplayName("vectorWeight > 1.0 returns 400")
     void search_vectorWeightTooHigh_returns400() {
         ResponseEntity<?> response = controller.search("query", 10, true, 1.5, 0.5);
         assertEquals(400, response.getStatusCode().value());
@@ -144,7 +144,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("vectorWeight < 0.0 返回 400")
+    @DisplayName("vectorWeight < 0.0 returns 400")
     void search_vectorWeightTooLow_returns400() {
         ResponseEntity<?> response = controller.search("query", 10, true, -0.1, 0.5);
         assertEquals(400, response.getStatusCode().value());
@@ -154,7 +154,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("fulltextWeight > 1.0 返回 400")
+    @DisplayName("fulltextWeight > 1.0 returns 400")
     void search_fulltextWeightTooHigh_returns400() {
         ResponseEntity<?> response = controller.search("query", 10, true, 0.5, 2.0);
         assertEquals(400, response.getStatusCode().value());
@@ -164,7 +164,7 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("fulltextWeight < 0.0 返回 400")
+    @DisplayName("fulltextWeight < 0.0 returns 400")
     void search_fulltextWeightTooLow_returns400() {
         ResponseEntity<?> response = controller.search("query", 10, true, 0.5, -0.5);
         assertEquals(400, response.getStatusCode().value());
@@ -174,16 +174,16 @@ class RagSearchControllerTest {
     }
 
     @Test
-    @DisplayName("边界值 0.0 和 1.0 均合法")
+    @DisplayName("Boundary values 0.0 and 1.0 are valid")
     void search_weightBoundaryValues_valid() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
                 .thenReturn(List.of());
 
-        // 全部由向量承担
+        // All weight to vector
         ResponseEntity<?> r1 = controller.search("q", 5, true, 1.0, 0.0);
         assertEquals(200, r1.getStatusCode().value());
 
-        // 全部由全文承担
+        // All weight to fulltext
         ResponseEntity<?> r2 = controller.search("q", 5, true, 0.0, 1.0);
         assertEquals(200, r2.getStatusCode().value());
     }

@@ -35,7 +35,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("单次评估返回评估结果")
+    @DisplayName("Single evaluation returns evaluation result")
     void evaluate_returnsEvaluationResult() {
         RagRetrievalEvaluation eval = new RagRetrievalEvaluation();
         eval.setQuery("测试查询");
@@ -55,7 +55,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("单次评估传递 evaluatorId")
+    @DisplayName("Single evaluation passes evaluatorId")
     void evaluate_passesEvaluatorId() {
         RagRetrievalEvaluation eval = new RagRetrievalEvaluation();
         when(evaluationService.evaluate(anyString(), anyList(), anyList(), anyString(), anyString()))
@@ -71,7 +71,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("批量评估处理多条请求")
+    @DisplayName("Batch evaluation processes all requests")
     void batchEvaluate_processesAllRequests() {
         RagRetrievalEvaluation eval = new RagRetrievalEvaluation();
         when(evaluationService.batchEvaluate(anyList())).thenReturn(List.of(eval, eval));
@@ -87,7 +87,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("计算指标返回评估指标")
+    @DisplayName("Calculate metrics returns evaluation metrics")
     void calculateMetrics_returnsMetrics() {
         RetrievalEvaluationService.EvaluationMetrics metrics =
                 new RetrievalEvaluationService.EvaluationMetrics(
@@ -105,7 +105,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("获取报告返回时间段聚合数据")
+    @DisplayName("Get report returns time-range aggregated data")
     void getReport_returnsAggregatedReport() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -126,7 +126,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("获取历史返回分页列表")
+    @DisplayName("Get history returns paged list")
     void getHistory_returnsPagedList() {
         RagRetrievalEvaluation eval = new RagRetrievalEvaluation();
         eval.setQuery("历史查询");
@@ -140,7 +140,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("获取聚合指标")
+    @DisplayName("Get aggregated metrics")
     void getAggregatedMetrics_returnsMetrics() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -162,7 +162,7 @@ class EvaluationControllerTest {
     // ==================== 用户反馈 ====================
 
     @Test
-    @DisplayName("提交反馈返回保存结果")
+    @DisplayName("Submit feedback returns saved result")
     void submitFeedback_returnsSavedFeedback() {
         RagUserFeedback feedback = new RagUserFeedback();
         feedback.setSessionId("s1");
@@ -186,7 +186,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("提交评分反馈传递所有字段")
+    @DisplayName("Submit rating feedback passes all fields")
     void submitFeedback_rating_passesAllFields() {
         RagUserFeedback feedback = new RagUserFeedback();
         when(userFeedbackService.submitFeedback(
@@ -212,7 +212,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("获取反馈统计")
+    @DisplayName("Get feedback stats")
     void getFeedbackStats_returnsStats() {
         ZonedDateTime start = ZonedDateTime.now().minusDays(7);
         ZonedDateTime end = ZonedDateTime.now();
@@ -233,7 +233,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("获取反馈历史")
+    @DisplayName("Get feedback history")
     void getFeedbackHistory_returnsList() {
         RagUserFeedback f = new RagUserFeedback();
         f.setFeedbackType("THUMBS_DOWN");
@@ -246,7 +246,7 @@ class EvaluationControllerTest {
     }
 
     @Test
-    @DisplayName("按类型查询反馈")
+    @DisplayName("Get feedback by type filters correctly")
     void getFeedbackByType_filtersCorrectly() {
         RagUserFeedback f = new RagUserFeedback();
         f.setFeedbackType("THUMBS_UP");
