@@ -166,7 +166,7 @@ public class RequestTraceFilter implements Filter {
                 String spanId = spanIdEnabled ? parts[2] : null;
                 return new TraceContext(traceId, spanId, true);
             }
-        } catch (Exception e) {
+        } catch (Exception e) { // Resilience: traceparent parsing failure falls back to generated traceId
             log.debug("Failed to parse traceparent: {}", traceparent);
         }
         // Parse failed, generating new

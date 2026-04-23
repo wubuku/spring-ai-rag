@@ -128,7 +128,7 @@ public class RagChatHistoryRepository {
             try {
                 docIds = objectMapper.readValue(entity.getRelatedDocumentIds(),
                         new TypeReference<List<Long>>() {});
-            } catch (Exception e) {
+            } catch (Exception e) { // Resilience: malformed JSON should not break chat history retrieval
                 log.debug("Failed to parse relatedDocumentIds JSON: {}", entity.getRelatedDocumentIds());
             }
         }
