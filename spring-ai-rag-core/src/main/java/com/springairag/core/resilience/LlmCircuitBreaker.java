@@ -31,7 +31,7 @@ public class LlmCircuitBreaker {
 
     private final AtomicReference<State> state = new AtomicReference<>(State.CLOSED);
     /** Ring buffer entries: index = callCount % windowSize */
-    private final boolean[] results;
+    private boolean[] results;
     /** How many calls have been made (determines ring buffer position) */
     private final AtomicInteger callCount = new AtomicInteger(0);
     /** How many slots in results[] are currently valid (0..windowSize) */
@@ -41,17 +41,14 @@ public class LlmCircuitBreaker {
     private final AtomicLong lastFailureTime = new AtomicLong(0);
     private final AtomicInteger halfOpenAttempts = new AtomicInteger(0);
 
-    private final int failureRateThreshold;
-    private final int minimumNumberOfCalls;
-    private final long waitDurationInOpenStateMillis;
-    private final int windowSize;
+    private int failureRateThreshold;
+    private int minimumNumberOfCalls;
+    private long waitDurationInOpenStateMillis;
+    private int windowSize;
 
     public LlmCircuitBreaker(RagCircuitBreakerProperties config) {
-        this.windowSize = config.getSlidingWindowSize() > 0 ? config.getSlidingWindowSize() : 20;
-        this.results = new boolean[windowSize];
-        this.failureRateThreshold = config.getFailureRateThreshold();
-        this.minimumNumberOfCalls = config.getMinimumNumberOfCalls();
-        this.waitDurationInOpenStateMillis = config.getWaitDurationInOpenStateSeconds() * 1000L;
+        initFromConfig(config.getSlidingWindowSize(), config.getFailureRateThreshold(),
+                config.getMinimumNumberOfCalls(), config.getWaitDurationInOpenStateSeconds());
     }
 
     /**
@@ -59,11 +56,21 @@ public class LlmCircuitBreaker {
      * Both property types have identical structure, so the logic is identical.
      */
     public LlmCircuitBreaker(EmbeddingCircuitBreakerProperties config) {
-        this.windowSize = config.getSlidingWindowSize() > 0 ? config.getSlidingWindowSize() : 20;
+        initFromConfig(config.getSlidingWindowSize(), config.getFailureRateThreshold(),
+                config.getMinimumNumberOfCalls(), config.getWaitDurationInOpenStateSeconds());
+    }
+
+    /**
+     * Common initialization extracted from both constructors to eliminate duplication.
+     * Both RagCircuitBreakerProperties and EmbeddingCircuitBreakerProperties have the same structure.
+     */
+    private void initFromConfig(int slidingWindowSize, int failureRateThreshold,
+                                int minimumNumberOfCalls, int waitDurationInOpenStateSeconds) {
+        this.windowSize = slidingWindowSize > 0 ? slidingWindowSize : 20;
         this.results = new boolean[windowSize];
-        this.failureRateThreshold = config.getFailureRateThreshold();
-        this.minimumNumberOfCalls = config.getMinimumNumberOfCalls();
-        this.waitDurationInOpenStateMillis = config.getWaitDurationInOpenStateSeconds() * 1000L;
+        this.failureRateThreshold = failureRateThreshold;
+        this.minimumNumberOfCalls = minimumNumberOfCalls;
+        this.waitDurationInOpenStateMillis = waitDurationInOpenStateSeconds * 1000L;
     }
 
     /** Attempt to acquire execution permit */
