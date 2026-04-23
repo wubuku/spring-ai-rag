@@ -11,19 +11,19 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * SearchCapabilities Unit Tests
+ * Unit Tests for SearchCapabilities
  *
- * <p>覆盖：
+ * <p>Covers:
  * <ul>
- *   <li>No-arg 构造：所有能力 disabled</li>
- *   <li>Init=false 构造：字段由测试直接控制</li>
- *   <li>Init=true 构造：调用数据库探测</li>
- *   <li>@PostConstruct null guard：jdbcTemplate=null 时安全退出</li>
- *   <li>能力计算方法：enableChineseFts/enableEnglishFts/enableTrgm</li>
- *   <li>Getters</li>
+ *   <li>No-arg constructor: all capabilities disabled</li>
+ *   <li>Init=false constructor: fields controlled directly by tests</li>
+ *   <li>Init=true constructor: calls database detection</li>
+ *   <li>@PostConstruct null guard: safe exit when jdbcTemplate=null</li>
+ *   <li>Capability calculation methods: enableChineseFts/enableEnglishFts/enableTrgm</li>
+ *   <li>Getters and setters</li>
  * </ul>
  */
-@DisplayName("SearchCapabilities 数据库全文检索能力探测")
+@DisplayName("SearchCapabilities - Database Full-Text Search Capability Detection")
 class SearchCapabilitiesTest {
 
     private JdbcTemplate jdbc;
@@ -31,7 +31,7 @@ class SearchCapabilitiesTest {
     // ========== No-arg constructor tests ==========
 
     @Test
-    @DisplayName("no-arg 构造：所有能力默认 false")
+    @DisplayName("no-arg constructor: all capabilities default to false")
     void noArgConstructor_allCapabilitiesDisabled() {
         SearchCapabilities caps = new SearchCapabilities();
 
@@ -50,59 +50,59 @@ class SearchCapabilitiesTest {
     // ========== Init=false constructor tests ==========
 
     @Test
-    @DisplayName("init=false 构造：enableChineseFts 需要 jieba 扩展 + 索引同时存在")
+    @DisplayName("init=false constructor: enableChineseFts requires both jieba extension and index")
     void enableChineseFts_requiresBothJiebaAndIndex() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
 
-        // 只有扩展，没有索引 → false
+        // Extension only, no index -> false
         caps.setHasJieba(true);
         caps.setHasZhIndex(false);
         assertFalse(caps.enableChineseFts());
 
-        // 有索引，没有扩展 → false
+        // Index only, no extension -> false
         caps.setHasJieba(false);
         caps.setHasZhIndex(true);
         assertFalse(caps.enableChineseFts());
 
-        // 两者都有 → true
+        // Both present -> true
         caps.setHasJieba(true);
         caps.setHasZhIndex(true);
         assertTrue(caps.enableChineseFts());
     }
 
     @Test
-    @DisplayName("enableEnglishFts 只依赖 english 索引")
+    @DisplayName("enableEnglishFts requires only english index")
     void enableEnglishFts_requiresOnlyIndex() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
 
-        assertFalse(caps.enableEnglishFts()); // 无索引
+        assertFalse(caps.enableEnglishFts()); // no index
         caps.setHasEnIndex(true);
-        assertTrue(caps.enableEnglishFts());  // 有索引
+        assertTrue(caps.enableEnglishFts());  // with index
     }
 
     @Test
-    @DisplayName("enableTrgm 需要 pg_trgm 扩展 + 索引同时存在")
+    @DisplayName("enableTrgm requires both pg_trgm extension and index")
     void enableTrgm_requiresBothExtensionAndIndex() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
 
-        // 只有扩展，没有索引 → false
+        // Extension only, no index -> false
         caps.setHasPgTrgm(true);
         caps.setHasTrgmIndex(false);
         assertFalse(caps.enableTrgm());
 
-        // 有索引，没有扩展 → false
+        // Index only, no extension -> false
         caps.setHasPgTrgm(false);
         caps.setHasTrgmIndex(true);
         assertFalse(caps.enableTrgm());
 
-        // 两者都有 → true
+        // Both present -> true
         caps.setHasPgTrgm(true);
         caps.setHasTrgmIndex(true);
         assertTrue(caps.enableTrgm());
     }
 
     @Test
-    @DisplayName("init=false 不调用数据库")
+    @DisplayName("init=false does not call database")
     void initFalse_doesNotCallDatabase() {
         JdbcTemplate mockJdbc = mock(JdbcTemplate.class);
         SearchCapabilities caps = new SearchCapabilities(mockJdbc, false);
@@ -112,19 +112,19 @@ class SearchCapabilitiesTest {
     // ========== Init=true constructor tests ==========
 
     @Nested
-    @DisplayName("init=true 构造：数据库探测")
+    @DisplayName("init=true constructor: database detection")
     class InitTrueTests {
 
         @Test
         @DisplayName("Detects extensions and indexes normally")
         void detectExtensionsAndIndexes() {
             jdbc = mock(JdbcTemplate.class);
-            // 模拟扩展检测返回：只有 vector + pg_trgm
+            // Mock extension detection returns: vector + pg_trgm only
             when(jdbc.queryForList(
                     contains("pg_extension"), eq(String.class)))
                     .thenReturn(List.of("vector", "pg_trgm"));
 
-            // 模拟索引检测：只有 trgm 索引
+            // Mock index detection returns: trgm index only
             when(jdbc.queryForObject(contains("search_vector_zh"), eq(Boolean.class)))
                     .thenReturn(false);
             when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class)))
@@ -144,7 +144,7 @@ class SearchCapabilitiesTest {
         }
 
         @Test
-        @DisplayName("检测失败时所有能力置为 false")
+        @DisplayName("detection failure: all capabilities set to false")
         void detectFailure_allCapabilitiesDisabled() {
             jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForList(anyString(), eq(String.class)))
@@ -161,7 +161,7 @@ class SearchCapabilitiesTest {
         }
 
         @Test
-        @DisplayName("扩展检测异常时能力置为 false（不抛异常）")
+        @DisplayName("extension detection exception: capabilities set to false without throwing")
         void extensionDetectionException_caughtGracefully() {
             jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForList(anyString(), eq(String.class)))
@@ -181,7 +181,7 @@ class SearchCapabilitiesTest {
     class PostConstructNullGuard {
 
         @Test
-        @DisplayName("jdbcTemplate=null 时 init 不抛异常，所有能力 false")
+        @DisplayName("jdbcTemplate=null: init does not throw, all capabilities false")
         void nullJdbcTemplate_doesNotThrow() {
             // 使用 no-arg 构造（jdbcTemplate=null）然后调用 init
             SearchCapabilities caps = new SearchCapabilities();
@@ -191,7 +191,7 @@ class SearchCapabilitiesTest {
         }
 
         @Test
-        @DisplayName("正常 jdbcTemplate 时 init 正确检测")
+        @DisplayName("normal jdbcTemplate: init detects correctly")
         void normalJdbcTemplate_initsCorrectly() {
             jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForList(contains("pg_extension"), eq(String.class)))
@@ -204,8 +204,8 @@ class SearchCapabilitiesTest {
                     .thenReturn(false);
 
             SearchCapabilities caps = new SearchCapabilities(jdbc);
-            // @PostConstruct init() 被构造函数调用（init=true 路径）
-            // 但 no-arg 调用 init=false，所以用显式调用测试
+            // @PostConstruct init() is called by constructor (init=true path)
+            // but no-arg constructor calls init=false, so use explicit call for testing
             SearchCapabilities caps2 = new SearchCapabilities(jdbc, false);
             caps2.init();
 
@@ -219,7 +219,7 @@ class SearchCapabilitiesTest {
     // ========== Getters and setters ==========
 
     @Test
-    @DisplayName("所有 getter 返回字段值")
+    @DisplayName("all getters return field values")
     void getters_returnFieldValues() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
         caps.setHasPgVector(true);
@@ -240,7 +240,7 @@ class SearchCapabilitiesTest {
     }
 
     @Test
-    @DisplayName("所有 setter 正确设置字段")
+    @DisplayName("all setters correctly set fields")
     void setters_setFieldsCorrectly() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
 
@@ -269,7 +269,7 @@ class SearchCapabilitiesTest {
     // ========== Edge cases ==========
 
     @Test
-    @DisplayName("ZH+EN+TRGM 全部启用时的能力计算")
+    @DisplayName("ZH+EN+TRGM all enabled: capability calculation")
     void allCapabilitiesEnabled_fulltextEnabled() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
         caps.setHasPgVector(true);
@@ -286,7 +286,7 @@ class SearchCapabilitiesTest {
     }
 
     @Test
-    @DisplayName("ZH 扩展缺失时 EN FTS 不受影响")
+    @DisplayName("ZH extension missing: EN FTS not affected")
     void jiebaMissing_doesNotAffectEnglishFts() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
         caps.setHasJieba(false);
@@ -298,7 +298,7 @@ class SearchCapabilitiesTest {
     }
 
     @Test
-    @DisplayName("TRGM 扩展存在但索引缺失时不启用")
+    @DisplayName("TRGM extension present but index missing: not enabled")
     void trgmExtensionWithoutIndex_notEnabled() {
         SearchCapabilities caps = new SearchCapabilities(mock(JdbcTemplate.class), false);
         caps.setHasPgTrgm(true);
