@@ -33,7 +33,7 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("系统提示词包含安全规则")
+    @DisplayName("System prompt contains safety rules")
     void systemPrompt_containsSafetyRules() {
         String prompt = extension.getSystemPromptTemplate();
         assertTrue(prompt.contains("120"), "必须包含急救电话提醒");
@@ -41,7 +41,7 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("检索配置使用高召回模式")
+    @DisplayName("Retrieval config uses high-recall mode")
     void retrievalConfig_usesHighRecall() {
         RetrievalConfig config = extension.getRetrievalConfig();
         assertTrue(config.getMaxResults() >= 12, "医疗领域应返回更多结果");

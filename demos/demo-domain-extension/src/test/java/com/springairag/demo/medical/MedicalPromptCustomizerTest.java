@@ -15,7 +15,7 @@ class MedicalPromptCustomizerTest {
     private final MedicalPromptCustomizer customizer = new MedicalPromptCustomizer();
 
     @Test
-    @DisplayName("医疗领域用户消息添加问诊前缀")
+    @DisplayName("Medical domain user message gets consultation prefix")
     void customizeUserMessage_medicalDomain_addsPrefix() {
         Map<String, Object> metadata = Map.of("domainId", "medical");
         String result = customizer.customizeUserMessage("头疼怎么办", metadata);
@@ -26,7 +26,7 @@ class MedicalPromptCustomizerTest {
     }
 
     @Test
-    @DisplayName("非医疗领域消息不修改")
+    @DisplayName("Non-medical domain message remains unchanged")
     void customizeUserMessage_otherDomain_noChange() {
         Map<String, Object> metadata = Map.of("domainId", "legal");
         String original = "合同违约怎么办";
