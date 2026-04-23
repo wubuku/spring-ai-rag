@@ -22,7 +22,7 @@ class RagAdvisorProviderTest {
 
             @Override
             public org.springframework.ai.chat.client.advisor.api.BaseAdvisor createAdvisor() {
-                return null; // 测试时不创建实际 Advisor
+                return null; // does not create actual advisor in tests
             }
         };
 
