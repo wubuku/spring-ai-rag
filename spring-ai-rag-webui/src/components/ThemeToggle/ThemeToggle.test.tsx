@@ -3,8 +3,6 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeToggle } from './ThemeToggle';
 
-const STORAGE_KEY = 'theme';
-
 const localStorageMock = {
   data: {} as Record<string, string>,
   getItem: vi.fn((key: string) => localStorageMock.data[key] ?? null),
