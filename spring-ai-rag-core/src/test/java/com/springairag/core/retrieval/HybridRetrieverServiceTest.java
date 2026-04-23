@@ -38,14 +38,14 @@ class HybridRetrieverServiceTest {
         embeddingModel = mock(EmbeddingModel.class);
         jdbcTemplate = mock(JdbcTemplate.class);
 
-        // === 直接设置 SearchCapabilities 字段（跳过 DB 探测）===
+        // === Directly set SearchCapabilities fields (skip DB detection) ===
         SearchCapabilities caps = new SearchCapabilities(jdbcTemplate, false);
         caps.setHasPgVector(true);
-        caps.setHasJieba(false);   // pg_jieba 不可用
-        caps.setHasZhIndex(false); // jieba 索引不存在
-        caps.setHasEnIndex(false); // english 索引不存在
-        caps.setHasPgTrgm(true);  // pg_trgm 扩展存在
-        caps.setHasTrgmIndex(true); // trgm 索引存在
+        caps.setHasJieba(false);   // pg_jieba unavailable
+        caps.setHasZhIndex(false); // jieba index absent
+        caps.setHasEnIndex(false); // english index absent
+        caps.setHasPgTrgm(true);  // pg_trgm extension present
+        caps.setHasTrgmIndex(true); // trgm index present
 
         // Provider detectAvailability() 的 pg_extension 和 pg_indexes 查询
         when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class)))
@@ -82,7 +82,7 @@ class HybridRetrieverServiceTest {
     // ========== 混合检索（默认模式） ==========
 
     @Test
-    @DisplayName("混合检索：并行执行向量+全文，融合结果")
+    @DisplayName("Hybrid search: parallel vector + fulltext, fuse results")
     void search_hybridMode_fusesVectorAndFulltext() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed("测试查询")).thenReturn(queryVec);
@@ -120,7 +120,7 @@ class HybridRetrieverServiceTest {
     // ========== 向量检索 ==========
 
     @Test
-    @DisplayName("向量检索：生成 embedding 并查询数据库")
+    @DisplayName("Vector search: generate embedding and query database")
     void search_vectorOnly_generatesEmbeddingAndQueries() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed("问题")).thenReturn(queryVec);
@@ -140,7 +140,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("向量检索：带 documentIds 过滤时 SQL 包含 IN 子句")
+    @DisplayName("Vector search: SQL contains IN clause when documentIds provided")
     void search_vectorWithDocumentIds_filtersByDocument() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -159,7 +159,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("向量检索：嵌入失败时返回空结果")
+    @DisplayName("Vector search: returns empty when embedding fails")
     void search_embeddingFails_returnsEmpty() {
         when(embeddingModel.embed(anyString())).thenThrow(new RuntimeException("API 超时"));
 
@@ -174,7 +174,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("向量检索：documentIds 时 SQL 使用 IN 过滤")
+    @DisplayName("Vector search: SQL uses IN filter for documentIds")
     void search_excludesDocumentIds_filtersCorrectly() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -195,7 +195,7 @@ class HybridRetrieverServiceTest {
     // ========== 全文检索 ==========
 
     @Test
-    @DisplayName("全文检索：返回 similarity 分数")
+    @DisplayName("Fulltext search: returns similarity score")
     void search_fulltext_returnsSimilarityScore() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -215,7 +215,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("全文检索：低于 minScore 的结果被过滤")
+    @DisplayName("Fulltext search: results below minScore are filtered")
     void search_fulltext_belowMinScore_filtered() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -237,7 +237,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("全文检索：数据库异常时返回空结果")
+    @DisplayName("Fulltext search: returns empty on DB error")
     void search_fulltext_dbError_returnsEmpty() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -257,7 +257,7 @@ class HybridRetrieverServiceTest {
     // ========== excludeIds 过滤 ==========
 
     @Test
-    @DisplayName("向量检索：excludeIds 排除指定嵌入")
+    @DisplayName("Vector search: excludeIds filters specified embeddings")
     void search_vectorExcludeIds_filtersCorrectly() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -280,7 +280,7 @@ class HybridRetrieverServiceTest {
     // ========== RetrievalConfig 控制 ==========
 
     @Test
-    @DisplayName("useHybridSearch=false 时只执行向量检索")
+    @DisplayName("useHybridSearch=false triggers vector-only search")
     void search_hybridDisabled_vectorOnly() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -302,7 +302,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("config.maxResults 覆盖 limit 参数")
+    @DisplayName("config.maxResults overrides limit parameter")
     void search_configMaxResultsOverridesLimit() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -330,7 +330,7 @@ class HybridRetrieverServiceTest {
     // ========== 返回结果结构 ==========
 
     @Test
-    @DisplayName("返回结果包含完整的字段")
+    @DisplayName("Result contains all expected fields")
     void search_resultContainsAllFields() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -355,7 +355,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("返回结果包含 metadata")
+    @DisplayName("Result contains metadata")
     void search_resultContainsMetadata() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -382,7 +382,7 @@ class HybridRetrieverServiceTest {
     // ========== 边界情况 ==========
 
     @Test
-    @DisplayName("空查询不崩溃")
+    @DisplayName("Empty query does not crash")
     void search_emptyQuery_doesNotCrash() {
         when(embeddingModel.embed("")).thenReturn(new float[]{0.0f});
         when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
@@ -395,7 +395,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("limit=0 返回空结果")
+    @DisplayName("limit=0 returns empty result")
     void search_limitZero_returnsEmpty() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -410,7 +410,7 @@ class HybridRetrieverServiceTest {
     // ========== RetrievalResult DTO 测试 ==========
 
     @Test
-    @DisplayName("RetrievalResult 字段读写正确")
+    @DisplayName("RetrievalResult field getters/setters work correctly")
     void retrievalResult_fields() {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId("doc-1");
@@ -429,7 +429,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("RetrievalResult score 可超出 1.0")
+    @DisplayName("RetrievalResult score can exceed 1.0")
     void retrievalResult_scoreRange() {
         RetrievalResult r = new RetrievalResult();
         r.setScore(1.5);  // 超出范围的分数
@@ -437,7 +437,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("RetrievalResult metadata 可为空")
+    @DisplayName("RetrievalResult metadata can be null")
     void retrievalResult_metadataCanBeNull() {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId("doc-1");
@@ -449,7 +449,7 @@ class HybridRetrieverServiceTest {
     // ========== pg_trgm 可选化测试 ==========
 
     @Nested
-    @DisplayName("pg_trgm 可选化与优雅降级")
+    @DisplayName("pg_trgm optional with graceful degradation")
     class PgTrgmFallbackTests {
 
         private Map<String, Object> embeddingRow(long id, String text) {
@@ -476,7 +476,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("pg_trgm 不可用时自动降级为纯向量检索")
+        @DisplayName("Falls back to vector-only when pg_trgm unavailable")
         void pgTrgmUnavailable_fallsBackToVectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -496,7 +496,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("pg_trgm 可用时执行混合检索")
+        @DisplayName("Performs hybrid search when pg_trgm is available")
         void pgTrgmAvailable_performsHybridSearch() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForObject(eq("SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm'"), eq(Integer.class)))
@@ -519,7 +519,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("fulltextEnabled=false 时即使 pg_trgm 可用也走纯向量")
+        @DisplayName("fulltextDisabled forces vector-only even when pg_trgm available")
         void fulltextDisabled_alwaysVectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -539,7 +539,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("RetrievalConfig.useHybridSearch=false 时走纯向量")
+        @DisplayName("RetrievalConfig.useHybridSearch=false triggers vector-only")
         void configHybridDisabled_vectorOnly() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -562,11 +562,11 @@ class HybridRetrieverServiceTest {
     // ========== 全文检索策略配置测试 ==========
 
     @Nested
-    @DisplayName("全文检索策略配置（rag.retrieval.fulltext-strategy）")
+    @DisplayName("Fulltext strategy configuration (rag.retrieval.fulltext-strategy)")
     class FulltextStrategyConfigTests {
 
         @Test
-        @DisplayName("strategy=none 时使用 NoOp 策略")
+        @DisplayName("strategy=none uses NoOp provider")
         void strategyNone_usesNoOp() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             RagProperties props = new RagProperties();
@@ -577,7 +577,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("strategy=pg_trgm 且扩展可用时使用 pg_trgm")
+        @DisplayName("strategy=pg_trgm uses pg_trgm when extension available")
         void strategyTrgm_available_usesTrgm() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             // SearchCapabilities 检测
@@ -594,7 +594,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("strategy=pg_trgm 但扩展不可用时启动失败")
+        @DisplayName("strategy=pg_trgm throws when extension unavailable")
         void strategyTrgm_unavailable_throws() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             // SearchCapabilities: only vector extension (no pg_trgm)
@@ -612,7 +612,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("strategy=auto 自动选择最佳可用策略")
+        @DisplayName("strategy=auto selects best available provider")
         void strategyAuto_selectsBestAvailable() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             // SearchCapabilities: only pg_trgm extension available
@@ -629,7 +629,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("strategy=auto 全部不可用时降级为 NoOp")
+        @DisplayName("strategy=auto falls back to NoOp when all unavailable")
         void strategyAuto_allUnavailable_fallsBackToNoOp() {
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
             // SearchCapabilities 检测返回空扩展列表
@@ -645,7 +645,7 @@ class HybridRetrieverServiceTest {
     // ========== 异步超时与降级测试 ==========
 
     @Nested
-    @DisplayName("CompletableFuture 超时与降级")
+    @DisplayName("CompletableFuture timeout and degradation")
     class AsyncTimeoutFallbackTests {
 
         private EmbeddingModel embeddingModel;
@@ -678,7 +678,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("全文检索抛出异常时降级为空，混合检索仍返回向量结果")
+        @DisplayName("Fulltext exception degrades to empty, hybrid still returns vector results")
         void fulltextThrowsException_fallsBackToEmpty_vectorResultsReturned() {
             embeddingModel = mock(EmbeddingModel.class);
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
@@ -709,7 +709,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("向量检索抛出异常时降级为空，搜索返回全文结果")
+        @DisplayName("Vector exception degrades to empty, search returns fulltext results")
         void vectorThrowsException_fallsBackToEmpty_fulltextResultsReturned() {
             embeddingModel = mock(EmbeddingModel.class);
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
@@ -735,7 +735,7 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("两个分支都抛出异常时，搜索返回空列表不抛异常")
+        @DisplayName("Both branches throw: search returns empty list without exception")
         void bothThrowException_bothFallbackToEmpty_returnsEmptyGracefully() {
             embeddingModel = mock(EmbeddingModel.class);
             JdbcTemplate jdbc = mock(JdbcTemplate.class);
@@ -762,14 +762,14 @@ class HybridRetrieverServiceTest {
         }
 
         @Test
-        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds 默认值为 5")
+        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds defaults to 5")
         void asyncTimeoutDefault_is5Seconds() {
             RagProperties props = new RagProperties();
             assertEquals(5, props.getAsync().getRetrievalTimeoutSeconds());
         }
 
         @Test
-        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds 可配置")
+        @DisplayName("RagProperties.Async.retrievalTimeoutSeconds is configurable")
         void asyncTimeout_configurable() {
             RagProperties props = new RagProperties();
             props.getAsync().setRetrievalTimeoutSeconds(10);
