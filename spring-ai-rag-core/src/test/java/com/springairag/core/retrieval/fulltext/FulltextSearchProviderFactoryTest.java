@@ -14,16 +14,16 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * FulltextSearchProviderFactory 全文检索策略工厂测试
+ * Unit Tests for FulltextSearchProviderFactory
  *
- * <p>测试策略：
+ * <p>Test strategy:
  * <ul>
- *   <li>SearchCapabilities：用 init=false 构造，直接 set 字段</li>
- *   <li>Fake providers：简单不可变实现，isAvailable() 由构造参数决定</li>
- *   <li>Factory：用完全可控构造函数注入上述两者</li>
+ *   <li>SearchCapabilities: constructed with init=false, set fields directly</li>
+ *   <li>Fake providers: simple immutable implementations, isAvailable() determined by constructor arg</li>
+ *   <li>Factory: injects both with fully controllable constructor</li>
  * </ul>
  */
-@DisplayName("FulltextSearchProviderFactory 全文检索策略工厂")
+@DisplayName("FulltextSearchProviderFactory Unit Tests")
 class FulltextSearchProviderFactoryTest {
 
     private JdbcTemplate jdbc;
@@ -64,7 +64,7 @@ class FulltextSearchProviderFactoryTest {
         };
     }
 
-    // ========== Helper: 构造 SearchCapabilities（init=false）==========
+    // ========== Helper: construct SearchCapabilities (init=false) ==========
 
     private SearchCapabilities makeCaps(boolean hasJieba, boolean hasZhIndex,
                                         boolean hasEnIndex, boolean hasTrgm, boolean hasTrgmIndex) {
@@ -78,7 +78,7 @@ class FulltextSearchProviderFactoryTest {
         return caps;
     }
 
-    // ========== Helper: 创建完全可控的工厂（inject fake providers）==========
+    // ========== Helper: create fully controllable factory (inject fake providers) ==========
 
     private FulltextSearchProviderFactory makeFactory(String strategy,
             SearchCapabilities caps, boolean jiebaAvail, boolean englishAvail, boolean trgmAvail) {
@@ -88,7 +88,7 @@ class FulltextSearchProviderFactoryTest {
         return new FulltextSearchProviderFactory(jdbc, strategy, caps, fJieba, fEnglish, fTrgm);
     }
 
-    // ========== Helper: 创建工厂（使用真实 init=false capabilities）==========
+    // ========== Helper: create factory (using real init=false capabilities) ==========
 
     private FulltextSearchProviderFactory makeFactoryRealCaps(String strategy,
             boolean hasJieba, boolean hasZhIndex,
@@ -99,11 +99,11 @@ class FulltextSearchProviderFactoryTest {
     }
 
     @Nested
-    @DisplayName("auto 策略自动检测")
+    @DisplayName("Auto Strategy Detection")
     class AutoStrategy {
 
         @Test
-        @DisplayName("pg_jieba 可用时优先选择（ZH 查询）")
+        @DisplayName("pg_jieba available: preferred for ZH query")
         void preferPgJiebaWhenAvailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "auto", true, true, false, false, false, true, false, false);
@@ -112,7 +112,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("pg_jieba 不可用时降级到 pg_trgm（ZH 查询）")
+        @DisplayName("pg_jieba unavailable: falls back to pg_trgm for ZH query")
         void fallbackToPgTrgmWhenJiebaUnavailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "auto", false, false, false, true, true, false, false, true);
@@ -121,7 +121,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("都不可用时降级到 NoOp（ZH 查询）")
+        @DisplayName("all unavailable: falls back to NoOp for ZH query")
         void fallbackToNoOpWhenAllUnavailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "auto", false, false, false, false, false, false, false, false);
@@ -130,7 +130,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("英文查询优先选 English FTS")
+        @DisplayName("English query: prefers English FTS")
         void preferEnglishFtsForEnQuery() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "auto", false, false, true, true, true, false, true, true);
@@ -139,7 +139,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("English FTS 不可用时降级到 pg_trgm（EN 查询）")
+        @DisplayName("English FTS unavailable: falls back to pg_trgm for EN query")
         void fallbackToTrgmWhenEnglishFtsUnavailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "auto", false, false, true, true, true, false, false, true);
@@ -148,7 +148,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("auto 降级链：jieba → trgm → none")
+        @DisplayName("auto fallback chain: jieba -> trgm -> none")
         void fullFallbackChain() {
             // jieba 不可用（hasZhIndex=false），trgm 可用 → trgm
             FulltextSearchProviderFactory factory1 = makeFactoryRealCaps(
@@ -167,7 +167,7 @@ class FulltextSearchProviderFactoryTest {
     class ExplicitStrategy {
 
         @Test
-        @DisplayName("none 策略返回 NoOp")
+        @DisplayName("none strategy returns NoOp")
         void noneStrategyReturnsNoOp() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "none", false, false, false, false, false, false, false, false);
@@ -175,7 +175,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("pg_trgm 策略可用时返回 pg_trgm")
+        @DisplayName("pg_trgm strategy: returns pg_trgm when available")
         void pgTrgmStrategyWhenAvailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "pg_trgm", false, false, false, true, true, false, false, true);
@@ -183,7 +183,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("pg_trgm 策略不可用时抛异常")
+        @DisplayName("pg_trgm strategy: throws when unavailable")
         void pgTrgmStrategyThrowsWhenUnavailable() {
             SearchCapabilities caps = makeCaps(false, false, false, false, false);
             FulltextSearchProviderFactory factory = makeFactory("pg_trgm", caps, false, false, false);
@@ -192,7 +192,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("pg_jieba 策略可用时返回 pg_jieba")
+        @DisplayName("pg_jieba strategy: returns pg_jieba when available")
         void pgJiebaStrategyWhenAvailable() {
             FulltextSearchProviderFactory factory = makeFactoryRealCaps(
                     "pg_jieba", true, true, false, false, false, true, false, false);
@@ -200,7 +200,7 @@ class FulltextSearchProviderFactoryTest {
         }
 
         @Test
-        @DisplayName("pg_jieba 策略不可用时抛异常")
+        @DisplayName("pg_jieba strategy: throws when unavailable")
         void pgJiebaStrategyThrowsWhenUnavailable() {
             SearchCapabilities caps = makeCaps(false, false, false, false, false);
             FulltextSearchProviderFactory factory = makeFactory("pg_jieba", caps, false, false, false);
@@ -210,7 +210,7 @@ class FulltextSearchProviderFactoryTest {
     }
 
     @Test
-    @DisplayName("getStrategyLabel 返回策略显示名称")
+    @DisplayName("getStrategyLabel returns strategy display name")
     void getStrategyLabel() {
         assertEquals("auto-detect", FulltextSearchProviderFactory.getStrategyLabel("auto"));
         assertEquals("pg_jieba (Chinese segmentation)", FulltextSearchProviderFactory.getStrategyLabel("pg_jieba"));

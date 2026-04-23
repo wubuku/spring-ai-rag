@@ -86,7 +86,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("向量检索服务层开销 < 50ms（10 次调用平均）")
+    @DisplayName("Vector search service layer overhead < 50ms (average of 10 calls)")
     void vectorSearch_overhead_under50ms() {
         // Mock embedding model — 返回假向量，不调用真实 API
         float[] fakeVector = new float[1024];
@@ -116,7 +116,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("混合检索（向量+全文并行）服务层开销 < 100ms")
+    @DisplayName("Hybrid search (vector+fulltext parallel) service layer overhead < 100ms")
     void hybridSearch_overhead_under100ms() {
         float[] fakeVector = new float[1024];
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
@@ -150,7 +150,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("RetrievalUtils.fuseResults 融合 1000 条结果 < 100ms")
+    @DisplayName("RetrievalUtils.fuseResults: fuse 1000 results < 100ms")
     void fuseResults_1000items_under100ms() {
         List<RetrievalResult> vectorResults = createFakeResults(1000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(1000, "f");
@@ -170,7 +170,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("RetrievalUtils.cosineSimilarity 10 万次计算 < 500ms")
+    @DisplayName("RetrievalUtils.cosineSimilarity: 100k computations < 500ms")
     void cosineSimilarity_100k_under500ms() {
         float[] a = new float[1024];
         float[] b = new float[1024];
@@ -199,7 +199,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("RetrievalUtils.vectorToString 1 万次 (1024维) < 500ms")
+    @DisplayName("RetrievalUtils.vectorToString: 10k conversions (1024-dim) < 500ms")
     void vectorToString_10k_under500ms() {
         float[] vector = new float[1024];
         for (int i = 0; i < vector.length; i++) vector[i] = (float) Math.random();
@@ -221,7 +221,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("纯计算端到端：查询→融合→排序 全链路 < 150ms")
+    @DisplayName("Pure compute end-to-end: query->fuse->rank full chain < 150ms")
     void endToEnd_computeOnly_under150ms() {
         float[] fakeVector = new float[1024];
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
@@ -252,7 +252,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("并发检索：10 线程 × 10 次，总吞吐量 > 50 ops/s")
+    @DisplayName("Concurrent search: 10 threads x 10 iterations, total throughput > 50 ops/s")
     void concurrentSearch_throughput_above50ops() throws Exception {
         float[] fakeVector = new float[1024];
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
@@ -293,7 +293,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("fuseResults 大数据集：10000+10000 → 100 < 2s")
+    @DisplayName("fuseResults large dataset: 10000+10000 -> 100 < 2s")
     void fuseResults_10kItems_under2s() {
         List<RetrievalResult> vectorResults = createFakeResults(10_000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(10_000, "f");
@@ -314,7 +314,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("并发 cosineSimilarity：8 线程 × 25000 次 < 3s")
+    @DisplayName("Concurrent cosineSimilarity: 8 threads x 25000 iterations < 3s")
     void concurrentCosineSimilarity_under3s() throws Exception {
         float[][] vectors = new float[8][];
         for (int t = 0; t < 8; t++) {
@@ -355,7 +355,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("parseVector 解析 1024 维字符串向量 10000 次 < 3s")
+    @DisplayName("parseVector: parse 1024-dim string vectors 10000 times < 3s")
     void parseVector_10k_under3s() {
         String vectorStr = createFakeVectorString();
 
@@ -380,7 +380,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("并发混合检索：5 线程同时向量+全文 < 500ms 总耗时")
+    @DisplayName("Concurrent hybrid search: 5 threads vector+fulltext < 500ms total")
     void concurrentHybridSearch_under500ms() throws Exception {
         float[] fakeVector = new float[1024];
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
@@ -424,7 +424,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("大数据集端到端：5000 结果融合+排序 < 1s")
+    @DisplayName("Large dataset end-to-end: 5000 result fuse+rank < 1s")
     void largeDatasetEndToEnd_under1s() {
         List<RetrievalResult> vectorResults = createFakeResults(5_000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(5_000, "f");
@@ -453,7 +453,7 @@ class HybridRetrieverServiceBenchmarkTest {
     }
 
     @Test
-    @DisplayName("并发 fuseResults：4 线程 × 5000 条 < 3s")
+    @DisplayName("Concurrent fuseResults: 4 threads x 5000 items < 3s")
     void concurrentFuseResults_under3s() throws Exception {
         // 预热
         List<RetrievalResult> warmup = createFakeResults(1000, "w");
