@@ -91,6 +91,9 @@ public class AdvisorMetrics {
      * @param resultCount number of results produced by the step
      */
     public void record(String stepName, long durationMs, int resultCount) {
+        if (stepName == null) {
+            return; // null step name: ignore
+        }
         switch (stepName) {
             case "QueryRewrite" -> {
                 queryRewriteTimer.record(durationMs, TimeUnit.MILLISECONDS);

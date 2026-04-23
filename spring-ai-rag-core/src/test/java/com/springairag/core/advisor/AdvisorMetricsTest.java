@@ -105,4 +105,34 @@ class AdvisorMetricsTest {
         assertEquals(1.0, advisorMetrics.getHybridSearchCount().count());
         assertEquals(5.0, advisorMetrics.getHybridSearchResultsCount().count());
     }
+
+    @Test
+    void record_nullStepName_isIgnored() {
+        advisorMetrics.record(null, 100, 5);
+
+        // No meters updated for null step name
+        assertEquals(0.0, meterRegistry.find("rag.advisor.query_rewrite.duration").timer().count());
+        assertEquals(0.0, meterRegistry.find("rag.advisor.hybrid_search.duration").timer().count());
+        assertEquals(0.0, meterRegistry.find("rag.advisor.rerank.duration").timer().count());
+    }
+
+    @Test
+    void record_emptyStepName_isIgnored() {
+        advisorMetrics.record("", 100, 5);
+
+        // No meters updated for empty step name
+        assertEquals(0.0, meterRegistry.find("rag.advisor.query_rewrite.duration").timer().count());
+        assertEquals(0.0, meterRegistry.find("rag.advisor.hybrid_search.duration").timer().count());
+        assertEquals(0.0, meterRegistry.find("rag.advisor.rerank.duration").timer().count());
+    }
+
+    @Test
+    void record_zeroDuration_isRecorded() {
+        advisorMetrics.record("QueryRewrite", 0, 0);
+
+        Timer timer = meterRegistry.find("rag.advisor.query_rewrite.duration").timer();
+        assertEquals(1, timer.count());
+        assertEquals(0, timer.totalTime(java.util.concurrent.TimeUnit.MILLISECONDS));
+        assertEquals(1.0, advisorMetrics.getQueryRewriteCount().count());
+    }
 }
