@@ -26,7 +26,7 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
-@DisplayName("DocumentVersionService — 文档版本历史服务")
+@DisplayName("DocumentVersionService — Document Version History Service")
 class DocumentVersionServiceTest {
 
     @Mock
@@ -49,11 +49,11 @@ class DocumentVersionServiceTest {
     }
 
     @Nested
-    @DisplayName("recordVersion — 记录版本")
+    @DisplayName("recordVersion — record version")
     class RecordVersion {
 
         @Test
-        @DisplayName("正常记录新版本")
+        @DisplayName("records new version")
         void recordsNewVersion() {
             when(versionRepository.findByDocumentIdAndContentHash(1L, "abc123hash"))
                     .thenReturn(List.of());
@@ -78,7 +78,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("版本号递增")
+        @DisplayName("version number increments")
         void versionNumberIncrements() {
             RagDocumentVersion latestVersion = new RagDocumentVersion();
             latestVersion.setVersionNumber(3);
@@ -97,7 +97,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("相同哈希不重复记录")
+        @DisplayName("skips duplicate hash")
         void skipsDuplicateHash() {
             RagDocumentVersion existing = new RagDocumentVersion();
             existing.setContentHash("abc123hash");
@@ -112,7 +112,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("文档 ID 为空时跳过")
+        @DisplayName("skips when no document ID")
         void skipsWhenNoId() {
             sampleDoc.setId(null);
 
@@ -123,7 +123,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("contentHash 为空时跳过")
+        @DisplayName("skips when no contentHash")
         void skipsWhenNoHash() {
             sampleDoc.setContentHash(null);
 
@@ -134,7 +134,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("版本快照包含元数据")
+        @DisplayName("snapshot includes metadata")
         void snapshotIncludesMetadata() {
             when(versionRepository.findByDocumentIdAndContentHash(1L, "abc123hash"))
                     .thenReturn(List.of());
@@ -152,16 +152,16 @@ class DocumentVersionServiceTest {
     }
 
     @Nested
-    @DisplayName("forceRecordVersion — 强制记录版本")
+    @DisplayName("forceRecordVersion — force record version")
     class ForceRecordVersion {
 
         @Test
-        @DisplayName("强制记录忽略哈希去重")
+        @DisplayName("forces record even with duplicate hash")
         void forcesRecordEvenWithDuplicateHash() {
             RagDocumentVersion existing = new RagDocumentVersion();
             existing.setContentHash("abc123hash");
 
-            // 即使有相同哈希的版本也强制记录
+            // Force record even when hash already exists
             when(versionRepository.findLatestByDocumentId(1L))
                     .thenReturn(Optional.empty());
             when(versionRepository.save(any(RagDocumentVersion.class)))
@@ -176,11 +176,11 @@ class DocumentVersionServiceTest {
     }
 
     @Nested
-    @DisplayName("版本查询")
+    @DisplayName("Version Query")
     class QueryVersions {
 
         @Test
-        @DisplayName("分页查询版本历史")
+        @DisplayName("paginated version history")
         void getVersionHistory() {
             Page<RagDocumentVersion> page = new PageImpl<>(List.of(new RagDocumentVersion()));
             when(versionRepository.findByDocumentIdOrderByVersionNumberDesc(eq(1L), any(PageRequest.class)))
@@ -192,7 +192,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("全量版本历史（升序）")
+        @DisplayName("full version history (ascending)")
         void getFullVersionHistory() {
             RagDocumentVersion v1 = new RagDocumentVersion();
             v1.setVersionNumber(1);
@@ -210,7 +210,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("获取指定版本")
+        @DisplayName("gets specific version")
         void getSpecificVersion() {
             RagDocumentVersion v = new RagDocumentVersion();
             v.setVersionNumber(2);
@@ -225,7 +225,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("获取最新版本")
+        @DisplayName("gets latest version")
         void getLatestVersion() {
             RagDocumentVersion v = new RagDocumentVersion();
             v.setVersionNumber(5);
@@ -240,7 +240,7 @@ class DocumentVersionServiceTest {
         }
 
         @Test
-        @DisplayName("统计版本数")
+        @DisplayName("counts versions")
         void countVersions() {
             when(versionRepository.countByDocumentId(1L)).thenReturn(5L);
 
@@ -249,11 +249,11 @@ class DocumentVersionServiceTest {
     }
 
     @Nested
-    @DisplayName("版本删除")
+    @DisplayName("Version Delete")
     class DeleteVersions {
 
         @Test
-        @DisplayName("删除文档所有版本")
+        @DisplayName("deletes all versions of document")
         void deleteAllVersions() {
             versionService.deleteVersions(1L);
 

@@ -24,9 +24,10 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
 /**
- * GeneralRagAutoConfiguration Bean 方法测试
+ * Unit tests for GeneralRagAutoConfiguration Bean methods.
  *
- * <p>直接调用 Bean 方法验证返回值，覆盖自动配置类的代码路径。
+ * <p>Directly calls bean methods to verify return values,
+ * covering code paths in the auto-configuration class.
  */
 class GeneralRagAutoConfigurationBeanTest {
 
@@ -37,7 +38,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class DefaultDomainRagExtensionTest {
 
         @Test
-        @DisplayName("返回 DefaultDomainRagExtension 实例")
+        @DisplayName("returns DefaultDomainRagExtension instance")
         void returnsDefaultExtension() {
             DefaultDomainRagExtension ext = config.defaultDomainRagExtension();
             assertNotNull(ext);
@@ -45,7 +46,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("每次调用返回新实例")
+        @DisplayName("returns new instance each time")
         void returnsNewInstanceEachTime() {
             DefaultDomainRagExtension ext1 = config.defaultDomainRagExtension();
             DefaultDomainRagExtension ext2 = config.defaultDomainRagExtension();
@@ -58,7 +59,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RagMetricsServiceTest {
 
         @Test
-        @DisplayName("使用 MeterRegistry 创建 RagMetricsService")
+        @DisplayName("creates RagMetricsService with MeterRegistry")
         void createsWithMeterRegistry() {
             MeterRegistry registry = new SimpleMeterRegistry();
             RagMetricsService service = config.ragMetricsService(registry);
@@ -72,7 +73,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class ApiKeyAuthFilterRegistrationTest {
 
         @Test
-        @DisplayName("返回 FilterRegistrationBean<ApiKeyAuthFilter>")
+        @DisplayName("returns FilterRegistrationBean<ApiKeyAuthFilter>")
         void returnsFilterRegistration() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
@@ -81,7 +82,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("URL 模式包含 /api/*")
+        @DisplayName("URL pattern includes /api/*")
         void urlPatternIncludesApi() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
@@ -89,7 +90,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("Order 为 1（认证在限流之后）")
+        @DisplayName("Order is 1 (auth after rate limiting)")
         void orderIs1() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
@@ -102,7 +103,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RateLimitFilterRegistrationTest {
 
         @Test
-        @DisplayName("返回 FilterRegistrationBean<RateLimitFilter>")
+        @DisplayName("returns FilterRegistrationBean<RateLimitFilter>")
         void returnsFilterRegistration() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
@@ -111,7 +112,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("URL 模式包含 /api/*")
+        @DisplayName("URL pattern includes /api/*")
         void urlPatternIncludesApi() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
@@ -119,7 +120,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("Order 为 0（限流先于认证）")
+        @DisplayName("Order is 0 (rate limiting before auth)")
         void orderIs0() {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
@@ -132,7 +133,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class TracingConfigurerTest {
 
         @Test
-        @DisplayName("调用 RequestTraceFilter.configure 并返回 Object")
+        @DisplayName("calls RequestTraceFilter.configure and returns Object")
         void configuresTraceFilter() {
             com.springairag.core.filter.RequestTraceFilter traceFilter =
                     mock(com.springairag.core.filter.RequestTraceFilter.class);
@@ -151,7 +152,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class ComponentHealthServiceTest {
 
         @Test
-        @DisplayName("使用 JdbcTemplate 创建 ComponentHealthService")
+        @DisplayName("creates ComponentHealthService with JdbcTemplate")
         void createsWithJdbcTemplate() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
             ComponentHealthService service = config.componentHealthService(jdbcTemplate, null);
@@ -160,7 +161,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("CacheMetricsService 可为 null")
+        @DisplayName("CacheMetricsService can be null")
         void cacheMetricsServiceCanBeNull() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
             ComponentHealthService service = config.componentHealthService(jdbcTemplate, null);
@@ -168,7 +169,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("CacheMetricsService 可传入非 null")
+        @DisplayName("CacheMetricsService can be provided")
         void cacheMetricsServiceCanBeProvided() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
             CacheMetricsService cacheMetrics = mock(CacheMetricsService.class);
@@ -182,7 +183,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RagHealthIndicatorTest {
 
         @Test
-        @DisplayName("返回 RagHealthIndicator 实例")
+        @DisplayName("returns RagHealthIndicator instance")
         void returnsHealthIndicator() {
             ComponentHealthService healthService = mock(ComponentHealthService.class);
             RagMetricsService metricsService = mock(RagMetricsService.class);
@@ -199,7 +200,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RagLivenessIndicatorTest {
 
         @Test
-        @DisplayName("返回 RagLivenessIndicator 实例")
+        @DisplayName("returns RagLivenessIndicator instance")
         void returnsLivenessIndicator() {
             JdbcTemplate jdbcTemplate = mock(JdbcTemplate.class);
 
@@ -215,7 +216,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RagReadinessIndicatorTest {
 
         @Test
-        @DisplayName("RagMetricsService 为 null 时仍可创建")
+        @DisplayName("can create with null RagMetricsService")
         void createsWithNullMetricsService() {
             ComponentHealthService healthService = mock(ComponentHealthService.class);
 
@@ -226,7 +227,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("RagMetricsService 非 null 时仍可创建")
+        @DisplayName("can create with non-null RagMetricsService")
         void createsWithNonNullMetricsService() {
             ComponentHealthService healthService = mock(ComponentHealthService.class);
             RagMetricsService metricsService = mock(RagMetricsService.class);
@@ -243,7 +244,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class LlmCircuitBreakerIndicatorTest {
 
         @Test
-        @DisplayName("返回 CircuitBreakerHealthIndicator 实例")
+        @DisplayName("returns CircuitBreakerHealthIndicator instance")
         void returnsCircuitBreakerIndicator() {
             RagChatService ragChatService = mock(RagChatService.class);
 
@@ -259,7 +260,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class RagPropertiesBeanTest {
 
         @Test
-        @DisplayName("返回非 null RagProperties 实例")
+        @DisplayName("returns non-null RagProperties instance")
         void returnsNonNullRagProperties() {
             RagProperties props = config.ragProperties();
             assertNotNull(props);
@@ -267,7 +268,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("每次调用返回新实例")
+        @DisplayName("returns new instance each time")
         void returnsNewInstanceEachTime() {
             RagProperties props1 = config.ragProperties();
             RagProperties props2 = config.ragProperties();
@@ -275,7 +276,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("RagProperties 子配置可访问")
+        @DisplayName("RagProperties sub-configs are accessible")
         void ragPropertiesSubConfigsAccessible() {
             RagProperties props = config.ragProperties();
             assertNotNull(props.getRetrieval());
@@ -289,7 +290,7 @@ class GeneralRagAutoConfigurationBeanTest {
     class ApiSloTrackerServiceBeanTest {
 
         @Test
-        @DisplayName("使用 ApiSloProperties 创建 ApiSloTrackerService")
+        @DisplayName("creates ApiSloTrackerService with ApiSloProperties")
         void createsWithApiSloProperties() {
             ApiSloProperties apiSloProperties = new ApiSloProperties();
             com.springairag.core.metrics.ApiSloTrackerService service =
@@ -299,7 +300,7 @@ class GeneralRagAutoConfigurationBeanTest {
         }
 
         @Test
-        @DisplayName("服务默认启用")
+        @DisplayName("service enabled by default")
         void serviceEnabledByDefault() {
             ApiSloProperties apiSloProperties = new ApiSloProperties();
             com.springairag.core.metrics.ApiSloTrackerService service =
