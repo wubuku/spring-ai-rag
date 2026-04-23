@@ -1,3 +1,4 @@
+> - 2026-04-24 03:20 - ✅ 后端主动巡检:DingTalkNotificationService catch 块补充韧性注释--sendAlert 循环 catch(单个频道失败不阻塞其他)+ sendToDingTalk retry catch(重试间隔指数退避);mvn test ✅(BUILD SUCCESS);commit 49b25e5 已推送
 > - 2026-04-24 02:37 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(health=UP,database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 > - 2026-04-24 02:33 - ✅ 后端主动巡检:ApiSloTrackerService.getSnapshot() 重构--从 49 行提取 5 个辅助方法(filterRecentSamples/emptySnapshot/buildSnapshot/countWithinThreshold/computeAverage),getSnapshot 从 49→12 行(-75%),消除重复循环逻辑(两次遍历改为统计与求和分离),所有 ApiSlo 测试通过,mvn test ✅(BUILD SUCCESS),commit e3ecd0d 已推送
 
