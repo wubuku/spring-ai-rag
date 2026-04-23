@@ -7,11 +7,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RagDocumentVersion — 文档版本历史实体")
+@DisplayName("RagDocumentVersion — Document Version History Entity")
 class RagDocumentVersionTest {
 
     @Test
-    @DisplayName("fromDocument 工厂方法创建快照")
+    @DisplayName("fromDocument factory method creates snapshot")
     void fromDocumentCreatesSnapshot() {
         RagDocument doc = new RagDocument();
         doc.setId(1L);
@@ -33,7 +33,7 @@ class RagDocumentVersionTest {
     }
 
     @Test
-    @DisplayName("fromDocument 元数据为 null 时正常工作")
+    @DisplayName("fromDocument handles null metadata")
     void fromDocumentWithNullMetadata() {
         RagDocument doc = new RagDocument();
         doc.setId(2L);
@@ -49,7 +49,7 @@ class RagDocumentVersionTest {
     }
 
     @Test
-    @DisplayName("setter/getter 完整覆盖")
+    @DisplayName("setter/getter full coverage")
     void settersAndGetters() {
         RagDocumentVersion version = new RagDocumentVersion();
 

@@ -15,7 +15,7 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RateLimitFilter — API 限流过滤器")
+@DisplayName("RateLimitFilter — API Rate Limit Filter")
 class RateLimitFilterTest {
 
     private static final int LIMIT = 5;
@@ -38,11 +38,11 @@ class RateLimitFilterTest {
     }
 
     @Nested
-    @DisplayName("正常放行")
+    @DisplayName("Normal Passing")
     class AllowRequests {
 
         @Test
-        @DisplayName("限流关闭时所有请求放行")
+        @DisplayName("disabled filter allows all requests")
         void disabledAllowsAll() throws Exception {
             RateLimitFilter disabled = new RateLimitFilter(false, LIMIT);
 
@@ -51,12 +51,12 @@ class RateLimitFilterTest {
                 chain = new MockFilterChain();
                 disabled.doFilterInternal(request, response, chain);
                 assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                        "第 " + (i + 1) + " 个请求应放行");
+                        "request #" + (i + 1) + " should pass");
             }
         }
 
         @Test
-        @DisplayName("requestsPerMinute ≤ 0 时放行")
+        @DisplayName("requestsPerMinute <= 0 allows all")
         void zeroLimitAllowsAll() throws Exception {
             RateLimitFilter zero = new RateLimitFilter(true, 0);
 
@@ -69,20 +69,20 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("在限额内请求正常放行")
+        @DisplayName("requests within limit pass normally")
         void withinLimitAllows() throws Exception {
             for (int i = 0; i < LIMIT; i++) {
                 response = new MockHttpServletResponse();
                 chain = new MockFilterChain();
                 filter.doFilterInternal(request, response, chain);
                 assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                        "第 " + (i + 1) + " 个请求应在限额内");
-                assertNotNull(chain.getRequest(), "请求应传递到 filter chain");
+                        "request #" + (i + 1) + " should be within limit");
+                assertNotNull(chain.getRequest(), "request should pass to filter chain");
             }
         }
 
         @Test
-        @DisplayName("排除路径不计数")
+        @DisplayName("excluded paths do not count")
         void excludedPathsDoNotCount() throws Exception {
             String[] excluded = {"/actuator/health", "/swagger-ui/index.html",
                     "/v3/api-docs", "/health", "/error"};
@@ -93,10 +93,10 @@ class RateLimitFilterTest {
                 chain = new MockFilterChain();
                 filter.doFilterInternal(request, response, chain);
                 assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                        path + " 应放行");
+                        path + " should pass");
             }
 
-            // 排除路径不消耗限额，正常路径仍可请求
+            // excluded paths do not consume limit, normal paths still work
             request.setRequestURI("/api/v1/rag/chat");
             for (int i = 0; i < LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -108,20 +108,20 @@ class RateLimitFilterTest {
     }
 
     @Nested
-    @DisplayName("限流触发")
+    @DisplayName("Rate Limit Triggered")
     class RateLimitTriggered {
 
         @Test
-        @DisplayName("超出限额返回 429")
+        @DisplayName("exceeds limit returns 429")
         void exceedsLimitReturns429() throws Exception {
-            // 先消耗完限额
+            // exhaust the limit first
             for (int i = 0; i < LIMIT; i++) {
                 response = new MockHttpServletResponse();
                 chain = new MockFilterChain();
                 filter.doFilterInternal(request, response, chain);
             }
 
-            // 第 LIMIT+1 个请求应被限流
+            // request #LIMIT+1 should be rate limited
             response = new MockHttpServletResponse();
             chain = new MockFilterChain();
             filter.doFilterInternal(request, response, chain);
@@ -132,7 +132,7 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("429 响应体包含错误详情")
+        @DisplayName("429 response body contains error details")
         void rateLimitResponseBody() throws Exception {
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -148,7 +148,7 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("429 时请求不传递到 filter chain")
+        @DisplayName("429 blocks filter chain")
         void rateLimitBlocksChain() throws Exception {
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -156,24 +156,24 @@ class RateLimitFilterTest {
                 filter.doFilterInternal(request, response, chain);
             }
 
-            // chain 应该没有被调用（最后一个请求被限流了）
-            // 注意：chain 在最后一次调用前是新的，所以要看前面的
-            // 更简单的方式：直接检查第 LIMIT+1 次调用后 chain 状态
-            // 由于 chain 每次新建，用另一种方式验证
+            // chain should not be invoked (last request was rate limited)
+            // note: chain is new before the last call
+            // simpler: check chain state after request #LIMIT+1
+            // since chain is recreated each time, use another verification
             response = new MockHttpServletResponse();
             MockFilterChain newChain = new MockFilterChain();
             filter.doFilterInternal(request, response, newChain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus());
-            assertNull(newChain.getRequest(), "被限流的请求不应传递到 chain");
+            assertNull(newChain.getRequest(), "rate-limited request should not reach chain");
         }
     }
 
     @Nested
-    @DisplayName("响应头")
+    @DisplayName("Response Headers")
     class ResponseHeaders {
 
         @Test
-        @DisplayName("正常响应包含限额头")
+        @DisplayName("normal response includes rate limit headers")
         void normalResponseHasHeaders() throws Exception {
             filter.doFilterInternal(request, response, chain);
 
@@ -182,7 +182,7 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("剩余计数递减")
+        @DisplayName("remaining count decrements")
         void remainingDecreases() throws Exception {
             for (int i = 0; i < LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -192,12 +192,12 @@ class RateLimitFilterTest {
                 int expectedRemaining = LIMIT - i - 1;
                 assertEquals(String.valueOf(expectedRemaining),
                         response.getHeader("X-RateLimit-Remaining"),
-                        "第 " + (i + 1) + " 次后剩余应为 " + expectedRemaining);
+                        "after request #" + (i + 1) + " remaining should be " + expectedRemaining);
             }
         }
 
         @Test
-        @DisplayName("429 响应包含 Retry-After 和限额头")
+        @DisplayName("429 response includes Retry-After and rate limit headers")
         void rateLimitResponseHeaders() throws Exception {
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -212,32 +212,32 @@ class RateLimitFilterTest {
     }
 
     @Nested
-    @DisplayName("IP 隔离")
+    @DisplayName("IP Isolation")
     class IpIsolation {
 
         @Test
-        @DisplayName("不同 IP 各自独立计数")
+        @DisplayName("different IPs have independent counts")
         void differentIpsIndependent() throws Exception {
             MockHttpServletRequest req2 = new MockHttpServletRequest();
             req2.setRequestURI("/api/v1/rag/chat");
             req2.setRemoteAddr("192.168.1.2");
 
-            // IP1 消耗完限额
+            // IP1 exhausts the limit
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
                 chain = new MockFilterChain();
                 filter.doFilterInternal(request, response, chain);
             }
 
-            // IP2 应仍可正常请求
+            // IP2 should still be able to request
             response = new MockHttpServletResponse();
             chain = new MockFilterChain();
             filter.doFilterInternal(req2, response, chain);
-            assertEquals(HttpStatus.OK.value(), response.getStatus(), "不同 IP 不应互相影响");
+            assertEquals(HttpStatus.OK.value(), response.getStatus(), "different IPs should not affect each other");
         }
 
         @Test
-        @DisplayName("X-Forwarded-For 优先于 RemoteAddr")
+        @DisplayName("X-Forwarded-For takes precedence over RemoteAddr")
         void forwardedForUsed() throws Exception {
             request.addHeader("X-Forwarded-For", "10.0.0.1, 10.0.0.2");
 
@@ -246,7 +246,7 @@ class RateLimitFilterTest {
         }
 
         @Test
-        @DisplayName("X-Forwarded-For 为 null 时回退 RemoteAddr")
+        @DisplayName("X-Forwarded-For null falls back to RemoteAddr")
         void fallbackToRemoteAddr() throws Exception {
             request.setRemoteAddr("127.0.0.1");
 
@@ -256,13 +256,13 @@ class RateLimitFilterTest {
     }
 
     @Nested
-    @DisplayName("窗口过期")
+    @DisplayName("Window Expiry")
     class WindowExpiry {
 
         @Test
-        @DisplayName("窗口过期后计数重置")
+        @DisplayName("count resets after window expiry")
         void expiredWindowResets() throws Exception {
-            // 消耗完限额
+            // exhaust the limit
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
                 chain = new MockFilterChain();
@@ -270,33 +270,33 @@ class RateLimitFilterTest {
             }
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus());
 
-            // 模拟窗口过期：直接修改 windowStart
+            // simulate window expiry: directly modify windowStart
             var window = filter.getWindows().get("192.168.1.1");
             assertNotNull(window);
 
-            // 使用反射或直接操作 map 来模拟过期
-            // 由于 WindowState 的 windowStart 是 final，我们清除 map 让它重建
+            // use reflection or direct map access to simulate expiry
+            // since windowStart is final, clear the map to let it rebuild
             filter.clearWindows();
 
-            // 过期后应重新放行
+            // after expiry, should pass again
             response = new MockHttpServletResponse();
             chain = new MockFilterChain();
             filter.doFilterInternal(request, response, chain);
-            assertEquals(HttpStatus.OK.value(), response.getStatus(), "窗口过期后应重置计数");
+            assertEquals(HttpStatus.OK.value(), response.getStatus(), "window expiry should reset count");
         }
     }
 
     @Nested
-    @DisplayName("user 策略 — 按已认证用户限流")
+    @DisplayName("user strategy — rate limit by authenticated user")
     class UserStrategy {
 
         @Test
-        @DisplayName("已认证用户使用 authenticatedApiKey 属性作为限流标识")
+        @DisplayName("authenticated user uses authenticatedApiKey as rate limit key")
         void authenticatedUserUsesAttribute() throws Exception {
             RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
             userFilter.clearWindows();
 
-            // 模拟 ApiKeyAuthFilter 已设置的认证属性
+            // simulate authenticated attribute set by ApiKeyAuthFilter
             request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-authenticated-user");
             request.setRemoteAddr("192.168.1.100");
 
@@ -305,24 +305,24 @@ class RateLimitFilterTest {
                 chain = new MockFilterChain();
                 userFilter.doFilterInternal(request, response, chain);
                 assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                        "第 " + (i + 1) + " 次请求应在限额内");
+                        "request #" + (i + 1) + " should be within limit");
             }
 
-            // 第 LIMIT+1 次应被限流
+            // request #LIMIT+1 should be rate limited
             response = new MockHttpServletResponse();
             chain = new MockFilterChain();
             userFilter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "第 " + (LIMIT + 1) + " 次请求应触发限流");
+                    "request #" + (LIMIT + 1) + " should trigger rate limit");
         }
 
         @Test
-        @DisplayName("未认证用户回退到 IP 限流")
+        @DisplayName("unauthenticated user falls back to IP rate limit")
         void unauthenticatedUserFallsBackToIp() throws Exception {
             RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
             userFilter.clearWindows();
 
-            // 未设置 authenticatedApiKey 属性（模拟未认证）
+            // no authenticatedApiKey attribute set (simulate unauthenticated)
             request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, null);
             request.setRemoteAddr("192.168.1.200");
 
@@ -337,16 +337,16 @@ class RateLimitFilterTest {
             chain = new MockFilterChain();
             userFilter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "未认证用户应使用 IP 限流");
+                    "unauthenticated user should use IP rate limit");
         }
 
         @Test
-        @DisplayName("不同已认证用户独立计数")
+        @DisplayName("different authenticated users have independent counts")
         void differentAuthenticatedUsersIndependent() throws Exception {
             RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
             userFilter.clearWindows();
 
-            // 用户 A 消耗完限额
+            // user A exhausts the limit
             request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-user-a");
             for (int i = 0; i <= LIMIT; i++) {
                 response = new MockHttpServletResponse();
@@ -354,19 +354,19 @@ class RateLimitFilterTest {
                 userFilter.doFilterInternal(request, response, chain);
             }
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "用户 A 应被限流");
+                    "user A should be rate limited");
 
-            // 用户 B 应仍可正常请求
+            // user B should still be able to request
             request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-user-b");
             response = new MockHttpServletResponse();
             chain = new MockFilterChain();
             userFilter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.OK.value(), response.getStatus(),
-                    "用户 B 不应受用户 A 限流影响");
+                    "user B should not be affected by user A rate limit");
         }
 
         @Test
-        @DisplayName("user 策略支持 keyLimits 自定义限额")
+        @DisplayName("user strategy supports keyLimits custom limits")
         void userStrategySupportsKeyLimits() throws Exception {
             Map<String, Integer> keyLimits = Map.of("sk-vip-user", 2);
             RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", keyLimits);
@@ -374,7 +374,7 @@ class RateLimitFilterTest {
 
             request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE, "sk-vip-user");
 
-            // VIP 用户只有 2 次限额
+            // VIP user has only 2 requests limit
             for (int i = 0; i < 2; i++) {
                 response = new MockHttpServletResponse();
                 chain = new MockFilterChain();
@@ -386,11 +386,11 @@ class RateLimitFilterTest {
             chain = new MockFilterChain();
             userFilter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "VIP 用户自定义限额为 2，超出应限流");
+                    "VIP user custom limit is 2, exceeding should rate limit");
         }
 
         @Test
-        @DisplayName("authenticatedApiKey 为空字符串时回退到 IP")
+        @DisplayName("empty authenticatedApiKey falls back to IP")
         void emptyAuthenticatedKeyFallsBackToIp() throws Exception {
             RateLimitFilter userFilter = new RateLimitFilter(true, LIMIT, "user", Map.of());
             userFilter.clearWindows();
@@ -409,7 +409,7 @@ class RateLimitFilterTest {
             chain = new MockFilterChain();
             userFilter.doFilterInternal(request, response, chain);
             assertEquals(HttpStatus.TOO_MANY_REQUESTS.value(), response.getStatus(),
-                    "空字符串 authenticatedApiKey 应回退到 IP");
+                    "empty authenticatedApiKey should fall back to IP");
         }
     }
 }
