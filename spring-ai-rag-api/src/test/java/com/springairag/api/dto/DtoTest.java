@@ -979,6 +979,224 @@ class DtoTest {
         assertEquals(2, r.failed());
     }
 
+    // ========== SilenceScheduleRequest ==========
+
+    @Test
+    void silenceScheduleRequest_constructorAndGetters() {
+        var req = new com.springairag.api.dto.SilenceScheduleRequest();
+        req.setName("weekend-maintenance");
+        req.setAlertKey("high-latency");
+        req.setSilenceType("RECURRING");
+        req.setStartTime("0 0 2 * * SAT");
+        req.setEndTime("0 0 6 * * SAT");
+        req.setDescription("Silence alerts during weekend maintenance window");
+        req.setEnabled(true);
+        req.setMetadata(Map.of("owner", "ops-team"));
+
+        assertEquals("weekend-maintenance", req.getName());
+        assertEquals("high-latency", req.getAlertKey());
+        assertEquals("RECURRING", req.getSilenceType());
+        assertEquals("0 0 2 * * SAT", req.getStartTime());
+        assertEquals("0 0 6 * * SAT", req.getEndTime());
+        assertEquals("Silence alerts during weekend maintenance window", req.getDescription());
+        assertTrue(req.getEnabled());
+        assertEquals("ops-team", req.getMetadata().get("owner"));
+    }
+
+    @Test
+    void silenceScheduleRequest_setters() {
+        var req = new com.springairag.api.dto.SilenceScheduleRequest();
+        req.setName(null);
+        req.setAlertKey(null);
+        req.setSilenceType(null);
+        req.setStartTime(null);
+        req.setEndTime(null);
+        assertNull(req.getName());
+        assertNull(req.getAlertKey());
+        assertNull(req.getSilenceType());
+        assertNull(req.getStartTime());
+        assertNull(req.getEndTime());
+    }
+
+    // ========== SloConfigRequest ==========
+
+    @Test
+    void sloConfigRequest_constructorAndGetters() {
+        var req = new com.springairag.api.dto.SloConfigRequest();
+        req.setSloName("availability_p99");
+        req.setSloType("AVAILABILITY");
+        req.setTargetValue(99.5);
+        req.setUnit("%");
+        req.setDescription("P99 availability over 5-minute window");
+        req.setEnabled(true);
+        req.setMetadata(Map.of("service", "rag-api"));
+
+        assertEquals("availability_p99", req.getSloName());
+        assertEquals("AVAILABILITY", req.getSloType());
+        assertEquals(99.5, req.getTargetValue());
+        assertEquals("%", req.getUnit());
+        assertEquals("P99 availability over 5-minute window", req.getDescription());
+        assertTrue(req.getEnabled());
+        assertEquals("rag-api", req.getMetadata().get("service"));
+    }
+
+    @Test
+    void sloConfigRequest_setters() {
+        var req = new com.springairag.api.dto.SloConfigRequest();
+        req.setSloName(null);
+        req.setSloType(null);
+        req.setTargetValue(null);
+        req.setUnit(null);
+        req.setDescription(null);
+        req.setEnabled(false);
+        assertNull(req.getSloName());
+        assertNull(req.getSloType());
+        assertNull(req.getTargetValue());
+        assertNull(req.getUnit());
+        assertNull(req.getDescription());
+        assertFalse(req.getEnabled());
+    }
+
+    // ========== FileTreeResponse ==========
+
+    @Test
+    void fileTreeResponse_recordConstructor() {
+        var entry1 = new com.springairag.api.dto.FileTreeEntryResponse("intro.md", "abc123/intro.md", "file", "text/markdown", 2048);
+        var entry2 = new com.springairag.api.dto.FileTreeEntryResponse("images", "abc123/images", "directory", null, 0);
+        var response = new com.springairag.api.dto.FileTreeResponse("abc123/", java.util.List.of(entry1, entry2), 2);
+
+        assertEquals("abc123/", response.path());
+        assertEquals(2, response.total());
+        assertEquals(2, response.entries().size());
+
+        var e1 = response.entries().get(0);
+        assertEquals("intro.md", e1.name());
+        assertEquals("abc123/intro.md", e1.path());
+        assertEquals("file", e1.type());
+        assertEquals("text/markdown", e1.mimeType());
+        assertEquals(2048, e1.size());
+
+        var e2 = response.entries().get(1);
+        assertEquals("images", e2.name());
+        assertEquals("directory", e2.type());
+        assertNull(e2.mimeType());
+        assertEquals(0, e2.size());
+    }
+
+    @Test
+    void fileTreeEntryResponse_recordValidation() {
+        var entry = new com.springairag.api.dto.FileTreeEntryResponse("default.md", "abc123/default.md", "file", "text/markdown", 4096);
+        assertEquals("default.md", entry.name());
+        assertEquals("abc123/default.md", entry.path());
+        assertEquals("file", entry.type());
+        assertEquals("text/markdown", entry.mimeType());
+        assertEquals(4096, entry.size());
+    }
+
+    // ========== SlowQueryStatsResponse ==========
+
+    @Test
+    void slowQueryStatsResponse_recordConstructor() {
+        var record1 = new com.springairag.api.dto.SlowQueryStatsResponse.SlowQueryRecordDto(1712000000000L, 250, "SELECT * FROM rag_documents");
+        var response = new com.springairag.api.dto.SlowQueryStatsResponse(true, 1000L, 5000L, 42L, 45L, java.util.List.of(record1));
+
+        assertTrue(response.enabled());
+        assertEquals(1000L, response.thresholdMs());
+        assertEquals(5000L, response.totalQueryCount());
+        assertEquals(42L, response.slowQueryCount());
+        assertEquals(45L, response.averageDurationMs());
+        assertEquals(1, response.recentSlowQueries().size());
+
+        var rec = response.recentSlowQueries().get(0);
+        assertEquals(1712000000000L, rec.timestampMs());
+        assertEquals(250, rec.durationMs());
+        assertEquals("SELECT * FROM rag_documents", rec.sql());
+    }
+
+    @Test
+    void slowQueryStatsResponse_emptySlowQueries() {
+        var response = new com.springairag.api.dto.SlowQueryStatsResponse(false, 500L, 100L, 0L, 30L, java.util.List.of());
+        assertFalse(response.enabled());
+        assertEquals(500L, response.thresholdMs());
+        assertEquals(100L, response.totalQueryCount());
+        assertEquals(0L, response.slowQueryCount());
+        assertEquals(30.0, response.averageDurationMs());
+        assertTrue(response.recentSlowQueries().isEmpty());
+    }
+
+    @Test
+    void slowQueryRecordDto_constructorAndGetters() {
+        var record = new com.springairag.api.dto.SlowQueryStatsResponse.SlowQueryRecordDto(1712000000000L, 150, "SELECT id FROM rag_collection");
+        assertEquals(1712000000000L, record.timestampMs());
+        assertEquals(150, record.durationMs());
+        assertEquals("SELECT id FROM rag_collection", record.sql());
+    }
+
+    // ========== DocumentSummary ==========
+
+    @Test
+    void documentSummary_recordConstructor() {
+        var now = java.time.LocalDateTime.now();
+        var summary = new com.springairag.api.dto.DocumentSummary(
+                42L, "RAG Guide", "https://example.com/doc.pdf", "PDF", "COMPLETED",
+                now, 4096L, "hash_abc", true, now, 1L, "My KB", 10L, "Preview...", "Full content", java.util.Map.of("key", "value"));
+
+        assertEquals(42L, summary.id());
+        assertEquals("RAG Guide", summary.title());
+        assertEquals("https://example.com/doc.pdf", summary.source());
+        assertEquals("PDF", summary.documentType());
+        assertEquals("COMPLETED", summary.processingStatus());
+        assertEquals(now, summary.createdAt());
+        assertEquals(4096L, summary.size());
+        assertEquals("hash_abc", summary.contentHash());
+        assertTrue(summary.enabled());
+        assertEquals(now, summary.updatedAt());
+        assertEquals(1L, summary.collectionId());
+        assertEquals("My KB", summary.collectionName());
+        assertEquals(10L, summary.chunkCount());
+        assertEquals("Preview...", summary.contentPreview());
+        assertEquals("Full content", summary.content());
+        assertEquals("value", summary.metadata().get("key"));
+    }
+
+    @Test
+    void documentSummary_nullFields() {
+        var summary = new com.springairag.api.dto.DocumentSummary(
+                null, null, null, null, null, null, null, null, false, null, null, null, 0L, null, null, null);
+        assertNull(summary.id());
+        assertNull(summary.title());
+        assertNull(summary.source());
+        assertNull(summary.documentType());
+        assertNull(summary.processingStatus());
+        assertNull(summary.createdAt());
+        assertNull(summary.size());
+        assertNull(summary.contentHash());
+        assertFalse(summary.enabled());
+        assertNull(summary.updatedAt());
+        assertNull(summary.collectionId());
+        assertNull(summary.collectionName());
+        assertEquals(0L, summary.chunkCount());
+        assertNull(summary.contentPreview());
+        assertNull(summary.content());
+        assertNull(summary.metadata());
+    }
+
+    // ========== SilenceAlertRequest ==========
+
+    @Test
+    void silenceAlertRequest_recordConstructor() {
+        var req = new com.springairag.api.dto.SilenceAlertRequest("high-latency", 60);
+        assertEquals("high-latency", req.alertKey());
+        assertEquals(60, req.durationMinutes());
+    }
+
+    @Test
+    void silenceAlertRequest_nullDuration() {
+        var req = new com.springairag.api.dto.SilenceAlertRequest("high-latency", null);
+        assertEquals("high-latency", req.alertKey());
+        assertNull(req.durationMinutes());
+    }
+
     // ========== RetrievalResult ==========
 
     @Test
