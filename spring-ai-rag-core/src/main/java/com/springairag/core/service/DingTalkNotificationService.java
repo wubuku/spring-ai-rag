@@ -71,6 +71,7 @@ public class DingTalkNotificationService implements NotificationService {
                         dtConfig.getName(), alertType, alertName);
                 return true;
             } catch (Exception e) {
+                // Resilience: one DingTalk channel failure must not block other channels or abort alerting
                 log.warn("Failed to send DingTalk notification: channel={} error={}",
                         dtConfig.getName(), e.getMessage());
             }
@@ -97,6 +98,7 @@ public class DingTalkNotificationService implements NotificationService {
                 restTemplate.postForEntity(url, request, String.class);
                 return;
             } catch (Exception e) {
+                // Retry: capture exception and attempt exponential backoff before next retry
                 lastException = e;
                 if (attempt < MAX_RETRIES) {
                     try {
