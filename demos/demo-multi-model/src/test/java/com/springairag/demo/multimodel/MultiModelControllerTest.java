@@ -14,6 +14,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.hamcrest.Matchers;
 
 import java.util.List;
 import java.util.Map;
@@ -57,8 +58,9 @@ class MultiModelControllerTest {
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET /demo/models — 返回模型注册中心信息")
+    @DisplayName("GET /demo/models - returns model registry info")
     void listModels_returnsModelRegistryInfo() throws Exception {
+        when(modelRegistry.availableProviders()).thenReturn(java.util.Set.of("openai", "anthropic"));
         when(modelRegistry.getAllModelsInfo()).thenReturn(List.of(
                 Map.of("provider", "openai", "available", true, "displayName", "DeepSeek"),
                 Map.of("provider", "anthropic", "available", true, "displayName", "Claude")
@@ -66,14 +68,14 @@ class MultiModelControllerTest {
 
         mockMvc.perform(get("/demo/models"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.availableProviders[0]").value("openai"))
-                .andExpect(jsonPath("$.availableProviders[1]").value("anthropic"))
+                .andExpect(jsonPath("$.availableProviders", Matchers.hasItems("openai", "anthropic")))
+                .andExpect(jsonPath("$.availableProviders.length()").value(2))
                 .andExpect(jsonPath("$.models").isArray())
                 .andExpect(jsonPath("$.models.length()").value(2));
     }
 
     @Test
-    @DisplayName("GET /demo/models — 无可用模型时返回空列表")
+    @DisplayName("GET /demo/models - returns empty list when no providers available")
     void listModels_whenNoProvidersAvailable() throws Exception {
         when(modelRegistry.availableProviders()).thenReturn(java.util.Set.of());
         when(modelRegistry.getAllModelsInfo()).thenReturn(List.of());
@@ -89,7 +91,7 @@ class MultiModelControllerTest {
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("GET /demo/models/{provider} — 返回指定模型详情")
+    @DisplayName("GET /demo/models/{provider} - returns model details")
     void getModel_returnsModelDetails() throws Exception {
         when(modelRegistry.isAvailable("openai")).thenReturn(true);
         when(modelRegistry.getModelInfo("openai")).thenReturn(
@@ -168,7 +170,7 @@ class MultiModelControllerTest {
     // ─────────────────────────────────────────────────────────
 
     @Test
-    @DisplayName("POST /demo/compare — 并行对比两个模型")
+    @DisplayName("POST /demo/compare - compares two models in parallel")
     void compareModels_returnsBothResults() throws Exception {
         when(modelComparisonService.compareProviders(anyString(), anyList(), anyInt()))
                 .thenReturn(List.of(
@@ -193,7 +195,7 @@ class MultiModelControllerTest {
     }
 
     @Test
-    @DisplayName("POST /demo/compare — 并行对比超时行为")
+    @DisplayName("POST /demo/compare - respects timeout")
     void compareModels_respectsTimeout() throws Exception {
         when(modelComparisonService.compareProviders(anyString(), anyList(), eq(10)))
                 .thenReturn(List.of(new ModelComparisonResult(

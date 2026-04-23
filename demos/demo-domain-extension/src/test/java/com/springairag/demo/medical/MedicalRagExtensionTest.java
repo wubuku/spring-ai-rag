@@ -51,7 +51,7 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("isApplicable 识别医疗关键词")
+    @DisplayName("isApplicable - recognizes medical keywords")
     void isApplicable_detectsMedicalKeywords() {
         assertTrue(extension.isApplicable("头疼怎么办"));
         assertTrue(extension.isApplicable("发烧38度"));
@@ -61,7 +61,7 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("isApplicable 过滤非医疗问题")
+    @DisplayName("isApplicable - filters non-medical questions")
     void isApplicable_rejectsNonMedical() {
         assertFalse(extension.isApplicable("今天天气怎么样"));
         assertFalse(extension.isApplicable("Python怎么学"));
@@ -69,18 +69,18 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("postProcessAnswer 添加免责声明")
+    @DisplayName("postProcessAnswer - adds medical disclaimer")
     void postProcessAnswer_addsDisclaimer() {
         String answer = "头疼可能由多种原因引起...";
         String processed = extension.postProcessAnswer(answer);
-        assertTrue(processed.contains("就医"), "应添加就医提醒");
+        assertTrue(processed.contains("就医"), "Should add medical disclaimer");
     }
 
     @Test
-    @DisplayName("postProcessAnswer 已有就医提醒时不重复添加")
+    @DisplayName("postProcessAnswer - does not add duplicate disclaimer")
     void postProcessAnswer_noDuplicateDisclaimer() {
         String answer = "建议及时就医检查";
         String processed = extension.postProcessAnswer(answer);
-        assertEquals(answer, processed, "已有就医提醒则不重复添加");
+        assertEquals(answer, processed, "Should not add duplicate disclaimer when already present");
     }
 }
