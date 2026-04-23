@@ -15,7 +15,7 @@ import java.io.IOException;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DisplayName("RequestTraceFilter 请求追踪过滤器")
+@DisplayName("RequestTraceFilter - Request Tracing Filter")
 class RequestTraceFilterTest {
 
     private RequestTraceFilter filter;
@@ -36,24 +36,24 @@ class RequestTraceFilterTest {
         MDC.clear();
     }
 
-    // ==================== 基础功能 ====================
+    // ==================== Basic Functionality ====================
 
     @Nested
-    @DisplayName("基础追踪")
+    @DisplayName("Basic Tracing")
     class BasicTracing {
 
         @Test
-        @DisplayName("自动生成 traceId 并注入 MDC")
+        @DisplayName("Auto-generates traceId and injects into MDC")
         void doFilter_generatesTraceId() throws ServletException, IOException {
             filter.doFilter(request, response, chain);
 
             String traceId = response.getHeader(RequestTraceFilter.TRACE_ID_HEADER);
             assertNotNull(traceId);
-            assertEquals(12, traceId.length(), "traceId 应为 12 字符");
+            assertEquals(12, traceId.length(), "traceId should be 12 characters");
         }
 
         @Test
-        @DisplayName("响应头包含 X-Trace-Id")
+        @DisplayName("Response header contains X-Trace-Id")
         void doFilter_setsResponseHeader() throws ServletException, IOException {
             filter.doFilter(request, response, chain);
 
@@ -61,7 +61,7 @@ class RequestTraceFilterTest {
         }
 
         @Test
-        @DisplayName("使用调用方传入的 traceId")
+        @DisplayName("Uses incoming traceId from caller")
         void doFilter_usesIncomingTraceId() throws ServletException, IOException {
             String incomingTrace = "abc123def456";
             request.addHeader(RequestTraceFilter.INCOMING_TRACE_HEADER, incomingTrace);
@@ -72,7 +72,7 @@ class RequestTraceFilterTest {
         }
 
         @Test
-        @DisplayName("过滤链执行后 MDC 已清理")
+        @DisplayName("MDC is cleared after filter chain execution")
         void doFilter_clearsMdcAfterRequest() throws ServletException, IOException {
             filter.doFilter(request, response, chain);
 
@@ -81,7 +81,7 @@ class RequestTraceFilterTest {
         }
 
         @Test
-        @DisplayName("每次请求生成不同 traceId")
+        @DisplayName("Each request generates a different traceId")
         void doFilter_differentTraceIdsPerRequest() throws ServletException, IOException {
             MockHttpServletResponse response1 = new MockHttpServletResponse();
             MockHttpServletResponse response2 = new MockHttpServletResponse();
@@ -96,7 +96,7 @@ class RequestTraceFilterTest {
         }
 
         @Test
-        @DisplayName("空白传入 traceId 时自动生成")
+        @DisplayName("Auto-generates traceId when incoming is blank")
         void doFilter_blankIncomingGeneratesNew() throws ServletException, IOException {
             request.addHeader(RequestTraceFilter.INCOMING_TRACE_HEADER, "   ");
 
@@ -105,11 +105,11 @@ class RequestTraceFilterTest {
             String traceId = response.getHeader(RequestTraceFilter.TRACE_ID_HEADER);
             assertNotNull(traceId);
             assertEquals(12, traceId.length());
-            assertNotEquals("   ", traceId.trim());
+            assertNotEquals("   ", traceId.trim(), "trimmed traceId should not match blank input");
         }
 
         @Test
-        @DisplayName("过滤链异常时 MDC 仍清理")
+        @DisplayName("MDC is still cleared when filter chain throws")
         void doFilter_clearsMdcOnException() {
             MockFilterChain failingChain = new MockFilterChain() {
                 @Override
@@ -124,28 +124,28 @@ class RequestTraceFilterTest {
                     filter.doFilter(request, response, failingChain));
 
             assertNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY),
-                    "异常后 MDC 仍应被清理");
+                    "MDC should still be cleared after exception");
         }
     }
 
-    // ==================== 采样策略 ====================
+    // ==================== Sampling Strategy ====================
 
     @Nested
-    @DisplayName("采样策略")
+    @DisplayName("Sampling Strategy")
     class Sampling {
 
         @Test
-        @DisplayName("采样率 0.0 时不注入 MDC")
+        @DisplayName("Sampling rate 0.0 skips MDC injection")
         void zeroRateSkipsMdc() throws ServletException, IOException {
             filter.configure(true, 0.0, false, false);
             filter.doFilter(request, response, chain);
 
             assertNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
-            // 响应头可能没有（外部传入时有）
+            // Response header may be absent (present when externally provided)
         }
 
         @Test
-        @DisplayName("采样率 1.0 时始终注入 MDC")
+        @DisplayName("Sampling rate 1.0 always injects MDC")
         void fullRateAlwaysInjects() throws ServletException, IOException {
             filter.configure(true, 1.0, false, false);
 
@@ -155,36 +155,36 @@ class RequestTraceFilterTest {
                 chain = new MockFilterChain();
                 filter.doFilter(request, response, chain);
                 assertNotNull(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER),
-                        "采样率 1.0 时第 " + (i + 1) + " 次请求应生成 traceId");
+                        "request " + (i + 1) + " should generate traceId with sampling rate 1.0");
             }
         }
 
         @Test
-        @DisplayName("外部传入 traceId 始终保留即使未采样")
+        @DisplayName("External traceId always preserved even if not sampled")
         void externalTraceAlwaysPreserved() throws ServletException, IOException {
             filter.configure(true, 0.0, false, false);
             request.addHeader("X-Trace-Id", "external-trace-123");
 
             filter.doFilter(request, response, chain);
 
-            // 未采样但 traceId 应传递到响应头
+            // Not sampled but traceId should be propagated to response header
             assertEquals("external-trace-123", response.getHeader(RequestTraceFilter.TRACE_ID_HEADER));
         }
 
         @Test
-        @DisplayName("追踪关闭时跳过所有处理")
+        @DisplayName("Skips all processing when tracing is disabled")
         void disabledSkipsAll() throws ServletException, IOException {
             filter.configure(false, 1.0, false, false);
             filter.doFilter(request, response, chain);
 
             assertNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
             assertNull(response.getHeader(RequestTraceFilter.TRACE_ID_HEADER));
-            // 验证 chain 被调用（请求被放行）
+            // Verify chain was called (request was passed through)
             assertNotNull(chain.getRequest());
         }
 
         @Test
-        @DisplayName("请求属性标记采样状态")
+        @DisplayName("Request attribute marks sampling status")
         void sampledAttributeSet() throws ServletException, IOException {
             filter.configure(true, 1.0, false, false);
             filter.doFilter(request, response, chain);
@@ -200,23 +200,23 @@ class RequestTraceFilterTest {
     class W3CTracing {
 
         @Test
-        @DisplayName("启用 W3C 格式时输出 traceparent 响应头")
+        @DisplayName("Outputs traceparent header when W3C format enabled")
         void w3cEnabledOutputsTraceparent() throws ServletException, IOException {
             filter.configure(true, 1.0, true, false);
             filter.doFilter(request, response, chain);
 
             String traceparent = response.getHeader("traceparent");
-            assertNotNull(traceparent, "应输出 traceparent 响应头");
-            assertTrue(traceparent.startsWith("00-"), "应以 00- 开头");
+            assertNotNull(traceparent, "should output traceparent response header");
+            assertTrue(traceparent.startsWith("00-"), "should start with 00-");
             String[] parts = traceparent.split("-");
-            assertEquals(4, parts.length, "格式: 00-traceId-spanId-flags");
-            assertEquals(32, parts[1].length(), "traceId 应为 32 字符");
-            assertEquals(16, parts[2].length(), "spanId 应为 16 字符");
+            assertEquals(4, parts.length, "format: 00-traceId-spanId-flags");
+            assertEquals(32, parts[1].length(), "traceId should be 32 characters");
+            assertEquals(16, parts[2].length(), "spanId should be 16 characters");
             assertEquals("01", parts[3]);
         }
 
         @Test
-        @DisplayName("传入 traceparent 时复用上游 traceId")
+        @DisplayName("Reuses upstream traceId when traceparent is incoming")
         void incomingTraceparentReusesTraceId() throws ServletException, IOException {
             filter.configure(true, 1.0, true, false);
             String upstreamTraceId = "0af7651916cd43dd8448eb211c80319c";
@@ -227,11 +227,11 @@ class RequestTraceFilterTest {
 
             String traceparent = response.getHeader("traceparent");
             assertTrue(traceparent.contains(upstreamTraceId),
-                    "应复用上游 traceId");
+                    "should reuse upstream traceId");
         }
 
         @Test
-        @DisplayName("W3C 格式下 X-Trace-Id 仍输出")
+        @DisplayName("X-Trace-Id still output alongside W3C format")
         void w3cAlsoOutputsXTraceId() throws ServletException, IOException {
             filter.configure(true, 1.0, true, false);
             filter.doFilter(request, response, chain);
@@ -241,7 +241,7 @@ class RequestTraceFilterTest {
         }
 
         @Test
-        @DisplayName("禁用 W3C 时不输出 traceparent")
+        @DisplayName("No traceparent output when W3C is disabled")
         void w3cDisabledNoTraceparent() throws ServletException, IOException {
             filter.configure(true, 1.0, false, false);
             filter.doFilter(request, response, chain);
@@ -257,20 +257,20 @@ class RequestTraceFilterTest {
     class SpanId {
 
         @Test
-        @DisplayName("启用 spanId 时 MDC 包含 spanId")
+        @DisplayName("MDC contains spanId when spanId is enabled")
         void spanIdEnabledAddsToMdc() throws ServletException, IOException {
             filter.configure(true, 1.0, false, true);
             filter.doFilter(request, response, chain);
 
             String spanId = MDC.get(RequestTraceFilter.SPAN_ID_KEY);
-            // spanId 在 finally 中被清理，但可以在 filter 执行期间验证
-            // 这里我们检查 traceId 至少被设置了
+            // spanId is cleared in finally, but can be verified during filter execution
+            // Here we verify that traceId was at least set
             assertNotNull(MDC.get(RequestTraceFilter.TRACE_ID_KEY) == null ?
                     response.getHeader(RequestTraceFilter.TRACE_ID_HEADER) : "ok");
         }
 
         @Test
-        @DisplayName("W3C+spanId 时 traceparent 包含独立 spanId")
+        @DisplayName("traceparent contains independent spanId with W3C+spanId")
         void w3cWithSpanId() throws ServletException, IOException {
             filter.configure(true, 1.0, true, true);
             filter.doFilter(request, response, chain);
@@ -278,11 +278,11 @@ class RequestTraceFilterTest {
             String traceparent = response.getHeader("traceparent");
             assertNotNull(traceparent);
             String[] parts = traceparent.split("-");
-            assertEquals(16, parts[2].length(), "spanId 应为 16 字符十六进制");
+            assertEquals(16, parts[2].length(), "spanId should be 16 hex characters");
         }
 
         @Test
-        @DisplayName("不同请求的 spanId 不同")
+        @DisplayName("Different requests have different spanIds")
         void differentSpansPerRequest() throws ServletException, IOException {
             filter.configure(true, 1.0, true, true);
 
@@ -295,34 +295,34 @@ class RequestTraceFilterTest {
             String parent2 = response.getHeader("traceparent");
 
             assertNotEquals(parent1.split("-")[2], parent2.split("-")[2],
-                    "不同请求应有不同 spanId");
+                    "different requests should have different spanIds");
         }
     }
 
-    // ==================== 十六进制 ID 生成 ====================
+    // ==================== Hex ID Generation ====================
 
     @Nested
-    @DisplayName("ID 生成")
+    @DisplayName("ID Generation")
     class IdGeneration {
 
         @Test
-        @DisplayName("generateHexId 生成指定长度")
+        @DisplayName("generateHexId produces specified length")
         void hexIdLength() {
             for (int len : new int[]{8, 12, 16, 32}) {
                 String id = RequestTraceFilter.generateHexId(len);
                 assertEquals(len, id.length());
-                assertTrue(id.matches("[0-9a-f]+"), "应为纯十六进制");
+                assertTrue(id.matches("[0-9a-f]+"), "should be pure hexadecimal");
             }
         }
 
         @Test
-        @DisplayName("多次生成不重复")
+        @DisplayName("Multiple generations produce unique IDs")
         void hexIdUnique() {
             var ids = new java.util.HashSet<String>();
             for (int i = 0; i < 100; i++) {
                 ids.add(RequestTraceFilter.generateHexId(16));
             }
-            assertEquals(100, ids.size(), "100 次生成应全部不同");
+            assertEquals(100, ids.size(), "100 generations should all be unique");
         }
     }
 }
