@@ -275,6 +275,7 @@ public class AlertServiceImpl implements AlertService {
             ZonedDateTime end = ZonedDateTime.parse(schedule.getEndTime());
             return !now.isBefore(start) && !now.isAfter(end);
         } catch (Exception e) {
+            // Resilience: parse failure means the schedule is invalid; treat as not silent
             log.debug("Failed to parse silence schedule times: {}", e.getMessage());
             return false;
         }
