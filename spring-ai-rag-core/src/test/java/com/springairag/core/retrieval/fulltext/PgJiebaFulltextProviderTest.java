@@ -18,7 +18,7 @@ import static org.mockito.Mockito.*;
 class PgJiebaFulltextProviderTest {
 
     @Test
-    @DisplayName("pg_jieba + jiebacfg 都可用时 isAvailable=true")
+    @DisplayName("isAvailable=true when pg_jieba extension and jiebacfg config exist")
     void available_whenExtensionAndConfigExist() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         // detectAvailability(): pg_jieba ext (Integer) + jiebacfg config (Integer) + search_vector_zh index (Boolean)
@@ -31,7 +31,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("pg_jieba 不可用时 isAvailable=false")
+    @DisplayName("isAvailable=false when pg_jieba extension is missing")
     void unavailable_whenExtensionMissing() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -42,10 +42,10 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("jiebacfg 配置不存在时 isAvailable=false")
+    @DisplayName("isAvailable=false when jiebacfg config is missing")
     void unavailable_whenConfigMissing() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
-        // pg_jieba 扩展存在，但 jiebacfg 配置查询失败
+        // pg_jieba extension exists, but jiebacfg config query fails
         when(jdbc.queryForObject(contains("pg_jieba"), eq(Integer.class))).thenReturn(1);
         when(jdbc.queryForObject(contains("jiebacfg"), eq(Integer.class)))
                 .thenThrow(new RuntimeException("not found"));
@@ -55,7 +55,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("不可用时 search 返回空列表")
+    @DisplayName("search returns empty list when provider is unavailable")
     void search_whenUnavailable_returnsEmpty() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -66,7 +66,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("search 使用 ts_rank 和 websearch_to_tsquery")
+    @DisplayName("search uses ts_rank and websearch_to_tsquery")
     void search_usesTsQueryAndRank() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         // detectAvailability(): ext (Integer) + config (Integer) + index (Boolean)
@@ -88,7 +88,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("空查询返回空列表")
+    @DisplayName("empty query returns empty list")
     void search_emptyQuery_returnsEmpty() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
@@ -99,7 +99,7 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("数据库异常时返回空列表不抛异常")
+    @DisplayName("search returns empty list on DB error without throwing")
     void search_dbError_returnsEmptyGracefully() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);

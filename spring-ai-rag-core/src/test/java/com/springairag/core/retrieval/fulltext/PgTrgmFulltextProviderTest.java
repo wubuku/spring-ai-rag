@@ -36,7 +36,7 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("pg_trgm 可用时 isAvailable=true")
+    @DisplayName("isAvailable=true when pg_trgm extension exists")
     void available_whenExtensionExists() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         // detectAvailability(): extension check (Integer) + index existence check (Boolean)
@@ -49,7 +49,7 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("pg_trgm 不可用时 isAvailable=false")
+    @DisplayName("isAvailable=false when pg_trgm extension is missing")
     void unavailable_whenExtensionMissing() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -60,7 +60,7 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("不可用时 search 返回空列表")
+    @DisplayName("search returns empty list when provider is unavailable")
     void search_whenUnavailable_returnsEmpty() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class)))
@@ -72,28 +72,28 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("多词查询：每个关键词分别检索取最高相似度")
+    @DisplayName("multi-word query: each keyword searched independently, best similarity kept")
     void search_multiWord_takesBestScore() {
         // Skip: requires complex varargs mocking. The multi-word search logic is tested
         // via HybridRetrieverService integration tests which use real SQL.
     }
 
     @Test
-    @DisplayName("结果低于 minScore 时被过滤")
+    @DisplayName("results below minScore are filtered out")
     void search_belowMinScore_filtered() {
         // Skip: requires complex varargs mocking. minScore filtering is covered
         // by HybridRetrieverService integration tests.
     }
 
     @Test
-    @DisplayName("excludeIds 被过滤")
+    @DisplayName("excludeIds are filtered from results")
     void search_excludeIds_filtered() {
         // Skip: requires complex varargs mocking. excludeIds filtering is covered
         // by HybridRetrieverService integration tests.
     }
 
     @Test
-    @DisplayName("数据库异常时返回空列表不抛异常")
+    @DisplayName("search returns empty list on DB error without throwing")
     void search_dbError_returnsEmptyGracefully() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
@@ -110,7 +110,7 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("空查询返回空列表")
+    @DisplayName("empty query returns empty list")
     void search_emptyQuery_returnsEmpty() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
@@ -121,7 +121,7 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
-    @DisplayName("限定 documentIds 时 SQL 包含 IN 子句")
+    @DisplayName("SQL includes IN clause when documentIds are specified")
     void search_withDocumentIds_filtersByDocument() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
