@@ -1504,4 +1504,282 @@ class DtoTest {
         assertEquals(200, endpoint.sloCount());
         assertEquals(0, endpoint.breachCount());
     }
+
+    @Test
+    void documentListResponse_constructorAndGetters() {
+        var summary = new DocumentSummary(1L, "Doc1", "src", "PDF", "COMPLETED",
+                null, 1024L, "abc", true, null, null, null, 3L, "preview", null, null);
+        var resp = new DocumentListResponse(List.of(summary), 1, 0, 20);
+        assertEquals(1, resp.documents().size());
+        assertEquals(1, resp.total());
+        assertEquals(0, resp.offset());
+        assertEquals(20, resp.limit());
+    }
+
+    @Test
+    void documentSummary_allFields() {
+        var ts = java.time.LocalDateTime.now();
+        var doc = new DocumentSummary(42L, "Title", "https://example.com", "MARKDOWN",
+                "PENDING", ts, 2048L, "hash123", false, ts, 1L, "KB", 5L,
+                "preview text", "full content", Map.of("key", "val"));
+        assertEquals(42L, doc.id());
+        assertEquals("Title", doc.title());
+        assertEquals("MARKDOWN", doc.documentType());
+        assertFalse(doc.enabled());
+        assertEquals(5L, doc.chunkCount());
+        assertEquals("full content", doc.content());
+    }
+
+    @Test
+    void searchResponse_ofFactory() {
+        var result = new RetrievalResult();
+        result.setDocumentId("doc-1");
+        result.setChunkText("matched content");
+        result.setScore(0.9);
+        result.setTitle("Doc Title");
+        var resp = SearchResponse.of(List.of(result), "query");
+        assertEquals(1, resp.total());
+        assertEquals("query", resp.query());
+        assertEquals(1, resp.results().size());
+        assertEquals("doc-1", resp.results().get(0).getDocumentId());
+    }
+
+    @Test
+    void fireAlertRequest_constructorAndGetters() {
+        var req = new FireAlertRequest("manual", "Test Alert", "msg", "WARNING", Map.of("cpu", 90));
+        assertEquals("manual", req.alertType());
+        assertEquals("Test Alert", req.alertName());
+        assertEquals("WARNING", req.severity());
+        assertEquals(90, req.metrics().get("cpu"));
+    }
+
+    @Test
+    void silenceAlertRequest_constructorAndGetters() {
+        var req = new SilenceAlertRequest("high-latency", 60);
+        assertEquals("high-latency", req.alertKey());
+        assertEquals(60, req.durationMinutes());
+    }
+
+    @Test
+    void silenceScheduleRequest_gettersAndSetters() {
+        var req = new SilenceScheduleRequest();
+        req.setName("weekend");
+        req.setAlertKey("alert1");
+        req.setSilenceType("ONE_TIME");
+        req.setStartTime("2026-04-10T02:00:00");
+        req.setEndTime("2026-04-10T04:00:00");
+        req.setDescription("maintenance");
+        req.setEnabled(true);
+        req.setMetadata(Map.of("a", 1));
+        assertEquals("weekend", req.getName());
+        assertEquals("alert1", req.getAlertKey());
+        assertEquals("ONE_TIME", req.getSilenceType());
+        assertTrue(req.getEnabled());
+        assertEquals(1, req.getMetadata().get("a"));
+    }
+
+    @Test
+    void sloConfigRequest_gettersAndSetters() {
+        var req = new SloConfigRequest();
+        req.setSloName("latency_p99");
+        req.setSloType("LATENCY");
+        req.setTargetValue(200.0);
+        req.setUnit("ms");
+        req.setDescription("P99 under 200ms");
+        req.setEnabled(true);
+        assertEquals("latency_p99", req.getSloName());
+        assertEquals(200.0, req.getTargetValue());
+        assertTrue(req.getEnabled());
+    }
+
+    @Test
+    void fileTreeEntryResponse_record() {
+        var entry = new FileTreeEntryResponse("default.md", "uuid/default.md", "file", "text/markdown", 1024);
+        assertEquals("default.md", entry.name());
+        assertEquals("uuid/default.md", entry.path());
+        assertEquals("file", entry.type());
+        assertEquals("text/markdown", entry.mimeType());
+        assertEquals(1024, entry.size());
+    }
+
+    @Test
+    void fileTreeEntryResponse_directory() {
+        var dir = new FileTreeEntryResponse("subdir", "uuid/subdir", "directory", null, 0);
+        assertEquals("directory", dir.type());
+        assertNull(dir.mimeType());
+    }
+
+    @Test
+    void fileTreeResponse_record() {
+        var entries = List.of(
+                new FileTreeEntryResponse("a.md", "p/a.md", "file", "text/markdown", 100));
+        var resp = new FileTreeResponse("p/", entries, 1);
+        assertEquals("p/", resp.path());
+        assertEquals(1, resp.total());
+        assertEquals("a.md", resp.entries().get(0).name());
+    }
+
+    @Test
+    void healthResponse_ofFactory() {
+        var resp = HealthResponse.of("UP", Map.of("db", "UP", "pgvector", "UP"));
+        assertEquals("UP", resp.status());
+        assertNotNull(resp.timestamp());
+        assertEquals(2, resp.components().size());
+    }
+
+    @Test
+    void componentHealthResponse_ofFactory() {
+        var comp = Map.of("db", Map.<String, Object>of("status", "UP", "latency", 5));
+        var resp = ComponentHealthResponse.of("DEGRADED", comp);
+        assertEquals("DEGRADED", resp.status());
+        assertEquals("UP", resp.components().get("db").get("status"));
+    }
+
+    @Test
+    void slowQueryStatsResponse_record() {
+        var records = List.of(new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t"));
+        var resp = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, records);
+        assertTrue(resp.enabled());
+        assertEquals(1000L, resp.thresholdMs());
+        assertEquals(5, resp.slowQueryCount());
+        assertEquals(1, resp.recentSlowQueries().size());
+        assertEquals(1500L, resp.recentSlowQueries().get(0).durationMs());
+    }
+
+    @Test
+    void ragMetricsSummary_ofFactory() {
+        var summary = RagMetricsSummary.of(1000, 950, 50, 95.0, 5000, 100000);
+        assertEquals(1000, summary.totalRequests());
+        assertEquals(950, summary.successfulRequests());
+        assertEquals(95.0, summary.successRate(), 0.01);
+        assertNotNull(summary.timestamp());
+    }
+
+    @Test
+    void modelListResponse_ofFactory() {
+        var resp = ModelListResponse.of(true, "openai", List.of("openai", "anthropic"),
+                List.of("openai"), List.of(Map.of("name", "gpt-4o")));
+        assertTrue(resp.multiModelEnabled());
+        assertEquals("openai", resp.defaultProvider());
+        assertEquals(2, resp.availableProviders().size());
+        assertEquals(1, resp.models().size());
+    }
+
+    @Test
+    void modelCompareResponse_record() {
+        var result = new ModelCompareResponse.ModelCompareResult(
+                "openai/gpt-4o", true, "RAG is...", 1250L, 150, 320, 470, null);
+        var resp = new ModelCompareResponse("What is RAG?", List.of("openai"), List.of(result));
+        assertEquals("What is RAG?", resp.query());
+        assertEquals(1, resp.results().size());
+        assertTrue(resp.results().get(0).success());
+        assertEquals(1250L, resp.results().get(0).latencyMs());
+    }
+
+    @Test
+    void modelCompareResult_failureCase() {
+        var result = new ModelCompareResponse.ModelCompareResult(
+                "broken", false, null, null, null, null, null, "API error");
+        assertFalse(result.success());
+        assertEquals("API error", result.error());
+    }
+
+    @Test
+    void modelDetailResponse_ofFactory() {
+        var resp = ModelDetailResponse.of(true, Map.of("provider", "openai", "model", "gpt-4o"));
+        assertTrue(resp.available());
+        assertEquals("openai", resp.details().get("provider"));
+    }
+
+    @Test
+    void modelMetricsResponse_record() {
+        var metric = new ModelMetricsResponse.ModelMetric("openai", 1000, 5, 0.005, "OpenAI GPT-4o");
+        var resp = new ModelMetricsResponse(true, List.of(metric));
+        assertTrue(resp.multiModelEnabled());
+        assertEquals(1, resp.models().size());
+        assertEquals("openai", resp.models().get(0).provider());
+        assertEquals(0.005, resp.models().get(0).errorRate(), 0.001);
+    }
+
+    @Test
+    void batchEmbedProgressEvent_overallPercent() {
+        var event = new BatchEmbedProgressEvent(2, 10, 5L, "EMBEDDING", 5, 10, "msg", 1, 0, 1);
+        assertEquals(20, event.overallPercent());
+        assertEquals("EMBEDDING", event.phase());
+    }
+
+    @Test
+    void batchEmbedProgressEvent_zeroDocs() {
+        var event = new BatchEmbedProgressEvent(0, 0, null, "DONE", 0, 0, "done", 0, 0, 0);
+        assertEquals(0, event.overallPercent());
+    }
+
+    @Test
+    void embedProgressEvent_factoryMethods() {
+        var preparing = EmbedProgressEvent.preparing(1L);
+        assertEquals("PREPARING", preparing.phase());
+
+        var chunking = EmbedProgressEvent.chunking(1L, 10);
+        assertEquals("CHUNKING", chunking.phase());
+        assertEquals(10, chunking.total());
+
+        var embedding = EmbedProgressEvent.embedding(1L, 5, 10);
+        assertEquals("EMBEDDING", embedding.phase());
+        assertEquals(5, embedding.current());
+
+        var storing = EmbedProgressEvent.storing(1L, 3, 10);
+        assertEquals("STORING", storing.phase());
+
+        var completed = EmbedProgressEvent.completed(1L, 10);
+        assertEquals("COMPLETED", completed.phase());
+
+        var failed = EmbedProgressEvent.failed(1L, "timeout");
+        assertEquals("FAILED", failed.phase());
+        assertTrue(failed.message().contains("timeout"));
+    }
+
+    @Test
+    void pdfToRagResponse_record() {
+        var resp = new PdfToRagResponse(42L, "doc_title", true, "COMPLETED", "ok", 23, "uuid-123", "uuid-123/default.md");
+        assertEquals(42L, resp.documentId());
+        assertTrue(resp.newlyCreated());
+        assertEquals(23, resp.chunksCreated());
+    }
+
+    @Test
+    void fileUploadResponse_record() {
+        var result = new FileUploadResponse.FileResult("doc.txt", 1L, "Doc", true, 5, null);
+        var resp = new FileUploadResponse(1, 1, 0, List.of(result));
+        assertEquals(1, resp.processed());
+        assertEquals(5, resp.results().get(0).chunks());
+        assertNull(resp.results().get(0).error());
+    }
+
+    @Test
+    void fileUploadResponse_withError() {
+        var result = new FileUploadResponse.FileResult("bad.txt", null, null, false, 0, "parse error");
+        var resp = new FileUploadResponse(1, 0, 1, List.of(result));
+        assertEquals(1, resp.failed());
+        assertEquals("parse error", resp.results().get(0).error());
+    }
+
+    @Test
+    void cacheInvalidateResponse_fromCleared() {
+        var resp = CacheInvalidateResponse.from(5);
+        assertEquals(5, resp.cleared());
+        assertEquals("Cache invalidated", resp.message());
+    }
+
+    @Test
+    void cacheInvalidateResponse_fromZero() {
+        var resp = CacheInvalidateResponse.from(0);
+        assertEquals("No entries to clear", resp.message());
+    }
+
+    @Test
+    void cacheInvalidateResponse_fromMap() {
+        var resp = CacheInvalidateResponse.from(Map.of("cleared", 3, "message", "done"));
+        assertEquals(3, resp.cleared());
+        assertEquals("done", resp.message());
+    }
 }
