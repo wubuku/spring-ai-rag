@@ -1,12 +1,14 @@
 package com.springairag.core.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+
+import java.util.Objects;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -131,10 +133,49 @@ public class MultiModelConfigLoader {
     public static class ModelsJsonRoot {
         public ModelsJson models;
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ModelsJsonRoot that = (ModelsJsonRoot) o;
+            return Objects.equals(models, that.models);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(models);
+        }
+
+        @Override
+        public String toString() {
+            return "ModelsJsonRoot{models=" + models + "}";
+        }
+
         public static class ModelsJson {
             public java.util.Map<String, ProviderJson> providers;
             public RoutingJson chatModel;
             public RoutingJson embeddingModel;
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+                ModelsJson that = (ModelsJson) o;
+                return Objects.equals(providers, that.providers)
+                        && Objects.equals(chatModel, that.chatModel)
+                        && Objects.equals(embeddingModel, that.embeddingModel);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(providers, chatModel, embeddingModel);
+            }
+
+            @Override
+            public String toString() {
+                return "ModelsJson{providers=" + providers + ", chatModel=" + chatModel
+                        + ", embeddingModel=" + embeddingModel + "}";
+            }
         }
 
         public static class ProviderJson {
@@ -145,6 +186,33 @@ public class MultiModelConfigLoader {
             public Boolean enabled;
             public Integer priority;
             public List<ModelJson> models;
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+                ProviderJson that = (ProviderJson) o;
+                return Objects.equals(displayName, that.displayName)
+                        && Objects.equals(baseUrl, that.baseUrl)
+                        && Objects.equals(apiKey, that.apiKey)
+                        && Objects.equals(apiType, that.apiType)
+                        && Objects.equals(enabled, that.enabled)
+                        && Objects.equals(priority, that.priority)
+                        && Objects.equals(models, that.models);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(displayName, baseUrl, apiKey, apiType,
+                        enabled, priority, models);
+            }
+
+            @Override
+            public String toString() {
+                return "ProviderJson{displayName=" + displayName + ", baseUrl=" + baseUrl
+                        + ", apiType=" + apiType + ", enabled=" + enabled
+                        + ", priority=" + priority + ", models=" + models + "}";
+            }
         }
 
         public static class ModelJson {
@@ -158,17 +226,88 @@ public class MultiModelConfigLoader {
             public Integer maxTokens;
             public Integer dimension;
 
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+                ModelJson that = (ModelJson) o;
+                return Objects.equals(id, that.id)
+                        && Objects.equals(name, that.name)
+                        && Objects.equals(type, that.type)
+                        && Objects.equals(reasoning, that.reasoning)
+                        && Objects.equals(inputModalities, that.inputModalities)
+                        && Objects.equals(cost, that.cost)
+                        && Objects.equals(contextWindow, that.contextWindow)
+                        && Objects.equals(maxTokens, that.maxTokens)
+                        && Objects.equals(dimension, that.dimension);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(id, name, type, reasoning, inputModalities,
+                        cost, contextWindow, maxTokens, dimension);
+            }
+
+            @Override
+            public String toString() {
+                return "ModelJson{id=" + id + ", name=" + name + ", type=" + type
+                        + ", reasoning=" + reasoning + ", inputModalities=" + inputModalities
+                        + ", cost=" + cost + ", contextWindow=" + contextWindow
+                        + ", maxTokens=" + maxTokens + ", dimension=" + dimension + "}";
+            }
+
             public static class CostJson {
                 public Double input;
                 public Double output;
                 public Double cacheRead;
                 public Double cacheWrite;
+
+                @Override
+                public boolean equals(Object o) {
+                    if (this == o) return true;
+                    if (o == null || getClass() != o.getClass()) return false;
+                    CostJson that = (CostJson) o;
+                    return Objects.equals(input, that.input)
+                            && Objects.equals(output, that.output)
+                            && Objects.equals(cacheRead, that.cacheRead)
+                            && Objects.equals(cacheWrite, that.cacheWrite);
+                }
+
+                @Override
+                public int hashCode() {
+                    return Objects.hash(input, output, cacheRead, cacheWrite);
+                }
+
+                @Override
+                public String toString() {
+                    return "CostJson{input=" + input + ", output=" + output
+                            + ", cacheRead=" + cacheRead + ", cacheWrite=" + cacheWrite + "}";
+                }
             }
         }
 
         public static class RoutingJson {
             public String primary;
             public List<String> fallbacks;
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+                RoutingJson that = (RoutingJson) o;
+                return Objects.equals(primary, that.primary)
+                        && Objects.equals(fallbacks, that.fallbacks);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(primary, fallbacks);
+            }
+
+            @Override
+            public String toString() {
+                return "RoutingJson{primary=" + primary + ", fallbacks=" + fallbacks + "}";
+            }
         }
     }
 }

@@ -338,4 +338,222 @@ class MultiModelConfigLoaderTest {
         assertTrue(gpt4o.inputModalities().contains("text"));
         assertTrue(gpt4o.inputModalities().contains("image"));
     }
+
+    // ─── JSON inner class equals/hashCode/toString tests ──────────
+
+    @Test
+    @DisplayName("RoutingJson equals and hashCode are consistent")
+    void routingJson_equalsConsistent() {
+        var r1 = new MultiModelConfigLoader.ModelsJsonRoot.RoutingJson();
+        r1.primary = "openai";
+        r1.fallbacks = java.util.List.of("anthropic", "deepseek");
+
+        var r2 = new MultiModelConfigLoader.ModelsJsonRoot.RoutingJson();
+        r2.primary = "openai";
+        r2.fallbacks = java.util.List.of("anthropic", "deepseek");
+
+        var r3 = new MultiModelConfigLoader.ModelsJsonRoot.RoutingJson();
+        r3.primary = "anthropic";
+        r3.fallbacks = java.util.List.of("deepseek");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+        assertNotEquals(r1, r3);
+        assertNotEquals(r1.hashCode(), r3.hashCode());
+        assertFalse(r1.equals(null));
+        assertFalse(r1.equals("string"));
+    }
+
+    @Test
+    @DisplayName("RoutingJson toString contains key fields")
+    void routingJson_toString_containsFields() {
+        var r = new MultiModelConfigLoader.ModelsJsonRoot.RoutingJson();
+        r.primary = "openai";
+        r.fallbacks = java.util.List.of("deepseek");
+
+        String str = r.toString();
+        assertTrue(str.contains("RoutingJson"));
+        assertTrue(str.contains("openai"));
+        assertTrue(str.contains("deepseek"));
+    }
+
+    @Test
+    @DisplayName("CostJson equals and hashCode are consistent")
+    void costJson_equalsConsistent() {
+        var c1 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson.CostJson();
+        c1.input = 2.5;
+        c1.output = 10.0;
+        c1.cacheRead = 1.25;
+        c1.cacheWrite = 0.0;
+
+        var c2 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson.CostJson();
+        c2.input = 2.5;
+        c2.output = 10.0;
+        c2.cacheRead = 1.25;
+        c2.cacheWrite = 0.0;
+
+        var c3 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson.CostJson();
+        c3.input = 5.0;
+        c3.output = 15.0;
+        c3.cacheRead = 2.0;
+        c3.cacheWrite = 1.0;
+
+        assertEquals(c1, c2);
+        assertEquals(c1.hashCode(), c2.hashCode());
+        assertNotEquals(c1, c3);
+        assertFalse(c1.equals(null));
+        assertFalse(c1.equals("string"));
+    }
+
+    @Test
+    @DisplayName("CostJson toString contains key fields")
+    void costJson_toString_containsFields() {
+        var c = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson.CostJson();
+        c.input = 2.5;
+        c.output = 10.0;
+        c.cacheRead = 1.25;
+        c.cacheWrite = 0.0;
+
+        String str = c.toString();
+        assertTrue(str.contains("CostJson"));
+        assertTrue(str.contains("2.5"));
+        assertTrue(str.contains("10.0"));
+    }
+
+    @Test
+    @DisplayName("ModelJson equals and hashCode are consistent")
+    void modelJson_equalsConsistent() {
+        var m1 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson();
+        m1.id = "gpt-4o";
+        m1.name = "GPT-4o";
+        m1.type = "chat";
+        m1.contextWindow = 128000;
+        m1.maxTokens = 16384;
+
+        var m2 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson();
+        m2.id = "gpt-4o";
+        m2.name = "GPT-4o";
+        m2.type = "chat";
+        m2.contextWindow = 128000;
+        m2.maxTokens = 16384;
+
+        var m3 = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson();
+        m3.id = "gpt-4o-mini";
+        m3.name = "GPT-4o Mini";
+        m3.type = "chat";
+        m3.contextWindow = 128000;
+        m3.maxTokens = 16384;
+
+        assertEquals(m1, m2);
+        assertEquals(m1.hashCode(), m2.hashCode());
+        assertNotEquals(m1, m3);
+        assertFalse(m1.equals(null));
+        assertFalse(m1.equals("string"));
+    }
+
+    @Test
+    @DisplayName("ModelJson toString contains key fields")
+    void modelJson_toString_containsFields() {
+        var m = new MultiModelConfigLoader.ModelsJsonRoot.ModelJson();
+        m.id = "gpt-4o";
+        m.name = "GPT-4o";
+        m.type = "chat";
+        m.contextWindow = 128000;
+        m.maxTokens = 16384;
+
+        String str = m.toString();
+        assertTrue(str.contains("ModelJson"));
+        assertTrue(str.contains("gpt-4o"));
+        assertTrue(str.contains("GPT-4o"));
+        assertTrue(str.contains("chat"));
+    }
+
+    @Test
+    @DisplayName("ProviderJson equals and hashCode are consistent")
+    void providerJson_equalsConsistent() {
+        var p1 = new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson();
+        p1.displayName = "OpenAI";
+        p1.baseUrl = "https://api.openai.com";
+        p1.apiType = "openai-completions";
+        p1.enabled = true;
+        p1.priority = 1;
+
+        var p2 = new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson();
+        p2.displayName = "OpenAI";
+        p2.baseUrl = "https://api.openai.com";
+        p2.apiType = "openai-completions";
+        p2.enabled = true;
+        p2.priority = 1;
+
+        var p3 = new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson();
+        p3.displayName = "Anthropic";
+        p3.baseUrl = "https://api.anthropic.com";
+        p3.apiType = "anthropic";
+        p3.enabled = false;
+        p3.priority = 2;
+
+        assertEquals(p1, p2);
+        assertEquals(p1.hashCode(), p2.hashCode());
+        assertNotEquals(p1, p3);
+        assertFalse(p1.equals(null));
+        assertFalse(p1.equals("string"));
+    }
+
+    @Test
+    @DisplayName("ProviderJson toString excludes apiKey for security")
+    void providerJson_toString_excludesApiKey() {
+        var p = new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson();
+        p.displayName = "OpenAI";
+        p.baseUrl = "https://api.openai.com";
+        p.apiKey = "sk-secret-key";
+        p.apiType = "openai-completions";
+        p.enabled = true;
+        p.priority = 1;
+
+        String str = p.toString();
+        assertTrue(str.contains("ProviderJson"));
+        assertTrue(str.contains("OpenAI"));
+        assertTrue(str.contains("https://api.openai.com"));
+        // apiKey should NOT appear in toString output
+        assertFalse(str.contains("sk-secret-key"));
+        assertFalse(str.contains("apiKey"));
+    }
+
+    @Test
+    @DisplayName("ModelsJson equals and hashCode are consistent")
+    void modelsJson_equalsConsistent() {
+        var m1 = new MultiModelConfigLoader.ModelsJsonRoot.ModelsJson();
+        m1.providers = java.util.Map.of("openai", new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson());
+
+        var m2 = new MultiModelConfigLoader.ModelsJsonRoot.ModelsJson();
+        m2.providers = java.util.Map.of("openai", new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson());
+
+        var m3 = new MultiModelConfigLoader.ModelsJsonRoot.ModelsJson();
+        m3.providers = java.util.Map.of("anthropic", new MultiModelConfigLoader.ModelsJsonRoot.ProviderJson());
+
+        assertEquals(m1, m2);
+        assertEquals(m1.hashCode(), m2.hashCode());
+        assertNotEquals(m1, m3);
+        assertFalse(m1.equals(null));
+        assertFalse(m1.equals("string"));
+    }
+
+    @Test
+    @DisplayName("ModelsJsonRoot equals and hashCode are consistent")
+    void modelsJsonRoot_equalsConsistent() {
+        var r1 = new MultiModelConfigLoader.ModelsJsonRoot();
+        r1.models = new MultiModelConfigLoader.ModelsJsonRoot.ModelsJson();
+
+        var r2 = new MultiModelConfigLoader.ModelsJsonRoot();
+        r2.models = new MultiModelConfigLoader.ModelsJsonRoot.ModelsJson();
+
+        var r3 = new MultiModelConfigLoader.ModelsJsonRoot();
+        r3.models = null;
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+        assertNotEquals(r1, r3);
+        assertFalse(r1.equals(null));
+        assertFalse(r1.equals("string"));
+    }
 }
