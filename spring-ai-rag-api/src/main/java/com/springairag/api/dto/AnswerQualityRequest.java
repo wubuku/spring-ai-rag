@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
 
 /**
  * Request for LLM-as-judge answer quality evaluation.
@@ -44,4 +45,24 @@ public class AnswerQualityRequest {
     public void setContext(String context) { this.context = context; }
     public String getAnswer() { return answer; }
     public void setAnswer(String answer) { this.answer = answer; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AnswerQualityRequest that = (AnswerQualityRequest) o;
+        return Objects.equals(query, that.query)
+                && Objects.equals(context, that.context)
+                && Objects.equals(answer, that.answer);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(query, context, answer);
+    }
+
+    @Override
+    public String toString() {
+        return "AnswerQualityRequest{query=" + query + ", context=" + context + ", answer=" + answer + "}";
+    }
 }

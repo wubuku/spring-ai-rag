@@ -5,6 +5,7 @@ import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import java.util.Objects;
 
 /**
  * Retrieval configuration
@@ -59,6 +60,31 @@ public class RetrievalConfig {
 
     public double getFulltextWeight() { return fulltextWeight; }
     public void setFulltextWeight(double fulltextWeight) { this.fulltextWeight = fulltextWeight; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RetrievalConfig that = (RetrievalConfig) o;
+        return maxResults == that.maxResults
+                && Double.compare(that.minScore, minScore) == 0
+                && useHybridSearch == that.useHybridSearch
+                && useRerank == that.useRerank
+                && Double.compare(that.vectorWeight, vectorWeight) == 0
+                && Double.compare(that.fulltextWeight, fulltextWeight) == 0;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(maxResults, minScore, useHybridSearch, useRerank, vectorWeight, fulltextWeight);
+    }
+
+    @Override
+    public String toString() {
+        return "RetrievalConfig{maxResults=" + maxResults + ", minScore=" + minScore
+                + ", useHybridSearch=" + useHybridSearch + ", useRerank=" + useRerank
+                + ", vectorWeight=" + vectorWeight + ", fulltextWeight=" + fulltextWeight + "}";
+    }
 
     public static class RetrievalConfigBuilder {
         private final RetrievalConfig config = new RetrievalConfig();

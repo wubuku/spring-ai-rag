@@ -557,6 +557,82 @@ class DtoTest {
         assertEquals(0.3, config.getFulltextWeight());
     }
 
+    // ========== RetrievalConfig equals/hashCode/toString ==========
+
+    @Test
+    void retrievalConfig_equals_sameFields() {
+        RetrievalConfig c1 = RetrievalConfig.builder()
+                .maxResults(20).minScore(0.3).useHybridSearch(false)
+                .useRerank(false).vectorWeight(0.7).fulltextWeight(0.3).build();
+        RetrievalConfig c2 = RetrievalConfig.builder()
+                .maxResults(20).minScore(0.3).useHybridSearch(false)
+                .useRerank(false).vectorWeight(0.7).fulltextWeight(0.3).build();
+        assertEquals(c1, c2);
+        assertEquals(c1.hashCode(), c2.hashCode());
+    }
+
+    @Test
+    void retrievalConfig_equals_differentMaxResults_notEqual() {
+        RetrievalConfig c1 = new RetrievalConfig();
+        c1.setMaxResults(10);
+        RetrievalConfig c2 = new RetrievalConfig();
+        c2.setMaxResults(20);
+        assertNotEquals(c1, c2);
+    }
+
+    @Test
+    void retrievalConfig_equals_differentMinScore_notEqual() {
+        RetrievalConfig c1 = new RetrievalConfig();
+        c1.setMinScore(0.5);
+        RetrievalConfig c2 = new RetrievalConfig();
+        c2.setMinScore(0.7);
+        assertNotEquals(c1, c2);
+    }
+
+    @Test
+    void retrievalConfig_equals_differentBooleanFlags_notEqual() {
+        RetrievalConfig c1 = new RetrievalConfig();
+        c1.setUseHybridSearch(true);
+        c1.setUseRerank(true);
+        RetrievalConfig c2 = new RetrievalConfig();
+        c2.setUseHybridSearch(false);
+        c2.setUseRerank(false);
+        assertNotEquals(c1, c2);
+    }
+
+    @Test
+    void retrievalConfig_equals_differentWeights_notEqual() {
+        RetrievalConfig c1 = new RetrievalConfig();
+        c1.setVectorWeight(0.5);
+        c1.setFulltextWeight(0.5);
+        RetrievalConfig c2 = new RetrievalConfig();
+        c2.setVectorWeight(0.7);
+        c2.setFulltextWeight(0.3);
+        assertNotEquals(c1, c2);
+    }
+
+    @Test
+    void retrievalConfig_equals_sameDefaults() {
+        RetrievalConfig c1 = new RetrievalConfig();
+        RetrievalConfig c2 = new RetrievalConfig();
+        assertEquals(c1, c2);
+        assertEquals(c1.hashCode(), c2.hashCode());
+    }
+
+    @Test
+    void retrievalConfig_toString_containsKeyFields() {
+        RetrievalConfig config = RetrievalConfig.builder()
+                .maxResults(20).minScore(0.3).useHybridSearch(false)
+                .useRerank(false).vectorWeight(0.7).fulltextWeight(0.3).build();
+        var str = config.toString();
+        assertTrue(str.contains("maxResults=20"));
+        assertTrue(str.contains("minScore=0.3"));
+        assertTrue(str.contains("useHybridSearch=false"));
+        assertTrue(str.contains("useRerank=false"));
+        assertTrue(str.contains("vectorWeight=0.7"));
+        assertTrue(str.contains("fulltextWeight=0.3"));
+    }
+
     // ========== ChatRequest ==========
 
     @Test
@@ -1517,6 +1593,54 @@ class DtoTest {
         assertEquals("Query", req.getQuery());
         assertEquals("Context", req.getContext());
         assertEquals("Answer", req.getAnswer());
+    }
+
+    // ========== AnswerQualityRequest equals/hashCode/toString ==========
+
+    @Test
+    void answerQualityRequest_equals_sameFields() {
+        var r1 = new AnswerQualityRequest("query", "context", "answer");
+        var r2 = new AnswerQualityRequest("query", "context", "answer");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void answerQualityRequest_equals_differentQuery_notEqual() {
+        var r1 = new AnswerQualityRequest("query1", "context", "answer");
+        var r2 = new AnswerQualityRequest("query2", "context", "answer");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void answerQualityRequest_equals_differentContext_notEqual() {
+        var r1 = new AnswerQualityRequest("query", "context1", "answer");
+        var r2 = new AnswerQualityRequest("query", "context2", "answer");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void answerQualityRequest_equals_differentAnswer_notEqual() {
+        var r1 = new AnswerQualityRequest("query", "context", "answer1");
+        var r2 = new AnswerQualityRequest("query", "context", "answer2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void answerQualityRequest_equals_nullFields() {
+        var r1 = new AnswerQualityRequest(null, null, null);
+        var r2 = new AnswerQualityRequest(null, null, null);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void answerQualityRequest_toString_containsKeyFields() {
+        var req = new AnswerQualityRequest("my-query", "my-context", "my-answer");
+        var str = req.toString();
+        assertTrue(str.contains("my-query"));
+        assertTrue(str.contains("my-context"));
+        assertTrue(str.contains("my-answer"));
     }
 
     // ========== AnswerQualityResponse ==========
