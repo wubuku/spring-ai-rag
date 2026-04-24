@@ -31,13 +31,13 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * HybridRetrieverService 性能基准测试
+ * HybridRetrieverService Performance Benchmark Tests
  *
- * <p>验证关键性能指标：
+ * <p>Validates key performance metrics:
  * <ul>
- *   <li>单次向量检索服务层开销 < 50ms（不含 EmbeddingModel 和 DB 实际耗时）</li>
- *   <li>结果融合（fuseAndDeduplicate）1000 条结果 < 100ms</li>
- *   <li>分数计算（cosineSimilarity）1M 次 < 500ms</li>
+ *   <li>Single vector search service-layer overhead &lt; 50ms (excluding EmbeddingModel and DB actual latency)</li>
+ *   <li>Result fusion (fuseAndDeduplicate) 1000 results &lt; 100ms</li>
+ *   <li>Cosine similarity computation 1M times &lt; 500ms</li>
  * </ul>
  */
 class HybridRetrieverServiceBenchmarkTest {
@@ -53,14 +53,14 @@ class HybridRetrieverServiceBenchmarkTest {
 
         RagProperties props = new RagProperties();
 
-        // 完整 mock setup：SearchCapabilities 和 Provider detectAvailability() 都需要这些
+        // Full mock setup: required by SearchCapabilities and Provider detectAvailability()
         when(jdbcTemplate.queryForObject(contains("search_vector_zh"), eq(Boolean.class))).thenReturn(false);
         when(jdbcTemplate.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(false);
         when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbcTemplate.queryForList(anyString(), eq(String.class))).thenReturn(List.of("vector"));
         when(jdbcTemplate.queryForObject(contains("pg_extension"), eq(Integer.class))).thenReturn(1);
 
-        // 创建 SearchCapabilities（init=false，直接设置字段）
+        // Create SearchCapabilities (init=false, set fields directly)
         SearchCapabilities caps = new SearchCapabilities(jdbcTemplate, false);
         caps.setHasPgVector(true);
         caps.setHasJieba(false);
@@ -69,12 +69,12 @@ class HybridRetrieverServiceBenchmarkTest {
         caps.setHasPgTrgm(true);
         caps.setHasTrgmIndex(true);
 
-        // 创建 spy providers（isAvailable 可被 stub）
+        // Create spy providers (isAvailable can be stubbed)
         PgJiebaFulltextProvider spyJieba = spy(new PgJiebaFulltextProvider(jdbcTemplate));
         PgEnglishFtsProvider spyEnglish = spy(new PgEnglishFtsProvider(jdbcTemplate));
         PgTrgmFulltextProvider spyTrgm = spy(new PgTrgmFulltextProvider(jdbcTemplate));
 
-        // 默认：jieba 和 english 不可用，trgm 可用
+        // Default: jieba and english unavailable, trgm available
         doReturn(false).when(spyJieba).isAvailable();
         doReturn(false).when(spyEnglish).isAvailable();
         doReturn(true).when(spyTrgm).isAvailable();
@@ -88,19 +88,19 @@ class HybridRetrieverServiceBenchmarkTest {
     @Test
     @DisplayName("Vector search service layer overhead < 50ms (average of 10 calls)")
     void vectorSearch_overhead_under50ms() {
-        // Mock embedding model — 返回假向量，不调用真实 API
+        // Mock embedding model — returns fake vector, no real API call
         float[] fakeVector = new float[1024];
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
         when(embeddingModel.embed(anyString())).thenReturn(fakeVector);
 
-        // Mock JdbcTemplate — 返回假数据，不查真实数据库
+        // Mock JdbcTemplate — returns fake data, no real DB query
         List<Map<String, Object>> fakeRows = createFakeRows(10);
         when(jdbcTemplate.queryForList(anyString(), (Object[]) any())).thenReturn(fakeRows);
 
-        // 预热
+        // Warmup
         service.search("warmup", null, null, 10);
 
-        // 基准测试：10 次调用取平均
+        // Benchmark: average over 10 calls
         int iterations = 10;
         long totalNs = 0;
         for (int i = 0; i < iterations; i++) {
@@ -110,7 +110,7 @@ class HybridRetrieverServiceBenchmarkTest {
         }
 
         double avgMs = (totalNs / (double) iterations) / 1_000_000;
-        System.out.printf("[Benchmark] 向量检索服务层平均耗时: %.2f ms (10次)%n", avgMs);
+        System.out.printf("[Benchmark] Vector search service-layer avg: %.2f ms (10 calls)%n", avgMs);
 
         assertTrue(avgMs < 50, String.format("服务层平均开销应 < 50ms，实际: %.2fms", avgMs));
     }
@@ -122,28 +122,28 @@ class HybridRetrieverServiceBenchmarkTest {
         for (int i = 0; i < fakeVector.length; i++) fakeVector[i] = (float) Math.random();
         when(embeddingModel.embed(anyString())).thenReturn(fakeVector);
 
-        // Mock 向量搜索和全文搜索返回不同的结果集
+        // Mock vector search and fulltext search returning different result sets
         List<Map<String, Object>> vectorRows = createFakeRows(20);
         List<Map<String, Object>> fulltextRows = createFakeFulltextRows(20);
 
-        // pg_trgm 可用性检测（Boolean for index + Integer for extension）
+        // pg_trgm availability detection (Boolean for index + Integer for extension)
         when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
 
-        // 第一次调用是向量搜索（ORDER BY embedding <=>），第二次是全文搜索（similarity）
+        // First call is vector search (ORDER BY embedding <=>), second is fulltext search (similarity)
         when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
                 .thenReturn(vectorRows);
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);
 
-        // 预热
+        // Warmup
         service.search("warmup", null, null, 10);
 
         long start = System.nanoTime();
         List<RetrievalResult> results = service.search("测试混合检索", null, null, 10);
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] 混合检索服务层耗时: %d ms, 结果数: %d%n", elapsedMs, results.size());
+        System.out.printf("[Benchmark] Hybrid search service-layer: %d ms, result count: %d%n", elapsedMs, results.size());
 
         assertTrue(elapsedMs < 100, String.format("混合检索服务层开销应 < 100ms，实际: %dms", elapsedMs));
         assertFalse(results.isEmpty(), "混合检索应返回结果");
@@ -155,7 +155,7 @@ class HybridRetrieverServiceBenchmarkTest {
         List<RetrievalResult> vectorResults = createFakeResults(1000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(1000, "f");
 
-        // 预热
+        // Warmup
         RetrievalUtils.fuseResults(vectorResults, fulltextResults, 20, 0.7f, 0.3f);
 
         long start = System.nanoTime();
@@ -179,19 +179,19 @@ class HybridRetrieverServiceBenchmarkTest {
             b[i] = (float) Math.random();
         }
 
-        // 预热
+        // Warmup
         RetrievalUtils.cosineSimilarity(a, b);
 
         int iterations = 100_000;
         long start = System.nanoTime();
         double sum = 0;
         for (int i = 0; i < iterations; i++) {
-            b[0] = (float) i / iterations; // 防止 JIT 完全优化掉
+            b[0] = (float) i / iterations; // Prevent JIT from fully optimizing away
             sum += RetrievalUtils.cosineSimilarity(a, b);
         }
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] cosineSimilarity 10万次 (1024维): %d ms, sum=%.4f%n",
+        System.out.printf("[Benchmark] cosineSimilarity 100k (1024-dim): %d ms, sum=%.4f%n",
                 elapsedMs, sum);
 
         assertTrue(elapsedMs < 500,
@@ -204,7 +204,7 @@ class HybridRetrieverServiceBenchmarkTest {
         float[] vector = new float[1024];
         for (int i = 0; i < vector.length; i++) vector[i] = (float) Math.random();
 
-        // 预热
+        // Warmup
         RetrievalUtils.vectorToString(vector);
 
         int iterations = 10_000;
@@ -214,7 +214,7 @@ class HybridRetrieverServiceBenchmarkTest {
         }
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] vectorToString 1万次 (1024维): %d ms%n", elapsedMs);
+        System.out.printf("[Benchmark] vectorToString 10k (1024-dim): %d ms%n", elapsedMs);
 
         assertTrue(elapsedMs < 1000,
                 String.format("1万次向量序列化应 < 1000ms，实际: %dms", elapsedMs));
@@ -230,10 +230,10 @@ class HybridRetrieverServiceBenchmarkTest {
         List<Map<String, Object>> rows = createFakeRows(20);
         when(jdbcTemplate.queryForList(anyString(), (Object[]) any())).thenReturn(rows);
 
-        // 预热
+        // Warmup
         service.search("warmup", null, null, 20);
 
-        // 端到端基准
+        // End-to-end benchmark
         int iterations = 5;
         long totalNs = 0;
         List<RetrievalResult> lastResults = null;
@@ -244,7 +244,7 @@ class HybridRetrieverServiceBenchmarkTest {
         }
 
         double avgMs = (totalNs / (double) iterations) / 1_000_000;
-        System.out.printf("[Benchmark] 端到端服务层平均耗时: %.2f ms (5次), 结果数: %d%n",
+        System.out.printf("[Benchmark] End-to-end service-layer avg: %.2f ms (5 calls), result count: %d%n",
                 avgMs, lastResults != null ? lastResults.size() : 0);
 
         assertTrue(avgMs < 150,
@@ -261,7 +261,7 @@ class HybridRetrieverServiceBenchmarkTest {
         List<Map<String, Object>> rows = createFakeRows(10);
         when(jdbcTemplate.queryForList(anyString(), (Object[]) any())).thenReturn(rows);
 
-        // 预热
+        // Warmup
         service.search("warmup", null, null, 10);
 
         int threadCount = 10;
@@ -285,7 +285,7 @@ class HybridRetrieverServiceBenchmarkTest {
 
         int totalOps = threadCount * opsPerThread;
         double opsPerSec = totalOps * 1000.0 / elapsedMs;
-        System.out.printf("[Benchmark] 并发检索 %d 线程 × %d 次: %d ms, %.0f ops/s%n",
+        System.out.printf("[Benchmark] Concurrent search %d threads x %d ops: %d ms, %.0f ops/s%n",
                 threadCount, opsPerThread, elapsedMs, opsPerSec);
 
         assertTrue(opsPerSec > 50,
@@ -298,7 +298,7 @@ class HybridRetrieverServiceBenchmarkTest {
         List<RetrievalResult> vectorResults = createFakeResults(10_000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(10_000, "f");
 
-        // 预热
+        // Warmup
         RetrievalUtils.fuseResults(vectorResults, fulltextResults, 10, 0.7f, 0.3f);
 
         long start = System.nanoTime();
@@ -322,7 +322,7 @@ class HybridRetrieverServiceBenchmarkTest {
             for (int i = 0; i < 1024; i++) vectors[t][i] = (float) Math.random();
         }
 
-        // 预热
+        // Warmup
         for (int i = 0; i < 1000; i++) {
             RetrievalUtils.cosineSimilarity(vectors[0], vectors[1]);
         }
@@ -347,7 +347,7 @@ class HybridRetrieverServiceBenchmarkTest {
 
         pool.shutdown();
 
-        System.out.printf("[Benchmark] 并发 cosineSimilarity 8×25000 (1024维): %d ms, sum=%.4f%n",
+        System.out.printf("[Benchmark] Concurrent cosineSimilarity 8x25000 (1024-dim): %d ms, sum=%.4f%n",
                 elapsedMs, totalSum);
 
         assertTrue(elapsedMs < 3000,
@@ -359,7 +359,7 @@ class HybridRetrieverServiceBenchmarkTest {
     void parseVector_10k_under3s() {
         String vectorStr = createFakeVectorString();
 
-        // 预热
+        // Warmup
         for (int i = 0; i < 100; i++) {
             RetrievalUtils.parseVector(vectorStr);
         }
@@ -371,7 +371,7 @@ class HybridRetrieverServiceBenchmarkTest {
         }
         long elapsedMs = (System.nanoTime() - start) / 1_000_000;
 
-        System.out.printf("[Benchmark] parseVector 1万次 (1024维字符串): %d ms, 维度=%d%n",
+        System.out.printf("[Benchmark] parseVector 10k (1024-dim string): %d ms, dim=%d%n",
                 elapsedMs, lastResult != null ? lastResult.length : 0);
 
         assertTrue(elapsedMs < 3000,
@@ -396,7 +396,7 @@ class HybridRetrieverServiceBenchmarkTest {
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);
 
-        // 预热
+        // Warmup
         service.search("warmup", null, null, 10);
 
         int threadCount = 5;
@@ -415,7 +415,7 @@ class HybridRetrieverServiceBenchmarkTest {
 
         pool.shutdown();
 
-        System.out.printf("[Benchmark] 并发混合检索 %d 线程: %d ms%n", threadCount, elapsedMs);
+        System.out.printf("[Benchmark] Concurrent hybrid search %d threads: %d ms%n", threadCount, elapsedMs);
 
         assertTrue(elapsedMs < 500,
                 String.format("5线程并发混合检索应 < 500ms，实际: %dms", elapsedMs));
@@ -429,7 +429,7 @@ class HybridRetrieverServiceBenchmarkTest {
         List<RetrievalResult> vectorResults = createFakeResults(5_000, "v");
         List<RetrievalResult> fulltextResults = createFakeResults(5_000, "f");
 
-        // 预热
+        // Warmup
         RetrievalUtils.fuseResults(vectorResults, fulltextResults, 20, 0.7f, 0.3f);
 
         // 多轮测试取平均
@@ -444,7 +444,7 @@ class HybridRetrieverServiceBenchmarkTest {
         }
         double avgMs = (totalNs / (double) iterations) / 1_000_000;
 
-        System.out.printf("[Benchmark] 大数据集端到端 5k+5k → 50: %.2f ms (平均%d次)%n",
+        System.out.printf("[Benchmark] Large dataset end-to-end 5k+5k → 50: %.2f ms (avg of %d runs)%n",
                 avgMs, iterations);
 
         assertTrue(avgMs < 1000,
@@ -455,7 +455,7 @@ class HybridRetrieverServiceBenchmarkTest {
     @Test
     @DisplayName("Concurrent fuseResults: 4 threads x 5000 items < 3s")
     void concurrentFuseResults_under3s() throws Exception {
-        // 预热
+        // Warmup
         List<RetrievalResult> warmup = createFakeResults(1000, "w");
         RetrievalUtils.fuseResults(warmup, warmup, 10, 0.7f, 0.3f);
 
@@ -476,7 +476,7 @@ class HybridRetrieverServiceBenchmarkTest {
 
         pool.shutdown();
 
-        System.out.printf("[Benchmark] 并发 fuseResults 4×(5k+5k → 50): %d ms%n", elapsedMs);
+        System.out.printf("[Benchmark] Concurrent fuseResults 4x(5k+5k → 50): %d ms%n", elapsedMs);
 
         assertTrue(elapsedMs < 3000,
                 String.format("4线程并发融合应 < 3s，实际: %dms", elapsedMs));
