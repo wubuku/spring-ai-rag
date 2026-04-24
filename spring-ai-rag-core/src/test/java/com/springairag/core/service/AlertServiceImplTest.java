@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.repository.AlertRepository;
@@ -21,6 +22,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * AlertService unit tests
@@ -43,11 +45,22 @@ class AlertServiceImplTest {
     @Mock
     private NotificationService notificationService;
 
+    @Mock
+    private RagAlertProperties alertProperties;
+
     private AlertService alertService;
 
     @BeforeEach
     void setUp() {
-        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, silenceScheduleRepository, List.of(notificationService));
+        // Configure alertProperties mock to return default SLO values (matching the static constants)
+        lenient().when(alertProperties.getAvailabilitySlo()).thenReturn(99.9);
+        lenient().when(alertProperties.getLatencyP50SloMs()).thenReturn(500.0);
+        lenient().when(alertProperties.getLatencyP95SloMs()).thenReturn(2000.0);
+        lenient().when(alertProperties.getLatencyP99SloMs()).thenReturn(5000.0);
+        lenient().when(alertProperties.getMrrSlo()).thenReturn(0.6);
+        lenient().when(alertProperties.getHitRateSlo()).thenReturn(0.85);
+
+        alertService = new AlertServiceImpl(alertRepository, retrievalLogRepository, evaluationRepository, silenceScheduleRepository, List.of(notificationService), alertProperties);
     }
 
     // ==================== shouldAlert ====================
@@ -653,7 +666,7 @@ class AlertServiceImplTest {
     @DisplayName("shouldAlert skips schedule check when repository is null (defensive)")
     void shouldAlert_nullRepository() {
         AlertServiceImpl serviceWithoutRepo = new AlertServiceImpl(
-                alertRepository, retrievalLogRepository, evaluationRepository, null, List.of());
+                alertRepository, retrievalLogRepository, evaluationRepository, null, List.of(), alertProperties);
         assertTrue(serviceWithoutRepo.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
     }
 }

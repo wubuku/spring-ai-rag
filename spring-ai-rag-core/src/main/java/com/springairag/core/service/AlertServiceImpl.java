@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.entity.RagAlert;
 import com.springairag.core.entity.RagSilenceSchedule;
 import com.springairag.core.repository.AlertRepository;
@@ -56,17 +57,20 @@ public class AlertServiceImpl implements AlertService {
     private final RagRetrievalEvaluationRepository evaluationRepository;
     private final RagSilenceScheduleRepository silenceScheduleRepository;
     private final List<NotificationService> notificationServices;
+    private final RagAlertProperties alertProperties;
 
     public AlertServiceImpl(AlertRepository alertRepository,
                            RagRetrievalLogRepository retrievalLogRepository,
                            RagRetrievalEvaluationRepository evaluationRepository,
                            RagSilenceScheduleRepository silenceScheduleRepository,
-                           List<NotificationService> notificationServices) {
+                           List<NotificationService> notificationServices,
+                           RagAlertProperties alertProperties) {
         this.alertRepository = alertRepository;
         this.retrievalLogRepository = retrievalLogRepository;
         this.evaluationRepository = evaluationRepository;
         this.silenceScheduleRepository = silenceScheduleRepository;
         this.notificationServices = notificationServices != null ? notificationServices : List.of();
+        this.alertProperties = alertProperties;
     }
 
     @Override
@@ -194,11 +198,11 @@ public class AlertServiceImpl implements AlertService {
     public Map<String, SloStatus> checkAllSlos(ZonedDateTime windowStart, ZonedDateTime windowEnd) {
         Map<String, SloStatus> results = new LinkedHashMap<>();
         results.put("availability", checkAvailabilitySlo(windowStart, windowEnd));
-        results.put("latency_p50", checkLatencySlo("p50", P50_LATENCY_SLO_MS, windowStart, windowEnd));
-        results.put("latency_p95", checkLatencySlo("p95", P95_LATENCY_SLO_MS, windowStart, windowEnd));
-        results.put("latency_p99", checkLatencySlo("p99", P99_LATENCY_SLO_MS, windowStart, windowEnd));
-        results.put("mrr", checkQualitySlo("mrr", MRR_SLO, windowStart, windowEnd));
-        results.put("hit_rate", checkQualitySlo("hit_rate", HIT_RATE_SLO, windowStart, windowEnd));
+        results.put("latency_p50", checkLatencySlo("p50", alertProperties.getLatencyP50SloMs(), windowStart, windowEnd));
+        results.put("latency_p95", checkLatencySlo("p95", alertProperties.getLatencyP95SloMs(), windowStart, windowEnd));
+        results.put("latency_p99", checkLatencySlo("p99", alertProperties.getLatencyP99SloMs(), windowStart, windowEnd));
+        results.put("mrr", checkQualitySlo("mrr", alertProperties.getMrrSlo(), windowStart, windowEnd));
+        results.put("hit_rate", checkQualitySlo("hit_rate", alertProperties.getHitRateSlo(), windowStart, windowEnd));
         return results;
     }
 
@@ -207,11 +211,11 @@ public class AlertServiceImpl implements AlertService {
     public SloStatus checkSlo(String sloName, ZonedDateTime startDate, ZonedDateTime endDate) {
         return switch (sloName) {
             case "availability" -> checkAvailabilitySlo(startDate, endDate);
-            case "latency_p50" -> checkLatencySlo("p50", P50_LATENCY_SLO_MS, startDate, endDate);
-            case "latency_p95" -> checkLatencySlo("p95", P95_LATENCY_SLO_MS, startDate, endDate);
-            case "latency_p99" -> checkLatencySlo("p99", P99_LATENCY_SLO_MS, startDate, endDate);
-            case "mrr" -> checkQualitySlo("mrr", MRR_SLO, startDate, endDate);
-            case "hit_rate" -> checkQualitySlo("hit_rate", HIT_RATE_SLO, startDate, endDate);
+            case "latency_p50" -> checkLatencySlo("p50", alertProperties.getLatencyP50SloMs(), startDate, endDate);
+            case "latency_p95" -> checkLatencySlo("p95", alertProperties.getLatencyP95SloMs(), startDate, endDate);
+            case "latency_p99" -> checkLatencySlo("p99", alertProperties.getLatencyP99SloMs(), startDate, endDate);
+            case "mrr" -> checkQualitySlo("mrr", alertProperties.getMrrSlo(), startDate, endDate);
+            case "hit_rate" -> checkQualitySlo("hit_rate", alertProperties.getHitRateSlo(), startDate, endDate);
             default -> {
                 SloStatus unknown = new SloStatus();
                 unknown.setSloName(sloName);

@@ -3,6 +3,7 @@ package com.springairag.starter;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagSecurityProperties;
 import com.springairag.core.config.RagRateLimitProperties;
@@ -37,7 +38,7 @@ import org.springframework.context.annotation.Primary;
 @AutoConfiguration
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
-@EnableConfigurationProperties({GeneralRagProperties.class, ApiSloProperties.class})
+@EnableConfigurationProperties({GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class})
 @Import(ApiSloConfig.class)
 public class GeneralRagAutoConfiguration {
 

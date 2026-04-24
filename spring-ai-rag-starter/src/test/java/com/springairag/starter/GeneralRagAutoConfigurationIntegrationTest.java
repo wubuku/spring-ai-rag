@@ -3,6 +3,7 @@ package com.springairag.starter;
 import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
+import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -62,15 +63,15 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@EnableConfigurationProperties binds GeneralRagProperties + ApiSloProperties")
+        @DisplayName("@EnableConfigurationProperties binds GeneralRagProperties + ApiSloProperties + RagAlertProperties")
         void enableConfigurationProperties() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(EnableConfigurationProperties.class);
             assertNotNull(ann);
             // RagProperties is registered via @Bean ragProperties(), not @EnableConfigurationProperties
-            // ApiSloProperties is bound via @EnableConfigurationProperties
+            // ApiSloProperties and RagAlertProperties are bound via @EnableConfigurationProperties
             assertArrayEquals(
-                    new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class},
+                    new Class<?>[]{GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class},
                     ann.value());
         }
 

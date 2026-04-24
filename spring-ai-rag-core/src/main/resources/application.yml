@@ -338,6 +338,16 @@ rag:
   #   wait-duration-in-open-state: 30 # Seconds to stay in OPEN state
   #   sliding-window-size: 20         # Sliding window size
 
+  # Alert SLO thresholds (can be overridden in application.yml)
+  # These values are used by AlertService.checkAllSlos() to determine SLO compliance
+  alert:
+    availability-slo: 99.9          # Availability SLO threshold (percentage)
+    latency-p50-slo-ms: 500        # P50 latency SLO threshold (milliseconds)
+    latency-p95-slo-ms: 2000       # P95 latency SLO threshold (milliseconds)
+    latency-p99-slo-ms: 5000       # P99 latency SLO threshold (milliseconds)
+    mrr-slo: 0.6                  # Mean Reciprocal Rank (MRR) quality SLO threshold
+    hit-rate-slo: 0.85             # Embedding cache hit rate SLO threshold
+
   # CORS configuration — enable for WebUI development
   cors:
     enabled: true
