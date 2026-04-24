@@ -33,6 +33,9 @@ public class ChatExportService {
      * @return JSON string bytes
      */
     public byte[] exportAsJson(String sessionId, int limit) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId must not be null");
+        }
         List<RagChatHistory> records = fetchRecords(sessionId, limit);
         StringBuilder sb = new StringBuilder();
         sb.append("{\n");
@@ -76,6 +79,9 @@ public class ChatExportService {
      * @return Markdown string bytes
      */
     public byte[] exportAsMarkdown(String sessionId, int limit) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId must not be null");
+        }
         List<RagChatHistory> records = fetchRecords(sessionId, limit);
         StringBuilder sb = new StringBuilder();
         sb.append("# Chat Export: `").append(sessionId).append("`\n\n");
@@ -105,6 +111,9 @@ public class ChatExportService {
      * @return CSV string bytes
      */
     public byte[] exportAsCsv(String sessionId, int limit) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("sessionId must not be null");
+        }
         List<RagChatHistory> records = fetchRecords(sessionId, limit);
         StringBuilder sb = new StringBuilder();
         sb.append("timestamp,role,content\n");

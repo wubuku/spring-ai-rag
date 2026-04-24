@@ -423,6 +423,29 @@ class ChatExportServiceTest {
         assertTrue(md.contains("## Assistant ["));
     }
 
+    // ==================== Null safety ====================
+
+    @Test
+    void exportAsJson_nullSessionId_throws() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> service.exportAsJson(null, 0));
+        assertEquals("sessionId must not be null", e.getMessage());
+    }
+
+    @Test
+    void exportAsMarkdown_nullSessionId_throws() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> service.exportAsMarkdown(null, 0));
+        assertEquals("sessionId must not be null", e.getMessage());
+    }
+
+    @Test
+    void exportAsCsv_nullSessionId_throws() {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class,
+                () -> service.exportAsCsv(null, 0));
+        assertEquals("sessionId must not be null", e.getMessage());
+    }
+
     // ==================== Helper ====================
 
     private RagChatHistory createRecord(Long id, String sessionId, String userMsg, String aiResp, LocalDateTime createdAt) {
