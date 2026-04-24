@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -132,14 +132,18 @@ describe('ThemeToggle', () => {
   it('system dark change updates theme when in auto mode', async () => {
     render(<ThemeToggle />);
     // Simulate OS dark mode activation
-    _currentHandler?.({ matches: true });
+    await act(async () => {
+      _currentHandler?.({ matches: true });
+    });
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark');
   });
 
   it('system light change updates theme when in auto mode', async () => {
     _mqInstance = makeMq(true); // starts dark
     render(<ThemeToggle />);
-    _currentHandler?.({ matches: false });
+    await act(async () => {
+      _currentHandler?.({ matches: false });
+    });
     expect(document.documentElement.getAttribute('data-theme')).toBe('light');
   });
 

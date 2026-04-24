@@ -105,11 +105,10 @@ describe('useChatSSE', () => {
     const { result } = renderHook(() =>
       useChatSSE({ onChunk: vi.fn(), onSources: vi.fn(), onError: vi.fn(), onDone: vi.fn() })
     );
-    expect(() => {
-      act(() => {
-        result.current.send('Hello');
-      });
-    }).not.toThrow();
+    await act(async () => {
+      result.current.send('Hello');
+    });
+    // If we reach here without throwing, the test passes
   });
 
   it('send twice cancels previous reader before opening new one', async () => {
