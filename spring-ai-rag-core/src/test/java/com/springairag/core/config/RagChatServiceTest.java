@@ -95,14 +95,14 @@ class RagChatServiceTest {
     }
 
     /**
-     * 创建模拟的 ChatClientResponse，返回指定回答文本和空 context
+     * Creates a mock ChatClientResponse with the given answer text and empty context.
      */
     private ChatClientResponse mockChatClientResponse(String answer) {
         return mockChatClientResponse(answer, Map.of());
     }
 
     /**
-     * 创建模拟的 ChatClientResponse，返回指定回答文本和指定 context
+     * Creates a mock ChatClientResponse with the given answer text and specified context.
      */
     private ChatClientResponse mockChatClientResponse(String answer, Map<String, Object> context) {
         ChatClientResponse resp = mock(ChatClientResponse.class);
@@ -172,7 +172,7 @@ class RagChatServiceTest {
     void chat_fromChatRequest_returnsChatResponseWithSources() {
         RagChatService service = createService();
 
-        // 模拟重排后的检索结果
+        // Simulates reranked retrieval results
         RetrievalResult r1 = new RetrievalResult();
         r1.setDocumentId("doc-1");
         r1.setChunkText("皮肤类型分类标准");
@@ -200,7 +200,7 @@ class RagChatServiceTest {
         assertEquals("根据参考资料，皮肤类型分为...", response.getAnswer());
         assertEquals("session-2", response.getMetadata().get("sessionId"));
 
-        // 验证 sources 被正确填充
+        // Verify sources are correctly populated
         assertNotNull(response.getSources());
         assertEquals(2, response.getSources().size());
         assertEquals("doc-1", response.getSources().get(0).getDocumentId());
@@ -214,7 +214,7 @@ class RagChatServiceTest {
     void chat_withoutRetrievalResults_sourcesIsNull() {
         RagChatService service = createService();
 
-        // 空 context（没有 RERANKED_RESULTS_KEY）
+        // Empty context (no RERANKED_RESULTS_KEY)
         ChatClientResponse chatClientResponse = mockChatClientResponse("直接回答", Map.of());
 
         when(chatClient.prompt()).thenReturn(promptSpec);
@@ -330,14 +330,14 @@ class RagChatServiceTest {
         when(callResponse.chatClientResponse()).thenThrow(new RuntimeException("LLM 超时"));
 
         assertThrows(RuntimeException.class, () -> service.chat("问题", "session-err"));
-        // 不应保存历史
+        // Should not save history
         verify(historyRepository, never()).save(anyString(), anyString(), anyString(), any(), any());
     }
 
     @Test
     @DisplayName("buildSystemPrompt uses template as system prompt when extensions exist without customizer")
     void buildSystemPrompt_withExtensionButNoCustomizer_setsSystemPrompt() {
-        // 覆盖 BeforeEach 的默认值
+        // Override BeforeEach defaults
         when(domainExtensionRegistry.hasExtensions()).thenReturn(true);
         when(domainExtensionRegistry.getSystemPromptTemplate(isNull())).thenReturn("领域系统提示词模板");
         when(promptCustomizerChain.hasCustomizers()).thenReturn(false);
@@ -356,7 +356,7 @@ class RagChatServiceTest {
         ChatResponse response = service.chat(request);
 
         assertEquals("回答", response.getAnswer());
-        // 验证 spec.system() 被调用，传入了领域模板
+        // Verify spec.system() was called with the domain template
         verify(promptSpec).system(eq("领域系统提示词模板"));
     }
 
@@ -381,9 +381,9 @@ class RagChatServiceTest {
         ChatResponse response = service.chat(new ChatRequest("问题", "session-custom"));
 
         assertEquals("回答", response.getAnswer());
-        // 验证 spec.system() 被调用，传入的是定制后的提示词
+        // Verify spec.system() was called with the customized prompt
         verify(promptSpec).system(eq("定制后的系统提示词"));
-        // 验证定制器被调用
+        // Verify customizer was invoked
         verify(promptCustomizerChain).customizeSystemPrompt(eq("原始模板"), eq(""), any());
     }
 
@@ -405,7 +405,7 @@ class RagChatServiceTest {
         ChatResponse response = service.chat(new ChatRequest("原始用户消息", "session-user-custom"));
 
         assertEquals("回答", response.getAnswer());
-        // 验证 spec.user() 被调用，传入的是定制后的用户消息
+        // Verify spec.user() was called with the customized user message
         verify(promptSpec).user(eq("【定制】原始用户消息"));
     }
 

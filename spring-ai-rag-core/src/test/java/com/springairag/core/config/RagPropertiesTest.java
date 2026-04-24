@@ -8,9 +8,9 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * RagProperties Unit Tests
+ * Unit Tests for RagProperties
  *
- * 验证默认值、setter/getter、嵌套类结构。
+ * <p>Verifies default values, setter/getter behavior, and nested class structure.
  */
 class RagPropertiesTest {
 
@@ -104,7 +104,7 @@ class RagPropertiesTest {
 
         props.getMemory().setMaxMessages(50);
         assertEquals(50, props.getMemory().getMaxMessages());
-        assertEquals(20, props2.getMemory().getMaxMessages(), "不同实例应独立");
+        assertEquals(20, props2.getMemory().getMaxMessages(), "instances should be independent");
     }
 
     @Test

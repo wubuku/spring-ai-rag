@@ -18,9 +18,9 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * RagChatHistoryRepository Unit Tests
+ * Unit Tests for RagChatHistoryRepository
  *
- * <p>测试 JPA 封装层的行为，mock RagChatHistoryJpaRepository 和 JdbcTemplate。
+ * <p>Tests the JPA repository wrapper behavior, mocking RagChatHistoryJpaRepository and JdbcTemplate.
  */
 class RagChatHistoryRepositoryTest {
 
@@ -140,15 +140,15 @@ class RagChatHistoryRepositoryTest {
 
     @Test
     void deleteBySessionId_chatMemoryFails_stillReturnsJpaCount() {
-        // JPA 删除成功
+        // JPA deletion succeeds
         when(jpaRepository.deleteBySessionId("session-1")).thenReturn(5);
-        // ChatMemory SQL 执行失败（弹性策略：表不存在等）
+        // ChatMemory SQL execution fails (resilience: table not exists, etc.)
         when(jdbcTemplate.update(contains("DELETE FROM spring_ai_chat_memory"), eq("session-1")))
                 .thenThrow(new RuntimeException("Table not found"));
 
         int deleted = repository.deleteBySessionId("session-1");
 
-        // Resilience: 即使 ChatMemory 清理失败，仍返回 JPA 删除数量
+        // Resilience: returns JPA deletion count even if ChatMemory cleanup fails
         assertEquals(5, deleted);
     }
 
@@ -176,7 +176,7 @@ class RagChatHistoryRepositoryTest {
 
     @Test
     void findBySessionId_withMalformedRelatedDocumentIds_stillReturnsDto() {
-        // relatedDocumentIds 包含非法 JSON → toDto 应捕获异常，docIds = null
+        // Malformed relatedDocumentIds JSON → toDto catches exception, docIds = null
         RagChatHistory entity = new RagChatHistory();
         entity.setId(2L);
         entity.setSessionId("session-bad");
