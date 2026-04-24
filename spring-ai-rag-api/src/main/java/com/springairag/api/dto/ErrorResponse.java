@@ -4,6 +4,7 @@ import com.springairag.api.enums.ErrorCode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * Unified error response DTO — RFC 7807 Problem Detail compatible
@@ -212,4 +213,41 @@ public class ErrorResponse {
     public void setMessage(String message) { this.message = message; }
     public void setTimestamp(String timestamp) { this.timestamp = timestamp; }
     public void setPath(String path) { this.path = path; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ErrorResponse that = (ErrorResponse) o;
+        // timestamp intentionally excluded — it changes on every construction
+        return Objects.equals(type, that.type) &&
+                Objects.equals(title, that.title) &&
+                Objects.equals(status, that.status) &&
+                Objects.equals(detail, that.detail) &&
+                Objects.equals(instance, that.instance) &&
+                Objects.equals(error, that.error) &&
+                Objects.equals(message, that.message) &&
+                Objects.equals(path, that.path);
+    }
+
+    @Override
+    public int hashCode() {
+        // timestamp intentionally excluded
+        return Objects.hash(type, title, status, detail, instance, error, message, path);
+    }
+
+    @Override
+    public String toString() {
+        return "ErrorResponse{" +
+                "type='" + type + '\'' +
+                ", title='" + title + '\'' +
+                ", status=" + status +
+                ", detail='" + detail + '\'' +
+                ", instance='" + instance + '\'' +
+                ", error='" + error + '\'' +
+                ", message='" + message + '\'' +
+                ", path='" + path + '\'' +
+                ", timestamp='" + timestamp + '\'' +
+                '}';
+    }
 }

@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * API Key metadata response (raw key is NOT included).
@@ -64,4 +65,36 @@ public class ApiKeyResponse {
 
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApiKeyResponse that = (ApiKeyResponse) o;
+        return Objects.equals(keyId, that.keyId) &&
+                Objects.equals(name, that.name) &&
+                Objects.equals(createdAt, that.createdAt) &&
+                Objects.equals(lastUsedAt, that.lastUsedAt) &&
+                Objects.equals(expiresAt, that.expiresAt) &&
+                Objects.equals(enabled, that.enabled) &&
+                Objects.equals(role, that.role);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt, enabled, role);
+    }
+
+    @Override
+    public String toString() {
+        return "ApiKeyResponse{" +
+                "keyId='" + keyId + '\'' +
+                ", name='" + name + '\'' +
+                ", createdAt=" + createdAt +
+                ", lastUsedAt=" + lastUsedAt +
+                ", expiresAt=" + expiresAt +
+                ", enabled=" + enabled +
+                ", role='" + role + '\'' +
+                '}';
+    }
 }

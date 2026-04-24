@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Retrieval evaluation request DTO
@@ -50,4 +51,32 @@ public class EvaluateRequest {
     public void setEvaluationMethod(String evaluationMethod) { this.evaluationMethod = evaluationMethod; }
     public String getEvaluatorId() { return evaluatorId; }
     public void setEvaluatorId(String evaluatorId) { this.evaluatorId = evaluatorId; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EvaluateRequest that = (EvaluateRequest) o;
+        return Objects.equals(query, that.query) &&
+                Objects.equals(retrievedDocIds, that.retrievedDocIds) &&
+                Objects.equals(relevantDocIds, that.relevantDocIds) &&
+                Objects.equals(evaluationMethod, that.evaluationMethod) &&
+                Objects.equals(evaluatorId, that.evaluatorId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(query, retrievedDocIds, relevantDocIds, evaluationMethod, evaluatorId);
+    }
+
+    @Override
+    public String toString() {
+        return "EvaluateRequest{" +
+                "query='" + query + '\'' +
+                ", retrievedDocIds=" + retrievedDocIds +
+                ", relevantDocIds=" + relevantDocIds +
+                ", evaluationMethod='" + evaluationMethod + '\'' +
+                ", evaluatorId='" + evaluatorId + '\'' +
+                '}';
+    }
 }

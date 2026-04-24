@@ -2,6 +2,9 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.LocalDateTime;
+import java.util.Objects;
+
 /**
  * Response returned immediately after creating a new API key.
  * The raw key is included ONLY here — it cannot be retrieved again.
@@ -50,4 +53,32 @@ public class ApiKeyCreatedResponse {
 
     public String getWarning() { return warning; }
     public void setWarning(String warning) { this.warning = warning; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApiKeyCreatedResponse that = (ApiKeyCreatedResponse) o;
+        return Objects.equals(keyId, that.keyId) &&
+                Objects.equals(rawKey, that.rawKey) &&
+                Objects.equals(name, that.name) &&
+                Objects.equals(expiresAt, that.expiresAt) &&
+                Objects.equals(warning, that.warning);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(keyId, rawKey, name, expiresAt, warning);
+    }
+
+    @Override
+    public String toString() {
+        return "ApiKeyCreatedResponse{" +
+                "keyId='" + keyId + '\'' +
+                ", name='" + name + '\'' +
+                ", expiresAt=" + expiresAt +
+                ", warning='" + warning + '\'' +
+                // rawKey intentionally excluded from toString (security)
+                '}';
+    }
 }

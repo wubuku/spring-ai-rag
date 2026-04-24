@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -2222,5 +2223,569 @@ class DtoTest {
         assertTrue(str.contains("availability_p99"));
         assertTrue(str.contains("AVAILABILITY"));
         assertTrue(str.contains("99.9"));
+    }
+
+    // ========== ErrorResponse equals/hashCode/toString ==========
+
+    @Test
+    void errorResponse_equals_sameFields() {
+        ErrorResponse r1 = new ErrorResponse();
+        r1.setType("https://springairag.dev/problems/validation-failed");
+        r1.setTitle("Validation Failed");
+        r1.setStatus(400);
+        r1.setDetail("Query must not be blank");
+        r1.setInstance("/api/v1/rag/chat/ask");
+        r1.setError("VALIDATION_FAILED");
+        r1.setMessage("Query must not be blank");
+        r1.setPath("/api/v1/rag/chat/ask");
+
+        ErrorResponse r2 = new ErrorResponse();
+        r2.setType("https://springairag.dev/problems/validation-failed");
+        r2.setTitle("Validation Failed");
+        r2.setStatus(400);
+        r2.setDetail("Query must not be blank");
+        r2.setInstance("/api/v1/rag/chat/ask");
+        r2.setError("VALIDATION_FAILED");
+        r2.setMessage("Query must not be blank");
+        r2.setPath("/api/v1/rag/chat/ask");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+        // timestamp intentionally excluded from equals, but same instance equals itself
+        assertEquals(r1, r1);
+    }
+
+    @Test
+    void errorResponse_equals_differentDetail_notEqual() {
+        ErrorResponse r1 = new ErrorResponse();
+        r1.setError("ERR1");
+        r1.setDetail("Error one");
+        ErrorResponse r2 = new ErrorResponse();
+        r2.setError("ERR1");
+        r2.setDetail("Error two");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void errorResponse_toString_containsKeyFields() {
+        ErrorResponse r = new ErrorResponse();
+        r.setType("https://springairag.dev/problems/not-found");
+        r.setTitle("Not Found");
+        r.setStatus(404);
+        r.setDetail("Document not found");
+        r.setPath("/api/v1/rag/documents/99");
+
+        String str = r.toString();
+        assertTrue(str.contains("Not Found"));
+        assertTrue(str.contains("404"));
+        assertTrue(str.contains("Document not found"));
+        assertTrue(str.contains("/api/v1/rag/documents/99"));
+    }
+
+    // ========== ApiKeyCreatedResponse equals/hashCode/toString ==========
+
+    @Test
+    void apiKeyCreatedResponse_equals_sameFields() {
+        LocalDateTime expires = LocalDateTime.of(2027, 1, 1, 0, 0);
+        ApiKeyCreatedResponse r1 = new ApiKeyCreatedResponse();
+        r1.setKeyId("rag_k_abc123");
+        r1.setRawKey("rag_sk_secret");
+        r1.setName("Prod Server");
+        r1.setExpiresAt(expires);
+        r1.setWarning("Save this key now.");
+
+        ApiKeyCreatedResponse r2 = new ApiKeyCreatedResponse();
+        r2.setKeyId("rag_k_abc123");
+        r2.setRawKey("rag_sk_secret");
+        r2.setName("Prod Server");
+        r2.setExpiresAt(expires);
+        r2.setWarning("Save this key now.");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void apiKeyCreatedResponse_equals_differentKeyId_notEqual() {
+        ApiKeyCreatedResponse r1 = new ApiKeyCreatedResponse();
+        r1.setKeyId("rag_k_abc");
+        ApiKeyCreatedResponse r2 = new ApiKeyCreatedResponse();
+        r2.setKeyId("rag_k_xyz");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void apiKeyCreatedResponse_toString_containsKeyFields() {
+        ApiKeyCreatedResponse r = new ApiKeyCreatedResponse();
+        r.setKeyId("rag_k_test");
+        r.setName("Test Key");
+        r.setExpiresAt(LocalDateTime.of(2027, 6, 15, 12, 0));
+        r.setWarning("Save now.");
+
+        String str = r.toString();
+        assertTrue(str.contains("rag_k_test"));
+        assertTrue(str.contains("Test Key"));
+        assertTrue(str.contains("Save now."));
+        // rawKey intentionally excluded from toString (security)
+        assertFalse(str.contains("rag_sk_"));
+    }
+
+    // ========== ApiKeyResponse equals/hashCode/toString ==========
+
+    @Test
+    void apiKeyResponse_equals_sameFields() {
+        LocalDateTime created = LocalDateTime.of(2026, 4, 12, 3, 50);
+        LocalDateTime expires = LocalDateTime.of(2027, 1, 1, 0, 0);
+        ApiKeyResponse r1 = new ApiKeyResponse();
+        r1.setKeyId("rag_k_abc123");
+        r1.setName("Production Server");
+        r1.setCreatedAt(created);
+        r1.setLastUsedAt(LocalDateTime.of(2026, 4, 12, 10, 0));
+        r1.setExpiresAt(expires);
+        r1.setEnabled(true);
+        r1.setRole("ADMIN");
+
+        ApiKeyResponse r2 = new ApiKeyResponse();
+        r2.setKeyId("rag_k_abc123");
+        r2.setName("Production Server");
+        r2.setCreatedAt(created);
+        r2.setLastUsedAt(LocalDateTime.of(2026, 4, 12, 10, 0));
+        r2.setExpiresAt(expires);
+        r2.setEnabled(true);
+        r2.setRole("ADMIN");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void apiKeyResponse_equals_differentRole_notEqual() {
+        ApiKeyResponse r1 = new ApiKeyResponse();
+        r1.setKeyId("rag_k_abc");
+        r1.setRole("ADMIN");
+        ApiKeyResponse r2 = new ApiKeyResponse();
+        r2.setKeyId("rag_k_abc");
+        r2.setRole("NORMAL");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void apiKeyResponse_toString_containsKeyFields() {
+        ApiKeyResponse r = new ApiKeyResponse();
+        r.setKeyId("rag_k_test");
+        r.setName("Test Key");
+        r.setEnabled(false);
+        r.setRole("NORMAL");
+
+        String str = r.toString();
+        assertTrue(str.contains("rag_k_test"));
+        assertTrue(str.contains("Test Key"));
+        assertTrue(str.contains("NORMAL"));
+    }
+
+    // ========== BatchDocumentRequest equals/hashCode/toString ==========
+
+    @Test
+    void batchDocumentRequest_equals_sameFields() {
+        DocumentRequest doc = new DocumentRequest("Title", "Content");
+        List<DocumentRequest> docs = List.of(doc);
+
+        BatchDocumentRequest r1 = new BatchDocumentRequest();
+        r1.setDocuments(docs);
+        r1.setEmbed(true);
+        r1.setCollectionId(5L);
+        r1.setForce(false);
+
+        BatchDocumentRequest r2 = new BatchDocumentRequest();
+        r2.setDocuments(docs);
+        r2.setEmbed(true);
+        r2.setCollectionId(5L);
+        r2.setForce(false);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void batchDocumentRequest_equals_differentCollectionId_notEqual() {
+        BatchDocumentRequest r1 = new BatchDocumentRequest();
+        r1.setCollectionId(1L);
+        BatchDocumentRequest r2 = new BatchDocumentRequest();
+        r2.setCollectionId(2L);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void batchDocumentRequest_toString_containsKeyFields() {
+        BatchDocumentRequest r = new BatchDocumentRequest();
+        r.setCollectionId(10L);
+        r.setEmbed(true);
+        r.setForce(true);
+
+        String str = r.toString();
+        assertTrue(str.contains("10"));
+        assertTrue(str.contains("embed=true"));
+        assertTrue(str.contains("force=true"));
+    }
+
+    // ========== CollectionRequest equals/hashCode/toString ==========
+
+    @Test
+    void collectionRequest_equals_sameFields() {
+        CollectionRequest r1 = new CollectionRequest();
+        r1.setName("KB1");
+        r1.setDescription("Knowledge base one");
+        r1.setEmbeddingModel("BAAI/bge-m3");
+        r1.setDimensions(1024);
+        r1.setEnabled(true);
+        r1.setMetadata(Map.of("team", "engineering"));
+
+        CollectionRequest r2 = new CollectionRequest();
+        r2.setName("KB1");
+        r2.setDescription("Knowledge base one");
+        r2.setEmbeddingModel("BAAI/bge-m3");
+        r2.setDimensions(1024);
+        r2.setEnabled(true);
+        r2.setMetadata(Map.of("team", "engineering"));
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void collectionRequest_equals_differentDimensions_notEqual() {
+        CollectionRequest r1 = new CollectionRequest();
+        r1.setDimensions(1024);
+        CollectionRequest r2 = new CollectionRequest();
+        r2.setDimensions(768);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void collectionRequest_toString_containsKeyFields() {
+        CollectionRequest r = new CollectionRequest();
+        r.setName("MyKB");
+        r.setEmbeddingModel("BAAI/bge-m3");
+        r.setDimensions(1024);
+        r.setEnabled(false);
+
+        String str = r.toString();
+        assertTrue(str.contains("MyKB"));
+        assertTrue(str.contains("BAAI/bge-m3"));
+        assertTrue(str.contains("1024"));
+    }
+
+    // ========== DocumentRequest equals/hashCode/toString ==========
+
+    @Test
+    void documentRequest_equals_sameFields() {
+        DocumentRequest r1 = new DocumentRequest();
+        r1.setTitle("Product Manual");
+        r1.setContent("How to use the product.");
+        r1.setSource("manual-upload");
+        r1.setDocumentType("markdown");
+        r1.setMetadata(Map.of("version", "1.0"));
+        r1.setCollectionId(1L);
+
+        DocumentRequest r2 = new DocumentRequest();
+        r2.setTitle("Product Manual");
+        r2.setContent("How to use the product.");
+        r2.setSource("manual-upload");
+        r2.setDocumentType("markdown");
+        r2.setMetadata(Map.of("version", "1.0"));
+        r2.setCollectionId(1L);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void documentRequest_equals_differentTitle_notEqual() {
+        DocumentRequest r1 = new DocumentRequest();
+        r1.setTitle("Title A");
+        DocumentRequest r2 = new DocumentRequest();
+        r2.setTitle("Title B");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void documentRequest_toString_containsKeyFields() {
+        DocumentRequest r = new DocumentRequest();
+        r.setTitle("Short Title");
+        r.setContent("Very long content that should be truncated in toString output.");
+        r.setSource("upload");
+        r.setDocumentType("pdf");
+
+        String str = r.toString();
+        assertTrue(str.contains("Short Title"));
+        assertTrue(str.contains("upload"));
+        assertTrue(str.contains("pdf"));
+    }
+
+    // ========== FeedbackRequest equals/hashCode/toString ==========
+
+    @Test
+    void feedbackRequest_equals_sameFields() {
+        FeedbackRequest r1 = new FeedbackRequest();
+        r1.setSessionId("sess-001");
+        r1.setQuery("How to configure RAG?");
+        r1.setFeedbackType("THUMBS_UP");
+        r1.setRating(5);
+        r1.setComment("Great answer!");
+        r1.setRetrievedDocumentIds(List.of(1L, 2L));
+        r1.setSelectedDocumentIds(List.of(1L));
+        r1.setDwellTimeMs(5000L);
+
+        FeedbackRequest r2 = new FeedbackRequest();
+        r2.setSessionId("sess-001");
+        r2.setQuery("How to configure RAG?");
+        r2.setFeedbackType("THUMBS_UP");
+        r2.setRating(5);
+        r2.setComment("Great answer!");
+        r2.setRetrievedDocumentIds(List.of(1L, 2L));
+        r2.setSelectedDocumentIds(List.of(1L));
+        r2.setDwellTimeMs(5000L);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void feedbackRequest_equals_differentRating_notEqual() {
+        FeedbackRequest r1 = new FeedbackRequest();
+        r1.setRating(5);
+        FeedbackRequest r2 = new FeedbackRequest();
+        r2.setRating(3);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void feedbackRequest_toString_containsKeyFields() {
+        FeedbackRequest r = new FeedbackRequest();
+        r.setSessionId("sess-xyz");
+        r.setFeedbackType("THUMBS_DOWN");
+        r.setRating(2);
+
+        String str = r.toString();
+        assertTrue(str.contains("sess-xyz"));
+        assertTrue(str.contains("THUMBS_DOWN"));
+        assertTrue(str.contains("2"));
+    }
+
+    // ========== SearchRequest equals/hashCode/toString ==========
+
+    @Test
+    void searchRequest_equals_sameFields() {
+        RetrievalConfig config = new RetrievalConfig();
+        SearchRequest r1 = new SearchRequest();
+        r1.setQuery("What is Spring AI?");
+        r1.setDocumentIds(List.of(1L, 2L));
+        r1.setCollectionIds(List.of(5L));
+        r1.setConfig(config);
+
+        SearchRequest r2 = new SearchRequest();
+        r2.setQuery("What is Spring AI?");
+        r2.setDocumentIds(List.of(1L, 2L));
+        r2.setCollectionIds(List.of(5L));
+        r2.setConfig(config);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void searchRequest_equals_differentQuery_notEqual() {
+        SearchRequest r1 = new SearchRequest();
+        r1.setQuery("Query A");
+        SearchRequest r2 = new SearchRequest();
+        r2.setQuery("Query B");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void searchRequest_toString_containsKeyFields() {
+        SearchRequest r = new SearchRequest();
+        r.setQuery("vector search");
+        r.setCollectionIds(List.of(1L, 2L));
+
+        String str = r.toString();
+        assertTrue(str.contains("vector search"));
+        assertTrue(str.contains("[1")); // List toString shows [1, 2]
+    }
+
+    // ========== ClientErrorRequest equals/hashCode/toString ==========
+
+    @Test
+    void clientErrorRequest_equals_sameFields() {
+        ClientErrorRequest r1 = new ClientErrorRequest();
+        r1.setErrorType("Error");
+        r1.setErrorMessage("Cannot read properties of undefined");
+        r1.setStackTrace("TypeError at line 42");
+        r1.setPageUrl("/webui/chat");
+        r1.setSessionId("sess-abc");
+        r1.setUserId("user-123");
+
+        ClientErrorRequest r2 = new ClientErrorRequest();
+        r2.setErrorType("Error");
+        r2.setErrorMessage("Cannot read properties of undefined");
+        r2.setStackTrace("TypeError at line 42");
+        r2.setPageUrl("/webui/chat");
+        r2.setSessionId("sess-abc");
+        r2.setUserId("user-123");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void clientErrorRequest_equals_differentErrorType_notEqual() {
+        ClientErrorRequest r1 = new ClientErrorRequest();
+        r1.setErrorType("Error");
+        ClientErrorRequest r2 = new ClientErrorRequest();
+        r2.setErrorType("TypeError");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void clientErrorRequest_toString_containsKeyFields() {
+        ClientErrorRequest r = new ClientErrorRequest();
+        r.setErrorType("ReferenceError");
+        r.setErrorMessage("x is not defined");
+        r.setPageUrl("/webui/search");
+        r.setSessionId("sess-999");
+        r.setUserId("admin");
+
+        String str = r.toString();
+        assertTrue(str.contains("ReferenceError"));
+        assertTrue(str.contains("x is not defined"));
+        assertTrue(str.contains("/webui/search"));
+        assertTrue(str.contains("sess-999"));
+        assertTrue(str.contains("admin"));
+    }
+
+    // ========== ApiKeyCreateRequest equals/hashCode/toString ==========
+
+    @Test
+    void apiKeyCreateRequest_equals_sameFields() {
+        LocalDateTime expires = LocalDateTime.of(2027, 12, 31, 23, 59);
+        ApiKeyCreateRequest r1 = new ApiKeyCreateRequest();
+        r1.setName("Admin Key");
+        r1.setExpiresAt(expires);
+
+        ApiKeyCreateRequest r2 = new ApiKeyCreateRequest();
+        r2.setName("Admin Key");
+        r2.setExpiresAt(expires);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void apiKeyCreateRequest_equals_differentName_notEqual() {
+        ApiKeyCreateRequest r1 = new ApiKeyCreateRequest();
+        r1.setName("Key A");
+        ApiKeyCreateRequest r2 = new ApiKeyCreateRequest();
+        r2.setName("Key B");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void apiKeyCreateRequest_toString_containsKeyFields() {
+        ApiKeyCreateRequest r = new ApiKeyCreateRequest();
+        r.setName("Read-Only Key");
+        r.setExpiresAt(LocalDateTime.of(2028, 1, 1, 0, 0));
+
+        String str = r.toString();
+        assertTrue(str.contains("Read-Only Key"));
+        assertTrue(str.contains("2028"));
+    }
+
+    // ========== BatchCreateAndEmbedRequest equals/hashCode/toString ==========
+
+    @Test
+    void batchCreateAndEmbedRequest_equals_sameFields() {
+        DocumentRequest doc = new DocumentRequest("T", "C");
+        List<DocumentRequest> docs = List.of(doc);
+
+        BatchCreateAndEmbedRequest r1 = new BatchCreateAndEmbedRequest();
+        r1.setCollectionId(7L);
+        r1.setDocuments(docs);
+        r1.setForce(true);
+
+        BatchCreateAndEmbedRequest r2 = new BatchCreateAndEmbedRequest();
+        r2.setCollectionId(7L);
+        r2.setDocuments(docs);
+        r2.setForce(true);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void batchCreateAndEmbedRequest_equals_differentForce_notEqual() {
+        BatchCreateAndEmbedRequest r1 = new BatchCreateAndEmbedRequest();
+        r1.setCollectionId(1L);
+        r1.setForce(false);
+        BatchCreateAndEmbedRequest r2 = new BatchCreateAndEmbedRequest();
+        r2.setCollectionId(1L);
+        r2.setForce(true);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void batchCreateAndEmbedRequest_toString_containsKeyFields() {
+        BatchCreateAndEmbedRequest r = new BatchCreateAndEmbedRequest();
+        r.setCollectionId(15L);
+        r.setForce(true);
+
+        String str = r.toString();
+        assertTrue(str.contains("15"));
+        assertTrue(str.contains("force=true"));
+    }
+
+    // ========== EvaluateRequest equals/hashCode/toString ==========
+
+    @Test
+    void evaluateRequest_equals_sameFields() {
+        EvaluateRequest r1 = new EvaluateRequest();
+        r1.setQuery("How does RAG work?");
+        r1.setRetrievedDocIds(List.of(1L, 2L, 3L));
+        r1.setRelevantDocIds(List.of(1L, 3L));
+        r1.setEvaluationMethod("AUTO");
+        r1.setEvaluatorId("eval-1");
+
+        EvaluateRequest r2 = new EvaluateRequest();
+        r2.setQuery("How does RAG work?");
+        r2.setRetrievedDocIds(List.of(1L, 2L, 3L));
+        r2.setRelevantDocIds(List.of(1L, 3L));
+        r2.setEvaluationMethod("AUTO");
+        r2.setEvaluatorId("eval-1");
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void evaluateRequest_equals_differentEvaluationMethod_notEqual() {
+        EvaluateRequest r1 = new EvaluateRequest();
+        r1.setEvaluationMethod("AUTO");
+        EvaluateRequest r2 = new EvaluateRequest();
+        r2.setEvaluationMethod("MANUAL");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void evaluateRequest_toString_containsKeyFields() {
+        EvaluateRequest r = new EvaluateRequest();
+        r.setQuery("test query");
+        r.setRetrievedDocIds(List.of(1L, 2L));
+        r.setRelevantDocIds(List.of(1L));
+        r.setEvaluationMethod("AUTO");
+        r.setEvaluatorId("auto-eval");
+
+        String str = r.toString();
+        assertTrue(str.contains("test query"));
+        assertTrue(str.contains("AUTO"));
+        assertTrue(str.contains("auto-eval"));
     }
 }

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Document create/update request.
@@ -59,4 +60,35 @@ public class DocumentRequest {
 
     public Long getCollectionId() { return collectionId; }
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DocumentRequest that = (DocumentRequest) o;
+        return Objects.equals(title, that.title) &&
+                Objects.equals(content, that.content) &&
+                Objects.equals(source, that.source) &&
+                Objects.equals(documentType, that.documentType) &&
+                Objects.equals(metadata, that.metadata) &&
+                Objects.equals(collectionId, that.collectionId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(title, content, source, documentType, metadata, collectionId);
+    }
+
+    @Override
+    public String toString() {
+        return "DocumentRequest{" +
+                "title='" + title + '\'' +
+                ", content='" + (content != null && content.length() > 50
+                        ? content.substring(0, 50) + "..." : content) + '\'' +
+                ", source='" + source + '\'' +
+                ", documentType='" + documentType + '\'' +
+                ", metadata=" + metadata +
+                ", collectionId=" + collectionId +
+                '}';
+    }
 }

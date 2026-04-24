@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Batch document operation request
@@ -44,4 +45,30 @@ public class BatchDocumentRequest {
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
     public boolean isForce() { return force; }
     public void setForce(boolean force) { this.force = force; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BatchDocumentRequest that = (BatchDocumentRequest) o;
+        return embed == that.embed &&
+                force == that.force &&
+                Objects.equals(documents, that.documents) &&
+                Objects.equals(collectionId, that.collectionId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(documents, embed, collectionId, force);
+    }
+
+    @Override
+    public String toString() {
+        return "BatchDocumentRequest{" +
+                "documents=" + (documents == null ? null : documents.size() + " docs") +
+                ", embed=" + embed +
+                ", collectionId=" + collectionId +
+                ", force=" + force +
+                '}';
+    }
 }

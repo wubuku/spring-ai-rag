@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
 /**
  * Request to create a new API key.
@@ -33,4 +34,26 @@ public class ApiKeyCreateRequest {
 
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ApiKeyCreateRequest that = (ApiKeyCreateRequest) o;
+        return Objects.equals(name, that.name) &&
+                Objects.equals(expiresAt, that.expiresAt);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, expiresAt);
+    }
+
+    @Override
+    public String toString() {
+        return "ApiKeyCreateRequest{" +
+                "name='" + name + '\'' +
+                ", expiresAt=" + expiresAt +
+                '}';
+    }
 }

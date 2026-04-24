@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.util.Objects;
 
 @Schema(description = "Client-side error report from WebUI")
 public class ClientErrorRequest {
@@ -65,4 +66,37 @@ public class ClientErrorRequest {
 
     public String getUserAgent() { return userAgent; }
     public void setUserAgent(String userAgent) { this.userAgent = userAgent; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ClientErrorRequest that = (ClientErrorRequest) o;
+        return Objects.equals(errorType, that.errorType) &&
+                Objects.equals(errorMessage, that.errorMessage) &&
+                Objects.equals(stackTrace, that.stackTrace) &&
+                Objects.equals(componentStack, that.componentStack) &&
+                Objects.equals(pageUrl, that.pageUrl) &&
+                Objects.equals(sessionId, that.sessionId) &&
+                Objects.equals(userId, that.userId) &&
+                Objects.equals(userAgent, that.userAgent);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(errorType, errorMessage, stackTrace,
+                componentStack, pageUrl, sessionId, userId, userAgent);
+    }
+
+    @Override
+    public String toString() {
+        return "ClientErrorRequest{" +
+                "errorType='" + errorType + '\'' +
+                ", errorMessage='" + errorMessage + '\'' +
+                ", pageUrl='" + pageUrl + '\'' +
+                ", sessionId='" + sessionId + '\'' +
+                ", userId='" + userId + '\'' +
+                // stackTrace/componentStack/userAgent intentionally excluded from toString (verbose)
+                '}';
+    }
 }

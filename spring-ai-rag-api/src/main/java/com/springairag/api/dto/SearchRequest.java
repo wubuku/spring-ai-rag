@@ -5,6 +5,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Search request parameters
@@ -44,4 +45,30 @@ public class SearchRequest {
 
     public RetrievalConfig getConfig() { return config; }
     public void setConfig(RetrievalConfig config) { this.config = config; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SearchRequest that = (SearchRequest) o;
+        return Objects.equals(query, that.query) &&
+                Objects.equals(documentIds, that.documentIds) &&
+                Objects.equals(collectionIds, that.collectionIds) &&
+                Objects.equals(config, that.config);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(query, documentIds, collectionIds, config);
+    }
+
+    @Override
+    public String toString() {
+        return "SearchRequest{" +
+                "query='" + query + '\'' +
+                ", documentIds=" + documentIds +
+                ", collectionIds=" + collectionIds +
+                ", config=" + config +
+                '}';
+    }
 }

@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * User feedback request DTO
@@ -65,4 +66,39 @@ public class FeedbackRequest {
     public void setSelectedDocumentIds(List<Long> selectedDocumentIds) { this.selectedDocumentIds = selectedDocumentIds; }
     public Long getDwellTimeMs() { return dwellTimeMs; }
     public void setDwellTimeMs(Long dwellTimeMs) { this.dwellTimeMs = dwellTimeMs; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        FeedbackRequest that = (FeedbackRequest) o;
+        return Objects.equals(sessionId, that.sessionId) &&
+                Objects.equals(query, that.query) &&
+                Objects.equals(feedbackType, that.feedbackType) &&
+                Objects.equals(rating, that.rating) &&
+                Objects.equals(comment, that.comment) &&
+                Objects.equals(retrievedDocumentIds, that.retrievedDocumentIds) &&
+                Objects.equals(selectedDocumentIds, that.selectedDocumentIds) &&
+                Objects.equals(dwellTimeMs, that.dwellTimeMs);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sessionId, query, feedbackType, rating, comment,
+                retrievedDocumentIds, selectedDocumentIds, dwellTimeMs);
+    }
+
+    @Override
+    public String toString() {
+        return "FeedbackRequest{" +
+                "sessionId='" + sessionId + '\'' +
+                ", query='" + query + '\'' +
+                ", feedbackType='" + feedbackType + '\'' +
+                ", rating=" + rating +
+                ", comment='" + comment + '\'' +
+                ", retrievedDocumentIds=" + retrievedDocumentIds +
+                ", selectedDocumentIds=" + selectedDocumentIds +
+                ", dwellTimeMs=" + dwellTimeMs +
+                '}';
+    }
 }

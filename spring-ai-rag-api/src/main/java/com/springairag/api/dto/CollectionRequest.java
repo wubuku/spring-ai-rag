@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Collection (knowledge base) creation/update request
@@ -53,4 +54,34 @@ public class CollectionRequest {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CollectionRequest that = (CollectionRequest) o;
+        return Objects.equals(name, that.name) &&
+                Objects.equals(description, that.description) &&
+                Objects.equals(embeddingModel, that.embeddingModel) &&
+                Objects.equals(dimensions, that.dimensions) &&
+                Objects.equals(enabled, that.enabled) &&
+                Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, description, embeddingModel, dimensions, enabled, metadata);
+    }
+
+    @Override
+    public String toString() {
+        return "CollectionRequest{" +
+                "name='" + name + '\'' +
+                ", description='" + description + '\'' +
+                ", embeddingModel='" + embeddingModel + '\'' +
+                ", dimensions=" + dimensions +
+                ", enabled=" + enabled +
+                ", metadata=" + metadata +
+                '}';
+    }
 }
