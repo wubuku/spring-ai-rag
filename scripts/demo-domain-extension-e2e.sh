@@ -1,9 +1,9 @@
 #!/bin/bash
-# scripts/demo-domain-extension-e2e.sh — demo-domain-extension 模块 E2E 验证
-# 启动 demo-domain-extension → 等待就绪 → curl 测试医疗领域扩展端点
+# scripts/demo-domain-extension-e2e.sh — demo-domain-extension module E2E verification
+# Starts demo-domain-extension -> waits for readiness -> curl tests medical domain extension endpoints
 #
-# 用法: bash scripts/demo-domain-extension-e2e.sh [PORT]
-# 示例: bash scripts/demo-domain-extension-e2e.sh 8085
+# Usage: bash scripts/demo-domain-extension-e2e.sh [PORT]
+# Example: bash scripts/demo-domain-extension-e2e.sh 8085
 
 set -e
 
@@ -20,36 +20,36 @@ info() { echo -e "${YELLOW}[INFO]${NC} $1"; }
 
 cd "$PROJECT_DIR/demos/demo-domain-extension"
 
-# 清理端口
-info "清理端口 ${PORT}..."
+# Clean up port
+info "Cleaning up port ${PORT}..."
 lsof -ti:${PORT} -sTCP:LISTEN 2>/dev/null | xargs -r kill -9 2>/dev/null || true
 sleep 2
 
-# 加载环境变量
+# Load environment variables
 if [ -f "$PROJECT_DIR/.env" ]; then
-    info "加载 .env 环境变量..."
+    info "Loading .env environment variables..."
     set -a; source "$PROJECT_DIR/.env"; set +a
 fi
 
-# 启动 demo-domain-extension
-info "启动 demo-domain-extension (端口 ${PORT})..."
+# Start demo-domain-extension
+info "Starting demo-domain-extension (port ${PORT})..."
 mvn spring-boot:run -Dserver.port="${PORT}" > /tmp/demo-domain-server.log 2>&1 &
 SERVER_PID=$!
 
-# 等待就绪
-info "等待服务器启动 (最多 ${MAX_WAIT}s)..."
+# Wait for readiness
+info "Waiting for server startup (up to ${MAX_WAIT}s)..."
 for i in $(seq 1 $MAX_WAIT); do
     if curl -sf "${BASE_URL}/actuator/health" > /dev/null 2>&1; then
-        echo ""; pass "服务器已就绪 (${i}s)"; break
+        echo ""; pass "Server ready (${i}s)"; break
     fi
     if ! kill -0 $SERVER_PID 2>/dev/null; then
-        echo ""; fail "服务器进程意外退出"; cat /tmp/demo-domain-server.log | tail -30; exit 1
+        echo ""; fail "Server process exited unexpectedly"; cat /tmp/demo-domain-server.log | tail -30; exit 1
     fi
     printf "."; sleep 1
 done
 
 if [ $i -eq $MAX_WAIT ]; then
-    echo ""; fail "服务器启动超时 (${MAX_WAIT}s)"
+    echo ""; fail "Server startup timeout (${MAX_WAIT}s)"
     cat /tmp/demo-domain-server.log | tail -30
     kill $SERVER_PID 2>/dev/null || true; exit 1
 fi
@@ -73,7 +73,7 @@ do_test() {
     if [ "$code" = "$expect_code" ]; then
         pass "HTTP ${code}"; PASSED=$((PASSED + 1))
     else
-        fail "HTTP ${code} (期望 ${expect_code})"; FAILED=$((FAILED + 1))
+        fail "HTTP ${code} (expected ${expect_code})"; FAILED=$((FAILED + 1))
     fi
 }
 
@@ -84,7 +84,7 @@ do_text() {
     if [ -n "$response" ] && [ "$response" != "null" ]; then
         pass "$(echo "$response" | head -c 60)"; PASSED=$((PASSED + 1))
     else
-        fail "空响应"; FAILED=$((FAILED + 1))
+        fail "Empty response"; FAILED=$((FAILED + 1))
     fi
 }
 
@@ -97,35 +97,35 @@ do_json() {
     if [ "$code" = "200" ] && [ -n "$response" ] && [ "$response" != "null" ]; then
         pass "HTTP ${code} ($(echo "$response" | head -c 80)...)"; PASSED=$((PASSED + 1))
     else
-        fail "HTTP ${code} 或空响应"; FAILED=$((FAILED + 1))
+        fail "HTTP ${code} or empty response"; FAILED=$((FAILED + 1))
     fi
 }
 
-echo ""; echo "=========================================="; info "demo-domain-extension E2E 测试"; echo "=========================================="; echo ""
+echo ""; echo "=========================================="; info "demo-domain-extension E2E Tests"; echo "=========================================="; echo ""
 
-# 健康检查
+# Health check
 do_test "actuator/health" GET "/actuator/health"
 
-# 医疗领域 — 完整问诊（POST /api/v1/medical/consult）
-do_json "POST /api/v1/medical/consult (头痛)" POST "/api/v1/medical/consult" \
-    '{"message":"最近总是头疼，特别是下午的时候","sessionId":"med-e2e-'$RANDOM'"}'
-do_json "POST /api/v1/medical/consult (发烧)" POST "/api/v1/medical/consult" \
-    '{"message":"孩子 38.5 度算发烧吗？","sessionId":"med-e2e-'$RANDOM'"}'
+# Medical domain — full consultation (POST /api/v1/medical/consult)
+do_json "POST /api/v1/medical/consult (headache)" POST "/api/v1/medical/consult" \
+    '{"message":"I have been having headaches recently, especially in the afternoon","sessionId":"med-e2e-'$RANDOM'"}'
+do_json "POST /api/v1/medical/consult (fever)" POST "/api/v1/medical/consult" \
+    '{"message":"Is 38.5 degrees Celsius a fever for a child?","sessionId":"med-e2e-'$RANDOM'"}'
 
-# 医疗领域 — 快速问诊（GET /api/v1/medical/quick）
-do_text "GET /api/v1/medical/quick?q=胃疼怎么办" "/api/v1/medical/quick?q=胃疼怎么办"
+# Medical domain — quick consult (GET /api/v1/medical/quick)
+do_text "GET /api/v1/medical/quick?q=stomachache" "/api/v1/medical/quick?q=stomachache"
 
-# 医疗领域 — 普通问答（对比，不使用领域扩展）
-do_json "POST /api/v1/medical/general (通用)" POST "/api/v1/medical/general" \
-    '{"message":"头痛的原因有哪些","sessionId":"med-e2e-'$RANDOM'"}'
+# Medical domain — general Q&A (comparison, without domain extension)
+do_json "POST /api/v1/medical/general (general)" POST "/api/v1/medical/general" \
+    '{"message":"What are the causes of headaches","sessionId":"med-e2e-'$RANDOM'"}'
 
-# 杀掉服务器
+# Kill server
 kill $SERVER_PID 2>/dev/null || true; wait $SERVER_PID 2>/dev/null || true
 
 echo ""; echo "=========================================="
-echo "E2E 测试结果: ${PASSED}/${TOTAL} 通过"
+echo "E2E Results: ${PASSED}/${TOTAL} passed"
 if [ $FAILED -gt 0 ]; then
-    echo -e "${RED}${FAILED} 项失败${NC}"; exit 1
+    echo -e "${RED}${FAILED} failed${NC}"; exit 1
 else
-    echo -e "${GREEN}全部通过${NC}"; exit 0
+    echo -e "${GREEN}All passed${NC}"; exit 0
 fi
