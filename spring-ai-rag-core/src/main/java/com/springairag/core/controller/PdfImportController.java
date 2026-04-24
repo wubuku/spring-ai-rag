@@ -800,57 +800,27 @@ public class PdfImportController {
     }
 
     private List<FileTreeEntryResponse> buildTreeEntries(List<FsFile> files, String parentPath) {
-        // Collect synthetic directory entries from file paths
         Set<String> dirs = new TreeSet<>();
         List<FileTreeEntryResponse> entries = new ArrayList<>();
 
         for (FsFile f : files) {
-            // DB paths may have leading whitespace (legacy import bug); trim for safe parsing
             String cleanPath = f.getPath().trim();
-            // Compute relative path from parentPath.
-            // parentPath may end with "/" (e.g. "uuid/") or not (e.g. "uuid").
-            // DB paths don't start with "/", so we need to adjust the offset accordingly.
-            // When parentPath ends with "/", parentPath.length() is the start of filename.
-            // When parentPath doesn't end with "/", parentPath.length() is also the start.
-            String relative;
-            if (parentPath.isEmpty()) {
-                relative = cleanPath;
-            } else {
-                int offset = parentPath.endsWith("/")
-                        ? parentPath.length()      // skip parentPath including trailing "/"
-                        : parentPath.length();     // same - skip parentPath
-                relative = cleanPath.substring(offset);
-            }
+            String relative = computeRelativePath(cleanPath, parentPath);
             int slashIdx = relative.indexOf('/');
 
             if (slashIdx == -1) {
-                // Direct file
-                entries.add(new FileTreeEntryResponse(
-                        relative,
-                        cleanPath,
-                        "file",
-                        f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
-                        f.getFileSize() != null ? f.getFileSize() : 0
-                ));
+                entries.add(toFileEntry(f, relative, cleanPath));
             } else {
-                // First segment is a subdirectory
-                String dirName = relative.substring(0, slashIdx);
-                dirs.add(dirName);
+                dirs.add(relative.substring(0, slashIdx));
             }
         }
 
         // Add synthetic directory entries (directories have no MIME type)
         for (String dir : dirs) {
-            entries.add(new FileTreeEntryResponse(
-                    dir,
-                    parentPath + dir + "/",
-                    "directory",
-                    null,
-                    0
-            ));
+            entries.add(toDirectoryEntry(dir, parentPath));
         }
 
-        // Sort: directories first, then files
+        // Sort: directories first, then files alphabetically
         entries.sort((a, b) -> {
             if (!a.type().equals(b.type())) {
                 return a.type().equals("directory") ? -1 : 1;
@@ -859,5 +829,34 @@ public class PdfImportController {
         });
 
         return entries;
+    }
+
+    /** Computes the relative path by stripping the parentPath prefix from cleanPath. */
+    private String computeRelativePath(String cleanPath, String parentPath) {
+        if (parentPath.isEmpty()) {
+            return cleanPath;
+        }
+        // Strip the parentPath prefix (both with and without trailing "/" have same length effect)
+        return cleanPath.substring(parentPath.length());
+    }
+
+    private FileTreeEntryResponse toFileEntry(FsFile f, String relative, String cleanPath) {
+        return new FileTreeEntryResponse(
+                relative,
+                cleanPath,
+                "file",
+                f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
+                f.getFileSize() != null ? f.getFileSize() : 0
+        );
+    }
+
+    private FileTreeEntryResponse toDirectoryEntry(String dir, String parentPath) {
+        return new FileTreeEntryResponse(
+                dir,
+                parentPath + dir + "/",
+                "directory",
+                null,
+                0
+        );
     }
 }
