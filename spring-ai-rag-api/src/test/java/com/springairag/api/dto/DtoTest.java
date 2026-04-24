@@ -200,6 +200,141 @@ class DtoTest {
         assertEquals(10, record.getResultCount());
     }
 
+    // ========== ChatResponse ==========
+
+    @Test
+    void chatResponse_equals_sameInstance() {
+        ChatResponse r = new ChatResponse("answer");
+        assertEquals(r, r);
+        assertEquals(r.hashCode(), r.hashCode());
+    }
+
+    @Test
+    void chatResponse_equals_sameFields() {
+        ChatResponse r1 = new ChatResponse("answer");
+        r1.setTraceId("trace-1");
+        ChatResponse r2 = new ChatResponse("answer");
+        r2.setTraceId("trace-1");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void chatResponse_equals_differentAnswer_notEqual() {
+        ChatResponse r1 = new ChatResponse("answer1");
+        ChatResponse r2 = new ChatResponse("answer2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void chatResponse_equals_differentTraceId_notEqual() {
+        ChatResponse r1 = new ChatResponse("answer");
+        r1.setTraceId("trace-1");
+        ChatResponse r2 = new ChatResponse("answer");
+        r2.setTraceId("trace-2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void chatResponse_equals_nullTraceId_sameAnswer_equal() {
+        ChatResponse r1 = new ChatResponse("answer");
+        ChatResponse r2 = new ChatResponse("answer");
+        assertEquals(r1, r2);
+    }
+
+    @Test
+    void chatResponse_toString_containsKeyFields() {
+        ChatResponse r = new ChatResponse("The answer is 42");
+        r.setTraceId("abc123");
+
+        String str = r.toString();
+        assertTrue(str.contains("ChatResponse"));
+        assertTrue(str.contains("The answer is 42"));
+        assertTrue(str.contains("abc123"));
+    }
+
+    // ========== StepMetricRecord ==========
+
+    @Test
+    void stepMetricRecord_equals_sameFields() {
+        ChatResponse.StepMetricRecord r1 = new ChatResponse.StepMetricRecord("HybridSearch", 23, 12);
+        ChatResponse.StepMetricRecord r2 = new ChatResponse.StepMetricRecord("HybridSearch", 23, 12);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void stepMetricRecord_equals_differentStepName_notEqual() {
+        ChatResponse.StepMetricRecord r1 = new ChatResponse.StepMetricRecord("HybridSearch", 23, 12);
+        ChatResponse.StepMetricRecord r2 = new ChatResponse.StepMetricRecord("Rerank", 23, 12);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void stepMetricRecord_equals_differentDuration_notEqual() {
+        ChatResponse.StepMetricRecord r1 = new ChatResponse.StepMetricRecord("HybridSearch", 23, 12);
+        ChatResponse.StepMetricRecord r2 = new ChatResponse.StepMetricRecord("HybridSearch", 99, 12);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void stepMetricRecord_toString_containsKeyFields() {
+        ChatResponse.StepMetricRecord r = new ChatResponse.StepMetricRecord("Embedding", 150, 20);
+        String str = r.toString();
+        assertTrue(str.contains("Embedding"));
+        assertTrue(str.contains("150"));
+        assertTrue(str.contains("20"));
+    }
+
+    // ========== SourceDocument ==========
+
+    @Test
+    void sourceDocument_equals_sameFields() {
+        ChatResponse.SourceDocument d1 = new ChatResponse.SourceDocument();
+        d1.setDocumentId("doc-1");
+        d1.setTitle("Title");
+        d1.setChunkText("chunk text");
+        d1.setScore(0.95);
+        ChatResponse.SourceDocument d2 = new ChatResponse.SourceDocument();
+        d2.setDocumentId("doc-1");
+        d2.setTitle("Title");
+        d2.setChunkText("chunk text");
+        d2.setScore(0.95);
+        assertEquals(d1, d2);
+        assertEquals(d1.hashCode(), d2.hashCode());
+    }
+
+    @Test
+    void sourceDocument_equals_differentDocumentId_notEqual() {
+        ChatResponse.SourceDocument d1 = new ChatResponse.SourceDocument();
+        d1.setDocumentId("doc-1");
+        ChatResponse.SourceDocument d2 = new ChatResponse.SourceDocument();
+        d2.setDocumentId("doc-2");
+        assertNotEquals(d1, d2);
+    }
+
+    @Test
+    void sourceDocument_equals_differentScore_notEqual() {
+        ChatResponse.SourceDocument d1 = new ChatResponse.SourceDocument();
+        d1.setScore(0.95);
+        ChatResponse.SourceDocument d2 = new ChatResponse.SourceDocument();
+        d2.setScore(0.50);
+        assertNotEquals(d1, d2);
+    }
+
+    @Test
+    void sourceDocument_toString_containsKeyFields() {
+        ChatResponse.SourceDocument d = new ChatResponse.SourceDocument();
+        d.setDocumentId("doc-456");
+        d.setTitle("Spring AI Reference");
+        d.setChunkText("Return policy: Within 7 days of receiving the product...");
+        d.setScore(0.92);
+        String str = d.toString();
+        assertTrue(str.contains("doc-456"));
+        assertTrue(str.contains("Spring AI Reference"));
+        assertTrue(str.contains("0.92"));
+    }
+
     // ========== SearchRequest ==========
 
     @Test

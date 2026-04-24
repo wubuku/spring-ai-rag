@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * RAG chat response
@@ -47,6 +48,31 @@ public class ChatResponse {
     public List<StepMetricRecord> getStepMetrics() { return stepMetrics; }
     public void setStepMetrics(List<StepMetricRecord> stepMetrics) { this.stepMetrics = stepMetrics; }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ChatResponse that = (ChatResponse) o;
+        return Objects.equals(answer, that.answer)
+                && Objects.equals(traceId, that.traceId)
+                && Objects.equals(sources, that.sources)
+                && Objects.equals(metadata, that.metadata)
+                && Objects.equals(stepMetrics, that.stepMetrics);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(answer, traceId, sources, metadata, stepMetrics);
+    }
+
+    @Override
+    public String toString() {
+        return "ChatResponse{answer='" + answer + "', traceId='" + traceId
+                + "', sources=" + (sources != null ? sources.size() : 0) + " source(s)"
+                + ", metadata=" + (metadata != null ? metadata.size() + " key(s)" : "null")
+                + ", stepMetrics=" + (stepMetrics != null ? stepMetrics.size() + " step(s)" : "null") + "}";
+    }
+
     public static ChatResponseBuilder builder() { return new ChatResponseBuilder(); }
 
     public static class ChatResponseBuilder {
@@ -89,6 +115,27 @@ public class ChatResponse {
         public void setDurationMs(long durationMs) { this.durationMs = durationMs; }
         public int getResultCount() { return resultCount; }
         public void setResultCount(int resultCount) { this.resultCount = resultCount; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            StepMetricRecord that = (StepMetricRecord) o;
+            return durationMs == that.durationMs
+                    && resultCount == that.resultCount
+                    && Objects.equals(stepName, that.stepName);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(stepName, durationMs, resultCount);
+        }
+
+        @Override
+        public String toString() {
+            return "StepMetricRecord{stepName='" + stepName + "', durationMs=" + durationMs
+                    + ", resultCount=" + resultCount + "}";
+        }
     }
 
     /**
@@ -122,5 +169,29 @@ public class ChatResponse {
 
         public double getScore() { return score; }
         public void setScore(double score) { this.score = score; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SourceDocument that = (SourceDocument) o;
+            return Double.compare(that.score, score) == 0
+                    && Objects.equals(documentId, that.documentId)
+                    && Objects.equals(title, that.title)
+                    && Objects.equals(chunkText, that.chunkText);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(documentId, title, chunkText, score);
+        }
+
+        @Override
+        public String toString() {
+            return "SourceDocument{documentId='" + documentId + "', title='" + title
+                    + "', chunkText='" + (chunkText != null && chunkText.length() > 50
+                            ? chunkText.substring(0, 50) + "..." : chunkText)
+                    + "', score=" + score + "}";
+        }
     }
 }
