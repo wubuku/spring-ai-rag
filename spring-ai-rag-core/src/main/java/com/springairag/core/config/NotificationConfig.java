@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Notification channel configuration for alert delivery.
@@ -80,6 +81,30 @@ public class NotificationConfig {
         public void setAlertTypes(List<String> alertTypes) {
             this.alertTypes = alertTypes;
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DingTalkConfig that = (DingTalkConfig) o;
+            return that.enabled == enabled
+                    && Objects.equals(name, that.name)
+                    && Objects.equals(webhookUrl, that.webhookUrl)
+                    && Objects.equals(secret, that.secret)
+                    && Objects.equals(alertTypes, that.alertTypes);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, webhookUrl, secret, enabled, alertTypes);
+        }
+
+        @Override
+        public String toString() {
+            return "DingTalkConfig{name='" + name + "', webhookUrl='" + webhookUrl
+                    + "', secret='***', enabled=" + enabled
+                    + ", alertTypes=" + alertTypes + "}";
+        }
     }
 
     public static class EmailConfig {
@@ -154,6 +179,33 @@ public class NotificationConfig {
 
         public void setAlertTypes(List<String> alertTypes) {
             this.alertTypes = alertTypes;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EmailConfig that = (EmailConfig) o;
+            return that.enabled == enabled
+                    && that.port == port
+                    && Objects.equals(host, that.host)
+                    && Objects.equals(username, that.username)
+                    && Objects.equals(password, that.password)
+                    && Objects.equals(from, that.from)
+                    && Objects.equals(to, that.to)
+                    && Objects.equals(alertTypes, that.alertTypes);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(enabled, host, port, username, password, from, to, alertTypes);
+        }
+
+        @Override
+        public String toString() {
+            return "EmailConfig{enabled=" + enabled + ", host='" + host + "', port=" + port
+                    + ", username='" + username + "', password='***', from='" + from
+                    + "', to=" + to + ", alertTypes=" + alertTypes + "}";
         }
     }
 }
