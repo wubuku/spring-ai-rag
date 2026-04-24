@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Silence schedule request DTO
@@ -63,4 +64,32 @@ public class SilenceScheduleRequest {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SilenceScheduleRequest that = (SilenceScheduleRequest) o;
+        return Objects.equals(name, that.name)
+                && Objects.equals(alertKey, that.alertKey)
+                && Objects.equals(silenceType, that.silenceType)
+                && Objects.equals(startTime, that.startTime)
+                && Objects.equals(endTime, that.endTime)
+                && Objects.equals(description, that.description)
+                && Objects.equals(enabled, that.enabled)
+                && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, alertKey, silenceType, startTime, endTime, description, enabled, metadata);
+    }
+
+    @Override
+    public String toString() {
+        return "SilenceScheduleRequest{name=" + name + ", alertKey=" + alertKey
+                + ", silenceType=" + silenceType + ", startTime=" + startTime
+                + ", endTime=" + endTime + ", description=" + description
+                + ", enabled=" + enabled + ", metadata=" + metadata + "}";
+    }
 }

@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.ZonedDateTime;
+import java.util.Objects;
 
 /**
  * Response from LLM-as-judge answer quality evaluation.
@@ -60,4 +61,30 @@ public class AnswerQualityResponse {
     public void setRecommendation(String recommendation) { this.recommendation = recommendation; }
     public ZonedDateTime getEvaluatedAt() { return evaluatedAt; }
     public void setEvaluatedAt(ZonedDateTime evaluatedAt) { this.evaluatedAt = evaluatedAt; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        AnswerQualityResponse that = (AnswerQualityResponse) o;
+        return groundedness == that.groundedness
+                && relevance == that.relevance
+                && helpfulness == that.helpfulness
+                && Objects.equals(reasoning, that.reasoning)
+                && Objects.equals(recommendation, that.recommendation)
+                && Objects.equals(evaluatedAt, that.evaluatedAt);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(groundedness, relevance, helpfulness, reasoning, recommendation, evaluatedAt);
+    }
+
+    @Override
+    public String toString() {
+        return "AnswerQualityResponse{groundedness=" + groundedness + ", relevance=" + relevance
+                + ", helpfulness=" + helpfulness + ", reasoning='" + reasoning + '\''
+                + ", recommendation='" + recommendation + '\''
+                + ", evaluatedAt=" + evaluatedAt + "}";
+    }
 }

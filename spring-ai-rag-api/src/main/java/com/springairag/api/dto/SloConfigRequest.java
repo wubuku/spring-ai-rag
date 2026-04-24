@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotNull;
 
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * SLO configuration request DTO
@@ -59,4 +60,31 @@ public class SloConfigRequest {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SloConfigRequest that = (SloConfigRequest) o;
+        return Objects.equals(sloName, that.sloName)
+                && Objects.equals(sloType, that.sloType)
+                && Objects.equals(targetValue, that.targetValue)
+                && Objects.equals(unit, that.unit)
+                && Objects.equals(description, that.description)
+                && Objects.equals(enabled, that.enabled)
+                && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(sloName, sloType, targetValue, unit, description, enabled, metadata);
+    }
+
+    @Override
+    public String toString() {
+        return "SloConfigRequest{sloName=" + sloName + ", sloType=" + sloType
+                + ", targetValue=" + targetValue + ", unit=" + unit
+                + ", description=" + description + ", enabled=" + enabled
+                + ", metadata=" + metadata + "}";
+    }
 }

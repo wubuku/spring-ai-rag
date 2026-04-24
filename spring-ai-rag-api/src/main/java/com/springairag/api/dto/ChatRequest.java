@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Size;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * RAG chat request.
@@ -71,4 +72,33 @@ public class ChatRequest {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ChatRequest that = (ChatRequest) o;
+        return maxResults == that.maxResults
+                && useHybridSearch == that.useHybridSearch
+                && useRerank == that.useRerank
+                && Objects.equals(message, that.message)
+                && Objects.equals(sessionId, that.sessionId)
+                && Objects.equals(domainId, that.domainId)
+                && Objects.equals(model, that.model)
+                && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
+                domainId, model, metadata);
+    }
+
+    @Override
+    public String toString() {
+        return "ChatRequest{message=" + message + ", sessionId=" + sessionId
+                + ", maxResults=" + maxResults + ", useHybridSearch=" + useHybridSearch
+                + ", useRerank=" + useRerank + ", domainId=" + domainId
+                + ", model=" + model + ", metadata=" + metadata + "}";
+    }
 }

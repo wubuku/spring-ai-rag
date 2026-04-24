@@ -1897,4 +1897,195 @@ class DtoTest {
         assertEquals(3, resp.cleared());
         assertEquals("done", resp.message());
     }
+
+    // ========== ChatRequest equals/hashCode/toString ==========
+
+    @Test
+    void chatRequest_equals_sameFields() {
+        ChatRequest r1 = new ChatRequest("hello", "s1");
+        r1.setMaxResults(10);
+        r1.setUseHybridSearch(true);
+        r1.setUseRerank(false);
+        r1.setDomainId("medical");
+        r1.setModel("deepseek");
+        r1.setMetadata(Map.of("key", "val"));
+
+        ChatRequest r2 = new ChatRequest("hello", "s1");
+        r2.setMaxResults(10);
+        r2.setUseHybridSearch(true);
+        r2.setUseRerank(false);
+        r2.setDomainId("medical");
+        r2.setModel("deepseek");
+        r2.setMetadata(Map.of("key", "val"));
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void chatRequest_equals_differentMessage_notEqual() {
+        ChatRequest r1 = new ChatRequest("hello", "s1");
+        ChatRequest r2 = new ChatRequest("world", "s1");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void chatRequest_equals_scoresIgnored() {
+        ChatRequest r1 = new ChatRequest("hello", "s1");
+        r1.setMaxResults(10);
+        r1.setUseHybridSearch(true);
+
+        ChatRequest r2 = new ChatRequest("hello", "s1");
+        r2.setMaxResults(99);
+        r2.setUseHybridSearch(false);
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void chatRequest_toString_containsKeyFields() {
+        ChatRequest r = new ChatRequest("hello world", "session-abc");
+        r.setMaxResults(5);
+        r.setUseHybridSearch(true);
+        r.setUseRerank(true);
+        r.setDomainId("legal");
+
+        String str = r.toString();
+        assertTrue(str.contains("hello world"));
+        assertTrue(str.contains("session-abc"));
+        assertTrue(str.contains("maxResults=5"));
+        assertTrue(str.contains("useHybridSearch=true"));
+        assertTrue(str.contains("legal"));
+    }
+
+    // ========== AnswerQualityResponse equals/hashCode/toString ==========
+
+    @Test
+    void answerQualityResponse_equals_sameFields() {
+        var t = ZonedDateTime.now();
+        AnswerQualityResponse r1 = new AnswerQualityResponse(4, 5, 3, "good", "ACCEPT", t);
+        AnswerQualityResponse r2 = new AnswerQualityResponse(4, 5, 3, "good", "ACCEPT", t);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void answerQualityResponse_equals_differentGroundedness_notEqual() {
+        var t = ZonedDateTime.now();
+        AnswerQualityResponse r1 = new AnswerQualityResponse(4, 5, 3, "good", "ACCEPT", t);
+        AnswerQualityResponse r2 = new AnswerQualityResponse(3, 5, 3, "good", "ACCEPT", t);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void answerQualityResponse_toString_containsKeyFields() {
+        var t = ZonedDateTime.parse("2026-04-07T00:30:00+08:00");
+        AnswerQualityResponse r = new AnswerQualityResponse(4, 5, 3, "well reasoned", "ACCEPT", t);
+        String str = r.toString();
+        assertTrue(str.contains("groundedness=4"));
+        assertTrue(str.contains("relevance=5"));
+        assertTrue(str.contains("helpfulness=3"));
+        assertTrue(str.contains("ACCEPT"));
+    }
+
+    // ========== SilenceScheduleRequest equals/hashCode/toString ==========
+
+    @Test
+    void silenceScheduleRequest_equals_sameFields() {
+        SilenceScheduleRequest r1 = new SilenceScheduleRequest();
+        r1.setName("maintenance");
+        r1.setAlertKey("high-latency");
+        r1.setSilenceType("RECURRING");
+        r1.setStartTime("0 0 2 * * SAT");
+        r1.setEndTime("0 0 6 * * SAT");
+        r1.setDescription("weekend window");
+        r1.setEnabled(true);
+        r1.setMetadata(Map.of("owner", "ops"));
+
+        SilenceScheduleRequest r2 = new SilenceScheduleRequest();
+        r2.setName("maintenance");
+        r2.setAlertKey("high-latency");
+        r2.setSilenceType("RECURRING");
+        r2.setStartTime("0 0 2 * * SAT");
+        r2.setEndTime("0 0 6 * * SAT");
+        r2.setDescription("weekend window");
+        r2.setEnabled(true);
+        r2.setMetadata(Map.of("owner", "ops"));
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void silenceScheduleRequest_equals_differentName_notEqual() {
+        SilenceScheduleRequest r1 = new SilenceScheduleRequest();
+        r1.setName("win1");
+        SilenceScheduleRequest r2 = new SilenceScheduleRequest();
+        r2.setName("win2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void silenceScheduleRequest_toString_containsKeyFields() {
+        SilenceScheduleRequest r = new SilenceScheduleRequest();
+        r.setName("weekend-maintenance");
+        r.setSilenceType("RECURRING");
+        r.setEnabled(false);
+
+        String str = r.toString();
+        assertTrue(str.contains("weekend-maintenance"));
+        assertTrue(str.contains("RECURRING"));
+        assertTrue(str.contains("enabled=false"));
+    }
+
+    // ========== SloConfigRequest equals/hashCode/toString ==========
+
+    @Test
+    void sloConfigRequest_equals_sameFields() {
+        SloConfigRequest r1 = new SloConfigRequest();
+        r1.setSloName("latency_p99");
+        r1.setSloType("LATENCY");
+        r1.setTargetValue(200.0);
+        r1.setUnit("ms");
+        r1.setDescription("P99 under 200ms");
+        r1.setEnabled(true);
+        r1.setMetadata(Map.of("service", "rag"));
+
+        SloConfigRequest r2 = new SloConfigRequest();
+        r2.setSloName("latency_p99");
+        r2.setSloType("LATENCY");
+        r2.setTargetValue(200.0);
+        r2.setUnit("ms");
+        r2.setDescription("P99 under 200ms");
+        r2.setEnabled(true);
+        r2.setMetadata(Map.of("service", "rag"));
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void sloConfigRequest_equals_differentTargetValue_notEqual() {
+        SloConfigRequest r1 = new SloConfigRequest();
+        r1.setSloName("slo1");
+        r1.setTargetValue(100.0);
+        SloConfigRequest r2 = new SloConfigRequest();
+        r2.setSloName("slo1");
+        r2.setTargetValue(200.0);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void sloConfigRequest_toString_containsKeyFields() {
+        SloConfigRequest r = new SloConfigRequest();
+        r.setSloName("availability_p99");
+        r.setSloType("AVAILABILITY");
+        r.setTargetValue(99.9);
+        r.setUnit("%");
+
+        String str = r.toString();
+        assertTrue(str.contains("availability_p99"));
+        assertTrue(str.contains("AVAILABILITY"));
+        assertTrue(str.contains("99.9"));
+    }
 }
