@@ -3,6 +3,7 @@ package com.springairag.core.service;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Alert service interface.
@@ -148,6 +149,42 @@ public interface AlertService {
         public void setResolvedAt(ZonedDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
         public ZonedDateTime getSilencedUntil() { return silencedUntil; }
         public void setSilencedUntil(ZonedDateTime silencedUntil) { this.silencedUntil = silencedUntil; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AlertRecord that = (AlertRecord) o;
+            return Objects.equals(id, that.id)
+                    && Objects.equals(alertType, that.alertType)
+                    && Objects.equals(alertName, that.alertName)
+                    && Objects.equals(message, that.message)
+                    && Objects.equals(severity, that.severity)
+                    && Objects.equals(metrics, that.metrics)
+                    && Objects.equals(status, that.status)
+                    && Objects.equals(resolution, that.resolution)
+                    && Objects.equals(firedAt, that.firedAt)
+                    && Objects.equals(resolvedAt, that.resolvedAt)
+                    && Objects.equals(silencedUntil, that.silencedUntil);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(id, alertType, alertName, message, severity, metrics, status, resolution, firedAt, resolvedAt, silencedUntil);
+        }
+
+        @Override
+        public String toString() {
+            return "AlertRecord{id=" + id
+                    + ", alertType='" + alertType + '\''
+                    + ", alertName='" + alertName + '\''
+                    + ", severity='" + severity + '\''
+                    + ", status='" + status + '\''
+                    + ", firedAt=" + firedAt
+                    + ", resolvedAt=" + resolvedAt
+                    + ", silencedUntil=" + silencedUntil
+                    + '}';
+        }
     }
 
     /**
@@ -173,6 +210,35 @@ public interface AlertService {
         public void setInfoAlerts(long infoAlerts) { this.infoAlerts = infoAlerts; }
         public double getAlertRate() { return alertRate; }
         public void setAlertRate(double alertRate) { this.alertRate = alertRate; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AlertStats that = (AlertStats) o;
+            return totalAlerts == that.totalAlerts
+                    && activeAlerts == that.activeAlerts
+                    && criticalAlerts == that.criticalAlerts
+                    && warningAlerts == that.warningAlerts
+                    && infoAlerts == that.infoAlerts
+                    && Double.compare(that.alertRate, alertRate) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(totalAlerts, activeAlerts, criticalAlerts, warningAlerts, infoAlerts, alertRate);
+        }
+
+        @Override
+        public String toString() {
+            return "AlertStats{totalAlerts=" + totalAlerts
+                    + ", activeAlerts=" + activeAlerts
+                    + ", criticalAlerts=" + criticalAlerts
+                    + ", warningAlerts=" + warningAlerts
+                    + ", infoAlerts=" + infoAlerts
+                    + ", alertRate=" + alertRate
+                    + '}';
+        }
     }
 
     /**
@@ -210,5 +276,40 @@ public interface AlertService {
         public void setWindowStart(ZonedDateTime windowStart) { this.windowStart = windowStart; }
         public ZonedDateTime getWindowEnd() { return windowEnd; }
         public void setWindowEnd(ZonedDateTime windowEnd) { this.windowEnd = windowEnd; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SloStatus that = (SloStatus) o;
+            return Double.compare(that.target, target) == 0
+                    && Double.compare(that.actual, actual) == 0
+                    && met == that.met
+                    && Double.compare(that.errorBudget, errorBudget) == 0
+                    && Double.compare(that.errorBudgetRemaining, errorBudgetRemaining) == 0
+                    && Objects.equals(sloName, that.sloName)
+                    && Objects.equals(sloType, that.sloType)
+                    && Objects.equals(unit, that.unit)
+                    && Objects.equals(windowStart, that.windowStart)
+                    && Objects.equals(windowEnd, that.windowEnd);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(sloName, sloType, target, actual, unit, met, errorBudget, errorBudgetRemaining, windowStart, windowEnd);
+        }
+
+        @Override
+        public String toString() {
+            return "SloStatus{sloName='" + sloName + '\''
+                    + ", sloType='" + sloType + '\''
+                    + ", target=" + target
+                    + ", actual=" + actual
+                    + ", unit='" + unit + '\''
+                    + ", met=" + met
+                    + ", windowStart=" + windowStart
+                    + ", windowEnd=" + windowEnd
+                    + '}';
+        }
     }
 }
