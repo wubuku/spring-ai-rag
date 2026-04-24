@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.util.Objects;
 
 /**
  * RAG service metrics summary DTO
@@ -36,5 +37,36 @@ public record RagMetricsSummary(
             double rate, long retrievalResults, long tokens) {
         return new RagMetricsSummary(total, success, failed, rate,
                 retrievalResults, tokens, Instant.now());
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RagMetricsSummary that = (RagMetricsSummary) o;
+        return totalRequests == that.totalRequests
+                && successfulRequests == that.successfulRequests
+                && failedRequests == that.failedRequests
+                && Double.compare(that.successRate, successRate) == 0
+                && totalRetrievalResults == that.totalRetrievalResults
+                && totalLlmTokens == that.totalLlmTokens
+                && Objects.equals(timestamp, that.timestamp);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(totalRequests, successfulRequests, failedRequests,
+                successRate, totalRetrievalResults, totalLlmTokens, timestamp);
+    }
+
+    @Override
+    public String toString() {
+        return "RagMetricsSummary{totalRequests=" + totalRequests
+                + ", successfulRequests=" + successfulRequests
+                + ", failedRequests=" + failedRequests
+                + ", successRate=" + successRate
+                + ", totalRetrievalResults=" + totalRetrievalResults
+                + ", totalLlmTokens=" + totalLlmTokens
+                + ", timestamp=" + timestamp + "}";
     }
 }

@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Batch embedding progress event (for SSE real-time push)
  *
@@ -51,5 +53,34 @@ public record BatchEmbedProgressEvent(
     public int overallPercent() {
         if (totalDocs == 0) return 0;
         return (currentDocIndex * 100) / totalDocs;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BatchEmbedProgressEvent that = (BatchEmbedProgressEvent) o;
+        return currentDocIndex == that.currentDocIndex && totalDocs == that.totalDocs
+                && current == that.current && total == that.total
+                && successCount == that.successCount && failedCount == that.failedCount
+                && cachedCount == that.cachedCount
+                && Objects.equals(currentDocId, that.currentDocId)
+                && Objects.equals(phase, that.phase)
+                && Objects.equals(message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(currentDocIndex, totalDocs, currentDocId, phase,
+                current, total, message, successCount, failedCount, cachedCount);
+    }
+
+    @Override
+    public String toString() {
+        return "BatchEmbedProgressEvent{currentDocIndex=" + currentDocIndex + ", totalDocs=" + totalDocs
+                + ", currentDocId=" + currentDocId + ", phase='" + phase + "'"
+                + ", current=" + current + ", total=" + total + ", message='" + message + "'"
+                + ", successCount=" + successCount + ", failedCount=" + failedCount
+                + ", cachedCount=" + cachedCount + "}";
     }
 }

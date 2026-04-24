@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.io.Serializable;
+import java.util.Objects;
 
 /**
  * Embedding progress event (for SSE real-time push)
@@ -56,5 +57,27 @@ public record EmbedProgressEvent(
 
     public static EmbedProgressEvent failed(Long docId, String reason) {
         return new EmbedProgressEvent("FAILED", 0, 0, "Embedding failed: " + reason, docId);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        EmbedProgressEvent that = (EmbedProgressEvent) o;
+        return current == that.current && total == that.total
+                && Objects.equals(phase, that.phase)
+                && Objects.equals(message, that.message)
+                && Objects.equals(documentId, that.documentId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(phase, current, total, message, documentId);
+    }
+
+    @Override
+    public String toString() {
+        return "EmbedProgressEvent{phase='" + phase + "', current=" + current
+                + ", total=" + total + ", message='" + message + "', documentId=" + documentId + "}";
     }
 }

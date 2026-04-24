@@ -970,6 +970,46 @@ class DtoTest {
         assertEquals("NOT_FOUND", item.status());
     }
 
+    // ========== BatchDeleteItem equals/hashCode/toString ==========
+
+    @Test
+    void batchDeleteItem_equals_sameFields() {
+        var a = new BatchDeleteItem(42L, "DELETED");
+        var b = new BatchDeleteItem(42L, "DELETED");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchDeleteItem_equals_differentId() {
+        var a = new BatchDeleteItem(1L, "DELETED");
+        var b = new BatchDeleteItem(2L, "DELETED");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchDeleteItem_equals_differentStatus() {
+        var a = new BatchDeleteItem(42L, "DELETED");
+        var b = new BatchDeleteItem(42L, "NOT_FOUND");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchDeleteItem_equals_nullFields() {
+        var a = new BatchDeleteItem(null, null);
+        var b = new BatchDeleteItem(null, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchDeleteItem_toString() {
+        var item = new BatchDeleteItem(42L, "DELETED");
+        var str = item.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("DELETED"));
+    }
+
     // ========== BatchDeleteSummary ==========
 
     @Test
@@ -986,6 +1026,46 @@ class DtoTest {
         assertEquals(5, s.total());
         assertEquals(5, s.deleted());
         assertEquals(0, s.notFound());
+    }
+
+    // ========== BatchDeleteSummary equals/hashCode/toString ==========
+
+    @Test
+    void batchDeleteSummary_equals_sameFields() {
+        var a = new BatchDeleteSummary(10, 8, 2);
+        var b = new BatchDeleteSummary(10, 8, 2);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchDeleteSummary_equals_differentTotal() {
+        var a = new BatchDeleteSummary(10, 8, 2);
+        var b = new BatchDeleteSummary(99, 8, 2);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchDeleteSummary_equals_differentDeleted() {
+        var a = new BatchDeleteSummary(10, 8, 2);
+        var b = new BatchDeleteSummary(10, 9, 2);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchDeleteSummary_equals_differentNotFound() {
+        var a = new BatchDeleteSummary(10, 8, 2);
+        var b = new BatchDeleteSummary(10, 8, 3);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchDeleteSummary_toString() {
+        var s = new BatchDeleteSummary(10, 8, 2);
+        var str = s.toString();
+        assertTrue(str.contains("10"));
+        assertTrue(str.contains("8"));
+        assertTrue(str.contains("2"));
     }
 
     // ========== BatchDeleteResponse ==========
@@ -1506,6 +1586,64 @@ class DtoTest {
         assertNull(summary.contentPreview());
         assertNull(summary.content());
         assertNull(summary.metadata());
+    }
+
+    // ========== DocumentSummary equals/hashCode/toString ==========
+
+    @Test
+    void documentSummary_equals_sameFields() {
+        var now = java.time.LocalDateTime.of(2026, 4, 25, 10, 0);
+        var a = new com.springairag.api.dto.DocumentSummary(
+                42L, "RAG Guide", "https://example.com/doc.pdf", "PDF", "COMPLETED",
+                now, 4096L, "hash_abc", true, now, 1L, "My KB", 10L, "Preview", "Full", java.util.Map.of("k", "v"));
+        var b = new com.springairag.api.dto.DocumentSummary(
+                42L, "RAG Guide", "https://example.com/doc.pdf", "PDF", "COMPLETED",
+                now, 4096L, "hash_abc", true, now, 1L, "My KB", 10L, "Preview", "Full", java.util.Map.of("k", "v"));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentSummary_equals_differentId() {
+        var now = java.time.LocalDateTime.of(2026, 4, 25, 10, 0);
+        var a = new com.springairag.api.dto.DocumentSummary(
+                1L, "Title", "src", "PDF", "DONE", now, 100L, "h", true, now, 1L, "KB", 5L, "P", "F", null);
+        var b = new com.springairag.api.dto.DocumentSummary(
+                2L, "Title", "src", "PDF", "DONE", now, 100L, "h", true, now, 1L, "KB", 5L, "P", "F", null);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentSummary_equals_differentEnabled() {
+        var now = java.time.LocalDateTime.of(2026, 4, 25, 10, 0);
+        var a = new com.springairag.api.dto.DocumentSummary(
+                1L, "Title", "src", "PDF", "DONE", now, 100L, "h", true, now, 1L, "KB", 5L, "P", "F", null);
+        var b = new com.springairag.api.dto.DocumentSummary(
+                1L, "Title", "src", "PDF", "DONE", now, 100L, "h", false, now, 1L, "KB", 5L, "P", "F", null);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentSummary_equals_nullFields() {
+        var a = new com.springairag.api.dto.DocumentSummary(
+                null, null, null, null, null, null, null, null, false, null, null, null, 0L, null, null, null);
+        var b = new com.springairag.api.dto.DocumentSummary(
+                null, null, null, null, null, null, null, null, false, null, null, null, 0L, null, null, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentSummary_toString() {
+        var summary = new com.springairag.api.dto.DocumentSummary(
+                42L, "RAG Guide", "https://example.com/doc.pdf", "PDF", "COMPLETED",
+                java.time.LocalDateTime.of(2026, 4, 25, 10, 0), 4096L, "hash_abc",
+                true, java.time.LocalDateTime.of(2026, 4, 25, 10, 0), 1L, "My KB",
+                10L, "Preview...", "Full content", java.util.Map.of("key", "value"));
+        var str = summary.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("RAG Guide"));
+        assertTrue(str.contains("PDF"));
     }
 
     // ========== SilenceAlertRequest ==========
@@ -2030,6 +2168,44 @@ class DtoTest {
         assertNotNull(summary.timestamp());
     }
 
+    // ========== RagMetricsSummary equals/hashCode/toString ==========
+
+    @Test
+    void ragMetricsSummary_equals_sameFields() {
+        var ts = java.time.Instant.parse("2026-04-25T00:00:00Z");
+        var a = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts);
+        var b = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void ragMetricsSummary_equals_differentSuccessRate() {
+        var ts = java.time.Instant.parse("2026-04-25T00:00:00Z");
+        var a = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts);
+        var b = new RagMetricsSummary(1000, 950, 50, 99.9, 5000, 100000, ts);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void ragMetricsSummary_equals_differentTimestamp() {
+        var ts1 = java.time.Instant.parse("2026-04-25T00:00:00Z");
+        var ts2 = java.time.Instant.parse("2026-04-26T00:00:00Z");
+        var a = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts1);
+        var b = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts2);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void ragMetricsSummary_toString() {
+        var ts = java.time.Instant.parse("2026-04-25T00:00:00Z");
+        var summary = new RagMetricsSummary(1000, 950, 50, 95.0, 5000, 100000, ts);
+        var str = summary.toString();
+        assertTrue(str.contains("1000"));
+        assertTrue(str.contains("950"));
+        assertTrue(str.contains("95.0"));
+    }
+
     @Test
     void modelListResponse_ofFactory() {
         var resp = ModelListResponse.of(true, "openai", List.of("openai", "anthropic"),
@@ -2111,6 +2287,72 @@ class DtoTest {
         var failed = EmbedProgressEvent.failed(1L, "timeout");
         assertEquals("FAILED", failed.phase());
         assertTrue(failed.message().contains("timeout"));
+    }
+
+    // ========== BatchEmbedProgressEvent equals/hashCode/toString ==========
+
+    @Test
+    void batchEmbedProgressEvent_equals_sameFields() {
+        var a = new BatchEmbedProgressEvent(2, 10, 5L, "EMBEDDING", 5, 10, "msg", 1, 0, 1);
+        var b = new BatchEmbedProgressEvent(2, 10, 5L, "EMBEDDING", 5, 10, "msg", 1, 0, 1);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchEmbedProgressEvent_equals_differentPhase() {
+        var a = new BatchEmbedProgressEvent(2, 10, 5L, "EMBEDDING", 5, 10, "msg", 1, 0, 1);
+        var b = new BatchEmbedProgressEvent(2, 10, 5L, "COMPLETED", 5, 10, "msg", 1, 0, 1);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchEmbedProgressEvent_equals_nullDocId() {
+        var a = new BatchEmbedProgressEvent(2, 10, null, "DONE", 5, 10, "msg", 1, 0, 1);
+        var b = new BatchEmbedProgressEvent(2, 10, null, "DONE", 5, 10, "msg", 1, 0, 1);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchEmbedProgressEvent_toString() {
+        var event = new BatchEmbedProgressEvent(2, 10, 5L, "EMBEDDING", 5, 10, "msg", 1, 0, 1);
+        var str = event.toString();
+        assertTrue(str.contains("EMBEDDING"));
+        assertTrue(str.contains("2"));
+    }
+
+    // ========== EmbedProgressEvent equals/hashCode/toString ==========
+
+    @Test
+    void embedProgressEvent_equals_sameFields() {
+        var a = new EmbedProgressEvent("EMBEDDING", 5, 10, "chunk 5/10", 42L);
+        var b = new EmbedProgressEvent("EMBEDDING", 5, 10, "chunk 5/10", 42L);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void embedProgressEvent_equals_differentPhase() {
+        var a = new EmbedProgressEvent("EMBEDDING", 5, 10, "msg", 42L);
+        var b = new EmbedProgressEvent("COMPLETED", 5, 10, "msg", 42L);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void embedProgressEvent_equals_nullDocumentId() {
+        var a = new EmbedProgressEvent("PREPARING", 0, 0, "prep", null);
+        var b = new EmbedProgressEvent("PREPARING", 0, 0, "prep", null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void embedProgressEvent_toString() {
+        var event = new EmbedProgressEvent("EMBEDDING", 5, 10, "chunk 5/10", 42L);
+        var str = event.toString();
+        assertTrue(str.contains("EMBEDDING"));
+        assertTrue(str.contains("42"));
     }
 
     @Test
