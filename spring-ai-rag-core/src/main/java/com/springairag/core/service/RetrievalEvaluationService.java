@@ -5,6 +5,7 @@ import com.springairag.core.entity.RagRetrievalEvaluation;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Retrieval evaluation service interface.
@@ -144,6 +145,32 @@ public interface RetrievalEvaluationService {
         public void setNdcg(double ndcg) { this.ndcg = ndcg; }
         public double getHitRate() { return hitRate; }
         public void setHitRate(double hitRate) { this.hitRate = hitRate; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EvaluationMetrics that = (EvaluationMetrics) o;
+            return Double.compare(that.mrr, mrr) == 0
+                    && Double.compare(that.ndcg, ndcg) == 0
+                    && Double.compare(that.hitRate, hitRate) == 0
+                    && Objects.equals(precisionAtK, that.precisionAtK)
+                    && Objects.equals(recallAtK, that.recallAtK);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(precisionAtK, recallAtK, mrr, ndcg, hitRate);
+        }
+
+        @Override
+        public String toString() {
+            return "EvaluationMetrics{" +
+                    "mrr=" + mrr +
+                    ", ndcg=" + ndcg +
+                    ", hitRate=" + hitRate +
+                    '}';
+        }
     }
 
     /**
@@ -175,6 +202,36 @@ public interface RetrievalEvaluationService {
         public void setDistribution(Map<String, Object> distribution) { this.distribution = distribution; }
         public List<Map<String, Object>> getTrend() { return trend; }
         public void setTrend(List<Map<String, Object>> trend) { this.trend = trend; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EvaluationReport that = (EvaluationReport) o;
+            return totalEvaluations == that.totalEvaluations
+                    && Double.compare(that.avgPrecision, avgPrecision) == 0
+                    && Double.compare(that.avgRecall, avgRecall) == 0
+                    && Double.compare(that.avgMrr, avgMrr) == 0
+                    && Double.compare(that.avgNdcg, avgNdcg) == 0
+                    && Double.compare(that.avgHitRate, avgHitRate) == 0
+                    && Objects.equals(distribution, that.distribution)
+                    && Objects.equals(trend, that.trend);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(totalEvaluations, avgPrecision, avgRecall, avgMrr, avgNdcg, avgHitRate, distribution, trend);
+        }
+
+        @Override
+        public String toString() {
+            return "EvaluationReport{" +
+                    "totalEvaluations=" + totalEvaluations +
+                    ", avgMrr=" + avgMrr +
+                    ", avgNdcg=" + avgNdcg +
+                    ", avgHitRate=" + avgHitRate +
+                    '}';
+        }
     }
 
     /**
@@ -200,6 +257,34 @@ public interface RetrievalEvaluationService {
         public void setAvgPrecisionAtK(Map<Integer, Double> avgPrecisionAtK) { this.avgPrecisionAtK = avgPrecisionAtK; }
         public Map<Integer, Double> getAvgRecallAtK() { return avgRecallAtK; }
         public void setAvgRecallAtK(Map<Integer, Double> avgRecallAtK) { this.avgRecallAtK = avgRecallAtK; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AggregatedMetrics that = (AggregatedMetrics) o;
+            return Objects.equals(avgMrr, that.avgMrr)
+                    && Objects.equals(avgNdcg, that.avgNdcg)
+                    && Objects.equals(avgHitRate, that.avgHitRate)
+                    && Objects.equals(totalEvaluations, that.totalEvaluations)
+                    && Objects.equals(avgPrecisionAtK, that.avgPrecisionAtK)
+                    && Objects.equals(avgRecallAtK, that.avgRecallAtK);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(avgMrr, avgNdcg, avgHitRate, totalEvaluations, avgPrecisionAtK, avgRecallAtK);
+        }
+
+        @Override
+        public String toString() {
+            return "AggregatedMetrics{" +
+                    "totalEvaluations=" + totalEvaluations +
+                    ", avgMrr=" + avgMrr +
+                    ", avgNdcg=" + avgNdcg +
+                    ", avgHitRate=" + avgHitRate +
+                    '}';
+        }
     }
 
     /**
@@ -236,5 +321,32 @@ public interface RetrievalEvaluationService {
         public void setReasoning(String reasoning) { this.reasoning = reasoning; }
         public String getRecommendation() { return recommendation; }
         public void setRecommendation(String recommendation) { this.recommendation = recommendation; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AnswerQualityResult that = (AnswerQualityResult) o;
+            return groundedness == that.groundedness
+                    && relevance == that.relevance
+                    && helpfulness == that.helpfulness
+                    && Objects.equals(reasoning, that.reasoning)
+                    && Objects.equals(recommendation, that.recommendation);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(groundedness, relevance, helpfulness, reasoning, recommendation);
+        }
+
+        @Override
+        public String toString() {
+            return "AnswerQualityResult{" +
+                    "groundedness=" + groundedness +
+                    ", relevance=" + relevance +
+                    ", helpfulness=" + helpfulness +
+                    ", recommendation=" + recommendation +
+                    '}';
+        }
     }
 }

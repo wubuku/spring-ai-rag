@@ -4,6 +4,7 @@ import com.springairag.core.entity.RagUserFeedback;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * User feedback service interface.
@@ -91,5 +92,35 @@ public interface UserFeedbackService {
         public void setSatisfactionRate(double satisfactionRate) { this.satisfactionRate = satisfactionRate; }
         public double getAvgDwellTimeMs() { return avgDwellTimeMs; }
         public void setAvgDwellTimeMs(double avgDwellTimeMs) { this.avgDwellTimeMs = avgDwellTimeMs; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            FeedbackStats that = (FeedbackStats) o;
+            return totalFeedbacks == that.totalFeedbacks
+                    && thumbsUp == that.thumbsUp
+                    && thumbsDown == that.thumbsDown
+                    && ratings == that.ratings
+                    && Double.compare(that.avgRating, avgRating) == 0
+                    && Double.compare(that.satisfactionRate, satisfactionRate) == 0
+                    && Double.compare(that.avgDwellTimeMs, avgDwellTimeMs) == 0;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(totalFeedbacks, thumbsUp, thumbsDown, ratings, avgRating, satisfactionRate, avgDwellTimeMs);
+        }
+
+        @Override
+        public String toString() {
+            return "FeedbackStats{" +
+                    "totalFeedbacks=" + totalFeedbacks +
+                    ", thumbsUp=" + thumbsUp +
+                    ", thumbsDown=" + thumbsDown +
+                    ", ratings=" + ratings +
+                    ", satisfactionRate=" + satisfactionRate +
+                    '}';
+        }
     }
 }

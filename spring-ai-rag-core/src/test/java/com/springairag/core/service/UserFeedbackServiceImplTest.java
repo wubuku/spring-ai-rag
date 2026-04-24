@@ -213,4 +213,64 @@ class UserFeedbackServiceImplTest {
         f.setDwellTimeMs(dwellTime);
         return f;
     }
+
+    // ==================== FeedbackStats equals/hashCode/toString Tests ====================
+
+    @Nested
+    class FeedbackStatsInnerClassTests {
+
+        @Test
+        void feedbackStats_equals_sameFields() {
+            UserFeedbackService.FeedbackStats s1 = new UserFeedbackService.FeedbackStats();
+            s1.setTotalFeedbacks(100);
+            s1.setThumbsUp(60);
+            s1.setThumbsDown(10);
+            s1.setRatings(30);
+            s1.setAvgRating(4.2);
+            s1.setSatisfactionRate(0.86);
+            s1.setAvgDwellTimeMs(5000.0);
+
+            UserFeedbackService.FeedbackStats s2 = new UserFeedbackService.FeedbackStats();
+            s2.setTotalFeedbacks(100);
+            s2.setThumbsUp(60);
+            s2.setThumbsDown(10);
+            s2.setRatings(30);
+            s2.setAvgRating(4.2);
+            s2.setSatisfactionRate(0.86);
+            s2.setAvgDwellTimeMs(5000.0);
+
+            assertEquals(s1, s2);
+            assertEquals(s1.hashCode(), s2.hashCode());
+        }
+
+        @Test
+        void feedbackStats_equals_differentThumbsUp_notEqual() {
+            UserFeedbackService.FeedbackStats s1 = new UserFeedbackService.FeedbackStats();
+            s1.setThumbsUp(60);
+            UserFeedbackService.FeedbackStats s2 = new UserFeedbackService.FeedbackStats();
+            s2.setThumbsUp(70);
+            assertNotEquals(s1, s2);
+        }
+
+        @Test
+        void feedbackStats_equals_differentAvgRating_notEqual() {
+            UserFeedbackService.FeedbackStats s1 = new UserFeedbackService.FeedbackStats();
+            s1.setAvgRating(4.2);
+            UserFeedbackService.FeedbackStats s2 = new UserFeedbackService.FeedbackStats();
+            s2.setAvgRating(4.5);
+            assertNotEquals(s1, s2);
+        }
+
+        @Test
+        void feedbackStats_toString_containsKeyFields() {
+            UserFeedbackService.FeedbackStats s = new UserFeedbackService.FeedbackStats();
+            s.setTotalFeedbacks(100);
+            s.setThumbsUp(60);
+            s.setSatisfactionRate(0.86);
+            String str = s.toString();
+            assertTrue(str.contains("totalFeedbacks=100"));
+            assertTrue(str.contains("thumbsUp=60"));
+            assertTrue(str.contains("satisfactionRate=0.86"));
+        }
+    }
 }

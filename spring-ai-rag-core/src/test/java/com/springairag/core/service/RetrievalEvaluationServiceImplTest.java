@@ -657,4 +657,172 @@ class RetrievalEvaluationServiceImplTest {
 
         exec.shutdownNow();
     }
+
+    // ==================== Inner Class equals/hashCode/toString Tests ====================
+
+    @Nested
+    class EvaluationMetricsInnerClassTests {
+
+        @Test
+        void evaluationMetrics_equals_sameFields() {
+            Map<Integer, Double> p = Map.of(5, 0.8);
+            Map<Integer, Double> r = Map.of(5, 0.6);
+            RetrievalEvaluationService.EvaluationMetrics m1 =
+                    new RetrievalEvaluationService.EvaluationMetrics(p, r, 0.75, 0.8, 0.9);
+            RetrievalEvaluationService.EvaluationMetrics m2 =
+                    new RetrievalEvaluationService.EvaluationMetrics(p, r, 0.75, 0.8, 0.9);
+            assertEquals(m1, m2);
+            assertEquals(m1.hashCode(), m2.hashCode());
+        }
+
+        @Test
+        void evaluationMetrics_equals_differentMrr_notEqual() {
+            RetrievalEvaluationService.EvaluationMetrics m1 =
+                    new RetrievalEvaluationService.EvaluationMetrics(null, null, 0.75, 0.8, 0.9);
+            RetrievalEvaluationService.EvaluationMetrics m2 =
+                    new RetrievalEvaluationService.EvaluationMetrics(null, null, 0.80, 0.8, 0.9);
+            assertNotEquals(m1, m2);
+        }
+
+        @Test
+        void evaluationMetrics_equals_nullMaps_treatedAsAbsent() {
+            RetrievalEvaluationService.EvaluationMetrics m1 =
+                    new RetrievalEvaluationService.EvaluationMetrics(null, null, 0.75, 0.8, 0.9);
+            RetrievalEvaluationService.EvaluationMetrics m2 =
+                    new RetrievalEvaluationService.EvaluationMetrics(null, null, 0.75, 0.8, 0.9);
+            assertEquals(m1, m2);
+            assertEquals(m1.hashCode(), m2.hashCode());
+        }
+
+        @Test
+        void evaluationMetrics_toString_containsKeyFields() {
+            RetrievalEvaluationService.EvaluationMetrics m =
+                    new RetrievalEvaluationService.EvaluationMetrics(null, null, 0.75, 0.8, 0.9);
+            String str = m.toString();
+            assertTrue(str.contains("mrr=0.75"));
+            assertTrue(str.contains("ndcg=0.8"));
+            assertTrue(str.contains("hitRate=0.9"));
+        }
+    }
+
+    @Nested
+    class EvaluationReportInnerClassTests {
+
+        @Test
+        void evaluationReport_equals_sameFields() {
+            RetrievalEvaluationService.EvaluationReport r1 = new RetrievalEvaluationService.EvaluationReport();
+            r1.setTotalEvaluations(10);
+            r1.setAvgMrr(0.75);
+            r1.setAvgNdcg(0.8);
+            r1.setAvgHitRate(0.9);
+            r1.setAvgPrecision(0.7);
+            r1.setAvgRecall(0.6);
+
+            RetrievalEvaluationService.EvaluationReport r2 = new RetrievalEvaluationService.EvaluationReport();
+            r2.setTotalEvaluations(10);
+            r2.setAvgMrr(0.75);
+            r2.setAvgNdcg(0.8);
+            r2.setAvgHitRate(0.9);
+            r2.setAvgPrecision(0.7);
+            r2.setAvgRecall(0.6);
+
+            assertEquals(r1, r2);
+            assertEquals(r1.hashCode(), r2.hashCode());
+        }
+
+        @Test
+        void evaluationReport_equals_differentTotalEvaluations_notEqual() {
+            RetrievalEvaluationService.EvaluationReport r1 = new RetrievalEvaluationService.EvaluationReport();
+            r1.setTotalEvaluations(10);
+            RetrievalEvaluationService.EvaluationReport r2 = new RetrievalEvaluationService.EvaluationReport();
+            r2.setTotalEvaluations(20);
+            assertNotEquals(r1, r2);
+        }
+
+        @Test
+        void evaluationReport_toString_containsKeyFields() {
+            RetrievalEvaluationService.EvaluationReport r = new RetrievalEvaluationService.EvaluationReport();
+            r.setTotalEvaluations(10);
+            r.setAvgMrr(0.75);
+            r.setAvgNdcg(0.8);
+            r.setAvgHitRate(0.9);
+            String str = r.toString();
+            assertTrue(str.contains("totalEvaluations=10"));
+            assertTrue(str.contains("avgMrr=0.75"));
+        }
+    }
+
+    @Nested
+    class AggregatedMetricsInnerClassTests {
+
+        @Test
+        void aggregatedMetrics_equals_sameFields() {
+            RetrievalEvaluationService.AggregatedMetrics m1 = new RetrievalEvaluationService.AggregatedMetrics();
+            m1.setAvgMrr(0.75);
+            m1.setAvgNdcg(0.8);
+            m1.setAvgHitRate(0.9);
+            m1.setTotalEvaluations(100L);
+
+            RetrievalEvaluationService.AggregatedMetrics m2 = new RetrievalEvaluationService.AggregatedMetrics();
+            m2.setAvgMrr(0.75);
+            m2.setAvgNdcg(0.8);
+            m2.setAvgHitRate(0.9);
+            m2.setTotalEvaluations(100L);
+
+            assertEquals(m1, m2);
+            assertEquals(m1.hashCode(), m2.hashCode());
+        }
+
+        @Test
+        void aggregatedMetrics_equals_nullFields_treatedAsAbsent() {
+            RetrievalEvaluationService.AggregatedMetrics m1 = new RetrievalEvaluationService.AggregatedMetrics();
+            m1.setAvgMrr(null);
+            RetrievalEvaluationService.AggregatedMetrics m2 = new RetrievalEvaluationService.AggregatedMetrics();
+            m2.setAvgMrr(null);
+            assertEquals(m1, m2);
+            assertEquals(m1.hashCode(), m2.hashCode());
+        }
+
+        @Test
+        void aggregatedMetrics_toString_containsKeyFields() {
+            RetrievalEvaluationService.AggregatedMetrics m = new RetrievalEvaluationService.AggregatedMetrics();
+            m.setTotalEvaluations(100L);
+            m.setAvgMrr(0.75);
+            String str = m.toString();
+            assertTrue(str.contains("totalEvaluations=100"));
+            assertTrue(str.contains("avgMrr=0.75"));
+        }
+    }
+
+    @Nested
+    class AnswerQualityResultInnerClassTests {
+
+        @Test
+        void answerQualityResult_equals_sameFields() {
+            RetrievalEvaluationService.AnswerQualityResult r1 =
+                    new RetrievalEvaluationService.AnswerQualityResult(4, 5, 3, "good answer", "ACCEPT");
+            RetrievalEvaluationService.AnswerQualityResult r2 =
+                    new RetrievalEvaluationService.AnswerQualityResult(4, 5, 3, "good answer", "ACCEPT");
+            assertEquals(r1, r2);
+            assertEquals(r1.hashCode(), r2.hashCode());
+        }
+
+        @Test
+        void answerQualityResult_equals_differentGroundedness_notEqual() {
+            RetrievalEvaluationService.AnswerQualityResult r1 =
+                    new RetrievalEvaluationService.AnswerQualityResult(4, 5, 3, "good answer", "ACCEPT");
+            RetrievalEvaluationService.AnswerQualityResult r2 =
+                    new RetrievalEvaluationService.AnswerQualityResult(3, 5, 3, "good answer", "ACCEPT");
+            assertNotEquals(r1, r2);
+        }
+
+        @Test
+        void answerQualityResult_toString_containsKeyFields() {
+            RetrievalEvaluationService.AnswerQualityResult r =
+                    new RetrievalEvaluationService.AnswerQualityResult(4, 5, 3, "good", "ACCEPT");
+            String str = r.toString();
+            assertTrue(str.contains("groundedness=4"));
+            assertTrue(str.contains("recommendation=ACCEPT"));
+        }
+    }
 }
