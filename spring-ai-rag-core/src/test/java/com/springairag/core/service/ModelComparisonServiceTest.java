@@ -13,6 +13,8 @@ import org.springframework.ai.chat.prompt.Prompt;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -246,6 +248,78 @@ class ModelComparisonServiceTest {
                 "Interrupt status should be restored (set to true) after handling");
         // Cleanup: restore interrupt status for subsequent tests
         Thread.interrupted();
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult equals and hashCode - same fields are equal")
+    void modelComparisonResult_equals_sameFields() {
+        var r1 = new ModelComparisonService.ModelComparisonResult(
+                "deepseek", true, "response", 100L, 50, 100, 150, null);
+        var r2 = new ModelComparisonService.ModelComparisonResult(
+                "deepseek", true, "response", 100L, 50, 100, 150, null);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult equals - different fields are not equal")
+    void modelComparisonResult_equals_differentFields() {
+        var r1 = new ModelComparisonService.ModelComparisonResult(
+                "deepseek", true, "response", 100L, 50, 100, 150, null);
+        var r2 = new ModelComparisonService.ModelComparisonResult(
+                "claude", true, "response", 100L, 50, 100, 150, null);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult equals - null-safe for String fields")
+    void modelComparisonResult_equals_nullFields() {
+        var r1 = new ModelComparisonService.ModelComparisonResult(
+                null, false, null, 0L, 0, 0, 0, "error");
+        var r2 = new ModelComparisonService.ModelComparisonResult(
+                null, false, null, 0L, 0, 0, 0, "error");
+        var r3 = new ModelComparisonService.ModelComparisonResult(
+                null, false, null, 0L, 0, 0, 0, "different error");
+        assertEquals(r1, r2);
+        assertNotEquals(r1, r3);
+        // hashCode consistency
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult equals - not equal to other types or null")
+    void modelComparisonResult_equals_otherTypesAndNull() {
+        var r = new ModelComparisonService.ModelComparisonResult(
+                "deepseek", true, "response", 100L, 50, 100, 150, null);
+        assertNotEquals(r, "string");
+        assertNotEquals(r, null);
+        assertNotEquals(r, Integer.valueOf(42));
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult toString contains all fields")
+    void modelComparisonResult_toString_containsAllFields() {
+        var r = new ModelComparisonService.ModelComparisonResult(
+                "deepseek", true, "response", 100L, 50, 100, 150, null);
+        String s = r.toString();
+        assertTrue(s.contains("modelName='deepseek'"));
+        assertTrue(s.contains("success=true"));
+        assertTrue(s.contains("response='response'"));
+        assertTrue(s.contains("latencyMs=100"));
+        assertTrue(s.contains("promptTokens=50"));
+        assertTrue(s.contains("completionTokens=100"));
+        assertTrue(s.contains("totalTokens=150"));
+        assertTrue(s.contains("ModelComparisonResult"));
+    }
+
+    @Test
+    @DisplayName("ModelComparisonResult toString for failure case with error")
+    void modelComparisonResult_toString_failureCase() {
+        var r = ModelComparisonService.ModelComparisonResult.failure("model-x", "timeout");
+        String s = r.toString();
+        assertTrue(s.contains("modelName='model-x'"));
+        assertTrue(s.contains("success=false"));
+        assertTrue(s.contains("error='timeout'"));
     }
 
     @Test

@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
@@ -199,5 +200,40 @@ public class ModelComparisonService {
         public int getCompletionTokens() { return completionTokens; }
         public int getTotalTokens() { return totalTokens; }
         public String getError() { return error; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ModelComparisonResult that = (ModelComparisonResult) o;
+            return success == that.success
+                    && latencyMs == that.latencyMs
+                    && promptTokens == that.promptTokens
+                    && completionTokens == that.completionTokens
+                    && totalTokens == that.totalTokens
+                    && Objects.equals(modelName, that.modelName)
+                    && Objects.equals(response, that.response)
+                    && Objects.equals(error, that.error);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(modelName, success, response, latencyMs,
+                    promptTokens, completionTokens, totalTokens, error);
+        }
+
+        @Override
+        public String toString() {
+            return "ModelComparisonResult{" +
+                    "modelName='" + modelName + '\'' +
+                    ", success=" + success +
+                    ", response='" + response + '\'' +
+                    ", latencyMs=" + latencyMs +
+                    ", promptTokens=" + promptTokens +
+                    ", completionTokens=" + completionTokens +
+                    ", totalTokens=" + totalTokens +
+                    ", error='" + error + '\'' +
+                    '}';
+        }
     }
 }
