@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Retrieval result
@@ -59,4 +60,35 @@ public class RetrievalResult {
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
+
+    /**
+     * Two retrieval results are equal when they point to the same document chunk.
+     * Scores ({@code score}, {@code vectorScore}, {@code fulltextScore}) are excluded
+     * from equality because they are query-specific and vary per search.
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RetrievalResult that = (RetrievalResult) o;
+        return chunkIndex == that.chunkIndex
+                && Objects.equals(documentId, that.documentId)
+                && Objects.equals(chunkText, that.chunkText)
+                && Objects.equals(title, that.title);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(documentId, chunkIndex, chunkText, title);
+    }
+
+    @Override
+    public String toString() {
+        return "RetrievalResult{" +
+                "documentId='" + documentId + '\'' +
+                ", chunkIndex=" + chunkIndex +
+                ", score=" + score +
+                ", title='" + title + '\'' +
+                '}';
+    }
 }

@@ -275,6 +275,121 @@ class DtoTest {
         assertEquals("file.txt", result.getMetadata().get("source"));
     }
 
+    // ========== RetrievalResult equals/hashCode/toString ==========
+
+    @Test
+    void retrievalResult_equals_sameDocumentIdAndChunkIndexAndTextAndTitle() {
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId("doc-1");
+        r1.setChunkIndex(0);
+        r1.setChunkText("same text");
+        r1.setTitle("Same Title");
+        r1.setScore(0.9);
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId("doc-1");
+        r2.setChunkIndex(0);
+        r2.setChunkText("same text");
+        r2.setTitle("Same Title");
+        r2.setScore(0.5); // different score, but equal
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void retrievalResult_equals_differentDocumentId_notEqual() {
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId("doc-1");
+        r1.setChunkIndex(0);
+        r1.setChunkText("same text");
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId("doc-2");
+        r2.setChunkIndex(0);
+        r2.setChunkText("same text");
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void retrievalResult_equals_differentChunkIndex_notEqual() {
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId("doc-1");
+        r1.setChunkIndex(0);
+        r1.setChunkText("same text");
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId("doc-1");
+        r2.setChunkIndex(1);
+        r2.setChunkText("same text");
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void retrievalResult_equals_scoresIgnored() {
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId("doc-1");
+        r1.setChunkIndex(0);
+        r1.setChunkText("same text");
+        r1.setScore(0.9);
+        r1.setVectorScore(0.95);
+        r1.setFulltextScore(0.85);
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId("doc-1");
+        r2.setChunkIndex(0);
+        r2.setChunkText("same text");
+        r2.setScore(0.1); // completely different scores
+        r2.setVectorScore(0.0);
+        r2.setFulltextScore(0.0);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void retrievalResult_equals_nullFields_treatedAsAbsent() {
+        RetrievalResult r1 = new RetrievalResult();
+        r1.setDocumentId(null);
+        r1.setChunkIndex(0);
+        r1.setChunkText(null);
+        r1.setTitle(null);
+
+        RetrievalResult r2 = new RetrievalResult();
+        r2.setDocumentId(null);
+        r2.setChunkIndex(0);
+        r2.setChunkText(null);
+        r2.setTitle(null);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void retrievalResult_equals_sameClass_notEqualToNull() {
+        RetrievalResult r = new RetrievalResult();
+        r.setDocumentId("doc-1");
+        r.setChunkIndex(0);
+        assertNotEquals(r, null);
+    }
+
+    @Test
+    void retrievalResult_toString_containsKeyFields() {
+        RetrievalResult r = new RetrievalResult();
+        r.setDocumentId("doc-xyz");
+        r.setChunkIndex(3);
+        r.setScore(0.75);
+        r.setTitle("Test Doc");
+
+        String str = r.toString();
+        assertTrue(str.contains("doc-xyz"));
+        assertTrue(str.contains("chunkIndex=3"));
+        assertTrue(str.contains("score=0.75"));
+        assertTrue(str.contains("Test Doc"));
+    }
+
     // ========== RetrievalConfig ==========
 
     @Test
