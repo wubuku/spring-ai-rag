@@ -1,3 +1,4 @@
+- 2026-04-25 05:44 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,34 chunks)/ E2E 10/12 ⚠️(Documents+Search:空数据库,已知环境问题,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-04-25 05:41 - ✅ PdfImportController.buildTreeEntries 重构:61行方法→4个聚焦方法(computeRelativePath/toFileEntry/toDirectoryEntry);消除死代码(两个 ternary 分支实际相同);提交 fc6b416 已推送
 - 2026-04-25 05:06 - ✅ WebUI 常规巡检:cron npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped)/ E2E 10/12 ⚠️(Documents+Search:空数据库,已知环境问题,非代码 bug)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(HEARTBEAT.md 仅时间戳更新);WebUI 项目处于生产级成熟状态
 - 2026-04-25 04:59 - ✅ 后端主动巡检:ChatExportService null-safety 参数验证——exportAsJson/exportAsMarkdown/exportAsCsv 三个方法新增 sessionId null 检查(IllegalArgumentException);ChatExportServiceTest 新增 3 个 null 参数测试;29→32 tests;mvn test ✅;commit 3c4c96a 已推送
