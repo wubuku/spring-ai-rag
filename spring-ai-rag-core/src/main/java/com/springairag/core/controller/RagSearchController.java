@@ -62,7 +62,10 @@ public class RagSearchController {
      * @return list of retrieval results
      */
     @Operation(summary = "Direct retrieval (GET)", description = "Hybrid search, no LLM generation. Supports vector/fulltext weight adjustment.")
-    @ApiResponse(responseCode = "200", description = "Returns retrieval results list")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
+            @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0]")
+    })
     @GetMapping
     @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<?> search(
