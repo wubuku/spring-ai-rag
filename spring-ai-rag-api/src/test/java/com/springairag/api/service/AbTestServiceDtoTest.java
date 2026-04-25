@@ -8,7 +8,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * AbTestService 内部 DTO 类测试
+ * Unit tests for AbTestService inner DTO classes.
  */
 class AbTestServiceDtoTest {
 
@@ -42,6 +42,66 @@ class AbTestServiceDtoTest {
         assertEquals(now, exp.getCreatedAt());
     }
 
+    @Test
+    void experiment_equals_sameFields_returnsTrue() {
+        ZonedDateTime now = ZonedDateTime.now();
+        AbTestService.Experiment a = new AbTestService.Experiment();
+        a.setId(1L);
+        a.setExperimentName("exp-A");
+        a.setDescription("desc");
+        a.setStatus("RUNNING");
+        a.setTrafficSplit(Map.of("A", 0.5));
+        a.setTargetMetric("precision");
+        a.setMinSampleSize(100);
+        a.setStartTime(now);
+        a.setEndTime(now.plusDays(7));
+        a.setCreatedAt(now);
+
+        AbTestService.Experiment b = new AbTestService.Experiment();
+        b.setId(1L);
+        b.setExperimentName("exp-A");
+        b.setDescription("desc");
+        b.setStatus("RUNNING");
+        b.setTrafficSplit(Map.of("A", 0.5));
+        b.setTargetMetric("precision");
+        b.setMinSampleSize(100);
+        b.setStartTime(now);
+        b.setEndTime(now.plusDays(7));
+        b.setCreatedAt(now);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void experiment_equals_differentId_returnsFalse() {
+        AbTestService.Experiment a = new AbTestService.Experiment();
+        a.setId(1L);
+
+        AbTestService.Experiment b = new AbTestService.Experiment();
+        b.setId(2L);
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void experiment_equals_differentClass_returnsFalse() {
+        AbTestService.Experiment exp = new AbTestService.Experiment();
+        exp.setId(1L);
+        assertNotEquals(exp, "not an experiment");
+        assertNotEquals(exp, null);
+    }
+
+    @Test
+    void experiment_toString_containsKeyFields() {
+        AbTestService.Experiment exp = new AbTestService.Experiment();
+        exp.setId(42L);
+        exp.setExperimentName("exp-test");
+        String str = exp.toString();
+        assertTrue(str.contains("id=42"));
+        assertTrue(str.contains("experimentName='exp-test'"));
+    }
+
     // ========== ExperimentResult ==========
 
     @Test
@@ -65,6 +125,59 @@ class AbTestServiceDtoTest {
         assertNotNull(result.getCreatedAt());
     }
 
+    @Test
+    void experimentResult_equals_sameFields_returnsTrue() {
+        ZonedDateTime now = ZonedDateTime.now();
+        AbTestService.ExperimentResult a = new AbTestService.ExperimentResult();
+        a.setId(1L);
+        a.setVariantName("A");
+        a.setSessionId("s1");
+        a.setQuery("q1");
+        a.setMetrics(Map.of("p", 0.9));
+        a.setIsConverted(true);
+        a.setCreatedAt(now);
+
+        AbTestService.ExperimentResult b = new AbTestService.ExperimentResult();
+        b.setId(1L);
+        b.setVariantName("A");
+        b.setSessionId("s1");
+        b.setQuery("q1");
+        b.setMetrics(Map.of("p", 0.9));
+        b.setIsConverted(true);
+        b.setCreatedAt(now);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void experimentResult_equals_differentVariant_returnsFalse() {
+        AbTestService.ExperimentResult a = new AbTestService.ExperimentResult();
+        a.setVariantName("A");
+
+        AbTestService.ExperimentResult b = new AbTestService.ExperimentResult();
+        b.setVariantName("B");
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void experimentResult_equals_differentClass_returnsFalse() {
+        AbTestService.ExperimentResult r = new AbTestService.ExperimentResult();
+        r.setId(1L);
+        assertNotEquals(r, "not a result");
+    }
+
+    @Test
+    void experimentResult_toString_containsKeyFields() {
+        AbTestService.ExperimentResult r = new AbTestService.ExperimentResult();
+        r.setId(5L);
+        r.setVariantName("ctrl");
+        String str = r.toString();
+        assertTrue(str.contains("id=5"));
+        assertTrue(str.contains("variantName='ctrl'"));
+    }
+
     // ========== CreateExperimentRequest ==========
 
     @Test
@@ -84,6 +197,41 @@ class AbTestServiceDtoTest {
         assertEquals(200, req.getMinSampleSize());
     }
 
+    @Test
+    void createExperimentRequest_equals_sameFields_returnsTrue() {
+        AbTestService.CreateExperimentRequest a = new AbTestService.CreateExperimentRequest();
+        a.setExperimentName("exp");
+        a.setDescription("d");
+        a.setTrafficSplit(Map.of("A", 0.5));
+        a.setTargetMetric("recall");
+        a.setMinSampleSize(100);
+
+        AbTestService.CreateExperimentRequest b = new AbTestService.CreateExperimentRequest();
+        b.setExperimentName("exp");
+        b.setDescription("d");
+        b.setTrafficSplit(Map.of("A", 0.5));
+        b.setTargetMetric("recall");
+        b.setMinSampleSize(100);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void createExperimentRequest_equals_nullFields_returnsTrue() {
+        AbTestService.CreateExperimentRequest a = new AbTestService.CreateExperimentRequest();
+        AbTestService.CreateExperimentRequest b = new AbTestService.CreateExperimentRequest();
+        assertEquals(a, b);
+    }
+
+    @Test
+    void createExperimentRequest_toString_containsKeyFields() {
+        AbTestService.CreateExperimentRequest req = new AbTestService.CreateExperimentRequest();
+        req.setExperimentName("my-exp");
+        String str = req.toString();
+        assertTrue(str.contains("experimentName='my-exp'"));
+    }
+
     // ========== UpdateExperimentRequest ==========
 
     @Test
@@ -99,6 +247,37 @@ class AbTestServiceDtoTest {
         assertEquals(0.3, req.getTrafficSplit().get("A"));
         assertEquals("f1", req.getTargetMetric());
         assertEquals(300, req.getMinSampleSize());
+    }
+
+    @Test
+    void updateExperimentRequest_equals_sameFields_returnsTrue() {
+        AbTestService.UpdateExperimentRequest a = new AbTestService.UpdateExperimentRequest();
+        a.setDescription("d");
+        a.setTargetMetric("f1");
+        a.setMinSampleSize(50);
+
+        AbTestService.UpdateExperimentRequest b = new AbTestService.UpdateExperimentRequest();
+        b.setDescription("d");
+        b.setTargetMetric("f1");
+        b.setMinSampleSize(50);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void updateExperimentRequest_equals_nullFields_returnsTrue() {
+        AbTestService.UpdateExperimentRequest a = new AbTestService.UpdateExperimentRequest();
+        AbTestService.UpdateExperimentRequest b = new AbTestService.UpdateExperimentRequest();
+        assertEquals(a, b);
+    }
+
+    @Test
+    void updateExperimentRequest_toString_containsKeyFields() {
+        AbTestService.UpdateExperimentRequest req = new AbTestService.UpdateExperimentRequest();
+        req.setDescription("updated");
+        String str = req.toString();
+        assertTrue(str.contains("description='updated'"));
     }
 
     // ========== ExperimentAnalysis ==========
@@ -131,6 +310,69 @@ class AbTestServiceDtoTest {
         assertEquals(now, analysis.getAnalyzedAt());
     }
 
+    @Test
+    void experimentAnalysis_equals_sameFields_returnsTrue() {
+        ZonedDateTime now = ZonedDateTime.now();
+        AbTestService.VariantStats stats = new AbTestService.VariantStats();
+        stats.setVariantName("A");
+        stats.setSampleSize(100);
+
+        AbTestService.ExperimentAnalysis a = new AbTestService.ExperimentAnalysis();
+        a.setExperimentId(1L);
+        a.setStatus("COMPLETED");
+        a.setVariantStats(Map.of("A", stats));
+        a.setWinner("A");
+        a.setConfidenceLevel(0.95);
+        a.setIsSignificant(true);
+        a.setRecommendation("use A");
+        a.setAnalyzedAt(now);
+
+        AbTestService.ExperimentAnalysis b = new AbTestService.ExperimentAnalysis();
+        b.setExperimentId(1L);
+        b.setStatus("COMPLETED");
+        b.setVariantStats(Map.of("A", stats));
+        b.setWinner("A");
+        b.setConfidenceLevel(0.95);
+        b.setIsSignificant(true);
+        b.setRecommendation("use A");
+        b.setAnalyzedAt(now);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void experimentAnalysis_equals_differentWinner_returnsFalse() {
+        AbTestService.ExperimentAnalysis a = new AbTestService.ExperimentAnalysis();
+        a.setWinner("A");
+
+        AbTestService.ExperimentAnalysis b = new AbTestService.ExperimentAnalysis();
+        b.setWinner("B");
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void experimentAnalysis_equals_differentConfidenceLevel_returnsFalse() {
+        AbTestService.ExperimentAnalysis a = new AbTestService.ExperimentAnalysis();
+        a.setConfidenceLevel(0.95);
+
+        AbTestService.ExperimentAnalysis b = new AbTestService.ExperimentAnalysis();
+        b.setConfidenceLevel(0.90);
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void experimentAnalysis_toString_containsKeyFields() {
+        AbTestService.ExperimentAnalysis a = new AbTestService.ExperimentAnalysis();
+        a.setExperimentId(7L);
+        a.setWinner("B");
+        String str = a.toString();
+        assertTrue(str.contains("experimentId=7"));
+        assertTrue(str.contains("winner='B'"));
+    }
+
     // ========== VariantStats ==========
 
     @Test
@@ -150,5 +392,59 @@ class AbTestServiceDtoTest {
         assertEquals(0.01, stats.getVariance());
         assertEquals(0.1, stats.getStdDev());
         assertEquals(0.75, stats.getConversionRate());
+    }
+
+    @Test
+    void variantStats_equals_sameFields_returnsTrue() {
+        AbTestService.VariantStats a = new AbTestService.VariantStats();
+        a.setVariantName("A");
+        a.setSampleSize(100);
+        a.setMeanMetric(0.85);
+        a.setVariance(0.02);
+        a.setStdDev(0.14);
+        a.setConversionRate(0.80);
+
+        AbTestService.VariantStats b = new AbTestService.VariantStats();
+        b.setVariantName("A");
+        b.setSampleSize(100);
+        b.setMeanMetric(0.85);
+        b.setVariance(0.02);
+        b.setStdDev(0.14);
+        b.setConversionRate(0.80);
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void variantStats_equals_differentName_returnsFalse() {
+        AbTestService.VariantStats a = new AbTestService.VariantStats();
+        a.setVariantName("A");
+
+        AbTestService.VariantStats b = new AbTestService.VariantStats();
+        b.setVariantName("B");
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void variantStats_equals_differentSampleSize_returnsFalse() {
+        AbTestService.VariantStats a = new AbTestService.VariantStats();
+        a.setSampleSize(100);
+
+        AbTestService.VariantStats b = new AbTestService.VariantStats();
+        b.setSampleSize(200);
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void variantStats_toString_containsKeyFields() {
+        AbTestService.VariantStats s = new AbTestService.VariantStats();
+        s.setVariantName("ctrl");
+        s.setSampleSize(500);
+        String str = s.toString();
+        assertTrue(str.contains("variantName='ctrl'"));
+        assertTrue(str.contains("sampleSize=500"));
     }
 }
