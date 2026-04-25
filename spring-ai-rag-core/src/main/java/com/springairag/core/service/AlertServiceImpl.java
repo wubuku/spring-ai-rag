@@ -26,7 +26,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Provides threshold alerting and SLO breach alerting, with alert records persisted to rag_alerts table.
  * Supports alert silencing, resolution, and statistical queries.
  *
- * <p>Built-in SLO metrics:
+ * <p>SLO thresholds are configurable via {@link RagAlertProperties} (prefix {@code rag.alert}).
+ * Default values:
  * <ul>
  *   <li>Availability SLO: 99.9%</li>
  *   <li>P50 latency SLO: 500ms</li>
@@ -40,14 +41,6 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AlertServiceImpl implements AlertService {
 
     private static final Logger log = LoggerFactory.getLogger(AlertServiceImpl.class);
-
-    // Default SLO definitions
-    public static final double AVAILABILITY_SLO = 99.9;
-    public static final double P50_LATENCY_SLO_MS = 500;
-    public static final double P95_LATENCY_SLO_MS = 2000;
-    public static final double P99_LATENCY_SLO_MS = 5000;
-    public static final double MRR_SLO = 0.6;
-    public static final double HIT_RATE_SLO = 0.85;
 
     // Alert silencing cache
     private final Map<String, ZonedDateTime> silencedAlerts = new ConcurrentHashMap<>();
@@ -305,7 +298,7 @@ public class AlertServiceImpl implements AlertService {
         SloStatus status = new SloStatus();
         status.setSloName("availability");
         status.setSloType("AVAILABILITY");
-        status.setTarget(AVAILABILITY_SLO);
+        status.setTarget(alertProperties.getAvailabilitySlo());
         status.setUnit("%");
         status.setWindowStart(startDate);
         status.setWindowEnd(endDate);
@@ -319,12 +312,12 @@ public class AlertServiceImpl implements AlertService {
 
         // Determine availability based on average latency: considered unavailable if avg latency > P99 SLO
         Double avgTotalTime = retrievalLogRepository.findAvgTotalTime(startDate, endDate);
-        double availability = (avgTotalTime != null && avgTotalTime <= P99_LATENCY_SLO_MS) ? 100.0 : 99.0;
+        double availability = (avgTotalTime != null && avgTotalTime <= alertProperties.getLatencyP99SloMs()) ? 100.0 : 99.0;
         status.setActual(availability);
-        status.setMet(availability >= AVAILABILITY_SLO);
+        status.setMet(availability >= alertProperties.getAvailabilitySlo());
 
         long windowMinutes = ChronoUnit.MINUTES.between(startDate, endDate);
-        double errorBudget = windowMinutes * (1.0 - AVAILABILITY_SLO / 100.0);
+        double errorBudget = windowMinutes * (1.0 - alertProperties.getAvailabilitySlo() / 100.0);
         status.setErrorBudget(errorBudget);
         status.setErrorBudgetRemaining(status.isMet() ? 100.0 : 0.0);
         return status;
