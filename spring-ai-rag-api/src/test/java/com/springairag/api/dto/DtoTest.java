@@ -870,6 +870,45 @@ class DtoTest {
         assertEquals(8192L, doc.size());
     }
 
+    @Test
+    void collectionExportResponse_toString() {
+        var doc = new CollectionExportResponse.ExportedDocumentSummary(
+                "Doc 1", "https://example.com/1.pdf", "Short content",
+                "PDF", Map.of(), 2048L);
+        var response = new CollectionExportResponse(
+                "My KB", "RAG knowledge base", "BAAI/bge-m3", 1024, true,
+                Map.of("industry", "tech"),
+                List.of(doc),
+                null, 1
+        );
+        var str = response.toString();
+        assertTrue(str.contains("CollectionExportResponse"));
+        assertTrue(str.contains("My KB"));
+        assertTrue(str.contains("BAAI/bge-m3"));
+        assertTrue(str.contains("documentCount=1"));
+    }
+
+    @Test
+    void exportedDocumentSummary_toString_showsContentLength() {
+        var doc = new CollectionExportResponse.ExportedDocumentSummary(
+                "Test Doc", "https://example.com/test.pdf", "Content text here",
+                "PDF", Map.of(), 8192L);
+        var str = doc.toString();
+        assertTrue(str.contains("ExportedDocumentSummary"));
+        assertTrue(str.contains("Test Doc"));
+        // content shown as length, not full content
+        assertTrue(str.contains("contentLength=17"));
+    }
+
+    @Test
+    void exportedDocumentSummary_toString_nullContent() {
+        var doc = new CollectionExportResponse.ExportedDocumentSummary(
+                "No Content Doc", null, null, "TXT", Map.of(), 0L);
+        var str = doc.toString();
+        assertTrue(str.contains("ExportedDocumentSummary"));
+        assertTrue(str.contains("contentLength=0"));
+    }
+
     // ========== VersionHistoryResponse ==========
 
     @Test
@@ -915,6 +954,32 @@ class DtoTest {
         );
         assertNull(response.contentSnapshot());
         assertEquals("CREATED", response.changeType());
+    }
+
+    @Test
+    void documentVersionResponse_toString_showsContentSnapshotLength() {
+        var response = new DocumentVersionResponse(
+                5L, 42L, 3, "sha256:xyz789", 4096L,
+                "UPDATED", "Content updated via batch import",
+                null, "Snapshot of updated content"
+        );
+        var str = response.toString();
+        assertTrue(str.contains("DocumentVersionResponse"));
+        assertTrue(str.contains("id=5"));
+        assertTrue(str.contains("versionNumber=3"));
+        // contentSnapshot shown as length, not full content
+        assertTrue(str.contains("contentSnapshotLength=27"));
+    }
+
+    @Test
+    void documentVersionResponse_toString_nullContentSnapshot() {
+        var response = new DocumentVersionResponse(
+                1L, 42L, 1, "hash1", 1024L,
+                "CREATED", "Initial version", null, null
+        );
+        var str = response.toString();
+        assertTrue(str.contains("DocumentVersionResponse"));
+        assertTrue(str.contains("contentSnapshotLength=0"));
     }
 
     // ========== AlertActionResponse ==========

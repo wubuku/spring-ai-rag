@@ -37,4 +37,18 @@ public record DocumentVersionResponse(
         @Schema(description = "Content snapshot (only in single version detail, omitted in list)")
         String contentSnapshot
 ) {
+    @Override
+    public String toString() {
+        return "DocumentVersionResponse{" +
+                "id=" + id +
+                ", documentId=" + documentId +
+                ", versionNumber=" + versionNumber +
+                ", contentHash='" + contentHash + "'" +
+                ", size=" + size +
+                ", changeType='" + changeType + "'" +
+                ", changeDescription='" + changeDescription + "'" +
+                ", createdAt=" + createdAt +
+                ", contentSnapshotLength=" + (contentSnapshot != null ? contentSnapshot.length() : 0) +
+                '}';
+    }
 }

@@ -61,5 +61,31 @@ public record CollectionExportResponse(
             @Schema(description = "Document size in bytes", example = "4096")
             Long size
     ) {
+        @Override
+        public String toString() {
+            return "ExportedDocumentSummary{" +
+                    "title='" + title + "'" +
+                    ", source='" + source + "'" +
+                    ", contentLength=" + (content != null ? content.length() : 0) +
+                    ", documentType='" + documentType + "'" +
+                    ", metadata=" + metadata +
+                    ", size=" + size +
+                    '}';
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "CollectionExportResponse{" +
+                "name='" + name + "'" +
+                ", description='" + description + "'" +
+                ", embeddingModel='" + embeddingModel + "'" +
+                ", dimensions=" + dimensions +
+                ", enabled=" + enabled +
+                ", metadata=" + metadata +
+                ", documents count=" + (documents != null ? documents.size() : 0) +
+                ", documentCount=" + documentCount +
+                ", exportedAt=" + exportedAt +
+                '}';
     }
 }
