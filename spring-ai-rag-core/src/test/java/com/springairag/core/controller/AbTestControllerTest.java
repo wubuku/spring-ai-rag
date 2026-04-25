@@ -276,4 +276,71 @@ class AbTestControllerTest {
         assertEquals(List.of(1L), request.retrievedDocIds);
         assertEquals(0.9, request.metrics.get("score"));
     }
+
+    @Test
+    void resultRequest_equals_sameFields_returnsTrue() {
+        AbTestController.ResultRequest r1 = new AbTestController.ResultRequest();
+        r1.variantName = "variant_a";
+        r1.sessionId = "sess-001";
+        r1.query = "test query";
+        r1.retrievedDocIds = List.of(1L, 2L);
+        r1.metrics = Map.of("score", 0.95);
+
+        AbTestController.ResultRequest r2 = new AbTestController.ResultRequest();
+        r2.variantName = "variant_a";
+        r2.sessionId = "sess-001";
+        r2.query = "test query";
+        r2.retrievedDocIds = List.of(1L, 2L);
+        r2.metrics = Map.of("score", 0.95);
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void resultRequest_equals_differentFields_returnsFalse() {
+        AbTestController.ResultRequest r1 = new AbTestController.ResultRequest();
+        r1.variantName = "variant_a";
+        r1.sessionId = "sess-001";
+        r1.query = "test query";
+        r1.retrievedDocIds = List.of(1L);
+        r1.metrics = Map.of("score", 0.9);
+
+        AbTestController.ResultRequest r2 = new AbTestController.ResultRequest();
+        r2.variantName = "variant_b"; // different
+        r2.sessionId = "sess-001";
+        r2.query = "test query";
+        r2.retrievedDocIds = List.of(1L);
+        r2.metrics = Map.of("score", 0.9);
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void resultRequest_equals_nullAndTypeCheck() {
+        AbTestController.ResultRequest r = new AbTestController.ResultRequest();
+        r.variantName = "variant_a";
+        r.sessionId = "sess-001";
+
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+        assertEquals(r, r); // same instance
+    }
+
+    @Test
+    void resultRequest_toString_containsKeyFields() {
+        AbTestController.ResultRequest request = new AbTestController.ResultRequest();
+        request.variantName = "variant_a";
+        request.sessionId = "sess-001";
+        request.query = "test query";
+        request.retrievedDocIds = List.of(1L, 2L);
+        request.metrics = Map.of("score", 0.95);
+
+        String str = request.toString();
+        assertTrue(str.contains("variantName=variant_a"));
+        assertTrue(str.contains("sessionId=sess-001"));
+        assertTrue(str.contains("query=test query"));
+        assertTrue(str.contains("retrievedDocIds"));
+        assertTrue(str.contains("metrics"));
+    }
 }

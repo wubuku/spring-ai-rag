@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A/B test controller.
@@ -179,6 +180,34 @@ public class AbTestController {
         public String query;
         public List<Long> retrievedDocIds;
         public Map<String, Double> metrics;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ResultRequest that = (ResultRequest) o;
+            return Objects.equals(variantName, that.variantName)
+                    && Objects.equals(sessionId, that.sessionId)
+                    && Objects.equals(query, that.query)
+                    && Objects.equals(retrievedDocIds, that.retrievedDocIds)
+                    && Objects.equals(metrics, that.metrics);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(variantName, sessionId, query, retrievedDocIds, metrics);
+        }
+
+        @Override
+        public String toString() {
+            return "ResultRequest{" +
+                    "variantName=" + variantName +
+                    ", sessionId=" + sessionId +
+                    ", query=" + query +
+                    ", retrievedDocIds=" + retrievedDocIds +
+                    ", metrics=" + metrics +
+                    '}';
+        }
     }
 
     // Null-safe audit logging helpers (AuditLogService is optional)
