@@ -3446,4 +3446,206 @@ class DtoTest {
         assertTrue(str.contains("42"));
         assertTrue(str.contains("7"));
     }
+
+    // ========== AlertActionResponse ==========
+
+    @Test
+    void alertActionResponse_equals_same() {
+        AlertActionResponse r1 = new AlertActionResponse(true, "OK");
+        AlertActionResponse r2 = new AlertActionResponse(true, "OK");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void alertActionResponse_equals_different() {
+        AlertActionResponse r1 = new AlertActionResponse(true, "msg1");
+        AlertActionResponse r2 = new AlertActionResponse(false, "msg2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void alertActionResponse_equals_nullAndType() {
+        AlertActionResponse r = AlertActionResponse.ok("done");
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void alertActionResponse_toString_containsFields() {
+        AlertActionResponse r = new AlertActionResponse(true, "Alert silenced");
+        String str = r.toString();
+        assertTrue(str.contains("true"));
+        assertTrue(str.contains("Alert silenced"));
+    }
+
+    // ========== VariantResponse ==========
+
+    @Test
+    void variantResponse_equals_same() {
+        VariantResponse r1 = VariantResponse.of("control");
+        VariantResponse r2 = VariantResponse.of("control");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void variantResponse_equals_different() {
+        VariantResponse r1 = VariantResponse.of("control");
+        VariantResponse r2 = VariantResponse.of("treatment");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void variantResponse_equals_nullAndType() {
+        VariantResponse r = VariantResponse.of("variant-a");
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void variantResponse_toString_containsVariant() {
+        VariantResponse r = VariantResponse.of("treatment");
+        String str = r.toString();
+        assertTrue(str.contains("treatment"));
+    }
+
+    // ========== BatchDeleteResponse ==========
+
+    @Test
+    void batchDeleteResponse_equals_same() {
+        BatchDeleteSummary s1 = new BatchDeleteSummary(5, 2, 3);
+        BatchDeleteSummary s2 = new BatchDeleteSummary(5, 2, 3);
+        BatchDeleteItem i1 = new BatchDeleteItem(1L, "DELETED");
+        BatchDeleteItem i2 = new BatchDeleteItem(1L, "DELETED");
+        BatchDeleteResponse r1 = new BatchDeleteResponse(List.of(i1), s1);
+        BatchDeleteResponse r2 = new BatchDeleteResponse(List.of(i2), s2);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void batchDeleteResponse_equals_different() {
+        BatchDeleteSummary s1 = new BatchDeleteSummary(3, 2, 1);
+        BatchDeleteSummary s2 = new BatchDeleteSummary(5, 4, 1);
+        BatchDeleteResponse r1 = new BatchDeleteResponse(List.of(), s1);
+        BatchDeleteResponse r2 = new BatchDeleteResponse(List.of(), s2);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void batchDeleteResponse_equals_nullAndType() {
+        BatchDeleteSummary s = new BatchDeleteSummary(1, 1, 0);
+        BatchDeleteResponse r = new BatchDeleteResponse(List.of(), s);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void batchDeleteResponse_toString_containsFields() {
+        BatchDeleteSummary s = new BatchDeleteSummary(3, 2, 1);
+        BatchDeleteResponse r = new BatchDeleteResponse(List.of(), s);
+        String str = r.toString();
+        assertTrue(str.contains("BatchDeleteResponse"));
+        assertTrue(str.contains("summary"));
+    }
+
+    // ========== FireAlertResponse ==========
+
+    @Test
+    void fireAlertResponse_equals_same() {
+        FireAlertResponse r1 = FireAlertResponse.of(42L);
+        FireAlertResponse r2 = FireAlertResponse.of(42L);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void fireAlertResponse_equals_different() {
+        FireAlertResponse r1 = new FireAlertResponse(1L, "msg1");
+        FireAlertResponse r2 = new FireAlertResponse(2L, "msg2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void fireAlertResponse_equals_nullAndType() {
+        FireAlertResponse r = FireAlertResponse.of(99L);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void fireAlertResponse_toString_containsFields() {
+        FireAlertResponse r = new FireAlertResponse(42L, "Alert triggered");
+        String str = r.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("Alert triggered"));
+    }
+
+    // ========== ResolveAlertRequest ==========
+
+    @Test
+    void resolveAlertRequest_equals_same() {
+        ResolveAlertRequest r1 = new ResolveAlertRequest("Service restarted");
+        ResolveAlertRequest r2 = new ResolveAlertRequest("Service restarted");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void resolveAlertRequest_equals_different() {
+        ResolveAlertRequest r1 = new ResolveAlertRequest("msg1");
+        ResolveAlertRequest r2 = new ResolveAlertRequest("msg2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void resolveAlertRequest_equals_nullAndType() {
+        ResolveAlertRequest r = new ResolveAlertRequest("resolved");
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void resolveAlertRequest_toString_containsResolution() {
+        ResolveAlertRequest r = new ResolveAlertRequest("Deployment completed");
+        String str = r.toString();
+        assertTrue(str.contains("Deployment completed"));
+    }
+
+    // ========== ReembedMissingResponse ==========
+
+    @Test
+    void reembedMissingResponse_equals_same() {
+        ReembedResultResponse rr = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "OK");
+        ReembedMissingResponse r1 = new ReembedMissingResponse(5, 4, 1, List.of(rr));
+        ReembedResultResponse rr2 = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "OK");
+        ReembedMissingResponse r2 = new ReembedMissingResponse(5, 4, 1, List.of(rr2));
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void reembedMissingResponse_equals_different() {
+        ReembedResultResponse rr = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "OK");
+        ReembedMissingResponse r1 = new ReembedMissingResponse(5, 4, 1, List.of(rr));
+        ReembedMissingResponse r2 = new ReembedMissingResponse(5, 5, 0, List.of());
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void reembedMissingResponse_equals_nullAndType() {
+        ReembedMissingResponse r = new ReembedMissingResponse(3, 2, 1, List.of());
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void reembedMissingResponse_toString_containsFields() {
+        ReembedMissingResponse r = new ReembedMissingResponse(5, 4, 1, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("5"));
+        assertTrue(str.contains("4"));
+        assertTrue(str.contains("1"));
+    }
 }

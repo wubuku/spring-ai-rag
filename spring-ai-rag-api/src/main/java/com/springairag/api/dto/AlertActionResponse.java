@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Alert action response
  *
@@ -19,5 +21,23 @@ public record AlertActionResponse(
 
     public static AlertActionResponse fail(String message) {
         return new AlertActionResponse(false, message);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof AlertActionResponse that
+                && this.success == that.success
+                && Objects.equals(this.message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(success, message);
+    }
+
+    @Override
+    public String toString() {
+        return "AlertActionResponse{success=" + success + ", message=" + message + "}";
     }
 }
