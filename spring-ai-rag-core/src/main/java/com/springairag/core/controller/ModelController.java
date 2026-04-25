@@ -20,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Multi-model management REST endpoint.
@@ -126,5 +127,26 @@ public class ModelController {
 
         /** Per-model timeout in seconds; default 30 */
         public Integer timeoutSeconds;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CompareModelsRequest that = (CompareModelsRequest) o;
+            return Objects.equals(query, that.query)
+                    && Objects.equals(providers, that.providers)
+                    && Objects.equals(timeoutSeconds, that.timeoutSeconds);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(query, providers, timeoutSeconds);
+        }
+
+        @Override
+        public String toString() {
+            return "CompareModelsRequest{query=\"" + query + "\", providers=" + providers
+                    + ", timeoutSeconds=" + timeoutSeconds + "}";
+        }
     }
 }

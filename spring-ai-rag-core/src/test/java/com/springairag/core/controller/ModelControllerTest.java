@@ -8,6 +8,7 @@ import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.service.ModelComparisonService.ModelComparisonResult;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -20,6 +21,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
 import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.*;
 
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -132,6 +135,110 @@ class ModelControllerTest {
                 .andExpect(jsonPath("$.availableProviders[0]").value("openai"))
                 .andExpect(jsonPath("$.fallbackChain").value(nullValue()))
                 .andExpect(jsonPath("$.models").isEmpty());
+    }
+
+    // ===== CompareModelsRequest equals/hashCode/toString =====
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — same fields returns true")
+    void compareModelsRequest_equals_sameFields_returnsTrue() {
+        ModelController.CompareModelsRequest r1 = new ModelController.CompareModelsRequest();
+        r1.query = "hello";
+        r1.providers = List.of("openai", "anthropic");
+        r1.timeoutSeconds = 30;
+
+        ModelController.CompareModelsRequest r2 = new ModelController.CompareModelsRequest();
+        r2.query = "hello";
+        r2.providers = List.of("openai", "anthropic");
+        r2.timeoutSeconds = 30;
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — different query returns false")
+    void compareModelsRequest_equals_differentQuery_returnsFalse() {
+        ModelController.CompareModelsRequest r1 = new ModelController.CompareModelsRequest();
+        r1.query = "hello";
+        r1.providers = List.of("openai");
+
+        ModelController.CompareModelsRequest r2 = new ModelController.CompareModelsRequest();
+        r2.query = "world";
+        r2.providers = List.of("openai");
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — different providers returns false")
+    void compareModelsRequest_equals_differentProviders_returnsFalse() {
+        ModelController.CompareModelsRequest r1 = new ModelController.CompareModelsRequest();
+        r1.query = "hello";
+        r1.providers = List.of("openai");
+
+        ModelController.CompareModelsRequest r2 = new ModelController.CompareModelsRequest();
+        r2.query = "hello";
+        r2.providers = List.of("anthropic");
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — different timeoutSeconds returns false")
+    void compareModelsRequest_equals_differentTimeoutSeconds_returnsFalse() {
+        ModelController.CompareModelsRequest r1 = new ModelController.CompareModelsRequest();
+        r1.query = "hello";
+        r1.providers = List.of("openai");
+        r1.timeoutSeconds = 30;
+
+        ModelController.CompareModelsRequest r2 = new ModelController.CompareModelsRequest();
+        r2.query = "hello";
+        r2.providers = List.of("openai");
+        r2.timeoutSeconds = 60;
+
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — null providers and timeout returns true")
+    void compareModelsRequest_equals_nullProvidersAndTimeout_returnsTrue() {
+        ModelController.CompareModelsRequest r1 = new ModelController.CompareModelsRequest();
+        r1.query = "hello";
+        r1.providers = null;
+        r1.timeoutSeconds = null;
+
+        ModelController.CompareModelsRequest r2 = new ModelController.CompareModelsRequest();
+        r2.query = "hello";
+        r2.providers = null;
+        r2.timeoutSeconds = null;
+
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest equals — different class returns false")
+    void compareModelsRequest_equals_differentClass_returnsFalse() {
+        ModelController.CompareModelsRequest r = new ModelController.CompareModelsRequest();
+        r.query = "hello";
+        r.providers = List.of("openai");
+        assertNotEquals(r, "not a CompareModelsRequest");
+        assertNotEquals(r, null);
+    }
+
+    @Test
+    @DisplayName("CompareModelsRequest toString — contains all fields")
+    void compareModelsRequest_toString_containsAllFields() {
+        ModelController.CompareModelsRequest r = new ModelController.CompareModelsRequest();
+        r.query = "hello";
+        r.providers = List.of("openai", "anthropic");
+        r.timeoutSeconds = 30;
+
+        String str = r.toString();
+        assertTrue(str.contains("hello"));
+        assertTrue(str.contains("openai"));
+        assertTrue(str.contains("30"));
     }
 
     @TestConfiguration

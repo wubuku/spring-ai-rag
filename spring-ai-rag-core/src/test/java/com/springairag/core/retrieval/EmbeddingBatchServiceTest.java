@@ -371,4 +371,88 @@ class EmbeddingBatchServiceTest {
         assertTrue(results.get(0).isSuccess());
         verify(embeddingModel, times(1)).call(any(EmbeddingRequest.class));
     }
+
+    // ===== EmbeddingResult equals/hashCode/toString =====
+
+    @Test
+    @DisplayName("EmbeddingResult equals — same fields returns true")
+    void embeddingResult_equals_sameFields_returnsTrue() {
+        float[] emb1 = {0.1f, 0.2f};
+        float[] emb2 = {0.1f, 0.2f};
+        EmbeddingBatchService.EmbeddingResult r1 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb1, null);
+        EmbeddingBatchService.EmbeddingResult r2 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb2, null);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult equals — different text returns false")
+    void embeddingResult_equals_differentText_returnsFalse() {
+        float[] emb = {0.1f};
+        EmbeddingBatchService.EmbeddingResult r1 =
+                new EmbeddingBatchService.EmbeddingResult("text1", emb, null);
+        EmbeddingBatchService.EmbeddingResult r2 =
+                new EmbeddingBatchService.EmbeddingResult("text2", emb, null);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult equals — different embedding content returns false")
+    void embeddingResult_equals_differentEmbedding_returnsFalse() {
+        float[] emb1 = {0.1f};
+        float[] emb2 = {0.9f};
+        EmbeddingBatchService.EmbeddingResult r1 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb1, null);
+        EmbeddingBatchService.EmbeddingResult r2 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb2, null);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult equals — different error returns false")
+    void embeddingResult_equals_differentError_returnsFalse() {
+        float[] emb = {0.1f};
+        EmbeddingBatchService.EmbeddingResult r1 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb, "err1");
+        EmbeddingBatchService.EmbeddingResult r2 =
+                new EmbeddingBatchService.EmbeddingResult("text", emb, "err2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult equals — null-safe")
+    void embeddingResult_equals_nullSafe() {
+        float[] emb = {0.1f};
+        EmbeddingBatchService.EmbeddingResult r1 =
+                new EmbeddingBatchService.EmbeddingResult(null, emb, null);
+        EmbeddingBatchService.EmbeddingResult r2 =
+                new EmbeddingBatchService.EmbeddingResult(null, emb, null);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult equals — different class returns false")
+    void embeddingResult_equals_differentClass_returnsFalse() {
+        float[] emb = {0.1f};
+        EmbeddingBatchService.EmbeddingResult r =
+                new EmbeddingBatchService.EmbeddingResult("text", emb, null);
+        assertNotEquals(r, "not an EmbeddingResult");
+        assertNotEquals(r, null);
+    }
+
+    @Test
+    @DisplayName("EmbeddingResult toString — contains all fields")
+    void embeddingResult_toString_containsAllFields() {
+        float[] emb = {0.1f, 0.2f};
+        EmbeddingBatchService.EmbeddingResult r =
+                new EmbeddingBatchService.EmbeddingResult("hello", emb, null);
+        String str = r.toString();
+        assertTrue(str.contains("hello"));
+        assertTrue(str.contains("float[2]"));
+        assertFalse(str.contains("0.1")); // no full array content
+        assertTrue(str.contains("error=\"null\"")); // null wrapped in quotes
+    }
 }

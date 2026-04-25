@@ -13,7 +13,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Batch embedding generation service.
@@ -184,6 +186,27 @@ public class EmbeddingBatchService {
         public String getError() { return error; }
 
         public boolean isSuccess() { return error == null && embedding != null; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            EmbeddingResult that = (EmbeddingResult) o;
+            return Arrays.equals(embedding, that.embedding)
+                    && Objects.equals(text, that.text)
+                    && Objects.equals(error, that.error);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(text, Arrays.hashCode(embedding), error);
+        }
+
+        @Override
+        public String toString() {
+            String embedingSummary = embedding == null ? "null" : "float[" + embedding.length + "]";
+            return "EmbeddingResult{text=\"" + text + "\", embedding=" + embedingSummary + ", error=\"" + error + "\"}";
+        }
     }
 
     /**
