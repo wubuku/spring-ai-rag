@@ -1,5 +1,7 @@
 package com.springairag.starter;
 
+import java.util.Objects;
+
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
@@ -37,5 +39,25 @@ public class GeneralRagProperties {
 
         public int getMaxMessages() { return maxMessages; }
         public void setMaxMessages(int maxMessages) { this.maxMessages = maxMessages; }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Memory memory = (Memory) o;
+            return enabled == memory.enabled
+                    && maxMessages == memory.maxMessages
+                    && Objects.equals(type, memory.type);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(enabled, type, maxMessages);
+        }
+
+        @Override
+        public String toString() {
+            return "Memory{enabled=" + enabled + ", type='" + type + "', maxMessages=" + maxMessages + "}";
+        }
     }
 }

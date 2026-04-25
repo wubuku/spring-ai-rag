@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * 多模型演示控制器
@@ -157,7 +158,7 @@ public class MultiModelController {
         return ResponseEntity.ok(response);
     }
 
-    /** 模型对比请求 DTO */
+    /** Model comparison request DTO */
     public static class CompareRequest {
         @NotBlank(message = "query cannot be blank")
         public String query;
@@ -165,7 +166,27 @@ public class MultiModelController {
         @Size(min = 1, message = "providers cannot be empty")
         public List<String> providers;
 
-        /** 单个模型超时秒数，默认 30 */
+        /** Per-model timeout in seconds, default 30 */
         public Integer timeoutSeconds;
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            CompareRequest that = (CompareRequest) o;
+            return Objects.equals(query, that.query)
+                    && Objects.equals(providers, that.providers)
+                    && Objects.equals(timeoutSeconds, that.timeoutSeconds);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(query, providers, timeoutSeconds);
+        }
+
+        @Override
+        public String toString() {
+            return "CompareRequest{query='" + query + "', providers=" + providers + ", timeoutSeconds=" + timeoutSeconds + "}";
+        }
     }
 }

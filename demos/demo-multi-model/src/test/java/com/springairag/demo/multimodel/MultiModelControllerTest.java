@@ -18,6 +18,7 @@ import org.hamcrest.Matchers;
 
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -212,5 +213,75 @@ class MultiModelControllerTest {
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.results.length()").value(1));
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // MultiModelController.CompareRequest equals / hashCode / toString
+    // ─────────────────────────────────────────────────────────
+
+    @Test
+    @DisplayName("CompareRequest equals - same fields")
+    void compareRequest_equals_sameFields() {
+        MultiModelController.CompareRequest a = new MultiModelController.CompareRequest();
+        a.query = "test query";
+        a.providers = List.of("openai", "anthropic");
+        a.timeoutSeconds = 30;
+
+        MultiModelController.CompareRequest b = new MultiModelController.CompareRequest();
+        b.query = "test query";
+        b.providers = List.of("openai", "anthropic");
+        b.timeoutSeconds = 30;
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    @DisplayName("CompareRequest equals - different fields")
+    void compareRequest_equals_differentFields() {
+        MultiModelController.CompareRequest a = new MultiModelController.CompareRequest();
+        a.query = "query A";
+
+        MultiModelController.CompareRequest b = new MultiModelController.CompareRequest();
+        b.query = "query B";
+
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    @DisplayName("CompareRequest equals - null providers")
+    void compareRequest_equals_nullProviders() {
+        MultiModelController.CompareRequest a = new MultiModelController.CompareRequest();
+        a.query = "query";
+        a.providers = null;
+
+        MultiModelController.CompareRequest b = new MultiModelController.CompareRequest();
+        b.query = "query";
+        b.providers = null;
+
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    @DisplayName("CompareRequest equals - different types")
+    void compareRequest_equals_differentTypes() {
+        MultiModelController.CompareRequest req = new MultiModelController.CompareRequest();
+        assertNotEquals(req, "not-a-request");
+        assertNotEquals(req, null);
+    }
+
+    @Test
+    @DisplayName("CompareRequest toString contains all fields")
+    void compareRequest_toString_containsAllFields() {
+        MultiModelController.CompareRequest req = new MultiModelController.CompareRequest();
+        req.query = "test query";
+        req.providers = List.of("openai");
+        req.timeoutSeconds = 30;
+
+        String str = req.toString();
+        assertTrue(str.contains("query='test query'"));
+        assertTrue(str.contains("providers=[""openai""]"));
+        assertTrue(str.contains("timeoutSeconds=30"));
     }
 }
