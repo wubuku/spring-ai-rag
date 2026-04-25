@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Document creation response (covers both CREATED and DUPLICATE cases)
  */
@@ -37,5 +39,35 @@ public record DocumentCreateResponse(
                 existingId, existingTitle, "DUPLICATE",
                 "Content already exists, documentId: " + existingId,
                 existingHash, existingId);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DocumentCreateResponse that = (DocumentCreateResponse) o;
+        return Objects.equals(id, that.id) &&
+                Objects.equals(title, that.title) &&
+                Objects.equals(status, that.status) &&
+                Objects.equals(message, that.message) &&
+                Objects.equals(contentHash, that.contentHash) &&
+                Objects.equals(existingDocumentId, that.existingDocumentId);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, status, message, contentHash, existingDocumentId);
+    }
+
+    @Override
+    public String toString() {
+        return "DocumentCreateResponse{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", status='" + status + '\'' +
+                ", message='" + message + '\'' +
+                ", contentHash='" + contentHash + '\'' +
+                ", existingDocumentId=" + existingDocumentId +
+                '}';
     }
 }

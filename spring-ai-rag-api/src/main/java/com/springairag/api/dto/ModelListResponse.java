@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Model list response
@@ -30,5 +31,33 @@ public record ModelListResponse(
             List<Map<String, Object>> models) {
         return new ModelListResponse(multiModelEnabled, defaultProvider,
                 availableProviders, fallbackChain, models);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ModelListResponse that = (ModelListResponse) o;
+        return multiModelEnabled == that.multiModelEnabled &&
+                Objects.equals(defaultProvider, that.defaultProvider) &&
+                Objects.equals(availableProviders, that.availableProviders) &&
+                Objects.equals(fallbackChain, that.fallbackChain) &&
+                Objects.equals(models, that.models);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(multiModelEnabled, defaultProvider, availableProviders, fallbackChain, models);
+    }
+
+    @Override
+    public String toString() {
+        return "ModelListResponse{" +
+                "multiModelEnabled=" + multiModelEnabled +
+                ", defaultProvider='" + defaultProvider + '\'' +
+                ", availableProviders=" + availableProviders +
+                ", fallbackChain=" + fallbackChain +
+                ", models=" + (models != null ? models.size() + " model(s)" : "null") +
+                '}';
     }
 }

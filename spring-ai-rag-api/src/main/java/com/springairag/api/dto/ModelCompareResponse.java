@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Model comparison response
@@ -17,6 +18,30 @@ public record ModelCompareResponse(
         @Schema(description = "List of model providers that were compared", example = "[\"openai\",\"anthropic\"]") List<String> providers,
         @Schema(description = "Comparison results for each model") List<ModelCompareResult> results
 ) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ModelCompareResponse that = (ModelCompareResponse) o;
+        return Objects.equals(query, that.query) &&
+                Objects.equals(providers, that.providers) &&
+                Objects.equals(results, that.results);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(query, providers, results);
+    }
+
+    @Override
+    public String toString() {
+        return "ModelCompareResponse{" +
+                "query='" + query + '\'' +
+                ", providers=" + providers +
+                ", results=" + (results != null ? results.size() + " result(s)" : "null") +
+                '}';
+    }
+
     /**
      * Single model comparison result
      *
@@ -39,5 +64,39 @@ public record ModelCompareResponse(
             @Schema(description = "Number of completion tokens", example = "320") Integer completionTokens,
             @Schema(description = "Total tokens used", example = "470") Integer totalTokens,
             @Schema(description = "Error message (on failure)", example = "Rate limit exceeded") String error
-    ) {}
+    ) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ModelCompareResult that = (ModelCompareResult) o;
+            return success == that.success &&
+                    Objects.equals(modelName, that.modelName) &&
+                    Objects.equals(response, that.response) &&
+                    Objects.equals(latencyMs, that.latencyMs) &&
+                    Objects.equals(promptTokens, that.promptTokens) &&
+                    Objects.equals(completionTokens, that.completionTokens) &&
+                    Objects.equals(totalTokens, that.totalTokens) &&
+                    Objects.equals(error, that.error);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(modelName, success, response, latencyMs, promptTokens, completionTokens, totalTokens, error);
+        }
+
+        @Override
+        public String toString() {
+            return "ModelCompareResponse.ModelCompareResult{" +
+                    "modelName='" + modelName + '\'' +
+                    ", success=" + success +
+                    ", responseLength=" + (response != null ? response.length() : 0) +
+                    ", latencyMs=" + latencyMs +
+                    ", promptTokens=" + promptTokens +
+                    ", completionTokens=" + completionTokens +
+                    ", totalTokens=" + totalTokens +
+                    ", error='" + error + '\'' +
+                    '}';
+        }
+    }
 }

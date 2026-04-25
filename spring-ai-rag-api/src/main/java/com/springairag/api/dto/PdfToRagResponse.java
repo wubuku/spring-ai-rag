@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Response DTO for PDF import with RAG knowledge base integration.
  *
@@ -39,4 +41,38 @@ public record PdfToRagResponse(
         @Schema(description = "Entry Markdown path in fs_files",
                 example = "550e8400-e29b-41d4-a716-446655440000/default.md")
         String entryMarkdown
-) {}
+) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PdfToRagResponse that = (PdfToRagResponse) o;
+        return newlyCreated == that.newlyCreated &&
+                Objects.equals(documentId, that.documentId) &&
+                Objects.equals(title, that.title) &&
+                Objects.equals(embedStatus, that.embedStatus) &&
+                Objects.equals(embedMessage, that.embedMessage) &&
+                Objects.equals(chunksCreated, that.chunksCreated) &&
+                Objects.equals(uuid, that.uuid) &&
+                Objects.equals(entryMarkdown, that.entryMarkdown);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(documentId, title, newlyCreated, embedStatus, embedMessage, chunksCreated, uuid, entryMarkdown);
+    }
+
+    @Override
+    public String toString() {
+        return "PdfToRagResponse{" +
+                "documentId=" + documentId +
+                ", title='" + title + '\'' +
+                ", newlyCreated=" + newlyCreated +
+                ", embedStatus='" + embedStatus + '\'' +
+                ", embedMessage='" + embedMessage + '\'' +
+                ", chunksCreated=" + chunksCreated +
+                ", uuid='" + uuid + '\'' +
+                ", entryMarkdown='" + entryMarkdown + '\'' +
+                '}';
+    }
+}

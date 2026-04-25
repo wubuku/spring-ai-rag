@@ -4072,4 +4072,433 @@ class DtoTest {
         assertTrue(str.contains("Collection deleted"));
         assertTrue(str.contains("documentsUnlinked=5"));
     }
+
+    // ========== CollectionDocumentListResponse equals/hashCode/toString ==========
+
+    @Test
+    void collectionDocumentListResponse_equals_sameFields() {
+        var a = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        var b = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionDocumentListResponse_equals_differentCollectionId() {
+        var a = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        var b = new CollectionDocumentListResponse(2L, List.of(), 10, 0, 20);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionDocumentListResponse_toString() {
+        var r = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        String str = r.toString();
+        assertTrue(str.contains("collectionId=1"));
+        assertTrue(str.contains("total=10"));
+        assertTrue(str.contains("offset=0"));
+        assertTrue(str.contains("limit=20"));
+    }
+
+    // ========== DocumentAddedResponse equals/hashCode/toString ==========
+
+    @Test
+    void documentAddedResponse_equals_sameFields() {
+        var a = new DocumentAddedResponse("ok", 1L, 42L);
+        var b = new DocumentAddedResponse("ok", 1L, 42L);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentAddedResponse_equals_differentDocumentId() {
+        var a = new DocumentAddedResponse("ok", 1L, 42L);
+        var b = new DocumentAddedResponse("ok", 1L, 99L);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentAddedResponse_toString() {
+        var r = DocumentAddedResponse.of(1L, 42L);
+        String str = r.toString();
+        assertTrue(str.contains("message='"));
+        assertTrue(str.contains("collectionId=1"));
+        assertTrue(str.contains("documentId=42"));
+    }
+
+    // ========== DocumentCreateResponse equals/hashCode/toString ==========
+
+    @Test
+    void documentCreateResponse_equals_sameFields() {
+        var a = new DocumentCreateResponse(1L, "Title", "CREATED", "msg", "hash123", null);
+        var b = new DocumentCreateResponse(1L, "Title", "CREATED", "msg", "hash123", null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentCreateResponse_equals_differentStatus() {
+        var a = DocumentCreateResponse.created(1L, "Title", "hash123");
+        var b = DocumentCreateResponse.duplicate(1L, "Title", "hash123");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentCreateResponse_toString() {
+        var r = DocumentCreateResponse.created(42L, "My Doc", "sha256:abc");
+        String str = r.toString();
+        assertTrue(str.contains("id=42"));
+        assertTrue(str.contains("title='My Doc'"));
+        assertTrue(str.contains("status='CREATED'"));
+    }
+
+    // ========== FileTreeEntryResponse equals/hashCode/toString ==========
+
+    @Test
+    void fileTreeEntryResponse_equals_sameFields() {
+        var a = new FileTreeEntryResponse("intro.md", "abc/intro.md", "file", "text/markdown", 2048);
+        var b = new FileTreeEntryResponse("intro.md", "abc/intro.md", "file", "text/markdown", 2048);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void fileTreeEntryResponse_equals_differentName() {
+        var a = new FileTreeEntryResponse("a.md", "abc/a.md", "file", "text/markdown", 100);
+        var b = new FileTreeEntryResponse("b.md", "abc/b.md", "file", "text/markdown", 100);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void fileTreeEntryResponse_toString() {
+        var r = new FileTreeEntryResponse("intro.md", "abc/intro.md", "file", "text/markdown", 2048);
+        String str = r.toString();
+        assertTrue(str.contains("name='intro.md'"));
+        assertTrue(str.contains("type='file'"));
+        assertTrue(str.contains("size=2048"));
+    }
+
+    // ========== FileTreeResponse equals/hashCode/toString ==========
+
+    @Test
+    void fileTreeResponse_equals_sameFields() {
+        var entry = new FileTreeEntryResponse("a.md", "abc/a.md", "file", "text/markdown", 100);
+        var a = new FileTreeResponse("abc/", List.of(entry), 1);
+        var b = new FileTreeResponse("abc/", List.of(entry), 1);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void fileTreeResponse_equals_differentPath() {
+        var entry = new FileTreeEntryResponse("a.md", "abc/a.md", "file", "text/markdown", 100);
+        var a = new FileTreeResponse("abc/", List.of(entry), 1);
+        var b = new FileTreeResponse("xyz/", List.of(entry), 1);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void fileTreeResponse_toString() {
+        var r = new FileTreeResponse("abc/", List.of(), 0);
+        String str = r.toString();
+        assertTrue(str.contains("path='abc/'"));
+        assertTrue(str.contains("total=0"));
+    }
+
+    // ========== FileUploadResponse equals/hashCode/toString ==========
+
+    @Test
+    void fileUploadResponse_equals_sameFields() {
+        var a = new FileUploadResponse(5, 3, 2, List.of());
+        var b = new FileUploadResponse(5, 3, 2, List.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void fileUploadResponse_equals_differentSuccessCount() {
+        var a = new FileUploadResponse(5, 3, 2, List.of());
+        var b = new FileUploadResponse(5, 4, 1, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void fileUploadResponse_toString() {
+        var r = new FileUploadResponse(10, 8, 2, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("processed=10"));
+        assertTrue(str.contains("success=8"));
+        assertTrue(str.contains("failed=2"));
+    }
+
+    @Test
+    void fileUploadResponse_FileResult_equals_sameFields() {
+        var a = new FileUploadResponse.FileResult("doc.pdf", 1L, "Title", true, 5, null);
+        var b = new FileUploadResponse.FileResult("doc.pdf", 1L, "Title", true, 5, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void fileUploadResponse_FileResult_equals_differentEmbedded() {
+        var a = new FileUploadResponse.FileResult("doc.pdf", 1L, "Title", true, 5, null);
+        var b = new FileUploadResponse.FileResult("doc.pdf", 1L, "Title", false, 0, "error");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void fileUploadResponse_FileResult_toString() {
+        var r = new FileUploadResponse.FileResult("doc.pdf", 1L, "Title", true, 5, null);
+        String str = r.toString();
+        assertTrue(str.contains("filename='doc.pdf'"));
+        assertTrue(str.contains("embedded=true"));
+        assertTrue(str.contains("chunks=5"));
+    }
+
+    // ========== ModelCompareResponse equals/hashCode/toString ==========
+
+    @Test
+    void modelCompareResponse_equals_sameFields() {
+        var a = new ModelCompareResponse("query", List.of("openai"), List.of());
+        var b = new ModelCompareResponse("query", List.of("openai"), List.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelCompareResponse_equals_differentQuery() {
+        var a = new ModelCompareResponse("query A", List.of("openai"), List.of());
+        var b = new ModelCompareResponse("query B", List.of("openai"), List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelCompareResponse_toString() {
+        var r = new ModelCompareResponse("what is RAG?", List.of("openai"), List.of());
+        String str = r.toString();
+        assertTrue(str.contains("query='what is RAG?'"));
+    }
+
+    @Test
+    void modelCompareResponse_ModelCompareResult_equals_sameFields() {
+        var a = new ModelCompareResponse.ModelCompareResult("gpt-4o", true, "answer", 100L, 10, 20, 30, null);
+        var b = new ModelCompareResponse.ModelCompareResult("gpt-4o", true, "answer", 100L, 10, 20, 30, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelCompareResponse_ModelCompareResult_equals_differentSuccess() {
+        var a = new ModelCompareResponse.ModelCompareResult("gpt-4o", true, "answer", 100L, 10, 20, 30, null);
+        var b = new ModelCompareResponse.ModelCompareResult("gpt-4o", false, null, 50L, null, null, null, "error");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelCompareResponse_ModelCompareResult_toString() {
+        var r = new ModelCompareResponse.ModelCompareResult("gpt-4o", true, "answer text", 100L, 10, 20, 30, null);
+        String str = r.toString();
+        assertTrue(str.contains("modelName='gpt-4o'"));
+        assertTrue(str.contains("success=true"));
+        assertTrue(str.contains("responseLength=11"));
+    }
+
+    // ========== ModelDetailResponse equals/hashCode/toString ==========
+
+    @Test
+    void modelDetailResponse_equals_sameFields() {
+        var a = new ModelDetailResponse(true, Map.of("provider", "openai"));
+        var b = new ModelDetailResponse(true, Map.of("provider", "openai"));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelDetailResponse_equals_differentAvailable() {
+        var a = new ModelDetailResponse(true, Map.of());
+        var b = new ModelDetailResponse(false, Map.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelDetailResponse_toString() {
+        var r = ModelDetailResponse.of(true, Map.of("name", "gpt-4o"));
+        String str = r.toString();
+        assertTrue(str.contains("available=true"));
+    }
+
+    // ========== ModelListResponse equals/hashCode/toString ==========
+
+    @Test
+    void modelListResponse_equals_sameFields() {
+        var a = ModelListResponse.of(true, "openai", List.of("openai"), List.of(), List.of());
+        var b = ModelListResponse.of(true, "openai", List.of("openai"), List.of(), List.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelListResponse_equals_differentDefaultProvider() {
+        var a = ModelListResponse.of(true, "openai", List.of(), List.of(), List.of());
+        var b = ModelListResponse.of(true, "anthropic", List.of(), List.of(), List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelListResponse_toString() {
+        var r = ModelListResponse.of(true, "openai", List.of("openai"), List.of(), List.of());
+        String str = r.toString();
+        assertTrue(str.contains("multiModelEnabled=true"));
+        assertTrue(str.contains("defaultProvider='openai'"));
+    }
+
+    // ========== ModelMetricsResponse equals/hashCode/toString ==========
+
+    @Test
+    void modelMetricsResponse_equals_sameFields() {
+        var a = new ModelMetricsResponse(true, List.of());
+        var b = new ModelMetricsResponse(true, List.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelMetricsResponse_equals_differentMultiModelEnabled() {
+        var a = new ModelMetricsResponse(true, List.of());
+        var b = new ModelMetricsResponse(false, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelMetricsResponse_toString() {
+        var r = new ModelMetricsResponse(true, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("multiModelEnabled=true"));
+    }
+
+    @Test
+    void modelMetricsResponse_ModelMetric_equals_sameFields() {
+        var a = new ModelMetricsResponse.ModelMetric("openai", 100, 5, 0.05, "OpenAI GPT-4o");
+        var b = new ModelMetricsResponse.ModelMetric("openai", 100, 5, 0.05, "OpenAI GPT-4o");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void modelMetricsResponse_ModelMetric_equals_differentErrorRate() {
+        var a = new ModelMetricsResponse.ModelMetric("openai", 100, 5, 0.05, "OpenAI");
+        var b = new ModelMetricsResponse.ModelMetric("openai", 100, 10, 0.10, "OpenAI");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void modelMetricsResponse_ModelMetric_toString() {
+        var r = new ModelMetricsResponse.ModelMetric("openai", 100, 5, 0.05, "OpenAI GPT-4o");
+        String str = r.toString();
+        assertTrue(str.contains("provider='openai'"));
+        assertTrue(str.contains("calls=100"));
+    }
+
+    // ========== PdfImportResponse equals/hashCode/toString ==========
+
+    @Test
+    void pdfImportResponse_equals_sameFields() {
+        var a = new PdfImportResponse("uuid-123", "uuid-123/default.md", 2);
+        var b = new PdfImportResponse("uuid-123", "uuid-123/default.md", 2);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void pdfImportResponse_equals_differentUuid() {
+        var a = new PdfImportResponse("uuid-123", "uuid-123/default.md", 2);
+        var b = new PdfImportResponse("uuid-456", "uuid-456/default.md", 2);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void pdfImportResponse_toString() {
+        var r = new PdfImportResponse("uuid-123", "uuid-123/default.md", 2);
+        String str = r.toString();
+        assertTrue(str.contains("uuid='uuid-123'"));
+        assertTrue(str.contains("filesStored=2"));
+    }
+
+    // ========== PdfToRagResponse equals/hashCode/toString ==========
+
+    @Test
+    void pdfToRagResponse_equals_sameFields() {
+        var a = new PdfToRagResponse(1L, "Title", true, "COMPLETED", "ok", 10, "uuid", "uuid/default.md");
+        var b = new PdfToRagResponse(1L, "Title", true, "COMPLETED", "ok", 10, "uuid", "uuid/default.md");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void pdfToRagResponse_equals_differentNewlyCreated() {
+        var a = new PdfToRagResponse(1L, "Title", true, "COMPLETED", "ok", 10, "uuid", "uuid/default.md");
+        var b = new PdfToRagResponse(1L, "Title", false, "COMPLETED", "ok", 10, "uuid", "uuid/default.md");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void pdfToRagResponse_toString() {
+        var r = new PdfToRagResponse(1L, "Title", true, "COMPLETED", "ok", 10, "uuid", "uuid/default.md");
+        String str = r.toString();
+        assertTrue(str.contains("documentId=1"));
+        assertTrue(str.contains("title='Title'"));
+        assertTrue(str.contains("newlyCreated=true"));
+    }
+
+    // ========== ReembedResultResponse equals/hashCode/toString ==========
+
+    @Test
+    void reembedResultResponse_equals_sameFields() {
+        var a = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "ok");
+        var b = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "ok");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void reembedResultResponse_equals_differentStatus() {
+        var a = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "ok");
+        var b = new ReembedResultResponse(1L, "Title", "FAILED", null, "error");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void reembedResultResponse_toString() {
+        var r = new ReembedResultResponse(1L, "Title", "COMPLETED", 10, "ok");
+        String str = r.toString();
+        assertTrue(str.contains("documentId=1"));
+        assertTrue(str.contains("status='COMPLETED'"));
+        assertTrue(str.contains("chunks=10"));
+    }
+
+    // ========== VersionHistoryResponse equals/hashCode/toString ==========
+
+    @Test
+    void versionHistoryResponse_equals_sameFields() {
+        var a = new VersionHistoryResponse(1L, 5, 0, 20, List.of());
+        var b = new VersionHistoryResponse(1L, 5, 0, 20, List.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void versionHistoryResponse_equals_differentTotalVersions() {
+        var a = new VersionHistoryResponse(1L, 5, 0, 20, List.of());
+        var b = new VersionHistoryResponse(1L, 10, 0, 20, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void versionHistoryResponse_toString() {
+        var r = new VersionHistoryResponse(42L, 7, 0, 20, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("documentId=42"));
+        assertTrue(str.contains("totalVersions=7"));
+        assertTrue(str.contains("page=0"));
+    }
 }

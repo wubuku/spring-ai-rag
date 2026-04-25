@@ -17,6 +17,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
+import com.springairag.api.dto.PdfImportResponse;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -54,7 +56,11 @@ class PdfImportControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
-        assertTrue(response.getBody().toString().contains("uuid=test-uuid"));
+        assertTrue(response.getBody() instanceof PdfImportResponse);
+        PdfImportResponse body = (PdfImportResponse) response.getBody();
+        assertEquals("test-uuid", body.uuid());
+        assertEquals("test-uuid/default.md", body.entryMarkdown());
+        assertEquals(2, body.filesStored());
     }
 
     @Test
