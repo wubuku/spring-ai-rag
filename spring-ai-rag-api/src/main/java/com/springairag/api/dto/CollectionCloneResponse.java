@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Clone collection response
  */
@@ -35,5 +37,33 @@ public record CollectionCloneResponse(
                 sourceId,
                 sourceName,
                 documentsCloned);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof CollectionCloneResponse that
+                && this.documentsCloned == that.documentsCloned
+                && Objects.equals(this.message, that.message)
+                && Objects.equals(this.clonedCollectionId, that.clonedCollectionId)
+                && Objects.equals(this.clonedCollectionName, that.clonedCollectionName)
+                && Objects.equals(this.sourceCollectionId, that.sourceCollectionId)
+                && Objects.equals(this.sourceCollectionName, that.sourceCollectionName);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(message, clonedCollectionId, clonedCollectionName,
+                sourceCollectionId, sourceCollectionName, documentsCloned);
+    }
+
+    @Override
+    public String toString() {
+        return "CollectionCloneResponse{message=" + message
+                + ", clonedCollectionId=" + clonedCollectionId
+                + ", clonedCollectionName=" + clonedCollectionName
+                + ", sourceCollectionId=" + sourceCollectionId
+                + ", sourceCollectionName=" + sourceCollectionName
+                + ", documentsCloned=" + documentsCloned + "}";
     }
 }

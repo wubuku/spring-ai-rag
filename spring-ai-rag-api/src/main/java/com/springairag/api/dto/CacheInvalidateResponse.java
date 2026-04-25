@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Cache invalidation response.
@@ -26,5 +27,23 @@ public record CacheInvalidateResponse(
         int cleared = ((Number) result.getOrDefault("cleared", 0)).intValue();
         String message = (String) result.getOrDefault("message", "");
         return new CacheInvalidateResponse(cleared, message);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof CacheInvalidateResponse that
+                && this.cleared == that.cleared
+                && Objects.equals(this.message, that.message);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(cleared, message);
+    }
+
+    @Override
+    public String toString() {
+        return "CacheInvalidateResponse{cleared=" + cleared + ", message=" + message + "}";
     }
 }

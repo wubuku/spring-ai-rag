@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Cache statistics response.
@@ -29,5 +30,28 @@ public record CacheStatsResponse(
                 (String) stats.getOrDefault("hitRate", "N/A"),
                 stats
         );
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof CacheStatsResponse that
+                && this.hitCount == that.hitCount
+                && this.missCount == that.missCount
+                && this.totalCount == that.totalCount
+                && Objects.equals(this.hitRate, that.hitRate)
+                && Objects.equals(this.details, that.details);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(hitCount, missCount, totalCount, hitRate, details);
+    }
+
+    @Override
+    public String toString() {
+        return "CacheStatsResponse{hitCount=" + hitCount + ", missCount=" + missCount
+                + ", totalCount=" + totalCount + ", hitRate=" + hitRate
+                + ", detailsSize=" + (details == null ? 0 : details.size()) + "}";
     }
 }

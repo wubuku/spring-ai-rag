@@ -3219,4 +3219,231 @@ class DtoTest {
         assertTrue(str.contains("AUTO"));
         assertTrue(str.contains("auto-eval"));
     }
+
+    // ========== ClientErrorCountResponse ==========
+
+    @Test
+    void clientErrorCountResponse_equals_same() {
+        ClientErrorCountResponse r1 = new ClientErrorCountResponse(42L);
+        ClientErrorCountResponse r2 = new ClientErrorCountResponse(42L);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void clientErrorCountResponse_equals_different() {
+        ClientErrorCountResponse r1 = new ClientErrorCountResponse(42L);
+        ClientErrorCountResponse r2 = new ClientErrorCountResponse(99L);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void clientErrorCountResponse_equals_nullAndType() {
+        ClientErrorCountResponse r = new ClientErrorCountResponse(10L);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void clientErrorCountResponse_toString_containsCount() {
+        ClientErrorCountResponse r = new ClientErrorCountResponse(42L);
+        String str = r.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("ClientErrorCountResponse"));
+    }
+
+    // ========== ClearHistoryResponse ==========
+
+    @Test
+    void clearHistoryResponse_equals_same() {
+        ClearHistoryResponse r1 = new ClearHistoryResponse("cleared", "sid1", 5);
+        ClearHistoryResponse r2 = new ClearHistoryResponse("cleared", "sid1", 5);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void clearHistoryResponse_equals_different() {
+        ClearHistoryResponse r1 = new ClearHistoryResponse("msg", "sid", 3);
+        ClearHistoryResponse r2 = new ClearHistoryResponse("msg2", "sid2", 4);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void clearHistoryResponse_equals_nullAndType() {
+        ClearHistoryResponse r = ClearHistoryResponse.of("sid", 2);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void clearHistoryResponse_toString_containsFields() {
+        ClearHistoryResponse r = ClearHistoryResponse.of("session-abc", 7);
+        String str = r.toString();
+        assertTrue(str.contains("session-abc"));
+        assertTrue(str.contains("7"));
+    }
+
+    // ========== CacheInvalidateResponse ==========
+
+    @Test
+    void cacheInvalidateResponse_equals_same() {
+        CacheInvalidateResponse r1 = new CacheInvalidateResponse(5, "Cache invalidated");
+        CacheInvalidateResponse r2 = new CacheInvalidateResponse(5, "Cache invalidated");
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void cacheInvalidateResponse_equals_different() {
+        CacheInvalidateResponse r1 = new CacheInvalidateResponse(5, "msg");
+        CacheInvalidateResponse r2 = new CacheInvalidateResponse(10, "msg2");
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void cacheInvalidateResponse_equals_nullAndType() {
+        CacheInvalidateResponse r = CacheInvalidateResponse.from(3);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void cacheInvalidateResponse_toString_containsFields() {
+        CacheInvalidateResponse r = CacheInvalidateResponse.from(5);
+        String str = r.toString();
+        assertTrue(str.contains("5"));
+        assertTrue(str.contains("CacheInvalidateResponse"));
+    }
+
+    // ========== CacheStatsResponse ==========
+
+    @Test
+    void cacheStatsResponse_equals_same() {
+        CacheStatsResponse r1 = new CacheStatsResponse(10, 5, 15, "66.7%", Map.of());
+        CacheStatsResponse r2 = new CacheStatsResponse(10, 5, 15, "66.7%", Map.of());
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void cacheStatsResponse_equals_different() {
+        CacheStatsResponse r1 = new CacheStatsResponse(10, 5, 15, "66.7%", Map.of());
+        CacheStatsResponse r2 = new CacheStatsResponse(20, 5, 25, "80%", Map.of());
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void cacheStatsResponse_equals_nullAndType() {
+        CacheStatsResponse r = CacheStatsResponse.from(Map.of());
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void cacheStatsResponse_toString_containsFields() {
+        CacheStatsResponse r = CacheStatsResponse.from(Map.of("hitCount", 100L, "missCount", 50L,
+                "totalCount", 150L, "hitRate", "66.7%"));
+        String str = r.toString();
+        assertTrue(str.contains("100"));
+        assertTrue(str.contains("50"));
+        assertTrue(str.contains("66.7%"));
+    }
+
+    // ========== CollectionCloneResponse ==========
+
+    @Test
+    void collectionCloneResponse_equals_same() {
+        CollectionCloneResponse r1 = CollectionCloneResponse.of(1L, "Clone", 2L, "Source", 10);
+        CollectionCloneResponse r2 = CollectionCloneResponse.of(1L, "Clone", 2L, "Source", 10);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void collectionCloneResponse_equals_different() {
+        CollectionCloneResponse r1 = CollectionCloneResponse.of(1L, "A", 2L, "B", 5);
+        CollectionCloneResponse r2 = CollectionCloneResponse.of(99L, "X", 98L, "Y", 50);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void collectionCloneResponse_equals_nullAndType() {
+        CollectionCloneResponse r = CollectionCloneResponse.of(1L, "A", 2L, "B", 3);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void collectionCloneResponse_toString_containsFields() {
+        CollectionCloneResponse r = CollectionCloneResponse.of(5L, "Cloned", 1L, "Source", 20);
+        String str = r.toString();
+        assertTrue(str.contains("Cloned"));
+        assertTrue(str.contains("Source"));
+        assertTrue(str.contains("20"));
+    }
+
+    // ========== CollectionImportResponse ==========
+
+    @Test
+    void collectionImportResponse_equals_same() {
+        CollectionImportResponse r1 = CollectionImportResponse.of(1L, 10, 2);
+        CollectionImportResponse r2 = CollectionImportResponse.of(1L, 10, 2);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void collectionImportResponse_equals_different() {
+        CollectionImportResponse r1 = CollectionImportResponse.of(1L, 5, 1);
+        CollectionImportResponse r2 = CollectionImportResponse.of(2L, 50, 10);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void collectionImportResponse_equals_nullAndType() {
+        CollectionImportResponse r = CollectionImportResponse.of(1L, 5, 2);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void collectionImportResponse_toString_containsFields() {
+        CollectionImportResponse r = CollectionImportResponse.of(3L, 100, 5);
+        String str = r.toString();
+        assertTrue(str.contains("100"));
+        assertTrue(str.contains("5"));
+    }
+
+    // ========== DocumentDeleteResponse ==========
+
+    @Test
+    void documentDeleteResponse_equals_same() {
+        DocumentDeleteResponse r1 = new DocumentDeleteResponse("deleted", 1L, 5L);
+        DocumentDeleteResponse r2 = new DocumentDeleteResponse("deleted", 1L, 5L);
+        assertEquals(r1, r2);
+        assertEquals(r1.hashCode(), r2.hashCode());
+    }
+
+    @Test
+    void documentDeleteResponse_equals_different() {
+        DocumentDeleteResponse r1 = new DocumentDeleteResponse("a", 1L, 5L);
+        DocumentDeleteResponse r2 = new DocumentDeleteResponse("b", 2L, 10L);
+        assertNotEquals(r1, r2);
+    }
+
+    @Test
+    void documentDeleteResponse_equals_nullAndType() {
+        DocumentDeleteResponse r = new DocumentDeleteResponse("del", 1L, 3L);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void documentDeleteResponse_toString_containsFields() {
+        DocumentDeleteResponse r = new DocumentDeleteResponse("deleted", 42L, 7L);
+        String str = r.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("7"));
+    }
 }
