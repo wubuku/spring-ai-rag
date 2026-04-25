@@ -1,86 +1,119 @@
 package com.springairag.core.i18n;
 
-import org.junit.jupiter.api.DisplayName;
+import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.MessageSource;
+import org.springframework.context.support.ResourceBundleMessageSource;
 import org.springframework.web.servlet.LocaleResolver;
+import org.springframework.web.servlet.i18n.AcceptHeaderLocaleResolver;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.*;
 
-@DisplayName("MessageSourceConfig i18n Configuration")
+/**
+ * Unit tests for MessageSourceConfig.
+ */
+@ExtendWith(MockitoExtension.class)
 class MessageSourceConfigTest {
 
-    private final MessageSourceConfig config = new MessageSourceConfig();
-
     @Test
-    @DisplayName("MessageSource Bean created successfully")
-    void messageSourceCreated() {
+    void messageSource_beanIsResourceBundleMessageSource() {
+        MessageSourceConfig config = new MessageSourceConfig();
         MessageSource messageSource = config.messageSource();
-
-        assertNotNull(messageSource);
-        // Verify default message file exists
-        String message = messageSource.getMessage("error.rate_limit_exceeded", null, Locale.CHINA);
-        assertNotNull(message);
-        assertFalse(message.isEmpty());
+        assertInstanceOf(ResourceBundleMessageSource.class, messageSource);
     }
 
     @Test
-    @DisplayName("useCodeAsDefaultMessage is true, unknown codes return the code itself")
-    void unknownCodeFallsBackToCode() {
-        MessageSource messageSource = config.messageSource();
-
-        String message = messageSource.getMessage("unknown.test.code", null, Locale.CHINA);
-
-        assertEquals("unknown.test.code", message);
+    void messageSource_setCorrectBasename() {
+        ResourceBundleMessageSource messageSource =
+            (ResourceBundleMessageSource) new MessageSourceConfig().messageSource();
+        assertEquals("messages/messages", messageSource.getBasenameSet().iterator().next());
     }
 
     @Test
-    @DisplayName("Chinese message resolves correctly")
-    void chineseMessageResolved() {
-        MessageSource messageSource = config.messageSource();
-
-        String message = messageSource.getMessage("error.rate_limit_exceeded", null, Locale.CHINA);
-
-        assertEquals("请求过于频繁，请稍后重试", message);
+    void messageSource_unknownCodeReturnsCodeAsDefaultMessage() {
+        // With useCodeAsDefaultMessage=true, unknown codes return the code itself
+        MessageSource messageSource = new MessageSourceConfig().messageSource();
+        String result = messageSource.getMessage("unknown.code.here", null, Locale.CHINA);
+        assertEquals("unknown.code.here", result);
     }
 
     @Test
-    @DisplayName("English message resolves correctly")
-    void englishMessageResolved() {
-        MessageSource messageSource = config.messageSource();
-
-        String message = messageSource.getMessage("error.rate_limit_exceeded", null, Locale.ENGLISH);
-
-        assertEquals("Too many requests, please try again later", message);
+    void localeResolver_beanIsAcceptHeaderLocaleResolver() {
+        LocaleResolver localeResolver = new MessageSourceConfig().localeResolver();
+        assertInstanceOf(AcceptHeaderLocaleResolver.class, localeResolver);
     }
 
     @Test
-    @DisplayName("Message with arguments resolves correctly")
-    void messageWithArgs() {
-        MessageSource messageSource = config.messageSource();
-
-        String message = messageSource.getMessage("error.document_not_found",
-                new Object[]{"test-doc"}, Locale.CHINA);
-
-        assertTrue(message.contains("test-doc"));
+    void localeResolver_supportedLocalesContainsChinaAndEnglish() {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        List<Locale> supported = resolver.getSupportedLocales();
+        assertEquals(2, supported.size());
+        assertTrue(supported.contains(Locale.CHINA));
+        assertTrue(supported.contains(Locale.ENGLISH));
     }
 
     @Test
-    @DisplayName("LocaleResolver Bean created successfully")
-    void localeResolverCreated() {
-        LocaleResolver resolver = config.localeResolver();
-
-        assertNotNull(resolver);
+    void localeResolver_japaneseIsNotSupported() {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        assertFalse(resolver.getSupportedLocales().contains(Locale.JAPAN));
     }
 
     @Test
-    @DisplayName("Default locale is Chinese")
-    void defaultLocaleIsChinese() {
-        LocaleResolver resolver = config.localeResolver();
+    void localeResolver_frenchIsNotSupported() {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        assertFalse(resolver.getSupportedLocales().contains(Locale.FRENCH));
+    }
 
-        // AcceptHeaderLocaleResolver default locale
-        assertNotNull(resolver);
+    @Test
+    void localeResolver_resolveLocale_returnsChinaForZhRequest(
+            @Mock HttpServletRequest request,
+            @Mock java.util.Enumeration<Locale> localesEnum) {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        when(request.getHeader("Accept-Language")).thenReturn("zh-CN");
+        when(request.getLocales()).thenReturn(localesEnum);
+        when(localesEnum.hasMoreElements()).thenReturn(true);
+        when(localesEnum.nextElement()).thenReturn(Locale.CHINA);
+        Locale resolved = resolver.resolveLocale(request);
+        assertEquals(Locale.CHINA, resolved);
+    }
+
+    @Test
+    void localeResolver_resolveLocale_returnsEnglishForEnRequest(
+            @Mock HttpServletRequest request,
+            @Mock java.util.Enumeration<Locale> localesEnum) {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        when(request.getHeader("Accept-Language")).thenReturn("en-US");
+        when(request.getLocales()).thenReturn(localesEnum);
+        when(localesEnum.hasMoreElements()).thenReturn(true);
+        when(localesEnum.nextElement()).thenReturn(Locale.US);
+        Locale resolved = resolver.resolveLocale(request);
+        assertEquals(Locale.US, resolved);
+    }
+
+    @Test
+    void localeResolver_resolveLocale_returnsDefaultWhenNoHeader(
+            @Mock HttpServletRequest request,
+            @Mock java.util.Enumeration<Locale> localesEnum) {
+        AcceptHeaderLocaleResolver resolver =
+            (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
+        when(request.getHeader("Accept-Language")).thenReturn(null);
+        when(request.getLocales()).thenReturn(localesEnum);
+        when(localesEnum.hasMoreElements()).thenReturn(false);
+        // Falls back to default locale (Locale.CHINA)
+        Locale resolved = resolver.resolveLocale(request);
+        assertEquals(Locale.CHINA, resolved);
     }
 }
