@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Restore collection response
  */
@@ -21,6 +23,22 @@ public record CollectionRestoreResponse(
 ) {
     public static CollectionRestoreResponse of(Long collectionId, String name, Long documentCount) {
         return new CollectionRestoreResponse("Collection restored", collectionId, name, documentCount);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CollectionRestoreResponse that = (CollectionRestoreResponse) o;
+        return Objects.equals(message, that.message)
+                && Objects.equals(collectionId, that.collectionId)
+                && Objects.equals(name, that.name)
+                && Objects.equals(documentCount, that.documentCount);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(message, collectionId, name, documentCount);
     }
 
     @Override

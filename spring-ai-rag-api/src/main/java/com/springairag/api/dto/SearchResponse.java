@@ -4,6 +4,7 @@ import com.springairag.api.dto.RetrievalResult;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Direct search response (GET /search)
@@ -21,6 +22,21 @@ public record SearchResponse(
 ) {
     public static SearchResponse of(List<RetrievalResult> results, String query) {
         return new SearchResponse(results, results.size(), query);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SearchResponse that = (SearchResponse) o;
+        return total == that.total
+                && Objects.equals(results, that.results)
+                && Objects.equals(query, that.query);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(results, total, query);
     }
 
     @Override

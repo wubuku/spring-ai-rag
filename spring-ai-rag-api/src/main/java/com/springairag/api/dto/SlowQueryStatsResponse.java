@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Slow query statistics response.
@@ -37,6 +38,21 @@ public record SlowQueryStatsResponse(
             @Schema(description = "SQL query with sensitive values masked", example = "SELECT * FROM rag_documents WHERE id = ?") String sql
     ) {
         @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            SlowQueryRecordDto that = (SlowQueryRecordDto) o;
+            return timestampMs == that.timestampMs
+                    && durationMs == that.durationMs
+                    && Objects.equals(sql, that.sql);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(timestampMs, durationMs, sql);
+        }
+
+        @Override
         public String toString() {
             return "SlowQueryRecordDto{" +
                     "timestampMs=" + timestampMs +
@@ -44,6 +60,24 @@ public record SlowQueryStatsResponse(
                     ", sql='" + sql + '\'' +
                     '}';
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        SlowQueryStatsResponse that = (SlowQueryStatsResponse) o;
+        return enabled == that.enabled
+                && thresholdMs == that.thresholdMs
+                && totalQueryCount == that.totalQueryCount
+                && slowQueryCount == that.slowQueryCount
+                && averageDurationMs == that.averageDurationMs
+                && Objects.equals(recentSlowQueries, that.recentSlowQueries);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(enabled, thresholdMs, totalQueryCount, slowQueryCount, averageDurationMs, recentSlowQueries);
     }
 
     @Override

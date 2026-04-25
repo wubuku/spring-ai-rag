@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Full document detail response (single document GET endpoint).
@@ -55,6 +56,34 @@ public record DocumentDetailResponse(
         @Schema(description = "Additional metadata")
         Map<String, Object> metadata
 ) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DocumentDetailResponse that = (DocumentDetailResponse) o;
+        return enabled == that.enabled
+                && chunkCount == that.chunkCount
+                && Objects.equals(id, that.id)
+                && Objects.equals(title, that.title)
+                && Objects.equals(source, that.source)
+                && Objects.equals(documentType, that.documentType)
+                && Objects.equals(processingStatus, that.processingStatus)
+                && Objects.equals(createdAt, that.createdAt)
+                && Objects.equals(updatedAt, that.updatedAt)
+                && Objects.equals(size, that.size)
+                && Objects.equals(contentHash, that.contentHash)
+                && Objects.equals(collectionId, that.collectionId)
+                && Objects.equals(collectionName, that.collectionName)
+                && Objects.equals(content, that.content)
+                && Objects.equals(metadata, that.metadata);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, title, source, documentType, processingStatus, createdAt, updatedAt,
+                size, contentHash, enabled, collectionId, collectionName, chunkCount, content, metadata);
+    }
+
     @Override
     public String toString() {
         return "DocumentDetailResponse{" +

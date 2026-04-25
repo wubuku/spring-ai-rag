@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Collection list response
@@ -21,6 +22,22 @@ public record CollectionListResponse(
         @Schema(description = "Page size", example = "10")
         int pageSize
 ) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CollectionListResponse that = (CollectionListResponse) o;
+        return total == that.total
+                && page == that.page
+                && pageSize == that.pageSize
+                && Objects.equals(collections, that.collections);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(collections, total, page, pageSize);
+    }
+
     @Override
     public String toString() {
         return "CollectionListResponse{" +

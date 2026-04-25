@@ -4501,4 +4501,387 @@ class DtoTest {
         assertTrue(str.contains("totalVersions=7"));
         assertTrue(str.contains("page=0"));
     }
+
+    // ========== ComponentHealthResponse equals/hashCode ==========
+
+    @Test
+    void componentHealthResponse_equals_same() {
+        var comp1 = Map.of("db", Map.<String, Object>of("status", "UP"));
+        var comp2 = Map.of("db", Map.<String, Object>of("status", "UP"));
+        var a = new ComponentHealthResponse("UP", "2026-04-25T10:00:00Z", comp1);
+        var b = new ComponentHealthResponse("UP", "2026-04-25T10:00:00Z", comp2);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void componentHealthResponse_equals_different() {
+        var comp1 = Map.of("db", Map.<String, Object>of("status", "UP"));
+        var comp2 = Map.of("db", Map.<String, Object>of("status", "DOWN"));
+        var a = new ComponentHealthResponse("UP", "2026-04-25T10:00:00Z", comp1);
+        var b = new ComponentHealthResponse("DOWN", "2026-04-25T10:00:00Z", comp2);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void componentHealthResponse_equals_nullAndType() {
+        var comp = Map.of("db", Map.<String, Object>of("status", "UP"));
+        var r = new ComponentHealthResponse("UP", "2026-04-25T10:00:00Z", comp);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== SearchResponse equals/hashCode ==========
+
+    @Test
+    void searchResponse_equals_same() {
+        var results = List.<RetrievalResult>of();
+        var a = new SearchResponse(results, 0, "query1");
+        var b = new SearchResponse(results, 0, "query1");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void searchResponse_equals_different() {
+        var a = new SearchResponse(List.of(), 0, "query1");
+        var b = new SearchResponse(List.of(), 10, "query2");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void searchResponse_equals_nullAndType() {
+        var r = new SearchResponse(List.of(), 5, "test");
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== HealthResponse equals/hashCode ==========
+
+    @Test
+    void healthResponse_equals_same() {
+        var comp1 = Map.of("db", "UP");
+        var comp2 = Map.of("db", "UP");
+        var a = new HealthResponse("UP", "2026-04-25T10:00:00Z", comp1);
+        var b = new HealthResponse("UP", "2026-04-25T10:00:00Z", comp2);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void healthResponse_equals_different() {
+        var a = new HealthResponse("UP", "2026-04-25T10:00:00Z", Map.of("db", "UP"));
+        var b = new HealthResponse("DOWN", "2026-04-25T10:00:00Z", Map.of("db", "DOWN"));
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void healthResponse_equals_nullAndType() {
+        var r = new HealthResponse("UP", "2026-04-25T10:00:00Z", Map.of("db", "UP"));
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== CollectionRestoreResponse equals/hashCode ==========
+
+    @Test
+    void collectionRestoreResponse_equals_same() {
+        var a = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
+        var b = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionRestoreResponse_equals_different() {
+        var a = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
+        var b = new CollectionRestoreResponse("Restored", 2L, "Other", 20L);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionRestoreResponse_equals_nullAndType() {
+        var r = CollectionRestoreResponse.of(1L, "Coll", 5L);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void collectionRestoreResponse_toString_containsFields() {
+        var r = CollectionRestoreResponse.of(1L, "My Coll", 10L);
+        String str = r.toString();
+        assertTrue(str.contains("collectionId=1"));
+        assertTrue(str.contains("My Coll"));
+        assertTrue(str.contains("documentCount=10"));
+    }
+
+    // ========== CollectionListResponse equals/hashCode ==========
+
+    @Test
+    void collectionListResponse_equals_same() {
+        var a = new CollectionListResponse(List.of(), 5, 0, 10);
+        var b = new CollectionListResponse(List.of(), 5, 0, 10);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionListResponse_equals_different() {
+        var a = new CollectionListResponse(List.of(), 5, 0, 10);
+        var b = new CollectionListResponse(List.of(), 10, 1, 20);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionListResponse_equals_nullAndType() {
+        var r = new CollectionListResponse(List.of(), 5, 0, 10);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void collectionListResponse_toString_containsFields() {
+        var r = new CollectionListResponse(List.of(), 5, 0, 10);
+        String str = r.toString();
+        assertTrue(str.contains("total=5"));
+        assertTrue(str.contains("page=0"));
+        assertTrue(str.contains("pageSize=10"));
+    }
+
+    // ========== DocumentListResponse equals/hashCode ==========
+
+    @Test
+    void documentListResponse_equals_same() {
+        var a = new DocumentListResponse(List.of(), 5, 0, 20);
+        var b = new DocumentListResponse(List.of(), 5, 0, 20);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentListResponse_equals_different() {
+        var a = new DocumentListResponse(List.of(), 5, 0, 20);
+        var b = new DocumentListResponse(List.of(), 10, 5, 50);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentListResponse_equals_nullAndType() {
+        var r = new DocumentListResponse(List.of(), 5, 0, 20);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void documentListResponse_toString_containsFields() {
+        var r = new DocumentListResponse(List.of(), 5, 0, 20);
+        String str = r.toString();
+        assertTrue(str.contains("total=5"));
+        assertTrue(str.contains("offset=0"));
+        assertTrue(str.contains("limit=20"));
+    }
+
+    // ========== CollectionExportResponse equals/hashCode ==========
+
+    @Test
+    void collectionExportResponse_equals_same() {
+        var doc1 = new CollectionExportResponse.ExportedDocumentSummary("Title", "https://x.pdf", "Content", "PDF", Map.of(), 1024L);
+        var doc2 = new CollectionExportResponse.ExportedDocumentSummary("Title", "https://x.pdf", "Content", "PDF", Map.of(), 1024L);
+        var a = new CollectionExportResponse("KB", "desc", "bge-m3", 1024, true, Map.of(), List.of(doc1), null, 1);
+        var b = new CollectionExportResponse("KB", "desc", "bge-m3", 1024, true, Map.of(), List.of(doc2), null, 1);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionExportResponse_equals_different() {
+        var a = new CollectionExportResponse("KB1", "desc", "bge-m3", 1024, true, Map.of(), List.of(), null, 0);
+        var b = new CollectionExportResponse("KB2", "desc2", "bge-m3", 1024, false, Map.of(), List.of(), null, 0);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionExportResponse_equals_nullAndType() {
+        var r = new CollectionExportResponse("KB", "desc", "bge-m3", 1024, true, Map.of(), List.of(), null, 0);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== ExportedDocumentSummary equals/hashCode ==========
+
+    @Test
+    void exportedDocumentSummary_equals_same() {
+        var a = new CollectionExportResponse.ExportedDocumentSummary("Title", "https://x.pdf", "Content", "PDF", Map.of(), 1024L);
+        var b = new CollectionExportResponse.ExportedDocumentSummary("Title", "https://x.pdf", "Content", "PDF", Map.of(), 1024L);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void exportedDocumentSummary_equals_different() {
+        var a = new CollectionExportResponse.ExportedDocumentSummary("Title1", "https://a.pdf", "Content1", "PDF", Map.of(), 1024L);
+        var b = new CollectionExportResponse.ExportedDocumentSummary("Title2", "https://b.pdf", "Content2", "TXT", Map.of(), 2048L);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void exportedDocumentSummary_equals_nullAndType() {
+        var d = new CollectionExportResponse.ExportedDocumentSummary("Title", "https://x.pdf", "Content", "PDF", Map.of(), 1024L);
+        assertNotEquals(d, null);
+        assertNotEquals(d, "string");
+    }
+
+    // ========== CollectionResponse equals/hashCode ==========
+
+    @Test
+    void collectionResponse_equals_same() {
+        var a = new CollectionResponse(1L, "KB", "desc", "bge-m3", 1024, true, Map.of(), null, null, 10);
+        var b = new CollectionResponse(1L, "KB", "desc", "bge-m3", 1024, true, Map.of(), null, null, 10);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionResponse_equals_different() {
+        var a = new CollectionResponse(1L, "KB", "desc", "bge-m3", 1024, true, Map.of(), null, null, 10);
+        var b = new CollectionResponse(2L, "Other", "desc2", "bge-m3", 1024, false, Map.of(), null, null, 20);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionResponse_equals_nullAndType() {
+        var r = new CollectionResponse(1L, "KB", "desc", "bge-m3", 1024, true, Map.of(), null, null, 10);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void collectionResponse_toString_containsFields() {
+        var r = new CollectionResponse(1L, "KB", "desc", "bge-m3", 1024, true, Map.of(), null, null, 10);
+        String str = r.toString();
+        assertTrue(str.contains("name='KB'"));
+        assertTrue(str.contains("dimensions=1024"));
+        assertTrue(str.contains("documentCount=10"));
+    }
+
+    // ========== DocumentDetailResponse equals/hashCode ==========
+
+    @Test
+    void documentDetailResponse_equals_same() {
+        var a = new DocumentDetailResponse(1L, "Title", "https://x.pdf", "PDF", "COMPLETED",
+                null, null, 1024L, "hash", true, 1L, "KB", 5, "content", Map.of());
+        var b = new DocumentDetailResponse(1L, "Title", "https://x.pdf", "PDF", "COMPLETED",
+                null, null, 1024L, "hash", true, 1L, "KB", 5, "content", Map.of());
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentDetailResponse_equals_different() {
+        var a = new DocumentDetailResponse(1L, "Title", "https://x.pdf", "PDF", "COMPLETED",
+                null, null, 1024L, "hash", true, 1L, "KB", 5, "content", Map.of());
+        var b = new DocumentDetailResponse(2L, "Other", "https://y.pdf", "TXT", "PENDING",
+                null, null, 2048L, "hash2", false, 2L, "Other", 10, "other", Map.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentDetailResponse_equals_nullAndType() {
+        var r = new DocumentDetailResponse(1L, "Title", "https://x.pdf", "PDF", "COMPLETED",
+                null, null, 1024L, "hash", true, 1L, "KB", 5, "content", Map.of());
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== DocumentVersionResponse equals/hashCode ==========
+
+    @Test
+    void documentVersionResponse_equals_same() {
+        var a = new DocumentVersionResponse(1L, 42L, 3, "hash1", 1024L, "UPDATED", "desc", null, null);
+        var b = new DocumentVersionResponse(1L, 42L, 3, "hash1", 1024L, "UPDATED", "desc", null, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentVersionResponse_equals_different() {
+        var a = new DocumentVersionResponse(1L, 42L, 3, "hash1", 1024L, "UPDATED", "desc", null, null);
+        var b = new DocumentVersionResponse(2L, 42L, 4, "hash2", 2048L, "DELETED", "desc2", null, null);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentVersionResponse_equals_nullAndType() {
+        var r = new DocumentVersionResponse(1L, 42L, 3, "hash1", 1024L, "UPDATED", "desc", null, null);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    // ========== SlowQueryStatsResponse equals/hashCode ==========
+
+    @Test
+    void slowQueryStatsResponse_equals_same() {
+        var rec1 = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        var rec2 = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        var a = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, List.of(rec1));
+        var b = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, List.of(rec2));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void slowQueryStatsResponse_equals_different() {
+        var a = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, List.of());
+        var b = new SlowQueryStatsResponse(false, 2000L, 1000L, 10L, 90L, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void slowQueryStatsResponse_equals_nullAndType() {
+        var r = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, List.of());
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void slowQueryStatsResponse_toString_containsFields() {
+        var r = new SlowQueryStatsResponse(true, 1000L, 500L, 5L, 45L, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("enabled=true"));
+        assertTrue(str.contains("thresholdMs=1000"));
+        assertTrue(str.contains("slowQueryCount=5"));
+    }
+
+    // ========== SlowQueryRecordDto equals/hashCode ==========
+
+    @Test
+    void slowQueryRecordDto_equals_same() {
+        var a = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        var b = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void slowQueryRecordDto_equals_different() {
+        var a = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM a");
+        var b = new SlowQueryStatsResponse.SlowQueryRecordDto(2000L, 2500L, "SELECT * FROM b");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void slowQueryRecordDto_equals_nullAndType() {
+        var r = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void slowQueryRecordDto_toString_containsFields() {
+        var r = new SlowQueryStatsResponse.SlowQueryRecordDto(1000L, 1500L, "SELECT * FROM t");
+        String str = r.toString();
+        assertTrue(str.contains("timestampMs=1000"));
+        assertTrue(str.contains("durationMs=1500"));
+        assertTrue(str.contains("SELECT * FROM t"));
+    }
 }

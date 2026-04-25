@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Export collection response
@@ -62,6 +63,24 @@ public record CollectionExportResponse(
             Long size
     ) {
         @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            ExportedDocumentSummary that = (ExportedDocumentSummary) o;
+            return Objects.equals(title, that.title)
+                    && Objects.equals(source, that.source)
+                    && Objects.equals(content, that.content)
+                    && Objects.equals(documentType, that.documentType)
+                    && Objects.equals(metadata, that.metadata)
+                    && Objects.equals(size, that.size);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(title, source, content, documentType, metadata, size);
+        }
+
+        @Override
         public String toString() {
             return "ExportedDocumentSummary{" +
                     "title='" + title + "'" +
@@ -72,6 +91,27 @@ public record CollectionExportResponse(
                     ", size=" + size +
                     '}';
         }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CollectionExportResponse that = (CollectionExportResponse) o;
+        return enabled == that.enabled
+                && Objects.equals(name, that.name)
+                && Objects.equals(description, that.description)
+                && Objects.equals(embeddingModel, that.embeddingModel)
+                && Objects.equals(dimensions, that.dimensions)
+                && Objects.equals(metadata, that.metadata)
+                && Objects.equals(documents, that.documents)
+                && Objects.equals(exportedAt, that.exportedAt)
+                && documentCount == that.documentCount;
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(name, description, embeddingModel, dimensions, enabled, metadata, documents, exportedAt, documentCount);
     }
 
     @Override

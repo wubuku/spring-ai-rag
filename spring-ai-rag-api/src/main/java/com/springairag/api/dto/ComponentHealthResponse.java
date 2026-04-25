@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Component detailed health check response.
@@ -21,5 +22,20 @@ public record ComponentHealthResponse(
     public static ComponentHealthResponse of(String status,
             Map<String, Map<String, Object>> components) {
         return new ComponentHealthResponse(status, Instant.now().toString(), components);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ComponentHealthResponse that = (ComponentHealthResponse) o;
+        return Objects.equals(status, that.status)
+                && Objects.equals(timestamp, that.timestamp)
+                && Objects.equals(components, that.components);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(status, timestamp, components);
     }
 }

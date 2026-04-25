@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Health check response.
@@ -20,6 +21,21 @@ public record HealthResponse(
 ) {
     public static HealthResponse of(String status, Map<String, String> components) {
         return new HealthResponse(status, Instant.now().toString(), components);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        HealthResponse that = (HealthResponse) o;
+        return Objects.equals(status, that.status)
+                && Objects.equals(timestamp, that.timestamp)
+                && Objects.equals(components, that.components);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(status, timestamp, components);
     }
 
     @Override
