@@ -5,6 +5,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Multi-model Configuration Properties.
@@ -81,6 +82,34 @@ public class MultiModelProperties {
 
     public void setEmbeddingModel(ModelRouting embeddingModel) {
         this.embeddingModel = embeddingModel;
+    }
+
+    // ─── equals / hashCode / toString ─────────────────────────────────
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        MultiModelProperties that = (MultiModelProperties) o;
+        return Objects.equals(configFile, that.configFile)
+                && Objects.equals(providers, that.providers)
+                && Objects.equals(chatModel, that.chatModel)
+                && Objects.equals(embeddingModel, that.embeddingModel);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(configFile, providers, chatModel, embeddingModel);
+    }
+
+    @Override
+    public String toString() {
+        return "MultiModelProperties{" +
+                "configFile='" + configFile + '\'' +
+                ", providers=" + providers +
+                ", chatModel=" + chatModel +
+                ", embeddingModel=" + embeddingModel +
+                '}';
     }
 
     // ─── Helper Methods ─────────────────────────────────────────────
