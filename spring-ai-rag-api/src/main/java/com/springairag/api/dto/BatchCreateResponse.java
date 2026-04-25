@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Batch document creation response (unified response format)
@@ -34,5 +35,57 @@ public record BatchCreateResponse(
 
             @Schema(description = "Error message (on failure)")
             String error
-    ) {}
+    ) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DocumentResult that = (DocumentResult) o;
+            return newlyCreated == that.newlyCreated &&
+                    Objects.equals(documentId, that.documentId) &&
+                    Objects.equals(title, that.title) &&
+                    Objects.equals(error, that.error);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(documentId, title, newlyCreated, error);
+        }
+
+        @Override
+        public String toString() {
+            return "DocumentResult{" +
+                    "documentId=" + documentId +
+                    ", title='" + title + '\'' +
+                    ", newlyCreated=" + newlyCreated +
+                    ", error='" + error + '\'' +
+                    '}';
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BatchCreateResponse that = (BatchCreateResponse) o;
+        return created == that.created &&
+                skipped == that.skipped &&
+                failed == that.failed &&
+                Objects.equals(results, that.results);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(created, skipped, failed, results);
+    }
+
+    @Override
+    public String toString() {
+        return "BatchCreateResponse{" +
+                "created=" + created +
+                ", skipped=" + skipped +
+                ", failed=" + failed +
+                ", resultsSize=" + (results != null ? results.size() : 0) +
+                '}';
+    }
 }

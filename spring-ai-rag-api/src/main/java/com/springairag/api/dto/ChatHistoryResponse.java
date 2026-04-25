@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Chat history record returned by GET /chat/history/{sessionId}.
@@ -44,5 +45,24 @@ public record ChatHistoryResponse(
                 ", metadata=" + metadata +
                 ", createdAt=" + createdAt +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        ChatHistoryResponse that = (ChatHistoryResponse) o;
+        return Objects.equals(id, that.id) &&
+                Objects.equals(sessionId, that.sessionId) &&
+                Objects.equals(userMessage, that.userMessage) &&
+                Objects.equals(aiResponse, that.aiResponse) &&
+                Objects.equals(relatedDocumentIds, that.relatedDocumentIds) &&
+                Objects.equals(metadata, that.metadata) &&
+                Objects.equals(createdAt, that.createdAt);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, sessionId, userMessage, aiResponse, relatedDocumentIds, metadata, createdAt);
     }
 }

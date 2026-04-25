@@ -2,6 +2,8 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.util.Objects;
+
 /**
  * Create collection response
  */
@@ -27,5 +29,20 @@ public record CollectionCreatedResponse(
                 ", collectionId=" + collectionId +
                 ", name='" + name + '\'' +
                 '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        CollectionCreatedResponse that = (CollectionCreatedResponse) o;
+        return Objects.equals(message, that.message) &&
+                Objects.equals(collectionId, that.collectionId) &&
+                Objects.equals(name, that.name);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(message, collectionId, name);
     }
 }

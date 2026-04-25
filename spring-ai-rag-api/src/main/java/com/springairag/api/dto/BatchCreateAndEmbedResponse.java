@@ -3,7 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Objects;
 
 /**
  * Batch create and embed documents response
@@ -41,5 +41,61 @@ public record BatchCreateAndEmbedResponse(
 
             @Schema(description = "Error message (on failure)")
             String error
-    ) {}
+    ) {
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DocumentResult that = (DocumentResult) o;
+            return embedded == that.embedded &&
+                    chunks == that.chunks &&
+                    Objects.equals(documentId, that.documentId) &&
+                    Objects.equals(title, that.title) &&
+                    Objects.equals(error, that.error);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(documentId, title, embedded, chunks, error);
+        }
+
+        @Override
+        public String toString() {
+            return "DocumentResult{" +
+                    "documentId=" + documentId +
+                    ", title='" + title + '\'' +
+                    ", embedded=" + embedded +
+                    ", chunks=" + chunks +
+                    ", error='" + error + '\'' +
+                    '}';
+        }
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        BatchCreateAndEmbedResponse that = (BatchCreateAndEmbedResponse) o;
+        return created == that.created &&
+                embedded == that.embedded &&
+                skipped == that.skipped &&
+                failed == that.failed &&
+                Objects.equals(results, that.results);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(created, embedded, skipped, failed, results);
+    }
+
+    @Override
+    public String toString() {
+        return "BatchCreateAndEmbedResponse{" +
+                "created=" + created +
+                ", embedded=" + embedded +
+                ", skipped=" + skipped +
+                ", failed=" + failed +
+                ", resultsSize=" + (results != null ? results.size() : 0) +
+                '}';
+    }
 }

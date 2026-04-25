@@ -3778,4 +3778,298 @@ class DtoTest {
         assertTrue(str.contains("42"));
         assertTrue(str.contains("1 entries"));
     }
+
+    // ========== ApiSloComplianceResponse equals/hashCode/toString ==========
+
+    @Test
+    void apiSloComplianceResponse_equals_sameFields() {
+        var stats = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var endpoint = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 98.0, 100, 98, 2, stats);
+        var a = new ApiSloComplianceResponse(true, 300, List.of(endpoint));
+        var b = new ApiSloComplianceResponse(true, 300, List.of(endpoint));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void apiSloComplianceResponse_equals_differentWindow() {
+        var a = new ApiSloComplianceResponse(true, 300, List.of());
+        var b = new ApiSloComplianceResponse(true, 600, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void apiSloComplianceResponse_equals_nullEndpoints() {
+        var a = new ApiSloComplianceResponse(false, 300, null);
+        var b = new ApiSloComplianceResponse(false, 300, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void apiSloComplianceResponse_equals_nullTypeCheck() {
+        var r = new ApiSloComplianceResponse(true, 300, List.of());
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void apiSloComplianceResponse_toString() {
+        var r = new ApiSloComplianceResponse(true, 300, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("enabled=true"));
+        assertTrue(str.contains("windowSeconds=300"));
+    }
+
+    @Test
+    void endpointSlo_equals_sameFields() {
+        var stats = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var a = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 98.0, 100, 98, 2, stats);
+        var b = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 98.0, 100, 98, 2, stats);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void endpointSlo_equals_differentCompliancePercent() {
+        var stats = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var a = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 98.0, 100, 98, 2, stats);
+        var b = new ApiSloComplianceResponse.EndpointSlo("rag.search.post", "GET", 500L, 99.0, 100, 99, 1, stats);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void latencyStats_equals_sameFields() {
+        var a = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var b = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void latencyStats_equals_differentP99() {
+        var a = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.0, 10.0, 200.0, 88.8);
+        var b = new ApiSloComplianceResponse.LatencyStats(50.0, 95.0, 99.5, 10.0, 200.0, 88.8);
+        assertNotEquals(a, b);
+    }
+
+    // ========== BatchCreateAndEmbedResponse equals/hashCode/toString ==========
+
+    @Test
+    void batchCreateAndEmbedResponse_equals_sameFields() {
+        var item = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        var a = new BatchCreateAndEmbedResponse(10, 8, 2, 0, List.of(item));
+        var b = new BatchCreateAndEmbedResponse(10, 8, 2, 0, List.of(item));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_equals_differentResults() {
+        var item = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        var a = new BatchCreateAndEmbedResponse(10, 8, 2, 0, List.of(item));
+        var b = new BatchCreateAndEmbedResponse(10, 8, 2, 1, List.of(item));
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_equals_nullResults() {
+        var a = new BatchCreateAndEmbedResponse(10, 8, 2, 0, null);
+        var b = new BatchCreateAndEmbedResponse(10, 8, 2, 0, null);
+        assertEquals(a, b);
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_toString() {
+        var item = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        var r = new BatchCreateAndEmbedResponse(10, 8, 2, 0, List.of(item));
+        String str = r.toString();
+        assertTrue(str.contains("created=10"));
+        assertTrue(str.contains("resultsSize=1"));
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_documentResult_equals_sameFields() {
+        var a = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        var b = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchCreateAndEmbedResponse_documentResult_equals_differentError() {
+        var a = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, "error1");
+        var b = new BatchCreateAndEmbedResponse.DocumentResult(1L, "Doc", true, 5, "error2");
+        assertNotEquals(a, b);
+    }
+
+    // ========== BatchCreateResponse equals/hashCode/toString ==========
+
+    @Test
+    void batchCreateResponse_equals_sameFields() {
+        var doc = new BatchCreateResponse.DocumentResult(1L, "Doc", true, null);
+        var a = new BatchCreateResponse(10, 2, 0, List.of(doc));
+        var b = new BatchCreateResponse(10, 2, 0, List.of(doc));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchCreateResponse_equals_differentSkipped() {
+        var a = new BatchCreateResponse(10, 2, 0, List.of());
+        var b = new BatchCreateResponse(10, 3, 0, List.of());
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchCreateResponse_toString() {
+        var r = new BatchCreateResponse(10, 2, 0, List.of());
+        String str = r.toString();
+        assertTrue(str.contains("created=10"));
+        assertTrue(str.contains("resultsSize=0"));
+    }
+
+    @Test
+    void batchCreateResponse_documentResult_equals_sameFields() {
+        var a = new BatchCreateResponse.DocumentResult(1L, "Doc", true, null);
+        var b = new BatchCreateResponse.DocumentResult(1L, "Doc", true, null);
+        assertEquals(a, b);
+    }
+
+    @Test
+    void batchCreateResponse_documentResult_equals_differentNewlyCreated() {
+        var a = new BatchCreateResponse.DocumentResult(1L, "Doc", true, null);
+        var b = new BatchCreateResponse.DocumentResult(1L, "Doc", false, null);
+        assertNotEquals(a, b);
+    }
+
+    // ========== BatchEmbedResponse equals/hashCode/toString ==========
+
+    @Test
+    void batchEmbedResponse_equals_sameFields() {
+        var summary = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+        var a = new BatchEmbedResponse(List.of(), summary);
+        var b = new BatchEmbedResponse(List.of(), summary);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchEmbedResponse_equals_differentSummary() {
+        var a = new BatchEmbedResponse(List.of(), new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2));
+        var b = new BatchEmbedResponse(List.of(), new BatchEmbedResponse.BatchEmbedSummary(5, 2, 1, 1, 1));
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void batchEmbedResponse_toString() {
+        var summary = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+        var r = new BatchEmbedResponse(List.of(), summary);
+        assertTrue(r.toString().contains("summary="));
+    }
+
+    @Test
+    void batchEmbedResultItem_equals_sameFields() {
+        var a = new BatchEmbedResponse.BatchEmbedResultItem(1L, "COMPLETED", 5, 5, null, null);
+        var b = new BatchEmbedResponse.BatchEmbedResultItem(1L, "COMPLETED", 5, 5, null, null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchEmbedResultItem_equals_nullIntegers() {
+        var a = new BatchEmbedResponse.BatchEmbedResultItem(1L, "SKIPPED", null, null, null, "empty");
+        var b = new BatchEmbedResponse.BatchEmbedResultItem(1L, "SKIPPED", null, null, null, "empty");
+        assertEquals(a, b);
+    }
+
+    @Test
+    void batchEmbedSummary_equals_sameFields() {
+        var a = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+        var b = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void batchEmbedSummary_equals_differentTotal() {
+        var a = new BatchEmbedResponse.BatchEmbedSummary(5, 1, 1, 1, 2);
+        var b = new BatchEmbedResponse.BatchEmbedSummary(6, 1, 1, 1, 3);
+        assertNotEquals(a, b);
+    }
+
+    // ========== ChatHistoryResponse equals/hashCode/toString ==========
+
+    @Test
+    void chatHistoryResponse_equals_sameFields() {
+        var a = new ChatHistoryResponse(1L, "session-abc", "User", "AI", List.of(1L, 2L), Map.of(), null);
+        var b = new ChatHistoryResponse(1L, "session-abc", "User", "AI", List.of(1L, 2L), Map.of(), null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void chatHistoryResponse_equals_differentSessionId() {
+        var a = new ChatHistoryResponse(1L, "session-abc", "User", "AI", null, null, null);
+        var b = new ChatHistoryResponse(1L, "session-xyz", "User", "AI", null, null, null);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void chatHistoryResponse_toString_containsKeyFields() {
+        var r = new ChatHistoryResponse(1L, "session-abc", "User", "AI response text", null, null, null);
+        String str = r.toString();
+        assertTrue(str.contains("session-abc"));
+        assertTrue(str.contains("aiResponseLength=16"));
+    }
+
+    // ========== CollectionCreatedResponse equals/hashCode/toString ==========
+
+    @Test
+    void collectionCreatedResponse_equals_sameFields() {
+        var a = CollectionCreatedResponse.of(1L, "My Collection");
+        var b = CollectionCreatedResponse.of(1L, "My Collection");
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionCreatedResponse_equals_differentName() {
+        var a = CollectionCreatedResponse.of(1L, "Collection A");
+        var b = CollectionCreatedResponse.of(1L, "Collection B");
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionCreatedResponse_toString() {
+        var r = CollectionCreatedResponse.of(1L, "My Collection");
+        String str = r.toString();
+        assertTrue(str.contains("Collection created"));
+        assertTrue(str.contains("collectionId=1"));
+    }
+
+    // ========== CollectionDeleteResponse equals/hashCode/toString ==========
+
+    @Test
+    void collectionDeleteResponse_equals_sameFields() {
+        var a = CollectionDeleteResponse.of(1L, 5);
+        var b = CollectionDeleteResponse.of(1L, 5);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void collectionDeleteResponse_equals_differentUnlinked() {
+        var a = CollectionDeleteResponse.of(1L, 5);
+        var b = CollectionDeleteResponse.of(1L, 10);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void collectionDeleteResponse_toString() {
+        var r = CollectionDeleteResponse.of(1L, 5);
+        String str = r.toString();
+        assertTrue(str.contains("Collection deleted"));
+        assertTrue(str.contains("documentsUnlinked=5"));
+    }
 }
