@@ -19,4 +19,13 @@ public record CollectionCreatedResponse(
     public static CollectionCreatedResponse of(Long collectionId, String name) {
         return new CollectionCreatedResponse("Collection created", collectionId, name);
     }
+
+    @Override
+    public String toString() {
+        return "CollectionCreatedResponse{" +
+                "message='" + message + '\'' +
+                ", collectionId=" + collectionId +
+                ", name='" + name + '\'' +
+                '}';
+    }
 }

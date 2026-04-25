@@ -22,4 +22,14 @@ public record CollectionRestoreResponse(
     public static CollectionRestoreResponse of(Long collectionId, String name, Long documentCount) {
         return new CollectionRestoreResponse("Collection restored", collectionId, name, documentCount);
     }
+
+    @Override
+    public String toString() {
+        return "CollectionRestoreResponse{" +
+                "message='" + message + '\'' +
+                ", collectionId=" + collectionId +
+                ", name='" + name + '\'' +
+                ", documentCount=" + documentCount +
+                '}';
+    }
 }

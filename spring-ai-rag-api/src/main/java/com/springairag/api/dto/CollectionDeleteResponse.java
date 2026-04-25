@@ -19,4 +19,13 @@ public record CollectionDeleteResponse(
     public static CollectionDeleteResponse of(Long id, long documentsUnlinked) {
         return new CollectionDeleteResponse("Collection deleted", id, documentsUnlinked);
     }
+
+    @Override
+    public String toString() {
+        return "CollectionDeleteResponse{" +
+                "message='" + message + '\'' +
+                ", id=" + id +
+                ", documentsUnlinked=" + documentsUnlinked +
+                '}';
+    }
 }

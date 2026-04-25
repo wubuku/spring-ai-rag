@@ -21,4 +21,13 @@ public record CollectionListResponse(
         @Schema(description = "Page size", example = "10")
         int pageSize
 ) {
+    @Override
+    public String toString() {
+        return "CollectionListResponse{" +
+                "collections=" + (collections != null ? collections.size() + " collection(s)" : "null") +
+                ", total=" + total +
+                ", page=" + page +
+                ", pageSize=" + pageSize +
+                '}';
+    }
 }

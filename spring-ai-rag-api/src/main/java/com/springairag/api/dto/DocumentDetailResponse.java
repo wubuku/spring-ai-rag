@@ -55,4 +55,24 @@ public record DocumentDetailResponse(
         @Schema(description = "Additional metadata")
         Map<String, Object> metadata
 ) {
+    @Override
+    public String toString() {
+        return "DocumentDetailResponse{" +
+                "id=" + id +
+                ", title='" + title + '\'' +
+                ", source='" + source + '\'' +
+                ", documentType='" + documentType + '\'' +
+                ", processingStatus='" + processingStatus + '\'' +
+                ", createdAt=" + createdAt +
+                ", updatedAt=" + updatedAt +
+                ", size=" + size +
+                ", contentHash='" + contentHash + '\'' +
+                ", enabled=" + enabled +
+                ", collectionId=" + collectionId +
+                ", collectionName='" + collectionName + '\'' +
+                ", chunkCount=" + chunkCount +
+                ", contentLength=" + (content != null ? content.length() : 0) +
+                ", metadata=" + metadata +
+                '}';
+    }
 }

@@ -21,4 +21,13 @@ public record DocumentListResponse(
         @Schema(description = "Page size limit", example = "20")
         int limit
 ) {
+    @Override
+    public String toString() {
+        return "DocumentListResponse{" +
+                "documents=" + (documents != null ? documents.size() + " document(s)" : "null") +
+                ", total=" + total +
+                ", offset=" + offset +
+                ", limit=" + limit +
+                '}';
+    }
 }

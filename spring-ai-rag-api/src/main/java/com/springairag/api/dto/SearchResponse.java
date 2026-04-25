@@ -22,4 +22,13 @@ public record SearchResponse(
     public static SearchResponse of(List<RetrievalResult> results, String query) {
         return new SearchResponse(results, results.size(), query);
     }
+
+    @Override
+    public String toString() {
+        return "SearchResponse{" +
+                "results=" + (results != null ? results.size() + " result(s)" : "null") +
+                ", total=" + total +
+                ", query='" + query + '\'' +
+                '}';
+    }
 }

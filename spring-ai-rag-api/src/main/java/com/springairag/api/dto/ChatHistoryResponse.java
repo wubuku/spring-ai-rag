@@ -32,4 +32,17 @@ public record ChatHistoryResponse(
 
         @Schema(description = "Timestamp when this message pair was recorded.", example = "2026-04-12T10:00:00")
         LocalDateTime createdAt
-) {}
+) {
+    @Override
+    public String toString() {
+        return "ChatHistoryResponse{" +
+                "id=" + id +
+                ", sessionId='" + sessionId + '\'' +
+                ", userMessage='" + userMessage + '\'' +
+                ", aiResponseLength=" + (aiResponse != null ? aiResponse.length() : 0) +
+                ", relatedDocumentIds=" + relatedDocumentIds +
+                ", metadata=" + metadata +
+                ", createdAt=" + createdAt +
+                '}';
+    }
+}

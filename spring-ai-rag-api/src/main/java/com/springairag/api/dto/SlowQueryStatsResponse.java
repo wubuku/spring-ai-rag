@@ -35,5 +35,26 @@ public record SlowQueryStatsResponse(
             @Schema(description = "Epoch timestamp in milliseconds", example = "1712899200000") long timestampMs,
             @Schema(description = "Query duration in milliseconds", example = "1523") long durationMs,
             @Schema(description = "SQL query with sensitive values masked", example = "SELECT * FROM rag_documents WHERE id = ?") String sql
-    ) {}
+    ) {
+        @Override
+        public String toString() {
+            return "SlowQueryRecordDto{" +
+                    "timestampMs=" + timestampMs +
+                    ", durationMs=" + durationMs +
+                    ", sql='" + sql + '\'' +
+                    '}';
+        }
+    }
+
+    @Override
+    public String toString() {
+        return "SlowQueryStatsResponse{" +
+                "enabled=" + enabled +
+                ", thresholdMs=" + thresholdMs +
+                ", totalQueryCount=" + totalQueryCount +
+                ", slowQueryCount=" + slowQueryCount +
+                ", averageDurationMs=" + averageDurationMs +
+                ", recentSlowQueries=" + (recentSlowQueries != null ? recentSlowQueries.size() + " query(ies)" : "null") +
+                '}';
+    }
 }

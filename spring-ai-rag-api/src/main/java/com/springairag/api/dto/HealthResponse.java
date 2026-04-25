@@ -21,4 +21,13 @@ public record HealthResponse(
     public static HealthResponse of(String status, Map<String, String> components) {
         return new HealthResponse(status, Instant.now().toString(), components);
     }
+
+    @Override
+    public String toString() {
+        return "HealthResponse{" +
+                "status='" + status + '\'' +
+                ", timestamp='" + timestamp + '\'' +
+                ", components=" + components +
+                '}';
+    }
 }
