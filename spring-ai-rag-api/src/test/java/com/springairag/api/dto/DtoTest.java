@@ -3648,4 +3648,134 @@ class DtoTest {
         assertTrue(str.contains("4"));
         assertTrue(str.contains("1"));
     }
+
+    // ========== EmbeddingStatusResponse ==========
+
+    @Test
+    void embeddingStatusResponse_equals_sameFields() {
+        var a = new EmbeddingStatusResponse(42, 35, 7, true);
+        var b = new EmbeddingStatusResponse(42, 35, 7, true);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void embeddingStatusResponse_equals_differentFields() {
+        var a = new EmbeddingStatusResponse(42, 35, 7, true);
+        var b = new EmbeddingStatusResponse(100, 35, 7, true);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void embeddingStatusResponse_equals_nullAndType() {
+        var r = new EmbeddingStatusResponse(10, 8, 2, false);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void embeddingStatusResponse_toString_containsFields() {
+        var r = new EmbeddingStatusResponse(42, 35, 7, true);
+        String str = r.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("35"));
+        assertTrue(str.contains("7"));
+        assertTrue(str.contains("true"));
+    }
+
+    // ========== FireAlertRequest ==========
+
+    @Test
+    void fireAlertRequest_equals_sameFields() {
+        var a = new FireAlertRequest("manual", "Test Alert", "msg", "WARNING", null);
+        var b = new FireAlertRequest("manual", "Test Alert", "msg", "WARNING", null);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void fireAlertRequest_equals_differentFields() {
+        var a = new FireAlertRequest("manual", "Test Alert", "msg", "WARNING", null);
+        var b = new FireAlertRequest("manual", "Different", "msg", "WARNING", null);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void fireAlertRequest_equals_nullAndType() {
+        var r = new FireAlertRequest("manual", "Test", null, null, null);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void fireAlertRequest_toString_containsKeyFields() {
+        var r = new FireAlertRequest("manual", "Test", "message", "WARNING", null);
+        String str = r.toString();
+        assertTrue(str.contains("manual"));
+        assertTrue(str.contains("Test"));
+    }
+
+    // ========== SilenceAlertRequest ==========
+
+    @Test
+    void silenceAlertRequest_equals_sameFields() {
+        var a = new SilenceAlertRequest("high-latency", 60);
+        var b = new SilenceAlertRequest("high-latency", 60);
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void silenceAlertRequest_equals_differentFields() {
+        var a = new SilenceAlertRequest("high-latency", 60);
+        var b = new SilenceAlertRequest("high-latency", 120);
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void silenceAlertRequest_equals_nullAndType() {
+        var r = new SilenceAlertRequest("key", 30);
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void silenceAlertRequest_toString_containsFields() {
+        var r = new SilenceAlertRequest("high-latency", 60);
+        String str = r.toString();
+        assertTrue(str.contains("high-latency"));
+        assertTrue(str.contains("60"));
+    }
+
+    // ========== DocumentStatsResponse ==========
+
+    @Test
+    void documentStatsResponse_equals_sameFields() {
+        var a = new DocumentStatsResponse(42, Map.of("COMPLETED", 30L, "FAILED", 12L));
+        var b = new DocumentStatsResponse(42, Map.of("COMPLETED", 30L, "FAILED", 12L));
+        assertEquals(a, b);
+        assertEquals(a.hashCode(), b.hashCode());
+    }
+
+    @Test
+    void documentStatsResponse_equals_differentMap() {
+        var a = new DocumentStatsResponse(42, Map.of("COMPLETED", 30L));
+        var b = new DocumentStatsResponse(42, Map.of("COMPLETED", 99L));
+        assertNotEquals(a, b);
+    }
+
+    @Test
+    void documentStatsResponse_equals_nullAndType() {
+        var r = new DocumentStatsResponse(10, Map.of("A", 5L));
+        assertNotEquals(r, null);
+        assertNotEquals(r, "string");
+    }
+
+    @Test
+    void documentStatsResponse_toString_containsFields() {
+        var r = new DocumentStatsResponse(42, Map.of("A", 5L));
+        String str = r.toString();
+        assertTrue(str.contains("42"));
+        assertTrue(str.contains("1 entries"));
+    }
 }

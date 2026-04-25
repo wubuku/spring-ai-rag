@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Manual alert trigger request
@@ -32,4 +33,28 @@ public record FireAlertRequest(
         @Schema(description = "Associated metrics")
         Map<String, Object> metrics
 ) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof FireAlertRequest that
+                && Objects.equals(this.alertType, that.alertType)
+                && Objects.equals(this.alertName, that.alertName)
+                && Objects.equals(this.message, that.message)
+                && Objects.equals(this.severity, that.severity)
+                && Objects.equals(this.metrics, that.metrics);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(alertType, alertName, message, severity, metrics);
+    }
+
+    @Override
+    public String toString() {
+        return "FireAlertRequest{alertType=" + alertType
+                + ", alertName=" + alertName
+                + ", message=" + message
+                + ", severity=" + severity
+                + ", metrics=" + (metrics != null ? metrics.size() + " entries" : "null") + "}";
+    }
 }

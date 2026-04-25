@@ -5,7 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
-import java.util.Map;
+import java.util.Objects;
 
 /**
  * Silence alert request
@@ -21,4 +21,21 @@ public record SilenceAlertRequest(
         @Schema(description = "Silence duration in minutes", example = "60")
         Integer durationMinutes
 ) {
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        return o instanceof SilenceAlertRequest that
+                && Objects.equals(this.alertKey, that.alertKey)
+                && Objects.equals(this.durationMinutes, that.durationMinutes);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(alertKey, durationMinutes);
+    }
+
+    @Override
+    public String toString() {
+        return "SilenceAlertRequest{alertKey=" + alertKey + ", durationMinutes=" + durationMinutes + "}";
+    }
 }
