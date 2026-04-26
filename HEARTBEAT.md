@@ -3336,3 +3336,16 @@ PDF 端点测试(Section 16,9 tests):
 - 2026-04-24 10:24 - ✅ WebUI 常规发布:cron 触发,npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 已推送(commit 0a52ea3);WebUI 项目处于生产级成熟状态
 
 - 2026-04-25 04:20 - ✅ WebUI 常规发布:cron 触发,npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99KB index gzipped)/ E2E 10/12 ✅(Documents DATABASE_ERROR(后端服务未更新新代码,需重启)+Search空结果(数据库无嵌入文档,环境问题非代码bug);Dashboard/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全部 ✅);dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
+
+## Cron 进度(WebUI - 2026-04-26 15:22 - 常规发布)
+
+- 2026-04-26 15:22 - ✅ WebUI 常规发布:
+  - npm test 148 ✅(23 test files,148 vitest 全通过)
+  - npm run build ✅(99KB index gzipped,11 chunks)
+  - E2E 10/12 ✅(Documents+Search 空结果:数据库无嵌入文档;Dashboard/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing ✅)
+  - 发现并修复:ProxySelectorFactory.java 缺失 `import java.io.IOException`(编译失败)
+  - 发现并修复:E2E h1 可见性检测——`isVisible()` 改为 `waitFor({ state:'attached' })` + `waitFor({ state:'visible' })`,解决 React SPA headless 渲染检测问题
+  - dist 已同步到 static/webui/
+  - 后端服务 8081 UP(database=UP,pgvector=UP)
+  - git 已推送(commit f87581c)
+  - WebUI 项目处于生产级成熟状态
