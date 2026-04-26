@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import com.springairag.core.adapter.ApiAdapterFactory;
 import com.springairag.core.adapter.ApiCompatibilityAdapter;
+import com.springairag.core.util.ProxySelectorFactory;
 import jakarta.annotation.PostConstruct;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -100,46 +101,7 @@ public class SpringAiConfig {
 
     @PostConstruct
     public void initProxySettings() {
-        RagProxyProperties proxy = ragProperties.getProxy();
-        if (!proxy.isEnabled()) {
-            // Proxy disabled: bypass JVM proxy by setting NO_PROXY selector
-            try {
-                java.net.ProxySelector.setDefault(java.net.ProxySelector.of(null));
-                log.info("JVM proxy disabled (rag.proxy.enabled=false), NO_PROXY selector active");
-            } catch (SecurityException | NullPointerException e) {
-                log.warn("Failed to set NO_PROXY selector: {}", e.getMessage());
-            }
-        } else {
-            // Proxy enabled: configure proxy host/port from properties
-            java.net.Proxy proxyHost = new java.net.Proxy(
-                    java.net.Proxy.Type.HTTP,
-                    new java.net.InetSocketAddress(proxy.getHost(), proxy.getPort()));
-            // Parse noProxyHosts from properties (pipe-separated)
-            String[] noProxyArray = proxy.getNoProxyHosts().split("\\|");
-            java.net.ProxySelector selector = new java.net.ProxySelector() {
-                @Override
-                public java.util.List<java.net.Proxy> select(java.net.URI uri) {
-                    String host = uri.getHost();
-                    if (host != null) {
-                        for (String np : noProxyArray) {
-                            if (np.startsWith("*.")) {
-                                String domain = np.substring(2);
-                                if (host.endsWith(domain)) return java.util.List.of(proxyHost);
-                            } else if (host.equals(np)) {
-                                return java.util.List.of(java.net.Proxy.NO_PROXY);
-                            }
-                        }
-                    }
-                    return java.util.List.of(proxyHost);
-                }
-                @Override
-                public void connectFailed(java.net.URI uri, java.net.SocketAddress sa, java.io.IOException e) {
-                    log.warn("Proxy connection failed for {}: {}", uri, e.getMessage());
-                }
-            };
-            java.net.ProxySelector.setDefault(selector);
-            log.info("JVM proxy enabled: {}:{}, noProxy={}", proxy.getHost(), proxy.getPort(), proxy.getNoProxyHosts());
-        }
+        ProxySelectorFactory.installDefault(ragProperties.getProxy());
     }
 
     /**

@@ -2,17 +2,17 @@
 
 /**
  * spring-ai-rag WebUI E2E Test Script
- * 
+ *
  * Prerequisites:
  *   npm install -g playwright
  *   npx playwright install chromium
- * 
+ *
  * Usage:
  *   node scripts/webui-e2e-test.js
- * 
+ *
  * Environment:
  *   BASE_URL - Backend URL (default: http://localhost:8081)
- * 
+ *
  * This script runs E2E tests against the spring-ai-rag WebUI,
  * verifying that each page loads correctly and has expected elements.
  */
@@ -51,7 +51,7 @@ async function runTest(name, fn) {
     viewport: TEST_CONFIG.viewport,
   });
   const page = await context.newPage();
-  
+
   try {
     await fn(page, browser);
     console.log(`  ✅ PASSED`);
@@ -70,13 +70,13 @@ async function runTest(name, fn) {
 async function navigateAndCheck(page, url, checks = []) {
   console.log(`  → Navigating to ${url}`);
   const response = await page.goto(url, { waitUntil: 'networkidle', timeout: TEST_CONFIG.timeout });
-  
+
   if (!response || response.status() >= 400) {
     throw new Error(`Page returned HTTP ${response?.status() || 'no response'}`);
   }
-  
+
   console.log(`  → HTTP ${response.status()} - Page loaded`);
-  
+
   for (const check of checks) {
     try {
       if (typeof check === 'function') {
@@ -84,10 +84,13 @@ async function navigateAndCheck(page, url, checks = []) {
       } else if (typeof check === 'object') {
         const { selector, description, state = 'visible' } = check;
         const el = page.locator(selector);
-        
+
         switch (state) {
           case 'visible':
-            if (!(await el.isVisible({ timeout: 5000 }))) {
+            try {
+              await el.waitFor({ state: 'attached', timeout: 15000 });
+              await el.waitFor({ state: 'visible', timeout: 5000 });
+            } catch {
               throw new Error(`${description || selector} not visible`);
             }
             break;
@@ -102,7 +105,7 @@ async function navigateAndCheck(page, url, checks = []) {
             }
             break;
         }
-        
+
         console.log(`  → ${description || selector}: OK`);
       }
     } catch (e) {
@@ -120,7 +123,7 @@ async function testDashboard(page) {
     { selector: 'h1', description: 'Page title (h1)', state: 'visible' },
     { selector: 'nav', description: 'Navigation sidebar', state: 'visible' },
   ]);
-  
+
   // Check sidebar has all navigation items
   const navItems = ['Dashboard', 'Documents', 'Collections', 'Chat', 'Search', 'Metrics', 'Alerts', 'Settings'];
   for (const item of navItems) {
@@ -137,7 +140,7 @@ async function testDocuments(page) {
     { selector: 'h1', description: 'Page title', state: 'visible' },
     { selector: 'input[type="file"]', description: 'File upload input', state: 'visible' },
   ]);
-  
+
   // Wait for loading skeleton to disappear and table to appear (up to 15s for API)
   console.log('  → Waiting for documents table to load...');
   try {
@@ -164,7 +167,7 @@ async function testCollections(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/collections`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Collections')) {
     throw new Error(`Expected title to contain "Collections", got "${title}"`);
@@ -178,7 +181,7 @@ async function testChat(page) {
     { selector: 'textarea, input[type="text"]', description: 'Chat input', state: 'visible' },
     { selector: 'button:has-text("Send")', description: 'Send button', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Chat')) {
     throw new Error(`Expected title to contain "Chat", got "${title}"`);
@@ -190,17 +193,17 @@ async function testChatInteraction(page) {
   // Navigate to chat
   await page.goto(`${WEBUI_BASE}/chat`, { waitUntil: 'networkidle', timeout: TEST_CONFIG.timeout });
   console.log('  → Chat page loaded');
-  
+
   // Find and fill the message input
   const input = page.locator('textarea, input[type="text"]').first();
   if (!(await input.isVisible({ timeout: 5000 }))) {
     throw new Error('Chat input not visible');
   }
-  
+
   const testMessage = 'Hello, this is a test message';
   await input.fill(testMessage);
   console.log(`  → Typed: "${testMessage}"`);
-  
+
   // Click send button
   const sendButton = page.locator('button:has-text("Send")');
   if (!(await sendButton.isEnabled({ timeout: 5000 }))) {
@@ -208,32 +211,32 @@ async function testChatInteraction(page) {
   }
   await sendButton.click();
   console.log('  → Clicked Send');
-  
+
   // Wait for assistant response to appear (streamed)
   // The response should appear in the messages area
   await page.waitForTimeout(8000); // Wait for SSE stream to complete (8s for LLM response)
-  
+
   // Check that the user message appears
   // Note: CSS modules generate hashed class names like _msg_xxx, _user_xxx, _assistant_xxx
   const messages = page.locator('[class*="_msg_"], [class*="_user_"], [class*="_assistant_"]');
   const messageCount = await messages.count();
   console.log(`  → Messages in chat: ${messageCount}`);
-  
+
   // Verify we have at least 2 messages (user + assistant)
   if (messageCount < 2) {
     throw new Error(`Expected at least 2 messages, got ${messageCount}`);
   }
-  
+
   // Get the last message (assistant response)
   const lastMessage = messages.last();
   const lastMessageContent = await lastMessage.textContent();
   console.log(`  → Assistant response: "${lastMessageContent?.slice(0, 100)}..."`);
-  
+
   // Verify the response is not empty
   if (!lastMessageContent || lastMessageContent.trim().length === 0) {
     throw new Error('Assistant response is empty');
   }
-  
+
   console.log('  → Chat interaction test PASSED');
 }
 
@@ -243,13 +246,13 @@ async function testSearch(page) {
     { selector: 'input[placeholder*="earch"]', description: 'Search input', state: 'visible' },
     { selector: 'button[type="submit"]', description: 'Search button', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Search')) {
     throw new Error(`Expected title to contain "Search", got "${title}"`);
   }
   console.log(`  → Page title: "${title.trim()}"`);
-  
+
   // Test search input interaction
   const input = page.locator('input[placeholder*="earch"]');
   await input.fill('test query');
@@ -258,26 +261,26 @@ async function testSearch(page) {
     throw new Error(`Search input value mismatch: "${value}"`);
   }
   console.log('  → Search input accepts text');
-  
+
   // Perform actual search and verify results
   await input.fill('痘痘');
   await page.keyboard.press('Enter');
   await page.waitForTimeout(3000);
-  
+
   // Check results are displayed
   const body = await page.evaluate(() => document.body.innerText);
   if (!body.includes('results for')) {
     throw new Error('Search did not return results');
   }
   console.log('  → Search returned results');
-  
+
   // Check score display - MUST NOT show NaN
   // The score should be a valid number (e.g., "66.2%" or "0.0%") or absent, but NOT "NaN%"
   if (body.includes('NaN')) {
     throw new Error('Search results contain NaN score - retrieval fusion bug!');
   }
   console.log('  → Scores are valid (no NaN)');
-  
+
   // Verify at least one score percentage is displayed
   const scoreMatches = body.match(/\d+\.\d+%/g);
   if (!scoreMatches || scoreMatches.length === 0) {
@@ -290,7 +293,7 @@ async function testMetrics(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/metrics`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Metrics')) {
     throw new Error(`Expected title to contain "Metrics", got "${title}"`);
@@ -302,7 +305,7 @@ async function testAlerts(page) {
   await navigateAndCheck(page, `${WEBUI_BASE}/alerts`, [
     { selector: 'h1', description: 'Page title', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Alerts')) {
     throw new Error(`Expected title to contain "Alerts", got "${title}"`);
@@ -315,18 +318,18 @@ async function testSettings(page) {
     { selector: 'h1', description: 'Page title', state: 'visible' },
     { selector: 'button:has-text("LLM")', description: 'LLM tab button', state: 'visible' },
   ]);
-  
+
   const title = await page.locator('h1').textContent();
   if (!title.includes('Settings')) {
     throw new Error(`Expected title to contain "Settings", got "${title}"`);
   }
   console.log(`  → Page title: "${title.trim()}"`);
-  
+
   // Check tabs exist
   const llmTab = page.locator('button:has-text("LLM")');
   const retrievalTab = page.locator('button:has-text("Retrieval")');
   const cacheTab = page.locator('button:has-text("Cache")');
-  
+
   if (await llmTab.isVisible({ timeout: 3000 })) {
     console.log('  → Settings tabs present');
   }
@@ -335,9 +338,9 @@ async function testSettings(page) {
 async function testNavigationFlow(page) {
   // Test that navigation between pages works
   console.log('  → Testing navigation flow');
-  
+
   await page.goto(`${WEBUI_BASE}/dashboard`, { waitUntil: 'networkidle' });
-  
+
   const pages = [
     { url: '/documents', name: 'Documents' },
     { url: '/collections', name: 'Collections' },
@@ -347,13 +350,13 @@ async function testNavigationFlow(page) {
     { url: '/alerts', name: 'Alerts' },
     { url: '/settings', name: 'Settings' },
   ];
-  
+
   for (const p of pages) {
     await page.click(`nav >> text=${p.name}`);
     await page.waitForURL(`**/webui${p.url}`, { timeout: 10000 });
     console.log(`  → Navigated to ${p.name}`);
   }
-  
+
   // Return to dashboard
   await page.click('nav >> text=Dashboard');
   await page.waitForURL('**/webui/dashboard', { timeout: 10000 });
@@ -363,17 +366,17 @@ async function testNavigationFlow(page) {
 async function testBackendHealth(page) {
   // Verify backend API is accessible
   console.log('  → Testing backend API health');
-  
+
   const response = await page.request.get(`${BASE_URL}/api/v1/rag/health`);
   if (response.status() !== 200) {
     throw new Error(`Health check failed: HTTP ${response.status()}`);
   }
-  
+
   const health = await response.json();
   if (health.status !== 'UP') {
     throw new Error(`Backend status is not UP: ${health.status}`);
   }
-  
+
   console.log(`  → Backend health: ${health.status}`);
   console.log(`  → Components: database=${health.components?.database}, pgvector=${health.components?.pgvector}`);
 }
@@ -381,7 +384,7 @@ async function testBackendHealth(page) {
 async function test404Fallback(page) {
   // Test SPA routing - direct navigation to sub-pages should work
   console.log('  → Testing SPA routing');
-  
+
   const response = await page.goto(`${WEBUI_BASE}/chat`, { waitUntil: 'networkidle' });
   if (response.status() !== 200) {
     throw new Error(`SPA routing failed: HTTP ${response.status()}`);
@@ -399,18 +402,18 @@ async function main() {
   console.log('═'.repeat(60));
   console.log(`\nTarget: ${WEBUI_BASE}`);
   console.log(`Browser: Chromium (headless)`);
-  
+
   // Ensure test-results directory exists
   const fs = require('fs');
   if (!fs.existsSync('test-results')) {
     fs.mkdirSync('test-results', { recursive: true });
   }
-  
+
   // Check backend first
   console.log('\n' + '─'.repeat(60));
   console.log('🔍 Pre-flight Check: Backend Health');
   console.log('─'.repeat(60));
-  
+
   try {
     const { execSync } = require('child_process');
     const result = execSync(`curl -s "${BASE_URL}/api/v1/rag/health"`, { timeout: 10000 });
@@ -425,12 +428,12 @@ async function main() {
     console.log('   Please start the backend: mvn spring-boot:run -pl spring-ai-rag-core');
     process.exit(1);
   }
-  
+
   // Run tests
   console.log('\n' + '─'.repeat(60));
   console.log('🧪 Running Tests');
   console.log('─'.repeat(60));
-  
+
   await runTest('Dashboard Page', testDashboard);
   await runTest('Documents Page', testDocuments);
   await runTest('Collections Page', testCollections);
@@ -443,23 +446,23 @@ async function main() {
   await runTest('Navigation Flow', testNavigationFlow);
   await runTest('Backend Health API', testBackendHealth);
   await runTest('SPA Routing', test404Fallback);
-  
+
   // Summary
   console.log('\n' + '═'.repeat(60));
   console.log('📊 Test Results');
   console.log('═'.repeat(60));
   console.log(`   ✅ Passed: ${results.passed}`);
   console.log(`   ❌ Failed: ${results.failed}`);
-  
+
   if (results.failed > 0) {
     console.log('\n❌ Failed Tests:');
     for (const { name, error } of results.errors) {
       console.log(`   - ${name}: ${error}`);
     }
   }
-  
+
   console.log('\n' + '═'.repeat(60));
-  
+
   process.exit(results.failed > 0 ? 1 : 0);
 }
 
