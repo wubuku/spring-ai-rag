@@ -669,4 +669,45 @@ class AlertServiceImplTest {
                 alertRepository, retrievalLogRepository, evaluationRepository, null, List.of(), alertProperties);
         assertTrue(serviceWithoutRepo.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
     }
+
+    // ==================== unsilenceAlert ====================
+
+    @Test
+    @DisplayName("unsilenceAlert removes existing silence entry and returns true")
+    void unsilenceAlert_existingKey_returnsTrue() {
+        alertService.silenceAlert("THRESHOLD_HIGH:latency", 60);
+        assertTrue(alertService.unsilenceAlert("THRESHOLD_HIGH:latency"));
+        // Verify alert can fire again
+        assertTrue(alertService.shouldAlert("THRESHOLD_HIGH", "latency", 3000, 2000));
+    }
+
+    @Test
+    @DisplayName("unsilenceAlert returns false when alert was not silenced")
+    void unsilenceAlert_notSilenced_returnsFalse() {
+        assertFalse(alertService.unsilenceAlert("THRESHOLD_HIGH:latency"));
+    }
+
+    // ==================== getSilencedAlerts ====================
+
+    @Test
+    @DisplayName("getSilencedAlerts returns all silenced alerts with expiration times")
+    void getSilencedAlerts_multipleEntries_returnsAll() {
+        alertService.silenceAlert("THRESHOLD_HIGH:latency", 60);
+        alertService.silenceAlert("SLO_BREACH:mrr", 30);
+
+        Map<String, ZonedDateTime> silenced = alertService.getSilencedAlerts();
+
+        assertEquals(2, silenced.size());
+        assertTrue(silenced.containsKey("THRESHOLD_HIGH:latency"));
+        assertTrue(silenced.containsKey("SLO_BREACH:mrr"));
+        assertNotNull(silenced.get("THRESHOLD_HIGH:latency"));
+        assertNotNull(silenced.get("SLO_BREACH:mrr"));
+    }
+
+    @Test
+    @DisplayName("getSilencedAlerts returns empty map when no alerts are silenced")
+    void getSilencedAlerts_empty_returnsEmpty() {
+        Map<String, ZonedDateTime> silenced = alertService.getSilencedAlerts();
+        assertTrue(silenced.isEmpty());
+    }
 }

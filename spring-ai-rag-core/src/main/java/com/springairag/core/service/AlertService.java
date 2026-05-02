@@ -82,6 +82,22 @@ public interface AlertService {
     void silenceAlert(String alertKey, int durationMinutes);
 
     /**
+     * Unsilence an alert (manually lift the silence before it expires).
+     *
+     * @param alertKey  alert key (format: alertType:metricName)
+     * @return true if the alert was silenced and is now unsilenced; false if it was not silenced
+     */
+    boolean unsilenceAlert(String alertKey);
+
+    /**
+     * Get all currently silenced alerts with their expiration times.
+     * Expired entries are automatically removed.
+     *
+     * @return map of alert key to silence expiration time
+     */
+    Map<String, ZonedDateTime> getSilencedAlerts();
+
+    /**
      * Get alert statistics.
      *
      * @param startDate start date

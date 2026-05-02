@@ -19,6 +19,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * Alert service implementation.
@@ -168,6 +169,32 @@ public class AlertServiceImpl implements AlertService {
     public void silenceAlert(String alertKey, int durationMinutes) {
         silencedAlerts.put(alertKey, ZonedDateTime.now().plusMinutes(durationMinutes));
         log.info("Alert silenced: {} - {} minutes", alertKey, durationMinutes);
+    }
+
+    @Override
+    public boolean unsilenceAlert(String alertKey) {
+        ZonedDateTime removed = silencedAlerts.remove(alertKey);
+        if (removed != null) {
+            log.info("Alert unsilenced: {}", alertKey);
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public Map<String, ZonedDateTime> getSilencedAlerts() {
+        // Remove expired entries and return a snapshot
+        cleanupExpiredSilenceRecords();
+        return Collections.unmodifiableMap(new LinkedHashMap<>(silencedAlerts));
+    }
+
+    /**
+     * Periodically clean up expired in-memory silence records.
+     * Runs every 5 minutes to prevent the silencedAlerts map from growing indefinitely.
+     */
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 300_000, zone = "${spring.task.scheduling.timezone:Asia/Shanghai}")
+    public void scheduledSilenceCleanup() {
+        cleanupExpiredSilenceRecords();
     }
 
     @Override

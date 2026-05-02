@@ -144,6 +144,41 @@ public class AlertController {
     }
 
     /**
+     * Get currently silenced alerts
+     */
+    @Operation(summary = "Get silenced alerts", description = "Returns all currently silenced alerts with their expiration times. Expired entries are automatically removed.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns map of alert key to silence expiration time")
+    })
+    @GetMapping("/silence")
+    public ResponseEntity<Map<String, ZonedDateTime>> getSilencedAlerts() {
+        return ResponseEntity.ok(alertService.getSilencedAlerts());
+    }
+
+    /**
+     * Unsilence alert
+     */
+    @Operation(summary = "Unsilence alert", description = "Manually lift the silence on a specified alert before its silence period expires.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Alert unsilenced or was not silenced"),
+        @ApiResponse(responseCode = "400", description = "Invalid alert key")
+    })
+    @DeleteMapping("/silence/{alertKey}")
+    public ResponseEntity<AlertActionResponse> unsilenceAlert(@PathVariable String alertKey) {
+        boolean wasSilenced = alertService.unsilenceAlert(alertKey);
+
+        auditUpdate(AuditLogService.ENTITY_ALERT,
+                alertKey,
+                wasSilenced ? "Alert unsilenced: " + alertKey : "Alert was not silenced: " + alertKey);
+
+        if (wasSilenced) {
+            return ResponseEntity.ok(AlertActionResponse.ok("Alert unsilenced: " + alertKey));
+        } else {
+            return ResponseEntity.ok(AlertActionResponse.ok("Alert was not silenced: " + alertKey));
+        }
+    }
+
+    /**
      * Manually fire an alert
      */
     @Operation(summary = "Manually fire an alert", description = "Manually create an alert record (used for external system integration).")
