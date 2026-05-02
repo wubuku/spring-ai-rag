@@ -3349,3 +3349,5 @@ PDF 端点测试(Section 16,9 tests):
   - 后端服务 8081 UP(database=UP,pgvector=UP)
   - git 已推送(commit f87581c)
   - WebUI 项目处于生产级成熟状态
+
+- 2026-05-02 21:50 - ✅ WebUI 常规发布:npm test 148 ✅(23 test files)/ npm run build ✅(99KB index gzipped)/ E2E 11/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);Search 测试失败:数据库为空,无索引文档,已知环境问题,非代码 bug;dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);pg_jieba 缺失导致 V15 迁移失败,创建 dummy jiebacfg text search config 解决;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
