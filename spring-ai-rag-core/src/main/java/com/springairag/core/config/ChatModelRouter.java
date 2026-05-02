@@ -125,8 +125,8 @@ public class ChatModelRouter {
      * Checks whether MultiModel mode is enabled.
      */
     public boolean isMultiModelEnabled() {
-        return modelRegistry.getAllProviders() != null
-                && !modelRegistry.getAllProviders().isEmpty();
+        var providers = modelRegistry.getAllProviders();
+        return providers != null && !providers.isEmpty();
     }
 
     /**

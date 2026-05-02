@@ -57,7 +57,7 @@ public class ModelComparisonService {
     public List<ModelComparisonResult> compareModels(String query,
                                                       Map<String, ChatModel> models,
                                                       int timeoutSeconds) {
-        if (models == null || models.isEmpty()) {
+        if (models == null || models.isEmpty() || query == null || query.isBlank()) {
             return List.of();
         }
         log.info("Comparing {} models with query: {}", models.size(),

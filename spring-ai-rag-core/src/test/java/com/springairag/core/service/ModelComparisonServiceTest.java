@@ -208,6 +208,22 @@ class ModelComparisonServiceTest {
     }
 
     @Test
+    @DisplayName("Null query returns empty results")
+    void compareModels_nullQuery_returnsEmpty() {
+        List<ModelComparisonService.ModelComparisonResult> results =
+                service.compareModels(null, Map.of("model", mock(ChatModel.class)), 30);
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
+    @DisplayName("Blank query returns empty results")
+    void compareModels_blankQuery_returnsEmpty() {
+        List<ModelComparisonService.ModelComparisonResult> results =
+                service.compareModels("   ", Map.of("model", mock(ChatModel.class)), 30);
+        assertTrue(results.isEmpty());
+    }
+
+    @Test
     @DisplayName("ModelComparisonResult.failure factory method")
     void modelComparisonResult_failureFactory() {
         var r = ModelComparisonService.ModelComparisonResult.failure("test-model", "超时");
