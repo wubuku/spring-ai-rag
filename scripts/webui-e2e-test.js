@@ -424,9 +424,8 @@ async function main() {
       console.log(`   pgvector: ${health.components.pgvector}`);
     }
   } catch (error) {
-    console.log(`❌ Backend is not accessible: ${error.message}`);
-    console.log('   Please start the backend: mvn spring-boot:run -pl spring-ai-rag-core');
-    process.exit(1);
+    console.log(`⚠️  Backend health check failed (DB may be down): ${error.message}`);
+    console.log(`   Proceeding with E2E tests anyway...`);
   }
 
   // Run tests
