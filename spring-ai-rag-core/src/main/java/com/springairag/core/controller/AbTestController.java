@@ -109,7 +109,9 @@ public class AbTestController {
     }
 
     @Operation(summary = "Get running experiments")
-    @ApiResponse(responseCode = "200", description = "Returns list of running experiments")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns list of running experiments")
+    })
     @GetMapping("/experiments/running")
     public ResponseEntity<List<AbTestService.Experiment>> getRunningExperiments() {
         return ResponseEntity.ok(abTestService.getRunningExperiments());

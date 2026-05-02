@@ -47,7 +47,9 @@ public class ModelController {
 
     @GetMapping
     @Operation(summary = "Get all registered model list")
-    @ApiResponse(responseCode = "200", description = "Returns all registered models and their status")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns all registered models and their status")
+    })
     public ResponseEntity<ModelListResponse> listModels() {
         List<String> availableProviders = modelRouter.getAvailableProviders();
         return ResponseEntity.ok(ModelListResponse.of(

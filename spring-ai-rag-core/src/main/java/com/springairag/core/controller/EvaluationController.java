@@ -128,7 +128,9 @@ public class EvaluationController {
      * Calculate metrics (non-persistent)
      */
     @Operation(summary = "Calculate evaluation metrics", description = "Pure calculation without persistence. Used for quick metric preview.")
-    @ApiResponse(responseCode = "200", description = "Returns calculation result")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns calculation result")
+    })
     @GetMapping("/metrics/calculate")
     public ResponseEntity<RetrievalEvaluationService.EvaluationMetrics> calculateMetrics(
             @RequestParam List<Long> retrieved,
@@ -156,7 +158,9 @@ public class EvaluationController {
      * Get evaluation history
      */
     @Operation(summary = "Evaluation history", description = "Paginated retrieval of evaluation records")
-    @ApiResponse(responseCode = "200", description = "Returns paginated evaluation history")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns paginated evaluation history")
+    })
     @GetMapping("/history")
     public ResponseEntity<List<RagRetrievalEvaluation>> getHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -228,7 +232,9 @@ public class EvaluationController {
      * Get feedback history
      */
     @Operation(summary = "Feedback history", description = "Paginated query of user feedback records")
-    @ApiResponse(responseCode = "200", description = "Returns paginated feedback history")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns paginated feedback history")
+    })
     @GetMapping("/feedback/history")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -240,7 +246,9 @@ public class EvaluationController {
      * Query feedback by type
      */
     @Operation(summary = "Query feedback by type", description = "Paginated query of feedback by type (THUMBS_UP/THUMBS_DOWN/RATING)")
-    @ApiResponse(responseCode = "200", description = "Returns paginated list of feedback for the specified type")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns paginated list of feedback for the specified type")
+    })
     @GetMapping("/feedback/type/{feedbackType}")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackByType(
             @PathVariable String feedbackType,

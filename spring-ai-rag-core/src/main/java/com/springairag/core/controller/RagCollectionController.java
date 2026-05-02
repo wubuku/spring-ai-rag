@@ -72,7 +72,9 @@ public class RagCollectionController {
      * Create a collection.
      */
     @Operation(summary = "Create collection", description = "Create a new document collection (knowledge base).")
-    @ApiResponse(responseCode = "200", description = "Collection created, returns collection info")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection created, returns collection info")
+    })
     @PostMapping
     public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
         log.info("Creating collection: name={}", request.getName());
@@ -184,7 +186,10 @@ public class RagCollectionController {
      * Delete collection (soft delete).
      */
     @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
-    @ApiResponse(responseCode = "200", description = "Collection soft-deleted")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection soft-deleted"),
+            @ApiResponse(responseCode = "404", description = "Collection not found")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         log.info("Soft-deleting collection: id={}", id);

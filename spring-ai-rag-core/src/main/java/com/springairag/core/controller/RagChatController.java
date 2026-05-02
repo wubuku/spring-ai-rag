@@ -206,7 +206,9 @@ public class RagChatController {
      * Get session history.
      */
     @Operation(summary = "Get session history", description = "Query chat history for the specified session, returned in reverse chronological order.")
-    @ApiResponse(responseCode = "200", description = "Session history records returned")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Session history records returned")
+    })
     @GetMapping("/history/{sessionId}")
     public ResponseEntity<List<ChatHistoryResponse>> getHistory(
             @PathVariable String sessionId,

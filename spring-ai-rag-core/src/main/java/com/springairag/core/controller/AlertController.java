@@ -56,7 +56,9 @@ public class AlertController {
      * Get active alerts
      */
     @Operation(summary = "Get active alerts", description = "Query all unresolved alert records, ordered by trigger time descending.")
-    @ApiResponse(responseCode = "200", description = "Returns list of active alerts")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Returns list of active alerts")
+    })
     @GetMapping("/active")
     public ResponseEntity<List<AlertService.AlertRecord>> getActiveAlerts() {
         return ResponseEntity.ok(alertService.getActiveAlerts());

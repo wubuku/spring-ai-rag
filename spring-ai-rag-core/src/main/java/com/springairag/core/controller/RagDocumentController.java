@@ -166,14 +166,19 @@ public class RagDocumentController {
     }
 
     @Operation(summary = "Delete document", description = "Delete document and its associated embedding vectors (cascading delete).")
-    @ApiResponse(responseCode = "200", description = "Document deleted")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document deleted"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
     @DeleteMapping("/{id}")
     public ResponseEntity<DocumentDeleteResponse> deleteDocument(@PathVariable Long id) {
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
     }
 
     @Operation(summary = "List documents", description = "Paginated document list with filtering by title/type/status and sorting by creation time descending.")
-    @ApiResponse(responseCode = "200", description = "Paginated document list returned")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Paginated document list returned")
+    })
     @GetMapping
     public ResponseEntity<DocumentListResponse> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
