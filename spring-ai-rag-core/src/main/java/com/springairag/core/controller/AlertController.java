@@ -19,6 +19,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Positive;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -36,6 +38,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 @ApiVersion("v1")
 @RequestMapping("/rag/alerts")
 @Tag(name = "RAG Alerts", description = "Alert management (threshold alerts + SLO monitoring)")
+@Validated
 public class AlertController {
 
     private final AlertService alertService;
@@ -108,7 +111,7 @@ public class AlertController {
     })
     @PostMapping("/{alertId}/resolve")
     public ResponseEntity<AlertActionResponse> resolveAlert(
-            @PathVariable Long alertId,
+            @PathVariable @Positive Long alertId,
             @Valid @RequestBody ResolveAlertRequest body) {
         alertService.resolveAlert(alertId, body.resolution() != null ? body.resolution() : "");
 

@@ -761,6 +761,26 @@ class RagControllerIntegrationTest {
         }
 
         @Test
+        void resolveAlert_invalidAlertId_returns400() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/alerts/{alertId}/resolve", 0)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"resolution": "fixed"}
+                                    """))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void resolveAlert_negativeAlertId_returns400() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/alerts/{alertId}/resolve", -5)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {"resolution": "fixed"}
+                                    """))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
         void silenceAlert_returnsSuccess() throws Exception {
             mockMvc.perform(post("/api/v1/rag/alerts/silence")
                             .contentType(MediaType.APPLICATION_JSON)
