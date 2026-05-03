@@ -441,6 +441,38 @@ class AbTestServiceImplTest {
                 abTestService.updateExperiment(99L, new AbTestService.UpdateExperimentRequest()));
     }
 
+    // ==================== Null Parameter Validation ====================
+
+    @Test
+    void updateExperiment_nullId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.updateExperiment(null, new AbTestService.UpdateExperimentRequest()));
+    }
+
+    @Test
+    void updateExperiment_nullRequest_throws() {
+        assertThrows(NullPointerException.class, () ->
+                abTestService.updateExperiment(1L, null));
+    }
+
+    @Test
+    void startExperiment_nullId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.startExperiment(null));
+    }
+
+    @Test
+    void pauseExperiment_nullId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.pauseExperiment(null));
+    }
+
+    @Test
+    void stopExperiment_nullId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                abTestService.stopExperiment(null));
+    }
+
     // ==================== Start/Pause/Stop Not Found ====================
 
     @Test

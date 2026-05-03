@@ -60,6 +60,10 @@ public class AbTestServiceImpl implements AbTestService {
 
     @Override
     public void updateExperiment(Long id, UpdateExperimentRequest request) {
+        if (id == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
+        Objects.requireNonNull(request, "UpdateExperimentRequest must not be null");
         RagAbExperiment entity = experimentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
 
@@ -85,6 +89,9 @@ public class AbTestServiceImpl implements AbTestService {
 
     @Override
     public void startExperiment(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         RagAbExperiment entity = experimentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
 
@@ -101,6 +108,9 @@ public class AbTestServiceImpl implements AbTestService {
 
     @Override
     public void pauseExperiment(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         RagAbExperiment entity = experimentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
 
@@ -116,6 +126,9 @@ public class AbTestServiceImpl implements AbTestService {
 
     @Override
     public void stopExperiment(Long id) {
+        if (id == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         RagAbExperiment entity = experimentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + id));
 
@@ -137,6 +150,12 @@ public class AbTestServiceImpl implements AbTestService {
     @Override
     @Transactional(readOnly = true)
     public String getVariantForSession(String sessionId, Long experimentId) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("Session id must not be null");
+        }
+        if (experimentId == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         RagAbExperiment entity = experimentRepository.findById(experimentId)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
 
@@ -158,6 +177,12 @@ public class AbTestServiceImpl implements AbTestService {
     public void recordResult(Long experimentId, String variantName, String sessionId,
                              String query, List<Long> retrievedDocIds,
                              Map<String, Double> metrics) {
+        if (sessionId == null) {
+            throw new IllegalArgumentException("Session id must not be null");
+        }
+        if (experimentId == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         if (resultRepository.existsBySessionIdAndExperimentId(sessionId, experimentId)) {
             log.debug("Duplicate result for session {} in experiment {}", sessionId, experimentId);
             return;
@@ -189,6 +214,9 @@ public class AbTestServiceImpl implements AbTestService {
     @Override
     @Transactional(readOnly = true)
     public ExperimentAnalysis analyzeExperiment(Long experimentId) {
+        if (experimentId == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         RagAbExperiment experiment = experimentRepository.findById(experimentId)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
 
@@ -242,6 +270,9 @@ public class AbTestServiceImpl implements AbTestService {
     @Override
     @Transactional(readOnly = true)
     public List<ExperimentResult> getExperimentResults(Long experimentId, int page, int size) {
+        if (experimentId == null) {
+            throw new IllegalArgumentException("Experiment id must not be null");
+        }
         return resultRepository.findByExperimentIdOrderByCreatedAtDesc(experimentId, PageRequest.of(page, size))
                 .getContent().stream()
                 .map(this::toExperimentResult)
