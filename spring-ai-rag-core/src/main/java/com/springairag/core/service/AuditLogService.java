@@ -156,8 +156,16 @@ public class AuditLogService {
 
     /**
      * Query audit records for a session.
+     *
+     * @param sessionId the session ID to query (must not be null or blank)
+     * @param page      page number (0-based)
+     * @param size      page size
+     * @return paginated audit records for the session
      */
     public Page<RagAuditLog> getSessionHistory(String sessionId, int page, int size) {
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new IllegalArgumentException("sessionId must not be null or blank");
+        }
         return repository.findBySessionIdOrderByCreatedAtDesc(sessionId, PageRequest.of(page, size));
     }
 

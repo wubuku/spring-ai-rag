@@ -271,6 +271,27 @@ class AuditLogServiceTest {
     }
 
     @Test
+    @DisplayName("getSessionHistory rejects null sessionId")
+    void getSessionHistory_nullSessionId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                auditLogService.getSessionHistory(null, 0, 10));
+    }
+
+    @Test
+    @DisplayName("getSessionHistory rejects blank sessionId")
+    void getSessionHistory_blankSessionId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                auditLogService.getSessionHistory("   ", 0, 10));
+    }
+
+    @Test
+    @DisplayName("getSessionHistory rejects empty sessionId")
+    void getSessionHistory_emptySessionId_throws() {
+        assertThrows(IllegalArgumentException.class, () ->
+                auditLogService.getSessionHistory("", 0, 10));
+    }
+
+    @Test
     @DisplayName("getRecentAuditLogs delegates to repository")
     void getRecentAuditLogs_delegatesToRepository() {
         auditLogService.getRecentAuditLogs(5);
