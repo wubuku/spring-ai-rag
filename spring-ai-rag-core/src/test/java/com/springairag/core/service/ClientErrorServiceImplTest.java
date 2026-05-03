@@ -113,4 +113,56 @@ class ClientErrorServiceImplTest {
 
         verify(clientErrorRepository, times(1)).save(any());
     }
+
+    @Test
+    void recordError_repositoryThrowsException_propagatesAsRuntimeException() {
+        ClientErrorRequest request = new ClientErrorRequest();
+        request.setErrorType("Error");
+        request.setErrorMessage("DB failure");
+        when(clientErrorRepository.save(any(RagClientError.class)))
+                .thenThrow(new RuntimeException("Database connection lost"));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> service.recordError(request));
+        assertEquals("Database connection lost", thrown.getMessage());
+    }
+
+    @Test
+    void getErrorCount_repositoryThrowsException_propagatesAsRuntimeException() {
+        when(clientErrorRepository.count())
+                .thenThrow(new RuntimeException("Database unavailable"));
+
+        RuntimeException thrown = assertThrows(RuntimeException.class,
+                () -> service.getErrorCount());
+        assertEquals("Database unavailable", thrown.getMessage());
+    }
+
+    @Test
+    void recordError_withLargeContent_savesAllFields() {
+        ClientErrorRequest request = new ClientErrorRequest();
+        request.setErrorType("RangeError");
+        request.setErrorMessage("Stack overflow");
+        // Stack trace exceeds 8192 characters
+        request.setStackTrace("RangeError: Stack overflow\n    at " + "fn.js:1:1\n".repeat(1000));
+        request.setComponentStack("App > Router > Component".repeat(500));
+        request.setPageUrl("/webui/chat/session/12345");
+        request.setSessionId("session-abc-def-123");
+        request.setUserId("user-123456");
+        request.setUserAgent("Mozilla/5.0 TestBrowser/1.0");
+
+        service.recordError(request);
+
+        ArgumentCaptor<RagClientError> captor = ArgumentCaptor.forClass(RagClientError.class);
+        verify(clientErrorRepository).save(captor.capture());
+        RagClientError saved = captor.getValue();
+        assertEquals("RangeError", saved.getErrorType());
+        assertEquals("Stack overflow", saved.getErrorMessage());
+        assertTrue(saved.getStackTrace().startsWith("RangeError: Stack overflow"));
+        assertTrue(saved.getStackTrace().length() > 10000);
+        assertTrue(saved.getComponentStack().length() > 5000);
+        assertEquals("/webui/chat/session/12345", saved.getPageUrl());
+        assertEquals("session-abc-def-123", saved.getSessionId());
+        assertEquals("user-123456", saved.getUserId());
+        assertEquals("Mozilla/5.0 TestBrowser/1.0", saved.getUserAgent());
+    }
 }

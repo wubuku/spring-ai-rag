@@ -21,7 +21,7 @@
 --    注意：如果 pg_jieba 未安装，列会创建但 search_vector_zh 为 NULL
 ALTER TABLE rag_embeddings 
 ADD COLUMN search_vector_zh tsvector
-GENERATED ALWAYS AS (to_tsvector('jiebacfg', chunk_text)) STORED;
+GENERATED ALWAYS AS (to_tsvector('simple', chunk_text)) STORED;
 
 -- 2. 添加英文 tsvector 列（使用内置 english 配置，始终有效）
 ALTER TABLE rag_embeddings 
