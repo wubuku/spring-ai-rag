@@ -210,6 +210,18 @@ class AbTestServiceImplTest {
     }
 
     @Test
+    void getVariantForSession_negativeHashBucket_alwaysPositive() {
+        // Math.floorMod guarantees non-negative [0,99] even when Objects.hash returns Integer.MIN_VALUE
+        // (Math.abs(Integer.MIN_VALUE) stays negative, causing wrong variant selection)
+        int floorModResult = Math.floorMod(Integer.MIN_VALUE, 100);
+        assertTrue(floorModResult >= 0 && floorModResult < 100,
+                "floorMod must return non-negative bucket, got: " + floorModResult);
+
+        int absResult = Math.abs(Integer.MIN_VALUE);
+        assertTrue(absResult < 0, "Math.abs(MIN_VALUE) overflows to negative: " + absResult);
+    }
+
+    @Test
     void getVariantForSession_distributionRespectsSplit() {
         RagAbExperiment entity = createExperimentEntity(1L, "RUNNING");
         entity.setTrafficSplit(Map.of("control", 0.8, "variant_a", 0.2));

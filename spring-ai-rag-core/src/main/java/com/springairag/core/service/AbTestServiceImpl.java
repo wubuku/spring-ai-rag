@@ -140,7 +140,8 @@ public class AbTestServiceImpl implements AbTestService {
         RagAbExperiment entity = experimentRepository.findById(experimentId)
                 .orElseThrow(() -> new IllegalArgumentException("Experiment not found: " + experimentId));
 
-        int hash = Math.abs(Objects.hash(sessionId, experimentId) % 100);
+        // Math.floorMod guarantees non-negative result [0,99], unlike Math.abs which overflows on Integer.MIN_VALUE
+        int hash = Math.floorMod(Objects.hash(sessionId, experimentId), 100);
         Map<String, Double> trafficSplit = entity.getTrafficSplit();
         int cumulative = 0;
 
