@@ -56,6 +56,9 @@ public class BatchDocumentService {
      * @return batch creation result
      */
     public BatchCreateResponse batchCreateDocuments(List<DocumentRequest> requests) {
+        if (requests == null) {
+            throw new IllegalArgumentException("requests must not be null");
+        }
         return batchCreateDocuments(requests, false, null, false);
     }
 
@@ -72,6 +75,9 @@ public class BatchDocumentService {
                                                      boolean embed,
                                                      Long collectionId,
                                                      boolean force) {
+        if (requests == null) {
+            throw new IllegalArgumentException("requests must not be null");
+        }
         log.info("Batch creating {} documents (embed={}, collectionId={}, force={})",
                 requests.size(), embed, collectionId, force);
 
@@ -180,6 +186,9 @@ public class BatchDocumentService {
      */
     @Transactional
     public BatchDeleteResponse batchDeleteDocuments(List<Long> ids) {
+        if (ids == null) {
+            throw new IllegalArgumentException("ids must not be null");
+        }
         if (ids.size() > 100) {
             throw new IllegalArgumentException("Batch delete limited to 100 documents per request");
         }

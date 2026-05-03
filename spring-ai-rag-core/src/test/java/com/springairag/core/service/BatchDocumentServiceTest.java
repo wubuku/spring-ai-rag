@@ -311,6 +311,29 @@ class BatchDocumentServiceTest {
         assertThrows(IllegalArgumentException.class, () -> service.batchDeleteDocuments(ids));
     }
 
+    // ==================== Null Safety ====================
+
+    @Test
+    @DisplayName("batchCreateDocuments: throws IllegalArgumentException when requests is null")
+    void batchCreateDocuments_nullRequests_throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchCreateDocuments((List<DocumentRequest>) null));
+    }
+
+    @Test
+    @DisplayName("batchCreateDocuments: throws IllegalArgumentException when requests is null (overload)")
+    void batchCreateDocuments_nullRequests_overload_throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchCreateDocuments(null, true, null, false));
+    }
+
+    @Test
+    @DisplayName("batchDeleteDocuments: throws IllegalArgumentException when ids is null")
+    void batchDeleteDocuments_nullIds_throws() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchDeleteDocuments(null));
+    }
+
     // ==================== computeSha256 ====================
 
     @Test
