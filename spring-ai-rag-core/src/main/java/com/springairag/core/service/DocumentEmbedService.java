@@ -107,6 +107,9 @@ public class DocumentEmbedService {
     @Transactional
     public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
             java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
+        if (documentId == null) {
+            throw new IllegalArgumentException("documentId must not be null");
+        }
         log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
         maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
@@ -218,6 +221,9 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> batchEmbedDocuments(List<Long> documentIds) {
+        if (documentIds == null) {
+            throw new IllegalArgumentException("documentIds must not be null");
+        }
         if (documentIds.size() > 50) {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }

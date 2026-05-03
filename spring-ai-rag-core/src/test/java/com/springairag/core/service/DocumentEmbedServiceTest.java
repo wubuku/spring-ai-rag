@@ -452,6 +452,20 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
+    @DisplayName("embedDocumentWithProgress: null documentId throws IllegalArgumentException")
+    void embedDocumentWithProgress_nullDocumentId_throwsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.embedDocumentWithProgress(null, false, null));
+    }
+
+    @Test
+    @DisplayName("batchEmbedDocuments: null documentIds throws IllegalArgumentException")
+    void batchEmbedDocuments_nullList_throwsIllegalArgument() {
+        assertThrows(IllegalArgumentException.class,
+                () -> service.batchEmbedDocuments(null));
+    }
+
+    @Test
     @DisplayName("embedDocumentWithProgress: cache hit with chunks=null does not throw")
     void embedDocumentWithProgress_cacheHit_chunksNull_noException() {
         RagDocument doc = createDocumentWithHash(1L, "短内容", "hash123");
