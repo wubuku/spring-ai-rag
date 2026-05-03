@@ -2670,7 +2670,7 @@
 | M2 | RetrievalEvaluationServiceImpl 长方法审查(390→320 行,消除重复累加逻辑) | 代码质量 | ✅ 2026-04-11(evaluate() 提取 buildEvaluationEntity()/recordEvaluationMetrics();getReport() 提取 buildReport() + computeStats() 复用;Accumulator→Stats;1697 core + 42 starter = 1739 tests pass) |
 | M3 | Collection 详情页文档列表(Collection 点击→展示该 Collection 下所有文档) | 功能 | ⏳ |
 | W1 | WebUI E2E Playwright 测试(Dashboard/Search/Collections 深度交互) | 测试覆盖 | ⏳ |
-| W2 | spring-ai-rag-starter 模块 JaCoCo 覆盖率提升(当前 0%) | 测试覆盖 | ⏳ |
+| W2 | spring-ai-rag-starter 模块 JaCoCo 覆盖率提升(当前 0%) | 测试覆盖 | ✅ 2026-04-12(GeneralRagAutoConfiguration Bean 测试补全,47 tests,+5) |
 | S4 | ApiKeyManagementService 验证缓存(Caffeine 30s TTL,避免每次认证都查 DB) | 性能 | ✅ 2026-04-12 |
 | S5 | GET /client-errors/count 返回 ErrorResponse 语义修复(→ ClientErrorCountResponse DTO) | API 质量 | ✅ 2026-04-12(commit 82256c2) |
 | T1 | ModelRegistry 多模型路由方法测试(10→37 tests) | 测试覆盖 | ✅ 2026-04-11(T5 完成,+27 tests,1718 total) |
