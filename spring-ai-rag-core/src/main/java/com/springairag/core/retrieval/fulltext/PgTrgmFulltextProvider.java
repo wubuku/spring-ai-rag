@@ -85,7 +85,9 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
-                        double score = ((Number) row.get("score_trgm")).doubleValue();
+                        // similarity() can return NULL for edge cases (e.g., empty strings)
+                        Number scoreNum = (Number) row.get("score_trgm");
+                        double score = scoreNum != null ? scoreNum.doubleValue() : 0.0;
                         return toResult(row, score);
                     })
                     .filter(r -> r.getScore() >= minScore)

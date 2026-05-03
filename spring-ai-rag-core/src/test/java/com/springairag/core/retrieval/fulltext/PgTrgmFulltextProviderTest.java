@@ -121,6 +121,32 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
+    @DisplayName("search handles NULL score_trgm gracefully (defaults to 0.0)")
+    void search_nullScore_returnsEmptyOrZeroScore() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
+        when(jdbc.update(anyString(), (Object) any())).thenReturn(1);
+
+        // Row with NULL score_trgm (similarity() can return NULL for edge cases)
+        Map<String, Object> nullScoreRow = new HashMap<>();
+        nullScoreRow.put("id", 1);
+        nullScoreRow.put("score_trgm", null);  // NULL score - edge case
+        nullScoreRow.put("document_id", 10);
+        nullScoreRow.put("chunk_text", "test content");
+        nullScoreRow.put("chunk_index", 0);
+        nullScoreRow.put("metadata", Collections.emptyMap());
+
+        when(jdbc.queryForList(anyString(), (Object[]) any()))
+                .thenReturn(List.of(nullScoreRow));
+
+        PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
+        List<RetrievalResult> results = provider.search("test", null, null, 5, 0.0);
+        // Should not throw NPE; should handle null score gracefully
+        assertDoesNotThrow(() -> provider.search("test", null, null, 5, 0.0));
+    }
+
+    @Test
     @DisplayName("SQL includes IN clause when documentIds are specified")
     void search_withDocumentIds_filtersByDocument() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);

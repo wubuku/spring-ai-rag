@@ -85,7 +85,9 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
-                        double rank = ((Number) row.get("rank")).doubleValue();
+                        // ts_rank can return NULL for edge cases
+                        Number rankNum = (Number) row.get("rank");
+                        double rank = rankNum != null ? rankNum.doubleValue() : 0.0;
                         return toResult(row, rank);
                     })
                     .filter(r -> r.getScore() >= minScore)
