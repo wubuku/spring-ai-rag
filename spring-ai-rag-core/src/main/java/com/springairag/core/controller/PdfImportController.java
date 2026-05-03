@@ -223,6 +223,17 @@ public class PdfImportController {
     }
 
     /**
+     * Builds a standard SSE response with correct headers and content type.
+     */
+    private ResponseEntity<SseEmitter> buildSseResponse(SseEmitter emitter) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .header("Cache-Control", "no-cache")
+                .header("X-Accel-Buffering", "no")
+                .body(emitter);
+    }
+
+    /**
      * Streams embedding progress via SSE, then sends the final result as "done" event.
      */
     private Object streamPdfToRagWithEmbedding(PdfImportService.PdfImportResult importResult,
@@ -274,11 +285,7 @@ public class PdfImportController {
         // Execute in virtual thread (Spring MVC uses async executor for SseEmitter)
         Thread.ofVirtual().start(task);
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_EVENT_STREAM)
-                .header("Cache-Control", "no-cache")
-                .header("X-Accel-Buffering", "no")
-                .body(emitter);
+        return buildSseResponse(emitter);
     }
 
     // ==================== Trigger Embedding for Already-Imported PDF ====================
@@ -402,11 +409,7 @@ public class PdfImportController {
 
         Thread.ofVirtual().start(task);
 
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_EVENT_STREAM)
-                .header("Cache-Control", "no-cache")
-                .header("X-Accel-Buffering", "no")
-                .body(emitter);
+        return buildSseResponse(emitter);
     }
 
     // ==================== Preview (Markdown → HTML) ====================
