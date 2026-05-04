@@ -5,7 +5,6 @@ import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
-import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.service.AuditLogService;
@@ -63,7 +62,7 @@ public class RagChatController {
     private final RagChatHistoryRepository historyRepository;
     private final ChatExportService chatExportService;
     private final RagSseProperties sseProperties;
-    private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
