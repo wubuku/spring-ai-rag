@@ -1,3 +1,9 @@
+/* eslint-disable react-refresh/only-export-components */
+// This file intentionally co-locates useToast hook with ToastProvider component.
+// The hook is used by 7+ components (ReembedAllButton, CreateCollectionModal,
+// ApiKeys, Files, ABTest, Documents, Collections). Moving to a separate file
+// would require updating all consumer import paths unnecessarily.
+
 import { useState, useCallback, type ReactNode } from 'react';
 import { ToastContext, useToastContext } from './ToastContext';
 import { TOAST_ICONS } from './constants';

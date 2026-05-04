@@ -1,3 +1,8 @@
+/* eslint-disable react-refresh/only-export-components */
+// This file intentionally co-locates useChatSessions hook with ChatSidebar component.
+// The hook manages localStorage for chat sessions and is used by Chat.tsx.
+// Moving to a separate file would require updating 1+ consumer import paths.
+
 import { useState } from 'react';
 import styles from './ChatSidebar.module.css';
 
