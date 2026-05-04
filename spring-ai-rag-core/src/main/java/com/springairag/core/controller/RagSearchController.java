@@ -42,6 +42,9 @@ public class RagSearchController {
 
     private static final Logger log = LoggerFactory.getLogger(RagSearchController.class);
 
+    /** Maximum allowed results per search request */
+    private static final int MAX_SEARCH_LIMIT = 1000;
+
     private final HybridRetrieverService hybridRetriever;
     private final RagDocumentRepository documentRepository;
 
@@ -55,7 +58,7 @@ public class RagSearchController {
      * Direct retrieval (hybrid search, no answer generation)
      *
      * @param query the query text
-     * @param limit max results to return (default 10)
+     * @param limit max results to return (default 10, max 1000)
      * @param useHybrid whether to use hybrid search (default true)
      * @param vectorWeight vector weight (default 0.5)
      * @param fulltextWeight fulltext weight (default 0.5)
@@ -64,7 +67,7 @@ public class RagSearchController {
     @Operation(summary = "Direct retrieval (GET)", description = "Hybrid search, no LLM generation. Supports vector/fulltext weight adjustment.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
-            @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0], or query is blank")
+            @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0], limit out of range [1, 1000], or query is blank")
     })
     @GetMapping
     @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
@@ -88,6 +91,10 @@ public class RagSearchController {
         if (fulltextWeight < 0.0 || fulltextWeight > 1.0) {
             return ResponseEntity.badRequest().body(
                     ErrorResponse.builder().detail("fulltextWeight must be between 0.0 and 1.0, got " + fulltextWeight).build());
+        }
+        if (limit < 1 || limit > MAX_SEARCH_LIMIT) {
+            return ResponseEntity.badRequest().body(
+                    ErrorResponse.builder().detail("limit must be between 1 and " + MAX_SEARCH_LIMIT + ", got " + limit).build());
         }
 
         RetrievalConfig config = RetrievalConfig.builder()

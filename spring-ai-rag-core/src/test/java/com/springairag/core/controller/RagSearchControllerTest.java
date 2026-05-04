@@ -189,6 +189,37 @@ class RagSearchControllerTest {
     }
 
     @Test
+    @DisplayName("limit exceeding 1000 returns 400")
+    void search_limitTooHigh_returns400() {
+        ResponseEntity<?> response = controller.search("query", 1001, true, 0.5, 0.5);
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("limit"));
+        verifyNoInteractions(hybridRetriever);
+    }
+
+    @Test
+    @DisplayName("limit of 0 returns 400")
+    void search_limitZero_returns400() {
+        ResponseEntity<?> response = controller.search("query", 0, true, 0.5, 0.5);
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("limit"));
+        verifyNoInteractions(hybridRetriever);
+    }
+
+    @Test
+    @DisplayName("limit of 1000 is accepted")
+    void search_limit1000Accepted() {
+        when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+        ResponseEntity<?> response = controller.search("query", 1000, true, 0.5, 0.5);
+        assertEquals(200, response.getStatusCode().value());
+    }
+
+    @Test
     @DisplayName("GET search with blank query returns 400")
     void search_blankQuery_returns400() {
         ResponseEntity<?> response = controller.search("", 10, true, 0.5, 0.5);
