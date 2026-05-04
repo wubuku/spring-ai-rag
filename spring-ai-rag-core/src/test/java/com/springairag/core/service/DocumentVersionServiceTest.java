@@ -173,6 +173,14 @@ class DocumentVersionServiceTest {
             assertEquals(1, result.getVersionNumber());
             assertEquals("EMBED", result.getChangeType());
         }
+
+        @Test
+        @DisplayName("throws when doc is null")
+        void throwsWhenDocIsNull() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.forceRecordVersion(null, "CREATE", "desc"));
+            assertEquals("doc must not be null", ex.getMessage());
+        }
     }
 
     @Nested
@@ -189,6 +197,14 @@ class DocumentVersionServiceTest {
             Page<RagDocumentVersion> result = versionService.getVersionHistory(1L, PageRequest.of(0, 10));
 
             assertEquals(1, result.getTotalElements());
+        }
+
+        @Test
+        @DisplayName("getVersionHistory throws when documentId is null")
+        void getVersionHistoryNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.getVersionHistory(null, PageRequest.of(0, 10)));
+            assertEquals("documentId must not be null", ex.getMessage());
         }
 
         @Test
@@ -210,6 +226,14 @@ class DocumentVersionServiceTest {
         }
 
         @Test
+        @DisplayName("getFullVersionHistory throws when documentId is null")
+        void getFullVersionHistoryNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.getFullVersionHistory(null));
+            assertEquals("documentId must not be null", ex.getMessage());
+        }
+
+        @Test
         @DisplayName("gets specific version")
         void getSpecificVersion() {
             RagDocumentVersion v = new RagDocumentVersion();
@@ -222,6 +246,14 @@ class DocumentVersionServiceTest {
 
             assertTrue(result.isPresent());
             assertEquals(2, result.get().getVersionNumber());
+        }
+
+        @Test
+        @DisplayName("getVersion throws when documentId is null")
+        void getVersionNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.getVersion(null, 1));
+            assertEquals("documentId must not be null", ex.getMessage());
         }
 
         @Test
@@ -240,11 +272,27 @@ class DocumentVersionServiceTest {
         }
 
         @Test
+        @DisplayName("getLatestVersion throws when documentId is null")
+        void getLatestVersionNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.getLatestVersion(null));
+            assertEquals("documentId must not be null", ex.getMessage());
+        }
+
+        @Test
         @DisplayName("counts versions")
         void countVersions() {
             when(versionRepository.countByDocumentId(1L)).thenReturn(5L);
 
             assertEquals(5L, versionService.countVersions(1L));
+        }
+
+        @Test
+        @DisplayName("countVersions throws when documentId is null")
+        void countVersionsNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.countVersions(null));
+            assertEquals("documentId must not be null", ex.getMessage());
         }
     }
 
@@ -258,6 +306,14 @@ class DocumentVersionServiceTest {
             versionService.deleteVersions(1L);
 
             verify(versionRepository).deleteByDocumentId(1L);
+        }
+
+        @Test
+        @DisplayName("deleteVersions throws when documentId is null")
+        void deleteVersionsNullDocumentId() {
+            IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                    () -> versionService.deleteVersions(null));
+            assertEquals("documentId must not be null", ex.getMessage());
         }
     }
 }
