@@ -826,4 +826,73 @@ class RetrievalEvaluationServiceImplTest {
             assertTrue(str.contains("recommendation=ACCEPT"));
         }
     }
+
+    @Nested
+    class EvaluationCaseNestedTest {
+
+        @Test
+        void evaluationCase_equals_sameFields() {
+            RetrievalEvaluationService.EvaluationCase c1 =
+                    new RetrievalEvaluationService.EvaluationCase("query1", List.of(1L, 2L), List.of(1L));
+            RetrievalEvaluationService.EvaluationCase c2 =
+                    new RetrievalEvaluationService.EvaluationCase("query1", List.of(1L, 2L), List.of(1L));
+            assertEquals(c1, c2);
+            assertEquals(c1.hashCode(), c2.hashCode());
+        }
+
+        @Test
+        void evaluationCase_equals_differentQuery_notEqual() {
+            RetrievalEvaluationService.EvaluationCase c1 =
+                    new RetrievalEvaluationService.EvaluationCase("query1", List.of(1L), List.of(1L));
+            RetrievalEvaluationService.EvaluationCase c2 =
+                    new RetrievalEvaluationService.EvaluationCase("query2", List.of(1L), List.of(1L));
+            assertNotEquals(c1, c2);
+        }
+
+        @Test
+        void evaluationCase_equals_differentRetrievedDocIds_notEqual() {
+            RetrievalEvaluationService.EvaluationCase c1 =
+                    new RetrievalEvaluationService.EvaluationCase("q", List.of(1L), List.of(1L));
+            RetrievalEvaluationService.EvaluationCase c2 =
+                    new RetrievalEvaluationService.EvaluationCase("q", List.of(2L), List.of(1L));
+            assertNotEquals(c1, c2);
+        }
+
+        @Test
+        void evaluationCase_equals_nullFields_notEqual() {
+            RetrievalEvaluationService.EvaluationCase c1 =
+                    new RetrievalEvaluationService.EvaluationCase(null, null, null);
+            RetrievalEvaluationService.EvaluationCase c2 =
+                    new RetrievalEvaluationService.EvaluationCase(null, null, null);
+            assertEquals(c1, c2);
+            assertEquals(c1.hashCode(), c2.hashCode());
+        }
+
+        @Test
+        void evaluationCase_equals_nullVsNonNull_notEqual() {
+            RetrievalEvaluationService.EvaluationCase c1 =
+                    new RetrievalEvaluationService.EvaluationCase("q", List.of(1L), List.of(1L));
+            RetrievalEvaluationService.EvaluationCase c2 =
+                    new RetrievalEvaluationService.EvaluationCase(null, List.of(1L), List.of(1L));
+            assertNotEquals(c1, c2);
+        }
+
+        @Test
+        void evaluationCase_equals_differentType_notEqual() {
+            RetrievalEvaluationService.EvaluationCase c =
+                    new RetrievalEvaluationService.EvaluationCase("q", List.of(1L), List.of(1L));
+            assertNotEquals(c, "string");
+            assertNotEquals(c, null);
+        }
+
+        @Test
+        void evaluationCase_toString_containsKeyFields() {
+            RetrievalEvaluationService.EvaluationCase c =
+                    new RetrievalEvaluationService.EvaluationCase("test query", List.of(1L, 2L), List.of(3L));
+            String str = c.toString();
+            assertTrue(str.contains("test query"));
+            assertTrue(str.contains("retrievedDocIds"));
+            assertTrue(str.contains("relevantDocIds"));
+        }
+    }
 }
