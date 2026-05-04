@@ -166,6 +166,15 @@ class ReRankingServiceTest {
         assertTrue(score > 0.5f, "完全不同文本应有高多样性");
     }
 
+    @Test
+    void diversityScore_nullText_returnsZero() {
+        List<RetrievalResult> results = List.of(
+                createResult("doc-1", "Spring Boot", 0.5),
+                createResult("doc-2", "Spring Framework", 0.6)
+        );
+        assertEquals(0f, service.calculateDiversityScore(null, results));
+    }
+
     // ========== calculateTextSimilarity ==========
 
     @Test

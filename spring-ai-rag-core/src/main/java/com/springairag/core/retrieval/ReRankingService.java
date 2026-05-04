@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
 
@@ -111,13 +112,13 @@ public class ReRankingService {
      * Calculate diversity score (difference from most similar result)
      */
     float calculateDiversityScore(String text, List<RetrievalResult> allResults) {
-        if (allResults.size() <= 1) {
-            return 1.0f;
+        if (text == null || allResults.size() <= 1) {
+            return text == null ? 0f : 1.0f;
         }
 
         float maxSimilarity = 0f;
         for (RetrievalResult other : allResults) {
-            if (!other.getChunkText().equals(text)) {
+            if (!Objects.equals(other.getChunkText(), text)) {
                 float similarity = calculateTextSimilarity(text, other.getChunkText());
                 maxSimilarity = Math.max(maxSimilarity, similarity);
             }
