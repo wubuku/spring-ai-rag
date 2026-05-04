@@ -4,6 +4,7 @@ import com.springairag.api.dto.VariantResponse;
 import com.springairag.api.service.AbTestService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -42,6 +43,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Experiment created successfully"),
         @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
+    @Timed(value = "rag.ab.create", description = "A/B experiment creation", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/experiments")
     public ResponseEntity<AbTestService.Experiment> createExperiment(
             @Valid @RequestBody AbTestService.CreateExperimentRequest request) {
@@ -58,6 +60,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "404", description = "Experiment not found"),
         @ApiResponse(responseCode = "409", description = "Experiment status does not allow update")
     })
+    @Timed(value = "rag.ab.update", description = "A/B experiment update", percentiles = {0.5, 0.95, 0.99})
     @PutMapping("/experiments/{id}")
     public ResponseEntity<Void> updateExperiment(
             @PathVariable Long id,
@@ -74,6 +77,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "404", description = "Experiment not found"),
         @ApiResponse(responseCode = "409", description = "Experiment status does not allow starting")
     })
+    @Timed(value = "rag.ab.start", description = "A/B experiment start", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/experiments/{id}/start")
     public ResponseEntity<Void> startExperiment(@PathVariable Long id) {
         abTestService.startExperiment(id);
@@ -87,6 +91,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Experiment paused successfully"),
         @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
+    @Timed(value = "rag.ab.pause", description = "A/B experiment pause", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/experiments/{id}/pause")
     public ResponseEntity<Void> pauseExperiment(@PathVariable Long id) {
         abTestService.pauseExperiment(id);
@@ -100,6 +105,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Experiment stopped successfully"),
         @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
+    @Timed(value = "rag.ab.stop", description = "A/B experiment stop", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/experiments/{id}/stop")
     public ResponseEntity<Void> stopExperiment(@PathVariable Long id) {
         abTestService.stopExperiment(id);
@@ -122,6 +128,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Returns variant assignment result"),
         @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
+    @Timed(value = "rag.ab.variant", description = "A/B variant assignment lookup", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/experiments/{id}/variant")
     public ResponseEntity<VariantResponse> getVariant(
             @PathVariable Long id,
@@ -135,6 +142,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Result recorded successfully"),
         @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
+    @Timed(value = "rag.ab.record", description = "A/B experiment result recording", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/experiments/{id}/results")
     public ResponseEntity<Void> recordResult(
             @PathVariable Long id,
@@ -153,6 +161,7 @@ public class AbTestController {
         @ApiResponse(responseCode = "200", description = "Returns experiment analysis results"),
         @ApiResponse(responseCode = "404", description = "Experiment not found")
     })
+    @Timed(value = "rag.ab.analyze", description = "A/B experiment analysis", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/experiments/{id}/analysis")
     public ResponseEntity<AbTestService.ExperimentAnalysis> analyzeExperiment(@PathVariable Long id) {
         return ResponseEntity.ok(abTestService.analyzeExperiment(id));
