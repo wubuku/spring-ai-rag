@@ -152,12 +152,14 @@ class SlowQueryMetricsServiceTest {
     }
 
     @Test
-    void recordSlowQuery_nullSql_stillRecordsCounter() {
-        // null SQL should not throw, counter still increments
+    void recordSlowQuery_nullSql_throwsNullPointerException() {
+        // null SQL is now a programming error enforced by SlowQueryRecord constructor
         properties.getSlowQuery().setMaxRetained(10);
-        service.recordSlowQuery(null, 2000);
-        assertEquals(1, service.getTotalSlowQueries());
-        assertEquals(1, service.getRecentSlowQueries().size());
+        assertThrows(NullPointerException.class, () ->
+                service.recordSlowQuery(null, 2000));
+        // counter does NOT increment because the exception is thrown before record creation
+        assertEquals(0, service.getTotalSlowQueries());
+        assertTrue(service.getRecentSlowQueries().isEmpty());
     }
 
     @Test
@@ -165,5 +167,51 @@ class SlowQueryMetricsServiceTest {
         // maskSensitiveSql handles null SQL without throwing
         var summary = service.getStatsSummary();
         assertNotNull(summary);
+    }
+
+    @Test
+    void slowQueryRecord_toString_truncatesLongSql() {
+        var record = new SlowQueryMetricsService.SlowQueryRecord(1000L, "SELECT a,b,c,d,e,f,g,h,i,j,k,l,m,n,o,p,q,r,s,t,u,v,w,x,y,z FROM users WHERE id > 100", 1500L);
+        String str = record.toString();
+        assertTrue(str.contains("SlowQueryRecord"));
+        assertTrue(str.contains("durationMs=1500"));
+        assertTrue(str.contains("...")); // long SQL truncated
+        assertFalse(str.contains("FROM users WHERE id > 100")); // truncated, not full
+    }
+
+    @Test
+    void slowQueryRecord_toString_showsShortSqlUnchanged() {
+        var record = new SlowQueryMetricsService.SlowQueryRecord(2000L, "SELECT 1", 500L);
+        String str = record.toString();
+        assertTrue(str.contains("SELECT 1"));
+        assertFalse(str.contains("..."));
+    }
+
+    @Test
+    void slowQueryRecord_nullSql_throwsNullPointerException() {
+        assertThrows(NullPointerException.class, () ->
+                new SlowQueryMetricsService.SlowQueryRecord(1000L, null, 500L));
+    }
+
+    @Test
+    void slowQueryStatsSummary_toString_containsKeyFields() {
+        var summary = new SlowQueryMetricsService.SlowQueryStatsSummary(
+                100L, 5000L, 10L, 1000L, 50L, java.util.Collections.emptyList());
+        String str = summary.toString();
+        assertTrue(str.contains("SlowQueryStatsSummary"));
+        assertTrue(str.contains("totalQueryCount=100"));
+        assertTrue(str.contains("slowQueryCount=10"));
+        assertTrue(str.contains("thresholdMs=1000"));
+        assertTrue(str.contains("averageQueryDurationMs=50"));
+    }
+
+    @Test
+    void recordSlowQuery_sensitiveDataMaskedInLog() {
+        // Verify the SENSITIVE_SQL_PATTERN static compiles and masks correctly
+        properties.getSlowQuery().setLogEnabled(true);
+        properties.getSlowQuery().setMaxRetained(10);
+        // This should not throw and should mask api_key
+        service.recordSlowQuery("SELECT * FROM users WHERE token='secret123' AND password='pass' AND api_key='key123'", 2000);
+        assertEquals(1, service.getTotalSlowQueries());
     }
 }

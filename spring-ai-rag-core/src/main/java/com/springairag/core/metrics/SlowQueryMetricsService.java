@@ -2,11 +2,9 @@ package com.springairag.core.metrics;
 
 import com.springairag.core.config.RagProperties;
 import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import jakarta.persistence.EntityManagerFactory;
-import jakarta.persistence.Query;
 import org.hibernate.SessionFactory;
 import org.hibernate.stat.Statistics;
 import org.slf4j.Logger;
@@ -17,6 +15,7 @@ import org.springframework.stereotype.Service;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Pattern;
 
 /**
  * Slow query monitoring service using Hibernate statistics.
@@ -34,6 +33,10 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SlowQueryMetricsService {
 
     private static final Logger log = LoggerFactory.getLogger(SlowQueryMetricsService.class);
+
+    /** Pre-compiled pattern for masking sensitive data in SQL. */
+    private static final Pattern SENSITIVE_SQL_PATTERN = Pattern.compile(
+            "(?i)(api[_-]?key|token|secret|password)\\s*=\\s*'[^']*'");
 
     private final RagProperties properties;
     private final EntityManagerFactory entityManagerFactory;
@@ -116,29 +119,41 @@ public class SlowQueryMetricsService {
             return;
         }
 
-        totalSlowQueries.incrementAndGet();
-        if (slowQueryCounter != null) {
-            slowQueryCounter.increment();
-        }
-        if (slowestQueryTimer != null) {
-            slowestQueryTimer.record(java.time.Duration.ofMillis(durationMs));
-        }
-
-        if (properties.getSlowQuery().isLogEnabled()) {
-            String maskedSql = maskSensitiveSql(sql);
-            log.warn("Slow query detected ({}ms > {}ms threshold): {}",
-                    durationMs, getThresholdMs(), truncateSql(maskedSql, 500));
-        }
-
+        // Only count metrics if record is successfully created (sql must be non-null)
         int maxRetained = properties.getSlowQuery().getMaxRetained();
-        if (maxRetained > 0) {
-            SlowQueryRecord record = new SlowQueryRecord(
-                    System.currentTimeMillis(), sql, durationMs);
-            recentSlowQueries.offer(record);
-            // Trim to maxRetained
-            while (recentSlowQueries.size() > maxRetained) {
-                recentSlowQueries.poll();
+        try {
+            totalSlowQueries.incrementAndGet();
+            if (slowQueryCounter != null) {
+                slowQueryCounter.increment();
             }
+            if (slowestQueryTimer != null) {
+                slowestQueryTimer.record(java.time.Duration.ofMillis(durationMs));
+            }
+
+            if (properties.getSlowQuery().isLogEnabled()) {
+                String maskedSql = maskSensitiveSql(sql);
+                log.warn("Slow query detected ({}ms > {}ms threshold): {}",
+                        durationMs, getThresholdMs(), truncateSql(maskedSql, 500));
+            }
+
+            if (maxRetained > 0) {
+                SlowQueryRecord record = new SlowQueryRecord(
+                        System.currentTimeMillis(), sql, durationMs);
+                recentSlowQueries.offer(record);
+                // Trim to maxRetained
+                while (recentSlowQueries.size() > maxRetained) {
+                    recentSlowQueries.poll();
+                }
+            }
+        } catch (RuntimeException e) {
+            // Metrics were not yet committed if record construction failed;
+            // decrement to keep counter accurate.
+            totalSlowQueries.decrementAndGet();
+            if (slowQueryCounter != null) {
+                // Micrometer counter is already incremented; decrement via negative increment
+                slowQueryCounter.increment(-1.0);
+            }
+            throw e;
         }
     }
 
@@ -194,8 +209,7 @@ public class SlowQueryMetricsService {
     private String maskSensitiveSql(String sql) {
         if (sql == null) return null;
         // Mask obvious API keys and tokens in SQL comments/values
-        return sql.replaceAll("(?i)(api[_-]?key|token|secret|password)\\s*=\\s*'[^']*'",
-                "$1='***'");
+        return SENSITIVE_SQL_PATTERN.matcher(sql).replaceAll("$1='***'");
     }
 
     private String truncateSql(String sql, int maxLength) {
@@ -211,7 +225,18 @@ public class SlowQueryMetricsService {
             String sql,
             /** Execution time in milliseconds. */
             long durationMs
-    ) {}
+    ) {
+        public SlowQueryRecord {
+            Objects.requireNonNull(sql, "sql must not be null");
+        }
+
+        @Override
+        public String toString() {
+            return "SlowQueryRecord{timestampMs=" + timestampMs +
+                    ", sql=" + (sql.length() <= 80 ? sql : sql.substring(0, 80) + "...") +
+                    ", durationMs=" + durationMs + "}";
+        }
+    }
 
     /** Aggregated slow query statistics summary. */
     public record SlowQueryStatsSummary(
@@ -221,5 +246,13 @@ public class SlowQueryMetricsService {
             long thresholdMs,
             long averageQueryDurationMs,
             List<SlowQueryRecord> recentSlowQueries
-    ) {}
+    ) {
+        @Override
+        public String toString() {
+            return "SlowQueryStatsSummary{totalQueryCount=" + totalQueryCount +
+                    ", slowQueryCount=" + slowQueryCount +
+                    ", thresholdMs=" + thresholdMs +
+                    ", averageQueryDurationMs=" + averageQueryDurationMs + "}";
+        }
+    }
 }
