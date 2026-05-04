@@ -188,6 +188,30 @@ class RagSearchControllerTest {
         assertEquals(200, r2.getStatusCode().value());
     }
 
+    @Test
+    @DisplayName("GET search with blank query returns 400")
+    void search_blankQuery_returns400() {
+        ResponseEntity<?> response = controller.search("", 10, true, 0.5, 0.5);
+
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("blank"));
+        verifyNoInteractions(hybridRetriever);
+    }
+
+    @Test
+    @DisplayName("GET search with whitespace-only query returns 400")
+    void search_whitespaceQuery_returns400() {
+        ResponseEntity<?> response = controller.search("   ", 10, true, 0.5, 0.5);
+
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("blank"));
+        verifyNoInteractions(hybridRetriever);
+    }
+
     // ========== Multi-collection search ==========
 
     @Test

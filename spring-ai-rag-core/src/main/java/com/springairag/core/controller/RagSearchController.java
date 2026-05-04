@@ -64,7 +64,7 @@ public class RagSearchController {
     @Operation(summary = "Direct retrieval (GET)", description = "Hybrid search, no LLM generation. Supports vector/fulltext weight adjustment.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns retrieval results list"),
-            @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0]")
+            @ApiResponse(responseCode = "400", description = "vectorWeight or fulltextWeight out of range [0.0, 1.0], or query is blank")
     })
     @GetMapping
     @Timed(value = "rag.search.get", description = "RAG direct search (GET)", percentiles = {0.5, 0.95, 0.99})
@@ -77,6 +77,10 @@ public class RagSearchController {
 
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
 
+        if (query == null || query.isBlank()) {
+            return ResponseEntity.badRequest().body(
+                    ErrorResponse.builder().detail("Query must not be blank").build());
+        }
         if (vectorWeight < 0.0 || vectorWeight > 1.0) {
             return ResponseEntity.badRequest().body(
                     ErrorResponse.builder().detail("vectorWeight must be between 0.0 and 1.0, got " + vectorWeight).build());
