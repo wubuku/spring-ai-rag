@@ -153,13 +153,25 @@ class SlowQueryMetricsServiceTest {
 
     @Test
     void recordSlowQuery_nullSql_throwsNullPointerException() {
-        // null SQL is now a programming error enforced by SlowQueryRecord constructor
+        // null SQL is a programming error enforced by Objects.requireNonNull before any metrics are recorded
         properties.getSlowQuery().setMaxRetained(10);
         assertThrows(NullPointerException.class, () ->
                 service.recordSlowQuery(null, 2000));
         // counter does NOT increment because the exception is thrown before record creation
         assertEquals(0, service.getTotalSlowQueries());
         assertTrue(service.getRecentSlowQueries().isEmpty());
+    }
+
+    @Test
+    void recordSlowQuery_nullSql_throwsEvenWhenMaxRetainedZero() {
+        // maxRetained=0 path: old code silently incremented counters/timer for null SQL
+        // (no SlowQueryRecord created → no exception → counters not rolled back)
+        // Fix: Objects.requireNonNull(sql) throws immediately before any metrics are recorded
+        properties.getSlowQuery().setMaxRetained(0);
+        assertThrows(NullPointerException.class, () ->
+                service.recordSlowQuery(null, 2000));
+        // counters must not be incremented (early validation before any metric recording)
+        assertEquals(0, service.getTotalSlowQueries());
     }
 
     @Test

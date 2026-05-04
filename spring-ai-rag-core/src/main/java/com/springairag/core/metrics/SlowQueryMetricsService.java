@@ -120,6 +120,7 @@ public class SlowQueryMetricsService {
         }
 
         // Only count metrics if record is successfully created (sql must be non-null)
+        Objects.requireNonNull(sql, "sql must not be null");
         int maxRetained = properties.getSlowQuery().getMaxRetained();
         try {
             totalSlowQueries.incrementAndGet();
@@ -147,12 +148,14 @@ public class SlowQueryMetricsService {
             }
         } catch (RuntimeException e) {
             // Metrics were not yet committed if record construction failed;
-            // decrement to keep counter accurate.
+            // decrement to keep counter and timer accurate.
             totalSlowQueries.decrementAndGet();
             if (slowQueryCounter != null) {
                 // Micrometer counter is already incremented; decrement via negative increment
                 slowQueryCounter.increment(-1.0);
             }
+            // Note: Timer rollback is not directly supported by Micrometer;
+            // the timer sample is discarded (not added to the timer) when the exception propagates.
             throw e;
         }
     }
