@@ -87,6 +87,15 @@ class EmbeddingModelRouterTest {
 
             assertNull(r.resolve("unknown/bge-m3"));
         }
+
+        @Test
+        @DisplayName("returns null for modelRef without slash and no matching pattern (no NPE)")
+        void resolve_noSlashNoMatchNoModels_returnsNull() {
+            // modelRef="unknown-model" has no "/", "unknown-model" does not contain "bge" or "embo",
+            // and embeddingModelsByProvider is empty → inferProviderFromModelId returns null
+            // → resolve() must return null gracefully without NPE
+            assertNull(router.resolve("unknown-model"));
+        }
     }
 
     // ─── getAvailableProviders() ───────────────────────────────────

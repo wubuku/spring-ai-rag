@@ -66,6 +66,10 @@ public class EmbeddingModelRouter {
         }
 
         String providerId = extractProviderId(modelRef);
+        if (providerId == null) {
+            log.warn("Could not determine provider from modelRef '{}'", modelRef);
+            return null;
+        }
 
         EmbeddingModel model = embeddingModelsByProvider.get(providerId.toLowerCase());
         if (model != null) {
