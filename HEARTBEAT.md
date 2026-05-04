@@ -3382,3 +3382,14 @@ PDF 端点测试(Section 16,9 tests):
 - 2026-05-02 21:50 - ✅ WebUI 常规发布:npm test 148 ✅(23 test files)/ npm run build ✅(99KB index gzipped)/ E2E 11/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing);Search 测试失败:数据库为空,无索引文档,已知环境问题,非代码 bug;dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);pg_jieba 缺失导致 V15 迁移失败,创建 dummy jiebacfg text search config 解决;git 工作区干净(无变更);WebUI 项目处于生产级成熟状态
 - 2026-05-02 23:45 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,34 chunks)/ E2E 11/12 ⚠️(Search:空数据库,已知环境问题,非代码 bug;Dashboard/Documents/Collections/Chat+Real Chat/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全部通过)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更);commit a276d22 已推送;WebUI 项目处于生产级成熟状态
 - 2026-05-03 15:09 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped)/ E2E 11/12 ⚠️(Search:空数据库,已知环境问题,非代码 bug;其余 11 项全部通过)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无 WebUI 变更,backend BatchDocumentService 未推送归后端 cron);WebUI 项目处于生产级成熟状态
+
+## Cron 进度(后端 - 2026-05-04 12:34 - 后端测试脚本 + 构建验证)
+
+- 2026-05-04 12:34 - ✅ 后端构建验证 + Maven 测试脚本:
+  - 发现并清理 5 个 stale Maven/Surefire 孤儿进程(来自上一轮崩溃会话)
+  - 新增 `scripts/oc-mvn-test.sh`:在独立进程组中跑 `mvn test`,脚本收到 INT/TERM/HUP 时向整组发信号,减少 Surefire 孤儿 JVM;自动 source .env;支持 `--selftest` 模式
+  - 新增 `scripts/test-oc-mvn-test.sh`:oc-mvn-test.sh 回归测试(Interrupt self-test + Maven smoke via -pl spring-ai-rag-api -DskipTests)
+  - test-oc-mvn-test.sh 全部通过(selftest sleep 检测/TERM 收口/Maven smoke)
+  - 核心 Controller 测试验证:RagCollectionControllerTest 29✅/RagDocumentControllerTest 47✅/RagChatControllerTest 20✅/RagSearchControllerTest 13✅/AlertControllerTest 28✅/AbTestControllerTest 20✅/ModelControllerTest 13✅/RetrievalEvaluationServiceImplTest 32✅/DocumentEmbedServiceTest 33✅/HybridRetrieverServiceTest 115✅/RagMetricsServiceTest 全部 0 failures 0 errors
+  - 全部 git 已推送(commit 2ff3cd0);代码库健康
+
