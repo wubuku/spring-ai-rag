@@ -144,9 +144,10 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
 
     @Override
     public List<RagRetrievalEvaluation> batchEvaluate(List<EvaluationCase> cases) {
-        if (cases != null) {
-            batchEvaluationCounter.increment(cases.size());
+        if (cases == null) {
+            return Collections.emptyList();
         }
+        batchEvaluationCounter.increment(cases.size());
         return cases.stream()
                 .map(c -> evaluate(c.getQuery(), c.getRetrievedDocIds(), c.getRelevantDocIds(),
                         c.getEvaluationMethod(), c.getEvaluatorId()))
