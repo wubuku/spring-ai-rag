@@ -3418,4 +3418,13 @@ PDF 端点测试(Section 16,9 tests):
   - 核心 Controller 测试验证:RagCollectionControllerTest 29✅/RagDocumentControllerTest 47✅/RagChatControllerTest 20✅/RagSearchControllerTest 13✅/AlertControllerTest 28✅/AbTestControllerTest 20✅/ModelControllerTest 13✅/RetrievalEvaluationServiceImplTest 32✅/DocumentEmbedServiceTest 33✅/HybridRetrieverServiceTest 115✅/RagMetricsServiceTest 全部 0 failures 0 errors
   - 全部 git 已推送(commit 2ff3cd0);代码库健康
 
+## Cron 进度(后端 - 2026-05-05 08:50 - Demo 测试编译修复)
+
+- 2026-05-05 08:50 - ✅ Demo 模块测试修复:
+  - 发现 `demo-multi-model` MultiModelControllerTest 编译错误:CompareRequest toString 测试中断言字符串包含 `""openai""`(Java 不支持双引号 `""` 作为字符串内引号,应为 `\"` 转义) + 缺少 JUnit `assertTrue/assertEquals/assertNotEquals` 静态导入
+  - 修复:添加 `assertTrue/assertEquals/assertNotEquals` 静态导入;断言改为 `providers=[openai]` 匹配 Java `List.of("openai").toString()` 实际输出(`[openai]` 无元素引号)
+  - 验证:14 tests 全部通过;demo-domain-extension 19 tests ✅;demo-component-level 7 tests ✅
+  - 核心模块测试验证:RagCollectionController 29✅/RagDocumentController 47✅/RagChatController 20✅/RagSearchController 18✅/AlertController 28✅/AbTestController 33✅/ModelController 13✅/DocumentEmbedService 33✅/RetrievalEvaluationService 32✅/HybridRetrieverService 107✅/spring-ai-rag-starter 52 tests ✅
+  - commit fb962d6 已推送;git 工作区干净
+
 - 2026-05-04 17:57 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全部通过)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区有 2 个后端变更(SlowQueryMetricsService,归属后端 cron),无 WebUI 变更;WebUI 项目处于生产级成熟状态
