@@ -18,6 +18,7 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -78,6 +79,7 @@ public class ApiKeyManagementService {
      */
     @Transactional
     public boolean revokeKey(String keyId) {
+        Objects.requireNonNull(keyId, "keyId must not be null");
         int updated = apiKeyRepository.disableByKeyId(keyId);
         if (updated > 0) {
             // Invalidate cache entries for this keyId (we invalidate all since we don't store reverse mapping)
@@ -96,6 +98,7 @@ public class ApiKeyManagementService {
      */
     @Transactional
     public ApiKeyCreatedResponse rotateKey(String keyId) {
+        Objects.requireNonNull(keyId, "keyId must not be null");
         Optional<RagApiKey> existing = apiKeyRepository.findByKeyId(keyId);
         if (existing.isEmpty()) {
             return null;

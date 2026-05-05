@@ -110,6 +110,11 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
+    void revokeKey_nullKeyId_throws() {
+        assertThrows(NullPointerException.class, () -> service.revokeKey(null));
+    }
+
+    @Test
     void rotateKey_existingKey_disablesOldAndCreatesNew() {
         RagApiKey existing = new RagApiKey();
         existing.setKeyId("rag_k_old");
@@ -135,6 +140,11 @@ class ApiKeyManagementServiceTest {
         ApiKeyCreatedResponse result = service.rotateKey("rag_k_unknown");
 
         assertNull(result);
+    }
+
+    @Test
+    void rotateKey_nullKeyId_throws() {
+        assertThrows(NullPointerException.class, () -> service.rotateKey(null));
     }
 
     @Test
