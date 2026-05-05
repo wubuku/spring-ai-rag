@@ -32,6 +32,19 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
     List<RagChatHistory> findBySessionIdAsc(@Param("sessionId") String sessionId);
 
     /**
+     * Query the most recent N history records by session ID, ordered newest-first.
+     * Uses database-level LIMIT to avoid loading all records into memory.
+     *
+     * @param sessionId the session ID
+     * @param limit maximum number of records to return (positive value required)
+     * @return at most {@code limit} records, newest first; never null
+     */
+    @Query(value = "SELECT * FROM rag_chat_history WHERE session_id = :sessionId ORDER BY created_at DESC, id DESC LIMIT :limit",
+            nativeQuery = true)
+    List<RagChatHistory> findTopNBySessionIdNewestFirst(@Param("sessionId") String sessionId,
+                                                         @Param("limit") int limit);
+
+    /**
      * Delete all history by session ID.
      */
     @Modifying

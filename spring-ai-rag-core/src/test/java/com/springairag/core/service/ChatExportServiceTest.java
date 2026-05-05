@@ -60,12 +60,14 @@ class ChatExportServiceTest {
         RagChatHistory r1 = createRecord(1L, "s1", "Msg1", "Ans1", now());
         RagChatHistory r2 = createRecord(2L, "s1", "Msg2", "Ans2", now());
         RagChatHistory r3 = createRecord(3L, "s1", "Msg3", "Ans3", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2, r3));
+        // DB returns newest-first (ORDER BY created_at DESC, id DESC); service reverses to chronological
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", 2))
+                .thenReturn(List.of(r3, r2));
 
         byte[] result = service.exportAsJson("s1", 2);
         String json = new String(result, StandardCharsets.UTF_8);
 
-        // With limit=2 and 3 records, subList gets last 2
+        // With limit=2 and 3 records, chronological order: r2 then r3 (both reversed from DB DESC order)
         assertTrue(json.contains("\"totalMessages\": 2"));
         assertTrue(json.contains("Msg2"));
         assertTrue(json.contains("Msg3"));
@@ -121,6 +123,54 @@ class ChatExportServiceTest {
 
         assertTrue(json.contains("\"content\": \"Hello\""));
         assertFalse(json.contains("\"role\": \"assistant\""));
+    }
+
+    @Test
+    void exportAsJson_withLimit_usesDatabaseLimitQuery() {
+        // With limit > 0, the optimized findTopNBySessionIdNewestFirst query should be called
+        RagChatHistory r1 = createRecord(1L, "s1", "Oldest", "Oldest answer", LocalDateTime.of(2026, 1, 1, 10, 0));
+        RagChatHistory r2 = createRecord(2L, "s1", "Middle", "Middle answer", LocalDateTime.of(2026, 1, 1, 11, 0));
+        RagChatHistory r3 = createRecord(3L, "s1", "Newest", "Newest answer", LocalDateTime.of(2026, 1, 1, 12, 0));
+        // DB returns newest-first; service reverses to chronological
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", 2))
+                .thenReturn(List.of(r3, r2)); // newest first from DB
+
+        byte[] result = service.exportAsJson("s1", 2);
+        String json = new String(result, StandardCharsets.UTF_8);
+
+        // Chronological order (oldest → newest) with limit applied
+        assertTrue(json.contains("\"totalMessages\": 2"));
+        // Middle appears before Newest (chronological order after reversal)
+        int middleIdx = json.indexOf("Middle");
+        int newestIdx = json.indexOf("Newest");
+        assertTrue(middleIdx >= 0 && newestIdx >= 0 && middleIdx < newestIdx,
+                "Middle should appear before Newest (chronological order)");
+        assertFalse(json.contains("Oldest"));
+        // Verify the optimized query was called (not findBySessionIdAsc)
+        verify(historyRepository).findTopNBySessionIdNewestFirst("s1", 2);
+        verify(historyRepository, never()).findBySessionIdAsc("s1");
+    }
+
+    @Test
+    void exportAsJson_withZeroLimit_usesFullScanQuery() {
+        // With limit=0, findBySessionIdAsc (full scan) should be called
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(Collections.emptyList());
+
+        service.exportAsJson("s1", 0);
+
+        verify(historyRepository).findBySessionIdAsc("s1");
+        verify(historyRepository, never()).findTopNBySessionIdNewestFirst(anyString(), anyInt());
+    }
+
+    @Test
+    void exportAsJson_withNegativeLimit_usesFullScanQuery() {
+        // Negative limit should fall through to full scan (no DB LIMIT)
+        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(Collections.emptyList());
+
+        service.exportAsJson("s1", -5);
+
+        verify(historyRepository).findBySessionIdAsc("s1");
+        verify(historyRepository, never()).findTopNBySessionIdNewestFirst(anyString(), anyInt());
     }
 
     @Test
@@ -196,7 +246,9 @@ class ChatExportServiceTest {
     void exportAsMarkdown_withLimit_respectsLimit() {
         RagChatHistory r1 = createRecord(1L, "s1", "Old", "Old answer", now());
         RagChatHistory r2 = createRecord(2L, "s1", "New", "New answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2));
+        // DB returns newest-first; service reverses to chronological, then subList takes last 1 = newest
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", 1))
+                .thenReturn(List.of(r2));
 
         byte[] result = service.exportAsMarkdown("s1", 1);
         String md = new String(result, StandardCharsets.UTF_8);
@@ -250,7 +302,9 @@ class ChatExportServiceTest {
     void exportAsCsv_withLimit_respectsLimit() {
         RagChatHistory r1 = createRecord(1L, "s1", "Old", "Old answer", now());
         RagChatHistory r2 = createRecord(2L, "s1", "New", "New answer", now());
-        when(historyRepository.findBySessionIdAsc("s1")).thenReturn(List.of(r1, r2));
+        // DB returns newest-first; service reverses to chronological, then subList takes last 1 = newest
+        when(historyRepository.findTopNBySessionIdNewestFirst("s1", 1))
+                .thenReturn(List.of(r2));
 
         byte[] result = service.exportAsCsv("s1", 1);
         String csv = new String(result, StandardCharsets.UTF_8);

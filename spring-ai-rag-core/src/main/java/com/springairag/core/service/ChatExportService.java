@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.format.DateTimeFormatter;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -133,11 +134,15 @@ public class ChatExportService {
     }
 
     private List<RagChatHistory> fetchRecords(String sessionId, int limit) {
-        List<RagChatHistory> allRecords = historyRepository.findBySessionIdAsc(sessionId);
-        if (limit > 0 && limit < allRecords.size()) {
-            return allRecords.subList(allRecords.size() - limit, allRecords.size());
+        if (limit > 0) {
+            // Use database-level LIMIT — avoids loading all records into memory
+            List<RagChatHistory> topN = historyRepository.findTopNBySessionIdNewestFirst(sessionId, limit);
+            // Reverse to return in chronological (ASC) order to match existing behavior
+            List<RagChatHistory> reversed = new java.util.ArrayList<>(topN);
+            Collections.reverse(reversed);
+            return reversed;
         }
-        return allRecords;
+        return historyRepository.findBySessionIdAsc(sessionId);
     }
 
     private String escapeJson(String s) {
