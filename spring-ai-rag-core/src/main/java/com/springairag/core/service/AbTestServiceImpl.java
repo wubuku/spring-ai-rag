@@ -183,6 +183,8 @@ public class AbTestServiceImpl implements AbTestService {
         if (experimentId == null) {
             throw new IllegalArgumentException("Experiment id must not be null");
         }
+        Objects.requireNonNull(variantName, "Variant name must not be null");
+        Objects.requireNonNull(query, "Query must not be null");
         if (resultRepository.existsBySessionIdAndExperimentId(sessionId, experimentId)) {
             log.debug("Duplicate result for session {} in experiment {}", sessionId, experimentId);
             return;

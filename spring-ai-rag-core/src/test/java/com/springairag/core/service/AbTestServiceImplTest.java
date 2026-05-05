@@ -366,6 +366,18 @@ class AbTestServiceImplTest {
                 abTestService.recordResult(99L, "control", "s1", "q", null, null));
     }
 
+    @Test
+    void recordResult_nullVariantName_throws() {
+        assertThrows(NullPointerException.class, () ->
+                abTestService.recordResult(1L, null, "sess-null", "query", null, null));
+    }
+
+    @Test
+    void recordResult_nullQuery_throws() {
+        assertThrows(NullPointerException.class, () ->
+                abTestService.recordResult(1L, "variant_a", "sess-null", null, null, null));
+    }
+
     // ==================== Analyze Experiment with Winner ====================
 
     @Test
