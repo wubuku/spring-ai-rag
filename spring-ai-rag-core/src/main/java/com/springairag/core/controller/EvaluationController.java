@@ -10,6 +10,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -58,6 +59,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Evaluation succeeded"),
         @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
+    @Timed(value = "rag.evaluation.evaluate", description = "Single retrieval evaluation", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/evaluate")
     public ResponseEntity<RagRetrievalEvaluation> evaluate(@Valid @RequestBody EvaluateRequest request) {
         RagRetrievalEvaluation result = evaluationService.evaluate(
@@ -78,6 +80,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Batch evaluation succeeded"),
         @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
+    @Timed(value = "rag.evaluation.batch", description = "Batch retrieval evaluation", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/batch")
     public ResponseEntity<List<RagRetrievalEvaluation>> batchEvaluate(
             @Valid @RequestBody List<EvaluateRequest> requests) {
@@ -104,6 +107,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "400", description = "Request parameters invalid"),
         @ApiResponse(responseCode = "500", description = "LLM judge unavailable or evaluation failed")
     })
+    @Timed(value = "rag.evaluation.answer-quality", description = "Answer quality evaluation (LLM-as-judge)", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/answer-quality")
     public ResponseEntity<AnswerQualityResponse> evaluateAnswerQuality(
             @Valid @RequestBody AnswerQualityRequest request) {
@@ -131,6 +135,7 @@ public class EvaluationController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns calculation result")
     })
+    @Timed(value = "rag.evaluation.metrics.calculate", description = "Calculate evaluation metrics", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/metrics/calculate")
     public ResponseEntity<RetrievalEvaluationService.EvaluationMetrics> calculateMetrics(
             @RequestParam List<Long> retrieved,
@@ -147,6 +152,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Returns evaluation report"),
         @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
+    @Timed(value = "rag.evaluation.report", description = "Get evaluation report", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/report")
     public ResponseEntity<RetrievalEvaluationService.EvaluationReport> getReport(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -161,6 +167,7 @@ public class EvaluationController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns paginated evaluation history")
     })
+    @Timed(value = "rag.evaluation.history", description = "Get evaluation history", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/history")
     public ResponseEntity<List<RagRetrievalEvaluation>> getHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -176,6 +183,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Returns aggregated metrics"),
         @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
+    @Timed(value = "rag.evaluation.metrics.aggregated", description = "Get aggregated evaluation metrics", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/metrics/aggregated")
     public ResponseEntity<RetrievalEvaluationService.AggregatedMetrics> getAggregatedMetrics(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -193,6 +201,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Feedback submitted successfully"),
         @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
+    @Timed(value = "rag.evaluation.feedback.submit", description = "Submit user feedback", percentiles = {0.5, 0.95, 0.99})
     @PostMapping("/feedback")
     public ResponseEntity<RagUserFeedback> submitFeedback(@Valid @RequestBody FeedbackRequest request) {
         RagUserFeedback result = userFeedbackService.submitFeedback(
@@ -221,6 +230,7 @@ public class EvaluationController {
         @ApiResponse(responseCode = "200", description = "Returns feedback statistics"),
         @ApiResponse(responseCode = "400", description = "Invalid date format")
     })
+    @Timed(value = "rag.evaluation.feedback.stats", description = "Get feedback statistics", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/feedback/stats")
     public ResponseEntity<UserFeedbackService.FeedbackStats> getFeedbackStats(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) ZonedDateTime startDate,
@@ -235,6 +245,7 @@ public class EvaluationController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns paginated feedback history")
     })
+    @Timed(value = "rag.evaluation.feedback.history", description = "Get feedback history", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/feedback/history")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackHistory(
             @RequestParam(defaultValue = "0") int page,
@@ -249,6 +260,7 @@ public class EvaluationController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns paginated list of feedback for the specified type")
     })
+    @Timed(value = "rag.evaluation.feedback.by-type", description = "Query feedback by type", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/feedback/type/{feedbackType}")
     public ResponseEntity<List<RagUserFeedback>> getFeedbackByType(
             @PathVariable String feedbackType,
