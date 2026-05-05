@@ -127,7 +127,11 @@
                     <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-surefire-plugin</artifactId>
                     <configuration>
-                        <argLine>@{argLine}</argLine>
+                        <!-- JaCoCo coverage (@{argLine}) + Java 21+ Mockito self-attach permission.
+                             Note: Mockito self-attaching warning may still appear in modules with JaCoCo agent active
+                             (e.g. spring-ai-rag-core) due to classfile transformer ordering — this is cosmetic,
+                             tests run correctly. The warning is suppressed in isolated demo module tests. -->
+                        <argLine>@{argLine} -Djdk.attach.allowAttachSelf=true</argLine>
                     </configuration>
                 </plugin>
                 <plugin>
