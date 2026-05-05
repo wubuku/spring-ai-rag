@@ -99,6 +99,7 @@ public class SearchCapabilities {
             log.info("Extensions detected: vector={}, pg_trgm={}, pg_jieba={}, zhparser={}",
                     hasPgVector, hasPgTrgm, hasJieba, hasZhparser);
         } catch (Exception e) {
+            // Resilience: DB query failure means all extensions assumed unavailable (graceful degradation)
             log.warn("Failed to detect extensions: {}", e.getMessage());
             hasPgVector = hasPgTrgm = hasJieba = hasZhparser = false;
         }
@@ -139,6 +140,7 @@ public class SearchCapabilities {
             log.info("Indexes detected: zh_index={}, en_index={}, trgm_index={}",
                     hasZhIndex, hasEnIndex, hasTrgmIndex);
         } catch (Exception e) {
+            // Resilience: DB query failure means all indexes assumed unavailable (graceful degradation)
             log.warn("Failed to detect indexes: {}", e.getMessage());
             hasZhIndex = hasEnIndex = hasTrgmIndex = false;
         }

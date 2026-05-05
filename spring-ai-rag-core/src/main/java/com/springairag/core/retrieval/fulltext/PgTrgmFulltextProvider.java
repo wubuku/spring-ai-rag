@@ -55,6 +55,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             log.info("pg_trgm availability check: extension and index found={}", available);
             return available;
         } catch (Exception e) {
+            // Resilience: DB query failure means pg_trgm not available (graceful degradation)
             log.warn("pg_trgm not available: {}", e.getMessage());
             return false;
         }
@@ -94,6 +95,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                     .limit(limit)
                     .toList();
         } catch (Exception e) {
+            // Resilience: search failure returns empty list (graceful degradation)
             log.warn("pg_trgm search failed for query '{}': {}", query, e.getMessage());
             return Collections.emptyList();
         }

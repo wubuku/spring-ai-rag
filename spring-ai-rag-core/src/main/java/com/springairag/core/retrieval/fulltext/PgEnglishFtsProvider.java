@@ -51,6 +51,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
             log.info("English FTS availability check: index found={}", available);
             return available;
         } catch (Exception e) {
+            // Resilience: DB query failure means FTS not available (graceful degradation)
             log.warn("English FTS not available: {}", e.getMessage());
             return false;
         }
@@ -87,6 +88,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                     .limit(limit)
                     .toList();
         } catch (Exception e) {
+            // Resilience: search failure returns empty list (graceful degradation)
             log.warn("English FTS search failed for query '{}': {}", query, e.getMessage());
             return Collections.emptyList();
         }
