@@ -37,6 +37,8 @@ public class UserFeedbackServiceImpl implements UserFeedbackService {
                                           Integer rating, String comment,
                                           List<Long> retrievedDocumentIds, List<Long> selectedDocumentIds,
                                           Long dwellTimeMs) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(query, "query must not be null");
         RagUserFeedback feedback = new RagUserFeedback();
         feedback.setSessionId(sessionId);
         feedback.setQuery(query);

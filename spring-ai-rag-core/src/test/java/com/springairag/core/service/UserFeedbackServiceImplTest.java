@@ -93,6 +93,26 @@ class UserFeedbackServiceImplTest {
     }
 
     @Test
+    @DisplayName("Submitting feedback with null sessionId throws NullPointerException")
+    void submitFeedback_nullSessionId_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.submitFeedback(
+                        null, "什么是 RAG？", "THUMBS_UP",
+                        null, null, List.of(1L), List.of(1L), 5000L));
+        assertEquals("sessionId must not be null", ex.getMessage());
+    }
+
+    @Test
+    @DisplayName("Submitting feedback with null query throws NullPointerException")
+    void submitFeedback_nullQuery_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.submitFeedback(
+                        "session-1", null, "THUMBS_UP",
+                        null, null, List.of(1L), List.of(1L), 5000L));
+        assertEquals("query must not be null", ex.getMessage());
+    }
+
+    @Test
     @DisplayName("Submitting thumbs-down feedback serializes empty doc list as null")
     void submitFeedback_thumbsDown_nullDocIds() {
         when(repository.save(any(RagUserFeedback.class))).thenAnswer(inv -> inv.getArgument(0));
