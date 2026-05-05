@@ -62,6 +62,14 @@ class RagCollectionServiceTest {
     class DeleteCollection {
 
         @Test
+        @DisplayName("throws NullPointerException when id is null")
+        void nullId_throwsNullPointerException() {
+            NullPointerException ex = assertThrows(NullPointerException.class,
+                    () -> service.deleteCollection(null));
+            assertEquals("id must not be null", ex.getMessage());
+        }
+
+        @Test
         @DisplayName("soft-deletes collection and unlinks documents")
         void existingCollection_unlinksDocumentsAndSoftDeletes() {
             RagCollection collection = createCollection(1L, "To Delete");
@@ -126,6 +134,14 @@ class RagCollectionServiceTest {
     class RestoreCollection {
 
         @Test
+        @DisplayName("throws NullPointerException when id is null")
+        void nullId_throwsNullPointerException() {
+            NullPointerException ex = assertThrows(NullPointerException.class,
+                    () -> service.restoreCollection(null));
+            assertEquals("id must not be null", ex.getMessage());
+        }
+
+        @Test
         @DisplayName("restores collection and returns with document count")
         void restoresCollectionSuccessfully() {
             RagCollection restored = createCollection(1L, "Restored");
@@ -174,6 +190,14 @@ class RagCollectionServiceTest {
     @Nested
     @DisplayName("cloneCollection")
     class CloneCollection {
+
+        @Test
+        @DisplayName("throws NullPointerException when id is null")
+        void nullId_throwsNullPointerException() {
+            NullPointerException ex = assertThrows(NullPointerException.class,
+                    () -> service.cloneCollection(null));
+            assertEquals("id must not be null", ex.getMessage());
+        }
 
         @Test
         @DisplayName("clones collection and documents with PENDING status")

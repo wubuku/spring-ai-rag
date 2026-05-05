@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -47,6 +48,7 @@ public class RagCollectionService {
      */
     @Transactional
     public Optional<DeleteResult> deleteCollection(Long id) {
+        Objects.requireNonNull(id, "id must not be null");
         log.info("Soft-deleting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
@@ -79,6 +81,7 @@ public class RagCollectionService {
      */
     @Transactional
     public Optional<RestoreResult> restoreCollection(Long id) {
+        Objects.requireNonNull(id, "id must not be null");
         log.info("Restoring collection: id={}", id);
 
         int updated = collectionRepository.restore(id);
@@ -111,6 +114,7 @@ public class RagCollectionService {
      */
     @Transactional
     public Optional<CollectionCloneResponse> cloneCollection(Long id) {
+        Objects.requireNonNull(id, "id must not be null");
         log.info("Cloning collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
