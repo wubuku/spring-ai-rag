@@ -8,6 +8,9 @@ import com.springairag.core.service.ModelComparisonService.ModelComparisonResult
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -281,7 +284,7 @@ class MultiModelControllerTest {
 
         String str = req.toString();
         assertTrue(str.contains("query='test query'"));
-        assertTrue(str.contains("providers=[""openai""]"));
+        assertTrue(str.contains("providers=[openai]"));
         assertTrue(str.contains("timeoutSeconds=30"));
     }
 }
