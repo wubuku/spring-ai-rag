@@ -179,6 +179,41 @@ class ModelMetricsServiceTest {
     }
 
     @Test
+    @DisplayName("recordSuccess with null provider throws NullPointerException")
+    void recordSuccess_nullProvider_throws() {
+        assertThrows(NullPointerException.class,
+                () -> modelMetricsService.recordSuccess(null, 100));
+    }
+
+    @Test
+    @DisplayName("recordError with null provider throws NullPointerException")
+    void recordError_nullProvider_throws() {
+        assertThrows(NullPointerException.class,
+                () -> modelMetricsService.recordError(null, 100));
+    }
+
+    @Test
+    @DisplayName("getCallCount with null provider throws NullPointerException")
+    void getCallCount_nullProvider_throws() {
+        assertThrows(NullPointerException.class,
+                () -> modelMetricsService.getCallCount(null));
+    }
+
+    @Test
+    @DisplayName("getErrorCount with null provider throws NullPointerException")
+    void getErrorCount_nullProvider_throws() {
+        assertThrows(NullPointerException.class,
+                () -> modelMetricsService.getErrorCount(null));
+    }
+
+    @Test
+    @DisplayName("getErrorRate with null provider throws NullPointerException")
+    void getErrorRate_nullProvider_throws() {
+        assertThrows(NullPointerException.class,
+                () -> modelMetricsService.getErrorRate(null));
+    }
+
+    @Test
     @DisplayName("Multiple providers should each have independent timers")
     void multipleProviders_independentTimers() {
         modelMetricsService.recordSuccess("deepseek", 100);

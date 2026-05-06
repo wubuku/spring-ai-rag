@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 
@@ -30,6 +31,7 @@ public class ModelMetricsService {
      * Record a successful model call.
      */
     public void recordSuccess(String provider, long durationMs) {
+        Objects.requireNonNull(provider, "provider must not be null");
         getOrCreateCallCounter(provider).increment();
         getOrCreateLatencyTimer(provider).record(durationMs, TimeUnit.MILLISECONDS);
     }
@@ -38,6 +40,7 @@ public class ModelMetricsService {
      * Record a failed model call.
      */
     public void recordError(String provider, long durationMs) {
+        Objects.requireNonNull(provider, "provider must not be null");
         getOrCreateCallCounter(provider).increment();
         getOrCreateErrorCounter(provider).increment();
         getOrCreateLatencyTimer(provider).record(durationMs, TimeUnit.MILLISECONDS);
@@ -47,6 +50,7 @@ public class ModelMetricsService {
      * Gets the call count for the specified provider.
      */
     public long getCallCount(String provider) {
+        Objects.requireNonNull(provider, "provider must not be null");
         Counter c = callCounters.get(provider);
         return c != null ? (long) c.count() : 0;
     }
@@ -55,6 +59,7 @@ public class ModelMetricsService {
      * Gets the error count for the specified provider.
      */
     public long getErrorCount(String provider) {
+        Objects.requireNonNull(provider, "provider must not be null");
         Counter c = errorCounters.get(provider);
         return c != null ? (long) c.count() : 0;
     }
@@ -63,6 +68,7 @@ public class ModelMetricsService {
      * Gets the error rate for the specified provider.
      */
     public double getErrorRate(String provider) {
+        Objects.requireNonNull(provider, "provider must not be null");
         long total = getCallCount(provider);
         if (total == 0) return 0.0;
         return (double) getErrorCount(provider) / total;
