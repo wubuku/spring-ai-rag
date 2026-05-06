@@ -17,6 +17,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -123,6 +124,19 @@ public class RagMetricsController {
                 summary.averageQueryDurationMs(),
                 recentRecords
         );
+    }
+
+    @Operation(summary = "Clear slow query history",
+            description = "Clears the in-memory slow query record queue and resets the total slow query counter. "
+                    + "This does not affect persistent logs or database records.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Slow query history cleared"),
+    })
+    @DeleteMapping(value = "/metrics/slow-queries")
+    public void clearSlowQueryHistory() {
+        if (slowQueryMetricsService != null) {
+            slowQueryMetricsService.clearHistory();
+        }
     }
 
     @Operation(summary = "Get API SLO compliance metrics",

@@ -231,4 +231,25 @@ class RagMetricsControllerTest {
         assertEquals("rag.search.post", result.endpoints().get(0).endpoint());
         assertEquals(95.0, result.endpoints().get(0).compliancePercent());
     }
+
+    @Test
+    void clearSlowQueryHistory_nullService_doesNotThrow() {
+        RagMetricsController controllerNoSlowQuery = new RagMetricsController(
+                metricsService, modelMetricsService, modelRegistry, modelRouter,
+                null, sloTrackerService);
+
+        // Should not throw even when service is null
+        controllerNoSlowQuery.clearSlowQueryHistory();
+    }
+
+    @Test
+    void clearSlowQueryHistory_servicePresent_callsClearHistory() {
+        RagMetricsController controller = new RagMetricsController(
+                metricsService, modelMetricsService, modelRegistry, modelRouter,
+                slowQueryMetricsService, sloTrackerService);
+
+        controller.clearSlowQueryHistory();
+
+        verify(slowQueryMetricsService).clearHistory();
+    }
 }
