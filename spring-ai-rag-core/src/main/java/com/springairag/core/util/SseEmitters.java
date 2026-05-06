@@ -79,8 +79,7 @@ public final class SseEmitters {
         try {
             emitter.send(SseEmitter.event().name("error").data(buildErrorData(error, extra)));
             emitter.complete();
-        } catch (Exception ex) {
-            /* best-effort: error event could not be sent, complete with error as fallback */
+        } catch (Exception ex) { // best-effort: error event could not be sent, complete with error as fallback
             emitter.completeWithError(new RuntimeException(error));
         }
     }
