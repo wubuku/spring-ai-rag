@@ -37,6 +37,7 @@ import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -111,6 +112,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "400", description = "Request parameter validation failed")
     })
     @PostMapping
+    @Timed(value = "rag.documents.create", description = "Create a new document", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentCreateResponse> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
 
@@ -148,6 +150,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}")
+    @Timed(value = "rag.documents.get", description = "Get document details", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentDetailResponse> getDocument(@PathVariable Long id) {
         log.info("Getting document: id={}", id);
 
@@ -171,6 +174,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @DeleteMapping("/{id}")
+    @Timed(value = "rag.documents.delete", description = "Delete a document", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentDeleteResponse> deleteDocument(@PathVariable Long id) {
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
     }
@@ -180,6 +184,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "200", description = "Paginated document list returned")
     })
     @GetMapping
+    @Timed(value = "rag.documents.list", description = "List documents with pagination and filters", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentListResponse> listDocuments(
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
@@ -228,6 +233,7 @@ public class RagDocumentController {
 
     @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")
     @GetMapping("/stats")
+    @Timed(value = "rag.documents.stats", description = "Get document statistics by processing status", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentStatsResponse> getDocumentStats() {
         List<Object[]> statusCounts = documentRepository.countByProcessingStatus();
         Map<String, Long> counts = new HashMap<>();
@@ -249,6 +255,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @PostMapping("/{id}/embed")
+    @Timed(value = "rag.documents.embed", description = "Generate embedding vectors for a document", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Object> embedDocument(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
@@ -273,6 +280,7 @@ public class RagDocumentController {
      */
     @Operation(summary = "Embedding vector status", description = "Query how many documents lack embedding vectors, to help determine if re-embedding is needed")
     @GetMapping("/embed-vector-status")
+    @Timed(value = "rag.documents.embedding-status", description = "Query embedding vector status", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<EmbeddingStatusResponse> embeddingStatus() {
         long total = documentRepository.count();
         long withoutEmbedding = documentRepository.countDocumentsWithoutEmbeddings();
@@ -286,6 +294,7 @@ public class RagDocumentController {
      */
     @Operation(summary = "Batch re-embed", description = "Automatically find all documents lacking embedding vectors and batch generate/store vectors. Used for data migration fixes or forced re-embedding.")
     @PostMapping("/embed-vector-reembed")
+    @Timed(value = "rag.documents.reembed-missing", description = "Batch re-embed documents without embedding vectors", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ReembedMissingResponse> reembedMissing(
             @Parameter(description = "Whether to force re-embedding (skip existing vectors)")
             @RequestParam(defaultValue = "false") boolean force) {
@@ -373,6 +382,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @PostMapping("/{id}/embed/stream")
+    @Timed(value = "rag.documents.embed-stream", description = "Generate embeddings via SSE streaming with progress events", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter embedDocumentStream(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
@@ -394,6 +404,7 @@ public class RagDocumentController {
     @Operation(summary = "Generate embedding vectors via VectorStore",
             description = "Use VectorStore.add() to automatically generate and store embeddings with simpler code. Stored in rag_vector_store table. Skips existing embeddings by default; set force=true to re-embed.")
     @PostMapping("/{id}/embed/vs")
+    @Timed(value = "rag.documents.embed-vs", description = "Generate embedding vectors via VectorStore", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Object> embedDocumentViaVectorStore(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
@@ -419,6 +430,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "400", description = "Invalid request parameters (ids empty or exceeds limit)")
     })
     @PostMapping("/batch")
+    @Timed(value = "rag.documents.batch-create", description = "Batch create documents", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
             @Valid @RequestBody BatchDocumentRequest request) {
         log.info("Batch create: docs={}, embed={}, collectionId={}, force={}",
@@ -444,6 +456,7 @@ public class RagDocumentController {
 
     @Operation(summary = "Batch delete documents", description = "Batch delete documents and their embedding vectors by ID list. Missing IDs don't affect other deletions.")
     @DeleteMapping("/batch")
+    @Timed(value = "rag.documents.batch-delete", description = "Batch delete documents", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchDeleteResponse> batchDeleteDocuments(
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
@@ -463,6 +476,7 @@ public class RagDocumentController {
 
     @Operation(summary = "Batch generate embedding vectors", description = "Batch chunk and generate embeddings for multiple documents. Single document failure doesn't affect others.")
     @PostMapping("/batch/embed")
+    @Timed(value = "rag.documents.batch-embed", description = "Batch generate embedding vectors", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
@@ -513,6 +527,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "200", description = "SSE stream established; progress events will follow")
     })
     @PostMapping("/batch/embed/stream")
+    @Timed(value = "rag.documents.batch-embed-stream", description = "Batch generate embeddings via SSE streaming with progress", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter batchEmbedDocumentsStream(
             @RequestBody Map<String, List<Long>> request) {
         List<Long> ids = request.get("ids");
@@ -552,6 +567,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "400", description = "Invalid request parameters")
     })
     @PostMapping("/batch/create-and-embed")
+    @Timed(value = "rag.documents.batch-create-and-embed", description = "Batch create and embed documents (deprecated)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchCreateAndEmbedResponse> batchCreateAndEmbed(
             @Valid @RequestBody BatchCreateAndEmbedRequest request) {
         log.info("Batch create and embed (deprecated): collectionId={}, docs={}, force={}",
@@ -579,6 +595,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "400", description = "No file or unsupported file format")
     })
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Timed(value = "rag.documents.upload", description = "Upload file and auto-embed", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
             @RequestParam("files") MultipartFile[] files,
             @RequestParam(value = "collectionId", required = false) Long collectionId,
@@ -720,6 +737,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Document not found")
     })
     @GetMapping("/{id}/versions")
+    @Timed(value = "rag.documents.version-history", description = "Get document version history", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<VersionHistoryResponse> getVersionHistory(
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Page number") @RequestParam(defaultValue = "0") int page,
@@ -747,6 +765,7 @@ public class RagDocumentController {
             @ApiResponse(responseCode = "404", description = "Version not found")
     })
     @GetMapping("/{id}/versions/{versionNumber}")
+    @Timed(value = "rag.documents.get-version", description = "Get specific document version", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentVersionResponse> getVersion(
             @Parameter(description = "Document ID") @PathVariable Long id,
             @Parameter(description = "Version number") @PathVariable int versionNumber) {
