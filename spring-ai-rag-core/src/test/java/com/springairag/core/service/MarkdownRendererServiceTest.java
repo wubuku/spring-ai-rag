@@ -156,5 +156,49 @@ class MarkdownRendererServiceTest {
 
             assertTrue(result.contains("From Binary"));
         }
+
+        @Test
+        @DisplayName("returns empty paragraph for text-marked file with null contentTxt")
+        void isTextTrue_withNullContentTxt_returnsEmptyParagraph() {
+            FsFile file = new FsFile();
+            file.setPath("readme.md");
+            file.setIsText(true);
+            file.setContentTxt(null);
+            file.setContentBin("# Binary content that should NOT be used".getBytes(StandardCharsets.UTF_8));
+
+            String result = service.renderToHtml(file);
+
+            // Should NOT use binary content for text-marked files
+            assertEquals("<p><em>Empty content.</em></p>", result);
+        }
+
+        @Test
+        @DisplayName("returns empty paragraph when both contentTxt and contentBin are null")
+        void bothContentFieldsNull_returnsEmptyParagraph() {
+            FsFile file = new FsFile();
+            file.setPath("readme.md");
+            file.setContentTxt(null);
+            file.setContentBin(null);
+
+            // Should not throw NullPointerException
+            String result = service.renderToHtml(file);
+
+            assertEquals("<p><em>Empty content.</em></p>", result);
+        }
+
+        @Test
+        @DisplayName("prefers contentTxt over contentBin when isText is false")
+        void isTextFalse_prefersContentTxt() {
+            FsFile file = new FsFile();
+            file.setPath("readme.md");
+            file.setIsText(false);
+            file.setContentTxt("# From Text Field");
+            file.setContentBin("# From Binary".getBytes(StandardCharsets.UTF_8));
+
+            String result = service.renderToHtml(file);
+
+            assertTrue(result.contains("From Text Field"));
+            assertFalse(result.contains("From Binary"));
+        }
     }
 }

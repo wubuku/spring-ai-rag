@@ -58,14 +58,39 @@ public class MarkdownRendererService {
 
     /**
      * Render an FsFile's Markdown content to HTML.
+     *
+     * <p>Content selection logic:
+     * <ul>
+     *   <li>For text-based files ({@code isText=true}): always uses {@code contentTxt},
+     *       treating a null value as empty content</li>
+     *   <li>For binary files ({@code isText=false} or null): uses {@code contentTxt} if available,
+     *       otherwise falls back to {@code contentBin}</li>
+     * </ul>
+     *
+     * @param markdownFile the file to render (may be null)
+     * @return rendered HTML string, or a placeholder message if the file is null or empty
      */
     public String renderToHtml(FsFile markdownFile) {
         if (markdownFile == null) {
             return "<p><em>File not found.</em></p>";
         }
-        String content = markdownFile.getContentTxt() != null
-                ? markdownFile.getContentTxt()
-                : new String(markdownFile.getContentBin(), StandardCharsets.UTF_8);
+
+        String content;
+        if (Boolean.TRUE.equals(markdownFile.getIsText())) {
+            // Text-based file: contentTxt must be present
+            // Null contentTxt means empty content for a text-marked file
+            content = markdownFile.getContentTxt();
+        } else {
+            // Binary or unspecified: prefer text field, fall back to binary
+            if (markdownFile.getContentTxt() != null) {
+                content = markdownFile.getContentTxt();
+            } else if (markdownFile.getContentBin() != null) {
+                content = new String(markdownFile.getContentBin(), StandardCharsets.UTF_8);
+            } else {
+                content = null;
+            }
+        }
+
         return renderToHtml(content, markdownFile.getPath());
     }
 }
