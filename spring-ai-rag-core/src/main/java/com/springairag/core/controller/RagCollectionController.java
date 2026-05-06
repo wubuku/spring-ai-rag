@@ -19,6 +19,7 @@ import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -76,6 +77,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "200", description = "Collection created, returns collection info")
     })
     @PostMapping
+    @Timed(value = "rag.collection.create", description = "Create collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
         log.info("Creating collection: name={}", request.getName());
 
@@ -106,6 +108,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found or deleted")
     })
     @GetMapping("/{id}")
+    @Timed(value = "rag.collection.get", description = "Get collection details", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
         log.info("Getting collection: id={}", id);
 
@@ -122,6 +125,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "List collections", description = "Paginated collection list, sorted by creation time descending.")
     @GetMapping
+    @Timed(value = "rag.collection.list", description = "List collections", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> list(
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
@@ -152,6 +156,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Update collection", description = "Update collection name, description, etc.")
     @PutMapping("/{id}")
+    @Timed(value = "rag.collection.update", description = "Update collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable Long id,
             @Valid @RequestBody CollectionRequest request) {
@@ -191,6 +196,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @DeleteMapping("/{id}")
+    @Timed(value = "rag.collection.delete", description = "Delete collection (soft delete)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
         log.info("Soft-deleting collection: id={}", id);
 
@@ -212,6 +218,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
     })
     @PostMapping("/{id}/restore")
+    @Timed(value = "rag.collection.restore", description = "Restore deleted collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionRestoreResponse> restore(@PathVariable Long id) {
         log.info("Restoring collection: id={}", id);
 
@@ -235,6 +242,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Source collection not found or deleted")
     })
     @PostMapping("/{id}/clone")
+    @Timed(value = "rag.collection.clone", description = "Clone collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionCloneResponse> cloneCollection(@PathVariable Long id) {
         log.info("Cloning collection: id={}", id);
 
@@ -248,6 +256,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "List documents in collection", description = "Query document list under the specified collection (paginated).")
     @GetMapping("/{id}/documents")
+    @Timed(value = "rag.collection.listDocuments", description = "List documents in collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionDocumentListResponse> listDocuments(
             @PathVariable Long id,
             @RequestParam(defaultValue = "0") int offset,
@@ -316,6 +325,7 @@ public class RagCollectionController {
             @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @PostMapping("/{id}/documents")
+    @Timed(value = "rag.collection.addDocument", description = "Add document to collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentAddedResponse> addDocument(
             @PathVariable Long id,
             @RequestBody Map<String, Long> request) {
@@ -349,6 +359,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Export collection", description = "Export collection info and document metadata as JSON for backup and migration.")
     @GetMapping("/{id}/export")
+    @Timed(value = "rag.collection.export", description = "Export collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {
         log.info("Exporting collection: id={}", id);
 
@@ -391,6 +402,7 @@ public class RagCollectionController {
      */
     @Operation(summary = "Import collection", description = "Create a new collection and its documents from exported JSON data.")
     @PostMapping("/import")
+    @Timed(value = "rag.collection.import", description = "Import collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
         String name = (String) importData.get("name");
         if (name == null || name.isBlank()) {
