@@ -3476,4 +3476,5 @@ PDF 端点测试(Section 16,9 tests):
 
 - 2026-05-04 17:57 - ✅ WebUI 常规发布(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,18 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing 全部通过)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区有 2 个后端变更(SlowQueryMetricsService,归属后端 cron),无 WebUI 变更;WebUI 项目处于生产级成熟状态
 
+- 2026-05-07 04:23 - ✅ WebUI 常规巡检(cron):npm test 148 ✅(23 test files,148 vitest 全通过)/ npm run build ✅(99.62KB index gzipped,34 chunks)/ E2E 12/12 ✅(Dashboard/Documents/Collections/Chat+Real Chat/Search+Results/Metrics/Alerts/Settings/Navigation/Backend Health/SPA Routing)/ dist 已同步到 static/webui/;后端服务 8081 UP(database=UP,pgvector=UP);git 工作区干净(无变更,webui assets 已纳入 .gitignore);WebUI 项目处于生产级成熟状态
 - 2026-05-06 23:55 - ✅ 后端巡检(深夜):mvn compile ✅(5 模块,无错误);代码库零 TODO/FIXME;零中文源文件消息;全部 Phase 1-7 + 24 项 P1/P2/P3 已完成;214+ Java 源文件;全部核心模块有专属单元测试;git 工作区干净(无变更);后端项目处于生产级成熟状态;stale Maven/SpringBoot 孤儿进程(来自 WebUI cron)已清理
