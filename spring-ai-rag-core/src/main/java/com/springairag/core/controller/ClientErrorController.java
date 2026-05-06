@@ -4,6 +4,7 @@ import com.springairag.api.dto.ClientErrorCountResponse;
 import com.springairag.api.dto.ClientErrorRequest;
 import com.springairag.core.service.ClientErrorService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -37,6 +38,7 @@ public class ClientErrorController {
         @ApiResponse(responseCode = "202", description = "Error accepted and recorded"),
         @ApiResponse(responseCode = "400", description = "Invalid request body")
     })
+    @Timed(value = "rag.client-errors.report", description = "Report a client-side error", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Void> reportError(
             @Valid @RequestBody ClientErrorRequest request,
             @RequestHeader(value = "User-Agent", required = false) String userAgent) {
@@ -55,6 +57,7 @@ public class ClientErrorController {
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "Total error count returned")
     })
+    @Timed(value = "rag.client-errors.count", description = "Get total client error count", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ClientErrorCountResponse> getErrorCount() {
         long count = clientErrorService.getErrorCount();
         return ResponseEntity.ok(new ClientErrorCountResponse(count));

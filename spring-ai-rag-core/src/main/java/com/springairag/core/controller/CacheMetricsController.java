@@ -7,6 +7,7 @@ import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.versioning.ApiVersion;
 import org.springframework.beans.factory.annotation.Autowired;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -53,6 +54,7 @@ public class CacheMetricsController {
         @ApiResponse(responseCode = "500", description = "Internal server error",
                      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
+    @Timed(value = "rag.cache.stats", description = "Get cache statistics", percentiles = {0.5, 0.95, 0.99})
     @GetMapping("/stats")
     public ResponseEntity<CacheStatsResponse> getCacheStats() {
         return ResponseEntity.ok(CacheStatsResponse.from(cacheMetricsService.getStats()));
@@ -73,6 +75,7 @@ public class CacheMetricsController {
         @ApiResponse(responseCode = "500", description = "Internal server error",
                      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
+    @Timed(value = "rag.cache.invalidate", description = "Clear embedding cache", percentiles = {0.5, 0.95, 0.99})
     @DeleteMapping("/invalidate")
     public ResponseEntity<CacheInvalidateResponse> invalidateCache() {
         int cleared = cacheMetricsService.clearCache();

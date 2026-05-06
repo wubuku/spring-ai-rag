@@ -8,6 +8,7 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.ModelRegistry;
 import com.springairag.core.service.ModelComparisonService;
 import com.springairag.core.versioning.ApiVersion;
+import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -50,6 +51,7 @@ public class ModelController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Returns all registered models and their status")
     })
+    @Timed(value = "rag.models.list", description = "List all registered models", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ModelListResponse> listModels() {
         List<String> availableProviders = modelRouter.getAvailableProviders();
         return ResponseEntity.ok(ModelListResponse.of(
@@ -67,6 +69,7 @@ public class ModelController {
         @ApiResponse(responseCode = "200", description = "Returns model details"),
         @ApiResponse(responseCode = "404", description = "Provider not found or unavailable")
     })
+    @Timed(value = "rag.models.get", description = "Get model details for a provider", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ModelDetailResponse> getModel(@PathVariable String provider) {
         if (!modelRouter.isProviderAvailable(provider)) {
             return ResponseEntity.notFound().build();
@@ -82,6 +85,7 @@ public class ModelController {
         @ApiResponse(responseCode = "200", description = "Returns comparison results of each model"),
         @ApiResponse(responseCode = "400", description = "providers list is empty or invalid")
     })
+    @Timed(value = "rag.models.compare", description = "Compare responses from multiple models", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<?> compareModels(@Valid @RequestBody CompareModelsRequest request) {
         if (request.providers == null || request.providers.isEmpty()) {
             return ResponseEntity.badRequest()
