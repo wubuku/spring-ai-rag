@@ -13,6 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 
 /**
@@ -52,6 +53,8 @@ public class RagChatHistoryRepository {
      */
     public void save(String sessionId, String userMessage, String aiResponse,
                      String relatedDocumentIds, Map<String, Object> metadata) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(userMessage, "userMessage must not be null");
         try {
             RagChatHistory entity = new RagChatHistory();
             entity.setSessionId(sessionId);
@@ -70,6 +73,7 @@ public class RagChatHistoryRepository {
      * Query chat history by session ID.
      */
     public List<ChatHistoryResponse> findBySessionId(String sessionId, int limit) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
         List<RagChatHistory> results = jpaRepository.findBySessionIdOrderByCreatedAtDesc(
                 sessionId, PageRequest.of(0, limit));
         return results.stream()
@@ -91,6 +95,7 @@ public class RagChatHistoryRepository {
      */
     @Transactional
     public int deleteBySessionId(String sessionId) {
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
         int deleted = jpaRepository.deleteBySessionId(sessionId);
         log.info("Deleted {} chat history records for session: {}", deleted, sessionId);
         try {

@@ -138,6 +138,43 @@ class RagChatHistoryRepositoryTest {
         assertEquals(0, deleted);
     }
 
+    // ─── null-safety ────────────────────────────────────────────────
+
+    @Test
+    void save_nullSessionId_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> repository.save(null, "user msg", "ai response"));
+        assertEquals("sessionId must not be null", ex.getMessage());
+    }
+
+    @Test
+    void save_nullUserMessage_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> repository.save("session-1", null, "ai response"));
+        assertEquals("userMessage must not be null", ex.getMessage());
+    }
+
+    @Test
+    void save_withMetadata_nullSessionId_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> repository.save(null, "user msg", "ai response", "doc-1", null));
+        assertEquals("sessionId must not be null", ex.getMessage());
+    }
+
+    @Test
+    void findBySessionId_nullSessionId_throws() {
+        assertThrows(NullPointerException.class,
+                () -> repository.findBySessionId(null, 10));
+    }
+
+    @Test
+    void deleteBySessionId_nullSessionId_throws() {
+        assertThrows(NullPointerException.class,
+                () -> repository.deleteBySessionId(null));
+    }
+
+    // ─── resilience ───────────────────────────────────────────────
+
     @Test
     void deleteBySessionId_chatMemoryFails_stillReturnsJpaCount() {
         // JPA deletion succeeds
