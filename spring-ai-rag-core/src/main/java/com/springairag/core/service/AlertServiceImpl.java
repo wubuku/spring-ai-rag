@@ -18,6 +18,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -102,6 +103,10 @@ public class AlertServiceImpl implements AlertService {
     @Transactional
     public Long fireAlert(String alertType, String metricName, String message,
                           String severity, Map<String, Object> metrics) {
+        Objects.requireNonNull(alertType, "alertType must not be null");
+        Objects.requireNonNull(metricName, "metricName must not be null");
+        Objects.requireNonNull(message, "message must not be null");
+        Objects.requireNonNull(severity, "severity must not be null");
         // Final silence check as safeguard (schedule may have been activated since shouldAlert)
         String alertKey = alertType + ":" + metricName;
         if (isSilencedBySchedule(alertKey)) {
@@ -156,6 +161,7 @@ public class AlertServiceImpl implements AlertService {
     @Override
     @Transactional
     public void resolveAlert(Long alertId, String resolution) {
+        Objects.requireNonNull(alertId, "alertId must not be null");
         alertRepository.findById(alertId).ifPresent(alert -> {
             alert.setStatus("RESOLVED");
             alert.setResolution(resolution);
@@ -167,12 +173,14 @@ public class AlertServiceImpl implements AlertService {
 
     @Override
     public void silenceAlert(String alertKey, int durationMinutes) {
+        Objects.requireNonNull(alertKey, "alertKey must not be null");
         silencedAlerts.put(alertKey, ZonedDateTime.now().plusMinutes(durationMinutes));
         log.info("Alert silenced: {} - {} minutes", alertKey, durationMinutes);
     }
 
     @Override
     public boolean unsilenceAlert(String alertKey) {
+        Objects.requireNonNull(alertKey, "alertKey must not be null");
         ZonedDateTime removed = silencedAlerts.remove(alertKey);
         if (removed != null) {
             log.info("Alert unsilenced: {}", alertKey);

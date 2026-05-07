@@ -710,4 +710,55 @@ class AlertServiceImplTest {
         Map<String, ZonedDateTime> silenced = alertService.getSilencedAlerts();
         assertTrue(silenced.isEmpty());
     }
+
+    // ==================== null-safety ====================
+
+    @Test
+    @DisplayName("fireAlert throws NullPointerException when alertType is null")
+    void fireAlert_nullAlertType_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.fireAlert(null, "latency", "P99 exceeded", "WARNING", Map.of()));
+    }
+
+    @Test
+    @DisplayName("fireAlert throws NullPointerException when metricName is null")
+    void fireAlert_nullMetricName_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.fireAlert("THRESHOLD_HIGH", null, "P99 exceeded", "WARNING", Map.of()));
+    }
+
+    @Test
+    @DisplayName("fireAlert throws NullPointerException when message is null")
+    void fireAlert_nullMessage_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.fireAlert("THRESHOLD_HIGH", "latency", null, "WARNING", Map.of()));
+    }
+
+    @Test
+    @DisplayName("fireAlert throws NullPointerException when severity is null")
+    void fireAlert_nullSeverity_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.fireAlert("THRESHOLD_HIGH", "latency", "P99 exceeded", null, Map.of()));
+    }
+
+    @Test
+    @DisplayName("silenceAlert throws NullPointerException when alertKey is null")
+    void silenceAlert_nullAlertKey_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.silenceAlert(null, 60));
+    }
+
+    @Test
+    @DisplayName("unsilenceAlert throws NullPointerException when alertKey is null")
+    void unsilenceAlert_nullAlertKey_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.unsilenceAlert(null));
+    }
+
+    @Test
+    @DisplayName("resolveAlert throws NullPointerException when alertId is null")
+    void resolveAlert_nullAlertId_throws() {
+        assertThrows(NullPointerException.class,
+                () -> alertService.resolveAlert(null, "fixed"));
+    }
 }
