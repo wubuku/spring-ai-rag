@@ -380,4 +380,36 @@ class PdfToRagServiceTest {
         assertEquals("COMPLETED", result.embedStatus());
         verify(cb, times(2)).accept(any());
     }
+
+    // ==================== null-safety tests ====================
+
+    @Test
+    void importPdfToRag_nullEntryMarkdownPath_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.importPdfToRag(null, "file.pdf", 1L, false, false));
+        assertEquals("entryMarkdownPath must not be null", ex.getMessage());
+    }
+
+    @Test
+    void importPdfToRagWithEmbedding_nullEntryMarkdownPath_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.importPdfToRagWithEmbedding(null, "file.pdf", 1L, false, null));
+        assertEquals("entryMarkdownPath must not be null", ex.getMessage());
+    }
+
+    @Test
+    void triggerEmbedding_nullUuid_throws() {
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.triggerEmbedding(null, 1L, false));
+        assertEquals("uuid must not be null", ex.getMessage());
+    }
+
+    @Test
+    void triggerEmbeddingWithProgress_nullUuid_throws() {
+        @SuppressWarnings("unchecked")
+        Consumer<com.springairag.api.dto.EmbedProgressEvent> cb = mock(Consumer.class);
+        NullPointerException ex = assertThrows(NullPointerException.class,
+                () -> service.triggerEmbeddingWithProgress(null, 1L, false, cb));
+        assertEquals("uuid must not be null", ex.getMessage());
+    }
 }

@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Consumer;
 
@@ -68,6 +69,7 @@ public class PdfToRagService {
                                           Long collectionId,
                                           boolean embed,
                                           boolean forceReembed) {
+        Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
         log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, originalFilename={}, "
                 + "collectionId={}, embed={}, forceReembed={}",
                 entryMarkdownPath, originalFilename, collectionId, embed, forceReembed);
@@ -99,6 +101,7 @@ public class PdfToRagService {
                                                        Long collectionId,
                                                        boolean forceReembed,
                                                        Consumer<EmbedProgressEvent> progressCallback) {
+        Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
         log.info("Importing PDF to RAG with SSE embedding: entryMarkdownPath={}, originalFilename={}, "
                 + "collectionId={}, forceReembed={}",
                 entryMarkdownPath, originalFilename, collectionId, forceReembed);
@@ -130,6 +133,7 @@ public class PdfToRagService {
      * @return embedding result (documentId, status, chunksCreated)
      */
     public PdfToRagResult triggerEmbedding(String uuid, Long collectionId, boolean forceReembed) {
+        Objects.requireNonNull(uuid, "uuid must not be null");
         String entryPath = uuid + "/default.md";
         log.info("Triggering embedding for imported PDF: uuid={}, collectionId={}, forceReembed={}",
                 uuid, collectionId, forceReembed);
@@ -154,6 +158,7 @@ public class PdfToRagService {
     public PdfToRagResult triggerEmbeddingWithProgress(String uuid, Long collectionId,
                                                         boolean forceReembed,
                                                         Consumer<EmbedProgressEvent> progressCallback) {
+        Objects.requireNonNull(uuid, "uuid must not be null");
         String entryPath = uuid + "/default.md";
         log.info("Triggering embedding with SSE for imported PDF: uuid={}", uuid);
 
