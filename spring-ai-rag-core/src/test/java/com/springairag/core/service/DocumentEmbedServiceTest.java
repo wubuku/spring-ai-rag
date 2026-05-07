@@ -115,6 +115,20 @@ class DocumentEmbedServiceTest {
         verifyNoInteractions(embeddingBatchService, jdbcTemplate);
     }
 
+    // ==================== embedDocument null-safety ====================
+
+    @Test
+    @DisplayName("embedDocument: throws NullPointerException when documentId is null")
+    void embedDocument_nullDocumentId_throws() {
+        assertThrows(NullPointerException.class, () -> service.embedDocument(null));
+    }
+
+    @Test
+    @DisplayName("embedDocument: throws NullPointerException when documentId is null with force=true")
+    void embedDocument_nullDocumentIdWithForce_throws() {
+        assertThrows(NullPointerException.class, () -> service.embedDocument(null, true));
+    }
+
     // ==================== embedDocumentViaVectorStore ====================
 
     @Test
@@ -142,6 +156,20 @@ class DocumentEmbedServiceTest {
                 jdbcTemplate, null, new RagProperties());
         assertThrows(IllegalStateException.class,
                 () -> noStoreService.embedDocumentViaVectorStore(1L));
+    }
+
+    // ==================== embedDocumentViaVectorStore null-safety ====================
+
+    @Test
+    @DisplayName("embedDocumentViaVectorStore: throws NullPointerException when documentId is null")
+    void embedDocumentViaVectorStore_nullDocumentId_throws() {
+        assertThrows(NullPointerException.class, () -> service.embedDocumentViaVectorStore(null));
+    }
+
+    @Test
+    @DisplayName("embedDocumentViaVectorStore: throws NullPointerException when documentId is null with force=true")
+    void embedDocumentViaVectorStore_nullDocumentIdWithForce_throws() {
+        assertThrows(NullPointerException.class, () -> service.embedDocumentViaVectorStore(null, true));
     }
 
     @Test
@@ -452,9 +480,9 @@ class DocumentEmbedServiceTest {
     }
 
     @Test
-    @DisplayName("embedDocumentWithProgress: null documentId throws IllegalArgumentException")
-    void embedDocumentWithProgress_nullDocumentId_throwsIllegalArgument() {
-        assertThrows(IllegalArgumentException.class,
+    @DisplayName("embedDocumentWithProgress: null documentId throws NullPointerException")
+    void embedDocumentWithProgress_nullDocumentId_throwsNullPointerException() {
+        assertThrows(NullPointerException.class,
                 () -> service.embedDocumentWithProgress(null, false, null));
     }
 

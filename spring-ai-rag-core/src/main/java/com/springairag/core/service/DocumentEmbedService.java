@@ -8,6 +8,8 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
+
+import java.util.Objects;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.RetrievalUtils;
@@ -81,6 +83,7 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId) {
+        Objects.requireNonNull(documentId);
         return embedDocument(documentId, false);
     }
 
@@ -93,6 +96,7 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocument(Long documentId, boolean force) {
+        Objects.requireNonNull(documentId);
         return embedDocumentWithProgress(documentId, force, null);
     }
 
@@ -107,9 +111,7 @@ public class DocumentEmbedService {
     @Transactional
     public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
             java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
-        if (documentId == null) {
-            throw new IllegalArgumentException("documentId must not be null");
-        }
+        Objects.requireNonNull(documentId);
         log.info("Generating embeddings for document: id={}, force={}", documentId, force);
 
         maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
@@ -178,6 +180,7 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId) {
+        Objects.requireNonNull(documentId);
         return embedDocumentViaVectorStore(documentId, false);
     }
 
@@ -191,6 +194,7 @@ public class DocumentEmbedService {
      */
     @Transactional
     public Map<String, Object> embedDocumentViaVectorStore(Long documentId, boolean force) {
+        Objects.requireNonNull(documentId);
         if (vectorStore == null) {
             throw new IllegalStateException("VectorStore not configured, use embedDocument method instead");
         }
