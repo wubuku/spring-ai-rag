@@ -71,6 +71,29 @@ export NO_PROXY=localhost,127.0.0.1,postgres
 
 The application proxy is controlled by `rag.proxy.*`. Do not commit workstation proxy addresses to `application.yml`, and keep database/local E2E traffic out of the external proxy.
 
+### Stale Global Git Proxy
+
+Git may also read a separate proxy from `~/.gitconfig`. If the local proxy client is stopped or its port changes, `git fetch/push` can fail with an error such as:
+
+```text
+Failed to connect to 127.0.0.1 port 1234
+```
+
+Locate the configuration source before changing repository settings:
+
+```bash
+git config --show-origin --get-regexp '^(http|https)\.proxy$'
+```
+
+When the current network can reach the remote directly, clear the proxy for one command without changing the user's global settings:
+
+```bash
+git -c http.proxy= -c https.proxy= fetch origin
+git -c http.proxy= -c https.proxy= push origin main
+```
+
+If the proxy is permanently obsolete, the developer can explicitly correct or remove the corresponding `--global` settings. Project scripts must not rewrite a user's `~/.gitconfig` automatically.
+
 ## Release Verification
 
 ```bash

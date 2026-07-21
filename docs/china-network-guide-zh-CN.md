@@ -76,6 +76,29 @@ export NO_PROXY=localhost,127.0.0.1,postgres
 
 应用自身的代理由 `rag.proxy.*` 控制。不要把本机代理地址提交进 `application.yml`，也不要让数据库与本地 E2E 流量误走外部代理。
 
+### Git 全局代理失效
+
+Git 还可能从 `~/.gitconfig` 读取独立代理。若本地代理客户端未启动或端口已变化，`git fetch/push` 可能报错：
+
+```text
+Failed to connect to 127.0.0.1 port 1234
+```
+
+先定位配置来源，不要直接修改仓库配置：
+
+```bash
+git config --show-origin --get-regexp '^(http|https)\.proxy$'
+```
+
+确认当前网络可直连时，可仅为本次命令清空代理，不影响用户全局设置：
+
+```bash
+git -c http.proxy= -c https.proxy= fetch origin
+git -c http.proxy= -c https.proxy= push origin main
+```
+
+若代理地址确实已永久失效，再由开发者主动修正或删除对应的 `--global` 配置。团队脚本不应自动改写个人 `~/.gitconfig`。
+
 ## 发布验证
 
 ```bash
