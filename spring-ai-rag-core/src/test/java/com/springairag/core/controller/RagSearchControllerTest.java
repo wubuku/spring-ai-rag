@@ -7,11 +7,16 @@ import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 
 import java.util.List;
 import java.util.Map;
@@ -27,14 +32,18 @@ class RagSearchControllerTest {
 
     private HybridRetrieverService hybridRetriever;
     private RagDocumentRepository documentRepository;
+    private ReRankingService reRankingService;
     private RagSearchController controller;
 
     @BeforeEach
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
         documentRepository = mock(RagDocumentRepository.class);
+        reRankingService = mock(ReRankingService.class);
         CollectionDocumentResolver resolver = new CollectionDocumentResolver(documentRepository);
-        controller = new RagSearchController(hybridRetriever, resolver);
+        controller = new RagSearchController(hybridRetriever, resolver, reRankingService);
+        when(reRankingService.rerank(anyString(), anyList(), anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
     }
 
     @Test
@@ -109,6 +118,49 @@ class RagSearchControllerTest {
         assertEquals(200, response.getStatusCode().value());
         assertEquals(1, response.getBody().size());
         assertEquals("doc1", response.getBody().get(0).getDocumentId());
+        verify(reRankingService).rerank(eq("query"), anyList(), eq(5));
+    }
+
+    @Test
+    @DisplayName("POST search skips rerank when useRerank is false")
+    void searchWithConfig_rerankDisabled_skipsRerank() {
+        when(hybridRetriever.search(eq("query"), isNull(), isNull(), eq(5), any(RetrievalConfig.class)))
+                .thenReturn(List.of(createResult("doc1", "chunk", 0.8)));
+
+        SearchRequest req = new SearchRequest("query");
+        req.setConfig(RetrievalConfig.builder()
+                .maxResults(5)
+                .useRerank(false)
+                .build());
+
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+
+        assertEquals(200, response.getStatusCode().value());
+        verifyNoInteractions(reRankingService);
+    }
+
+    @Test
+    @DisplayName("POST search returns reranked order when useRerank is true")
+    void searchWithConfig_rerankEnabled_returnsRerankedOrder() {
+        List<RetrievalResult> original = List.of(
+                createResult("doc1", "first", 0.8),
+                createResult("doc2", "second", 0.7));
+        List<RetrievalResult> reranked = List.of(original.get(1), original.get(0));
+        when(hybridRetriever.search(eq("query"), isNull(), isNull(), eq(2), any(RetrievalConfig.class)))
+                .thenReturn(original);
+        when(reRankingService.rerank("query", original, 2)).thenReturn(reranked);
+
+        SearchRequest req = new SearchRequest("query");
+        req.setConfig(RetrievalConfig.builder()
+                .maxResults(2)
+                .useRerank(true)
+                .build());
+
+        ResponseEntity<List<RetrievalResult>> response = controller.searchWithConfig(req);
+
+        assertEquals(List.of("doc2", "doc1"), response.getBody().stream()
+                .map(RetrievalResult::getDocumentId)
+                .toList());
     }
 
     @Test
@@ -302,6 +354,45 @@ class RagSearchControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         assertTrue(response.getBody().isEmpty());
+    }
+
+    @Test
+    @DisplayName("restricted key without collection filter is forced to allowed collections")
+    void searchWithConfig_restrictedKeyWithoutFilter_forcesAllowedCollections() {
+        when(documentRepository.findIdsByCollectionIdIn(List.of(2L, 4L)))
+                .thenReturn(List.of(20L, 40L));
+        when(hybridRetriever.search(eq("query"), eq(List.of(20L, 40L)),
+                isNull(), eq(10), any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+        SearchRequest req = new SearchRequest("query");
+
+        controller.searchWithConfig(req, requestForRestrictedKey(2L, 4L));
+
+        assertEquals(List.of(2L, 4L), req.getCollectionIds());
+        verify(documentRepository).findIdsByCollectionIdIn(List.of(2L, 4L));
+    }
+
+    @Test
+    @DisplayName("restricted key cannot search a collection outside its ACL")
+    void searchWithConfig_restrictedKeyOutsideAcl_throwsForbidden() {
+        SearchRequest req = new SearchRequest("query");
+        req.setCollectionIds(List.of(9L));
+
+        assertThrows(SecurityException.class,
+                () -> controller.searchWithConfig(
+                        req, requestForRestrictedKey(2L, 4L)));
+        verifyNoInteractions(hybridRetriever);
+    }
+
+    private MockHttpServletRequest requestForRestrictedKey(Long... ids) {
+        RagApiKey key = new RagApiKey();
+        key.setRole(ApiKeyRole.NORMAL);
+        key.setAllowedCollectionIds(String.join(",",
+                java.util.Arrays.stream(ids).map(String::valueOf).toList()));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
+        return request;
     }
 
     private RetrievalResult createResult(String docId, String text, double score) {

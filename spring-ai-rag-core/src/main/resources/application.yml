@@ -78,7 +78,7 @@ spring:
     repair: true
 
   # Spring AI OpenAI / OpenAI-compatible model configuration
-  # DeepSeek example: base-url=https://api.deepseek.com/v1, model=deepseek-chat
+  # DeepSeek example: base-url=https://api.deepseek.com, model=deepseek-chat
   # Zhipu example: base-url=https://open.bigmodel.cn/paas/v4, model=glm-4
   openai:
     api-key: ${SPRING_AI_OPENAI_API_KEY:${OPENAI_API_KEY:dummy}}
@@ -140,7 +140,7 @@ app:
     providers:
       openrouter:
         displayName: OpenRouter
-        baseUrl: https://openrouter.ai/api/v1
+        baseUrl: https://openrouter.ai/api
         apiKey: ${OPENROUTER_API_KEY:}
         apiType: openai-completions
         enabled: true

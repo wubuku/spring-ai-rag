@@ -2,44 +2,106 @@
 
 ---
 
-# REST API Reference
+# REST API 参考
 
 📖 [English](rest-api.md) · 📖 [中文](rest-api-zh-CN.md)
 
-> Swagger UI available at `/swagger-ui.html` after startup.
+> 启动后可通过 `/swagger-ui.html` 访问 Swagger UI。
 >
-> Base path: `/api/v1/rag`
+> 基础路径：`/api/v1/rag`
 
 ---
 
-## General
+## 通用约定
 
-### Authentication
+### 认证
 
-When API Key authentication is enabled, include the following header in requests:
+启用 API Key 认证（`rag.security.enabled=true`）后，请求需携带以下任一凭据：
 
 ```
-X-API-Key: your-api-key
+X-API-Key: your-api-key          # Header（推荐）
+?apiKey=your-api-key            # Query 参数（SSE / EventSource）
 ```
 
-Configure via: `rag.security.api-keys` (comma-separated for multiple keys).
+角色权限：
 
-### Rate Limiting
+| Key 角色 | `/api-keys` 列表 | `/api-keys` 创建 | `/api-keys` 删除 |
+|----------|------------------|------------------|------------------|
+| ADMIN | ✅ 全部 | ✅ 任意角色 | ✅ 任意 Key |
+| NORMAL | ❌ 403 | ✅ 仅 NORMAL（自助） | ❌ 403 |
 
-When `rag.rate-limit.enabled` is true, all API requests are subject to a sliding-window rate limit.
+数据库 Key 可通过 `allowedCollectionIds` 限制集合访问：
 
-Two strategies are supported (`rag.rate-limit.strategy`):
-- `ip`: Rate limit by client IP address
-- `api-key`: Rate limit by API Key (falls back to IP if no key provided);分级限额可配置 `rag.rate-limit.key-limits`
+- `null` 或 `[]`：可访问全部集合
+- 非空列表：Search、Chat、Collection、Document、上传、PDF-to-RAG 均限制在这些集合内
+- 显式请求范围外集合返回 `403`
+- 受限 Key 未提供集合过滤时，检索自动收敛到其允许列表
+- ADMIN 与旧版静态 `rag.security.api-key` 保持全库权限
+- 受限 NORMAL Key 不能创建权限更宽的子 Key；轮换会保留原集合权限
 
-**Rate limit response headers (on normal requests):**
+### API 密钥管理
 
-| Header | Description |
-|--------|-------------|
-| `X-RateLimit-Limit` | Max requests per minute |
-| `X-RateLimit-Remaining` | Remaining quota in current window |
+#### `GET /api/v1/rag/api-keys`
 
-**Rate limit exceeded response:**
+ADMIN 列出全部 Key。响应不会包含原始密钥：
+
+```json
+[{
+  "keyId": "rag_k_abc123",
+  "name": "Production Server",
+  "role": "NORMAL",
+  "allowedCollectionIds": [1, 2],
+  "enabled": true,
+  "createdAt": "2026-04-15T00:00:00",
+  "lastUsedAt": null,
+  "expiresAt": null
+}]
+```
+
+#### `POST /api/v1/rag/api-keys`
+
+创建 Key。`expiresAt` 与 `allowedCollectionIds` 均可省略；省略或传空集合表示全库权限。
+
+```json
+{
+  "name": "My API Key",
+  "expiresAt": "2027-01-01T00:00:00",
+  "allowedCollectionIds": [1, 2]
+}
+```
+
+原始密钥仅在 `201 Created` 响应中返回一次：
+
+```json
+{
+  "keyId": "rag_k_xyz789",
+  "rawKey": "rag_sk_...",
+  "name": "My API Key",
+  "allowedCollectionIds": [1, 2],
+  "expiresAt": "2027-01-01T00:00:00"
+}
+```
+
+#### `DELETE /api/v1/rag/api-keys/{keyId}`
+
+ADMIN 撤销 Key；最后一个 ADMIN Key 不允许删除。
+
+### API 限流
+
+启用 `rag.rate-limit.enabled` 后，所有 API 请求受滑动窗口限流约束。
+
+支持两种策略（`rag.rate-limit.strategy`）：
+- `ip`：按客户端 IP 限流
+- `api-key`：按 API Key 限流；未提供 Key 时回退到 IP，分级限额使用 `rag.rate-limit.key-limits`
+
+**正常响应中的限流 Header：**
+
+| Header | 说明 |
+|--------|------|
+| `X-RateLimit-Limit` | 每分钟最大请求数 |
+| `X-RateLimit-Remaining` | 当前窗口剩余额度 |
+
+**超限响应：**
 
 ```
 HTTP/1.1 429 Too Many Requests
@@ -84,42 +146,52 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 
 ---
 
-## Chat — RAG Q&A
+## Chat — RAG 问答
 
 ### `POST /api/v1/rag/chat/ask`
 
-Non-streaming RAG Q&A, returns a complete answer.
+非流式 RAG 问答，返回完整答案。
 
-**Request body:**
+**请求体：**
 
 ```json
 {
-  "message": "What is Spring AI?",
+  "message": "什么是 Spring AI？",
   "sessionId": "session-001",
   "domainId": "medical",
+  "model": "openrouter/xiaomi/mimo-v2-pro",
+  "collectionIds": [1, 2],
+  "documentIds": [10, 20],
   "maxResults": 5,
+  "useHybridSearch": true,
+  "useRerank": true,
   "metadata": {}
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `message` | string | ✅ | Query content (≤10000 chars) |
-| `sessionId` | string | ✅ | Session ID (for multi-turn conversations) |
-| `domainId` | string | | Domain extension ID |
-| `maxResults` | int | | Number of retrieval results, default 5 |
-| `metadata` | object | | Extended metadata |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `message` | string | ✅ | 问题内容（不超过 10000 字符） |
+| `sessionId` | string | | 会话 ID，最长 36 字符；省略时自动生成 |
+| `domainId` | string | | 领域扩展 ID |
+| `model` | string | | `GET /rag/models` 返回的运行时模型引用；省略时使用默认链 |
+| `collectionIds` | long[] | | 仅检索这些集合 |
+| `documentIds` | long[] | | 仅检索这些文档；与集合范围取交集 |
+| `maxResults` | int | | 检索结果数，默认 5 |
+| `useHybridSearch` | boolean | | 是否启用向量 + 全文检索，默认 true |
+| `useRerank` | boolean | | 是否启用重排序，默认 true |
+| `metadata` | object | | 扩展元数据 |
 
-**Response:**
+**响应：**
 
 ```json
 {
-  "answer": "Spring AI is an AI application framework in the Spring ecosystem...",
+  "answer": "Spring AI 是 Spring 生态的 AI 应用框架……",
   "sessionId": "session-001",
   "sources": [
     {
       "documentId": 1,
-      "title": "Introduction to Spring AI",
+      "title": "Spring AI 介绍",
       "score": 0.92,
       "chunk": "Spring AI provides ChatClient..."
     }
@@ -131,27 +203,29 @@ Non-streaming RAG Q&A, returns a complete answer.
 
 ### `POST /api/v1/rag/chat/stream`
 
-SSE streaming Q&A, returns answer chunks progressively.
+SSE 流式问答，逐块返回答案。
 
-**Request body:** Same as `/ask`.
+**请求体：** 与 `/ask` 相同。
 
-**Response:** `text/event-stream`
+`sessionId` 同样限制为最长 36 字符；超限请求在进入 Chat Memory 前返回 `400 VALIDATION_FAILED`。
+
+**响应：** `text/event-stream`
 
 ```
-data: {"chunk": "Spring AI is"}
+data: {"choices":[{"delta":{"content":"Spring AI 是"}}]}
 
-data: {"chunk": " an AI framework"}
+data: {"choices":[{"delta":{"content":" Spring 生态的 AI 框架"}}]}
 
-event: done
-data: [DONE]
+event:done
+data:{"traceId":"...","status":"complete"}
 ```
 
-**curl example:**
+**curl 示例：**
 
 ```bash
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is RAG?", "sessionId": "s1"}'
+  -d '{"message": "什么是 RAG？", "sessionId": "s1", "model": "openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
 ---
@@ -791,89 +865,122 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 
 ---
 
-## Models — Multi-Model Management
+## Models — 运行时选模
 
 ### `GET /api/v1/rag/models`
 
-Get all registered models and their routing status.
+获取可写入 `ChatRequest.model` 的 provider/model 引用。
 
-**Response:**
+**响应：**
 
 ```json
 {
   "multiModelEnabled": true,
-  "defaultProvider": "openai",
-  "availableProviders": ["openai", "minimax"],
-  "fallbackChain": ["openai", "minimax"],
+  "defaultProvider": "minimax",
+  "defaultModel": "minimax/MiniMax-M2.7",
+  "availableProviders": ["openrouter", "minimax"],
+  "fallbackChain": ["openrouter/xiaomi/mimo-v2-pro"],
   "models": [
     {
-      "provider": "openai",
+      "ref": "openrouter/xiaomi/mimo-v2-pro",
+      "provider": "openrouter",
+      "providerName": "OpenRouter",
+      "modelId": "xiaomi/mimo-v2-pro",
+      "name": "MiMo V2 Pro",
+      "apiType": "openai-completions",
       "available": true,
-      "displayName": "OpenAI (DeepSeek/Compatible)",
-      "className": "OpenAiChatModel"
+      "reasoning": false,
+      "contextWindow": 600000,
+      "maxTokens": 32000,
+      "source": "configured"
     },
     {
+      "ref": "minimax/MiniMax-M2.7",
       "provider": "minimax",
+      "providerName": "MiniMax",
+      "modelId": "MiniMax-M2.7",
+      "name": "MiniMax M2.7",
+      "apiType": "anthropic-messages",
       "available": true,
-      "displayName": "MiniMax",
-      "className": "MiniMaxChatModel"
+      "reasoning": false,
+      "contextWindow": 200000,
+      "maxTokens": 8192,
+      "source": "configured"
     }
   ]
 }
 ```
 
+已配置但缺少凭据的模型仍会返回，并带有 `available: false` 和
+`unavailableReason`。
+
 ### `GET /api/v1/rag/models/{provider}`
 
-Get details of a specific provider's model.
+获取 provider 摘要及其模型级条目。
 
-**Path parameters:**
+**路径参数：**
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `provider` | string | Provider identifier (openai / anthropic / minimax) |
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `provider` | string | Provider 标识，例如 `openrouter` 或 `minimax` |
 
-**Response (provider exists):**
+**Provider 存在时：**
 
 ```json
 {
-  "provider": "openai",
   "available": true,
-  "displayName": "OpenAI (DeepSeek/Compatible)",
-  "className": "OpenAiChatModel"
+  "details": {
+    "provider": "openrouter",
+    "available": true,
+    "displayName": "OpenRouter",
+    "models": [
+      {
+        "ref": "openrouter/xiaomi/mimo-v2-pro",
+        "modelId": "xiaomi/mimo-v2-pro",
+        "available": true
+      }
+    ]
+  }
 }
 ```
 
-**Response (provider not found):** `404 Not Found`
+**Provider 不存在：** `404 Not Found`
 
 ### `POST /api/v1/rag/models/compare`
 
-Compare responses from multiple models in parallel, for model effectiveness comparison.
+并行比较多个模型引用的响应。
 
-**Request body:**
+**请求体：**
 
 ```json
 {
-  "query": "Explain the basic principles of quantum computing",
-  "providers": ["openai", "minimax"],
+  "query": "解释量子计算的基本原理",
+  "providers": [
+    "openrouter/xiaomi/mimo-v2-pro",
+    "minimax/MiniMax-M2.7"
+  ],
   "timeoutSeconds": 30
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | ✅ | Query text |
-| `providers` | string[] | ✅ | List of providers to compare |
-| `timeoutSeconds` | int | ❌ | Per-model timeout in seconds (default 30) |
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | ✅ | 问题文本 |
+| `providers` | string[] | ✅ | 要比较的 provider 或 `provider/model` 引用 |
+| `timeoutSeconds` | int | ❌ | 单模型超时秒数，默认 30 |
 
-**Response:**
+**响应：**
 
 ```json
 {
-  "query": "Explain the basic principles of quantum computing",
-  "providers": ["openai", "minimax"],
+  "query": "解释量子计算的基本原理",
+  "providers": [
+    "openrouter/xiaomi/mimo-v2-pro",
+    "minimax/MiniMax-M2.7"
+  ],
   "results": [
     {
-      "modelName": "openai",
+      "modelName": "openrouter/xiaomi/mimo-v2-pro",
       "success": true,
       "response": "Quantum computing is...",
       "latencyMs": 1200,
@@ -883,7 +990,7 @@ Compare responses from multiple models in parallel, for model effectiveness comp
       "error": null
     },
     {
-      "modelName": "minimax",
+      "modelName": "minimax/MiniMax-M2.7",
       "success": true,
       "response": "The core of quantum computing is...",
       "latencyMs": 950,
@@ -898,9 +1005,9 @@ Compare responses from multiple models in parallel, for model effectiveness comp
 
 ### `GET /api/v1/rag/metrics/models`
 
-Get per-model invocation metrics (call count, error rate).
+获取每个模型的调用次数和错误率。
 
-**Response:**
+**响应：**
 
 ```json
 {

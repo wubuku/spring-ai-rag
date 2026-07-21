@@ -2,16 +2,23 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfToRagResponse;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.FsFile;
+import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.io.IOException;
 import java.util.List;
@@ -39,6 +46,11 @@ class PdfImportControllerTest {
         markdownRendererService = mock(MarkdownRendererService.class);
         pdfToRagService = mock(PdfToRagService.class);
         controller = new PdfImportController(pdfImportService, markdownRendererService, pdfToRagService);
+    }
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
     }
 
     // ==================== importPdf tests ====================
@@ -306,6 +318,17 @@ class PdfImportControllerTest {
         assertEquals(500, ((ResponseEntity<?>) response).getStatusCode().value());
     }
 
+    @Test
+    void importPdfToRag_restrictedKeyRejectsCollectionOutsideAcl() {
+        authenticateRestrictedKey("10");
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "paper.pdf", "application/pdf", "PDF data".getBytes());
+
+        assertThrows(SecurityException.class,
+                () -> controller.importPdfToRag(pdfFile, 99L, false));
+        verifyNoInteractions(pdfImportService, pdfToRagService);
+    }
+
     // ==================== triggerEmbedding tests ====================
 
     @Test
@@ -372,6 +395,30 @@ class PdfImportControllerTest {
         ResponseEntity<?> entity = (ResponseEntity<?>) response;
         assertEquals(200, entity.getStatusCode().value());
         verify(pdfToRagService).triggerEmbedding("uuid-789", 10L, false);
+    }
+
+    @Test
+    void triggerEmbedding_restrictedSingleCollectionDefaultsToAllowedCollection() {
+        authenticateRestrictedKey("10");
+        PdfToRagService.PdfToRagResult ragResult =
+                new PdfToRagService.PdfToRagResult(7L, "Doc", false, "CACHED", "already done", 3);
+        when(pdfToRagService.triggerEmbedding(eq("uuid-789"), eq(10L), eq(false)))
+                .thenReturn(ragResult);
+
+        Object response = controller.triggerEmbedding("uuid-789", null, "sync", false);
+
+        assertTrue(response instanceof ResponseEntity);
+        assertEquals(200, ((ResponseEntity<?>) response).getStatusCode().value());
+        verify(pdfToRagService).triggerEmbedding("uuid-789", 10L, false);
+    }
+
+    private void authenticateRestrictedKey(String allowedCollectionIds) {
+        RagApiKey key = new RagApiKey();
+        key.setRole(ApiKeyRole.NORMAL);
+        key.setAllowedCollectionIds(allowedCollectionIds);
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
+        RequestContextHolder.setRequestAttributes(new ServletRequestAttributes(request));
     }
 
     // ==================== previewHtmlFragment tests ====================

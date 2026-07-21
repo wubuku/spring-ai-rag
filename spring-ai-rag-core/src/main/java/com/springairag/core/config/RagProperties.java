@@ -12,8 +12,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * <pre>
  * rag:
  *   embedding:
- *     api-key: sk-xxx
- *     base-url: https://api.siliconflow.cn/v1
+ *     api-key: ${SILICONFLOW_API_KEY}
+ *     base-url: https://api.siliconflow.cn
  *     model: BAAI/bge-m3
  *     dimensions: 1024
  *   retrieval:

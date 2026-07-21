@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagRerankProperties;
 import com.springairag.core.retrieval.rerank.RerankProviderFactory;
 import org.junit.jupiter.api.Test;
 
@@ -93,6 +94,41 @@ class ReRankingServiceTest {
 
         List<RetrievalResult> reranked = enabledService.rerank("query", results, 3);
         assertTrue(reranked.size() <= 3, "应不超过 maxResults");
+    }
+
+    @Test
+    void rerank_improvesReciprocalRankForKeywordRelevantDocument() {
+        RagRerankProperties config = new RagRerankProperties();
+        config.setEnabled(true);
+        config.setDiversityWeight(0.2f);
+        ReRankingService enabledService = new ReRankingService(
+                config, new com.springairag.core.retrieval.rerank.HeuristicRerankProvider(config));
+
+        RetrievalResult distractor = createResult(
+                "doc-distractor", "generic framework overview", 0.60);
+        RetrievalResult relevant = createResult(
+                "doc-relevant",
+                "Spring AI Advisor chain vector store embedding model RAG",
+                0.55);
+        List<RetrievalResult> baseline = List.of(distractor, relevant);
+
+        List<RetrievalResult> quality = enabledService.rerank(
+                "Spring AI advisor vector store", baseline, 2);
+
+        double baselineMrr = reciprocalRank(baseline, "doc-relevant");
+        double qualityMrr = reciprocalRank(quality, "doc-relevant");
+        assertTrue(qualityMrr > baselineMrr,
+                "Heuristic quality profile should improve MRR on the deterministic golden case");
+        assertEquals("doc-relevant", quality.getFirst().getDocumentId());
+    }
+
+    private double reciprocalRank(List<RetrievalResult> results, String relevantId) {
+        for (int i = 0; i < results.size(); i++) {
+            if (relevantId.equals(results.get(i).getDocumentId())) {
+                return 1.0 / (i + 1);
+            }
+        }
+        return 0.0;
     }
 
     // ========== calculateRelevanceScore ==========

@@ -99,6 +99,18 @@ public class RagApiKey {
     @Column(name = "api_key", length = 128)
     private String apiKey;
 
+    /**
+     * Comma-separated collection IDs this key may access.
+     * Null or blank means unrestricted (all collections).
+     */
+    @Column(name = "allowed_collection_ids", length = 2048)
+    private String allowedCollectionIds;
+
     public String getApiKey() { return apiKey; }
     public void setApiKey(String apiKey) { this.apiKey = apiKey; }
+
+    public String getAllowedCollectionIds() { return allowedCollectionIds; }
+    public void setAllowedCollectionIds(String allowedCollectionIds) {
+        this.allowedCollectionIds = allowedCollectionIds;
+    }
 }

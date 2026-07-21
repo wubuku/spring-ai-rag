@@ -11,6 +11,7 @@ import java.util.Objects;
  *
  * @param multiModelEnabled Whether multi-model is enabled
  * @param defaultProvider Default provider
+ * @param defaultModel Default model reference
  * @param availableProviders List of available providers
  * @param fallbackChain Fallback chain
  * @param models Detailed information for each model
@@ -19,6 +20,7 @@ import java.util.Objects;
 public record ModelListResponse(
         @Schema(description = "Whether multi-model support is enabled", example = "true") boolean multiModelEnabled,
         @Schema(description = "Default model provider", example = "openai") String defaultProvider,
+        @Schema(description = "Default model reference", example = "openrouter/xiaomi/mimo-v2-pro") String defaultModel,
         @Schema(description = "List of available provider names", example = "[\"openai\",\"anthropic\"]") List<String> availableProviders,
         @Schema(description = "Fallback chain in priority order", example = "[\"openai\",\"anthropic\"]") List<String> fallbackChain,
         @Schema(description = "Detailed information for each available model") List<Map<String, Object>> models
@@ -26,10 +28,24 @@ public record ModelListResponse(
     public static ModelListResponse of(
             boolean multiModelEnabled,
             String defaultProvider,
+            String defaultModel,
             List<String> availableProviders,
             List<String> fallbackChain,
             List<Map<String, Object>> models) {
-        return new ModelListResponse(multiModelEnabled, defaultProvider,
+        return new ModelListResponse(multiModelEnabled, defaultProvider, defaultModel,
+                availableProviders, fallbackChain, models);
+    }
+
+    /**
+     * Backward-compatible factory for callers that only provide a provider-level default.
+     */
+    public static ModelListResponse of(
+            boolean multiModelEnabled,
+            String defaultProvider,
+            List<String> availableProviders,
+            List<String> fallbackChain,
+            List<Map<String, Object>> models) {
+        return of(multiModelEnabled, defaultProvider, defaultProvider,
                 availableProviders, fallbackChain, models);
     }
 
@@ -40,6 +56,7 @@ public record ModelListResponse(
         ModelListResponse that = (ModelListResponse) o;
         return multiModelEnabled == that.multiModelEnabled &&
                 Objects.equals(defaultProvider, that.defaultProvider) &&
+                Objects.equals(defaultModel, that.defaultModel) &&
                 Objects.equals(availableProviders, that.availableProviders) &&
                 Objects.equals(fallbackChain, that.fallbackChain) &&
                 Objects.equals(models, that.models);
@@ -47,7 +64,8 @@ public record ModelListResponse(
 
     @Override
     public int hashCode() {
-        return Objects.hash(multiModelEnabled, defaultProvider, availableProviders, fallbackChain, models);
+        return Objects.hash(multiModelEnabled, defaultProvider, defaultModel,
+                availableProviders, fallbackChain, models);
     }
 
     @Override
@@ -55,6 +73,7 @@ public record ModelListResponse(
         return "ModelListResponse{" +
                 "multiModelEnabled=" + multiModelEnabled +
                 ", defaultProvider='" + defaultProvider + '\'' +
+                ", defaultModel='" + defaultModel + '\'' +
                 ", availableProviders=" + availableProviders +
                 ", fallbackChain=" + fallbackChain +
                 ", models=" + (models != null ? models.size() + " model(s)" : "null") +

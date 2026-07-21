@@ -106,6 +106,55 @@ class ApiKeyControllerTest {
     }
 
     @Test
+    void createKey_restrictedCallerCannotDelegateBroaderAcl() throws Exception {
+        RagApiKey caller = mockCaller("rag_k_scoped", ApiKeyRole.NORMAL);
+        caller.setAllowedCollectionIds("2,4");
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(req -> {
+                            req.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    caller);
+                            return req;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Escalation","allowedCollectionIds":[9]}
+                                """))
+                .andExpect(status().isForbidden());
+
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void createKey_restrictedCallerDefaultsChildToSameAcl() throws Exception {
+        RagApiKey caller = mockCaller("rag_k_scoped", ApiKeyRole.NORMAL);
+        caller.setAllowedCollectionIds("2,4");
+        when(apiKeyService.generateKey(any())).thenReturn(
+                new ApiKeyCreatedResponse(
+                        "rag_k_child", "rag_sk_child", "Child", null,
+                        List.of(2L, 4L)));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(req -> {
+                            req.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    caller);
+                            return req;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"Child"}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.allowedCollectionIds[0]").value(2))
+                .andExpect(jsonPath("$.allowedCollectionIds[1]").value(4));
+
+        verify(apiKeyService).generateKey(argThat(request ->
+                List.of(2L, 4L).equals(request.getAllowedCollectionIds())));
+    }
+
+    @Test
     void listKeys_returnsAllKeys() throws Exception {
         ApiKeyResponse key1 = new ApiKeyResponse("rag_k_1", "Key 1",
                 LocalDateTime.of(2026, 1, 1, 0, 0), null, null, true);

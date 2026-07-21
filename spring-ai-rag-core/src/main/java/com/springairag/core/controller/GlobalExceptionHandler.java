@@ -191,4 +191,12 @@ public class GlobalExceptionHandler {
                 .contentType(PROBLEM_JSON)
                 .body(body);
     }
+
+    @ExceptionHandler(SecurityException.class)
+    public ResponseEntity<ErrorResponse> handleSecurityException(SecurityException e,
+                                                                 HttpServletRequest request) {
+        return buildResponse(HttpStatus.FORBIDDEN, "FORBIDDEN",
+                e.getMessage() != null ? e.getMessage() : "Access denied", request);
+    }
+
 }

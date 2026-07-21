@@ -10,7 +10,9 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.*;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.service.AlertService;
+import com.springairag.core.service.CollectionDocumentResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import com.springairag.core.versioning.ApiVersionConfig;
@@ -100,6 +102,8 @@ class RagControllerIntegrationTest {
 
     // ==================== Search ====================
     @MockBean private HybridRetrieverService hybridRetrieverService;
+    @MockBean private CollectionDocumentResolver collectionDocumentResolver;
+    @MockBean private ReRankingService reRankingService;
 
     // ==================== Document ====================
     @MockBean private RagDocumentRepository documentRepository;
@@ -195,6 +199,34 @@ class RagControllerIntegrationTest {
         }
 
         @Test
+        void chatAsk_sessionIdLongerThanDatabaseLimit_returns400() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/chat/ask")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "message": "测试消息",
+                                        "sessionId": "1234567890123456789012345678901234567"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+        }
+
+        @Test
+        void chatStream_sessionIdLongerThanDatabaseLimit_returns400() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/chat/stream")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "message": "测试消息",
+                                        "sessionId": "1234567890123456789012345678901234567"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+        }
+
+        @Test
         void chatAsk_missingSessionId_returns200() throws Exception {
             // sessionId is optional — controller auto-generates for new conversations
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -243,6 +275,8 @@ class RagControllerIntegrationTest {
         @Test
         void search_get_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
+            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
+                    .thenReturn(null);
             when(hybridRetrieverService.search(eq("test query"), isNull(), isNull(), eq(5), any()))
                     .thenReturn(List.of(result));
 
@@ -257,6 +291,8 @@ class RagControllerIntegrationTest {
 
         @Test
         void search_get_defaultParams() throws Exception {
+            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
+                    .thenReturn(null);
             when(hybridRetrieverService.search(eq("default"), isNull(), isNull(), eq(10), any()))
                     .thenReturn(List.of());
 
@@ -269,7 +305,9 @@ class RagControllerIntegrationTest {
         @Test
         void search_post_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
-            when(hybridRetrieverService.search(anyString(), any(), isNull(), anyInt(), any()))
+            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
+                    .thenReturn(null);
+            when(hybridRetrieverService.search(anyString(), isNull(), isNull(), anyInt(), any()))
                     .thenReturn(List.of(result));
 
             mockMvc.perform(post("/api/v1/rag/search")
@@ -279,7 +317,8 @@ class RagControllerIntegrationTest {
                                         "query": "POST 检索",
                                         "config": {
                                             "maxResults": 5,
-                                            "useHybrid": true
+                                            "useHybridSearch": true,
+                                            "useRerank": false
                                         }
                                     }
                                     """))

@@ -26,7 +26,7 @@ import java.util.Map;
 @Configuration
 public class OpenApiConfig {
 
-    @Value("${server.port:8080}")
+    @Value("${server.port:8081}")
     private int serverPort;
 
     @Bean
@@ -54,7 +54,7 @@ public class OpenApiConfig {
                                 ## Try It Out
                                 Use the **Try it out** button in Swagger UI to make live API calls.
                                 """)
-                        .version("1.0.0-SNAPSHOT")
+                        .version("1.0.0")
                         .contact(new Contact()
                                 .name("Spring AI RAG")
                                 .url("https://github.com/yangjiefeng/spring-ai-rag"))

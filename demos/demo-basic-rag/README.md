@@ -16,8 +16,9 @@ mvn clean install -DskipTests
 
 ```bash
 cd demos/demo-basic-rag
-export DEEPSEEK_API_KEY=sk-xxx
-export SILICONFLOW_API_KEY=sk-xxx
+set -a
+source ../../.env
+set +a
 mvn spring-boot:run
 ```
 
@@ -25,12 +26,12 @@ mvn spring-boot:run
 
 ```bash
 # Customer service Q&A
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{"message": "What is your return and exchange policy?", "sessionId": "customer-001"}'
 
 # Upload a knowledge base document
-curl -X POST http://localhost:8080/api/v1/rag/documents \
+curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{"title": "Return Policy", "content": "You may apply for returns or exchanges within 7 days of receiving the product...", "source": "policy"}'
 ```
@@ -45,7 +46,7 @@ curl -X POST http://localhost:8080/api/v1/rag/documents \
 <dependency>
     <groupId>com.springairag</groupId>
     <artifactId>spring-ai-rag-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -55,7 +56,7 @@ See `src/main/resources/application.yml` for reference.
 Only configure:
 - `spring.datasource.*` (PostgreSQL + pgvector)
 - `app.llm.*` (LLM Provider)
-- `siliconflow.*` (Embedding Model)
+- `rag.embedding.*` (Embedding Model)
 
 ### Step 3: Use Directly
 

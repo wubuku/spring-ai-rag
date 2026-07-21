@@ -101,6 +101,16 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    void handleSecurityException_returns403() {
+        ResponseEntity<ErrorResponse> response = handler.handleSecurityException(
+                new SecurityException("collection denied"), request);
+
+        assertEquals(HttpStatus.FORBIDDEN, response.getStatusCode());
+        assertEquals("FORBIDDEN", response.getBody().getError());
+        assertEquals("collection denied", response.getBody().getMessage());
+    }
+
+    @Test
     void handleMissingParam_returns400() {
         MissingServletRequestParameterException e = new MissingServletRequestParameterException("sessionId", "String");
         ResponseEntity<ErrorResponse> response = handler.handleMissingParam(e, request);

@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -27,15 +28,25 @@ public class ApiKeyCreatedResponse {
     @Schema(description = "Warning to remind users to save the key")
     private String warning;
 
+    @Schema(description = "Collection IDs this key may access. Null means unrestricted.", example = "[1, 2]")
+    private List<Long> allowedCollectionIds;
+
     public ApiKeyCreatedResponse() {
     }
 
     public ApiKeyCreatedResponse(String keyId, String rawKey, String name,
                                  java.time.LocalDateTime expiresAt) {
+        this(keyId, rawKey, name, expiresAt, null);
+    }
+
+    public ApiKeyCreatedResponse(String keyId, String rawKey, String name,
+                                 java.time.LocalDateTime expiresAt,
+                                 List<Long> allowedCollectionIds) {
         this.keyId = keyId;
         this.rawKey = rawKey;
         this.name = name;
         this.expiresAt = expiresAt;
+        this.allowedCollectionIds = allowedCollectionIds;
         this.warning = "Save this key now — it will not be shown again.";
     }
 
@@ -54,6 +65,11 @@ public class ApiKeyCreatedResponse {
     public String getWarning() { return warning; }
     public void setWarning(String warning) { this.warning = warning; }
 
+    public List<Long> getAllowedCollectionIds() { return allowedCollectionIds; }
+    public void setAllowedCollectionIds(List<Long> allowedCollectionIds) {
+        this.allowedCollectionIds = allowedCollectionIds;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -63,12 +79,13 @@ public class ApiKeyCreatedResponse {
                 Objects.equals(rawKey, that.rawKey) &&
                 Objects.equals(name, that.name) &&
                 Objects.equals(expiresAt, that.expiresAt) &&
-                Objects.equals(warning, that.warning);
+                Objects.equals(warning, that.warning) &&
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(keyId, rawKey, name, expiresAt, warning);
+        return Objects.hash(keyId, rawKey, name, expiresAt, warning, allowedCollectionIds);
     }
 
     @Override
@@ -77,6 +94,7 @@ public class ApiKeyCreatedResponse {
                 "keyId='" + keyId + '\'' +
                 ", name='" + name + '\'' +
                 ", expiresAt=" + expiresAt +
+                ", allowedCollectionIds=" + allowedCollectionIds +
                 ", warning='" + warning + '\'' +
                 // rawKey intentionally excluded from toString (security)
                 '}';

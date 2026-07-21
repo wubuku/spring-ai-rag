@@ -17,8 +17,8 @@ replicaCount: 1
 
 image:
   repository: ghcr.io/wubuku/spring-ai-rag
-  # Overridden by CI during image build
-  tag: "latest"
+  # Keep the default immutable; override with a commit SHA for unreleased builds.
+  tag: "1.0.0"
   pullPolicy: IfNotPresent
 
 # ── Image pull secret (for GHCR) ──────────────────────────────────────────
@@ -33,7 +33,7 @@ serviceAccount:
 # ── Pod annotations ──────────────────────────────────────────────────────
 podAnnotations: {}
   # example: prometheus.io/scrape: "true"
-  # example: prometheus.io/port: "8080"
+  # example: prometheus.io/port: "8081"
 
 # ── Security context (Pod level) ─────────────────────────────────────────
 podSecurityContext:
@@ -58,7 +58,7 @@ securityContext:
 # ── Service ───────────────────────────────────────────────────────────────
 service:
   type: ClusterIP
-  port: 8080
+  port: 8081
   labels: {}
 
 # ── Ingress ───────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ affinity:
 livenessProbe:
   httpGet:
     path: /actuator/health/liveness
-    port: 8080
+    port: 8081
   initialDelaySeconds: 60
   periodSeconds: 10
   timeoutSeconds: 5
@@ -128,7 +128,7 @@ livenessProbe:
 readinessProbe:
   httpGet:
     path: /actuator/health/readiness
-    port: 8080
+    port: 8081
   initialDelaySeconds: 30
   periodSeconds: 5
   timeoutSeconds: 3
@@ -138,7 +138,7 @@ readinessProbe:
 startupProbe:
   httpGet:
     path: /actuator/health/liveness
-    port: 8080
+    port: 8081
   initialDelaySeconds: 10
   periodSeconds: 10
   timeoutSeconds: 5
@@ -161,25 +161,24 @@ jvm:
     -XX:+UnlockDiagnosticVMOptions
     -XX:NativeMemoryTracking=summary
 
-# ── Spring profile ─────────────────────────────────────────────────────────
-springProfile: ""
-
 # ── Config (non-sensitive, stored in ConfigMap) ────────────────────────────
 config:
   # spring.threads.virtual.enabled
   virtualThreads: true
-  # rag.retrieval.vector.topK
-  defaultTopK: 5
-  # rag.retrieval.vector.defaultSimilarityThreshold
-  defaultSimilarityThreshold: 0.7
-  # rag.embedding.batchSize
-  embeddingBatchSize: 100
+  # rag.retrieval.*
+  defaultLimit: 10
+  minScore: 0.3
+  vectorWeight: 0.5
+  fulltextWeight: 0.5
+  # Production-quality pipeline switches
+  queryRewriteEnabled: true
+  rerankEnabled: true
 
 # ── Secrets (sensitive, stored in Secret) ──────────────────────────────────
 # Provide via --set or a pre-created Secret named {{ include "spring-ai-rag.fullname" . }}-env
 secrets:
   # Spring profile override
-  springProfile: ""
+  springProfile: "postgresql,prod"
 
   # PostgreSQL connection
   postgresHost: "postgres"
@@ -191,7 +190,7 @@ secrets:
   # DeepSeek / OpenAI-compatible LLM
   deepseekApiKey: ""     # REQUIRED — set via --set secrets.deepseekApiKey=xxx
   openaiApiKey: ""       # falls back to deepseekApiKey if not set
-  openaiBaseUrl: "https://api.deepseek.com/v1"
+  openaiBaseUrl: "https://api.deepseek.com"
   openaiModel: "deepseek-chat"
 
   # SiliconFlow embedding (BGE-M3)
@@ -203,7 +202,7 @@ secrets:
   # MiniMax (optional)
   minimaxApiKey: ""
   minimaxApiKeyId: ""
-  minimaxBaseUrl: "https://api.minimax.chat/v1"
+  minimaxBaseUrl: "https://api.minimaxi.com"
 
   # Optional: External pgvector host (leave empty to use the postgres subchart / sidecar)
   externalPostgresHost: ""

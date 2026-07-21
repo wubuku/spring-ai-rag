@@ -41,6 +41,33 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
+## One-command Release Verification
+
+`scripts/verify-release.sh` codifies the 1.0 release gates, including embedded-WebUI reference, file-existence, and Git-trackability checks. Per-step stdout/stderr, a status table, and a Markdown summary are written to `target/release-verification/<run-id>/`:
+
+```bash
+# Default: static checks, Maven, WebUI, Playwright, Helm, Docker
+./scripts/verify-release.sh
+
+# Reuse an existing node_modules directory
+./scripts/verify-release.sh --skip-npm-ci
+
+# Add HTTP E2E and goldenset against a running PostgreSQL-profile service
+BASE_URL=http://127.0.0.1:8081 \
+  ./scripts/verify-release.sh --with-runtime-e2e --with-goldenset
+
+# The real-LLM server normally runs on 18081 via start-real-e2e-server.sh
+./scripts/verify-release.sh --with-real-llm
+
+# Complete local gate: start a PostgreSQL-profile server, run HTTP E2E,
+# goldenset, and real-LLM smoke, archive logs, then stop that server
+./scripts/verify-release.sh --with-local-runtime
+```
+
+`--with-local-runtime` requires PostgreSQL/pgvector plus working database, embedding, and chat-LLM settings in `.env`. It exclusively owns port `18081` by default and fails when the port is occupied, so it never reuses or kills an unrelated service. Override the port with `RUNTIME_SERVER_PORT`. On success, failure, or interruption, the script archives its logs and stops the service it started.
+
+Docker uses a mainland-China mirror first and falls back to official sources. See the [mainland China network guide](china-network-guide.md). External-service failures must remain failed or explicitly skipped; they must not be reported as a release pass.
+
 ## Test Categories
 
 ### Unit Tests (JUnit 5 + Mockito)

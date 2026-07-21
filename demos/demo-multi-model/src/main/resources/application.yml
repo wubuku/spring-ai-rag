@@ -3,12 +3,12 @@
 # ============================================
 # Usage:
 #   1. Copy .env.example to .env and fill in real API keys
-#   2. mvn spring-boot:run -pl demos/demo-multi-model
-#   3. curl http://localhost:8080/demo/models
+#   2. mvn -f demos/demo-multi-model/pom.xml spring-boot:run
+#   3. curl http://localhost:8081/demo/models
 # ============================================
 
 server:
-  port: 8080
+  port: 8081
 
 spring:
   application:
@@ -34,7 +34,7 @@ spring:
   # To switch provider: modify app.llm.provider
   ai:
     openai:
-      api-key: ${OPENAI_API_KEY:dummy}
+      api-key: ${OPENAI_API_KEY:}
       base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
       chat:
         enabled: false   # ChatModel beans are manually created by SpringAiConfig
@@ -52,25 +52,20 @@ app:
   llm:
     provider: ${LLM_PROVIDER:openai}
 
-  # Vector embedding configuration (SiliconFlow BGE-M3)
+rag:
   embedding:
-    provider: siliconflow
-    siliconflow:
-      api-key: ${SILICONFLOW_API_KEY:dummy}
-      base-url: https://api.siliconflow.cn/v1
-      model: BAAI/bge-m3
-      dimension: 1024
-
-  # RAG retrieval configuration
+    api-key: ${SILICONFLOW_API_KEY:}
+    base-url: https://api.siliconflow.cn
+    model: BAAI/bge-m3
+    dimensions: 1024
   retrieval:
-    defaultTopK: 5
-    rerank:
-      enabled: true
-      topN: 3
-    hybrid:
-      vectorWeight: 0.7
-      fulltextWeight: 0.3
-      minScore: 0.3
+    default-limit: 5
+    vector-weight: 0.7
+    fulltext-weight: 0.3
+    min-score: 0.3
+  rerank:
+    enabled: true
+    top-n: 3
 
 # ============================================
 # Actuator Health Checks

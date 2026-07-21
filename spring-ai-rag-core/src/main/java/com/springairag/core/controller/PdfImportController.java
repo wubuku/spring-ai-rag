@@ -10,6 +10,7 @@ import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.SseEmitters;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 import com.springairag.core.versioning.ApiVersion;
@@ -103,7 +104,6 @@ public class PdfImportController {
             return ResponseEntity.badRequest()
                     .body(ErrorResponse.of("Only PDF files are supported"));
         }
-
         try {
             PdfImportService.PdfImportResult result = pdfImportService.importPdf(file, collection);
 
@@ -160,66 +160,118 @@ public class PdfImportController {
             @ApiResponse(responseCode = "400", description = "Invalid request"),
             @ApiResponse(responseCode = "500", description = "Internal error during import or embedding")
     })
-    @PostMapping(value = "/pdf-to-rag", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public Object importPdfToRag(
+    @PostMapping(value = "/pdf-to-rag",
+            params = "embed=false",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> importPdfToRagWithoutEmbedding(
             @Parameter(description = "PDF file to import")
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Optional collection ID to associate with the RAG document")
-            @RequestParam(value = "collectionId", required = false) Long collectionId,
-            @Parameter(description = "Whether to trigger embedding (default: true). "
-                    + "When true, returns SSE progress stream; when false, returns immediately.")
-            @RequestParam(value = "embed", defaultValue = "true") boolean embed) {
-
-        if (file == null || file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ErrorResponse.of("No file uploaded"));
-        }
-
-        String filename = file.getOriginalFilename();
-        if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
-            return ResponseEntity.badRequest()
-                    .body(ErrorResponse.of("Only PDF files are supported"));
-        }
+            @RequestParam(value = "collectionId", required = false) Long collectionId) {
 
         try {
-            // Step 1: Import PDF to fs_files (get entry Markdown path)
+            String filename = requirePdfFilename(file);
+            Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
+                    collectionId, ApiKeyCollectionAccess.currentKey());
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
 
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
                     importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
 
-            if (!embed) {
-                // Step 2a: Create RagDocument WITHOUT embedding (fast, returns immediately)
-                PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
-                        importResult.entryMarkdown(),
-                        filename,
-                        collectionId,
-                        false,  // embed=false
-                        false   // forceReembed (irrelevant when embed=false)
-                );
+            PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
+                    importResult.entryMarkdown(),
+                    filename,
+                    effectiveCollectionId,
+                    false,
+                    false
+            );
 
-                return ResponseEntity.ok(new PdfToRagResponse(
-                        ragResult.documentId(),
-                        ragResult.title(),
-                        ragResult.newlyCreated(),
-                        null,   // no embedding
-                        null,   // no embedding
-                        null,   // no embedding
-                        importResult.uuid(),
-                        importResult.entryMarkdown()
-                ));
-            }
-
-            // Step 2b: Create RagDocument WITH embedding (returns SSE stream)
-            return streamPdfToRagWithEmbedding(importResult, filename, collectionId);
-
+            return ResponseEntity.ok(new PdfToRagResponse(
+                    ragResult.documentId(),
+                    ragResult.title(),
+                    ragResult.newlyCreated(),
+                    null,
+                    null,
+                    null,
+                    importResult.uuid(),
+                    importResult.entryMarkdown()
+            ));
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (SecurityException e) {
+            throw e;
         } catch (Exception e) { // Resilience: import
-            log.error("PDF-to-RAG import failed for '{}': {}", filename, e.getMessage(), e);
+            log.error("PDF-to-RAG import failed: {}", e.getMessage(), e);
             return ResponseEntity.internalServerError()
                     .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
         }
+    }
+
+    @PostMapping(value = "/pdf-to-rag",
+            params = "embed=true",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "collectionId", required = false) Long collectionId) {
+        return startPdfToRagEmbedding(file, collectionId);
+    }
+
+    @PostMapping(value = "/pdf-to-rag",
+            params = "!embed",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> importPdfToRagWithEmbeddingDefault(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "collectionId", required = false) Long collectionId) {
+        return startPdfToRagEmbedding(file, collectionId);
+    }
+
+    Object importPdfToRag(MultipartFile file, Long collectionId, boolean embed) {
+        try {
+            return embed
+                    ? importPdfToRagWithEmbedding(file, collectionId)
+                    : importPdfToRagWithoutEmbedding(file, collectionId);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (SecurityException e) {
+            throw e;
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
+        }
+    }
+
+    private ResponseEntity<SseEmitter> startPdfToRagEmbedding(
+            MultipartFile file, Long collectionId) {
+        String filename = requirePdfFilename(file);
+        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
+                collectionId, ApiKeyCollectionAccess.currentKey());
+        try {
+            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+            log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
+                    importResult.uuid(), importResult.entryMarkdown(), importResult.filesStored());
+            return streamPdfToRagWithEmbedding(
+                    importResult, filename, effectiveCollectionId);
+        } catch (IllegalArgumentException | SecurityException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("PDF-to-RAG import failed for '{}': {}", filename, e.getMessage(), e);
+            throw new IllegalStateException(
+                    "PDF-to-RAG import failed: " + e.getMessage(), e);
+        }
+    }
+
+    private String requirePdfFilename(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("No file uploaded");
+        }
+        String filename = file.getOriginalFilename();
+        if (filename == null || !filename.toLowerCase().endsWith(".pdf")) {
+            throw new IllegalArgumentException("Only PDF files are supported");
+        }
+        return filename;
     }
 
     /**
@@ -236,9 +288,10 @@ public class PdfImportController {
     /**
      * Streams embedding progress via SSE, then sends the final result as "done" event.
      */
-    private Object streamPdfToRagWithEmbedding(PdfImportService.PdfImportResult importResult,
-                                               String filename,
-                                               Long collectionId) {
+    private ResponseEntity<SseEmitter> streamPdfToRagWithEmbedding(
+            PdfImportService.PdfImportResult importResult,
+            String filename,
+            Long collectionId) {
         SseEmitter emitter = SseEmitters.create();
 
         // Run embedding in background thread so the HTTP response can stream
@@ -326,14 +379,14 @@ public class PdfImportController {
             @ApiResponse(responseCode = "400", description = "UUID not found or Markdown has no content"),
             @ApiResponse(responseCode = "500", description = "Internal error during embedding")
     })
-    @PostMapping("/{uuid}/embed")
-    public Object triggerEmbedding(
+    @PostMapping(value = "/{uuid}/embed",
+            params = "embed=sync",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> triggerEmbeddingSync(
             @Parameter(description = "Virtual directory UUID of the imported PDF")
             @PathVariable("uuid") String uuid,
             @Parameter(description = "Optional collection ID to associate with the RAG document")
             @RequestParam(value = "collectionId", required = false) Long collectionId,
-            @Parameter(description = "Embedding mode: 'sse' (default, SSE progress stream) or 'sync' (immediate JSON)")
-            @RequestParam(value = "embed", defaultValue = "sse") String embed,
             @Parameter(description = "Force re-embedding even if content unchanged (default: false)")
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
 
@@ -341,40 +394,83 @@ public class PdfImportController {
             return ResponseEntity.badRequest()
                     .body(ErrorResponse.of("UUID must not be blank"));
         }
+        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
+                collectionId, ApiKeyCollectionAccess.currentKey());
 
-        if ("sync".equalsIgnoreCase(embed)) {
-            // Sync mode: return immediately with result
-            try {
-                PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
-                        uuid, collectionId, forceReembed);
+        try {
+            PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
+                    uuid, effectiveCollectionId, forceReembed);
 
-                return ResponseEntity.ok(new PdfToRagResponse(
-                        result.documentId(),
-                        result.title(),
-                        result.newlyCreated(),
-                        result.embedStatus(),
-                        result.embedMessage(),
-                        result.chunksCreated(),
-                        uuid,
-                        uuid + "/default.md"
-                ));
-            } catch (IllegalArgumentException e) {
-                return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-            } catch (Exception e) { // Resilience: trigger
-                log.error("Trigger embedding failed for uuid={}: {}", uuid, e.getMessage());
-                return ResponseEntity.internalServerError()
-                        .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));
-            }
+            return ResponseEntity.ok(new PdfToRagResponse(
+                    result.documentId(),
+                    result.title(),
+                    result.newlyCreated(),
+                    result.embedStatus(),
+                    result.embedMessage(),
+                    result.chunksCreated(),
+                    uuid,
+                    uuid + "/default.md"
+            ));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (Exception e) { // Resilience: trigger
+            log.error("Trigger embedding failed for uuid={}: {}", uuid, e.getMessage());
+            return ResponseEntity.internalServerError()
+                    .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));
         }
+    }
 
-        // SSE mode: stream progress, then final result
-        return streamEmbeddingWithProgress(uuid, collectionId, forceReembed);
+    @PostMapping(value = "/{uuid}/embed",
+            params = "embed=sse",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> triggerEmbeddingSse(
+            @PathVariable("uuid") String uuid,
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
+        return startEmbeddingSse(uuid, collectionId, forceReembed);
+    }
+
+    @PostMapping(value = "/{uuid}/embed",
+            params = "!embed",
+            produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public ResponseEntity<SseEmitter> triggerEmbeddingSseDefault(
+            @PathVariable("uuid") String uuid,
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
+        return startEmbeddingSse(uuid, collectionId, forceReembed);
+    }
+
+    private ResponseEntity<SseEmitter> startEmbeddingSse(
+            String uuid, Long collectionId, boolean forceReembed) {
+        if (uuid == null || uuid.isBlank()) {
+            throw new IllegalArgumentException("UUID must not be blank");
+        }
+        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
+                collectionId, ApiKeyCollectionAccess.currentKey());
+        return streamEmbeddingWithProgress(uuid, effectiveCollectionId, forceReembed);
+    }
+
+    Object triggerEmbedding(
+            String uuid, Long collectionId, String embed, boolean forceReembed) {
+        try {
+            return "sync".equalsIgnoreCase(embed)
+                    ? triggerEmbeddingSync(uuid, collectionId, forceReembed)
+                    : triggerEmbeddingSse(uuid, collectionId, forceReembed);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (SecurityException e) {
+            throw e;
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(ErrorResponse.of("Embedding trigger failed: " + e.getMessage()));
+        }
     }
 
     /**
      * Streams embedding progress via SSE, then sends the final result as "done" event.
      */
-    private Object streamEmbeddingWithProgress(String uuid, Long collectionId, boolean forceReembed) {
+    private ResponseEntity<SseEmitter> streamEmbeddingWithProgress(
+            String uuid, Long collectionId, boolean forceReembed) {
         SseEmitter emitter = SseEmitters.create();
 
         Runnable task = () -> {

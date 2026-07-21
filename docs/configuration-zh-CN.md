@@ -18,7 +18,7 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       chat:
         enabled: false
 
@@ -49,37 +49,73 @@ rag:
 
 ```yaml
 spring:
-  openai:
-    api-key: ${OPENAI_API_KEY}
-    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
-    chat:
-      enabled: false
-      options:
-        model: ${OPENAI_MODEL:deepseek-chat}
-        temperature: ${OPENAI_TEMPERATURE:0.7}
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
+      chat:
+        enabled: false
+        options:
+          model: ${OPENAI_MODEL:deepseek-chat}
+          temperature: ${OPENAI_TEMPERATURE:0.7}
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `spring.openai.api-key` | (必填) | API Key |
-| `spring.openai.base-url` | `https://api.deepseek.com/v1` | API 端点 |
-| `spring.openai.chat.options.model` | `deepseek-chat` | 模型名称 |
-| `spring.openai.chat.options.temperature` | `0.7` | 生成温度 |
+| `spring.ai.openai.api-key` | (必填) | API Key |
+| `spring.ai.openai.base-url` | `https://api.deepseek.com` | API 端点；不要追加 `/v1` |
+| `spring.ai.openai.chat.options.model` | `deepseek-chat` | 兼容路径的默认模型名 |
+| `spring.ai.openai.chat.options.temperature` | `0.7` | 生成温度 |
 
 ### Anthropic 配置
 
 ```yaml
 spring:
-  anthropic:
-    api-key: ${ANTHROPIC_API_KEY}
-    base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-    chat:
-      enabled: false
-      options:
-        model: ${ANTHROPIC_MODEL:claude-3-5-sonnet-20241022}
-        temperature: ${ANTHROPIC_TEMPERATURE:0.7}
-        max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        enabled: false
+        options:
+          model: ${ANTHROPIC_MODEL:claude-3-5-sonnet-20241022}
+          temperature: ${ANTHROPIC_TEMPERATURE:0.7}
+          max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 ```
+
+### 运行时选模
+
+`app.models.providers` 定义彼此独立的 ChatModel 实例。每个 provider 配置
+API 类型、端点、密钥占位符和一个或多个模型 ID：
+
+```yaml
+app:
+  models:
+    config-file: ${MODELS_CONFIG_FILE:}
+    providers:
+      openrouter:
+        displayName: OpenRouter
+        baseUrl: https://openrouter.ai/api
+        apiKey: ${OPENROUTER_API_KEY:}
+        apiType: openai-completions
+        enabled: true
+        priority: 1
+        models:
+          - id: xiaomi/mimo-v2-pro
+            name: MiMo V2 Pro
+            type: chat
+            contextWindow: 600000
+            maxTokens: 32000
+    chatModel:
+      primary: openrouter/xiaomi/mimo-v2-pro
+      fallbacks: []
+```
+
+调用 `GET /api/v1/rag/models` 获取 `providerId/modelId` 引用，并将其作为
+两个 Chat 端点的 `model` 字段。显式指定未知或不可用模型会返回 HTTP
+400；省略 `model` 时使用 primary/fallback 链。外部 JSON 会完整替换
+YAML 模型注册表，见
+[multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md)。
 
 ## 嵌入模型配置
 
@@ -89,26 +125,15 @@ spring:
 rag:
   embedding:
     api-key: ${SILICONFLOW_API_KEY}
-    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn/v1}
+    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.security.enabled` | `false`（本地） / `true`（`prod` profile） | 开启 API Key 认证；**`application-prod.yml` 默认开启** |
-| `rag.security.api-key` | `""` | 可选静态 Key；为空时仍可用数据库 Key（Bootstrap 首次生成 admin） |
-
-> 开启认证后，所有 `/api/*` 请求需要 `X-API-Key` header 或 `?apiKey=` query 参数。
-> SSE 请求（EventSource）不支持自定义 header，必须用 `?apiKey=` query 参数。
-
-**API Key 角色**：ADMIN（NORMAL 表中所有 key）可管理 keys；NORMAL 仅 RAG 功能 + 自助创建 NORMAL key。
-> 首次启动时 `ApiKeyBootstrapService` 会自动生成第一个 ADMIN key 并打印到日志。
-
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
 | `rag.embedding.api-key` | `""` | SiliconFlow API Key |
-| `rag.embedding.base-url` | `https://api.siliconflow.cn/v1` | API 端点 |
+| `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
 
@@ -283,10 +308,17 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.security.enabled` | `false` | 启用 API Key 认证 |
-| `rag.security.api-key` | `""` | API Key 值 |
+| `rag.security.enabled` | `false`（本地）/ `true`（`prod`） | 启用 API Key 认证 |
+| `rag.security.api-key` | `""` | 可选静态全库 Key |
 
-启用后，所有 `/api/v1/**` 请求需携带 `X-API-Key` 头。
+启用后，所有 `/api/v1/**` 请求需携带 `X-API-Key` 头或 `?apiKey=`
+查询参数。首次启动时 `ApiKeyBootstrapService` 会在空表中生成一个
+ADMIN Key；ADMIN 可管理全部 Key，NORMAL 仅使用 RAG 数据面。
+
+数据库 API Key 可在 `POST /api/v1/rag/api-keys` 中设置
+`allowedCollectionIds`。Flyway V24 将其保存到
+`rag_api_key.allowed_collection_ids`；空值表示全库权限。ADMIN 与可选静态
+Key 保持全库权限。详见 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置
 

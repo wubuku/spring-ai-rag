@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { apiKeysApi, type ApiKeyResponse, type ApiKeyCreateRequest } from '../api/apikeys';
+import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import styles from './ApiKeys.module.css';
 
@@ -51,10 +52,12 @@ function KeyList() {
             <span>{t('apiKeys.name')}</span>
             <span>{t('apiKeys.keyId')}</span>
             <span>{t('apiKeys.role')}</span>
+            <span>{t('apiKeys.collectionAccess')}</span>
             <span>{t('apiKeys.created')}</span>
             <span>{t('apiKeys.lastUsed')}</span>
             <span>{t('apiKeys.status')}</span>
             <span>{t('apiKeys.expires')}</span>
+            <span>{t('common.actions')}</span>
           </div>
           {data.data.map(key => (
             <KeyRow
@@ -111,6 +114,11 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
       <span className={styles.name}>{keyItem.name}</span>
       <span className={styles.keyId} title={keyItem.keyId}>{keyItem.keyId}</span>
       <span>{getRoleBadge(keyItem.role, t)}</span>
+      <span className={styles.scope}>
+        {keyItem.allowedCollectionIds?.length
+          ? keyItem.allowedCollectionIds.map(id => `#${id}`).join(', ')
+          : t('apiKeys.allCollections')}
+      </span>
       <span className={styles.date}>{formatDate(keyItem.createdAt)}</span>
       <span className={styles.date}>{formatDate(keyItem.lastUsedAt)}</span>
       <span>{statusBadge}</span>
@@ -167,9 +175,22 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [expiresAt, setExpiresAt] = useState('');
-  const [createdKey, setCreatedKey] = useState<{ keyId: string; rawKey: string; name: string; expiresAt?: string; warning: string } | null>(null);
+  const [restrictCollections, setRestrictCollections] = useState(false);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
+  const [createdKey, setCreatedKey] = useState<{
+    keyId: string;
+    rawKey: string;
+    name: string;
+    expiresAt?: string;
+    allowedCollectionIds?: number[];
+    warning: string;
+  } | null>(null);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
+  const collectionsQuery = useQuery({
+    queryKey: ['collections', 'api-key-scope'],
+    queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
+  });
 
   const createMutation = useMutation({
     mutationFn: (data: ApiKeyCreateRequest) => apiKeysApi.createKey(data),
@@ -189,7 +210,18 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
     if (expiresAt) {
       data.expiresAt = new Date(expiresAt).toISOString();
     }
+    if (restrictCollections) {
+      data.allowedCollectionIds = selectedCollectionIds;
+    }
     createMutation.mutate(data);
+  };
+
+  const toggleCollection = (collectionId: number) => {
+    setSelectedCollectionIds(current =>
+      current.includes(collectionId)
+        ? current.filter(id => id !== collectionId)
+        : [...current, collectionId],
+    );
   };
 
   const handleClose = () => {
@@ -228,6 +260,56 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               />
               <div className={styles.hint}>{t('apiKeys.expiresAtHint')}</div>
             </div>
+            <fieldset className={styles.scopeFieldset}>
+              <legend className={styles.label}>{t('apiKeys.collectionAccess')}</legend>
+              <label className={styles.scopeOption}>
+                <input
+                  type="radio"
+                  name="collectionScope"
+                  checked={!restrictCollections}
+                  onChange={() => setRestrictCollections(false)}
+                />
+                <span>
+                  <strong>{t('apiKeys.allCollections')}</strong>
+                  <small>{t('apiKeys.allCollectionsHint')}</small>
+                </span>
+              </label>
+              <label className={styles.scopeOption}>
+                <input
+                  type="radio"
+                  name="collectionScope"
+                  checked={restrictCollections}
+                  onChange={() => setRestrictCollections(true)}
+                />
+                <span>
+                  <strong>{t('apiKeys.selectedCollections')}</strong>
+                  <small>{t('apiKeys.selectedCollectionsHint')}</small>
+                </span>
+              </label>
+              {restrictCollections && (
+                <div className={styles.collectionSelector}>
+                  {collectionsQuery.isPending ? (
+                    <div className={styles.hint}>{t('common.loading')}</div>
+                  ) : collectionsQuery.isError ? (
+                    <div className={styles.scopeError}>{t('apiKeys.collectionsLoadError')}</div>
+                  ) : !collectionsQuery.data?.data?.collections?.length ? (
+                    <div className={styles.hint}>{t('collections.noCollections')}</div>
+                  ) : (
+                    collectionsQuery.data.data.collections.map(collection => (
+                      <label className={styles.collectionOption} key={collection.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedCollectionIds.includes(collection.id)}
+                          onChange={() => toggleCollection(collection.id)}
+                        />
+                        <span>{collection.name}</span>
+                        <code>#{collection.id}</code>
+                      </label>
+                    ))
+                  )}
+                </div>
+              )}
+            </fieldset>
             <div className={styles.modalActions}>
               <button type="button" className={styles.btnSecondary} onClick={handleClose}>
                 {t('common.cancel')}
@@ -235,7 +317,11 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <button
                 type="submit"
                 className={styles.btnPrimary}
-                disabled={createMutation.isPending || !name.trim()}
+                disabled={
+                  createMutation.isPending
+                  || !name.trim()
+                  || (restrictCollections && selectedCollectionIds.length === 0)
+                }
               >
                 {createMutation.isPending ? t('common.loading') : t('apiKeys.create')}
               </button>
@@ -253,6 +339,14 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <div className={styles.mono}>{createdKey.keyId}</div>
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.rawKey')}</div>
               <div className={styles.rawKey}>{createdKey.rawKey}</div>
+              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                {t('apiKeys.collectionAccess')}
+              </div>
+              <div className={styles.scope}>
+                {createdKey.allowedCollectionIds?.length
+                  ? createdKey.allowedCollectionIds.map(id => `#${id}`).join(', ')
+                  : t('apiKeys.allCollections')}
+              </div>
               <div className={styles.warning}>{createdKey.warning}</div>
             </div>
             <div className={styles.modalActions}>

@@ -30,7 +30,7 @@ helm upgrade --install spring-ai-rag ./k8s \
   --set secrets.siliconflowApiKey=sk-xxxxxxxxxxxx \
   \
   --set image.repository=ghcr.io/wubuku/spring-ai-rag \
-  --set image.tag=latest
+  --set image.tag=1.0.0
 ```
 
 ### Verify
@@ -39,9 +39,9 @@ helm upgrade --install spring-ai-rag ./k8s \
 kubectl get pods -n rag-system -w
 
 # port-forward for local testing
-kubectl port-forward svc/spring-ai-rag 8080:8080 -n rag-system
+kubectl port-forward svc/spring-ai-rag 8081:8081 -n rag-system
 
-curl http://localhost:8080/actuator/health
+curl http://localhost:8081/actuator/health
 ```
 
 ### Upgrade
@@ -54,7 +54,7 @@ helm upgrade spring-ai-rag ./k8s \
   --set secrets.deepseekApiKey=sk-xxx \
   --set secrets.siliconflowApiKey=sk-xxx \
   \
-  --set image.tag=v1.2.0   # specify the version to upgrade to
+  --set image.tag=1.0.0
 ```
 
 ## Configuration
@@ -68,7 +68,7 @@ helm upgrade spring-ai-rag ./k8s \
 | `secrets.siliconflowApiKey` | Yes | — | SiliconFlow API key |
 | `replicaCount` | No | `1` | Number of replicas |
 | `image.repository` | No | `ghcr.io/wubuku/spring-ai-rag` | Docker image repository |
-| `image.tag` | No | `latest` | Docker image tag |
+| `image.tag` | No | `1.0.0` | Immutable Docker image tag |
 | `service.type` | No | `ClusterIP` | Service type (ClusterIP / NodePort / LoadBalancer) |
 
 ### Production Profile
@@ -104,7 +104,7 @@ See `values.yaml` for the complete reference. Key sections:
 | `ingress` | Ingress controller + TLS configuration |
 | `livenessProbe` / `readinessProbe` / `startupProbe` | Pod health probes |
 | `podDisruptionBudget` | Availability guarantees during node drains |
-| `config` | Application defaults (topK, batchSize, virtualThreads) |
+| `config` | Retrieval quality defaults and virtual-thread switch |
 | `secrets` | All sensitive credentials |
 | `postgresql` | Bitnami PostgreSQL subchart (disabled by default) |
 | `jvm` | JVM tuning options |

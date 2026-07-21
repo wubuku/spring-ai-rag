@@ -235,26 +235,51 @@
   border-top: 1px solid var(--border-color, #e5e7eb);
 }
 
-.collectionRow {
+.contextRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.contextControl {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+  min-width: 0;
 }
 
-.collectionLabel {
+.contextLabel {
   font-size: 0.85rem;
   color: var(--text-secondary, #6b7280);
   white-space: nowrap;
 }
 
-.collectionSelect {
-  flex: 1;
-  max-width: 280px;
+.contextSelect {
+  width: min(280px, 55vw);
   padding: 0.35rem 0.5rem;
   border-radius: 6px;
   border: 1px solid var(--border-color, #d1d5db);
   background: var(--bg-primary, #fff);
+  color: var(--color-text);
   font-size: 0.875rem;
+}
+
+@media (max-width: 640px) {
+  .contextRow {
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .contextControl {
+    width: 100%;
+  }
+
+  .contextSelect {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
 }
 
 .feedbackRow { display:flex; gap:0.35rem; margin-top:0.35rem; }

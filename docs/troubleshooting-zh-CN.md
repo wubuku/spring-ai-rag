@@ -128,13 +128,13 @@ WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 
 ```bash
 # 1. 检查文档是否已嵌入
-curl http://localhost:8080/api/v1/rag/documents/stats
+curl http://localhost:8081/api/v1/rag/documents/stats
 
 # 2. 直接调用检索接口（跳过 LLM）
-curl "http://localhost:8080/api/v1/rag/search?query=测试&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=测试&limit=5"
 
 # 3. 降低相似度阈值
-curl -X POST http://localhost:8080/api/v1/rag/search \
+curl -X POST http://localhost:8081/api/v1/rag/search \
   -H "Content-Type: application/json" \
   -d '{"query": "测试", "config": {"minScore": 0.1, "maxResults": 10}}'
 ```
@@ -162,7 +162,7 @@ rag:
 
 2. **调整混合检索权重**：
 ```bash
-curl "http://localhost:8080/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltextWeight=0.3"
+curl "http://localhost:8081/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltextWeight=0.3"
 ```
 
 3. **启用重排序**：
@@ -249,7 +249,7 @@ grep -i "retrieval\|llm\|total" logs/application.log | tail -10
 
 ```bash
 # 检查 SSE 连接
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "test", "sessionId": "s1"}' 2>&1
 ```
@@ -294,7 +294,7 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 **解决**：
 
 ```bash
-curl -H "X-API-Key: your-key" http://localhost:8080/api/v1/rag/chat/ask ...
+curl -H "X-API-Key: your-key" http://localhost:8081/api/v1/rag/chat/ask ...
 ```
 
 或临时禁用认证：
@@ -314,8 +314,8 @@ rag:
 **解决**：先查询确认 ID 存在：
 
 ```bash
-curl http://localhost:8080/api/v1/rag/documents?page=0&size=10
-curl http://localhost:8080/api/v1/rag/collections?page=0&size=10
+curl http://localhost:8081/api/v1/rag/documents?page=0&size=10
+curl http://localhost:8081/api/v1/rag/collections?page=0&size=10
 ```
 
 ---
@@ -330,10 +330,10 @@ curl http://localhost:8080/api/v1/rag/collections?page=0&size=10
 
 ```bash
 # 查看活跃告警
-curl http://localhost:8080/api/v1/rag/alerts/active
+curl http://localhost:8081/api/v1/rag/alerts/active
 
 # 查看 SLO 配置
-curl http://localhost:8080/api/v1/rag/alerts/slos
+curl http://localhost:8081/api/v1/rag/alerts/slos
 ```
 
 **调整**：
@@ -426,14 +426,37 @@ logging:
 
 ```bash
 # 导出健康检查
-curl http://localhost:8080/api/v1/rag/health | jq .
+curl http://localhost:8081/api/v1/rag/health | jq .
 
 # 导出文档统计
-curl http://localhost:8080/api/v1/rag/documents/stats | jq .
+curl http://localhost:8081/api/v1/rag/documents/stats | jq .
 
 # 导出告警统计
-curl http://localhost:8080/api/v1/rag/alerts/stats | jq .
+curl http://localhost:8081/api/v1/rag/alerts/stats | jq .
 ```
+
+---
+
+## 中国境内网络问题
+
+### Docker 在拉取基础镜像时连续超时
+
+**症状**：构建停在 `FROM` / `load metadata`，访问 `gcr.io` 或 Docker Hub 连续超时。
+
+**处理**：
+
+```bash
+# 默认从 docker.m.daocloud.io 拉取，失败后回退官方源
+./scripts/docker-build-local.sh
+
+# 使用团队镜像仓库
+MIRROR_BASE_URL=your.registry.example ./scripts/docker-build-local.sh
+
+# 当前网络直连 Docker Hub 更稳定时
+./scripts/docker-build-local.sh --official
+```
+
+发布 Dockerfile 已移除 `gcr.io` 依赖，并允许通过 `MAVEN_IMAGE` / `RUNTIME_IMAGE` build arg 覆盖。架构、Maven/npm/Playwright 下载和代理注意事项见 [中国境内开发网络避坑指南](china-network-guide-zh-CN.md)。
 
 ---
 
@@ -442,4 +465,5 @@ curl http://localhost:8080/api/v1/rag/alerts/stats | jq .
 - [架构设计](architecture.md) — 理解系统设计
 - [配置参考](configuration.md) — 所有配置项
 - [测试指南](testing-guide.md) — 如何编写测试
+- [中国境内网络避坑](china-network-guide-zh-CN.md) — Docker / Maven / npm / Playwright
 - GitHub Issues — 提交 Bug 报告

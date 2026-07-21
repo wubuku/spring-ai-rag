@@ -16,13 +16,18 @@ export interface Collection {
 export interface CollectionListResponse {
   collections: Collection[];
   total: number;
-  page: number;
-  pageSize: number;
+  offset: number;
+  limit: number;
 }
 
 export const collectionsApi = {
   list: (params?: { page?: number; size?: number }) =>
-    apiClient.get<CollectionListResponse>('/collections', { params }),
+    apiClient.get<CollectionListResponse>('/collections', {
+      params: {
+        offset: (params?.page ?? 0) * (params?.size ?? 20),
+        limit: params?.size ?? 20,
+      },
+    }),
 
   get: (id: number) => apiClient.get<Collection>(`/collections/${id}`),
 

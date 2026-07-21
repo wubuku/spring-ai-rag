@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.config.ChatModelRouter;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,13 +35,13 @@ class ModelComparisonServiceTest {
 
     private ModelComparisonService service;
     private ExecutorService executor;
-    private ModelRegistry modelRegistry;
+    private ChatModelRouter chatModelRouter;
 
     @BeforeEach
     void setUp() {
         executor = Executors.newSingleThreadExecutor();
-        modelRegistry = mock(ModelRegistry.class);
-        service = new ModelComparisonService(executor, modelRegistry);
+        chatModelRouter = mock(ChatModelRouter.class);
+        service = new ModelComparisonService(executor, chatModelRouter);
     }
 
     @AfterEach
@@ -248,7 +248,7 @@ class ModelComparisonServiceTest {
         }
         doReturn(future).when(interruptingExecutor).submit(any(Callable.class));
 
-        ModelComparisonService svc = new ModelComparisonService(interruptingExecutor, modelRegistry);
+        ModelComparisonService svc = new ModelComparisonService(interruptingExecutor, chatModelRouter);
 
         // Check interrupt status before the call
         boolean beforeInterrupt = Thread.currentThread().isInterrupted();
@@ -351,7 +351,7 @@ class ModelComparisonServiceTest {
         }
         doReturn(future).when(timeoutExecutor).submit(any(Callable.class));
 
-        ModelComparisonService svc = new ModelComparisonService(timeoutExecutor, modelRegistry);
+        ModelComparisonService svc = new ModelComparisonService(timeoutExecutor, chatModelRouter);
 
         List<ModelComparisonService.ModelComparisonResult> results =
                 svc.compareModels("test", Map.of("model-x", mock(ChatModel.class)), 2);

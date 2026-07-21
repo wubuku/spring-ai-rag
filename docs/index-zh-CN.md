@@ -5,7 +5,7 @@
 > spring-ai-rag 文档导航。先读本页，再按任务下钻，避免一次加载全部细节。
 
 **项目一句话**：基于 Spring AI 的通用 RAG 框架——**模型无关 · 领域解耦 · 组件化**。  
-**版本**：`1.0.0-SNAPSHOT` · **默认端口**：`8081` · **主 profile**：`postgresql`
+**版本**：`1.0.0` · **默认端口**：`8081` · **主 profile**：`postgresql`
 
 ---
 
@@ -48,7 +48,7 @@
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | 与参考项目对比、Phase 完成状态 |
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | 混合检索增强规划（可能滞后于代码） |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
-| [multi-model-external-config.md](multi-model-external-config.md) | 外部 `models.json` 配置 |
+| [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
 
 ### 配置、API、数据
 
@@ -66,6 +66,9 @@
 | 文档 | 说明 |
 |------|------|
 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | 单元 / 集成 / E2E / 覆盖率 |
+| [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md) | 生产检索默认值与 goldenset 度量 |
+| [release-checklist-zh-CN.md](release-checklist-zh-CN.md) | 1.0 发布门禁与产物清单 |
+| [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md) | 中国境内 Docker / Maven / npm / Playwright 网络避坑 |
 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 按症状排障 |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | 部署 |
 | `docs/prometheus/`、`docs/grafana/` | 监控看板与采集 |
@@ -94,7 +97,7 @@
 | `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V23** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V24** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |
@@ -110,10 +113,11 @@
 1. **OpenAI / Embedding `base-url` 不要带 `/v1`**  
    Spring AI 会再拼 `/v1/chat/completions` 或 `/v1/embeddings`，带了会变成 `/v1/v1/...` → 401/404。
 2. **本地务必** `SPRING_PROFILES_ACTIVE=postgresql`（见 `.env` / `CLAUDE.md`）。
-3. **默认 HTTP 端口是 8081**（部分旧文档示例仍写 8080）。
+3. **本地、Docker 与 Helm 的默认 HTTP 端口均为 8081**。
 4. **向量维度 1024** 必须与 BGE-M3 / `VECTOR(1024)` 一致；换模型要同步改库。
 5. **WebUI** 需单独 `npm` 构建，或拷贝到 `spring-ai-rag-core/src/main/resources/static/webui/`。
 6. **测试与代码同等重要**：`mvn test` 不过不算完成；重要改动后跑 E2E（见 [testing-guide-zh-CN.md](testing-guide-zh-CN.md)）。
+7. **境内 Docker 拉取超时**：使用 `scripts/docker-build-local.sh`，不要把区域镜像硬编码进 Dockerfile（见 [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md)）。
 
 ---
 

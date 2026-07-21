@@ -8,6 +8,7 @@ import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -58,7 +59,11 @@ public class ApiKeyController {
     })
     @PostMapping
     public ResponseEntity<ApiKeyCreatedResponse> createKey(
-            @Valid @RequestBody ApiKeyCreateRequest request) {
+            @Valid @RequestBody ApiKeyCreateRequest request,
+            HttpServletRequest httpRequest) {
+        request.setAllowedCollectionIds(
+                ApiKeyCollectionAccess.resolveDelegatedAllowedIds(
+                        request.getAllowedCollectionIds(), getCaller(httpRequest)));
         ApiKeyCreatedResponse response = apiKeyService.generateKey(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
@@ -110,7 +115,16 @@ public class ApiKeyController {
                      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping("/{keyId}/rotate")
-    public ResponseEntity<ApiKeyCreatedResponse> rotateKey(@PathVariable String keyId) {
+    public ResponseEntity<?> rotateKey(@PathVariable String keyId,
+                                       HttpServletRequest request) {
+        RagApiKey caller = getCaller(request);
+        if (caller != null
+                && caller.getRole() != ApiKeyRole.ADMIN
+                && !keyId.equals(caller.getKeyId())) {
+            return ResponseEntity.status(403)
+                    .body(ErrorResponse.of(
+                            "NORMAL keys can only rotate themselves"));
+        }
         ApiKeyCreatedResponse response = apiKeyService.rotateKey(keyId);
         if (response == null) {
             return ResponseEntity.notFound().build();
@@ -129,12 +143,18 @@ public class ApiKeyController {
      * so they are treated as NORMAL.
      */
     private ApiKeyRole getCallerRole(HttpServletRequest request) {
-        // Primary: entity set by filter after DB validation
-        Object entityAttr = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
-        if (entityAttr instanceof RagApiKey caller) {
-            return caller.getRole();
+        RagApiKey caller = getCaller(request);
+        return caller != null && caller.getRole() != null
+                ? caller.getRole()
+                : ApiKeyRole.NORMAL;
+    }
+
+    private RagApiKey getCaller(HttpServletRequest request) {
+        if (request == null) {
+            return null;
         }
-        // Fallback: legacy static key (no DB entity) → treat as NORMAL
-        return ApiKeyRole.NORMAL;
+        Object entityAttr = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
+        return entityAttr instanceof RagApiKey caller ? caller : null;
     }
 }

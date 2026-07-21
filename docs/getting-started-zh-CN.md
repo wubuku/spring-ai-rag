@@ -43,7 +43,7 @@ Flyway 会自动创建表结构（首次启动时）。
 ```bash
 # LLM（默认 DeepSeek，OpenAI 兼容）
 OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_BASE_URL=https://api.deepseek.com
 
 # 嵌入模型（SiliconFlow BGE-M3）
 SILICONFLOW_API_KEY=sk-xxx
@@ -73,14 +73,14 @@ export $(cat ../../.env | grep -v '^#' | xargs)
 mvn spring-boot:run
 ```
 
-服务启动在 `http://localhost:8080`。
+服务启动在 `http://localhost:8081`。
 
 ## 6. 第一次 RAG 问答
 
 ### 导入文档
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/documents \
+curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Spring AI 介绍",
@@ -93,13 +93,13 @@ curl -X POST http://localhost:8080/api/v1/rag/documents \
 
 ```bash
 # 假设文档 ID 是 1
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
+curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 ```
 
 ### RAG 问答
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{"message": "什么是 Spring AI？"}'
 ```
@@ -107,7 +107,7 @@ curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
 ### 流式问答
 
 ```bash
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "解释 RAG 的工作原理"}'
 ```

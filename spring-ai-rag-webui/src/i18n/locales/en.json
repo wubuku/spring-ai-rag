@@ -112,7 +112,8 @@
     "noSources": "No sources retrieved",
     "hint": "I will search through your knowledge base to find the most relevant information.",
     "collection": "Knowledge base",
-    "allCollections": "All collections"
+    "allCollections": "All collections",
+    "model": "Model"
   },
   "search": {
     "title": "Search",
@@ -173,6 +174,8 @@
     "cache": "Cache",
     "provider": "Provider",
     "model": "Model",
+    "availableProvider": "Available runtime provider",
+    "modelsLoadError": "Unable to load configured models",
     "apiKeyConfigured": "API Key Configured",
     "apiKeyNotSet": "API Key Not Set",
     "vectorWeight": "Vector Weight",
@@ -285,7 +288,13 @@
     "expired": "Expired",
     "role": "Role",
     "admin": "Admin",
-    "normal": "Normal"
+    "normal": "Normal",
+    "collectionAccess": "Collection Access",
+    "allCollections": "All collections",
+    "allCollectionsHint": "The key can access current and future collections.",
+    "selectedCollections": "Selected collections",
+    "selectedCollectionsHint": "The key can only access the collections selected below.",
+    "collectionsLoadError": "Failed to load collections"
   },
   "files": {
     "title": "Files",

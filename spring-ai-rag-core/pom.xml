@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.springairag</groupId>
         <artifactId>spring-ai-rag</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>spring-ai-rag-core</artifactId>
@@ -248,11 +248,14 @@
                             <execution>
                                 <id>build-webui</id>
                                 <goals><goal>exec</goal></goals>
-                                <phase>prepare-package</phase>
+                                <phase>generate-resources</phase>
                                 <configuration>
                                     <workingDirectory>${project.basedir}/../spring-ai-rag-webui</workingDirectory>
                                     <executable>npm</executable>
-                                    <arguments>run build</arguments>
+                                    <arguments>
+                                        <argument>run</argument>
+                                        <argument>build</argument>
+                                    </arguments>
                                 </configuration>
                             </execution>
                         </executions>
@@ -264,8 +267,9 @@
                             <execution>
                                 <id>clean-webui-static</id>
                                 <goals><goal>clean</goal></goals>
-                                <phase>prepare-package</phase>
+                                <phase>generate-resources</phase>
                                 <configuration>
+                                    <excludeDefaultDirectories>true</excludeDefaultDirectories>
                                     <filesets>
                                         <fileset>
                                             <directory>${project.basedir}/src/main/resources/static/webui/assets</directory>
@@ -291,7 +295,7 @@
                             <execution>
                                 <id>copy-webui</id>
                                 <goals><goal>copy-resources</goal></goals>
-                                <phase>prepare-package</phase>
+                                <phase>generate-resources</phase>
                                 <configuration>
                                     <outputDirectory>${project.basedir}/src/main/resources/static/webui</outputDirectory>
                                     <resources>

@@ -1,5 +1,6 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
+import { getApiKey } from '../utils/apiKeyStorage';
 
 const BASE_URL = '/api/v1/rag';
 
@@ -7,6 +8,14 @@ export const apiClient = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 30_000, // 30 second default timeout
+});
+
+apiClient.interceptors.request.use(config => {
+  const apiKey = getApiKey();
+  if (apiKey) {
+    config.headers.set('X-API-Key', apiKey);
+  }
+  return config;
 });
 
 // Configure retry behavior

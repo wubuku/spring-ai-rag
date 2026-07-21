@@ -12,8 +12,10 @@ import java.util.Objects;
 
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
 import java.util.List;
 
 /**
@@ -42,7 +44,15 @@ public class MultiModelConfigLoader {
             return;
         }
 
-        Path path = Path.of(configFile);
+        Path path;
+        try {
+            path = configFile.startsWith("file:")
+                    ? Path.of(URI.create(configFile))
+                    : Path.of(configFile);
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid external models.json path '{}': {}", configFile, e.getMessage());
+            return;
+        }
         if (!Files.exists(path)) {
             log.info("External models.json not found at '{}'; using YAML config only", configFile);
             return;
@@ -67,21 +77,21 @@ public class MultiModelConfigLoader {
         }
     }
 
-    @SuppressWarnings("unchecked")
     private void applyModelsConfig(ModelsJsonRoot.ModelsJson jsonModels) {
+        // External JSON is a full override, not a merge with application.yml.
+        properties.setProviders(new LinkedHashMap<>());
         if (jsonModels.providers != null) {
             jsonModels.providers.forEach((providerId, providerJson) -> {
                 properties.getProviders().put(providerId, toProviderConfig(providerId, providerJson));
             });
         }
 
-        if (jsonModels.chatModel != null) {
-            properties.setChatModel(toModelRouting(jsonModels.chatModel));
-        }
-
-        if (jsonModels.embeddingModel != null) {
-            properties.setEmbeddingModel(toModelRouting(jsonModels.embeddingModel));
-        }
+        properties.setChatModel(jsonModels.chatModel != null
+                ? toModelRouting(jsonModels.chatModel)
+                : null);
+        properties.setEmbeddingModel(jsonModels.embeddingModel != null
+                ? toModelRouting(jsonModels.embeddingModel)
+                : null);
     }
 
     private MultiModelProperties.ProviderConfig toProviderConfig(String providerId, ModelsJsonRoot.ProviderJson p) {

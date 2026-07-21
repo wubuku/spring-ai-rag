@@ -531,14 +531,10 @@ public class RagChatService {
                                     String model, RetrievalScope scope) {
         ChatClient effectiveClient = this.chatClient;
         if (model != null && !model.isBlank() && chatModelRouter != null) {
-            ChatModel resolved = chatModelRouter.resolve(model);
-            if (resolved != null) {
-                effectiveClient = ChatClient.builder(resolved)
-                        .defaultAdvisors(sortedAdvisors).build();
-                log.info("Streaming: routing request to model '{}' via ChatModelRouter", model);
-            } else {
-                log.warn("Streaming: model '{}' could not be resolved, using default", model);
-            }
+            ChatModel resolved = chatModelRouter.resolveRequired(model);
+            effectiveClient = ChatClient.builder(resolved)
+                    .defaultAdvisors(sortedAdvisors).build();
+            log.info("Streaming: routing request to model '{}' via ChatModelRouter", model);
         }
 
         ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();

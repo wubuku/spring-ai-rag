@@ -8,7 +8,7 @@
 :: Spring AI RAG :: Version: ${spring-boot.formatted-version}
 :: Java: ${java.version}
 :: Profile: ${spring.profiles.active:default}
-:: Port: ${server.port:8080}
+:: Port: ${server.port:8081}
 :: Database: ${spring.datasource.url:*}
 
 Powered by Spring Boot ${spring-boot.formatted-version}

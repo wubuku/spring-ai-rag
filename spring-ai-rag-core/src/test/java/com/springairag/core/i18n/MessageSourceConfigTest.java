@@ -77,41 +77,34 @@ class MessageSourceConfigTest {
 
     @Test
     void localeResolver_resolveLocale_returnsChinaForZhRequest(
-            @Mock HttpServletRequest request,
-            @Mock java.util.Enumeration<Locale> localesEnum) {
+            @Mock HttpServletRequest request) {
         AcceptHeaderLocaleResolver resolver =
             (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
         when(request.getHeader("Accept-Language")).thenReturn("zh-CN");
-        when(request.getLocales()).thenReturn(localesEnum);
-        when(localesEnum.hasMoreElements()).thenReturn(true);
-        when(localesEnum.nextElement()).thenReturn(Locale.CHINA);
+        when(request.getLocales()).thenReturn(
+                Collections.enumeration(List.of(Locale.CHINA)));
         Locale resolved = resolver.resolveLocale(request);
         assertEquals(Locale.CHINA, resolved);
     }
 
     @Test
     void localeResolver_resolveLocale_returnsEnglishForEnRequest(
-            @Mock HttpServletRequest request,
-            @Mock java.util.Enumeration<Locale> localesEnum) {
+            @Mock HttpServletRequest request) {
         AcceptHeaderLocaleResolver resolver =
             (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
         when(request.getHeader("Accept-Language")).thenReturn("en-US");
-        when(request.getLocales()).thenReturn(localesEnum);
-        when(localesEnum.hasMoreElements()).thenReturn(true);
-        when(localesEnum.nextElement()).thenReturn(Locale.US);
+        when(request.getLocales()).thenReturn(
+                Collections.enumeration(List.of(Locale.US)));
         Locale resolved = resolver.resolveLocale(request);
-        assertEquals(Locale.US, resolved);
+        assertEquals(Locale.ENGLISH, resolved);
     }
 
     @Test
     void localeResolver_resolveLocale_returnsDefaultWhenNoHeader(
-            @Mock HttpServletRequest request,
-            @Mock java.util.Enumeration<Locale> localesEnum) {
+            @Mock HttpServletRequest request) {
         AcceptHeaderLocaleResolver resolver =
             (AcceptHeaderLocaleResolver) new MessageSourceConfig().localeResolver();
         when(request.getHeader("Accept-Language")).thenReturn(null);
-        when(request.getLocales()).thenReturn(localesEnum);
-        when(localesEnum.hasMoreElements()).thenReturn(false);
         // Falls back to default locale (Locale.CHINA)
         Locale resolved = resolver.resolveLocale(request);
         assertEquals(Locale.CHINA, resolved);

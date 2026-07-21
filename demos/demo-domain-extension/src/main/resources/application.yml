@@ -21,8 +21,9 @@ spring:
   ai:
     openai:
       base-url: https://api.deepseek.com
-      api-key: ${DEEPSEEK_API_KEY:sk-xxx}
+      api-key: ${DEEPSEEK_API_KEY:}
       chat:
+        enabled: false
         options:
           model: deepseek-chat
           temperature: 0.7
@@ -33,13 +34,13 @@ spring:
 app:
   llm:
     provider: openai
-  siliconflow:
-    api-key: ${SILICONFLOW_API_KEY:sk-xxx}
-    embedding:
-      model: BAAI/bge-m3
-      dimensions: 1024
 
 rag:
+  embedding:
+    api-key: ${SILICONFLOW_API_KEY:}
+    base-url: https://api.siliconflow.cn
+    model: BAAI/bge-m3
+    dimensions: 1024
   memory:
     max-messages: 20
 

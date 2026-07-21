@@ -252,4 +252,34 @@ class ChatModelRouterTest {
         assertTrue(router.orderedCandidates(null).isEmpty() || router.orderedCandidates("x") != null);
     }
 
+    @Test
+    @DisplayName("explicit unavailable configured model is rejected")
+    void resolveRequired_unavailableConfiguredModel_throws() {
+        ConfiguredChatModelFactory factory = mock(ConfiguredChatModelFactory.class);
+        when(factory.resolve("openrouter/model-a")).thenReturn(null);
+        when(factory.getUnavailableReason("openrouter/model-a"))
+                .thenReturn("provider API key is not configured");
+        when(factory.listChatModels()).thenReturn(List.of());
+        ChatModelRouter configuredRouter =
+                new ChatModelRouter(registry, factory, List.of());
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> configuredRouter.resolveRequired("openrouter/model-a"));
+
+        assertTrue(error.getMessage().contains("provider API key is not configured"));
+    }
+
+    @Test
+    @DisplayName("configured model reference resolves before legacy providers")
+    void resolve_configuredModel_usesFactory() {
+        ConfiguredChatModelFactory factory = mock(ConfiguredChatModelFactory.class);
+        ChatModel configured = mock(ChatModel.class);
+        when(factory.resolve("openrouter/model-a")).thenReturn(configured);
+        ChatModelRouter configuredRouter =
+                new ChatModelRouter(registry, factory, List.of());
+
+        assertSame(configured, configuredRouter.resolve("openrouter/model-a"));
+    }
+
 }

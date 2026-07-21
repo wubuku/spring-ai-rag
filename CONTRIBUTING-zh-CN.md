@@ -42,7 +42,7 @@ Flyway 会自动创建表结构（首次启动时执行 `db/migration/V1__init_r
 ```bash
 # LLM 配置
 OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_BASE_URL=https://api.deepseek.com
 LLM_PROVIDER=openai
 
 # 数据库

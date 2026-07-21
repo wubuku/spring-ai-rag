@@ -1,144 +1,130 @@
-# Multi-Model External Configuration — Sample
+# Multi-Model External Configuration
 
-> This is a **sample** file showing the external JSON configuration format.
-> Place this file outside the JAR (e.g., `/etc/spring-ai/models.json`) and set:
-> ```bash
-> export MODELS_CONFIG_FILE=/etc/spring-ai/models.json
-> # or
-> export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
-> ```
+> 📖 [English](multi-model-external-config.md) · 📖 [中文](multi-model-external-config-zh-CN.md)
 
-## Key Points
+Use an external `models.json` when model inventory and credentials must be
+managed outside the application JAR.
 
-- **Location**: External filesystem (not inside JAR). Use absolute path or `file:` prefix.
-- **Overrides YAML**: When this file exists, it **fully replaces** `app.models.*` from `application.yml` (no merge).
-- **Model IDs**: Do **NOT** prefix with provider ID (use `"MiniMax-M2.7"`, not `"minimax/MiniMax-M2.7"`).
-- **Model References**: Use `providerId/modelId` format (e.g., `"minimax/MiniMax-M2.7"`).
+## Enable
 
-## Format
+```bash
+export MODELS_CONFIG_FILE=/etc/spring-ai/models.json
+# `file:` URIs are also supported:
+export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
+```
+
+- The path must be absolute or a valid `file:` URI.
+- A successfully loaded file fully replaces `app.models.*`; it is not merged
+  with YAML.
+- A missing or invalid file leaves the YAML configuration active.
+- OpenAI-compatible `baseUrl` values must not end in `/v1`.
+- A model ID is the provider-native ID. Do not prepend the local provider ID.
+  Requests use `providerId/modelId`, such as
+  `openrouter/xiaomi/mimo-v2-pro`.
+
+## Complete Example
 
 ```json
 {
   "models": {
     "providers": {
       "openrouter": {
-      "displayName": "OpenRouter",
-      "baseUrl": "https://openrouter.ai/api/v1",
-      "apiKey": "${OPENROUTER_API_KEY}",
-      "apiType": "openai-completions",
-      "enabled": true,
-      "priority": 1,
-      "models": [
-        {
-          "id": "anthropic/claude-3-5-sonnet-20241022",
-          "name": "Claude 3.5 Sonnet",
-          "type": "chat",
-          "inputModalities": ["text"],
-          "cost": { "input": 3, "output": 15, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 200000,
-          "maxTokens": 8192
-        },
-        {
-          "id": "google/gemini-pro-1.5",
-          "name": "Gemini Pro 1.5",
-          "type": "chat",
-          "inputModalities": ["text", "image"],
-          "cost": { "input": 1.25, "output": 5, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 1000000,
-          "maxTokens": 8192
-        }
-      ]
+        "displayName": "OpenRouter",
+        "baseUrl": "https://openrouter.ai/api",
+        "apiKey": "${OPENROUTER_API_KEY}",
+        "apiType": "openai-completions",
+        "enabled": true,
+        "priority": 1,
+        "models": [
+          {
+            "id": "xiaomi/mimo-v2-pro",
+            "name": "MiMo V2 Pro",
+            "type": "chat",
+            "reasoning": false,
+            "inputModalities": ["text"],
+            "cost": {
+              "input": 0,
+              "output": 0,
+              "cacheRead": 0,
+              "cacheWrite": 0
+            },
+            "contextWindow": 600000,
+            "maxTokens": 32000
+          }
+        ]
+      },
+      "minimax": {
+        "displayName": "MiniMax",
+        "baseUrl": "https://api.minimaxi.com/anthropic",
+        "apiKey": "${MINIMAX_API_KEY}",
+        "apiType": "anthropic-messages",
+        "enabled": true,
+        "priority": 2,
+        "models": [
+          {
+            "id": "MiniMax-M2.7",
+            "name": "MiniMax M2.7",
+            "type": "chat",
+            "reasoning": false,
+            "inputModalities": ["text"],
+            "cost": {
+              "input": 15,
+              "output": 60,
+              "cacheRead": 2,
+              "cacheWrite": 10
+            },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          },
+          {
+            "id": "embo-01",
+            "name": "Embedding V01",
+            "type": "embedding",
+            "inputModalities": ["text"],
+            "dimension": 1024
+          }
+        ]
+      },
+      "siliconflow": {
+        "displayName": "SiliconFlow",
+        "baseUrl": "https://api.siliconflow.cn",
+        "apiKey": "${SILICONFLOW_API_KEY}",
+        "apiType": "openai-chat",
+        "enabled": true,
+        "priority": 3,
+        "models": [
+          {
+            "id": "BGE-M3",
+            "name": "BGE-M3 Embedding",
+            "type": "embedding",
+            "inputModalities": ["text"],
+            "dimension": 1024
+          }
+        ]
+      }
     },
-    "minimax": {
-      "displayName": "MiniMax",
-      "baseUrl": "https://api.minimaxi.com",
-      "apiKey": "${MINIMAX_API_KEY}",
-      "apiType": "openai-completions",
-      "enabled": true,
-      "priority": 2,
-      "models": [
-        {
-          "id": "MiniMax-M2.7",
-          "name": "MiniMax M2.7",
-          "type": "chat",
-          "reasoning": false,
-          "inputModalities": ["text"],
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 1000000,
-          "maxTokens": 32000
-        },
-        {
-          "id": "embo-01",
-          "name": "Embo-01 Embedding",
-          "type": "embedding",
-          "inputModalities": ["text"],
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 32000,
-          "dimension": 1024
-        }
-      ]
+    "chatModel": {
+      "primary": "minimax/MiniMax-M2.7",
+      "fallbacks": ["openrouter/xiaomi/mimo-v2-pro"]
     },
-    "siliconflow": {
-      "displayName": "SiliconFlow",
-      "baseUrl": "https://api.siliconflow.cn/v1",
-      "apiKey": "${SILICONFLOW_API_KEY}",
-      "apiType": "openai-completions",
-      "enabled": true,
-      "priority": 3,
-      "models": [
-        {
-          "id": "BGE-M3",
-          "name": "BGE-M3 Embedding",
-          "type": "embedding",
-          "inputModalities": ["text"],
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 8000,
-          "dimension": 1024
-        }
-      ]
-    },
-    "zhipu": {
-      "displayName": "Zhipu AI",
-      "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
-      "apiKey": "${ZHIPU_API_KEY}",
-      "apiType": "openai-completions",
-      "enabled": false,
-      "priority": 4,
-      "models": [
-        {
-          "id": "GLM-5",
-          "name": "GLM-5",
-          "type": "chat",
-          "inputModalities": ["text"],
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 },
-          "contextWindow": 128000,
-          "maxTokens": 4096
-        }
-      ]
+    "embeddingModel": {
+      "primary": "siliconflow/BGE-M3",
+      "fallbacks": ["minimax/embo-01"]
     }
-  },
-  "chatModel": {
-    "primary": "minimax/MiniMax-M2.7",
-    "fallbacks": ["openrouter/anthropic/claude-3-5-sonnet-20241022"]
-  },
-  "embeddingModel": {
-    "primary": "siliconflow/BGE-M3",
-    "fallbacks": ["minimax/embo-01"]
-  }
   }
 }
 ```
 
-## Environment Variable
+Supported chat `apiType` values are `openai`, `openai-chat`,
+`openai-completions`, `anthropic`, and `anthropic-messages`.
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `MODELS_CONFIG_FILE` | Absolute path or `file:` URL to external JSON | (empty — YAML only) |
+## Verify
+
+After startup, query the effective registry:
 
 ```bash
-# Example: load from external path
-export MODELS_CONFIG_FILE=/etc/spring-ai/models.json
-
-# Or with file: prefix
-export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
+curl http://localhost:8081/api/v1/rag/models
 ```
+
+The response includes `defaultModel`, model-level `ref` values, availability,
+and an `unavailableReason` when credentials or provider settings are missing.

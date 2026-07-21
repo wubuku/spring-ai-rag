@@ -6,6 +6,7 @@ import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.repository.RagApiKeyRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,11 +65,20 @@ public class ApiKeyManagementService {
         entity.setName(request.getName());
         entity.setExpiresAt(request.getExpiresAt());
         entity.setEnabled(true);
+        entity.setAllowedCollectionIds(
+                ApiKeyCollectionAccess.serializeAllowedIds(request.getAllowedCollectionIds()));
 
         apiKeyRepository.save(entity);
         log.info("API key created: keyId={}, name={}", keyId, request.getName());
 
-        return new ApiKeyCreatedResponse(keyId, rawKey, request.getName(), request.getExpiresAt());
+        List<Long> allowedCollectionIds = ApiKeyCollectionAccess.parseAllowedIds(
+                entity.getAllowedCollectionIds());
+        return new ApiKeyCreatedResponse(
+                keyId,
+                rawKey,
+                request.getName(),
+                request.getExpiresAt(),
+                allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
     }
 
     /**
@@ -113,6 +123,10 @@ public class ApiKeyManagementService {
         // Create a new key with the same name and expiration
         RagApiKey oldKey = existing.get();
         ApiKeyCreateRequest request = new ApiKeyCreateRequest(oldKey.getName(), oldKey.getExpiresAt());
+        List<Long> allowedCollectionIds = ApiKeyCollectionAccess.parseAllowedIds(
+                oldKey.getAllowedCollectionIds());
+        request.setAllowedCollectionIds(
+                allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
         return generateKey(request);
     }
 
@@ -213,6 +227,10 @@ public class ApiKeyManagementService {
                 entity.getEnabled()
         );
         r.setRole(entity.getRole() != null ? entity.getRole().name() : null);
+        List<Long> allowedCollectionIds = ApiKeyCollectionAccess.parseAllowedIds(
+                entity.getAllowedCollectionIds());
+        r.setAllowedCollectionIds(
+                allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
         return r;
     }
 

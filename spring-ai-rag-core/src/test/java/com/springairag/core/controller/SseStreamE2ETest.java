@@ -49,6 +49,26 @@ class SseStreamE2ETest {
         controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, auditLogService);
     }
 
+    private void stubStream(String message, String sessionId, String domainId,
+                            Flux<String> result) {
+        when(ragChatService.chatStream(argThat(request ->
+                matches(request, message, sessionId, domainId))))
+                .thenReturn(result);
+    }
+
+    private void verifyStream(String message, String sessionId, String domainId) {
+        verify(ragChatService).chatStream(argThat(request ->
+                matches(request, message, sessionId, domainId)));
+    }
+
+    private boolean matches(ChatRequest request, String message,
+                            String sessionId, String domainId) {
+        return request != null
+                && java.util.Objects.equals(message, request.getMessage())
+                && java.util.Objects.equals(sessionId, request.getSessionId())
+                && java.util.Objects.equals(domainId, request.getDomainId());
+    }
+
     /**
      * 拦截 SseEmitter.send() 调用，捕获实际发送的 SSE 事件
      */
@@ -96,27 +116,26 @@ class SseStreamE2ETest {
     @DisplayName("SSE: multiple chunks arrive in order and end with [DONE]")
     void stream_multipleChunks_allReceivedInOrder() throws Exception {
         // 模拟 LLM 逐 token 输出
-        when(ragChatService.chatStream(eq("你好"), eq("session-s1"), isNull()))
-                .thenReturn(Flux.just("你", "好", "，", "世", "界", "！"));
+        stubStream("你好", "session-s1", null,
+                Flux.just("你", "好", "，", "世", "界", "！"));
 
         ChatRequest request = new ChatRequest("你好", "session-s1");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("你好", "session-s1", null);
+        verifyStream("你好", "session-s1", null);
     }
 
     @Test
     @DisplayName("SSE: single complete sentence arrives as one chunk")
     void stream_singleChunk() {
-        when(ragChatService.chatStream(eq("简单问题"), eq("session-s2"), isNull()))
-                .thenReturn(Flux.just("这是一个回答。"));
+        stubStream("简单问题", "session-s2", null, Flux.just("这是一个回答。"));
 
         ChatRequest request = new ChatRequest("简单问题", "session-s2");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("简单问题", "session-s2", null);
+        verifyStream("简单问题", "session-s2", null);
     }
 
     @Test
@@ -126,8 +145,8 @@ class SseStreamE2ETest {
         List<String> receivedChunks = new ArrayList<>();
 
         // 用 Flux 模拟：先发几个 chunk，然后完成
-        when(ragChatService.chatStream(eq("测试"), eq("session-s3"), isNull()))
-                .thenReturn(Flux.just("Hello", " World").doOnNext(receivedChunks::add));
+        stubStream("测试", "session-s3", null,
+                Flux.just("Hello", " World").doOnNext(receivedChunks::add));
 
         ChatRequest request = new ChatRequest("测试", "session-s3");
         SseEmitter emitter = controller.stream(request);
@@ -146,8 +165,7 @@ class SseStreamE2ETest {
     @Test
     @DisplayName("SSE: domainId is correctly passed to service")
     void stream_withDomainId_passesCorrectly() {
-        when(ragChatService.chatStream(eq("皮肤问题"), eq("session-d1"), eq("dermatology")))
-                .thenReturn(Flux.just("皮肤科回答"));
+        stubStream("皮肤问题", "session-d1", "dermatology", Flux.just("皮肤科回答"));
 
         ChatRequest request = new ChatRequest("皮肤问题", "session-d1");
         request.setDomainId("dermatology");
@@ -155,18 +173,15 @@ class SseStreamE2ETest {
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("皮肤问题", "session-d1", "dermatology");
+        verifyStream("皮肤问题", "session-d1", "dermatology");
     }
 
     @Test
     @DisplayName("SSE: different domainId calls different service methods")
     void stream_differentDomains_callsDifferentStreams() {
-        when(ragChatService.chatStream(eq("问题"), eq("s1"), eq("medical")))
-                .thenReturn(Flux.just("医学回答"));
-        when(ragChatService.chatStream(eq("问题"), eq("s2"), eq("legal")))
-                .thenReturn(Flux.just("法律回答"));
-        when(ragChatService.chatStream(eq("问题"), eq("s3"), isNull()))
-                .thenReturn(Flux.just("通用回答"));
+        stubStream("问题", "s1", "medical", Flux.just("医学回答"));
+        stubStream("问题", "s2", "legal", Flux.just("法律回答"));
+        stubStream("问题", "s3", null, Flux.just("通用回答"));
 
         // medical
         ChatRequest req1 = new ChatRequest("问题", "s1");
@@ -182,9 +197,9 @@ class SseStreamE2ETest {
         ChatRequest req3 = new ChatRequest("问题", "s3");
         controller.stream(req3);
 
-        verify(ragChatService).chatStream("问题", "s1", "medical");
-        verify(ragChatService).chatStream("问题", "s2", "legal");
-        verify(ragChatService).chatStream("问题", "s3", null);
+        verifyStream("问题", "s1", "medical");
+        verifyStream("问题", "s2", "legal");
+        verifyStream("问题", "s3", null);
     }
 
     // ==================== Empty Response Handling ====================
@@ -192,14 +207,13 @@ class SseStreamE2ETest {
     @Test
     @DisplayName("SSE: completes normally when Flux is empty")
     void stream_emptyFlux_completesNormally() {
-        when(ragChatService.chatStream(eq(""), eq("session-empty"), isNull()))
-                .thenReturn(Flux.empty());
+        stubStream("", "session-empty", null, Flux.empty());
 
         ChatRequest request = new ChatRequest("", "session-empty");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("", "session-empty", null);
+        verifyStream("", "session-empty", null);
     }
 
     // ==================== Error Handling ====================
@@ -207,14 +221,14 @@ class SseStreamE2ETest {
     @Test
     @DisplayName("SSE: completeWithError called when Flux emits error")
     void stream_fluxError_triggersCompleteWithError() {
-        when(ragChatService.chatStream(eq("出错"), eq("session-err"), isNull()))
-                .thenReturn(Flux.error(new RuntimeException("LLM 超时")));
+        stubStream("出错", "session-err", null,
+                Flux.error(new RuntimeException("LLM 超时")));
 
         ChatRequest request = new ChatRequest("出错", "session-err");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("出错", "session-err", null);
+        verifyStream("出错", "session-err", null);
     }
 
     @Test
@@ -225,8 +239,7 @@ class SseStreamE2ETest {
                 Flux.just("正常"),
                 Flux.error(new IOException("连接断开"))
         );
-        when(ragChatService.chatStream(eq("问题"), eq("session-io"), isNull()))
-                .thenReturn(errorFlux);
+        stubStream("问题", "session-io", null, errorFlux);
 
         ChatRequest request = new ChatRequest("问题", "session-io");
         SseEmitter emitter = controller.stream(request);
@@ -245,14 +258,13 @@ class SseStreamE2ETest {
             tokens.add("token" + i + " ");
         }
 
-        when(ragChatService.chatStream(eq("长回答"), eq("session-long"), isNull()))
-                .thenReturn(Flux.fromIterable(tokens));
+        stubStream("长回答", "session-long", null, Flux.fromIterable(tokens));
 
         ChatRequest request = new ChatRequest("长回答", "session-long");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("长回答", "session-long", null);
+        verifyStream("长回答", "session-long", null);
     }
 
     // ==================== Independent Sessions ====================
@@ -260,12 +272,9 @@ class SseStreamE2ETest {
     @Test
     @DisplayName("SSE: multiple sessions stream independently")
     void stream_multipleSessions_independentStreams() {
-        when(ragChatService.chatStream(anyString(), eq("session-A"), isNull()))
-                .thenReturn(Flux.just("A的回答"));
-        when(ragChatService.chatStream(anyString(), eq("session-B"), isNull()))
-                .thenReturn(Flux.just("B的回答"));
-        when(ragChatService.chatStream(anyString(), eq("session-C"), isNull()))
-                .thenReturn(Flux.just("C的回答"));
+        stubStream("问题A", "session-A", null, Flux.just("A的回答"));
+        stubStream("问题B", "session-B", null, Flux.just("B的回答"));
+        stubStream("问题C", "session-C", null, Flux.just("C的回答"));
 
         SseEmitter emitterA = controller.stream(new ChatRequest("问题A", "session-A"));
         SseEmitter emitterB = controller.stream(new ChatRequest("问题B", "session-B"));
@@ -275,9 +284,9 @@ class SseStreamE2ETest {
         assertNotNull(emitterB);
         assertNotNull(emitterC);
 
-        verify(ragChatService).chatStream("问题A", "session-A", null);
-        verify(ragChatService).chatStream("问题B", "session-B", null);
-        verify(ragChatService).chatStream("问题C", "session-C", null);
+        verifyStream("问题A", "session-A", null);
+        verifyStream("问题B", "session-B", null);
+        verifyStream("问题C", "session-C", null);
     }
 
     // ==================== Chinese and Special Character Handling ====================
@@ -286,14 +295,14 @@ class SseStreamE2ETest {
     @DisplayName("SSE: Chinese and special characters handled correctly")
     void stream_chineseAndSpecialChars() {
         String complexMessage = "请问：如何在 Spring AI 中使用 pgvector？🚀";
-        when(ragChatService.chatStream(eq(complexMessage), eq("session-cn"), isNull()))
-                .thenReturn(Flux.just("在 Spring AI 中使用 pgvector 需要...", "（省略）"));
+        stubStream(complexMessage, "session-cn", null,
+                Flux.just("在 Spring AI 中使用 pgvector 需要...", "（省略）"));
 
         ChatRequest request = new ChatRequest(complexMessage, "session-cn");
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream(complexMessage, "session-cn", null);
+        verifyStream(complexMessage, "session-cn", null);
     }
 
     // ==================== SseEmitter Configuration ====================
@@ -301,8 +310,7 @@ class SseStreamE2ETest {
     @Test
     @DisplayName("SSE: emitter timeout set to 0 (no timeout limit)")
     void stream_emitterNoTimeout() {
-        when(ragChatService.chatStream(anyString(), anyString(), isNull()))
-                .thenReturn(Flux.just("test"));
+        stubStream("测试", "session-timeout", null, Flux.just("test"));
 
         ChatRequest request = new ChatRequest("测试", "session-timeout");
         SseEmitter emitter = controller.stream(request);

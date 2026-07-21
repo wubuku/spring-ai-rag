@@ -132,7 +132,7 @@ mvn spring-boot:run
 **Debugging**: 如果启动失败，检查端口是否被占用：
 ```bash
 # 查找占用端口的进程
-lsof -i:8080 -sTCP:LISTEN
+lsof -i:8081 -sTCP:LISTEN
 
 # 终止进程
 kill -9 <PID>
@@ -189,13 +189,13 @@ WHERE table_name = 'rag_embeddings' AND column_name = 'embedding';
 
 ```bash
 # 1. Check if documents are embedded
-curl http://localhost:8080/api/v1/rag/documents/stats
+curl http://localhost:8081/api/v1/rag/documents/stats
 
 # 2. Call retrieval directly (skip LLM)
-curl "http://localhost:8080/api/v1/rag/search?query=test&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=test&limit=5"
 
 # 3. Lower similarity threshold
-curl -X POST http://localhost:8080/api/v1/rag/search \
+curl -X POST http://localhost:8081/api/v1/rag/search \
   -H "Content-Type: application/json" \
   -d '{"query": "test", "config": {"minScore": 0.1, "maxResults": 10}}'
 ```
@@ -223,7 +223,7 @@ rag:
 
 2. **Adjust hybrid search weights**:
 ```bash
-curl "http://localhost:8080/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltextWeight=0.3"
+curl "http://localhost:8081/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltextWeight=0.3"
 ```
 
 3. **Enable reranking**:
@@ -310,7 +310,7 @@ grep -i "retrieval\|llm\|total" logs/application.log | tail -10
 
 ```bash
 # Check SSE connection
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "test", "sessionId": "s1"}' 2>&1
 ```
@@ -355,7 +355,7 @@ curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
 **Solution**:
 
 ```bash
-curl -H "X-API-Key: your-key" http://localhost:8080/api/v1/rag/chat/ask ...
+curl -H "X-API-Key: your-key" http://localhost:8081/api/v1/rag/chat/ask ...
 ```
 
 Or temporarily disable authentication:
@@ -375,8 +375,8 @@ rag:
 **Solution**: First verify ID exists:
 
 ```bash
-curl http://localhost:8080/api/v1/rag/documents?page=0&size=10
-curl http://localhost:8080/api/v1/rag/collections?page=0&size=10
+curl http://localhost:8081/api/v1/rag/documents?page=0&size=10
+curl http://localhost:8081/api/v1/rag/collections?page=0&size=10
 ```
 
 ---
@@ -391,10 +391,10 @@ curl http://localhost:8080/api/v1/rag/collections?page=0&size=10
 
 ```bash
 # View active alerts
-curl http://localhost:8080/api/v1/rag/alerts/active
+curl http://localhost:8081/api/v1/rag/alerts/active
 
 # View SLO configuration
-curl http://localhost:8080/api/v1/rag/alerts/slos
+curl http://localhost:8081/api/v1/rag/alerts/slos
 ```
 
 **Adjust**:
@@ -487,14 +487,37 @@ logging:
 
 ```bash
 # Export health check
-curl http://localhost:8080/api/v1/rag/health | jq .
+curl http://localhost:8081/api/v1/rag/health | jq .
 
 # Export document statistics
-curl http://localhost:8080/api/v1/rag/documents/stats | jq .
+curl http://localhost:8081/api/v1/rag/documents/stats | jq .
 
 # Export alert statistics
-curl http://localhost:8080/api/v1/rag/alerts/stats | jq .
+curl http://localhost:8081/api/v1/rag/alerts/stats | jq .
 ```
+
+---
+
+## Mainland China Network Issues
+
+### Docker repeatedly times out while pulling base images
+
+**Symptom**: the build stalls at `FROM` / `load metadata`, or access to `gcr.io` or Docker Hub repeatedly times out.
+
+**Resolution**:
+
+```bash
+# Pull from docker.m.daocloud.io first, then fall back to official sources
+./scripts/docker-build-local.sh
+
+# Use a team registry
+MIRROR_BASE_URL=your.registry.example ./scripts/docker-build-local.sh
+
+# Force Docker Hub when direct access is more reliable
+./scripts/docker-build-local.sh --official
+```
+
+The release Dockerfile no longer depends on `gcr.io` and accepts `MAVEN_IMAGE` / `RUNTIME_IMAGE` build arguments. See the [mainland China network guide](china-network-guide.md) for architecture, Maven/npm/Playwright downloads, and proxy notes.
 
 ---
 
@@ -503,4 +526,5 @@ curl http://localhost:8080/api/v1/rag/alerts/stats | jq .
 - [Architecture Design](architecture.md) — Understand system design
 - [Configuration Reference](configuration.md) — All configuration items
 - [Testing Guide](testing-guide.md) — How to write tests
+- [Mainland China Network Guide](china-network-guide.md) — Docker / Maven / npm / Playwright
 - GitHub Issues — Submit bug reports

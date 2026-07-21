@@ -34,7 +34,7 @@ services:
       postgres:
         condition: service_healthy
     ports:
-      - "${APP_PORT:-8080}:8080"
+      - "${APP_PORT:-8081}:8081"
     environment:
       # Database connection
       POSTGRES_HOST: postgres
@@ -46,7 +46,7 @@ services:
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-sk-your-key-here}
       # General OpenAI-compatible configuration
       OPENAI_API_KEY: ${OPENAI_API_KEY:-${DEEPSEEK_API_KEY:-sk-your-key-here}}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com/v1}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.deepseek.com}
       OPENAI_MODEL: ${OPENAI_MODEL:-deepseek-chat}
       # Embedding model (SiliconFlow BGE-M3)
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-sk-your-key-here}

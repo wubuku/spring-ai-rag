@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { modelsApi, type ModelInfo } from '../api/models';
 import { getApiKey, saveApiKey } from '../utils/apiKeyStorage';
+import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import styles from './Settings.module.css';
 
 interface RetrievalConfig {
@@ -16,6 +18,11 @@ interface CacheConfig {
   maxSize: number;
 }
 
+interface LlmConfig {
+  provider: string;
+  model: string;
+}
+
 const SETTINGS_KEY = 'user_settings';
 
 export function Settings() {
@@ -23,12 +30,17 @@ export function Settings() {
   const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache' | 'apikey' | 'language'>('llm');
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
-  const lastSavedRef = useRef<{ retrieval: RetrievalConfig; cache: CacheConfig } | null>(null);
-
-  const [llmConfig] = useState({
-    provider: 'deepseek',
-    model: 'deepseek-chat',
-    apiKeyConfigured: true,
+  const lastSavedRef = useRef<{
+    llm: LlmConfig;
+    retrieval: RetrievalConfig;
+    cache: CacheConfig;
+  } | null>(null);
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [modelsLoading, setModelsLoading] = useState(true);
+  const [modelsError, setModelsError] = useState(false);
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>({
+    provider: '',
+    model: getSelectedModel(),
   });
 
   const [retrievalConfig, setRetrievalConfig] = useState<RetrievalConfig>(() => {
@@ -67,9 +79,50 @@ export function Settings() {
   });
 
   useEffect(() => {
+    let active = true;
+    modelsApi.list()
+      .then(response => {
+        if (!active) return;
+        const availableModels = response.data.models.filter(model => model.available);
+        const preferred = getSelectedModel();
+        const selected =
+          availableModels.find(model => model.ref === preferred) ??
+          availableModels.find(model => model.ref === response.data.defaultModel) ??
+          availableModels[0];
+        setModels(response.data.models);
+        if (selected) {
+          setLlmConfig({ provider: selected.provider, model: selected.ref });
+        }
+        setModelsError(false);
+      })
+      .catch(() => {
+        if (active) setModelsError(true);
+      })
+      .finally(() => {
+        if (active) setModelsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!modelsLoading && !lastSavedRef.current) {
+      lastSavedRef.current = {
+        llm: llmConfig,
+        retrieval: retrievalConfig,
+        cache: cacheConfig,
+      };
+      setHasChanges(false);
+    }
+  }, [modelsLoading, llmConfig, retrievalConfig, cacheConfig]);
+
+  useEffect(() => {
     const lastSaved = lastSavedRef.current;
     if (!lastSaved) return;
     const hasChanges =
+      llmConfig.provider !== lastSaved.llm.provider ||
+      llmConfig.model !== lastSaved.llm.model ||
       retrievalConfig.vectorWeight !== lastSaved.retrieval.vectorWeight ||
       retrievalConfig.fulltextWeight !== lastSaved.retrieval.fulltextWeight ||
       retrievalConfig.topK !== lastSaved.retrieval.topK ||
@@ -78,7 +131,7 @@ export function Settings() {
       cacheConfig.ttlMinutes !== lastSaved.cache.ttlMinutes ||
       cacheConfig.maxSize !== lastSaved.cache.maxSize;
     setHasChanges(hasChanges);
-  }, [retrievalConfig, cacheConfig]);
+  }, [llmConfig, retrievalConfig, cacheConfig]);
 
   const handleSave = () => {
     const settings = {
@@ -89,9 +142,15 @@ export function Settings() {
       enabled: cacheConfig.enabled,
       ttlMinutes: cacheConfig.ttlMinutes,
       maxSize: cacheConfig.maxSize,
+      llmModel: llmConfig.model,
     };
     localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-    lastSavedRef.current = { retrieval: retrievalConfig, cache: cacheConfig };
+    saveSelectedModel(llmConfig.model);
+    lastSavedRef.current = {
+      llm: llmConfig,
+      retrieval: retrievalConfig,
+      cache: cacheConfig,
+    };
     setSaved(true);
     setHasChanges(false);
     setTimeout(() => setSaved(false), 2000);
@@ -109,6 +168,20 @@ export function Settings() {
     { id: 'apikey' as const, label: t('settings.ragApiKey') },
     { id: 'language' as const, label: t('settings.title').split(' ')[0] === '设置' ? '语言' : 'Language' },
   ];
+
+  const availableModels = models.filter(model => model.available);
+  const providers = Array.from(
+    new Map(availableModels.map(model => [
+      model.provider,
+      model.providerName || model.provider,
+    ])).entries()
+  );
+  const providerModels = availableModels.filter(
+    model => model.provider === llmConfig.provider
+  );
+  const selectedModel = availableModels.find(
+    model => model.ref === llmConfig.model
+  );
 
   return (
     <div className={styles.container}>
@@ -138,27 +211,63 @@ export function Settings() {
 
             <div className={styles.field}>
               <label className={styles.label}>{t('settings.provider')}</label>
-              <select className={styles.select} value={llmConfig.provider} disabled>
-                <option value="deepseek">DeepSeek</option>
-                <option value="anthropic">Anthropic</option>
-                <option value="openai">OpenAI</option>
+              <select
+                className={styles.select}
+                value={llmConfig.provider}
+                disabled={modelsLoading || providers.length === 0}
+                data-testid="settings-provider-select"
+                onChange={event => {
+                  const provider = event.target.value;
+                  const firstModel = availableModels.find(
+                    model => model.provider === provider
+                  );
+                  setLlmConfig({
+                    provider,
+                    model: firstModel?.ref ?? '',
+                  });
+                }}
+              >
+                {providers.map(([provider, providerName]) => (
+                  <option key={provider} value={provider}>
+                    {providerName}
+                  </option>
+                ))}
               </select>
               <span className={styles.hint}>
-                {i18n.language === 'zh-CN' ? '当前激活的提供商' : 'Currently active provider'}
+                {modelsError
+                  ? t('settings.modelsLoadError')
+                  : t('settings.availableProvider')}
               </span>
             </div>
 
             <div className={styles.field}>
               <label className={styles.label}>{t('settings.model')}</label>
-              <input type="text" className={styles.input} value={llmConfig.model} disabled />
+              <select
+                className={styles.select}
+                value={llmConfig.model}
+                disabled={modelsLoading || providerModels.length === 0}
+                data-testid="settings-model-select"
+                onChange={event => setLlmConfig(config => ({
+                  ...config,
+                  model: event.target.value,
+                }))}
+              >
+                {providerModels.map(model => (
+                  <option key={model.ref} value={model.ref}>
+                    {model.name} ({model.modelId})
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className={styles.field}>
               <label className={styles.label}>API Key</label>
               <div className={styles.apiKeyStatus}>
-                <span className={styles.statusDot} data-ok={llmConfig.apiKeyConfigured} />
+                <span className={styles.statusDot} data-ok={Boolean(selectedModel?.available)} />
                 <span>
-                  {llmConfig.apiKeyConfigured ? t('settings.apiKeyConfigured') : t('settings.apiKeyNotSet')}
+                  {selectedModel?.available
+                    ? t('settings.apiKeyConfigured')
+                    : t('settings.apiKeyNotSet')}
                 </span>
               </div>
               <span className={styles.hint}>

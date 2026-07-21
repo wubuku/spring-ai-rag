@@ -102,7 +102,7 @@ No extra configuration needed.
 ### 3. Specify domainId When Calling
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{
     "message": "What are the symptoms of hypertension?",

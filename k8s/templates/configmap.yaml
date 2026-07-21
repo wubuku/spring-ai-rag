@@ -61,42 +61,45 @@ data:
 
     # ── LLM: OpenAI-compatible (DeepSeek / SiliconFlow / custom) ─────────
     spring.ai.openai:
-      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
       api-key: ${OPENAI_API_KEY:}
       chat:
+        enabled: false
         options:
           model: ${OPENAI_MODEL:deepseek-chat}
           temperature: 0.7
           max-tokens: 8192
 
-    # ── Embedding model (SiliconFlow BGE-M3) ────────────────────────────
-    siliconflow:
-      api-key: ${SILICONFLOW_API_KEY:}
-      base-url: https://api.siliconflow.cn/v1
+    # ── rag.* configuration ───────────────────────────────────────────────
+    rag:
+      # Embedding model (SiliconFlow BGE-M3)
       embedding:
+        api-key: ${SILICONFLOW_API_KEY:}
+        base-url: https://api.siliconflow.cn
         model: BAAI/bge-m3
         dimensions: 1024
 
-    # ── rag.* configuration ───────────────────────────────────────────────
-    rag:
       retrieval:
-        vector:
-          topK: {{ .Values.config.defaultTopK }}
-          defaultSimilarityThreshold: {{ .Values.config.defaultSimilarityThreshold }}
-        hybrid:
-          enable: true
-          vectorWeight: 0.7
-          fulltextWeight: 0.3
-        rerank:
-          enabled: true
-          model: BAAI/bge-reranker-v2-m3
-          topN: 10
-      embedding:
-        batchSize: {{ .Values.config.embeddingBatchSize }}
-      chat:
-        memory:
-          maxMessages: 20
-          messageTtlDays: 30
+        default-limit: {{ .Values.config.defaultLimit }}
+        min-score: {{ .Values.config.minScore }}
+        vector-weight: {{ .Values.config.vectorWeight }}
+        fulltext-weight: {{ .Values.config.fulltextWeight }}
+        fulltext-enabled: true
+        fulltext-strategy: auto
+
+      query-rewrite:
+        enabled: {{ .Values.config.queryRewriteEnabled }}
+
+      rerank:
+        enabled: {{ .Values.config.rerankEnabled }}
+        provider: heuristic
+        diversity-weight: 0.2
+        top-n: 5
+        fallback-to-heuristic: true
+
+      memory:
+        max-messages: 20
+        message-ttl-days: 30
 
     # ── Management / Actuator ─────────────────────────────────────────────
     management:
@@ -135,7 +138,7 @@ data:
     logging:
       level:
         root: INFO
-        com.ruichuang: DEBUG
+        com.springairag: INFO
         org.springframework.ai: INFO
       pattern:
         console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId}] %-5level %logger{36} - %msg%n"

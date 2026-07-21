@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
 
 import java.lang.reflect.Method;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -60,6 +61,27 @@ class ApiVersionRequestMappingHandlerMappingTest {
     }
 
     @Test
+    @DisplayName("versioned mapping preserves request parameter and header conditions")
+    void getMappingForMethod_withParamsAndHeaders_preservesConditions() throws Exception {
+        Method method = ConditionalController.class.getMethod("handle");
+
+        RequestMappingInfo info = mapping.getMappingForMethod(method, ConditionalController.class);
+
+        assertNotNull(info);
+        assertEquals(Set.of("/api/v1/conditional"), info.getPatternValues());
+        assertEquals(
+                Set.of("mode=full", "debug"),
+                info.getParamsCondition().getExpressions().stream()
+                        .map(Object::toString)
+                        .collect(java.util.stream.Collectors.toSet()));
+        assertEquals(
+                Set.of("X-Tenant=demo", "X-Trace"),
+                info.getHeadersCondition().getExpressions().stream()
+                        .map(Object::toString)
+                        .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
     @DisplayName("@ApiVersion deprecated attribute is readable")
     void apiVersion_deprecated_readable() {
         ApiVersion ann = DeprecatedController.class.getAnnotation(ApiVersion.class);
@@ -98,6 +120,16 @@ class ApiVersionRequestMappingHandlerMappingTest {
     @org.springframework.web.bind.annotation.RequestMapping("/shared")
     static class MultiVersionController {
         @org.springframework.web.bind.annotation.GetMapping
+        public String handle() { return "ok"; }
+    }
+
+    @org.springframework.web.bind.annotation.RestController
+    @ApiVersion("v1")
+    @org.springframework.web.bind.annotation.RequestMapping("/conditional")
+    static class ConditionalController {
+        @org.springframework.web.bind.annotation.GetMapping(
+                params = {"mode=full", "debug"},
+                headers = {"X-Tenant=demo", "X-Trace"})
         public String handle() { return "ok"; }
     }
 

@@ -54,12 +54,14 @@ public class ModelController {
     @Timed(value = "rag.models.list", description = "List all registered models", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ModelListResponse> listModels() {
         List<String> availableProviders = modelRouter.getAvailableProviders();
+        String defaultModel = modelRouter.getDefaultModelRef();
         return ResponseEntity.ok(ModelListResponse.of(
                 modelRouter.isMultiModelEnabled(),
-                resolveDefaultProvider(),
+                resolveDefaultProvider(defaultModel),
+                defaultModel,
                 availableProviders,
                 modelRouter.getFallbackChain(),
-                modelRegistry.getAllModelsInfo()
+                modelRouter.getModelsInfo()
         ));
     }
 
@@ -75,7 +77,7 @@ public class ModelController {
             return ResponseEntity.notFound().build();
         }
         return ResponseEntity.ok(ModelDetailResponse.of(
-                true, modelRegistry.getModelInfo(provider)));
+                true, modelRouter.getProviderInfo(provider)));
     }
 
     @PostMapping("/compare")
@@ -112,15 +114,11 @@ public class ModelController {
                 request.query, request.providers, resultList));
     }
 
-    private String resolveDefaultProvider() {
-        var allInfo = modelRegistry.getAllModelsInfo();
-        for (var info : allInfo) {
-            if (Boolean.TRUE.equals(info.get("available"))) {
-                return (String) info.get("provider");
-            }
+    private String resolveDefaultProvider(String defaultModel) {
+        if (defaultModel != null && defaultModel.contains("/")) {
+            return defaultModel.substring(0, defaultModel.indexOf('/'));
         }
-        var providers = modelRouter.getAvailableProviders();
-        return providers.isEmpty() ? "none" : providers.get(0);
+        return defaultModel != null ? defaultModel : "none";
     }
 
     /** Model comparison request DTO. */

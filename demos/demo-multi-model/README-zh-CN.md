@@ -39,13 +39,12 @@ cd ../..
 mvn clean install -DskipTests
 ```
 
-### 2. 配置环境变量
+### 2. 加载本地环境
 
 ```bash
-export DEEPSEEK_API_KEY=sk-xxx          # OpenAI 兼容模型（DeepSeek 等）
-export ANTHROPIC_API_KEY=sk-ant-xxx     # Anthropic Claude
-export MINIMAX_API_KEY=eyxxx            # MiniMax Text-01
-export SILICONFLOW_API_KEY=sk-xxx      # 嵌入模型
+set -a
+source ../../.env
+set +a
 ```
 
 ### 3. 启动演示
@@ -59,15 +58,15 @@ mvn spring-boot:run
 
 ```bash
 # 查看所有可用模型
-curl http://localhost:8080/demo/models
+curl http://localhost:8081/demo/models
 
 # 使用 DeepSeek 回答
-curl -X POST http://localhost:8080/demo/chat?provider=openai \
+curl -X POST http://localhost:8081/demo/chat?provider=openai \
   -H "Content-Type: application/json" \
   -d '{"message": "什么是 RAG？"}'
 
 # 并行对比多个模型
-curl -X POST http://localhost:8080/demo/compare \
+curl -X POST http://localhost:8081/demo/compare \
   -H "Content-Type: application/json" \
   -d '{
     "query": "RAG 系统的核心组件有哪些？",

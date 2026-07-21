@@ -20,8 +20,8 @@ import static org.junit.jupiter.api.Assertions.*;
  * cd demos/demo-basic-rag
  * export DEEPSEEK_API_KEY=xxx SILICONFLOW_API_KEY=xxx
  * mvn spring-boot:run
- * curl http://localhost:8080/demo/ask?q=什么是RAG
- * curl -X POST http://localhost:8080/demo/chat \
+ * curl http://localhost:8081/demo/ask?q=什么是RAG
+ * curl -X POST http://localhost:8081/demo/chat \
  *   -H "Content-Type: application/json" \
  *   -d '{"message": "你们的退换货政策是什么？", "sessionId": "customer-001"}'
  * </pre>

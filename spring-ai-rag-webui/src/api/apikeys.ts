@@ -4,6 +4,7 @@ export interface ApiKeyResponse {
   keyId: string;
   name: string;
   role?: string;
+  allowedCollectionIds?: number[];
   createdAt: string;
   lastUsedAt?: string;
   expiresAt?: string;
@@ -15,12 +16,14 @@ export interface ApiKeyCreatedResponse {
   rawKey: string;
   name: string;
   expiresAt?: string;
+  allowedCollectionIds?: number[];
   warning: string;
 }
 
 export interface ApiKeyCreateRequest {
   name: string;
   expiresAt?: string;
+  allowedCollectionIds?: number[];
 }
 
 export const apiKeysApi = {

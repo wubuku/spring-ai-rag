@@ -56,8 +56,36 @@ describe('useChatSSE', () => {
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/rag/chat/stream', expect.objectContaining({
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Hello', collectionId: 1, sessionId: 'conv-1' }),
+      body: JSON.stringify({ message: 'Hello', collectionIds: [1], sessionId: 'conv-1' }),
     }));
+  });
+
+  it('includes the selected model in the request body', async () => {
+    setupMockStream();
+    const { result } = renderHook(() =>
+      useChatSSE({ onChunk: vi.fn(), onSources: vi.fn(), onError: vi.fn(), onDone: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.send(
+        'Hello',
+        [1, 2],
+        'conv-1',
+        'openrouter/xiaomi/mimo-v2-pro'
+      );
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/rag/chat/stream',
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: 'Hello',
+          collectionIds: [1, 2],
+          sessionId: 'conv-1',
+          model: 'openrouter/xiaomi/mimo-v2-pro',
+        }),
+      })
+    );
   });
 
   it('close cancels the reader', async () => {

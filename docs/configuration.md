@@ -18,7 +18,7 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       chat:
         enabled: false
 
@@ -49,37 +49,75 @@ Switch LLM providers via `app.llm.provider`:
 
 ```yaml
 spring:
-  openai:
-    api-key: ${OPENAI_API_KEY}
-    base-url: ${OPENAI_BASE_URL:https://api.deepseek.com/v1}
-    chat:
-      enabled: false
-      options:
-        model: ${OPENAI_MODEL:deepseek-chat}
-        temperature: ${OPENAI_TEMPERATURE:0.7}
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      base-url: ${OPENAI_BASE_URL:https://api.deepseek.com}
+      chat:
+        enabled: false
+        options:
+          model: ${OPENAI_MODEL:deepseek-chat}
+          temperature: ${OPENAI_TEMPERATURE:0.7}
 ```
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `spring.openai.api-key` | (required) | API Key |
-| `spring.openai.base-url` | `https://api.deepseek.com/v1` | API endpoint |
-| `spring.openai.chat.options.model` | `deepseek-chat` | Model name |
-| `spring.openai.chat.options.temperature` | `0.7` | Generation temperature |
+| `spring.ai.openai.api-key` | (required) | API Key |
+| `spring.ai.openai.base-url` | `https://api.deepseek.com` | API endpoint; do not append `/v1` |
+| `spring.ai.openai.chat.options.model` | `deepseek-chat` | Legacy/default model name |
+| `spring.ai.openai.chat.options.temperature` | `0.7` | Generation temperature |
 
 ### Anthropic Configuration
 
 ```yaml
 spring:
-  anthropic:
-    api-key: ${ANTHROPIC_API_KEY}
-    base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
-    chat:
-      enabled: false
-      options:
-        model: ${ANTHROPIC_MODEL:claude-3-5-sonnet-20241022}
-        temperature: ${ANTHROPIC_TEMPERATURE:0.7}
-        max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
+  ai:
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      base-url: ${ANTHROPIC_BASE_URL:https://api.anthropic.com}
+      chat:
+        enabled: false
+        options:
+          model: ${ANTHROPIC_MODEL:claude-3-5-sonnet-20241022}
+          temperature: ${ANTHROPIC_TEMPERATURE:0.7}
+          max-tokens: ${ANTHROPIC_MAX_TOKENS:4096}
 ```
+
+### Runtime Model Selection
+
+`app.models.providers` defines independently instantiated chat models. Each
+provider declares an API type, endpoint, credential placeholder, and one or more
+model IDs:
+
+```yaml
+app:
+  models:
+    config-file: ${MODELS_CONFIG_FILE:}
+    providers:
+      openrouter:
+        displayName: OpenRouter
+        baseUrl: https://openrouter.ai/api
+        apiKey: ${OPENROUTER_API_KEY:}
+        apiType: openai-completions
+        enabled: true
+        priority: 1
+        models:
+          - id: xiaomi/mimo-v2-pro
+            name: MiMo V2 Pro
+            type: chat
+            contextWindow: 600000
+            maxTokens: 32000
+    chatModel:
+      primary: openrouter/xiaomi/mimo-v2-pro
+      fallbacks: []
+```
+
+Use the returned `providerId/modelId` reference from
+`GET /api/v1/rag/models` as the `model` field on both chat endpoints. An
+explicit unknown or unavailable model returns HTTP 400; omitting `model` uses
+the configured primary/fallback chain. An external JSON file fully replaces
+the YAML model registry; see
+[multi-model-external-config.md](multi-model-external-config.md).
 
 ## Embedding Model Configuration
 
@@ -89,7 +127,7 @@ Embedding model configuration is independent of the Chat provider and is always 
 rag:
   embedding:
     api-key: ${SILICONFLOW_API_KEY}
-    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn/v1}
+    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
 ```
@@ -97,7 +135,7 @@ rag:
 | Property | Default | Description |
 |----------|---------|-------------|
 | `rag.embedding.api-key` | `""` | SiliconFlow API Key |
-| `rag.embedding.base-url` | `https://api.siliconflow.cn/v1` | API endpoint |
+| `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
 
@@ -277,6 +315,11 @@ rag:
 
 When enabled, all `/api/v1/**` requests must carry the `X-API-Key` header.
 
+Database-backed API keys may define `allowedCollectionIds` through
+`POST /api/v1/rag/api-keys`. The ACL is stored by Flyway V24 in
+`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. ADMIN and
+the optional static key remain unrestricted. See [rest-api.md](rest-api.md).
+
 ## API Rate Limiting Configuration
 
 ```yaml
@@ -408,7 +451,7 @@ spring:
 |-------------------|---------|-------------|
 | `maximum-pool-size` | `20` | Max connections |
 | `minimum-idle` | `5` | Min idle connections |
-| `idle-timeout` | `300000` | Idle connection回收 time (ms) |
+| `idle-timeout` | `300000` | Idle connection eviction time (ms) |
 | `max-lifetime` | `1800000` | Connection max lifetime (ms) |
 | `connection-timeout` | `10000` | Connection acquisition timeout (ms) |
 | `leak-detection-threshold` | `60000` | Connection leak detection time (ms) |

@@ -36,13 +36,22 @@ Configuration:
 | ADMIN | ✅ List all | ✅ Create any role | ✅ Delete any key |
 | NORMAL | ❌ 403 | ✅ Create NORMAL key only (self-service) | ❌ 403 |
 
+Database-backed keys can also carry `allowedCollectionIds`:
+
+- `null` or `[]`: unrestricted access to all collections
+- non-empty list: search, chat, collection, document, upload, and PDF-to-RAG paths are limited to those collections
+- a restricted request that explicitly names an outside collection returns `403`
+- when a restricted key omits a collection filter, retrieval is automatically constrained to its allow-list
+- ADMIN and the legacy static `rag.security.api-key` remain unrestricted
+- a restricted NORMAL key cannot create a broader child key; rotation preserves the existing allow-list
+
 ### Rate Limiting
 
 When `rag.rate-limit.enabled` is true, all API requests are subject to a sliding-window rate limit.
 
 Two strategies are supported (`rag.rate-limit.strategy`):
 - `ip`: Rate limit by client IP address
-- `api-key`: Rate limit by API Key (falls back to IP if no key provided);分级限额可配置 `rag.rate-limit.key-limits`
+- `api-key`: Rate limit by API Key (falls back to IP if no key is provided); tiered limits use `rag.rate-limit.key-limits`
 
 **Rate limit response headers (on normal requests):**
 
@@ -109,7 +118,12 @@ Non-streaming RAG Q&A, returns a complete answer.
   "message": "What is Spring AI?",
   "sessionId": "session-001",
   "domainId": "medical",
+  "model": "openrouter/xiaomi/mimo-v2-pro",
+  "collectionIds": [1, 2],
+  "documentIds": [10, 20],
   "maxResults": 5,
+  "useHybridSearch": true,
+  "useRerank": true,
   "metadata": {}
 }
 ```
@@ -117,9 +131,14 @@ Non-streaming RAG Q&A, returns a complete answer.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `message` | string | ✅ | Query content (≤10000 chars) |
-| `sessionId` | string | ✅ | Session ID (for multi-turn conversations) |
+| `sessionId` | string | | Session ID, maximum 36 characters; generated when omitted |
 | `domainId` | string | | Domain extension ID |
+| `model` | string | | Runtime model reference from `GET /rag/models`; omitted uses the default chain |
+| `collectionIds` | long[] | | Restrict retrieval to these collections |
+| `documentIds` | long[] | | Restrict retrieval to these documents; intersects with collections |
 | `maxResults` | int | | Number of retrieval results, default 5 |
+| `useHybridSearch` | boolean | | Enable vector + full-text retrieval, default true |
+| `useRerank` | boolean | | Enable reranking, default true |
 | `metadata` | object | | Extended metadata |
 
 **Response:**
@@ -147,23 +166,25 @@ SSE streaming Q&A, returns answer chunks progressively.
 
 **Request body:** Same as `/ask`.
 
+The same 36-character `sessionId` limit applies. Longer values return `400 VALIDATION_FAILED` before Chat Memory persistence.
+
 **Response:** `text/event-stream`
 
 ```
-data: {"chunk": "Spring AI is"}
+data: {"choices":[{"delta":{"content":"Spring AI is"}}]}
 
-data: {"chunk": " an AI framework"}
+data: {"choices":[{"delta":{"content":" an AI framework"}}]}
 
-event: done
-data: [DONE]
+event:done
+data:{"traceId":"...","status":"complete"}
 ```
 
 **curl example:**
 
 ```bash
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is RAG?", "sessionId": "s1"}'
+  -d '{"message": "What is RAG?", "sessionId": "s1", "model": "openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
 ---
@@ -255,6 +276,7 @@ List all API keys (ADMIN only).
   "keyId": "rag_k_abc123",
   "name": "Production Server",
   "role": "ADMIN",
+  "allowedCollectionIds": null,
   "enabled": true,
   "createdAt": "2026-04-15T00:00:00",
   "lastUsedAt": "2026-04-16T00:00:00",
@@ -272,9 +294,13 @@ Create a new API key. ADMIN can create any role; any valid key can create NORMAL
 ```json
 {
   "name": "My API Key",
-  "expiresAt": "2027-01-01T00:00:00"   // optional
+  "expiresAt": "2027-01-01T00:00:00",
+  "allowedCollectionIds": [1, 2]
 }
 ```
+
+`expiresAt` and `allowedCollectionIds` are optional. Omit or send an empty
+`allowedCollectionIds` list for unrestricted access.
 
 **Response 201**:
 ```json
@@ -283,6 +309,7 @@ Create a new API key. ADMIN can create any role; any valid key can create NORMAL
   "rawKey": "rag_sk_a1b2c3d4-...",   // shown ONLY here — save it!
   "name": "My API Key",
   "role": "NORMAL",
+  "allowedCollectionIds": [1, 2],
   "expiresAt": "2027-01-01T00:00:00"
 }
 ```
@@ -1115,55 +1142,82 @@ Requires `rag.slo.enabled = true`.
 
 ---
 
-## Models — Multi-Model Management
+## Models — Runtime Model Selection
 
 ### `GET /api/v1/rag/models`
 
-Get all registered models and their routing status.
+Get provider/model references that can be sent in `ChatRequest.model`.
 
 **Response:**
 
 ```json
 {
   "multiModelEnabled": true,
-  "defaultProvider": "openai",
-  "availableProviders": ["openai", "minimax"],
-  "fallbackChain": ["openai", "minimax"],
+  "defaultProvider": "minimax",
+  "defaultModel": "minimax/MiniMax-M2.7",
+  "availableProviders": ["openrouter", "minimax"],
+  "fallbackChain": ["openrouter/xiaomi/mimo-v2-pro"],
   "models": [
     {
-      "provider": "openai",
+      "ref": "openrouter/xiaomi/mimo-v2-pro",
+      "provider": "openrouter",
+      "providerName": "OpenRouter",
+      "modelId": "xiaomi/mimo-v2-pro",
+      "name": "MiMo V2 Pro",
+      "apiType": "openai-completions",
       "available": true,
-      "displayName": "OpenAI (DeepSeek/Compatible)",
-      "className": "OpenAiChatModel"
+      "reasoning": false,
+      "contextWindow": 600000,
+      "maxTokens": 32000,
+      "source": "configured"
     },
     {
+      "ref": "minimax/MiniMax-M2.7",
       "provider": "minimax",
+      "providerName": "MiniMax",
+      "modelId": "MiniMax-M2.7",
+      "name": "MiniMax M2.7",
+      "apiType": "anthropic-messages",
       "available": true,
-      "displayName": "MiniMax",
-      "className": "MiniMaxChatModel"
+      "reasoning": false,
+      "contextWindow": 200000,
+      "maxTokens": 8192,
+      "source": "configured"
     }
   ]
 }
 ```
 
+Models that are configured but missing credentials remain in the list with
+`available: false` and an `unavailableReason`.
+
 ### `GET /api/v1/rag/models/{provider}`
 
-Get details of a specific provider's model.
+Get a provider summary and its model-level entries.
 
 **Path parameters:**
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `provider` | string | Provider identifier (openai / anthropic / minimax) |
+| `provider` | string | Provider identifier such as `openrouter` or `minimax` |
 
 **Response (provider exists):**
 
 ```json
 {
-  "provider": "openai",
   "available": true,
-  "displayName": "OpenAI (DeepSeek/Compatible)",
-  "className": "OpenAiChatModel"
+  "details": {
+    "provider": "openrouter",
+    "available": true,
+    "displayName": "OpenRouter",
+    "models": [
+      {
+        "ref": "openrouter/xiaomi/mimo-v2-pro",
+        "modelId": "xiaomi/mimo-v2-pro",
+        "available": true
+      }
+    ]
+  }
 }
 ```
 
@@ -1171,14 +1225,17 @@ Get details of a specific provider's model.
 
 ### `POST /api/v1/rag/models/compare`
 
-Compare responses from multiple models in parallel, for model effectiveness comparison.
+Compare responses from multiple model references in parallel.
 
 **Request body:**
 
 ```json
 {
   "query": "Explain the basic principles of quantum computing",
-  "providers": ["openai", "minimax"],
+  "providers": [
+    "openrouter/xiaomi/mimo-v2-pro",
+    "minimax/MiniMax-M2.7"
+  ],
   "timeoutSeconds": 30
 }
 ```
@@ -1186,7 +1243,7 @@ Compare responses from multiple models in parallel, for model effectiveness comp
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `query` | string | ✅ | Query text |
-| `providers` | string[] | ✅ | List of providers to compare |
+| `providers` | string[] | ✅ | Provider or `provider/model` references to compare |
 | `timeoutSeconds` | int | ❌ | Per-model timeout in seconds (default 30) |
 
 **Response:**
@@ -1194,10 +1251,13 @@ Compare responses from multiple models in parallel, for model effectiveness comp
 ```json
 {
   "query": "Explain the basic principles of quantum computing",
-  "providers": ["openai", "minimax"],
+  "providers": [
+    "openrouter/xiaomi/mimo-v2-pro",
+    "minimax/MiniMax-M2.7"
+  ],
   "results": [
     {
-      "modelName": "openai",
+      "modelName": "openrouter/xiaomi/mimo-v2-pro",
       "success": true,
       "response": "Quantum computing is...",
       "latencyMs": 1200,
@@ -1207,7 +1267,7 @@ Compare responses from multiple models in parallel, for model effectiveness comp
       "error": null
     },
     {
-      "modelName": "minimax",
+      "modelName": "minimax/MiniMax-M2.7",
       "success": true,
       "response": "The core of quantum computing is...",
       "latencyMs": 950,

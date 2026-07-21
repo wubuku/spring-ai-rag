@@ -1,0 +1,1 @@
+import{t as e}from"./client-Bc-FTXLS.js";var t={list:()=>e.get(`/models`)},n=`rag-selected-model`;function r(){return localStorage.getItem(n)??``}function i(e){e?localStorage.setItem(n,e):localStorage.removeItem(n)}export{i as n,t as r,r as t};

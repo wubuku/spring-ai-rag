@@ -1,6 +1,6 @@
 package com.springairag.core.service;
 
-import com.springairag.core.config.ModelRegistry;
+import com.springairag.core.config.ChatModelRouter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
@@ -34,13 +34,13 @@ public class ModelComparisonService {
     private static final Logger log = LoggerFactory.getLogger(ModelComparisonService.class);
 
     private final ExecutorService modelComparisonExecutor;
-    private final ModelRegistry modelRegistry;
+    private final ChatModelRouter chatModelRouter;
 
     public ModelComparisonService(
             @org.springframework.beans.factory.annotation.Qualifier("modelComparisonExecutor") ExecutorService modelComparisonExecutor,
-            ModelRegistry modelRegistry) {
+            ChatModelRouter chatModelRouter) {
         this.modelComparisonExecutor = modelComparisonExecutor;
-        this.modelRegistry = modelRegistry;
+        this.chatModelRouter = chatModelRouter;
     }
 
     /**
@@ -89,10 +89,10 @@ public class ModelComparisonService {
     }
 
     /**
-     * Compare multiple providers in parallel (resolved via ModelRegistry)
+     * Compare multiple model references in parallel.
      *
      * @param query query text
-     * @param providers provider list to compare (e.g., ["openai", "minimax"])
+     * @param providers model references to compare (e.g., ["openai", "minimax/MiniMax-M2.7"])
      * @param timeoutSeconds per-model timeout (seconds)
      * @return comparison result list (in submission order)
      */
@@ -101,11 +101,7 @@ public class ModelComparisonService {
                                                        int timeoutSeconds) {
         Map<String, ChatModel> models = new LinkedHashMap<>();
         for (String p : providers) {
-            try {
-                models.put(p, modelRegistry.get(p));
-            } catch (IllegalArgumentException e) {
-                log.warn("Provider not available for comparison: {}", p);
-            }
+            models.put(p, chatModelRouter.resolveRequired(p));
         }
         return compareModels(query, models, timeoutSeconds);
     }
@@ -115,8 +111,8 @@ public class ModelComparisonService {
      */
     public List<ModelComparisonResult> compareAllProviders(String query, int timeoutSeconds) {
         Map<String, ChatModel> models = new LinkedHashMap<>();
-        for (String p : modelRegistry.availableProviders()) {
-            models.put(p, modelRegistry.get(p));
+        for (String modelRef : chatModelRouter.getAvailableModelRefs()) {
+            models.put(modelRef, chatModelRouter.resolveRequired(modelRef));
         }
         return compareModels(query, models, timeoutSeconds);
     }

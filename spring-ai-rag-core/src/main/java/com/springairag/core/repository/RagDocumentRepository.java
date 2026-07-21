@@ -81,11 +81,33 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                                        @Param("createdBefore") LocalDateTime createdBefore,
                                        Pageable pageable);
 
+    @Query("SELECT d FROM RagDocument d WHERE d.collectionId IN :collectionIds AND " +
+           "(COALESCE(:title, '') = '' OR LOWER(d.title) LIKE LOWER(CONCAT('%', :title, '%'))) AND " +
+           "(COALESCE(:documentType, '') = '' OR d.documentType = :documentType) AND " +
+           "(COALESCE(:processingStatus, '') = '' OR d.processingStatus = :processingStatus) AND " +
+           "(:enabled IS NULL OR d.enabled = :enabled) AND " +
+           "(CAST(:createdAfter AS timestamp) IS NULL OR d.createdAt >= :createdAfter) AND " +
+           "(CAST(:createdBefore AS timestamp) IS NULL OR d.createdAt <= :createdBefore)")
+    Page<RagDocument> searchDocumentsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("title") String title,
+            @Param("documentType") String documentType,
+            @Param("processingStatus") String processingStatus,
+            @Param("enabled") Boolean enabled,
+            @Param("createdAfter") LocalDateTime createdAfter,
+            @Param("createdBefore") LocalDateTime createdBefore,
+            Pageable pageable);
+
     /**
      * Count documents by processing status.
      */
     @Query("SELECT d.processingStatus, COUNT(d) FROM RagDocument d GROUP BY d.processingStatus")
     List<Object[]> countByProcessingStatus();
+
+    @Query("SELECT d.processingStatus, COUNT(d) FROM RagDocument d " +
+           "WHERE d.collectionId IN :collectionIds GROUP BY d.processingStatus")
+    List<Object[]> countByProcessingStatusAndCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds);
 
     /**
      * Find by content hash (for deduplication).
@@ -96,6 +118,8 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      * Count documents in a collection.
      */
     long countByCollectionId(Long collectionId);
+
+    long countByCollectionIdIn(List<Long> collectionIds);
 
     /**
      * Query by collection ID (no pagination).
@@ -125,6 +149,15 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
         nativeQuery = true)
     List<RagDocument> findDocumentsWithoutEmbeddings();
 
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT d.* FROM rag_documents d " +
+                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
+                "WHERE d.collection_id IN (:collectionIds) " +
+                "AND (e.id IS NULL OR e.embedding IS NULL)",
+        nativeQuery = true)
+    List<RagDocument> findDocumentsWithoutEmbeddingsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds);
+
     /**
      * Count documents without embeddings.
      */
@@ -134,4 +167,13 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
                 "WHERE e.id IS NULL OR e.embedding IS NULL",
         nativeQuery = true)
     long countDocumentsWithoutEmbeddings();
+
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT COUNT(*) FROM rag_documents d " +
+                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
+                "WHERE d.collection_id IN (:collectionIds) " +
+                "AND (e.id IS NULL OR e.embedding IS NULL)",
+        nativeQuery = true)
+    long countDocumentsWithoutEmbeddingsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds);
 }

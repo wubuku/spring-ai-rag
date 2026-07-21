@@ -2,32 +2,24 @@ package com.springairag.core.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.anthropic.AnthropicChatModel;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.minimax.MiniMaxChatModel;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 /**
- * ChatModel Router: supports primary model + Fallback chain.
- *
- * <p>Resolves model references ({@code providerId/modelId}) to the corresponding ChatModel instance.
- * When the primary model throws an exception, automatically switches to the fallback model.
- *
- * <p>Supported ChatModel types:
- * <ul>
- *   <li>{@link OpenAiChatModel} — OpenAI / OpenAI-Compatible API</li>
- *   <li>{@link AnthropicChatModel} — Anthropic API</li>
- *   <li>Other beans implementing {@link ChatModel}</li>
- * </ul>
+ * Resolves configured {@code provider/modelId} references and legacy provider beans.
  */
 @Component
 public class ChatModelRouter {
@@ -35,190 +27,264 @@ public class ChatModelRouter {
     private static final Logger log = LoggerFactory.getLogger(ChatModelRouter.class);
 
     private final ModelRegistry modelRegistry;
-    private final Map<String, ChatModel> chatModelsByProvider = new ConcurrentHashMap<>();
+    private final ConfiguredChatModelFactory configuredFactory;
+    private final Map<String, ChatModel> legacyModelsByProvider = new ConcurrentHashMap<>();
 
     @Autowired
     public ChatModelRouter(
             ModelRegistry modelRegistry,
+            ConfiguredChatModelFactory configuredFactory,
             @Autowired(required = false) List<ChatModel> chatModels) {
         this.modelRegistry = modelRegistry;
+        this.configuredFactory = configuredFactory;
+        registerLegacyModels(chatModels);
+    }
+
+    /**
+     * Test/backward-compatible constructor for contexts without configured model support.
+     */
+    ChatModelRouter(ModelRegistry modelRegistry, List<ChatModel> chatModels) {
+        this.modelRegistry = modelRegistry;
+        this.configuredFactory = null;
+        registerLegacyModels(chatModels);
+    }
+
+    private void registerLegacyModels(List<ChatModel> chatModels) {
         if (chatModels != null) {
             for (ChatModel model : chatModels) {
                 String provider = resolveProvider(model);
                 if (provider != null) {
-                    chatModelsByProvider.put(provider.toLowerCase(), model);
+                    legacyModelsByProvider.put(provider.toLowerCase(), model);
                 }
             }
         }
-        log.info("ChatModelRouter initialized with {} providers: {}",
-                chatModelsByProvider.size(), chatModelsByProvider.keySet());
+        log.info("ChatModelRouter initialized with legacy providers: {}",
+                legacyModelsByProvider.keySet());
     }
 
     /**
-     * Resolves a model reference (providerId/modelId) to a ChatModel instance.
-     * If the reference contains only a providerId (e.g. "minimax"), returns that provider's default ChatModel.
+     * Resolves a configured model reference or a legacy provider alias.
      */
     public ChatModel resolve(String modelRef) {
         if (modelRef == null || modelRef.isBlank()) {
             return null;
         }
 
-        String providerId = extractProviderId(modelRef);
-        if (providerId == null) {
-            return null;
+        if (configuredFactory != null) {
+            ChatModel configured = configuredFactory.resolve(modelRef);
+            if (configured != null) {
+                log.debug("Resolved configured ChatModel: {} -> {}",
+                        modelRef, configured.getClass().getSimpleName());
+                return configured;
+            }
         }
-        String modelId = extractModelId(modelRef);
 
-        ChatModel model = chatModelsByProvider.get(providerId.toLowerCase());
-        if (model != null) {
-            log.debug("Resolved {} -> provider={}, model={}", modelRef, providerId, modelId);
-        } else {
-            log.warn("No ChatModel found for provider '{}' (modelRef={})", providerId, modelRef);
+        // Provider-only aliases remain supported for the active legacy Spring bean.
+        String requested = modelRef.trim().toLowerCase();
+        if (!requested.contains("/")) {
+            return legacyModelsByProvider.get(requested);
         }
-        return model;
+        return null;
     }
 
     /**
-     * Gets the primary ChatModel.
+     * Resolves an explicitly requested model or fails with a client-visible 400 error.
      */
+    public ChatModel resolveRequired(String modelRef) {
+        ChatModel resolved = resolve(modelRef);
+        if (resolved != null) {
+            return resolved;
+        }
+        String reason = configuredFactory != null
+                ? configuredFactory.getUnavailableReason(modelRef)
+                : "model is not registered";
+        throw new IllegalArgumentException(
+                "Unknown or unavailable chat model '" + modelRef + "': " + reason
+                        + ". Available models: " + getAvailableModelRefs());
+    }
+
     public ChatModel getPrimary() {
-        String primary = modelRegistry.getPrimaryChatModelName();
-        return resolve(primary);
+        return resolve(modelRegistry.getPrimaryChatModelName());
     }
 
-    /**
-     * Gets the list of fallback ChatModels.
-     */
     public List<ChatModel> getFallbacks() {
         List<String> fallbackNames = modelRegistry.getFallbackChatModelNames();
+        if (fallbackNames == null) {
+            return List.of();
+        }
         return fallbackNames.stream()
                 .map(this::resolve)
-                .filter(m -> m != null)
+                .filter(model -> model != null)
                 .toList();
     }
 
     /**
-     * Gets all available ChatModels in priority order (primary first, fallbacks after).
+     * Returns configured primary/fallback models followed by the legacy active bean.
      */
     public List<ChatModel> getAllOrdered() {
         List<ChatModel> result = new ArrayList<>();
-        ChatModel primary = getPrimary();
-        if (primary != null) {
-            result.add(primary);
-        }
+        addUnique(result, getPrimary());
         for (ChatModel fallback : getFallbacks()) {
-            if (!result.contains(fallback)) {
-                result.add(fallback);
-            }
+            addUnique(result, fallback);
         }
-        return result;
+        legacyModelsByProvider.keySet().stream().sorted()
+                .map(legacyModelsByProvider::get)
+                .forEach(model -> addUnique(result, model));
+        return List.copyOf(result);
     }
 
     /**
-     * Build ordered candidate models for a chat call.
-     *
-     * <p>When {@code preferredModelRef} is set, that model is tried first, then remaining
-     * models from {@link #getAllOrdered()}. When blank, returns {@link #getAllOrdered()}.
-     *
-     * @return ordered unique ChatModel instances (may be empty)
+     * Explicit preferred models are strict; default routing remains failover-compatible.
      */
     public List<ChatModel> orderedCandidates(String preferredModelRef) {
         List<ChatModel> ordered = new ArrayList<>();
         if (preferredModelRef != null && !preferredModelRef.isBlank()) {
-            ChatModel preferred = resolve(preferredModelRef);
-            if (preferred != null) {
-                ordered.add(preferred);
-            }
+            addUnique(ordered, resolveRequired(preferredModelRef));
         }
-        for (ChatModel m : getAllOrdered()) {
-            if (m != null && !ordered.contains(m)) {
-                ordered.add(m);
-            }
+        for (ChatModel model : getAllOrdered()) {
+            addUnique(ordered, model);
         }
-        return ordered;
+        return List.copyOf(ordered);
     }
 
-    /**
-     * Gets all registered ChatModel provider names.
-     */
     public List<String> getAvailableProviders() {
-        return List.copyOf(chatModelsByProvider.keySet());
+        Set<String> providers = new LinkedHashSet<>();
+        for (Map<String, Object> model : getModelsInfo()) {
+            if (Boolean.TRUE.equals(model.get("available"))) {
+                providers.add(String.valueOf(model.get("provider")));
+            }
+        }
+        return List.copyOf(providers);
     }
 
-    /**
-     * Checks whether MultiModel mode is enabled.
-     */
+    public List<String> getAvailableModelRefs() {
+        List<String> refs = new ArrayList<>();
+        for (Map<String, Object> model : getModelsInfo()) {
+            if (Boolean.TRUE.equals(model.get("available"))) {
+                refs.add(String.valueOf(model.get("ref")));
+            }
+        }
+        return List.copyOf(new LinkedHashSet<>(refs));
+    }
+
+    public List<Map<String, Object>> getModelsInfo() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        if (configuredFactory != null) {
+            configuredFactory.listChatModels().stream()
+                    .map(ConfiguredChatModelFactory.ModelDescriptor::toMap)
+                    .forEach(result::add);
+        }
+
+        for (String provider : legacyModelsByProvider.keySet().stream().sorted().toList()) {
+            boolean configuredProviderAvailable = result.stream()
+                    .anyMatch(info -> provider.equalsIgnoreCase(String.valueOf(info.get("provider")))
+                            && Boolean.TRUE.equals(info.get("available")));
+            if (!configuredProviderAvailable) {
+                ChatModel model = legacyModelsByProvider.get(provider);
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("ref", provider);
+                info.put("provider", provider);
+                info.put("providerName", modelRegistry.getDisplayName(provider));
+                String modelId = model.getDefaultOptions() != null
+                        ? model.getDefaultOptions().getModel()
+                        : null;
+                info.put("modelId", modelId != null ? modelId : provider);
+                info.put("name", modelId != null ? modelId : modelRegistry.getDisplayName(provider));
+                info.put("apiType", legacyApiType(model));
+                info.put("available", true);
+                info.put("source", "legacy");
+                result.add(info);
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public Map<String, Object> getProviderInfo(String provider) {
+        List<Map<String, Object>> models = getModelsInfo().stream()
+                .filter(info -> provider != null
+                        && provider.equalsIgnoreCase(String.valueOf(info.get("provider"))))
+                .toList();
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("provider", provider);
+        result.put("available", models.stream()
+                .anyMatch(info -> Boolean.TRUE.equals(info.get("available"))));
+        result.put("displayName", modelRegistry.getDisplayName(provider));
+        result.put("models", models);
+        return result;
+    }
+
+    public String getDefaultModelRef() {
+        String primary = modelRegistry.getPrimaryChatModelName();
+        if (primary != null && resolve(primary) != null) {
+            return canonicalOrOriginal(primary);
+        }
+        List<String> fallbacks = modelRegistry.getFallbackChatModelNames();
+        if (fallbacks != null) {
+            for (String fallback : fallbacks) {
+                if (resolve(fallback) != null) {
+                    return canonicalOrOriginal(fallback);
+                }
+            }
+        }
+        return getAvailableModelRefs().stream().findFirst().orElse("none");
+    }
+
     public boolean isMultiModelEnabled() {
-        var providers = modelRegistry.getAllProviders();
-        return providers != null && !providers.isEmpty();
+        Map<String, MultiModelProperties.ProviderConfig> configuredProviders =
+                modelRegistry.getAllProviders();
+        return (configuredProviders != null && !configuredProviders.isEmpty())
+                || getAvailableModelRefs().size() > 1;
     }
 
-    /**
-     * Gets the Fallback Chain list.
-     */
     public List<String> getFallbackChain() {
         List<String> fallbacks = modelRegistry.getFallbackChatModelNames();
-        return fallbacks != null ? fallbacks : Collections.emptyList();
+        return fallbacks != null ? List.copyOf(fallbacks) : Collections.emptyList();
     }
 
-    /**
-     * Checks whether the specified provider is available.
-     */
     public boolean isProviderAvailable(String provider) {
-        return provider != null && chatModelsByProvider.containsKey(provider.toLowerCase());
+        return provider != null && getAvailableProviders().stream()
+                .anyMatch(provider::equalsIgnoreCase);
     }
 
-    // ─── Internal Methods ───────────────────────────────────────────
-
-    private String extractProviderId(String modelRef) {
-        if (modelRef.contains("/")) {
-            String[] parts = modelRef.split("/", 2);
-            return parts[0];
+    private String canonicalOrOriginal(String modelRef) {
+        if (configuredFactory == null) {
+            return modelRef;
         }
-        // Only modelId, no provider prefix
-        // Try to infer provider from modelRef
-        return inferProviderFromModelId(modelRef);
+        String canonical = configuredFactory.canonicalRef(modelRef);
+        return canonical != null ? canonical : modelRef;
     }
 
-    private String extractModelId(String modelRef) {
-        if (modelRef.contains("/")) {
-            return modelRef.split("/", 2)[1];
+    private static void addUnique(List<ChatModel> models, ChatModel candidate) {
+        if (candidate != null && !models.contains(candidate)) {
+            models.add(candidate);
         }
-        return modelRef;
     }
 
-    private String inferProviderFromModelId(String modelId) {
-        // Infers provider from model ID
-        // This is a simple fallback strategy
-        if (modelId.contains("-")) {
-            // E.g. "MiniMax-M2.7" -> "minimax"
-            String lower = modelId.toLowerCase();
-            if (lower.contains("gpt")) return "openai";
-            if (lower.contains("claude")) return "anthropic";
-            if (lower.contains("glm")) return "zhipu";
-            if (lower.contains("minimax")) return "minimax";
-            if (lower.contains("deepseek")) return "deepseek";
-        }
-        // Last fallback: return the first available
-        return chatModelsByProvider.keySet().stream()
-                .findFirst()
-                .orElse(null);
-    }
-
-    private String resolveProvider(ChatModel model) {
-        // Infers provider from ChatModel bean type
+    private String legacyApiType(ChatModel model) {
         if (model instanceof OpenAiChatModel) {
             return "openai";
         }
         if (model instanceof AnthropicChatModel) {
             return "anthropic";
         }
-        // Infer from bean name
+        if (model instanceof MiniMaxChatModel) {
+            return "minimax";
+        }
+        return model.getClass().getSimpleName();
+    }
+
+    private String resolveProvider(ChatModel model) {
+        if (model instanceof OpenAiChatModel) {
+            return "openai";
+        }
+        if (model instanceof AnthropicChatModel) {
+            return "anthropic";
+        }
+        if (model instanceof MiniMaxChatModel) {
+            return "minimax";
+        }
         String name = model.getClass().getSimpleName().toLowerCase();
-        if (name.contains("openai")) return "openai";
-        if (name.contains("anthropic")) return "anthropic";
         if (name.contains("deepseek")) return "deepseek";
-        if (name.contains("minimax")) return "minimax";
         if (name.contains("zhipu")) return "zhipu";
         if (name.contains("siliconflow")) return "siliconflow";
         if (name.contains("volces")) return "volces";

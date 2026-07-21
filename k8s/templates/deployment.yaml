@@ -90,7 +90,7 @@ spec:
 
           ports:
             - name: http
-              containerPort: 8080
+              containerPort: 8081
               protocol: TCP
 
           # ── Environment from Secret ─────────────────────────────────────────
@@ -98,18 +98,17 @@ spec:
             - secretRef:
                 name: {{ include "spring-ai-rag.fullname" . }}-env
                 optional: true    # gracefully handle cases where secret is managed externally
-            - configMapRef:
-                name: {{ include "spring-ai-rag.fullname" . }}-config
-                optional: true
 
           # ── JVM options ────────────────────────────────────────────────────
           # Max heap from jvm.maxHeap (e.g. "1536m"). Default: 1536m (75% of 2Gi limit).
           # Override: --set jvm.maxHeap=3Gi
           env:
-            - name: JAVA_OPTS
-              value: {{ printf "-Xms512m -Xmx%s -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom" (.Values.jvm.maxHeap | default "1536m") | quote }}
+            - name: JAVA_TOOL_OPTIONS
+              value: {{ printf "-Xms512m -Xmx%s %s" (.Values.jvm.maxHeap | default "1536m") (.Values.jvm.extraOptions | default "") | quote }}
             - name: SERVER_PORT
-              value: "8080"
+              value: "8081"
+            - name: SPRING_CONFIG_ADDITIONAL_LOCATION
+              value: "optional:file:/config/"
 
           # ── Health probes ──────────────────────────────────────────────────
           {{- with .Values.livenessProbe }}
@@ -135,6 +134,9 @@ spec:
 
           # ── Volume mounts ─────────────────────────────────────────────────
           volumeMounts:
+            - name: app-config
+              mountPath: /config
+              readOnly: true
             - name: tmp
               mountPath: /tmp
             - name: app-logs
@@ -142,6 +144,9 @@ spec:
 
       # ── Volumes ───────────────────────────────────────────────────────────
       volumes:
+        - name: app-config
+          configMap:
+            name: {{ include "spring-ai-rag.fullname" . }}-config
         - name: tmp
           emptyDir: {}
         - name: app-logs

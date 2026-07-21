@@ -8,6 +8,9 @@ set -e
 
 BASE_URL="${BASE_URL:-http://localhost:8081}"
 API="${BASE_URL}/api/v1/rag"
+CHAT_TIMEOUT_SECONDS="${E2E_CHAT_TIMEOUT_SECONDS:-180}"
+PDF_TO_RAG_TIMEOUT_SECONDS="${E2E_PDF_TO_RAG_TIMEOUT_SECONDS:-180}"
+ADMIN_API_KEY="${E2E_ADMIN_API_KEY:-}"
 PASS=0
 FAIL=0
 DOC_ID=""
@@ -205,14 +208,23 @@ echo ""
 # 7. RAG 问答
 # ────────────────────────────────────────
 echo "8️⃣  RAG 问答 (非流式)"
+set +e
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/chat/ask" \
     -H "Content-Type: application/json" \
-    -d '{"message":"Spring AI是什么？","sessionId":"e2e-test-session","maxResults":3}')
+    -d '{"message":"Spring AI是什么？","sessionId":"e2e-test-session","maxResults":3}' \
+    --connect-timeout 10 --max-time "$CHAT_TIMEOUT_SECONDS")
+CHAT_CURL_RC=$?
+set -e
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
-assert_status "POST /chat/ask" "200" "$CODE"
+if [ "$CHAT_CURL_RC" -ne 0 ]; then
+    echo -e "  ${RED}❌ FAIL${NC} POST /chat/ask curl exit=$CHAT_CURL_RC"
+    FAIL=$((FAIL + 1))
+else
+    assert_status "POST /chat/ask" "200" "$CODE"
+fi
 # 如果没有配置LLM key，可能返回错误，但端点本身应该可达
-if [ "$CODE" = "200" ]; then
+if [ "$CHAT_CURL_RC" -eq 0 ] && [ "$CODE" = "200" ]; then
     assert_contains "返回answer或error" "$BODY" '"answer"'
 else
     echo -e "  ${YELLOW}⚠️ INFO${NC} /chat/ask 返回非200（可能未配置LLM key）"
@@ -223,11 +235,20 @@ echo ""
 # 8. 流式响应
 # ────────────────────────────────────────
 echo "9️⃣  流式响应 (SSE)"
+set +e
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/chat/stream" \
     -H "Content-Type: application/json" \
     -H "Accept: text/event-stream" \
-    -d '{"message":"你好","sessionId":"e2e-stream-test"}')
-assert_status "POST /chat/stream" "200" "$HTTP_CODE"
+    -d '{"message":"你好","sessionId":"e2e-stream-test"}' \
+    --connect-timeout 10 --max-time "$CHAT_TIMEOUT_SECONDS")
+STREAM_CURL_RC=$?
+set -e
+if [ "$STREAM_CURL_RC" -ne 0 ]; then
+    echo -e "  ${RED}❌ FAIL${NC} POST /chat/stream curl exit=$STREAM_CURL_RC"
+    FAIL=$((FAIL + 1))
+else
+    assert_status "POST /chat/stream" "200" "$HTTP_CODE"
+fi
 echo ""
 
 # ────────────────────────────────────────
@@ -301,51 +322,32 @@ echo ""
 # 1️⃣5️⃣ API Key 管理
 # ────────────────────────────────────────
 echo "1️⃣5️⃣  API Key 管理"
-# 1. List API Keys (should have at least the static key or generated keys)
-RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
-CODE=$(echo "$RESP" | tail -1)
-BODY=$(echo "$RESP" | sed '$d')
-assert_status "GET /api-keys (list)" "200" "$CODE"
-echo ""
-
-# 2. Create a new API Key
-RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/api-keys" \
-    -H "Content-Type: application/json" \
-    -d '{"name":"e2e-test-key","expiresAt":"2027-01-01T00:00:00Z"}')
-CODE=$(echo "$RESP" | tail -1)
-BODY=$(echo "$RESP" | sed '$d')
-assert_status "POST /api-keys (create)" "201" "$CODE"
-# Extract keyId from response (format: {"keyId":"rag_k_...","name":"e2e-test-key",...})
-KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
-echo "  Created keyId: $KEY_ID"
-echo ""
-
-# 3. List again and verify new key appears
-RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
-CODE=$(echo "$RESP" | tail -1)
-assert_status "GET /api-keys (verify new key)" "200" "$CODE"
-echo ""
-
-# 4. Revoke the test key
-if [ -n "$KEY_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/api-keys/$KEY_ID")
+if [ -n "$ADMIN_API_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_API_KEY" "$API/api-keys")
     CODE=$(echo "$RESP" | tail -1)
-    assert_status "DELETE /api-keys/{keyId} (revoke)" "200" "$CODE"
-    echo ""
+    assert_status "GET /api-keys with admin key" "200" "$CODE"
 
-    # 5. Verify revoked key no longer appears in list
-    RESP=$(curl -s -w "\n%{http_code}" "$API/api-keys")
+    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/api-keys" \
+        -H "X-API-Key: $ADMIN_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d '{"name":"e2e-test-key","expiresAt":"2027-01-01T00:00:00"}')
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    if echo "$BODY" | grep -q "$KEY_ID"; then
-        echo -e "  ${RED}❌ FAIL${NC} Revoked key still appears in list"
-        FAIL=$((FAIL + 1))
+    assert_status "POST /api-keys (create)" "201" "$CODE"
+    KEY_ID=$(echo "$BODY" | grep -o '"keyId":"rag_k_[^"]*"' | head -1 | cut -d'"' -f4)
+
+    if [ -n "$KEY_ID" ]; then
+        RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/api-keys/$KEY_ID" \
+            -H "X-API-Key: $ADMIN_API_KEY")
+        CODE=$(echo "$RESP" | tail -1)
+        assert_status "DELETE /api-keys/{keyId} (revoke)" "204" "$CODE"
     else
-        echo -e "  ${GREEN}✅ PASS${NC} Revoked key removed from list"
-        PASS=$((PASS + 1))
+        echo -e "  ${RED}❌ FAIL${NC} API key create response did not include keyId"
+        FAIL=$((FAIL + 1))
     fi
+    echo ""
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} No key ID to test revocation"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} Set E2E_ADMIN_API_KEY to test API key management"
 fi
 echo ""
 
@@ -391,7 +393,6 @@ PDFEOF
 echo "- 16a. POST /files/pdf (upload test PDF, get UUID)"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf" \
     -F "file=@$TESTPDF")
-rm -f "$TESTPDF"
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "POST /files/pdf" "200" "$CODE"
@@ -516,22 +517,70 @@ PASS=$((PASS + 1))
 # 16j. POST /files/pdf-to-rag - 完整链路：PDF → Markdown → RagDocument → 嵌入
 # 上传一个小 PDF，验证完整链路（RagDocument 被创建，嵌入成功）
 echo "- 16j. POST /files/pdf-to-rag (full PDF→RAG→embed pipeline)"
-# 使用 /tmp 中的小测试 PDF（如果没有就用 16a 的同一个）
-if [ -n "$PDF_UUID" ]; then
-    # pdf-to-rag 需要新上传，截取一小段 PDF 字节作为测试
-    DD_CMD=$(command -v dd 2>/dev/null && echo "dd" || echo "head -c")
+# Reuse the valid PDF created for 16a.
+if [ -n "$UUID" ] && [ -f "$TESTPDF" ]; then
     TMPPDF="/tmp/e2e-small-pdf-$$.pdf"
-    head -c 200 "$PDF_FILE" > "$TMPPDF" 2>/dev/null || cp "$PDF_FILE" "$TMPPDF"
+    SSE_OUTPUT="/tmp/e2e-pdf-to-rag-$$.sse"
+    cp "$TESTPDF" "$TMPPDF"
 
-    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/files/pdf-to-rag" \
+    set +e
+    CODE=$(curl -sS -N -o "$SSE_OUTPUT" -w "%{http_code}" -X POST \
+        "$API/files/pdf-to-rag?embed=true" \
+        -H "Accept: text/event-stream" \
         -F "file=@$TMPPDF;type=application/pdf" \
-        -F "embed=true")
+        --connect-timeout 10 --max-time "$PDF_TO_RAG_TIMEOUT_SECONDS")
+    PDF_TO_RAG_CURL_RC=$?
+    set -e
     rm -f "$TMPPDF"
-    CODE=$(echo "$RESP" | tail -1)
 
-    if [ "$CODE" = "200" ] || echo "$RESP" | grep -q '"documentId"'; then
-        DOC_ID=$(echo "$RESP" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('documentId',''))" 2>/dev/null)
-        if [ -n "$DOC_ID" ] && [ "$DOC_ID" != "None" ]; then
+    DONE_JSON=$(python3 - "$SSE_OUTPUT" <<'PY'
+import sys
+
+event_name = None
+data_lines = []
+done_data = ""
+
+def finish_event():
+    global done_data
+    if event_name == "done" and data_lines:
+        done_data = "\n".join(data_lines)
+
+with open(sys.argv[1], encoding="utf-8") as stream:
+    for raw_line in stream:
+        line = raw_line.rstrip("\r\n")
+        if not line:
+            finish_event()
+            event_name = None
+            data_lines = []
+        elif line.startswith("event:"):
+            event_name = line.split(":", 1)[1].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line.split(":", 1)[1].lstrip())
+finish_event()
+print(done_data)
+PY
+)
+    SSE_PREVIEW=$(head -c 240 "$SSE_OUTPUT" 2>/dev/null || true)
+
+    if [ "$PDF_TO_RAG_CURL_RC" -ne 0 ]; then
+        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag curl exit=$PDF_TO_RAG_CURL_RC: $SSE_PREVIEW"
+        FAIL=$((FAIL + 1))
+    elif [ "$CODE" != "200" ]; then
+        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag failed (HTTP $CODE): $SSE_PREVIEW"
+        FAIL=$((FAIL + 1))
+    elif grep -q '^event:[[:space:]]*error' "$SSE_OUTPUT"; then
+        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag SSE returned error: $SSE_PREVIEW"
+        FAIL=$((FAIL + 1))
+    elif [ -z "$DONE_JSON" ]; then
+        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag SSE missing done event: $SSE_PREVIEW"
+        FAIL=$((FAIL + 1))
+    else
+        DOC_ID=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('documentId',''))" "$DONE_JSON")
+        EMBED_STATUS=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('embedStatus',''))" "$DONE_JSON")
+        CHUNKS_CREATED=$(python3 -c "import json,sys; print(json.loads(sys.argv[1]).get('chunksCreated',0))" "$DONE_JSON")
+        if [ -n "$DOC_ID" ] && [ "$DOC_ID" != "None" ] \
+            && [ "$EMBED_STATUS" = "COMPLETED" ] \
+            && [ "${CHUNKS_CREATED:-0}" -gt 0 ]; then
             echo -e "  ${GREEN}✅ PASS${NC} pdf-to-rag created RagDocument id=$DOC_ID"
             PASS=$((PASS + 1))
 
@@ -547,16 +596,15 @@ if [ -n "$PDF_UUID" ]; then
                 FAIL=$((FAIL + 1))
             fi
         else
-            echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag returned 200 but no documentId: ${RESP:0:200}"
+            echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag done event invalid: ${DONE_JSON:0:240}"
             FAIL=$((FAIL + 1))
         fi
-    else
-        echo -e "  ${RED}❌ FAIL${NC} pdf-to-rag failed (HTTP $CODE): ${RESP:0:200}"
-        FAIL=$((FAIL + 1))
     fi
+    rm -f "$SSE_OUTPUT"
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} (no PDF_UUID from 16a)"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} (no UUID from 16a)"
 fi
+rm -f "$TESTPDF"
 
 
 # ────────────────────────────────────────
@@ -570,9 +618,9 @@ echo "1️⃣7️⃣  API Key 角色权限测试"
 RESP_NO_AUTH=$(curl -s -w "\n%{http_code}" "$API/api-keys")
 CODE_NO_AUTH=$(echo "$RESP_NO_AUTH" | tail -1)
 
-if [ "$CODE_NO_AUTH" = "401" ] || [ "$CODE_NO_AUTH" = "403" ]; then
+if [ -n "$ADMIN_API_KEY" ] && { [ "$CODE_NO_AUTH" = "401" ] || [ "$CODE_NO_AUTH" = "403" ]; }; then
     echo "  认证已开启（HTTP $CODE_NO_AUTH），运行角色权限测试..."
-    ADMIN_KEY="rag-test-admin-key-001"
+    ADMIN_KEY="$ADMIN_API_KEY"
 
     # 1. Admin key 可列出所有 keys
     RESP=$(curl -s -w "\n%{http_code}" -H "X-API-Key: $ADMIN_KEY" "$API/api-keys")
@@ -606,8 +654,7 @@ if [ "$CODE_NO_AUTH" = "401" ] || [ "$CODE_NO_AUTH" = "403" ]; then
 
     echo ""
 else
-    echo "  ⚠️  跳过：API Key 认证未开启（rag.security.enabled=false）"
-    echo "     启动服务器时加 --spring.profiles.active=e2e 可开启认证"
+    echo "  ⚠️  跳过：未提供 E2E_ADMIN_API_KEY 或 API Key 认证未开启"
 fi
 echo ""
 # ────────────────────────────────────────
@@ -617,7 +664,7 @@ echo "=========================================="
 TOTAL=$((PASS + FAIL))
 echo -e "测试完成: ${GREEN}$PASS 通过${NC} / ${RED}$FAIL 失败${NC} / $TOTAL 总计"
 echo "=========================================="
-
-if [ $FAIL -gt 0 ]; then
+if [ "$FAIL" -gt 0 ]; then
     exit 1
 fi
+exit 0

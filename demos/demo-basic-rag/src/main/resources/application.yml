@@ -3,6 +3,9 @@
 # Uses real keys and DB connection from .env
 # ============================================
 
+server:
+  port: 8081
+
 spring:
   application:
     name: customer-service-bot
@@ -24,13 +27,16 @@ spring:
       minimum-idle: 2
 
   flyway:
-    enabled: false   # V1-V10 already applied manually, no repeat migration needed
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
 
   ai:
     openai:
       api-key: ${OPENAI_API_KEY:}
       base-url: ${OPENAI_BASE_URL:}
       chat:
+        enabled: false
         options:
           model: ${OPENAI_MODEL:}
           temperature: 0.7
@@ -39,13 +45,12 @@ app:
   llm:
     provider: ${LLM_PROVIDER:openai}
 
-siliconflow:
-  api-key: ${SILICONFLOW_API_KEY:}
+rag:
   embedding:
+    api-key: ${SILICONFLOW_API_KEY:}
+    base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
-
-rag:
   retrieval:
     fulltext-enabled: true
     fulltext-strategy: auto
@@ -53,12 +58,10 @@ rag:
     fulltext-weight: 0.5
     default-limit: 10
     min-score: 0.3
-  chat-memory:
-    table-name: spring_ai_chat_memory
-    history-size: 100
+  memory:
+    max-messages: 20
   security:
-    api-key:
-      enabled: false
+    enabled: false
 
 management:
   endpoints:

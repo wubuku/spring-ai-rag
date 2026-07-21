@@ -6,7 +6,9 @@ import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { chatApi } from '../api/chat';
 import { collectionsApi } from '../api/collections';
 import { evaluationApi } from '../api/evaluation';
+import { modelsApi } from '../api/models';
 import { getApiKey } from '../utils/apiKeyStorage';
+import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
 
@@ -24,6 +26,7 @@ export function Chat() {
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
   const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
+  const [selectedModel, setSelectedModel] = useState<string>(getSelectedModel());
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -40,6 +43,20 @@ export function Chat() {
     },
   });
   const collections = collectionsData?.collections ?? [];
+
+  const { data: modelsData } = useQuery({
+    queryKey: ['chat-models'],
+    queryFn: async () => {
+      const res = await modelsApi.list();
+      return res.data;
+    },
+  });
+  const availableModels = modelsData?.models.filter(model => model.available) ?? [];
+  const effectiveSelectedModel =
+    availableModels.find(model => model.ref === selectedModel)?.ref ??
+    availableModels.find(model => model.ref === modelsData?.defaultModel)?.ref ??
+    availableModels[0]?.ref ??
+    '';
 
   const { send, isConnected } = useChatSSE({
     apiKey: getApiKey(),
@@ -112,7 +129,12 @@ export function Chat() {
     ]);
     const collectionIds =
       selectedCollectionId !== '' ? [Number(selectedCollectionId)] : undefined;
-    send(userMsg, collectionIds, conversationId);
+    send(
+      userMsg,
+      collectionIds,
+      conversationId,
+      effectiveSelectedModel || undefined
+    );
   };
 
   const submitFeedback = async (type: 'THUMBS_UP' | 'THUMBS_DOWN', queryHint?: string) => {
@@ -273,26 +295,51 @@ export function Chat() {
         </div>
 
         <div className={styles.composer}>
-          <div className={styles.collectionRow}>
-            <label htmlFor="chat-collection" className={styles.collectionLabel}>
-              {t('chat.collection')}
-            </label>
-            <select
-              id="chat-collection"
-              className={styles.collectionSelect}
-              value={selectedCollectionId}
-              onChange={e => setSelectedCollectionId(e.target.value)}
-              disabled={isConnected}
-              data-testid="chat-collection-select"
-            >
-              <option value="">{t('chat.allCollections')}</option>
-              {collections.map(c => (
-                <option key={c.id} value={String(c.id)}>
-                  {c.name}
-                  {c.documentCount != null ? ` (${c.documentCount})` : ''}
-                </option>
-              ))}
-            </select>
+          <div className={styles.contextRow}>
+            <div className={styles.contextControl}>
+              <label htmlFor="chat-collection" className={styles.contextLabel}>
+                {t('chat.collection')}
+              </label>
+              <select
+                id="chat-collection"
+                className={styles.contextSelect}
+                value={selectedCollectionId}
+                onChange={e => setSelectedCollectionId(e.target.value)}
+                disabled={isConnected}
+                data-testid="chat-collection-select"
+              >
+                <option value="">{t('chat.allCollections')}</option>
+                {collections.map(c => (
+                  <option key={c.id} value={String(c.id)}>
+                    {c.name}
+                    {c.documentCount != null ? ` (${c.documentCount})` : ''}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.contextControl}>
+              <label htmlFor="chat-model" className={styles.contextLabel}>
+                {t('chat.model')}
+              </label>
+              <select
+                id="chat-model"
+                className={styles.contextSelect}
+                value={effectiveSelectedModel}
+                onChange={event => {
+                  const modelRef = event.target.value;
+                  setSelectedModel(modelRef);
+                  saveSelectedModel(modelRef);
+                }}
+                disabled={isConnected || availableModels.length === 0}
+                data-testid="chat-model-select"
+              >
+                {availableModels.map(model => (
+                  <option key={model.ref} value={model.ref}>
+                    {model.providerName}: {model.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className={styles.inputRow}>
             <textarea

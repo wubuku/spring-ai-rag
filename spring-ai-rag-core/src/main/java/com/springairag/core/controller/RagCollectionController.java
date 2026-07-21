@@ -14,6 +14,7 @@ import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.CollectionMapper;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
@@ -79,6 +80,8 @@ public class RagCollectionController {
     @PostMapping
     @Timed(value = "rag.collection.create", description = "Create collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
+        ApiKeyCollectionAccess.requireCollectionCreationAllowed(
+                ApiKeyCollectionAccess.currentKey());
         log.info("Creating collection: name={}", request.getName());
 
         RagCollection collection = new RagCollection();
@@ -110,6 +113,8 @@ public class RagCollectionController {
     @GetMapping("/{id}")
     @Timed(value = "rag.collection.get", description = "Get collection details", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> getById(@PathVariable Long id) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
         log.info("Getting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
@@ -135,7 +140,13 @@ public class RagCollectionController {
         int page = offset / limit;
         var pageable = PageRequest.of(page, limit, Sort.by(Sort.Direction.DESC, "createdAt"));
 
-        var pageResult = collectionRepository.searchCollections(name, enabled, pageable);
+        var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
+                ApiKeyCollectionAccess.currentKey());
+        var pageResult = restrictedIds
+                .map(ids -> collectionRepository.searchCollectionsByIds(
+                        List.copyOf(ids), name, enabled, pageable))
+                .orElseGet(() -> collectionRepository.searchCollections(
+                        name, enabled, pageable));
 
         List<Map<String, Object>> items = pageResult.getContent().stream()
                 .map(c -> {
@@ -160,6 +171,8 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> update(
             @PathVariable Long id,
             @Valid @RequestBody CollectionRequest request) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
         log.info("Updating collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
@@ -198,6 +211,8 @@ public class RagCollectionController {
     @DeleteMapping("/{id}")
     @Timed(value = "rag.collection.delete", description = "Delete collection (soft delete)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, String>> delete(@PathVariable Long id) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
         log.info("Soft-deleting collection: id={}", id);
 
         return collectionService.deleteCollection(id)
@@ -220,6 +235,8 @@ public class RagCollectionController {
     @PostMapping("/{id}/restore")
     @Timed(value = "rag.collection.restore", description = "Restore deleted collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionRestoreResponse> restore(@PathVariable Long id) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
         log.info("Restoring collection: id={}", id);
 
         return collectionService.restoreCollection(id)
@@ -244,6 +261,8 @@ public class RagCollectionController {
     @PostMapping("/{id}/clone")
     @Timed(value = "rag.collection.clone", description = "Clone collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionCloneResponse> cloneCollection(@PathVariable Long id) {
+        ApiKeyCollectionAccess.requireCollectionCreationAllowed(
+                ApiKeyCollectionAccess.currentKey());
         log.info("Cloning collection: id={}", id);
 
         return collectionService.cloneCollection(id)
@@ -264,6 +283,8 @@ public class RagCollectionController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String processingStatus) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
 
         if (!collectionRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
@@ -329,6 +350,8 @@ public class RagCollectionController {
     public ResponseEntity<DocumentAddedResponse> addDocument(
             @PathVariable Long id,
             @RequestBody Map<String, Long> request) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
 
         Long documentId = request.get("documentId");
         if (documentId == null) {
@@ -341,6 +364,11 @@ public class RagCollectionController {
 
         return documentRepository.findById(documentId)
                 .map(doc -> {
+                    if (doc.getCollectionId() != null) {
+                        ApiKeyCollectionAccess.requireCollectionId(
+                                doc.getCollectionId(),
+                                ApiKeyCollectionAccess.currentKey());
+                    }
                     doc.setCollectionId(id);
                     documentRepository.save(doc);
 
@@ -361,6 +389,8 @@ public class RagCollectionController {
     @GetMapping("/{id}/export")
     @Timed(value = "rag.collection.export", description = "Export collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {
+        ApiKeyCollectionAccess.requireCollectionId(
+                id, ApiKeyCollectionAccess.currentKey());
         log.info("Exporting collection: id={}", id);
 
         return collectionRepository.findByIdAndDeletedFalse(id)
@@ -404,6 +434,8 @@ public class RagCollectionController {
     @PostMapping("/import")
     @Timed(value = "rag.collection.import", description = "Import collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> importCollection(@RequestBody Map<String, Object> importData) {
+        ApiKeyCollectionAccess.requireCollectionCreationAllowed(
+                ApiKeyCollectionAccess.currentKey());
         String name = (String) importData.get("name");
         if (name == null || name.isBlank()) {
             throw new IllegalArgumentException("name is required");

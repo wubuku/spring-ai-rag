@@ -102,7 +102,7 @@ public class MedicalDomainExtension implements DomainRagExtension {
 ### 3. 调用时指定 domainId
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{
     "message": "高血压有什么症状？",

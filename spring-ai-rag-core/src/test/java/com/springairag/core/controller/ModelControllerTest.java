@@ -52,24 +52,29 @@ class ModelControllerTest {
     void testListModels() throws Exception {
         when(modelRouter.isMultiModelEnabled()).thenReturn(true);
         when(modelRouter.getAvailableProviders()).thenReturn(List.of("openai", "minimax"));
+        when(modelRouter.getDefaultModelRef()).thenReturn("minimax/MiniMax-M2.7");
         when(modelRouter.getFallbackChain()).thenReturn(List.of("openai", "minimax"));
-        when(modelRegistry.getAllModelsInfo()).thenReturn(List.of(
-                Map.of("provider", "openai", "available", true, "displayName", "OpenAI (DeepSeek/兼容)"),
-                Map.of("provider", "minimax", "available", true, "displayName", "MiniMax")
+        when(modelRouter.getModelsInfo()).thenReturn(List.of(
+                Map.of("ref", "openai", "provider", "openai", "available", true),
+                Map.of("ref", "minimax/MiniMax-M2.7", "provider", "minimax", "available", true)
         ));
 
         mockMvc.perform(get("/api/v1/rag/models"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.multiModelEnabled").value(true))
+                .andExpect(jsonPath("$.defaultProvider").value("minimax"))
+                .andExpect(jsonPath("$.defaultModel").value("minimax/MiniMax-M2.7"))
                 .andExpect(jsonPath("$.availableProviders").isArray())
+                .andExpect(jsonPath("$.models[1].ref").value("minimax/MiniMax-M2.7"))
                 .andExpect(jsonPath("$.fallbackChain").isArray());
     }
 
     @Test
     void testGetModel_existing() throws Exception {
         when(modelRouter.isProviderAvailable("openai")).thenReturn(true);
-        when(modelRegistry.getModelInfo("openai")).thenReturn(
-                Map.of("provider", "openai", "available", true, "displayName", "OpenAI (DeepSeek/兼容)")
+        when(modelRouter.getProviderInfo("openai")).thenReturn(
+                Map.of("provider", "openai", "available", true,
+                        "displayName", "OpenAI (DeepSeek/Compatible)")
         );
 
         mockMvc.perform(get("/api/v1/rag/models/openai"))
@@ -125,13 +130,15 @@ class ModelControllerTest {
     void testListModels_singleModel_disabledMultiModel() throws Exception {
         when(modelRouter.isMultiModelEnabled()).thenReturn(false);
         when(modelRouter.getAvailableProviders()).thenReturn(List.of("openai"));
+        when(modelRouter.getDefaultModelRef()).thenReturn("openai");
         when(modelRouter.getFallbackChain()).thenReturn(null);
-        when(modelRegistry.getAllModelsInfo()).thenReturn(List.of());
+        when(modelRouter.getModelsInfo()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/v1/rag/models"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.multiModelEnabled").value(false))
                 .andExpect(jsonPath("$.defaultProvider").value("openai"))
+                .andExpect(jsonPath("$.defaultModel").value("openai"))
                 .andExpect(jsonPath("$.availableProviders[0]").value("openai"))
                 .andExpect(jsonPath("$.fallbackChain").value(nullValue()))
                 .andExpect(jsonPath("$.models").isEmpty());

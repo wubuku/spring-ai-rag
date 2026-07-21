@@ -8,6 +8,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-07-21
+
+### 新增
+- 生产检索默认组合：查询改写、本地 heuristic rerank，以及可复现的 goldenset 脚本，输出 Precision@K、MRR、nDCG 增益
+- API Key `allowedCollectionIds` 集合 ACL，覆盖 Chat、Search、Collection、Document、上传与 PDF-to-RAG 数据面
+- 运行时选模：按配置为 OpenAI 兼容与 Anthropic 端点创建、缓存独立 ChatModel 实例
+- 模型级注册 API、WebUI Settings/Chat 选模、偏好持久化，以及按 `provider/model` 对比
+- Flyway V24 API Key collection ACL 迁移
+
+### 变更
+- 全部 Maven 模块与 Demo 发布为 `1.0.0`
+- 生产、Docker Compose 与 Helm 默认端口统一为 `8081`
+- Docker 与 Helm 默认使用不可变 `1.0.0` tag
+- Dockerfile 基础镜像可覆盖；本地构建默认使用中国境内镜像并自动回退官方源
+- OpenAI 兼容 `base-url` 配置与文档统一不带 `/v1`
+- 外部 `models.json` 完整覆盖 YAML 模型清单，并支持绝对路径和 `file:` URI
+- 发布验证支持 `--with-local-runtime`，一条命令管理本地服务并执行 HTTP E2E、goldenset 与真实 LLM smoke
+- 发布门禁校验内嵌 WebUI 入口引用、资源存在性与 Git 可跟踪性，防止发布包引用未提交的 hash 资源
+
+### 安全
+- 受限 NORMAL Key 无法创建超出自身集合权限的子 Key
+- Key 轮换保留 collection ACL；ADMIN 与可选静态 Key 保持全库权限
+
+### 修复
+- Chat ask/stream 对 `sessionId` 执行 36 字符上限校验，避免超长值触发 Chat Memory 数据库 500
+- PDF-to-RAG E2E 正确解析 SSE `event:done`，并区分 curl、HTTP、SSE error 与完成事件
+- 真实 LLM smoke 使用独立 Collection/Document 范围，ask/stream 均验证本轮 code，并自动清理测试数据
+- 真实 LLM stream 校验按 SSE JSON 分片拼接 `delta.content`，避免 code 跨分片时误报失败
+
+### 文档
+- 新增中英文生产质量默认值、外部模型配置和发布清单
+- 新增中英文中国境内开发网络避坑指南，以及可留存逐项日志的一键发布验证脚本
+- 更新 README、上手、配置、REST API、部署、Docker、Helm 与排障文档中的端口和版本口径
+
 ## [1.0.0-SNAPSHOT] - 2026-04-05
 
 ### Added

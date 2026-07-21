@@ -84,17 +84,18 @@ strip_v1() { echo "$1" | sed 's|/$||; s|/v1$||'; }
 # MiniMax Anthropic gateway often ends with /anthropic — keep path, only strip trailing slash
 strip_slash() { echo "$1" | sed 's|/$||'; }
 
-JAVA_ARGS=(
-  -Dspring.profiles.active=postgresql
-  -Dserver.port="${SERVER_PORT}"
-  -Drag.security.enabled="${SECURITY_ENABLED}"
-  -Dspring.datasource.url="jdbc:postgresql://${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5432}/${POSTGRES_DATABASE:-spring_ai_rag_dev}"
-  -Dspring.datasource.username="${POSTGRES_USER:-postgres}"
-  -Dspring.datasource.password="${POSTGRES_PASSWORD:-postgres}"
-  -Dapp.llm.provider="${LLM_PROVIDER}"
-  -Drag.embedding.api-key="${EMB_KEY}"
-  -Drag.embedding.base-url="${EMB_BASE}"
-  -Drag.embedding.model="${EMB_MODEL}"
+JAVA_ENV=(
+  "SPRING_PROFILES_ACTIVE=postgresql"
+  "SERVER_PORT=${SERVER_PORT}"
+  "RAG_SECURITY_ENABLED=${SECURITY_ENABLED}"
+  "RAG_SECURITY_API_KEY=${RAG_SECURITY_API_KEY:-${RAG_API_KEY:-}}"
+  "SPRING_DATASOURCE_URL=jdbc:postgresql://${POSTGRES_HOST:-localhost}:${POSTGRES_PORT:-5432}/${POSTGRES_DATABASE:-spring_ai_rag_dev}"
+  "SPRING_DATASOURCE_USERNAME=${POSTGRES_USER:-postgres}"
+  "SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD:-postgres}"
+  "APP_LLM_PROVIDER=${LLM_PROVIDER}"
+  "RAG_EMBEDDING_API_KEY=${EMB_KEY}"
+  "RAG_EMBEDDING_BASE_URL=${EMB_BASE}"
+  "RAG_EMBEDDING_MODEL=${EMB_MODEL}"
 )
 
 case "${LLM_PROVIDER}" in
@@ -107,11 +108,11 @@ case "${LLM_PROVIDER}" in
     fi
     MM_BASE=$(strip_v1 "$MM_BASE_RAW")
     MM_MODEL="${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-${MINIMAX_MODEL:-${ANTHROPIC_MODEL:-MiniMax-M3}}}"
-    JAVA_ARGS+=(
-      -Dspring.ai.minimax.api-key="${MM_KEY}"
-      -Dspring.ai.minimax.base-url="${MM_BASE}"
-      -Dspring.ai.minimax.chat.options.model="${MM_MODEL}"
-      -Dspring.ai.minimax.chat.options.temperature="${MINIMAX_TEMPERATURE:-0.2}"
+    JAVA_ENV+=(
+      "SPRING_AI_MINIMAX_API_KEY=${MM_KEY}"
+      "SPRING_AI_MINIMAX_BASE_URL=${MM_BASE}"
+      "SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL=${MM_MODEL}"
+      "SPRING_AI_MINIMAX_CHAT_OPTIONS_TEMPERATURE=${MINIMAX_TEMPERATURE:-0.2}"
     )
     CHAT_DESC="minimax model=${MM_MODEL} base=${MM_BASE} key_len=${#MM_KEY}"
     ;;
@@ -119,12 +120,12 @@ case "${LLM_PROVIDER}" in
     ANTH_KEY="${ANTHROPIC_API_KEY:-${SPRING_AI_MINIMAX_API_KEY:-}}"
     ANTH_BASE=$(strip_slash "${ANTHROPIC_BASE_URL:-https://api.minimaxi.com/anthropic}")
     ANTH_MODEL="${ANTHROPIC_MODEL:-${SPRING_AI_MINIMAX_CHAT_OPTIONS_MODEL:-MiniMax-M3}}"
-    JAVA_ARGS+=(
-      -Dspring.ai.anthropic.api-key="${ANTH_KEY}"
-      -Dspring.ai.anthropic.base-url="${ANTH_BASE}"
-      -Dspring.ai.anthropic.chat.options.model="${ANTH_MODEL}"
-      -Dspring.ai.anthropic.chat.options.temperature="${ANTHROPIC_TEMPERATURE:-0.2}"
-      -Dspring.ai.anthropic.chat.options.max-tokens="${ANTHROPIC_MAX_TOKENS:-4096}"
+    JAVA_ENV+=(
+      "SPRING_AI_ANTHROPIC_API_KEY=${ANTH_KEY}"
+      "SPRING_AI_ANTHROPIC_BASE_URL=${ANTH_BASE}"
+      "SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MODEL=${ANTH_MODEL}"
+      "SPRING_AI_ANTHROPIC_CHAT_OPTIONS_TEMPERATURE=${ANTHROPIC_TEMPERATURE:-0.2}"
+      "SPRING_AI_ANTHROPIC_CHAT_OPTIONS_MAX_TOKENS=${ANTHROPIC_MAX_TOKENS:-4096}"
     )
     CHAT_DESC="anthropic model=${ANTH_MODEL} base=${ANTH_BASE} key_len=${#ANTH_KEY}"
     ;;
@@ -133,10 +134,10 @@ case "${LLM_PROVIDER}" in
     OA_KEY="${SPRING_AI_OPENAI_API_KEY:-${OPENAI_API_KEY:-${SILICONFLOW_API_KEY:-}}}"
     OA_BASE=$(strip_v1 "${SPRING_AI_OPENAI_BASE_URL:-${OPENAI_BASE_URL:-https://api.siliconflow.cn}}")
     OA_MODEL="${SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL:-${OPENAI_MODEL:-Qwen/Qwen2.5-7B-Instruct}}"
-    JAVA_ARGS+=(
-      -Dspring.ai.openai.api-key="${OA_KEY}"
-      -Dspring.ai.openai.base-url="${OA_BASE}"
-      -Dspring.ai.openai.chat.options.model="${OA_MODEL}"
+    JAVA_ENV+=(
+      "SPRING_AI_OPENAI_API_KEY=${OA_KEY}"
+      "SPRING_AI_OPENAI_BASE_URL=${OA_BASE}"
+      "SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=${OA_MODEL}"
     )
     CHAT_DESC="openai-compat model=${OA_MODEL} base=${OA_BASE} key_len=${#OA_KEY}"
     ;;
@@ -162,8 +163,7 @@ echo "  chat: ${CHAT_DESC}"
 echo "  embed: siliconflow model=${EMB_MODEL} base=${EMB_BASE} key_len=${#EMB_KEY}"
 echo "  log: ${LOG_FILE}"
 
-nohup java -cp "$CP" \
-  "${JAVA_ARGS[@]}" \
+nohup env "${JAVA_ENV[@]}" java -cp "$CP" \
   com.springairag.core.SpringAiRagApplication \
   >"${LOG_FILE}" 2>&1 &
 echo "PID $!"

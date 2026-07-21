@@ -1,0 +1,53 @@
+{
+  "name": "spring-ai-rag-retrieval-goldenset-v1",
+  "description": "Small retrieval goldenset for Precision@K / MRR / nDCG. Docs are created by run-retrieval-goldenset.sh with stable titles; relevantDocIds resolved by title after create.",
+  "documents": [
+    {
+      "title": "GOLDENSET_DOC_SPRING_AI",
+      "content": "Spring AI is a Spring Framework project that provides abstractions for chat models, embedding models, and vector stores. It supports OpenAI-compatible APIs and Advisor chains for RAG pipelines."
+    },
+    {
+      "title": "GOLDENSET_DOC_PGVECTOR",
+      "content": "pgvector is a PostgreSQL extension for vector similarity search. HNSW indexes accelerate approximate nearest neighbor queries used by hybrid retrieval in RAG systems."
+    },
+    {
+      "title": "GOLDENSET_DOC_RERANK",
+      "content": "Reranking improves RAG quality by reordering retrieved chunks. Heuristic rerank uses keyword and diversity scores; cross-encoder models such as bge-reranker provide higher precision."
+    },
+    {
+      "title": "GOLDENSET_DOC_COLLECTION_ACL",
+      "content": "Collection isolation and API key ACLs restrict which knowledge bases a client may query. Allowed collection IDs are enforced on search and chat retrieval paths."
+    },
+    {
+      "title": "GOLDENSET_DOC_UNRELATED",
+      "content": "Cooking recipes for pasta carbonara use eggs, pecorino cheese, guanciale, and black pepper. This document is intentionally unrelated to enterprise RAG topics."
+    }
+  ],
+  "cases": [
+    {
+      "id": "q-spring-ai",
+      "query": "What is Spring AI and how does it support RAG?",
+      "relevantTitles": ["GOLDENSET_DOC_SPRING_AI"]
+    },
+    {
+      "id": "q-pgvector",
+      "query": "How does pgvector HNSW help vector search in PostgreSQL?",
+      "relevantTitles": ["GOLDENSET_DOC_PGVECTOR"]
+    },
+    {
+      "id": "q-rerank",
+      "query": "Why use reranking or bge-reranker after retrieval?",
+      "relevantTitles": ["GOLDENSET_DOC_RERANK"]
+    },
+    {
+      "id": "q-acl",
+      "query": "How do API keys restrict access to collections?",
+      "relevantTitles": ["GOLDENSET_DOC_COLLECTION_ACL"]
+    },
+    {
+      "id": "q-hybrid",
+      "query": "vector store embedding model advisor chain",
+      "relevantTitles": ["GOLDENSET_DOC_SPRING_AI", "GOLDENSET_DOC_PGVECTOR"]
+    }
+  ]
+}

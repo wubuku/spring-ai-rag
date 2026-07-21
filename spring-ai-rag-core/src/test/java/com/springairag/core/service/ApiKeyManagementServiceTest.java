@@ -91,6 +91,19 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
+    void generateKey_withAllowedCollections_persistsAndReturnsAcl() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Scoped Key", null);
+        request.setAllowedCollectionIds(List.of(7L, 3L, 7L));
+
+        ApiKeyCreatedResponse response = service.generateKey(request);
+
+        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
+        verify(apiKeyRepository).save(captor.capture());
+        assertEquals("3,7", captor.getValue().getAllowedCollectionIds());
+        assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
+    }
+
+    @Test
     void revokeKey_existingKey_disablesAndReturnsTrue() {
         when(apiKeyRepository.disableByKeyId("rag_k_abc")).thenReturn(1);
 
@@ -121,6 +134,7 @@ class ApiKeyManagementServiceTest {
         existing.setName("My Key");
         existing.setKeyHash("oldhash");
         existing.setEnabled(true);
+        existing.setAllowedCollectionIds("3,7");
         when(apiKeyRepository.findByKeyId("rag_k_old")).thenReturn(Optional.of(existing));
         when(apiKeyRepository.disableByKeyId("rag_k_old")).thenReturn(1);
 
@@ -128,6 +142,7 @@ class ApiKeyManagementServiceTest {
 
         assertNotNull(response);
         assertEquals("My Key", response.getName());
+        assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
         verify(apiKeyRepository).disableByKeyId("rag_k_old");
         // disableByKeyId is @Modifying (no save), only generateKey calls save() once
         verify(apiKeyRepository, times(1)).save(any(RagApiKey.class));

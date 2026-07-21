@@ -5,7 +5,7 @@
 > Navigation hub for spring-ai-rag. Read this page first, then drill down by task — avoid loading every detail at once.
 
 **One-liner**: A Spring AI–based general RAG framework — **model-agnostic · domain-decoupled · componentized**.  
-**Version**: `1.0.0-SNAPSHOT` · **Default port**: `8081` · **Primary profile**: `postgresql`
+**Version**: `1.0.0` · **Default port**: `8081` · **Primary profile**: `postgresql`
 
 ---
 
@@ -66,6 +66,9 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [testing-guide.md](testing-guide.md) | Unit / integration / E2E / coverage |
+| [quality-defaults.md](quality-defaults.md) | Production retrieval defaults and goldenset measurement |
+| [release-checklist.md](release-checklist.md) | 1.0 release gates and artifact checklist |
+| [china-network-guide.md](china-network-guide.md) | Mainland China Docker / Maven / npm / Playwright network pitfalls |
 | [troubleshooting.md](troubleshooting.md) | Symptom-based troubleshooting |
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Deployment |
 | `docs/prometheus/`, `docs/grafana/` | Metrics & dashboards |
@@ -94,7 +97,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V23** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V24** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |
@@ -110,10 +113,11 @@ Details: [troubleshooting.md](troubleshooting.md), [TOOLS.md](../TOOLS.md).
 1. **Do not put `/v1` on OpenAI / Embedding `base-url`**  
    Spring AI appends `/v1/chat/completions` or `/v1/embeddings`; a trailing `/v1` becomes `/v1/v1/...` → 401/404.
 2. **Local runs need** `SPRING_PROFILES_ACTIVE=postgresql` (see `.env` / `CLAUDE.md`).
-3. **Default HTTP port is 8081** (some older examples still say 8080).
+3. **Default HTTP port is 8081** for local, Docker, and Helm deployments.
 4. **Vector dimension 1024** must match BGE-M3 / `VECTOR(1024)`; changing models means changing the DB too.
 5. **WebUI** is a separate `npm` build, or copy into `spring-ai-rag-core/src/main/resources/static/webui/`.
 6. **Tests equal production code**: `mvn test` must pass; run E2E after meaningful changes ([testing-guide.md](testing-guide.md)).
+7. **Docker pulls time out in mainland China**: use `scripts/docker-build-local.sh`; do not hard-code a regional mirror in the Dockerfile ([china-network-guide.md](china-network-guide.md)).
 
 ---
 

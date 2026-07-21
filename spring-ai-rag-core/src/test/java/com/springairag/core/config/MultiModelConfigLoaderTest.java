@@ -157,6 +157,70 @@ class MultiModelConfigLoaderTest {
         assertEquals("siliconflow/BGE-M3", props.getEmbeddingModel().primary());
     }
 
+    @Test
+    @DisplayName("External JSON fully replaces YAML providers and omitted routing")
+    void loadExternalJsonIfPresent_replacesYamlInsteadOfMerging() throws IOException {
+        Path jsonFile = tempDir.resolve("models-override.json");
+        Files.writeString(jsonFile, """
+                {
+                  "models": {
+                    "providers": {
+                      "external": {
+                        "displayName": "External",
+                        "baseUrl": "https://api.example.test",
+                        "apiKey": "test-key",
+                        "apiType": "openai-chat",
+                        "enabled": true,
+                        "models": [
+                          { "id": "model-a", "name": "Model A", "type": "chat" }
+                        ]
+                      }
+                    }
+                  }
+                }
+                """);
+
+        MultiModelProperties props = createProperties(jsonFile.toString());
+        props.setProviders(Map.of("yaml", new MultiModelProperties.ProviderConfig(
+                "YAML", "https://yaml.example.test", "key",
+                "openai-chat", true, 1, java.util.List.of())));
+        props.setChatModel(new MultiModelProperties.ModelRouting(
+                "yaml/model", java.util.List.of()));
+
+        new MultiModelConfigLoader(props).loadExternalJsonIfPresent();
+
+        assertEquals(Set.of("external"), props.getProviders().keySet());
+        assertNull(props.getChatModel());
+        assertNull(props.getEmbeddingModel());
+    }
+
+    @Test
+    @DisplayName("Supports file URI for external configuration")
+    void loadExternalJsonIfPresent_fileUri_loads() throws IOException {
+        Path jsonFile = tempDir.resolve("models-uri.json");
+        Files.writeString(jsonFile, """
+                {
+                  "models": {
+                    "providers": {
+                      "external": {
+                        "displayName": "External",
+                        "baseUrl": "https://api.example.test",
+                        "apiKey": "test-key",
+                        "apiType": "openai-chat",
+                        "enabled": true,
+                        "models": []
+                      }
+                    }
+                  }
+                }
+                """);
+
+        MultiModelProperties props = createProperties(jsonFile.toUri().toString());
+        new MultiModelConfigLoader(props).loadExternalJsonIfPresent();
+
+        assertTrue(props.getProviders().containsKey("external"));
+    }
+
     // ─── Provider + ModelRef tests ───────────────────────────────
 
     @Test

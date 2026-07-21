@@ -75,9 +75,12 @@ jvm:
 # Production readiness defaults (all explicitly set for auditability)
 config:
   virtualThreads: true
-  defaultTopK: 10
-  defaultSimilarityThreshold: 0.75
-  embeddingBatchSize: 200
+  defaultLimit: 10
+  minScore: 0.25
+  vectorWeight: 0.55
+  fulltextWeight: 0.45
+  queryRewriteEnabled: true
+  rerankEnabled: true
 
 livenessProbe:
   initialDelaySeconds: 90
@@ -101,5 +104,5 @@ podDisruptionBudget:
 # Annotations for prometheus scraping in production
 podAnnotations:
   prometheus.io/scrape: "true"
-  prometheus.io/port: "8080"
+  prometheus.io/port: "8081"
   prometheus.io/path: "/actuator/prometheus"

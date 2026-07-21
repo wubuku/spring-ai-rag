@@ -6,7 +6,9 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
 import com.springairag.core.util.SseEmitters;
@@ -17,6 +19,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -88,17 +91,23 @@ public class RagChatController {
     })
     @PostMapping("/ask")
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request,
+                                            HttpServletRequest httpRequest) {
         // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
+        applyCollectionAcl(request, httpRequest);
         log.info("RAG ask: sessionId={}, domain={}, collectionIds={}, message={}",
                 request.getSessionId(), request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         ChatResponse response = ragChatService.chat(request);
         return ResponseEntity.ok(response);
+    }
+
+    ResponseEntity<ChatResponse> ask(ChatRequest request) {
+        return ask(request, null);
     }
 
     /**
@@ -111,16 +120,22 @@ public class RagChatController {
     })
     @PostMapping
     @Timed(value = "rag.chat.non-stream", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request) {
+    public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
+                                             HttpServletRequest httpRequest) {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
+        applyCollectionAcl(request, httpRequest);
         log.info("RAG chat: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         ChatResponse response = ragChatService.chat(request);
         return ResponseEntity.ok(response);
+    }
+
+    ResponseEntity<ChatResponse> chat(ChatRequest request) {
+        return chat(request, null);
     }
 
     /**
@@ -163,11 +178,13 @@ public class RagChatController {
     })
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
-    public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
+    public SseEmitter stream(@Valid @RequestBody ChatRequest request,
+                               HttpServletRequest httpRequest) {
         // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
+        applyCollectionAcl(request, httpRequest);
         String sessionId = request.getSessionId();
         log.info("RAG stream: sessionId={}, domain={}, collectionIds={}, message={}",
                 sessionId, request.getDomainId(), request.getCollectionIds(),
@@ -196,10 +213,15 @@ public class RagChatController {
                             heartbeat.stop();
                             String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
                             SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
+                            emitter.complete();
                         }
                 );
 
         return emitter;
+    }
+
+    SseEmitter stream(ChatRequest request) {
+        return stream(request, null);
     }
 
     /**
@@ -284,6 +306,12 @@ public class RagChatController {
     // Null-safe audit logging helper
     private void auditDelete(String entityType, String entityId, String message) {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
+    }
+
+    private void applyCollectionAcl(ChatRequest request, HttpServletRequest httpRequest) {
+        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
+                request.getCollectionIds(), key));
     }
 
 }

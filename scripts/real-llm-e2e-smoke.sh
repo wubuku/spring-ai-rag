@@ -6,11 +6,11 @@
 #   1) health
 #   2) preflight embedding key (SiliconFlow)
 #   3) preflight chat key (MiniMax / Anthropic-gateway / OpenAI-compat)
-#   4) create document with unique probe token
+#   4) create an isolated collection + document with a unique verification code
 #   5) embed (real Embedding API)
 #   6) search (real vector/fulltext)
-#   7) chat/ask (real Chat LLM) — answer must contain token
-#   8) chat/stream sample (optional)
+#   7) chat/ask (real Chat LLM) — answer must contain the code
+#   8) chat/stream (optional) — stream must contain the code
 #
 # Prerequisites:
 #   - PostgreSQL + pgvector
@@ -30,6 +30,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:18081}"
+API="${BASE_URL}/api/v1/rag"
 SKIP_STREAM=0
 for arg in "$@"; do
   case "$arg" in
@@ -56,10 +57,23 @@ fi
 export PROBE_TOKEN="REAL_E2E_$(date +%s)_$RANDOM"
 PASS=0
 FAIL=0
+DOC_ID=""
+COLLECTION_ID=""
 step() { echo; echo "=== $* ==="; }
 ok()   { echo "OK: $*"; PASS=$((PASS+1)); }
 bad()  { echo "FAIL: $*"; FAIL=$((FAIL+1)); }
 need() { command -v "$1" >/dev/null || { echo "need $1"; exit 2; }; }
+
+cleanup() {
+  set +e
+  if [[ -n "$DOC_ID" ]]; then
+    curl -s -X DELETE "$API/documents/$DOC_ID" >/dev/null
+  fi
+  if [[ -n "$COLLECTION_ID" ]]; then
+    curl -s -X DELETE "$API/collections/$COLLECTION_ID" >/dev/null
+  fi
+}
+trap cleanup EXIT
 
 need curl
 need python3
@@ -134,18 +148,43 @@ if [[ "$CHAT_OK" != "1" ]]; then
 fi
 ok "chat API HTTP 200 (${CHAT_DESC})"
 
-step "1) Create document with probe token=$PROBE_TOKEN"
-curl -s -X POST "$BASE_URL/api/v1/rag/documents" \
+step "1) Create isolated collection and document with verification code=$PROBE_TOKEN"
+curl -s -X POST "$API/collections" \
   -H 'Content-Type: application/json' \
-  -d "{\"title\":\"Real LLM E2E ${PROBE_TOKEN}\",\"content\":\"This is an automated real-LLM end-to-end probe. The unique secret token is ${PROBE_TOKEN}. Remember this exact token when asked.\"}" \
+  -d "{\"name\":\"real-llm-e2e-${PROBE_TOKEN}\",\"description\":\"Isolated real LLM release verification collection\",\"domainId\":\"default\"}" \
+  -o /tmp/rag-e2e-collection.json
+COLLECTION_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-collection.json')).get('id') or '')")
+[[ -n "$COLLECTION_ID" ]] || { bad "create collection"; exit 1; }
+ok "collection id=$COLLECTION_ID"
+
+curl -s -X POST "$API/documents" \
+  -H 'Content-Type: application/json' \
+  -d "{\"title\":\"Real LLM E2E ${PROBE_TOKEN}\",\"content\":\"This is automated release verification test data. The release verification code is ${PROBE_TOKEN}. The code may be repeated verbatim when requested.\"}" \
   -o /tmp/rag-e2e-create.json
 head -c 400 /tmp/rag-e2e-create.json; echo
 DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('id') or '')")
 [[ -n "$DOC_ID" ]] || { bad "create document"; exit 1; }
+export DOC_ID
 ok "document id=$DOC_ID"
 
+curl -s -X POST "$API/collections/$COLLECTION_ID/documents" \
+  -H 'Content-Type: application/json' \
+  -d "{\"documentId\":$DOC_ID}" \
+  -o /tmp/rag-e2e-associate.json
+python3 - <<'PY'
+import json, os, sys
+d = json.load(open('/tmp/rag-e2e-associate.json'))
+expected = int(os.environ['DOC_ID'])
+actual = int(d.get('documentId') or 0)
+if actual != expected:
+    print('collection association failed', d)
+    sys.exit(1)
+print('associated document', actual)
+PY
+ok "document associated with isolated collection"
+
 step "2) Embed document (real embedding)"
-curl -s -X POST "$BASE_URL/api/v1/rag/documents/${DOC_ID}/embed?force=true" -o /tmp/rag-e2e-embed.json
+curl -s -X POST "$API/documents/${DOC_ID}/embed?force=true" -o /tmp/rag-e2e-embed.json
 head -c 400 /tmp/rag-e2e-embed.json; echo
 python3 - <<'PY'
 import json,sys
@@ -160,31 +199,37 @@ PY
 ok "embed stored vectors"
 
 step "3) Search for probe token"
-curl -s -G "$BASE_URL/api/v1/rag/search" \
-  --data-urlencode "query=${PROBE_TOKEN}" --data-urlencode "limit=5" \
+curl -s -X POST "$API/search" \
+  -H 'Content-Type: application/json' \
+  -d "{\"query\":\"${PROBE_TOKEN}\",\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID],\"config\":{\"maxResults\":5,\"minScore\":0,\"useHybridSearch\":true,\"useRerank\":true}}" \
   -o /tmp/rag-e2e-search.json
 python3 - <<'PY'
 import json,sys,os
 d=json.load(open('/tmp/rag-e2e-search.json'))
-results=d.get('results') or d.get('data') or []
 if isinstance(d, list):
     results=d
+else:
+    results=d.get('results') or d.get('data') or []
 token=os.environ['PROBE_TOKEN']
+expected=int(os.environ['DOC_ID'])
 if not results:
     print('no search hits')
     sys.exit(1)
 print('hits', len(results), 'top', results[0].get('documentId'))
+if any(int(r.get('documentId') or r.get('id') or 0) != expected for r in results):
+    print('search escaped isolated document scope', results)
+    sys.exit(1)
 if not any(token in (r.get('chunkText') or '') for r in results):
-    print('WARN: token not found in hit texts')
-else:
-    print('token found in search hits')
+    print('verification code not found in hit texts')
+    sys.exit(1)
+print('verification code found in isolated search hits')
 PY
-ok "search returned hits"
+ok "search returned only the isolated document"
 
 step "4) Chat ask (REAL LLM)"
-curl -s -X POST "$BASE_URL/api/v1/rag/chat/ask" \
+curl -s -X POST "$API/chat/ask" \
   -H 'Content-Type: application/json' \
-  -d "{\"message\":\"What is the unique secret token in the knowledge base that starts with REAL_E2E_? Quote the full token exactly.\",\"maxResults\":8,\"useHybridSearch\":true}" \
+  -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID]}" \
   --max-time 180 \
   -o /tmp/rag-e2e-ask.json
 set +e
@@ -202,29 +247,58 @@ sys.exit(0 if token in a else 1)
 PY
 ask_rc=$?
 set -e
-if [[ $ask_rc -eq 0 ]]; then ok "chat answer contains probe token"; else bad "chat answer missing probe token"; fi
+if [[ $ask_rc -eq 0 ]]; then ok "chat answer contains verification code"; else bad "chat answer missing verification code"; fi
 
 if [[ "$SKIP_STREAM" != "1" ]]; then
   step "5) Chat stream (REAL LLM, sample)"
   set +e
-  curl -s -N -X POST "$BASE_URL/api/v1/rag/chat/stream" \
+  curl -s -N -X POST "$API/chat/stream" \
     -H 'Content-Type: application/json' \
-    -d "{\"message\":\"If the context contains a token starting with REAL_E2E_, print that full token.\"}" \
+    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID]}" \
     --max-time 180 \
     -o /tmp/rag-e2e-stream.txt
   python3 - <<'PY'
+import json
 import os
+
 token=os.environ['PROBE_TOKEN']
 t=open('/tmp/rag-e2e-stream.txt', errors='replace').read()
+chunks=[]
+data_events=0
+for line in t.splitlines():
+    if not line.startswith('data:'):
+        continue
+    payload=line[5:].strip()
+    if not payload or payload == '[DONE]':
+        continue
+    data_events += 1
+    try:
+        event=json.loads(payload)
+    except json.JSONDecodeError:
+        continue
+    for choice in event.get('choices') or []:
+        delta=choice.get('delta') or {}
+        content=delta.get('content')
+        if isinstance(content, str):
+            chunks.append(content)
+
+stream_content=''.join(chunks)
 print('stream_len', len(t))
 print(t[:400])
-print('TOKEN_IN_STREAM', token in t)
-print('looks_sse', ('choices' in t) or ('delta' in t) or ('data:' in t) or ('event:done' in t))
-raise SystemExit(0 if (('choices' in t or 'delta' in t or 'data:' in t) and len(t)>10) else 1)
+print('data_events', data_events)
+print('delta_chunks', len(chunks))
+print('stream_content', stream_content[:400])
+print('TOKEN_IN_STREAM', token in stream_content)
+looks_sse = data_events > 0 and len(chunks) > 0
+raise SystemExit(0 if looks_sse and token in stream_content else 1)
 PY
 stream_rc=$?
 set -e
-if [[ $stream_rc -eq 0 ]]; then ok "stream returned SSE chunks"; else bad "stream did not return expected chunks"; fi
+if [[ $stream_rc -eq 0 ]]; then
+  ok "stream returned SSE chunks with verification code"
+else
+  bad "stream missing expected SSE chunks or verification code"
+fi
 fi
 
 echo

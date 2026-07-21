@@ -41,6 +41,33 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 mvn clean package -DskipTests
 ```
 
+## 一键发布验证
+
+`scripts/verify-release.sh` 固化 1.0 发布门禁，包括内嵌 WebUI 入口引用、资源存在性与 Git 可跟踪性检查，并将每一步的 stdout/stderr、状态表和 Markdown 汇总写入 `target/release-verification/<run-id>/`：
+
+```bash
+# 默认：静态检查、Maven、WebUI、Playwright、Helm、Docker
+./scripts/verify-release.sh
+
+# 已有 node_modules 时可省略 npm ci
+./scripts/verify-release.sh --skip-npm-ci
+
+# 对已启动的 PostgreSQL profile 服务追加 HTTP E2E 与 goldenset
+BASE_URL=http://127.0.0.1:8081 \
+  ./scripts/verify-release.sh --with-runtime-e2e --with-goldenset
+
+# 真实 LLM 服务通常由 scripts/start-real-e2e-server.sh 启动在 18081
+./scripts/verify-release.sh --with-real-llm
+
+# 完整本地门禁：自动启动 postgresql profile 服务，执行 HTTP E2E、
+# goldenset 与真实 LLM smoke，归档日志后停止该服务
+./scripts/verify-release.sh --with-local-runtime
+```
+
+`--with-local-runtime` 需要 PostgreSQL/pgvector 已运行，且 `.env` 中存在可用的数据库、Embedding 与 Chat LLM 配置；默认独占端口 `18081`，端口被占用时会失败，避免复用或误杀非本脚本启动的服务。可用 `RUNTIME_SERVER_PORT` 改端口。无论成功、失败或中断，脚本都会归档日志并清理自己启动的服务。
+
+Docker 默认先用中国境内镜像并自动回退官方源；详见 [中国境内开发网络避坑指南](china-network-guide-zh-CN.md)。外部服务失败必须保留为失败或明确跳过，不能伪造发布通过。
+
 ## 测试分类
 
 ### 单元测试（JUnit 5 + Mockito）

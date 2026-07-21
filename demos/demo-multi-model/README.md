@@ -39,13 +39,12 @@ cd ../..
 mvn clean install -DskipTests
 ```
 
-### 2. Configure environment variables
+### 2. Load local environment
 
 ```bash
-export DEEPSEEK_API_KEY=sk-xxx          # OpenAI-compatible models (DeepSeek, etc.)
-export ANTHROPIC_API_KEY=sk-ant-xxx     # Anthropic Claude
-export MINIMAX_API_KEY=eyxxx            # MiniMax Text-01
-export SILICONFLOW_API_KEY=sk-xxx      # Embedding Model
+set -a
+source ../../.env
+set +a
 ```
 
 ### 3. Start the demo
@@ -59,15 +58,15 @@ mvn spring-boot:run
 
 ```bash
 # List all available models
-curl http://localhost:8080/demo/models
+curl http://localhost:8081/demo/models
 
 # Ask using DeepSeek
-curl -X POST http://localhost:8080/demo/chat?provider=openai \
+curl -X POST http://localhost:8081/demo/chat?provider=openai \
   -H "Content-Type: application/json" \
   -d '{"message": "What is RAG?"}'
 
 # Compare multiple models in parallel
-curl -X POST http://localhost:8080/demo/compare \
+curl -X POST http://localhost:8081/demo/compare \
   -H "Content-Type: application/json" \
   -d '{
     "query": "What are the core components of a RAG system?",

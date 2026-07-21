@@ -81,6 +81,40 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
+  page.route('**/api/v1/rag/models', route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax', 'openrouter'],
+        fallbackChain: ['openrouter/xiaomi/mimo-v2-pro'],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'MiniMax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/xiaomi/mimo-v2-pro',
+            provider: 'openrouter',
+            providerName: 'OpenRouter',
+            modelId: 'xiaomi/mimo-v2-pro',
+            name: 'MiMo V2 Pro',
+            apiType: 'openai-completions',
+            available: true,
+          },
+        ],
+      }),
+    });
+  });
+
   // Mock search endpoint
   page.route('/api/v1/rag/search', route => {
     route.fulfill({
@@ -159,18 +193,6 @@ export async function mockAllApiCalls(page: Page) {
     }
   });
 
-  // Default: pass through non-API requests (static assets, fonts, etc.)
-  // Mock only known API endpoints, pass everything else through
-  page.route('**', route => {
-    const url = route.request().url();
-    // Skip mocking for non-API requests (static assets from Spring Boot)
-    if (!url.includes('/api/v1/rag/')) {
-      route.continue();
-    } else {
-      // For unmocked API calls, pass through to real backend
-      route.continue();
-    }
-  });
 }
 
 // Evaluation mocks (P0-5)

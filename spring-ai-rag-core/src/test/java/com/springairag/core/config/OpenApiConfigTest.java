@@ -23,7 +23,7 @@ class OpenApiConfigTest {
         assertNotNull(openAPI);
         assertNotNull(openAPI.getInfo());
         assertEquals("Spring AI RAG Service API", openAPI.getInfo().getTitle());
-        assertEquals("1.0.0-SNAPSHOT", openAPI.getInfo().getVersion());
+        assertEquals("1.0.0", openAPI.getInfo().getVersion());
         assertNotNull(openAPI.getInfo().getDescription());
         assertTrue(openAPI.getInfo().getDescription().contains("RAG"));
         assertNotNull(openAPI.getInfo().getContact());

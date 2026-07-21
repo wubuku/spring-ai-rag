@@ -114,7 +114,8 @@
     "noSources": "未检索到参考资料",
     "hint": "我会检索您的知识库，找到最相关的信息来回答您的问题。",
     "collection": "知识库",
-    "allCollections": "全部知识库"
+    "allCollections": "全部知识库",
+    "model": "模型"
   },
   "search": {
     "title": "文档检索",
@@ -175,6 +176,8 @@
     "cache": "缓存配置",
     "provider": "提供商",
     "model": "模型",
+    "availableProvider": "可用运行时提供商",
+    "modelsLoadError": "无法加载已配置模型",
     "apiKeyConfigured": "API Key 已配置",
     "apiKeyNotSet": "API Key 未配置",
     "vectorWeight": "向量权重",
@@ -287,7 +290,13 @@
     "expired": "已过期",
     "role": "角色",
     "admin": "管理员",
-    "normal": "普通"
+    "normal": "普通",
+    "collectionAccess": "集合权限",
+    "allCollections": "全部集合",
+    "allCollectionsHint": "该密钥可访问当前及未来创建的所有集合。",
+    "selectedCollections": "指定集合",
+    "selectedCollectionsHint": "该密钥只能访问下方选中的集合。",
+    "collectionsLoadError": "加载集合失败"
   },
   "files": {
     "title": "文件管理",

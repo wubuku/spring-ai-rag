@@ -42,7 +42,7 @@ scrape_configs:
   - job_name: 'spring-ai-rag'
     metrics_path: '/actuator/prometheus'
     static_configs:
-      - targets: ['rag-service:8080']
+      - targets: ['rag-service:8081']
     relabel_configs:
       - source_labels: [__address__]
         target_label: instance

@@ -5,7 +5,10 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
+import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionDocumentResolver;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -13,7 +16,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -46,11 +51,20 @@ public class RagSearchController {
 
     private final HybridRetrieverService hybridRetriever;
     private final CollectionDocumentResolver collectionDocumentResolver;
+    private final ReRankingService reRankingService;
 
+    @Autowired
     public RagSearchController(HybridRetrieverService hybridRetriever,
-                               CollectionDocumentResolver collectionDocumentResolver) {
+                               CollectionDocumentResolver collectionDocumentResolver,
+                               ReRankingService reRankingService) {
         this.hybridRetriever = hybridRetriever;
         this.collectionDocumentResolver = collectionDocumentResolver;
+        this.reRankingService = reRankingService;
+    }
+
+    RagSearchController(HybridRetrieverService hybridRetriever,
+                        CollectionDocumentResolver collectionDocumentResolver) {
+        this(hybridRetriever, collectionDocumentResolver, null);
     }
 
     /**
@@ -75,7 +89,9 @@ public class RagSearchController {
             @RequestParam(defaultValue = "10") int limit,
             @RequestParam(defaultValue = "true") boolean useHybrid,
             @RequestParam(defaultValue = "0.5") double vectorWeight,
-            @RequestParam(defaultValue = "0.5") double fulltextWeight) {
+            @RequestParam(defaultValue = "0.5") double fulltextWeight,
+            @RequestParam(required = false) List<Long> collectionIds,
+            HttpServletRequest httpRequest) {
 
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
 
@@ -99,14 +115,32 @@ public class RagSearchController {
         RetrievalConfig config = RetrievalConfig.builder()
                 .maxResults(limit)
                 .useHybridSearch(useHybrid)
+                .useRerank(false)
                 .vectorWeight(vectorWeight)
                 .fulltextWeight(fulltextWeight)
                 .build();
 
-        List<RetrievalResult> results = hybridRetriever.search(query, null, null, limit, config);
+        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        List<Long> effectiveCollectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                collectionIds, key);
+        List<Long> resolvedDocIds = collectionDocumentResolver.resolveDocumentIds(
+                null, effectiveCollectionIds);
+        if (CollectionDocumentResolver.hasCollectionFilter(effectiveCollectionIds)
+                && (resolvedDocIds == null || resolvedDocIds.isEmpty())) {
+            return ResponseEntity.ok(SearchResponse.of(List.of(), query));
+        }
+
+        List<RetrievalResult> results = hybridRetriever.search(
+                query, resolvedDocIds, null, limit, config);
 
         log.info("Direct search returned {} results", results.size());
         return ResponseEntity.ok(SearchResponse.of(results, query));
+    }
+
+    ResponseEntity<?> search(String query, int limit, boolean useHybrid,
+                             double vectorWeight, double fulltextWeight) {
+        return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
+                null, null);
     }
 
     /**
@@ -120,8 +154,12 @@ public class RagSearchController {
     @PostMapping
     @Timed(value = "rag.search.post", description = "RAG direct search (POST)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<List<RetrievalResult>> searchWithConfig(
-            @Valid @RequestBody SearchRequest request) {
+            @Valid @RequestBody SearchRequest request,
+            HttpServletRequest httpRequest) {
 
+        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
+                request.getCollectionIds(), key));
         log.info("Direct search with config: query={}, collectionIds={}, documentIds={}",
                 request.getQuery(), request.getCollectionIds(), request.getDocumentIds());
 
@@ -145,9 +183,17 @@ public class RagSearchController {
                 null,
                 config.getMaxResults(),
                 config);
+        if (config.isUseRerank() && reRankingService != null) {
+            results = reRankingService.rerank(
+                    request.getQuery(), results, config.getMaxResults());
+        }
 
         log.info("Direct search returned {} results", results.size());
         return ResponseEntity.ok(results);
+    }
+
+    ResponseEntity<List<RetrievalResult>> searchWithConfig(SearchRequest request) {
+        return searchWithConfig(request, null);
     }
 
 }

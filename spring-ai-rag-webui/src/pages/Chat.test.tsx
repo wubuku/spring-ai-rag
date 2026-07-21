@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Chat } from './Chat';
 import { useChatSSE } from '../hooks/useSSE';
+import { modelsApi } from '../api/models';
 
 // Mock useChatSSE at module level
 const mockSend = vi.fn();
@@ -22,6 +24,17 @@ vi.mock('../api/collections', () => ({
   },
 }));
 
+vi.mock('../api/models', () => ({
+  modelsApi: {
+    list: vi.fn(),
+  },
+}));
+
+vi.mock('../utils/modelPreference', () => ({
+  getSelectedModel: vi.fn(() => ''),
+  saveSelectedModel: vi.fn(),
+}));
+
 function renderChat(ui = <Chat />) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -39,6 +52,16 @@ describe('Chat', () => {
       send: mockSend,
       close: mockClose,
       isConnected: false,
+    });
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: false,
+        defaultProvider: 'openai',
+        defaultModel: 'openai',
+        availableProviders: ['openai'],
+        fallbackChain: [],
+        models: [],
+      },
     });
   });
 
@@ -79,7 +102,7 @@ describe('Chat', () => {
     await act(async () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     });
-    expect(mockSend).toHaveBeenCalledWith('Hello', undefined, undefined);
+    expect(mockSend).toHaveBeenCalledWith('Hello', undefined, undefined, undefined);
   });
 
   it('Shift+Enter does not submit', async () => {
@@ -105,7 +128,7 @@ describe('Chat', () => {
     await act(async () => {
       fireEvent.click(sendBtn);
     });
-    expect(mockSend).toHaveBeenCalledWith('Test query', undefined, undefined);
+    expect(mockSend).toHaveBeenCalledWith('Test query', undefined, undefined, undefined);
   });
 
   it('send button is disabled and shows ... when isConnected is true', () => {
@@ -118,5 +141,56 @@ describe('Chat', () => {
     // When connected, button should show "..." and be disabled
     const sendBtn = screen.getByRole('button', { name: /\.\.\./i });
     expect(sendBtn).toBeDisabled();
+  });
+
+  it('passes the selected runtime model to SSE', async () => {
+    (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        multiModelEnabled: true,
+        defaultProvider: 'minimax',
+        defaultModel: 'minimax/MiniMax-M2.7',
+        availableProviders: ['minimax', 'openrouter'],
+        fallbackChain: ['openrouter/xiaomi/mimo-v2-pro'],
+        models: [
+          {
+            ref: 'minimax/MiniMax-M2.7',
+            provider: 'minimax',
+            providerName: 'MiniMax',
+            modelId: 'MiniMax-M2.7',
+            name: 'MiniMax M2.7',
+            apiType: 'anthropic-messages',
+            available: true,
+          },
+          {
+            ref: 'openrouter/xiaomi/mimo-v2-pro',
+            provider: 'openrouter',
+            providerName: 'OpenRouter',
+            modelId: 'xiaomi/mimo-v2-pro',
+            name: 'MiMo V2 Pro',
+            apiType: 'openai-completions',
+            available: true,
+          },
+        ],
+      },
+    });
+    renderChat();
+
+    const user = userEvent.setup();
+    const modelSelect = await screen.findByTestId('chat-model-select');
+    await screen.findByRole('option', { name: /OpenRouter/ });
+    await user.selectOptions(modelSelect, 'openrouter/xiaomi/mimo-v2-pro');
+    await waitFor(() => {
+      expect(modelSelect).toHaveValue('openrouter/xiaomi/mimo-v2-pro');
+    });
+    const textarea = screen.getByPlaceholderText(/chat.placeholder/);
+    fireEvent.change(textarea, { target: { value: 'Use this model' } });
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
+
+    expect(mockSend).toHaveBeenCalledWith(
+      'Use this model',
+      undefined,
+      undefined,
+      'openrouter/xiaomi/mimo-v2-pro'
+    );
   });
 });

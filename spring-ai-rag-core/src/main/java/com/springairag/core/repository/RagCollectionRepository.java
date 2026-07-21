@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -27,6 +28,14 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
     Page<RagCollection> searchCollections(@Param("name") String name,
                                            @Param("enabled") Boolean enabled,
                                            Pageable pageable);
+
+    @Query("SELECT c FROM RagCollection c WHERE c.deleted = false AND c.id IN :ids AND " +
+           "(COALESCE(:name, '') = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
+           "(:enabled IS NULL OR c.enabled = :enabled)")
+    Page<RagCollection> searchCollectionsByIds(@Param("ids") List<Long> ids,
+                                                @Param("name") String name,
+                                                @Param("enabled") Boolean enabled,
+                                                Pageable pageable);
 
     /**
      * Find by ID (excluding deleted).

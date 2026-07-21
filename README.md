@@ -22,16 +22,16 @@ A general-purpose RAG (Retrieval-Augmented Generation) service framework built o
 - **Hybrid Search**: Vector search (pgvector HNSW) + fulltext search (pg_jieba tokenizer / pg_trgm trigram)
 - **Fulltext Strategy**: Configurable `auto` (auto-detect) / `pg_jieba` / `pg_trgm` / `none`
 - **Advisor Chain Pipeline**: QueryRewrite → HybridSearch → Rerank → Context Injection
-- **Multi-Model Support**: OpenAI-compatible + Anthropic, switch providers with a single config change
+- **Runtime Multi-Model Routing**: Select configured OpenAI-compatible or Anthropic models per chat request
 - **Domain Extension**: Implement `DomainRagExtension` to inject domain prompts and retrieval strategies
 - **SSE Streaming**: Server-Sent Events for real-time responses
 - **A/B Experiment Framework**: Parallel multi-model comparison with automatic latency / token / quality metrics
 - **Retrieval Evaluation**: Precision@K / MRR / NDCG evaluation + user feedback loop
 - **Caching**: Embedding result cache + Caffeine L1 cache, externally configurable
 - **Observability**: Micrometer metrics + Actuator health checks + request tracing (traceId)
-- **API Key Auth**: Built-in security filter + per-user rate limiting (sliding window)
+- **API Key Auth & Collection ACL**: Restrict each key to selected knowledge-base collections
 - **API Versioning**: `@ApiVersion` annotation for automatic `/api/v1/` path mapping
-- **PDF Import & Preview**: Convert PDF to Markdown + images using marker CLI, browser preview with `<base>` tag for image path resolution
+- **PDF Import & Preview**: Prefer marker CLI for rich conversion, with a built-in PDFBox text fallback
 
 ## Quick Start
 
@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-Flyway runs V1–V10 migrations automatically on startup (tables + HNSW indexes + fulltext GIN indexes).
+Flyway runs V1–V24 migrations automatically on startup (tables + HNSW indexes + fulltext GIN indexes).
 
 ### 2. Add Dependency
 
@@ -53,7 +53,7 @@ Flyway runs V1–V10 migrations automatically on startup (tables + HNSW indexes 
 <dependency>
     <groupId>com.springairag</groupId>
     <artifactId>spring-ai-rag-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -66,29 +66,30 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway auto-migration (V1–V10)
+  # Flyway auto-migration (V1–V24)
   flyway:
     enabled: true
 
-app:
-  llm:
-    provider: openai          # openai | anthropic
   ai:
     openai:
       api-key: ${DEEPSEEK_API_KEY}
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       chat:
+        enabled: false
         options:
           model: deepseek-chat
           temperature: 0.7
 
-siliconflow:
-  api-key: ${SILICONFLOW_API_KEY}
-  embedding:
-    model: BAAI/bge-m3
-    dimensions: 1024
+app:
+  llm:
+    provider: openai          # openai | anthropic
 
 rag:
+  embedding:
+    api-key: ${SILICONFLOW_API_KEY}
+    base-url: https://api.siliconflow.cn
+    model: BAAI/bge-m3
+    dimensions: 1024
   retrieval:
     fulltext-enabled: true
     fulltext-strategy: auto   # auto | pg_jieba | pg_trgm | none
@@ -101,28 +102,28 @@ rag:
 
 ```bash
 # RAG Q&A
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is RAG?"}'
+  -d '{"message": "What is RAG?", "model": "openrouter/xiaomi/mimo-v2-pro"}'
 
 # Streaming Q&A
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "Explain how RAG works in detail"}'
 
 # Upload document
-curl -X POST http://localhost:8080/api/v1/rag/documents \
+curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{"title": "RAG Introduction", "content": "RAG stands for Retrieval-Augmented Generation..."}'
 
 # Embed document
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
+curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 
 # Search (no LLM)
-curl "http://localhost:8080/api/v1/rag/search?query=RAG&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5"
 ```
 
-After starting, visit `http://localhost:8080/swagger-ui.html` for the full API reference.
+After starting, visit `http://localhost:8081/swagger-ui.html` for the full API reference.
 
 ## Architecture
 

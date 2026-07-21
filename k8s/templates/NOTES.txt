@@ -24,7 +24,7 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
   {{ include "spring-ai-rag.fullname" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}
 
   # Port-forward (for local access)
-  kubectl port-forward svc/{{ $fullName }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ $fullName }} 8081:{{ .Values.service.port }} -n {{ .Release.Namespace }}
 
   # Ingress (after DNS propagation, if ingress is enabled)
   {{- range .Values.ingress.hosts }}
@@ -45,7 +45,7 @@ App:        {{ .Chart.Name }} {{ .Chart.AppVersion }}
   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name=spring-ai-rag -f
 
   # Curl health endpoint (via port-forward)
-  curl http://localhost:8080/actuator/health
+  curl http://localhost:8081/actuator/health
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

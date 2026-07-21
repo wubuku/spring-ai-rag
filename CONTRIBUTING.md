@@ -42,7 +42,7 @@ Create `.env` in the project root (already in `.gitignore`):
 ```bash
 # LLM Configuration
 OPENAI_API_KEY=your-key
-OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_BASE_URL=https://api.deepseek.com
 LLM_PROVIDER=openai
 
 # Database

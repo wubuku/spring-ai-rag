@@ -14,7 +14,7 @@
 
     <groupId>com.springairag.demo</groupId>
     <artifactId>demo-domain-extension</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
     <name>Spring AI RAG - Domain Extension Demo</name>
     <description>Domain extension example: demonstrates adding new domains via DomainRagExtension + PromptCustomizer</description>
 

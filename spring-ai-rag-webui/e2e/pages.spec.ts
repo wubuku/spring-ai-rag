@@ -56,6 +56,20 @@ test.describe('Settings', () => {
     await page.goto('/webui/settings', { waitUntil: 'networkidle' });
     await expect(page.getByRole('button', { name: /save/i })).toBeVisible();
   });
+
+  test('selects a configured provider and model', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+
+    const provider = page.getByTestId('settings-provider-select');
+    const model = page.getByTestId('settings-model-select');
+    await expect(provider).toBeEnabled();
+    await provider.selectOption('openrouter');
+    await model.selectOption('openrouter/xiaomi/mimo-v2-pro');
+
+    await expect(model).toHaveValue('openrouter/xiaomi/mimo-v2-pro');
+    await expect(page.getByRole('button', { name: /save/i })).toBeEnabled();
+  });
 });
 
 test.describe('Metrics', () => {
@@ -72,11 +86,11 @@ test.describe('Metrics', () => {
       .getByText('Loading')
       .isVisible()
       .catch(() => false);
-    const hasPre = await page
-      .locator('pre')
+    const hasMetrics = await page
+      .getByText('Call Volume')
       .isVisible()
       .catch(() => false);
-    expect(hasLoading || hasPre).toBeTruthy();
+    expect(hasLoading || hasMetrics).toBeTruthy();
   });
 });
 

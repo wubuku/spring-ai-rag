@@ -9,9 +9,9 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
  *
  * <p>After starting, access:
  * <ul>
- *   <li>Swagger UI: http://localhost:8080/swagger-ui.html</li>
- *   <li>RAG Q&amp;A: POST http://localhost:8080/api/v1/rag/chat/ask</li>
- *   <li>Health check: http://localhost:8080/actuator/health</li>
+ *   <li>Swagger UI: http://localhost:8081/swagger-ui.html</li>
+ *   <li>RAG Q&amp;A: POST http://localhost:8081/api/v1/rag/chat/ask</li>
+ *   <li>Health check: http://localhost:8081/actuator/health</li>
  * </ul>
  */
 @SpringBootApplication(scanBasePackages = {"com.springairag", "com.springairag.demo"})

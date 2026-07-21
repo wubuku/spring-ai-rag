@@ -22,16 +22,16 @@
 - **混合检索**：向量检索（pgvector HNSW）+ 全文检索（pg_jieba 分词 / pg_trgm 三元组）
 - **全文检索策略**：可配置 `auto`（自动检测）/ `pg_jieba` / `pg_trgm` / `none`
 - **Advisor 链式 Pipeline**：查询改写 → 混合检索 → 重排序 → 上下文注入
-- **多模型支持**：OpenAI 兼容 + Anthropic，Provider 一行配置切换
+- **运行时多模型路由**：每次对话可选择已配置的 OpenAI 兼容或 Anthropic 模型
 - **领域扩展**：实现 `DomainRagExtension` 注入领域 Prompt 和检索策略
 - **SSE 流式输出**：Server-Send Events 实时响应
 - **A/B 实验框架**：多模型并行对比，自动收集延迟/token/质量指标
 - **检索评估**：Precision@K / MRR / NDCG 评估 + 用户反馈闭环
 - **缓存策略**：嵌入结果缓存 + Caffeine 本地缓存，配置可外部化
 - **监控可观测**：Micrometer 指标 + Actuator 健康检查 + 请求追踪（traceId）
-- **API Key 认证**：内建安全过滤器 + per-user 限流（滑动窗口）
+- **API Key 认证与 Collection ACL**：每个 Key 可限制只访问指定知识库
 - **API 版本管理**：`@ApiVersion` 注解支持 `/api/v1/` 路径自动映射
-- **PDF 导入与预览**：使用 marker CLI 将 PDF 转换为 Markdown + 图片，支持浏览器预览（`<base>` 标签解决图片路径）
+- **PDF 导入与预览**：优先使用 marker CLI 高质量转换，并内置 PDFBox 纯文本降级
 
 ## 快速开始
 
@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V10 迁移（建表 + HNSW 索引 + 全文检索 GIN 索引）。
+应用启动时 Flyway 自动执行 V1-V24 迁移（建表 + HNSW 索引 + 全文检索 GIN 索引）。
 
 ### 2. 添加依赖
 
@@ -53,7 +53,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 <dependency>
     <groupId>com.springairag</groupId>
     <artifactId>spring-ai-rag-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -66,29 +66,30 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V10）
+  # Flyway 自动迁移（V1-V24）
   flyway:
     enabled: true
 
-app:
-  llm:
-    provider: openai          # openai | anthropic
   ai:
     openai:
       api-key: ${DEEPSEEK_API_KEY}
-      base-url: https://api.deepseek.com/v1
+      base-url: https://api.deepseek.com
       chat:
+        enabled: false
         options:
           model: deepseek-chat
           temperature: 0.7
 
-siliconflow:
-  api-key: ${SILICONFLOW_API_KEY}
-  embedding:
-    model: BAAI/bge-m3
-    dimensions: 1024
+app:
+  llm:
+    provider: openai          # openai | anthropic
 
 rag:
+  embedding:
+    api-key: ${SILICONFLOW_API_KEY}
+    base-url: https://api.siliconflow.cn
+    model: BAAI/bge-m3
+    dimensions: 1024
   retrieval:
     fulltext-enabled: true
     fulltext-strategy: auto   # auto | pg_jieba | pg_trgm | none
@@ -101,28 +102,28 @@ rag:
 
 ```bash
 # RAG 问答
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 RAG？"}'
+  -d '{"message": "什么是 RAG？", "model": "openrouter/xiaomi/mimo-v2-pro"}'
 
 # 流式问答
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "详细解释 RAG 工作原理"}'
 
 # 上传文档
-curl -X POST http://localhost:8080/api/v1/rag/documents \
+curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{"title": "RAG 简介", "content": "RAG 是检索增强生成..."}'
 
 # 文档嵌入
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
+curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 
 # 检索（不经过 LLM）
-curl "http://localhost:8080/api/v1/rag/search?query=RAG&limit=5"
+curl "http://localhost:8081/api/v1/rag/search?query=RAG&limit=5"
 ```
 
-启动后访问 `http://localhost:8080/swagger-ui.html` 查看完整 API 文档。
+启动后访问 `http://localhost:8081/swagger-ui.html` 查看完整 API 文档。
 
 ## 架构概览
 

@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -31,6 +32,9 @@ public class ApiKeyResponse {
 
     @Schema(description = "Role of this key (ADMIN or NORMAL). May be null when role is not available.", example = "ADMIN")
     private String role;
+
+    @Schema(description = "Collection IDs this key may access. Null means unrestricted.", example = "[1, 2]")
+    private List<Long> allowedCollectionIds;
 
     public ApiKeyResponse() {
     }
@@ -66,6 +70,11 @@ public class ApiKeyResponse {
     public String getRole() { return role; }
     public void setRole(String role) { this.role = role; }
 
+    public List<Long> getAllowedCollectionIds() { return allowedCollectionIds; }
+    public void setAllowedCollectionIds(List<Long> allowedCollectionIds) {
+        this.allowedCollectionIds = allowedCollectionIds;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -77,12 +86,14 @@ public class ApiKeyResponse {
                 Objects.equals(lastUsedAt, that.lastUsedAt) &&
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(enabled, that.enabled) &&
-                Objects.equals(role, that.role);
+                Objects.equals(role, that.role) &&
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt, enabled, role);
+        return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt,
+                enabled, role, allowedCollectionIds);
     }
 
     @Override
@@ -95,6 +106,7 @@ public class ApiKeyResponse {
                 ", expiresAt=" + expiresAt +
                 ", enabled=" + enabled +
                 ", role='" + role + '\'' +
+                ", allowedCollectionIds=" + allowedCollectionIds +
                 '}';
     }
 }

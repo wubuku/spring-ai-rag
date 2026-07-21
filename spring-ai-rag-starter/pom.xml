@@ -8,7 +8,7 @@
     <parent>
         <groupId>com.springairag</groupId>
         <artifactId>spring-ai-rag</artifactId>
-        <version>1.0.0-SNAPSHOT</version>
+        <version>1.0.0</version>
     </parent>
 
     <artifactId>spring-ai-rag-starter</artifactId>

@@ -2,9 +2,11 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -21,6 +23,11 @@ public class ApiKeyCreateRequest {
     @Schema(description = "Optional expiration date/time (ISO-8601). Null means never expires.", example = "2027-01-01T00:00:00")
     private LocalDateTime expiresAt;
 
+    @Schema(description = "Optional collection IDs this key may access. Null/empty = all collections (unrestricted).",
+            example = "[1, 2]")
+    @Size(max = 100, message = "At most 100 collection IDs may be assigned to one API key")
+    private List<@Positive(message = "Collection IDs must be positive") Long> allowedCollectionIds;
+
     public ApiKeyCreateRequest() {
     }
 
@@ -35,18 +42,24 @@ public class ApiKeyCreateRequest {
     public LocalDateTime getExpiresAt() { return expiresAt; }
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
 
+    public List<Long> getAllowedCollectionIds() { return allowedCollectionIds; }
+    public void setAllowedCollectionIds(List<Long> allowedCollectionIds) {
+        this.allowedCollectionIds = allowedCollectionIds;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ApiKeyCreateRequest that = (ApiKeyCreateRequest) o;
         return Objects.equals(name, that.name) &&
-                Objects.equals(expiresAt, that.expiresAt);
+                Objects.equals(expiresAt, that.expiresAt) &&
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, expiresAt);
+        return Objects.hash(name, expiresAt, allowedCollectionIds);
     }
 
     @Override
@@ -54,6 +67,7 @@ public class ApiKeyCreateRequest {
         return "ApiKeyCreateRequest{" +
                 "name='" + name + '\'' +
                 ", expiresAt=" + expiresAt +
+                ", allowedCollectionIds=" + allowedCollectionIds +
                 '}';
     }
 }

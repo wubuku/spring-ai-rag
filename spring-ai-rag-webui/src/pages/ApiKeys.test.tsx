@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import { ApiKeys } from './ApiKeys';
 
@@ -38,6 +38,12 @@ vi.mock('../api/apikeys', () => ({
   },
 }));
 
+vi.mock('../api/collections', () => ({
+  collectionsApi: {
+    list: vi.fn(),
+  },
+}));
+
 const mockKeys = [
   {
     keyId: 'rag_k_abc123',
@@ -46,6 +52,7 @@ const mockKeys = [
     lastUsedAt: '2026-04-12T10:00:00',
     expiresAt: '2027-01-01T00:00:00',
     enabled: true,
+    role: 'ADMIN',
   },
   {
     keyId: 'rag_k_def456',
@@ -54,6 +61,8 @@ const mockKeys = [
     lastUsedAt: undefined,
     expiresAt: undefined,
     enabled: true,
+    role: 'NORMAL',
+    allowedCollectionIds: [10, 20],
   },
 ];
 
@@ -96,6 +105,8 @@ describe('ApiKeys', () => {
     await waitFor(() => {
       expect(screen.getByText('Production Server')).toBeInTheDocument();
       expect(screen.getByText('Test Key')).toBeInTheDocument();
+      expect(screen.getByText('apiKeys.allCollections')).toBeInTheDocument();
+      expect(screen.getByText('#10, #20')).toBeInTheDocument();
     });
   });
 
@@ -119,5 +130,49 @@ describe('ApiKeys', () => {
     // Verify the toolbar has the Create Key button
     const toolbarButtons = document.querySelectorAll('[class*="_toolbar"] button');
     expect(toolbarButtons.length).toBeGreaterThan(0);
+  });
+
+  it('submits selected collection IDs when creating a restricted key', async () => {
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'apikeys') {
+        return { data: { data: mockKeys }, isPending: false, isError: false };
+      }
+      return {
+        data: {
+          data: {
+            collections: [
+              {
+                id: 10,
+                name: 'Knowledge Base',
+                description: '',
+                embeddingModel: 'BAAI/bge-m3',
+                dimensions: 1024,
+                enabled: true,
+                metadata: {},
+                createdAt: '2026-07-21T00:00:00',
+                updatedAt: '2026-07-21T00:00:00',
+                documentCount: 0,
+              },
+            ],
+          },
+        },
+        isPending: false,
+        isError: false,
+      };
+    });
+
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    fireEvent.change(screen.getByPlaceholderText('apiKeys.namePlaceholder'), {
+      target: { value: 'Scoped Key' },
+    });
+    fireEvent.click(screen.getByText('apiKeys.selectedCollections'));
+    fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
+
+    expect(mockMutateFn).toHaveBeenCalledWith({
+      name: 'Scoped Key',
+      allowedCollectionIds: [10],
+    });
   });
 });

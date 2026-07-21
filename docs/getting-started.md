@@ -43,7 +43,7 @@ Create `.env` in the project root:
 ```bash
 # LLM (default: DeepSeek, OpenAI-compatible)
 OPENAI_API_KEY=sk-xxx
-OPENAI_BASE_URL=https://api.deepseek.com/v1
+OPENAI_BASE_URL=https://api.deepseek.com
 
 # Embedding model (SiliconFlow BGE-M3)
 SILICONFLOW_API_KEY=sk-xxx
@@ -73,14 +73,14 @@ export $(cat ../../.env | grep -v '^#' | xargs)
 mvn spring-boot:run
 ```
 
-Service starts at `http://localhost:8080`.
+Service starts at `http://localhost:8081`.
 
 ## 6. First RAG Q&A
 
 ### Import a Document
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/documents \
+curl -X POST http://localhost:8081/api/v1/rag/documents \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Introduction to Spring AI",
@@ -93,13 +93,13 @@ curl -X POST http://localhost:8080/api/v1/rag/documents \
 
 ```bash
 # Assuming document ID is 1
-curl -X POST http://localhost:8080/api/v1/rag/documents/1/embed
+curl -X POST http://localhost:8081/api/v1/rag/documents/1/embed
 ```
 
 ### RAG Q&A
 
 ```bash
-curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
   -d '{"message": "What is Spring AI?"}'
 ```
@@ -107,7 +107,7 @@ curl -X POST http://localhost:8080/api/v1/rag/chat/ask \
 ### Streaming Q&A
 
 ```bash
-curl -N -X POST http://localhost:8080/api/v1/rag/chat/stream \
+curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
   -d '{"message": "Explain how RAG works"}'
 ```

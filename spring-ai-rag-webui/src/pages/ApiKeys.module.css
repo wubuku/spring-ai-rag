@@ -63,14 +63,15 @@
 .table {
   border: 1px solid var(--color-border);
   border-radius: 8px;
-  overflow: hidden;
+  overflow-x: auto;
   font-size: 0.875rem;
 }
 
 .tableHead {
   display: grid;
-  grid-template-columns: 1.5fr 2fr 1.5fr 1.5fr 1fr 1.5fr;
+  grid-template-columns: 1.3fr 1.7fr 0.8fr 1.3fr 1.2fr 1.2fr 0.8fr 1.2fr 1fr;
   gap: 0.5rem;
+  min-width: 1180px;
   padding: 0.625rem 0.875rem;
   background: var(--color-surface);
   font-weight: 600;
@@ -80,8 +81,9 @@
 
 .tableRow {
   display: grid;
-  grid-template-columns: 1.5fr 2fr 1.5fr 1.5fr 1fr 1.5fr;
+  grid-template-columns: 1.3fr 1.7fr 0.8fr 1.3fr 1.2fr 1.2fr 0.8fr 1.2fr 1fr;
   gap: 0.5rem;
+  min-width: 1180px;
   padding: 0.625rem 0.875rem;
   align-items: center;
   border-bottom: 1px solid var(--color-border);
@@ -136,6 +138,12 @@
   font-size: 0.8rem;
 }
 
+.scope {
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
 .mono {
   font-family: monospace;
   font-size: 0.8rem;
@@ -156,10 +164,10 @@
 
 .modalContent {
   background: var(--color-bg);
-  border-radius: 12px;
+  border-radius: 8px;
   padding: 1.5rem;
   width: 100%;
-  max-width: 480px;
+  max-width: 560px;
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -219,6 +227,74 @@
   font-size: 0.75rem;
   color: var(--color-text-muted);
   margin-top: 0.25rem;
+}
+
+.scopeFieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 1rem;
+}
+
+.scopeOption {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+  padding: 0.625rem 0;
+  cursor: pointer;
+}
+
+.scopeOption input {
+  margin-top: 0.2rem;
+}
+
+.scopeOption span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.scopeOption strong {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.scopeOption small {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.collectionSelector {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: 0.375rem 0.625rem;
+  margin: 0.25rem 0 0 1.5rem;
+}
+
+.collectionOption {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2rem;
+  cursor: pointer;
+}
+
+.collectionOption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collectionOption code {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.scopeError {
+  color: #dc2626;
+  font-size: 0.75rem;
 }
 
 .modalActions {

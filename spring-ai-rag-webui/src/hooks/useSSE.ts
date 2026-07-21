@@ -33,7 +33,13 @@ export interface UseChatSSEOptions {
 
 export interface UseChatSSEReturn {
   isConnected: boolean;
-  send: (message: string, collectionIds?: number[] | number, conversationId?: string, apiKey?: string) => void;
+  send: (
+    message: string,
+    collectionIds?: number[] | number,
+    conversationId?: string,
+    model?: string,
+    apiKey?: string
+  ) => void;
   close: () => void;
 }
 
@@ -81,7 +87,13 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   }, []);
 
   const send = useCallback(
-    async (message: string, collectionIds?: number[] | number, conversationId?: string, apiKeyParam?: string) => {
+    async (
+      message: string,
+      collectionIds?: number[] | number,
+      conversationId?: string,
+      model?: string,
+      apiKeyParam?: string
+    ) => {
       close();
       setIsConnected(true);
       accumulatedContentRef.current = '';
@@ -110,6 +122,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             message,
             collectionIds: normalizedIds && normalizedIds.length > 0 ? normalizedIds : undefined,
             sessionId: conversationId ?? undefined,
+            model: model || undefined,
           }),
         });
 

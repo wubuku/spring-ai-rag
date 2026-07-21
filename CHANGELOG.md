@@ -8,6 +8,40 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [1.0.0] - 2026-07-21
+
+### Added
+- Production retrieval defaults with query rewriting, local heuristic reranking, and a reproducible goldenset runner reporting Precision@K, MRR, and nDCG deltas
+- Collection-scoped API keys via `allowedCollectionIds`, enforced across chat, search, collection, document, upload, and PDF-to-RAG data paths
+- Runtime model selection with independent cached ChatModel instances for configured OpenAI-compatible and Anthropic endpoints
+- Model-level registry API, WebUI Settings/Chat selectors, persisted preferences, and model comparison by `provider/model`
+- Flyway V24 migration for API-key collection ACLs
+
+### Changed
+- Released all Maven modules and demos as `1.0.0`
+- Production, Docker Compose, and Helm defaults now use port `8081`
+- Docker and Helm artifacts use immutable `1.0.0` tags by default
+- Dockerfile base images are overridable; local builds use a mainland-China mirror first and fall back to official sources
+- OpenAI-compatible base URLs are documented and configured without a trailing `/v1`
+- External `models.json` now fully replaces YAML model inventory and supports absolute paths plus `file:` URIs
+- Release verification supports `--with-local-runtime` to manage a local server and run HTTP E2E, goldenset, and real-LLM smoke in one command
+- The release gate verifies embedded-WebUI references, file existence, and Git trackability so hashed assets cannot be omitted from the release commit
+
+### Security
+- Restricted NORMAL keys cannot delegate collection access beyond their own allow-list
+- API-key rotation preserves collection ACLs; ADMIN and optional static keys remain unrestricted
+
+### Fixed
+- Chat ask/stream now enforce the 36-character `sessionId` storage limit instead of returning a database 500 for oversized values
+- PDF-to-RAG E2E now parses SSE `event:done` and distinguishes curl, HTTP, SSE error, and completion failures
+- Real-LLM smoke uses isolated collection/document scopes, verifies the per-run code in ask and stream, and removes test data
+- Real-LLM stream verification reconstructs `delta.content` across SSE JSON fragments so split verification codes do not cause false failures
+
+### Documentation
+- Added production quality defaults, external model configuration, and release checklist documentation in English and Chinese
+- Added a bilingual mainland-China network guide and a one-command release verifier with persistent per-gate logs
+- Updated README, getting started, configuration, REST API, deployment, Docker, Helm, and troubleshooting port/version examples
+
 ## [1.0.0-SNAPSHOT] - 2026-04-11
 
 ### Added

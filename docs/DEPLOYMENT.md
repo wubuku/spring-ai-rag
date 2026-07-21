@@ -30,7 +30,8 @@ CREATE DATABASE spring_ai_rag
 
 ### 2.3 迁移
 
-项目使用 Flyway 自动迁移。首次启动时自动执行 `db/migration/V1__init_rag_schema.sql`。
+项目使用 Flyway 自动迁移。首次启动时按顺序执行
+`db/migration/V1__*.sql` 至 `V24__*.sql`。
 
 如需手动迁移：
 
@@ -55,35 +56,33 @@ spring:
       maximum-pool-size: 20
       minimum-idle: 5
       connection-timeout: 30000
+  ai:
+    openai:
+      base-url: https://api.deepseek.com
+      api-key: ${DEEPSEEK_API_KEY}
+      chat:
+        enabled: false
+        options:
+          model: deepseek-chat
+    anthropic:
+      api-key: ${ANTHROPIC_API_KEY}
+      chat:
+        enabled: false
+        options:
+          model: claude-sonnet-4-20250514
 
 # LLM 配置（选择一个 provider）
 app:
   llm:
     provider: openai    # openai | anthropic
 
-spring:
-  ai:
-    openai:
-      base-url: https://api.deepseek.com/v1
-      api-key: ${DEEPSEEK_API_KEY}
-      chat:
-        options:
-          model: deepseek-chat
-    anthropic:
-      api-key: ${ANTHROPIC_API_KEY}
-      chat:
-        options:
-          model: claude-sonnet-4-20250514
-
 # 嵌入模型（SiliconFlow BGE-M3）
-siliconflow:
-  api-key: ${SILICONFLOW_API_KEY}
-  embedding:
-    model: BAAI/bge-m3
-    base-url: https://api.siliconflow.cn/v1
-
-# RAG 配置
 rag:
+  embedding:
+    api-key: ${SILICONFLOW_API_KEY}
+    base-url: https://api.siliconflow.cn
+    model: BAAI/bge-m3
+    dimensions: 1024
   memory:
     max-messages: 20
 
@@ -101,10 +100,8 @@ management:
 ### 3.2 环境变量
 
 ```bash
-export DEEPSEEK_API_KEY=sk-xxx
-export SILICONFLOW_API_KEY=sk-xxx
-# 如使用 Anthropic：
-export ANTHROPIC_API_KEY=sk-ant-xxx
+cp .env.example .env
+# 仅在本机 .env 中填写 LLM、Embedding 与数据库凭据
 ```
 
 ## 4. 构建与运行
@@ -113,57 +110,73 @@ export ANTHROPIC_API_KEY=sk-ant-xxx
 
 ```bash
 cd spring-ai-rag
-mvn clean package -DskipTests
+mvn clean install
+mvn -f demos/demo-basic-rag/pom.xml clean package
 ```
 
 ### 4.2 运行
 
 ```bash
-java -jar spring-ai-rag-core/target/spring-ai-rag-core-1.0.0-SNAPSHOT.jar \
-  --spring.profiles.active=postgresql \
-  --server.port=8080
+set -a
+source .env
+set +a
+java -jar demos/demo-basic-rag/target/demo-basic-rag-1.0.0.jar \
+  --spring.profiles.active=postgresql
 ```
 
 ### 4.3 Docker 部署
 
-```dockerfile
-FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
-COPY spring-ai-rag-core/target/spring-ai-rag-core-1.0.0-SNAPSHOT.jar app.jar
-EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+```bash
+docker build -f docker/Dockerfile -t ghcr.io/wubuku/spring-ai-rag:1.0.0 .
+docker run -d \
+  --name spring-ai-rag \
+  -p 8081:8081 \
+  --env-file .env \
+  -e POSTGRES_HOST=host.docker.internal \
+  -e POSTGRES_DATABASE=spring_ai_rag \
+  -e SPRING_PROFILES_ACTIVE=postgresql,prod \
+  ghcr.io/wubuku/spring-ai-rag:1.0.0
 ```
 
+生产环境同时发布不可变 tag `1.0.0`；不要只依赖 `latest`。
+
+### 4.4 中国境内 Docker 构建
+
+直接访问境外 registry 不稳定时，使用仓库脚本。它会按当前机器架构拉取境内镜像，失败后自动回退官方源，并把最终镜像写为 `spring-ai-rag:1.0.0`：
+
 ```bash
-docker build -t spring-ai-rag .
-docker run -d \
-  -p 8080:8080 \
-  -e DEEPSEEK_API_KEY=sk-xxx \
-  -e SILICONFLOW_API_KEY=sk-xxx \
-  -e SPRING_DATASOURCE_URL=jdbc:postgresql://host.docker.internal:5432/spring_ai_rag \
-  spring-ai-rag
+./scripts/docker-build-local.sh --tag spring-ai-rag:1.0.0
 ```
+
+自建 Harbor 或其他团队镜像仓库可通过 `MIRROR_BASE_URL` 覆盖。不要修改 Dockerfile 去绑定单一镜像站：
+
+```bash
+MIRROR_BASE_URL=your.registry.example \
+  ./scripts/docker-build-local.sh --tag spring-ai-rag:1.0.0
+```
+
+更多网络、架构与回退说明见 [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md)。
 
 ## 5. 监控
 
 ### 5.1 健康检查
 
 ```bash
-curl http://localhost:8080/api/v1/rag/health
+curl http://localhost:8081/api/v1/rag/health
 # 自定义端点
-curl http://localhost:8080/actuator/health
+curl http://localhost:8081/actuator/health
 ```
 
 ### 5.2 监控指标
 
 ```bash
 # 所有指标
-curl http://localhost:8080/actuator/metrics
+curl http://localhost:8081/actuator/metrics
 
 # RAG 特定指标
-curl http://localhost:8080/actuator/metrics/rag.requests.total
-curl http://localhost:8080/actuator/metrics/rag.response.time
-curl http://localhost:8080/actuator/metrics/rag.requests.success
+curl http://localhost:8081/actuator/metrics/rag.requests.total
+curl http://localhost:8081/actuator/metrics/rag.response.time
+curl http://localhost:8081/actuator/metrics/rag.requests.success
 ```
 
 ### 5.3 关键指标说明
@@ -185,7 +198,7 @@ curl http://localhost:8080/actuator/metrics/rag.requests.success
 <dependency>
     <groupId>com.springairag</groupId>
     <artifactId>spring-ai-rag-starter</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 </dependency>
 ```
 
@@ -212,7 +225,7 @@ public class MyDomainExtension implements DomainRagExtension {
 | 症状 | 检查项 |
 |------|--------|
 | 启动报 `vector` 扩展不存在 | `CREATE EXTENSION IF NOT EXISTS vector;` |
-| 嵌入模型调用失败 | 检查 `siliconflow.api-key` 和网络连通性 |
+| 嵌入模型调用失败 | 检查 `rag.embedding.api-key` 和网络连通性 |
 | LLM 返回 401 | 检查 API Key 是否正确 |
 | 检索无结果 | 检查 `rag_embeddings` 表是否有数据 |
 | 响应慢 | 查看 `/actuator/metrics/rag.response.time` 定位瓶颈 |

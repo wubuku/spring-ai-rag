@@ -20,7 +20,9 @@ public class ChatRequest {
     @Schema(description = "User message content", example = "What is the return policy?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String message;
 
-    @Schema(description = "Session ID for multi-turn conversation memory. If empty for first message, a new session is auto-generated", example = "conv-123", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+    @Size(max = 36, message = "Session ID must not exceed 36 characters")
+    @Schema(description = "Session ID for multi-turn conversation memory. If empty for first message, a new session is auto-generated",
+            example = "conv-123", maxLength = 36, requiredMode = Schema.RequiredMode.NOT_REQUIRED)
     private String sessionId;
 
     @Min(value = 1, message = "Max results must be at least 1")

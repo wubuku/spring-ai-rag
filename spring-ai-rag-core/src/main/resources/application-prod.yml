@@ -29,6 +29,22 @@ rag:
     # Optional: enable under load; default off to avoid surprising first deploy
     enabled: ${RAG_RATE_LIMIT_ENABLED:false}
 
+  # Quality defaults for production (measurable via /api/v1/rag/evaluation/* + goldenset script)
+  query-rewrite:
+    enabled: true
+  rerank:
+    # Heuristic rerank is local/no extra API cost; set provider=http + RERANK_API_KEY for cross-encoder
+    enabled: ${RAG_RERANK_ENABLED:true}
+    provider: ${RAG_RERANK_PROVIDER:heuristic}
+    diversity-weight: 0.2
+    top-n: 5
+    fallback-to-heuristic: true
+  retrieval:
+    default-limit: 10
+    min-score: 0.25
+    vector-weight: 0.55
+    fulltext-weight: 0.45
+
 logging:
   level:
     com.springairag.core.filter.ApiKeyAuthFilter: INFO
