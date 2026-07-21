@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { to: '/chat', labelKey: 'nav.chat', icon: '💬' },
   { to: '/search', labelKey: 'nav.search', icon: '🔍' },
   { to: '/metrics', labelKey: 'nav.metrics', icon: '📈' },
+  { to: '/evaluation', labelKey: 'nav.evaluation', icon: '✅' },
   { to: '/alerts', labelKey: 'nav.alerts', icon: '🔔' },
   { to: '/abtest', labelKey: 'nav.abtest', icon: '🧪' },
   { to: '/api-keys', labelKey: 'nav.apiKeys', icon: '🔑' },

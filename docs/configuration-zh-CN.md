@@ -96,8 +96,8 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.security.enabled` | `false` | 开启 API Key 认证（默认关闭） |
-| `rag.security.api-key` | `""` | 静态 API Key（单 key，与数据库 keys 二选一） |
+| `rag.security.enabled` | `false`（本地） / `true`（`prod` profile） | 开启 API Key 认证；**`application-prod.yml` 默认开启** |
+| `rag.security.api-key` | `""` | 可选静态 Key；为空时仍可用数据库 Key（Bootstrap 首次生成 admin） |
 
 > 开启认证后，所有 `/api/*` 请求需要 `X-API-Key` header 或 `?apiKey=` query 参数。
 > SSE 请求（EventSource）不支持自定义 header，必须用 `?apiKey=` query 参数。

@@ -1,9 +1,11 @@
 # 架构设计详解
 
-> 📖 English | 📖 中文
+> 📖 [English](architecture.md) · 📖 [中文](architecture-zh-CN.md)
 
 > **spring-ai-rag** — 模型无关、领域解耦、组件化的通用 RAG 服务框架。
 > 本文档面向核心开发者和架构评审者。
+>
+> 文档导航：[index-zh-CN.md](index-zh-CN.md) · 完成状态对照：[IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md)
 
 ---
 

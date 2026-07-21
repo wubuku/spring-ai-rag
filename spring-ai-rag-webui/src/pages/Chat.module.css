@@ -226,3 +226,36 @@
 .sendBtn:hover:not(:disabled) {
   background: var(--color-primary-hover);
 }
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 1rem;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+}
+
+.collectionRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.collectionLabel {
+  font-size: 0.85rem;
+  color: var(--text-secondary, #6b7280);
+  white-space: nowrap;
+}
+
+.collectionSelect {
+  flex: 1;
+  max-width: 280px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border-color, #d1d5db);
+  background: var(--bg-primary, #fff);
+  font-size: 0.875rem;
+}
+
+.feedbackRow { display:flex; gap:0.35rem; margin-top:0.35rem; }
+.feedbackBtn { border:1px solid var(--color-border,#d1d5db); background:transparent; border-radius:6px; cursor:pointer; padding:0.15rem 0.4rem; }

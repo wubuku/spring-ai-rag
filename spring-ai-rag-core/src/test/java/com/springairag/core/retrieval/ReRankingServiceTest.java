@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.rerank.RerankProviderFactory;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -18,7 +19,8 @@ class ReRankingServiceTest {
         RagProperties props = new RagProperties();
         props.getRerank().setEnabled(enabled);
         props.getRerank().setDiversityWeight(diversityWeight);
-        return new ReRankingService(props);
+        props.getRerank().setProvider("heuristic");
+        return new ReRankingService(props, new RerankProviderFactory(props));
     }
 
     private final ReRankingService service = createService(false, 0.2f);

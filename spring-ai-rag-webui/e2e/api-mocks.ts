@@ -1,7 +1,25 @@
 import type { Page } from '@playwright/test';
 
 // Shared API mocks for all tests
-export function mockAllApiCalls(page: Page) {
+export async function mockAllApiCalls(page: Page) {
+  // Evaluation endpoints (P0-5)
+  await page.route('**/api/v1/rag/evaluation/**', async route => {
+    const url = route.request().url();
+    if (url.includes('/report')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ avgMrr: 0.5, avgNdcg: 0.4, totalEvaluations: 1 }) });
+      return;
+    }
+    if (url.includes('/history') || url.includes('/feedback/history')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([]) });
+      return;
+    }
+    if (url.includes('/feedback/stats')) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ thumbsUp: 1, thumbsDown: 0 }) });
+      return;
+    }
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
+  });
+
   // Mock health endpoint
   page.route('/api/v1/rag/health', route => {
     route.fulfill({
@@ -25,20 +43,18 @@ export function mockAllApiCalls(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          documents: [
-            {
-              id: 1,
-              title: 'Sample Document',
-              documentType: 'TEXT',
-              createdAt: new Date().toISOString(),
-              contentHash: 'abc123def456',
-            },
-          ],
-          total: 1,
-          page: 0,
-          size: 20,
-        },
+        documents: [
+          {
+            id: 1,
+            title: 'Sample Document',
+            documentType: 'TEXT',
+            createdAt: new Date().toISOString(),
+            contentHash: 'abc123def456',
+          },
+        ],
+        total: 1,
+        page: 0,
+        size: 20,
       }),
     });
   });
@@ -49,20 +65,18 @@ export function mockAllApiCalls(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          collections: [
-            {
-              id: 1,
-              name: 'Sample Collection',
-              embeddingModel: 'bge-m3',
-              dimensions: 1024,
-              documentCount: 5,
-            },
-          ],
-          total: 1,
-          page: 0,
-          size: 20,
-        },
+        collections: [
+          {
+            id: 1,
+            name: 'Sample Collection',
+            embeddingModel: 'bge-m3',
+            dimensions: 1024,
+            documentCount: 5,
+          },
+        ],
+        total: 1,
+        page: 0,
+        size: 20,
       }),
     });
   });
@@ -73,11 +87,9 @@ export function mockAllApiCalls(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          query: 'test',
-          total: 0,
-          results: [],
-        },
+        query: 'test',
+        total: 0,
+        results: [],
       }),
     });
   });
@@ -88,10 +100,10 @@ export function mockAllApiCalls(page: Page) {
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          totalRequests: 42,
-          avgLatencyMs: 150,
-        },
+        totalRequests: 42,
+        avgLatencyMs: 150,
+        totalRetrievals: 10,
+        totalLlmCalls: 5,
       }),
     });
   });
@@ -158,5 +170,29 @@ export function mockAllApiCalls(page: Page) {
       // For unmocked API calls, pass through to real backend
       route.continue();
     }
+  });
+}
+
+// Evaluation mocks (P0-5)
+export async function mockEvaluationApi(page: import('@playwright/test').Page) {
+  await page.route('**/api/v1/rag/evaluation/**', async route => {
+    const url = route.request().url();
+    if (url.includes('/report')) {
+      await route.fulfill({ json: { avgMrr: 0.5, avgNdcg: 0.4, totalEvaluations: 1 } });
+      return;
+    }
+    if (url.includes('/history')) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (url.includes('/feedback/stats')) {
+      await route.fulfill({ json: { thumbsUp: 1, thumbsDown: 0 } });
+      return;
+    }
+    if (url.includes('/feedback/history')) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    await route.fulfill({ json: {} });
   });
 }

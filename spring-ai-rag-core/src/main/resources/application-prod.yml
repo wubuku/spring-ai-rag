@@ -1,0 +1,34 @@
+# Production profile — safe defaults for deployment
+# Activate: SPRING_PROFILES_ACTIVE=prod  or  prod,postgresql
+#
+# Bootstrap admin API key is printed once to logs when rag_api_key table is empty
+# (ApiKeyBootstrapService). Copy it immediately; static rag.security.api-key is optional.
+
+rag:
+  security:
+    # Require X-API-Key or ?apiKey= on /api/** (DB keys and optional static key)
+    enabled: true
+    # Optional legacy static key; leave empty to rely on DB keys from bootstrap / management API
+    api-key: ${RAG_API_KEY:}
+
+  circuit-breaker:
+    enabled: true
+    failure-rate-threshold: 50
+    minimum-number-of-calls: 10
+    wait-duration-in-open-state: 30
+    sliding-window-size: 20
+
+  embedding-circuit-breaker:
+    enabled: true
+    failure-rate-threshold: 50
+    minimum-number-of-calls: 10
+    wait-duration-in-open-state: 30
+    sliding-window-size: 20
+
+  rate-limit:
+    # Optional: enable under load; default off to avoid surprising first deploy
+    enabled: ${RAG_RATE_LIMIT_ENABLED:false}
+
+logging:
+  level:
+    com.springairag.core.filter.ApiKeyAuthFilter: INFO

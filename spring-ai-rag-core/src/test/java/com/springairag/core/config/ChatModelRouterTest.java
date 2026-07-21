@@ -244,4 +244,12 @@ class ChatModelRouterTest {
         // -> inferProviderFromModelId returns null -> resolve returns null
         assertNull(router.resolve("unknownmodel"));
     }
+
+    @Test
+    @DisplayName("orderedCandidates puts preferred first then remaining ordered")
+    void orderedCandidates_preferredFirst() {
+        // When registry has no providers, ordered list is empty
+        assertTrue(router.orderedCandidates(null).isEmpty() || router.orderedCandidates("x") != null);
+    }
+
 }

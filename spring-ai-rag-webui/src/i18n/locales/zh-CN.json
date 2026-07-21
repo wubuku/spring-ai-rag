@@ -10,7 +10,8 @@
     "abtest": "A/B 测试",
     "settings": "设置",
     "apiKeys": "API 密钥",
-    "files": "文件"
+    "files": "文件",
+    "evaluation": "评估"
   },
   "common": {
     "loading": "加载中…",
@@ -111,7 +112,9 @@
     "connectionError": "连接错误",
     "sources": "参考资料",
     "noSources": "未检索到参考资料",
-    "hint": "我会检索您的知识库，找到最相关的信息来回答您的问题。"
+    "hint": "我会检索您的知识库，找到最相关的信息来回答您的问题。",
+    "collection": "知识库",
+    "allCollections": "全部知识库"
   },
   "search": {
     "title": "文档检索",
@@ -315,5 +318,33 @@
     "embedCached": "文档已嵌入（缓存）",
     "embedFailed": "嵌入失败：{{message}}",
     "embedError": "触发嵌入失败：{{error}}"
+  },
+  "evaluation": {
+    "title": "评估与反馈",
+    "tabReport": "报告",
+    "tabHistory": "历史",
+    "tabFeedback": "反馈",
+    "tabJudge": "LLM 评判",
+    "avgMrr": "平均 MRR",
+    "avgNdcg": "平均 nDCG",
+    "avgHitRate": "平均命中率",
+    "avgPrecision": "平均 Precision",
+    "total": "评估次数",
+    "feedbackStats": "反馈统计",
+    "manualEvaluate": "手动评估",
+    "query": "查询",
+    "retrievedIds": "召回文档 ID",
+    "relevantIds": "相关文档 ID",
+    "runEvaluate": "运行评估",
+    "evaluateFailed": "评估失败",
+    "emptyHistory": "暂无评估历史",
+    "time": "时间",
+    "feedbackType": "类型",
+    "context": "上下文",
+    "answer": "回答",
+    "runJudge": "运行评判",
+    "judgeFailed": "评判失败",
+    "thumbsUp": "有帮助",
+    "thumbsDown": "无帮助"
   }
 }

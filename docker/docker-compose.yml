@@ -50,6 +50,11 @@ services:
       OPENAI_MODEL: ${OPENAI_MODEL:-deepseek-chat}
       # Embedding model (SiliconFlow BGE-M3)
       SILICONFLOW_API_KEY: ${SILICONFLOW_API_KEY:-sk-your-key-here}
+      # Profiles: postgresql for pgvector; prod enables API key auth + circuit breakers
+      # Override with SPRING_PROFILES_ACTIVE=postgresql for open local compose without auth
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-postgresql,prod}
+      # Optional static API key (bootstrap DB admin key is also created if table empty)
+      RAG_API_KEY: ${RAG_API_KEY:-}
 
 volumes:
   pgdata:

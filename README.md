@@ -218,16 +218,20 @@ cd demos/demo-basic-rag && mvn test
 
 ## Documentation
 
+**Start here**: [Documentation Index](docs/index.md) (progressive map of all docs)
+
+- [Getting Started](docs/getting-started.md)
 - [Architecture](docs/architecture.md)
 - [Configuration Reference](docs/configuration.md)
 - [REST API Reference](docs/rest-api.md)
 - [PostgreSQL Extensions](docs/postgresql-extensions.md) (pg_jieba / pg_trgm / pgvector)
 - [Domain Extension Guide](docs/extension-guide.md)
 - [Testing Guide](docs/testing-guide.md)
-- [Getting Started](docs/getting-started.md)
 - [Troubleshooting](docs/troubleshooting.md)
+- [Deployment](docs/DEPLOYMENT.md)
 - [CHANGELOG](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
+- Agent / local entry: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [TOOLS.md](TOOLS.md)
 
 ## License
 

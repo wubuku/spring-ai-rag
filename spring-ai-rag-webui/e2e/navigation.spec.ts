@@ -3,11 +3,12 @@ import { mockAllApiCalls } from './api-mocks';
 
 test.describe('Navigation', () => {
   test('sidebar navigation links are visible', async ({ page }) => {
-    mockAllApiCalls(page);
+    await mockAllApiCalls(page);
     await page.goto('/webui/dashboard', { waitUntil: 'networkidle' });
     const sidebar = page.locator('aside');
     await expect(sidebar).toBeVisible();
 
+    // Labels include emoji icons in nav links (e.g. "📄 Documents")
     const navLinks = [
       'Dashboard',
       'Documents',
@@ -15,26 +16,28 @@ test.describe('Navigation', () => {
       'Chat',
       'Search',
       'Metrics',
+      'Evaluation',
       'Alerts',
       'Settings',
     ];
 
     for (const label of navLinks) {
-      await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole('link', { name: new RegExp(label) })).toBeVisible();
     }
   });
 
   test('navigates to all pages without crash', async ({ page }) => {
-    mockAllApiCalls(page);
+    await mockAllApiCalls(page);
     const routes = [
-      '/dashboard',
-      '/documents',
-      '/collections',
-      '/chat',
-      '/search',
-      '/metrics',
-      '/alerts',
-      '/settings',
+      '/webui/dashboard',
+      '/webui/documents',
+      '/webui/collections',
+      '/webui/chat',
+      '/webui/search',
+      '/webui/metrics',
+      '/webui/evaluation',
+      '/webui/alerts',
+      '/webui/settings',
     ];
 
     for (const route of routes) {
@@ -44,7 +47,7 @@ test.describe('Navigation', () => {
   });
 
   test('redirects root to dashboard', async ({ page }) => {
-    mockAllApiCalls(page);
+    await mockAllApiCalls(page);
     await page.goto('/webui/', { waitUntil: 'networkidle' });
     await expect(page).toHaveURL(/\/dashboard/);
   });

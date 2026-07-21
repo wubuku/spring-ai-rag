@@ -1,8 +1,10 @@
 # Troubleshooting Guide
 
-> 📖 English | 📖 中文
+> 📖 [English](troubleshooting.md) · 📖 [中文](troubleshooting-zh-CN.md)
 
 > Common problems and solutions, organized by symptom.
+>
+> Doc hub: [index.md](index.md)
 
 ---
 
@@ -245,12 +247,39 @@ rag:
 ```bash
 # Check API Key configuration
 echo $OPENAI_API_KEY | head -c 10
+echo $SPRING_AI_OPENAI_API_KEY | head -c 10
 
 # Check base-url is correct
-grep "base-url" application.yml
+grep -n "base-url\|baseUrl" spring-ai-rag-core/src/main/resources/application*.yml
 ```
 
-**Solution**: Confirm API Key is valid and not expired, base-url matches provider.
+**Solution**:
+
+1. Confirm the API Key is valid and not expired, and that the base-url matches the provider.  
+2. **Do not include a `/v1` suffix on `base-url`**. Spring AI’s OpenAI-compatible clients append `/v1/chat/completions` or `/v1/embeddings`; if `/v1` is already present, the final path becomes `/v1/v1/...` → 401/404.  
+   - Correct: `https://api.deepseek.com`, `https://api.siliconflow.cn`  
+   - Incorrect: `https://api.deepseek.com/v1`  
+   - See: [Spring AI #710](https://github.com/spring-projects/spring-ai/issues/710)
+
+### Config seems ignored after start / cannot reach model or DB
+
+**Symptom**: `.env` is filled in, but the app still uses defaults or fails auth/connection.
+
+**Cause**: After only `source .env`, `mvn spring-boot:run` may fork a JVM that does not inherit every variable.
+
+**Solution**:
+
+```bash
+# Preferred: project script passes args explicitly
+bash scripts/start-server.sh
+
+# Or export, then start with the right profile
+export $(cat .env | grep -v '^#' | xargs)
+export SPRING_PROFILES_ACTIVE=postgresql
+mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
+```
+
+Local default port is **8081** (not 8080).
 
 ---
 

@@ -10,7 +10,8 @@
     "abtest": "A/B Test",
     "settings": "Settings",
     "apiKeys": "API Keys",
-    "files": "Files"
+    "files": "Files",
+    "evaluation": "Evaluation"
   },
   "common": {
     "loading": "Loading…",
@@ -109,7 +110,9 @@
     "connectionError": "Connection error",
     "sources": "Sources",
     "noSources": "No sources retrieved",
-    "hint": "I will search through your knowledge base to find the most relevant information."
+    "hint": "I will search through your knowledge base to find the most relevant information.",
+    "collection": "Knowledge base",
+    "allCollections": "All collections"
   },
   "search": {
     "title": "Search",
@@ -313,5 +316,33 @@
     "embedCached": "Document already embedded (cached)",
     "embedFailed": "Embedding failed: {{message}}",
     "embedError": "Failed to trigger embedding: {{error}}"
+  },
+  "evaluation": {
+    "title": "Evaluation & Feedback",
+    "tabReport": "Report",
+    "tabHistory": "History",
+    "tabFeedback": "Feedback",
+    "tabJudge": "LLM Judge",
+    "avgMrr": "Avg MRR",
+    "avgNdcg": "Avg nDCG",
+    "avgHitRate": "Avg Hit Rate",
+    "avgPrecision": "Avg Precision",
+    "total": "Evaluations",
+    "feedbackStats": "Feedback stats",
+    "manualEvaluate": "Manual evaluate",
+    "query": "Query",
+    "retrievedIds": "Retrieved doc IDs",
+    "relevantIds": "Relevant doc IDs",
+    "runEvaluate": "Run evaluate",
+    "evaluateFailed": "Evaluate failed",
+    "emptyHistory": "No evaluation history",
+    "time": "Time",
+    "feedbackType": "Type",
+    "context": "Context",
+    "answer": "Answer",
+    "runJudge": "Run judge",
+    "judgeFailed": "Judge failed",
+    "thumbsUp": "Helpful",
+    "thumbsDown": "Not helpful"
   }
 }

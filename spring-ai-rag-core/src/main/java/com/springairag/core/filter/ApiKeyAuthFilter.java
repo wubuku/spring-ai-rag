@@ -75,7 +75,8 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        if (!authEnabled || configuredApiKey == null || configuredApiKey.isBlank()) {
+        // When auth is disabled, pass through. Static key may be blank when using DB-only keys.
+        if (!authEnabled) {
             filterChain.doFilter(request, response);
             return;
         }
@@ -115,8 +116,9 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             }
         }
 
-        // 2. Fall back to legacy configured static key (backward compatibility)
-        if (configuredApiKey.equals(requestApiKey)) {
+        // 2. Fall back to legacy configured static key (optional; blank static key is OK when using DB keys)
+        if (configuredApiKey != null && !configuredApiKey.isBlank()
+                && configuredApiKey.equals(requestApiKey)) {
             log.debug("API Key validated (legacy): {} {}", request.getMethod(), path);
             request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, requestApiKey);
             filterChain.doFilter(request, response);

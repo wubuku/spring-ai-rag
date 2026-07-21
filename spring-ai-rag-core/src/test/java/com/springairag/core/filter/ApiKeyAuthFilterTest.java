@@ -1,6 +1,8 @@
 package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.service.ApiKeyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -43,24 +45,58 @@ class ApiKeyAuthFilterTest {
     }
 
     @Test
-    void blankApiKey_passesThrough() throws ServletException, IOException {
+    void enabledAuth_blankStaticKey_missingRequestKey_returns401() throws ServletException, IOException {
+        // Security enabled with empty static key must still require a key (DB keys only mode)
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true);
         request.setRequestURI("/api/v1/rag/documents");
 
         filter.doFilterInternal(request, response, filterChain);
 
-        verify(filterChain).doFilter(request, response);
-        assertEquals(200, response.getStatus());
+        verify(filterChain, never()).doFilter(request, response);
+        assertEquals(401, response.getStatus());
     }
 
     @Test
-    void nullApiKey_passesThrough() throws ServletException, IOException {
+    void enabledAuth_nullStaticKey_missingRequestKey_returns401() throws ServletException, IOException {
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter(null, true);
         request.setRequestURI("/api/v1/rag/documents");
 
         filter.doFilterInternal(request, response, filterChain);
 
+        verify(filterChain, never()).doFilter(request, response);
+        assertEquals(401, response.getStatus());
+    }
+
+    @Test
+    void enabledAuth_blankStaticKey_validDbKey_passes() throws ServletException, IOException {
+        ApiKeyManagementService apiKeyService = mock(ApiKeyManagementService.class);
+        RagApiKey entity = new RagApiKey();
+        entity.setKeyId("kid-1");
+        when(apiKeyService.validateKeyEntity("rag_sk_dbkey")).thenReturn(entity);
+
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true, apiKeyService);
+        request.setRequestURI("/api/v1/rag/documents");
+        request.addHeader("X-API-Key", "rag_sk_dbkey");
+
+        filter.doFilterInternal(request, response, filterChain);
+
         verify(filterChain).doFilter(request, response);
+        assertEquals("kid-1", request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE));
+    }
+
+    @Test
+    void enabledAuth_blankStaticKey_invalidDbKey_returns401() throws ServletException, IOException {
+        ApiKeyManagementService apiKeyService = mock(ApiKeyManagementService.class);
+        when(apiKeyService.validateKeyEntity("bad")).thenReturn(null);
+
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true, apiKeyService);
+        request.setRequestURI("/api/v1/rag/documents");
+        request.addHeader("X-API-Key", "bad");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain, never()).doFilter(request, response);
+        assertEquals(401, response.getStatus());
     }
 
     @Test

@@ -218,16 +218,20 @@ cd demos/demo-basic-rag && mvn test
 
 ## 文档
 
-- [架构设计](docs/architecture.md)
-- [配置参考](docs/configuration.md)
-- [REST API 参考](docs/rest-api.md)
+**从这里开始**：[文档索引](docs/index-zh-CN.md)（全库渐进式导航）
+
+- [开发者上手](docs/getting-started-zh-CN.md)
+- [架构设计](docs/architecture-zh-CN.md)
+- [配置参考](docs/configuration-zh-CN.md)
+- [REST API 参考](docs/rest-api-zh-CN.md)
 - [PostgreSQL 扩展说明](docs/postgresql-extensions.md)（pg_jieba / pg_trgm / pgvector）
-- [领域扩展指南](docs/extension-guide.md)
-- [测试指南](docs/testing-guide.md)
-- [开发者上手](docs/getting-started.md)
-- [故障排查](docs/troubleshooting.md)
-- [CHANGELOG](CHANGELOG.md)
-- [贡献指南](CONTRIBUTING.md)
+- [领域扩展指南](docs/extension-guide-zh-CN.md)
+- [测试指南](docs/testing-guide-zh-CN.md)
+- [故障排查](docs/troubleshooting-zh-CN.md)
+- [部署](docs/DEPLOYMENT.md)
+- [CHANGELOG](CHANGELOG-zh-CN.md)
+- [贡献指南](CONTRIBUTING-zh-CN.md)
+- Agent / 本机入口：[AGENTS.md](AGENTS.md)、[CLAUDE.md](CLAUDE.md)、[TOOLS.md](TOOLS.md)
 
 ## License
 

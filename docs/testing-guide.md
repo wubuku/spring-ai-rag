@@ -1,8 +1,17 @@
 # Testing Guide
 
-> 📖 English | 📖 中文
+> 📖 [English](testing-guide.md) · 📖 [中文](testing-guide-zh-CN.md)
 
 > Spring AI RAG project philosophy on testing: "Tests are production code" — write tests alongside code, `mvn test` must pass before considering work done.
+
+> **Standing rules** (project requirement — do not weaken):  
+> - Production code and tests are written together and treated equally  
+> - Work is “done” only when `mvn test` fully passes  
+> - After REST endpoint changes, run E2E (`scripts/e2e-test.sh`)  
+> - After WebUI changes, run Playwright (`scripts/webui-e2e-test.js` / `npm run test:e2e`)  
+> - After meaningful improvements: restart the service → confirm `http://localhost:8081` is up → run regression  
+
+Doc hub: [index.md](index.md) · Commands: [../TOOLS.md](../TOOLS.md)
 
 ## Testing Pyramid
 

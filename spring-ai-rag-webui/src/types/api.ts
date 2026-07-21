@@ -94,7 +94,9 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   message: string;
+  /** @deprecated use collectionIds */
   collectionId?: number;
+  collectionIds?: number[];
   conversationId?: string;
   useHybridSearch?: boolean;
 }

@@ -1,8 +1,17 @@
 # 测试指南
 
-> 📖 English | 📖 中文
+> 📖 [English](testing-guide.md) · 📖 [中文](testing-guide-zh-CN.md)
 
 Spring AI RAG 项目对测试的态度是"测试是生产代码"——写代码必须同步写测试，`mvn test` 不通过就不算完成。
+
+> **永久规则**（来自项目要求，不可弱化）：  
+> - 写生产代码必须同步写测试，两者同等重要  
+> - `mvn test` 全部通过才算「完成」  
+> - 有 REST 端点改动后运行 E2E（`scripts/e2e-test.sh`）  
+> - 涉及 WebUI 修改时必须跑 Playwright（`scripts/webui-e2e-test.js` / `npm run test:e2e`）  
+> - 重要改进后：重启服务 → 确认 `http://localhost:8081` 可用 → 再跑回归  
+
+总文档导航：[index-zh-CN.md](index-zh-CN.md) · 命令速查：[../TOOLS.md](../TOOLS.md)
 
 ## 测试金字塔
 

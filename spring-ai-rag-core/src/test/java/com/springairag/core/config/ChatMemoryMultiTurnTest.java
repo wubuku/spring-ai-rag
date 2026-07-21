@@ -130,6 +130,7 @@ class ChatMemoryMultiTurnTest {
                 new RagProperties(),
                 null,
                 null,
+                null,
                 null
         );
     }

@@ -268,7 +268,15 @@ rag:
   # Re-ranking configuration
   rerank:
     enabled: false
+    provider: heuristic   # heuristic | http | none
     diversity-weight: 0.2
+    top-n: 5
+    # HTTP provider (SiliconFlow-compatible /v1/rerank). api-key falls back to rag.embedding.api-key
+    base-url: ${RERANK_BASE_URL:https://api.siliconflow.cn}
+    api-key: ${RERANK_API_KEY:}
+    model: ${RERANK_MODEL:BAAI/bge-reranker-v2-m3}
+    timeout-ms: 10000
+    fallback-to-heuristic: true
 
   # Document chunking configuration
   chunk:

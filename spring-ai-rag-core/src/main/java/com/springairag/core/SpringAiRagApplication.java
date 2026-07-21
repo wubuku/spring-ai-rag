@@ -7,7 +7,14 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 /**
  * Spring AI RAG application entry point.
  */
-@SpringBootApplication(scanBasePackages = "com.springairag")
+@SpringBootApplication(
+        scanBasePackages = "com.springairag",
+        excludeName = {
+                "org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration",
+                "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration",
+                "org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration"
+        }
+)
 @ConfigurationPropertiesScan("com.springairag.core.config")
 public class SpringAiRagApplication {
 

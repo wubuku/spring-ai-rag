@@ -1,0 +1,121 @@
+package com.springairag.core.retrieval.rerank;
+
+import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.RagRerankProperties;
+
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+/**
+ * Heuristic reranker: keyword match + position + diversity (legacy ReRankingService algorithm).
+ */
+public class HeuristicRerankProvider implements RerankProvider {
+
+    private final RagRerankProperties config;
+
+    public HeuristicRerankProvider(RagRerankProperties config) {
+        this.config = config != null ? config : new RagRerankProperties();
+    }
+
+    @Override
+    public String getName() {
+        return "heuristic";
+    }
+
+    @Override
+    public boolean isAvailable() {
+        return true;
+    }
+
+    @Override
+    public List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults) {
+        if (results == null || results.isEmpty()) {
+            return results;
+        }
+        int limit = maxResults > 0 ? maxResults : results.size();
+        float diversityWeight = config.getDiversityWeight();
+
+        return results.stream()
+                .map(r -> {
+                    float relevance = calculateRelevanceScore(query, r.getChunkText());
+                    float diversity = calculateDiversityScore(r.getChunkText(), results);
+                    float rawScore = (float) r.getScore();
+                    float safeScore = Float.isNaN(rawScore) ? 0f : rawScore;
+                    float finalScore = safeScore * (1 - diversityWeight)
+                            + relevance * diversityWeight * 0.5f
+                            + diversity * diversityWeight * 0.5f;
+
+                    RetrievalResult out = new RetrievalResult();
+                    out.setDocumentId(r.getDocumentId());
+                    out.setTitle(r.getTitle());
+                    out.setChunkText(r.getChunkText());
+                    out.setScore(finalScore);
+                    out.setVectorScore(r.getVectorScore());
+                    out.setFulltextScore(r.getFulltextScore());
+                    out.setChunkIndex(r.getChunkIndex());
+                    out.setMetadata(r.getMetadata());
+                    return out;
+                })
+                .sorted(Comparator.comparingDouble(RetrievalResult::getScore).reversed())
+                .limit(limit)
+                .toList();
+    }
+
+    public float calculateRelevanceScore(String query, String text) {
+        if (query == null || text == null) {
+            return 0f;
+        }
+        String[] queryTerms = query.toLowerCase().split("\\s+");
+        String lowerText = text.toLowerCase();
+        int matchCount = 0;
+        int positionScore = 0;
+        for (String term : queryTerms) {
+            if (lowerText.contains(term)) {
+                matchCount++;
+                int pos = lowerText.indexOf(term);
+                if (pos < 50) {
+                    positionScore += (50 - pos) / 10;
+                }
+            }
+        }
+        float termMatchScore = queryTerms.length == 0 ? 0f : (float) matchCount / queryTerms.length;
+        float positionBonus = Math.min(positionScore / 10f, 0.3f);
+        return Math.min(termMatchScore + positionBonus, 1.0f);
+    }
+
+    public float calculateDiversityScore(String text, List<RetrievalResult> allResults) {
+        if (text == null || allResults.size() <= 1) {
+            return text == null ? 0f : 1.0f;
+        }
+        float maxSimilarity = 0f;
+        for (RetrievalResult other : allResults) {
+            if (!Objects.equals(other.getChunkText(), text)) {
+                float similarity = calculateTextSimilarity(text, other.getChunkText());
+                maxSimilarity = Math.max(maxSimilarity, similarity);
+            }
+        }
+        return 1.0f - maxSimilarity;
+    }
+
+    public float calculateTextSimilarity(String text1, String text2) {
+        if (text1 == null || text2 == null) {
+            return 0f;
+        }
+        Set<String> words1 = new HashSet<>(Arrays.asList(text1.toLowerCase().split("\\s+")));
+        Set<String> words2 = new HashSet<>(Arrays.asList(text2.toLowerCase().split("\\s+")));
+        words1.removeIf(w -> w.length() < 2);
+        words2.removeIf(w -> w.length() < 2);
+        if (words1.isEmpty() || words2.isEmpty()) {
+            return 0f;
+        }
+        Set<String> intersection = new HashSet<>(words1);
+        intersection.retainAll(words2);
+        Set<String> union = new HashSet<>(words1);
+        union.addAll(words2);
+        return (float) intersection.size() / union.size();
+    }
+}

@@ -1,8 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { chatApi } from '../api/chat';
+import { collectionsApi } from '../api/collections';
+import { evaluationApi } from '../api/evaluation';
 import { getApiKey } from '../utils/apiKeyStorage';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
@@ -20,6 +23,7 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
@@ -28,10 +32,18 @@ export function Chat() {
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
 
+  const { data: collectionsData } = useQuery({
+    queryKey: ['chat-collections'],
+    queryFn: async () => {
+      const res = await collectionsApi.list({ page: 0, size: 200 });
+      return res.data;
+    },
+  });
+  const collections = collectionsData?.collections ?? [];
+
   const { send, isConnected } = useChatSSE({
     apiKey: getApiKey(),
     onChunk: (content: string) => {
-      // Append chunk to the last streaming assistant message
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
@@ -77,7 +89,6 @@ export function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // Save conversation when it ends
   useEffect(() => {
     if (conversationId && messages.length > 0) {
       const userMsg = messages.find(m => m.role === 'user');
@@ -99,7 +110,21 @@ export function Chat() {
       { id: newId, role: 'user', content: userMsg },
       { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
     ]);
-    send(userMsg, undefined, conversationId);
+    const collectionIds =
+      selectedCollectionId !== '' ? [Number(selectedCollectionId)] : undefined;
+    send(userMsg, collectionIds, conversationId);
+  };
+
+  const submitFeedback = async (type: 'THUMBS_UP' | 'THUMBS_DOWN', queryHint?: string) => {
+    try {
+      await evaluationApi.submitFeedback({
+        sessionId: conversationId,
+        query: queryHint,
+        feedbackType: type,
+      });
+    } catch {
+      // ignore feedback errors in UI
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -134,12 +159,10 @@ export function Chat() {
   };
 
   const handleSelectSession = (sessionId: string) => {
-    // For now, just switch to the session - in future, load its messages
     setConversationId(sessionId);
     setShowSidebar(false);
   };
 
-  // Auto-resize textarea
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInput(e.target.value);
     const textarea = e.target;
@@ -206,7 +229,7 @@ export function Chat() {
               <div className={styles.role}>{msg.role === 'user' ? 'You' : 'Assistant'}</div>
               <div className={styles.content}>
                 {msg.content}
-                {msg.isStreaming && <span className={styles.cursor}>▍</span>}
+                {msg.isStreaming && <span className={styles.cursor}>|</span>}
               </div>
               {msg.sources && msg.sources.length > 0 && (
                 <div className={styles.sources}>
@@ -218,29 +241,78 @@ export function Chat() {
                   ))}
                 </div>
               )}
+              {msg.role === 'assistant' && !msg.isStreaming && msg.content && (
+                <div className={styles.feedbackRow}>
+                  <button
+                    type="button"
+                    className={styles.feedbackBtn}
+                    title={t('evaluation.thumbsUp')}
+                    onClick={() => {
+                      const prevUser = [...messages].reverse().find(m => m.role === 'user');
+                      submitFeedback('THUMBS_UP', prevUser?.content);
+                    }}
+                  >
+                    👍
+                  </button>
+                  <button
+                    type="button"
+                    className={styles.feedbackBtn}
+                    title={t('evaluation.thumbsDown')}
+                    onClick={() => {
+                      const prevUser = [...messages].reverse().find(m => m.role === 'user');
+                      submitFeedback('THUMBS_DOWN', prevUser?.content);
+                    }}
+                  >
+                    👎
+                  </button>
+                </div>
+              )}
             </div>
           ))}
           <div ref={bottomRef} />
         </div>
 
-        <div className={styles.inputRow}>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={handleInput}
-            onKeyDown={handleKeyDown}
-            placeholder={t('chat.placeholder')}
-            disabled={isConnected}
-            className={styles.input}
-            rows={1}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isConnected || !input.trim()}
-            className={styles.sendBtn}
-          >
-            {isConnected ? '...' : t('chat.send')}
-          </button>
+        <div className={styles.composer}>
+          <div className={styles.collectionRow}>
+            <label htmlFor="chat-collection" className={styles.collectionLabel}>
+              {t('chat.collection')}
+            </label>
+            <select
+              id="chat-collection"
+              className={styles.collectionSelect}
+              value={selectedCollectionId}
+              onChange={e => setSelectedCollectionId(e.target.value)}
+              disabled={isConnected}
+              data-testid="chat-collection-select"
+            >
+              <option value="">{t('chat.allCollections')}</option>
+              {collections.map(c => (
+                <option key={c.id} value={String(c.id)}>
+                  {c.name}
+                  {c.documentCount != null ? ` (${c.documentCount})` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className={styles.inputRow}>
+            <textarea
+              ref={textareaRef}
+              value={input}
+              onChange={handleInput}
+              onKeyDown={handleKeyDown}
+              placeholder={t('chat.placeholder')}
+              disabled={isConnected}
+              className={styles.input}
+              rows={1}
+            />
+            <button
+              onClick={handleSend}
+              disabled={isConnected || !input.trim()}
+              className={styles.sendBtn}
+            >
+              {isConnected ? '...' : t('chat.send')}
+            </button>
+          </div>
         </div>
       </div>
     </div>

@@ -77,7 +77,7 @@ public class PerformanceConfig {
     @Bean
     @Primary
     public EmbeddingModel cachedEmbeddingModel(
-            EmbeddingModel delegate,
+            @Qualifier("embeddingModel") EmbeddingModel delegate,
             @Qualifier("embeddingCacheManager") CacheManager embeddingCacheManager,
             MeterRegistry meterRegistry) {
 

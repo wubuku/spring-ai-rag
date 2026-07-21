@@ -64,6 +64,9 @@ class RagChatServiceTest {
         domainExtensionRegistry = mock(DomainExtensionRegistry.class);
         promptCustomizerChain = mock(PromptCustomizerChain.class);
         chatModelRouter = mock(ChatModelRouter.class);
+        // Default: no multi-model candidates → RagChatService falls back to default chatClient
+        when(chatModelRouter.orderedCandidates(any())).thenReturn(List.of());
+        when(chatModelRouter.orderedCandidates(isNull())).thenReturn(List.of());
 
         when(chatClientBuilder.defaultAdvisors(anyList())).thenReturn(chatClientBuilder);
         when(chatClientBuilder.build()).thenReturn(chatClient);
@@ -83,6 +86,7 @@ class RagChatServiceTest {
                 domainExtensionRegistry,
                 promptCustomizerChain,
                 new com.springairag.core.config.RagProperties(),
+                null,
                 null,
                 null,
                 null
@@ -311,6 +315,7 @@ class RagChatServiceTest {
                 new com.springairag.core.config.RagProperties(),
                 null,
                 List.of(mockProvider),
+                null,
                 null
         );
 
@@ -410,9 +415,9 @@ class RagChatServiceTest {
     }
 
     @Test
-    @DisplayName("chat with model field triggers ChatModelRouter.resolve()")
+    @DisplayName("chat with model field uses ChatModelRouter.orderedCandidates()")
     void chat_withModelField_triggersRouterResolve() {
-        when(chatModelRouter.resolve("minimax")).thenReturn(null); // null means use default
+        when(chatModelRouter.orderedCandidates("minimax")).thenReturn(List.of());
         RagChatService service = createService();
         ChatClientResponse chatClientResponse = mockChatClientResponse("回答");
 
@@ -426,13 +431,12 @@ class RagChatServiceTest {
         request.setModel("minimax");
         ChatResponse response = service.chat(request);
 
-        // Verify router was called with the model name
-        verify(chatModelRouter).resolve("minimax");
+        verify(chatModelRouter).orderedCandidates("minimax");
         assertEquals("回答", response.getAnswer());
     }
 
     @Test
-    @DisplayName("chat without model field does NOT call ChatModelRouter.resolve()")
+    @DisplayName("chat without model field still asks router for ordered candidates (primary+fallbacks)")
     void chat_withoutModelField_doesNotTriggerRouterResolve() {
         RagChatService service = createService();
         ChatClientResponse chatClientResponse = mockChatClientResponse("默认回答");
@@ -444,16 +448,14 @@ class RagChatServiceTest {
         when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
         ChatRequest request = new ChatRequest("问题", "session-default");
-        // model is null by default
         ChatResponse response = service.chat(request);
 
-        // Router should NOT be called when model is null
-        verify(chatModelRouter, never()).resolve(anyString());
+        verify(chatModelRouter).orderedCandidates(isNull());
         assertEquals("默认回答", response.getAnswer());
     }
 
     @Test
-    @DisplayName("chat with blank model field does NOT call ChatModelRouter.resolve()")
+    @DisplayName("chat with blank model field treats as unscoped preferred model")
     void chat_withBlankModelField_doesNotTriggerRouterResolve() {
         RagChatService service = createService();
         ChatClientResponse chatClientResponse = mockChatClientResponse("空白模型回答");
@@ -465,11 +467,10 @@ class RagChatServiceTest {
         when(callResponse.chatClientResponse()).thenReturn(chatClientResponse);
 
         ChatRequest request = new ChatRequest("问题", "session-blank");
-        request.setModel("   "); // blank string
+        request.setModel("   ");
         ChatResponse response = service.chat(request);
 
-        // Router should NOT be called for blank model
-        verify(chatModelRouter, never()).resolve(anyString());
+        verify(chatModelRouter).orderedCandidates("   ");
         assertEquals("空白模型回答", response.getAnswer());
     }
 }

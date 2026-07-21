@@ -1,8 +1,10 @@
 # 故障排查指南
 
-> 📖 English | 📖 中文
+> 📖 [English](troubleshooting.md) · 📖 [中文](troubleshooting-zh-CN.md)
 
 > 常见问题和解决方案，按症状分类。
+>
+> 文档导航：[index-zh-CN.md](index-zh-CN.md)
 
 ---
 
@@ -184,12 +186,39 @@ rag:
 ```bash
 # 检查 API Key 配置
 echo $OPENAI_API_KEY | head -c 10
+echo $SPRING_AI_OPENAI_API_KEY | head -c 10
 
 # 检查 base-url 是否正确
-grep "base-url" application.yml
+grep -n "base-url\|baseUrl" spring-ai-rag-core/src/main/resources/application*.yml
 ```
 
-**解决**：确认 API Key 有效且未过期，base-url 与 provider 匹配。
+**解决**：
+
+1. 确认 API Key 有效且未过期，base-url 与 provider 匹配。  
+2. **`base-url` 不要包含 `/v1` 后缀**。Spring AI 的 OpenAI 兼容客户端会自动追加 `/v1/chat/completions` 或 `/v1/embeddings`；若已带 `/v1`，最终变成 `/v1/v1/...` → 401/404。  
+   - 正确示例：`https://api.deepseek.com`、`https://api.siliconflow.cn`  
+   - 错误示例：`https://api.deepseek.com/v1`  
+   - 参考：[Spring AI #710](https://github.com/spring-projects/spring-ai/issues/710)
+
+### 启动后配置像没生效 / 连不上模型或数据库
+
+**症状**：`.env` 已填写，但应用仍用默认值或报鉴权/连接失败。
+
+**原因**：仅 `source .env` 后执行 `mvn spring-boot:run` 时，fork 出的 JVM 不一定继承全部变量。
+
+**解决**：
+
+```bash
+# 推荐：项目脚本显式传参
+bash scripts/start-server.sh
+
+# 或 export 后启动，并确认 profile
+export $(cat .env | grep -v '^#' | xargs)
+export SPRING_PROFILES_ACTIVE=postgresql
+mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
+```
+
+本地默认端口为 **8081**（不是 8080）。
 
 ---
 

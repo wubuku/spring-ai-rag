@@ -144,6 +144,48 @@ class HybridSearchAdvisorTest {
         assertEquals("HybridSearchAdvisor", advisor.getName());
     }
 
+
+    @Test
+    void before_withDocumentIds_passesFilterToRetriever() {
+        List<RetrievalResult> mockResults = List.of(createResult("doc-1", "scoped", 0.9));
+        when(hybridRetriever.search(eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5)))
+                .thenReturn(mockResults);
+
+        Prompt prompt = new Prompt(new UserMessage("scoped query"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(Map.of(
+                        HybridSearchAdvisor.DOCUMENT_IDS_KEY, List.of(1L, 2L),
+                        HybridSearchAdvisor.MAX_RESULTS_KEY, 5
+                ))
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        verify(hybridRetriever).search(eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5));
+        Object contextResults = result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
+        assertEquals(1, ((List<?>) contextResults).size());
+    }
+
+    @Test
+    void before_emptyDocumentIdsWithFilter_returnsEmptyWithoutCallingRetriever() {
+        Prompt prompt = new Prompt(new UserMessage("isolated"));
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(prompt)
+                .context(Map.of(
+                        HybridSearchAdvisor.DOCUMENT_IDS_KEY, List.of(),
+                        HybridSearchAdvisor.FILTER_REQUESTED_KEY, true
+                ))
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        verifyNoInteractions(hybridRetriever);
+        Object contextResults = result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
+        assertNotNull(contextResults);
+        assertTrue(((List<?>) contextResults).isEmpty());
+    }
+
     private RetrievalResult createResult(String docId, String text, double score) {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId(docId);

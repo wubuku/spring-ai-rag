@@ -7,6 +7,7 @@ import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.service.CollectionDocumentResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,8 @@ class RagSearchControllerTest {
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
         documentRepository = mock(RagDocumentRepository.class);
-        controller = new RagSearchController(hybridRetriever, documentRepository);
+        CollectionDocumentResolver resolver = new CollectionDocumentResolver(documentRepository);
+        controller = new RagSearchController(hybridRetriever, resolver);
     }
 
     @Test

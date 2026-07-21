@@ -111,13 +111,15 @@ class RagChatControllerTest {
     void stream_returnsSseEmitter() {
         ChatRequest request = new ChatRequest("流式问题", "session-stream");
 
-        when(ragChatService.chatStream(eq("流式问题"), eq("session-stream"), isNull()))
+        when(ragChatService.chatStream(any(ChatRequest.class)))
                 .thenReturn(Flux.just("Hello", " World"));
 
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("流式问题", "session-stream", null);
+        verify(ragChatService).chatStream(argThat(r ->
+                "流式问题".equals(r.getMessage()) &&
+                "session-stream".equals(r.getSessionId())));
     }
 
     @Test
@@ -125,13 +127,28 @@ class RagChatControllerTest {
         ChatRequest request = new ChatRequest("流式问题", "session-stream");
         request.setDomainId("medical");
 
-        when(ragChatService.chatStream(eq("流式问题"), eq("session-stream"), eq("medical")))
+        when(ragChatService.chatStream(any(ChatRequest.class)))
                 .thenReturn(Flux.just("回答"));
 
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
-        verify(ragChatService).chatStream("流式问题", "session-stream", "medical");
+        verify(ragChatService).chatStream(argThat(r -> "medical".equals(r.getDomainId())));
+    }
+
+    @Test
+    void stream_withCollectionIds_passesToService() {
+        ChatRequest request = new ChatRequest("流式问题", "session-stream");
+        request.setCollectionIds(List.of(1L, 2L));
+
+        when(ragChatService.chatStream(any(ChatRequest.class)))
+                .thenReturn(Flux.just("回答"));
+
+        SseEmitter emitter = controller.stream(request);
+
+        assertNotNull(emitter);
+        verify(ragChatService).chatStream(argThat(r ->
+                r.getCollectionIds() != null && r.getCollectionIds().equals(List.of(1L, 2L))));
     }
 
     // ==================== getHistory ====================

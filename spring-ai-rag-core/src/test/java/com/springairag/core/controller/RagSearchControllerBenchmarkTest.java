@@ -40,7 +40,7 @@ class RagSearchControllerBenchmarkTest {
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
         documentRepository = mock(RagDocumentRepository.class);
-        controller = new RagSearchController(hybridRetriever, documentRepository);
+        controller = new RagSearchController(hybridRetriever, new com.springairag.core.service.CollectionDocumentResolver(documentRepository));
 
         RetrievalResult mockResult = new RetrievalResult();
         mockResult.setDocumentId("doc-benchmark");

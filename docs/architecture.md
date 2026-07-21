@@ -1,7 +1,11 @@
 # Architecture Design
 
+> 📖 [English](architecture.md) · 📖 [中文](architecture-zh-CN.md)
+
 > **spring-ai-rag** — A model-agnostic, domain-decoupled, componentized general-purpose RAG service framework.
 > This document is intended for core developers and architecture reviewers.
+>
+> Doc hub: [index.md](index.md) · Completion status: [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md)
 
 ---
 

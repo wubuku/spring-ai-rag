@@ -17,6 +17,7 @@ import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.resilience.LlmCircuitBreaker;
+import com.springairag.core.service.CollectionDocumentResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -83,6 +84,7 @@ public class RagChatService {
     private final RagMetricsService metricsService; // optional, null when actuator is not present
     private final LlmCircuitBreaker circuitBreaker; // optional, null when not enabled
     private final RetryTemplate retryTemplate; // LLM call retry template, optional
+    private final CollectionDocumentResolver collectionDocumentResolver; // optional for unit tests
 
     /**
      * Returns the LLM circuit breaker instance (may be null when not enabled)
@@ -108,7 +110,9 @@ public class RagChatService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             List<RagAdvisorProvider> customAdvisorProviders,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            RetryTemplate retryTemplate) {
+            RetryTemplate retryTemplate,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CollectionDocumentResolver collectionDocumentResolver) {
 
         this.chatClientBuilder = chatClientBuilder;
         this.chatModelRouter = chatModelRouter;
@@ -117,6 +121,7 @@ public class RagChatService {
         this.domainExtensionRegistry = domainExtensionRegistry;
         this.promptCustomizerChain = promptCustomizerChain;
         this.metricsService = metricsService;
+        this.collectionDocumentResolver = collectionDocumentResolver;
 
         if (ragProperties.getCircuitBreaker().isEnabled()) {
             this.circuitBreaker = new LlmCircuitBreaker(ragProperties.getCircuitBreaker());
@@ -208,12 +213,14 @@ public class RagChatService {
      * RAG Q&amp;A (built from ChatRequest), returns full response with citation sources
      */
     public ChatResponse chat(ChatRequest request) {
+        RetrievalScope scope = resolveRetrievalScope(request);
         return executeChat(
                 request.getMessage(),
                 request.getSessionId(),
                 request.getDomainId(),
                 request.getMetadata(),
-                request.getModel()
+                request.getModel(),
+                scope
         );
     }
 
@@ -224,55 +231,93 @@ public class RagChatService {
      */
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
             Map<String, Object> metadata, String model) {
-        // Circuit breaker check (fast-fail if OPEN)
+        return executeChat(userMessage, sessionId, domainId, metadata, model, RetrievalScope.unscoped());
+    }
+
+    private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
+            Map<String, Object> metadata, String model, RetrievalScope scope) {
+        // Circuit breaker check (fast-fail if OPEN) — before any model attempt
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
             throw new LlmCircuitOpenException();
         }
 
-        // Resolve model dynamically if specified and router is available (M5: MultiModel integration)
-        ChatClient effectiveClient = this.chatClient;
-        if (model != null && !model.isBlank() && chatModelRouter != null) {
-            ChatModel resolved = chatModelRouter.resolve(model);
-            if (resolved != null) {
-                effectiveClient = ChatClient.builder(resolved)
-                        .defaultAdvisors(sortedAdvisors).build();
-                log.info("Routing request to model '{}' via ChatModelRouter", model);
-            } else {
-                log.warn("Model '{}' could not be resolved, using default", model);
-            }
-        }
-
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
+        final RetrievalScope finalScope = scope != null ? scope : RetrievalScope.unscoped();
 
-        // Capture in final variable for lambda (effectiveClient may be reassigned above)
-        final ChatClient finalEffectiveClient = effectiveClient;
+        List<ChatClient> clients = resolveChatClientCandidates(model);
+        RuntimeException lastFailure = null;
 
-        long startTime = System.currentTimeMillis();
-        // Retryable LLM call: rebuild spec from captured parameters on each retry
-        Supplier<LlmCallResult> llmCall = () -> {
-            ChatClient.ChatClientRequestSpec s = finalEffectiveClient.prompt();
-            if (systemPrompt != null) {
-                s.system(systemPrompt);
+        for (int i = 0; i < clients.size(); i++) {
+            ChatClient client = clients.get(i);
+            final ChatClient attemptClient = client;
+            final int attemptIndex = i;
+            try {
+                Supplier<LlmCallResult> llmCall = () -> {
+                    ChatClient.ChatClientRequestSpec s = attemptClient.prompt();
+                    if (systemPrompt != null) {
+                        s.system(systemPrompt);
+                    }
+                    s.user(finalMessage);
+                    s.advisors(buildAdvisorParams(sessionId, domainId, metadata, finalScope));
+                    return invokeChatClient(s, System.currentTimeMillis());
+                };
+                LlmCallResult callResult = invokeWithRetry(llmCall);
+
+                if (metricsService != null) {
+                    metricsService.recordSuccess(callResult.elapsedMs, 0);
+                }
+                historyRepository.save(sessionId, userMessage, callResult.answer, null, metadata);
+
+                if (attemptIndex > 0) {
+                    log.info("Chat succeeded on fallback candidate index {} after earlier model failures",
+                            attemptIndex);
+                }
+
+                ChatResponse response = new ChatResponse(callResult.answer);
+                response.setTraceId(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
+                response.setSources(callResult.sources);
+                response.setMetadata(Map.of("sessionId", sessionId));
+                response.setStepMetrics(callResult.pipelineMetrics);
+                return response;
+            } catch (LlmCircuitOpenException e) {
+                // Do not try other models when circuit is open
+                throw e;
+            } catch (RuntimeException e) {
+                lastFailure = e;
+                log.warn("Chat model candidate {}/{} failed after retries: {} — trying next fallback if any",
+                        attemptIndex + 1, clients.size(), e.getMessage());
             }
-            s.user(finalMessage);
-            s.advisors(buildAdvisorParams(sessionId, domainId, metadata));
-            return invokeChatClient(s, System.currentTimeMillis());
-        };
-        LlmCallResult callResult = invokeWithRetry(llmCall);
-
-        if (metricsService != null) {
-            metricsService.recordSuccess(callResult.elapsedMs, 0);
         }
-        historyRepository.save(sessionId, userMessage, callResult.answer, null, metadata);
 
-        ChatResponse response = new ChatResponse(callResult.answer);
-        response.setTraceId(MDC.get(RequestTraceFilter.TRACE_ID_KEY));
-        response.setSources(callResult.sources);
-        response.setMetadata(Map.of("sessionId", sessionId));
-        response.setStepMetrics(callResult.pipelineMetrics);
-        return response;
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+        throw new IllegalStateException("No chat model available to handle request");
+    }
+
+    /**
+     * Resolve ordered ChatClient candidates: preferred model (if any) then configured fallbacks.
+     * Always includes at least the default chatClient.
+     */
+    private List<ChatClient> resolveChatClientCandidates(String model) {
+        List<ChatClient> clients = new ArrayList<>();
+        if (chatModelRouter != null) {
+            List<ChatModel> models = chatModelRouter.orderedCandidates(model);
+            for (ChatModel m : models) {
+                clients.add(ChatClient.builder(m).defaultAdvisors(sortedAdvisors).build());
+            }
+        } else if (model != null && !model.isBlank()) {
+            log.warn("Model '{}' requested but ChatModelRouter is not available — using default client", model);
+        }
+        // Always ensure default client is available as last resort
+        if (clients.isEmpty()) {
+            clients.add(this.chatClient);
+        } else if (!clients.contains(this.chatClient)) {
+            // Prefer not to compare ChatClient identity; default already covered if router empty
+        }
+        return clients;
     }
 
     /**
@@ -354,9 +399,15 @@ public class RagChatService {
                 userMessage, metadata != null ? metadata : Map.of());
     }
 
-    /** Builds Advisor parameters (session ID, domain, metadata) */
+    /** Builds Advisor parameters (session ID, domain, metadata, retrieval scope) */
     private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
             String sessionId, String domainId, Map<String, Object> metadata) {
+        return buildAdvisorParams(sessionId, domainId, metadata, RetrievalScope.unscoped());
+    }
+
+    private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
+            String sessionId, String domainId, Map<String, Object> metadata, RetrievalScope scope) {
+        RetrievalScope s = scope != null ? scope : RetrievalScope.unscoped();
         return a -> {
             a.param(ChatMemory.CONVERSATION_ID, sessionId);
             if (metadata != null) {
@@ -365,7 +416,57 @@ public class RagChatService {
             if (domainId != null) {
                 a.param("domainId", domainId);
             }
+            if (s.filterRequested()) {
+                a.param(HybridSearchAdvisor.FILTER_REQUESTED_KEY, Boolean.TRUE);
+                // Always pass a list (possibly empty) so HybridSearchAdvisor never searches all
+                a.param(HybridSearchAdvisor.DOCUMENT_IDS_KEY,
+                        s.documentIds() != null ? s.documentIds() : List.of());
+            } else if (s.documentIds() != null) {
+                a.param(HybridSearchAdvisor.DOCUMENT_IDS_KEY, s.documentIds());
+            }
+            if (s.maxResults() > 0) {
+                a.param(HybridSearchAdvisor.MAX_RESULTS_KEY, s.maxResults());
+            }
         };
+    }
+
+    /**
+     * Resolve collection/document filters from ChatRequest into a retrieval scope.
+     */
+    RetrievalScope resolveRetrievalScope(ChatRequest request) {
+        if (request == null) {
+            return RetrievalScope.unscoped();
+        }
+        int maxResults = request.getMaxResults() > 0 ? request.getMaxResults() : 5;
+        boolean collectionFilter = CollectionDocumentResolver.hasCollectionFilter(request.getCollectionIds());
+        boolean documentFilter = request.getDocumentIds() != null && !request.getDocumentIds().isEmpty();
+        boolean filterRequested = collectionFilter || documentFilter;
+
+        List<Long> resolved = null;
+        if (collectionDocumentResolver != null && (collectionFilter || documentFilter)) {
+            resolved = collectionDocumentResolver.resolveDocumentIds(
+                    request.getDocumentIds(), request.getCollectionIds());
+        } else if (documentFilter) {
+            resolved = request.getDocumentIds();
+        }
+
+        if (filterRequested && resolved == null) {
+            resolved = List.of();
+        }
+        return new RetrievalScope(resolved, filterRequested, maxResults);
+    }
+
+    /**
+     * Retrieval scope passed into advisor params.
+     *
+     * @param documentIds     null = no document filter; empty + filterRequested = no hits
+     * @param filterRequested true when caller asked for collection/document isolation
+     * @param maxResults      retrieval limit for HybridSearchAdvisor
+     */
+    record RetrievalScope(List<Long> documentIds, boolean filterRequested, int maxResults) {
+        static RetrievalScope unscoped() {
+            return new RetrievalScope(null, false, 0);
+        }
     }
 
     /** Extracts reranked retrieval results from advisor context as citation sources */
@@ -403,34 +504,52 @@ public class RagChatService {
      * RAG Q&amp;A (streaming, returns Flux with per-token output)
      */
     public Flux<String> chatStream(String userMessage, String sessionId) {
-        return chatClient.prompt()
-                .user(userMessage)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
-                .stream()
-                .content();
+        return chatStream(userMessage, sessionId, null, null, RetrievalScope.unscoped());
     }
 
     /**
      * RAG Q&amp;A (streaming, with domain support)
      */
     public Flux<String> chatStream(String userMessage, String sessionId, String domainId) {
-        ChatClient.ChatClientRequestSpec spec = chatClient.prompt();
+        return chatStream(userMessage, sessionId, domainId, null, RetrievalScope.unscoped());
+    }
 
-        // Apply domain extension system prompt
-        if (domainExtensionRegistry.hasExtensions()) {
-            String template = domainExtensionRegistry.getSystemPromptTemplate(domainId);
-            if (template != null) {
-                spec.system(template);
+    /**
+     * RAG Q&amp;A (streaming from full ChatRequest — collection/model parity with non-stream).
+     */
+    public Flux<String> chatStream(ChatRequest request) {
+        RetrievalScope scope = resolveRetrievalScope(request);
+        return chatStream(
+                request.getMessage(),
+                request.getSessionId(),
+                request.getDomainId(),
+                request.getModel(),
+                scope);
+    }
+
+    private Flux<String> chatStream(String userMessage, String sessionId, String domainId,
+                                    String model, RetrievalScope scope) {
+        ChatClient effectiveClient = this.chatClient;
+        if (model != null && !model.isBlank() && chatModelRouter != null) {
+            ChatModel resolved = chatModelRouter.resolve(model);
+            if (resolved != null) {
+                effectiveClient = ChatClient.builder(resolved)
+                        .defaultAdvisors(sortedAdvisors).build();
+                log.info("Streaming: routing request to model '{}' via ChatModelRouter", model);
+            } else {
+                log.warn("Streaming: model '{}' could not be resolved, using default", model);
             }
         }
 
+        ChatClient.ChatClientRequestSpec spec = effectiveClient.prompt();
+
+        String systemPrompt = buildSystemPrompt(domainId, null);
+        if (systemPrompt != null) {
+            spec.system(systemPrompt);
+        }
+
         spec.user(userMessage);
-        spec.advisors(a -> {
-            a.param(ChatMemory.CONVERSATION_ID, sessionId);
-            if (domainId != null) {
-                a.param("domainId", domainId);
-            }
-        });
+        spec.advisors(buildAdvisorParams(sessionId, domainId, null, scope));
 
         return spec.stream().content();
     }

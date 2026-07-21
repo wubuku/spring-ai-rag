@@ -115,6 +115,30 @@ public class ChatModelRouter {
     }
 
     /**
+     * Build ordered candidate models for a chat call.
+     *
+     * <p>When {@code preferredModelRef} is set, that model is tried first, then remaining
+     * models from {@link #getAllOrdered()}. When blank, returns {@link #getAllOrdered()}.
+     *
+     * @return ordered unique ChatModel instances (may be empty)
+     */
+    public List<ChatModel> orderedCandidates(String preferredModelRef) {
+        List<ChatModel> ordered = new ArrayList<>();
+        if (preferredModelRef != null && !preferredModelRef.isBlank()) {
+            ChatModel preferred = resolve(preferredModelRef);
+            if (preferred != null) {
+                ordered.add(preferred);
+            }
+        }
+        for (ChatModel m : getAllOrdered()) {
+            if (m != null && !ordered.contains(m)) {
+                ordered.add(m);
+            }
+        }
+        return ordered;
+    }
+
+    /**
      * Gets all registered ChatModel provider names.
      */
     public List<String> getAvailableProviders() {

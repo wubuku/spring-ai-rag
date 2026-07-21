@@ -93,8 +93,8 @@ public class RagChatController {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
-        log.info("RAG ask: sessionId={}, domain={}, message={}",
-                request.getSessionId(), request.getDomainId(),
+        log.info("RAG ask: sessionId={}, domain={}, collectionIds={}, message={}",
+                request.getSessionId(), request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         ChatResponse response = ragChatService.chat(request);
@@ -169,8 +169,8 @@ public class RagChatController {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
         String sessionId = request.getSessionId();
-        log.info("RAG stream: sessionId={}, domain={}, message={}",
-                sessionId, request.getDomainId(),
+        log.info("RAG stream: sessionId={}, domain={}, collectionIds={}, message={}",
+                sessionId, request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
         SseEmitter emitter = SseEmitters.create();
@@ -181,7 +181,8 @@ public class RagChatController {
         //   heartbeat: comment (: heartbeat\n\n) if enabled
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
 
-        ragChatService.chatStream(request.getMessage(), sessionId, request.getDomainId())
+        // Full ChatRequest path: collectionIds / documentIds / model parity with /ask
+        ragChatService.chatStream(request)
                 .subscribe(
                         chunk -> {
                             String json = "{\"choices\":[{\"delta\":{\"content\":\"" + SseEmitters.escapeJson(chunk) + "\"}}]}";
