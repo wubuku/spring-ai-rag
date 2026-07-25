@@ -23,6 +23,7 @@
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
 | 出问题排查 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 下文「常见陷阱」 |
 | Agent / Claude 协作 | [AGENTS.md](../AGENTS.md) → 本页 | [CLAUDE.md](../CLAUDE.md)、[TOOLS.md](../TOOLS.md)、[MEMORY.md](../MEMORY.md) |
+| Claude Code 使用 grok-4.5 | [claude-grok-proxy-zh-CN.md](claude-grok-proxy-zh-CN.md) | `scripts/run-claude-grok.sh` |
 
 英文文档与中文同名（去掉 `-zh-CN`），内容应对齐。
 
@@ -78,6 +79,7 @@
 | 文档 | 体积策略 | 说明 |
 |------|----------|------|
 | [CLAUDE.md](../CLAUDE.md) | **极短** | Claude Code 本地启动与硬性提示 |
+| [claude-grok-proxy-zh-CN.md](claude-grok-proxy-zh-CN.md) | 使用指南 | `run-claude-grok.sh` 最小配置、覆盖变量与排障 |
 | [AGENTS.md](../AGENTS.md) | **短** | Agent 总入口：原则 + 规则 + 文档地图 |
 | [TOOLS.md](../TOOLS.md) | 中 | 构建命令、DB、模型、路径、E2E 命令 |
 | [MEMORY.md](../MEMORY.md) | 中长 | 日常开发速查（包结构、API、踩坑） |

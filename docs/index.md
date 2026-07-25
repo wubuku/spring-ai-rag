@@ -23,6 +23,7 @@
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
 | Troubleshooting | [troubleshooting.md](troubleshooting.md) | “Common pitfalls” below |
 | Agent / Claude collaboration | [AGENTS.md](../AGENTS.md) → this page | [CLAUDE.md](../CLAUDE.md), [TOOLS.md](../TOOLS.md), [MEMORY.md](../MEMORY.md) |
+| Use grok-4.5 with Claude Code | [claude-grok-proxy.md](claude-grok-proxy.md) | `scripts/run-claude-grok.sh` |
 
 Chinese counterparts use the same basename with a `-zh-CN` suffix where available.
 
@@ -78,6 +79,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Size policy | Description |
 |-----|-------------|-------------|
 | [CLAUDE.md](../CLAUDE.md) | **Very short** | Claude Code local start & hard tips |
+| [claude-grok-proxy.md](claude-grok-proxy.md) | Guide | Minimum `run-claude-grok.sh` setup, overrides, and troubleshooting |
 | [AGENTS.md](../AGENTS.md) | **Short** | Agent hub: principles + rules + map |
 | [TOOLS.md](../TOOLS.md) | Medium | Build commands, DB, models, paths, E2E |
 | [MEMORY.md](../MEMORY.md) | Medium-long | Dev cheat sheet (packages, API, pitfalls) |
