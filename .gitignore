@@ -2,7 +2,6 @@
 # OpenClaw 工作区文件（不纳入版本管理）
 # ============================================
 .openclaw/
-AGENTS.md
 SOUL.md
 USER.md
 IDENTITY.md
@@ -57,4 +56,3 @@ e2e-start.sh
 e2e-test.properties
 test-results
 .playwright-mcp
-CLAUDE.md
