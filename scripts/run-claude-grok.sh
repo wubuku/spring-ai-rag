@@ -332,4 +332,10 @@ set +e
 claude "${claude_args[@]}" "$@"
 claude_status=$?
 set -e
+
+if proxy_is_ours; then
+  echo "[claude-grok] Proxy still running at ${PROXY_BASE_URL}." >&2
+  echo "[claude-grok] Stop with: $0 --stop-proxy" >&2
+fi
+
 exit "${claude_status}"
