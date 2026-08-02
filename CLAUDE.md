@@ -55,6 +55,6 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 | 配置 / API / 排障 | [docs/configuration-zh-CN.md](docs/configuration-zh-CN.md) · [docs/rest-api-zh-CN.md](docs/rest-api-zh-CN.md) · [docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
 | 测试 | [docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [docs/testing-guide.md](docs/testing-guide.md) |
 | 命令与模型 | [TOOLS.md](TOOLS.md) |
-| Claude Code + grok | [docs/claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) · `scripts/run-claude-grok.sh` |
+| Claude Code + grok | [docs/claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) · `scripts/run-claude-grok.sh`（退出后共享代理仍在运行，用 `--stop-proxy` 停止） |
 | 开发速查 | [MEMORY.md](MEMORY.md) |
 | 能力完成状态 | [docs/IMPLEMENTATION_COMPARISON.md](docs/IMPLEMENTATION_COMPARISON.md) |
