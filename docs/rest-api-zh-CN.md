@@ -16,34 +16,59 @@
 
 ### 认证
 
-启用 API Key 认证（`rag.security.enabled=true`）后，请求需携带以下任一凭据：
+请求凭据使用 Header：
 
 ```
-X-API-Key: your-api-key          # Header（推荐）
-?apiKey=your-api-key            # Query 参数（SSE / EventSource）
+Authorization: Bearer your-api-key
+X-API-Key: your-api-key
 ```
 
-角色权限：
+同时提供两个 Header 且值不一致时返回 `401`。
 
-| Key 角色 | `/api-keys` 列表 | `/api-keys` 创建 | `/api-keys` 删除 |
-|----------|------------------|------------------|------------------|
-| ADMIN | ✅ 全部 | ✅ 任意角色 | ✅ 任意 Key |
-| NORMAL | ❌ 403 | ✅ 仅 NORMAL（自助） | ❌ 403 |
+配置 `RAG_ROOT_API_KEY` 后进入独立服务 root 模式：
 
-数据库 Key 可通过 `allowedCollectionIds` 限制集合访问：
+- 所有 `/api/**` 自动要求 environment root 或有效数据库业务 Key。
+- query credential（`?apiKey=`）返回 `401`；SSE 使用 `fetch` + Header。
+- environment root 可访问 RAG 数据面并管理 API Key。
+- 数据库业务 Key具有 `FULL_RAG` 读写能力，但调用 `/api-keys` 管理端点返回 `403`。
+- legacy `rag.security.api-key` 在 root 模式下不参与认证。
 
-- `null` 或 `[]`：可访问全部集合
-- 非空列表：Search、Chat、Collection、Document、上传、PDF-to-RAG 均限制在这些集合内
-- 显式请求范围外集合返回 `403`
-- 受限 Key 未提供集合过滤时，检索自动收敛到其允许列表
-- ADMIN 与旧版静态 `rag.security.api-key` 保持全库权限
-- 受限 NORMAL Key 不能创建权限更宽的子 Key；轮换会保留原集合权限
+未配置 root 时保持 legacy 模式：`rag.security.enabled=true` 后接受上述 Header，并继续
+兼容 `?apiKey=`；数据库 ADMIN/NORMAL 与静态 Key 语义保持不变。
+
+#### `GET /api/v1/rag/auth/me`
+
+返回当前 principal 和能力。WebUI 使用该端点确认输入的是 environment root：
+
+```json
+{
+  "principalType": "ENVIRONMENT_ROOT",
+  "principalId": "environment-root",
+  "rootMode": true,
+  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"]
+}
+```
+
+数据库业务 Key返回 `DATABASE_API_KEY` 和
+`["RAG_READ", "RAG_WRITE"]`；WebUI 不允许其解锁管理台。响应带
+`Cache-Control: no-store`。
+
+数据库业务 Key可通过 `allowedCollectionIds` 限制集合访问：
+
+- `null` 或 `[]`：可访问全部集合。
+- 非空列表：Search、Chat、Collection、Document、上传、PDF-to-RAG 均限制在这些集合内。
+- 显式请求范围外集合返回 `403`。
+- 受限 Key 未提供集合过滤时，检索自动收敛到其允许列表。
 
 ### API 密钥管理
 
+root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为
+数据库 `NORMAL` 角色和产品语义 `FULL_RAG`：可读写 RAG 数据面，但不能管理 Key。
+未配置 root 时保留 legacy ADMIN/NORMAL 管理语义。
+
 #### `GET /api/v1/rag/api-keys`
 
-ADMIN 列出全部 Key。响应不会包含原始密钥：
+列出全部业务 Key。响应不会包含原始密钥或 hash：
 
 ```json
 [{
@@ -52,25 +77,27 @@ ADMIN 列出全部 Key。响应不会包含原始密钥：
   "role": "NORMAL",
   "allowedCollectionIds": [1, 2],
   "enabled": true,
-  "createdAt": "2026-04-15T00:00:00",
+  "createdAt": "2026-08-14T00:00:00",
   "lastUsedAt": null,
-  "expiresAt": null
+  "expiresAt": "2026-10-01T00:00:00"
 }]
 ```
 
 #### `POST /api/v1/rag/api-keys`
 
-创建 Key。`expiresAt` 与 `allowedCollectionIds` 均可省略；省略或传空集合表示全库权限。
+root 模式下 `expiresAt` 必填、必须在未来且最长 90 天。
+`allowedCollectionIds` 可省略；省略或传空集合表示可访问全部集合。
 
 ```json
 {
   "name": "My API Key",
-  "expiresAt": "2027-01-01T00:00:00",
+  "expiresAt": "2026-10-01T00:00:00",
   "allowedCollectionIds": [1, 2]
 }
 ```
 
-原始密钥仅在 `201 Created` 响应中返回一次：
+原始密钥仅在 `201 Created` 响应中返回一次，响应带
+`Cache-Control: no-store`：
 
 ```json
 {
@@ -78,13 +105,27 @@ ADMIN 列出全部 Key。响应不会包含原始密钥：
   "rawKey": "rag_sk_...",
   "name": "My API Key",
   "allowedCollectionIds": [1, 2],
-  "expiresAt": "2027-01-01T00:00:00"
+  "expiresAt": "2026-10-01T00:00:00"
 }
 ```
 
+#### `POST /api/v1/rag/api-keys/{keyId}/rotate`
+
+禁用旧 Key并生成同名新 Key，Collection 范围保持不变，raw secret 仅在本次
+`201 Created` 响应中返回。永久或超过 90 天的 legacy Key在 root 模式轮换时会收敛
+到最长 90 天；已过期或已禁用 Key不能轮换。
+
 #### `DELETE /api/v1/rag/api-keys/{keyId}`
 
-ADMIN 撤销 Key；最后一个 ADMIN Key 不允许删除。
+立即禁用指定业务 Key，成功返回 `204 No Content`。
+
+WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内存，刷新或退出后
+需要重新输入；外部调用方不需要 WebUI，只需持有分发的业务 Key：
+
+```bash
+curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+```
 
 ### API 限流
 

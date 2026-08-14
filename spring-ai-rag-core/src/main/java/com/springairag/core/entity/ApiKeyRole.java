@@ -14,7 +14,7 @@ public enum ApiKeyRole {
 
     /**
      * Normal key: can only access RAG functionality (chat, search, documents).
-     * Can also self-create other normal keys (self-service key provisioning).
+     * 在 environment root 模式下不能创建、轮换或吊销任何 API Key。
      */
     NORMAL
 }

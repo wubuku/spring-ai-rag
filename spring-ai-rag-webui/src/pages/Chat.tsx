@@ -7,7 +7,6 @@ import { chatApi } from '../api/chat';
 import { collectionsApi } from '../api/collections';
 import { evaluationApi } from '../api/evaluation';
 import { modelsApi } from '../api/models';
-import { getApiKey } from '../utils/apiKeyStorage';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import type { ChatSource } from '../types/api';
 import styles from './Chat.module.css';
@@ -59,7 +58,6 @@ export function Chat() {
     '';
 
   const { send, isConnected } = useChatSSE({
-    apiKey: getApiKey(),
     onChunk: (content: string) => {
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];

@@ -1,35 +1,35 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApiCalls } from './api-mocks';
+import { mockAllApiCalls, openProtectedPage } from './api-mocks';
 
 test.describe('Chat', () => {
   test('renders chat page with title', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await expect(page.getByRole('heading', { name: 'Chat' })).toBeVisible();
   });
 
   test('shows empty state message', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await expect(page.getByText('No messages yet. Start a conversation!')).toBeVisible();
   });
 
   test('shows input and send button', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await expect(page.locator('textarea')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
   });
 
   test('send button disabled when input is empty', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
   });
 
   test('type in textarea enables send button', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     const textarea = page.locator('textarea');
     await textarea.fill('What is RAG?');
     await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled();
@@ -46,7 +46,7 @@ test.describe('Chat', () => {
         body: 'event: done\ndata: {"status":"complete"}\n\n',
       });
     });
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
 
     await page.getByTestId('chat-model-select')
       .selectOption('openrouter/xiaomi/mimo-v2-pro');

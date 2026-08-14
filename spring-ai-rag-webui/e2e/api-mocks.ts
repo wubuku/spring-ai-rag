@@ -1,7 +1,77 @@
-import type { Page } from '@playwright/test';
+import { expect, type Page } from '@playwright/test';
+
+export const MOCK_ROOT_API_KEY = 'root_test_0123456789_abcdefghijklmnopqrstuvwxyz';
+export const MOCK_BUSINESS_API_KEY = 'rag_sk_business_test_0123456789abcdefghijklmnopqrstuvwxyz';
+
+export async function openProtectedPage(page: Page, path: string) {
+  await page.goto(path, { waitUntil: 'networkidle' });
+  await expect(page).toHaveURL(/\/webui\/unlock$/);
+  await page.getByTestId('root-api-key').fill(MOCK_ROOT_API_KEY);
+  await page.getByRole('button', { name: 'Unlock' }).click();
+  await expect(page).not.toHaveURL(/\/webui\/unlock$/);
+  await expect(page.getByText('Loading…', { exact: true })).toHaveCount(0);
+}
 
 // Shared API mocks for all tests
 export async function mockAllApiCalls(page: Page) {
+  await page.route('/api/v1/rag/auth/me', async route => {
+    const credential = route.request().headers()['x-api-key'];
+    if (credential === MOCK_ROOT_API_KEY) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          principalType: 'ENVIRONMENT_ROOT',
+          principalId: 'environment-root',
+          rootMode: true,
+          capabilities: ['RAG_READ', 'RAG_WRITE', 'API_KEY_MANAGE'],
+        }),
+      });
+      return;
+    }
+    if (credential === MOCK_BUSINESS_API_KEY) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          principalType: 'DATABASE_API_KEY',
+          principalId: 'rag_k_business',
+          rootMode: true,
+          capabilities: ['RAG_READ', 'RAG_WRITE'],
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'UNAUTHORIZED', message: 'Invalid API Key' }),
+    });
+  });
+
+  await page.route(/\/api\/v1\/rag\/api-keys(?:\/.*)?$/, async route => {
+    const method = route.request().method();
+    if (method === 'GET') {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+      return;
+    }
+    if (method === 'POST') {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          keyId: 'rag_k_mock',
+          rawKey: MOCK_BUSINESS_API_KEY,
+          name: 'Mock Key',
+          expiresAt: '2026-11-12T12:00:00',
+          warning: 'Store this key securely. It will not be shown again.',
+        }),
+      });
+      return;
+    }
+    await route.fulfill({ status: 204, body: '' });
+  });
+
   // Evaluation endpoints (P0-5)
   await page.route('**/api/v1/rag/evaluation/**', async route => {
     const url = route.request().url();
@@ -143,7 +213,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock alerts endpoint
-  page.route('/api/v1/rag/alerts', route => {
+  page.route(/\/api\/v1\/rag\/alerts.*/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',

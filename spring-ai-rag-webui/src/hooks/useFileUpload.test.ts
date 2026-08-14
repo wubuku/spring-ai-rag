@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useFileUpload } from './useFileUpload';
+import { clearCredential, setCredential } from '../auth/credentialStore';
 
 describe('useFileUpload', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    clearCredential();
   });
 
   it('initializes with empty uploads and isUploading false', () => {
@@ -79,5 +81,35 @@ describe('useFileUpload', () => {
       result.current.clearUploads();
     });
     expect(result.current.uploads).toEqual([]);
+  });
+
+  it('sends uploads with the in-memory credential header', async () => {
+    setCredential('root-secret');
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response('{}', { status: 200 })
+    );
+    const files = {
+      0: new File(['hello'], 'test.txt', { type: 'text/plain' }),
+      length: 1,
+      item: (index: number) => index === 0
+        ? new File(['hello'], 'test.txt', { type: 'text/plain' })
+        : null,
+      [Symbol.iterator]: function* () {
+        yield this[0];
+      },
+    } as FileList;
+    const { result } = renderHook(() => useFileUpload({}));
+
+    await act(async () => {
+      result.current.uploadFiles(files);
+    });
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/v1/rag/documents/upload',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { 'X-API-Key': 'root-secret' },
+      })
+    );
   });
 });

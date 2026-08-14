@@ -59,12 +59,13 @@ describe('Settings', () => {
     expect(screen.getByText(/settings\.title/i)).toBeInTheDocument();
   });
 
-  it('renders all four tabs', () => {
+  it('renders settings tabs without an API key persistence tab', () => {
     render(<Settings />);
     // Mock returns keys: settings.llmProvider, settings.retrieval, settings.cache, language label
     expect(screen.getByRole('button', { name: /settings\.llmProvider/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /settings\.retrieval/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /settings\.cache/i })).toBeInTheDocument();
+    expect(screen.queryByText('settings.ragApiKey')).not.toBeInTheDocument();
   });
 
   it('shows save button disabled when no changes', () => {

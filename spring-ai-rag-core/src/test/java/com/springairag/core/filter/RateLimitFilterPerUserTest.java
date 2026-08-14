@@ -84,6 +84,24 @@ class RateLimitFilterPerUserTest {
     class ApiKeyStrategy {
 
         @Test
+        @DisplayName("authenticated principal ID takes precedence over raw header")
+        void authenticatedPrincipalTakesPrecedenceOverRawHeader() throws Exception {
+            RateLimitFilter filter = createFilter("api-key", Map.of());
+            request.addHeader("X-API-Key", "raw-root-secret-must-not-be-stored");
+            request.setAttribute(
+                    ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE,
+                    "environment-root");
+
+            filter.doFilterInternal(request, response, chain);
+
+            assertEquals("environment-root",
+                    request.getAttribute(RateLimitFilter.CLIENT_ID_ATTRIBUTE));
+            assertTrue(filter.getWindows().containsKey("environment-root"));
+            assertFalse(filter.getWindows()
+                    .containsKey("raw-root-secret-must-not-be-stored"));
+        }
+
+        @Test
         @DisplayName("with API Key present, rates by key")
         void apiKeyStrategyUsesKey() throws Exception {
             RateLimitFilter filter = createFilter("api-key", Map.of());

@@ -1,17 +1,20 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useChatSSE } from './useSSE';
+import { clearCredential, setCredential } from '../auth/credentialStore';
 
 describe('useChatSSE', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
+    clearCredential();
     // Mock fetch with a successful SSE stream response
     mockFetch = vi.fn();
     vi.stubGlobal('fetch', mockFetch);
   });
 
   afterEach(() => {
+    clearCredential();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });
@@ -86,6 +89,27 @@ describe('useChatSSE', () => {
         }),
       })
     );
+  });
+
+  it('sends the in-memory credential in a header and never in the URL', async () => {
+    setupMockStream();
+    setCredential('root-secret');
+    const { result } = renderHook(() => useChatSSE({}));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/rag/chat/stream',
+      expect.objectContaining({
+        headers: {
+          'Content-Type': 'application/json',
+          'X-API-Key': 'root-secret',
+        },
+      })
+    );
+    expect(mockFetch.mock.calls[0][0]).not.toContain('root-secret');
   });
 
   it('close cancels the reader', async () => {

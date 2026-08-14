@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApiCalls } from './api-mocks';
+import { mockAllApiCalls, openProtectedPage } from './api-mocks';
 
 /**
  * Chat SSE Streaming E2E Tests (UI smoke; API mocked)
@@ -10,14 +10,14 @@ test.describe('Chat SSE Streaming', () => {
   });
 
   test('chat page loads with textarea and send button', async ({ page }) => {
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await page.waitForSelector('textarea', { timeout: 20000 });
     await expect(page.locator('textarea')).toBeVisible();
     await expect(page.getByRole('button', { name: /send|chat\.send/i })).toBeVisible();
   });
 
   test('textarea accepts input', async ({ page }) => {
-    await page.goto('/webui/chat', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/chat');
     await page.waitForSelector('textarea', { timeout: 20000 });
     const textarea = page.locator('textarea');
     await textarea.fill('What is RAG?');
@@ -34,13 +34,13 @@ test.describe('Documents Upload', () => {
   });
 
   test('upload zone is visible on documents page', async ({ page }) => {
-    await page.goto('/webui/documents', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/documents');
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toBeAttached({ timeout: 15000 });
   });
 
   test('can select a file for upload', async ({ page }) => {
-    await page.goto('/webui/documents', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/documents');
     const fileInput = page.locator('input[type="file"]');
     await expect(fileInput).toBeAttached({ timeout: 15000 });
   });

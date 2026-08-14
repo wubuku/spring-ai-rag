@@ -1,4 +1,5 @@
 import { Component, type ReactNode } from 'react';
+import { getCredentialHeaders } from '../../auth/credentialStore';
 import styles from './ErrorBoundary.module.css';
 
 interface Props {
@@ -34,7 +35,10 @@ async function reportErrorToServer(payload: ClientErrorPayload): Promise<void> {
   try {
     await fetch('/api/v1/rag/client-errors', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...getCredentialHeaders(),
+      },
       body: JSON.stringify(payload),
     });
   } catch {

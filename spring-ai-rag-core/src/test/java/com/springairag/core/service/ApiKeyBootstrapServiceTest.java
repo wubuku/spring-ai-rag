@@ -4,6 +4,7 @@ import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -34,6 +35,9 @@ class ApiKeyBootstrapServiceTest {
     @Mock
     private ApplicationArguments args;
 
+    @Mock
+    private EnvironmentRootCredentialResolver rootCredentialResolver;
+
     @Captor
     private ArgumentCaptor<RagApiKey> ragApiKeyCaptor;
 
@@ -41,7 +45,8 @@ class ApiKeyBootstrapServiceTest {
 
     @BeforeEach
     void setUp() {
-        bootstrapService = new ApiKeyBootstrapService(apiKeyManagementService, apiKeyRepository);
+        bootstrapService = new ApiKeyBootstrapService(
+                apiKeyManagementService, apiKeyRepository, rootCredentialResolver);
     }
 
     @Nested
@@ -57,6 +62,17 @@ class ApiKeyBootstrapServiceTest {
 
             verify(apiKeyManagementService, never()).generateKey(any());
             verify(apiKeyRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("skips legacy bootstrap when environment root is configured")
+        void skipsWhenEnvironmentRootIsConfigured() {
+            when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+            bootstrapService.run(args);
+
+            verifyNoInteractions(apiKeyRepository);
+            verifyNoInteractions(apiKeyManagementService);
         }
 
         @Test

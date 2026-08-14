@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { getCredentialHeaders } from '../auth/credentialStore';
 
 export interface ChatStreamChunkEvent {
   choices: Array<{
@@ -28,7 +29,6 @@ export interface UseChatSSEOptions {
   onSources?: (sources: Array<{documentId: string | number; title?: string; content?: string; score?: number}>, conversationId?: string) => void;
   onError?: (error: string) => void;
   onDone?: () => void;
-  apiKey?: string;
 }
 
 export interface UseChatSSEReturn {
@@ -37,8 +37,7 @@ export interface UseChatSSEReturn {
     message: string,
     collectionIds?: number[] | number,
     conversationId?: string,
-    model?: string,
-    apiKey?: string
+    model?: string
   ) => void;
   close: () => void;
 }
@@ -53,7 +52,7 @@ export interface UseChatSSEReturn {
  * - Error event:   event:error\ndata:{"error":{"message":"..."}}
  */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
-  const { onChunk, onSources, onError, onDone, apiKey } = options;
+  const { onChunk, onSources, onError, onDone } = options;
   const [isConnected, setIsConnected] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const accumulatedContentRef = useRef<string>('');
@@ -91,15 +90,11 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       message: string,
       collectionIds?: number[] | number,
       conversationId?: string,
-      model?: string,
-      apiKeyParam?: string
+      model?: string
     ) => {
       close();
       setIsConnected(true);
       accumulatedContentRef.current = '';
-
-      // Use API key from parameter, options, or fall back to empty string
-      const effectiveApiKey = apiKeyParam || apiKey || '';
 
       // Normalize singular collectionId for backward compatibility
       const normalizedIds: number[] | undefined =
@@ -110,14 +105,12 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             : [collectionIds];
 
       try {
-        // Append apiKey to URL query string if available (for SSE auth compatibility)
-        const url = effectiveApiKey
-          ? `/api/v1/rag/chat/stream?apiKey=${encodeURIComponent(effectiveApiKey)}`
-          : '/api/v1/rag/chat/stream';
-
-        const response = await fetch(url, {
+        const response = await fetch('/api/v1/rag/chat/stream', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            ...getCredentialHeaders(),
+          },
           body: JSON.stringify({
             message,
             collectionIds: normalizedIds && normalizedIds.length > 0 ? normalizedIds : undefined,
@@ -196,7 +189,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         readerRef.current = null;
       }
     },
-    [close, apiKey]
+    [close]
   );
 
   return { isConnected, send, close };

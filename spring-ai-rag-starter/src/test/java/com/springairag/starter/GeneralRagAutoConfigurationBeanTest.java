@@ -69,36 +69,6 @@ class GeneralRagAutoConfigurationBeanTest {
     }
 
     @Nested
-    @DisplayName("apiKeyAuthFilterRegistration()")
-    class ApiKeyAuthFilterRegistrationTest {
-
-        @Test
-        @DisplayName("returns FilterRegistrationBean<ApiKeyAuthFilter>")
-        void returnsFilterRegistration() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
-            assertNotNull(registration);
-            assertInstanceOf(FilterRegistrationBean.class, registration);
-        }
-
-        @Test
-        @DisplayName("URL pattern includes /api/*")
-        void urlPatternIncludesApi() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
-            assertTrue(registration.getUrlPatterns().contains("/api/*"));
-        }
-
-        @Test
-        @DisplayName("Order is 1 (auth after rate limiting)")
-        void orderIs1() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.apiKeyAuthFilterRegistration(properties, null);
-            assertEquals(1, registration.getOrder());
-        }
-    }
-
-    @Nested
     @DisplayName("rateLimitFilterRegistration()")
     class RateLimitFilterRegistrationTest {
 

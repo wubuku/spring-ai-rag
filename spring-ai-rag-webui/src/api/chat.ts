@@ -18,7 +18,6 @@ export interface ChatRequest {
   collectionIds?: number[];
   conversationId?: string;
   useHybridSearch?: boolean;
-  apiKey?: string;
 }
 
 export const chatApi = {
@@ -28,19 +27,14 @@ export const chatApi = {
       data
     ),
 
-  stream: (data: ChatRequest): EventSource =>
-    new EventSource(
-      `/api/v1/rag/chat/stream?apiKey=${encodeURIComponent(data.apiKey ?? '')}&message=${encodeURIComponent(data.message)}&collectionId=${data.collectionId ?? ''}&conversationId=${data.conversationId ?? ''}`
-    ),
-
   getHistory: (conversationId: string, limit = 50) =>
     apiClient.get<{ messages: ChatMessage[] }>(`/chat/history/${conversationId}?limit=${limit}`),
 
   clearHistory: (conversationId: string) => apiClient.delete(`/chat/history/${conversationId}`),
 
   exportConversation: (conversationId: string, format: 'json' | 'md') =>
-    fetch(`/api/v1/rag/chat/export/${conversationId}?format=${format}`).then(res => {
-      if (!res.ok) throw new Error('Export failed');
-      return res.blob();
-    }),
+    apiClient.get<Blob>(`/chat/export/${encodeURIComponent(conversationId)}`, {
+      params: { format },
+      responseType: 'blob',
+    }).then(response => response.data),
 };

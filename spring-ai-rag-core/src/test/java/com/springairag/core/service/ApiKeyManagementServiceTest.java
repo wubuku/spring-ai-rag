@@ -470,11 +470,11 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
-    void generateRawKey_uuidSuffixIs32HexChars() {
+    void generateRawKey_suffixContains256Bits() {
         String rawKey = service.generateRawKey();
-        String uuidPart = rawKey.substring("rag_sk_".length());
-        assertEquals(32, uuidPart.length());
-        assertTrue(uuidPart.matches("[0-9a-f]{32}"));
+        String randomPart = rawKey.substring("rag_sk_".length());
+        assertEquals(64, randomPart.length());
+        assertTrue(randomPart.matches("[0-9a-f]{64}"));
     }
 
     @Test
@@ -483,9 +483,9 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
-    void generateKeyId_is12HexCharsAfterPrefix() {
+    void generateKeyId_contains128BitsAfterPrefix() {
         String keyId = service.generateKeyId();
-        assertEquals(12, keyId.substring("rag_k_".length()).length());
+        assertEquals(32, keyId.substring("rag_k_".length()).length());
     }
 
     @Test
@@ -545,6 +545,130 @@ class ApiKeyManagementServiceTest {
 
         assertNull(service.validateKeyEntity(rawKey));
         assertNull(getValidationCache().getIfPresent(hash));
+    }
+
+    @Test
+    void generateManagedKey_requiresExpiry() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Managed", null);
+
+        IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.generateManagedKey(request));
+
+        assertTrue(error.getMessage().contains("required"));
+        verify(apiKeyRepository, never()).save(any());
+    }
+
+    @Test
+    void generateManagedKey_rejectsExpiredValue() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
+                "Managed", LocalDateTime.now().minusMinutes(1));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.generateManagedKey(request));
+        verify(apiKeyRepository, never()).save(any());
+    }
+
+    @Test
+    void generateManagedKey_rejectsExpiryBeyondNinetyDays() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
+                "Managed", LocalDateTime.now().plusDays(91));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.generateManagedKey(request));
+        verify(apiKeyRepository, never()).save(any());
+    }
+
+    @Test
+    void generateManagedKey_createsNormalFullRagKey() {
+        LocalDateTime expiry = LocalDateTime.now().plusDays(30);
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Managed", expiry);
+
+        ApiKeyCreatedResponse response = service.generateManagedKey(request);
+
+        assertEquals(expiry, response.getExpiresAt());
+        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
+        verify(apiKeyRepository).save(captor.capture());
+        assertEquals(com.springairag.core.entity.ApiKeyRole.NORMAL,
+                captor.getValue().getRole());
+    }
+
+    @Test
+    void rotateManagedKey_capsPermanentLegacyKeyAtNinetyDays() {
+        LocalDateTime before = LocalDateTime.now().plusDays(89);
+        RagApiKey existing = activeKey("rag_k_permanent", null);
+        when(apiKeyRepository.findByKeyId("rag_k_permanent"))
+                .thenReturn(Optional.of(existing));
+
+        ApiKeyCreatedResponse response =
+                service.rotateManagedKey("rag_k_permanent");
+
+        assertNotNull(response);
+        assertTrue(response.getExpiresAt().isAfter(before));
+        assertTrue(response.getExpiresAt()
+                .isBefore(LocalDateTime.now().plusDays(91)));
+        verify(apiKeyRepository).disableByKeyId("rag_k_permanent");
+    }
+
+    @Test
+    void rotateManagedKey_preservesShorterExistingExpiry() {
+        LocalDateTime expiry = LocalDateTime.now().plusDays(30);
+        RagApiKey existing = activeKey("rag_k_short", expiry);
+        when(apiKeyRepository.findByKeyId("rag_k_short"))
+                .thenReturn(Optional.of(existing));
+
+        ApiKeyCreatedResponse response = service.rotateManagedKey("rag_k_short");
+
+        assertEquals(expiry, response.getExpiresAt());
+    }
+
+    @Test
+    void rotateManagedKey_capsOverlongExistingExpiry() {
+        RagApiKey existing = activeKey(
+                "rag_k_long", LocalDateTime.now().plusDays(180));
+        when(apiKeyRepository.findByKeyId("rag_k_long"))
+                .thenReturn(Optional.of(existing));
+
+        ApiKeyCreatedResponse response = service.rotateManagedKey("rag_k_long");
+
+        assertTrue(response.getExpiresAt()
+                .isBefore(LocalDateTime.now().plusDays(91)));
+    }
+
+    @Test
+    void rotateManagedKey_rejectsExpiredKeyWithoutDisablingIt() {
+        RagApiKey existing = activeKey(
+                "rag_k_expired_managed", LocalDateTime.now().minusMinutes(1));
+        when(apiKeyRepository.findByKeyId("rag_k_expired_managed"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.rotateManagedKey("rag_k_expired_managed"));
+
+        verify(apiKeyRepository, never()).disableByKeyId(anyString());
+        verify(apiKeyRepository, never()).save(any());
+    }
+
+    @Test
+    void rotateManagedKey_rejectsDisabledKey() {
+        RagApiKey existing = activeKey(
+                "rag_k_disabled_managed", LocalDateTime.now().plusDays(30));
+        existing.setEnabled(false);
+        when(apiKeyRepository.findByKeyId("rag_k_disabled_managed"))
+                .thenReturn(Optional.of(existing));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.rotateManagedKey("rag_k_disabled_managed"));
+        verify(apiKeyRepository, never()).disableByKeyId(anyString());
+    }
+
+    private RagApiKey activeKey(String keyId, LocalDateTime expiresAt) {
+        RagApiKey key = new RagApiKey();
+        key.setKeyId(keyId);
+        key.setName("Managed Key");
+        key.setEnabled(true);
+        key.setExpiresAt(expiresAt);
+        return key;
     }
 
     // Helper to access static VALIDATED_KEY_CACHE via reflection

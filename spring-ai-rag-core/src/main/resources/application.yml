@@ -241,6 +241,11 @@ app:
 # Embedding Model Configuration (independent of Chat provider, always active)
 # ============================================
 rag:
+  security:
+    # Dedicated deployment root for unlocking the Web console and managing business API keys.
+    # When configured, /api/** requires this root key or a valid database-backed business key.
+    root-api-key: ${RAG_ROOT_API_KEY:}
+
   embedding:
     api-key: ${SILICONFLOW_API_KEY:}
     # ⚠️ IMPORTANT: Spring AI OpenAiEmbeddingModel automatically appends /v1/embeddings

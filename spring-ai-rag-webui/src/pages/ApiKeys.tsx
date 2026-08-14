@@ -1,10 +1,42 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { apiKeysApi, type ApiKeyResponse, type ApiKeyCreateRequest } from '../api/apikeys';
+import {
+  apiKeysApi,
+  type ApiKeyCreatedResponse,
+  type ApiKeyResponse,
+  type ApiKeyCreateRequest,
+} from '../api/apikeys';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import styles from './ApiKeys.module.css';
+
+const MAX_EXPIRY_DAYS = 90;
+
+function toLocalDateTimeInput(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return [
+    date.getFullYear(),
+    '-',
+    pad(date.getMonth() + 1),
+    '-',
+    pad(date.getDate()),
+    'T',
+    pad(date.getHours()),
+    ':',
+    pad(date.getMinutes()),
+  ].join('');
+}
+
+function createExpiryBounds() {
+  const now = new Date();
+  const minimum = new Date(now.getTime() + 5 * 60 * 1000);
+  const maximum = new Date(now.getTime() + MAX_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  return {
+    minimum: toLocalDateTimeInput(minimum),
+    maximum: toLocalDateTimeInput(maximum),
+  };
+}
 
 export function ApiKeys() {
   const { t } = useTranslation();
@@ -51,7 +83,7 @@ function KeyList() {
           <div className={styles.tableHead}>
             <span>{t('apiKeys.name')}</span>
             <span>{t('apiKeys.keyId')}</span>
-            <span>{t('apiKeys.role')}</span>
+            <span>{t('apiKeys.profile')}</span>
             <span>{t('apiKeys.collectionAccess')}</span>
             <span>{t('apiKeys.created')}</span>
             <span>{t('apiKeys.lastUsed')}</span>
@@ -151,7 +183,7 @@ function getRoleBadge(role: string | undefined, t: (key: string) => string) {
     return <span className={`${styles.badge} ${styles.badgeAdmin}`}>{t('apiKeys.admin')}</span>;
   }
   if (role === 'NORMAL') {
-    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.normal')}</span>;
+    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.fullRag')}</span>;
   }
   return <span className={`${styles.badge} ${styles.badgeNormal}`}>—</span>;
 }
@@ -174,17 +206,11 @@ function getStatusBadge(key: ApiKeyResponse, t: (key: string) => string) {
 function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
-  const [expiresAt, setExpiresAt] = useState('');
+  const [expiryBounds] = useState(createExpiryBounds);
+  const [expiresAt, setExpiresAt] = useState(expiryBounds.maximum);
   const [restrictCollections, setRestrictCollections] = useState(false);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
-  const [createdKey, setCreatedKey] = useState<{
-    keyId: string;
-    rawKey: string;
-    name: string;
-    expiresAt?: string;
-    allowedCollectionIds?: number[];
-    warning: string;
-  } | null>(null);
+  const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
   const collectionsQuery = useQuery({
@@ -205,11 +231,11 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
-    const data: ApiKeyCreateRequest = { name: name.trim() };
-    if (expiresAt) {
-      data.expiresAt = new Date(expiresAt).toISOString();
-    }
+    if (!name.trim() || !expiresAt) return;
+    const data: ApiKeyCreateRequest = {
+      name: name.trim(),
+      expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt,
+    };
     if (restrictCollections) {
       data.allowedCollectionIds = selectedCollectionIds;
     }
@@ -225,7 +251,14 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   };
 
   const handleClose = () => {
+    setCreatedKey(null);
     onClose();
+  };
+
+  const copyRawKey = async () => {
+    if (!createdKey) return;
+    await navigator.clipboard.writeText(createdKey.rawKey);
+    showToast(t('apiKeys.copied'), 'success');
   };
 
   return (
@@ -251,14 +284,24 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               />
             </div>
             <div className={styles.formGroup}>
-              <label className={styles.label}>{t('apiKeys.expiresAt')} {t('common.optional')}</label>
+              <label className={styles.label}>{t('apiKeys.expiresAt')} {t('common.required')}</label>
               <input
                 type="datetime-local"
                 className={styles.input}
                 value={expiresAt}
                 onChange={e => setExpiresAt(e.target.value)}
+                min={expiryBounds.minimum}
+                max={expiryBounds.maximum}
+                required
               />
               <div className={styles.hint}>{t('apiKeys.expiresAtHint')}</div>
+            </div>
+            <div className={styles.formGroup}>
+              <span className={styles.label}>{t('apiKeys.profile')}</span>
+              <span className={`${styles.badge} ${styles.badgeNormal}`}>
+                {t('apiKeys.fullRag')}
+              </span>
+              <div className={styles.hint}>{t('apiKeys.fullRagHint')}</div>
             </div>
             <fieldset className={styles.scopeFieldset}>
               <legend className={styles.label}>{t('apiKeys.collectionAccess')}</legend>
@@ -320,6 +363,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 disabled={
                   createMutation.isPending
                   || !name.trim()
+                  || !expiresAt
                   || (restrictCollections && selectedCollectionIds.length === 0)
                 }
               >
@@ -338,7 +382,12 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.keyId')}</div>
               <div className={styles.mono}>{createdKey.keyId}</div>
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.rawKey')}</div>
-              <div className={styles.rawKey}>{createdKey.rawKey}</div>
+              <div className={styles.rawKeyRow}>
+                <div className={styles.rawKey}>{createdKey.rawKey}</div>
+                <button type="button" className={styles.copyBtn} onClick={copyRawKey}>
+                  {t('apiKeys.copy')}
+                </button>
+              </div>
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
                 {t('apiKeys.collectionAccess')}
               </div>
@@ -381,7 +430,14 @@ function RotateKeyModal({ keyId, onClose }: { keyId: string; onClose: () => void
   });
 
   const handleClose = () => {
+    setRotatedKey(null);
     onClose();
+  };
+
+  const copyRawKey = async () => {
+    if (!rotatedKey) return;
+    await navigator.clipboard.writeText(rotatedKey.rawKey);
+    showToast(t('apiKeys.copied'), 'success');
   };
 
   return (
@@ -425,7 +481,12 @@ function RotateKeyModal({ keyId, onClose }: { keyId: string; onClose: () => void
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.keyId')}</div>
               <div className={styles.mono}>{rotatedKey.keyId}</div>
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>{t('apiKeys.rawKey')}</div>
-              <div className={styles.rawKey}>{rotatedKey.rawKey}</div>
+              <div className={styles.rawKeyRow}>
+                <div className={styles.rawKey}>{rotatedKey.rawKey}</div>
+                <button type="button" className={styles.copyBtn} onClick={copyRawKey}>
+                  {t('apiKeys.copy')}
+                </button>
+              </div>
               <div className={styles.warning}>{rotatedKey.warning}</div>
             </div>
             <div className={styles.modalActions}>

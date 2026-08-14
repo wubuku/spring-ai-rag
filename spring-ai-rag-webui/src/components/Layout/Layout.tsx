@@ -3,6 +3,7 @@ import { Outlet, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { ThemeToggle } from '../ThemeToggle';
+import { useApiKeyAuth } from '../../auth/ApiKeyAuthContext';
 import styles from './Layout.module.css';
 
 const NAV_ITEMS = [
@@ -24,6 +25,7 @@ const MOBILE_BREAKPOINT = 768;
 
 export function Layout() {
   const { t } = useTranslation();
+  const { logout } = useApiKeyAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < MOBILE_BREAKPOINT);
 
@@ -70,7 +72,7 @@ export function Layout() {
         <div className={styles.themeToggle}>
           <ThemeToggle />
         </div>
-        <nav>
+        <nav className={styles.nav}>
           {NAV_ITEMS.map(item => (
             <NavLink
               key={item.to}
@@ -83,6 +85,11 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className={styles.consoleActions}>
+          <button type="button" className={styles.logoutBtn} onClick={logout}>
+            {t('unlock.logout')}
+          </button>
+        </div>
       </aside>
 
       <div className={styles.mainWrapper}>

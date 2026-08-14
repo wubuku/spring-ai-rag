@@ -22,13 +22,21 @@ class RagSecurityPropertiesTest {
     }
 
     @Test
+    void defaults_rootApiKeyIsEmpty() {
+        RagSecurityProperties props = new RagSecurityProperties();
+        assertEquals("", props.getRootApiKey());
+    }
+
+    @Test
     void setters_updateAllValues() {
         RagSecurityProperties props = new RagSecurityProperties();
 
         props.setApiKey("sk-secure-api-key-12345");
+        props.setRootApiKey("root-key");
         props.setEnabled(true);
 
         assertEquals("sk-secure-api-key-12345", props.getApiKey());
+        assertEquals("root-key", props.getRootApiKey());
         assertTrue(props.isEnabled());
     }
 

@@ -13,6 +13,15 @@ vi.mock('../ErrorBoundary', () => ({
   ErrorBoundary: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
+vi.mock('../../auth/ApiKeyAuthContext', () => ({
+  useApiKeyAuth: () => ({
+    identity: null,
+    isUnlocked: true,
+    unlock: vi.fn(),
+    logout: vi.fn(),
+  }),
+}));
+
 describe('Layout', () => {
   it('renders sidebar with navigation items', () => {
     render(
@@ -30,6 +39,7 @@ describe('Layout', () => {
     expect(screen.getByText('nav.metrics')).toBeInTheDocument();
     expect(screen.getByText('nav.alerts')).toBeInTheDocument();
     expect(screen.getByText('nav.settings')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'unlock.logout' })).toBeInTheDocument();
   });
 
   it('renders ThemeToggle', () => {

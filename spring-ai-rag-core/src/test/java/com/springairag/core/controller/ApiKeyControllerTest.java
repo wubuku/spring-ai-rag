@@ -6,9 +6,11 @@ import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -46,6 +48,14 @@ class ApiKeyControllerTest {
     @MockitoBean
     private RagApiKeyRepository apiKeyRepository;
 
+    @MockitoBean
+    private EnvironmentRootCredentialResolver rootCredentialResolver;
+
+    @BeforeEach
+    void setUpRootMode() {
+        when(rootCredentialResolver.isConfigured()).thenReturn(false);
+    }
+
     /**
      * Creates a mock RagApiKey entity with the given role, for setting as a request attribute.
      */
@@ -61,6 +71,15 @@ class ApiKeyControllerTest {
     private static org.springframework.test.web.servlet.request.RequestPostProcessor adminCaller() {
         return req -> { req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
                 mockCaller("rag_k_admin", ApiKeyRole.ADMIN)); return req; };
+    }
+
+    private static org.springframework.test.web.servlet.request.RequestPostProcessor rootCaller() {
+        return req -> {
+            req.setAttribute(ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE, true);
+            req.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE,
+                    ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT);
+            return req;
+        };
     }
 
     @TestConfiguration
@@ -88,7 +107,8 @@ class ApiKeyControllerTest {
                 .andExpect(jsonPath("$.keyId").value("rag_k_abc123"))
                 .andExpect(jsonPath("$.rawKey").value("rag_sk_rawkey456"))
                 .andExpect(jsonPath("$.name").value("Production Server"))
-                .andExpect(jsonPath("$.warning").value("Save this key now — it will not be shown again."));
+                .andExpect(jsonPath("$.warning").value("Save this key now — it will not be shown again."))
+                .andExpect(header().string("Cache-Control", "no-store"));
     }
 
     @Test
@@ -212,5 +232,87 @@ class ApiKeyControllerTest {
 
         mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_unknown/rotate"))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void rootMode_rootCreatesManagedKey() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        ApiKeyCreatedResponse created = new ApiKeyCreatedResponse(
+                "rag_k_managed",
+                "rag_sk_managed",
+                "Service A",
+                LocalDateTime.now().plusDays(30));
+        when(apiKeyService.generateManagedKey(any())).thenReturn(created);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(rootCaller())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Service A",
+                                  "expiresAt":"2026-09-13T00:00:00"
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.keyId").value("rag_k_managed"));
+
+        verify(apiKeyService).generateManagedKey(any(ApiKeyCreateRequest.class));
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void rootMode_businessKeyCannotCreateKeys() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(req -> {
+                            req.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    mockCaller("rag_k_business", ApiKeyRole.NORMAL));
+                            return req;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Escalation",
+                                  "expiresAt":"2026-09-13T00:00:00"
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
+
+        verify(apiKeyService, never()).generateManagedKey(any());
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void rootMode_rootCanListWithoutDatabaseAdminEntity() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(apiKeyService.listKeys()).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/rag/api-keys").with(rootCaller()))
+                .andExpect(status().isOk())
+                .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void rootMode_rootRotationUsesManagedRulesAndNoStore() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(apiKeyService.rotateManagedKey("rag_k_old")).thenReturn(
+                new ApiKeyCreatedResponse(
+                        "rag_k_new",
+                        "rag_sk_new",
+                        "Service A",
+                        LocalDateTime.now().plusDays(30)));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys/rag_k_old/rotate")
+                        .with(rootCaller()))
+                .andExpect(status().isCreated())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.keyId").value("rag_k_new"));
+
+        verify(apiKeyService).rotateManagedKey("rag_k_old");
+        verify(apiKeyService, never()).rotateKey(anyString());
     }
 }

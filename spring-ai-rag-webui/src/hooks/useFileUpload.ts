@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { getCredentialHeaders } from '../auth/credentialStore';
 
 interface UploadProgress {
   fileName: string;
@@ -76,6 +77,7 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
         // Make the upload request
         const response = await fetch('/api/v1/rag/documents/upload', {
           method: 'POST',
+          headers: getCredentialHeaders(),
           body: formData,
         });
 

@@ -5,6 +5,7 @@ import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -31,16 +32,23 @@ public class ApiKeyBootstrapService implements ApplicationRunner {
 
     private final ApiKeyManagementService apiKeyManagementService;
     private final RagApiKeyRepository apiKeyRepository;
+    private final EnvironmentRootCredentialResolver rootCredentialResolver;
 
     public ApiKeyBootstrapService(ApiKeyManagementService apiKeyManagementService,
-                                   RagApiKeyRepository apiKeyRepository) {
+                                   RagApiKeyRepository apiKeyRepository,
+                                   EnvironmentRootCredentialResolver rootCredentialResolver) {
         this.apiKeyManagementService = apiKeyManagementService;
         this.apiKeyRepository = apiKeyRepository;
+        this.rootCredentialResolver = rootCredentialResolver;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        if (rootCredentialResolver.isConfigured()) {
+            log.info("Environment root mode active; legacy ADMIN key bootstrap is disabled");
+            return;
+        }
         if (apiKeyRepository.count() > 0) {
             // Keys already exist — nothing to bootstrap
             return;

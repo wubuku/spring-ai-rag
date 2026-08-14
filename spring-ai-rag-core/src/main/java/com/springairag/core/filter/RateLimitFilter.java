@@ -154,6 +154,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return new ClientId(resolveClientIp(request), "ip");
         }
         if ("api-key".equals(strategy)) {
+            Object authenticatedKey = request.getAttribute(
+                    ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
+            if (authenticatedKey instanceof String key && !key.isBlank()) {
+                return new ClientId(key, "api-key");
+            }
             String apiKey = request.getHeader(API_KEY_HEADER);
             if (apiKey != null && !apiKey.isBlank()) {
                 return new ClientId(apiKey, "api-key");

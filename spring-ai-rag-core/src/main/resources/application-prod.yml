@@ -1,12 +1,13 @@
 # Production profile — safe defaults for deployment
 # Activate: SPRING_PROFILES_ACTIVE=prod  or  prod,postgresql
 #
-# Bootstrap admin API key is printed once to logs when rag_api_key table is empty
-# (ApiKeyBootstrapService). Copy it immediately; static rag.security.api-key is optional.
+# Set RAG_ROOT_API_KEY (at least 32 printable ASCII characters) to enable the standalone
+# service MVP. In root mode the legacy log bootstrap is disabled.
 
 rag:
   security:
-    # Require X-API-Key or ?apiKey= on /api/** (DB keys and optional static key)
+    # Require X-API-Key or ?apiKey= on /api/** in legacy mode.
+    # A configured RAG_ROOT_API_KEY overrides this flag and rejects query credentials.
     enabled: true
     # Optional legacy static key; leave empty to rely on DB keys from bootstrap / management API
     api-key: ${RAG_API_KEY:}

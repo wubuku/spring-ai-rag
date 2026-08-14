@@ -5,14 +5,12 @@ import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagSecurityProperties;
 import com.springairag.core.config.RagRateLimitProperties;
 import com.springairag.core.config.RagTracingProperties;
+import com.springairag.core.config.RagWebSecurityConfiguration;
 import com.springairag.core.extension.DefaultDomainRagExtension;
-import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.RequestTraceFilter;
-import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.metrics.ComponentHealthService;
 import com.springairag.core.metrics.RagMetricsService;
@@ -39,7 +37,7 @@ import org.springframework.context.annotation.Primary;
 @ConditionalOnClass(name = "org.springframework.ai.chat.client.ChatClient")
 @ConditionalOnProperty(prefix = "general.rag", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({GeneralRagProperties.class, ApiSloProperties.class, RagAlertProperties.class})
-@Import(ApiSloConfig.class)
+@Import({ApiSloConfig.class, RagWebSecurityConfiguration.class})
 public class GeneralRagAutoConfiguration {
 
     /**
@@ -70,24 +68,6 @@ public class GeneralRagAutoConfiguration {
     @ConditionalOnMissingBean(RagMetricsService.class)
     public RagMetricsService ragMetricsService(MeterRegistry meterRegistry) {
         return new RagMetricsService(meterRegistry);
-    }
-
-    /**
-     * API Key authentication filter
-     */
-    @Bean
-    public FilterRegistrationBean<ApiKeyAuthFilter> apiKeyAuthFilterRegistration(
-            @Autowired(required = false) RagProperties properties,
-            @Autowired(required = false) ApiKeyManagementService apiKeyManagementService) {
-        RagSecurityProperties security =
-                properties != null ? properties.getSecurity()
-                        : new RagSecurityProperties();
-        ApiKeyAuthFilter filter = new ApiKeyAuthFilter(
-                security.getApiKey(), security.isEnabled(), apiKeyManagementService);
-        FilterRegistrationBean<ApiKeyAuthFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/api/*");
-        registration.setOrder(1);
-        return registration;
     }
 
     /**

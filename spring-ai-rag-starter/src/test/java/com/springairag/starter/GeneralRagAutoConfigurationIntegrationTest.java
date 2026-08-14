@@ -4,6 +4,7 @@ import com.springairag.api.service.DomainRagExtension;
 import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.config.RagAlertProperties;
+import com.springairag.core.config.RagWebSecurityConfiguration;
 import com.springairag.core.extension.DefaultDomainRagExtension;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -84,13 +85,13 @@ class GeneralRagAutoConfigurationIntegrationTest {
         }
 
         @Test
-        @DisplayName("@Import imports ApiSloConfig")
+        @DisplayName("@Import imports API SLO and shared web security")
         void importsConfigs() {
             var ann = GeneralRagAutoConfiguration.class
                     .getAnnotation(Import.class);
             assertNotNull(ann);
             assertArrayEquals(
-                    new Class<?>[]{ApiSloConfig.class},
+                    new Class<?>[]{ApiSloConfig.class, RagWebSecurityConfiguration.class},
                     ann.value());
         }
     }
@@ -123,17 +124,6 @@ class GeneralRagAutoConfigurationIntegrationTest {
                     org.springframework.boot.autoconfigure.condition.ConditionalOnClass.class));
             assertNotNull(method.getAnnotation(
                     org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean.class));
-        }
-
-        @Test
-        @DisplayName("apiKeyAuthFilterRegistration: returns FilterRegistrationBean<ApiKeyAuthFilter>")
-        void filterBean() throws Exception {
-            var method = GeneralRagAutoConfiguration.class
-                    .getMethod("apiKeyAuthFilterRegistration",
-                            com.springairag.core.config.RagProperties.class,
-                            com.springairag.core.service.ApiKeyManagementService.class);
-            assertNotNull(method.getAnnotation(Bean.class));
-            assertEquals(FilterRegistrationBean.class, method.getReturnType());
         }
 
         @Test

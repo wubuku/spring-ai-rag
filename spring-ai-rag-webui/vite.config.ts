@@ -9,7 +9,10 @@ function webuiDevMiddleware(): Plugin {
     configureServer(server) {
       server.middlewares.use((req, _res, next) => {
         if (req.url?.startsWith('/webui')) {
-          req.url = req.url.replace(/^\/webui/, '') || '/';
+          const acceptsHtml = req.headers.accept?.includes('text/html');
+          if (acceptsHtml && req.url !== '/webui/') {
+            req.url = '/webui/';
+          }
         }
         next();
       });

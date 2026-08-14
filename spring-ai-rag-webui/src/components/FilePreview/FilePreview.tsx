@@ -16,6 +16,7 @@ interface FilePreviewProps {
 export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
   const { t } = useTranslation();
   const [htmlContent, setHtmlContent] = useState<string>('');
+  const [objectUrl, setObjectUrl] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -24,49 +25,54 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
   useEffect(() => {
     if (entry.type === 'directory') return;
 
-    // For Markdown and text content, fetch and render
-    if (mimeType.startsWith('text/') ||
-        mimeType === 'application/json' ||
-        mimeType === 'application/pdf' ||
-        mimeType.includes('markdown')) {
-      setLoading(true);
-      setError(null);
+    let active = true;
+    let nextObjectUrl = '';
+    setLoading(true);
+    setError(null);
+    setHtmlContent('');
+    setObjectUrl('');
 
-      const controller = new AbortController();
-      const encoded = encodeURIComponent(entry.path);
-
-      fetch(`/api/v1/rag/files/preview?path=${encoded}`, { signal: controller.signal })
-        .then(response => {
-          if (!response.ok) throw new Error(response.statusText);
-          return response.text();
-        })
-        .then(html => {
-          // Extract body content from the full HTML page
+    const load = async () => {
+      try {
+        if (mimeType.startsWith('image/') || mimeType === 'application/pdf') {
+          const blob = await filesApi.getRawFile(entry.path);
+          nextObjectUrl = URL.createObjectURL(blob);
+          if (active) setObjectUrl(nextObjectUrl);
+        } else if (
+          mimeType.startsWith('text/')
+          || mimeType === 'application/json'
+          || mimeType.includes('markdown')
+        ) {
+          const html = await filesApi.getPreviewHtml(entry.path);
           const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-          const bodyContent = bodyMatch ? bodyMatch[1] : html;
-          setHtmlContent(bodyContent);
-          setLoading(false);
-        })
-        .catch(err => {
-          if (err.name === 'AbortError') return; // Ignore abort errors
-          setError(err instanceof Error ? err.message : String(err));
-          setLoading(false);
-        });
+          if (active) setHtmlContent(bodyMatch ? bodyMatch[1] : html);
+        }
+      } catch (err) {
+        if (active) setError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
 
-      // Cleanup: abort fetch if component unmounts or dependencies change
-      return () => controller.abort();
-    } else {
-      setLoading(false);
-      setHtmlContent('');
-    }
+    load();
+    return () => {
+      active = false;
+      if (nextObjectUrl) URL.revokeObjectURL(nextObjectUrl);
+    };
   }, [entry.path, entry.type, mimeType, reloadKey]);
 
   // ── Image preview ──────────────────────────────────────────────────────────
   if (mimeType.startsWith('image/')) {
+    if (loading) {
+      return <div className={styles.contentPreview}><Skeleton width="100%" height="240px" /></div>;
+    }
+    if (error || !objectUrl) {
+      return <div className={styles.errorBox}>{t('files.previewError', { error: error ?? 'Unavailable' })}</div>;
+    }
     return (
       <div className={styles.imageContainer}>
         <img
-          src={filesApi.rawFileUrl(entry.path)}
+          src={objectUrl}
           alt={entry.name}
           className={styles.image}
         />
@@ -76,10 +82,16 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
 
   // ── PDF preview ───────────────────────────────────────────────────────────
   if (mimeType === 'application/pdf') {
+    if (loading) {
+      return <div className={styles.contentPreview}><Skeleton width="100%" height="320px" /></div>;
+    }
+    if (error || !objectUrl) {
+      return <div className={styles.errorBox}>{t('files.previewError', { error: error ?? 'Unavailable' })}</div>;
+    }
     return (
       <div className={styles.pdfContainer}>
         <object
-          data={filesApi.rawFileUrl(entry.path)}
+          data={objectUrl}
           type="application/pdf"
           className={styles.pdfObject}
         >
@@ -87,7 +99,7 @@ export function FilePreview({ entry, reloadKey }: FilePreviewProps) {
             <span>📄</span>
             <p>{t('files.pdfNoPreview')}</p>
             <a
-              href={filesApi.rawFileUrl(entry.path)}
+              href={objectUrl}
               target="_blank"
               rel="noopener noreferrer"
               className={styles.downloadLink}

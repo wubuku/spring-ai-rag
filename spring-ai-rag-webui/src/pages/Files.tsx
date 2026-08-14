@@ -117,11 +117,19 @@ export function Files() {
     setPreviewKey(k => k + 1);
   }, []);
 
-  const handleOpenRaw = useCallback(() => {
+  const handleOpenRaw = useCallback(async () => {
     if (selectedEntry) {
-      window.open(filesApi.rawFileUrl(selectedEntry.path), '_blank');
+      try {
+        const blob = await filesApi.getRawFile(selectedEntry.path);
+        const objectUrl = URL.createObjectURL(blob);
+        window.open(objectUrl, '_blank', 'noopener,noreferrer');
+        window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        showToast(t('files.previewError', { error: message }), 'error');
+      }
     }
-  }, [selectedEntry]);
+  }, [selectedEntry, showToast, t]);
 
   // ── Trigger Embedding ────────────────────────────────────────────────────
 

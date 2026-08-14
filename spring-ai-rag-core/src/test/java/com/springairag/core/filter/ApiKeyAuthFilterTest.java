@@ -2,6 +2,7 @@ package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
@@ -10,6 +11,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.dao.DataAccessResourceFailureException;
 
 import java.io.IOException;
 
@@ -22,6 +24,8 @@ import static org.mockito.Mockito.*;
 class ApiKeyAuthFilterTest {
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
+    private static final String ROOT_KEY =
+            "root-2026-08-14-9f4c2a7b6d1e8a3c";
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
     private FilterChain filterChain;
@@ -233,5 +237,145 @@ class ApiKeyAuthFilterTest {
 
         verify(filterChain).doFilter(request, response);
         assertEquals(200, response.getStatus());
+    }
+
+    @Test
+    void rootMode_authDisabledStillRequiresCredential()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("legacy-static", false, null);
+        request.setRequestURI("/api/v1/rag/documents");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+        verify(filterChain, never()).doFilter(any(), any());
+    }
+
+    @Test
+    void rootMode_bearerRootSetsStablePrincipal()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("", false, null);
+        request.setRequestURI("/api/v1/rag/auth/me");
+        request.addHeader("Authorization", "Bearer " + ROOT_KEY);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertEquals(EnvironmentRootCredentialResolver.PRINCIPAL_ID,
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE));
+        assertEquals(ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT,
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE));
+        assertEquals(Boolean.TRUE,
+                request.getAttribute(ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE));
+    }
+
+    @Test
+    void rootMode_databaseBusinessKeyPassesWithoutRootMarker()
+            throws ServletException, IOException {
+        ApiKeyManagementService service = mock(ApiKeyManagementService.class);
+        RagApiKey key = new RagApiKey();
+        key.setKeyId("rag_k_business");
+        when(service.validateKeyEntity("rag_sk_business")).thenReturn(key);
+        ApiKeyAuthFilter filter = rootFilter("", false, service);
+        request.setRequestURI("/api/v1/rag/search");
+        request.addHeader("X-API-Key", "rag_sk_business");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertEquals("rag_k_business",
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE));
+        assertNull(request.getAttribute(
+                ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE));
+    }
+
+    @Test
+    void rootMode_rejectsQueryCredential()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("", false, null);
+        request.setRequestURI("/api/v1/rag/chat/stream");
+        request.setParameter("apiKey", ROOT_KEY);
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+        assertTrue(response.getContentAsString().contains("Query-string"));
+    }
+
+    @Test
+    void rootMode_rejectsConflictingHeaders()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("", false, null);
+        request.setRequestURI("/api/v1/rag/search");
+        request.addHeader("X-API-Key", ROOT_KEY);
+        request.addHeader("Authorization", "Bearer different-credential-value");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+        assertTrue(response.getContentAsString().contains("Conflicting"));
+    }
+
+    @Test
+    void rootMode_doesNotAcceptLegacyStaticFallback()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("legacy-static", false, null);
+        request.setRequestURI("/api/v1/rag/search");
+        request.addHeader("X-API-Key", "legacy-static");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+    }
+
+    @Test
+    void rootMode_cacheStatsRequiresAuthentication()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = rootFilter("", false, null);
+        request.setRequestURI("/api/v1/rag/cache/stats");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(401, response.getStatus());
+    }
+
+    @Test
+    void rootMode_databaseFailureReturns503WithoutStaticFallback()
+            throws ServletException, IOException {
+        ApiKeyManagementService service = mock(ApiKeyManagementService.class);
+        when(service.validateKeyEntity("rag_sk_candidate"))
+                .thenThrow(new DataAccessResourceFailureException("db unavailable"));
+        ApiKeyAuthFilter filter = rootFilter("rag_sk_candidate", false, service);
+        request.setRequestURI("/api/v1/rag/search");
+        request.addHeader("X-API-Key", "rag_sk_candidate");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        assertEquals(503, response.getStatus());
+        assertTrue(response.getContentAsString()
+                .contains("CREDENTIAL_SERVICE_UNAVAILABLE"));
+    }
+
+    @Test
+    void legacyMode_queryCredentialRemainsSupported()
+            throws ServletException, IOException {
+        ApiKeyAuthFilter filter = new ApiKeyAuthFilter("legacy-static", true);
+        request.setRequestURI("/api/v1/rag/chat/stream");
+        request.setParameter("apiKey", "legacy-static");
+
+        filter.doFilterInternal(request, response, filterChain);
+
+        verify(filterChain).doFilter(request, response);
+        assertEquals(ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC,
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE));
+    }
+
+    private ApiKeyAuthFilter rootFilter(
+            String legacyKey, boolean enabled, ApiKeyManagementService service) {
+        return new ApiKeyAuthFilter(
+                legacyKey,
+                enabled,
+                service,
+                new EnvironmentRootCredentialResolver(ROOT_KEY));
     }
 }

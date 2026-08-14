@@ -105,7 +105,22 @@ QueryRewriteAdvisor (+10)
 
 ## 7. 安全与 Collection ACL
 
-当前内部 API Key 支持：
+当前支持两种兼容运行模式。
+
+独立服务 MVP 模式由 `RAG_ROOT_API_KEY` 显式启用：
+
+- environment root 自动保护 `/api/**`，不依赖 legacy 认证开关。
+- root 可通过 `/webui/unlock` 解锁管理台；凭据只保存在页面内存，刷新后重新输入。
+- 只有 root 能创建、列出、轮换和吊销业务 Key。
+- root 创建的 Key固定为 `FULL_RAG` 数据面能力，可读写 RAG 数据、可限制 Collection，
+  但不能管理其他 Key。
+- 业务 Key expiry 必填且最长 90 天；raw secret 仅在创建或轮换响应中显示一次。
+- root 模式只接受 Bearer / `X-API-Key` Header，拒绝 query credential，并禁用旧 ADMIN
+  bootstrap/raw 日志分发。
+
+未配置 root 时保留 legacy ADMIN/NORMAL/static-key 行为。
+
+数据库 API Key 共同支持：
 
 - hash 查询。
 - `ADMIN` / `NORMAL` 角色。
@@ -113,13 +128,12 @@ QueryRewriteAdvisor (+10)
 - `allowedCollectionIds`。
 - Chat、Search、Collection、Document、PDF-to-RAG 数据面 ACL。
 
-但它还不是适合外部模型服务的完整凭据系统：
+该 MVP 只承诺单实例、TLS、受控管理网络，还不是完整的多租户外部凭据系统：
 
 - schema 仍保留明文列。
 - NORMAL key 委派边界需要收紧。
 - rotation 缺少稳定 principal / family。
 - 缺少事务化最后一个 ADMIN 保护。
-- bootstrap secret 通过日志分发。
 - 多实例吊销、共享限流和写放大尚未解决。
 
 这些边界见 [openai-compatibility-readiness-zh-CN.md](openai-compatibility-readiness-zh-CN.md)，

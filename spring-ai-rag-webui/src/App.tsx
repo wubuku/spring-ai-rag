@@ -3,6 +3,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { lazy, Suspense } from 'react';
 import { Layout } from './components/Layout/Layout';
 import { ToastProvider } from './components/Toast';
+import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
+import { ProtectedRoute } from './auth/ProtectedRoute';
+import { Unlock } from './pages/Unlock';
 
 import './styles/global.css';
 
@@ -58,9 +61,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
         <BrowserRouter basename="/webui">
-          <Routes>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Navigate to="dashboard" replace />} />
+          <ApiKeyAuthProvider>
+            <Routes>
+              <Route path="/unlock" element={<Unlock />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Navigate to="dashboard" replace />} />
               <Route
                 path="dashboard"
                 element={
@@ -157,16 +163,19 @@ export default function App() {
                   </Suspense>
                 }
               />
-              <Route
-                path="settings"
-                element={
-                  <Suspense fallback={<PageFallback />}>
-                    <Settings />
-                  </Suspense>
-                }
-              />
-            </Route>
-          </Routes>
+                  <Route
+                    path="settings"
+                    element={
+                      <Suspense fallback={<PageFallback />}>
+                        <Settings />
+                      </Suspense>
+                    }
+                  />
+                </Route>
+              </Route>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </ApiKeyAuthProvider>
         </BrowserRouter>
       </ToastProvider>
     </QueryClientProvider>

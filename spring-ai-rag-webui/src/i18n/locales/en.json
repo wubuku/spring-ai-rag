@@ -13,6 +13,15 @@
     "files": "Files",
     "evaluation": "Evaluation"
   },
+  "unlock": {
+    "title": "Unlock Management Console",
+    "rootApiKey": "Root API Key",
+    "submit": "Unlock",
+    "unlocking": "Verifying…",
+    "invalidKey": "Unable to unlock. Use a valid root API key.",
+    "memoryOnly": "The credential remains in page memory only. Refreshing or signing out requires it again.",
+    "logout": "Sign out"
+  },
   "common": {
     "loading": "Loading…",
     "error": "Error",
@@ -270,7 +279,7 @@
     "rawKey": "Raw Key (shown only once)",
     "namePlaceholder": "e.g. Production Server",
     "expiresAt": "Expiration Date",
-    "expiresAtHint": "Leave empty for no expiration",
+    "expiresAtHint": "Required, with a maximum lifetime of 90 days. The suggested default is 90 days.",
     "create": "Create",
     "createError": "Failed to create API key",
     "keyCreated": "API key created successfully",
@@ -287,8 +296,13 @@
     "active": "Active",
     "expired": "Expired",
     "role": "Role",
+    "profile": "Access Profile",
     "admin": "Admin",
     "normal": "Normal",
+    "fullRag": "FULL_RAG",
+    "fullRagHint": "Can use RAG read and write APIs, but cannot manage API keys.",
+    "copy": "Copy",
+    "copied": "Copied",
     "collectionAccess": "Collection Access",
     "allCollections": "All collections",
     "allCollectionsHint": "The key can access current and future collections.",

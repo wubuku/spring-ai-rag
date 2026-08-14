@@ -7,7 +7,7 @@ import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
-import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +18,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,11 +31,8 @@ import java.util.List;
  * <p>Provides CRUD operations for API keys used in programmatic authentication.
  * Raw keys are returned only at creation time — they cannot be retrieved again.
  *
- * <p>Authorization:
- * <ul>
- *   <li>ADMIN keys: can list and revoke any key</li>
- *   <li>NORMAL keys: can create new NORMAL keys (self-service), but cannot list or revoke</li>
- * </ul>
+ * <p>配置 environment root 后，只有 root 可调用本控制器；数据库业务 Key只能访问
+ * RAG 数据面。未配置 root 时保留 legacy 管理语义。
  */
 @RestController
 @RequestMapping("/api/v1/rag/api-keys")
@@ -42,12 +40,12 @@ import java.util.List;
 public class ApiKeyController {
 
     private final ApiKeyManagementService apiKeyService;
-    private final RagApiKeyRepository apiKeyRepository;
+    private final EnvironmentRootCredentialResolver rootCredentialResolver;
 
     public ApiKeyController(ApiKeyManagementService apiKeyService,
-                            RagApiKeyRepository apiKeyRepository) {
+                            EnvironmentRootCredentialResolver rootCredentialResolver) {
         this.apiKeyService = apiKeyService;
-        this.apiKeyRepository = apiKeyRepository;
+        this.rootCredentialResolver = rootCredentialResolver;
     }
 
     @Operation(summary = "Create a new API key",
@@ -58,14 +56,22 @@ public class ApiKeyController {
                      content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping
-    public ResponseEntity<ApiKeyCreatedResponse> createKey(
+    public ResponseEntity<?> createKey(
             @Valid @RequestBody ApiKeyCreateRequest request,
             HttpServletRequest httpRequest) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(httpRequest);
+        if (denied != null) {
+            return denied;
+        }
         request.setAllowedCollectionIds(
                 ApiKeyCollectionAccess.resolveDelegatedAllowedIds(
                         request.getAllowedCollectionIds(), getCaller(httpRequest)));
-        ApiKeyCreatedResponse response = apiKeyService.generateKey(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        ApiKeyCreatedResponse response = rootCredentialResolver.isConfigured()
+                ? apiKeyService.generateManagedKey(request)
+                : apiKeyService.generateKey(request);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .cacheControl(CacheControl.noStore())
+                .body(response);
     }
 
     @Operation(summary = "List all API keys",
@@ -77,9 +83,14 @@ public class ApiKeyController {
     })
     @GetMapping
     public ResponseEntity<?> listKeys(HttpServletRequest request) {
-        if (getCallerRole(request) != ApiKeyRole.ADMIN) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (!rootCredentialResolver.isConfigured()
+                && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(ErrorResponse.of("Only ADMIN keys can list all API keys"));
+                    .body(forbidden("Only ADMIN keys can list all API keys"));
         }
         return ResponseEntity.ok(apiKeyService.listKeys());
     }
@@ -96,9 +107,14 @@ public class ApiKeyController {
     @DeleteMapping("/{keyId}")
     public ResponseEntity<?> revokeKey(@PathVariable String keyId,
                                         HttpServletRequest request) {
-        if (getCallerRole(request) != ApiKeyRole.ADMIN) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (!rootCredentialResolver.isConfigured()
+                && getCallerRole(request) != ApiKeyRole.ADMIN) {
             return ResponseEntity.status(403)
-                    .body(ErrorResponse.of("Only ADMIN keys can revoke API keys"));
+                    .body(forbidden("Only ADMIN keys can revoke API keys"));
         }
         boolean found = apiKeyService.revokeKey(keyId);
         if (!found) {
@@ -117,19 +133,27 @@ public class ApiKeyController {
     @PostMapping("/{keyId}/rotate")
     public ResponseEntity<?> rotateKey(@PathVariable String keyId,
                                        HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
         RagApiKey caller = getCaller(request);
         if (caller != null
                 && caller.getRole() != ApiKeyRole.ADMIN
                 && !keyId.equals(caller.getKeyId())) {
             return ResponseEntity.status(403)
-                    .body(ErrorResponse.of(
+                    .body(forbidden(
                             "NORMAL keys can only rotate themselves"));
         }
-        ApiKeyCreatedResponse response = apiKeyService.rotateKey(keyId);
+        ApiKeyCreatedResponse response = rootCredentialResolver.isConfigured()
+                ? apiKeyService.rotateManagedKey(keyId)
+                : apiKeyService.rotateKey(keyId);
         if (response == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.status(HttpStatus.CREATED).body(response);
+        return ResponseEntity.status(HttpStatus.CREATED)
+                .cacheControl(CacheControl.noStore())
+                .body(response);
     }
 
     /**
@@ -156,5 +180,26 @@ public class ApiKeyController {
         Object entityAttr = request.getAttribute(
                 ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
         return entityAttr instanceof RagApiKey caller ? caller : null;
+    }
+
+    private ResponseEntity<ErrorResponse> requireEnvironmentRoot(
+            HttpServletRequest request) {
+        if (!rootCredentialResolver.isConfigured()) {
+            return null;
+        }
+        if (Boolean.TRUE.equals(request.getAttribute(
+                ApiKeyAuthFilter.ROOT_AUTHENTICATED_ATTRIBUTE))) {
+            return null;
+        }
+        return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(forbidden("Only the environment root can manage API keys"));
+    }
+
+    private ErrorResponse forbidden(String detail) {
+        return ErrorResponse.builder()
+                .error("FORBIDDEN")
+                .status(HttpStatus.FORBIDDEN.value())
+                .message(detail)
+                .build();
     }
 }

@@ -1,10 +1,10 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApiCalls } from './api-mocks';
+import { mockAllApiCalls, openProtectedPage } from './api-mocks';
 
 test.describe('Navigation', () => {
   test('sidebar navigation links are visible', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/dashboard', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/dashboard');
     const sidebar = page.locator('aside');
     await expect(sidebar).toBeVisible();
 
@@ -41,14 +41,14 @@ test.describe('Navigation', () => {
     ];
 
     for (const route of routes) {
-      await page.goto(route, { waitUntil: 'networkidle' });
+      await openProtectedPage(page, route);
       await expect(page.locator('aside')).toBeVisible();
     }
   });
 
   test('redirects root to dashboard', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/');
     await expect(page).toHaveURL(/\/dashboard/);
   });
 });

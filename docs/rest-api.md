@@ -12,38 +12,56 @@
 
 ### Authentication
 
-When API Key authentication is enabled (`rag.security.enabled=true`), include one of the following in requests:
+Send credentials in a header:
 
 ```
-X-API-Key: your-api-key          # Header (recommended)
-?apiKey=your-api-key            # Query parameter (for SSE / EventSource)
+Authorization: Bearer your-api-key
+X-API-Key: your-api-key
 ```
 
-> **Note**: SSE (Server-Sent Events) does not support custom headers due to W3C spec limitations.
-> The `useSSE.ts` frontend hook uses `?apiKey=` query parameter to authenticate POST requests.
+Providing both headers with different values returns `401`.
 
-Configuration:
+Setting `RAG_ROOT_API_KEY` enables standalone-service root mode:
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `rag.security.enabled` | `false` | Enable/disable API key authentication |
-| `rag.security.api-key` | — | Static API key (singular; use database keys for multi-key management) |
+- Every `/api/**` request automatically requires the environment root or a
+  valid database business key.
+- Query credentials (`?apiKey=`) return `401`; SSE uses `fetch` with a header.
+- The environment root can use the RAG data plane and manage API keys.
+- Database business keys have `FULL_RAG` read/write access but receive `403`
+  from `/api-keys` management endpoints.
+- Legacy `rag.security.api-key` does not participate in root-mode
+  authentication.
 
-**Role-based access** (when `rag.security.enabled=true`):
+Without a root credential, legacy behavior remains. Setting
+`rag.security.enabled=true` accepts the headers above and continues to support
+`?apiKey=` with the existing database ADMIN/NORMAL and static-key semantics.
 
-| Key Role | `/api-keys` List | `/api-keys` Create | `/api-keys` Delete |
-|----------|-----------------|-------------------|-------------------|
-| ADMIN | ✅ List all | ✅ Create any role | ✅ Delete any key |
-| NORMAL | ❌ 403 | ✅ Create NORMAL key only (self-service) | ❌ 403 |
+#### `GET /api/v1/rag/auth/me`
 
-Database-backed keys can also carry `allowedCollectionIds`:
+Returns the current principal and capabilities. The WebUI uses this endpoint to
+confirm that the submitted credential is the environment root:
 
-- `null` or `[]`: unrestricted access to all collections
-- non-empty list: search, chat, collection, document, upload, and PDF-to-RAG paths are limited to those collections
-- a restricted request that explicitly names an outside collection returns `403`
-- when a restricted key omits a collection filter, retrieval is automatically constrained to its allow-list
-- ADMIN and the legacy static `rag.security.api-key` remain unrestricted
-- a restricted NORMAL key cannot create a broader child key; rotation preserves the existing allow-list
+```json
+{
+  "principalType": "ENVIRONMENT_ROOT",
+  "principalId": "environment-root",
+  "rootMode": true,
+  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"]
+}
+```
+
+A database business key returns `DATABASE_API_KEY` with
+`["RAG_READ", "RAG_WRITE"]`; the WebUI refuses to unlock the management
+console with it. Responses include `Cache-Control: no-store`.
+
+Database business keys may carry `allowedCollectionIds`:
+
+- `null` or `[]`: unrestricted access to all collections.
+- A non-empty list limits search, chat, collection, document, upload, and
+  PDF-to-RAG paths to those collections.
+- Explicit requests for an outside collection return `403`.
+- Retrieval without an explicit collection filter is constrained to the
+  key's allow-list.
 
 ### Rate Limiting
 
@@ -260,75 +278,87 @@ Exported: 2026-04-05
 
 ---
 
+## User (2026-04-05T10:00:00)
+Hello
+
+## Assistant (2026-04-05T10:00:01)
+Hi!
+```
+
+---
+
 ## API Keys — Key Management
 
-> Requires `rag.security.enabled=true`. ADMIN key required for list/delete; any valid key for create.
+In root mode, every endpoint in this section requires the environment root.
+Root-created keys have database role `NORMAL` and product profile `FULL_RAG`:
+they can read and write the RAG data plane but cannot manage keys. Without a
+root credential, legacy ADMIN/NORMAL management semantics remain.
 
 ### `GET /api/v1/rag/api-keys`
 
-List all API keys (ADMIN only).
-
-**Request**: `X-API-Key: admin-key` header or `?apiKey=admin-key` query
+List business-key metadata. Raw secrets and hashes are never returned.
 
 **Response 200**:
 ```json
 [{
   "keyId": "rag_k_abc123",
   "name": "Production Server",
-  "role": "ADMIN",
-  "allowedCollectionIds": null,
+  "role": "NORMAL",
+  "allowedCollectionIds": [1, 2],
   "enabled": true,
-  "createdAt": "2026-04-15T00:00:00",
-  "lastUsedAt": "2026-04-16T00:00:00",
-  "expiresAt": null
+  "createdAt": "2026-08-14T00:00:00",
+  "lastUsedAt": null,
+  "expiresAt": "2026-10-01T00:00:00"
 }]
 ```
 
-**Response 403**: Non-admin key
-
 ### `POST /api/v1/rag/api-keys`
 
-Create a new API key. ADMIN can create any role; any valid key can create NORMAL keys (self-service).
+In root mode, `expiresAt` is required, must be in the future, and cannot be
+more than 90 days away. `allowedCollectionIds` is optional; omit it or send an
+empty list for all collections.
 
 **Request body**:
 ```json
 {
   "name": "My API Key",
-  "expiresAt": "2027-01-01T00:00:00",
+  "expiresAt": "2026-10-01T00:00:00",
   "allowedCollectionIds": [1, 2]
 }
 ```
 
-`expiresAt` and `allowedCollectionIds` are optional. Omit or send an empty
-`allowedCollectionIds` list for unrestricted access.
+The raw secret appears only in the `201 Created` response, which includes
+`Cache-Control: no-store`:
 
-**Response 201**:
 ```json
 {
   "keyId": "rag_k_xyz789",
-  "rawKey": "rag_sk_a1b2c3d4-...",   // shown ONLY here — save it!
+  "rawKey": "rag_sk_...",
   "name": "My API Key",
-  "role": "NORMAL",
   "allowedCollectionIds": [1, 2],
-  "expiresAt": "2027-01-01T00:00:00"
+  "expiresAt": "2026-10-01T00:00:00"
 }
 ```
 
+### `POST /api/v1/rag/api-keys/{keyId}/rotate`
+
+Disable the old key and create a same-name replacement with the same Collection
+scope. The new raw secret appears only in this `201 Created` response.
+Root-mode rotation caps permanent or overlong legacy expiry at 90 days and
+rejects expired or disabled keys.
+
 ### `DELETE /api/v1/rag/api-keys/{keyId}`
 
-Revoke an API key (ADMIN only, cannot delete the last ADMIN key).
+Immediately disable a business key. Success returns `204 No Content`.
 
-**Response 204**: Deleted
+The management console is available at `/webui/unlock`. It keeps the root
+credential only in page memory and requires it again after refresh or sign-out.
+External callers do not use the WebUI; they only need a distributed business
+key:
 
-**Response 400**: Last ADMIN key cannot be deleted
-
----
-
-## User (2026-04-05T10:00:00)
-Hello
-
-## Assistant (2026-04-05T10:00:01)
-Hi!
+```bash
+curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
 ```
 
 ---

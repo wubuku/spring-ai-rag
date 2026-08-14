@@ -5,6 +5,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.repository.RagApiKeyRepository;
@@ -16,12 +17,12 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -35,6 +36,8 @@ public class ApiKeyManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyManagementService.class);
     private static final String KEY_PREFIX = "rag_sk_";
+    public static final int MAX_MANAGED_EXPIRY_DAYS = 90;
+    private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     /** Short-lived cache for validated keys: avoids DB round-trip on every authenticated request. */
     private static final Cache<String, RagApiKey> VALIDATED_KEY_CACHE = Caffeine.newBuilder()
             .maximumSize(1_000)
@@ -65,6 +68,7 @@ public class ApiKeyManagementService {
         entity.setName(request.getName());
         entity.setExpiresAt(request.getExpiresAt());
         entity.setEnabled(true);
+        entity.setRole(ApiKeyRole.NORMAL);
         entity.setAllowedCollectionIds(
                 ApiKeyCollectionAccess.serializeAllowedIds(request.getAllowedCollectionIds()));
 
@@ -79,6 +83,15 @@ public class ApiKeyManagementService {
                 request.getName(),
                 request.getExpiresAt(),
                 allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
+    }
+
+    /**
+     * 由 environment root 签发 MVP 业务 Key。
+     */
+    @Transactional
+    public ApiKeyCreatedResponse generateManagedKey(ApiKeyCreateRequest request) {
+        validateManagedExpiry(request.getExpiresAt());
+        return generateKey(request);
     }
 
     /**
@@ -128,6 +141,46 @@ public class ApiKeyManagementService {
         request.setAllowedCollectionIds(
                 allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
         return generateKey(request);
+    }
+
+    /**
+     * 轮换 root 管理的业务 Key，并把 legacy 永久/超长期限收敛到 90 天内。
+     */
+    @Transactional
+    public ApiKeyCreatedResponse rotateManagedKey(String keyId) {
+        Objects.requireNonNull(keyId, "keyId must not be null");
+        Optional<RagApiKey> existing = apiKeyRepository.findByKeyId(keyId);
+        if (existing.isEmpty()) {
+            return null;
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        RagApiKey oldKey = existing.get();
+        if (!oldKey.isEnabled()) {
+            throw new IllegalArgumentException("Disabled API keys cannot be rotated");
+        }
+        if (oldKey.getExpiresAt() != null
+                && !oldKey.getExpiresAt().isAfter(now)) {
+            throw new IllegalArgumentException("Expired API keys cannot be rotated");
+        }
+
+        LocalDateTime maximumExpiry = now.plusDays(MAX_MANAGED_EXPIRY_DAYS);
+        LocalDateTime newExpiry = oldKey.getExpiresAt() == null
+                || oldKey.getExpiresAt().isAfter(maximumExpiry)
+                ? maximumExpiry
+                : oldKey.getExpiresAt();
+
+        apiKeyRepository.disableByKeyId(keyId);
+        VALIDATED_KEY_CACHE.invalidateAll();
+        log.info("Managed API key rotated (old key disabled): keyId={}", keyId);
+
+        ApiKeyCreateRequest request =
+                new ApiKeyCreateRequest(oldKey.getName(), newExpiry);
+        List<Long> allowedCollectionIds = ApiKeyCollectionAccess.parseAllowedIds(
+                oldKey.getAllowedCollectionIds());
+        request.setAllowedCollectionIds(
+                allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
+        return generateManagedKey(request);
     }
 
     /**
@@ -217,6 +270,22 @@ public class ApiKeyManagementService {
         return key.getExpiresAt() != null && key.getExpiresAt().isBefore(LocalDateTime.now());
     }
 
+    private void validateManagedExpiry(LocalDateTime expiresAt) {
+        LocalDateTime now = LocalDateTime.now();
+        if (expiresAt == null) {
+            throw new IllegalArgumentException(
+                    "expiresAt is required for managed API keys");
+        }
+        if (!expiresAt.isAfter(now)) {
+            throw new IllegalArgumentException(
+                    "expiresAt must be in the future");
+        }
+        if (expiresAt.isAfter(now.plusDays(MAX_MANAGED_EXPIRY_DAYS))) {
+            throw new IllegalArgumentException(
+                    "expiresAt must not be more than 90 days in the future");
+        }
+    }
+
     private ApiKeyResponse toResponse(RagApiKey entity) {
         ApiKeyResponse r = new ApiKeyResponse(
                 entity.getKeyId(),
@@ -235,11 +304,17 @@ public class ApiKeyManagementService {
     }
 
     String generateRawKey() {
-        return KEY_PREFIX + UUID.randomUUID().toString().replace("-", "");
+        return KEY_PREFIX + randomHex(32);
     }
 
     String generateKeyId() {
-        return "rag_k_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+        return "rag_k_" + randomHex(16);
+    }
+
+    private String randomHex(int byteCount) {
+        byte[] random = new byte[byteCount];
+        SECURE_RANDOM.nextBytes(random);
+        return HexFormat.of().formatHex(random);
     }
 
     private String sha256(String input) {

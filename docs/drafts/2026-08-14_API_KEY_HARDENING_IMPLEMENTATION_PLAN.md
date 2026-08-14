@@ -1,10 +1,11 @@
 # API Key 加固独立实施规划
 
-> 状态：规划完成，待用户批准，尚未开始实施
+> 状态：规划连续三轮检查已通过；Phase 0 + Phase M0 已完成并通过验证
 > 起草与最近复核日期：2026-08-14
 > 适用代码基线：commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`
 > 当前数据库基线：Flyway V1-V24；实施时从下一个可用版本开始，本文按 V25 expand 描述
-> 实施约束：未经批准不得修改生产代码；实施前仍须执行 Phase 0 重新核对当前代码和迁移号
+> 实施约束：规划检查达到连续 3/3 前不得修改生产代码；实施先执行 Phase 0
+> 当前进度：[API Key WebUI MVP 实施进度](2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md)
 > 上层消费者：[OpenAI Chat Completions 兼容 RAG 服务实施规划](2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)
 > 当前代码事实：[OpenAI 兼容服务就绪度与代码库上下文](../openai-compatibility-readiness-zh-CN.md)
 > 历史来源：[API Key 管理重构规划](API-KEY-MANAGEMENT-PLAN.md) 记录了早期
@@ -58,7 +59,8 @@ credential、principal、policy、quota 和 lifecycle 基础。
 在以下条件全部满足前：
 
 - 不得把 `/v1/**`、MCP 或其他外部数据面标记为 production-ready。
-- 不得向外部客户签发 unrestricted 或永不过期的 NORMAL Key。
+- 除本规划明确定义的单实例 MVP-0 外，不得向外部客户签发 unrestricted 或永不过期的
+  NORMAL Key；MVP-0 业务 Key必须有 expiry，并受其单实例、TLS、受控管理网络声明约束。
 - 不得把现有 static key 当作外部 principal。
 - 不得用“网关之后再补”替代应用内可验证的身份和授权边界。
 
@@ -70,6 +72,36 @@ credential、principal、policy、quota 和 lifecycle 基础。
 4. 事务化 lifecycle audit。
 5. standalone 与 starter 两种拓扑一致的认证链。
 6. 单实例和多实例模式下被明确验证的 revoke 与 quota 语义。
+
+### 1.4 最短可用路径：独立 RAG 服务 MVP
+
+本文区分“独立服务最小可用”与“面向公网、多实例的 production-ready”。在不建设传统
+用户名/密码登录的前提下，最短可用产品定义为：
+
+```text
+独立运行的 RAG API 数据面
+  + 由专用 root API Key 解锁的 Web 管理控制台
+  + 可由控制台创建、展示一次、轮换和吊销的业务 API Key
+```
+
+调用方分为两类：
+
+- 管理员/运维人员访问 WebUI，输入环境变量提供的 root API Key 解锁控制台并管理 Key。
+- 外部用户或系统不访问 WebUI，只携带分配到的业务 API Key 调用 RAG API。
+
+MVP 首版只签发 `FULL_RAG` 业务 Key：可访问当前 RAG 数据面的完整读写能力，并可选限制
+Collection；业务 Key不能创建、列出、轮换或吊销其他 Key。root 是唯一 Key 管理主体，
+同时具有完整 RAG 数据面能力。API 创建操作永远不能创建或提升出新的 root。
+
+该 MVP 可以先按**单实例、TLS、受控管理网络**交付，并复用现有 `rag_api_key` hash、
+过期、吊销和 Collection ACL 能力，不以 family/version、shared quota、IAP/OIDC 或
+传统账号系统为前置条件。它不能宣称完成多实例吊销、细粒度最小权限、租户隔离或公网
+管理面加固；这些仍由 Milestone A 完成。
+
+配置有效 `RAG_ROOT_API_KEY` 即显式启用 MVP 安全模式：management 和现有 RAG 数据面
+都必须携带 root 或有效数据库业务 Key，不能再被 legacy `rag.security.enabled=false`
+绕过。未配置 root 时保持现有兼容行为，不启用本 MVP；配置了空白、弱值或 placeholder
+则 fail startup。
 
 ---
 
@@ -108,8 +140,10 @@ credential、principal、policy、quota 和 lifecycle 基础。
 - 不承诺没有可信 usage 时的硬 token/cost budget。
 - 不把浏览器 `sessionStorage` 当作防 XSS 的安全凭据库。
 - 不在第一阶段允许公网 NORMAL 用户自助创建下级 Key。
-- 不用 API Key role 替代独立的人类管理身份；生产 WebUI 的可信 IAP/OIDC 集成可由平台
-  提供，本工程只定义接入边界。
+- MVP 不建设传统用户名/密码、人类用户目录或服务端登录 session；WebUI 的 root API Key
+  输入是“控制台解锁”，不是账号登录。
+- IAP/OIDC 是后续公网或企业管理面的增强项，不阻塞单实例、受控管理网络中的 root-key
+  WebUI MVP。
 
 ---
 
@@ -132,8 +166,10 @@ credential、principal、policy、quota 和 lifecycle 基础。
 | 限流 | [`RateLimitFilter`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/RateLimitFilter.java) | JVM fixed window、raw header/user/IP identifier |
 | starter 装配 | [`GeneralRagAutoConfiguration`](../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java) | auth order 1、limit order 0，仅 `/api/*` |
 | 审计 | [`AuditLogService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/AuditLogService.java) | optional + catch-and-continue，不适合安全 lifecycle |
-| WebUI storage | [`apiKeyStorage.ts`](../../spring-ai-rag-webui/src/utils/apiKeyStorage.ts) | 明文 localStorage |
+| WebUI storage | [`credentialStore.ts`](../../spring-ai-rag-webui/src/auth/credentialStore.ts) | MVP 已改为页面内存，并在启动时清理旧 localStorage 项 |
 | WebUI stream | [`useSSE.ts`](../../spring-ai-rag-webui/src/hooks/useSSE.ts) | fetch streaming 仍把 key 放 query，实际可改 header |
+| WebUI 路由 | [`App.tsx`](../../spring-ai-rag-webui/src/App.tsx) | 所有页面直接挂载在 Layout 下，没有 unlock/login route 或 route guard |
+| 传统登录 | core、starter、WebUI 和 Flyway | 没有 username/password、用户表、`formLogin`、`UserDetailsService` 或登录 session |
 
 ### 3.2 当前数据库
 
@@ -565,11 +601,14 @@ legacy `/api/**`：
 - 迁移期保留 X-API-Key。
 - fetch-based streaming 改为 Header 后进入 query key 弃用路线。
 - 可增加 Bearer，保持旧客户端不受影响。
+- 未配置 root 的 legacy mode 可在兼容窗口继续接受 query `apiKey`；一旦配置 root 进入
+  MVP 安全模式，所有 management 和数据面都拒绝 query credential，只接受 Header。
 
 management endpoint：
 
-- 只接受 database-backed family principal 或经过验证的 operator session。
-- 不接受 static key、query key 或 anonymous-dev caller。
+- MVP-0 接受专用 environment-root principal；完整加固后接受 database-backed family
+  principal 或经过验证的 operator session。
+- 不接受 legacy static key、query key 或 anonymous-dev caller。
 
 ### 9.2 Credential resolver
 
@@ -615,7 +654,28 @@ ApiKeyCredentialExtractor
 - 不得把 database lookup error 当作“无匹配”继续放行。
 - 启动时如 static secret hash 与 active DB version 冲突，fail fast，避免身份歧义。
 
-### 9.4 Failure semantics
+### 9.4 Environment root key
+
+MVP 新增专用 `RAG_ROOT_API_KEY`，不得复用 legacy `RAG_API_KEY` /
+`rag.security.api-key`：
+
+- 只从环境变量或等价 Secret file 读取，不写数据库、不通过 API 返回、不打印日志。
+- 启动时只保留用于 constant-time 验证的内存派生值，并建立固定
+  `ENVIRONMENT_ROOT` principal。
+- root 固定拥有 Key 管理和完整 RAG 数据面能力；该能力不能通过 create/policy API
+  委派。
+- root 轮换通过更新 Secret、滚动或重启实例完成；旧值在实例退出后失效。
+- 未配置 root 时不启用 MVP 安全模式并保持现有兼容；一旦配置，则空白、少于 32 个
+  ASCII 字符或使用已知示例/placeholder 值时 fail startup。
+- 有效 root 自动要求 `/api/**` management 和数据面鉴权，不能被 legacy global auth
+  disabled 配置降级为匿名访问。
+- 多实例必须由同一 Secret source 注入相同 root；MVP-0 本身仍只承诺单实例外部数据面。
+
+该 root 是受约束的部署根信任，不是 legacy static data-plane key。完整 family hardening
+实施后，可保留它作为 break-glass operator，或由明确迁移步骤转换为 bootstrap ADMIN；
+不得同时存在两个语义不清的 root。
+
+### 9.5 Failure semantics
 
 | 情况 | 内部结果 | HTTP 基线 |
 |---|---|---|
@@ -629,7 +689,7 @@ ApiKeyCredentialExtractor
 
 上层协议负责映射 error envelope；API Key 模块不依赖 OpenAI DTO。
 
-### 9.5 Request context
+### 9.6 Request context
 
 新增单一 request attribute，例如：
 
@@ -808,6 +868,7 @@ parentFamilyId (only when explicit delegation is enabled)
 
 | 操作 | 默认允许 |
 |---|---|
+| MVP-0 创建、列出、轮换、吊销业务 Key | environment root |
 | 创建任意 external family | ADMIN + `keys.create` |
 | 列出全部 | ADMIN + `keys.read` |
 | 查看自己 | `keys.read.self` |
@@ -817,6 +878,8 @@ parentFamilyId (only when explicit delegation is enabled)
 | policy update | ADMIN + `keys.policy.write` |
 
 role 只是 action 可授予上限，不能跳过 action 检查。
+API-created Key 永远不能获得 environment-root 身份；MVP-0 的 `FULL_RAG` Key只拥有数据面
+权限，不能调用管理 endpoint。
 
 ---
 
@@ -1028,7 +1091,34 @@ DELETE /api/v1/rag/api-key-versions/{keyId}
 
 ## 16. Bootstrap 与 Recovery
 
-### 16.1 Production bootstrap
+### 16.1 MVP-0 environment root
+
+最短路径使用：
+
+```text
+RAG_ROOT_API_KEY=<high-entropy-secret>
+```
+
+要求：
+
+1. 独立于 legacy `RAG_API_KEY`，避免“普通 static key 意外成为 root”。
+2. 不落库、不落日志、不出现在 actuator、异常消息或配置 dump。
+3. WebUI 只在用户提交时发送到 `GET /api/v1/rag/auth/me` 验证；服务端返回 principal
+   类型和能力，不返回 credential。
+4. 通过 root 创建的业务 Key仍写入现有 `rag_api_key` hash 路径，role 固定为 NORMAL，
+   语义固定为 `FULL_RAG`，expiry 必填且最长 90 天，可附带 Collection ACL。
+5. 业务 Key不能调用 Key 管理 API；当前 NORMAL self-create 行为必须关闭。
+6. root 变更通过 Secret 更新和实例重启生效，不提供 WebUI 修改 root 的能力。
+7. 有效 root 自动启用 `/api/**` 的 root/数据库 Key 鉴权；未配置 root 时保持 legacy
+   行为，避免破坏现有嵌入式使用方。
+8. MVP 模式禁用现有 `ApiKeyBootstrapService` 的空表 ADMIN 自动生成和 raw 日志输出；
+   第一个业务 Key由 root 在 WebUI 或管理 API 中创建。
+9. MVP 模式只接受 `Authorization: Bearer` 或 `X-API-Key` Header，拒绝 query
+   credential；create/rotate raw response 设置 `Cache-Control: no-store`。
+10. rotate 不继承永久或超长 expiry：新 expiry 为 `min(旧 expiry, now + 90 days)`；
+    旧 expiry 为空时使用 `now + 90 days`，旧 Key已过期时拒绝轮换。
+
+### 16.2 Production bootstrap
 
 推荐：
 
@@ -1045,14 +1135,14 @@ DELETE /api/v1/rag/api-key-versions/{keyId}
 
 raw secret不得打印。
 
-### 16.2 Multi-instance
+### 16.3 Multi-instance
 
 - advisory lock + singleton row + unique constraints 三层防重复。
 - 只有一个实例完成 bootstrap。
 - 其他实例检测已完成后继续启动。
 - DB 不可用时不能各自本地生成 ADMIN。
 
-### 16.3 Local development
+### 16.4 Local development
 
 可保留显式 opt-in：
 
@@ -1067,7 +1157,7 @@ rag.api-keys.bootstrap.mode=development-log
 - 明确标记只用于本机。
 - 测试验证 profile guard。
 
-### 16.4 Recovery
+### 16.5 Recovery
 
 当 family 表非空但无可用 ADMIN：
 
@@ -1330,33 +1420,58 @@ Filter 不能把 DB/policy exception 落到普通 500：
 
 ### 21.2 第一阶段产品边界
 
-生产管理面采用 platform-operated provisioning：
+MVP-0 采用 API Key 控制台解锁，不引入 username/password：
 
-- REST/CLI automation 使用受限 ADMIN family。
-- WebUI 默认只用于 local/dev 或可信管理网络。
-- 没有 IAP/OIDC/mTLS 时，不把 WebUI 暴露到公网。
+- 未解锁时只显示 `/webui/unlock`。
+- 管理员输入 `RAG_ROOT_API_KEY` 对应的 secret。
+- WebUI 调用 `GET /api/v1/rag/auth/me`，确认 principal 为 environment root。
+- 验证成功后进入控制台；“退出”只清除浏览器内存中的 credential。
+- 刷新页面后重新输入 root，MVP 不建立账号 session。
+- 外部用户/系统不访问 WebUI，只持业务 Key 调用 RAG API。
+- WebUI route guard 只是用户体验；后端必须对每个管理请求重新认证和授权。
 
-### 21.3 必做 WebUI 修复
+WebUI 默认只部署在 local/dev 或可信管理网络。没有 IAP/OIDC/mTLS 时，不把管理面暴露
+到公网；数据面仍必须使用 TLS。
+
+### 21.3 MVP-0 控制台流程
+
+1. `/webui/unlock` 提供 password-style root key 输入框，不提供用户名字段。
+2. `GET /api/v1/rag/auth/me` 返回 `principalType`、`keyId`/stable operator ID 和
+   capabilities；无效 key 返回 401。数据库业务 Key返回数据面 capabilities，
+   WebUI 根据 principal/capabilities 拒绝其解锁管理控制台。
+3. credential 只保存在 React auth context/内存；页面刷新后重新解锁。
+4. `/webui/api-keys` 只允许 root 进入，并支持创建、列表、轮换和吊销。
+5. 创建表单首版只有 `FULL_RAG` profile、名称、必填 expiry、全部或指定 Collections；
+   默认建议 90 天且服务端拒绝超过 90 天。
+6. raw business key 只显示一次，关闭 modal 后清理；可提供显式复制按钮。
+7. 列表只显示 key ID、名称、状态、expiry、last used 和 Collection scope，不显示 hash/raw。
+8. 外部调用示例使用 Header；不要求调用方打开或登录 WebUI。
+9. 应用首次加载主动删除旧版本遗留的 `rag-api-key` 和 `rag-api-key-role` localStorage
+   项，并移除 Settings 中的 API Key 持久化入口。
+
+### 21.4 必做 WebUI 修复
 
 1. `useSSE.ts` 使用 `fetch` Header 发送 X-API-Key/Bearer，不再放 query。
 2. 弃用或改写 `api/chat.ts` 的 EventSource query secret。
-3. create/rotate raw secret 仅保存在组件内存，关闭 modal 后清除。
-4. 不把新 raw secret写入 localStorage、console、toast analytics。
-5. 管理 UI 展示 familyId、active keyId、owner、role、expiry、policy summary、
-   policyVersion、limits。
-6. policy update 使用 version conflict 提示，不静默覆盖。
+3. 删除 root/admin credential 的 localStorage 持久化；create/rotate raw secret 只保存在
+   组件内存，关闭 modal 后清除。
+4. 启动时清理旧版 `rag-api-key` / `rag-api-key-role` storage，防止升级后继续残留。
+5. 不把新 raw secret写入 localStorage、console、toast analytics。
+6. 完整 hardening 阶段再展示 familyId、active keyId、owner、role、expiry、policy
+   summary、policyVersion、limits。
+7. policy update 使用 version conflict 提示，不静默覆盖。
 
-### 21.4 Credential storage mode
+### 21.5 Credential storage mode
 
 建议显式配置：
 
-- `local-development`：允许 localStorage，页面醒目标记；prod 拒绝。
+- `root-key-memory`：MVP-0 模式，credential 只在当前页面生命周期保存在内存。
 - `external-session`：由 IAP/OIDC gateway 建立 HttpOnly/SameSite session。
 - `disabled`：生产默认关闭管理 UI route。
 
-sessionStorage 不作为安全替代方案。
+localStorage 和 sessionStorage 都不作为 root credential 存储。
 
-### 21.5 Browser security
+### 21.6 Browser security
 
 external-session 模式还需要：
 
@@ -1569,6 +1684,7 @@ spring-ai-rag-core/
     RagApiKeySecurityStateRepository.java
 
   .../core/security/
+    EnvironmentRootCredentialResolver.java
     ApiKeyPrincipal.java
     ApiKeyPolicy.java
     ApiKeyPolicyValidator.java
@@ -1599,8 +1715,12 @@ spring-ai-rag-core/
     ApiKeyLastUsedRecorder.java
 
   .../core/config/
+    RagRootApiKeyProperties.java
     RagApiKeyProperties.java
     RagWebSecurityConfiguration.java
+
+  .../core/controller/
+    ApiKeyIdentityController.java
 
   .../resources/db/migration/
     V25__api_key_family_expand.sql
@@ -1610,9 +1730,10 @@ spring-ai-rag-starter/
   GeneralRagAutoConfiguration.java
 
 spring-ai-rag-webui/
+  src/auth/ApiKeyAuthContext.tsx
   src/api/apikeys.ts
+  src/pages/ConsoleUnlock.tsx
   src/pages/ApiKeys.tsx
-  src/utils/apiKeyStorage.ts
   src/hooks/useSSE.ts
 ```
 
@@ -1630,7 +1751,15 @@ release gate 验证旧 bootstrap 已替换、共享 auth 已启用、management 
 已生效、shared quota 已满足目标环境要求。中间 PR 只能用于受控开发/CI，不能生成生产
 部署批准。
 
-本工程有两个交付里程碑，避免把长期 contract 清理错误地变成新消费者开发的阻塞项：
+本工程有三个交付里程碑，避免把“最短可用”、外部生产就绪和长期 contract 清理混为一谈：
+
+**Milestone MVP-0：standalone RAG service usable**
+
+- 完成 Phase 0 和 Phase M0。
+- 单实例、TLS、受控管理网络运行。
+- root API Key 可解锁 WebUI，并创建、列出、轮换和吊销 `FULL_RAG` 业务 Key。
+- 外部用户/系统仅持业务 Key 调用现有 RAG API，不依赖 WebUI。
+- 不宣称多实例、shared quota、细粒度 policy 或公网管理面 production-ready。
 
 **Milestone A：external data-plane ready**
 
@@ -1669,6 +1798,47 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 - 尚未改变生产行为。
 - 当前真实行为由测试记录。
 - V25 名称仍未被其他迁移占用。
+
+### Phase M0：WebUI root-key 独立服务 MVP
+
+> 实施状态：已于 2026-08-14 完成；验证证据和三轮实现审查见
+> [API Key WebUI MVP 实施进度](2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md)。
+
+该阶段不新增传统账号系统，不要求先执行 V25 family migration：
+
+1. 新增独立 `RAG_ROOT_API_KEY` 配置和 environment-root resolver；与 legacy static key
+   完全分离，constant-time 验证，不记录 raw。
+2. 在 core 建立 standalone 可加载的最小共享认证装配，并让 starter 复用；避免 Filter
+   缺失或重复；有效 root 配置自动保护 management 和现有 `/api/**` 数据面。
+3. management path 无论 global auth flag 都必须认证；仅 environment root 可
+   create/list/revoke/rotate，关闭 NORMAL self-create 和 self-rotate 管理入口。
+4. MVP 模式关闭旧 `ApiKeyBootstrapService` 自动 ADMIN 和 raw 日志分发；空表由 root
+   显式创建第一个业务 Key。
+5. 增加 `GET /api/v1/rag/auth/me`，供 WebUI 验证 root 和读取 capabilities。
+6. 通过现有表签发 NORMAL `FULL_RAG` Key；服务端强制 expiry 在未来且不超过 90 天，
+   保持 revoke、last-used 和 Collection ACL，API-created Key不能管理 Key。
+7. 增加 WebUI unlock route、内存 auth context、管理 route guard 和显式退出。
+8. streaming credential 从 query 移到 Header；root 和业务 raw key 都不进入
+   localStorage/sessionStorage、URL、日志或 console。
+9. WebUI 启动时清除旧 API Key localStorage 项，并删除 Settings 中的旧持久化入口。
+10. 增加 root -> WebUI -> create -> external read/write -> revoke 的后端 E2E 和
+   Playwright 流程，并记录单实例/受控网络部署边界。
+
+完成标准：
+
+- 设置 root 环境变量并启动 standalone 服务后，可在 WebUI 解锁控制台。
+- root 可创建、列表、轮换和吊销业务 Key。
+- 新业务 Key可调用检索、对话、文档写入、Collection 维护和向量更新等现有数据面，
+  但调用管理 API 返回 403。
+- 缺失、已过期或超过 90 天的业务 Key expiry 创建请求被拒绝。
+- 轮换 legacy 永久/超长 Key时，新 Key被收敛到最长 90 天；已过期 Key不能轮换。
+- 外部调用流程无需 WebUI。
+- 未配置 root 时保持 legacy 启动行为；配置弱值时启动失败。
+- 有效 root 配置下，未携带 root/业务 Key 的数据面请求返回 401。
+- 空表启动不再生成或日志输出 ADMIN raw secret。
+- root 模式不接受 query credential，create/rotate response 带 `no-store`。
+- 无 raw secret 出现在持久化、URL 或日志。
+- 当前交付明确限制为单实例；不能误标为 Milestone A。
 
 ### Phase 1：Expand schema 与模型
 
@@ -1800,6 +1970,7 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 
 | PR | 内容 | 估计 |
 |---|---|---|
+| M0 | environment root、共享 standalone auth、WebUI unlock、root-only management、E2E | 3-5 人日 |
 | 1 | Characterization、shared topology tests、迁移 preflight | 2-3 人日 |
 | 2 | V25 family/version/operation/security-state、policy、backfill | 4-6 人日 |
 | 3 | resolver、principal、Bearer、legacy adapter、最小共享 auth topology、failure mapping | 3-5 人日 |
@@ -1807,8 +1978,8 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 | 5 | bootstrap/recovery/last-used、完整 filter order、local/shared quota、多实例测试 | 4-7 人日 |
 | 6 | WebUI、运维脚本、文档、E2E、family-only cutover 准备 | 3-5 人日 |
 
-Expand 到可对外签发 Key 约 20-32 人日。实际 contract 删除可在观察窗后单独 PR，约
-2-3 人日。
+Phase 0 + Phase M0 约 5-8 人日，可先形成单实例独立 RAG 服务。Expand 到 Milestone A
+仍约 20-32 人日；实际 contract 删除可在观察窗后单独 PR，约 2-3 人日。
 
 若已有可靠 Redis/gateway/IAP 可复用，工作量下降；若需要本项目同时建设这些平台能力，
 需单独估算。该估计高于总规划早期粗估，是因为拆分后把 mixed-version、幂等、最后 ADMIN、
@@ -1872,8 +2043,14 @@ Quota：
 
 ### 26.2 MVC/Filter tests
 
+- environment root valid/weak/placeholder；missing 保持 legacy mode。
+- 有效 root 自动保护 management 和数据面，即使 legacy global auth disabled。
+- root 模式拒绝 query credential；Bearer/X-API-Key Header 行为和冲突规则可验证。
+- rotate null/超长/已过期 expiry 的收敛或拒绝语义。
+- `/auth/me` 对 root 和业务 Key返回各自 capabilities；WebUI 只接受 environment root。
 - management security 不受 global auth disabled 影响。
-- static/null/NORMAL 管理拒绝。
+- legacy static/null/NORMAL 管理拒绝。
+- MVP 空表启动不生成 ADMIN、不记录 raw secret。
 - no-store headers。
 - 401/403/409/429/503。
 - raw/hash 不出 list/error。
@@ -1929,7 +2106,13 @@ Quota：
 
 ### 26.6 WebUI
 
-- local/dev credential mode。
+- 未解锁时只显示 unlock route。
+- root unlock 成功/失败、刷新后重新输入、退出清空内存。
+- 业务 Key不能解锁管理控制台。
+- root 创建 `FULL_RAG` Key、raw shown-once、列表、轮换和吊销。
+- expiry 必填、默认 90 天且超过上限时展示服务端 validation error。
+- 启动时清除旧 `rag-api-key` / `rag-api-key-role`，Settings 不再提供持久化入口。
+- 外部业务 Key调用 RAG API 不依赖 WebUI。
 - prod 禁止 localStorage admin。
 - streaming Header，不含 query key。
 - raw create/rotate modal 关闭即清理。
@@ -2086,6 +2269,27 @@ metrics tag 不含 keyId、familyId、owner、raw。
 
 ## 30. 验收标准
 
+### MVP-0 standalone service
+
+- [x] 项目不新增 username/password、用户表或账号 session。
+- [x] `RAG_ROOT_API_KEY` 与 legacy `RAG_API_KEY` 完全分离；未配置时保持 legacy mode，
+  已配置但少于 32 个 ASCII 字符或为 placeholder 时 fail startup。
+- [x] 有效 root 配置自动保护 management 和现有 RAG 数据面，不能被 global auth
+  disabled 绕过。
+- [x] MVP 空表启动不自动生成或日志输出 ADMIN raw secret。
+- [x] WebUI 可用 root 解锁，credential 只保存在页面内存。
+- [x] WebUI 升级后主动清除旧 API Key localStorage 项，Settings 不再保存 credential。
+- [x] root 是唯一可创建、列表、轮换和吊销业务 Key 的主体。
+- [x] API-created Key 固定为 `FULL_RAG` 数据面权限，不能获得 root 或 Key 管理能力。
+- [x] API-created Key expiry 必填、在未来且不超过 90 天。
+- [x] rotate 不产生永久或超过 90 天的 Key，已过期 Key不能轮换。
+- [x] 业务 Key可完成现有 RAG 读取和写入主流程，并可受 Collection ACL 限制。
+- [x] 外部用户/系统只携带 Key 调用 API，不需要访问 WebUI。
+- [x] root/业务 raw key 不进入 DB 明文、URL、日志、console、localStorage 或 sessionStorage。
+- [x] root 模式拒绝 query credential；create/rotate response 使用 `no-store`。
+- [x] standalone core 与 starter 的认证装配无遗漏、无重复。
+- [x] 文档明确 MVP-0 为单实例、TLS、受控管理网络，不等同 Milestone A。
+
 ### Secret
 
 - [ ] 新 secret 至少 256 bit SecureRandom。
@@ -2180,27 +2384,31 @@ metrics tag 不含 keyId、familyId、owner、raw。
 
 开始生产代码前需批准：
 
-1. 使用 family/version/operation/security-state 四类目标数据。
-2. 新 secret 改用 256 bit SecureRandom；public IDs 加长。
-3. external NORMAL expiry 必填，production max TTL 默认 90 天。
-4. NORMAL self-service create 默认关闭。
-5. role 只作为管理能力上限，数据面由显式 policy 决定。
-6. `/v1` 等新 external path 只接受 database family principal。
-7. static key 仅保留 legacy `/api/**` 数据面，不可管理 Key。
-8. management endpoint 不受 global auth disabled 的匿名兼容。
-9. create/rotate 使用 Idempotency-Key；成功响应丢失时不重放 raw。
-10. rotation 默认 5 分钟 overlap、硬上限 15 分钟；支持 ADMIN immediate。
-11. `DELETE /api-keys/{keyId}` 表示 family revoke；新增 version-only revoke endpoint。
-12. family revoke 对 descendants 级联。
-13. lifecycle audit fail closed 并与管理事务原子提交。
-14. production bootstrap 使用 Secret Manager/file 输入，不打印 raw。
-15. 至少保留一个独立 break-glass ADMIN family。
-16. external 首版不使用 positive auth cache。
-17. production 多实例要求 Redis/shared quota backend；local backend 只用于单实例/dev。
-18. V25 migration 要求显式确认 legacy timestamp source timezone。
-19. expand 期间阻断 management writes，并保持 external compatibility disabled。
-20. new external Key 不写 legacy shadow；V24 回滚时明确不可用。
-21. production WebUI 没有可信 external session 时保持关闭或仅部署在受控管理网络。
+1. MVP-0 使用独立 `RAG_ROOT_API_KEY`，不复用 legacy static key。
+2. MVP-0 不建设 username/password；WebUI 使用内存 root-key unlock。
+3. MVP-0 只签发不能管理 Key 的 `FULL_RAG` 业务 Key，并限制为单实例、TLS、受控管理网络。
+4. 使用 family/version/operation/security-state 四类目标数据。
+5. 新 secret 改用 256 bit SecureRandom；public IDs 加长。
+6. external NORMAL expiry 必填，production max TTL 默认 90 天。
+7. NORMAL self-service create 默认关闭。
+8. role 只作为管理能力上限，数据面由显式 policy 决定。
+9. `/v1` 等新 external path 只接受 database family principal。
+10. static key 仅保留 legacy `/api/**` 数据面，不可管理 Key。
+11. management endpoint 不受 global auth disabled 的匿名兼容。
+12. create/rotate 使用 Idempotency-Key；成功响应丢失时不重放 raw。
+13. rotation 默认 5 分钟 overlap、硬上限 15 分钟；支持 ADMIN immediate。
+14. `DELETE /api-keys/{keyId}` 表示 family revoke；新增 version-only revoke endpoint。
+15. family revoke 对 descendants 级联。
+16. lifecycle audit fail closed 并与管理事务原子提交。
+17. production bootstrap 使用 Secret Manager/file 输入，不打印 raw。
+18. 至少保留一个独立 break-glass ADMIN family。
+19. external 首版不使用 positive auth cache。
+20. production 多实例要求 Redis/shared quota backend；local backend 只用于单实例/dev。
+21. V25 migration 要求显式确认 legacy timestamp source timezone。
+22. expand 期间阻断 management writes，并保持 external compatibility disabled。
+23. new external Key 不写 legacy shadow；V24 回滚时明确不可用。
+24. production WebUI 没有可信 external session 时保持关闭或仅部署在受控管理网络。
 
-批准后从 Phase 0 开始，不能跳过 characterization、migration 和管理面加固直接实现
-Bearer Filter 或外部 Controller。
+只批准最短可用路径时，先执行 Phase 0 + Phase M0，不开始 V25 migration；批准完整加固后
+再继续 Phase 1-7。任何路径都不能跳过对应 characterization、management authorization
+和 secret regression 测试。

@@ -33,6 +33,10 @@
   border-bottom: 1px solid var(--color-border);
 }
 
+.nav {
+  flex: 1;
+}
+
 .navItem {
   display: flex;
   align-items: center;
@@ -57,6 +61,27 @@
 
 .icon {
   font-size: 1.1rem;
+}
+
+.consoleActions {
+  padding: 12px 16px;
+  border-top: 1px solid var(--color-border);
+}
+
+.logoutBtn {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.logoutBtn:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
 }
 
 .mainWrapper {

@@ -104,6 +104,33 @@ cp .env.example .env
 # 仅在本机 .env 中填写 LLM、Embedding 与数据库凭据
 ```
 
+### 3.3 独立 RAG 服务与 Web 管理台
+
+独立服务 MVP 使用环境变量 `RAG_ROOT_API_KEY` 解锁 Web 管理台并签发业务 Key。
+root 至少为 32 个不含空白的可打印 ASCII 字符，不能使用示例占位符。可在部署环境中
+生成随机值：
+
+```bash
+export RAG_ROOT_API_KEY="$(openssl rand -base64 48 | tr -d '\n')"
+```
+
+启动后访问 `http://localhost:8081/webui/unlock`，输入 root 解锁控制台。root 只保存在
+当前页面内存；刷新、关闭页面或退出后需要重新输入。控制台可创建、列出、轮换和吊销
+`FULL_RAG` 业务 Key，业务 Key用于外部系统调用 RAG 数据面，不需要访问 WebUI。
+
+```bash
+curl http://localhost:8081/api/v1/rag/search?query=example \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}"
+```
+
+部署边界：
+
+- 当前 MVP 只承诺单实例。
+- 数据面必须使用 TLS；WebUI 只部署在本地或受控管理网络。
+- root 通过 Secret 管理系统或环境变量注入，不写入镜像、YAML、日志或 Git。
+- 修改 root 后重启实例生效；没有 WebUI 修改 root 的接口。
+- root 模式拒绝 `?apiKey=`，只接受 Bearer 或 `X-API-Key` Header。
+
 ## 4. 构建与运行
 
 ### 4.1 构建

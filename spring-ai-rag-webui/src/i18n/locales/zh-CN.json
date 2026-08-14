@@ -13,6 +13,15 @@
     "files": "文件",
     "evaluation": "评估"
   },
+  "unlock": {
+    "title": "解锁管理控制台",
+    "rootApiKey": "Root API Key",
+    "submit": "解锁",
+    "unlocking": "验证中…",
+    "invalidKey": "无法解锁：请确认使用有效的 Root API Key。",
+    "memoryOnly": "凭证仅保存在当前页面内存中；刷新或退出后需要重新输入。",
+    "logout": "退出控制台"
+  },
   "common": {
     "loading": "加载中…",
     "error": "错误",
@@ -272,7 +281,7 @@
     "rawKey": "原始密钥（仅显示一次）",
     "namePlaceholder": "例如：生产环境服务器",
     "expiresAt": "过期时间",
-    "expiresAtHint": "留空表示永不过期",
+    "expiresAtHint": "必填，最长 90 天；默认建议 90 天。",
     "create": "创建",
     "createError": "创建 API 密钥失败",
     "keyCreated": "API 密钥创建成功",
@@ -289,8 +298,13 @@
     "active": "有效",
     "expired": "已过期",
     "role": "角色",
+    "profile": "权限配置",
     "admin": "管理员",
     "normal": "普通",
+    "fullRag": "FULL_RAG",
+    "fullRagHint": "可调用 RAG 数据面的读取和写入接口，但不能管理 API Key。",
+    "copy": "复制",
+    "copied": "已复制",
     "collectionAccess": "集合权限",
     "allCollections": "全部集合",
     "allCollectionsHint": "该密钥可访问当前及未来创建的所有集合。",

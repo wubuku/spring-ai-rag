@@ -304,21 +304,41 @@ Timeouts are applied at the `RestClient` level to all external LLM API calls (Op
 ```yaml
 rag:
   security:
+    root-api-key: ${RAG_ROOT_API_KEY:}
     api-key: ${RAG_API_KEY:}
     enabled: false
 ```
 
 | Property | Default | Description |
 |----------|---------|-------------|
+| `rag.security.root-api-key` | `""` | Standalone-service root credential; environment variable `RAG_ROOT_API_KEY` |
 | `rag.security.enabled` | `false` | Enable API Key authentication |
-| `rag.security.api-key` | `""` | API Key value |
+| `rag.security.api-key` | `""` | Legacy static unrestricted key; ignored for authentication in root mode |
 
-When enabled, all `/api/v1/**` requests must carry the `X-API-Key` header.
+Setting a valid `RAG_ROOT_API_KEY` enables standalone-service MVP security mode:
 
-Database-backed API keys may define `allowedCollectionIds` through
-`POST /api/v1/rag/api-keys`. The ACL is stored by Flyway V24 in
-`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. ADMIN and
-the optional static key remain unrestricted. See [rest-api.md](rest-api.md).
+- The value must contain at least 32 printable non-whitespace ASCII characters;
+  documented placeholder values fail startup.
+- All `/api/**` requests automatically require the environment root or a valid
+  database business key, regardless of `rag.security.enabled`.
+- Only `Authorization: Bearer` and `X-API-Key` headers are accepted; query
+  credentials are rejected.
+- Only the environment root can create, list, rotate, or revoke business keys.
+- The root is not stored in the database or logs. The WebUI keeps it only in
+  page memory and requires it again after refresh.
+- Empty-table ADMIN bootstrap and raw-secret logging are disabled.
+- Root-created business keys have the fixed `FULL_RAG` data-plane profile,
+  cannot manage keys, and require a future expiry no more than 90 days away.
+
+Without `RAG_ROOT_API_KEY`, legacy behavior remains: `rag.security.enabled`
+controls authentication, while `rag.security.api-key` and database
+ADMIN/NORMAL semantics continue to apply, including query-credential
+compatibility.
+
+Database business keys may define `allowedCollectionIds` through
+`POST /api/v1/rag/api-keys`. Flyway V24 stores the ACL in
+`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. See
+[rest-api.md](rest-api.md).
 
 ## API Rate Limiting Configuration
 

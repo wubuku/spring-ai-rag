@@ -34,8 +34,6 @@ export interface PdfToRagResponse {
   entryMarkdown: string;
 }
 
-const BASE_URL = '/api/v1/rag/files';
-
 export const filesApi = {
   /**
    * List direct children under a virtual path prefix.
@@ -99,21 +97,15 @@ export const filesApi = {
     return apiClient.post<PdfToRagResponse>(`/files/${uuid}/embed?${params.toString()}`, {}).then(r => r.data);
   },
 
-  /**
-   * Get the raw file content URL for embedding/preview.
-   * @param path URL-encoded virtual file path
-   */
-  rawFileUrl: (path: string): string => {
-    const encoded = encodeURIComponent(path);
-    return `${BASE_URL}/raw?path=${encoded}`;
-  },
+  getRawFile: (path: string) =>
+    apiClient.get<Blob>('/files/raw', {
+      params: { path },
+      responseType: 'blob',
+    }).then(response => response.data),
 
-  /**
-   * Get the HTML preview URL for a PDF or Markdown file.
-   * @param path URL-encoded virtual path of the PDF or Markdown file
-   */
-  previewUrl: (path: string): string => {
-    const encoded = encodeURIComponent(path);
-    return `${BASE_URL}/preview?path=${encoded}`;
-  },
+  getPreviewHtml: (path: string) =>
+    apiClient.get<string>('/files/preview', {
+      params: { path },
+      responseType: 'text',
+    }).then(response => response.data),
 };

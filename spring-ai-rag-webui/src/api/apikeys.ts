@@ -22,7 +22,7 @@ export interface ApiKeyCreatedResponse {
 
 export interface ApiKeyCreateRequest {
   name: string;
-  expiresAt?: string;
+  expiresAt: string;
   allowedCollectionIds?: number[];
 }
 

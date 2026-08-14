@@ -302,23 +302,35 @@ rag:
 ```yaml
 rag:
   security:
+    root-api-key: ${RAG_ROOT_API_KEY:}
     api-key: ${RAG_API_KEY:}
     enabled: false
 ```
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
+| `rag.security.root-api-key` | `""` | 独立服务 root 凭据；对应环境变量 `RAG_ROOT_API_KEY` |
 | `rag.security.enabled` | `false`（本地）/ `true`（`prod`） | 启用 API Key 认证 |
-| `rag.security.api-key` | `""` | 可选静态全库 Key |
+| `rag.security.api-key` | `""` | Legacy 静态全库 Key；root 模式下不参与认证 |
 
-启用后，所有 `/api/v1/**` 请求需携带 `X-API-Key` 头或 `?apiKey=`
-查询参数。首次启动时 `ApiKeyBootstrapService` 会在空表中生成一个
-ADMIN Key；ADMIN 可管理全部 Key，NORMAL 仅使用 RAG 数据面。
+配置有效 `RAG_ROOT_API_KEY` 后进入独立服务 MVP 安全模式：
 
-数据库 API Key 可在 `POST /api/v1/rag/api-keys` 中设置
-`allowedCollectionIds`。Flyway V24 将其保存到
-`rag_api_key.allowed_collection_ids`；空值表示全库权限。ADMIN 与可选静态
-Key 保持全库权限。详见 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
+- 值必须至少 32 个不含空白的可打印 ASCII 字符；弱占位符会导致启动失败。
+- 无论 `rag.security.enabled` 为何，所有 `/api/**` 都自动要求 environment root
+  或有效的数据库业务 Key。
+- 只接受 `Authorization: Bearer` 或 `X-API-Key` Header；query credential 被拒绝。
+- 只有 environment root 能创建、列出、轮换和吊销业务 Key。
+- root 不入库、不写日志；WebUI 只在当前页面内存中持有，刷新后需重新解锁。
+- root 模式禁用空表 ADMIN 自动生成和 raw secret 日志分发。
+- root 签发的业务 Key固定为 `FULL_RAG` 数据面能力，不能管理 Key；expiry 必填、
+  必须在未来且最长 90 天。
+
+未配置 `RAG_ROOT_API_KEY` 时保持 legacy 行为：`rag.security.enabled` 控制认证开关，
+`rag.security.api-key` 和数据库 ADMIN/NORMAL 语义继续生效，query credential 仍兼容。
+
+数据库业务 Key可设置 `allowedCollectionIds`。Flyway V24 将其保存到
+`rag_api_key.allowed_collection_ids`；空值表示全库权限。详见
+[rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置
 

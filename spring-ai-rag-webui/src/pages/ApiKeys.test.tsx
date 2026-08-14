@@ -170,9 +170,23 @@ describe('ApiKeys', () => {
     fireEvent.click(screen.getByRole('checkbox'));
     fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
 
-    expect(mockMutateFn).toHaveBeenCalledWith({
+    expect(mockMutateFn).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Scoped Key',
       allowedCollectionIds: [10],
-    });
+      expiresAt: expect.stringMatching(/T\d{2}:\d{2}:00$/),
+    }));
+  });
+
+  it('requires an expiration no later than 90 days', () => {
+    mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    const expiry = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+
+    expect(expiry).not.toBeNull();
+    expect(expiry).toBeRequired();
+    expect(expiry?.value).not.toBe('');
+    expect(expiry?.max).not.toBe('');
   });
 });

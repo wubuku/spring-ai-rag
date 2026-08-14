@@ -1,6 +1,6 @@
 import axios from 'axios';
 import axiosRetry from 'axios-retry';
-import { getApiKey } from '../utils/apiKeyStorage';
+import { clearCredential, getCredential } from '../auth/credentialStore';
 
 const BASE_URL = '/api/v1/rag';
 
@@ -11,9 +11,11 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.request.use(config => {
-  const apiKey = getApiKey();
-  if (apiKey) {
-    config.headers.set('X-API-Key', apiKey);
+  const credential = getCredential();
+  if (credential
+      && !config.headers.has('X-API-Key')
+      && !config.headers.has('Authorization')) {
+    config.headers.set('X-API-Key', credential);
   }
   return config;
 });
@@ -42,6 +44,9 @@ axiosRetry(apiClient, {
 apiClient.interceptors.response.use(
   response => response,
   error => {
+    if (error.response?.status === 401) {
+      clearCredential();
+    }
     const message = error.response?.data?.detail ?? error.message;
     return Promise.reject(new Error(message));
   }

@@ -105,7 +105,24 @@ See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 
 ## 7. Security And Collection ACL
 
-The internal API-key system supports:
+Two compatible operating modes are available.
+
+Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:
+
+- The environment root protects `/api/**` independently of the legacy auth flag.
+- The root unlocks the administration UI at `/webui/unlock`; the browser keeps
+  it only in page memory and requires it again after refresh.
+- Only the root can create, list, rotate, and revoke business keys.
+- Root-created keys have a fixed `FULL_RAG` data-plane profile. They can read
+  and write RAG data and may be Collection-scoped, but cannot manage keys.
+- Business-key expiry is required and limited to 90 days. Raw secrets appear
+  only in create or rotate responses.
+- Root mode accepts only Bearer or `X-API-Key` headers, rejects query
+  credentials, and disables legacy ADMIN bootstrap/raw-secret logging.
+
+Without a root credential, legacy ADMIN/NORMAL/static-key behavior remains.
+
+Database API keys support:
 
 - Hash lookup.
 - `ADMIN` / `NORMAL` roles.
@@ -113,13 +130,13 @@ The internal API-key system supports:
 - `allowedCollectionIds`.
 - Data-plane ACLs for Chat, Search, Collections, Documents, and PDF-to-RAG.
 
-It is not yet a complete credential system for external model-service callers:
+This MVP is limited to a single instance, TLS, and a trusted management
+network. It is not yet a complete multi-tenant external credential system:
 
 - The schema retains a plaintext column.
 - NORMAL-key delegation needs stronger boundaries.
 - Rotation lacks a stable principal or family.
 - There is no transactional last-ADMIN guard.
-- Bootstrap distributes a secret through logs.
 - Multi-instance revocation, shared limiting, and write amplification remain unresolved.
 
 See [openai-compatibility-readiness.md](openai-compatibility-readiness.md) and the

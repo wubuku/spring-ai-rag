@@ -1,16 +1,16 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApiCalls } from './api-mocks';
+import { mockAllApiCalls, openProtectedPage } from './api-mocks';
 
 test.describe('Collections', () => {
   test('renders collections page with title', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/collections', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/collections');
     await expect(page.getByRole('heading', { name: 'Collections' })).toBeVisible();
   });
 
   test('shows collections list or empty state', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/collections', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/collections');
     const hasGrid = await page
       .locator('[class*="grid"]')
       .isVisible()
@@ -30,13 +30,13 @@ test.describe('Collections', () => {
 test.describe('Settings', () => {
   test('renders settings page with title', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/settings');
     await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible();
   });
 
   test('shows settings tabs', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/settings');
     await expect(page.getByRole('button', { name: /LLM|Provider/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Retrieval/i })).toBeVisible();
     await expect(page.getByRole('button', { name: /Cache/i })).toBeVisible();
@@ -44,7 +44,7 @@ test.describe('Settings', () => {
 
   test('switches between tabs', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/settings');
     await page.getByRole('button', { name: /Retrieval/i }).click();
     await expect(page.getByText(/retrieval|top\s*k|vector|weight/i).first()).toBeVisible();
     await page.getByRole('button', { name: /Cache/i }).click();
@@ -53,13 +53,13 @@ test.describe('Settings', () => {
 
   test('shows save button', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/settings');
     await expect(page.getByRole('button', { name: /save/i })).toBeVisible();
   });
 
   test('selects a configured provider and model', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/settings', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/settings');
 
     const provider = page.getByTestId('settings-provider-select');
     const model = page.getByTestId('settings-model-select');
@@ -75,13 +75,13 @@ test.describe('Settings', () => {
 test.describe('Metrics', () => {
   test('renders metrics page with title', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/metrics', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/metrics');
     await expect(page.getByRole('heading', { name: 'Metrics' })).toBeVisible();
   });
 
   test('shows loading or metrics content', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/metrics', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/metrics');
     const hasLoading = await page
       .getByText('Loading')
       .isVisible()
@@ -97,7 +97,7 @@ test.describe('Metrics', () => {
 test.describe('Alerts', () => {
   test('renders alerts page with title', async ({ page }) => {
     await mockAllApiCalls(page);
-    await page.goto('/webui/alerts', { waitUntil: 'networkidle' });
+    await openProtectedPage(page, '/webui/alerts');
     await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible();
   });
 });
