@@ -1,13 +1,16 @@
 # OpenAI Chat Completions 兼容 RAG 服务实施规划
 
-> 状态：待评审、待批准，尚未开始实施
+> 状态：规划与三轮系统检查已完成，待用户批准，尚未开始实施
 > 起草日期：2026-07-21
-> 适用基线：本规划起草时的当前工作树；工作树包含尚未提交的多模型、Collection ACL 等改动
+> 最近复核：2026-08-14
+> 适用基线：commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`；实施前仍须按 Phase 0A 重新核对代码与协议
 > 目标接口：`POST /v1/chat/completions`、`GET /v1/models`、`GET /v1/models/{id}`
 > 实施约束：未经批准不得修改生产代码；实施时必须同步补测试、文档并通过项目既有 E2E 门禁
+> 当前代码上下文：[OpenAI 兼容服务就绪度与代码库上下文](../openai-compatibility-readiness-zh-CN.md)
+> 安全前置工程：[API Key 加固独立实施规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
 > 相关旧稿：[API-KEY-MANAGEMENT-PLAN.md](API-KEY-MANAGEMENT-PLAN.md) 解释了当前内部实现
-> 的来源；涉及外部服务的 bootstrap、委派、secret 传输、轮换和 WebUI 安全决策，以本文
-> 第 12 节为准。
+> 的来源；涉及 bootstrap、委派、secret、轮换、迁移和 WebUI 管理安全的目标决策，
+> 以独立 API Key 加固规划为准。
 
 ## 1. 决策摘要
 
@@ -938,597 +941,146 @@ request document_ids 所属 collections
 10. documentIds 必须和最终 collections 取交集。
 11. ACL 计算应抽取为共享 service，旧 Controller 和兼容 Controller 都调用，避免规则漂移。
 
-## 12. 外部调用方 API Key、鉴权、限流与 CORS
+## 12. 外部凭据集成契约
 
-### 12.1 结论：API Key 是兼容服务的上线前置能力
+### 12.1 独立前置工程
 
-当前系统已经有 API Key 管理雏形，不需要从零开始；但它目前更接近内部工具，
-**尚不能直接作为外部 RAG 服务的完整身份与授权系统**。
+外部 API Key 的 schema、principal、policy、管理生命周期、bootstrap、审计、迁移、
+WebUI 凭据安全和共享 quota 已剥离为独立工程：
 
-对 OpenAI-compatible 服务，API Key 的定义应是：
+[API Key 加固独立实施规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
 
-> 一个面向机器调用方的长期 service credential。它解析为稳定的 key principal，
-> 再由 principal policy 决定可调用的 action、可见的 RAG deployment、可访问的
-> Collection、过期时间和配额。
+该规划是本兼容层的安全前置条件，不是本节的子任务。兼容层不得复制或弱化其中的安全
+不变量，也不得在前置工程未达到其验收标准时自行实现一套临时 Bearer Key。
 
-它不是：
+本规划只定义 `/v1` 如何消费加固后的能力。
 
-- 上游 LLM provider key。
-- OpenAI 请求体 `user` / `safety_identifier` 所声明的终端用户。
-- 仅用于“请求头字符串相等”的全局共享密码。
+### 12.2 上线门禁
 
-OpenAI 请求中的 `user`、`safety_identifier` 只能作为受限长度的非可信审计提示，
-不能参与认证或扩大权限。兼容层必须使用当前数据库 Key 的 `keyId` 作为 authenticated
-principal。
+生产或非开发 profile 启用 `rag.openai-compatibility.enabled=true` 时，必须同时满足：
 
-因此设置硬门槛：
+1. `rag.security.enabled=true`。
+2. family/version credential resolver、immutable principal 和 typed effective policy 已可用。
+3. 至少存在可用的数据库 ADMIN / break-glass 管理路径。
+4. 当前部署模式满足 API Key 规划定义的吊销一致性和 quota readiness；多副本不能使用
+   被标记为仅单实例有效的 local backend。
+5. core standalone 与 starter consumer 两种拓扑都已注册相同的认证、授权和 quota 链。
 
-- `rag.openai-compatibility.enabled=true` 时，生产/非开发 profile 必须同时满足
-  `rag.security.enabled=true`。
-- `/v1/**` 只接受能够解析为数据库 principal 和 policy 的 Key。
-- 外部兼容 Key 至少必须具备 action scope、deployment allow-list、Collection scope、
-  过期/吊销状态和每 Key 限流。
-- 上述条件未满足时 fail fast，不允许“接口先上线，安全后补”。
+任一条件不满足时，应用应 fail fast，或保持 `/v1/**` 未注册；不能把接口降级为 static key、
+匿名访问或无全局配额的“临时可用”模式。
 
-### 12.2 当前实现事实
+### 12.3 Credential transport 与 Principal
 
-| 能力 | 当前实现 | 结论 |
-|---|---|---|
-| Secret 格式 | `rag_sk_` + 去掉连字符的 UUID | 有约 122 bit 随机性，基础上可用 |
-| Public ID | `rag_k_` + 12 个 hex 字符 | 可用于日志、列表和 principal ID；外部规模下应加长 |
-| 存储与查找 | `SHA-256(rawKey)`，`key_hash` 唯一索引 | 正确方向；验证为索引查找 |
-| 明文返回 | create/rotate response 返回一次 raw key | 正确方向 |
-| 明文列 | V23 和 entity 仍存在 nullable `api_key` 及索引，但 service 当前不写 | 与“raw 永不存储”声明矛盾，必须清理 |
-| 生命周期 | create、list、revoke、rotate、expiresAt、lastUsedAt | 基础能力已存在 |
-| 时间语义 | `expires_at/last_used_at` 为无时区 TIMESTAMP，Java 使用 `LocalDateTime` | 多节点/跨时区下需明确 UTC 迁移 |
-| 角色 | `ADMIN` / `NORMAL` | 只能表达粗粒度管理权限 |
-| 创建角色 | create DTO 没有 role；service 依赖 entity 默认值创建 NORMAL，仅 bootstrap 再提升首个 Key | 当前文档“ADMIN 可创建任意角色”与代码不一致 |
-| Collection ACL | `allowed_collection_ids` 逗号串；null/blank 表示 unrestricted | 已覆盖主要数据链路，但 secure default 不足 |
-| 委派 | 任意有效 Key 可 create；受限 Key 只能委派 ACL 子集 | NORMAL 仍可无限创建子 Key；unrestricted NORMAL 可创建 unrestricted 子 Key |
-| 轮换 | 禁用旧 Key，再按 name/expiry/Collection ACL 调用 generate | 丢失旧 role 和未来 policy；原 expiry 可能已过期或即将过期 |
-| 静态 Key | `rag.security.api-key` 无数据库 entity | 无 keyId、owner、ACL、role、quota 或 policy |
-| Bootstrap | 空表时自动生成 ADMIN，并把 raw key 写入启动日志 | 不适合集中日志和多副本生产部署 |
-| 认证传输 | `X-API-Key` 或 `?apiKey=`；不支持 Bearer | 旧 API 可兼容，新 `/v1` 不应接受 query secret |
-| Filter 装配 | auth/rate-limit 的 `FilterRegistrationBean` 只在 starter，且只映射 `/api/*`；core standalone 不加载 starter | core 自带运行入口可能连当前 `/api/**` 都未经过这两个 filter |
-| 正向缓存 | JVM 本地 Caffeine，30 秒 TTL | 多实例吊销可能继续生效至其他实例缓存过期 |
-| last used | 每次成功认证同步 UPDATE | 高频 RAG 请求会产生数据库写放大 |
-| 限流 | JVM 本地固定 60 秒窗口；可按 IP、raw header 或 auth attribute | 多实例不共享；配置可能要求保存 raw key；当前 auth/filter 顺序有误 |
-| 管理审计 | create/revoke/rotate 仅普通日志 | `rag_audit_log` 已存在，但 API Key 生命周期尚未接入，operator 也未填充 |
-| 管理 UI | 可创建、列表、吊销、轮换、选 Collection；调用 credential 存在 localStorage，旧 stream 放入 query | 仅适合开发/内网，无 owner、deployment、endpoint scope、quota、分页/搜索 |
+`/v1/**` 的固定契约：
 
-还需明确两个当前权限缺口：
+- 默认只接受 `Authorization: Bearer <credential>`。
+- 可用显式 compatibility flag 接受 `X-API-Key`，但不接受 query `apiKey`。
+- Bearer 与 X-API-Key 同时存在且值不同时返回 401；相同值只记录无 secret 的弃用指标。
+- 只接受 database-backed family principal；legacy static key、anonymous/null caller 和
+  请求体 `user` / `safety_identifier` 都不能形成或扩大身份。
+- downstream 只读取 request-scoped immutable `ApiKeyPrincipal`，不读取 raw header 或可变
+  JPA entity。
 
-1. static legacy key 或认证关闭时，Controller 得不到 `RagApiKey` entity；create 会把
-   null caller 视为 unrestricted 并可生成 unrestricted NORMAL Key，rotate 的 caller
-   检查也会因 `caller == null` 而放行任意 `keyId`。
-2. 现有文档声称“最后一个 ADMIN 不可吊销”，当前 service/controller 并无对应事务校验。
-
-这些事实应在兼容接口实施前修复；不能把文档描述当作已实现保证。
-
-### 12.3 目标 Principal 与 Policy
-
-认证后下游不应继续直接依赖可变 JPA entity，而应得到不可变快照：
-
-```java
-record ApiKeyPrincipal(
-    String keyId,
-    String credentialFamilyId,
-    ApiKeyRole role,
-    String tenantId,
-    String projectId,
-    String ownerId,
-    long policyVersion,
-    ApiKeyPolicy policy
-) {}
-```
-
-`tenantId`、`projectId`、`ownerId` 第一阶段可以是外部身份系统分配的 opaque string；
-无需为了兼容接口先建设完整用户目录。其目的，是让一个 Key 能明确归属到客户、项目或
-service account，而不是只剩一个自由文本 name。这些字段在 MVP 是归属和审计属性，
-不会自动形成行级租户隔离；真实数据授权仍由 action/deployment/Collection policy
-决定。若未来开放租户管理员自助管理，需要另行引入人类身份、tenant-admin 角色和强制
-tenant boundary，不能仅凭请求中的 tenantId 或 ownerId 信任 caller。
-
-rotation 不改变调用方身份，只替换 secret；短 overlap window 又可能同时存在两个有效
-secret version。因此不能把稳定 owner/policy/委派关系复制到每个可轮换 Key 行。目标模型
-必须分成两层，并使用新表隔离 V18-V24 legacy schema：
-
-**`rag_api_key_family`：稳定 principal / policy**
-
-- `family_id`：至少 128 bit 的公开稳定标识，主键。
-- `status`：`ACTIVE` / `REVOKED`。
-- `name`、`tenant_id`、`project_id`、`owner_id`、`role`。
-- `parent_family_id`、`delegation_depth`、`created_by_key_id`。
-- `policy JSONB`、`policy_version`。
-- `expires_at`、`created_at`、`revoked_at`、`revocation_reason`。
-
-**`rag_api_key_version`：可轮换 secret**
-
-- `key_id`：公开 version ID；`key_hash`：SHA-256 索引查找值。
-- `family_id`：外键指向稳定 family。
-- `status`：`ACTIVE` / `ROTATED` / `REVOKED`。
-- `created_at`、`last_used_at`、`retire_at`、`revoked_at`。
-- `rotated_from_key_id`、`revocation_reason`。
-
-**`rag_api_key_operation`：管理幂等记录**
-
-- `operator_principal_id`、`operation_type`、`idempotency_key_hash` 组成唯一键。
-- `target_family_id`、`created_key_id`、`result_status`、`created_at`、`expires_at`。
-- 不保存 raw secret、完整 request body 或可重放 response。
-- 只允许同一已认证 operator 查询自己的重复 operation 结果，并设置有限 retention。
-
-所有 lifecycle timestamp 使用 `TIMESTAMPTZ` / Java `Instant`；新的管理契约要求 RFC
-3339 offset，不接受无时区 expiry。`rag_api_key` 作为 V18-V24 legacy compatibility
-shadow 在 expand 窗口暂时保留，不再作为新 external credential 的存储位置。这样旧应用
-无法把新 external Key 误当作只受粗粒度 ACL 约束的 legacy Key。
-
-认证查询顺序是 `key_hash -> ACTIVE version -> ACTIVE family -> family expiry/policy`。
-overlap 时旧 version 可暂时保持 `ACTIVE` 并设置有上限的 `retire_at`；即使异步清理尚未
-把它改成 `ROTATED`，认证也必须在 `now >= retire_at` 时拒绝。policy 和 owner 只存于
-family，因此 policy 更新会同时作用于 overlap 中的所有 version，rotation 也无需复制
-可变授权数据。
-
-`parent_family_id` 在创建后不可变；创建 child 时锁定 parent 并验证 depth/child count/
-policy subset。rotation、version revoke 和 family revoke 都先 `SELECT ... FOR UPDATE`
-锁定目标 family，再在事务内重算 active versions 和 ADMIN/family invariants，不能只靠
-Controller 预检查。
-
-项目已使用 Hibernate `@JdbcTypeCode(SqlTypes.JSON)` 和 PostgreSQL JSONB，可复用该
-模式定义 typed `ApiKeyPolicy`，不应继续为 deployment/action 增加手工逗号字符串解析。
-
-建议 policy：
-
-```json
-{
-  "schemaVersion": 1,
-  "actions": [
-    "models.read",
-    "chat.completions.invoke"
-  ],
-  "deploymentIds": [
-    "rag-default"
-  ],
-  "collectionScope": {
-    "mode": "LIST",
-    "ids": [1, 2]
-  },
-  "limits": {
-    "requestsPerMinute": 60,
-    "maxConcurrentRequests": 4,
-    "monthlyTokenBudget": null
-  },
-  "maxContentAuditMode": "METADATA_ONLY",
-  "allowDelegation": false
-}
-```
-
-规则：
-
-- role 只决定粗粒度管理能力，真实数据面授权由 action + deployment + collection
-  三层共同决定。新 authorization service 不得沿用当前
-  `ApiKeyCollectionAccess.isUnrestricted()` 中“ADMIN 自动全库”的数据面捷径；迁移后的
-  ADMIN 如需全库权限，应由显式 policy 表达。
-- `schemaVersion` 表示 JSON policy 结构版本；family 行上的 `policyVersion` 表示同一
-  principal 的并发修改 revision，两者不能复用。
-- JSON policy 使用独立、严格的 ObjectMapper/schema validation；未知 action、非法
-  scope mode、负数 limit 或未来 schemaVersion 必须 fail closed。
-- action 使用稳定语义名，不直接把 URL 字符串存入 policy。
-- 兼容层外部 Key 的默认 action 只有 `models.read` 和
-  `chat.completions.invoke`，不能因此获得文档上传、删除、Collection 管理或 Key 管理权限。
-- 新建外部 NORMAL Key 默认 `allowDelegation=false`。
-- 新建外部 Key 必须显式选择 deployment；空列表表示无 deployment 权限，不能解释为 ALL。
-- 新建 external family 的 expiry 必填、必须在未来且不得超过可配置最大 TTL（建议生产
-  默认 90 天）；普通管理请求不能创建永不过期 external credential。
-- Collection 需要显式 `mode=ALL|LIST|NONE`，消除当前 null/empty=ALL 的歧义。
-  外部 NORMAL Key 默认 `LIST` 或 `NONE`；只有 ADMIN 明确选择时才允许 `ALL`。
-- 新 external Key 默认 `maxContentAuditMode=METADATA_ONLY`；只有 operator 明确授权且
-  deployment/global 同时允许时才可使用 FULL。
-- `monthlyTokenBudget` 只有在上游提供可信 usage 时才能做硬扣减；MVP 的硬门禁是 RPM 和
-  concurrency，token/cost budget 可作为后续阶段。
-
-### 12.4 授权求值顺序
-
-每个 `/v1` 请求按固定顺序执行：
+兼容层至少依赖 principal 提供：
 
 ```text
-解析 Bearer credential
-  -> hash lookup
-  -> version ACTIVE / retireAt 校验
-  -> family ACTIVE / expiresAt / revokedAt 校验
-  -> ancestor families ACTIVE / expiry / policy chain 校验
-  -> 形成含 effective policy 的 ApiKeyPrincipal
-  -> action scope
-  -> deployment allow-list
-  -> deployment 是否 enabled 且至少一个 backend available
-  -> deployment/request/key/document Collection scope 合成
-  -> RPM / concurrency / optional budget
-  -> RAG execution
-  -> usage、last-used、audit
+keyId
+credentialFamilyId
+role
+owner / tenant / project audit attributes
+effective actions
+effective deployment IDs
+effective Collection scope
+effective limits
+policyVersion
 ```
 
-失败语义：
+`role` 是管理能力上限，不是数据面 bypass；ADMIN 调用 `/v1` 仍需显式 action、deployment
+和 Collection 权限。
 
-- credential 缺失、未知、过期或已吊销：401，不透露具体原因。
-- credential store 不可用、family/version 数据不一致、policy JSON/schema 无法解析：
-  503 `service_unavailable` + trace ID，并触发告警；不能伪装成 401，也不能回退 static key。
-- principal 存在但 action 或 Collection 越权：403。
-- requested deployment 不存在或对该 principal 不可见：统一返回 404
-  `model_not_found`，避免通过差异响应枚举 deployment；models retrieve 和 chat 必须一致。
-- quota/并发达到上限：429，并给出 `Retry-After` 和 trace ID。
-- `/v1/models` 只返回 key policy 允许、Collection scope 有交集且当前可执行的
-  deployments。
-- `POST /v1/chat/completions` 必须再次校验 requested deployment；不能把 models
-  列表过滤当作授权。
+### 12.4 `/v1` 授权合成
 
-建议新增 `ApiKeyAuthorizationService`，输入 principal、semantic action、deployment
-和 request scope，返回不可变 `AuthorizedRagScope`。Controller、filter 和 retrieval
-代码不得分别重写授权公式。
+固定求值顺序：
 
-### 12.5 Secret 生成、存储与传输
+```text
+principal valid
+  -> semantic action
+  -> requested deployment visible and executable
+  -> deployment/request/key/document Collection scope
+  -> family quota and concurrency
+  -> RAG execution
+```
 
-目标规则：
+Endpoint 对应 action：
 
-- 使用 `SecureRandom` 生成至少 256 bit 随机 secret；保留 `rag_sk_` 前缀兼容现有识别，
-  不再依赖 UUID 文本生成。
-- 新 public keyId 也使用至少 128 bit 随机标识；继续接受现有 12-hex keyId，但不再为新
-  外部 Key 生成过短 ID。
-- 对高熵随机 secret，SHA-256 索引查找是合理方案；无需套用低熵密码的慢 hash。
-- 数据库只保存 hash 和 public keyId；raw secret 仅在 create/rotate 成功响应返回一次。
-- create/rotate 只允许通过 TLS；响应设置 `Cache-Control: no-store`、`Pragma: no-cache`，
-  管理 UI 不把新 raw secret 写入 localStorage、浏览器日志或 analytics。
-- raw secret 不进入 entity、数据库、审计详情、普通日志、MDC、metrics tag、URL、
-  exception message 或测试快照。
-- V23 的 `api_key` 索引必须在 expand 时删除，列先受 `CHECK (api_key IS NULL)` 保护；
-  contract 再随 legacy table 一起删除。如发现历史明文，停止迁移并要求轮换，而不是
-  静默丢弃或继续使用。
-- `Authorization`、`X-API-Key` 和 query 参数仍应由现有敏感日志 converter 覆盖，并增加
-  回归测试验证嵌套 JSON、异常文本和代理 access log 配置。
-
-`/v1/**`：
-
-- 首选且默认只接受 `Authorization: Bearer <key>`。
-- 可通过配置兼容 `X-API-Key`。
-- 不接受 query string `apiKey`。
-- 同时提供 Bearer 与 X-API-Key 且值不同，返回 401；相同值可接受但记录无 secret 的
-  deprecated transport metric。
-
-旧 `/api/**`：
-
-- 为 WebUI 和 legacy SSE 暂时保留 `X-API-Key` 与 query fallback。
-- 可增加 Bearer 支持并做回归测试。
-- query key 应进入弃用路线；WebUI 能改用 `fetch` streaming header 后再移除。
-
-### 12.6 管理面、创建与委派
-
-`/v1/**` 是数据面，只消费 Key，不提供 Key 管理 endpoint。管理面继续位于
-`/api/v1/rag/api-keys`。MVP 是 platform-operated provisioning，不建设公网租户自助
-门户；外部客户拿到的是有限数据面 Key，不是管理权限。
-
-管理面允许两类经过明确验证的 operator principal：
-
-1. 机器自动化：数据库 API Key family，满足 ADMIN role 上限和对应 `keys.*` action。
-2. 人类 WebUI：可信 IAP/OIDC/mTLS gateway 验证的 operator identity，经应用侧映射到
-   `keys.*` action；不能仅因请求来自代理就视为 ADMIN，也不能把数据库 ADMIN key
-   注入浏览器。
-
-API Key 管理 endpoint 自身永远不能因 `rag.security.enabled=false` 变成匿名接口。
-认证关闭时应不注册/返回 404，或只允许显式 local-development bootstrap mode；生产
-profile 必须 fail closed。
-
-管理面默认只在内网/VPN、API Gateway admin route、IAP 或 mTLS 后开放，不应与公网
-`/v1` 数据面共享同等暴露范围。当前 WebUI 把 credential 持久化到 localStorage，且旧
-stream 将其放入 query string；该模式只标记为 local-development。生产 WebUI 至少使用
-页面内存中的短期 admin credential，优先由外部身份代理建立 HttpOnly/SameSite session，
-并配置 CSP、CSRF 与严格 origin；不能把 sessionStorage 当作防 XSS 的安全边界。没有
-身份代理时，WebUI 只能部署在可信管理网络。
-
-第一阶段若尚无可信人类身份集成，生产管理面只开放机器自动化路径，WebUI 保持关闭或
-仅部署在受控运维环境；不能用 localStorage ADMIN key 作为临时公网方案。
-
-管理授权以 `keys.*` semantic action 为准；`role` 是可授予能力的上限，不是绕过 action
-检查的捷径。只有 ADMIN family 可以持有跨主体 `keys.create/read/revoke/policy.write`
-action；NORMAL 最多持有显式开启的 self action。
-
-推荐权限：
-
-| 操作 | 默认允许者 |
+| Endpoint | Action |
 |---|---|
-| 创建外部调用 Key | ADMIN 且有 `keys.create` |
-| 列出所有 Key | ADMIN 且有 `keys.read` |
-| 查看自己的 Key metadata | 有 `keys.read.self` |
-| 吊销任意 family | ADMIN 且有 `keys.revoke` |
-| 吊销自己 family 的单个 version | 有 `keys.version.revoke.self` |
-| 轮换自己的 Key | 有 `keys.rotate.self` |
-| 修改 policy | ADMIN 且有 `keys.policy.write` |
+| `GET /v1/models` | `models.read` |
+| `GET /v1/models/{id}` | `models.read` |
+| `POST /v1/chat/completions` | `chat.completions.invoke` |
 
-**MVP 关闭 NORMAL self-service create。** 这是管理面安全修复，不保留当前“任意 NORMAL
-可创建 NORMAL”的兼容行为；如未来确有产品需求，只能通过下面的显式委派规则重新开放。
+要求：
 
-如产品明确需要委派，必须同时满足：
+- `/v1/models` 只列出 policy 允许、Collection scope 有交集且当前可执行的 deployment。
+- retrieve 和 chat 对同一 deployment 使用同一 authorization service；列表过滤不能替代
+  chat 的逐请求授权。
+- requested deployment 不存在或对 caller 不可见时统一返回 404 `model_not_found`。
+- Collection 合成遵循第 11 节；空结果必须显式 deny，不能退化为全库。
+- 请求中的 `model`、`rag.collection_ids`、`document_ids`、`user` 或任意自定义 Header 都
+  只能收窄服务端 policy，不能扩权。
 
-- parent policy `allowDelegation=true`。
-- child actions、deployments、Collections 都是 parent 的真子集或相等。
-- child expiry 不晚于 parent；parent 无 expiry 也不自动允许 child 永不过期。
-- child RPM、concurrency、budget 不高于 parent。
-- child role 不得提升。
-- 保存稳定的 `credentialFamilyId`、`parentCredentialFamilyId` 和
-  `delegationDepth`，并限制最大深度；`createdByKeyId` 只用于审计。
-- 不能把 parent authority 只绑定到可轮换的 keyId，否则父 Key 轮换会被误判为父权限
-  撤销。rotation 只在同一 family 下新增 version，不改变子 family 的 parent。
-- 显式 revoke credential family 时，在同一事务内级联 revoke descendant families；
-  单纯把旧 version 标记为 rotated 不触发级联。
-- 每次 child 请求的 effective actions/deployments/Collections 是 child policy 与全部
-  active ancestor policy 的逐层交集；任一 ancestor 过期、吊销或 policy 收窄都立即
-  fail closed。不能只在创建 child 时校验一次后永久信任复制结果。
-- RPM、concurrency 和 budget 同时记入 child 与全部 ancestor family 的 quota bucket；
-  否则创建多个 child 会放大 parent 总配额。另设最大 delegation depth 和每 family
-  active child 数量上限，防止无界 fan-out。
+建议复用 API Key 工程提供的 `ApiKeyAuthorizationService`，由兼容层把 deployment 和
+request scope 转为 `AuthorizedRagScope`；Controller、Models API 和 retrieval 代码不得各自
+重写授权公式。
 
-管理 API 需要：
+### 12.5 Quota 与流式生命周期
 
-- create request 显式包含 owner、role、expiry、actions、deployments、Collection mode
-  和 limits；只有 ADMIN 可创建 ADMIN。
-- expiry 超出 production max TTL 时拒绝。只有 bootstrap/break-glass ADMIN 流程可使用
-  显式配置的例外，该操作必须进入强事务审计并触发告警。
-- response 只在成功创建/轮换时含 raw key。
-- create/rotate 接受 `Idempotency-Key` 并保存不含 raw secret 的 operation result。若首个
-  成功响应丢失，重复请求不得创建第二个 family/version，也不得试图重放 raw secret；
-  返回明确的 `secret_already_issued` 冲突和已创建 keyId。create 的未知 family 通过
-  family revoke 清理；rotate 的未知新 secret 通过 version-only revoke 清理，不能为此
-  误撤销整个 family。
-- Idempotency-Key 至少 128 bit 随机、限制长度，并按 authenticated operator principal +
-  operation type + path scope 哈希后保存；其他 operator 即使猜到同一值也不能枚举结果。
-- list/search 返回 metadata 和 policy 摘要，不返回 hash/raw。
-- 大规模使用前新增分页与 owner/status/deployment 搜索；为避免破坏当前数组响应，
-  可新增 paginated management endpoint，再迁移 WebUI。
-- 修改 policy 使用 optimistic locking / `policyVersion`，避免覆盖并发管理操作。
+兼容层只消费 API Key 工程提供的 stable family quota：
 
-### 12.7 吊销、轮换与 ADMIN 保护
+- bucket key 是 `credentialFamilyId`，不是 raw secret 或可轮换 keyId。
+- rotation 和 overlap version 不能重置 RPM 或并发。
+- delegated family 的 ancestor 扣减语义由 API Key 工程保证。
+- stream 从订阅开始持有 concurrency lease，并在 complete、error、cancel、timeout 和
+  client disconnect 的所有终态释放。
+- shared backend 不可用时返回 503；达到配额时返回 429 + `Retry-After`。
+- usage 不可信或缺失时，不把估算 token 当作硬预算扣减。
 
-面向管理调用方的默认撤销对象是 credential family，而不是某一个可轮换 version：
+### 12.6 Filter、错误与运行拓扑
 
-- `DELETE /api/v1/rag/api-keys/{keyId}` 先解析 `keyId -> familyId`，再撤销整个 family。
-  这样从旧 keyId 发起撤销也不会漏掉同 family 的新 version。
-- `DELETE /api/v1/rag/api-key-versions/{keyId}` 只撤销该 version，用于 overlap 提前收口、
-  单一 secret 泄漏和 rotate 响应丢失恢复；self action 只能操作 caller 自己的 family。
-- family 撤销会拒绝其所有 version，并通过 `parent_family_id` 递归撤销所有 descendant
-  families。实现可使用递归 CTE + 行锁，或先锁定受影响 family 集合后批量更新。
-- version-only revoke 不替代 family revoke；两者使用不同路径和 action，避免操作语义
-  含糊。撤销当前最后一个有效 version 时必须返回影响提示，但 ADMIN emergency 操作可
-  显式确认。
-
-吊销要求：
-
-- 数据库状态变更与审计事件在一个业务事务中提交。API Key lifecycle audit 是安全记录，
-  不能沿用当前 `AuditLogService` 吞错后继续成功的 best-effort 语义；审计写失败时管理
-  操作必须回滚，或写入同事务 outbox 后再异步投递。
-- 启用数据库 Key 管理时，lifecycle audit repository/outbox 必须存在；不能因为
-  optional bean 缺失而静默关闭安全审计。
-- 响应成功后，所有实例必须立即或在明确的极短上限内拒绝旧 key。
-- 吊销已吊销 family 应幂等。
-- 禁止撤销后不再存在可用 ADMIN family；需要在同一事务中锁定受影响 family tree 和
-  ADMIN 保护行/集合，按 family 而不是 active version 行计数。
-- 记录 operator keyId/familyId、target keyId/familyId、owner、reason、trace ID 和
-  client IP，不记录 raw/hash。
-
-轮换要求：
-
-- 在同一 family 下创建新的 version；owner、tenant/project、role、policy、delegation
-  和限额留在 family，不做容易漂移的逐行复制。
-- 普通 rotation 在受上限约束的短 overlap 内允许新旧两个 ACTIVE version，旧 version
-  必须带 `retireAt`；immediate cutover 才要求提交后只剩新 version ACTIVE。
-- 并发 rotation 必须在 family 行锁内串行化；第二个请求看到第一个已创建的新 version 后
-  按 idempotency/冲突规则结束，不能再创建第三个 active version。
-- family 已过期时拒绝 rotation。默认保留仍有效的 family expiry且绝不自动延长；需要
-  延长时必须由有权主体执行独立、带 optimistic locking 和审计的 expiry/policy 更新。
-- 可用性优先的默认策略是创建新 version 后保留一个很短、可配置且有硬上限的 overlap
-  window；旧 version 写入 `retireAt`，避免响应丢失时调用方立即失联。
-- 紧急泄漏处置可由 ADMIN 显式请求 immediate cutover；普通 self rotation 不允许无限
-  延长 overlap，任何路径都不能形成永久双活。
-- 调用方应在 overlap 内部署新 secret、用新 secret 完成探活，再显式提前 retire 旧
-  version；即使未确认，旧 version 也在 `retireAt` 自动失效。
-- old/new keyId 通过 `rotatedFromKeyId` 关联，审计中可追踪；旧 version 使用明确的
-  rotated/revoked reason，不能把 credential family 误标为整体撤销。
-
-### 12.8 Bootstrap 与 legacy static key
-
-生产环境不应把首次 ADMIN raw secret 写入集中日志。
-
-推荐 bootstrap：
-
-1. 运维在 Secret Manager / Kubernetes Secret 中提供一次性 secret；优先使用文件挂载
-   `RAG_BOOTSTRAP_ADMIN_KEY_FILE`，环境变量 `RAG_BOOTSTRAP_ADMIN_KEY` 仅作为兼容方式。
-2. 首实例在数据库锁保护下保存其 hash 和 ADMIN policy。
-   expand 回滚窗口内同时维护 12.13 定义的 legacy ADMIN shadow；contract 后停止。
-3. 应用不打印 raw secret；成功后提示删除 bootstrap 输入。
-4. 多副本同时启动时使用 PostgreSQL advisory lock 或唯一 bootstrap marker，避免多个
-   实例各自创建 ADMIN。
-5. 表非空但不存在可用 ADMIN 时 readiness 失败并要求显式恢复流程；不能静默把任意最早
-   NORMAL Key 提升为 ADMIN，也不能每次启动自动再生成管理员。
-
-本地开发可保留显式 opt-in 的“生成并打印一次”模式，但 prod profile 必须拒绝该模式。
-
-`rag.security.api-key` static legacy key：
-
-- 迁移期只保留旧 `/api/**` 使用。
-- 不允许访问 `/v1/**`，因为它无法表达 keyId、owner、deployment scope 和 quota。
-- 不允许调用 Key 管理 endpoint 或作为 ADMIN。
-- 文档标记 deprecated，并提供转换为数据库 Key 的运维步骤。
-
-### 12.9 验证缓存、多实例与 last-used
-
-当前 30 秒 JVM positive cache 会导致节点 A 吊销后，节点 B 最长约 30 秒仍接受旧
-principal。对外兼容层首版推荐：
-
-- 不缓存正向认证结果；每次使用唯一 `key_hash` 索引查数据库。
-- RAG 调用的主要成本在检索和模型，一次索引查询是更可控的安全成本。
-
-如压测证明必须缓存，缓存值至少包含当前 family 及 ancestor chain 的
-`policyVersion/status/expiresAt`，并配合：
-
-- Redis/pub-sub 或数据库通知的跨实例失效。
-- 短 TTL 作为失效失败时的上限。
-- revoke/rotate/policy update 的集成测试覆盖两个应用实例。
-
-`last_used_at` 不应每请求同步写：
-
-- 每个 key 最多每 5-15 分钟更新一次，或异步批量 flush。
-- 业务请求不等待 last-used 写入。
-- 失败只影响观测，不影响已通过的认证。
-
-### 12.10 限流、并发和预算
-
-当前 `RateLimitFilter` 实际是 JVM 本地固定窗口，不是分布式 sliding window；而
-`key-limits` 在 `api-key` strategy 下以 raw header 字符串为配置 key，会迫使运维把
-secret 放进配置。
-
-目标：
-
-- auth 先解析 principal，再由 rate limiter 使用稳定 `credentialFamilyId`；rotation 和
-  overlap versions 共用同一 quota bucket，不能通过换 key 重置配额。
-- 限额来自 `ApiKeyPolicy.limits`，不按 raw secret 配置。
-- 至少支持每 Key RPM 和最大并发。
-- delegated credential 的请求同时消耗自身和所有 ancestor family 的 quota。
-- stream 请求从开始到 complete/error/cancel 全程占用一个 concurrency permit。
-- 所有退出路径必须释放 permit。
-- 单实例可使用本地 limiter；多副本生产必须使用共享 limiter（例如 gateway/Redis）。
-  按实例折算不能提供稳定全局配额，只能作为明确的非生产诊断模式，并在 readiness 中暴露。
-- gateway 只有在自身完成 credential -> family principal 校验，或消费应用签名的可信
-  principal header 时才能按 family 限流；否则应由应用使用 Redis 等共享 backend，不能
-  让 gateway 直接以 raw Bearer token 作为 limiter key。
-- production 所需共享 limiter 不可用时启动/readiness 必须失败；运行期 backend 故障
-  返回 503 `service_unavailable`，不能 fail open 绕过 quota。
-- 未认证攻击流量另设 pre-auth IP limiter；不要让业务 per-key limiter承担该职责。
-- client IP 只从受信任反向代理写入的 forwarded header 解析；直连或代理链不可信时使用
-  socket remote address。不能像当前实现一样无条件信任 caller 提供的
-  `X-Forwarded-For`。
-- token/cost budget 只基于可信 usage 扣减。上游不返回 usage 时，必须事先选择
-  “仅告警/拒绝该 deployment/不提供硬预算”之一，不能伪造 token。
-
-Filter 顺序：
+两种运行拓扑必须使用同一共享安全配置。逻辑顺序为：
 
 ```text
 RequestTraceFilter
   -> optional pre-auth IP limiter
-  -> ApiKeyAuthFilter
-  -> ApiKeyAuthorization / per-key limiter
+  -> ApiKeyAuthenticationFilter
+  -> ApiKeyQuotaFilter
+  -> ApiKeyAuthorizationInterceptor
   -> Controller
 ```
 
-### 12.11 Filter 注册与运行拓扑
+`/v1/*` pattern 只在兼容 feature flag 启用时加入。Filter 在 MVC advice 之前失败时，使用
+path-aware error writer 输出第 13 节的 OpenAI envelope；`/api/**` 仍保持现有错误格式。
 
-必须覆盖：
+错误分类：
 
-```text
-/api/*
-/v1/*
-```
+| 情况 | HTTP | 兼容层行为 |
+|---|---:|---|
+| 缺失、未知、过期、吊销 credential | 401 | `invalid_api_key`，不区分内部原因 |
+| action / deployment / Collection 拒绝 | 403 或隐藏式 404 | `permission_denied` 或 `model_not_found` |
+| family quota / concurrency 超限 | 429 | `rate_limit_exceeded` + `Retry-After` |
+| credential、policy 或 shared quota backend 不可用 | 503 | `service_unavailable`，不得 fallback |
 
-同时需要解决当前 runtime 拓扑：
+trace、auth、quota 和完整 stream SLO 必须分别验证 core standalone 与 starter consumer，
+不能只在 starter 中增加 `/v1/*` 注册。
 
-- core 自带 runnable `SpringAiRagApplication`。
-- starter 才包含 `GeneralRagAutoConfiguration`。
-- core POM 不依赖 starter。
+### 12.7 CORS 与 Secret 边界
 
-推荐把 filter registration bean 抽到 core 的共享 `RagWebFilterConfiguration`：
+启用浏览器 CORS 时为 `/v1/**` 允许 `Authorization`、`Content-Type`、`X-API-Key` 和
+`X-Trace-Id`，生产使用精确 origin allow-list。CORS 不是认证边界。
 
-- core standalone 通过组件扫描加载。
-- starter 通过 `@Import` 显式加载。
-- 使用明确 bean name 和 conditional，防止重复注册。
-- 给 trace、pre-auth limiter、auth、authorization/per-family limiter 分配不冲突的显式
-  order；不能继续依赖两个 order=1 filter 的容器排序。
-- 共享配置同时修复 core standalone 当前 `/api/*` 未注册 auth/rate-limit filter 的问题，
-  并为两种启动拓扑增加集成测试。
-- `/v1/*` pattern 只在 `rag.openai-compatibility.enabled=true` 时加入；关闭功能后不得
-  仅因 filter 存在而改变 `/v1/**` 的 404/error 形态。
-
-不能只在 starter 中加 `/v1/*`，否则 core standalone 启动路径仍可能不受保护。
-
-为执行 action scope，推荐新增基于 annotation + `HandlerInterceptor` 的语义授权：
-
-- `@RequiresApiAction("chat.completions.invoke")`
-- `@RequiresApiAction("models.read")`
-- Key 管理方法使用 `keys.*`
-
-对带新 policy 的外部 Key，未标注 action 的业务 endpoint 默认拒绝；legacy DB Key 的
-兼容策略必须显式配置和测试，不能因“未标注”默认为全权。
-
-`ApiSloConfig` 同时映射 `/v1/**`。普通 MVC 请求可复用 interceptor；SSE 的 SLO 必须由
-stream subscription 到 complete/error/cancel 的专用 timer 记录，不能把 Controller
-返回 `SseEmitter` 的时间误当作完整请求延迟。
-
-### 12.12 CORS
-
-启用 CORS 时同时映射：
-
-```text
-/api/**
-/v1/**
-```
-
-`/v1/**` mapping 同样受 `rag.openai-compatibility.enabled=true` 控制。
-
-允许 `Authorization`、`Content-Type`、`X-API-Key`、`X-Trace-Id`。生产环境不建议
-`allowed-origins: *` 与凭据组合；浏览器场景还应使用明确 origin allow-list。
-
-### 12.13 数据迁移顺序
-
-从当前 V24 基线开始，必须采用 expand/contract。当前 entity 映射了 `api_key` 且启动
-使用 `ddl-auto=validate`；若先 drop column/table，再回滚到旧应用，旧版本会直接启动
-失败。更重要的是，若把新 external Key 继续写入旧 `rag_api_key`，滚动升级期间的旧实例
-会按粗粒度 legacy 规则接受它，可能绕过 action/deployment policy。因此新凭证必须写入
-独立的 family/version 表。
-
-**Expand release：**
-
-1. 检查 `rag_api_key.api_key` 非空数据；active 行必须创建 replacement、完成调用方切换、
-   吊销旧 key 后再清空旧行明文；disabled 行可在保留审计证据后清空。处理完成前阻止
-   启用 compatibility。
-2. 删除无用途的 plaintext index，并增加 `CHECK (api_key IS NULL)`，先保证任何版本都
-   无法写入明文，但暂时保留列满足旧 entity validation。
-3. 新建 `rag_api_key_family` 和 `rag_api_key_version`，包含 12.3 定义的状态、owner、
-   lineage、policy、TIMESTAMPTZ lifecycle 字段、唯一约束和查询索引。
-4. 为每个 legacy `rag_api_key` 建立一个独立 family 和初始 version，复用原 keyId/hash。
-   `enabled=false` 映射为 revoked family/version，其余映射为 active。旧表存在非空
-   lifecycle 值时，部署者必须通过 Flyway placeholder
-   `legacyApiKeyTimezone` 提供有效 IANA source timezone，再使用
-   `created_at/last_used_at/expires_at AT TIME ZONE <source>` 回填为 `Instant`；缺失或
-   非法时 migration fail，不能按当前节点默认时区猜测。全新空表可安全使用 UTC。
-5. 将 legacy role 和 `allowed_collection_ids` 映射为 family metadata 与显式 Collection
-   scope。现有 ADMIN 仅自动获得恢复管理所需的 `keys.*` action，不自动获得 `/v1`
-   deployment/data actions；现有 NORMAL 也不自动获得 `/v1`。调用 OpenAI-compatible
-   数据面必须由管理员显式转换/授予，避免升级即扩大权限。
-6. 新代码以 family/version 表作为 principal source of truth。旧 `/api/**` 的业务数据
-   endpoint（chat/search/document/collection 等）在迁移期通过明确的 legacy
-   authorization adapter 保持既有契约；**API Key 管理 endpoint 不进入该宽松 adapter**，
-   新版本一律要求 family principal + `keys.*` action，static/null caller 和 NORMAL
-   self-service create 不得被兼容回来。新 `/v1/**` 只读取新 policy。
-7. 对迁移来的 legacy credential，revoke/status/Collection 收窄需要双写旧 shadow 表；
-   effective Collection scope 取 legacy 与新 policy 的交集。旧实例全部退出前，在
-   gateway 阻断 Key 管理 endpoint，禁止 create/rotate/policy grant，并保持
-   compatibility disabled，避免旧 Controller 的 null/static caller 缺口继续暴露。
-8. 新 external credential 只写 family/version 表，绝不写 legacy shadow。因而旧实例或
-   回滚到 V24 时不会错误接受它；代价是该 credential 在旧版本上明确不可用。
-9. expand 回滚窗口内，唯一例外是受控 platform break-glass ADMIN：其 active version
-   需要双写 legacy shadow。这样全新环境回滚到 V24 时旧 bootstrap 不会因
-   `rag_api_key.count()==0` 再生成并打印 raw ADMIN，且仍有明确的回滚管理 credential。
-   该 shadow 只用于回滚，不授予普通 external family。
-10. 发布移除 `RagApiKey.apiKey` 映射并使用新实体/Repository 的应用版本；确认所有实例
-   升级后，才解除管理面维护门禁、创建 external Key 和启用 compatibility。
-
-**Contract release：**
-
-1. 经过回滚观察窗并确认所有认证、旧 `/api/**` 和管理面都使用新表后，删除整个 legacy
-   `rag_api_key` shadow table；这同时永久删除 plaintext 列和 legacy enabled/ACL 字段。
-2. 删除 dual-write 和 legacy authorization adapter。
-3. contract release 的回滚目标必须是已使用 family/version 表、且不映射 legacy
-   `rag_api_key` 的兼容版本，不能回滚到 V24 时代应用。
-
-迁移必须有 Testcontainers PostgreSQL 集成测试，覆盖：全新数据库、V24 expand 升级、
-新旧应用兼容窗口、new-only external credential、contract、存在 revoked/expired/admin/
-normal key、异常 plaintext 行、legacy timezone backfill、migration rerun 和允许的回滚
-目标。还必须验证 expand 回滚到 V24 时新 external Key 是“不可用”而不是“被宽松授权”，
-且全新环境不会触发 V24 bootstrap 再生成日志 ADMIN。
+兼容层不得把 raw credential 写入 URL、日志、MDC、metrics、审计、错误或 response。
+`/v1` 只消费已签发 credential，不提供 create/rotate/revoke endpoint；管理面及其 TLS、
+no-store、审计和 WebUI 规则全部由独立 API Key 规划负责。
 
 ## 13. 错误契约
 
@@ -1646,40 +1198,13 @@ spring-ai-rag-core/
     ChatGenerationOptionsFactory.java
     ResolvedChatModel.java
 
-  src/main/java/com/springairag/core/config/
-    RagWebFilterConfiguration.java
-
-  src/main/java/com/springairag/core/security/
-    ApiKeyPrincipal.java
-    ApiKeyPolicy.java
-    ApiKeyCredentialResolver.java
-    ApiKeyAuthorizationService.java
-    RequiresApiAction.java
-    ApiKeyAuthorizationInterceptor.java
-    AuthorizedRagScope.java
-
-  src/main/java/com/springairag/core/service/
-    ApiKeyManagementService.java
-    ApiKeyBootstrapService.java
-
-  src/main/java/com/springairag/core/entity/
-    RagApiKeyFamily.java
-    RagApiKeyVersion.java
-    RagApiKeyOperation.java
-
-  src/main/java/com/springairag/core/repository/
-    RagApiKeyFamilyRepository.java
-    RagApiKeyVersionRepository.java
-    RagApiKeyOperationRepository.java
-
-  src/main/resources/db/migration/
-    V25+__api_key_*.sql
-
 spring-ai-rag-starter/
   GeneralRagAutoConfiguration.java
 ```
 
-包名可在实施时依据现有风格微调，但职责边界不应退回到单一巨型 Controller。
+API Key principal、authorization、quota 和共享 Web Security 文件由独立前置工程交付，
+本规划只在兼容配置和 Controller 中消费。包名可在实施时依据现有风格微调，但职责边界
+不应退回到单一巨型 Controller。
 
 ## 16. 分阶段实施步骤
 
@@ -1696,42 +1221,22 @@ spring-ai-rag-starter/
 - 尚未注册 `/v1/**`。
 - 现有 API 行为由测试固定。
 
-### Phase 0B：外部 API Key 基础加固
+### Phase 0B：验证 API Key 前置工程
 
-1. 为现有 API Key 行为补齐 characterization tests，包括 static key、auth disabled、
-   NORMAL 委派、ADMIN 轮换、多实例 cache 边界，以及 core standalone/starter 的实际
-   filter 装配差异。
-2. 按 expand/contract 新增 migrations：在 legacy 表增加 plaintext null constraint，
-   新建 family/version 表，并维护唯一 break-glass ADMIN shadow；经过观察窗后删除整个
-   legacy table。
-3. 新增 immutable `ApiKeyPrincipal`、`RagApiKeyFamily`、`RagApiKeyVersion`、typed JSONB
-   `ApiKeyPolicy` 和 family policy version。
-4. 每个 legacy Key 回填为独立 family/version，但不自动获得 `/v1` 权限；为新 external
-   Key 使用 secure defaults。
-5. 改用 `SecureRandom` 生成至少 256 bit secret，保持旧 `rag_sk_` key 可继续验证。
-6. 修正管理授权：默认关闭 NORMAL self-service create；static/null caller 不可管理或
-   轮换任意 Key；事务保护最后一个 ADMIN family。
-7. 修正 rotate：同 family 创建新 version，默认不延长 family expiry，并定义 overlap /
-   retireAt；`DELETE {keyId}` 明确定义为 family revoke 并级联 descendant families。
-8. 生产 bootstrap 改为 Secret Manager/Kubernetes Secret 输入，不再打印 raw key。
-9. external path 首版移除正向认证缓存；节流/异步更新 `last_used_at`。
-10. create/revoke/rotate/policy update 写入结构化 audit，operator 使用 caller keyId。
-11. create/rotate 响应增加 no-store headers，生产部署文档要求 TLS。
-12. 增加 WebUI 所需的 owner、deployment、scope、limits 展示/编辑设计，并去除生产
-    admin credential 的 localStorage/query 存储；UI 实现可跟随管理 API PR，不阻塞纯
-    SDK 数据面验证。
+1. 按[独立 API Key 加固规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
+   达到 Milestone A（external data-plane ready）。
+2. 固化兼容层依赖契约：immutable principal、typed effective policy、Bearer resolver、
+   stable family quota、path-neutral failure classification 和双运行拓扑共享装配。
+3. 签发一个只具有 `models.read`、`chat.completions.invoke`、指定 deployments /
+   Collections 和有限 quota 的测试 family。
+4. 验证 legacy static/null caller 不可形成 `/v1` principal，现有 legacy credential 也
+   不会因迁移自动获得 `/v1` action。
 
 完成标准：
 
-- 可以创建一个只允许 `models.read`、`chat.completions.invoke` 和指定 deployments /
-  Collections 的外部 Key。
-- raw secret 只出现一次且不持久化、不进日志。
-- revoke/rotate 后旧 secret 按定义立即失效。
-- family policy 更新同时约束所有 active/overlap versions；family revoke 覆盖全部
-  versions 和 descendants。
-- static legacy key 不能调用 `/v1` 或管理数据库 Key。
-- expand 回滚到 V24 时新 external Key 不可用，且不会被旧授权规则接受。
-- 安全基础未完成前不得进入兼容 endpoint 上线阶段。
+- 独立规划 Milestone A 的实现、测试、回滚演练和 readiness 门禁全部通过。
+- 兼容层可用公开接口消费 principal/policy/quota，不读取 legacy entity 或 raw header。
+- 安全前置未完成前不得进入兼容 endpoint 实现和上线阶段。
 
 ### Phase 1：内部执行模型
 
@@ -1805,7 +1310,7 @@ spring-ai-rag-starter/
 
 ### Phase 5：鉴权、ACL、限流与运行拓扑
 
-1. 接入 Phase 0B 的 credential resolver 和 immutable principal，支持 Bearer。
+1. 接入独立 API Key 工程的 credential resolver 和 immutable principal，支持 Bearer。
 2. 新增 path-aware error writer。
 3. filter 覆盖 `/v1/*`。
 4. 调整 auth/rate limit 顺序。
@@ -1813,7 +1318,7 @@ spring-ai-rag-starter/
 6. rate limit 使用 stable familyId 与 policy limits，并覆盖 stream concurrency 生命周期。
 7. CORS 覆盖 `/v1/**`。
 8. 验证 core standalone 与 starter demo 两种启动方式。
-9. 多副本环境验证 revoke 可见性和 limiter 的共享/折算策略。
+9. 多副本环境验证 revoke 可见性和 shared limiter 的全局语义。
 10. SLO interceptor 覆盖 `/v1/**`，stream 使用终态 timer。
 
 完成标准：
@@ -1911,6 +1416,7 @@ SSE：
 
 Security：
 
+- 独立 API Key 加固规划 Milestone A 的验收和 readiness 已通过。
 - Bearer 成功、缺失、错误 scheme、空 token。
 - X-API-Key compatibility flag。
 - 双 header 相同/冲突。
@@ -1922,51 +1428,13 @@ Security：
 - deployment allow-list 同时约束 models list/retrieve 和 chat。
 - Collection scope 的 ALL/LIST/NONE 语义。
 - ADMIN 数据面权限来自显式 policy，不因 role 自动绕过 scope。
-- per-key RPM 与 concurrency；stream cancel/error 正确释放 permit。
-- rotation/overlap versions 共用 family quota；多个 child 同时消耗 ancestor quota。
+- stable family RPM 与 concurrency；rotation 后 quota 不重置，stream cancel/error 正确释放 permit。
 - shared limiter 不可用时 fail closed；不可信 X-Forwarded-For 不能绕过 pre-auth limit。
 - 401/403/429 都是 OpenAI envelope。
 - `/api/**` 仍是旧错误格式。
 
-API Key 生命周期：
-
-- SecureRandom secret 长度/熵和旧 key 兼容验证。
-- entity、repository、日志、audit 均不含 raw secret。
-- create/rotate response 有 no-store headers；生产入口强制 TLS。
-- V24 -> family/version expand -> contract migration；发现 plaintext 行时 fail。
-- expand 回滚到 V24 时 legacy Key 保持既定状态，新 external Key 安全地不可用；contract
-  后只能回滚到使用 family/version 表的兼容版本。
-- fresh install 的 break-glass ADMIN 在 expand 窗口有受控 legacy shadow，回滚 V24
-  不会触发第二次 bootstrap 或把新 raw ADMIN 写入日志。
-- 兼容窗口迁移 credential 的认证要求 legacy enabled 与 family/version status 均有效，
-  Collection scope 取新旧交集。
-- external key secure defaults；空 deployment/Collection 不解释为 ALL。
-- external family 无 expiry、expiry 已过或超过 max TTL 时创建失败；break-glass 例外有
-  审计和告警。
-- NORMAL 默认不能创建 child key。
-- 启用委派时 actions/deployments/Collections/expiry/limits 均不可提权。
-- parent policy 收窄、过期或吊销立即约束 child；多个 child 共用 ancestor quota，不能
-  通过 fan-out 放大 RPM/concurrency/budget。
-- parent family 显式 revoke 会级联 child families；parent rotation 不会误伤 child。
-- 并发 child create/rotate/revoke 在 family 行锁下仍满足 depth、child count、active
-  version 数和最后 ADMIN 约束。
-- `DELETE {keyId}` 从任一 version ID 都撤销完整 family。
-- rotate 保持 credentialFamilyId，family owner/policy/limits/lineage 不发生复制或漂移。
-- rotate 默认使用有上限的短 overlap；旧 version 在 retireAt 后即使未清理也无效，紧急
-  模式可 immediate cutover。
-- rotate 不延长过期时间；expired family 不能 rotate。
-- create/rotate 同一 Idempotency-Key 不产生重复 family/version，也不会重放 raw secret。
-- operation record 按 operator/operation/key hash 隔离、到期清理，跨 operator 不泄露结果。
-- rotate response 丢失后可只撤销未知新 version，不会误撤销整个 family。
-- 无 offset 的新 expiry 被拒绝；旧 TIMESTAMP 按显式 legacy timezone 正确迁移为 Instant。
-- static/null caller 不能 rotate 任意 key。
-- 最后一个可用 ADMIN family 在并发/cascade revoke 下仍受保护。
-- revoke、policy update 立即使其他实例旧 principal 失效；rotation 按 immediate 或
-  retireAt 语义使旧 version 失效。
-- `last_used_at` 节流且写入失败不影响业务请求。
-- bootstrap 多实例只有一个 ADMIN，prod 日志不含 raw secret。
-- key management audit 不可用时管理操作 fail closed。
-- 生产 WebUI 不把 admin key 放入 localStorage 或 query string。
+API Key schema、生命周期、迁移、bootstrap、管理授权和 WebUI secret 回归由独立加固规划
+第 26 节覆盖；本规划只保留 `/v1` 消费契约的集成测试，避免两处测试清单漂移。
 
 ### 17.2 Contract / MVC 测试
 
@@ -1978,8 +1446,6 @@ API Key 生命周期：
 - `Content-Type`、cache headers、trace header。
 - feature flag disabled。
 - global OpenAPI 文档不把 RFC 7807 schema错误套到 `/v1/**`。
-- management create 只返回一次 raw key；list/search 永不返回 raw/hash。
-- management 401/403、self/admin、revoke/rotate/policyVersion 冲突。
 
 ### 17.3 SDK E2E
 
@@ -2020,8 +1486,8 @@ scripts/openai-compat-e2e.sh
 scripts/real-llm-e2e-smoke.sh
 ```
 
-数据库 migration 和多实例安全测试应使用 Testcontainers PostgreSQL，不得只用 mock
-repository。若实现共享 limiter/cache invalidation，还需启动两个应用实例验证。
+Phase 0B 必须先通过独立 API Key 规划定义的 PostgreSQL、migration 和多实例门禁；
+本规划的 SDK E2E 仍需在两个应用实例上验证 revoke 可见性和 shared quota。
 
 如改动 WebUI 对新 endpoint 的使用，再运行 Playwright；MVP 不要求 WebUI 改用兼容 API。
 
@@ -2036,10 +1502,9 @@ repository。若实现共享 limiter/cache invalidation，还需启动两个应�
 - `rag.openai.compat.unsupported_parameter`。
 - `rag.openai.compat.client_disconnect`。
 - `rag.openai.compat.tokens`，仅 usage 可用时记录。
-- `rag.auth.api_key.validation`，tag 仅含 result/reason，不含 keyId。
-- `rag.auth.api_key.policy_denied`，tag：action/reason。
-- `rag.auth.api_key.lifecycle`，tag：operation/result。
-- `rag.auth.api_key.last_used_write` 和 cache invalidation 指标。
+- `rag.openai.compat.auth`，tag 仅含 result/reason，不含 keyId。
+- `rag.openai.compat.policy_denied`，tag：action/reason。
+- `rag.openai.compat.quota`，tag：result/kind/backend，不含 familyId。
 
 日志必须包含：
 
@@ -2071,10 +1536,6 @@ Context 或显式参数恢复日志上下文，并在所有终态清理。
 }
 ```
 
-API Key create/revoke/rotate/policy update 必须写 `rag_audit_log`，补齐当前未使用的
-`operator` 和 `client_ip` 字段；details 只保存 scope/policy 摘要和 before/after
-policyVersion。
-
 Chat 请求的运营审计默认只保存元数据；FULL content retention 必须显式配置并使用独立
 retention。不要在普通日志、安全 lifecycle audit 或 metrics 中记录完整 Authorization
 header、原始 API key、完整 Prompt/answer 或敏感 metadata。
@@ -2083,23 +1544,18 @@ header、原始 API key、完整 Prompt/answer 或敏感 metadata。
 
 ### 19.1 上线顺序
 
-1. 先上线 API Key schema、policy 和管理面加固，兼容 endpoint 仍保持 disabled。
-2. expand 滚动升级期间在 gateway 阻断 Key 管理 endpoint，不创建/轮换/授权 external
-   credential，并保持 compatibility disabled。
-3. 完成全量实例升级，确认 plaintext check constraint 生效、family/version 回填正确、
-   应用不映射 raw 字段、日志无 raw secret、revoke/rotate 和最后 ADMIN 保护通过。
-4. 使用安全 bootstrap/recovery 流程确认 ADMIN，再创建一个有限 expiry/scope/quota 的
-   new-only 测试 external key。
-5. 验证回滚演练中该 external key 在 V24 上不可用，而不是获得 legacy 宽权限。
-6. 测试环境启用单一 `rag-default` deployment。
-7. 使用 mock upstream 跑 SDK E2E。
-8. 使用真实 provider 跑 smoke。
-9. 使用多个不同 policy 的 restricted keys 做 action/deployment/ACL 渗透测试。
-10. 单实例压测 RPM/concurrency；多副本验证 revoke 和 limiter 语义。
-11. 小流量启用。
-12. 观察错误率、policy denial、429、首 token 延迟、fallback、连接取消和 token 用量。
-13. 经过应用回滚观察窗后执行 contract migration 删除 legacy table。
-14. 再开放更多 deployments。
+1. 先完成独立 API Key 加固规划的实现、迁移、回滚演练和 readiness 验收，兼容 endpoint
+   始终保持 disabled。
+2. 使用有限 action、deployment、Collection 和 quota 的 external test family 验证
+   第 12 节依赖契约。
+3. 测试环境只启用一个 `rag-default` deployment。
+4. 使用 mock upstream 跑协议、错误和 Python/Node SDK E2E。
+5. 使用真实 provider 跑非流式、流式和 fallback smoke。
+6. 使用多个 restricted family 做 action/deployment/ACL 渗透测试。
+7. 在双实例环境验证 revoke 可见性、shared RPM/concurrency 和 stream lease 清理。
+8. 小流量启用，观察错误率、policy denial、429、首 token 延迟、fallback、连接取消和
+   token 用量。
+9. 再开放更多 deployments。
 
 ### 19.2 回滚
 
@@ -2113,46 +1569,25 @@ rag:
 
 要求：
 
-- 关闭 flag 后 `/v1/**` 立即停止暴露，但 API Key 加固 schema 保留并继续服务旧 API。
-- expand 阶段可回滚到 V24 应用；legacy Key 状态由 dual-write 保持，新 external Key 在
-  V24 上不可用。已迁移/轮换为 new-only secret 的调用方需要恢复到 legacy credential
-  或取消应用回滚，runbook 必须列出受影响 family。
-- platform break-glass ADMIN active version 在 expand 窗口保持 legacy shadow；回滚前
-  必须验证其可用且旧 bootstrap 不会运行。
-- contract 阶段后只能回滚到使用 family/version 表且不映射 legacy table 的版本。
-- plaintext `api_key` 不得因回滚重新写入；expand 阶段 check constraint 始终保留。
+- 关闭 flag 后 `/v1/**` 立即停止暴露；已完成的 API Key 加固能力不随兼容层回滚。
 - 现有 `/api/v1/rag/**` 不依赖兼容 Controller。
 - deployment 配置删除不影响 backend model registry。
-- external keys 可单独 revoke，作为比全局关闭更细的应急止损。
+- 可先 revoke 受影响 external family，再全局关闭兼容 flag。
+- API Key schema、credential migration 和管理面自身的回滚只按独立规划第 22、28 节执行，
+  不能由本兼容层 runbook 临时改写。
 
 ## 20. 风险清单
 
 | 风险 | 严重度 | 缓解 |
 |---|---|---|
+| API Key 前置工程未完成就开放 `/v1` | 高 | feature flag 门禁 + Phase 0B readiness 验证 |
 | 把 partial SSE 误称完整兼容 | 高 | 原始字节测试 + 官方 SDK E2E |
 | caller history 与 server memory 重复 | 高 | 默认 stateless；server mode 严格校验 |
 | `/v1` 绕过 auth/rate limit | 高 | 两种 runtime 拓扑均做 filter 集成测试 |
-| core standalone 当前 `/api` 未注册 auth/rate limit | 高 | shared core filter config；standalone/starter 回归测试 |
-| static/null caller 绕过 Key 管理授权 | 高 | `/v1` 只收 DB principal；管理面显式 action scope |
 | credential DB/policy 故障被当作 401 或回退 static key | 高 | 503 + alert；`/v1` 禁止 legacy fallback |
-| NORMAL 自助创建 unrestricted 子 Key | 高 | external 默认禁委派；启用时做全 policy 子集校验 |
-| rotate 丢失 ADMIN/owner/policy | 高 | principal metadata 只存 family；rotation 只新增 version |
-| rotation overlap 中多个 version 的 policy 漂移 | 高 | policy 只存 family；version 只存 secret 生命周期 |
-| create/rotate 响应丢失造成未知 secret 或停机 | 高 | 幂等 operation record；默认短 overlap；未知 secret 可定向撤销 |
-| 新 external Key 被旧实例按 legacy 规则接受 | 高 | 新 Key 只写 family/version 表；全量升级前禁管理和启用 compatibility |
-| fresh install 回滚 V24 再次日志生成 ADMIN | 高 | break-glass ADMIN 双写 legacy shadow；回滚测试断言 bootstrap 不运行 |
-| V23 plaintext 列造成未来误存/泄漏 | 高 | expand 检查并加 null constraint；contract 删除 legacy table |
-| 多实例撤销受 30 秒 JVM cache 延迟 | 高 | external 首版无 positive cache；后续分布式失效 |
-| 本地限流在多副本被倍增 | 高 | 共享 limiter/gateway；readiness 暴露非全局模式 |
-| limiter 故障或伪造 X-Forwarded-For 绕过限制 | 高 | production fail closed；trusted proxy 配置 |
-| raw key 被限流配置、URL 或日志记录 | 高 | 限额按 familyId/policy；`/v1` 禁 query key；脱敏测试 |
-| rotation/委派绕过配额 | 高 | family quota bucket；child 请求同时扣减全部 ancestor bucket |
-| Bootstrap raw ADMIN 进入集中日志 | 高 | prod 由 Secret Manager 注入；数据库锁保证单次初始化 |
-| 管理 WebUI localStorage/query 泄漏 ADMIN key | 高 | 管理面内网化；短期 session；移除 query secret；CSP |
+| shared limiter 故障被错误 fail open | 高 | 运行期返回 503；双实例故障测试 |
+| stream 异常路径泄漏 concurrency lease | 高 | complete/error/cancel/timeout/disconnect 全终态测试 |
 | external Prompt/answer 被默认长期留存 | 高 | 默认 metadata-only；FULL 显式 opt-in + 独立 TTL/访问控制 |
-| 无时区 expiresAt 在节点间解释不同 | 高 | RFC3339 offset + TIMESTAMPTZ/Instant + 显式 legacy timezone backfill |
-| 每请求写 last_used 造成数据库写放大 | 中 | 节流或异步批量写 |
-| 最后一个 ADMIN family 被并发/级联吊销 | 高 | 事务行锁、family 计数和并发集成测试 |
 | deployment/request 绕过 Collection ACL | 高 | 统一 scope service；fail closed 矩阵测试 |
 | 动态模型使用错误 Prompt adapter | 高 | candidate 携带 capabilities，执行时选择 adapter |
 | stream 中途 fallback 拼接不同模型输出 | 高 | 只允许首 chunk 前 fallback |
@@ -2160,7 +1595,7 @@ rag:
 | unsupported 参数被静默忽略 | 中 | strict validation 和明确 error param |
 | 兼容 DTO 跟随 OpenAI 演进 | 中 | DTO 独立 package；官方协议回归；兼容级别声明 |
 | 新抽象破坏 legacy API | 高 | legacy contract tests 先行，旧 Controller 不改契约 |
-| core/starter 重复或缺少 bean | 高 | 两种启动拓扑测试，明确 shared configuration |
+| core/starter 的 `/v1` Bean 或 Filter 不一致 | 高 | 两种启动拓扑测试，明确 shared configuration |
 | developer role 语义降级 | 中 | 文档说明；独立 mapper 测试；未来 Spring AI 支持后替换 |
 | 上游返回 tool call | 中 | MVP 视为 backend contract error，不输出半兼容结果 |
 | 客户端断开后上游继续生成 | 中 | SseEmitter callbacks dispose subscription |
@@ -2194,35 +1629,18 @@ rag:
 
 ### 安全
 
+- [ ] 独立 API Key 加固规划 Milestone A 的验收和 readiness 全部通过。
 - [ ] `/v1/*` 必须经过 auth 和 rate limit。
 - [ ] production 中 compatibility enabled 强制 security enabled。
-- [ ] Bearer auth 使用数据库 principal；static legacy key 不可调用 `/v1`。
-- [ ] raw secret 只在 create/rotate 返回一次，数据库、日志、audit、metrics 不保存。
-- [ ] create/rotate 只经 TLS 暴露并返回 no-store headers。
-- [ ] expand 后 V23 plaintext 列受 null constraint 保护；contract 后 legacy table 已删除，
-      异常历史明文会阻止 migration。
-- [ ] external key 有 owner、expiry、action scope、deployment allow-list、Collection
-      scope、RPM 和 concurrency。
-- [ ] external expiry 必填且不超过 production max TTL；break-glass 例外可追踪。
-- [ ] 新 expiry 使用 RFC3339 offset/Instant；legacy 无时区值按显式 source timezone 迁移。
+- [ ] Bearer auth 使用 database-backed immutable principal；static、query、anonymous caller
+      不可调用 `/v1`。
 - [ ] `/v1/models` 与 chat 使用相同 deployment authorization。
 - [ ] restricted key 无法绕过 action、deployment 或 Collection scope。
-- [ ] NORMAL 默认不能创建 child key；委派启用时不能提权。
-- [ ] child effective policy 与 ancestor chain 取交集，所有 child 共享 ancestor quota。
-- [ ] revoke、rotate、policy update 在多实例语义下按定义生效。
-- [ ] family/version 分层，rotate 不复制或延长 family policy/expiry。
-- [ ] rotate 默认提供有硬上限的短 overlap，response 丢失时旧 version 仍可用于恢复。
-- [ ] create/rotate 幂等重试不生成重复 secret，服务端不存储或重放已签发 raw secret。
-- [ ] 从任一 version keyId 撤销均覆盖整个 family，委派 descendants 按定义级联。
-- [ ] 最后一个 ADMIN family 在并发和级联撤销下受事务保护。
-- [ ] expand 回滚时 new-only external Key 不被 V24 接受。
-- [ ] fresh install 回滚 V24 时 break-glass ADMIN 可用，旧 bootstrap 不生成第二个 Key。
-- [ ] prod bootstrap 不把 raw ADMIN key 写入日志。
-- [ ] API Key lifecycle audit 不可用时管理面 fail closed。
-- [ ] 生产管理面不公开暴露，WebUI 不持久化 admin key 到 localStorage/query。
-- [ ] rate limit 使用 stable familyId/policy，不需要在配置中写 raw key，rotation 不重置
-      quota。
-- [ ] error/filter 日志不泄漏 key。
+- [ ] quota 使用 stable familyId；rotation 不重置，shared backend 故障 fail closed。
+- [ ] stream 在 complete/error/cancel/timeout/disconnect 后释放 concurrency lease。
+- [ ] 401/403/404/429/503 在 Filter 和 MVC 路径均使用 OpenAI error envelope。
+- [ ] core standalone 与 starter consumer 的 `/v1` 安全链和错误行为一致。
+- [ ] URL、error、日志、MDC 和 metrics 不泄漏 raw credential。
 - [ ] feature flag 默认关闭。
 
 ### 回归
@@ -2236,20 +1654,19 @@ rag:
 
 ## 22. 工作量与建议拆分
 
-在当前代码基础上，建议按 6 个可独立评审的 PR 实施：
+以下工作量只计算 OpenAI 兼容层；API Key 加固由独立规划单独估算。建议按 5 个可独立
+评审的 PR 实施：
 
 | PR | 内容 | 估计 |
 |---|---|---|
-| 1 | API Key family/version schema、policy、管理授权、生命周期、bootstrap、审计 | 7–10 人日 |
-| 2 | 内部 command/result、memory 分离、legacy adapter | 3–4 人日 |
-| 3 | deployment registry、candidate capabilities、scope/ACL | 2–3 人日 |
-| 4 | presence-aware DTO、非流式 endpoint、models、errors、auth | 3–4 人日 |
-| 5 | 标准 SSE、fallback、cancellation、usage、concurrency | 3–4 人日 |
-| 6 | SDK/多实例 E2E、WebUI 管理、文档、部署与全量回归 | 3–4 人日 |
+| 1 | 内部 command/result、memory 分离、legacy adapter | 3–4 人日 |
+| 2 | deployment registry、candidate capabilities、scope/ACL | 2–3 人日 |
+| 3 | presence-aware DTO、非流式 endpoint、models、errors、安全能力接线 | 3–4 人日 |
+| 4 | 标准 SSE、fallback、cancellation、usage、concurrency lease | 3–4 人日 |
+| 5 | SDK/双实例 E2E、文档、部署与全量回归 | 3–4 人日 |
 
-合计约 21–29 人日。若已有 gateway/Redis 可复用，共享限流部分可能降低；若需要在本项目
-新增分布式 limiter，需另计 2–4 人日。只做表面 Controller 会更快，但不满足本规划对
-外部服务“基本可用”的定义。
+兼容层合计约 14–19 人日。独立 API Key 加固规划估计 20–32 人日，因此从当前基线到可对外
+服务的组合工作量约 34–51 人日；两项应分别评审和交付，不能用兼容层估算掩盖安全工程。
 
 ## 23. 实施前批准项
 
@@ -2263,15 +1680,11 @@ rag:
 6. feature flag 默认关闭。
 7. 第一阶段不新建 Maven 模块。
 8. 允许为正确实现而抽取 `RagExecutionService`，同时保持 legacy contract。
-9. `/v1` 只接受数据库 Key principal，不接受 legacy static key 或 query secret。
-10. API Key policy 使用 owner + action + deployment + explicit Collection scope；external
-    NORMAL 默认不可委派。
-11. 新 external key 默认必须有限权限和 quota；`ALL` 只能显式授予。
-12. 生产 bootstrap 使用运维提供的一次性 secret，不打印自动生成的 raw ADMIN key。
-13. API Key 使用 family/version 两层新表；expand 保留受 null constraint 保护的 legacy
-    shadow，contract 再删除 legacy table。发现历史明文时 migration fail。
-14. MVP 硬配额为 RPM + concurrency；token/cost budget 仅在 usage 可靠后启用。
-15. `DELETE /api-keys/{keyId}` 的目标是完整 credential family；rotation 仅替换 version，
-    family expiry 默认不延长。
+9. 接受独立 API Key 加固规划作为必须先完成的安全前置工程。
+10. `/v1` 只接受其 database-backed principal，不接受 legacy static key 或 query secret。
+11. Models 与 Chat 使用 `models.read` / `chat.completions.invoke`、deployment allow-list
+    和 explicit Collection scope 的统一授权结果。
+12. `/v1` 使用 stable family RPM + concurrency；多副本必须使用 shared backend，token
+    budget 仅在 usage 可靠时启用。
 
 批准后应严格按 Phase 0 开始，不直接从 Controller/SSE 拼装代码切入。

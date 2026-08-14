@@ -1,7 +1,7 @@
 # Claude Code 项目说明
 
 > 本文件是 **Claude Code 入口**：只保留硬性提示与文档链接。  
-> 完整导航 → **[docs/index-zh-CN.md](docs/index-zh-CN.md)**（[EN](docs/index.md)） · Agent 约定 → **[AGENTS.md](AGENTS.md)** · 命令 → **[TOOLS.md](TOOLS.md)**
+> 完整导航 → **[docs/index-zh-CN.md](docs/index-zh-CN.md)**（[EN](docs/index.md)） · Agent 约定 → **[AGENTS.md](AGENTS.md)** · 命令 → **[docs/developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)**
 
 ## 启动 / 重启后端
 
@@ -31,7 +31,7 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 
 ## 硬性提示（易踩坑）
 
-1. **Embedding / OpenAI `base-url` 不要带 `/v1`**（Spring AI 会再追加）→ 否则 401/404。见 [TOOLS.md](TOOLS.md)。  
+1. **Embedding / OpenAI `base-url` 不要带 `/v1`**（Spring AI 会再追加）→ 否则 401/404。见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)。
 2. **默认端口 8081**（部分旧文档仍写 8080）；**真实 LLM 联调默认用 18081** 避免冲突。  
 3. WebUI 需单独构建，或拷贝到 `spring-ai-rag-core/src/main/resources/static/webui/`。  
 4. 写代码同步写测试；`mvn test` 不过不算完成。Mock Playwright ≠ 真实 LLM。  
@@ -54,7 +54,7 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 | 架构 / Pipeline | [docs/architecture-zh-CN.md](docs/architecture-zh-CN.md) · [docs/architecture.md](docs/architecture.md) |
 | 配置 / API / 排障 | [docs/configuration-zh-CN.md](docs/configuration-zh-CN.md) · [docs/rest-api-zh-CN.md](docs/rest-api-zh-CN.md) · [docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
 | 测试 | [docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [docs/testing-guide.md](docs/testing-guide.md) |
-| 命令与模型 | [TOOLS.md](TOOLS.md) |
+| 命令与模型 | [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) |
 | Claude Code + grok | [docs/claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) · `scripts/run-claude-grok.sh`（退出后共享代理仍在运行，用 `--stop-proxy` 停止） |
-| 开发速查 | [MEMORY.md](MEMORY.md) |
+| 项目上下文 | [project-context-zh-CN.md](docs/project-context-zh-CN.md) |
 | 能力完成状态 | [docs/IMPLEMENTATION_COMPARISON.md](docs/IMPLEMENTATION_COMPARISON.md) |

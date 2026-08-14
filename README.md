@@ -232,7 +232,7 @@ cd demos/demo-basic-rag && mvn test
 - [Deployment](docs/DEPLOYMENT.md)
 - [CHANGELOG](CHANGELOG.md)
 - [Contributing](CONTRIBUTING.md)
-- Agent / local entry: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [TOOLS.md](TOOLS.md)
+- Agent / developer entry: [AGENTS.md](AGENTS.md), [CLAUDE.md](CLAUDE.md), [Developer Reference](docs/developer-reference.md), [Project Context](docs/project-context.md)
 
 ## License
 

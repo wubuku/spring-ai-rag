@@ -6,11 +6,13 @@ SOUL.md
 USER.md
 IDENTITY.md
 TOOLS.md
+MEMORY.md
 HEARTBEAT.md
 BOOTSTRAP.md
-skills/
-MEMORY.md
 memory/
+
+# OpenClaw 本地 skills；项目级可提交 Skills 位于 .agents/skills/
+/skills/
 
 # ============================================
 # Java / Maven

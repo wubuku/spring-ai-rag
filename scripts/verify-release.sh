@@ -27,7 +27,7 @@ usage() {
 Usage: ./scripts/verify-release.sh [options]
 
 Default gates:
-  shell syntax + diff/secret checks
+  project documentation + shell syntax + diff/secret checks
   mvn clean test
   WebUI npm ci, lint, Vitest, build
   Maven -Pwebui release package + embedded bundle integrity
@@ -151,7 +151,7 @@ skip_gate() {
 
 require_commands() {
   local command_name
-  for command_name in git mvn npm npx curl bash rg; do
+  for command_name in git mvn npm npx node curl bash rg; do
     command -v "$command_name" >/dev/null || {
       echo "Missing required command: $command_name"
       return 1
@@ -396,6 +396,7 @@ finalize() {
 trap finalize EXIT
 
 run_gate "Prerequisites" require_commands
+run_gate "Project documentation" ./scripts/verify-project-docs.sh
 run_gate "Shell syntax" check_shell_syntax
 run_gate "Git diff check" git diff --check
 run_gate "Release versions" check_release_versions

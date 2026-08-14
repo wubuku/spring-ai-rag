@@ -14,15 +14,17 @@
 | Who you are / what you need | Read first | Then |
 |----------------------------|------------|------|
 | New to the project | [README.md](../README.md) | [getting-started.md](getting-started.md) |
-| Run the service locally | [getting-started.md](getting-started.md) | [TOOLS.md](../TOOLS.md), `.env.example` |
+| Run the service locally | [getting-started.md](getting-started.md) | [developer-reference.md](developer-reference.md), `.env.example` |
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
+| Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
+| Plan OpenAI compatibility | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
-| Write / run tests | [testing-guide.md](testing-guide.md) | [TOOLS.md](../TOOLS.md) E2E section |
+| Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
 | Troubleshooting | [troubleshooting.md](troubleshooting.md) | “Common pitfalls” below |
-| Agent / Claude collaboration | [AGENTS.md](../AGENTS.md) → this page | [CLAUDE.md](../CLAUDE.md), [TOOLS.md](../TOOLS.md), [MEMORY.md](../MEMORY.md) |
+| Agent / Claude collaboration | [AGENTS.md](../AGENTS.md) → this page | [project-context.md](project-context.md), [developer-reference.md](developer-reference.md) |
 | Use grok-4.5 with Claude Code | [claude-grok-proxy.md](claude-grok-proxy.md) | `scripts/run-claude-grok.sh` |
 
 Chinese counterparts use the same basename with a `-zh-CN` suffix where available.
@@ -45,11 +47,15 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [architecture.md](architecture.md) | Modules, three-Bean model, Advisor chain, dual memory, domain extension |
+| [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | Comparison with reference projects; phase status |
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | Hybrid search plan (may lag code) |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | Multi-model plan |
 | [multi-model-external-config.md](multi-model-external-config.md) | External `models.json` config |
+| [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Current RAG execution, runtime topologies, API-key capabilities, and external-service security gaps |
+| [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | Credential, policy, rotation, revocation, audit, quota, and migration prerequisite work (awaiting approval) |
+| [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Expose RAG deployments as compatible model services; consumes the separate API-key prerequisite (awaiting approval) |
 
 ### Config, API, data
 
@@ -67,6 +73,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [testing-guide.md](testing-guide.md) | Unit / integration / E2E / coverage |
+| [developer-reference.md](developer-reference.md) | Copyable build, start, database, model, E2E, and release commands |
 | [quality-defaults.md](quality-defaults.md) | Production retrieval defaults and goldenset measurement |
 | [release-checklist.md](release-checklist.md) | 1.0 release gates and artifact checklist |
 | [china-network-guide.md](china-network-guide.md) | Mainland China Docker / Maven / npm / Playwright network pitfalls |
@@ -74,20 +81,19 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [DEPLOYMENT.md](DEPLOYMENT.md) | Deployment |
 | `docs/prometheus/`, `docs/grafana/` | Metrics & dashboards |
 
-### Agent / local collaboration (progressive entry)
+### Agent / project collaboration
 
 | Doc | Size policy | Description |
 |-----|-------------|-------------|
 | [CLAUDE.md](../CLAUDE.md) | **Very short** | Claude Code local start & hard tips |
 | [claude-grok-proxy.md](claude-grok-proxy.md) | Guide | Minimum `run-claude-grok.sh` setup, overrides, and troubleshooting |
 | [AGENTS.md](../AGENTS.md) | **Short** | Agent hub: principles + rules + map |
-| [TOOLS.md](../TOOLS.md) | Medium | Build commands, DB, models, paths, E2E |
-| [MEMORY.md](../MEMORY.md) | Medium-long | Dev cheat sheet (packages, API, pitfalls) |
-| `memory/YYYY-MM-DD.md` | Logs | Daily work notes |
-| [SOUL.md](../SOUL.md) / [IDENTITY.md](../IDENTITY.md) / [USER.md](../USER.md) | Role | Agent persona (not product docs) |
-| [HEARTBEAT.md](../HEARTBEAT.md) | Status log | Automation heartbeat; **not** architecture |
-| [skills/project-docs/](../skills/project-docs/SKILL.md) | Skill | Documentation system skill (alongside `pm-24x7`; self-contained) |
+| [project-context.md](project-context.md) | Evergreen | Stable project knowledge for contributors and Agents |
+| [developer-reference.md](developer-reference.md) | Reference | Build, runtime, model, E2E, and release commands |
+| [.agents/skills/project-docs/](../.agents/skills/project-docs/SKILL.md) | Skill | Documentation-system workflow |
+| [.agents/skills/pm-24x7/](../.agents/skills/pm-24x7/SKILL.md) | Skill | Optional always-on OpenClaw project-manager workflow |
 
+OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.md` is intentionally gitignored and is not part of the project documentation system. Local state may link to these evergreen documents.
 ---
 
 ## 3. Code entry points
@@ -110,7 +116,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 
 ## 4. Common pitfalls
 
-Details: [troubleshooting.md](troubleshooting.md), [TOOLS.md](../TOOLS.md).
+Details: [troubleshooting.md](troubleshooting.md), [developer-reference.md](developer-reference.md).
 
 1. **Do not put `/v1` on OpenAI / Embedding `base-url`**  
    Spring AI appends `/v1/chat/completions` or `/v1/embeddings`; a trailing `/v1` becomes `/v1/v1/...` → 401/404.
@@ -139,7 +145,8 @@ Conclusions: [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md).
 
 ## 6. Maintenance rules
 
-- **Keep entry docs short**: `CLAUDE.md` and `AGENTS.md` hold hard tips + links only; sink detail into this tree or `TOOLS.md` / `MEMORY.md`.
+- **Keep entry docs short**: `CLAUDE.md` and `AGENTS.md` hold hard tips + links only; sink stable context into `project-context*` and commands into `developer-reference*`.
+- **Keep local state local**: OpenClaw state files are gitignored and may reference project docs, never the reverse.
 - **Docs follow code**: config → `configuration*`; API → `rest-api*`; design → `architecture*`. **Keep EN/ZH pairs in sync** when both exist.
 - **Plan docs** (`*-plan.md`, `drafts/`) may lag; prefer code and `IMPLEMENTATION_COMPARISON.md`.
 - **Never commit secrets**; keys live only in `.env` (gitignored).

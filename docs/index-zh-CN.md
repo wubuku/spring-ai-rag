@@ -14,15 +14,17 @@
 | 你是谁 / 要做什么 | 先读 | 再读 |
 |------------------|------|------|
 | 第一次了解项目 | [README-zh-CN.md](../README-zh-CN.md) | [getting-started-zh-CN.md](getting-started-zh-CN.md) |
-| 本地跑通服务 | [getting-started-zh-CN.md](getting-started-zh-CN.md) | [TOOLS.md](../TOOLS.md)、`.env.example` |
+| 本地跑通服务 | [getting-started-zh-CN.md](getting-started-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md)、`.env.example` |
 | 改核心架构 / Pipeline | [architecture-zh-CN.md](architecture-zh-CN.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
+| 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
+| 规划 OpenAI 兼容服务 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
-| 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [TOOLS.md](../TOOLS.md) E2E 段 |
+| 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
 | 出问题排查 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 下文「常见陷阱」 |
-| Agent / Claude 协作 | [AGENTS.md](../AGENTS.md) → 本页 | [CLAUDE.md](../CLAUDE.md)、[TOOLS.md](../TOOLS.md)、[MEMORY.md](../MEMORY.md) |
+| Agent / Claude 协作 | [AGENTS.md](../AGENTS.md) → 本页 | [project-context-zh-CN.md](project-context-zh-CN.md)、[developer-reference-zh-CN.md](developer-reference-zh-CN.md) |
 | Claude Code 使用 grok-4.5 | [claude-grok-proxy-zh-CN.md](claude-grok-proxy-zh-CN.md) | `scripts/run-claude-grok.sh` |
 
 英文文档与中文同名（去掉 `-zh-CN`），内容应对齐。
@@ -45,11 +47,15 @@
 | 文档 | 说明 |
 |------|------|
 | [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、三 Bean、Advisor 链、双表记忆、领域扩展 |
+| [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `DomainRagExtension` 扩展开发 |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | 与参考项目对比、Phase 完成状态 |
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | 混合检索增强规划（可能滞后于代码） |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
+| [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 当前 RAG 执行、运行拓扑、API Key 能力和外部服务安全缺口 |
+| [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（待批准） |
+| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（待批准实施） |
 
 ### 配置、API、数据
 
@@ -67,6 +73,7 @@
 | 文档 | 说明 |
 |------|------|
 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | 单元 / 集成 / E2E / 覆盖率 |
+| [developer-reference-zh-CN.md](developer-reference-zh-CN.md) | 可复制的构建、启动、数据库、模型、E2E 与发布命令 |
 | [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md) | 生产检索默认值与 goldenset 度量 |
 | [release-checklist-zh-CN.md](release-checklist-zh-CN.md) | 1.0 发布门禁与产物清单 |
 | [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md) | 中国境内 Docker / Maven / npm / Playwright 网络避坑 |
@@ -74,20 +81,19 @@
 | [DEPLOYMENT.md](DEPLOYMENT.md) | 部署 |
 | `docs/prometheus/`、`docs/grafana/` | 监控看板与采集 |
 
-### Agent / 本机协作（渐进式入口）
+### Agent / 项目协作
 
 | 文档 | 体积策略 | 说明 |
 |------|----------|------|
 | [CLAUDE.md](../CLAUDE.md) | **极短** | Claude Code 本地启动与硬性提示 |
 | [claude-grok-proxy-zh-CN.md](claude-grok-proxy-zh-CN.md) | 使用指南 | `run-claude-grok.sh` 最小配置、覆盖变量与排障 |
 | [AGENTS.md](../AGENTS.md) | **短** | Agent 总入口：原则 + 规则 + 文档地图 |
-| [TOOLS.md](../TOOLS.md) | 中 | 构建命令、DB、模型、路径、E2E 命令 |
-| [MEMORY.md](../MEMORY.md) | 中长 | 日常开发速查（包结构、API、踩坑） |
-| `memory/YYYY-MM-DD.md` | 日志 | 按日工作记录 |
-| [SOUL.md](../SOUL.md) / [IDENTITY.md](../IDENTITY.md) / [USER.md](../USER.md) | 角色 | Agent 人格与用户偏好（非产品文档） |
-| [HEARTBEAT.md](../HEARTBEAT.md) | 状态日志 | 自动化心跳；**不要**当架构文档读 |
-| [skills/project-docs/](../skills/project-docs/SKILL.md) | 技能 | 文档体系建设技能（与 `pm-24x7` 并列；自包含） |
+| [project-context-zh-CN.md](project-context-zh-CN.md) | 长青 | 面向开发者和 Agent 的稳定项目认知 |
+| [developer-reference-zh-CN.md](developer-reference-zh-CN.md) | 参考 | 构建、运行、模型、E2E 与发布命令 |
+| [.agents/skills/project-docs/](../.agents/skills/project-docs/SKILL.md) | Skill | 文档体系工作流 |
+| [.agents/skills/pm-24x7/](../.agents/skills/pm-24x7/SKILL.md) | Skill | 可选的 OpenClaw 7×24 项目经理工作流 |
 
+OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状态文件有意保持 gitignore，不属于项目文档体系；本地状态可以链接这些长青文档。
 ---
 
 ## 3. 代码入口（读代码时）
@@ -110,7 +116,7 @@
 
 ## 4. 常见陷阱（先记这几条）
 
-细节与排障步骤见 [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md)、[TOOLS.md](../TOOLS.md)。
+细节与排障步骤见 [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md)、[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
 
 1. **OpenAI / Embedding `base-url` 不要带 `/v1`**  
    Spring AI 会再拼 `/v1/chat/completions` 或 `/v1/embeddings`，带了会变成 `/v1/v1/...` → 401/404。
@@ -139,7 +145,8 @@
 
 ## 6. 维护约定
 
-- **入口文档保持短**：`CLAUDE.md`、`AGENTS.md` 只放硬性提示 + 链接；细节下沉到本目录或 `TOOLS.md` / `MEMORY.md`。
+- **入口文档保持短**：`CLAUDE.md`、`AGENTS.md` 只放硬性提示 + 链接；稳定认知下沉到 `project-context*`，命令下沉到 `developer-reference*`。
+- **本地状态保持本地**：OpenClaw 状态文件继续 gitignore，可以引用项目长青文档，项目文档不能反向依赖它们。
 - **改行为就改文档**：配置项 → `configuration*`；API → `rest-api*`；架构决策 → `architecture*`。**中英文成对存在时必须同步更新。**
 - **规划类文档**（`*-plan.md`、`drafts/`）可能滞后于代码，以代码与 `IMPLEMENTATION_COMPARISON.md` 为准。
 - **不要把密钥写进文档**；密钥只在 `.env`（已 gitignore）。

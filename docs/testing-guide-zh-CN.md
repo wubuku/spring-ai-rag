@@ -11,7 +11,7 @@ Spring AI RAG 项目对测试的态度是"测试是生产代码"——写代码�
 > - 涉及 WebUI 修改时必须跑 Playwright（`scripts/webui-e2e-test.js` / `npm run test:e2e`）  
 > - 重要改进后：重启服务 → 确认 `http://localhost:8081` 可用 → 再跑回归  
 
-总文档导航：[index-zh-CN.md](index-zh-CN.md) · 命令速查：[../TOOLS.md](../TOOLS.md)
+总文档导航：[index-zh-CN.md](index-zh-CN.md) · 命令速查：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)
 
 ## 测试金字塔
 
@@ -40,6 +40,16 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 # 跳过测试构建
 mvn clean package -DskipTests
 ```
+
+## 一键文档验证
+
+`scripts/verify-project-docs.sh` 固化项目文档检查清单：OpenClaw 本地状态隔离、`.agents/skills/` 可跟踪性、相对链接、中英文标题结构、入口行数、项目固定约定、文档命令、Shell 语法、空白和新增行敏感信息扫描。
+
+```bash
+./scripts/verify-project-docs.sh
+```
+
+默认发布验证也会执行该门禁。
 
 ## 一键发布验证
 

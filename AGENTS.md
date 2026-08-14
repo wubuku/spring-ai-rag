@@ -12,8 +12,8 @@
 ## 1. 你是谁、先做什么
 
 1. 读本文件的 **硬性规则** 与 **文档地图**。  
-2. 需要命令 / 环境细节 → [TOOLS.md](TOOLS.md)。  
-3. 需要日常速查（包结构、API、踩坑）→ [MEMORY.md](MEMORY.md)。  
+2. 需要命令 / 环境细节 → [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)。
+3. 需要稳定项目认知 → [project-context-zh-CN.md](docs/project-context-zh-CN.md)。
 4. 需要完整导航 → [docs/index-zh-CN.md](docs/index-zh-CN.md)（[EN](docs/index.md)）。  
 5. Claude Code 本地极短提示 → [CLAUDE.md](CLAUDE.md)。
 
@@ -24,14 +24,14 @@
 ## 2. 硬性规则（违反易导致联调失败）
 
 1. **OpenAI / Embedding 的 `base-url` 不要带 `/v1`**  
-   Spring AI 会再拼 `/v1/...`，带了会变成 `/v1/v1/...` → 401/404。见 [TOOLS.md](TOOLS.md)。
+   Spring AI 会再拼 `/v1/...`，带了会变成 `/v1/v1/...` → 401/404。见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)。
 2. **本地开发 profile 用 `postgresql`**（`SPRING_PROFILES_ACTIVE=postgresql`），不要默认用会连不上的配置。
 3. **端口默认 8081**（不是部分旧文档里的 8080）；真实 LLM 联调常用 **18081**。
 4. **向量维度 1024** 必须与 embedding 模型和 PG `VECTOR(1024)` 一致。
 5. **写代码同步写测试**；`mvn test` 不过不算完成。Mock Playwright ≠ 真实 LLM 联调。
-6. **WebUI** 是独立前端：改 `spring-ai-rag-webui/` 后需构建；静态资源路径见 [TOOLS.md](TOOLS.md) / [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
+6. **WebUI** 是独立前端：改 `spring-ai-rag-webui/` 后需构建；静态资源路径见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) / [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
 7. **Flyway 迁移** 在 `spring-ai-rag-core/src/main/resources/db/migration/`，当前 **V1–V24**；改 schema 必须加迁移，不要只改实体。
-8. **真实 LLM 联调**用 `scripts/start-real-e2e-server.sh` + `scripts/real-llm-e2e-smoke.sh`（默认 18081，避免与日常 8081 冲突）；细节见 [TOOLS.md](TOOLS.md)、[docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md)。
+8. **真实 LLM 联调**用 `scripts/start-real-e2e-server.sh` + `scripts/real-llm-e2e-smoke.sh`（默认 18081，避免与日常 8081 冲突）；细节见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)、[docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md)。
 9. **密钥与隐私**：API Key、Token **不得**写入文档或提交到 git；只放 `.env`（已 gitignore）。
 10. **注释与文档语言**：代码注释、Javadoc、用户可见说明优先**中文**（项目约定）；对外英文文档与中文成对维护时需同步。
 11. **境内 Docker / 构建网络**：拉镜像或构建超时先看 [docs/china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md)，优先 `scripts/docker-build-local.sh`；不要把区域镜像硬编码进 Dockerfile。
@@ -41,104 +41,39 @@
 
 ---
 
-## 3. 文档地图（按任务打开）
+## 3. 任务地图
 
-### 必读索引
-
-| 文档 | 何时读 |
-|------|--------|
-| [docs/index-zh-CN.md](docs/index-zh-CN.md) | **总入口**，渐进发现 |
-| [TOOLS.md](TOOLS.md) | 构建、启动、DB、模型、E2E 命令 |
-| [MEMORY.md](MEMORY.md) | 包结构、主要 API、历史踩坑 |
-
-### 产品与上手
-
-| 文档 | 何时读 |
-|------|--------|
-| [README-zh-CN.md](README-zh-CN.md) | 项目概览 |
-| [docs/getting-started-zh-CN.md](docs/getting-started-zh-CN.md) | 从零跑通 |
-| [CONTRIBUTING-zh-CN.md](CONTRIBUTING-zh-CN.md) | 贡献约定 |
-| [CHANGELOG-zh-CN.md](CHANGELOG-zh-CN.md) | 版本变更 |
-
-### 设计与实现
-
-| 文档 | 何时读 |
-|------|--------|
-| [docs/architecture-zh-CN.md](docs/architecture-zh-CN.md) | 模块、Pipeline、Advisor、记忆 |
-| [docs/extension-guide-zh-CN.md](docs/extension-guide-zh-CN.md) | 领域扩展 `DomainRagExtension` |
-| [docs/IMPLEMENTATION_COMPARISON.md](docs/IMPLEMENTATION_COMPARISON.md) | 能力完成状态 / 对比 |
-| [docs/multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) | 外部 `models.json`、多模型与 fallback |
-| `docs/*-plan.md`、`docs/drafts/` | 规划稿（可能滞后于代码，以代码为准） |
-
-### 配置、API、数据
-
-| 文档 | 何时读 |
-|------|--------|
-| [docs/configuration-zh-CN.md](docs/configuration-zh-CN.md) | 配置项、环境变量 |
-| [docs/rest-api-zh-CN.md](docs/rest-api-zh-CN.md) | HTTP API（含 API Key collection ACL 等） |
-| [docs/SSE-PROTOCOL.md](docs/SSE-PROTOCOL.md) | 流式协议 |
-| [docs/api-versioning.md](docs/api-versioning.md) | `/api/v1` 策略 |
-| [docs/postgresql-extensions.md](docs/postgresql-extensions.md) | PG 扩展 |
-
-### 质量与运维
-
-| 文档 | 何时读 |
-|------|--------|
-| [docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) | 写/跑测试、覆盖率、E2E |
-| [docs/quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) | 生产检索默认值与 goldenset |
-| [docs/release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) | 1.0 发布门禁与产物清单 |
-| [docs/china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md) | 境内 Docker / Maven / npm / Playwright / Git 代理 |
-| [docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) | 按症状排障 |
-| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | 部署 |
-| [docs/prometheus/](docs/prometheus/)、[docs/grafana/](docs/grafana/) | 监控 |
-
-### 本仓库 Agent 辅助文件
-
-| 文件 | 角色 |
+| 任务 | 入口 |
 |------|------|
-| [CLAUDE.md](CLAUDE.md) | Claude Code **极短**本地入口 |
-| [docs/claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) | Claude Code + grok 本地兼容代理（`scripts/run-claude-grok.sh`） |
-| [TOOLS.md](TOOLS.md) | 命令、DB、模型、E2E 命令 |
-| [MEMORY.md](MEMORY.md) | 开发速查（包结构、API、踩坑） |
-| [docs/index-zh-CN.md](docs/index-zh-CN.md) | **文档总索引**（优先打开） |
+| 完整文档导航 | [docs/index-zh-CN.md](docs/index-zh-CN.md)（[EN](docs/index.md)） |
+| 项目概览 / 从零跑通 | [README-zh-CN.md](README-zh-CN.md) → [getting-started-zh-CN.md](docs/getting-started-zh-CN.md) |
+| 构建、启动、DB、模型、E2E | [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) |
+| 包结构、稳定能力、关键边界 | [project-context-zh-CN.md](docs/project-context-zh-CN.md) |
+| 架构 / 能力状态 / 领域扩展 | [architecture-zh-CN.md](docs/architecture-zh-CN.md) · [IMPLEMENTATION_COMPARISON.md](docs/IMPLEMENTATION_COMPARISON.md) · [extension-guide-zh-CN.md](docs/extension-guide-zh-CN.md) |
+| 配置 / HTTP API / SSE | [configuration-zh-CN.md](docs/configuration-zh-CN.md) · [rest-api-zh-CN.md](docs/rest-api-zh-CN.md) · [SSE-PROTOCOL.md](docs/SSE-PROTOCOL.md) |
+| 多模型与外部 `models.json` | [multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) |
+| 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |
+| 部署 / 境内网络 / 排障 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) · [china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md) · [troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
+| Claude Code / grok 代理 | [CLAUDE.md](CLAUDE.md) · [claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) |
+| 文档治理 | [.agents/skills/project-docs/SKILL.md](.agents/skills/project-docs/SKILL.md) |
 
-英文版：多数文档有去掉 `-zh-CN` 的对应文件，**成对更新**。
+代码根目录为 `spring-ai-rag-{api,core,starter,documents}/`、`spring-ai-rag-webui/`、`demos/`；脚本入口统一查 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)。
+多数正式文档有去掉 `-zh-CN` 的英文对应文件，修改时必须成对更新。`docs/drafts/` 与 `*-plan.md` 可能滞后于代码。
 
 ---
 
-## 4. 代码与脚本入口（极简）
+## 4. 协作约定
 
-| 路径 | 用途 |
-|------|------|
-| `spring-ai-rag-api/` | DTO、SPI |
-| `spring-ai-rag-core/` | 实现 + 可运行应用、Flyway、controller/advisor |
-| `spring-ai-rag-starter/` | 自动配置 |
-| `spring-ai-rag-documents/` | 文档处理 |
-| `spring-ai-rag-webui/` | 管理台前端 |
-| `demos/` | 示例 |
-| `scripts/start-server.sh` | 推荐本地启动 |
-| `scripts/start-real-e2e-server.sh` / `real-llm-e2e-smoke.sh` | 真实 LLM E2E |
-| `scripts/e2e-test.sh` | 常规 E2E |
-| `scripts/docker-build-local.sh` | 境内友好本地 Docker 构建 |
-| `scripts/verify-release.sh` | 1.0 发布产物校验 |
-| `scripts/run-retrieval-goldenset.sh` | 检索 goldenset |
-| `scripts/run-claude-grok.sh` | Claude Code + grok 代理启动 |
-
-更细的包与类名 → [MEMORY.md](MEMORY.md)；命令全文 → [TOOLS.md](TOOLS.md)。
-
----
-
-## 5. 协作约定
-
-- **先链后写**：能链到 `docs/` / `TOOLS` / `MEMORY` 的，不要在 `AGENTS.md` / `CLAUDE.md` 展开长文。  
-- **改行为就改文档**：配置 → `configuration*`；API → `rest-api*`；架构 → `architecture*`；命令 → `TOOLS.md`。  
+- **先链后写**：能链到 `docs/` 的，不要在 `AGENTS.md` / `CLAUDE.md` 展开长文。
+- **改行为就改文档**：配置 → `configuration*`；API → `rest-api*`；架构 → `architecture*`；命令 → `developer-reference*`。
 - **测试门禁**：功能完成 = 实现 + 测试 +（相关）文档；禁止「只改实现、测试红着交」。  
 - **不要**把 `HEARTBEAT.md`、`memory/日期.md` 当架构真相来源；以代码与正式 `docs/` 为准。  
+- OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/` 等是本地状态，不属于项目文档体系；项目级 Skills 位于 `.agents/skills/`。
 - 外部参考仓库路径见 [docs/index-zh-CN.md](docs/index-zh-CN.md) §5（本机对照用，非 submodule）。
 
 ---
 
-## 6. 维护本文件
+## 5. 维护本文件
 
 - 仅在 **规则变更**、**文档地图过时**、**模块/端口/迁移版本号变化** 时更新。  
 - 保持 **短**：新增内容优先写到专题文档，再在本文件加一行链接。  

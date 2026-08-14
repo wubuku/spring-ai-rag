@@ -232,7 +232,7 @@ cd demos/demo-basic-rag && mvn test
 - [部署](docs/DEPLOYMENT.md)
 - [CHANGELOG](CHANGELOG-zh-CN.md)
 - [贡献指南](CONTRIBUTING-zh-CN.md)
-- Agent / 本机入口：[AGENTS.md](AGENTS.md)、[CLAUDE.md](CLAUDE.md)、[TOOLS.md](TOOLS.md)
+- Agent / 开发者入口：[AGENTS.md](AGENTS.md)、[CLAUDE.md](CLAUDE.md)、[开发者参考](docs/developer-reference-zh-CN.md)、[项目上下文](docs/project-context-zh-CN.md)
 
 ## License
 

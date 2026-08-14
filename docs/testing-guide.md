@@ -11,7 +11,7 @@
 > - After WebUI changes, run Playwright (`scripts/webui-e2e-test.js` / `npm run test:e2e`)  
 > - After meaningful improvements: restart the service → confirm `http://localhost:8081` is up → run regression  
 
-Doc hub: [index.md](index.md) · Commands: [../TOOLS.md](../TOOLS.md)
+Doc hub: [index.md](index.md) · Commands: [developer-reference.md](developer-reference.md)
 
 ## Testing Pyramid
 
@@ -40,6 +40,16 @@ mvn test -pl spring-ai-rag-core -Dtest=RagDocumentControllerTest
 # Skip tests during build
 mvn clean package -DskipTests
 ```
+
+## One-command Documentation Verification
+
+`scripts/verify-project-docs.sh` codifies the project-documentation checklist: OpenClaw local-state isolation, `.agents/skills/` trackability, relative links, EN/ZH heading structure, entry size limits, fixed project conventions, documented commands, shell syntax, whitespace, and added-line secret scanning.
+
+```bash
+./scripts/verify-project-docs.sh
+```
+
+The default release verification also runs this gate.
 
 ## One-command Release Verification
 
