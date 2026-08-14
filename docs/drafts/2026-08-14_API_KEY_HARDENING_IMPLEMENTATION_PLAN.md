@@ -1,6 +1,6 @@
 # API Key 加固独立实施规划
 
-> 状态：规划、拆分与三轮系统检查已完成，待用户批准，尚未开始实施
+> 状态：规划完成，待用户批准，尚未开始实施
 > 起草与最近复核日期：2026-08-14
 > 适用代码基线：commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`
 > 当前数据库基线：Flyway V1-V24；实施时从下一个可用版本开始，本文按 V25 expand 描述
@@ -146,10 +146,15 @@ credential、principal、policy、quota 和 lifecycle 基础。
 | V22 | `role` | 最早 Key 被直接提升为 ADMIN |
 | V23 | plaintext `api_key` + index | 必须先禁止写入，再随 legacy table 删除 |
 | V24 | 逗号串 `allowed_collection_ids` | 迁移为 typed explicit scope |
-| V10 | `rag_audit_log` | 可承载 lifecycle audit，但需强事务写入服务 |
+| V10 | `rag_audit_log` | 可承载 lifecycle audit，但需强事务写入服务，并扩容 ID 列 |
 
 当前 `spring.jpa.hibernate.ddl-auto=validate`。因此 expand 阶段不能先删除
 `rag_api_key.api_key` 或整个 legacy table，否则旧应用和回滚版本会启动失败。
+
+V10 的 `rag_audit_log.entity_id` 只有 64 字符，`operator` 只有 128 字符；目标
+family/key public ID 最长 80 字符，可信 human operator ID 最长 160 字符。V25 必须把
+前者扩到至少 80、后者扩到至少 192，并同步 `RagAuditLog` JPA 映射，否则强事务
+lifecycle audit 会让合法管理操作因列宽失败而整体回滚。
 
 ### 3.3 当前运行拓扑
 
@@ -667,11 +672,17 @@ Controller 不得各自重写公式。
 对新 policy family：
 
 - 标注 endpoint 按 action 检查。
-- 未标注的新 external endpoint 默认拒绝。
+- management 与新 external endpoint 未声明 action/policy metadata 时默认拒绝。
+- 新增启动期 `ApiAuthorizationCoverageValidator`，扫描 `RequestMappingHandlerMapping`：
+  `/api/v1/rag/api-keys/**`、`/api/v1/rag/api-key-versions/**` 和已注册的 `/v1/**`
+  handler 必须具有可解析的授权策略，否则 application context 启动失败。
+- 需要动态 any-of/self-vs-admin 语义的 handler 使用显式 policy metadata，由统一
+  authorization service 求值；不得退回 Controller 内零散 role 判断。
 
 对现有 `/api/**`：
 
-- expand 期通过明确 `LegacyApiAuthorizationAdapter` 保持当前数据面契约。
+- expand 期只有显式 allowlist 的 handler 可通过 `LegacyApiAuthorizationAdapter`
+  保持当前数据面契约。
 - Key 管理 endpoint 不进入宽松 adapter。
 - 后续逐 endpoint 迁移 action，不能一次大爆炸式重写全部 controller。
 
@@ -1092,6 +1103,8 @@ rag.api-keys.bootstrap.mode=development-log
 
 - 与 family/version/operation 使用同一 datasource 和事务。
 - 直接写 `rag_audit_log`，第一阶段不吞异常。
+- V25 先把 `entity_id` 扩到至少 80、`operator` 扩到至少 192，并同步
+  `RagAuditLog` 的 `@Column(length=...)`；不得依赖数据库静默截断。
 - repository 不存在时 Key 管理 Bean 不注册或 readiness fail。
 - 后续如需外部审计系统，使用同事务 outbox；不能改成异步 best effort。
 
@@ -1285,6 +1298,8 @@ Controller
 - `/api/v1/rag/api-keys/*`：无论 global security flag，管理面始终要求可信 operator；
   local bootstrap mode 是独立显式例外。
 - `/v1/*`：由上层兼容 feature flag 控制注册，但一旦存在必须使用 family principal。
+- management 与 `/v1` handler 的授权 coverage validator 在 core standalone 和 starter
+  consumer 都必须启用；漏标 action/policy metadata 时 fail startup。
 
 ### 20.4 Error writer
 
@@ -1399,16 +1414,19 @@ V25__api_key_family_expand.sql
 
 内容：
 
-1. 如果存在非空 `rag_api_key.api_key`，migration fail。
-2. drop `idx_rag_api_key_api_key`。
-3. 增加 `CHECK (api_key IS NULL)`，暂时保留列。
-4. 新建 family/version/operation/security_state。
-5. 插入 singleton security row。
-6. 严格验证 legacy ACL、role 和 timestamps。
-7. 为每个 legacy row 回填独立 family + 初始 version，复用原 keyId/hash。
-8. `enabled=false` 映射 revoked family/version。
-9. role、ACL 映射 legacy policy；不授予新 `/v1` actions。
-10. 建立 constraints、FK 和 indexes。
+1. 对 `rag_api_key` 获取与 legacy INSERT/UPDATE/DELETE 冲突的 PostgreSQL table lock；
+   在受控 `lock_timeout` 内不能获得锁则 migration fail，禁止无锁回填。
+2. 如果存在非空 `rag_api_key.api_key`，migration fail。
+3. drop `idx_rag_api_key_api_key`。
+4. 增加 `CHECK (api_key IS NULL)`，暂时保留列。
+5. 扩容 `rag_audit_log.entity_id` 至至少 80、`operator` 至至少 192。
+6. 新建 family/version/operation/security_state。
+7. 插入 singleton security row。
+8. 严格验证 legacy ACL、role 和 timestamps。
+9. 为每个 legacy row 回填独立 family + 初始 version，复用原 keyId/hash。
+10. `enabled=false` 映射 revoked family/version。
+11. role、ACL 映射 legacy policy；不授予新 `/v1` actions。
+12. 建立 constraints、FK 和 indexes。
 
 ### 22.4 Legacy timezone
 
@@ -1442,7 +1460,10 @@ legacyApiKeyTimezoneConfirmed
 滚动升级期间：
 
 - compatibility endpoint 保持 disabled。
-- gateway 阻断 Key management create/rotate/revoke/policy update。
+- 在任何 V25 migration 启动前，所有外部和内部入口已阻断 Key management
+  create/rotate/revoke/policy update，并从每个可达入口验证维护响应；不能只依赖人工通知。
+- 写阻断保持到所有实例升级、回填和双读验证完成；绕过 gateway 的直连入口必须关闭或
+  执行同等门禁。
 - 旧 `/api/**` 数据面继续使用 legacy table。
 - 新应用认证 migrated credential 时要求 legacy shadow 与 family/version 都有效，
   scope 取两侧最严格值。
@@ -1535,6 +1556,7 @@ spring-ai-rag-api/
 
 spring-ai-rag-core/
   .../core/entity/
+    RagAuditLog.java
     RagApiKeyFamily.java
     RagApiKeyVersion.java
     RagApiKeyOperation.java
@@ -1556,6 +1578,7 @@ spring-ai-rag-core/
     ApiKeyAuthorizationService.java
     ApiKeyAuthenticationFilter.java
     ApiKeyAuthorizationInterceptor.java
+    ApiAuthorizationCoverageValidator.java
     RequiresApiAction.java
     LegacyApiAuthorizationAdapter.java
     TrustedClientIpResolver.java
@@ -1600,11 +1623,19 @@ Controller。
 
 ## 24. 分阶段实施
 
+以下 Phase 和 PR 是实现、评审与合并顺序，不是独立 production release。V25 migration
+不能与 legacy 日志 bootstrap、starter-only auth 或未完成的 family management 组合部署。
+首个允许进入任何环境滚动升级流程的 Expand release A 必须原子包含 Phase 1-6，并由
+release gate 验证旧 bootstrap 已替换、共享 auth 已启用、management coverage validator
+已生效、shared quota 已满足目标环境要求。中间 PR 只能用于受控开发/CI，不能生成生产
+部署批准。
+
 本工程有两个交付里程碑，避免把长期 contract 清理错误地变成新消费者开发的阻塞项：
 
 **Milestone A：external data-plane ready**
 
 - 完成 Phase 0–6。
+- Phase 1–6 作为同一个可部署 Expand A 原子发布单元通过 release gate。
 - Expand release A 已在全部实例部署，management 门禁已解除。
 - restricted external family、双实例 revoke/quota、V24 回滚安全性和日志无 raw 已验证。
 - 达到该里程碑后，OpenAI 兼容层等消费者可以接入，并可按受控发布流程开放数据面。
@@ -1641,12 +1672,14 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 
 ### Phase 1：Expand schema 与模型
 
-1. 增加 V25 preflight、plaintext null constraint 和新表。
+1. 增加 V25 preflight、plaintext null constraint、审计 ID 列扩容和新表。
 2. 增加 timezone placeholders。
-3. 增加 family/version/operation/security-state entities 和 repositories。
+3. 同步 `RagAuditLog` 列宽，增加 family/version/operation/security-state entities 和
+   repositories。
 4. 增加 typed policy、validator 和 secure defaults。
 5. 增加 V24 -> V25 Testcontainers migration tests。
 6. 回填 legacy rows，但不授予新 external actions。
+7. 验证 migration table lock 会等待/拒绝并发 legacy write，且超时后完整回滚。
 
 完成标准：
 
@@ -1665,12 +1698,17 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 7. management path 永不 anonymous。
 8. legacy `/api` authorization adapter。
 9. protocol-neutral failure classification。
+10. 在 core 建立最小共享 `RagWebSecurityConfiguration`，注册 path-aware authentication
+    和 authorization interceptor；standalone 由扫描加载，starter 由 import 加载。
+11. starter 删除重复 auth registration，并增加两个 topology 的 missing/duplicate bean
+    integration tests；legacy rate-limit 暂留到 Phase 5 替换。
 
 完成标准：
 
 - migrated legacy Key 行为不变。
 - new family principal 不依赖 JPA entity request attribute。
 - DB/policy error 返回 503，不 fallback。
+- core standalone 与 starter consumer 的 management/auth 链一致且无重复 Bean。
 
 ### Phase 3：Management Lifecycle
 
@@ -1682,6 +1720,8 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 6. security state locks 和最后 ADMIN。
 7. transactional lifecycle audit。
 8. no-store/TLS guard。
+9. 为全部 management handler 声明 action/policy metadata，并在同一变更中启用
+   `ApiAuthorizationCoverageValidator`；不能先启用 validator 再等待后续 PR 补标。
 
 完成标准：
 
@@ -1689,6 +1729,7 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 - rotation 保持 family。
 - response 丢失不会创建重复 secret。
 - audit 失败导致管理事务回滚。
+- management handler 漏标授权策略时 core/starter context 均启动失败。
 
 ### Phase 4：Bootstrap、Recovery 和 Last Used
 
@@ -1707,8 +1748,8 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 
 ### Phase 5：Shared Web Security 与 Quota
 
-1. core shared filter configuration。
-2. starter import + duplicate bean tests。
+1. 在 Phase 2 的共享配置上增加 `PreAuthIpRateLimitFilter` 和 `ApiKeyQuotaFilter`。
+2. 删除 starter legacy `RateLimitFilter` registration，并验证无重复/遗漏。
 3. trace/pre-auth/auth/quota 显式 order。
 4. local family quota backend。
 5. Redis/shared quota backend 或批准的 gateway backend。
@@ -1761,9 +1802,9 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 |---|---|---|
 | 1 | Characterization、shared topology tests、迁移 preflight | 2-3 人日 |
 | 2 | V25 family/version/operation/security-state、policy、backfill | 4-6 人日 |
-| 3 | resolver、principal、Bearer、legacy adapter、failure mapping | 3-5 人日 |
+| 3 | resolver、principal、Bearer、legacy adapter、最小共享 auth topology、failure mapping | 3-5 人日 |
 | 4 | management lifecycle、idempotency、audit、ADMIN guard | 4-6 人日 |
-| 5 | bootstrap/recovery/last-used、local/shared quota、多实例测试 | 4-7 人日 |
+| 5 | bootstrap/recovery/last-used、完整 filter order、local/shared quota、多实例测试 | 4-7 人日 |
 | 6 | WebUI、运维脚本、文档、E2E、family-only cutover 准备 | 3-5 人日 |
 
 Expand 到可对外签发 Key 约 20-32 人日。实际 contract 删除可在观察窗后单独 PR，约
@@ -1839,6 +1880,7 @@ Quota：
 - explicit filter order。
 - `/api/*` 和 future `/v1/*` patterns。
 - core standalone 与 starter context 无 duplicate/missing bean。
+- management/new external handler 漏标 action/policy metadata 时两个 topology 均启动失败。
 
 ### 26.3 PostgreSQL integration
 
@@ -1864,6 +1906,8 @@ Quota：
 - malformed ACL fail。
 - timezone missing/invalid/unconfirmed fail。
 - timezone conversion。
+- lifecycle audit 的 80 字符 target ID 和 160 字符 human operator ID 可无损写入。
+- 并发 legacy create/rotate/revoke 不能与 V25 回填交错；锁超时不留下部分 schema/backfill。
 - rerun/idempotence。
 - external Key absent from shadow。
 - break-glass ADMIN shadow。
@@ -1975,17 +2019,18 @@ metrics tag 不含 keyId、familyId、owner、raw。
 4. 设置并确认 legacy timezone。
 5. 准备 bootstrap/break-glass secret。
 6. 准备 Redis/shared quota。
-7. 冻结 Key 管理变更。
+7. 在所有 gateway、内部 ingress 和直连入口启用 Key management write 维护门禁，并从
+   每个可达入口验证 create/rotate/revoke/policy update 已被拒绝。
 8. 保持外部兼容 endpoint disabled。
 
 ### 28.2 Expand 滚动升级
 
-1. 部署 V25 schema。
-2. gateway 阻断 management write。
+1. 再次验证所有入口的 management write 门禁仍生效。
+2. 部署 V25 schema；迁移必须获取 legacy table lock，锁超时则停止发布。
 3. 滚动升级所有实例。
 4. 验证两种 topology Bean 和 Filter。
 5. 验证 legacy data path。
-6. 验证 shadow、family/version 回填。
+6. 验证 shadow、family/version 回填不存在遗漏或孤儿。
 7. 验证日志和 DB 无 raw。
 
 ### 28.3 解除门禁
@@ -2063,6 +2108,7 @@ metrics tag 不含 keyId、familyId、owner、raw。
 ### Management
 
 - [ ] management endpoint 在 global auth disabled 时仍不匿名。
+- [ ] management 和已启用 `/v1` handler 漏标授权策略时 fail startup，不能默认放行。
 - [ ] static/null caller 不能 create/list/revoke/rotate/policy。
 - [ ] NORMAL 默认不能 create child。
 - [ ] create/rotate idempotent 且不重放 raw。
@@ -2070,6 +2116,7 @@ metrics tag 不含 keyId、familyId、owner、raw。
 - [ ] 从任一 keyId 可撤销完整 family。
 - [ ] policyVersion 冲突可检测。
 - [ ] lifecycle audit 与状态变更同事务。
+- [ ] 最大长度 family/key ID 和可信 human operator ID 可写入审计表，不截断、不导致事务失败。
 
 ### Rotation 与 Revoke
 
@@ -2103,6 +2150,9 @@ metrics tag 不含 keyId、familyId、owner、raw。
 
 - [ ] fresh、V24 upgrade、mixed-version、family-only、contract 全通过。
 - [ ] plaintext/malformed ACL/timezone 未确认会阻止 migration。
+- [ ] V25 扩容审计 ID 列并与 `RagAuditLog` 映射一致。
+- [ ] management write 门禁先于 V25 生效，migration table lock 阻止并发 legacy 写入。
+- [ ] lock timeout 完整回滚，回填后 legacy 与 family/version 无遗漏或孤儿。
 - [ ] existing Key 不自动获得新 external actions。
 - [ ] new external Key 不写 legacy shadow。
 - [ ] V24 rollback 时 new external Key 不可用而不是提权。
