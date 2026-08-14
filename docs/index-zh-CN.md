@@ -54,8 +54,8 @@
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 当前 RAG 执行、运行拓扑、API Key 能力和外部服务安全缺口 |
-| [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（待批准） |
-| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（待批准实施） |
+| [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（规划检查完成，待批准） |
+| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（规划检查完成，待批准） |
 
 ### 配置、API、数据
 

@@ -54,8 +54,8 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | Multi-model plan |
 | [multi-model-external-config.md](multi-model-external-config.md) | External `models.json` config |
 | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Current RAG execution, runtime topologies, API-key capabilities, and external-service security gaps |
-| [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | Credential, policy, rotation, revocation, audit, quota, and migration prerequisite work (awaiting approval) |
-| [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Expose RAG deployments as compatible model services; consumes the separate API-key prerequisite (awaiting approval) |
+| [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | Credential, policy, rotation, revocation, audit, quota, and migration prerequisite work (planning review complete; awaiting approval) |
+| [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Expose RAG deployments as compatible model services; consumes the separate API-key prerequisite (planning review complete; awaiting approval) |
 
 ### Config, API, data
 
