@@ -56,7 +56,33 @@ Run the project-documentation boundary, link, bilingual-structure, invariant, co
 
 ## 3. Start And Health Check
 
-Preferred entry:
+One-command backend and frontend development:
+
+```bash
+./scripts/dev.sh
+```
+
+The launcher exports the complete repository-root `.env` to Maven / Spring Boot
+and starts:
+
+```text
+Backend: http://127.0.0.1:8081
+WebUI:   http://127.0.0.1:15173/webui/unlock
+```
+
+If neither `.env` nor the caller environment defines `RAG_ROOT_API_KEY`, the
+launcher generates an ephemeral root credential for the current backend process.
+On macOS it is copied to the clipboard and is never written to files or logs.
+Status, stop, and port overrides:
+
+```bash
+./scripts/dev.sh --status
+./scripts/dev.sh --stop
+BACKEND_PORT=18082 FRONTEND_PORT=15174 ./scripts/dev.sh
+RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
+```
+
+Backend only:
 
 ```bash
 bash scripts/start-server.sh
@@ -65,7 +91,9 @@ bash scripts/start-server.sh
 Manual start:
 
 ```bash
-export $(grep -v '^#' .env | grep -v '^$' | xargs)
+set -a
+source .env
+set +a
 export SPRING_PROFILES_ACTIVE=postgresql
 mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 ```
@@ -131,6 +159,11 @@ Development:
 ```bash
 npm run dev
 ```
+
+Direct use listens on `http://127.0.0.1:15173/webui/` and proxies `/api` to
+`http://127.0.0.1:8081` by default. For normal full-stack development, run
+`./scripts/dev.sh` from the repository root so the launcher keeps ports and the
+proxy target aligned.
 
 The release build embeds assets under:
 

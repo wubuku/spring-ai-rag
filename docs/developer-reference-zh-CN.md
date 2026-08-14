@@ -56,7 +56,30 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 
 ## 3. 启动与健康检查
 
-推荐入口：
+前后端一键开发入口：
+
+```bash
+./scripts/dev.sh
+```
+
+该脚本完整导出仓库根目录 `.env` 给 Maven / Spring Boot，默认启动：
+
+```text
+Backend: http://127.0.0.1:8081
+WebUI:   http://127.0.0.1:15173/webui/unlock
+```
+
+如果 `.env` 或调用环境未设置 `RAG_ROOT_API_KEY`，脚本会为当前后端进程生成临时 root
+credential；macOS 默认复制到剪贴板，不写入文件或日志。状态、停止和端口覆盖：
+
+```bash
+./scripts/dev.sh --status
+./scripts/dev.sh --stop
+BACKEND_PORT=18082 FRONTEND_PORT=15174 ./scripts/dev.sh
+RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
+```
+
+只启动后端：
 
 ```bash
 bash scripts/start-server.sh
@@ -65,7 +88,9 @@ bash scripts/start-server.sh
 手动启动：
 
 ```bash
-export $(grep -v '^#' .env | grep -v '^$' | xargs)
+set -a
+source .env
+set +a
 export SPRING_PROFILES_ACTIVE=postgresql
 mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 ```
@@ -131,6 +156,10 @@ npm run build
 ```bash
 npm run dev
 ```
+
+直接运行时默认监听 `http://127.0.0.1:15173/webui/`，并把 `/api` 代理到
+`http://127.0.0.1:8081`。日常前后端联调优先从仓库根目录运行 `./scripts/dev.sh`，
+由启动器统一端口和代理目标。
 
 生产 bundle 由发布流程复制到：
 

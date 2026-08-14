@@ -279,6 +279,7 @@ check_project_invariants() {
 check_scripts_and_commands() {
   local script
   for script in \
+      scripts/dev.sh \
       scripts/start-server.sh \
       scripts/start-real-e2e-server.sh \
       scripts/real-llm-e2e-smoke.sh \

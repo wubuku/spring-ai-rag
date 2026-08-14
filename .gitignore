@@ -51,6 +51,7 @@ Thumbs.db
 .env.local
 application-local.yml
 **/application-local.yml
+.dev/
 
 # E2E 测试临时文件
 .mvn/
