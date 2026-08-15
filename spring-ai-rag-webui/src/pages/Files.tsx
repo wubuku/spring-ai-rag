@@ -2,6 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { filesApi, type TreeEntry } from '../api/files';
+import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
 import { FilePreview } from '../components/FilePreview/FilePreview';
@@ -49,6 +50,7 @@ export function Files() {
   const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done' | 'error'>('idle');
   const [uploadError, setUploadError] = useState('');
   const [collectionPrefix, setCollectionPrefix] = useState('');
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState('');
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'embedding' | 'done' | 'error'>('idle');
   const [embeddingMessage, setEmbeddingMessage] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -59,6 +61,11 @@ export function Files() {
     queryFn: () => filesApi.listTree(currentPath || undefined),
     staleTime: 30_000,
   });
+  const { data: collectionsData } = useQuery({
+    queryKey: ['files-collections'],
+    queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
+  });
+  const collections = collectionsData?.data?.collections ?? [];
 
   // ── Navigation ──────────────────────────────────────────────────────────
 
@@ -141,7 +148,12 @@ export function Files() {
     setEmbeddingState('embedding');
     setEmbeddingMessage('');
     try {
-      const result = await filesApi.triggerEmbedding(uuid);
+      const result = await filesApi.triggerEmbedding(
+        uuid,
+        undefined,
+        false,
+        selectedCollectionKey || undefined,
+      );
       setEmbeddingState('done');
       if (result.embedStatus === 'COMPLETED') {
         showToast(t('files.embedSuccess', { chunks: result.chunksCreated }), 'success');
@@ -157,7 +169,7 @@ export function Files() {
       setEmbeddingMessage(msg);
       showToast(t('files.embedError', { error: msg }), 'error');
     }
-  }, [currentPath, t, showToast]);
+  }, [currentPath, selectedCollectionKey, t, showToast]);
 
   // ── Breadcrumb ────────────────────────────────────────────────────────────
 
@@ -249,7 +261,27 @@ export function Files() {
 
       {/* ── Add to RAG Button (shown when inside a PDF directory) ── */}
       {currentPath && !currentPath.startsWith('/papers') && (
-        <div style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+        <div className={styles.ragActions}>
+          <label className={styles.ragCollectionLabel} htmlFor="files-rag-collection">
+            <span>{t('files.ragCollection')}</span>
+            <select
+              id="files-rag-collection"
+              data-testid="files-rag-collection-select"
+              value={selectedCollectionKey}
+              onChange={event => setSelectedCollectionKey(event.target.value)}
+              className={styles.ragCollectionSelect}
+            >
+              <option value="">{t('files.noCollection')}</option>
+              {collections.map(collection => (
+                <option
+                  key={collection.collectionKey}
+                  value={collection.collectionKey}
+                >
+                  {collection.name} ({collection.collectionKey})
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             className={styles.previewBtn}
             onClick={handleTriggerEmbedding}
@@ -264,7 +296,7 @@ export function Files() {
             </span>
           )}
           {embeddingState === 'error' && (
-            <span style={{ fontSize: '0.8rem', color: 'var(--color-error, #ef4444)' }}>
+            <span className={styles.ragError}>
               {embeddingMessage}
             </span>
           )}

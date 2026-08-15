@@ -20,6 +20,8 @@
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | Plan OpenAI compatibility | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
+| Plan embedding-model / vector migration | [Project context](project-context.md) | [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
+| Use JSONB structured-record retrieval | [REST API](rest-api.md) | [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
@@ -56,6 +58,8 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Current RAG execution, runtime topologies, API-key capabilities, and external-service security gaps |
 | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | Credential, policy, rotation, revocation, audit, quota, and migration prerequisite work (planning review complete; awaiting approval) |
 | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Expose RAG deployments as compatible model services; consumes the separate API-key prerequisite (planning review complete; awaiting approval) |
+| [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | Implemented: remove the unused `rag_vector_store` path and use immutable model identity, fixed-size columns, Profile-scoped state, and rollback-safe migration |
+| [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | Implemented caller-supplied JSONB plus natural-language descriptions; only descriptions are indexed/embedded, with collection / external-ID idempotency |
 
 ### Config, API, data
 
@@ -105,7 +109,7 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 | `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V24** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V29** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |

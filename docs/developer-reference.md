@@ -18,7 +18,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V24 |
+| Flyway | V1–V29 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -198,6 +198,54 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
 ```
 
 The flow performs provider preflight, unique-document creation, embedding, search, ask, and stream. Mock Playwright is not a substitute for real-LLM validation.
+
+### JSONB Structured-Record Verification
+
+Run the focused, repeatable gate for the JSONB implementation and its
+surrounding API, database, WebUI, documentation, and whitespace checks:
+
+```bash
+./scripts/verify-jsonb-records.sh
+```
+
+Use `--skip-playwright` only when browser binaries are unavailable and record
+the skipped gate. The PostgreSQL Testcontainers step defaults to
+`-Dapi.version=1.40` and `TESTCONTAINERS_RYUK_DISABLED=true` because some
+OrbStack/proxy environments cannot negotiate the older default Docker API or
+pull Ryuk through the local certificate path. Override these values with
+`TESTCONTAINERS_API_VERSION`, `TESTCONTAINERS_RYUK_DISABLED`, and
+`TESTCONTAINERS_PG_IMAGE`. Logs and a Markdown summary are written to
+`.verification/jsonb-verification/<run-id>/`.
+The Mock Playwright preview uses `JSONB_PLAYWRIGHT_PORT` (default `4174`) with
+strict port binding and never reuses an unrelated process. If that port is
+occupied, choose an unused one, for example:
+
+```bash
+JSONB_PLAYWRIGHT_PORT=4199 ./scripts/verify-jsonb-records.sh
+```
+
+Run this gate serially: its `mvn clean` step must not overlap another Maven
+test process that uses the same module `target/` directories.
+
+### JSONB Live HTTP E2E
+
+Run the JSON structured-record HTTP flow against an already running PostgreSQL
+profile service:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/jsonb-records-e2e.sh
+```
+
+The script verifies JSON-record upsert, collection-scoped search, detail,
+payload-only updates, `retrievalText` updates, clone/export/import, and
+allow/deny behavior using a temporary restricted API key created by the root.
+`embed=true` calls the real embedding provider but does not call a Chat LLM.
+Use `--skip-acl` only when the server intentionally has no usable root
+credential, and record that skip. The script never prints API keys or complete
+payloads; temporary responses are removed from ignored
+`.verification/jsonb-e2e/` storage on exit.
 
 ## 8. Goldenset And Release Gates
 

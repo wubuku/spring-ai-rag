@@ -15,6 +15,7 @@ PASS=0
 FAIL=0
 DOC_ID=""
 COLLECTION_ID=""
+COLLECTION_KEY="e2e-$(date +%s)-$$-$RANDOM"
 
 # 颜色
 GREEN='\033[0;32m'
@@ -69,14 +70,15 @@ echo "2️⃣  Collection CRUD"
 # 2a. 创建 Collection
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections" \
     -H "Content-Type: application/json" \
-    -d '{"name":"e2e-test-collection","description":"E2E自动化测试Collection","domainId":"default"}')
+    -d "{\"collectionKey\":\"$COLLECTION_KEY\",\"name\":\"e2e-test-collection\",\"description\":\"E2E自动化测试Collection\",\"domainId\":\"default\"}")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "POST /collections" "200" "$CODE"
 assert_contains "返回 collection ID" "$BODY" '"id"'
+assert_contains "返回 collectionKey" "$BODY" "\"collectionKey\":\"$COLLECTION_KEY\""
 assert_contains "返回 name" "$BODY" '"name"'
 COLLECTION_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
-echo "  📦 创建的 Collection ID: $COLLECTION_ID"
+echo "  📦 创建的 Collection: key=$COLLECTION_KEY, id=$COLLECTION_ID"
 
 # 2b. 列出 Collections
 RESP=$(curl -s -w "\n%{http_code}" "$API/collections?offset=0&limit=10")
@@ -86,40 +88,41 @@ assert_status "GET /collections" "200" "$CODE"
 assert_contains "返回 collections 数组" "$BODY" '"collections"'
 assert_contains "返回 total" "$BODY" '"total"'
 
-# 2c. 获取单个 Collection
-if [ -n "$COLLECTION_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/$COLLECTION_ID")
+# 2c. 按稳定 key 获取单个 Collection
+if [ -n "$COLLECTION_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    assert_status "GET /collections/{id}" "200" "$CODE"
+    assert_status "GET /collections/by-key" "200" "$CODE"
+    assert_contains "返回正确 collectionKey" "$BODY" "\"collectionKey\":\"$COLLECTION_KEY\""
     assert_contains "返回正确 name" "$BODY" '"name"'
     assert_contains "返回 description" "$BODY" '"description"'
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection key"
 fi
 
 # 2d. 更新 Collection
-if [ -n "$COLLECTION_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X PUT "$API/collections/$COLLECTION_ID" \
+if [ -n "$COLLECTION_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X PUT "$API/collections/by-key?collectionKey=$COLLECTION_KEY" \
         -H "Content-Type: application/json" \
         -d '{"name":"e2e-updated-collection","description":"E2E 自动化测试 Collection（已更新）","domainId":"default"}')
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    assert_status "PUT /collections/{id}" "200" "$CODE"
+    assert_status "PUT /collections/by-key" "200" "$CODE"
     assert_contains "返回更新后的 name" "$BODY" "e2e-updated-collection"
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection key"
 fi
 
 # 2e. 获取 Collection 内的文档列表
-if [ -n "$COLLECTION_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/$COLLECTION_ID/documents?offset=0&limit=10")
+if [ -n "$COLLECTION_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY&offset=0&limit=10")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    assert_status "GET /collections/{id}/documents" "200" "$CODE"
+    assert_status "GET /collections/by-key/documents" "200" "$CODE"
     assert_contains "返回 documents 数组" "$BODY" '"documents"'
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection key"
 fi
 echo ""
 
@@ -139,16 +142,17 @@ DOC_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
 echo "  📄 创建的文档ID: $DOC_ID"
 
 # 3f. 将文档添加到 Collection
-if [ -n "$DOC_ID" ] && [ -n "$COLLECTION_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections/$COLLECTION_ID/documents" \
+if [ -n "$DOC_ID" ] && [ -n "$COLLECTION_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
         -H "Content-Type: application/json" \
         -d "{\"documentId\":$DOC_ID}")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    assert_status "POST /collections/{id}/documents (关联)" "200" "$CODE"
+    assert_status "POST /collections/by-key/documents (关联)" "200" "$CODE"
     assert_contains "返回 documentId" "$BODY" '"documentId"'
+    assert_contains "返回 collectionKey" "$BODY" "\"collectionKey\":\"$COLLECTION_KEY\""
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 document ID 或 collection ID"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 document ID 或 collection key"
 fi
 echo ""
 
@@ -307,14 +311,14 @@ echo ""
 # 1️⃣4️⃣ 清理 Collection
 # ────────────────────────────────────────
 echo "1️⃣4️⃣ 清理 Collection"
-if [ -n "$COLLECTION_ID" ]; then
-    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/collections/$COLLECTION_ID")
+if [ -n "$COLLECTION_KEY" ]; then
+    RESP=$(curl -s -w "\n%{http_code}" -X DELETE "$API/collections/by-key?collectionKey=$COLLECTION_KEY")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
-    assert_status "DELETE /collections/{id}" "200" "$CODE"
+    assert_status "DELETE /collections/by-key" "200" "$CODE"
     assert_contains "确认删除" "$BODY" "Collection deleted"
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection ID"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 collection key"
 fi
 echo ""
 

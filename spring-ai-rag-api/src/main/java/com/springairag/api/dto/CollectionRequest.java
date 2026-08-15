@@ -2,7 +2,9 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 
 import java.util.Map;
 import java.util.Objects;
@@ -12,6 +14,14 @@ import java.util.Objects;
  */
 @Schema(description = "Collection (knowledge base) creation/update request")
 public class CollectionRequest {
+
+    @NotNull(message = "Collection key is required")
+    @ValidCollectionKey
+    @Schema(description = "Stable external business key. Required when creating a collection; immutable afterwards.",
+            example = "customer-42:product-manual:v3", minLength = 1,
+            maxLength = 128, pattern = "^[\\x21-\\x7E]{1,128}$",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private String collectionKey;
 
     @NotBlank(message = "Collection name is required")
     @Size(max = 255, message = "Collection name must not exceed 255 characters")
@@ -37,6 +47,9 @@ public class CollectionRequest {
     public CollectionRequest() {
     }
 
+    public String getCollectionKey() { return collectionKey; }
+    public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
+
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }
 
@@ -60,7 +73,8 @@ public class CollectionRequest {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         CollectionRequest that = (CollectionRequest) o;
-        return Objects.equals(name, that.name) &&
+        return Objects.equals(collectionKey, that.collectionKey) &&
+                Objects.equals(name, that.name) &&
                 Objects.equals(description, that.description) &&
                 Objects.equals(embeddingModel, that.embeddingModel) &&
                 Objects.equals(dimensions, that.dimensions) &&
@@ -70,12 +84,14 @@ public class CollectionRequest {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, embeddingModel, dimensions, enabled, metadata);
+        return Objects.hash(collectionKey, name, description, embeddingModel, dimensions, enabled, metadata);
     }
 
     @Override
     public String toString() {
         return "CollectionRequest{" +
+                "collectionKey='" + collectionKey + '\'' +
+                ", " +
                 "name='" + name + '\'' +
                 ", description='" + description + '\'' +
                 ", embeddingModel='" + embeddingModel + '\'' +

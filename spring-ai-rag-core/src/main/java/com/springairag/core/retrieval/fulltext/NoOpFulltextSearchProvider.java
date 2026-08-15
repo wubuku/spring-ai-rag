@@ -25,7 +25,8 @@ public class NoOpFulltextSearchProvider implements FulltextSearchProvider {
 
     @Override
     public List<RetrievalResult> search(String query, List<Long> documentIds,
-                                        List<Long> excludeIds, int limit, double minScore) {
+                                        List<Long> excludeIds, int limit, double minScore,
+                                        long embeddingProfileId) {
         return Collections.emptyList();
     }
 }

@@ -11,6 +11,7 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   collectionId: number | null;
+  collectionKey: string | null;
   collectionName: string | null;
   chunkCount: number;
 }
@@ -23,7 +24,7 @@ export interface DocumentListResponse {
 }
 
 export const documentsApi = {
-  list: (params: { page?: number; size?: number; collectionId?: number; title?: string }) =>
+  list: (params: { page?: number; size?: number; collectionId?: number; collectionKey?: string; title?: string }) =>
     apiClient.get<DocumentListResponse>('/documents', { params }),
 
   get: (id: number) => apiClient.get<Document>(`/documents/${id}`),

@@ -123,6 +123,15 @@ public final class DocumentMapper {
      * Converts a document version entity to a typed response DTO.
      */
     public static DocumentVersionResponse toVersionResponse(RagDocumentVersion v) {
+        return toVersionResponse(v, true);
+    }
+
+    public static DocumentVersionResponse toVersionSummary(RagDocumentVersion v) {
+        return toVersionResponse(v, false);
+    }
+
+    private static DocumentVersionResponse toVersionResponse(
+            RagDocumentVersion v, boolean includeSnapshots) {
         if (v == null) {
             throw new IllegalArgumentException("Document version must not be null");
         }
@@ -135,7 +144,8 @@ public final class DocumentMapper {
                 v.getChangeType(),
                 v.getChangeDescription(),
                 v.getCreatedAt(),
-                v.getContentSnapshot()
+                includeSnapshots ? v.getContentSnapshot() : null,
+                includeSnapshots ? v.getJsonbPayloadSnapshot() : null
         );
     }
 
@@ -144,13 +154,24 @@ public final class DocumentMapper {
      */
     public static DocumentSummary toSummary(RagDocument doc,
                                            Map<Long, String> collectionNameMap,
-                                           RagEmbeddingRepository embeddingRepository) {
+                                           RagEmbeddingRepository embeddingRepository,
+                                           long embeddingProfileId) {
+        return toSummary(doc, collectionNameMap, Map.of(), embeddingRepository, embeddingProfileId);
+    }
+
+    public static DocumentSummary toSummary(RagDocument doc,
+                                           Map<Long, String> collectionNameMap,
+                                           Map<Long, String> collectionKeyMap,
+                                           RagEmbeddingRepository embeddingRepository,
+                                           long embeddingProfileId) {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
-        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+        String collectionKey = collectionId != null ? collectionKeyMap.get(collectionId) : null;
+        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                doc.getId(), embeddingProfileId);
 
         return new DocumentSummary(
                 doc.getId(),
@@ -168,7 +189,8 @@ public final class DocumentMapper {
                 chunkCount,
                 doc.getContent() != null ? truncate(doc.getContent(), CONTENT_PREVIEW_MAX_LEN) : null,
                 null, // content is null in list view
-                doc.getMetadata()
+                doc.getMetadata(),
+                collectionKey
         );
     }
 
@@ -177,13 +199,25 @@ public final class DocumentMapper {
      */
     public static DocumentDetailResponse toDetailResponse(RagDocument doc,
                                                           Map<Long, String> collectionNameMap,
-                                                          RagEmbeddingRepository embeddingRepository) {
+                                                          RagEmbeddingRepository embeddingRepository,
+                                                          long embeddingProfileId) {
+        return toDetailResponse(doc, collectionNameMap, Map.of(),
+                embeddingRepository, embeddingProfileId);
+    }
+
+    public static DocumentDetailResponse toDetailResponse(RagDocument doc,
+                                                          Map<Long, String> collectionNameMap,
+                                                          Map<Long, String> collectionKeyMap,
+                                                          RagEmbeddingRepository embeddingRepository,
+                                                          long embeddingProfileId) {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
         Long collectionId = doc.getCollectionId();
         String collectionName = collectionId != null ? collectionNameMap.get(collectionId) : null;
-        long chunkCount = embeddingRepository.countByDocumentId(doc.getId());
+        String collectionKey = collectionId != null ? collectionKeyMap.get(collectionId) : null;
+        long chunkCount = embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                doc.getId(), embeddingProfileId);
 
         return new DocumentDetailResponse(
                 doc.getId(),
@@ -200,7 +234,8 @@ public final class DocumentMapper {
                 collectionName,
                 chunkCount,
                 doc.getContent(),
-                doc.getMetadata()
+                doc.getMetadata(),
+                collectionKey
         );
     }
 

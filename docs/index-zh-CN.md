@@ -20,6 +20,8 @@
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | 规划 OpenAI 兼容服务 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
+| 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
+| 使用 JSONB 结构化记录检索 | [REST API](rest-api-zh-CN.md) | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
@@ -56,6 +58,8 @@
 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 当前 RAG 执行、运行拓扑、API Key 能力和外部服务安全缺口 |
 | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（规划检查完成，待批准） |
 | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（规划检查完成，待批准） |
+| [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | 已实施：清理无效 `rag_vector_store` 路径，使用不可变模型身份、固定维度列、Profile 级状态和可回滚换模流程 |
+| [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
 
 ### 配置、API、数据
 
@@ -105,7 +109,7 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V24** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V29** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |

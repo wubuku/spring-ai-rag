@@ -54,8 +54,20 @@ public record DocumentDetailResponse(
         String content,
 
         @Schema(description = "Additional metadata")
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+
+        @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
+        String collectionKey
 ) {
+    public DocumentDetailResponse(Long id, String title, String source, String documentType,
+                                  String processingStatus, LocalDateTime createdAt,
+                                  LocalDateTime updatedAt, Long size, String contentHash,
+                                  boolean enabled, Long collectionId, String collectionName,
+                                  long chunkCount, String content, Map<String, Object> metadata) {
+        this(id, title, source, documentType, processingStatus, createdAt, updatedAt, size,
+                contentHash, enabled, collectionId, collectionName, chunkCount, content,
+                metadata, null);
+    }
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -73,6 +85,7 @@ public record DocumentDetailResponse(
                 && Objects.equals(size, that.size)
                 && Objects.equals(contentHash, that.contentHash)
                 && Objects.equals(collectionId, that.collectionId)
+                && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(collectionName, that.collectionName)
                 && Objects.equals(content, that.content)
                 && Objects.equals(metadata, that.metadata);
@@ -81,7 +94,8 @@ public record DocumentDetailResponse(
     @Override
     public int hashCode() {
         return Objects.hash(id, title, source, documentType, processingStatus, createdAt, updatedAt,
-                size, contentHash, enabled, collectionId, collectionName, chunkCount, content, metadata);
+                size, contentHash, enabled, collectionId, collectionName, chunkCount, content,
+                metadata, collectionKey);
     }
 
     @Override
@@ -98,6 +112,7 @@ public record DocumentDetailResponse(
                 ", contentHash='" + contentHash + '\'' +
                 ", enabled=" + enabled +
                 ", collectionId=" + collectionId +
+                ", collectionKey='" + collectionKey + '\'' +
                 ", collectionName='" + collectionName + '\'' +
                 ", chunkCount=" + chunkCount +
                 ", contentLength=" + (content != null ? content.length() : 0) +

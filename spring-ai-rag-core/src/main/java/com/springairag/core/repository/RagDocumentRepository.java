@@ -10,6 +10,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * RAG Document JPA Repository
@@ -114,6 +115,20 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      */
     List<RagDocument> findByContentHash(String contentHash);
 
+    Optional<RagDocument> findByCollectionIdAndDocumentTypeAndExternalId(
+            Long collectionId, String documentType, String externalId);
+
+    @Query("SELECT d.id FROM RagDocument d " +
+           "WHERE d.collectionId IN :collectionIds " +
+           "AND d.documentType = :documentType " +
+           "AND d.enabled = true")
+    List<Long> findEnabledIdsByCollectionIdsAndDocumentType(
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("documentType") String documentType);
+
+    List<RagDocument> findByIdInAndDocumentTypeAndEnabledTrue(
+            List<Long> ids, String documentType);
+
     /**
      * Count documents in a collection.
      */
@@ -140,40 +155,64 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     void clearCollectionIdByCollectionId(@Param("collectionId") Long collectionId);
 
     /**
-     * Find documents without embeddings (no corresponding record in rag_embeddings, or embedding is NULL).
+     * Find documents without a fresh COMPLETED state for one Embedding Profile.
      */
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT d.* FROM rag_documents d " +
-                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
-                "WHERE e.id IS NULL OR e.embedding IS NULL",
+                "WHERE NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash)",
         nativeQuery = true)
-    List<RagDocument> findDocumentsWithoutEmbeddings();
+    List<RagDocument> findDocumentsWithoutEmbeddings(
+            @Param("embeddingProfileId") long embeddingProfileId);
 
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT d.* FROM rag_documents d " +
-                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
                 "WHERE d.collection_id IN (:collectionIds) " +
-                "AND (e.id IS NULL OR e.embedding IS NULL)",
+                "AND NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash)",
         nativeQuery = true)
     List<RagDocument> findDocumentsWithoutEmbeddingsByCollectionIds(
-            @Param("collectionIds") List<Long> collectionIds);
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("embeddingProfileId") long embeddingProfileId);
 
     /**
-     * Count documents without embeddings.
+     * Count documents without a fresh COMPLETED state for one Embedding Profile.
      */
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT COUNT(*) FROM rag_documents d " +
-                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
-                "WHERE e.id IS NULL OR e.embedding IS NULL",
+                "WHERE NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash)",
         nativeQuery = true)
-    long countDocumentsWithoutEmbeddings();
+    long countDocumentsWithoutEmbeddings(
+            @Param("embeddingProfileId") long embeddingProfileId);
 
     @org.springframework.data.jpa.repository.Query(
         value = "SELECT COUNT(*) FROM rag_documents d " +
-                "LEFT JOIN rag_embeddings e ON d.id = e.document_id " +
                 "WHERE d.collection_id IN (:collectionIds) " +
-                "AND (e.id IS NULL OR e.embedding IS NULL)",
+                "AND NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash)",
         nativeQuery = true)
     long countDocumentsWithoutEmbeddingsByCollectionIds(
-            @Param("collectionIds") List<Long> collectionIds);
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("embeddingProfileId") long embeddingProfileId);
 }

@@ -11,8 +11,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
         scanBasePackages = "com.springairag",
         excludeName = {
                 "org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration",
-                "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration",
-                "org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration"
+                "org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration"
         }
 )
 @ConfigurationPropertiesScan("com.springairag.core.config")

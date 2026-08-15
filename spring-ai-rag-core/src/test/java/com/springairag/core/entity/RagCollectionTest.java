@@ -19,6 +19,7 @@ class RagCollectionTest {
         var entity = new RagCollection();
 
         assertNull(entity.getId());
+        assertNull(entity.getCollectionKey());
         assertNull(entity.getName());
         assertNull(entity.getDescription());
         assertNull(entity.getEmbeddingModel());
@@ -38,6 +39,7 @@ class RagCollectionTest {
         LocalDateTime now = LocalDateTime.now();
 
         entity.setId(5L);
+        entity.setCollectionKey("customer:medical");
         entity.setName("Medical Knowledge Base");
         entity.setDescription("Clinical guidelines and protocols");
         entity.setEmbeddingModel("BAAI/bge-m3");
@@ -50,6 +52,7 @@ class RagCollectionTest {
         entity.setDeletedAt(now);
 
         assertEquals(5L, entity.getId());
+        assertEquals("customer:medical", entity.getCollectionKey());
         assertEquals("Medical Knowledge Base", entity.getName());
         assertEquals("Clinical guidelines and protocols", entity.getDescription());
         assertEquals("BAAI/bge-m3", entity.getEmbeddingModel());

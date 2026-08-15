@@ -16,6 +16,12 @@
     <description>General-purpose RAG service API definitions (DTOs, service interfaces, domain models)</description>
 
     <dependencies>
+        <!-- Public JSONB payload DTOs use Jackson's JsonNode type directly. -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+
         <!-- Spring AI Model (ChatModel, EmbeddingModel, Document and other base types) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>

@@ -12,7 +12,9 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V24
+- [x] Flyway inventory is V1-V29
+- [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
+- [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] OpenAI-compatible base URLs do not end in `/v1`
 - [x] English and Chinese release notes are present
 

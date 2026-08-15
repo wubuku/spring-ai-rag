@@ -112,6 +112,10 @@ function post(url, body, headers, tags) {
   return req('POST', url, JSON.stringify(body), { ...HEADERS_JSON, ...headers }, tags);
 }
 
+function put(url, body, headers, tags) {
+  return req('PUT', url, JSON.stringify(body), { ...HEADERS_JSON, ...headers }, tags);
+}
+
 function del(url, headers, tags) {
   return req('DELETE', url, null, { ...HEADERS_JSON, ...headers }, tags);
 }
@@ -123,6 +127,7 @@ function del(url, headers, tags) {
 // A pre-created collection ID (set by setup())
 let COLLECTION_ID = null;
 let COLLECTION_NAME = `perf-col-${Date.now()}`;
+let COLLECTION_KEY = `k6-load-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
 // A pre-created document ID with embedded chunks
 let DOC_ID = null;
@@ -136,7 +141,7 @@ const SEARCH_QUERY = 'What is RAG architecture?';
 // Chat request body
 const CHAT_BODY = {
   query: 'Explain the hybrid retrieval approach.',
-  collectionId: () => COLLECTION_ID,
+  collectionKeys: () => [COLLECTION_KEY],
   sessionId: () => SESSION_ID,
   retrievalConfig: {
     vectorWeight: 0.7,
@@ -170,7 +175,12 @@ export function setup() {
   // 2. Create a test collection
   const colRes = post(
     `${BASE_URL}/api/v1/rag/collections`,
-    { name: COLLECTION_NAME, description: 'k6 load test collection', metadata: { test: true } },
+    {
+      collectionKey: COLLECTION_KEY,
+      name: COLLECTION_NAME,
+      description: 'k6 load test collection',
+      metadata: { test: true },
+    },
     {},
     { name: 'setup_create_collection' }
   );
@@ -179,7 +189,11 @@ export function setup() {
   } else {
     const colBody = JSON.parse(colRes.body);
     COLLECTION_ID = colBody.data?.id || colBody.id;
-    console.log(`[setup] Collection created: ${COLLECTION_ID}`);
+    const returnedKey = colBody.data?.collectionKey || colBody.collectionKey;
+    if (returnedKey !== COLLECTION_KEY) {
+      fail(`[setup] Collection key mismatch: expected=${COLLECTION_KEY} actual=${returnedKey}`);
+    }
+    console.log(`[setup] Collection created: key=${COLLECTION_KEY} id=${COLLECTION_ID}`);
   }
 
   // 3. Create a test document with content (for search/chat tests)
@@ -193,7 +207,7 @@ export function setup() {
         Query rewriting expands user intent using LLM prompting.
         Re-ranking reorders retrieved chunks for relevance to the query.
         Chat memory persists multi-turn conversation context.`,
-      collectionId: COLLECTION_ID,
+      collectionKey: COLLECTION_KEY,
       metadata: { source: 'k6-load-test', category: 'test' },
     };
     const docRes = post(`${BASE_URL}/api/v1/rag/documents`, docBody, {}, { name: 'setup_create_document' });
@@ -221,10 +235,11 @@ export function setup() {
     }
   }
 
-  console.log(`[setup] Complete — collection=${COLLECTION_ID} doc=${DOC_ID} session=${SESSION_ID}\n`);
+  console.log(`[setup] Complete — collectionKey=${COLLECTION_KEY} collectionId=${COLLECTION_ID} doc=${DOC_ID} session=${SESSION_ID}\n`);
 
   return {
     collectionId: COLLECTION_ID,
+    collectionKey: COLLECTION_KEY,
     documentId: DOC_ID,
     sessionId: SESSION_ID,
     collectionName: COLLECTION_NAME,
@@ -237,7 +252,7 @@ export function setup() {
 
 export function teardown(data) {
   console.log('\n[teardown] Cleaning up test data...');
-  const { collectionId, sessionId } = data;
+  const { collectionKey, sessionId } = data;
 
   // Delete chat history
   if (sessionId) {
@@ -248,10 +263,14 @@ export function teardown(data) {
   }
 
   // Delete collection (cascades to documents)
-  if (collectionId) {
-    const cr = del(`${BASE_URL}/api/v1/rag/collections/${collectionId}`, {}, { name: 'teardown_delete_collection' });
+  if (collectionKey) {
+    const cr = del(
+      `${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodeURIComponent(collectionKey)}`,
+      {},
+      { name: 'teardown_delete_collection' }
+    );
     if (cr.status === 200 || cr.status === 204) {
-      console.log(`[teardown] Collection deleted: ${collectionId}`);
+      console.log(`[teardown] Collection deleted: ${collectionKey}`);
     } else {
       console.warn(`[teardown] Collection deletion returned ${cr.status}`);
     }
@@ -370,15 +389,19 @@ function runCollectionRead(data) {
       'collection list returns 200': r => r.status === 200,
     });
 
-    // Get collection by ID
-    if (data.collectionId) {
-      const gr = get(`${BASE_URL}/api/v1/rag/collections/${data.collectionId}`, HEADERS_JSON, { name: 'collection_get' });
+    // Get collection by stable key
+    if (data.collectionKey) {
+      const gr = get(
+        `${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodeURIComponent(data.collectionKey)}`,
+        HEADERS_JSON,
+        { name: 'collection_get' }
+      );
       check(gr, {
         'collection get returns 200': r => r.status === 200,
-        'collection get returns correct id': r => {
+        'collection get returns correct key': r => {
           try {
             const b = JSON.parse(r.body);
-            return (b.id || b.data?.id) === data.collectionId;
+            return (b.collectionKey || b.data?.collectionKey) === data.collectionKey;
           } catch { return false; }
         },
       });
@@ -414,7 +437,7 @@ function runDocumentCRUD(data) {
         RAG systems use hybrid search combining dense vectors and sparse full-text.
         The vector store is backed by PostgreSQL with the pgvector extension.
         Embedding models convert text into fixed-dimensional floating point arrays.`,
-      collectionId: data.collectionId || null,
+      collectionKey: data.collectionKey || null,
       metadata: { vu: __VU, test: true },
     }, {}, { name: 'document_create' });
 
@@ -480,7 +503,7 @@ function runHybridSearch(data) {
     const postSearchRes = post(`${BASE_URL}/api/v1/rag/search`,
       {
         query: SEARCH_QUERY,
-        collectionId: data.collectionId || null,
+        collectionKeys: data.collectionKey ? [data.collectionKey] : undefined,
         topK: 10,
         vectorWeight: 0.7,
         fulltextWeight: 0.3,
@@ -525,7 +548,7 @@ function runChatAsk(data) {
     const chatRes = post(`${BASE_URL}/api/v1/rag/chat/ask`,
       {
         query: 'Explain RAG architecture.',
-        collectionId: data.collectionId || null,
+        collectionKeys: data.collectionKey ? [data.collectionKey] : undefined,
         sessionId: data.sessionId || 'k6-session',
         retrievalConfig: { topK: 3, vectorWeight: 0.5, fulltextWeight: 0.5 },
       },
@@ -560,7 +583,7 @@ function runChatStream(data) {
     // SSE streaming chat — sends request and reads first few chunks
     const chatBody = JSON.stringify({
       query: 'What is hybrid search?',
-      collectionId: data.collectionId || null,
+      collectionKeys: data.collectionKey ? [data.collectionKey] : undefined,
       sessionId: data.sessionId || 'k6-session',
       retrievalConfig: { topK: 3 },
     });
@@ -643,7 +666,9 @@ function runCollectionWrite(data) {
   group('Collection Write', () => {
     // Create a transient collection (per-VU unique to avoid collisions)
     const colName = `k6-col-${__VU}-${Date.now()}`;
+    const collectionKey = `k6-col-${__VU}-${__ITER}-${Date.now()}`;
     const cr = post(`${BASE_URL}/api/v1/rag/collections`, {
+      collectionKey,
       name: colName,
       description: `k6 load test collection by VU ${__VU}`,
       metadata: { vu: __VU, test: true },
@@ -663,11 +688,12 @@ function runCollectionWrite(data) {
 
     if (created && createdId) {
       // Get the created collection
-      const gr = get(`${BASE_URL}/api/v1/rag/collections/${createdId}`, HEADERS_JSON, { name: 'collection_get' });
+      const encodedKey = encodeURIComponent(collectionKey);
+      const gr = get(`${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodedKey}`, HEADERS_JSON, { name: 'collection_get' });
       check(gr, { 'collection get returns 200': r => r.status === 200 });
 
       // Update the collection
-      const ur = post(`${BASE_URL}/api/v1/rag/collections/${createdId}`, {
+      const ur = put(`${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodedKey}`, {
         name: colName + '-updated',
         description: 'updated by k6 load test',
       }, {}, { name: 'collection_update' });
@@ -676,7 +702,7 @@ function runCollectionWrite(data) {
       });
 
       // Delete the collection
-      const dr = del(`${BASE_URL}/api/v1/rag/collections/${createdId}`, HEADERS_JSON, { name: 'collection_delete' });
+      const dr = del(`${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodedKey}`, HEADERS_JSON, { name: 'collection_delete' });
       check(dr, {
         'collection delete returns 200/204': r => r.status === 200 || r.status === 204,
       });

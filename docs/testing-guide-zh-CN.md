@@ -149,15 +149,32 @@ export $(cat .env | grep -v '^#' | xargs) && bash scripts/e2e-test.sh
 
 E2E 测试覆盖的端点：
 1. `GET /api/v1/rag/health` — 健康检查
-2. `POST /api/v1/rag/documents` — 创建文档
-3. `GET /api/v1/rag/documents/{id}` — 获取文档（含 JSONB metadata）
-4. `GET /api/v1/rag/documents` — 文档列表（分页）
-5. `POST /api/v1/rag/documents/{id}/embed` — 生成嵌入向量
-6. `GET /api/v1/rag/search` — 直接检索
-7. `POST /api/v1/rag/chat/ask` — RAG 问答
-8. `POST /api/v1/rag/chat/stream` — 流式响应（SSE）
-9. `GET /api/v1/rag/chat/history/{sessionId}` — 对话历史
-10. `DELETE /api/v1/rag/documents/{id}` — 删除文档 + 验证 404
+2. `POST /api/v1/rag/collections` 及 by-key 获取/更新/列表/删除 — Collection Key 生命周期
+3. `POST /api/v1/rag/documents` — 创建文档
+4. `GET /api/v1/rag/documents/{id}` — 获取文档（含文档 metadata）
+5. `GET /api/v1/rag/documents` — 文档列表（分页）
+6. `POST /api/v1/rag/documents/{id}/embed` — 生成嵌入向量
+7. `GET /api/v1/rag/search` — 直接检索
+8. `POST /api/v1/rag/chat/ask` — RAG 问答
+9. `POST /api/v1/rag/chat/stream` — 流式响应（SSE）
+10. `GET /api/v1/rag/chat/history/{sessionId}` — 对话历史
+11. `DELETE /api/v1/rag/documents/{id}` — 删除文档 + 验证 404
+
+脚本每次运行生成唯一的可见 ASCII `collectionKey`，并在 Collection 路由、文档写入及检索
+请求中优先使用 by-key 和 `collectionKey(s)`，避免重复执行与全局唯一约束冲突。
+
+JSONB 结构化记录的真实 HTTP 验收使用：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/jsonb-records-e2e.sh
+```
+
+它覆盖 JSON record upsert、限定 Collection 的检索、详情、payload-only 更新、
+`retrievalText` 更新、clone/export/import 和临时受限 API Key 的 allow/deny。
+脚本需要真实 embedding provider；没有 root 凭据时只能显式使用 `--skip-acl`，
+并在验证记录中注明。该脚本不调用 Chat LLM，也不会输出 API Key 或完整 payload。
 
 ## 覆盖率
 
@@ -189,25 +206,83 @@ mvn jacoco:report-aggregate
 
 ## 测试数据库
 
-单元测试使用 H2 内存数据库（默认），集成测试可用 Testcontainers：
+单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
+因为它需要 pgvector，并验证 Flyway V1-V29、固定向量列、Profile 专属索引、原子替换、
+Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
-```java
-@Testcontainers
-@SpringBootTest
-class PgVectorStoreIntegrationTest {
+启动 PostgreSQL 16 + pgvector 数据库后执行：
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
-        .withDatabaseName("test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    }
-}
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=EmbeddingProfilePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Drag.it.jdbc-url=jdbc:postgresql://127.0.0.1:35267/embedding_profile_test \
+  -Drag.it.username=postgres \
+  -Drag.it.password=postgres \
+  test
 ```
+
+未设置 `rag.it.jdbc-url` 时该测试会跳过，因此上述显式命令是本次迁移的必要验收门槛。
+
+### Collection Key 验收门禁
+
+Collection 身份具备 DTO、Resolver、ACL、Service、Controller、MockMvc、OpenAPI 和
+PostgreSQL 专项覆盖。真实 PostgreSQL/Testcontainers 测试执行 V27/V28，并验证 legacy
+回填候选冲突避让、1/128 字符边界、可见 ASCII 约束、大小写敏感、软删除保留 key、
+SQL 层不可变和并发唯一性：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Dcollection-key.it.enabled=true \
+  -Dtest=CollectionKeyPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+运行时验收前，串行执行编译和聚焦集成门禁：
+
+```bash
+mvn clean compile test-compile
+
+mvn -pl spring-ai-rag-core -am \
+  -Dtest='*Collection*,*ApiKey*,OpenApiContractTest,RagControllerIntegrationTest,RagSearchControllerTest,RagChatControllerTest,PdfImportControllerTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 全部通过。随后
+运行时 smoke 使用唯一 key 覆盖创建、by-key 获取/更新、使用新目标 key 克隆、使用新 key
+导出/导入、软删除、恢复、重复冲突，以及文档/Search/Chat 的 key 输入。
+
+### JSONB 结构化记录验收门禁
+
+JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V29，并验证 JSONB round-trip、
+仅更新 payload 的版本记录、相同描述下不同记录共存以及级联清理：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Djsonb.it.enabled=true \
+  -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
+  test
+```
+
+聚焦的全层一键门禁：
+
+```bash
+./scripts/verify-jsonb-records.sh
+```
+
+该脚本还会运行 API DTO、分块器、JSON service/controller/OpenAPI、Maven 编译、WebUI 构建、
+Mock Playwright、project-docs 和空白检查，并将结果记录到
+`.verification/jsonb-verification/<run-id>/summary.md`。
+浏览器 preview 对 `JSONB_PLAYWRIGHT_PORT`（默认 `4174`）使用严格端口绑定；若本地已有
+服务占用该端口，请指定空闲端口。完整门禁必须串行运行，因为 Maven clean 会删除模块的
+`target/` 输出。
 
 ## 编写新测试的规则
 

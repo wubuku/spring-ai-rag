@@ -16,12 +16,20 @@ import java.util.Map;
 @Table(name = "rag_collection", indexes = {
     @Index(name = "idx_rag_col_enabled", columnList = "enabled"),
     @Index(name = "idx_rag_col_name", columnList = "name")
+}, uniqueConstraints = {
+    @UniqueConstraint(name = "uk_rag_collection_collection_key", columnNames = "collection_key")
 })
 public class RagCollection {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    /**
+     * Stable caller-supplied external identity. It is never renamed or reused.
+     */
+    @Column(name = "collection_key", nullable = false, length = 128, updatable = false)
+    private String collectionKey;
 
     /**
      * Optimistic locking version field.
@@ -71,6 +79,9 @@ public class RagCollection {
 
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
+
+    public String getCollectionKey() { return collectionKey; }
+    public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
 
     public String getName() { return name; }
     public void setName(String name) { this.name = name; }

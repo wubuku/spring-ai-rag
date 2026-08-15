@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V24 迁移（建表 + HNSW 索引 + 全文检索 GIN 索引）。
+应用启动时 Flyway 自动执行 V1-V29 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录字段）。
 
 ### 2. 添加依赖
 
@@ -66,7 +66,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V24）
+  # Flyway 自动迁移（V1-V29）
   flyway:
     enabled: true
 

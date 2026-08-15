@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { searchApi } from '../api/search';
+import { collectionsApi } from '../api/collections';
 import { SearchResults } from '../components/SearchResults';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import styles from './Search.module.css';
@@ -10,13 +11,26 @@ export function Search() {
   const { t } = useTranslation();
   const [query, setQuery] = useState<string>('');
   const [useHybrid, setUseHybrid] = useState(true);
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState('');
   const [hasSearched, setHasSearched] = useState(false);
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
 
+  const { data: collectionsData } = useQuery({
+    queryKey: ['search-collections'],
+    queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
+  });
+  const collections = collectionsData?.data?.collections ?? [];
+
   const { data, isPending, refetch } = useQuery({
-    queryKey: ['search', query, useHybrid],
-    queryFn: () => searchApi.search({ query, useHybrid }),
+    queryKey: ['search', query, useHybrid, selectedCollectionKey],
+    queryFn: () => searchApi.search({
+      query,
+      useHybrid,
+      collectionKeys: selectedCollectionKey
+        ? [selectedCollectionKey]
+        : undefined,
+    }),
     enabled: false,
   });
 
@@ -118,6 +132,26 @@ export function Search() {
             onChange={e => setUseHybrid(e.target.checked)}
           />
           Hybrid
+        </label>
+        <label className={styles.collectionLabel} htmlFor="search-collection">
+          <span>{t('search.collection')}</span>
+          <select
+            id="search-collection"
+            data-testid="search-collection-select"
+            value={selectedCollectionKey}
+            onChange={event => setSelectedCollectionKey(event.target.value)}
+            className={styles.collectionSelect}
+          >
+            <option value="">{t('search.allCollections')}</option>
+            {collections.map(collection => (
+              <option
+                key={collection.collectionKey}
+                value={collection.collectionKey}
+              >
+                {collection.name} ({collection.collectionKey})
+              </option>
+            ))}
+          </select>
         </label>
         <button type="submit" disabled={!query.trim()} className={styles.searchBtn}>
           {t('search.searchButton')}

@@ -130,6 +130,14 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
+    provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
+    model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
+    distance-metric: COSINE
+    normalization: PROVIDER_DEFAULT
+    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
+    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
+    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 ```
 
 | Property | Default | Description |
@@ -138,8 +146,22 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
+| `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | Immutable model-space identity used by writes and retrieval |
+| `rag.embedding.provider` | `siliconflow` | Provider identity stored in the Profile |
+| `rag.embedding.model-revision` | `unspecified` | Explicit revision identity; changing model semantics requires a new Profile |
+| `rag.embedding.distance-metric` | `COSINE` | Distance metric; only `COSINE` is supported in this release |
+| `rag.embedding.normalization` | `PROVIDER_DEFAULT` | Normalization semantics stored in the Profile |
+| `rag.embedding.migration-mode` | `none` | Startup migration mode for explicit Legacy adoption |
+| `rag.embedding.migration-legacy-profile-key` | `""` | Existing Profile key used for Legacy adoption |
+| `rag.embedding.migration-confirm` | `""` | Exact confirmation required by the Legacy adoption operation |
 
-> ⚠️ When changing embedding models, `dimensions` must be updated synchronously, and pgvector table indexes must be rebuilt.
+The active Profile is registered in `rag_embedding_profiles` and is immutable after creation.
+The current supported dimension is `1024`, stored in the fixed-length
+`rag_embeddings.embedding_1024 VECTOR(1024)` column. New vectors are also written to the
+legacy `embedding` column during the compatibility window. Changing models requires a new
+Profile and a complete re-embedding; do not change only `dimensions`, cast old vectors, or
+mix Profiles in one retrieval query. Legacy vector adoption is explicit and requires the
+configured confirmation value.
 
 ## Retrieval Configuration
 
@@ -226,7 +248,24 @@ rag:
 |----------|---------|-------------|
 | `rag.chunk.default-chunk-size` | `1000` | Default chunk size (characters) |
 | `rag.chunk.default-chunk-overlap` | `100` | Chunk overlap size (characters) |
-| `rag.chunk.min-chunk-size` | `100` | Minimum chunk size (characters) |
+| `rag.chunk.min-chunk-size` | `100` | Best-effort target for generated chunks; non-blank documents are not discarded |
+
+## JSON Structured-Record Configuration
+
+```yaml
+rag:
+  structured-records:
+    max-jsonb-payload-bytes: 1048576
+    max-retrieval-text-chars: 10000
+    max-batch-size: 20
+    max-batch-payload-bytes: 10485760
+    max-search-results: 20
+```
+
+These limits protect JSONB request, batch, and response sizes. They do not
+alter the embedding input: only caller-supplied `retrievalText` is chunked and
+embedded. `jsonbPayload` is stored as JSONB and is not hashed; the API
+intentionally has no payload hash setting.
 
 ## Conversation Memory Configuration
 
@@ -336,10 +375,13 @@ controls authentication, while `rag.security.api-key` and database
 ADMIN/NORMAL semantics continue to apply, including query-credential
 compatibility.
 
-Database business keys may define `allowedCollectionIds` through
-`POST /api/v1/rag/api-keys`. Flyway V24 stores the ACL in
-`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. See
-[rest-api.md](rest-api.md).
+Database business keys define their external scope with
+`allowedCollectionKeys` through `POST /api/v1/rag/api-keys`; deprecated
+`allowedCollectionIds` remains compatible. The controller resolves keys to
+internal IDs, and Flyway V24 storage remains
+`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. An
+explicit empty key list is rejected instead of silently granting unrestricted
+access. See [rest-api.md](rest-api.md).
 
 ## API Rate Limiting Configuration
 
@@ -481,29 +523,16 @@ spring:
 | `connection-timeout` | `10000` | Connection acquisition timeout (ms) |
 | `leak-detection-threshold` | `60000` | Connection leak detection time (ms) |
 
-## pgvector Vector Store Configuration
+## PostgreSQL Vector Storage
 
-```yaml
-# Activated via postgresql profile
-spring:
-  ai:
-    vectorstore:
-      pgvector:
-        enabled: true
-        vector-table-name: rag_vector_store
-        distance-type: COSINE_DISTANCE
-        index-type: HNSW
-        dimensions: 1024
-```
-
-Activation: `--spring.profiles.active=postgresql`
-
-| Property | Default | Description |
-|----------|---------|-------------|
-| `vector-table-name` | `rag_vector_store` | Vector table name |
-| `distance-type` | `COSINE_DISTANCE` | Distance algorithm (COSINE_DISTANCE / EUCLIDEAN_DISTANCE / NEGATIVE_INNER_PRODUCT) |
-| `index-type` | `HNSW` | Index type (HNSW / IVFFlat) |
-| `dimensions` | `1024` | Vector dimensions |
+The application uses the application-owned `rag_embeddings` table, not Spring AI's
+standalone vector-store table. The active 1024-dimensional Profile receives a
+Profile-specific HNSW index on `embedding_1024`; index creation is managed by the
+Embedding Profile registry. The `postgresql` profile supplies the PostgreSQL runtime
+configuration. Flyway V25/V26 creates the Profile/state schema and removes the
+unused `rag_vector_store` table when it is absent or empty. V27/V28 adds the
+required, globally unique, immutable `rag_collection.collection_key`;
+V29 adds JSONB structured-record columns and payload-aware version snapshots.
 
 ## Profile Overview
 
@@ -533,7 +562,7 @@ management:
 ```
 
 Actuator endpoints:
-- `GET /actuator/health` — Health check (DB, vector store, embedding model)
+- `GET /actuator/health` — Health check (DB, embedding profile, embedding model)
 - `GET /actuator/metrics` — Metrics (retrieval latency, token usage, etc.)
 - `GET /actuator/info` — Application info
 

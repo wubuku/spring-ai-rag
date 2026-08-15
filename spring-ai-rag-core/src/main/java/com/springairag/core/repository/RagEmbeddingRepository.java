@@ -39,4 +39,19 @@ public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long
      * Count embeddings by document ID.
      */
     long countByDocumentId(Long documentId);
+
+    /**
+     * Count fresh chunks for a document under one completed Embedding Profile.
+     */
+    @Query(value = "SELECT COALESCE(MAX(s.chunk_count), 0) "
+            + "FROM rag_document_embedding_state s "
+            + "JOIN rag_documents d ON d.id = s.document_id "
+            + "WHERE s.document_id = :documentId "
+            + "AND s.embedding_profile_id = :embeddingProfileId "
+            + "AND s.status = 'COMPLETED' "
+            + "AND s.content_hash = d.content_hash",
+            nativeQuery = true)
+    long countFreshChunksByDocumentIdAndProfileId(
+            @Param("documentId") Long documentId,
+            @Param("embeddingProfileId") long embeddingProfileId);
 }

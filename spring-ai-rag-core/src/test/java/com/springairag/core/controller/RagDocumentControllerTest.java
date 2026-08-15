@@ -13,9 +13,12 @@ import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.DocumentStatsResponse;
 import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.dto.EmbeddingStatusResponse;
 import com.springairag.api.dto.ReembedMissingResponse;
 import com.springairag.api.dto.ReembedResultResponse;
 import com.springairag.api.dto.VersionHistoryResponse;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
@@ -28,8 +31,6 @@ import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -46,12 +47,17 @@ import static org.mockito.Mockito.*;
  */
 class RagDocumentControllerTest {
 
+    private static final EmbeddingProfile PROFILE = new EmbeddingProfile(
+            7L, "test-profile", "test", "test-model", "v1",
+            1024, "COSINE", "PROVIDER_DEFAULT", true);
+
     private RagDocumentRepository documentRepository;
     private RagEmbeddingRepository embeddingRepository;
     private RagCollectionRepository collectionRepository;
     private DocumentEmbedService documentEmbedService;
     private BatchDocumentService batchDocumentService;
     private DocumentVersionService documentVersionService;
+    private EmbeddingProfileProvider embeddingProfileProvider;
     private AuditLogService auditLogService;
     private RagDocumentController controller;
 
@@ -63,8 +69,13 @@ class RagDocumentControllerTest {
         documentEmbedService = mock(DocumentEmbedService.class);
         batchDocumentService = mock(BatchDocumentService.class);
         documentVersionService = mock(DocumentVersionService.class);
+        embeddingProfileProvider = mock(EmbeddingProfileProvider.class);
         auditLogService = mock(AuditLogService.class);
-        controller = new RagDocumentController(documentRepository, embeddingRepository, collectionRepository, documentEmbedService, batchDocumentService, documentVersionService, auditLogService);
+        when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
+        controller = new RagDocumentController(
+                documentRepository, embeddingRepository, collectionRepository,
+                documentEmbedService, batchDocumentService, documentVersionService,
+                embeddingProfileProvider, auditLogService);
 
         // Default mock behavior for documentToMap calls
         when(embeddingRepository.countByDocumentId(anyLong())).thenReturn(0L);
@@ -95,6 +106,7 @@ class RagDocumentControllerTest {
     private RagCollection createCollection(Long id, String name) {
         RagCollection c = new RagCollection();
         c.setId(id);
+        c.setCollectionKey("test-collection-" + id);
         c.setName(name);
         c.setDescription("测试集合 " + name);
         c.setEmbeddingModel("bge-m3");
@@ -167,7 +179,8 @@ class RagDocumentControllerTest {
         doc.setCollectionId(1L);
         when(documentRepository.findById(1L)).thenReturn(Optional.of(doc));
         when(collectionRepository.findById(1L)).thenReturn(Optional.of(createCollection(1L, "知识库A")));
-        when(embeddingRepository.countByDocumentId(1L)).thenReturn(5L);
+        when(embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                1L, PROFILE.id())).thenReturn(5L);
 
         ResponseEntity<DocumentDetailResponse> response = controller.getDocument(1L);
 
@@ -426,57 +439,6 @@ class RagDocumentControllerTest {
         assertEquals("Content is empty: documentId=1", ((ErrorResponse) response.getBody()).getDetail());
     }
 
-    @Test
-    void embedDocumentViaVectorStore_success() {
-        when(documentEmbedService.embedDocumentViaVectorStore(1L, false)).thenReturn(Map.of(
-                "message", "VectorStore embed completed",
-                "documentId", 1L,
-                "chunksCreated", 5,
-                "embeddingsStored", 5,
-                "storageTable", "rag_vector_store",
-                "status", "COMPLETED"
-        ));
-
-        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
-
-        assertEquals(200, response.getStatusCode().value());
-        @SuppressWarnings("unchecked")
-        Map<String, Object> body = (Map<String, Object>) response.getBody();
-        assertEquals(5, body.get("chunksCreated"));
-        assertEquals("rag_vector_store", body.get("storageTable"));
-        assertEquals("COMPLETED", body.get("status"));
-    }
-
-    @Test
-    void embedDocumentViaVectorStore_noVectorStore_returns400() {
-        when(documentEmbedService.embedDocumentViaVectorStore(1L, false))
-                .thenThrow(new IllegalStateException("VectorStore not configured, use embedDocument instead"));
-
-        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
-
-        assertEquals(400, response.getStatusCode().value());
-        assertTrue(((ErrorResponse) response.getBody()).getDetail().contains("VectorStore not configured"));
-    }
-
-    @Test
-    void embedDocumentViaVectorStore_notFound() {
-        when(documentEmbedService.embedDocumentViaVectorStore(999L, false))
-                .thenThrow(new DocumentNotFoundException(999L));
-
-        assertThrows(DocumentNotFoundException.class, () -> controller.embedDocumentViaVectorStore(999L, false));
-    }
-
-    @Test
-    void embedDocumentViaVectorStore_emptyContent_returns400() {
-        when(documentEmbedService.embedDocumentViaVectorStore(1L, false))
-                .thenThrow(new IllegalArgumentException("Content is empty"));
-
-        ResponseEntity<?> response = controller.embedDocumentViaVectorStore(1L, false);
-
-        assertEquals(400, response.getStatusCode().value());
-        assertEquals("Content is empty", ((ErrorResponse) response.getBody()).getDetail());
-    }
-
     // ==================== 批量操作测试 ====================
 
     @Test
@@ -720,7 +682,8 @@ class RagDocumentControllerTest {
 
     @Test
     void reembedMissing_noDocuments_returnsEmptyResults() {
-        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of());
+        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+                .thenReturn(List.of());
 
         ResponseEntity<ReembedMissingResponse> response = controller.reembedMissing(false);
 
@@ -737,7 +700,8 @@ class RagDocumentControllerTest {
     void reembedMissing_allSucceed_returnsCorrectCounts() {
         RagDocument doc1 = createDoc(1L, "Doc One", "content one");
         RagDocument doc2 = createDoc(2L, "Doc Two", "content two");
-        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc1, doc2));
+        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+                .thenReturn(List.of(doc1, doc2));
         when(documentEmbedService.embedDocument(1L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
         when(documentEmbedService.embedDocument(2L, false))
@@ -769,7 +733,8 @@ class RagDocumentControllerTest {
     void reembedMissing_oneSucceedsOneFails_returnsMixedCounts() {
         RagDocument doc1 = createDoc(1L, "Good Doc", "content");
         RagDocument doc2 = createDoc(2L, "Bad Doc", "content");
-        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc1, doc2));
+        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+                .thenReturn(List.of(doc1, doc2));
         when(documentEmbedService.embedDocument(1L, false))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "done"));
         when(documentEmbedService.embedDocument(2L, false))
@@ -796,7 +761,8 @@ class RagDocumentControllerTest {
     @Test
     void reembedMissing_forceFlag_passesThroughToService() {
         RagDocument doc = createDoc(1L, "Force Doc", "content");
-        when(documentRepository.findDocumentsWithoutEmbeddings()).thenReturn(List.of(doc));
+        when(documentRepository.findDocumentsWithoutEmbeddings(PROFILE.id()))
+                .thenReturn(List.of(doc));
         when(documentEmbedService.embedDocument(1L, true))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 5, "message", "force re-embed"));
 
@@ -805,5 +771,20 @@ class RagDocumentControllerTest {
         assertEquals(200, response.getStatusCode().value());
         verify(documentEmbedService).embedDocument(1L, true);
         assertEquals("COMPLETED", response.getBody().results().get(0).status());
+    }
+
+    @Test
+    void embeddingStatus_usesActiveProfileFreshState() {
+        when(documentRepository.count()).thenReturn(4L);
+        when(documentRepository.countDocumentsWithoutEmbeddings(PROFILE.id()))
+                .thenReturn(1L);
+
+        ResponseEntity<EmbeddingStatusResponse> response = controller.embeddingStatus();
+
+        assertEquals(4L, response.getBody().totalDocuments());
+        assertEquals(3L, response.getBody().withEmbeddings());
+        assertEquals(1L, response.getBody().withoutEmbeddings());
+        assertTrue(response.getBody().hasMissing());
+        verify(documentRepository).countDocumentsWithoutEmbeddings(PROFILE.id());
     }
 }

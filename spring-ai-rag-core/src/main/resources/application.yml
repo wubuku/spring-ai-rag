@@ -17,11 +17,9 @@ spring:
     allow-bean-definition-overriding: true
 
   # Exclude unwanted auto-configurations
-  # PgVectorStore: manually created by VectorStoreConfig
   # MiniMax Chat/Embedding: manually managed by SpringAiConfig / EmbeddingModelConfig (avoid conflict with SiliconFlow)
   autoconfigure:
     exclude:
-      - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
       - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
 
@@ -253,6 +251,14 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
+    provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
+    model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
+    distance-metric: COSINE
+    normalization: PROVIDER_DEFAULT
+    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
+    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
+    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 
   # RAG retrieval configuration
   retrieval:
@@ -287,6 +293,13 @@ rag:
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100
+
+  structured-records:
+    max-jsonb-payload-bytes: 1048576
+    max-retrieval-text-chars: 10000
+    max-batch-size: 20
+    max-batch-payload-bytes: 10485760
+    max-search-results: 20
 
   # Chat memory configuration
   memory:

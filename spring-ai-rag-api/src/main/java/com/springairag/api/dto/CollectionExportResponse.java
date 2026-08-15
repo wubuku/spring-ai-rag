@@ -1,5 +1,6 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
@@ -14,6 +15,9 @@ import java.util.Objects;
 public record CollectionExportResponse(
         @Schema(description = "Collection name", example = "My Knowledge Base")
         String name,
+
+        @Schema(description = "Stable collection key")
+        String collectionKey,
 
         @Schema(description = "Collection description", example = "RAG documents for Q&A")
         String description,
@@ -60,8 +64,31 @@ public record CollectionExportResponse(
             Map<String, Object> metadata,
 
             @Schema(description = "Document size in bytes", example = "4096")
-            Long size
+            Long size,
+
+            @Schema(description = "Structured-record external identity")
+            String externalId,
+
+            @Schema(description = "Structured JSONB payload")
+            JsonNode jsonbPayload,
+
+            @Schema(description = "Original uploaded filename")
+            String originalFilename,
+
+            @Schema(description = "Whether the document is enabled")
+            Boolean enabled
     ) {
+        public ExportedDocumentSummary(
+                String title,
+                String source,
+                String content,
+                String documentType,
+                Map<String, Object> metadata,
+                Long size) {
+            this(title, source, content, documentType, metadata, size,
+                    null, null, null, true);
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -72,12 +99,17 @@ public record CollectionExportResponse(
                     && Objects.equals(content, that.content)
                     && Objects.equals(documentType, that.documentType)
                     && Objects.equals(metadata, that.metadata)
-                    && Objects.equals(size, that.size);
+                    && Objects.equals(size, that.size)
+                    && Objects.equals(externalId, that.externalId)
+                    && Objects.equals(jsonbPayload, that.jsonbPayload)
+                    && Objects.equals(originalFilename, that.originalFilename)
+                    && Objects.equals(enabled, that.enabled);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(title, source, content, documentType, metadata, size);
+            return Objects.hash(title, source, content, documentType, metadata, size,
+                    externalId, jsonbPayload, originalFilename, enabled);
         }
 
         @Override
@@ -89,8 +121,26 @@ public record CollectionExportResponse(
                     ", documentType='" + documentType + "'" +
                     ", metadata=" + metadata +
                     ", size=" + size +
+                    ", externalId='" + externalId + "'" +
+                    ", hasJsonbPayload=" + (jsonbPayload != null) +
+                    ", originalFilename='" + originalFilename + "'" +
+                    ", enabled=" + enabled +
                     '}';
         }
+    }
+
+    public CollectionExportResponse(
+            String name,
+            String description,
+            String embeddingModel,
+            Integer dimensions,
+            boolean enabled,
+            Map<String, Object> metadata,
+            List<ExportedDocumentSummary> documents,
+            Instant exportedAt,
+            int documentCount) {
+        this(name, null, description, embeddingModel, dimensions, enabled,
+                metadata, documents, exportedAt, documentCount);
     }
 
     @Override
@@ -100,6 +150,7 @@ public record CollectionExportResponse(
         CollectionExportResponse that = (CollectionExportResponse) o;
         return enabled == that.enabled
                 && Objects.equals(name, that.name)
+                && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(description, that.description)
                 && Objects.equals(embeddingModel, that.embeddingModel)
                 && Objects.equals(dimensions, that.dimensions)
@@ -111,13 +162,15 @@ public record CollectionExportResponse(
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, description, embeddingModel, dimensions, enabled, metadata, documents, exportedAt, documentCount);
+        return Objects.hash(name, collectionKey, description, embeddingModel, dimensions,
+                enabled, metadata, documents, exportedAt, documentCount);
     }
 
     @Override
     public String toString() {
         return "CollectionExportResponse{" +
                 "name='" + name + "'" +
+                ", collectionKey='" + collectionKey + "'" +
                 ", description='" + description + "'" +
                 ", embeddingModel='" + embeddingModel + "'" +
                 ", dimensions=" + dimensions +

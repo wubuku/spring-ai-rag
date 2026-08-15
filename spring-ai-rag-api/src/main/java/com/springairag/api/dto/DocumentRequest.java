@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 import java.util.Map;
 import java.util.Objects;
 
@@ -33,8 +34,13 @@ public class DocumentRequest {
     @Schema(description = "Additional metadata (JSON object)")
     private Map<String, Object> metadata;
 
-    @Schema(description = "Collection ID (optional, specified at creation time)", example = "1")
+    @Schema(description = "Deprecated compatibility field. Use collectionKey.",
+            example = "1", deprecated = true)
     private Long collectionId;
+
+    @ValidCollectionKey
+    @Schema(description = "Stable external Collection key (preferred over collectionId)", example = "customer-42:manual:v3")
+    private String collectionKey;
 
     public DocumentRequest() {}
 
@@ -61,6 +67,9 @@ public class DocumentRequest {
     public Long getCollectionId() { return collectionId; }
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
 
+    public String getCollectionKey() { return collectionKey; }
+    public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -71,12 +80,13 @@ public class DocumentRequest {
                 Objects.equals(source, that.source) &&
                 Objects.equals(documentType, that.documentType) &&
                 Objects.equals(metadata, that.metadata) &&
-                Objects.equals(collectionId, that.collectionId);
+                Objects.equals(collectionId, that.collectionId) &&
+                Objects.equals(collectionKey, that.collectionKey);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(title, content, source, documentType, metadata, collectionId);
+        return Objects.hash(title, content, source, documentType, metadata, collectionId, collectionKey);
     }
 
     @Override
@@ -89,6 +99,7 @@ public class DocumentRequest {
                 ", documentType='" + documentType + '\'' +
                 ", metadata=" + metadata +
                 ", collectionId=" + collectionId +
+                ", collectionKey='" + collectionKey + '\'' +
                 '}';
     }
 }

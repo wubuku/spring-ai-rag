@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-14。
+> **最近复核**：2026-08-15。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -58,24 +58,30 @@ QueryRewriteAdvisor (+10)
 
 Collection 不是仅用于展示的分类字段，而是已经进入写入、检索和权限链路的知识库边界：
 
+- `rag_collection.id` 是内部 `Long` 主键/外键身份；调用方提供的 `collectionKey` 是推荐
+  外部身份。它只能包含 1-128 个可见 ASCII 字符，区分大小写，全局唯一、不可变，软删除后
+  仍保持占用。
 - `rag_documents.collection_id` 建立 Collection 与 Document 的一对多关系；单个文档最多属于一个
   Collection，也可以不属于任何 Collection。
-- Chat 与 Search 后端接受多个 `collectionIds`。控制器先应用 API Key Collection ACL，
-  `CollectionDocumentResolver` 再将 Collection 展开为 document IDs，并与显式
-  `documentIds` 取交集；向量检索和全文检索最终按这些 document IDs 过滤。
-- 不受限调用方省略 `collectionIds` 或传 `[]` 表示不限定 Collection；受限 API Key
-  省略或传空列表时会被自动收敛到该 Key 的允许列表。请求非空范围但解析不到文档时返回空结果。
-- WebUI Chat 当前提供单 Collection 选择，后端协议支持多 Collection；Collections 页面可进入
-  对应文档列表。独立 Search 页面当前还没有 Collection 选择器。
+- Chat 与 Search 推荐多个 `collectionKeys`，deprecated 的 `collectionIds` 继续兼容。
+  `CollectionIdentityResolver` 与 `ApiKeyCollectionAccess` 校验 ID/key 集合一致性并转换为
+  已授权内部 ID，再由 `CollectionDocumentResolver` 展开并与显式 `documentIds` 取交集。
+- 不受限调用方同时省略两种身份字段表示不限定 Collection；受限 API Key 省略范围时继承
+  允许列表。显式空范围返回 `400`；受限调用方的未知或未授权 key 返回 `403`。已授权非空
+  范围没有文档时返回空结果。
+- Collection CRUD、恢复、克隆、文档关联、导入导出、文档写入、上传、PDF-to-RAG、
+  WebUI 和 API Key 管理均在外部边界使用稳定 key；数据库关系和检索仍使用数字 ID。
+- WebUI Chat 与 Search 当前单选 Collection key，后端协议支持多个 key；Collections、
+  Documents、Files 和 API Keys 页面也在外部边界使用 key。
 
 当前边界：
 
 - Collection 的 `embeddingModel`、`dimensions` 当前是管理/导入导出元数据，不会为每个
   Collection 切换 EmbeddingModel；实际写入和查询仍使用全局 Embedding 配置。
-- Collection / Document 的 `enabled` 状态尚未完整下推到向量和全文检索 SQL，不能把
-  “disabled”直接理解为“保证不可检索”。
+- 向量和全文检索会排除 disabled 文档，并要求活动 Embedding Profile 存在新鲜的
+  completed 状态。
 - 删除 Collection 会软删除集合并解除文档关联，不会删除文档或 embeddings；解除关联后的文档
-  仍可能出现在未限定 Collection 的全库检索中。
+  仍可能出现在未限定 Collection 的全库检索中；被删除 Collection 的 key 不可复用。
 - 当前实现先把 Collection 展开为 document IDs，再生成 `document_id IN (...)` 查询；
   超大 Collection 需要评估参数规模，并优先演进为数据库直接按 `collection_id` JOIN/过滤。
 
@@ -84,7 +90,9 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 ## 4. 检索与质量
 
 - Embedding 默认使用 SiliconFlow `BAAI/bge-m3`。
-- 向量维度固定为 `1024`，必须与 PostgreSQL `VECTOR(1024)` 一致。
+- Embedding 使用不可变的 `rag_embedding_profiles` 身份和固定长度的
+  `rag_embeddings.embedding_1024 VECTOR(1024)` 列。文档只有在活动 Profile 的状态为
+  `COMPLETED` 且 content hash 与当前文档一致时才算新鲜可服务。
 - 支持 vector + full-text 混合检索。
 - 生产 profile 推荐启用 query rewrite 和本地 heuristic rerank。
 - Goldenset 使用 Precision@K、MRR 和 nDCG。
@@ -92,6 +100,23 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 小型在线 goldenset 的 baseline 与 quality 组合都达到满分；重排增益由确定性 MRR 测试证明，不能把该样本解释为统计显著提升。
 
 详见 [quality-defaults-zh-CN.md](quality-defaults-zh-CN.md)。
+
+### JSON 结构化记录
+
+JSON record API 将调用者负责的业务数据保存到
+`RagDocument.jsonbPayload` / `rag_documents.jsonb_payload`，将调用者提供的自然语言描述
+保存到现有 `content` 字段，并以 `retrievalText` 对外暴露。只有 `retrievalText` 会参与
+hash、分块、全文索引、embedding 和普通 RAG Prompt 上下文；服务不会自动生成或校验
+JSON 与描述是否一致。
+
+JSON record 使用 `(collectionId, documentType=json-record, externalId)` 作为幂等身份，
+不参与普通文档的全局 content-hash 去重，因此不同 payload 可以拥有相同描述。仅更新
+payload 会创建可审计版本，但不会使新鲜 embedding 失效；设计上没有 `payloadHash`。
+专用搜索 API 在检索排序完成后再批量补充当前 JSONB payload，不把 payload 复制到 embedding
+metadata，也不自动放入普通聊天 Prompt。
+
+普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
+静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
 
 ## 5. 多模型
 
@@ -108,7 +133,9 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V24。
+- Flyway 当前为 V1–V29。
+- V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
+  结构化记录。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 
@@ -125,6 +152,7 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 | `/evaluation` | 评估与反馈 |
 | `/api-keys` | API Key 管理 |
 | `/files` | PDF / 文件导入 |
+| `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 
 契约见 [rest-api-zh-CN.md](rest-api-zh-CN.md) 和 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
 

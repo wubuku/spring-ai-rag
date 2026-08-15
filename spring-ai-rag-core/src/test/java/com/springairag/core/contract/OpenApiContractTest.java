@@ -11,7 +11,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -75,6 +74,9 @@ class OpenApiContractTest {
             "RetrievalResult",
             "DocumentRequest",
             "CollectionRequest",
+            "CollectionCloneRequest",
+            "CollectionUpdateRequest",
+            "ApiKeyCreateRequest",
             "ErrorResponse",
             "HealthResponse",
             "BatchDocumentRequest",
@@ -120,9 +122,6 @@ class OpenApiContractTest {
     private JdbcTemplate jdbcTemplate;
 
     @MockBean
-    private VectorStore vectorStore;
-
-    @MockBean
     private DocumentEmbedService documentEmbedService;
 
     @MockBean
@@ -130,6 +129,9 @@ class OpenApiContractTest {
 
     @MockBean
     private DocumentVersionService documentVersionService;
+
+    @MockBean
+    private JsonRecordService jsonRecordService;
 
     // Collection
     @MockBean
@@ -662,6 +664,120 @@ class OpenApiContractTest {
     }
 
     @Nested
+    @DisplayName("Collection Key Contract")
+    class CollectionKeyContract {
+
+        @Test
+        void collectionCreateSchemaDefinesRequiredVisibleAsciiKey() throws Exception {
+            JsonNode spec = loadSpec();
+            JsonNode schema = spec.path("components").path("schemas")
+                    .path("CollectionRequest");
+            JsonNode key = schema.path("properties").path("collectionKey");
+
+            assertThat(key.isMissingNode()).isFalse();
+            assertThat(key.path("type").asText()).isEqualTo("string");
+            assertThat(key.path("minLength").asInt()).isEqualTo(1);
+            assertThat(key.path("maxLength").asInt()).isEqualTo(128);
+            assertThat(key.path("pattern").asText())
+                    .isEqualTo("^[\\x21-\\x7E]{1,128}$");
+            assertThat(iterable(schema.path("required").elements()))
+                    .extracting(JsonNode::asText)
+                    .contains("collectionKey");
+        }
+
+        @Test
+        void collectionUpdateSchemaDoesNotExposeImmutableKey() throws Exception {
+            JsonNode schemas = loadSpec().path("components").path("schemas");
+            JsonNode update = schemas.path("CollectionUpdateRequest");
+
+            assertThat(update.isMissingNode()).isFalse();
+            assertThat(update.path("properties").has("collectionKey")).isFalse();
+        }
+
+        @Test
+        void collectionKeyFieldsExistAndLegacyIdsAreDeprecated() throws Exception {
+            JsonNode schemas = loadSpec().path("components").path("schemas");
+
+            for (String schemaName : java.util.List.of(
+                    "ChatRequest", "SearchRequest")) {
+                JsonNode properties = schemas.path(schemaName).path("properties");
+                assertThat(properties.has("collectionKeys")).isTrue();
+                assertThat(properties.path("collectionIds")
+                        .path("deprecated").asBoolean()).isTrue();
+            }
+
+            JsonNode document = schemas.path("DocumentRequest").path("properties");
+            assertThat(document.has("collectionKey")).isTrue();
+            assertThat(document.path("collectionId")
+                    .path("deprecated").asBoolean()).isTrue();
+
+            JsonNode apiKey = schemas.path("ApiKeyCreateRequest").path("properties");
+            assertThat(apiKey.has("allowedCollectionKeys")).isTrue();
+            assertThat(apiKey.path("allowedCollectionIds")
+                    .path("deprecated").asBoolean()).isTrue();
+
+            JsonNode jsonUpsert = schemas.path("JsonRecordUpsertRequest")
+                    .path("properties");
+            assertThat(jsonUpsert.has("collectionKey")).isTrue();
+            assertThat(jsonUpsert.path("collectionId")
+                    .path("deprecated").asBoolean()).isTrue();
+
+            JsonNode jsonSearch = schemas.path("JsonRecordSearchRequest")
+                    .path("properties");
+            assertThat(jsonSearch.has("collectionKeys")).isTrue();
+            assertThat(jsonSearch.path("collectionIds")
+                    .path("deprecated").asBoolean()).isTrue();
+
+            for (String schemaName : java.util.List.of(
+                    "JsonRecordUpsertResponse",
+                    "JsonRecordDetailResponse",
+                    "JsonRecordSearchResult")) {
+                assertThat(schemas.path(schemaName).path("properties")
+                        .has("collectionKey")).isTrue();
+            }
+        }
+
+        @Test
+        void byKeyAndCloneRoutesDocumentStringKeyAndConflictResponses()
+                throws Exception {
+            JsonNode paths = loadSpec().path("paths");
+            JsonNode byKey = findPath(paths, "/rag/collections/by-key");
+            assertThat(byKey.isMissingNode()).isFalse();
+            JsonNode collectionKeyParameter = byKey.path("get")
+                    .path("parameters").get(0);
+            assertThat(collectionKeyParameter.path("name").asText())
+                    .isEqualTo("collectionKey");
+            assertThat(collectionKeyParameter.path("schema")
+                    .path("type").asText()).isEqualTo("string");
+
+            JsonNode create = findPath(paths, "/rag/collections").path("post");
+            assertThat(create.path("responses").has("409")).isTrue();
+
+            JsonNode clone = findPath(
+                    paths, "/rag/collections/{id}/clone").path("post");
+            assertThat(clone.path("responses").has("400")).isTrue();
+            assertThat(clone.path("responses").has("403")).isTrue();
+            assertThat(clone.path("responses").has("409")).isTrue();
+
+            JsonNode cloneByKey = findPath(
+                    paths, "/rag/collections/clone").path("post");
+            assertThat(cloneByKey.isMissingNode()).isFalse();
+            assertThat(cloneByKey.path("responses").has("400")).isTrue();
+            assertThat(cloneByKey.path("responses").has("403")).isTrue();
+            assertThat(cloneByKey.path("responses").has("409")).isTrue();
+
+            JsonNode cloneRequest = loadSpec().path("components").path("schemas")
+                    .path("CollectionCloneRequest");
+            assertThat(cloneRequest.path("required"))
+                    .anySatisfy(node ->
+                            assertThat(node.asText()).isEqualTo("sourceCollectionKey"));
+            assertThat(cloneRequest.path("required"))
+                    .anySatisfy(node ->
+                            assertThat(node.asText()).isEqualTo("collectionKey"));
+        }
+    }
+
+    @Nested
     @DisplayName("B9-1 — OpenAPI Spec Completeness")
     class SpecCompletenessContract {
 
@@ -725,5 +841,21 @@ class OpenApiContractTest {
 
     private static <T> Iterable<T> iterable(Iterator<T> it) {
         return () -> it;
+    }
+
+    private JsonNode loadSpec() throws Exception {
+        MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode findPath(JsonNode paths, String suffix) {
+        for (String path : iterable(paths.fieldNames())) {
+            if (path.endsWith(suffix)) {
+                return paths.path(path);
+            }
+        }
+        return paths.path("__missing__");
     }
 }

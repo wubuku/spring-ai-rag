@@ -24,7 +24,7 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [selectedCollectionId, setSelectedCollectionId] = useState<string>('');
+  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string>('');
   const [selectedModel, setSelectedModel] = useState<string>(getSelectedModel());
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -125,14 +125,13 @@ export function Chat() {
       { id: newId, role: 'user', content: userMsg },
       { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
     ]);
-    const collectionIds =
-      selectedCollectionId !== '' ? [Number(selectedCollectionId)] : undefined;
-    send(
-      userMsg,
-      collectionIds,
-      conversationId,
-      effectiveSelectedModel || undefined
-    );
+    const collectionKeys =
+      selectedCollectionKey !== '' ? [selectedCollectionKey] : undefined;
+    if (collectionKeys) {
+      send(userMsg, undefined, conversationId, effectiveSelectedModel || undefined, collectionKeys);
+    } else {
+      send(userMsg, undefined, conversationId, effectiveSelectedModel || undefined);
+    }
   };
 
   const submitFeedback = async (type: 'THUMBS_UP' | 'THUMBS_DOWN', queryHint?: string) => {
@@ -301,14 +300,14 @@ export function Chat() {
               <select
                 id="chat-collection"
                 className={styles.contextSelect}
-                value={selectedCollectionId}
-                onChange={e => setSelectedCollectionId(e.target.value)}
+                value={selectedCollectionKey}
+                onChange={e => setSelectedCollectionKey(e.target.value)}
                 disabled={isConnected}
                 data-testid="chat-collection-select"
               >
                 <option value="">{t('chat.allCollections')}</option>
                 {collections.map(c => (
-                  <option key={c.id} value={String(c.id)}>
+                  <option key={c.collectionKey} value={c.collectionKey}>
                     {c.name}
                     {c.documentCount != null ? ` (${c.documentCount})` : ''}
                   </option>

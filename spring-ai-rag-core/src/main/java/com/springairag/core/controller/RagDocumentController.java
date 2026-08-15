@@ -22,6 +22,7 @@ import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.api.dto.ReembedMissingResponse;
 import com.springairag.api.dto.ReembedResultResponse;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -34,6 +35,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
@@ -87,14 +89,19 @@ public class RagDocumentController {
     private final DocumentEmbedService documentEmbedService;
     private final BatchDocumentService batchDocumentService;
     private final DocumentVersionService documentVersionService;
+    private final EmbeddingProfileProvider embeddingProfileProvider;
+    private final CollectionIdentityResolver collectionIdentityResolver;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
+    @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
                                   RagEmbeddingRepository embeddingRepository,
                                   RagCollectionRepository collectionRepository,
                                   @Lazy DocumentEmbedService documentEmbedService,
                                   @Lazy BatchDocumentService batchDocumentService,
                                   DocumentVersionService documentVersionService,
+                                  EmbeddingProfileProvider embeddingProfileProvider,
+                                  CollectionIdentityResolver collectionIdentityResolver,
                                   @Autowired(required = false) AuditLogService auditLogService) {
         this.documentRepository = documentRepository;
         this.embeddingRepository = embeddingRepository;
@@ -102,7 +109,24 @@ public class RagDocumentController {
         this.documentEmbedService = documentEmbedService;
         this.batchDocumentService = batchDocumentService;
         this.documentVersionService = documentVersionService;
+        this.embeddingProfileProvider = embeddingProfileProvider;
+        this.collectionIdentityResolver = collectionIdentityResolver;
         this.auditLogService = auditLogService;
+    }
+
+    public RagDocumentController(RagDocumentRepository documentRepository,
+                                 RagEmbeddingRepository embeddingRepository,
+                                 RagCollectionRepository collectionRepository,
+                                 @Lazy DocumentEmbedService documentEmbedService,
+                                 @Lazy BatchDocumentService batchDocumentService,
+                                 DocumentVersionService documentVersionService,
+                                 EmbeddingProfileProvider embeddingProfileProvider,
+                                 AuditLogService auditLogService) {
+        this(documentRepository, embeddingRepository, collectionRepository,
+                documentEmbedService, batchDocumentService, documentVersionService,
+                embeddingProfileProvider,
+                new CollectionIdentityResolver(collectionRepository),
+                auditLogService);
     }
 
     // ==================== CRUD ====================
@@ -117,8 +141,8 @@ public class RagDocumentController {
     public ResponseEntity<DocumentCreateResponse> createDocument(@Valid @RequestBody DocumentRequest request) {
         log.info("Creating document: title={}", request.getTitle());
         var currentKey = ApiKeyCollectionAccess.currentKey();
-        Long collectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                request.getCollectionId(), currentKey);
+        Long collectionId = resolveWritableCollectionId(
+                request.getCollectionId(), request.getCollectionKey(), currentKey);
 
         String content = request.getContent();
         String contentHash = DigestUtils.sha256(content);
@@ -169,16 +193,23 @@ public class RagDocumentController {
         log.info("Getting document: id={}", id);
 
         return documentRepository.findById(id)
-                .map(doc -> {
+            .map(doc -> {
                     ApiKeyCollectionAccess.requireDocumentAccess(
                             doc, ApiKeyCollectionAccess.currentKey());
                     Long collectionId = doc.getCollectionId();
                     Map<Long, String> collectionNameMap = collectionId != null
-                            ? Map.of(collectionId, collectionRepository.findById(collectionId)
-                                    .map(RagCollection::getName).orElse(null))
+                            ? collectionRepository.findById(collectionId)
+                                    .map(collection -> Map.of(collectionId, collection.getName()))
+                                    .orElseGet(Map::of)
+                            : Map.of();
+                    Map<Long, String> collectionKeyMap = collectionId != null
+                            ? collectionRepository.findById(collectionId)
+                                    .map(collection -> Map.of(collectionId, collection.getCollectionKey()))
+                                    .orElseGet(Map::of)
                             : Map.of();
                     DocumentDetailResponse result = DocumentMapper.toDetailResponse(
-                            doc, collectionNameMap, embeddingRepository);
+                            doc, collectionNameMap, collectionKeyMap, embeddingRepository,
+                            activeEmbeddingProfileId());
                     return ResponseEntity.ok(result);
                 })
                 .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -210,6 +241,7 @@ public class RagDocumentController {
             @RequestParam(required = false) String processingStatus,
             @RequestParam(required = false) Boolean enabled,
             @RequestParam(required = false) Long collectionId,
+            @RequestParam(required = false) String collectionKey,
             @Parameter(description = "Filter documents created at or after this timestamp (ISO-8601, e.g. 2024-01-01T00:00:00)")
             @RequestParam(required = false) String createdAfter,
             @Parameter(description = "Filter documents created at or before this timestamp (ISO-8601, e.g. 2024-12-31T23:59:59)")
@@ -223,17 +255,18 @@ public class RagDocumentController {
 
         var currentKey = ApiKeyCollectionAccess.currentKey();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(currentKey);
-        if (collectionId != null) {
-            ApiKeyCollectionAccess.requireCollectionId(collectionId, currentKey);
-        }
-        var pageResult = restrictedIds
-                .map(ids -> documentRepository.searchDocumentsByCollectionIds(
-                        collectionId != null ? List.of(collectionId) : List.copyOf(ids),
+        collectionId = resolveOptionalCollectionId(collectionId, collectionKey, currentKey);
+        final Long resolvedCollectionId = collectionId;
+        var pageResult = restrictedIds.isPresent()
+                ? documentRepository.searchDocumentsByCollectionIds(
+                        resolvedCollectionId != null
+                                ? List.of(resolvedCollectionId)
+                                : List.copyOf(restrictedIds.orElseThrow()),
                         title, documentType, processingStatus, enabled,
-                        createdAfterDt, createdBeforeDt, pageable))
-                .orElseGet(() -> documentRepository.searchDocuments(
-                        title, documentType, processingStatus, enabled, collectionId,
-                        createdAfterDt, createdBeforeDt, pageable));
+                        createdAfterDt, createdBeforeDt, pageable)
+                : documentRepository.searchDocuments(
+                        title, documentType, processingStatus, enabled, resolvedCollectionId,
+                        createdAfterDt, createdBeforeDt, pageable);
 
         // Batch-fetch collection names to avoid N+1 queries (one findById per document)
         List<Long> collectionIds = pageResult.getContent().stream()
@@ -245,9 +278,15 @@ public class RagDocumentController {
                 ? Map.of()
                 : collectionRepository.findAllById(collectionIds).stream()
                         .collect(Collectors.toMap(RagCollection::getId, RagCollection::getName));
+        Map<Long, String> collectionKeyMap = collectionIds.isEmpty()
+                ? Map.of()
+                : collectionRepository.findAllById(collectionIds).stream()
+                        .collect(Collectors.toMap(RagCollection::getId, RagCollection::getCollectionKey));
 
         List<DocumentSummary> docs = pageResult.getContent().stream()
-                .map(doc -> DocumentMapper.toSummary(doc, collectionNameMap, embeddingRepository))
+                .map(doc -> DocumentMapper.toSummary(
+                        doc, collectionNameMap, collectionKeyMap, embeddingRepository,
+                        activeEmbeddingProfileId()))
                 .toList();
 
         return ResponseEntity.ok(new DocumentListResponse(
@@ -256,6 +295,14 @@ public class RagDocumentController {
                 offset,
                 limit
         ));
+    }
+
+    public ResponseEntity<DocumentListResponse> listDocuments(
+            int offset, int limit, String title, String documentType,
+            String processingStatus, Boolean enabled, Long collectionId,
+            String createdAfter, String createdBefore) {
+        return listDocuments(offset, limit, title, documentType, processingStatus,
+                enabled, collectionId, null, createdAfter, createdBefore);
     }
 
     @Operation(summary = "Document statistics", description = "Get document count statistics by processing status.")
@@ -314,6 +361,7 @@ public class RagDocumentController {
     @GetMapping("/embed-vector-status")
     @Timed(value = "rag.documents.embedding-status", description = "Query embedding vector status", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<EmbeddingStatusResponse> embeddingStatus() {
+        long embeddingProfileId = activeEmbeddingProfileId();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
                 ApiKeyCollectionAccess.currentKey());
         long total = restrictedIds
@@ -321,8 +369,9 @@ public class RagDocumentController {
                 .orElseGet(documentRepository::count);
         long withoutEmbedding = restrictedIds
                 .map(ids -> documentRepository.countDocumentsWithoutEmbeddingsByCollectionIds(
-                        List.copyOf(ids)))
-                .orElseGet(documentRepository::countDocumentsWithoutEmbeddings);
+                        List.copyOf(ids), embeddingProfileId))
+                .orElseGet(() -> documentRepository.countDocumentsWithoutEmbeddings(
+                        embeddingProfileId));
         long withEmbedding = total - withoutEmbedding;
         return ResponseEntity.ok(new EmbeddingStatusResponse(
                 total, withEmbedding, withoutEmbedding, withoutEmbedding > 0));
@@ -337,11 +386,13 @@ public class RagDocumentController {
     public ResponseEntity<ReembedMissingResponse> reembedMissing(
             @Parameter(description = "Whether to force re-embedding (skip existing vectors)")
             @RequestParam(defaultValue = "false") boolean force) {
+        long embeddingProfileId = activeEmbeddingProfileId();
         List<RagDocument> missing = ApiKeyCollectionAccess.restrictedCollectionIds(
                         ApiKeyCollectionAccess.currentKey())
                 .map(ids -> documentRepository.findDocumentsWithoutEmbeddingsByCollectionIds(
-                        List.copyOf(ids)))
-                .orElseGet(documentRepository::findDocumentsWithoutEmbeddings);
+                        List.copyOf(ids), embeddingProfileId))
+                .orElseGet(() -> documentRepository.findDocumentsWithoutEmbeddings(
+                        embeddingProfileId));
         if (missing.isEmpty()) {
             return ResponseEntity.ok(new ReembedMissingResponse(0, 0, 0, List.of()));
         }
@@ -396,6 +447,10 @@ public class RagDocumentController {
         }
     }
 
+    private long activeEmbeddingProfileId() {
+        return embeddingProfileProvider.getActiveProfile().id();
+    }
+
     /**
      * SSE streaming endpoint for embedding progress.
      *
@@ -445,25 +500,6 @@ public class RagDocumentController {
         return emitter;
     }
 
-    @Operation(summary = "Generate embedding vectors via VectorStore",
-            description = "Use VectorStore.add() to automatically generate and store embeddings with simpler code. Stored in rag_vector_store table. Skips existing embeddings by default; set force=true to re-embed.")
-    @PostMapping("/{id}/embed/vs")
-    @Timed(value = "rag.documents.embed-vs", description = "Generate embedding vectors via VectorStore", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<Object> embedDocumentViaVectorStore(
-            @PathVariable Long id,
-            @Parameter(description = "Force re-embedding, bypassing the cache")
-            @RequestParam(defaultValue = "false") boolean force) {
-        requireDocumentAccess(id);
-        try {
-            Map<String, Object> result = documentEmbedService.embedDocumentViaVectorStore(id, force);
-            return ResponseEntity.ok(result);
-        } catch (IllegalStateException e) {
-            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
-        }
-    }
-
     // ==================== Batch Operations ====================
 
     @Operation(summary = "Batch create documents",
@@ -478,8 +514,13 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.batch-create", description = "Batch create documents", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
             @Valid @RequestBody BatchDocumentRequest request) {
-        request.setCollectionId(ApiKeyCollectionAccess.resolveWritableCollectionId(
-                request.getCollectionId(), ApiKeyCollectionAccess.currentKey()));
+        Long batchCollectionId = resolveWritableCollectionId(
+                request.getCollectionId(), request.getCollectionKey(),
+                ApiKeyCollectionAccess.currentKey());
+        normalizeDocumentCollectionScopes(request.getDocuments(), batchCollectionId,
+                ApiKeyCollectionAccess.currentKey());
+        request.setCollectionId(batchCollectionId);
+        request.setCollectionKey(null);
         log.info("Batch create: docs={}, embed={}, collectionId={}, force={}",
                 request.getDocuments().size(), request.isEmbed(),
                 request.getCollectionId(), request.isForce());
@@ -499,6 +540,41 @@ public class RagDocumentController {
                         "collectionId", request.getCollectionId() != null ? request.getCollectionId() : ""));
 
         return ResponseEntity.ok(result);
+    }
+
+    private Long resolveWritableCollectionId(Long collectionId, String collectionKey,
+                                             com.springairag.core.entity.RagApiKey currentKey) {
+        Long resolved = collectionKey != null
+                ? collectionIdentityResolver.resolveActiveId(collectionId, collectionKey)
+                : collectionId;
+        return ApiKeyCollectionAccess.resolveWritableCollectionId(resolved, currentKey);
+    }
+
+    private Long resolveOptionalCollectionId(Long collectionId, String collectionKey,
+                                             com.springairag.core.entity.RagApiKey currentKey) {
+        if (collectionId == null && collectionKey == null) {
+            return null;
+        }
+        return resolveWritableCollectionId(collectionId, collectionKey, currentKey);
+    }
+
+    private void normalizeDocumentCollectionScopes(List<DocumentRequest> requests,
+                                                   Long defaultCollectionId,
+                                                   com.springairag.core.entity.RagApiKey currentKey) {
+        if (requests == null) {
+            return;
+        }
+        for (DocumentRequest document : requests) {
+            Long effective;
+            if (document.getCollectionId() == null && document.getCollectionKey() == null) {
+                effective = defaultCollectionId;
+            } else {
+                effective = resolveWritableCollectionId(
+                        document.getCollectionId(), document.getCollectionKey(), currentKey);
+            }
+            document.setCollectionId(effective);
+            document.setCollectionKey(null);
+        }
     }
 
     @Operation(summary = "Batch delete documents", description = "Batch delete documents and their embedding vectors by ID list. Missing IDs don't affect other deletions.")
@@ -620,8 +696,13 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.batch-create-and-embed", description = "Batch create and embed documents (deprecated)", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchCreateAndEmbedResponse> batchCreateAndEmbed(
             @Valid @RequestBody BatchCreateAndEmbedRequest request) {
-        request.setCollectionId(ApiKeyCollectionAccess.resolveWritableCollectionId(
-                request.getCollectionId(), ApiKeyCollectionAccess.currentKey()));
+        Long batchCollectionId = resolveWritableCollectionId(
+                request.getCollectionId(), request.getCollectionKey(),
+                ApiKeyCollectionAccess.currentKey());
+        normalizeDocumentCollectionScopes(request.getDocuments(), batchCollectionId,
+                ApiKeyCollectionAccess.currentKey());
+        request.setCollectionId(batchCollectionId);
+        request.setCollectionKey(null);
         log.info("Batch create and embed (deprecated): collectionId={}, docs={}, force={}",
                 request.getCollectionId(), request.getDocuments().size(), request.isForce());
 
@@ -651,9 +732,10 @@ public class RagDocumentController {
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
             @RequestParam("files") MultipartFile[] files,
             @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "force", defaultValue = "false") boolean force) {
-        collectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+        collectionId = resolveWritableCollectionId(
+                collectionId, collectionKey, ApiKeyCollectionAccess.currentKey());
 
         log.info("File upload request: {} files, collectionId={}", files.length, collectionId);
 
@@ -685,6 +767,11 @@ public class RagDocumentController {
                         "collectionId", collectionId != null ? collectionId : ""));
 
         return ResponseEntity.ok(new FileUploadResponse(files.length, success, failed, results));
+    }
+
+    public ResponseEntity<FileUploadResponse> uploadAndEmbed(
+            MultipartFile[] files, Long collectionId, boolean force) {
+        return uploadAndEmbed(files, collectionId, null, force);
     }
 
     private FileUploadResponse.FileResult processUploadedFile(
@@ -809,7 +896,7 @@ public class RagDocumentController {
                 page,
                 size,
                 versions.getContent().stream()
-                        .map(DocumentMapper::toVersionResponse)
+                        .map(DocumentMapper::toVersionSummary)
                         .toList()
         ));
     }

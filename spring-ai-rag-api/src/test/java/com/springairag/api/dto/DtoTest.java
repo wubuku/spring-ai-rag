@@ -38,6 +38,7 @@ class DtoTest {
     @Test
     void collectionRequest_defaults() {
         CollectionRequest req = new CollectionRequest();
+        assertNull(req.getCollectionKey());
         assertNull(req.getName());
         assertNull(req.getDescription());
         assertNull(req.getEmbeddingModel());
@@ -49,6 +50,7 @@ class DtoTest {
     @Test
     void collectionRequest_getterSetter() {
         CollectionRequest req = new CollectionRequest();
+        req.setCollectionKey("customer:manual");
         req.setName("test-collection");
         req.setDescription("测试集合");
         req.setEmbeddingModel("bge-m3");
@@ -56,6 +58,7 @@ class DtoTest {
         req.setEnabled(false);
         req.setMetadata(Map.of("key", "value"));
 
+        assertEquals("customer:manual", req.getCollectionKey());
         assertEquals("test-collection", req.getName());
         assertEquals("测试集合", req.getDescription());
         assertEquals("bge-m3", req.getEmbeddingModel());
@@ -1314,7 +1317,7 @@ class DtoTest {
 
     @Test
     void collectionDocumentListResponse_constructor() {
-        var r = new CollectionDocumentListResponse(1L, List.of(), 0, 0, 20);
+        var r = new CollectionDocumentListResponse(1L, null, List.of(), 0, 0, 20);
         assertEquals(1L, r.collectionId());
         assertEquals(0, r.total());
         assertEquals(0, r.offset());
@@ -1894,7 +1897,7 @@ class DtoTest {
 
     @Test
     void collectionCreatedResponse_constructor() {
-        var resp = new CollectionCreatedResponse("Collection created", 42L, "My KB");
+        var resp = new CollectionCreatedResponse("Collection created", 42L, null, "My KB");
         assertEquals("Collection created", resp.message());
         assertEquals(42L, resp.collectionId());
         assertEquals("My KB", resp.name());
@@ -1950,7 +1953,7 @@ class DtoTest {
 
     @Test
     void collectionRestoreResponse_constructor() {
-        var resp = new CollectionRestoreResponse("Collection restored", 1L, "My KB", 10L);
+        var resp = new CollectionRestoreResponse("Collection restored", 1L, null, "My KB", 10L);
         assertEquals("Collection restored", resp.message());
         assertEquals(1L, resp.collectionId());
         assertEquals("My KB", resp.name());
@@ -1970,7 +1973,8 @@ class DtoTest {
 
     @Test
     void collectionCloneResponse_constructor() {
-        var resp = new CollectionCloneResponse("Clone completed", 5L, "KB (Copy)", 1L, "Original KB", 10);
+        var resp = new CollectionCloneResponse(
+                "Clone completed", 5L, null, "KB (Copy)", 1L, null, "Original KB", 10);
         assertEquals("Clone completed", resp.message());
         assertEquals(5L, resp.clonedCollectionId());
         assertEquals("KB (Copy)", resp.clonedCollectionName());
@@ -1983,7 +1987,7 @@ class DtoTest {
 
     @Test
     void documentAddedResponse_constructor() {
-        var resp = new DocumentAddedResponse("Document added to collection", 1L, 42L);
+        var resp = new DocumentAddedResponse("Document added to collection", 1L, null, 42L);
         assertEquals("Document added to collection", resp.message());
         assertEquals(1L, resp.collectionId());
         assertEquals(42L, resp.documentId());
@@ -4077,22 +4081,22 @@ class DtoTest {
 
     @Test
     void collectionDocumentListResponse_equals_sameFields() {
-        var a = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
-        var b = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        var a = new CollectionDocumentListResponse(1L, null, List.of(), 10, 0, 20);
+        var b = new CollectionDocumentListResponse(1L, null, List.of(), 10, 0, 20);
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
     }
 
     @Test
     void collectionDocumentListResponse_equals_differentCollectionId() {
-        var a = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
-        var b = new CollectionDocumentListResponse(2L, List.of(), 10, 0, 20);
+        var a = new CollectionDocumentListResponse(1L, null, List.of(), 10, 0, 20);
+        var b = new CollectionDocumentListResponse(2L, null, List.of(), 10, 0, 20);
         assertNotEquals(a, b);
     }
 
     @Test
     void collectionDocumentListResponse_toString() {
-        var r = new CollectionDocumentListResponse(1L, List.of(), 10, 0, 20);
+        var r = new CollectionDocumentListResponse(1L, null, List.of(), 10, 0, 20);
         String str = r.toString();
         assertTrue(str.contains("collectionId=1"));
         assertTrue(str.contains("total=10"));
@@ -4104,16 +4108,16 @@ class DtoTest {
 
     @Test
     void documentAddedResponse_equals_sameFields() {
-        var a = new DocumentAddedResponse("ok", 1L, 42L);
-        var b = new DocumentAddedResponse("ok", 1L, 42L);
+        var a = new DocumentAddedResponse("ok", 1L, null, 42L);
+        var b = new DocumentAddedResponse("ok", 1L, null, 42L);
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
     }
 
     @Test
     void documentAddedResponse_equals_differentDocumentId() {
-        var a = new DocumentAddedResponse("ok", 1L, 42L);
-        var b = new DocumentAddedResponse("ok", 1L, 99L);
+        var a = new DocumentAddedResponse("ok", 1L, null, 42L);
+        var b = new DocumentAddedResponse("ok", 1L, null, 99L);
         assertNotEquals(a, b);
     }
 
@@ -4586,16 +4590,16 @@ class DtoTest {
 
     @Test
     void collectionRestoreResponse_equals_same() {
-        var a = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
-        var b = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
+        var a = new CollectionRestoreResponse("Restored", 1L, null, "My Coll", 10L);
+        var b = new CollectionRestoreResponse("Restored", 1L, null, "My Coll", 10L);
         assertEquals(a, b);
         assertEquals(a.hashCode(), b.hashCode());
     }
 
     @Test
     void collectionRestoreResponse_equals_different() {
-        var a = new CollectionRestoreResponse("Restored", 1L, "My Coll", 10L);
-        var b = new CollectionRestoreResponse("Restored", 2L, "Other", 20L);
+        var a = new CollectionRestoreResponse("Restored", 1L, null, "My Coll", 10L);
+        var b = new CollectionRestoreResponse("Restored", 2L, null, "Other", 20L);
         assertNotEquals(a, b);
     }
 

@@ -12,11 +12,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import com.github.benmanes.caffeine.cache.Cache;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
-import com.github.benmanes.caffeine.cache.Cache;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -28,11 +30,15 @@ class ApiKeyManagementServiceTest {
     @Mock
     private RagApiKeyRepository apiKeyRepository;
 
+    @Mock
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     private ApiKeyManagementService service;
 
     @BeforeEach
     void setUp() {
-        service = new ApiKeyManagementService(apiKeyRepository);
+        service = new ApiKeyManagementService(
+                apiKeyRepository, collectionIdentityResolver);
         // Clear static validation cache between tests to avoid cross-test pollution
         ApiKeyManagementServiceTest.clearValidationCache();
     }
@@ -94,6 +100,11 @@ class ApiKeyManagementServiceTest {
     void generateKey_withAllowedCollections_persistsAndReturnsAcl() {
         ApiKeyCreateRequest request = new ApiKeyCreateRequest("Scoped Key", null);
         request.setAllowedCollectionIds(List.of(7L, 3L, 7L));
+        Map<Long, String> keys = new LinkedHashMap<>();
+        keys.put(3L, "customer:faq");
+        keys.put(7L, "customer:manual");
+        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
+                .thenReturn(keys);
 
         ApiKeyCreatedResponse response = service.generateKey(request);
 
@@ -101,6 +112,8 @@ class ApiKeyManagementServiceTest {
         verify(apiKeyRepository).save(captor.capture());
         assertEquals("3,7", captor.getValue().getAllowedCollectionIds());
         assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
+        assertEquals(List.of("customer:faq", "customer:manual"),
+                response.getAllowedCollectionKeys());
     }
 
     @Test
@@ -137,12 +150,19 @@ class ApiKeyManagementServiceTest {
         existing.setAllowedCollectionIds("3,7");
         when(apiKeyRepository.findByKeyId("rag_k_old")).thenReturn(Optional.of(existing));
         when(apiKeyRepository.disableByKeyId("rag_k_old")).thenReturn(1);
+        Map<Long, String> keys = new LinkedHashMap<>();
+        keys.put(3L, "customer:faq");
+        keys.put(7L, "customer:manual");
+        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
+                .thenReturn(keys);
 
         ApiKeyCreatedResponse response = service.rotateKey("rag_k_old");
 
         assertNotNull(response);
         assertEquals("My Key", response.getName());
         assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
+        assertEquals(List.of("customer:faq", "customer:manual"),
+                response.getAllowedCollectionKeys());
         verify(apiKeyRepository).disableByKeyId("rag_k_old");
         // disableByKeyId is @Modifying (no save), only generateKey calls save() once
         verify(apiKeyRepository, times(1)).save(any(RagApiKey.class));
@@ -176,8 +196,14 @@ class ApiKeyManagementServiceTest {
         key2.setEnabled(false);
         key2.setCreatedAt(LocalDateTime.of(2026, 2, 1, 0, 0));
         key2.setLastUsedAt(LocalDateTime.of(2026, 3, 1, 0, 0));
+        key2.setAllowedCollectionIds("3,7");
 
         when(apiKeyRepository.findAll()).thenReturn(List.of(key1, key2));
+        Map<Long, String> keys = new LinkedHashMap<>();
+        keys.put(3L, "customer:faq");
+        keys.put(7L, "customer:manual");
+        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
+                .thenReturn(keys);
 
         List<ApiKeyResponse> result = service.listKeys();
 
@@ -187,6 +213,8 @@ class ApiKeyManagementServiceTest {
         assertEquals(true, result.get(0).getEnabled());
         assertEquals("rag_k_2", result.get(1).getKeyId());
         assertEquals(false, result.get(1).getEnabled());
+        assertEquals(List.of("customer:faq", "customer:manual"),
+                result.get(1).getAllowedCollectionKeys());
     }
 
     @Test

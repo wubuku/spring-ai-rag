@@ -16,6 +16,7 @@ export interface ChatRequest {
   /** @deprecated use collectionIds */
   collectionId?: number;
   collectionIds?: number[];
+  collectionKeys?: string[];
   conversationId?: string;
   useHybridSearch?: boolean;
 }

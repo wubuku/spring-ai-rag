@@ -36,8 +36,10 @@ public interface FulltextSearchProvider {
      * @param excludeIds   embedding IDs to exclude
      * @param limit        max results to return
      * @param minScore     minimum relevance score threshold
+     * @param embeddingProfileId active embedding profile ID
      * @return retrieval results list (sorted by relevance descending)
      */
     List<RetrievalResult> search(String query, List<Long> documentIds,
-                                 List<Long> excludeIds, int limit, double minScore);
+                                 List<Long> excludeIds, int limit, double minScore,
+                                 long embeddingProfileId);
 }

@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -33,6 +35,10 @@ class DocumentAclControllerTest {
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
+        EmbeddingProfileProvider profileProvider = mock(EmbeddingProfileProvider.class);
+        when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
+                1L, "test-profile", "test", "test-model", "v1",
+                1024, "COSINE", "PROVIDER_DEFAULT", true));
         controller = new RagDocumentController(
                 documentRepository,
                 mock(RagEmbeddingRepository.class),
@@ -40,6 +46,7 @@ class DocumentAclControllerTest {
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
+                profileProvider,
                 null);
         authenticateRestrictedKey(2L, 4L);
     }

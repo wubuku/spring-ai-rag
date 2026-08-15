@@ -1,5 +1,6 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
@@ -36,8 +37,25 @@ public record DocumentVersionResponse(
         LocalDateTime createdAt,
 
         @Schema(description = "Content snapshot (only in single version detail, omitted in list)")
-        String contentSnapshot
+        String contentSnapshot,
+
+        @Schema(description = "JSONB payload snapshot (only in single version detail, omitted in list)")
+        JsonNode jsonbPayloadSnapshot
 ) {
+    public DocumentVersionResponse(
+            Long id,
+            Long documentId,
+            int versionNumber,
+            String contentHash,
+            Long size,
+            String changeType,
+            String changeDescription,
+            LocalDateTime createdAt,
+            String contentSnapshot) {
+        this(id, documentId, versionNumber, contentHash, size, changeType,
+                changeDescription, createdAt, contentSnapshot, null);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -51,12 +69,14 @@ public record DocumentVersionResponse(
                 && Objects.equals(changeType, that.changeType)
                 && Objects.equals(changeDescription, that.changeDescription)
                 && Objects.equals(createdAt, that.createdAt)
-                && Objects.equals(contentSnapshot, that.contentSnapshot);
+                && Objects.equals(contentSnapshot, that.contentSnapshot)
+                && Objects.equals(jsonbPayloadSnapshot, that.jsonbPayloadSnapshot);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, documentId, versionNumber, contentHash, size, changeType, changeDescription, createdAt, contentSnapshot);
+        return Objects.hash(id, documentId, versionNumber, contentHash, size, changeType,
+                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot);
     }
 
     @Override
@@ -71,6 +91,7 @@ public record DocumentVersionResponse(
                 ", changeDescription='" + changeDescription + "'" +
                 ", createdAt=" + createdAt +
                 ", contentSnapshotLength=" + (contentSnapshot != null ? contentSnapshot.length() : 0) +
+                ", hasJsonbPayloadSnapshot=" + (jsonbPayloadSnapshot != null) +
                 '}';
     }
 }

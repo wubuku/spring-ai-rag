@@ -28,8 +28,13 @@ public class ApiKeyCreatedResponse {
     @Schema(description = "Warning to remind users to save the key")
     private String warning;
 
-    @Schema(description = "Collection IDs this key may access. Null means unrestricted.", example = "[1, 2]")
+    @Schema(description = "Deprecated compatibility field. Null means unrestricted.",
+            example = "[1, 2]", deprecated = true)
     private List<Long> allowedCollectionIds;
+
+    @Schema(description = "Stable Collection keys this key may access. Null means unrestricted.",
+            example = "[\"customer-42:manual:v3\"]")
+    private List<String> allowedCollectionKeys;
 
     public ApiKeyCreatedResponse() {
     }
@@ -70,6 +75,11 @@ public class ApiKeyCreatedResponse {
         this.allowedCollectionIds = allowedCollectionIds;
     }
 
+    public List<String> getAllowedCollectionKeys() { return allowedCollectionKeys; }
+    public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
+        this.allowedCollectionKeys = allowedCollectionKeys;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -80,12 +90,14 @@ public class ApiKeyCreatedResponse {
                 Objects.equals(name, that.name) &&
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(warning, that.warning) &&
-                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(keyId, rawKey, name, expiresAt, warning, allowedCollectionIds);
+        return Objects.hash(keyId, rawKey, name, expiresAt, warning,
+                allowedCollectionIds, allowedCollectionKeys);
     }
 
     @Override
@@ -95,6 +107,7 @@ public class ApiKeyCreatedResponse {
                 ", name='" + name + '\'' +
                 ", expiresAt=" + expiresAt +
                 ", allowedCollectionIds=" + allowedCollectionIds +
+                ", allowedCollectionKeys=" + allowedCollectionKeys +
                 ", warning='" + warning + '\'' +
                 // rawKey intentionally excluded from toString (security)
                 '}';

@@ -57,8 +57,20 @@ public record DocumentSummary(
         String content,
 
         @Schema(description = "Additional metadata")
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+
+        @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
+        String collectionKey
 ) {
+    public DocumentSummary(Long id, String title, String source, String documentType,
+                           String processingStatus, LocalDateTime createdAt, Long size,
+                           String contentHash, boolean enabled, LocalDateTime updatedAt,
+                           Long collectionId, String collectionName, long chunkCount,
+                           String contentPreview, String content, Map<String, Object> metadata) {
+        this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
+                enabled, updatedAt, collectionId, collectionName, chunkCount, contentPreview,
+                content, metadata, null);
+    }
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -75,6 +87,7 @@ public record DocumentSummary(
                 && Objects.equals(contentHash, that.contentHash)
                 && Objects.equals(updatedAt, that.updatedAt)
                 && Objects.equals(collectionId, that.collectionId)
+                && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(collectionName, that.collectionName)
                 && Objects.equals(contentPreview, that.contentPreview)
                 && Objects.equals(content, that.content)
@@ -85,7 +98,8 @@ public record DocumentSummary(
     public int hashCode() {
         return Objects.hash(id, title, source, documentType, processingStatus,
                 createdAt, size, contentHash, enabled, updatedAt,
-                collectionId, collectionName, chunkCount, contentPreview, content, metadata);
+                collectionId, collectionName, chunkCount, contentPreview, content, metadata,
+                collectionKey);
     }
 
     @Override
@@ -95,6 +109,7 @@ public record DocumentSummary(
                 + "', createdAt=" + createdAt + ", size=" + size + ", contentHash='" + contentHash
                 + "', enabled=" + enabled + ", updatedAt=" + updatedAt
                 + ", collectionId=" + collectionId + ", collectionName='" + collectionName
+                + "', collectionKey='" + collectionKey
                 + "', chunkCount=" + chunkCount + ", contentPreview='" + contentPreview
                 + "', content='" + (content != null && content.length() > 50
                         ? content.substring(0, 50) + "..." : content) + "'"

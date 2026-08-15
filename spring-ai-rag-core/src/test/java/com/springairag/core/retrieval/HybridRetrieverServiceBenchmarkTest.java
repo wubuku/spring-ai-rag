@@ -130,8 +130,8 @@ class HybridRetrieverServiceBenchmarkTest {
         when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
 
-        // First call is vector search (ORDER BY embedding <=>), second is fulltext search (similarity)
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
+        // First call is vector search (ORDER BY e.embedding_1024 <=>), second is fulltext search (similarity)
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), (Object[]) any()))
                 .thenReturn(vectorRows);
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);
@@ -391,7 +391,7 @@ class HybridRetrieverServiceBenchmarkTest {
 
         when(jdbcTemplate.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
         when(jdbcTemplate.queryForObject(contains("pg_trgm"), eq(Integer.class))).thenReturn(1);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), (Object[]) any()))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), (Object[]) any()))
                 .thenReturn(vectorRows);
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);

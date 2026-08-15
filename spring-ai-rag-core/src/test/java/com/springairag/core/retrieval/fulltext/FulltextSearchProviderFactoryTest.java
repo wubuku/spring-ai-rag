@@ -42,7 +42,8 @@ class FulltextSearchProviderFactoryTest {
             @Override public String getName() { return "pg_jieba"; }
             @Override public boolean isAvailable() { return available; }
             @Override public List<RetrievalResult> search(String q, List<Long> docIds,
-                    List<Long> excludeIds, int limit, double minScore) { return List.of(); }
+                    List<Long> excludeIds, int limit, double minScore,
+                    long embeddingProfileId) { return List.of(); }
         };
     }
 
@@ -51,7 +52,8 @@ class FulltextSearchProviderFactoryTest {
             @Override public String getName() { return "english_fts"; }
             @Override public boolean isAvailable() { return available; }
             @Override public List<RetrievalResult> search(String q, List<Long> docIds,
-                    List<Long> excludeIds, int limit, double minScore) { return List.of(); }
+                    List<Long> excludeIds, int limit, double minScore,
+                    long embeddingProfileId) { return List.of(); }
         };
     }
 
@@ -60,7 +62,8 @@ class FulltextSearchProviderFactoryTest {
             @Override public String getName() { return "pg_trgm"; }
             @Override public boolean isAvailable() { return available; }
             @Override public List<RetrievalResult> search(String q, List<Long> docIds,
-                    List<Long> excludeIds, int limit, double minScore) { return List.of(); }
+                    List<Long> excludeIds, int limit, double minScore,
+                    long embeddingProfileId) { return List.of(); }
         };
     }
 
@@ -246,7 +249,7 @@ class NoOpFulltextSearchProviderTest {
     @Test
     @DisplayName("search returns empty list for any query")
     void searchReturnsEmpty() {
-        List<RetrievalResult> results = provider.search("test query", null, null, 10, 0.3);
+        List<RetrievalResult> results = provider.search("test query", null, null, 10, 0.3, 1L);
         assertNotNull(results);
         assertTrue(results.isEmpty());
     }
@@ -255,7 +258,7 @@ class NoOpFulltextSearchProviderTest {
     @DisplayName("search returns empty list with document ID and exclude ID filters")
     void searchWithDocumentIdsReturnsEmpty() {
         List<RetrievalResult> results = provider.search("test",
-                List.of(1L, 2L), List.of(3L), 5, 0.5);
+                List.of(1L, 2L), List.of(3L), 5, 0.5, 1L);
         assertNotNull(results);
         assertTrue(results.isEmpty());
     }
@@ -263,7 +266,7 @@ class NoOpFulltextSearchProviderTest {
     @Test
     @DisplayName("search returns empty list for null query")
     void searchNullQueryReturnsEmpty() {
-        List<RetrievalResult> results = provider.search(null, null, null, 10, 0.0);
+        List<RetrievalResult> results = provider.search(null, null, null, 10, 0.0, 1L);
         assertNotNull(results);
         assertTrue(results.isEmpty());
     }
@@ -271,7 +274,7 @@ class NoOpFulltextSearchProviderTest {
     @Test
     @DisplayName("search returns empty list when limit is zero")
     void searchZeroLimitReturnsEmpty() {
-        List<RetrievalResult> results = provider.search("anything", null, null, 0, 0.0);
+        List<RetrievalResult> results = provider.search("anything", null, null, 0, 0.0, 1L);
         assertNotNull(results);
         assertTrue(results.isEmpty());
     }
@@ -279,7 +282,7 @@ class NoOpFulltextSearchProviderTest {
     @Test
     @DisplayName("search result is unmodifiable")
     void searchResultIsUnmodifiable() {
-        List<RetrievalResult> results = provider.search("query", null, null, 10, 0.5);
+        List<RetrievalResult> results = provider.search("query", null, null, 10, 0.5, 1L);
         assertThrows(UnsupportedOperationException.class, () -> results.add(null));
     }
 

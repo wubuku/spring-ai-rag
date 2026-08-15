@@ -128,6 +128,14 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
+    provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
+    model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
+    distance-metric: COSINE
+    normalization: PROVIDER_DEFAULT
+    migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
+    migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
+    migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -136,8 +144,20 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
+| `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | 写入和检索使用的不可变模型空间身份 |
+| `rag.embedding.provider` | `siliconflow` | Profile 中保存的提供商身份 |
+| `rag.embedding.model-revision` | `unspecified` | 显式模型版本身份；模型语义变化必须创建新 Profile |
+| `rag.embedding.distance-metric` | `COSINE` | 距离度量；本版本只支持 `COSINE` |
+| `rag.embedding.normalization` | `PROVIDER_DEFAULT` | 保存于 Profile 的归一化语义 |
+| `rag.embedding.migration-mode` | `none` | 显式 Legacy 认领的启动迁移模式 |
+| `rag.embedding.migration-legacy-profile-key` | `""` | Legacy 认领使用的既有 Profile key |
+| `rag.embedding.migration-confirm` | `""` | Legacy 认领操作要求的精确确认值 |
 
-> ⚠️ 更换嵌入模型时，`dimensions` 必须同步修改，且需重建 pgvector 表索引。
+活动 Profile 注册在 `rag_embedding_profiles` 中，创建后身份不可变。当前支持的维度为
+`1024`，存储在固定长度的 `rag_embeddings.embedding_1024 VECTOR(1024)` 列中。兼容窗口
+内新向量还会双写旧 `embedding` 列。更换模型必须创建新 Profile 并完整重嵌入，不能只改
+`dimensions`、把旧向量 cast 成新向量，或在一次检索中混用多个 Profile。Legacy 向量只能
+通过显式认领并提供正确确认值接入。
 
 ## 检索配置
 
@@ -224,7 +244,23 @@ rag:
 |------|--------|------|
 | `rag.chunk.default-chunk-size` | `1000` | 默认分块大小（字符） |
 | `rag.chunk.default-chunk-overlap` | `100` | 分块重叠大小（字符） |
-| `rag.chunk.min-chunk-size` | `100` | 最小分块大小（字符） |
+| `rag.chunk.min-chunk-size` | `100` | 生成分块的尽力而为目标；非空文档不会被丢弃 |
+
+## JSON 结构化记录配置
+
+```yaml
+rag:
+  structured-records:
+    max-jsonb-payload-bytes: 1048576
+    max-retrieval-text-chars: 10000
+    max-batch-size: 20
+    max-batch-payload-bytes: 10485760
+    max-search-results: 20
+```
+
+这些限制用于保护 JSONB 请求、批量请求和响应大小，不会改变 embedding 输入：
+只有调用者提供的 `retrievalText` 会被分块和嵌入。`jsonbPayload` 以 JSONB 保存，不计算
+hash；API 设计上也没有 payload hash 配置。
 
 ## 对话记忆配置
 
@@ -328,8 +364,10 @@ rag:
 未配置 `RAG_ROOT_API_KEY` 时保持 legacy 行为：`rag.security.enabled` 控制认证开关，
 `rag.security.api-key` 和数据库 ADMIN/NORMAL 语义继续生效，query credential 仍兼容。
 
-数据库业务 Key可设置 `allowedCollectionIds`。Flyway V24 将其保存到
-`rag_api_key.allowed_collection_ids`；空值表示全库权限。详见
+数据库业务 Key 通过 `POST /api/v1/rag/api-keys` 的 `allowedCollectionKeys` 定义外部
+范围；deprecated 的 `allowedCollectionIds` 继续兼容。Controller 会把 key 解析为内部
+ID，Flyway V24 的存储仍为 `rag_api_key.allowed_collection_ids`；空值表示全库权限。
+显式空 key 列表会被拒绝，不会静默变成全库权限。详见
 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置
@@ -471,29 +509,14 @@ spring:
 | `connection-timeout` | `10000` | 获取连接超时（ms） |
 | `leak-detection-threshold` | `60000` | 连接泄漏检测时间（ms） |
 
-## pgvector 向量存储配置
+## PostgreSQL 向量存储
 
-```yaml
-# 通过 postgresql profile 激活
-spring:
-  ai:
-    vectorstore:
-      pgvector:
-        enabled: true
-        vector-table-name: rag_vector_store
-        distance-type: COSINE_DISTANCE
-        index-type: HNSW
-        dimensions: 1024
-```
-
-激活方式：`--spring.profiles.active=postgresql`
-
-| 属性 | 默认值 | 说明 |
-|------|--------|------|
-| `vector-table-name` | `rag_vector_store` | 向量表名 |
-| `distance-type` | `COSINE_DISTANCE` | 距离算法（COSINE_DISTANCE / EUCLIDEAN_DISTANCE / NEGATIVE_INNER_PRODUCT） |
-| `index-type` | `HNSW` | 索引类型（HNSW / IVFFlat） |
-| `dimensions` | `1024` | 向量维度 |
+应用使用自有的 `rag_embeddings` 表，而不是 Spring AI 独立的 vector-store 表。当前
+1024 维活动 Profile 使用 `embedding_1024` 上的 Profile 专属 HNSW 索引；索引由
+Embedding Profile 注册器管理。`postgresql` profile 提供 PostgreSQL 运行配置。Flyway
+V25/V26 创建 Profile/状态结构，并在 `rag_vector_store` 不存在或为空时清理该无效表；
+V27/V28 增加必填、全局唯一、不可变的 `rag_collection.collection_key`；V29 增加 JSONB
+结构化记录列和 payload 感知的版本快照。
 
 ## Profile 一览
 

@@ -91,6 +91,34 @@ describe('useChatSSE', () => {
     );
   });
 
+  it('includes collection keys in the request body', async () => {
+    setupMockStream();
+    const { result } = renderHook(() =>
+      useChatSSE({ onChunk: vi.fn(), onSources: vi.fn(), onError: vi.fn(), onDone: vi.fn() })
+    );
+
+    await act(async () => {
+      result.current.send(
+        'Hello',
+        undefined,
+        'conv-1',
+        undefined,
+        ['customer:manual'],
+      );
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/rag/chat/stream',
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: 'Hello',
+          collectionKeys: ['customer:manual'],
+          sessionId: 'conv-1',
+        }),
+      })
+    );
+  });
+
   it('sends the in-memory credential in a header and never in the URL', async () => {
     setupMockStream();
     setCredential('root-secret');

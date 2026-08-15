@@ -85,7 +85,8 @@ public class HierarchicalTextChunker {
         // 4. Insert table blocks
         chunks.addAll(convertTablesToChunks(tables));
 
-        // 5. Filter out too-short fragments and sort
+        // 5. Drop only blank fragments and sort. minChunkSize is a quality target,
+        // not an admission gate: complete short documents must remain searchable.
         return filterAndSortChunks(chunks);
     }
 
@@ -238,7 +239,7 @@ public class HierarchicalTextChunker {
 
     private List<TextChunk> filterAndSortChunks(List<TextChunk> chunks) {
         return chunks.stream()
-                .filter(c -> c.text().length() >= minChunkSize)
+                .filter(c -> c != null && c.text() != null && !c.text().isBlank())
                 .sorted(Comparator.comparingInt(TextChunk::startPos))
                 .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
     }

@@ -4,10 +4,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,6 +53,9 @@ class ApiKeyControllerTest {
 
     @MockitoBean
     private EnvironmentRootCredentialResolver rootCredentialResolver;
+
+    @MockitoBean
+    private CollectionIdentityResolver collectionIdentityResolver;
 
     @BeforeEach
     void setUpRootMode() {
@@ -172,6 +178,148 @@ class ApiKeyControllerTest {
 
         verify(apiKeyService).generateKey(argThat(request ->
                 List.of(2L, 4L).equals(request.getAllowedCollectionIds())));
+    }
+
+    @Test
+    void createKey_withAllowedCollectionKeysResolvesAndPersistsIds() throws Exception {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("customer:manual", "customer:faq")))
+                .thenReturn(List.of(7L, 3L));
+        ApiKeyCreatedResponse created = new ApiKeyCreatedResponse(
+                "rag_k_scoped", "rag_sk_scoped", "Scoped", null,
+                List.of(3L, 7L));
+        created.setAllowedCollectionKeys(
+                List.of("customer:faq", "customer:manual"));
+        when(apiKeyService.generateKey(any())).thenReturn(created);
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Scoped",
+                                  "allowedCollectionKeys":[
+                                    "customer:manual",
+                                    "customer:faq"
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.allowedCollectionIds[0]").value(3))
+                .andExpect(jsonPath("$.allowedCollectionIds[1]").value(7))
+                .andExpect(jsonPath("$.allowedCollectionKeys[0]")
+                        .value("customer:faq"));
+
+        verify(apiKeyService).generateKey(argThat(request ->
+                List.of(7L, 3L).equals(request.getAllowedCollectionIds())));
+    }
+
+    @Test
+    void createKey_idAndKeyScopesCompareAsSets() throws Exception {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("two", "one")))
+                .thenReturn(List.of(2L, 1L));
+        when(apiKeyService.generateKey(any())).thenReturn(
+                new ApiKeyCreatedResponse(
+                        "rag_k_scoped", "rag_sk_scoped", "Scoped", null,
+                        List.of(1L, 2L)));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Scoped",
+                                  "allowedCollectionIds":[1,2],
+                                  "allowedCollectionKeys":["two","one"]
+                                }
+                                """))
+                .andExpect(status().isCreated());
+
+        verify(apiKeyService).generateKey(argThat(request ->
+                List.of(2L, 1L).equals(request.getAllowedCollectionIds())));
+    }
+
+    @Test
+    void createKey_mismatchedIdAndKeyScopesReturns400() throws Exception {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("two"))).thenReturn(List.of(2L));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Mismatch",
+                                  "allowedCollectionIds":[1],
+                                  "allowedCollectionKeys":["two"]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void createKey_unknownCollectionKeyReturns404ForUnrestrictedCaller() throws Exception {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("missing"))).thenThrow(
+                new RagException(ErrorCode.COLLECTION_NOT_FOUND, "missing"));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Missing",
+                                  "allowedCollectionKeys":["missing"]
+                                }
+                                """))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("COLLECTION_NOT_FOUND"));
+
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void createKey_unknownCollectionKeyReturns403ForRestrictedCaller() throws Exception {
+        RagApiKey caller = mockCaller("rag_k_scoped", ApiKeyRole.NORMAL);
+        caller.setAllowedCollectionIds("2");
+        when(collectionIdentityResolver.resolveActiveIdsWithinAllowed(
+                eq(List.of("missing")), anySet())).thenThrow(
+                new RagException(ErrorCode.COLLECTION_NOT_FOUND, "missing"));
+
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .with(request -> {
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY,
+                                    caller);
+                            return request;
+                        })
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Missing",
+                                  "allowedCollectionKeys":["missing"]
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
+
+        verify(apiKeyService, never()).generateKey(any());
+    }
+
+    @Test
+    void createKey_explicitEmptyAllowedKeysReturns400() throws Exception {
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Empty",
+                                  "allowedCollectionKeys":[]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+
+        verify(apiKeyService, never()).generateKey(any());
     }
 
     @Test

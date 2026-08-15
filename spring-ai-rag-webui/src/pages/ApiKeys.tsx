@@ -157,7 +157,9 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
       <span>{getRoleBadge(keyItem.role, t)}</span>
       <span className={styles.scope}>
         {keyItem.allowedCollectionIds?.length
-          ? keyItem.allowedCollectionIds.map(id => `#${id}`).join(', ')
+          ? (keyItem.allowedCollectionKeys?.length
+            ? keyItem.allowedCollectionKeys.join(', ')
+            : keyItem.allowedCollectionIds.map(id => `#${id}`).join(', '))
           : t('apiKeys.allCollections')}
       </span>
       <span className={styles.date}>{formatDate(keyItem.createdAt)}</span>
@@ -217,7 +219,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const [name, setName] = useState('');
   const [expiryDefaults] = useState(createExpiryDefaults);
   const [restrictCollections, setRestrictCollections] = useState(false);
-  const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
+  const [selectedCollectionKeys, setSelectedCollectionKeys] = useState<string[]>([]);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
@@ -252,16 +254,16 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
         : expiresAtValue,
     };
     if (restrictCollections) {
-      data.allowedCollectionIds = selectedCollectionIds;
+      data.allowedCollectionKeys = selectedCollectionKeys;
     }
     createMutation.mutate(data);
   };
 
-  const toggleCollection = (collectionId: number) => {
-    setSelectedCollectionIds(current =>
-      current.includes(collectionId)
-        ? current.filter(id => id !== collectionId)
-        : [...current, collectionId],
+  const toggleCollection = (collectionKey: string) => {
+    setSelectedCollectionKeys(current =>
+      current.includes(collectionKey)
+        ? current.filter(key => key !== collectionKey)
+        : [...current, collectionKey],
     );
   };
 
@@ -353,14 +355,14 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                     <div className={styles.hint}>{t('collections.noCollections')}</div>
                   ) : (
                     collectionsQuery.data.data.collections.map(collection => (
-                      <label className={styles.collectionOption} key={collection.id}>
+                      <label className={styles.collectionOption} key={collection.collectionKey}>
                         <input
                           type="checkbox"
-                          checked={selectedCollectionIds.includes(collection.id)}
-                          onChange={() => toggleCollection(collection.id)}
+                          checked={selectedCollectionKeys.includes(collection.collectionKey)}
+                          onChange={() => toggleCollection(collection.collectionKey)}
                         />
                         <span>{collection.name}</span>
-                        <code>#{collection.id}</code>
+                        <code>{collection.collectionKey}</code>
                       </label>
                     ))
                   )}
@@ -377,7 +379,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 disabled={
                   createMutation.isPending
                   || !name.trim()
-                  || (restrictCollections && selectedCollectionIds.length === 0)
+                  || (restrictCollections && selectedCollectionKeys.length === 0)
                 }
               >
                 {createMutation.isPending ? t('common.loading') : t('apiKeys.create')}
@@ -406,7 +408,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className={styles.scope}>
                 {createdKey.allowedCollectionIds?.length
-                  ? createdKey.allowedCollectionIds.map(id => `#${id}`).join(', ')
+                  ? (createdKey.allowedCollectionKeys?.length
+                    ? createdKey.allowedCollectionKeys.join(', ')
+                    : createdKey.allowedCollectionIds.map(id => `#${id}`).join(', '))
                   : t('apiKeys.allCollections')}
               </div>
               <div className={styles.warning}>{createdKey.warning}</div>

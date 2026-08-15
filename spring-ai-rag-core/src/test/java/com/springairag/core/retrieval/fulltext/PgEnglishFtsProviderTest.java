@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.api.dto.RetrievalResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataAccessResourceFailureException;
 
@@ -56,7 +57,7 @@ class PgEnglishFtsProviderTest {
         when(jdbc.queryForObject(anyString(), eq(Boolean.class))).thenReturn(false);
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
-        assertTrue(provider.search("test", null, null, 5, 0.3).isEmpty());
+        assertTrue(provider.search("test", null, null, 5, 0.3, 1L).isEmpty());
     }
 
     @Test
@@ -76,7 +77,7 @@ class PgEnglishFtsProviderTest {
         when(jdbc.queryForList(contains("ts_rank_cd"), any(Object[].class))).thenReturn(List.of(row));
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
-        List<RetrievalResult> results = provider.search("test query", null, null, 5, 0.0);
+        List<RetrievalResult> results = provider.search("test query", null, null, 5, 0.0, 1L);
 
         assertEquals(1, results.size());
         assertEquals(0.65, results.get(0).getFulltextScore(), 0.001);
@@ -84,6 +85,13 @@ class PgEnglishFtsProviderTest {
         assertEquals("test document content", results.get(0).getChunkText());
         assertEquals(3, results.get(0).getChunkIndex());
         verify(jdbc).queryForList(contains("ts_rank_cd"), any(Object[].class));
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("e.embedding_profile_id = 1"));
+        assertTrue(sql.contains("s.status = 'COMPLETED'"));
+        assertTrue(sql.contains("s.content_hash = d.content_hash"));
+        assertTrue(sql.contains("d.enabled = true"));
     }
 
     @Test
@@ -104,7 +112,7 @@ class PgEnglishFtsProviderTest {
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
         List<RetrievalResult> results = provider.search("machine learning",
-                List.of(10L, 20L, 30L), null, 10, 0.0);
+                List.of(10L, 20L, 30L), null, 10, 0.0, 1L);
 
         assertEquals(1, results.size());
         assertEquals("10", results.get(0).getDocumentId());
@@ -128,7 +136,7 @@ class PgEnglishFtsProviderTest {
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of(row));
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
-        List<RetrievalResult> results = provider.search("query", null, null, 5, 0.5);
+        List<RetrievalResult> results = provider.search("query", null, null, 5, 0.5, 1L);
         assertTrue(results.isEmpty());
     }
 
@@ -149,7 +157,7 @@ class PgEnglishFtsProviderTest {
         when(jdbc.queryForList(anyString(), any(Object[].class))).thenReturn(List.of(row));
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
-        List<RetrievalResult> results = provider.search("query", null, List.of(99L), 5, 0.0);
+        List<RetrievalResult> results = provider.search("query", null, List.of(99L), 5, 0.0, 1L);
         assertTrue(results.isEmpty());
     }
 
@@ -161,9 +169,9 @@ class PgEnglishFtsProviderTest {
         when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(true);
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
-        assertTrue(provider.search(null, null, null, 5, 0.3).isEmpty());
-        assertTrue(provider.search("", null, null, 5, 0.3).isEmpty());
-        assertTrue(provider.search("   ", null, null, 5, 0.3).isEmpty());
+        assertTrue(provider.search(null, null, null, 5, 0.3, 1L).isEmpty());
+        assertTrue(provider.search("", null, null, 5, 0.3, 1L).isEmpty());
+        assertTrue(provider.search("   ", null, null, 5, 0.3, 1L).isEmpty());
         // Only the constructor's detectAvailability call should have occurred; no search queries
         verify(jdbc, atLeastOnce()).queryForObject(contains("search_vector_en"), eq(Boolean.class));
         // No queryForList calls for search
@@ -180,6 +188,6 @@ class PgEnglishFtsProviderTest {
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
         assertDoesNotThrow(() ->
-                assertTrue(provider.search("query", null, null, 5, 0.3).isEmpty()));
+                assertTrue(provider.search("query", null, null, 5, 0.3, 1L).isEmpty()));
     }
 }

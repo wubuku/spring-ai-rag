@@ -64,7 +64,9 @@ class HybridRetrieverServiceTest {
     }
 
     private float[] mockEmbedding() {
-        return new float[]{0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+        float[] vector = new float[1024];
+        Arrays.fill(vector, 0.1f);
+        return vector;
     }
 
     private Map<String, Object> mockDbRow(long id, String docId, int chunkIndex,
@@ -101,8 +103,8 @@ class HybridRetrieverServiceTest {
         fulltextRows.add(ftRow);
 
         // 由于两个搜索使用相同的 queryForList，需要更精确地匹配
-        // 第一次调用是向量搜索（ORDER BY embedding <=>），第二次是全文搜索（similarity）
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        // 第一次调用是向量搜索（ORDER BY e.embedding_1024 <=>），第二次是全文搜索（similarity）
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(vecRow));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(fulltextRows);
@@ -126,7 +128,7 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed("问题")).thenReturn(queryVec);
 
         Map<String, Object> row = mockDbRow(1L, "doc-1", 0, "检索内容", queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(row));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
@@ -199,7 +201,7 @@ class HybridRetrieverServiceTest {
     void search_fulltext_returnsSimilarityScore() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
         when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
 
@@ -219,7 +221,7 @@ class HybridRetrieverServiceTest {
     void search_fulltext_belowMinScore_filtered() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
         when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
 
@@ -241,7 +243,7 @@ class HybridRetrieverServiceTest {
     void search_fulltext_dbError_returnsEmpty() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
         when(jdbcTemplate.update(anyString(), (Object) any())).thenReturn(1);
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
@@ -264,7 +266,7 @@ class HybridRetrieverServiceTest {
 
         Map<String, Object> row1 = mockDbRow(1L, "doc-1", 0, "保留", queryVec);
         Map<String, Object> row2 = mockDbRow(99L, "doc-1", 1, "排除", queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(row1, row2));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
@@ -336,7 +338,7 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
 
         Map<String, Object> row = mockDbRow(42L, "doc-xyz", 3, "测试块内容", queryVec);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(row));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
@@ -363,7 +365,7 @@ class HybridRetrieverServiceTest {
         Map<String, Object> metadata = Map.of("source", "file.pdf", "page", 5);
         Map<String, Object> row = mockDbRow(1L, "doc-1", 0, "内容", queryVec);
         row.put("metadata", metadata);
-        when(jdbcTemplate.queryForList(contains("embedding <=>"), any(Object[].class)))
+        when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(row));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
                 .thenReturn(Collections.emptyList());
@@ -491,7 +493,7 @@ class HybridRetrieverServiceTest {
             List<RetrievalResult> results = svc.search("test query", null, null, 5);
 
             assertNotNull(results);
-            verify(jdbc, atLeastOnce()).queryForList(contains("ORDER BY embedding <=>"), any(Object[].class));
+            verify(jdbc, atLeastOnce()).queryForList(contains("ORDER BY e.embedding_1024 <=>"), any(Object[].class));
             verify(jdbc, never()).queryForList(contains("similarity"), any(Object[].class));
         }
 
@@ -504,7 +506,7 @@ class HybridRetrieverServiceTest {
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenThrow(new DataAccessResourceFailureException("jieba not found"));
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
-            when(jdbc.queryForList(contains("ORDER BY embedding <=>"), any(Object[].class)))
+            when(jdbc.queryForList(contains("ORDER BY e.embedding_1024 <=>"), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "vector result")));
             when(jdbc.queryForList(contains("similarity"), any(Object[].class)))
                     .thenReturn(List.of(fulltextRow(2L, "fulltext result", 0.8)));
@@ -651,14 +653,16 @@ class HybridRetrieverServiceTest {
         private EmbeddingModel embeddingModel;
 
         private float[] mockEmbedding() {
-            return new float[]{0.1f, 0.2f, 0.3f, 0.4f, 0.5f};
+            float[] vector = new float[1024];
+            Arrays.fill(vector, 0.1f);
+            return vector;
         }
 
         private Map<String, Object> embeddingRow(long id, String text) {
             Map<String, Object> row = new HashMap<>();
             row.put("id", id);
             row.put("chunk_text", text);
-            row.put("embedding", "[0.1,0.2,0.3]");
+            row.put("embedding", mockEmbedding());
             row.put("document_id", 1L);
             row.put("chunk_index", 0);
             row.put("metadata", null);
@@ -687,7 +691,7 @@ class HybridRetrieverServiceTest {
             when(jdbc.queryForObject(anyString(), eq(Integer.class)))
                     .thenThrow(new DataAccessResourceFailureException("jieba not found"));
             when(embeddingModel.embed(anyString())).thenReturn(mockEmbedding());
-            when(jdbc.queryForList(contains("ORDER BY embedding <=>"), any(Object[].class)))
+            when(jdbc.queryForList(contains("ORDER BY e.embedding_1024 <=>"), any(Object[].class)))
                     .thenReturn(List.of(embeddingRow(1L, "vector result")));
             // 全文检索抛出异常
             when(jdbc.queryForList(contains("similarity"), any(Object[].class)))

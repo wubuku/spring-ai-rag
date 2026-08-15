@@ -134,7 +134,9 @@
     "searchHint": "Press Enter or click Search",
     "clearHistory": "Clear History",
     "historyCleared": "Search history cleared",
-    "recentSearches": "Recent Searches"
+    "recentSearches": "Recent Searches",
+    "collection": "Collection",
+    "allCollections": "All collections"
   },
   "metrics": {
     "title": "Metrics",
@@ -332,6 +334,8 @@
     "root": "Root",
     "collectionPrefix": "Collection prefix",
     "collectionPrefixPlaceholder": "e.g. papers/2024",
+    "ragCollection": "RAG collection",
+    "noCollection": "No collection",
     "addToRag": "Add to RAG",
     "addToRagTitle": "Add this PDF to RAG knowledge base and trigger embedding",
     "embedding": "Embedding…",

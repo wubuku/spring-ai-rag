@@ -188,12 +188,16 @@ the administration UI.
 
 ```text
 ChatRequest / SearchRequest
-  collectionIds? + documentIds?
+  collectionKeys? + deprecated collectionIds? + documentIds?
         |
         v
 ApiKeyCollectionAccess.resolveCollectionIds
-  - unrestricted: preserve the requested scope
-  - restricted: constrain to allowedCollectionIds; reject outside IDs with 403
+  + CollectionIdentityResolver
+  - validate 1-128 visible-ASCII keys without normalization
+  - require ID/key sets to identify the same active Collections
+  - restricted: resolve only inside allowed internal IDs; unknown/outside key -> 403
+  - unrestricted unknown key -> 404
+  - return internal Long IDs
         |
         v
 CollectionDocumentResolver
@@ -218,33 +222,48 @@ Request semantics:
 
 | Input | Unrestricted caller | Restricted API key |
 |-------|---------------------|--------------------|
-| Omit `collectionIds` or send `[]` | No Collection filter | Use the key's allow-list |
-| Non-empty `collectionIds` | Search one or more Collections | Must be a subset of the allow-list or return `403` |
+| Omit both identity fields | No Collection filter | Use the key's allow-list |
+| Explicit empty `collectionKeys` or `collectionIds` | Return `400` | Return `400` |
+| Non-empty `collectionKeys` | Resolve exact, case-sensitive keys | Must resolve inside the allow-list or return `403` |
+| Deprecated non-empty `collectionIds` | Search one or more Collections | Must be a subset of the allow-list or return `403` |
+| Supply both key and ID sets | Sets must match; ordering is ignored | Sets must match after ACL enforcement |
 | Include `documentIds` as well | Intersect with Collection membership | Apply ACL first, then intersect |
 | Non-empty scope resolves to zero documents | Return empty; never search the full corpus | Return empty; never search the full corpus |
 
 Data model and current boundaries:
 
+- `rag_collection.id` remains the internal `BIGINT` primary key.
+  `rag_collection.collection_key VARCHAR(128) COLLATE "C"` is the stable
+  external identity. It is globally unique, immutable, case-sensitive, and
+  remains reserved after soft deletion.
 - `rag_documents.collection_id` is nullable, so a document belongs to at most
   one Collection. Unassigned documents cannot be selected through
-  `collectionIds`, but may appear in unscoped retrieval or through explicit
-  `documentIds`.
+  Collection scope, but may appear in unscoped retrieval or through explicit
+  `documentIds`. Database foreign keys and retrieval SQL remain numeric.
+- Collection create/import/clone require a caller-supplied key. By-key CRUD,
+  restore, document association, and export use query parameters rather than
+  path segments because valid keys may contain URL-reserved punctuation.
+- API-key management exposes `allowedCollectionKeys`; V24 storage and runtime
+  authorization continue to use internal IDs in
+  `rag_api_key.allowed_collection_ids`.
 - Deleting a Collection soft-deletes it and clears `collection_id` from its
   documents. It does not delete documents or `rag_embeddings`, so those
   documents may still be found by full-corpus retrieval.
 - `rag_collection.embedding_model` and `dimensions` do not participate in
-  runtime model routing. Retrieval uses the global EmbeddingModel and the
-  shared `VECTOR(1024)` schema.
-- Collection and Document `enabled` states are not yet fully included in
-  retrieval SQL.
+  per-Collection model routing. The active global EmbeddingModel is bound to
+  one immutable Embedding Profile for each write and query.
+- Vector and full-text retrieval require the active Profile, a fresh
+  `COMPLETED` document embedding state, a matching current content hash, and an
+  enabled document.
 - The current MVP expands Collections to a complete document-ID list and then
   generates `IN (...)`. Large Collections should move toward retrieval SQL
   that joins `rag_documents` and filters directly on `collection_id`.
-- WebUI Chat currently selects one Collection while the backend accepts
-  multiple. The standalone Search page has no Collection selector yet.
+- WebUI Chat and Search currently select one Collection and send its key;
+  backend Chat and Search contracts accept multiple keys.
 
 Source anchors:
 
+- [CollectionIdentityResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
 - [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
 - [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
 - [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
@@ -276,12 +295,56 @@ TextCleaner
   ▼
 EmbeddingBatchService
   │ 4. Call EmbeddingModel per batchSize
-  │ 5. Write to rag_embeddings (VECTOR(1024))
+  │ 5. Validate all results, then atomically replace the active Profile rows
+  │    in rag_embeddings.embedding_1024 VECTOR(1024)
   ▼
 Done
 ```
 
-**Alternative path**: `POST /embed/vs` uses Spring AI `PgVectorStore.add()` for simplified flow (embedding + storage in one step).
+The active Profile is registered in `rag_embedding_profiles`. Per-document
+cache and completion state is stored in `rag_document_embedding_state`. Model
+calls happen outside the write transaction; only a short transaction deletes
+and replaces the Profile-scoped rows. A failed or incomplete batch leaves the
+previous completed vectors available.
+
+### 4.4 JSON Structured-Record Flow
+
+```text
+POST /api/v1/rag/json-records/upsert
+  |
+  v
+JsonRecordService
+  | persist jsonbPayload + retrievalText
+  | identity: collectionId + json-record + externalId
+  v
+RagDocument.content = retrievalText
+RagDocument.jsonbPayload = business JSONB
+  |
+  +--> DocumentEmbedService (retrievalText only)
+  |      +--> one record-level chunk
+  |      +--> active Profile embedding
+  |
+  +--> version snapshot (content + jsonb payload)
+
+POST /api/v1/rag/json-records/search
+  |
+  v
+HybridRetrieverService -> ranked document IDs
+  |
+  v
+batch payload enrichment from rag_documents
+  |
+  v
+ranked JSON record response
+```
+
+`jsonbPayload` is never copied into embedding metadata or ordinary chat
+context. The caller owns the semantic relationship between the payload and
+`retrievalText`; the service stores both without trying to reconcile them.
+Payload-only updates create an audit version but preserve a fresh embedding.
+This is deliberately a dedicated JSONB path, leaving room for a future
+`xmlPayload` path with the same retrieval-text boundary without introducing a
+generic `payload` column.
 
 ---
 
@@ -291,7 +354,10 @@ Done
 
 ```
 rag_collection (1) ──→ (N) rag_documents
+rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
+rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
+rag_embedding_profiles (1) ──→ (N) rag_embeddings
 
 rag_chat_history        # Conversation history (standalone table)
 rag_retrieval_logs      # Retrieval logs
@@ -308,14 +374,20 @@ rag_audit_log           # Audit logs (collection operations)
 
 | Table | Key Columns | Description |
 |-------|-------------|-------------|
-| `rag_collection` | name, description, embedding_model | Knowledge base / collection |
-| `rag_documents` | title, content, content_hash, collection_id | Document metadata |
-| `rag_embeddings` | document_id, chunk_index, embedding VECTOR(1024), content | Text chunks + vectors |
+| `rag_collection` | id, collection_key, name, description, embedding_model | Internal numeric identity plus stable external Collection key |
+| `rag_documents` | title, content, content_hash, collection_id, external_id, jsonb_payload | Document metadata and structured-record payload |
+| `rag_document_versions` | document_id, version_number, content_snapshot, jsonb_payload_snapshot | Document and JSONB version audit |
+| `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
+| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile-scoped cache and completion state |
+| `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms | Retrieval quality tracking |
 
 **Index Strategy**:
-- `rag_embeddings.embedding`: IVFFlat index (vector nearest-neighbor search)
+- `rag_collection.collection_key`: named global unique constraint / B-Tree;
+  visible-ASCII CHECK and UPDATE trigger enforce the key contract and
+  immutability
+- `rag_embeddings.embedding_1024`: Profile-specific partial HNSW indexes (vector nearest-neighbor search)
 - `rag_documents.content_hash`: B-Tree (hash-based deduplication)
 - `rag_documents`: GIN index (full-text search with jiebacfg Chinese tokenizer)
 

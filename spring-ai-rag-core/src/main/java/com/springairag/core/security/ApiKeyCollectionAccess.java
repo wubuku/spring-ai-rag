@@ -4,6 +4,7 @@ import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.service.CollectionIdentityResolver;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -121,13 +122,19 @@ public final class ApiKeyCollectionAccess {
      */
     public static List<Long> resolveCollectionIds(List<Long> requested, RagApiKey key) {
         if (isUnrestricted(key)) {
+            if (requested != null && requested.isEmpty()) {
+                throw new IllegalArgumentException("Collection scope must not be empty");
+            }
             return requested;
         }
         Set<Long> allowSet = restrictedCollectionIds(key).orElseThrow();
         List<Long> allowed = List.copyOf(allowSet);
 
-        if (requested == null || requested.isEmpty()) {
+        if (requested == null) {
             return allowed;
+        }
+        if (requested.isEmpty()) {
+            throw new IllegalArgumentException("Collection scope must not be empty");
         }
         Set<Long> effective = new LinkedHashSet<>();
         for (Long id : requested) {
@@ -142,6 +149,72 @@ public final class ApiKeyCollectionAccess {
             effective.add(id);
         }
         return List.copyOf(effective);
+    }
+
+    /**
+     * Resolve preferred external keys plus the legacy numeric IDs.
+     *
+     * <p>Unknown keys are deliberately converted to FORBIDDEN for restricted
+     * callers, so an API key cannot probe whether an inaccessible Collection
+     * exists. Unrestricted callers retain the normal 404 from the resolver.
+     */
+    public static List<Long> resolveCollectionIds(
+            List<Long> requestedIds,
+            List<String> requestedKeys,
+            RagApiKey key,
+            CollectionIdentityResolver resolver) {
+        if (requestedKeys == null) {
+            return resolveCollectionIds(requestedIds, key);
+        }
+        if (requestedKeys.isEmpty()) {
+            throw new IllegalArgumentException("Collection scope must not be empty");
+        }
+        if (requestedIds != null && requestedIds.isEmpty()) {
+            throw new IllegalArgumentException("Collection scope must not be empty");
+        }
+        try {
+            List<Long> resolvedKeys = isUnrestricted(key)
+                    ? resolver.resolveActiveIds(null, requestedKeys)
+                    : resolver.resolveActiveIdsWithinAllowed(
+                            requestedKeys,
+                            restrictedCollectionIds(key).orElseThrow());
+            if (requestedIds != null) {
+                List<Long> resolvedIds = resolveCollectionIds(requestedIds, key);
+                if (!new LinkedHashSet<>(resolvedIds)
+                        .equals(new LinkedHashSet<>(resolvedKeys))) {
+                    throw new IllegalArgumentException(
+                            "collectionIds and collectionKeys identify different collections");
+                }
+                return resolvedIds;
+            }
+            return resolvedKeys;
+        } catch (com.springairag.core.exception.RagException e) {
+            if (!isUnrestricted(key)) {
+                throw new SecurityException("Collection is not authorized");
+            }
+            throw e;
+        }
+    }
+
+    public static List<Long> resolveDelegatedAllowedKeys(
+            List<String> requestedKeys,
+            RagApiKey caller,
+            CollectionIdentityResolver resolver) {
+        if (requestedKeys == null) {
+            return null;
+        }
+        if (requestedKeys.isEmpty()) {
+            throw new IllegalArgumentException("Allowed collection keys must not be empty");
+        }
+        try {
+            return resolveDelegatedAllowedIds(
+                    resolveCollectionIds(null, requestedKeys, caller, resolver), caller);
+        } catch (com.springairag.core.exception.RagException e) {
+            if (!isUnrestricted(caller)) {
+                throw new SecurityException("Collection is not authorized");
+            }
+            throw e;
+        }
     }
 
     public static void requireCollectionId(Long collectionId, RagApiKey key) {

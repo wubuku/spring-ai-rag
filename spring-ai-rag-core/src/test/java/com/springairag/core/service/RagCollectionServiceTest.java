@@ -1,8 +1,11 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.CollectionCloneResponse;
+import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -45,6 +49,7 @@ class RagCollectionServiceTest {
     private RagCollection createCollection(Long id, String name) {
         RagCollection c = new RagCollection();
         c.setId(id);
+        c.setCollectionKey(id == null ? "collection-new" : "collection-" + id);
         c.setName(name);
         c.setDescription("Description of " + name);
         c.setEmbeddingModel("bge-m3");
@@ -53,6 +58,87 @@ class RagCollectionServiceTest {
         c.setDeleted(false);
         c.setCreatedAt(LocalDateTime.now());
         return c;
+    }
+
+    // ==================== createCollection ====================
+
+    @Nested
+    @DisplayName("createCollection")
+    class CreateCollection {
+
+        @Test
+        @DisplayName("persists the caller supplied key without normalization")
+        void createsWithExplicitKey() {
+            CollectionRequest request = request("Customer:Manual/V3");
+            when(collectionRepository.saveAndFlush(any(RagCollection.class)))
+                    .thenAnswer(invocation -> {
+                        RagCollection collection = invocation.getArgument(0);
+                        collection.setId(1L);
+                        return collection;
+                    });
+
+            RagCollection created = service.createCollection(request);
+
+            assertEquals("Customer:Manual/V3", created.getCollectionKey());
+            verify(collectionRepository).existsByCollectionKey("Customer:Manual/V3");
+            verify(collectionRepository).saveAndFlush(argThat(collection ->
+                    "Customer:Manual/V3".equals(collection.getCollectionKey())));
+        }
+
+        @Test
+        @DisplayName("requires a valid explicit key")
+        void rejectsMissingAndInvalidKeys() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.createCollection(request(null)));
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.createCollection(request("has space")));
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.createCollection(request("x".repeat(129))));
+            verify(collectionRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("precheck maps an existing key to duplicate resource")
+        void duplicatePrecheckReturnsConflict() {
+            when(collectionRepository.existsByCollectionKey("duplicate"))
+                    .thenReturn(true);
+
+            RagException error = assertThrows(RagException.class,
+                    () -> service.createCollection(request("duplicate")));
+
+            assertEquals(ErrorCode.DUPLICATE_RESOURCE, error.getErrorCodeEnum());
+            verify(collectionRepository, never()).saveAndFlush(any());
+        }
+
+        @Test
+        @DisplayName("database uniqueness race maps only the named key constraint")
+        void uniqueConstraintRaceReturnsConflict() {
+            org.hibernate.exception.ConstraintViolationException violation =
+                    mock(org.hibernate.exception.ConstraintViolationException.class);
+            when(violation.getConstraintName())
+                    .thenReturn("uk_rag_collection_collection_key");
+            when(collectionRepository.saveAndFlush(any(RagCollection.class)))
+                    .thenThrow(new DataIntegrityViolationException(
+                            "duplicate", violation));
+
+            RagException error = assertThrows(RagException.class,
+                    () -> service.createCollection(request("race")));
+
+            assertEquals(ErrorCode.DUPLICATE_RESOURCE, error.getErrorCodeEnum());
+        }
+
+        @Test
+        @DisplayName("unrelated database errors are not mislabeled as duplicates")
+        void unrelatedDatabaseErrorIsPreserved() {
+            DataIntegrityViolationException databaseError =
+                    new DataIntegrityViolationException("other constraint");
+            when(collectionRepository.saveAndFlush(any(RagCollection.class)))
+                    .thenThrow(databaseError);
+
+            assertSame(databaseError, assertThrows(
+                    DataIntegrityViolationException.class,
+                    () -> service.createCollection(request("valid-key"))));
+        }
     }
 
     // ==================== deleteCollection ====================
@@ -195,8 +281,23 @@ class RagCollectionServiceTest {
         @DisplayName("throws NullPointerException when id is null")
         void nullId_throwsNullPointerException() {
             NullPointerException ex = assertThrows(NullPointerException.class,
-                    () -> service.cloneCollection(null));
+                    () -> service.cloneCollection(null, "clone-null-id"));
             assertEquals("id must not be null", ex.getMessage());
+        }
+
+        @Test
+        @DisplayName("requires a new explicit key")
+        void missingOrDuplicateTargetKeyIsRejected() {
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.cloneCollection(1L));
+            assertThrows(IllegalArgumentException.class,
+                    () -> service.cloneCollection(1L, null));
+            when(collectionRepository.existsByCollectionKey("existing-clone"))
+                    .thenReturn(true);
+            RagException duplicate = assertThrows(RagException.class,
+                    () -> service.cloneCollection(1L, "existing-clone"));
+            assertEquals(ErrorCode.DUPLICATE_RESOURCE,
+                    duplicate.getErrorCodeEnum());
         }
 
         @Test
@@ -229,17 +330,19 @@ class RagCollectionServiceTest {
 
             when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
             when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of(doc1, doc2));
-            when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
+            when(collectionRepository.saveAndFlush(any(RagCollection.class))).thenAnswer(inv -> {
                 RagCollection c = inv.getArgument(0);
                 if (c.getId() == null) c.setId(5L);
                 return c;
             });
-            when(documentRepository.saveAll(anyList())).thenAnswer(inv -> inv.getArgument(0));
+            when(documentRepository.saveAllAndFlush(anyList())).thenAnswer(inv -> inv.getArgument(0));
 
-            Optional<CollectionCloneResponse> result = service.cloneCollection(1L);
+            Optional<CollectionCloneResponse> result =
+                    service.cloneCollection(1L, "clone-with-documents");
 
             assertTrue(result.isPresent());
             assertEquals(5L, result.get().clonedCollectionId());
+            assertEquals("clone-with-documents", result.get().clonedCollectionKey());
             assertEquals("Source (Copy)", result.get().clonedCollectionName());
             assertEquals(1L, result.get().sourceCollectionId());
             assertEquals(2, result.get().documentsCloned());
@@ -247,7 +350,7 @@ class RagCollectionServiceTest {
             // Verify documents are saved with PENDING status and new collection id
             @SuppressWarnings("unchecked")
             ArgumentCaptor<List<RagDocument>> docsCaptor = ArgumentCaptor.forClass(List.class);
-            verify(documentRepository).saveAll(docsCaptor.capture());
+            verify(documentRepository).saveAllAndFlush(docsCaptor.capture());
             List<RagDocument> savedDocs = docsCaptor.getValue();
             assertEquals(2, savedDocs.size());
             savedDocs.forEach(doc -> {
@@ -265,15 +368,17 @@ class RagCollectionServiceTest {
             RagCollection source = createCollection(1L, "Empty Source");
             when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
             when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of());
-            when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
+            when(collectionRepository.saveAndFlush(any(RagCollection.class))).thenAnswer(inv -> {
                 RagCollection c = inv.getArgument(0);
                 if (c.getId() == null) c.setId(5L);
                 return c;
             });
 
-            Optional<CollectionCloneResponse> result = service.cloneCollection(1L);
+            Optional<CollectionCloneResponse> result =
+                    service.cloneCollection(1L, "clone-empty");
 
             assertTrue(result.isPresent());
+            assertEquals("clone-empty", result.get().clonedCollectionKey());
             assertEquals(0, result.get().documentsCloned());
             verify(documentRepository, never()).saveAll(anyList());
         }
@@ -283,7 +388,8 @@ class RagCollectionServiceTest {
         void notFound_returnsEmpty() {
             when(collectionRepository.findByIdAndDeletedFalse(999L)).thenReturn(Optional.empty());
 
-            Optional<CollectionCloneResponse> result = service.cloneCollection(999L);
+            Optional<CollectionCloneResponse> result =
+                    service.cloneCollection(999L, "clone-missing");
 
             assertTrue(result.isEmpty());
             verify(collectionRepository, never()).save(any());
@@ -296,15 +402,23 @@ class RagCollectionServiceTest {
             RagCollection source = createCollection(1L, "Source");
             when(collectionRepository.findByIdAndDeletedFalse(1L)).thenReturn(Optional.of(source));
             when(documentRepository.findAllByCollectionId(1L)).thenReturn(List.of());
-            when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
+            when(collectionRepository.saveAndFlush(any(RagCollection.class))).thenAnswer(inv -> {
                 RagCollection c = inv.getArgument(0);
                 if (c.getId() == null) c.setId(5L);
                 return c;
             });
 
-            Optional<CollectionCloneResponse> result = svcNoAudit.cloneCollection(1L);
+            Optional<CollectionCloneResponse> result =
+                    svcNoAudit.cloneCollection(1L, "clone-no-audit");
 
             assertTrue(result.isPresent());
         }
+    }
+
+    private CollectionRequest request(String collectionKey) {
+        CollectionRequest request = new CollectionRequest();
+        request.setCollectionKey(collectionKey);
+        request.setName("Test Collection");
+        return request;
     }
 }

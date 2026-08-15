@@ -42,6 +42,12 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      */
     Optional<RagCollection> findByIdAndDeletedFalse(Long id);
 
+    Optional<RagCollection> findByCollectionKey(String collectionKey);
+
+    Optional<RagCollection> findByCollectionKeyAndDeletedFalse(String collectionKey);
+
+    boolean existsByCollectionKey(String collectionKey);
+
     /**
      * Soft delete: mark as deleted.
      */

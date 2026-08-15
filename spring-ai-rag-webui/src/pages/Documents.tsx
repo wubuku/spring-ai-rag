@@ -14,7 +14,7 @@ export function Documents() {
   const { t } = useTranslation();
   const [page, setPage] = useState(0);
   const [keyword, setKeyword] = useState('');
-  const [selectedCollection, setSelectedCollection] = useState<number | undefined>(undefined);
+  const [selectedCollection, setSelectedCollection] = useState<string | undefined>(undefined);
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<{ id: number; title: string } | null>(null);
   const PAGE_SIZE = 20;
@@ -24,9 +24,9 @@ export function Documents() {
   // Read collectionId from URL on mount (e.g., when navigated from Collections page)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const urlCollectionId = params.get('collectionId');
-    if (urlCollectionId) {
-      setSelectedCollection(Number(urlCollectionId));
+    const urlCollectionKey = params.get('collectionKey');
+    if (urlCollectionKey) {
+      setSelectedCollection(urlCollectionKey);
     }
   }, []);
 
@@ -42,7 +42,7 @@ export function Documents() {
         page,
         size: PAGE_SIZE,
         title: keyword || undefined,
-        collectionId: selectedCollection,
+        collectionKey: selectedCollection,
       }),
     staleTime: 10000,
   });
@@ -95,7 +95,7 @@ export function Documents() {
 
   const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const val = e.target.value;
-    setSelectedCollection(val === '' ? undefined : Number(val));
+    setSelectedCollection(val === '' ? undefined : val);
     setPage(0);
   };
 
@@ -169,9 +169,9 @@ export function Documents() {
           className={styles.filterSelect}
         >
           <option value="">All Collections</option>
-          {collections.map((c: { id: number; name: string }) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
+          {collections.map((c: { id: number; collectionKey: string; name: string }) => (
+            <option key={c.collectionKey} value={c.collectionKey}>
+              {c.name} ({c.collectionKey})
             </option>
           ))}
         </select>

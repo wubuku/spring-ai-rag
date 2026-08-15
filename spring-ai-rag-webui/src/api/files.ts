@@ -68,11 +68,14 @@ export const filesApi = {
    * @param collectionId Optional collection ID to associate with
    * @param embed Whether to trigger embedding (default: false - returns immediately)
    */
-  importPdfToRag: (file: File, collectionId?: number, embed: boolean = false) => {
+  importPdfToRag: (file: File, collectionId?: number, embed: boolean = false, collectionKey?: string) => {
     const formData = new FormData();
     formData.append('file', file);
     if (collectionId !== undefined) {
       formData.append('collectionId', String(collectionId));
+    }
+    if (collectionKey !== undefined) {
+      formData.append('collectionKey', collectionKey);
     }
     formData.append('embed', String(embed));
     return apiClient.post<PdfToRagResponse>('/files/pdf-to-rag', formData, {
@@ -87,10 +90,13 @@ export const filesApi = {
    * @param collectionId Optional collection ID to associate
    * @param forceReembed Whether to force re-embedding (default: false)
    */
-  triggerEmbedding: (uuid: string, collectionId?: number, forceReembed: boolean = false) => {
+  triggerEmbedding: (uuid: string, collectionId?: number, forceReembed: boolean = false, collectionKey?: string) => {
     const params = new URLSearchParams();
     if (collectionId !== undefined) {
       params.append('collectionId', String(collectionId));
+    }
+    if (collectionKey !== undefined) {
+      params.append('collectionKey', collectionKey);
     }
     params.append('embed', 'sync');
     params.append('forceReembed', String(forceReembed));

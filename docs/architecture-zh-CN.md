@@ -187,12 +187,16 @@ Collection 已经是实际检索边界，不只是管理页面中的文档分类
 
 ```text
 ChatRequest / SearchRequest
-  collectionIds? + documentIds?
+  collectionKeys? + deprecated collectionIds? + documentIds?
         │
         ▼
 ApiKeyCollectionAccess.resolveCollectionIds
-  - unrestricted：保留调用方范围
-  - restricted：限制为 allowedCollectionIds，越界返回 403
+  + CollectionIdentityResolver
+  - 按原值校验 1-128 个可见 ASCII 字符，不做归一化
+  - ID/key 集合必须标识同一批活动 Collection
+  - restricted：只在允许的内部 ID 中解析；未知/越界 key 返回 403
+  - unrestricted 未知 key 返回 404
+  - 输出内部 Long ID
         │
         ▼
 CollectionDocumentResolver
@@ -217,27 +221,38 @@ CollectionDocumentResolver
 
 | 输入 | 不受限调用方 | 受限 API Key |
 |------|--------------|---------------|
-| 省略 `collectionIds` 或传 `[]` | 不按 Collection 过滤 | 自动使用 Key 的允许列表 |
-| 非空 `collectionIds` | 检索指定一个或多个 Collection | 必须是允许列表的子集，否则 `403` |
+| 同时省略两种身份字段 | 不按 Collection 过滤 | 自动使用 Key 的允许列表 |
+| 显式空 `collectionKeys` 或 `collectionIds` | 返回 `400` | 返回 `400` |
+| 非空 `collectionKeys` | 按大小写精确解析 key | 必须在允许列表中解析，否则 `403` |
+| deprecated 非空 `collectionIds` | 检索一个或多个 Collection | 必须是允许列表的子集，否则 `403` |
+| 同时提供 key 和 ID 集合 | 集合必须一致，忽略顺序 | 应用 ACL 后集合必须一致 |
 | 同时给出 `documentIds` | 与 Collection 所属文档取交集 | 先应用 ACL，再取交集 |
 | 非空范围解析后为零文档 | 返回空结果，不调用全库检索 | 返回空结果，不调用全库检索 |
 
 数据模型和当前边界：
 
+- `rag_collection.id` 继续作为内部 `BIGINT` 主键；
+  `rag_collection.collection_key VARCHAR(128) COLLATE "C"` 是稳定外部身份。它全局唯一、
+  不可变、区分大小写，软删除后仍保持占用。
 - `rag_documents.collection_id` 是可空外键，所以一个文档最多属于一个 Collection；
-  未归属文档不能通过 `collectionIds` 选中，但仍可出现在未限定 Collection 或显式
-  `documentIds` 的检索中。
+  未归属文档不能通过 Collection 范围选中，但仍可出现在未限定 Collection 或显式
+  `documentIds` 的检索中。数据库外键和检索 SQL 继续使用数字 ID。
+- Collection 创建、导入和克隆必须由调用方提供 key。by-key CRUD、恢复、文档关联和导出
+  使用 query parameter，不使用 path segment，因为合法 key 可以包含 URL 保留标点。
+- API Key 管理对外使用 `allowedCollectionKeys`；V24 存储和运行时授权仍在
+  `rag_api_key.allowed_collection_ids` 中保存内部 ID。
 - 删除 Collection 会软删除集合并批量清空关联文档的 `collection_id`，不会删除文档或
   `rag_embeddings`；这些文档之后仍可能被全库检索命中。
 - `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
-  全局 EmbeddingModel 和统一的 `VECTOR(1024)`。
-- Collection / Document 的 `enabled` 状态尚未完整加入检索 SQL。
+  全局 EmbeddingModel，但每次写入和查询都会绑定到一个不可变 Embedding Profile。
+- 向量和全文检索都要求活动 Profile、最新 content hash 对应的 `COMPLETED` 状态，以及启用的文档。
 - Collection 先解析成完整 document ID 列表，再生成 `IN (...)`；这是可用的 MVP，
   但大集合应改为检索 SQL 直接 JOIN `rag_documents` 并按 `collection_id` 过滤。
-- WebUI Chat 当前单选 Collection，后端支持多个；独立 Search 页面尚未暴露 Collection 选择。
+- WebUI Chat 和 Search 当前单选 Collection 并发送其 key；后端 Chat/Search 契约支持多个 key。
 
 源码锚点：
 
+- [CollectionIdentityResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
 - [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
 - [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
 - [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
@@ -269,12 +284,51 @@ TextCleaner
   ▼
 EmbeddingBatchService
   │ 4. 按 batchSize 调用 EmbeddingModel
-  │ 5. 写入 rag_embeddings（VECTOR(1024)）
+  │ 5. 校验全部结果后，在短事务内原子替换活动 Profile 的
+  │    rag_embeddings.embedding_1024 VECTOR(1024) 行
   ▼
 完成
 ```
 
-**替代路径**：`POST /embed/vs` 使用 Spring AI `PgVectorStore.add()` 简化流程（一步完成嵌入+存储）。
+活动 Profile 注册在 `rag_embedding_profiles`。按文档和 Profile 保存缓存及完成状态的
+`rag_document_embedding_state`。模型调用在写事务外执行；短事务只替换该 Profile 的向量行。
+批量调用失败或结果不完整时，旧的已完成向量保持可用。
+
+### 4.4 JSON 结构化记录流程
+
+```text
+POST /api/v1/rag/json-records/upsert
+  │
+  ▼
+JsonRecordService
+  │ 保存 jsonbPayload + retrievalText
+  │ 身份：collectionId + json-record + externalId
+  ▼
+RagDocument.content = retrievalText
+RagDocument.jsonbPayload = 业务 JSONB
+  │
+  ├──> DocumentEmbedService（只处理 retrievalText）
+  │      ├──> 一个 record-level chunk
+  │      └──> 活动 Profile embedding
+  │
+  └──> 版本快照（content + JSONB payload）
+
+POST /api/v1/rag/json-records/search
+  │
+  ▼
+HybridRetrieverService -> 排序后的 document IDs
+  │
+  ▼
+从 rag_documents 批量补充 payload
+  │
+  ▼
+排序后的 JSON record 响应
+```
+
+`jsonbPayload` 不会复制到 embedding metadata 或普通聊天上下文。JSON 与
+`retrievalText` 的语义对应关系由调用者负责，服务只保存二者，不尝试互相校验。
+仅更新 payload 会创建审计版本，但保留新鲜 embedding。这是一条明确的 JSONB 专用路径，
+未来可以按相同的 retrieval-text 边界增加 `xmlPayload`，而不引入泛化的 `payload` 列。
 
 ---
 
@@ -284,7 +338,10 @@ EmbeddingBatchService
 
 ```
 rag_collection (1) ──→ (N) rag_documents
+rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
+rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
+rag_embedding_profiles (1) ──→ (N) rag_embeddings
 
 rag_chat_history        # 对话历史（独立表）
 rag_retrieval_logs      # 检索日志
@@ -301,14 +358,19 @@ rag_audit_log           # 审计日志（集合操作）
 
 | 表 | 关键列 | 说明 |
 |---|--------|------|
-| `rag_collection` | name, description, embedding_model | 知识库/集合 |
-| `rag_documents` | title, content, content_hash, collection_id | 文档元数据 |
-| `rag_embeddings` | document_id, chunk_index, embedding VECTOR(1024), content | 文本块 + 向量 |
+| `rag_collection` | id, collection_key, name, description, embedding_model | 内部数字身份与稳定外部 Collection key |
+| `rag_documents` | title, content, content_hash, collection_id, external_id, jsonb_payload | 文档元数据与结构化记录 payload |
+| `rag_document_versions` | document_id, version_number, content_snapshot, jsonb_payload_snapshot | 文档与 JSONB 版本审计 |
+| `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
+| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile 级缓存与完成状态 |
+| `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms | 检索质量追踪 |
 
 **索引策略**：
-- `rag_embeddings.embedding`：IVFFlat 索引（向量近邻搜索）
+- `rag_collection.collection_key`：命名的全局唯一约束/B-Tree；可见 ASCII CHECK 和
+  UPDATE trigger 共同保证字符契约与不可变性
+- `rag_embeddings.embedding_1024`：Profile 专属 partial HNSW 索引（向量近邻搜索）
 - `rag_documents.content_hash`：B-Tree（哈希去重）
 - `rag_documents`：GIN 索引（全文检索，jiebacfg 中文分词）
 

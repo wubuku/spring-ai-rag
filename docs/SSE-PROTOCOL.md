@@ -1,6 +1,6 @@
 # SSE 流式协议设计文档
 
-> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-04-06
+> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-08-15
 
 ## 1. 当前实现的协议格式
 
@@ -121,7 +121,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
 
     const send = useCallback(async (
         message: string,
-        collectionIds?: number[] | number,
+        collectionKeys?: string[] | string,
         conversationId?: string,
         model?: string
     ) => {
@@ -129,12 +129,12 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         setIsConnected(true);
         accumulatedContentRef.current = '';
 
-        const normalizedIds =
-            collectionIds == null
+        const normalizedKeys =
+            collectionKeys == null
                 ? undefined
-                : Array.isArray(collectionIds)
-                    ? collectionIds
-                    : [collectionIds];
+                : Array.isArray(collectionKeys)
+                    ? collectionKeys
+                    : [collectionKeys];
 
         const response = await fetch('/api/v1/rag/chat/stream', {
             method: 'POST',
@@ -144,7 +144,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             },
             body: JSON.stringify({
                 message,
-                collectionIds: normalizedIds?.length ? normalizedIds : undefined,
+                collectionKeys: normalizedKeys,
                 sessionId: conversationId,
                 model,
             }),
@@ -183,6 +183,10 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
     }, [close]);
 }
 ```
+
+`collectionKeys` 为 `undefined` 表示省略 Collection 范围；显式 `[]` 必须原样发送并由
+后端返回 `400`，前端不得把显式空范围归一化为省略。deprecated 的 `collectionIds`
+继续兼容；同时提供两者时必须解析为同一 Collection 集合。
 
 ### 3.2 SSE 事件解析器
 
@@ -251,7 +255,8 @@ const { send, isConnected } = useChatSSE({
 # 测试 SSE 端点（显示原始格式）
 curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H 'Content-Type: application/json' \
-  -d '{"message":"你好"}' --no-buffer
+  -d '{"message":"你好","collectionKeys":["customer-42:manual:v3"]}' \
+  --no-buffer
 
 # 期望输出：
 # data:{"choices":[{"delta":{"content":"Hello"}}]}
@@ -261,7 +266,19 @@ curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
 # data:{"traceId":"abc123","status":"complete"}
 ```
 
-## 6. 与旧格式的对比
+## 6. PDF 与 Embedding SSE 的 Collection 身份
+
+以下 SSE 入口推荐使用 query parameter `collectionKey`，deprecated 的 `collectionId`
+继续兼容：
+
+- `POST /api/v1/rag/files/pdf-to-rag?embed=true&collectionKey=...`
+- `POST /api/v1/rag/files/{uuid}/embed?embed=sse&collectionKey=...`
+
+key 可包含 URL 保留标点，调用方必须进行 URL 编码，例如 `+` 编码为 `%2B`、`#` 编码为
+`%23`。同时提供 ID 和 key 时，两者必须指向同一活动 Collection。SSE 事件 payload
+保持现有进度/完成格式；Collection 身份只影响请求范围，不改变事件协议。
+
+## 7. 与旧格式的对比
 
 | 特性 | 旧格式 (event:chunk) | 新格式 (OpenAI 兼容) |
 |------|---------------------|---------------------|
@@ -270,14 +287,14 @@ curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
 | 兼容性 | 自定义 | OpenAI/ Spring AI 兼容 |
 | 前端解析 | 需识别 event name | 统一解析 data: JSON |
 
-## 7. 已知限制
+## 8. 已知限制
 
 1. **sources 事件**：当前实现未发送 sources 事件（来源文档在 done 之后通过另一个 API 获取）
 2. **error 事件**：错误通过 `completeWithError` 传递，未使用 `event:error`
 3. **token 统计**：未发送 token 使用量元数据
 4. **heartbeat**：无心跳保活（`SseEmitter(0L)` 表示无限超时）
 
-## 8. 未来改进方向
+## 9. 未来改进方向
 
 - [ ] 添加 sources 事件（`event:sources\ndata:{"sources":[...]}`)
 - [ ] 添加 error 事件规范化

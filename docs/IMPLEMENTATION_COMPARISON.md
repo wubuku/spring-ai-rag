@@ -3,7 +3,7 @@
 > **当前项目**: spring-ai-rag  
 > **参考项目**: spring-ai-skills-demo, MaxKB4j, dermai-rag-service  
 > **创建时间**: 2026-04-01  
-> **最后更新**: 2026-05-06 06:22 — 文档对齐：gap 表格中 20+ 项已实现但标注未完成，本次更正为 ✅；源文件 280 / 测试文件 203；项目处于生产级成熟状态
+> **最后更新**: 2026-08-15 — Embedding Profile、固定维度向量列和旧 VectorStore 旁路清理已落地
 
 ---
 
@@ -11,7 +11,7 @@
 
 | 阶段 | 内容 | 状态 |
 |------|------|------|
-| Phase 1 | 基础框架（ChatModel/EmbeddingModel/PgVectorStore） | ✅ 完成 |
+| Phase 1 | 基础框架（ChatModel/EmbeddingModel/应用自有 pgvector） | ✅ 完成 |
 | Phase 2 | 核心 RAG 组件（混合检索/查询改写/重排/分块） | ✅ 完成 |
 | Phase 3 | RAG Pipeline + REST API + 对话记忆 | ✅ 完成 |
 | Phase 4 | 领域扩展示例（DomainRagExtension + demo） | ✅ 完成 |
@@ -131,18 +131,18 @@
 - **分块**: HierarchicalTextChunker（从 dermai-rag-service 迁移），支持 Markdown 标题/段落/句子三级分块
 - **清洗**: TextCleaner（从 dermai-rag-service 迁移）
 - **嵌入**: EmbeddingBatchService，按 batchSize 分批调用 EmbeddingModel
-- **存储**: 通过 JdbcTemplate INSERT 到 rag_embeddings（vector 列用 `?::vector` 转换）
+- **存储**: 事务外生成、短事务原子替换，通过 JdbcTemplate 双写兼容列和固定长度 `embedding_1024`
 
 ### 参考实现
 - **dermai-rag-service**: 同样的 HierarchicalTextChunker + TextCleaner + EmbeddingBatchService
-- **spring-ai-skills-demo**: 直接用 Spring AI 的 `VectorStore.add(List<Document>)` 自动处理嵌入和存储
+- **spring-ai-skills-demo**: 直接用 Spring AI 的 `VectorStore.add(List<Document>)` 自动处理嵌入和存储；本项目使用 Profile-aware JdbcTemplate 以控制固定维度、原子替换和缓存状态
 
 ### 差距
 | 差距 | 严重度 |
 |------|--------|
 | （已修复）文档内容哈希去重已实现（HashDeduplicationService + SHA-256 content_hash） | P2 ✅ |
 | （已修复）进度回调 SSE 流已实现（PdfImportController + SseEmitter 实时进度） | P2 ✅ |
-| （保留）手动 JdbcTemplate INSERT 被保留——因需要精确控制向量维度和批量大小，PgVectorStore.add() 灵活性不足 | — |
+| （保留）手动 JdbcTemplate INSERT 被保留——因需要精确控制 Profile、固定向量维度、批量大小和原子替换 | — |
 
 ---
 
@@ -215,7 +215,7 @@
 | P1 | API 兼容性适配层（多 system 消息） | dermai-rag-service ApiClientService | `config/ChatModelConfig.java` | ✅ @ConditionalOnMissingBean 双 Bean |
 | P1 | 查询改写增加同义词/限定词 | dermai-rag-service QueryRewritingService | `retrieval/QueryRewritingService.java` | ✅ 同义词+领域限定+Padding |
 | P1 | 添加检索日志表 | dermai-rag-service V3 | `db/migration/V7__add_collection.sql` | ✅ rag_retrieval_logs 已迁移 |
-| P1 | 用 VectorStore.add() 简化嵌入存储 | spring-ai-skills-demo | `controller/RagDocumentController.java` | ✅ /embed/vs 端点 |
+| P1 | 用 VectorStore.add() 简化嵌入存储 | spring-ai-skills-demo | `controller/RagDocumentController.java` | ❌ 未采用；该旁路已移除，避免写入不可被主检索读取的表 |
 | P1 | 创建 RagProperties 统一配置类 | dermai-rag-service | `config/RagProperties.java` | ✅ @ConfigurationProperties |
 | P1 | 创建业务异常类 | dermai-rag-service | `exception/` 包 | ✅ 3 个自定义异常 |
 | P1 | 异步异常处理 | dermai-rag-service AsyncConfig | `config/AsyncConfig.java` | ✅ CustomAsyncExceptionHandler |

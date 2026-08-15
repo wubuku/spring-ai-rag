@@ -80,12 +80,6 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- Spring AI PGVector Store Starter -->
-        <dependency>
-            <groupId>org.springframework.ai</groupId>
-            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
-        </dependency>
-
         <!-- Spring AI Chat Memory JDBC Starter -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
@@ -102,7 +96,6 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
-            <scope>runtime</scope>
         </dependency>
 
         <!-- Flyway -->

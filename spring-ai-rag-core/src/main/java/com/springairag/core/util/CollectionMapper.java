@@ -28,6 +28,7 @@ public final class CollectionMapper {
         }
         Map<String, Object> map = new HashMap<>();
         map.put("id", c.getId());
+        map.put("collectionKey", c.getCollectionKey());
         map.put("name", c.getName());
         map.put("description", c.getDescription());
         map.put("embeddingModel", c.getEmbeddingModel());

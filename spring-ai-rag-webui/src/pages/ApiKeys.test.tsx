@@ -134,7 +134,7 @@ describe('ApiKeys', () => {
     expect(toolbarButtons.length).toBeGreaterThan(0);
   });
 
-  it('submits selected collection IDs when creating a restricted key', async () => {
+  it('submits selected collection keys when creating a restricted key', async () => {
     mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
       if (options.queryKey[0] === 'apikeys') {
         return { data: { data: mockKeys }, isPending: false, isError: false };
@@ -145,6 +145,7 @@ describe('ApiKeys', () => {
             collections: [
               {
                 id: 10,
+                collectionKey: 'customer:manual',
                 name: 'Knowledge Base',
                 description: '',
                 embeddingModel: 'BAAI/bge-m3',
@@ -174,8 +175,11 @@ describe('ApiKeys', () => {
 
     expect(mockMutateFn).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Scoped Key',
-      allowedCollectionIds: [10],
+      allowedCollectionKeys: ['customer:manual'],
       expiresAt: expect.stringMatching(/T\d{2}:\d{2}:00$/),
+    }));
+    expect(mockMutateFn).not.toHaveBeenCalledWith(expect.objectContaining({
+      allowedCollectionIds: expect.anything(),
     }));
   });
 

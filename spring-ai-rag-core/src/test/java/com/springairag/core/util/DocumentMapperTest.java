@@ -34,6 +34,7 @@ class DocumentMapperTest {
     private RagEmbeddingRepository embeddingRepository;
 
     private RagDocument sampleDocument;
+    private static final long PROFILE_ID = 7L;
 
     @BeforeEach
     void setUp() {
@@ -339,6 +340,29 @@ class DocumentMapperTest {
     }
 
     @Nested
+    @DisplayName("Profile-aware DTO mapping")
+    class ProfileAwareDtoTests {
+
+        @Test
+        @DisplayName("uses fresh chunk count from the active profile")
+        void usesFreshActiveProfileChunkCount() {
+            when(embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                    1L, PROFILE_ID)).thenReturn(4L);
+
+            var summary = DocumentMapper.toSummary(
+                    sampleDocument, Map.of(), embeddingRepository, PROFILE_ID);
+            var detail = DocumentMapper.toDetailResponse(
+                    sampleDocument, Map.of(), embeddingRepository, PROFILE_ID);
+
+            assertEquals(4L, summary.chunkCount());
+            assertEquals(4L, detail.chunkCount());
+            verify(embeddingRepository, times(2))
+                    .countFreshChunksByDocumentIdAndProfileId(1L, PROFILE_ID);
+            verify(embeddingRepository, never()).countByDocumentId(1L);
+        }
+    }
+
+    @Nested
     @DisplayName("null input validation")
     class NullInputValidationTests {
 
@@ -374,14 +398,16 @@ class DocumentMapperTest {
         @DisplayName("toSummary throws IllegalArgumentException for null document")
         void toSummary_throwsOnNullDocument() {
             assertThrows(IllegalArgumentException.class,
-                    () -> DocumentMapper.toSummary(null, new HashMap<>(), embeddingRepository));
+                    () -> DocumentMapper.toSummary(
+                            null, new HashMap<>(), embeddingRepository, PROFILE_ID));
         }
 
         @Test
         @DisplayName("toDetailResponse throws IllegalArgumentException for null document")
         void toDetailResponse_throwsOnNullDocument() {
             assertThrows(IllegalArgumentException.class,
-                    () -> DocumentMapper.toDetailResponse(null, new HashMap<>(), embeddingRepository));
+                    () -> DocumentMapper.toDetailResponse(
+                            null, new HashMap<>(), embeddingRepository, PROFILE_ID));
         }
     }
 }

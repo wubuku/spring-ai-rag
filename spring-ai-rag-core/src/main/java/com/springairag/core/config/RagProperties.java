@@ -56,6 +56,7 @@ public class RagProperties {
     private final RagSlowQueryProperties slowQuery = new RagSlowQueryProperties();
     private final RagSseProperties sse = new RagSseProperties();
     private final RagPdfProperties pdf = new RagPdfProperties();
+    private final RagStructuredRecordProperties structuredRecords = new RagStructuredRecordProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -127,5 +128,9 @@ public class RagProperties {
 
     public RagSseProperties getSse() {
         return sse;
+    }
+
+    public RagStructuredRecordProperties getStructuredRecords() {
+        return structuredRecords;
     }
 }

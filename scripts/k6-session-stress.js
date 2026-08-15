@@ -41,6 +41,7 @@ const START_VUS      = parseInt(__ENV.START_VUS      || '5');
 const END_VUS        = parseInt(__ENV.END_VUS        || '100');
 const STAGE_DUR      = __ENV.STAGE_DURATION  || '15s';
 const STAGE_STEP     = parseInt(__ENV.STAGE_STEP    || '10');
+const COLLECTION_KEY = `k6-session-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
 
 // ─────────────────────────────────────────────────────────────────
 // Build VU ramp stages
@@ -160,18 +161,26 @@ export function setup() {
   // Ensure we have a document in the database for search results
   const collectionRes = http.post(
     `${BASE_URL}/api/v1/rag/collections`,
-    JSON.stringify({ name: 'stress-test-collection', description: 'k6 session stress test collection', dimensions: 1024 }),
+    JSON.stringify({
+      collectionKey: COLLECTION_KEY,
+      name: 'stress-test-collection',
+      description: 'k6 session stress test collection',
+      dimensions: 1024,
+    }),
     { headers: HEADERS }
   );
 
   let collectionId = null;
+  let collectionKey = null;
   if (collectionRes.status === 200 || collectionRes.status === 201) {
     try {
-      collectionId = JSON.parse(collectionRes.body).id;
+      const body = JSON.parse(collectionRes.body);
+      collectionId = body.id;
+      collectionKey = body.collectionKey;
     } catch (e) { /* ignore */ }
   }
 
-  return { collectionId, sessionId: SESSION_ID };
+  return { collectionId, collectionKey, sessionId: SESSION_ID };
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -183,8 +192,12 @@ export function teardown(data) {
   callClearHistory();
 
   // Clean up collection if created
-  if (data.collectionId) {
-    http.del(`${BASE_URL}/api/v1/rag/collections/${data.collectionId}`, null, { headers: HEADERS });
+  if (data.collectionKey) {
+    http.del(
+      `${BASE_URL}/api/v1/rag/collections/by-key?collectionKey=${encodeURIComponent(data.collectionKey)}`,
+      null,
+      { headers: HEADERS }
+    );
   }
 }
 
@@ -192,7 +205,7 @@ export function teardown(data) {
 // Main — VU iteration: each VU sends a chat message to the SAME session
 // ─────────────────────────────────────────────────────────────────
 
-export default function () {
+export default function (data) {
   // ── Simulate concurrent users writing to same session ────────
 
   // Send a chat message (this writes to ChatMemory)
@@ -200,6 +213,7 @@ export default function () {
   const body = {
     query: query,
     sessionId: SESSION_ID,
+    collectionKeys: data.collectionKey ? [data.collectionKey] : undefined,
     retrievalConfig: {
       vectorWeight: 0.7,
       fulltextWeight: 0.3,

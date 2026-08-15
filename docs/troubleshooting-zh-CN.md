@@ -458,6 +458,37 @@ MIRROR_BASE_URL=your.registry.example ./scripts/docker-build-local.sh
 
 发布 Dockerfile 已移除 `gcr.io` 依赖，并允许通过 `MAVEN_IMAGE` / `RUNTIME_IMAGE` build arg 覆盖。架构、Maven/npm/Playwright 下载和代理注意事项见 [中国境内开发网络避坑指南](china-network-guide-zh-CN.md)。
 
+### JSONB PostgreSQL 测试无法启动容器
+
+**症状**：
+
+- Testcontainers 报告 Docker API `1.32` 低于 daemon 要求的最低版本 `1.40`。
+- Ryuk 辅助镜像因代理替换证书或 registry 超时而拉取失败。
+
+**解决**：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+验证脚本默认传递 `-Dapi.version=1.40`，并使用 `pgvector/pgvector:pg16`。本机环境不同
+时可覆盖 `TESTCONTAINERS_API_VERSION`、`TESTCONTAINERS_RYUK_DISABLED` 或
+`TESTCONTAINERS_PG_IMAGE`。这些是测试环境覆盖，不应写入 application YAML 或 Dockerfile。
+CI / 共享环境的 registry 和证书链可信时，应重新启用 Ryuk。
+
+### JSONB 验证器 preview 端口被占用
+
+验证器的 Mock Playwright 阶段会使用严格端口绑定启动自己的 Vite preview。如果默认
+`4174` 已被其他开发服务占用，应指定空闲端口，不要复用已有进程：
+
+```bash
+JSONB_PLAYWRIGHT_PORT=4199 ./scripts/verify-jsonb-records.sh
+```
+
+验证器会检查自身 preview 进程，并对 readiness 请求设置超时。端口占用应视为验证失败，
+不能因此终止或复用其他项目的服务。
+
 ---
 
 ## 获取帮助

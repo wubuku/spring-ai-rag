@@ -13,13 +13,14 @@ interface CreateCollectionModalProps {
 export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModalProps) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
+  const [collectionKey, setCollectionKey] = useState('');
   const [description, setDescription] = useState('');
-  const [errors, setErrors] = useState<{ name?: string; description?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; collectionKey?: string; description?: string }>({});
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   const createMutation = useMutation({
-    mutationFn: () => collectionsApi.create({ name, description }),
+    mutationFn: () => collectionsApi.create({ name, collectionKey, description }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections'] });
       showToast('Collection created successfully', 'success');
@@ -31,7 +32,7 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
   });
 
   const validate = (): boolean => {
-    const newErrors: { name?: string; description?: string } = {};
+    const newErrors: { name?: string; collectionKey?: string; description?: string } = {};
 
     if (!name.trim()) {
       newErrors.name = 'Name is required';
@@ -43,6 +44,10 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
 
     if (description.length > 500) {
       newErrors.description = 'Description must be less than 500 characters';
+    }
+
+    if (!/^[\x21-\x7E]{1,128}$/.test(collectionKey)) {
+      newErrors.collectionKey = 'Collection key must be 1-128 visible ASCII characters';
     }
 
     setErrors(newErrors);
@@ -57,6 +62,7 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
 
   const handleClose = () => {
     setName('');
+    setCollectionKey('');
     setDescription('');
     setErrors({});
     onClose();
@@ -74,6 +80,31 @@ export function CreateCollectionModal({ isOpen, onClose }: CreateCollectionModal
           </button>
         </div>
         <form onSubmit={handleSubmit} className={styles.form}>
+          <div className={styles.field}>
+            <label className={styles.label} htmlFor="collection-key">
+              Collection key <span className={styles.required}>*</span>
+            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <input
+                id="collection-key"
+                type="text"
+                value={collectionKey}
+                onChange={e => setCollectionKey(e.target.value)}
+                className={`${styles.input} ${errors.collectionKey ? styles.inputError : ''}`}
+                maxLength={128}
+                placeholder="UUID or business key"
+              />
+              <button
+                type="button"
+                onClick={() => setCollectionKey(crypto.randomUUID())}
+                title="Generate UUID"
+              >
+                Generate UUID
+              </button>
+            </div>
+            {errors.collectionKey && <span className={styles.error}>{errors.collectionKey}</span>}
+          </div>
+
           <div className={styles.field}>
             <label className={styles.label} htmlFor="name">
               Name <span className={styles.required}>*</span>

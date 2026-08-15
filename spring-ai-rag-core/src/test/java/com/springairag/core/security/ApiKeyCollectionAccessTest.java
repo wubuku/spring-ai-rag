@@ -3,12 +3,17 @@ package com.springairag.core.security;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class ApiKeyCollectionAccessTest {
 
@@ -89,6 +94,62 @@ class ApiKeyCollectionAccessTest {
         assertEquals(Set.of(3L, 7L),
                 ApiKeyCollectionAccess.restrictedCollectionIds(
                         restrictedKey(3L, 7L)).orElseThrow());
+    }
+
+    @Test
+    void explicitEmptyScopeIsRejectedForRestrictedAndUnrestrictedKeys() {
+        assertThrows(IllegalArgumentException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(List.of(), null));
+        assertThrows(IllegalArgumentException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(
+                        List.of(), restrictedKey(3L)));
+
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        assertThrows(IllegalArgumentException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(
+                        null, List.of(), null, resolver));
+    }
+
+    @Test
+    void keyAndIdScopesCompareAsSetsRegardlessOfOrder() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        when(resolver.resolveActiveIds(null, List.of("two", "one")))
+                .thenReturn(List.of(2L, 1L));
+
+        assertEquals(List.of(1L, 2L),
+                ApiKeyCollectionAccess.resolveCollectionIds(
+                        List.of(1L, 2L), List.of("two", "one"), null, resolver));
+    }
+
+    @Test
+    void keyAndIdScopeMismatchIsBadRequest() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        when(resolver.resolveActiveIds(null, List.of("two")))
+                .thenReturn(List.of(2L));
+
+        assertThrows(IllegalArgumentException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(
+                        List.of(1L), List.of("two"), null, resolver));
+    }
+
+    @Test
+    void unknownKeyIs404ForUnrestrictedAnd403ForRestrictedCaller() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        RagException missing = new RagException(
+                ErrorCode.COLLECTION_NOT_FOUND, "missing");
+        when(resolver.resolveActiveIds(null, List.of("missing")))
+                .thenThrow(missing);
+
+        assertSame(missing, assertThrows(RagException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(
+                        null, List.of("missing"), null, resolver)));
+
+        RagApiKey restricted = restrictedKey(3L);
+        when(resolver.resolveActiveIdsWithinAllowed(
+                List.of("missing"), Set.of(3L))).thenThrow(missing);
+        assertThrows(SecurityException.class,
+                () -> ApiKeyCollectionAccess.resolveCollectionIds(
+                        null, List.of("missing"), restricted, resolver));
     }
 
     private RagApiKey restrictedKey(Long... collectionIds) {

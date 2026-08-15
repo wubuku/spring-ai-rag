@@ -25,7 +25,6 @@ data:
         allow-bean-definition-overriding: true
       autoconfigure:
         exclude:
-          - org.springframework.ai.vectorstore.pgvector.autoconfigure.PgVectorStoreAutoConfiguration
           - org.springframework.ai.model.minimax.autoconfigure.MiniMaxChatAutoConfiguration
           - org.springframework.ai.model.minimax.autoconfigure.MiniMaxEmbeddingAutoConfiguration
 

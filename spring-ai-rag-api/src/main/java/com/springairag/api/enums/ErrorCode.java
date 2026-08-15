@@ -44,6 +44,7 @@ public enum ErrorCode {
     // ==================== 409 Conflict ====================
 
     DUPLICATE_RESOURCE(409, "Duplicate Resource"),
+    STRUCTURED_RECORD_CONFLICT(409, "Structured Record Conflict"),
 
     // ==================== 422 Unprocessable Entity ====================
 

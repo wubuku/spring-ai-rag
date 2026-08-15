@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 
 import java.util.List;
 import java.util.Objects;
@@ -25,8 +26,13 @@ public class BatchDocumentRequest {
     @Schema(description = "Whether to auto-embed vectors after creation (default false: create documents only)", example = "false")
     private boolean embed = false;
 
-    @Schema(description = "Associated collection ID (only effective when embed=true)", example = "1")
+    @Schema(description = "Deprecated compatibility field. Use collectionKey.",
+            example = "1", deprecated = true)
     private Long collectionId;
+
+    @ValidCollectionKey
+    @Schema(description = "Stable external Collection key (preferred over collectionId)", example = "customer-42:manual:v3")
+    private String collectionKey;
 
     @Schema(description = "Whether to force re-embedding (only effective when embed=true, true=ignore existing embeddings and regenerate)", example = "false")
     private boolean force = false;
@@ -43,6 +49,8 @@ public class BatchDocumentRequest {
     public void setEmbed(boolean embed) { this.embed = embed; }
     public Long getCollectionId() { return collectionId; }
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
+    public String getCollectionKey() { return collectionKey; }
+    public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
     public boolean isForce() { return force; }
     public void setForce(boolean force) { this.force = force; }
 
@@ -54,12 +62,13 @@ public class BatchDocumentRequest {
         return embed == that.embed &&
                 force == that.force &&
                 Objects.equals(documents, that.documents) &&
-                Objects.equals(collectionId, that.collectionId);
+                Objects.equals(collectionId, that.collectionId) &&
+                Objects.equals(collectionKey, that.collectionKey);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(documents, embed, collectionId, force);
+        return Objects.hash(documents, embed, collectionId, collectionKey, force);
     }
 
     @Override
@@ -68,6 +77,7 @@ public class BatchDocumentRequest {
                 "documents=" + (documents == null ? null : documents.size() + " docs") +
                 ", embed=" + embed +
                 ", collectionId=" + collectionId +
+                ", collectionKey='" + collectionKey + '\'' +
                 ", force=" + force +
                 '}';
     }

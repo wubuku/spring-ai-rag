@@ -6,6 +6,7 @@ export interface SearchResult {
   content: string;
   score: number;
   collectionId?: number;
+  collectionKey?: string;
 }
 
 export interface SearchResponse {
@@ -21,5 +22,9 @@ export const searchApi = {
     useHybrid?: boolean;
     vectorWeight?: number;
     fulltextWeight?: number;
-  }) => apiClient.get<SearchResponse>('/search', { params }),
+    collectionKeys?: string[];
+  }) => apiClient.get<SearchResponse>('/search', {
+    params,
+    paramsSerializer: { indexes: null },
+  }),
 };

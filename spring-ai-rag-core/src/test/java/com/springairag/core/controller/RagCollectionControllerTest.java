@@ -2,8 +2,10 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.CollectionDocumentListResponse;
 import com.springairag.api.dto.CollectionExportResponse;
+import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
+import com.springairag.api.dto.CollectionCloneRequest;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
@@ -57,16 +59,12 @@ class RagCollectionControllerTest {
 
     @Test
     void create_returnsCollectionWithId() {
-        when(collectionRepository.save(any(RagCollection.class))).thenAnswer(inv -> {
-            RagCollection c = inv.getArgument(0);
-            c.setId(1L);
-            c.setCreatedAt(LocalDateTime.now());
-            return c;
-        });
-
         CollectionRequest req = new CollectionRequest();
+        req.setCollectionKey("create-test");
         req.setName("测试知识库");
         req.setDescription("这是一个测试知识库");
+        RagCollection saved = createCollection(1L, "测试知识库");
+        when(collectionService.createCollection(any(CollectionRequest.class))).thenReturn(saved);
 
         ResponseEntity<Map<String, Object>> response = controller.create(req);
 
@@ -391,36 +389,37 @@ class RagCollectionControllerTest {
     @Test
     void importCollection_createsCollectionAndDocuments() {
         RagCollection saved = createCollection(1L, "导入的知识库");
-        when(collectionRepository.save(any(RagCollection.class))).thenReturn(saved);
+        when(collectionRepository.saveAndFlush(any(RagCollection.class))).thenReturn(saved);
 
         RagDocument savedDoc = new RagDocument();
         savedDoc.setId(10L);
-        when(documentRepository.save(any(RagDocument.class))).thenReturn(savedDoc);
+        when(documentRepository.saveAndFlush(any(RagDocument.class))).thenReturn(savedDoc);
 
-        Map<String, Object> importData = new HashMap<>();
-        importData.put("name", "导入的知识库");
-        importData.put("description", "测试导入");
-        importData.put("dimensions", 1024);
+        CollectionImportRequest importData = new CollectionImportRequest();
+        importData.setName("导入的知识库");
+        importData.setCollectionKey("legacy-import-test");
+        importData.setDescription("测试导入");
+        importData.setDimensions(1024);
 
-        List<Map<String, Object>> docs = new ArrayList<>();
-        Map<String, Object> docData = new HashMap<>();
-        docData.put("title", "文档1");
-        docData.put("source", "test.txt");
-        docData.put("content", "内容");
-        docData.put("size", 100);
-        docs.add(docData);
-        importData.put("documents", docs);
+        CollectionImportRequest.ImportedDocument docData =
+                new CollectionImportRequest.ImportedDocument();
+        docData.setTitle("文档1");
+        docData.setSource("test.txt");
+        docData.setContent("内容");
+        docData.setSize(100L);
+        importData.setDocuments(List.of(docData));
 
         ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(collectionRepository).save(any(RagCollection.class));
-        verify(documentRepository).save(any(RagDocument.class));
+        verify(collectionRepository).saveAndFlush(any(RagCollection.class));
+        verify(documentRepository).saveAndFlush(any(RagDocument.class));
     }
 
     @Test
     void importCollection_missingName_returns400() {
-        Map<String, Object> importData = Map.of("description", "no name");
+        CollectionImportRequest importData = new CollectionImportRequest();
+        importData.setDescription("no name");
 
         assertThrows(IllegalArgumentException.class,
                 () -> controller.importCollection(importData));
@@ -428,18 +427,20 @@ class RagCollectionControllerTest {
 
     @Test
     void importCollection_emptyName_returns400() {
+        CollectionImportRequest importData = new CollectionImportRequest();
+        importData.setName("  ");
         assertThrows(IllegalArgumentException.class,
-                () -> controller.importCollection(Map.of("name", "  ")));
+                () -> controller.importCollection(importData));
     }
 
     @Test
     void cloneCollection_existingCollectionWithDocuments_clonesSuccessfully() {
         com.springairag.api.dto.CollectionCloneResponse mockResponse =
                 com.springairag.api.dto.CollectionCloneResponse.of(5L, "Source Collection (Copy)", 1L, "Source Collection", 2);
-        when(collectionService.cloneCollection(1L)).thenReturn(Optional.of(mockResponse));
+        when(collectionService.cloneCollection(1L, "clone-test")).thenReturn(Optional.of(mockResponse));
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
-                controller.cloneCollection(1L);
+                controller.cloneCollectionById(1L, "clone-test");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
@@ -448,32 +449,58 @@ class RagCollectionControllerTest {
         assertEquals(1L, response.getBody().sourceCollectionId());
         assertEquals("Source Collection", response.getBody().sourceCollectionName());
         assertEquals(2, response.getBody().documentsCloned());
-        verify(collectionService).cloneCollection(1L);
+        verify(collectionService).cloneCollection(1L, "clone-test");
     }
 
     @Test
     void cloneCollection_existingCollectionNoDocuments_clonesWithZeroDocuments() {
         com.springairag.api.dto.CollectionCloneResponse mockResponse =
                 com.springairag.api.dto.CollectionCloneResponse.of(5L, "Empty Source (Copy)", 1L, "Empty Source", 0);
-        when(collectionService.cloneCollection(1L)).thenReturn(Optional.of(mockResponse));
+        when(collectionService.cloneCollection(1L, "clone-empty")).thenReturn(Optional.of(mockResponse));
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
-                controller.cloneCollection(1L);
+                controller.cloneCollectionById(1L, "clone-empty");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals(5L, response.getBody().clonedCollectionId());
         assertEquals(0, response.getBody().documentsCloned());
-        verify(collectionService).cloneCollection(1L);
+        verify(collectionService).cloneCollection(1L, "clone-empty");
     }
 
     @Test
     void cloneCollection_nonExisting_returns404() {
-        when(collectionService.cloneCollection(999L)).thenReturn(Optional.empty());
+        when(collectionService.cloneCollection(999L, "clone-missing")).thenReturn(Optional.empty());
 
         ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
-                controller.cloneCollection(999L);
+                controller.cloneCollectionById(999L, "clone-missing");
 
         assertEquals(404, response.getStatusCode().value());
+    }
+
+    @Test
+    void cloneCollectionByKey_resolvesSourceAndClonesToTargetKey() {
+        RagCollection source = createCollection(1L, "Source Collection");
+        source.setCollectionKey("source-key");
+        when(collectionRepository.findByCollectionKeyAndDeletedFalse("source-key"))
+                .thenReturn(Optional.of(source));
+        com.springairag.api.dto.CollectionCloneResponse mockResponse =
+                com.springairag.api.dto.CollectionCloneResponse.of(
+                        5L, "target-key", "Source Collection (Copy)",
+                        1L, "source-key", "Source Collection", 2);
+        when(collectionService.cloneCollection(1L, "target-key"))
+                .thenReturn(Optional.of(mockResponse));
+        CollectionCloneRequest request = new CollectionCloneRequest();
+        request.setSourceCollectionKey("source-key");
+        request.setCollectionKey("target-key");
+
+        ResponseEntity<com.springairag.api.dto.CollectionCloneResponse> response =
+                controller.cloneCollectionByKey(request);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertNotNull(response.getBody());
+        assertEquals("source-key", response.getBody().sourceCollectionKey());
+        assertEquals("target-key", response.getBody().clonedCollectionKey());
+        verify(collectionService).cloneCollection(1L, "target-key");
     }
 }

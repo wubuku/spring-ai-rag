@@ -2,6 +2,7 @@ import { apiClient } from './client';
 
 export interface Collection {
   id: number;
+  collectionKey: string;
   name: string;
   description: string;
   embeddingModel: string;
@@ -30,9 +31,12 @@ export const collectionsApi = {
     }),
 
   get: (id: number) => apiClient.get<Collection>(`/collections/${id}`),
+  getByKey: (collectionKey: string) =>
+    apiClient.get<Collection>('/collections/by-key', { params: { collectionKey } }),
 
   create: (data: {
     name: string;
+    collectionKey: string;
     description?: string;
     dimensions?: number;
     embeddingModel?: string;
@@ -40,8 +44,12 @@ export const collectionsApi = {
 
   update: (id: number, data: { name?: string; description?: string; enabled?: boolean }) =>
     apiClient.put(`/collections/${id}`, data),
+  updateByKey: (collectionKey: string, data: { name?: string; description?: string; enabled?: boolean }) =>
+    apiClient.put('/collections/by-key', data, { params: { collectionKey } }),
 
   delete: (id: number) => apiClient.delete(`/collections/${id}`),
+  deleteByKey: (collectionKey: string) =>
+    apiClient.delete('/collections/by-key', { params: { collectionKey } }),
 
   addDocuments: (id: number, documentIds: number[]) =>
     apiClient.post(`/collections/${id}/documents`, { documentIds }),

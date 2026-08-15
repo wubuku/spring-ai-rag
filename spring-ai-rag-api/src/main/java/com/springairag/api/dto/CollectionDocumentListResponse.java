@@ -13,6 +13,9 @@ public record CollectionDocumentListResponse(
         @Schema(description = "Collection ID", example = "1")
         Long collectionId,
 
+        @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
+        String collectionKey,
+
         @Schema(description = "Document list")
         List<DocumentSummary> documents,
 
@@ -25,6 +28,11 @@ public record CollectionDocumentListResponse(
         @Schema(description = "Limit", example = "20")
         int limit
 ) {
+    public CollectionDocumentListResponse(Long collectionId, List<DocumentSummary> documents,
+                                          long total, int offset, int limit) {
+        this(collectionId, null, documents, total, offset, limit);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -34,18 +42,20 @@ public record CollectionDocumentListResponse(
                 offset == that.offset &&
                 limit == that.limit &&
                 Objects.equals(collectionId, that.collectionId) &&
+                Objects.equals(collectionKey, that.collectionKey) &&
                 Objects.equals(documents, that.documents);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(collectionId, documents, total, offset, limit);
+        return Objects.hash(collectionId, collectionKey, documents, total, offset, limit);
     }
 
     @Override
     public String toString() {
         return "CollectionDocumentListResponse{" +
                 "collectionId=" + collectionId +
+                ", collectionKey='" + collectionKey + '\'' +
                 ", documents=" + (documents != null ? documents.size() + " document(s)" : "null") +
                 ", total=" + total +
                 ", offset=" + offset +

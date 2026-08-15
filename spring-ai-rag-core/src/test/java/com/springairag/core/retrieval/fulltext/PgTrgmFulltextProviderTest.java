@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.api.dto.RetrievalResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataAccessResourceFailureException;
 
@@ -29,7 +30,7 @@ class PgTrgmFulltextProviderTest {
 
         @Override
         java.util.List<java.util.Map<String, Object>> executeSearch(String query,
-                java.util.List<Long> documentIds, int limit) {
+                java.util.List<Long> documentIds, int limit, long embeddingProfileId) {
             // Returns fixed result for testing; filtering by minScore and excludeIds is tested separately
             return fixedResult;
         }
@@ -67,7 +68,7 @@ class PgTrgmFulltextProviderTest {
                 .thenThrow(new RuntimeException("not found"));
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
-        List<RetrievalResult> results = provider.search("test", null, null, 5, 0.3);
+        List<RetrievalResult> results = provider.search("test", null, null, 5, 0.3, 1L);
         assertTrue(results.isEmpty());
     }
 
@@ -104,7 +105,7 @@ class PgTrgmFulltextProviderTest {
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
         assertDoesNotThrow(() -> {
-            List<RetrievalResult> results = provider.search("test", null, null, 5, 0.3);
+            List<RetrievalResult> results = provider.search("test", null, null, 5, 0.3, 1L);
             assertTrue(results.isEmpty());
         });
     }
@@ -116,8 +117,8 @@ class PgTrgmFulltextProviderTest {
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
-        assertTrue(provider.search("", null, null, 5, 0.3).isEmpty());
-        assertTrue(provider.search("   ", null, null, 5, 0.3).isEmpty());
+        assertTrue(provider.search("", null, null, 5, 0.3, 1L).isEmpty());
+        assertTrue(provider.search("   ", null, null, 5, 0.3, 1L).isEmpty());
     }
 
     @Test
@@ -141,9 +142,9 @@ class PgTrgmFulltextProviderTest {
                 .thenReturn(List.of(nullScoreRow));
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
-        List<RetrievalResult> results = provider.search("test", null, null, 5, 0.0);
+        List<RetrievalResult> results = provider.search("test", null, null, 5, 0.0, 1L);
         // Should not throw NPE; should handle null score gracefully
-        assertDoesNotThrow(() -> provider.search("test", null, null, 5, 0.0));
+        assertDoesNotThrow(() -> provider.search("test", null, null, 5, 0.0, 1L));
     }
 
     @Test
@@ -156,9 +157,15 @@ class PgTrgmFulltextProviderTest {
         when(jdbc.queryForList(anyString(), (Object[]) any())).thenReturn(Collections.emptyList());
 
         PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
-        provider.search("test", List.of(1L, 2L), null, 5, 0.3);
+        provider.search("test", List.of(1L, 2L), null, 5, 0.3, 1L);
 
-        // Verify queryForList was called (no assertion needed - just ensure no exception)
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("e.embedding_profile_id = 1"));
+        assertTrue(sql.contains("s.status = 'COMPLETED'"));
+        assertTrue(sql.contains("s.content_hash = d.content_hash"));
+        assertTrue(sql.contains("d.enabled = true"));
         verify(jdbc).queryForObject(anyString(), eq(Integer.class));
     }
 }

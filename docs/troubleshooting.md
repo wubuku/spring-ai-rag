@@ -519,6 +519,44 @@ MIRROR_BASE_URL=your.registry.example ./scripts/docker-build-local.sh
 
 The release Dockerfile no longer depends on `gcr.io` and accepts `MAVEN_IMAGE` / `RUNTIME_IMAGE` build arguments. See the [mainland China network guide](china-network-guide.md) for architecture, Maven/npm/Playwright downloads, and proxy notes.
 
+### JSONB PostgreSQL test cannot start its container
+
+**Symptoms**:
+
+- Testcontainers reports that Docker API `1.32` is below the daemon minimum
+  `1.40`.
+- The Ryuk helper image fails with a proxy-issued certificate or registry
+  timeout.
+
+**Solution**:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+The verifier passes `-Dapi.version=1.40` and uses
+`pgvector/pgvector:pg16` by default. Override
+`TESTCONTAINERS_API_VERSION`, `TESTCONTAINERS_RYUK_DISABLED`, or
+`TESTCONTAINERS_PG_IMAGE` when the local Docker environment differs. These
+are test-environment overrides; they do not belong in application YAML or the
+Dockerfile. Re-enable Ryuk in CI/shared environments where the registry and
+certificate chain are trusted.
+
+### JSONB verifier preview port is occupied
+
+The verifier's Mock Playwright phase starts its own Vite preview with strict
+port binding. If the default `4174` is already used by another development
+server, select an unused port instead of reusing the existing process:
+
+```bash
+JSONB_PLAYWRIGHT_PORT=4199 ./scripts/verify-jsonb-records.sh
+```
+
+The verifier checks the preview process and uses bounded readiness requests.
+An occupied port is a verification failure, not permission to kill or reuse
+another project's server.
+
 ---
 
 ## Getting Help

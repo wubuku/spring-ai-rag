@@ -17,7 +17,7 @@
 
 ## Evergreen Content
 
-- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V24, and release state
+- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V29, and release state
 - [ ] `developer-reference*` commands match repository scripts
 - [ ] Configuration changes update `configuration*`
 - [ ] API changes update `rest-api*`
@@ -38,7 +38,7 @@
 - [ ] Real LLM E2E defaults to `18081`
 - [ ] Local profile is `postgresql`
 - [ ] Vector dimension is `1024`
-- [ ] Flyway range is V1–V24
+- [ ] Flyway range is V1–V29
 - [ ] OpenAI / Embedding `base-url` examples do not append `/v1`
 - [ ] Secrets appear only as placeholders
 

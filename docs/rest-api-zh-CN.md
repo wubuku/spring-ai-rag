@@ -53,23 +53,43 @@ X-API-Key: your-api-key
 `["RAG_READ", "RAG_WRITE"]`；WebUI 不允许其解锁管理台。响应带
 `Cache-Control: no-store`。
 
-数据库业务 Key可通过 `allowedCollectionIds` 限制集合访问：
+数据库业务 Key 对外使用 `allowedCollectionKeys`；响应中继续保留 deprecated 的
+`allowedCollectionIds` 兼容字段：
 
-- `null` 或 `[]`：可访问全部集合。
-- 非空列表：Search、Chat、Collection、Document、上传、PDF-to-RAG 均限制在这些集合内。
-- 显式请求范围外集合返回 `403`。
-- 受限 Key 未提供集合过滤时，检索自动收敛到其允许列表。
+- 省略范围表示可访问全部 Collection。
+- 非空列表会把 Search、Chat、Collection、Document、上传和 PDF-to-RAG 限制在这些
+  Collection 内。
+- 受限 Key 显式请求未知或未授权 key 时返回 `403`，避免枚举 Collection。
+- 受限 Key 未提供 Collection 过滤时，检索自动收敛到其允许列表。
+
+### Collection 身份
+
+Collection 同时具有两个标识：
+
+- `id` 是内部数据库 `BIGINT` 主键和外键。
+- `collectionKey` 是调用方提供的稳定外部业务标识，也是 API 推荐身份。
+
+创建、导入和克隆目标必须提供 `collectionKey`。它只能包含 1-128 个可见 ASCII
+字符（`U+0021` 至 `U+007E`），区分大小写，并按原值保存。服务不会 trim、归一化、
+转换大小写、截断或自动生成。key 全局唯一，创建后不可变，软删除后仍被占用。不具备
+业务命名方案的调用方可在本地生成 UUID。
+
+key 可能包含 URL 保留标点，因此 by-key 路由使用 query parameter，调用方必须正确进行
+URL 编码。数字路径及 `collectionId(s)` 字段继续兼容但已 deprecated。同时提供 ID 和
+key 时，两者解析出的 Collection 集合必须一致；比较时忽略顺序，不一致返回 `400`。
 
 ### Collection 检索范围语义
 
-Chat 和 Search 的 `collectionIds` 使用相同语义：
+Chat 和 Search 推荐使用 `collectionKeys`；deprecated 的 `collectionIds` 使用相同范围
+语义：
 
-- 对不受限调用方，省略或传 `[]` 表示不按 Collection 限制，将搜索全部可检索文档。
+- 对不受限调用方，同时省略两个字段表示不按 Collection 限制，将搜索全部可检索文档。
 - 传非空列表表示仅检索这些 Collection；后端支持一次指定多个 Collection。
 - 同时提供 `documentIds` 时，两者取交集。
 - 非空 Collection 范围没有任何文档时返回空结果，不会退化为全库检索。
-- 对受限 API Key，省略或传 `[]` 会自动使用 Key 的 `allowedCollectionIds`；
-  显式传入范围外 ID 返回 `403`。
+- 对受限 API Key，省略范围时使用 Key 的内部允许列表；显式传入未知或未授权 key
+  返回 `403`。
+- 显式传入空的 `collectionKeys` 或 `collectionIds` 返回 `400`，绝不会当作省略范围。
 
 当前实现会先把 Collection 展开为 document IDs，再由向量和全文检索按
 `document_id IN (...)` 过滤。大规模 Collection 的性能与参数数量需要单独压测。
@@ -89,6 +109,7 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
   "keyId": "rag_k_abc123",
   "name": "Production Server",
   "role": "NORMAL",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "enabled": true,
   "createdAt": "2026-08-14T00:00:00",
@@ -100,13 +121,14 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
 #### `POST /api/v1/rag/api-keys`
 
 root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有效期。
-`allowedCollectionIds` 可省略；省略或传空集合表示可访问全部集合。
+`allowedCollectionKeys` 可省略；省略表示可访问全部 Collection。
+`allowedCollectionIds` 已 deprecated。
 
 ```json
 {
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
-  "allowedCollectionIds": [1, 2]
+  "allowedCollectionKeys": ["customer-42:manual:v3"]
 }
 ```
 
@@ -118,6 +140,7 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
   "keyId": "rag_k_xyz789",
   "rawKey": "rag_sk_...",
   "name": "My API Key",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00"
 }
@@ -215,7 +238,7 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
   "sessionId": "session-001",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
-  "collectionIds": [1, 2],
+  "collectionKeys": ["medical:guidelines:v3", "medical:drugs:v2"],
   "documentIds": [10, 20],
   "maxResults": 5,
   "useHybridSearch": true,
@@ -230,7 +253,8 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 | `sessionId` | string | | 会话 ID，最长 36 字符；省略时自动生成 |
 | `domainId` | string | | 领域扩展 ID |
 | `model` | string | | `GET /rag/models` 返回的运行时模型引用；省略时使用默认链 |
-| `collectionIds` | long[] | | 仅检索这些集合 |
+| `collectionKeys` | string[] | | 推荐的稳定 Collection 范围 |
+| `collectionIds` | long[] | | deprecated 数字兼容范围 |
 | `documentIds` | long[] | | 仅检索这些文档；与集合范围取交集 |
 | `maxResults` | int | | 检索结果数，默认 5 |
 | `useHybridSearch` | boolean | | 是否启用向量 + 全文检索，默认 true |
@@ -338,6 +362,8 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
 | `useHybrid` | bool | true | Use hybrid search |
 | `vectorWeight` | double | 0.5 | Vector search weight |
 | `fulltextWeight` | double | 0.5 | Full-text search weight |
+| `collectionKeys` | string[] | | 推荐的重复 Collection 范围参数 |
+| `collectionIds` | long[] | | deprecated 的重复数字范围参数 |
 
 **Response:**
 
@@ -368,6 +394,7 @@ Submit more complex retrieval configuration via request body.
 ```json
 {
   "query": "Spring AI",
+  "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
     "maxResults": 10,
@@ -381,11 +408,83 @@ Submit more complex retrieval configuration via request body.
 
 ---
 
+## JSON 结构化记录：JSONB Payload 检索
+
+结构化记录端点将两个由调用者提供的值明确分开：
+
+- `retrievalText` 是用于 `content_hash`、分块、全文检索和 embedding 的自然语言描述。
+- `jsonbPayload` 是保存为 PostgreSQL JSONB 的业务 JSON，在通过范围检索后返回。
+
+服务不会自动生成或校验这两个字段之间的对应关系。调用方使用
+`externalId + collectionId` 作为稳定、幂等的记录身份。JSON record 不参与普通文档的
+全局 content-hash 去重，也不存在 `payloadHash`。
+
+### `POST /api/v1/rag/json-records/upsert`
+
+创建或更新一条记录。`embed` 默认是 `true`；设为 `false` 时只保存记录，之后再单独执行
+文档嵌入。
+
+```json
+{
+  "collectionId": 12,
+  "externalId": "product:sku-10001",
+  "title": "紧凑型无线键盘",
+  "retrievalText": "这是一款支持蓝牙与双模 2.4G 连接的紧凑型无线键盘。",
+  "jsonbPayload": {
+    "sku": "10001",
+    "protocols": ["bluetooth", "2.4g"],
+    "stock": 42
+  },
+  "source": "catalog",
+  "metadata": {
+    "tenant": "demo"
+  },
+  "embed": true
+}
+```
+
+仅更新 payload 会创建版本快照，但不会使新鲜 embedding 失效。更新 `retrievalText` 会使
+活动 embedding 失效；当 `embed=true` 时会重新嵌入。
+
+### `POST /api/v1/rag/json-records/batch-upsert`
+
+请求体为 `{ "items": [ ... ] }`。各 item 按输入顺序独立处理；单项失败会记录在该项结果中，
+不会回滚已经成功的其他项。
+
+### `POST /api/v1/rag/json-records/search`
+
+只在必填的 `collectionIds` 范围内搜索 JSON record，复用普通 Search 的混合检索链。
+响应保持排序，并为每条结果返回当前 `retrievalText` 和 `jsonbPayload`。
+
+```json
+{
+  "query": "支持蓝牙的无线键盘",
+  "collectionIds": [12],
+  "config": {
+    "maxResults": 10,
+    "useHybridSearch": true,
+    "useRerank": true
+  }
+}
+```
+
+检索前会应用 API Key 的 Collection ACL；受限 Key 不能超出自身
+`allowedCollectionIds`。
+
+### `GET /api/v1/rag/json-records/{documentId}`
+
+按内部 document ID 返回当前结构化记录，包括 `externalId`、`retrievalText` 和
+`jsonbPayload`。Collection export/import、clone 和文档版本响应都会保留结构化字段及
+payload 快照。
+
+---
+
 ## Documents — Document Management
 
 ### `POST /api/v1/rag/documents`
 
-Create a document.
+创建文档。使用 `collectionKey` 关联 Collection；deprecated 的 `collectionId` 继续兼容。
+同时提供两者时，必须指向同一个活动 Collection。
 
 ```json
 {
@@ -393,7 +492,8 @@ Create a document.
   "content": "Spring AI is...",
   "source": "manual",
   "documentType": "text",
-  "metadata": {}
+  "metadata": {},
+  "collectionKey": "customer-42:manual:v3"
 }
 ```
 
@@ -404,6 +504,11 @@ Create a document.
 | `source` | string | | Source identifier |
 | `documentType` | string | | Document type |
 | `metadata` | object | | Extended metadata |
+| `collectionKey` | string | | 推荐的稳定 Collection key |
+| `collectionId` | long | | deprecated 数字兼容字段 |
+
+文档详情、列表、版本、Collection-document 及创建响应在保留数字 ID 的同时，会在返回
+Collection 身份的位置增加 `collectionKey`。
 
 ---
 
@@ -413,8 +518,16 @@ Paginated document query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `page` | int | 0 | Page number |
-| `size` | int | 20 | Page size |
+| `offset` | int | 0 | Number of documents to skip |
+| `limit` | int | 20 | Maximum number of documents to return |
+| `title` | string | | Optional title filter |
+| `documentType` | string | | Optional document-type filter |
+| `processingStatus` | string | | Optional processing-status filter |
+| `enabled` | boolean | | Optional enabled-state filter |
+| `collectionId` | long | | Deprecated Collection ID filter |
+| `collectionKey` | string | | Preferred stable Collection key filter |
+| `createdAfter` | timestamp | | Lower bound for `createdAt` |
+| `createdBefore` | timestamp | | Upper bound for `createdAt` |
 
 ---
 
@@ -442,26 +555,33 @@ Generate embedding vectors for a specified document.
 
 ---
 
-### `POST /api/v1/rag/documents/{id}/embed/vs`
-
-Generate embedding vectors for a document via VectorStore.
-
 ---
 
 ### `POST /api/v1/rag/documents/batch`
 
-Batch create documents (save only, no embedding). Follow up with `/batch/embed` to vectorize.
+批量创建文档。顶层 `collectionKey` 是所有 item 的默认 Collection；item 也可提供自己的
+key。item 级身份覆盖默认值，但仍执行 ID/key 一致性和 ACL 校验。`embed=true` 表示在同一
+请求中完成 embedding。
 
 ```json
 {
+  "collectionKey": "customer-42:manual:v3",
+  "embed": true,
+  "force": false,
   "documents": [
     { "title": "doc1", "content": "content 1" },
-    { "title": "doc2", "content": "content 2" }
+    {
+      "title": "doc2",
+      "content": "content 2",
+      "collectionKey": "customer-42:faq:v1"
+    }
   ]
 }
 ```
 
-> **Tip:** To create and embed in one step, use `POST /documents/batch` with `embed=true` parameter instead.
+顶层和 item 的 deprecated `collectionId` 字段继续兼容。
+`POST /documents/batch/create-and-embed` 已 deprecated；请使用本端点并设置
+`embed=true`。
 
 ---
 
@@ -498,7 +618,8 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `files` | MultipartFile[] | ✅ | File list (max 100) |
-| `collectionId` | Long | No | Target collection ID |
+| `collectionKey` | string | No | 推荐的目标 Collection key |
+| `collectionId` | long | No | deprecated 数字 Collection ID |
 | `force` | boolean | No | `true` = force re-embed |
 
 **Supported file types:** txt / md / json / xml / html / csv / log
@@ -522,6 +643,22 @@ Upload text files and embed in one step. Suitable for direct file submission fro
   ]
 }
 ```
+
+---
+
+### PDF-to-RAG Collection 范围
+
+以下 multipart 端点推荐使用 `collectionKey`，同时兼容 deprecated 的 `collectionId`：
+
+- `POST /api/v1/rag/files/pdf-to-rag`
+- `POST /api/v1/rag/files/{uuid}/embed`
+
+`/pdf-to-rag` 的 `embed=false` 立即返回 JSON；`embed=true` 或省略 `embed` 时返回 SSE
+进度流。`/{uuid}/embed` 的 `embed=sync` 返回 JSON，`embed=sse` 或省略时返回 SSE。
+同时提供两个 Collection 标识时，两者必须一致。
+
+`POST /api/v1/rag/files/pdf` 的 `collection` 参数与此无关：它只表示虚拟文件目录前缀，
+不是 RAG Collection 身份。
 
 ---
 
@@ -581,10 +718,12 @@ Get a specific version of a document (includes content snapshot).
 
 ### `POST /api/v1/rag/collections`
 
-Create a collection.
+创建 Collection。`collectionKey` 必填并遵循前述身份契约。重复 key 返回 `409`，
+软删除 Collection 保留的 key 也视为重复。
 
 ```json
 {
+  "collectionKey": "medical-knowledge-base",
   "name": "Medical Knowledge Base",
   "description": "Medical domain document collection",
   "embeddingModel": "BAAI/bge-m3",
@@ -594,6 +733,8 @@ Create a collection.
 }
 ```
 
+响应同时包含内部 `id` 和外部 `collectionKey`。
+
 ---
 
 ### `GET /api/v1/rag/collections`
@@ -602,57 +743,88 @@ Paginated collection query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `page` | int | 0 | Page number |
-| `size` | int | 20 | Page size |
-| `keyword` | string | | Search keyword |
+| `offset` | int | 0 | Number of collections to skip |
+| `limit` | int | 20 | Maximum number of collections to return |
+| `name` | string | | Optional collection-name filter |
+| `enabled` | boolean | | Optional enabled-state filter |
+
+受限 API Key 只能看到允许范围内的 Collection。
 
 ---
 
-### `GET /api/v1/rag/collections/{id}`
+### By-Key 生命周期路由
 
-Get collection details.
+以下为推荐的生命周期端点。`collectionKey` 位于 query parameter，必须进行 URL 编码：
 
----
+- `GET /api/v1/rag/collections/by-key?collectionKey=...`
+- `PUT /api/v1/rag/collections/by-key?collectionKey=...`
+- `DELETE /api/v1/rag/collections/by-key?collectionKey=...`
+- `POST /api/v1/rag/collections/by-key/restore?collectionKey=...`
+- `GET /api/v1/rag/collections/by-key/documents?collectionKey=...`
+- `POST /api/v1/rag/collections/by-key/documents?collectionKey=...`
+- `GET /api/v1/rag/collections/by-key/export?collectionKey=...`
 
-### `PUT /api/v1/rag/collections/{id}`
+更新请求体只包含可变字段：`name`、`description`、`embeddingModel`、`dimensions`、
+`enabled` 和 `metadata`。更新请求体出现 `collectionKey` 时返回 `400`，不支持重命名。
 
-Update a collection.
-
----
-
-### `DELETE /api/v1/rag/collections/{id}`
-
-软删除 Collection，并解除其文档关联。该操作不会删除文档或 embeddings；解除关联后的文档
-仍可能出现在未指定 `collectionIds` 的全库检索中。
-
----
-
-### `GET /api/v1/rag/collections/{id}/documents`
-
-Get documents in a collection.
+删除为软删除，并解除文档关联，但不会删除文档或 embedding。key 仍保持占用。恢复沿用
+原 key，且不会自动恢复文档关联。
 
 ---
 
-### `POST /api/v1/rag/collections/{id}/documents`
+### `POST /api/v1/rag/collections/clone`
 
-Add documents to a collection.
+使用稳定的源 key 和目标 key 克隆 Collection：
 
 ```json
 {
-  "documentIds": [1, 2, 3]
+  "sourceCollectionKey": "customer-42:manual:v3",
+  "collectionKey": "customer-42:manual:v4"
 }
+```
+
+目标 key 必填且必须未被占用。文档以待处理状态复制，embedding 不会复制。受限 API Key
+不能创建、导入或克隆 Collection。
+
+---
+
+### Collection 文档
+
+列出文档：
+
+```http
+GET /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
+```
+
+把一个已有文档关联到 Collection：
+
+```json
+{
+  "documentId": 1
+}
+```
+
+请求地址：
+
+```http
+POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
 ```
 
 ---
 
-### `GET /api/v1/rag/collections/{id}/export`
+### Collection 导出与导入
 
-Export a collection and its documents as JSON.
+导出地址：
+
+```http
+GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av3
+```
 
 **Response:**
 
 ```json
 {
+  "collectionKey": "customer-42:manual:v3",
   "name": "Medical Knowledge Base",
   "description": "Medical domain document collection",
   "embeddingModel": "BAAI/bge-m3",
@@ -678,20 +850,37 @@ Export a collection and its documents as JSON.
 
 ### `POST /api/v1/rag/collections/import`
 
-Import and create a new collection with documents from exported JSON data.
+从导出的 JSON 数据创建新 Collection 并导入文档。`collectionKey` 必填。导出结果保留
+源 key，而 key 全局唯一，因此作为第二个 Collection 导入前必须修改 key。
 
-**Request body:** Use the JSON data returned by the `/export` endpoint.
+**请求体：** 使用 `/export` 返回的 JSON，并设置目标 `collectionKey`。
 
 **Response:**
 
 ```json
 {
   "id": 5,
+  "collectionKey": "customer-42:manual:import-2026-08",
   "name": "Medical Knowledge Base",
   "importedDocuments": 10,
-  "message": "Collection imported successfully"
+  "documentCount": 10
 }
 ```
+
+---
+
+### Deprecated 数字 Collection 路由
+
+以下兼容路由继续可用，但在 OpenAPI 中标记为 deprecated：
+
+- `GET`、`PUT`、`DELETE /api/v1/rag/collections/{id}`
+- `POST /api/v1/rag/collections/{id}/restore`
+- `POST /api/v1/rag/collections/{id}/clone?collectionKey=...`
+- `GET /api/v1/rag/collections/{id}/documents`
+- `POST /api/v1/rag/collections/{id}/documents`
+- `GET /api/v1/rag/collections/{id}/export`
+
+这些路由与推荐路由使用相同的 ACL、不可变、软删除和目标 key 规则。
 
 ---
 
@@ -857,14 +1046,18 @@ Service health check.
 ```json
 {
   "status": "UP",
-  "timestamp": "2026-04-02T16:00:00Z",
+  "timestamp": "2026-08-15T16:00:00Z",
   "components": {
     "database": "UP",
-    "vectorStore": "UP",
-    "embeddingModel": "UP"
+    "pgvector": "UP",
+    "tables": "UP",
+    "cache": "UP"
   }
 }
 ```
+
+详细组件接口为 `GET /api/v1/rag/health/components`，会返回相同的组件名称以及延迟、
+扩展、表计数和缓存详情。
 
 ---
 

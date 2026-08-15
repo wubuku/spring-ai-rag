@@ -1,19 +1,2 @@
-# ============================================
-# PostgreSQL Profile Configuration
-# Activation: --spring.profiles.active=postgresql
-# Purpose: Re-enable PgVectorStore auto-configuration (overrides main config exclude)
-# ============================================
-
-spring:
-  autoconfigure:
-    exclude:
-
-# Enable pgvector vector store
-  ai:
-    vectorstore:
-      pgvector:
-        enabled: true
-        vector-table-name: rag_vector_store
-        distance-type: COSINE_DISTANCE
-        index-type: HNSW
-        dimensions: 1024
+# PostgreSQL profile marker.
+# Database, Flyway and Embedding Profile configuration live in application.yml.

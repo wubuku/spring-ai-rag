@@ -46,6 +46,7 @@ export interface Document {
   createdAt: string;
   updatedAt: string;
   collectionId?: number;
+  collectionKey?: string;
 }
 
 export interface DocumentListResponse {
@@ -63,6 +64,7 @@ export interface BatchCreateResponse {
 // Collections API
 export interface Collection {
   id: number;
+  collectionKey: string;
   name: string;
   description?: string;
   documentCount: number;
@@ -97,6 +99,7 @@ export interface ChatRequest {
   /** @deprecated use collectionIds */
   collectionId?: number;
   collectionIds?: number[];
+  collectionKeys?: string[];
   conversationId?: string;
   useHybridSearch?: boolean;
 }
@@ -122,6 +125,7 @@ export interface RetrievalResult {
   content: string;
   score: number;
   collectionId?: number;
+  collectionKey?: string;
 }
 
 export interface SearchRequest {

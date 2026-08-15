@@ -136,7 +136,9 @@
     "searchHint": "按回车或点击搜索",
     "clearHistory": "清除历史",
     "historyCleared": "搜索历史已清除",
-    "recentSearches": "最近搜索"
+    "recentSearches": "最近搜索",
+    "collection": "集合",
+    "allCollections": "全部集合"
   },
   "metrics": {
     "title": "系统指标",
@@ -334,6 +336,8 @@
     "root": "根目录",
     "collectionPrefix": "集合前缀",
     "collectionPrefixPlaceholder": "例如：papers/2024",
+    "ragCollection": "RAG 集合",
+    "noCollection": "不关联集合",
     "addToRag": "添加到 RAG",
     "addToRagTitle": "将此 PDF 添加到 RAG 知识库并触发嵌入",
     "embedding": "嵌入中…",

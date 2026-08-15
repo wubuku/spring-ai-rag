@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -42,9 +43,13 @@ public class ChatRequest {
     @Schema(description = "Specify model (optional, e.g. \"minimax\" or \"openai/deepseek-chat\", null uses default model)", example = "minimax")
     private String model;
 
-    @Schema(description = "Limit retrieval to documents in these collection IDs (multi-collection). Empty/null = all documents.",
-            example = "[1, 2]")
+    @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
+            example = "[1, 2]", deprecated = true)
     private List<Long> collectionIds;
+
+    @Schema(description = "Limit retrieval to these stable external Collection keys (preferred over collectionIds). Empty/null = all documents.",
+            example = "[\"customer-42:manual:v3\"]")
+    private List<@ValidCollectionKey String> collectionKeys;
 
     @Schema(description = "Limit retrieval to these document IDs (optional; intersected with collectionIds when both set)",
             example = "[10, 20]")
@@ -84,6 +89,9 @@ public class ChatRequest {
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
+    public List<String> getCollectionKeys() { return collectionKeys; }
+    public void setCollectionKeys(List<String> collectionKeys) { this.collectionKeys = collectionKeys; }
+
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
 
@@ -103,6 +111,7 @@ public class ChatRequest {
                 && Objects.equals(domainId, that.domainId)
                 && Objects.equals(model, that.model)
                 && Objects.equals(collectionIds, that.collectionIds)
+                && Objects.equals(collectionKeys, that.collectionKeys)
                 && Objects.equals(documentIds, that.documentIds)
                 && Objects.equals(metadata, that.metadata);
     }
@@ -110,7 +119,7 @@ public class ChatRequest {
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
-                domainId, model, collectionIds, documentIds, metadata);
+                domainId, model, collectionIds, collectionKeys, documentIds, metadata);
     }
 
     @Override
@@ -119,6 +128,7 @@ public class ChatRequest {
                 + ", maxResults=" + maxResults + ", useHybridSearch=" + useHybridSearch
                 + ", useRerank=" + useRerank + ", domainId=" + domainId
                 + ", model=" + model + ", collectionIds=" + collectionIds
+                + ", collectionKeys=" + collectionKeys
                 + ", documentIds=" + documentIds + ", metadata=" + metadata + "}";
     }
 }

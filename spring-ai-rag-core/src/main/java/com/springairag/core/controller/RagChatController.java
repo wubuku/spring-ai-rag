@@ -11,6 +11,7 @@ import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -66,17 +67,30 @@ public class RagChatController {
     private final ChatExportService chatExportService;
     private final RagSseProperties sseProperties;
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private final CollectionIdentityResolver collectionIdentityResolver;
 
+    @Autowired
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
                              ChatExportService chatExportService,
                              RagSseProperties sseProperties,
+                             @Autowired(required = false) CollectionIdentityResolver collectionIdentityResolver,
                              @Autowired(required = false) AuditLogService auditLogService) {
         this.ragChatService = ragChatService;
         this.historyRepository = historyRepository;
         this.chatExportService = chatExportService;
         this.sseProperties = sseProperties;
+        this.collectionIdentityResolver = collectionIdentityResolver;
         this.auditLogService = auditLogService;
+    }
+
+    public RagChatController(RagChatService ragChatService,
+                             RagChatHistoryRepository historyRepository,
+                             ChatExportService chatExportService,
+                             RagSseProperties sseProperties,
+                             AuditLogService auditLogService) {
+        this(ragChatService, historyRepository, chatExportService, sseProperties,
+                null, auditLogService);
     }
 
     /**
@@ -310,8 +324,12 @@ public class RagChatController {
 
     private void applyCollectionAcl(ChatRequest request, HttpServletRequest httpRequest) {
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        if (request.getCollectionKeys() != null && collectionIdentityResolver == null) {
+            throw new IllegalStateException("Collection key resolver is unavailable");
+        }
         request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
-                request.getCollectionIds(), key));
+                request.getCollectionIds(), request.getCollectionKeys(), key,
+                collectionIdentityResolver));
     }
 
 }

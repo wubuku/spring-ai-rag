@@ -10,6 +10,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -24,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.LinkedHashSet;
 
 /**
  * API Key management REST controller.
@@ -41,11 +43,15 @@ public class ApiKeyController {
 
     private final ApiKeyManagementService apiKeyService;
     private final EnvironmentRootCredentialResolver rootCredentialResolver;
+    private final CollectionIdentityResolver collectionIdentityResolver;
 
     public ApiKeyController(ApiKeyManagementService apiKeyService,
-                            EnvironmentRootCredentialResolver rootCredentialResolver) {
+                            EnvironmentRootCredentialResolver rootCredentialResolver,
+                            @org.springframework.beans.factory.annotation.Autowired(required = false)
+                            CollectionIdentityResolver collectionIdentityResolver) {
         this.apiKeyService = apiKeyService;
         this.rootCredentialResolver = rootCredentialResolver;
+        this.collectionIdentityResolver = collectionIdentityResolver;
     }
 
     @Operation(summary = "Create a new API key",
@@ -63,9 +69,33 @@ public class ApiKeyController {
         if (denied != null) {
             return denied;
         }
+        List<Long> requestedIds = request.getAllowedCollectionIds();
+        if (request.getAllowedCollectionKeys() != null) {
+            if (collectionIdentityResolver == null) {
+                throw new IllegalStateException("Collection key resolver is unavailable");
+            }
+            List<Long> keyIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                    null,
+                    request.getAllowedCollectionKeys(),
+                    getCaller(httpRequest),
+                    collectionIdentityResolver);
+            if (requestedIds != null) {
+                if (requestedIds.isEmpty()) {
+                    throw new IllegalArgumentException(
+                            "Allowed collection scope must not be empty");
+                }
+                List<Long> idIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                        requestedIds, getCaller(httpRequest));
+                if (!new LinkedHashSet<>(idIds).equals(new LinkedHashSet<>(keyIds))) {
+                    throw new IllegalArgumentException(
+                            "allowedCollectionIds and allowedCollectionKeys identify different collections");
+                }
+            }
+            requestedIds = keyIds;
+        }
         request.setAllowedCollectionIds(
                 ApiKeyCollectionAccess.resolveDelegatedAllowedIds(
-                        request.getAllowedCollectionIds(), getCaller(httpRequest)));
+                        requestedIds, getCaller(httpRequest)));
         ApiKeyCreatedResponse response = rootCredentialResolver.isConfigured()
                 ? apiKeyService.generateManagedKey(request)
                 : apiKeyService.generateKey(request);

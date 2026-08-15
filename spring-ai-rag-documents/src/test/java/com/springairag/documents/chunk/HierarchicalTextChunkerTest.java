@@ -38,9 +38,9 @@ class HierarchicalTextChunkerTest {
     @Test
     void split_shortPlainText() {
         List<TextChunk> chunks = chunker.split("This is a short sentence.");
-        // 短于 minChunkSize(50) 会被过滤
         assertNotNull(chunks);
-        assertTrue(chunks.isEmpty());
+        assertEquals(1, chunks.size());
+        assertEquals("This is a short sentence.", chunks.getFirst().text());
     }
 
     @Test
@@ -387,7 +387,7 @@ class HierarchicalTextChunkerTest {
         assertEquals(chunk1.hashCode(), chunk2.hashCode());
     }
 
-    // ========== minChunkSize 过滤测试 ==========
+    // ========== minChunkSize quality-target tests ==========
 
     @Test
     void split_filtersShortChunks() {
@@ -403,11 +403,9 @@ class HierarchicalTextChunkerTest {
 
         HierarchicalTextChunker strictChunker = new HierarchicalTextChunker(500, 100, 50);
         List<TextChunk> chunks = strictChunker.split(content);
-        // 所有 chunk 长度应 >= minChunkSize
-        for (TextChunk chunk : chunks) {
-            assertTrue(chunk.text().length() >= 100,
-                    "Chunk 长度 " + chunk.text().length() + " 应 >= 100: " + chunk.text().substring(0, Math.min(30, chunk.text().length())));
-        }
+        assertFalse(chunks.isEmpty());
+        assertTrue(chunks.stream().anyMatch(chunk -> chunk.text().contains("Short.")),
+                "完整短段不能因 minChunkSize 被静默丢弃");
     }
 
     // ========== 排序测试 ==========

@@ -6,6 +6,7 @@ import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 
 /**
@@ -75,6 +76,13 @@ public class RagDocumentVersion {
     private Map<String, Object> metadataSnapshot;
 
     /**
+     * JSON payload snapshot for structured records.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "jsonb_payload_snapshot", columnDefinition = "jsonb")
+    private JsonNode jsonbPayloadSnapshot;
+
+    /**
      * Created at
      */
     @CreationTimestamp
@@ -98,6 +106,8 @@ public class RagDocumentVersion {
         version.setChangeType(changeType);
         version.setChangeDescription(description);
         version.setMetadataSnapshot(doc.getMetadata());
+        version.setJsonbPayloadSnapshot(doc.getJsonbPayload() == null
+                ? null : doc.getJsonbPayload().deepCopy());
         return version;
     }
 
@@ -129,6 +139,11 @@ public class RagDocumentVersion {
 
     public Map<String, Object> getMetadataSnapshot() { return metadataSnapshot; }
     public void setMetadataSnapshot(Map<String, Object> metadataSnapshot) { this.metadataSnapshot = metadataSnapshot; }
+
+    public JsonNode getJsonbPayloadSnapshot() { return jsonbPayloadSnapshot; }
+    public void setJsonbPayloadSnapshot(JsonNode jsonbPayloadSnapshot) {
+        this.jsonbPayloadSnapshot = jsonbPayloadSnapshot;
+    }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

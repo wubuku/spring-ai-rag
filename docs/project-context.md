@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-14.
+> **Last reviewed**: 2026-08-15.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -59,32 +59,40 @@ Key rules:
 Collection is not merely a display category. It is an active knowledge-base
 boundary across ingestion, retrieval, and authorization:
 
+- `rag_collection.id` is the internal `Long` primary/foreign-key identity.
+  Caller-supplied `collectionKey` is the preferred external identity. It is
+  1-128 visible ASCII characters, case-sensitive, globally unique, immutable,
+  and remains reserved after soft deletion.
 - `rag_documents.collection_id` defines the one-to-many relationship. A
   document belongs to at most one Collection and may also be unassigned.
-- Chat and Search accept multiple `collectionIds`. Controllers first apply the
-  API-key Collection ACL. `CollectionDocumentResolver` then expands
-  Collections to document IDs and intersects them with explicit `documentIds`;
-  vector and full-text retrieval filter on the resulting document IDs.
-- For an unrestricted caller, omitted `collectionIds` or `[]` means no
-  Collection filter. For a restricted API key, omission or an empty list is
-  replaced by the key's allow-list. A requested non-empty scope that resolves
-  to no documents returns an empty result.
-- The WebUI Chat page currently selects one Collection, while the backend
-  protocol supports multiple Collections. The Collections page links to its
-  documents. The standalone Search page does not yet expose a Collection
-  selector.
+- Chat and Search prefer multiple `collectionKeys`; deprecated
+  `collectionIds` remains compatible. `CollectionIdentityResolver` and
+  `ApiKeyCollectionAccess` validate matching ID/key sets and convert them to
+  authorized internal IDs before `CollectionDocumentResolver` expands and
+  intersects with explicit `documentIds`.
+- For an unrestricted caller, omitting both identity fields means no
+  Collection filter. A restricted API key inherits its allow-list when scope
+  is omitted. An explicitly empty scope returns `400`; a restricted caller's
+  unknown or unauthorized key returns `403`. A non-empty authorized scope
+  with no documents returns an empty result.
+- Collection CRUD, restore, clone, document association, import/export,
+  document ingestion, upload, PDF-to-RAG, WebUI, and API-key management expose
+  the stable key. Database relationships and retrieval remain numeric.
+- WebUI Chat and Search currently select one Collection key; backend protocols
+  support multiple keys. Collections, Documents, Files, and API Keys also use
+  keys at their external boundary.
 
 Current boundaries:
 
 - Collection `embeddingModel` and `dimensions` are management/import-export
   metadata. They do not select a per-Collection EmbeddingModel; ingestion and
   query embedding still use the global embedding configuration.
-- Collection and Document `enabled` states are not fully enforced by vector
-  and full-text retrieval SQL. Do not interpret "disabled" as guaranteed
-  non-retrievability.
+- Vector and full-text retrieval exclude disabled documents and require a fresh
+  completed state for the active Embedding Profile.
 - Deleting a Collection soft-deletes it and unlinks its documents; it does not
   delete documents or embeddings. Unlinked documents may still appear in
-  unscoped full-corpus retrieval.
+  unscoped full-corpus retrieval. The deleted Collection's key cannot be
+  reused.
 - Retrieval currently expands Collections to document IDs and generates a
   `document_id IN (...)` filter. Very large Collections require parameter-size
   testing and should evolve toward a direct `collection_id` join/filter.
@@ -94,7 +102,10 @@ See [architecture.md](architecture.md).
 ## 4. Retrieval And Quality
 
 - Embedding defaults to SiliconFlow `BAAI/bge-m3`.
-- Vector dimension is `1024` and must match PostgreSQL `VECTOR(1024)`.
+- Embeddings use the immutable `rag_embedding_profiles` identity and the
+  fixed-length `rag_embeddings.embedding_1024 VECTOR(1024)` column. A document
+  is fresh for a Profile only when its state is `COMPLETED` and its content hash
+  matches the current document.
 - Retrieval combines vector and full-text signals.
 - The production profile recommends query rewrite and local heuristic reranking.
 - Goldenset metrics include Precision@K, MRR, and nDCG.
@@ -102,6 +113,27 @@ See [architecture.md](architecture.md).
 The small online goldenset gave perfect baseline and quality scores. Deterministic MRR tests demonstrate reranking gain; the online sample is not statistical evidence.
 
 See [quality-defaults.md](quality-defaults.md).
+
+### JSON Structured Records
+
+The JSON record API stores caller-owned business data in
+`RagDocument.jsonbPayload` / `rag_documents.jsonb_payload` and stores the
+caller-owned natural-language description in the existing `content` field,
+exposed as `retrievalText`. Only `retrievalText` is hashed, chunked, full-text
+indexed, embedded, and eligible for normal RAG prompt context. The service
+does not derive or verify the description against the JSON.
+
+JSON records use `(collectionId, documentType=json-record, externalId)` as
+their idempotent identity. They do not use global content-hash deduplication,
+so different payloads may share the same description. Payload-only updates
+create an auditable document version without invalidating a fresh embedding;
+there is intentionally no `payloadHash`. The dedicated search API enriches
+ranked results with the current JSONB payload after retrieval, and does not
+copy payload into embedding metadata or ordinary chat prompts.
+
+Ordinary non-blank short documents are retained as at least one chunk.
+`minChunkSize` is a best-effort chunk-quality target, not a document-loss
+filter. JSON records use one record-level chunk.
 
 ## 5. Multi-Model Runtime
 
@@ -118,7 +150,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V24.
+- Flyway is currently V1–V29.
+- V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
+  Collection business key; V29 adds JSONB structured records.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 
@@ -135,6 +169,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/evaluation` | Evaluation and feedback |
 | `/api-keys` | API-key management |
 | `/files` | PDF and file import |
+| `/json-records` | JSONB structured-record upsert, search, and detail |
 
 See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 

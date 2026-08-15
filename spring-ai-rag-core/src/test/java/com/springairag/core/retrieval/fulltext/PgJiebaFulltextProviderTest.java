@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.api.dto.RetrievalResult;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.dao.DataAccessResourceFailureException;
 
@@ -62,7 +63,7 @@ class PgJiebaFulltextProviderTest {
                 .thenThrow(new RuntimeException("not found"));
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
-        assertTrue(provider.search("test", null, null, 5, 0.3).isEmpty());
+        assertTrue(provider.search("test", null, null, 5, 0.3, 1L).isEmpty());
     }
 
     @Test
@@ -80,11 +81,18 @@ class PgJiebaFulltextProviderTest {
         when(jdbc.queryForList(contains("ts_rank"), any(Object[].class))).thenReturn(List.of(row));
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
-        List<RetrievalResult> results = provider.search("测试", null, null, 5, 0.0);
+        List<RetrievalResult> results = provider.search("测试", null, null, 5, 0.0, 1L);
 
         assertEquals(1, results.size());
         assertEquals(0.75, results.get(0).getFulltextScore(), 0.001);
         verify(jdbc).queryForList(contains("ts_rank"), any(Object[].class));
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("e.embedding_profile_id = 1"));
+        assertTrue(sql.contains("s.status = 'COMPLETED'"));
+        assertTrue(sql.contains("s.content_hash = d.content_hash"));
+        assertTrue(sql.contains("d.enabled = true"));
     }
 
     @Test
@@ -94,8 +102,8 @@ class PgJiebaFulltextProviderTest {
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
-        assertTrue(provider.search(null, null, null, 5, 0.3).isEmpty());
-        assertTrue(provider.search("", null, null, 5, 0.3).isEmpty());
+        assertTrue(provider.search(null, null, null, 5, 0.3, 1L).isEmpty());
+        assertTrue(provider.search("", null, null, 5, 0.3, 1L).isEmpty());
     }
 
     @Test
@@ -108,7 +116,7 @@ class PgJiebaFulltextProviderTest {
 
         PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
         assertDoesNotThrow(() -> {
-            assertTrue(provider.search("测试", null, null, 5, 0.3).isEmpty());
+            assertTrue(provider.search("测试", null, null, 5, 0.3, 1L).isEmpty());
         });
     }
 }

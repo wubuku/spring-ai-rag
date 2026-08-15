@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 import java.util.List;
 import java.util.Objects;
 
@@ -21,8 +22,12 @@ public class SearchRequest {
     @Schema(description = "Limit to document ID list (empty means search all)", example = "[1, 2, 3]")
     private List<Long> documentIds;
 
-    @Schema(description = "Search within these collection IDs (multi-collection search)", example = "[1, 2, 3]")
+    @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
+            example = "[1, 2, 3]", deprecated = true)
     private List<Long> collectionIds;
+
+    @Schema(description = "Stable external Collection keys (preferred over collectionIds)", example = "[\"customer-42:manual:v3\"]")
+    private List<@ValidCollectionKey String> collectionKeys;
 
     @Valid
     @Schema(description = "Retrieval configuration parameters")
@@ -43,6 +48,9 @@ public class SearchRequest {
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
+    public List<String> getCollectionKeys() { return collectionKeys; }
+    public void setCollectionKeys(List<String> collectionKeys) { this.collectionKeys = collectionKeys; }
+
     public RetrievalConfig getConfig() { return config; }
     public void setConfig(RetrievalConfig config) { this.config = config; }
 
@@ -54,12 +62,13 @@ public class SearchRequest {
         return Objects.equals(query, that.query) &&
                 Objects.equals(documentIds, that.documentIds) &&
                 Objects.equals(collectionIds, that.collectionIds) &&
+                Objects.equals(collectionKeys, that.collectionKeys) &&
                 Objects.equals(config, that.config);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(query, documentIds, collectionIds, config);
+        return Objects.hash(query, documentIds, collectionIds, collectionKeys, config);
     }
 
     @Override
@@ -68,6 +77,7 @@ public class SearchRequest {
                 "query='" + query + '\'' +
                 ", documentIds=" + documentIds +
                 ", collectionIds=" + collectionIds +
+                ", collectionKeys=" + collectionKeys +
                 ", config=" + config +
                 '}';
     }

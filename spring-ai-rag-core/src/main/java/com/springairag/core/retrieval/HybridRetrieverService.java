@@ -2,6 +2,9 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
+import com.springairag.core.config.EmbeddingVectorColumns;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagRetrievalProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
@@ -40,6 +43,7 @@ public class HybridRetrieverService {
     private static final Logger log = LoggerFactory.getLogger(HybridRetrieverService.class);
 
     private final EmbeddingModel embeddingModel;
+    private final EmbeddingProfileProvider profileProvider;
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private final RagRetrievalProperties retrieval;
@@ -47,13 +51,16 @@ public class HybridRetrieverService {
 
     private final int retrievalTimeoutSeconds;
 
+    @Autowired
     public HybridRetrieverService(
             EmbeddingModel embeddingModel,
+            EmbeddingProfileProvider profileProvider,
             JdbcTemplate jdbcTemplate,
             RagProperties ragProperties,
             @Autowired(required = false) FulltextSearchProviderFactory fulltextProviderFactory,
             @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor) {
         this.embeddingModel = embeddingModel;
+        this.profileProvider = profileProvider;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
         this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
@@ -62,6 +69,30 @@ public class HybridRetrieverService {
         log.info("HybridRetrieverService initialized, retrievalTimeout={}s, fulltextStrategy={}",
                 retrievalTimeoutSeconds,
                 fulltextProviderFactory != null ? "auto-detect" : "disabled (no factory)");
+    }
+
+    HybridRetrieverService(
+            EmbeddingModel embeddingModel,
+            JdbcTemplate jdbcTemplate,
+            RagProperties ragProperties,
+            FulltextSearchProviderFactory fulltextProviderFactory,
+            Executor taskExecutor) {
+        this(
+                embeddingModel,
+                () -> new EmbeddingProfile(
+                        1L,
+                        "test-embedding-profile",
+                        "test",
+                        "test-model",
+                        "test-revision",
+                        1024,
+                        "COSINE",
+                        "PROVIDER_DEFAULT",
+                        true),
+                jdbcTemplate,
+                ragProperties,
+                fulltextProviderFactory,
+                taskExecutor);
     }
 
     /**
@@ -100,6 +131,7 @@ public class HybridRetrieverService {
                                          List<Long> excludeIds, int limit,
                                          RetrievalConfig config) {
         log.debug("Executing hybrid search for query: {}", query);
+        EmbeddingProfile profile = profileProvider.getActiveProfile();
 
         // Detect language and select fulltext provider
         FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
@@ -111,12 +143,13 @@ public class HybridRetrieverService {
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
         if (!isFulltextAvailable(config, fulltextProvider)) {
-            return vectorSearch(query, documentIds, excludeIds, effectiveLimit);
+            return vectorSearch(query, documentIds, excludeIds, effectiveLimit, profile);
         }
 
         // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
         CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
-                .supplyAsync(() -> vectorSearch(query, documentIds, excludeIds, effectiveLimit * 2), taskExecutor)
+                .supplyAsync(() -> vectorSearch(
+                        query, documentIds, excludeIds, effectiveLimit * 2, profile), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Vector search timed out after {}s, falling back to empty result: {}",
@@ -125,8 +158,13 @@ public class HybridRetrieverService {
                 });
 
         CompletableFuture<List<RetrievalResult>> fulltextFuture = CompletableFuture
-                .supplyAsync(() -> fulltextProvider.search(query, documentIds, excludeIds,
-                        effectiveLimit * 2, retrieval.getMinScore()), taskExecutor)
+                .supplyAsync(() -> fulltextProvider.search(
+                        query,
+                        documentIds,
+                        excludeIds,
+                        effectiveLimit * 2,
+                        retrieval.getMinScore(),
+                        profile.id()), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Fulltext search [{}] timed out after {}s, falling back to empty result: {}",
@@ -147,10 +185,13 @@ public class HybridRetrieverService {
      * Vector search.
      */
     private List<RetrievalResult> vectorSearch(String query, List<Long> documentIds,
-                                               List<Long> excludeIds, int limit) {
+                                               List<Long> excludeIds, int limit,
+                                               EmbeddingProfile profile) {
         try {
             float[] queryVector = embeddingModel.embed(query);
-            List<Map<String, Object>> rows = executeVectorQuery(queryVector, documentIds, limit);
+            validateQueryVector(queryVector, profile);
+            List<Map<String, Object>> rows =
+                    executeVectorQuery(queryVector, documentIds, limit, profile);
             return mapVectorResults(rows, queryVector, excludeIds);
         } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
             log.error("Vector search failed", e);
@@ -159,28 +200,53 @@ public class HybridRetrieverService {
     }
 
     private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
-                                                          List<Long> documentIds, int limit) {
+                                                          List<Long> documentIds, int limit,
+                                                          EmbeddingProfile profile) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
+        String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
+        String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
+                + "::text AS embedding, e.document_id, e.chunk_index, e.metadata";
+        String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
+                + "AND e." + vectorColumn + " IS NOT NULL ";
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
-            // Use CAST(? AS vector) for proper parameter binding with pgvector
             String sql = String.format(
-                    "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
-                            "FROM rag_embeddings WHERE document_id IN (%s) " +
-                            "ORDER BY embedding <=> CAST(? AS vector) LIMIT ?",
+                    select + scope
+                            + "AND e.document_id IN (%s) "
+                            + "ORDER BY e." + vectorColumn
+                            + " <=> CAST(? AS vector) LIMIT ?",
                     placeholders);
             List<Object> args = new ArrayList<>(documentIds);
             args.add(vectorStr);
             args.add(limit);
             return jdbcTemplate.queryForList(sql, args.toArray());
         }
-        // Use CAST(? AS vector) for proper parameter binding with pgvector
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata " +
-                        "FROM rag_embeddings ORDER BY embedding <=> CAST(? AS vector) LIMIT ?",
+                select + scope
+                        + "ORDER BY e." + vectorColumn
+                        + " <=> CAST(? AS vector) LIMIT ?",
                 vectorStr, limit);
         return rows;
+    }
+
+    private void validateQueryVector(float[] queryVector, EmbeddingProfile profile) {
+        if (queryVector == null) {
+            throw new IllegalStateException("Embedding model returned a null query vector");
+        }
+        if (queryVector.length != profile.dimensions()) {
+            throw new IllegalStateException(
+                    "Query embedding dimension mismatch for profile "
+                            + profile.profileKey() + ": expected=" + profile.dimensions()
+                            + ", actual=" + queryVector.length);
+        }
+        for (float value : queryVector) {
+            if (!Float.isFinite(value)) {
+                throw new IllegalStateException(
+                        "Query embedding contains a non-finite value for profile "
+                                + profile.profileKey());
+            }
+        }
     }
 
     private List<RetrievalResult> mapVectorResults(List<Map<String, Object>> rows,

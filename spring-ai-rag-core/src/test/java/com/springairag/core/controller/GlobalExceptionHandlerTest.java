@@ -22,10 +22,12 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.http.HttpMethod.GET;
 
 /**
  * GlobalExceptionHandler Unit Tests - including RFC 7807 field validation
@@ -150,6 +152,17 @@ class GlobalExceptionHandlerTest {
         ResponseEntity<ErrorResponse> response = handler.handleNotFound(e, request);
         assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
         assertEquals("NOT_FOUND", response.getBody().getError());
+    }
+
+    @Test
+    void handleResourceNotFound_returns404() {
+        NoResourceFoundException e = new NoResourceFoundException(GET, "/api/v1/rag/documents/1/embed/vs");
+        ResponseEntity<ErrorResponse> response = handler.handleResourceNotFound(e, request);
+        assertEquals(HttpStatus.NOT_FOUND, response.getStatusCode());
+        assertEquals("NOT_FOUND", response.getBody().getError());
+        assertEquals("Resource not found: /api/v1/rag/documents/1/embed/vs",
+                response.getBody().getMessage());
+        assertEquals("application/problem+json", response.getHeaders().getContentType().toString());
     }
 
     @Test

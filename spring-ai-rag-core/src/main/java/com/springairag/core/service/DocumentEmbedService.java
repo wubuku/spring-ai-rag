@@ -1,28 +1,21 @@
 package com.springairag.core.service;
 
-import com.springairag.api.dto.BatchCreateAndEmbedRequest;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
-import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.repository.RagDocumentRepository;
 
 import java.util.Objects;
-import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.retrieval.EmbeddingBatchService;
-import com.springairag.core.retrieval.RetrievalUtils;
 import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.document.Document;
-import org.springframework.ai.vectorstore.VectorStore;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
 import java.util.List;
@@ -33,11 +26,7 @@ import java.util.function.Consumer;
  * Document embedding service
  *
  * <p>Responsible for chunking document content, generating embedding vectors, and storing them.
- * Supports two storage paths:
- * <ul>
- *   <li>JdbcTemplate path: stores to rag_embeddings, supports document_id association</li>
- *   <li>VectorStore path: stores to rag_vector_store, managed by Spring AI</li>
- * </ul>
+ * All writes use the profile-aware rag_embeddings path.
  */
 @Service
 public class DocumentEmbedService {
@@ -47,22 +36,19 @@ public class DocumentEmbedService {
     private final HierarchicalTextChunker chunker;
     private final RagProperties ragProperties;
     private final RagDocumentRepository documentRepository;
-    private final RagEmbeddingRepository embeddingRepository;
     private final EmbeddingBatchService embeddingBatchService;
-    private final JdbcTemplate jdbcTemplate;
-    private final VectorStore vectorStore;
+    private final EmbeddingPersistenceService persistenceService;
+    private final EmbeddingProfileProvider profileProvider;
 
     public DocumentEmbedService(RagDocumentRepository documentRepository,
-                                 RagEmbeddingRepository embeddingRepository,
                                  EmbeddingBatchService embeddingBatchService,
-                                 JdbcTemplate jdbcTemplate,
-                                 @Autowired(required = false) VectorStore vectorStore,
+                                 EmbeddingPersistenceService persistenceService,
+                                 EmbeddingProfileProvider profileProvider,
                                  RagProperties ragProperties) {
         this.documentRepository = documentRepository;
-        this.embeddingRepository = embeddingRepository;
         this.embeddingBatchService = embeddingBatchService;
-        this.jdbcTemplate = jdbcTemplate;
-        this.vectorStore = vectorStore;
+        this.persistenceService = persistenceService;
+        this.profileProvider = profileProvider;
         this.chunker = new HierarchicalTextChunker(
                 ragProperties.getChunk().getDefaultChunkSize(),
                 ragProperties.getChunk().getMinChunkSize(),
@@ -71,33 +57,37 @@ public class DocumentEmbedService {
     }
 
     /**
-     * Generates embedding vectors for a document (JdbcTemplate path)
-     *
-     * <p>Flow: fetch document → chunk → generate embeddings → store to rag_embeddings → update status
-     *
-     * <p>Embedding cache: if document already has embeddings with COMPLETED status, skips re-embedding.
-     * Pass {@code force=true} to force re-embedding (e.g., after embedding model change).
-     *
-     * @param documentId document ID
-     * @return operation result (chunksCreated, embeddingsStored, status)
+     * 为文档生成活动 Profile 的向量。
      */
-    @Transactional
     public Map<String, Object> embedDocument(Long documentId) {
         Objects.requireNonNull(documentId);
         return embedDocument(documentId, false);
     }
 
-    /**
-     * Generates embedding vectors for a document (JdbcTemplate path, supports force re-embedding)
-     *
-     * @param documentId document ID
-     * @param force whether to force re-embedding (skip cache check)
-     * @return operation result (chunksCreated, embeddingsStored, status)
-     */
-    @Transactional
     public Map<String, Object> embedDocument(Long documentId, boolean force) {
         Objects.requireNonNull(documentId);
         return embedDocumentWithProgress(documentId, force, null);
+    }
+
+    /**
+     * Checks the active profile cache without invoking the embedding provider.
+     *
+     * <p>Structured-record payload-only updates use this to avoid a redundant
+     * provider call while still allowing a record first persisted with
+     * {@code embed=false} to be embedded by a later upsert.
+     */
+    public boolean hasFreshEmbedding(RagDocument document) {
+        if (document == null || document.getId() == null
+                || document.getContentHash() == null
+                || document.getContentHash().isBlank()) {
+            return false;
+        }
+        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        return persistenceService.findCacheState(
+                document.getId(),
+                profile,
+                document.getContentHash(),
+                buildChunkerVersion(document)).hit();
     }
 
     /**
@@ -108,53 +98,67 @@ public class DocumentEmbedService {
      * @param progressCallback progress callback, can be null
      * @return operation result
      */
-    @Transactional
     public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
             java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
         Objects.requireNonNull(documentId);
-        log.info("Generating embeddings for document: id={}, force={}", documentId, force);
+        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        log.info("Generating embeddings for document: id={}, force={}, profile={}",
+                documentId, force, profile.profileKey());
 
         maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
 
-        EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
+        EmbedPrepareResult prep = prepareForEmbedding(documentId, force, profile);
         if (prep.cached() != null) {
             maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, 0));
             return prep.cached();
         }
 
         List<TextChunk> chunks = prep.chunks();
-        RagDocument doc = prep.doc();
-        doc.setProcessingStatus("PROCESSING");
-        documentRepository.save(doc);
-
         maybeEmit(progressCallback, EmbedProgressEvent.chunking(documentId, chunks.size()));
 
-        // Delete old vectors → generate embeddings → store
-        embeddingRepository.deleteByDocumentId(documentId);
         List<String> texts = chunks.stream().map(TextChunk::text).toList();
-        List<EmbeddingBatchService.EmbeddingResult> results =
-                embeddingBatchService.createEmbeddingsBatch(texts);
-
-        emitEmbeddingProgress(progressCallback, documentId, results.size());
-        int stored = storeEmbeddings(documentId, chunks, results);
-
-        maybeEmit(progressCallback, EmbedProgressEvent.storing(documentId, stored, chunks.size()));
-
-        // Only mark as COMPLETED if at least some embeddings were successfully stored
-        if (stored > 0) {
-            completeEmbedding(doc, chunks.size());
-            maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, stored));
-            log.info("Document {} embedding completed: {}/{} chunks stored", documentId, stored, chunks.size());
-            return buildSuccessResult(documentId, stored, stored, "COMPLETED");
-        } else {
-            // All embeddings failed - mark as FAILED, not COMPLETED
-            doc.setProcessingStatus("FAILED");
-            documentRepository.save(doc);
-            maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, 0));
-            log.warn("Document {} embedding failed: 0/{} chunks stored - check embedding service availability",
-                    documentId, chunks.size());
-            return buildSuccessResult(documentId, 0, 0, "FAILED");
+        List<EmbeddingBatchService.EmbeddingResult> results;
+        try {
+            results = embeddingBatchService.createEmbeddingsBatch(texts);
+        } catch (RuntimeException e) {
+            String error = "Embedding provider call failed: " + e.getMessage();
+            persistenceService.recordFailureIfNoCompleted(
+                    documentId,
+                    prep.documentVersion(),
+                    prep.contentHash(),
+                    profile,
+                    prep.chunkerVersion(),
+                    error);
+            log.warn("Document {} embedding provider call failed without replacing old vectors",
+                    documentId, e);
+            return buildResult(documentId, 0, 0, "FAILED", profile, error);
         }
+        emitEmbeddingProgress(
+                progressCallback, documentId, results == null ? 0 : results.size());
+
+        String validationError = validateEmbeddingResults(chunks, results, profile);
+        if (validationError != null) {
+            persistenceService.recordFailureIfNoCompleted(
+                    documentId,
+                    prep.documentVersion(),
+                    prep.contentHash(),
+                    profile,
+                    prep.chunkerVersion(),
+                    validationError);
+            log.warn("Document {} embedding failed without replacing old vectors: {}",
+                    documentId, validationError);
+            return buildResult(documentId, 0, 0, "FAILED", profile, validationError);
+        }
+
+        maybeEmit(progressCallback,
+                EmbedProgressEvent.storing(documentId, chunks.size(), chunks.size()));
+        replaceWithOneVersionRetry(
+                documentId, prep, profile, chunks, results);
+        maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, chunks.size()));
+        log.info("Document {} embedding completed: chunks={}, profile={}",
+                documentId, chunks.size(), profile.profileKey());
+        return buildResult(
+                documentId, chunks.size(), chunks.size(), "COMPLETED", profile, null);
     }
 
     /** Safely emits a progress callback (null-safe) */
@@ -172,58 +176,11 @@ public class DocumentEmbedService {
     }
 
     /**
-     * Generates embedding vectors for a document (VectorStore simplified path)
-     *
-     * @param documentId document ID
-     * @return operation result
-     * @throws IllegalStateException thrown when VectorStore is not configured
-     */
-    @Transactional
-    public Map<String, Object> embedDocumentViaVectorStore(Long documentId) {
-        Objects.requireNonNull(documentId);
-        return embedDocumentViaVectorStore(documentId, false);
-    }
-
-    /**
-     * Generates embedding vectors for a document (VectorStore simplified path, supports force re-embedding)
-     *
-     * @param documentId document ID
-     * @param force whether to force re-embedding (skip cache check)
-     * @return operation result
-     * @throws IllegalStateException thrown when VectorStore is not configured
-     */
-    @Transactional
-    public Map<String, Object> embedDocumentViaVectorStore(Long documentId, boolean force) {
-        Objects.requireNonNull(documentId);
-        if (vectorStore == null) {
-            throw new IllegalStateException("VectorStore not configured, use embedDocument method instead");
-        }
-
-        log.info("Generating embeddings via VectorStore for document: id={}, force={}", documentId, force);
-
-        EmbedPrepareResult prep = prepareForEmbedding(documentId, force);
-        if (prep.cached() != null) return prep.cached();
-
-        List<TextChunk> chunks = prep.chunks();
-        RagDocument doc = prep.doc();
-        doc.setProcessingStatus("PROCESSING");
-        documentRepository.save(doc);
-
-        vectorStore.add(buildVectorStoreDocuments(documentId, doc.getTitle(), chunks));
-        completeEmbedding(doc, chunks.size());
-
-        log.info("Document {} embedding via VectorStore completed: {} chunks stored", documentId, chunks.size());
-        return buildSuccessResult(documentId, chunks.size(), chunks.size(), "COMPLETED",
-                "storageTable", "rag_vector_store");
-    }
-
-    /**
      * Batch generates embedding vectors for multiple documents
      *
      * @param documentIds list of document IDs
      * @return batch operation result (results + summary)
      */
-    @Transactional
     public Map<String, Object> batchEmbedDocuments(List<Long> documentIds) {
         if (documentIds == null) {
             throw new IllegalArgumentException("documentIds must not be null");
@@ -271,7 +228,6 @@ public class DocumentEmbedService {
      * @param progressCallback progress callback, called after each document is processed
      * @return batch operation result (results + summary)
      */
-    @Transactional
     public Map<String, Object> batchEmbedDocumentsWithProgress(
             List<Long> documentIds,
             Consumer<BatchEmbedProgressEvent> progressCallback) {
@@ -390,134 +346,19 @@ public class DocumentEmbedService {
      * Single document embedding processing (called by batchEmbedDocuments)
      */
     private Map<String, Object> embedSingleDocument(Long id) {
-        Map<String, Object> result = new HashMap<>();
-        result.put("documentId", id);
         try {
-            processSingleEmbedding(id, result);
+            return embedDocument(id, false);
         } catch (Exception e) { // Resilience: single document embed failure, record error
             log.error("Failed to embed document {}: {}", id, e.getMessage());
-            result.put("status", "FAILED");
+            Map<String, Object> result = new HashMap<>();
+            result.put("documentId", id);
+            result.put("status", e instanceof DocumentNotFoundException ? "NOT_FOUND" : "FAILED");
             result.put("error", e.getMessage());
+            return result;
         }
-        return result;
-    }
-
-    /** Executes core logic for single document embedding; writes result to result Map */
-    private void processSingleEmbedding(Long id, Map<String, Object> result) {
-        RagDocument doc = findAndValidateDocument(id, result);
-        if (doc == null) {
-            return;
-        }
-
-        List<TextChunk> chunks = prepareChunks(doc, result);
-        if (chunks == null) {
-            return;
-        }
-
-        doc.setProcessingStatus("PROCESSING");
-        documentRepository.save(doc);
-        embeddingRepository.deleteByDocumentId(id);
-
-        int stored = storeEmbeddings(id, chunks,
-                embeddingBatchService.createEmbeddingsBatch(
-                        chunks.stream().map(TextChunk::text).toList()));
-
-        if (stored > 0) {
-            completeEmbedding(doc, chunks.size());
-            result.put("status", "COMPLETED");
-            result.put("chunksCreated", stored);
-            result.put("embeddingsStored", stored);
-        } else {
-            doc.setProcessingStatus("FAILED");
-            documentRepository.save(doc);
-            result.put("status", "FAILED");
-            result.put("chunksCreated", 0);
-            result.put("embeddingsStored", 0);
-        }
-    }
-
-    /** Finds document and checks cache; returns null when status already written to result */
-    private RagDocument findAndValidateDocument(Long id, Map<String, Object> result) {
-        RagDocument doc = documentRepository.findById(id).orElse(null);
-        if (doc == null) {
-            result.put("status", "NOT_FOUND");
-            return null;
-        }
-        Map<String, Object> cached = checkEmbeddingCache(doc);
-        if (cached != null) {
-            result.put("status", "CACHED");
-            result.put("embeddingsStored", cached.get("embeddingsStored"));
-            return null;
-        }
-        return doc;
-    }
-
-    /** Handles chunking; returns null when no embedding needed (reason already written to result) */
-    private List<TextChunk> prepareChunks(RagDocument doc, Map<String, Object> result) {
-        String content = doc.getContent();
-        if (content == null || content.isBlank()) {
-            result.put("status", "SKIPPED");
-            result.put("reason", "Content is empty");
-            return null;
-        }
-        List<TextChunk> chunks = chunker.split(content);
-        if (chunks.isEmpty()) {
-            result.put("status", "SKIPPED");
-            result.put("reason", "Content too short, no chunking needed");
-            return null;
-        }
-        return chunks;
-    }
-
-    /**
-     * Checks whether VectorStore is available
-     */
-    public boolean isVectorStoreAvailable() {
-        return vectorStore != null;
     }
 
     // ==================== Internal Methods ====================
-
-    /**
-     * Checks embedding cache — determines whether re-embedding is needed based on content hash
-     *
-     * <p>Check strategy (three layers):
-     * <ol>
-     *   <li>Status check: non-COMPLETED status does not hit cache</li>
-     *   <li>Content hash check: current content hash differs from embedded hash → content changed, needs re-embedding</li>
-     *   <li>Embedding record check: no existing embedding records → needs embedding</li>
-     * </ol>
-     *
-     * @return result Map on cache hit, null on miss
-     */
-    private Map<String, Object> checkEmbeddingCache(RagDocument doc) {
-        if (!"COMPLETED".equals(doc.getProcessingStatus())) {
-            return null;
-        }
-
-        // Content hash comparison: if content changed, need to re-embed even if old embeddings exist
-        String currentHash = doc.getContentHash();
-        String embeddedHash = doc.getEmbeddedContentHash();
-        if (currentHash != null && embeddedHash != null && !currentHash.equals(embeddedHash)) {
-            log.info("Content changed for document {}: currentHash={}, embeddedHash={}, re-embedding needed",
-                    doc.getId(), currentHash, embeddedHash);
-            return null;
-        }
-
-        long existingCount = embeddingRepository.countByDocumentId(doc.getId());
-        if (existingCount > 0) {
-            log.info("Embedding cache hit for document {}: {} existing embeddings, content unchanged, skipping",
-                    doc.getId(), existingCount);
-            return Map.of(
-                    "message", "Embedding already exists and content unchanged, skipping (use force=true to re-embed)",
-                    "documentId", doc.getId(),
-                    "embeddingsStored", existingCount,
-                    "status", "CACHED",
-                    "cached", true
-            );
-        }
-        return null;
-    }
 
     private RagDocument findDocument(Long id) {
         return documentRepository.findById(id)
@@ -532,97 +373,169 @@ public class DocumentEmbedService {
         return content;
     }
 
-    private int storeEmbeddings(Long documentId, List<TextChunk> chunks,
-                                 List<EmbeddingBatchService.EmbeddingResult> results) {
-        int stored = 0;
-        for (int i = 0; i < results.size(); i++) {
-            EmbeddingBatchService.EmbeddingResult result = results.get(i);
-            if (result.isSuccess()) {
-                TextChunk chunk = chunks.get(i);
-                String vectorStr = RetrievalUtils.vectorToString(result.getEmbedding());
-                jdbcTemplate.update(
-                        "INSERT INTO rag_embeddings (document_id, chunk_text, chunk_index, embedding, chunk_start_pos, chunk_end_pos, created_at) " +
-                                "VALUES (?, ?, ?, ?::vector, ?, ?, NOW())",
-                        documentId, chunk.text(), i, vectorStr, chunk.startPos(), chunk.endPos());
-                stored++;
-            } else {
-                log.warn("Embedding failed for chunk {} in doc {}: {}", i, documentId, result.getError());
-            }
-        }
-        return stored;
-    }
-
-    private List<Document> buildVectorStoreDocuments(Long documentId, String documentTitle, List<TextChunk> chunks) {
-        List<Document> documents = new java.util.ArrayList<>(chunks.size());
-        String title = documentTitle != null ? documentTitle : String.valueOf(documentId);
-        for (int i = 0; i < chunks.size(); i++) {
-            TextChunk chunk = chunks.get(i);
-            documents.add(Document.builder()
-                    .id(documentId + "-" + i)
-                    .text(chunk.text())
-                    .metadata(Map.of(
-                            "documentId", String.valueOf(documentId),
-                            "title", title,
-                            "chunkIndex", String.valueOf(i),
-                            "chunkStartPos", String.valueOf(chunk.startPos()),
-                            "chunkEndPos", String.valueOf(chunk.endPos())
-                    ))
-                    .build());
-        }
-        return documents;
-    }
-
     // ==================== Extracted Shared Logic ====================
 
-    /** Embedding preparation result: document + cache check + chunking result */
-    private record EmbedPrepareResult(RagDocument doc, Map<String, Object> cached, List<TextChunk> chunks) {}
+    private record EmbedPrepareResult(
+            Map<String, Object> cached,
+            List<TextChunk> chunks,
+            String contentHash,
+            long documentVersion,
+            String chunkerVersion) {
+    }
 
     /**
      * Unified embedding preparation flow: find document → check cache → validate content → chunk
      * @return preparation result; non-null cached means cache hit, return directly
      */
-    private EmbedPrepareResult prepareForEmbedding(Long documentId, boolean force) {
+    private EmbedPrepareResult prepareForEmbedding(
+            Long documentId, boolean force, EmbeddingProfile profile) {
         RagDocument doc = findDocument(documentId);
+        String content = validateContent(doc);
+        long version = doc.getVersion() == null ? 0 : doc.getVersion();
+        String contentHash = doc.getContentHash();
+        if (contentHash == null || contentHash.isBlank()) {
+            contentHash = BatchDocumentService.computeSha256(content);
+            persistenceService.ensureContentHash(documentId, version, contentHash);
+            version++;
+            doc.setContentHash(contentHash);
+            doc.setVersion(version);
+        }
+        String chunkerVersion = buildChunkerVersion(doc);
 
         if (!force) {
-            Map<String, Object> cached = checkEmbeddingCache(doc);
-            if (cached != null) {
-                return new EmbedPrepareResult(doc, cached, null);
+            EmbeddingPersistenceService.CacheState cache = persistenceService.findCacheState(
+                    documentId,
+                    profile,
+                    contentHash,
+                    chunkerVersion);
+            if (cache.hit()) {
+                Map<String, Object> cached = buildResult(
+                        documentId, cache.chunkCount(), cache.chunkCount(),
+                        "CACHED", profile, null);
+                cached.put("cached", true);
+                cached.put("message",
+                        "Embedding already exists for the active profile and content");
+                return new EmbedPrepareResult(cached, null, contentHash, version, chunkerVersion);
             }
         }
 
-        String content = validateContent(doc);
-        List<TextChunk> chunks = chunker.split(content);
+        List<TextChunk> chunks = splitForEmbedding(doc, content);
         if (chunks.isEmpty()) {
-            return new EmbedPrepareResult(doc, Map.of(
-                    "message", "Document content too short, no chunking needed",
-                    "documentId", documentId,
-                    "chunksCreated", 0,
-                    "status", "FAILED"
-            ), null);
+            Map<String, Object> failed = buildResult(
+                    documentId, 0, 0, "FAILED", profile,
+                    "Non-blank document produced no chunks");
+            return new EmbedPrepareResult(failed, null, contentHash, version, chunkerVersion);
         }
         log.info("Document {} split into {} chunks", documentId, chunks.size());
-        return new EmbedPrepareResult(doc, null, chunks);
+        return new EmbedPrepareResult(null, chunks, contentHash, version, chunkerVersion);
     }
 
-    /** Marks embedding as complete: COMPLETED + updates content hash */
-    private void completeEmbedding(RagDocument doc, int chunkCount) {
-        doc.setProcessingStatus("COMPLETED");
-        doc.setEmbeddedContentHash(doc.getContentHash());
-        documentRepository.save(doc);
+    private String validateEmbeddingResults(
+            List<TextChunk> chunks,
+            List<EmbeddingBatchService.EmbeddingResult> results,
+            EmbeddingProfile profile) {
+        if (results == null || results.size() != chunks.size()) {
+            return "Embedding result count mismatch: expected=" + chunks.size()
+                    + ", actual=" + (results == null ? 0 : results.size());
+        }
+        for (int i = 0; i < results.size(); i++) {
+            EmbeddingBatchService.EmbeddingResult result = results.get(i);
+            if (result == null || !result.isSuccess()) {
+                return "Embedding failed for chunk " + i + ": "
+                        + (result == null ? "missing result" : result.getError());
+            }
+            if (!Objects.equals(chunks.get(i).text(), result.getText())) {
+                return "Embedding response order mismatch at chunk " + i;
+            }
+            float[] vector = result.getEmbedding();
+            if (vector == null) {
+                return "Embedding is null at chunk " + i;
+            }
+            if (vector.length != profile.dimensions()) {
+                return "Embedding dimension mismatch at chunk " + i
+                        + ": expected=" + profile.dimensions()
+                        + ", actual=" + vector.length;
+            }
+            for (float value : vector) {
+                if (!Float.isFinite(value)) {
+                    return "Embedding contains non-finite value at chunk " + i;
+                }
+            }
+        }
+        return null;
     }
 
-    /** Builds success response Map */
-    private Map<String, Object> buildSuccessResult(Long docId, int chunks, int stored, String status,
-                                                     String... extraEntries) {
+    private void replaceWithOneVersionRetry(
+            Long documentId,
+            EmbedPrepareResult prep,
+            EmbeddingProfile profile,
+            List<TextChunk> chunks,
+            List<EmbeddingBatchService.EmbeddingResult> results) {
+        try {
+            persistenceService.replace(
+                    documentId,
+                    prep.documentVersion(),
+                    prep.contentHash(),
+                    profile,
+                    prep.chunkerVersion(),
+                    chunks,
+                    results);
+        } catch (IllegalStateException firstFailure) {
+            RagDocument current = findDocument(documentId);
+            long currentVersion = current.getVersion() == null ? 0 : current.getVersion();
+            boolean reusable = Boolean.TRUE.equals(current.getEnabled())
+                    && Objects.equals(prep.contentHash(), current.getContentHash())
+                    && Objects.equals(prep.chunkerVersion(), buildChunkerVersion(current));
+            if (!reusable || currentVersion == prep.documentVersion()) {
+                throw firstFailure;
+            }
+            persistenceService.replace(
+                    documentId,
+                    currentVersion,
+                    prep.contentHash(),
+                    profile,
+                    prep.chunkerVersion(),
+                    chunks,
+                    results);
+        }
+    }
+
+    private List<TextChunk> splitForEmbedding(RagDocument doc, String content) {
+        if (RagDocument.JSON_RECORD.equals(doc.getDocumentType())) {
+            return List.of(new TextChunk(content, 0, content.length()));
+        }
+        return chunker.split(content);
+    }
+
+    private String buildChunkerVersion(RagDocument doc) {
+        if (RagDocument.JSON_RECORD.equals(doc.getDocumentType())) {
+            return "json-record-v1:single";
+        }
+        return "hierarchical-v2:"
+                + ragProperties.getChunk().getDefaultChunkSize() + ":"
+                + ragProperties.getChunk().getMinChunkSize() + ":"
+                + ragProperties.getChunk().getDefaultChunkOverlap();
+    }
+
+    private Map<String, Object> buildResult(
+            Long docId,
+            int chunks,
+            int stored,
+            String status,
+            EmbeddingProfile profile,
+            String error) {
         Map<String, Object> result = new HashMap<>();
-        result.put("message", "Embedding generation completed");
+        result.put("message", "COMPLETED".equals(status)
+                ? "Embedding generation completed"
+                : "Embedding generation " + status.toLowerCase());
         result.put("documentId", docId);
         result.put("chunksCreated", chunks);
         result.put("embeddingsStored", stored);
         result.put("status", status);
-        for (int i = 0; i < extraEntries.length; i += 2) {
-            result.put(extraEntries[i], extraEntries[i + 1]);
+        result.put("embeddingProfileKey", profile.profileKey());
+        result.put("embeddingDimensions", profile.dimensions());
+        if (error != null) {
+            result.put("error", error);
         }
         return result;
     }

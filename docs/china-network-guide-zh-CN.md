@@ -47,6 +47,28 @@ docker build -f docker/Dockerfile \
   -t spring-ai-rag:1.0.0 .
 ```
 
+## Testcontainers Docker API 与 Ryuk
+
+JSONB PostgreSQL 集成测试使用 `pgvector/pgvector:pg16`。部分 OrbStack 环境中，
+Testcontainers 会协商到 Docker API `1.32`，而本机 daemon 最低要求 `1.40`；部分代理/
+证书配置还会导致 Ryuk 辅助镜像拉取失败。项目验证脚本提供可移植覆盖：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+脚本默认传递 `-Dapi.version=1.40`。如果本机 daemon 需要其他版本，可以覆盖：
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+禁用 Ryuk 只是本地环境的排障手段，不是应用配置。CI 或共享环境应优先恢复可信的
+registry/证书链并重新启用 Ryuk。
+
 ## Maven 依赖下载慢
 
 优先在用户级 `~/.m2/settings.xml` 配置团队认可的 Maven mirror，不要把个人镜像地址或凭据提交到项目 POM。排障时先区分：

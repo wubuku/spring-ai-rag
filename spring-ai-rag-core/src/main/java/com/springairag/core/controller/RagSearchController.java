@@ -10,6 +10,7 @@ import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,19 +53,29 @@ public class RagSearchController {
     private final HybridRetrieverService hybridRetriever;
     private final CollectionDocumentResolver collectionDocumentResolver;
     private final ReRankingService reRankingService;
+    private final CollectionIdentityResolver collectionIdentityResolver;
 
     @Autowired
     public RagSearchController(HybridRetrieverService hybridRetriever,
                                CollectionDocumentResolver collectionDocumentResolver,
-                               ReRankingService reRankingService) {
+                               ReRankingService reRankingService,
+                               @Autowired(required = false)
+                               CollectionIdentityResolver collectionIdentityResolver) {
         this.hybridRetriever = hybridRetriever;
         this.collectionDocumentResolver = collectionDocumentResolver;
         this.reRankingService = reRankingService;
+        this.collectionIdentityResolver = collectionIdentityResolver;
     }
 
     RagSearchController(HybridRetrieverService hybridRetriever,
                         CollectionDocumentResolver collectionDocumentResolver) {
-        this(hybridRetriever, collectionDocumentResolver, null);
+        this(hybridRetriever, collectionDocumentResolver, null, null);
+    }
+
+    RagSearchController(HybridRetrieverService hybridRetriever,
+                        CollectionDocumentResolver collectionDocumentResolver,
+                        ReRankingService reRankingService) {
+        this(hybridRetriever, collectionDocumentResolver, reRankingService, null);
     }
 
     /**
@@ -91,6 +102,7 @@ public class RagSearchController {
             @RequestParam(defaultValue = "0.5") double vectorWeight,
             @RequestParam(defaultValue = "0.5") double fulltextWeight,
             @RequestParam(required = false) List<Long> collectionIds,
+            @RequestParam(required = false) List<String> collectionKeys,
             HttpServletRequest httpRequest) {
 
         log.info("Direct search: query={}, limit={}, useHybrid={}", query, limit, useHybrid);
@@ -122,7 +134,7 @@ public class RagSearchController {
 
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
         List<Long> effectiveCollectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
-                collectionIds, key);
+                collectionIds, collectionKeys, key, collectionIdentityResolver);
         List<Long> resolvedDocIds = collectionDocumentResolver.resolveDocumentIds(
                 null, effectiveCollectionIds);
         if (CollectionDocumentResolver.hasCollectionFilter(effectiveCollectionIds)
@@ -140,7 +152,7 @@ public class RagSearchController {
     ResponseEntity<?> search(String query, int limit, boolean useHybrid,
                              double vectorWeight, double fulltextWeight) {
         return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
-                null, null);
+                null, null, null);
     }
 
     /**
@@ -159,7 +171,8 @@ public class RagSearchController {
 
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
         request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
-                request.getCollectionIds(), key));
+                request.getCollectionIds(), request.getCollectionKeys(), key,
+                collectionIdentityResolver));
         log.info("Direct search with config: query={}, collectionIds={}, documentIds={}",
                 request.getQuery(), request.getCollectionIds(), request.getDocumentIds());
 

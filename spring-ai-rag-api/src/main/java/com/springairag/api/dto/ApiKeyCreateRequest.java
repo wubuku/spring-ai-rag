@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.validation.ValidCollectionKey;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -24,10 +25,15 @@ public class ApiKeyCreateRequest {
             example = "2027-01-01T00:00:00")
     private LocalDateTime expiresAt;
 
-    @Schema(description = "Optional collection IDs this key may access. Null/empty = all collections (unrestricted).",
-            example = "[1, 2]")
+    @Schema(description = "Deprecated compatibility field. Use allowedCollectionKeys. Null means unrestricted.",
+            example = "[1, 2]", deprecated = true)
     @Size(max = 100, message = "At most 100 collection IDs may be assigned to one API key")
     private List<@Positive(message = "Collection IDs must be positive") Long> allowedCollectionIds;
+
+    @Schema(description = "Optional stable Collection keys this key may access. Null/empty = all collections.",
+            example = "[\"customer-42:manual:v3\"]")
+    @Size(max = 100, message = "At most 100 collection keys may be assigned to one API key")
+    private List<@ValidCollectionKey String> allowedCollectionKeys;
 
     public ApiKeyCreateRequest() {
     }
@@ -48,6 +54,11 @@ public class ApiKeyCreateRequest {
         this.allowedCollectionIds = allowedCollectionIds;
     }
 
+    public List<String> getAllowedCollectionKeys() { return allowedCollectionKeys; }
+    public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
+        this.allowedCollectionKeys = allowedCollectionKeys;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -55,12 +66,13 @@ public class ApiKeyCreateRequest {
         ApiKeyCreateRequest that = (ApiKeyCreateRequest) o;
         return Objects.equals(name, that.name) &&
                 Objects.equals(expiresAt, that.expiresAt) &&
-                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, expiresAt, allowedCollectionIds);
+        return Objects.hash(name, expiresAt, allowedCollectionIds, allowedCollectionKeys);
     }
 
     @Override
@@ -69,6 +81,7 @@ public class ApiKeyCreateRequest {
                 "name='" + name + '\'' +
                 ", expiresAt=" + expiresAt +
                 ", allowedCollectionIds=" + allowedCollectionIds +
+                ", allowedCollectionKeys=" + allowedCollectionKeys +
                 '}';
     }
 }

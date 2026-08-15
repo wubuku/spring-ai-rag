@@ -45,9 +45,19 @@ public class ApiKeyManagementService {
             .build();
 
     private final RagApiKeyRepository apiKeyRepository;
+    private final CollectionIdentityResolver collectionIdentityResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ApiKeyManagementService(
+            RagApiKeyRepository apiKeyRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CollectionIdentityResolver collectionIdentityResolver) {
+        this.apiKeyRepository = apiKeyRepository;
+        this.collectionIdentityResolver = collectionIdentityResolver;
+    }
 
     public ApiKeyManagementService(RagApiKeyRepository apiKeyRepository) {
-        this.apiKeyRepository = apiKeyRepository;
+        this(apiKeyRepository, null);
     }
 
     /**
@@ -77,12 +87,17 @@ public class ApiKeyManagementService {
 
         List<Long> allowedCollectionIds = ApiKeyCollectionAccess.parseAllowedIds(
                 entity.getAllowedCollectionIds());
-        return new ApiKeyCreatedResponse(
+        ApiKeyCreatedResponse response = new ApiKeyCreatedResponse(
                 keyId,
                 rawKey,
                 request.getName(),
                 request.getExpiresAt(),
                 allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
+        if (!allowedCollectionIds.isEmpty() && collectionIdentityResolver != null) {
+            response.setAllowedCollectionKeys(
+                    collectionIdentityResolver.mapKeys(allowedCollectionIds).values().stream().toList());
+        }
+        return response;
     }
 
     /**
@@ -296,6 +311,10 @@ public class ApiKeyManagementService {
                 entity.getAllowedCollectionIds());
         r.setAllowedCollectionIds(
                 allowedCollectionIds.isEmpty() ? null : allowedCollectionIds);
+        if (!allowedCollectionIds.isEmpty() && collectionIdentityResolver != null) {
+            r.setAllowedCollectionKeys(
+                    collectionIdentityResolver.mapKeys(allowedCollectionIds).values().stream().toList());
+        }
         return r;
     }
 

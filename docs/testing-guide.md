@@ -149,15 +149,36 @@ export $(cat .env | grep -v '^#' | xargs) && bash scripts/e2e-test.sh
 
 E2E test coverage:
 1. `GET /api/v1/rag/health` — Health check
-2. `POST /api/v1/rag/documents` — Create document
-3. `GET /api/v1/rag/documents/{id}` — Get document (with JSONB metadata)
-4. `GET /api/v1/rag/documents` — Document list (pagination)
-5. `POST /api/v1/rag/documents/{id}/embed` — Generate embedding vectors
-6. `GET /api/v1/rag/search` — Direct retrieval
-7. `POST /api/v1/rag/chat/ask` — RAG Q&A
-8. `POST /api/v1/rag/chat/stream` — Streaming response (SSE)
-9. `GET /api/v1/rag/chat/history/{sessionId}` — Conversation history
-10. `DELETE /api/v1/rag/documents/{id}` — Delete document + verify 404
+2. `POST /api/v1/rag/collections` plus by-key get/update/list/delete — Collection Key lifecycle
+3. `POST /api/v1/rag/documents` — Create document
+4. `GET /api/v1/rag/documents/{id}` — Get document (with document metadata)
+5. `GET /api/v1/rag/documents` — Document list (pagination)
+6. `POST /api/v1/rag/documents/{id}/embed` — Generate embedding vectors
+7. `GET /api/v1/rag/search` — Direct retrieval
+8. `POST /api/v1/rag/chat/ask` — RAG Q&A
+9. `POST /api/v1/rag/chat/stream` — Streaming response (SSE)
+10. `GET /api/v1/rag/chat/history/{sessionId}` — Conversation history
+11. `DELETE /api/v1/rag/documents/{id}` — Delete document + verify 404
+
+The script generates a unique visible-ASCII `collectionKey` for each run and
+uses by-key Collection routes plus `collectionKey(s)` on ingestion and
+retrieval requests. This prevents repeat runs from colliding with the global
+unique constraint.
+
+For the JSONB structured-record live HTTP acceptance flow, use:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/jsonb-records-e2e.sh
+```
+
+It covers JSON-record upsert, collection-scoped search, detail, payload-only
+updates, `retrievalText` updates, clone/export/import, and allow/deny behavior
+with a temporary restricted API key. It needs a real embedding provider; if no
+root credential is available, use `--skip-acl` explicitly and record the skip.
+The script does not call a Chat LLM and does not print API keys or complete
+payloads.
 
 ## Coverage
 
@@ -189,25 +210,91 @@ mvn jacoco:report-aggregate
 
 ## Test Database
 
-Unit tests use H2 in-memory database (default); integration tests can use Testcontainers:
+Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
+an explicit PostgreSQL integration test because it requires pgvector and validates
+Flyway V1-V29, fixed vector columns, Profile-specific indexes, atomic replacement,
+Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
-```java
-@Testcontainers
-@SpringBootTest
-class PgVectorStoreIntegrationTest {
+Start a PostgreSQL 16 + pgvector database, then run:
 
-    @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16")
-        .withDatabaseName("test")
-        .withUsername("test")
-        .withPassword("test");
-
-    @DynamicPropertySource
-    static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", postgres::getJdbcUrl);
-    }
-}
+```bash
+mvn -pl spring-ai-rag-core -am \
+  -Dtest=EmbeddingProfilePostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  -Drag.it.jdbc-url=jdbc:postgresql://127.0.0.1:35267/embedding_profile_test \
+  -Drag.it.username=postgres \
+  -Drag.it.password=postgres \
+  test
 ```
+
+The test is skipped when `rag.it.jdbc-url` is absent, so the explicit command is
+the required migration acceptance gate.
+
+### Collection Key Acceptance Gate
+
+Collection identity has focused DTO, resolver, ACL, service, controller,
+MockMvc, OpenAPI, and PostgreSQL coverage. The real PostgreSQL/Testcontainers
+test executes V27/V28 and verifies legacy backfill collision avoidance,
+1/128-character boundaries, visible-ASCII checks, case sensitivity, soft-delete
+reservation, SQL-level immutability, and concurrent uniqueness:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Dcollection-key.it.enabled=true \
+  -Dtest=CollectionKeyPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+Before runtime acceptance, run the compile and focused integration gates
+serially:
+
+```bash
+mvn clean compile test-compile
+
+mvn -pl spring-ai-rag-core -am \
+  -Dtest='*Collection*,*ApiKey*,OpenApiContractTest,RagControllerIntegrationTest,RagSearchControllerTest,RagChatControllerTest,PdfImportControllerTest' \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+WebUI acceptance requires `npm run test:run`, `npm run build`, and the Mock API
+Playwright suite. Runtime smoke should then create a unique key and cover
+create, by-key get/update, clone with a new target key, export/import with a new
+key, soft delete, restore, duplicate conflict, and document/search/chat key
+inputs.
+
+### JSONB Structured-Record Acceptance Gate
+
+The JSONB implementation has both mocked HTTP/service coverage and a real
+PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
+executes Flyway V1-V29 from an empty database, and verifies JSONB round-trip,
+payload-only versioning, identical descriptions with distinct records, and
+cascade cleanup:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Djsonb.it.enabled=true \
+  -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
+  test
+```
+
+The focused all-layer gate is:
+
+```bash
+./scripts/verify-jsonb-records.sh
+```
+
+It also runs the API DTO, chunker, JSON service/controller/OpenAPI, Maven
+compile, WebUI build, Mock Playwright, project-docs, and whitespace checks.
+`.verification/jsonb-verification/<run-id>/summary.md` is the recorded result.
+The browser preview binds strictly to `JSONB_PLAYWRIGHT_PORT` (default `4174`);
+use an unused port when another local service occupies it. Run the complete
+gate serially because the Maven clean phase removes module `target/` output.
 
 ## Rules for Writing New Tests
 

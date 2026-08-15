@@ -33,8 +33,13 @@ public class ApiKeyResponse {
     @Schema(description = "Role of this key (ADMIN or NORMAL). May be null when role is not available.", example = "ADMIN")
     private String role;
 
-    @Schema(description = "Collection IDs this key may access. Null means unrestricted.", example = "[1, 2]")
+    @Schema(description = "Deprecated compatibility field. Null means unrestricted.",
+            example = "[1, 2]", deprecated = true)
     private List<Long> allowedCollectionIds;
+
+    @Schema(description = "Stable Collection keys this key may access. Null means unrestricted.",
+            example = "[\"customer-42:manual:v3\"]")
+    private List<String> allowedCollectionKeys;
 
     public ApiKeyResponse() {
     }
@@ -75,6 +80,11 @@ public class ApiKeyResponse {
         this.allowedCollectionIds = allowedCollectionIds;
     }
 
+    public List<String> getAllowedCollectionKeys() { return allowedCollectionKeys; }
+    public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
+        this.allowedCollectionKeys = allowedCollectionKeys;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -87,13 +97,14 @@ public class ApiKeyResponse {
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(enabled, that.enabled) &&
                 Objects.equals(role, that.role) &&
-                Objects.equals(allowedCollectionIds, that.allowedCollectionIds);
+                Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt,
-                enabled, role, allowedCollectionIds);
+                enabled, role, allowedCollectionIds, allowedCollectionKeys);
     }
 
     @Override
@@ -107,6 +118,7 @@ public class ApiKeyResponse {
                 ", enabled=" + enabled +
                 ", role='" + role + '\'' +
                 ", allowedCollectionIds=" + allowedCollectionIds +
+                ", allowedCollectionKeys=" + allowedCollectionKeys +
                 '}';
     }
 }

@@ -3,6 +3,8 @@ package com.springairag.core.integration;
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.service.AbTestService;
+import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.controller.*;
 import com.springairag.core.entity.RagCollection;
@@ -19,7 +21,7 @@ import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.vectorstore.VectorStore;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
@@ -38,6 +40,7 @@ import java.time.ZonedDateTime;
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -110,14 +113,22 @@ class RagControllerIntegrationTest {
     @MockBean private RagEmbeddingRepository embeddingRepository;
     @MockBean private EmbeddingBatchService embeddingBatchService;
     @MockBean private JdbcTemplate jdbcTemplate;
-    @MockBean private VectorStore vectorStore;
     @MockBean private com.springairag.core.service.DocumentEmbedService documentEmbedService;
     @MockBean private com.springairag.core.service.BatchDocumentService batchDocumentService;
     @MockBean private com.springairag.core.service.DocumentVersionService documentVersionService;
+    @MockBean private EmbeddingProfileProvider embeddingProfileProvider;
+
+    @BeforeEach
+    void configureActiveEmbeddingProfile() {
+        when(embeddingProfileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
+                1L, "test-profile", "test", "test-model", "v1",
+                1024, "COSINE", "PROVIDER_DEFAULT", true));
+    }
 
     // ==================== Collection ====================
     @MockBean private RagCollectionRepository collectionRepository;
     @MockBean private com.springairag.core.service.RagCollectionService ragCollectionService;
+    @MockBean private com.springairag.core.service.CollectionIdentityResolver collectionIdentityResolver;
 
     // ==================== AB Test ====================
     @MockBean private AbTestService abTestService;
@@ -351,7 +362,8 @@ class RagControllerIntegrationTest {
             doc.setTitle("测试文档");
             when(documentRepository.searchDocuments(isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), isNull(), any(PageRequest.class)))
                     .thenReturn(new PageImpl<>(List.of(doc)));
-            when(embeddingRepository.countByDocumentId(1L)).thenReturn(0L);
+            when(embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
+                    1L, 1L)).thenReturn(0L);
 
             mockMvc.perform(get("/api/v1/rag/documents"))
                     .andExpect(status().isOk())
@@ -420,12 +432,14 @@ class RagControllerIntegrationTest {
             saved.setDescription("描述");
             saved.setDimensions(1024);
             saved.setEnabled(true);
-            when(collectionRepository.save(any(RagCollection.class))).thenReturn(saved);
+            saved.setCollectionKey("test-collection");
+            when(ragCollectionService.createCollection(any())).thenReturn(saved);
 
             mockMvc.perform(post("/api/v1/rag/collections")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
+                                        "collectionKey": "test-collection",
                                         "name": "测试集合",
                                         "description": "描述"
                                     }
@@ -496,11 +510,109 @@ class RagControllerIntegrationTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content("""
                                     {
+                                        "collectionKey": "blank-name",
                                         "name": "",
                                         "description": "desc"
                                     }
                                     """))
                     .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void createCollection_missingKeyReturns400BeforeServiceCall() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/collections")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "name": "Missing key"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+
+            verify(ragCollectionService, never()).createCollection(any());
+        }
+
+        @Test
+        void createCollection_invalidKeyCharactersReturn400() throws Exception {
+            mockMvc.perform(post("/api/v1/rag/collections")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "collectionKey": "has space",
+                                        "name": "Invalid key"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+
+            verify(ragCollectionService, never()).createCollection(any());
+        }
+
+        @Test
+        void updateCollection_rejectsImmutableKeyInPayload() throws Exception {
+            mockMvc.perform(put("/api/v1/rag/collections/{id}", 1)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "collectionKey": "replacement",
+                                        "name": "Updated"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("BAD_REQUEST"))
+                    .andExpect(jsonPath("$.message")
+                            .value("collectionKey is immutable and must not be supplied when updating"));
+
+            verify(collectionRepository, never())
+                    .findByIdAndDeletedFalse(anyLong());
+        }
+
+        @Test
+        void cloneCollectionByKey_routesAndValidatesStableKeys() throws Exception {
+            RagCollection source = new RagCollection();
+            source.setId(1L);
+            source.setCollectionKey("source-key");
+            source.setName("Source");
+            when(collectionIdentityResolver.requireActive(null, "source-key"))
+                    .thenReturn(source);
+            when(ragCollectionService.cloneCollection(1L, "target-key"))
+                    .thenReturn(Optional.of(
+                            com.springairag.api.dto.CollectionCloneResponse.of(
+                                    2L, "target-key", "Source (Copy)",
+                                    1L, "source-key", "Source", 0)));
+
+            mockMvc.perform(post("/api/v1/rag/collections/clone")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "sourceCollectionKey": "source-key",
+                                        "collectionKey": "target-key"
+                                    }
+                                    """))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.sourceCollectionKey").value("source-key"))
+                    .andExpect(jsonPath("$.clonedCollectionKey").value("target-key"));
+
+            verify(ragCollectionService).cloneCollection(1L, "target-key");
+        }
+
+        @Test
+        void cloneCollectionByKey_rejectsMissingSourceKey() throws Exception {
+            org.mockito.Mockito.clearInvocations(ragCollectionService);
+
+            mockMvc.perform(post("/api/v1/rag/collections/clone")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "collectionKey": "target-key"
+                                    }
+                                    """))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error").value("VALIDATION_FAILED"));
+
+            verify(ragCollectionService, never())
+                    .cloneCollection(anyLong(), anyString());
         }
 
         @Test

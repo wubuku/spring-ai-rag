@@ -138,6 +138,7 @@ export async function mockAllApiCalls(page: Page) {
         collections: [
           {
             id: 1,
+            collectionKey: 'sample-collection',
             name: 'Sample Collection',
             embeddingModel: 'bge-m3',
             dimensions: 1024,
@@ -194,6 +195,46 @@ export async function mockAllApiCalls(page: Page) {
         query: 'test',
         total: 0,
         results: [],
+      }),
+    });
+  });
+
+  page.route(/\/api\/v1\/rag\/files\/tree.*/, route => {
+    const path = new URL(route.request().url()).searchParams.get('path') ?? '';
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        path,
+        entries: path
+          ? []
+          : [
+              {
+                name: 'sample-pdf',
+                path: 'sample-pdf/',
+                type: 'directory',
+                mimeType: null,
+                size: 0,
+              },
+            ],
+        total: path ? 0 : 1,
+      }),
+    });
+  });
+
+  page.route(/\/api\/v1\/rag\/files\/sample-pdf\/embed.*/, route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        documentId: 1,
+        title: 'Sample PDF',
+        newlyCreated: true,
+        embedStatus: 'COMPLETED',
+        embedMessage: null,
+        chunksCreated: 3,
+        uuid: 'sample-pdf',
+        entryMarkdown: 'sample-pdf/document.md',
       }),
     });
   });

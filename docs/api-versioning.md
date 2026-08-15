@@ -1,7 +1,8 @@
 # API Versioning Strategy
 
 > Created: 2026-04-05
-> Status: 📋 Planned
+> Updated: 2026-08-15
+> Status: Planned v2 strategy; v1 compatibility rules are active
 
 ---
 
@@ -23,6 +24,16 @@ All REST endpoints are under `/api/v1/rag/*`:
 - `GET /api/v1/rag/evaluate` — Retrieval evaluation
 - `GET/POST /api/v1/rag/ab-tests` — A/B experiments
 - `GET/POST /api/v1/rag/alerts` — Alerts
+
+Collection v1 uses a dual-identity compatibility model:
+
+- `Long id` and `collectionId(s)` are deprecated internal-identity surfaces.
+- Caller-supplied `collectionKey(s)` is the preferred stable external
+  identity.
+- Numeric Collection routes remain available, while by-key routes use encoded
+  query parameters.
+- Removing numeric fields or routes is a breaking change and requires v2 or
+  another explicitly breaking version.
 
 ## When to Version
 
@@ -46,7 +57,7 @@ Non-breaking changes do NOT require new versions:
 | 2 | Rename `ChatRequest.model` → `ChatRequest.provider` + `ChatRequest.modelId` | Clarify multi-model routing parameters |
 | 3 | Remove deprecated endpoints: `/batch/create-and-embed` | Already marked @Deprecated, remove in v2 |
 | 4 | SSE event format: standardize `event: chunk\|done\|error` naming | Current inconsistency in event names |
-| 5 | Collection ID from numeric Long → UUID string | Better scalability and security |
+| 5 | Remove deprecated numeric Collection routes and `collectionId(s)` request fields; require `collectionKey(s)` | Finish the v1 dual-identity migration without changing database foreign keys |
 | 6 | Error response: RFC 7807 Problem Details only (remove custom ErrorResponse) | Standard compliance |
 
 ## v2 Non-Breaking Additions
@@ -82,14 +93,14 @@ Non-breaking changes do NOT require new versions:
 
 ```bash
 # v1
-curl -X POST http://localhost:8081/api/v1/rag/chat \
+curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is RAG?", "collectionIds": [1]}'
+  -d '{"message": "What is RAG?", "collectionKeys": ["customer-42:manual:v3"]}'
 
 # v2 (example new format)
-curl -X POST http://localhost:8081/api/v2/rag/chat \
+curl -X POST http://localhost:8081/api/v2/rag/chat/ask \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is RAG?", "collections": ["uuid-1"]}'
+  -d '{"message": "What is RAG?", "collectionKeys": ["customer-42:manual:v3"]}'
 ```
 
 ## References

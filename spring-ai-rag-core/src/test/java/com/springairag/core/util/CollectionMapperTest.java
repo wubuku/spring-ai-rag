@@ -24,6 +24,7 @@ class CollectionMapperTest {
         Map<String, Object> result = CollectionMapper.toMap(collection, 42L);
 
         assertEquals(1L, result.get("id"));
+        assertEquals("collection-1", result.get("collectionKey"));
         assertEquals("Test Collection", result.get("name"));
         assertEquals("A test collection", result.get("description"));
         assertEquals("BAAI/bge-m3", result.get("embeddingModel"));
@@ -119,6 +120,7 @@ class CollectionMapperTest {
                                           String embeddingModel, Integer dimensions, boolean enabled) {
         RagCollection collection = new RagCollection();
         collection.setId(id);
+        collection.setCollectionKey("collection-" + id);
         collection.setName(name);
         collection.setDescription(description);
         collection.setEmbeddingModel(embeddingModel);

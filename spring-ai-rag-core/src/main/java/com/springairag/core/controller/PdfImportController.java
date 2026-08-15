@@ -10,6 +10,7 @@ import com.springairag.core.entity.FsFile;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.SseEmitters;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -67,13 +68,24 @@ public class PdfImportController {
     private final PdfImportService pdfImportService;
     private final MarkdownRendererService markdownRendererService;
     private final PdfToRagService pdfToRagService;
+    private final CollectionIdentityResolver collectionIdentityResolver;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public PdfImportController(PdfImportService pdfImportService,
+                               MarkdownRendererService markdownRendererService,
+                               PdfToRagService pdfToRagService,
+                               @org.springframework.beans.factory.annotation.Autowired(required = false)
+                               CollectionIdentityResolver collectionIdentityResolver) {
+        this.pdfImportService = pdfImportService;
+        this.markdownRendererService = markdownRendererService;
+        this.pdfToRagService = pdfToRagService;
+        this.collectionIdentityResolver = collectionIdentityResolver;
+    }
 
     public PdfImportController(PdfImportService pdfImportService,
                                MarkdownRendererService markdownRendererService,
                                PdfToRagService pdfToRagService) {
-        this.pdfImportService = pdfImportService;
-        this.markdownRendererService = markdownRendererService;
-        this.pdfToRagService = pdfToRagService;
+        this(pdfImportService, markdownRendererService, pdfToRagService, null);
     }
 
     // ==================== PDF Import ====================
@@ -168,12 +180,13 @@ public class PdfImportController {
             @Parameter(description = "PDF file to import")
             @RequestParam("file") MultipartFile file,
             @Parameter(description = "Optional collection ID to associate with the RAG document")
-            @RequestParam(value = "collectionId", required = false) Long collectionId) {
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey) {
 
         try {
             String filename = requirePdfFilename(file);
-            Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                    collectionId, ApiKeyCollectionAccess.currentKey());
+            Long effectiveCollectionId = resolveWritableCollectionId(
+                    collectionId, collectionKey);
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
 
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
@@ -214,8 +227,9 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "collectionId", required = false) Long collectionId) {
-        return startPdfToRagEmbedding(file, collectionId);
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey) {
+        return startPdfToRagEmbedding(file, collectionId, collectionKey);
     }
 
     @PostMapping(value = "/pdf-to-rag",
@@ -224,15 +238,16 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbeddingDefault(
             @RequestParam("file") MultipartFile file,
-            @RequestParam(value = "collectionId", required = false) Long collectionId) {
-        return startPdfToRagEmbedding(file, collectionId);
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey) {
+        return startPdfToRagEmbedding(file, collectionId, collectionKey);
     }
 
     Object importPdfToRag(MultipartFile file, Long collectionId, boolean embed) {
         try {
             return embed
-                    ? importPdfToRagWithEmbedding(file, collectionId)
-                    : importPdfToRagWithoutEmbedding(file, collectionId);
+                    ? importPdfToRagWithEmbedding(file, collectionId, null)
+                    : importPdfToRagWithoutEmbedding(file, collectionId, null);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (SecurityException e) {
@@ -243,11 +258,28 @@ public class PdfImportController {
         }
     }
 
-    private ResponseEntity<SseEmitter> startPdfToRagEmbedding(
+    ResponseEntity<Object> importPdfToRagWithoutEmbedding(
             MultipartFile file, Long collectionId) {
+        return importPdfToRagWithoutEmbedding(file, collectionId, null);
+    }
+
+    ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
+            MultipartFile file, Long collectionId) {
+        return importPdfToRagWithEmbedding(file, collectionId, null);
+    }
+
+    private Long resolveWritableCollectionId(Long collectionId, String collectionKey) {
+        Long resolved = collectionKey != null
+                ? collectionIdentityResolver.resolveActiveId(collectionId, collectionKey)
+                : collectionId;
+        return ApiKeyCollectionAccess.resolveWritableCollectionId(
+                resolved, ApiKeyCollectionAccess.currentKey());
+    }
+
+    private ResponseEntity<SseEmitter> startPdfToRagEmbedding(
+            MultipartFile file, Long collectionId, String collectionKey) {
         String filename = requirePdfFilename(file);
-        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+        Long effectiveCollectionId = resolveWritableCollectionId(collectionId, collectionKey);
         try {
             PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
             log.info("PDF-to-RAG step 1 complete: uuid={}, entryMarkdown={}, files={}",
@@ -387,6 +419,7 @@ public class PdfImportController {
             @PathVariable("uuid") String uuid,
             @Parameter(description = "Optional collection ID to associate with the RAG document")
             @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @Parameter(description = "Force re-embedding even if content unchanged (default: false)")
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
 
@@ -394,8 +427,8 @@ public class PdfImportController {
             return ResponseEntity.badRequest()
                     .body(ErrorResponse.of("UUID must not be blank"));
         }
-        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+        Long effectiveCollectionId = resolveWritableCollectionId(
+                collectionId, collectionKey);
 
         try {
             PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
@@ -420,14 +453,25 @@ public class PdfImportController {
         }
     }
 
+    ResponseEntity<Object> triggerEmbeddingSync(
+            String uuid, Long collectionId, boolean forceReembed) {
+        return triggerEmbeddingSync(uuid, collectionId, null, forceReembed);
+    }
+
     @PostMapping(value = "/{uuid}/embed",
             params = "embed=sse",
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> triggerEmbeddingSse(
             @PathVariable("uuid") String uuid,
             @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
-        return startEmbeddingSse(uuid, collectionId, forceReembed);
+        return startEmbeddingSse(uuid, collectionId, collectionKey, forceReembed);
+    }
+
+    ResponseEntity<SseEmitter> triggerEmbeddingSse(
+            String uuid, Long collectionId, boolean forceReembed) {
+        return triggerEmbeddingSse(uuid, collectionId, null, forceReembed);
     }
 
     @PostMapping(value = "/{uuid}/embed",
@@ -436,17 +480,23 @@ public class PdfImportController {
     public ResponseEntity<SseEmitter> triggerEmbeddingSseDefault(
             @PathVariable("uuid") String uuid,
             @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
-        return startEmbeddingSse(uuid, collectionId, forceReembed);
+        return startEmbeddingSse(uuid, collectionId, collectionKey, forceReembed);
+    }
+
+    ResponseEntity<SseEmitter> triggerEmbeddingSseDefault(
+            String uuid, Long collectionId, boolean forceReembed) {
+        return triggerEmbeddingSseDefault(uuid, collectionId, null, forceReembed);
     }
 
     private ResponseEntity<SseEmitter> startEmbeddingSse(
-            String uuid, Long collectionId, boolean forceReembed) {
+            String uuid, Long collectionId, String collectionKey, boolean forceReembed) {
         if (uuid == null || uuid.isBlank()) {
             throw new IllegalArgumentException("UUID must not be blank");
         }
-        Long effectiveCollectionId = ApiKeyCollectionAccess.resolveWritableCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+        Long effectiveCollectionId = resolveWritableCollectionId(
+                collectionId, collectionKey);
         return streamEmbeddingWithProgress(uuid, effectiveCollectionId, forceReembed);
     }
 
@@ -454,8 +504,8 @@ public class PdfImportController {
             String uuid, Long collectionId, String embed, boolean forceReembed) {
         try {
             return "sync".equalsIgnoreCase(embed)
-                    ? triggerEmbeddingSync(uuid, collectionId, forceReembed)
-                    : triggerEmbeddingSse(uuid, collectionId, forceReembed);
+                    ? triggerEmbeddingSync(uuid, collectionId, null, forceReembed)
+                    : triggerEmbeddingSse(uuid, collectionId, null, forceReembed);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
         } catch (SecurityException e) {

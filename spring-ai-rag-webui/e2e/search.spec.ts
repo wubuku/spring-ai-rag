@@ -46,4 +46,20 @@ test.describe('Search', () => {
     const checkbox = page.getByText('Hybrid').locator('..').locator('input[type="checkbox"]');
     await expect(checkbox).toBeChecked();
   });
+
+  test('sends the selected collection key', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/search');
+    await page.getByTestId('search-collection-select').selectOption('sample-collection');
+    await page.locator('input').first().fill('scoped query');
+
+    const requestPromise = page.waitForRequest(request =>
+      request.url().includes('/api/v1/rag/search?')
+    );
+    await page.getByRole('button', { name: 'Search' }).click();
+    const request = await requestPromise;
+    const url = new URL(request.url());
+
+    expect(url.searchParams.getAll('collectionKeys')).toEqual(['sample-collection']);
+  });
 });

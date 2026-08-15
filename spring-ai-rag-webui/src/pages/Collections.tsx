@@ -22,7 +22,7 @@ export function Collections() {
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => collectionsApi.delete(id),
+    mutationFn: (collectionKey: string) => collectionsApi.deleteByKey(collectionKey),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['collections'] });
       showToast(t('collections.deleteSuccess'), 'success');
@@ -57,8 +57,9 @@ export function Collections() {
       ) : (
         <div className={styles.grid}>
           {data?.data?.collections?.map(col => (
-            <div key={col.id} className={styles.card}>
+            <div key={col.collectionKey} className={styles.card}>
               <div className={styles.name}>{col.name}</div>
+              <div className={styles.meta} title={col.collectionKey}>{col.collectionKey}</div>
               <div className={styles.meta}>
                 {col.embeddingModel} · {col.dimensions}D
               </div>
@@ -67,13 +68,13 @@ export function Collections() {
               </div>
               <div className={styles.actions}>
                 <button
-                  onClick={() => navigate(`/documents?collectionId=${col.id}`)}
+                  onClick={() => navigate(`/documents?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
                   className={styles.viewBtn}
                 >
                   View Documents
                 </button>
                 <button
-                  onClick={() => deleteMutation.mutate(col.id)}
+                  onClick={() => deleteMutation.mutate(col.collectionKey)}
                   className={styles.deleteBtn}
                   disabled={deleteMutation.isPending}
                 >

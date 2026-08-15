@@ -37,7 +37,8 @@ export interface UseChatSSEReturn {
     message: string,
     collectionIds?: number[] | number,
     conversationId?: string,
-    model?: string
+    model?: string,
+    collectionKeys?: string[] | string
   ) => void;
   close: () => void;
 }
@@ -90,7 +91,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
       message: string,
       collectionIds?: number[] | number,
       conversationId?: string,
-      model?: string
+      model?: string,
+      collectionKeys?: string[] | string
     ) => {
       close();
       setIsConnected(true);
@@ -103,6 +105,12 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           : Array.isArray(collectionIds)
             ? collectionIds
             : [collectionIds];
+      const normalizedKeys: string[] | undefined =
+        collectionKeys === undefined || collectionKeys === null
+          ? undefined
+          : Array.isArray(collectionKeys)
+            ? collectionKeys
+            : [collectionKeys];
 
       try {
         const response = await fetch('/api/v1/rag/chat/stream', {
@@ -114,6 +122,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
           body: JSON.stringify({
             message,
             collectionIds: normalizedIds && normalizedIds.length > 0 ? normalizedIds : undefined,
+            collectionKeys: normalizedKeys && normalizedKeys.length > 0 ? normalizedKeys : undefined,
             sessionId: conversationId ?? undefined,
             model: model || undefined,
           }),

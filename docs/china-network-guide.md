@@ -47,6 +47,32 @@ docker build -f docker/Dockerfile \
   -t spring-ai-rag:1.0.0 .
 ```
 
+## Testcontainers Docker API And Ryuk
+
+The JSONB PostgreSQL integration test uses Testcontainers with
+`pgvector/pgvector:pg16`. On some OrbStack installations Testcontainers
+negotiates Docker API `1.32` while the local daemon requires at least `1.40`.
+Some proxy/certificate setups also fail while pulling the Ryuk helper image.
+Use the project verifier's portable overrides:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+The script passes `-Dapi.version=1.40` by default. Override it when the local
+daemon needs another version:
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-jsonb-records.sh --skip-playwright
+```
+
+Disabling Ryuk is a local-environment workaround, not an application setting.
+Prefer restoring a trusted registry/certificate path and re-enabling Ryuk in
+CI or shared environments.
+
 ## Slow Maven Dependencies
 
 Configure a team-approved Maven mirror in the user-level `~/.m2/settings.xml`; do not commit personal mirror credentials or endpoints to project POMs. Distinguish among Maven Central latency, unavailable milestone repositories, authenticated corporate proxies, and stale `.lastUpdated` files.

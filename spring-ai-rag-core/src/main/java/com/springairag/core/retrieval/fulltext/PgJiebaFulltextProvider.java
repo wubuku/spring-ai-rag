@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -75,12 +76,14 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
 
     @Override
     public List<RetrievalResult> search(String query, List<Long> documentIds,
-                                        List<Long> excludeIds, int limit, double minScore) {
+                                        List<Long> excludeIds, int limit, double minScore,
+                                        long embeddingProfileId) {
         if (!available) return Collections.emptyList();
         if (query == null || query.isBlank()) return Collections.emptyList();
 
         try {
-            List<Map<String, Object>> rows = executeSearch(query.trim(), documentIds, limit);
+            List<Map<String, Object>> rows =
+                    executeSearch(query.trim(), documentIds, limit, embeddingProfileId);
             log.debug("pg_jieba search for '{}' returned {} rows", query, rows.size());
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
@@ -99,38 +102,39 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
         }
     }
 
-    private List<Map<String, Object>> executeSearch(String query, List<Long> documentIds, int limit) {
+    private List<Map<String, Object>> executeSearch(
+            String query, List<Long> documentIds, int limit, long embeddingProfileId) {
         // Use pre-built search_vector_zh column (with GIN index)
         // Use websearch_to_tsquery for Google-style search syntax
+        String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
+                + "ts_rank_cd(e.search_vector_zh, "
+                + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
+        String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
         if (documentIds != null && !documentIds.isEmpty()) {
             String placeholders = documentIds.stream()
                     .map(id -> "?").collect(Collectors.joining(","));
             String sql = String.format(
-                    "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                            "ts_rank_cd(search_vector_zh, q) as rank " +
-                            "FROM rag_embeddings, " +
-                            "     websearch_to_tsquery('%s', ?) AS q " +
-                            "WHERE document_id IN (%s) " +
-                            "AND search_vector_zh IS NOT NULL " +
-                            "AND search_vector_zh @@ q " +
-                            "ORDER BY rank DESC LIMIT ?",
-                    TS_CONFIG, placeholders);
+                    select + scope
+                            + "AND e.document_id IN (%s) "
+                            + "AND e.search_vector_zh IS NOT NULL "
+                            + "AND e.search_vector_zh @@ websearch_to_tsquery('"
+                            + TS_CONFIG + "', ?) "
+                            + "ORDER BY rank DESC LIMIT ?",
+                    placeholders);
             List<Object> args = new ArrayList<>();
             args.add(query);
             args.addAll(documentIds);
+            args.add(query);
             args.add(limit);
             return jdbcTemplate.queryForList(sql, args.toArray());
         }
 
-        String sql = 
-                "SELECT id, chunk_text, embedding, document_id, chunk_index, metadata, " +
-                "       ts_rank_cd(search_vector_zh, q) as rank " +
-                "FROM rag_embeddings, " +
-                "     websearch_to_tsquery('" + TS_CONFIG + "', ?) AS q " +
-                "WHERE search_vector_zh IS NOT NULL " +
-                "AND search_vector_zh @@ q " +
-                "ORDER BY rank DESC LIMIT ?";
-        return jdbcTemplate.queryForList(sql, query, limit);
+        String sql = select + scope
+                + "AND e.search_vector_zh IS NOT NULL "
+                + "AND e.search_vector_zh @@ websearch_to_tsquery('"
+                + TS_CONFIG + "', ?) "
+                + "ORDER BY rank DESC LIMIT ?";
+        return jdbcTemplate.queryForList(sql, query, query, limit);
     }
 
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {

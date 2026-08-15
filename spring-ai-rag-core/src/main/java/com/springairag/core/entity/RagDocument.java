@@ -7,6 +7,7 @@ import org.hibernate.annotations.UpdateTimestamp;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.Map;
 
 /**
@@ -23,6 +24,8 @@ import java.util.Map;
     @Index(name = "idx_rag_doc_enabled", columnList = "enabled")
 })
 public class RagDocument {
+
+    public static final String JSON_RECORD = "json-record";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -75,6 +78,19 @@ public class RagDocument {
      */
     @Column(name = "content_hash", length = 64)
     private String contentHash;
+
+    /**
+     * Caller-supplied stable identity for structured records.
+     */
+    @Column(name = "external_id", length = 255)
+    private String externalId;
+
+    /**
+     * Business JSON payload. It is never copied into embedding metadata.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "jsonb_payload", columnDefinition = "jsonb")
+    private JsonNode jsonbPayload;
 
     /**
      * SHA-256 hash of the content at last embedding time.
@@ -138,6 +154,9 @@ public class RagDocument {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+
     public Long getCollectionId() { return collectionId; }
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
 
@@ -158,6 +177,12 @@ public class RagDocument {
 
     public String getContentHash() { return contentHash; }
     public void setContentHash(String contentHash) { this.contentHash = contentHash; }
+
+    public String getExternalId() { return externalId; }
+    public void setExternalId(String externalId) { this.externalId = externalId; }
+
+    public JsonNode getJsonbPayload() { return jsonbPayload; }
+    public void setJsonbPayload(JsonNode jsonbPayload) { this.jsonbPayload = jsonbPayload; }
 
     public String getEmbeddedContentHash() { return embeddedContentHash; }
     public void setEmbeddedContentHash(String embeddedContentHash) { this.embeddedContentHash = embeddedContentHash; }

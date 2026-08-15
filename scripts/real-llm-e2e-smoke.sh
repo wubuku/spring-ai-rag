@@ -59,6 +59,7 @@ PASS=0
 FAIL=0
 DOC_ID=""
 COLLECTION_ID=""
+COLLECTION_KEY="real-e2e-${PROBE_TOKEN}"
 step() { echo; echo "=== $* ==="; }
 ok()   { echo "OK: $*"; PASS=$((PASS+1)); }
 bad()  { echo "FAIL: $*"; FAIL=$((FAIL+1)); }
@@ -69,8 +70,8 @@ cleanup() {
   if [[ -n "$DOC_ID" ]]; then
     curl -s -X DELETE "$API/documents/$DOC_ID" >/dev/null
   fi
-  if [[ -n "$COLLECTION_ID" ]]; then
-    curl -s -X DELETE "$API/collections/$COLLECTION_ID" >/dev/null
+  if [[ -n "$COLLECTION_KEY" ]]; then
+    curl -s -X DELETE "$API/collections/by-key?collectionKey=$COLLECTION_KEY" >/dev/null
   fi
 }
 trap cleanup EXIT
@@ -151,11 +152,13 @@ ok "chat API HTTP 200 (${CHAT_DESC})"
 step "1) Create isolated collection and document with verification code=$PROBE_TOKEN"
 curl -s -X POST "$API/collections" \
   -H 'Content-Type: application/json' \
-  -d "{\"name\":\"real-llm-e2e-${PROBE_TOKEN}\",\"description\":\"Isolated real LLM release verification collection\",\"domainId\":\"default\"}" \
+  -d "{\"collectionKey\":\"${COLLECTION_KEY}\",\"name\":\"real-llm-e2e-${PROBE_TOKEN}\",\"description\":\"Isolated real LLM release verification collection\",\"domainId\":\"default\"}" \
   -o /tmp/rag-e2e-collection.json
 COLLECTION_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-collection.json')).get('id') or '')")
-[[ -n "$COLLECTION_ID" ]] || { bad "create collection"; exit 1; }
-ok "collection id=$COLLECTION_ID"
+RETURNED_COLLECTION_KEY=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-collection.json')).get('collectionKey') or '')")
+[[ -n "$COLLECTION_ID" && "$RETURNED_COLLECTION_KEY" == "$COLLECTION_KEY" ]] \
+  || { bad "create collection or collectionKey mismatch"; exit 1; }
+ok "collection key=$COLLECTION_KEY id=$COLLECTION_ID"
 
 curl -s -X POST "$API/documents" \
   -H 'Content-Type: application/json' \
@@ -167,7 +170,7 @@ DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json
 export DOC_ID
 ok "document id=$DOC_ID"
 
-curl -s -X POST "$API/collections/$COLLECTION_ID/documents" \
+curl -s -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
   -H 'Content-Type: application/json' \
   -d "{\"documentId\":$DOC_ID}" \
   -o /tmp/rag-e2e-associate.json
@@ -201,7 +204,7 @@ ok "embed stored vectors"
 step "3) Search for probe token"
 curl -s -X POST "$API/search" \
   -H 'Content-Type: application/json' \
-  -d "{\"query\":\"${PROBE_TOKEN}\",\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID],\"config\":{\"maxResults\":5,\"minScore\":0,\"useHybridSearch\":true,\"useRerank\":true}}" \
+  -d "{\"query\":\"${PROBE_TOKEN}\",\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID],\"config\":{\"maxResults\":5,\"minScore\":0,\"useHybridSearch\":true,\"useRerank\":true}}" \
   -o /tmp/rag-e2e-search.json
 python3 - <<'PY'
 import json,sys,os
@@ -229,7 +232,7 @@ ok "search returned only the isolated document"
 step "4) Chat ask (REAL LLM)"
 curl -s -X POST "$API/chat/ask" \
   -H 'Content-Type: application/json' \
-  -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID]}" \
+  -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
   --max-time 180 \
   -o /tmp/rag-e2e-ask.json
 set +e
@@ -254,7 +257,7 @@ if [[ "$SKIP_STREAM" != "1" ]]; then
   set +e
   curl -s -N -X POST "$API/chat/stream" \
     -H 'Content-Type: application/json' \
-    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionIds\":[$COLLECTION_ID],\"documentIds\":[$DOC_ID]}" \
+    -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
     --max-time 180 \
     -o /tmp/rag-e2e-stream.txt
   python3 - <<'PY'

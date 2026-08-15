@@ -18,7 +18,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V24 |
+| Flyway | V1–V29 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -194,6 +194,46 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
 ```
 
 该流程会执行 provider preflight、创建唯一文档、embedding、search、ask 和 stream。Mock Playwright 不能替代真实 LLM 验证。
+
+### JSONB 结构化记录一键验证
+
+运行 JSONB 实现及其 API、数据库、WebUI、文档和空白检查的可重复门禁：
+
+```bash
+./scripts/verify-jsonb-records.sh
+```
+
+只有在浏览器依赖不可用时才使用 `--skip-playwright`，并在验证记录中明确记载跳过。
+PostgreSQL Testcontainers 步骤默认使用 `-Dapi.version=1.40` 和
+`TESTCONTAINERS_RYUK_DISABLED=true`，用于规避部分 OrbStack / 代理环境的旧 Docker API
+协商失败或 Ryuk 镜像证书问题。可通过 `TESTCONTAINERS_API_VERSION`、
+`TESTCONTAINERS_RYUK_DISABLED`、`TESTCONTAINERS_PG_IMAGE` 覆盖。日志和 Markdown 汇总写入
+`.verification/jsonb-verification/<run-id>/`。
+Mock Playwright preview 使用 `JSONB_PLAYWRIGHT_PORT`（默认 `4174`），并启用严格端口绑定，
+不会复用无关进程。如果端口已被占用，请指定空闲端口，例如：
+
+```bash
+JSONB_PLAYWRIGHT_PORT=4199 ./scripts/verify-jsonb-records.sh
+```
+
+该门禁必须串行执行：其中的 `mvn clean` 不能与使用相同模块 `target/` 目录的其他 Maven
+测试进程并发运行。
+
+### JSONB 真实 HTTP E2E
+
+在已经启动的 PostgreSQL profile 服务上执行 JSON structured-record 的真实 HTTP 链路：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/jsonb-records-e2e.sh
+```
+
+脚本会验证 JSON record upsert、collection-scoped search、detail、payload-only 更新、
+`retrievalText` 更新、clone/export/import，以及使用 root 创建临时受限 API Key 后的
+允许/拒绝范围。`embed=true` 会调用真实 embedding provider；不会调用 Chat LLM。
+需要跳过 ACL 时必须显式使用 `--skip-acl`，并把该事实记录在验证结果中。脚本不会打印
+API Key 或完整 payload，临时响应写入被忽略的 `.verification/jsonb-e2e/` 后清理。
 
 ## 8. Goldenset 与发布门禁
 

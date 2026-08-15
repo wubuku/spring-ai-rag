@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-Flyway runs V1–V24 migrations automatically on startup (tables + HNSW indexes + fulltext GIN indexes).
+Flyway runs V1–V29 migrations automatically on startup (tables + embedding profiles + fixed-dimension HNSW indexes + fulltext GIN indexes + JSONB structured-record fields).
 
 ### 2. Add Dependency
 
@@ -66,7 +66,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway auto-migration (V1–V24)
+  # Flyway auto-migration (V1–V29)
   flyway:
     enabled: true
 

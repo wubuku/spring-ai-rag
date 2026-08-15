@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Chat } from './Chat';
 import { useChatSSE } from '../hooks/useSSE';
 import { modelsApi } from '../api/models';
+import { collectionsApi } from '../api/collections';
 
 // Mock useChatSSE at module level
 const mockSend = vi.fn();
@@ -20,7 +21,7 @@ vi.mock('../hooks/useSSE', () => ({
 
 vi.mock('../api/collections', () => ({
   collectionsApi: {
-    list: vi.fn().mockResolvedValue({ data: { collections: [], total: 0 } }),
+    list: vi.fn(),
   },
 }));
 
@@ -62,6 +63,9 @@ describe('Chat', () => {
         fallbackChain: [],
         models: [],
       },
+    });
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: { collections: [], total: 0 },
     });
   });
 
@@ -191,6 +195,39 @@ describe('Chat', () => {
       undefined,
       undefined,
       'openrouter/xiaomi/mimo-v2-pro'
+    );
+  });
+
+  it('passes the selected collection key to SSE', async () => {
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        collections: [
+          {
+            id: 10,
+            collectionKey: 'customer:manual',
+            name: 'Knowledge Base',
+            documentCount: 2,
+          },
+        ],
+        total: 1,
+      },
+    });
+    renderChat();
+
+    const collectionSelect = await screen.findByTestId('chat-collection-select');
+    await screen.findByRole('option', { name: /Knowledge Base/ });
+    await userEvent.selectOptions(collectionSelect, 'customer:manual');
+    fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
+      target: { value: 'Scoped question' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
+
+    expect(mockSend).toHaveBeenCalledWith(
+      'Scoped question',
+      undefined,
+      undefined,
+      undefined,
+      ['customer:manual'],
     );
   });
 });

@@ -15,11 +15,22 @@ public record DocumentAddedResponse(
         @Schema(description = "Collection ID", example = "1")
         Long collectionId,
 
+        @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
+        String collectionKey,
+
         @Schema(description = "Document ID", example = "1")
         Long documentId
 ) {
+    public DocumentAddedResponse(String message, Long collectionId, Long documentId) {
+        this(message, collectionId, null, documentId);
+    }
+
     public static DocumentAddedResponse of(Long collectionId, Long documentId) {
-        return new DocumentAddedResponse("Document added to collection", collectionId, documentId);
+        return new DocumentAddedResponse("Document added to collection", collectionId, null, documentId);
+    }
+
+    public static DocumentAddedResponse of(Long collectionId, String collectionKey, Long documentId) {
+        return new DocumentAddedResponse("Document added to collection", collectionId, collectionKey, documentId);
     }
 
     @Override
@@ -29,12 +40,13 @@ public record DocumentAddedResponse(
         DocumentAddedResponse that = (DocumentAddedResponse) o;
         return Objects.equals(message, that.message) &&
                 Objects.equals(collectionId, that.collectionId) &&
+                Objects.equals(collectionKey, that.collectionKey) &&
                 Objects.equals(documentId, that.documentId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(message, collectionId, documentId);
+        return Objects.hash(message, collectionId, collectionKey, documentId);
     }
 
     @Override
@@ -42,6 +54,7 @@ public record DocumentAddedResponse(
         return "DocumentAddedResponse{" +
                 "message='" + message + '\'' +
                 ", collectionId=" + collectionId +
+                ", collectionKey='" + collectionKey + '\'' +
                 ", documentId=" + documentId +
                 '}';
     }

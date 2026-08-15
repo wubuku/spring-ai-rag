@@ -54,28 +54,54 @@ A database business key returns `DATABASE_API_KEY` with
 `["RAG_READ", "RAG_WRITE"]`; the WebUI refuses to unlock the management
 console with it. Responses include `Cache-Control: no-store`.
 
-Database business keys may carry `allowedCollectionIds`:
+Database business keys expose `allowedCollectionKeys`; deprecated
+`allowedCollectionIds` remains in compatibility responses:
 
-- `null` or `[]`: unrestricted access to all collections.
+- Omit the scope to grant unrestricted access to all collections.
 - A non-empty list limits search, chat, collection, document, upload, and
   PDF-to-RAG paths to those collections.
-- Explicit requests for an outside collection return `403`.
+- Explicit requests for an unknown or unauthorized key return `403`, so a
+  restricted caller cannot enumerate Collections.
 - Retrieval without an explicit collection filter is constrained to the
   key's allow-list.
 
+### Collection Identity
+
+Collections have two identifiers:
+
+- `id` is the internal database `BIGINT` primary key and foreign key.
+- `collectionKey` is the caller-supplied stable external business identifier
+  and the preferred API identity.
+
+`collectionKey` is required for create, import, and clone targets. It must
+contain 1-128 visible ASCII characters (`U+0021` through `U+007E`), is
+case-sensitive, and is stored exactly as supplied. The service does not trim,
+normalize, change case, truncate, or generate it. It is globally unique,
+immutable after creation, and remains reserved after soft deletion. Callers
+without a business naming scheme can generate a UUID locally.
+
+Because keys may contain URL-reserved punctuation, by-key endpoints use query
+parameters and callers must URL-encode the value. Deprecated numeric routes
+and `collectionId(s)` fields remain available. When both forms are supplied,
+they must resolve to the same Collection set; ordering is ignored, but a
+mismatch returns `400`.
+
 ### Collection Retrieval Scope
 
-Chat and Search use the same `collectionIds` semantics:
+Chat and Search prefer `collectionKeys`; deprecated `collectionIds` has the
+same scope semantics:
 
-- For an unrestricted caller, omission or `[]` means no Collection filter and
-  searches all retrievable documents.
+- For an unrestricted caller, omitting both fields means no Collection filter
+  and searches all retrievable documents.
 - A non-empty list restricts retrieval to those Collections; the backend
   accepts more than one Collection.
 - If `documentIds` is also present, the effective scope is their intersection.
 - A non-empty Collection scope with no documents returns an empty result and
   never falls through to full-corpus retrieval.
-- For a restricted API key, omission or `[]` is replaced by the key's
-  `allowedCollectionIds`; an explicit outside ID returns `403`.
+- For a restricted API key, omission is replaced by the key's internal
+  allow-list; an explicit unknown or outside key returns `403`.
+- An explicitly present but empty `collectionKeys` or `collectionIds` scope
+  returns `400`; it is never treated as an omitted global scope.
 
 The current implementation expands Collections to document IDs before vector
 and full-text retrieval applies a `document_id IN (...)` filter. Large
@@ -155,7 +181,7 @@ Non-streaming RAG Q&A, returns a complete answer.
   "sessionId": "session-001",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
-  "collectionIds": [1, 2],
+  "collectionKeys": ["medical:guidelines:v3", "medical:drugs:v2"],
   "documentIds": [10, 20],
   "maxResults": 5,
   "useHybridSearch": true,
@@ -170,7 +196,8 @@ Non-streaming RAG Q&A, returns a complete answer.
 | `sessionId` | string | | Session ID, maximum 36 characters; generated when omitted |
 | `domainId` | string | | Domain extension ID |
 | `model` | string | | Runtime model reference from `GET /rag/models`; omitted uses the default chain |
-| `collectionIds` | long[] | | Restrict retrieval to these collections |
+| `collectionKeys` | string[] | | Preferred stable Collection scope |
+| `collectionIds` | long[] | | Deprecated numeric compatibility scope |
 | `documentIds` | long[] | | Restrict retrieval to these documents; intersects with collections |
 | `maxResults` | int | | Number of retrieval results, default 5 |
 | `useHybridSearch` | boolean | | Enable vector + full-text retrieval, default true |
@@ -322,6 +349,7 @@ List business-key metadata. Raw secrets and hashes are never returned.
   "keyId": "rag_k_abc123",
   "name": "Production Server",
   "role": "NORMAL",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "enabled": true,
   "createdAt": "2026-08-14T00:00:00",
@@ -333,15 +361,15 @@ List business-key metadata. Raw secrets and hashes are never returned.
 ### `POST /api/v1/rag/api-keys`
 
 In root mode, `expiresAt` is required and must be in the future. There is no
-fixed maximum lifetime. `allowedCollectionIds` is optional; omit it or send an
-empty list for all collections.
+fixed maximum lifetime. `allowedCollectionKeys` is optional; omit it for all
+collections. `allowedCollectionIds` is deprecated.
 
 **Request body**:
 ```json
 {
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
-  "allowedCollectionIds": [1, 2]
+  "allowedCollectionKeys": ["customer-42:manual:v3"]
 }
 ```
 
@@ -353,6 +381,7 @@ The raw secret appears only in the `201 Created` response, which includes
   "keyId": "rag_k_xyz789",
   "rawKey": "rag_sk_...",
   "name": "My API Key",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00"
 }
@@ -394,6 +423,8 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 | `useHybrid` | bool | true | Use hybrid search |
 | `vectorWeight` | double | 0.5 | Vector search weight |
 | `fulltextWeight` | double | 0.5 | Full-text search weight |
+| `collectionKeys` | string[] | | Preferred repeated Collection scope parameter |
+| `collectionIds` | long[] | | Deprecated repeated numeric scope parameter |
 
 **Response:**
 
@@ -424,6 +455,7 @@ Submit more complex retrieval configuration via request body.
 ```json
 {
   "query": "Spring AI",
+  "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
     "maxResults": 10,
@@ -437,11 +469,91 @@ Submit more complex retrieval configuration via request body.
 
 ---
 
+## JSON Structured Records — JSONB Payload Retrieval
+
+Structured-record endpoints keep two caller-supplied values separate:
+
+- `retrievalText` is the natural-language description used for `content_hash`,
+  chunking, full-text search, and embedding.
+- `jsonbPayload` is the business JSON stored as PostgreSQL JSONB and returned
+  after a successful scoped retrieval.
+
+The service does not generate or validate the relationship between the two
+fields. Use `externalId` together with `collectionId` as the stable,
+idempotent record identity. JSON records do not participate in global
+content-hash deduplication, and there is no `payloadHash`.
+
+### `POST /api/v1/rag/json-records/upsert`
+
+Create or update one record. `embed` defaults to `true`; setting it to
+`false` persists the record and leaves embedding to a later document operation.
+
+```json
+{
+  "collectionId": 12,
+  "externalId": "product:sku-10001",
+  "title": "Compact wireless keyboard",
+  "retrievalText": "A compact wireless keyboard supports Bluetooth and dual-mode 2.4G connectivity.",
+  "jsonbPayload": {
+    "sku": "10001",
+    "protocols": ["bluetooth", "2.4g"],
+    "stock": 42
+  },
+  "source": "catalog",
+  "metadata": {
+    "tenant": "demo"
+  },
+  "embed": true
+}
+```
+
+Payload-only updates create a version snapshot but do not invalidate a fresh
+embedding. `retrievalText` changes invalidate the active embedding and are
+re-embedded when `embed=true`.
+
+### `POST /api/v1/rag/json-records/batch-upsert`
+
+Accepts `{ "items": [ ... ] }`. Items are processed independently in input
+order; one failed item is returned in the item result without rolling back
+successful items.
+
+### `POST /api/v1/rag/json-records/search`
+
+Searches only JSON records in the required `collectionIds` scope, using the
+same hybrid retrieval path as ordinary search. The response preserves ranking
+and includes the current `retrievalText` and `jsonbPayload` for each result.
+
+```json
+{
+  "query": "wireless keyboard with Bluetooth",
+  "collectionIds": [12],
+  "config": {
+    "maxResults": 10,
+    "useHybridSearch": true,
+    "useRerank": true
+  }
+}
+```
+
+API-key Collection ACL is applied before retrieval. A restricted key cannot
+expand the request beyond its `allowedCollectionIds`.
+
+### `GET /api/v1/rag/json-records/{documentId}`
+
+Returns the current structured record by internal document ID, including
+`externalId`, `retrievalText`, and `jsonbPayload`. Collection export/import,
+clone, and document-version responses preserve the structured fields and
+payload snapshots.
+
+---
+
 ## Documents — Document Management
 
 ### `POST /api/v1/rag/documents`
 
-Create a document.
+Create a document. Use `collectionKey` to associate it with a Collection;
+deprecated `collectionId` remains available. When both are supplied, they must
+identify the same active Collection.
 
 ```json
 {
@@ -449,7 +561,8 @@ Create a document.
   "content": "Spring AI is...",
   "source": "manual",
   "documentType": "text",
-  "metadata": {}
+  "metadata": {},
+  "collectionKey": "customer-42:manual:v3"
 }
 ```
 
@@ -460,6 +573,12 @@ Create a document.
 | `source` | string | | Source identifier |
 | `documentType` | string | | Document type |
 | `metadata` | object | | Extended metadata |
+| `collectionKey` | string | | Preferred stable Collection key |
+| `collectionId` | long | | Deprecated numeric compatibility field |
+
+Document detail, list, version, Collection-document, and create responses keep
+numeric IDs for compatibility and add `collectionKey` wherever a Collection
+identity is returned.
 
 ---
 
@@ -469,8 +588,16 @@ Paginated document query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `page` | int | 0 | Page number |
-| `size` | int | 20 | Page size |
+| `offset` | int | 0 | Number of documents to skip |
+| `limit` | int | 20 | Maximum number of documents to return |
+| `title` | string | | Optional title filter |
+| `documentType` | string | | Optional document-type filter |
+| `processingStatus` | string | | Optional processing-status filter |
+| `enabled` | boolean | | Optional enabled-state filter |
+| `collectionId` | long | | Deprecated Collection ID filter |
+| `collectionKey` | string | | Preferred stable Collection key filter |
+| `createdAfter` | timestamp | | Lower bound for `createdAt` |
+| `createdBefore` | timestamp | | Upper bound for `createdAt` |
 
 ---
 
@@ -498,26 +625,34 @@ Generate embedding vectors for a specified document.
 
 ---
 
-### `POST /api/v1/rag/documents/{id}/embed/vs`
-
-Generate embedding vectors for a document via VectorStore.
-
 ---
 
 ### `POST /api/v1/rag/documents/batch`
 
-Batch create documents (save only, no embedding). Follow up with `/batch/embed` to vectorize.
+Batch create documents. Set the top-level `collectionKey` as the default
+Collection for all items; an item may provide its own key. An item-level
+identity overrides the default after normal ID/key consistency and ACL checks.
+Set `embed=true` to embed in the same request.
 
 ```json
 {
+  "collectionKey": "customer-42:manual:v3",
+  "embed": true,
+  "force": false,
   "documents": [
     { "title": "doc1", "content": "content 1" },
-    { "title": "doc2", "content": "content 2" }
+    {
+      "title": "doc2",
+      "content": "content 2",
+      "collectionKey": "customer-42:faq:v1"
+    }
   ]
 }
 ```
 
-> **Tip:** To create and embed in one step, use `POST /documents/batch` with `embed=true` parameter instead.
+Deprecated top-level and item-level `collectionId` fields remain compatible.
+`POST /documents/batch/create-and-embed` is deprecated; use this endpoint with
+`embed=true`.
 
 ---
 
@@ -586,7 +721,8 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `files` | MultipartFile[] | ✅ | File list (max 100) |
-| `collectionId` | Long | No | Target collection ID |
+| `collectionKey` | string | No | Preferred target Collection key |
+| `collectionId` | long | No | Deprecated numeric Collection ID |
 | `force` | boolean | No | `true` = force re-embed |
 
 **Supported file types:** txt / md / json / xml / html / csv / log
@@ -610,6 +746,24 @@ Upload text files and embed in one step. Suitable for direct file submission fro
   ]
 }
 ```
+
+---
+
+### PDF-to-RAG Collection Scope
+
+The following multipart endpoints prefer `collectionKey`; deprecated
+`collectionId` remains compatible:
+
+- `POST /api/v1/rag/files/pdf-to-rag`
+- `POST /api/v1/rag/files/{uuid}/embed`
+
+`embed=false` on `/pdf-to-rag` returns JSON immediately. `embed=true`, or
+omitting `embed`, returns an SSE progress stream. For `/{uuid}/embed`,
+`embed=sync` returns JSON and `embed=sse`, or omission, returns SSE. If both
+Collection identifiers are supplied, they must match.
+
+The `collection` parameter on `POST /api/v1/rag/files/pdf` is unrelated: it is
+only a virtual file-directory prefix and is not a RAG Collection identity.
 
 ---
 
@@ -669,10 +823,13 @@ Get a specific version of a document (includes content snapshot).
 
 ### `POST /api/v1/rag/collections`
 
-Create a collection.
+Create a Collection. `collectionKey` is required and follows the identity
+contract above. Duplicate keys, including keys retained by soft-deleted
+Collections, return `409`.
 
 ```json
 {
+  "collectionKey": "medical-knowledge-base",
   "name": "Medical Knowledge Base",
   "description": "Medical domain document collection",
   "embeddingModel": "BAAI/bge-m3",
@@ -682,6 +839,8 @@ Create a collection.
 }
 ```
 
+The response contains both internal `id` and external `collectionKey`.
+
 ---
 
 ### `GET /api/v1/rag/collections`
@@ -690,58 +849,93 @@ Paginated collection query.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `page` | int | 0 | Page number |
-| `size` | int | 20 | Page size |
-| `keyword` | string | | Search keyword |
+| `offset` | int | 0 | Number of collections to skip |
+| `limit` | int | 20 | Maximum number of collections to return |
+| `name` | string | | Optional collection-name filter |
+| `enabled` | boolean | | Optional enabled-state filter |
+
+Restricted API keys see only their allowed Collections.
 
 ---
 
-### `GET /api/v1/rag/collections/{id}`
+### By-Key Lifecycle Routes
 
-Get collection details.
+These are the preferred lifecycle endpoints. URL-encode `collectionKey` as a
+query parameter:
 
----
+- `GET /api/v1/rag/collections/by-key?collectionKey=...`
+- `PUT /api/v1/rag/collections/by-key?collectionKey=...`
+- `DELETE /api/v1/rag/collections/by-key?collectionKey=...`
+- `POST /api/v1/rag/collections/by-key/restore?collectionKey=...`
+- `GET /api/v1/rag/collections/by-key/documents?collectionKey=...`
+- `POST /api/v1/rag/collections/by-key/documents?collectionKey=...`
+- `GET /api/v1/rag/collections/by-key/export?collectionKey=...`
 
-### `PUT /api/v1/rag/collections/{id}`
+The update body contains only mutable fields: `name`, `description`,
+`embeddingModel`, `dimensions`, `enabled`, and `metadata`. Supplying
+`collectionKey` in an update body returns `400`; renaming a key is not
+supported.
 
-Update a collection.
-
----
-
-### `DELETE /api/v1/rag/collections/{id}`
-
-Soft-delete a Collection and unlink its documents. This does not delete the
-documents or embeddings; unlinked documents may still appear in full-corpus
-retrieval when `collectionIds` is omitted.
-
----
-
-### `GET /api/v1/rag/collections/{id}/documents`
-
-Get documents in a collection.
+Delete is a soft delete and unlinks documents without deleting documents or
+embeddings. The key remains reserved. Restore preserves the same key and does
+not re-link documents automatically.
 
 ---
 
-### `POST /api/v1/rag/collections/{id}/documents`
+### `POST /api/v1/rag/collections/clone`
 
-Add documents to a collection.
+Clone a Collection using stable source and target keys:
 
 ```json
 {
-  "documentIds": [1, 2, 3]
+  "sourceCollectionKey": "customer-42:manual:v3",
+  "collectionKey": "customer-42:manual:v4"
 }
+```
+
+The target key is required and must be unused. Documents are copied with
+pending processing status; embeddings are not copied. Restricted API keys
+cannot create, import, or clone Collections.
+
+---
+
+### Collection Documents
+
+List documents with:
+
+```http
+GET /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
+```
+
+Associate one existing document with:
+
+```json
+{
+  "documentId": 1
+}
+```
+
+sent to:
+
+```http
+POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
 ```
 
 ---
 
-### `GET /api/v1/rag/collections/{id}/export`
+### Collection Export and Import
 
-Export a collection and its documents as JSON.
+Export through:
+
+```http
+GET /api/v1/rag/collections/by-key/export?collectionKey=customer-42%3Amanual%3Av3
+```
 
 **Response:**
 
 ```json
 {
+  "collectionKey": "customer-42:manual:v3",
   "name": "Medical Knowledge Base",
   "description": "Medical domain document collection",
   "embeddingModel": "BAAI/bge-m3",
@@ -767,20 +961,41 @@ Export a collection and its documents as JSON.
 
 ### `POST /api/v1/rag/collections/import`
 
-Import and create a new collection with documents from exported JSON data.
+Import and create a new Collection with documents from exported JSON data.
+`collectionKey` is required. Because export preserves the source key and keys
+are globally unique, change it before importing as a second Collection.
 
-**Request body:** Use the JSON data returned by the `/export` endpoint.
+**Request body:** Use the JSON data returned by `/export`, with the target
+`collectionKey`.
 
 **Response:**
 
 ```json
 {
   "id": 5,
+  "collectionKey": "customer-42:manual:import-2026-08",
   "name": "Medical Knowledge Base",
   "importedDocuments": 10,
-  "message": "Collection imported successfully"
+  "documentCount": 10
 }
 ```
+
+---
+
+### Deprecated Numeric Collection Routes
+
+The following compatibility routes remain available but are deprecated in
+OpenAPI:
+
+- `GET`, `PUT`, and `DELETE /api/v1/rag/collections/{id}`
+- `POST /api/v1/rag/collections/{id}/restore`
+- `POST /api/v1/rag/collections/{id}/clone?collectionKey=...`
+- `GET /api/v1/rag/collections/{id}/documents`
+- `POST /api/v1/rag/collections/{id}/documents`
+- `GET /api/v1/rag/collections/{id}/export`
+
+They have the same ACL, immutability, soft-delete, and target-key rules as the
+preferred routes.
 
 ---
 
@@ -1021,14 +1236,19 @@ Service health check.
 ```json
 {
   "status": "UP",
-  "timestamp": "2026-04-02T16:00:00Z",
+  "timestamp": "2026-08-15T16:00:00Z",
   "components": {
     "database": "UP",
-    "vectorStore": "UP",
-    "embeddingModel": "UP"
+    "pgvector": "UP",
+    "tables": "UP",
+    "cache": "UP"
   }
 }
 ```
+
+The detailed component endpoint is `GET /api/v1/rag/health/components`. It
+returns the same component names with latency, extension, table-count, and
+cache details.
 
 ---
 

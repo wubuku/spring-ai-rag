@@ -30,7 +30,7 @@
  *   K6_TOPK      – topK for search (default: 10)
  *   K6_PROFILE   – Profile: smoke|load|stress (default: load)
  *   VECTOR_WEIGHT – Vector weight 0.0-1.0 (default: 1.0 for pure vector)
- *   COLLECTION_ID – Optional collection ID to scope search
+ *   COLLECTION_KEY – Optional stable collection key to scope search
  */
 
 import http from 'k6/http';
@@ -47,7 +47,7 @@ const VUS = parseInt(__ENV.K6_VUS || '50');
 const DURATION = __ENV.K6_DURATION || '30s';
 const TOPK = parseInt(__ENV.K6_TOPK || '10');
 const VECTOR_WEIGHT = parseFloat(__ENV.VECTOR_WEIGHT || '1.0');
-const COLLECTION_ID = __ENV.COLLECTION_ID || null;
+const COLLECTION_KEY = __ENV.COLLECTION_KEY || null;
 const PROFILE = __ENV.K6_PROFILE || 'load';
 
 // Metrics
@@ -113,6 +113,7 @@ export const options = {
 // ─────────────────────────────────────────────────────────────────
 
 let testCollectionId = null;
+let testCollectionKey = COLLECTION_KEY;
 let testDocumentId = null;
 
 export function setup() {
@@ -133,16 +134,23 @@ export function setup() {
   if (collectionsRes.status === 200) {
     try {
       const data = JSON.parse(collectionsRes.body);
-      const collections = data.data?.content || data.content || [];
+      const collections = data.collections || data.data?.collections || data.data?.content || data.content || [];
       for (const col of collections) {
+        if (testCollectionKey && col.collectionKey !== testCollectionKey) {
+          continue;
+        }
         // Check if collection has documents
-        const docsRes = http.get(`${BASE_URL}/api/v1/rag/collections/${col.id}/documents?page=0&size=1`, HEADERS_JSON);
+        const docsRes = http.get(
+          `${BASE_URL}/api/v1/rag/collections/by-key/documents?collectionKey=${encodeURIComponent(col.collectionKey)}&offset=0&limit=1`,
+          HEADERS_JSON
+        );
         if (docsRes.status === 200) {
           const docsData = JSON.parse(docsRes.body);
-          const totalDocs = docsData.data?.totalElements || docsData.totalElements || 0;
+          const totalDocs = docsData.total || docsData.data?.total || docsData.data?.totalElements || docsData.totalElements || 0;
           if (totalDocs > 0) {
             testCollectionId = col.id;
-            console.log(`Found collection "${col.name}" (id=${testCollectionId}) with ${totalDocs} documents — will use for search scope`);
+            testCollectionKey = col.collectionKey;
+            console.log(`Found collection "${col.name}" (key=${testCollectionKey}, id=${testCollectionId}) with ${totalDocs} documents — will use for search scope`);
             break;
           }
         }
@@ -152,18 +160,25 @@ export function setup() {
     }
   }
 
-  if (!testCollectionId) {
+  if (!testCollectionKey) {
     console.log('No existing collection with documents found — creating test collection...');
+    const generatedKey = `k6-vector-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
     const createColRes = http.post(
       `${BASE_URL}/api/v1/rag/collections`,
-      JSON.stringify({ name: `k6-vector-search-test-${Date.now()}`, description: 'Temporary collection for k6 vector search stress test', dimensions: 1024 }),
+      JSON.stringify({
+        collectionKey: generatedKey,
+        name: `k6-vector-search-test-${Date.now()}`,
+        description: 'Temporary collection for k6 vector search stress test',
+        dimensions: 1024,
+      }),
       HEADERS_JSON
     );
     if (createColRes.status === 200 || createColRes.status === 201) {
       try {
         const colData = JSON.parse(createColRes.body);
         testCollectionId = colData.data?.id || colData.id;
-        console.log(`Created collection id=${testCollectionId}`);
+        testCollectionKey = colData.data?.collectionKey || colData.collectionKey;
+        console.log(`Created collection key=${testCollectionKey} id=${testCollectionId}`);
       } catch (e) {
         console.warn('Failed to parse collection creation response:', e.message);
       }
@@ -171,7 +186,7 @@ export function setup() {
   }
 
   // Create a test document with rich content for vector search
-  if (testCollectionId) {
+  if (testCollectionKey) {
     const docContent = `
 Spring AI is an application framework for AI engineering. It provides a simple, user-friendly API for building AI applications.
 Machine learning is a subset of artificial intelligence that enables systems to learn from data without being explicitly programmed.
@@ -190,7 +205,7 @@ Vaccines work by training the immune system to recognize and fight specific path
       JSON.stringify({
         title: 'Knowledge Base for Vector Search Testing',
         content: docContent,
-        collectionId: testCollectionId,
+        collectionKey: testCollectionKey,
       }),
       HEADERS_JSON
     );
@@ -198,7 +213,7 @@ Vaccines work by training the immune system to recognize and fight specific path
       try {
         const docData = JSON.parse(createDocRes.body);
         testDocumentId = docData.data?.id || docData.id;
-        console.log(`Created document id=${testDocumentId} in collection ${testCollectionId}`);
+        console.log(`Created document id=${testDocumentId} in collection ${testCollectionKey}`);
       } catch (e) {
         console.warn('Failed to parse document creation response:', e.message);
       }
@@ -219,6 +234,7 @@ Vaccines work by training the immune system to recognize and fight specific path
 
   return {
     collectionId: testCollectionId,
+    collectionKey: testCollectionKey,
     documentId: testDocumentId,
     topK: TOPK,
     vectorWeight: VECTOR_WEIGHT,
@@ -234,7 +250,7 @@ function runPureVectorSearch(data) {
 
   // Pure vector search (no fulltext) via GET
   const getSearchRes = http.get(
-    `${BASE_URL}/api/v1/rag/search?query=${encodeURIComponent(query)}&topK=${data.topK}&vectorWeight=${data.vectorWeight}&fulltextWeight=${1 - data.vectorWeight}${data.collectionId ? '&collectionId=' + data.collectionId : ''}`,
+    `${BASE_URL}/api/v1/rag/search?query=${encodeURIComponent(query)}&topK=${data.topK}&vectorWeight=${data.vectorWeight}&fulltextWeight=${1 - data.vectorWeight}${data.collectionKey ? '&collectionKeys=' + encodeURIComponent(data.collectionKey) : ''}`,
     HEADERS_JSON,
     { name: 'vector_search_get' }
   );
@@ -271,7 +287,7 @@ function runPureVectorSearchPOST(data) {
     `${BASE_URL}/api/v1/rag/search`,
     JSON.stringify({
       query: query,
-      collectionId: data.collectionId || null,
+      collectionKeys: data.collectionKey ? [data.collectionKey] : undefined,
       topK: data.topK,
       vectorWeight: data.vectorWeight,
       fulltextWeight: 1 - data.vectorWeight,  // Pure vector: fulltext=0
@@ -315,7 +331,7 @@ function runMixedWeightSearch(data) {
   const vectorWeight = [0.5, 0.7, 0.9, 1.0][Math.floor(Math.random() * 4)];
 
   const res = http.get(
-    `${BASE_URL}/api/v1/rag/search?query=${encodeURIComponent(query)}&topK=${data.topK}&vectorWeight=${vectorWeight}&fulltextWeight=${1 - vectorWeight}${data.collectionId ? '&collectionId=' + data.collectionId : ''}`,
+    `${BASE_URL}/api/v1/rag/search?query=${encodeURIComponent(query)}&topK=${data.topK}&vectorWeight=${vectorWeight}&fulltextWeight=${1 - vectorWeight}${data.collectionKey ? '&collectionKeys=' + encodeURIComponent(data.collectionKey) : ''}`,
     HEADERS_JSON,
     { name: 'vector_search_mixed_weight' }
   );
