@@ -233,7 +233,6 @@ Vaccines work by training the immune system to recognize and fight specific path
   }
 
   return {
-    collectionId: testCollectionId,
     collectionKey: testCollectionKey,
     documentId: testDocumentId,
     topK: TOPK,

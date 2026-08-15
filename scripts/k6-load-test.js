@@ -238,7 +238,6 @@ export function setup() {
   console.log(`[setup] Complete — collectionKey=${COLLECTION_KEY} collectionId=${COLLECTION_ID} doc=${DOC_ID} session=${SESSION_ID}\n`);
 
   return {
-    collectionId: COLLECTION_ID,
     collectionKey: COLLECTION_KEY,
     documentId: DOC_ID,
     sessionId: SESSION_ID,
@@ -798,8 +797,10 @@ function runAlertsAndFeedback(data) {
     // Retrieval evaluation (if documents exist)
     if (data.documentId) {
       const er = post(`${BASE_URL}/api/v1/rag/evaluate`, {
-        collectionId: data.collectionId,
-        topK: 5,
+        query: 'k6 load test query',
+        retrievedDocIds: [data.documentId],
+        relevantDocIds: [data.documentId],
+        evaluationMethod: 'K6_SMOKE',
       }, {}, { name: 'evaluate' });
       check(er, {
         'evaluate returns 200': r => r.status === 200 || r.status === 404,

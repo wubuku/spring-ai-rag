@@ -170,17 +170,15 @@ export function setup() {
     { headers: HEADERS }
   );
 
-  let collectionId = null;
   let collectionKey = null;
   if (collectionRes.status === 200 || collectionRes.status === 201) {
     try {
       const body = JSON.parse(collectionRes.body);
-      collectionId = body.id;
       collectionKey = body.collectionKey;
     } catch (e) { /* ignore */ }
   }
 
-  return { collectionId, collectionKey, sessionId: SESSION_ID };
+  return { collectionKey, sessionId: SESSION_ID };
 }
 
 // ─────────────────────────────────────────────────────────────────
