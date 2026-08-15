@@ -36,7 +36,7 @@ public class ApiKeyManagementService {
 
     private static final Logger log = LoggerFactory.getLogger(ApiKeyManagementService.class);
     private static final String KEY_PREFIX = "rag_sk_";
-    public static final int MAX_MANAGED_EXPIRY_DAYS = 90;
+    private static final int DEFAULT_MANAGED_EXPIRY_DAYS = 365;
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
     /** Short-lived cache for validated keys: avoids DB round-trip on every authenticated request. */
     private static final Cache<String, RagApiKey> VALIDATED_KEY_CACHE = Caffeine.newBuilder()
@@ -144,7 +144,9 @@ public class ApiKeyManagementService {
     }
 
     /**
-     * 轮换 root 管理的业务 Key，并把 legacy 永久/超长期限收敛到 90 天内。
+     * 轮换 root 管理的业务 Key。
+     *
+     * <p>保留现有未来过期时间；legacy 永不过期 Key 使用一年后的过期时间。
      */
     @Transactional
     public ApiKeyCreatedResponse rotateManagedKey(String keyId) {
@@ -164,10 +166,8 @@ public class ApiKeyManagementService {
             throw new IllegalArgumentException("Expired API keys cannot be rotated");
         }
 
-        LocalDateTime maximumExpiry = now.plusDays(MAX_MANAGED_EXPIRY_DAYS);
         LocalDateTime newExpiry = oldKey.getExpiresAt() == null
-                || oldKey.getExpiresAt().isAfter(maximumExpiry)
-                ? maximumExpiry
+                ? now.plusDays(DEFAULT_MANAGED_EXPIRY_DAYS)
                 : oldKey.getExpiresAt();
 
         apiKeyRepository.disableByKeyId(keyId);
@@ -279,10 +279,6 @@ public class ApiKeyManagementService {
         if (!expiresAt.isAfter(now)) {
             throw new IllegalArgumentException(
                     "expiresAt must be in the future");
-        }
-        if (expiresAt.isAfter(now.plusDays(MAX_MANAGED_EXPIRY_DAYS))) {
-            throw new IllegalArgumentException(
-                    "expiresAt must not be more than 90 days in the future");
         }
     }
 

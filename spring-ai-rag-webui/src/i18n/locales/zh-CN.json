@@ -281,7 +281,7 @@
     "rawKey": "原始密钥（仅显示一次）",
     "namePlaceholder": "例如：生产环境服务器",
     "expiresAt": "过期时间",
-    "expiresAtHint": "必填，最长 90 天；默认建议 90 天。",
+    "expiresAtHint": "必填且必须在未来；默认建议一年。",
     "create": "创建",
     "createError": "创建 API 密钥失败",
     "keyCreated": "API 密钥创建成功",

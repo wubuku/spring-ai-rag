@@ -139,7 +139,8 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 - 只有 root 能创建、列出、轮换和吊销业务 Key。
 - root 创建的 Key固定为 `FULL_RAG` 数据面能力，可读写 RAG 数据、可限制 Collection，
   但不能管理其他 Key。
-- 业务 Key expiry 必填且最长 90 天；raw secret 仅在创建或轮换响应中显示一次。
+- 业务 Key expiry 必填、必须在未来且不设固定最长有效期；raw secret 仅在创建或轮换
+  响应中显示一次。
 - root 模式只接受 Bearer / `X-API-Key` Header，拒绝 query credential，并禁用旧 ADMIN
   bootstrap/raw 日志分发。
 

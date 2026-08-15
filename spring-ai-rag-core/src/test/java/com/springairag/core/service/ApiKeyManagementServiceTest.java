@@ -570,13 +570,16 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
-    void generateManagedKey_rejectsExpiryBeyondNinetyDays() {
+    void generateManagedKey_acceptsExpiryBeyondNinetyDays() {
+        LocalDateTime expiry = LocalDateTime.now().plusDays(365);
         ApiKeyCreateRequest request = new ApiKeyCreateRequest(
-                "Managed", LocalDateTime.now().plusDays(91));
+                "Managed", expiry);
 
-        assertThrows(IllegalArgumentException.class,
-                () -> service.generateManagedKey(request));
-        verify(apiKeyRepository, never()).save(any());
+        ApiKeyCreatedResponse response = service.generateManagedKey(request);
+
+        assertEquals(expiry, response.getExpiresAt());
+        verify(apiKeyRepository).save(argThat(
+                key -> expiry.equals(key.getExpiresAt())));
     }
 
     @Test
@@ -594,8 +597,8 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
-    void rotateManagedKey_capsPermanentLegacyKeyAtNinetyDays() {
-        LocalDateTime before = LocalDateTime.now().plusDays(89);
+    void rotateManagedKey_assignsDefaultExpiryToPermanentLegacyKey() {
+        LocalDateTime before = LocalDateTime.now().plusDays(364);
         RagApiKey existing = activeKey("rag_k_permanent", null);
         when(apiKeyRepository.findByKeyId("rag_k_permanent"))
                 .thenReturn(Optional.of(existing));
@@ -606,7 +609,7 @@ class ApiKeyManagementServiceTest {
         assertNotNull(response);
         assertTrue(response.getExpiresAt().isAfter(before));
         assertTrue(response.getExpiresAt()
-                .isBefore(LocalDateTime.now().plusDays(91)));
+                .isBefore(LocalDateTime.now().plusDays(366)));
         verify(apiKeyRepository).disableByKeyId("rag_k_permanent");
     }
 
@@ -623,16 +626,15 @@ class ApiKeyManagementServiceTest {
     }
 
     @Test
-    void rotateManagedKey_capsOverlongExistingExpiry() {
-        RagApiKey existing = activeKey(
-                "rag_k_long", LocalDateTime.now().plusDays(180));
+    void rotateManagedKey_preservesLongExistingExpiry() {
+        LocalDateTime expiry = LocalDateTime.now().plusDays(730);
+        RagApiKey existing = activeKey("rag_k_long", expiry);
         when(apiKeyRepository.findByKeyId("rag_k_long"))
                 .thenReturn(Optional.of(existing));
 
         ApiKeyCreatedResponse response = service.rotateManagedKey("rag_k_long");
 
-        assertTrue(response.getExpiresAt()
-                .isBefore(LocalDateTime.now().plusDays(91)));
+        assertEquals(expiry, response.getExpiresAt());
     }
 
     @Test

@@ -20,7 +20,7 @@ public class ApiKeyCreateRequest {
     @Size(max = 255, message = "Name must be at most 255 characters")
     private String name;
 
-    @Schema(description = "Expiration date/time (ISO-8601). Required for root-managed keys and limited to 90 days.",
+    @Schema(description = "Expiration date/time (ISO-8601). Required for root-managed keys and must be in the future.",
             example = "2027-01-01T00:00:00")
     private LocalDateTime expiresAt;
 

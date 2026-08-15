@@ -13,6 +13,7 @@ const mockUseMutation = vi.fn(() => ({
 const mockUseQueryClient = vi.fn(() => ({
   invalidateQueries: vi.fn(),
 }));
+const mockShowToast = vi.fn();
 
 // Mock the entire module
 vi.mock('@tanstack/react-query', () => ({
@@ -24,7 +25,7 @@ vi.mock('@tanstack/react-query', () => ({
 // Mock Toast
 vi.mock('../components/Toast', () => ({
   useToast: vi.fn(() => ({
-    showToast: vi.fn(),
+    showToast: mockShowToast,
   })),
 }));
 
@@ -70,6 +71,7 @@ describe('ApiKeys', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockMutateFn.mockClear();
+    mockShowToast.mockClear();
     mockUseMutation.mockReturnValue({
       mutate: mockMutateFn,
       isPending: false,
@@ -177,7 +179,7 @@ describe('ApiKeys', () => {
     }));
   });
 
-  it('requires an expiration no later than 90 days', () => {
+  it('requires a future expiration without a maximum', () => {
     mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
     render(<BrowserRouter><ApiKeys /></BrowserRouter>);
 
@@ -187,6 +189,41 @@ describe('ApiKeys', () => {
     expect(expiry).not.toBeNull();
     expect(expiry).toBeRequired();
     expect(expiry?.value).not.toBe('');
-    expect(expiry?.max).not.toBe('');
+    expect(expiry?.min).not.toBe('');
+    expect(expiry?.max).toBe('');
+  });
+
+  it('submits an expiration beyond 90 days unchanged', () => {
+    mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    fireEvent.change(screen.getByPlaceholderText('apiKeys.namePlaceholder'), {
+      target: { value: 'Long-lived Service' },
+    });
+    const expiry = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+    fireEvent.change(expiry!, { target: { value: '2027-12-31T23:59' } });
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
+
+    expect(mockMutateFn).toHaveBeenCalledWith({
+      name: 'Long-lived Service',
+      expiresAt: '2027-12-31T23:59:00',
+    });
+  });
+
+  it('shows the backend reason when creation fails', () => {
+    mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    const mutationOptions = mockUseMutation.mock.calls.at(-1)?.[0] as {
+      onError?: (error: unknown) => void;
+    };
+    mutationOptions.onError?.(new Error('Server validation failed'));
+
+    expect(mockShowToast).toHaveBeenCalledWith(
+      'apiKeys.createError: Server validation failed',
+      'error',
+    );
   });
 });

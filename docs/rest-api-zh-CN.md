@@ -99,7 +99,7 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
 
 #### `POST /api/v1/rag/api-keys`
 
-root 模式下 `expiresAt` 必填、必须在未来且最长 90 天。
+root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有效期。
 `allowedCollectionIds` 可省略；省略或传空集合表示可访问全部集合。
 
 ```json
@@ -126,8 +126,8 @@ root 模式下 `expiresAt` 必填、必须在未来且最长 90 天。
 #### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
 禁用旧 Key并生成同名新 Key，Collection 范围保持不变，raw secret 仅在本次
-`201 Created` 响应中返回。永久或超过 90 天的 legacy Key在 root 模式轮换时会收敛
-到最长 90 天；已过期或已禁用 Key不能轮换。
+`201 Created` 响应中返回。root 模式轮换会保留现有的未来过期时间；legacy 永不过期
+Key 会获得一年后的过期时间；已过期或已禁用 Key不能轮换。
 
 #### `DELETE /api/v1/rag/api-keys/{keyId}`
 

@@ -328,7 +328,8 @@ Setting a valid `RAG_ROOT_API_KEY` enables standalone-service MVP security mode:
   page memory and requires it again after refresh.
 - Empty-table ADMIN bootstrap and raw-secret logging are disabled.
 - Root-created business keys have the fixed `FULL_RAG` data-plane profile,
-  cannot manage keys, and require a future expiry no more than 90 days away.
+  cannot manage keys, and require a future expiry without a fixed maximum
+  lifetime.
 
 Without `RAG_ROOT_API_KEY`, legacy behavior remains: `rag.security.enabled`
 controls authentication, while `rag.security.api-key` and database
@@ -387,6 +388,10 @@ rag:
 | `rag.cors.allowed-methods` | `GET,POST,PUT,DELETE,OPTIONS` | Allowed HTTP methods |
 | `rag.cors.allowed-headers` | `*` | Allowed request headers |
 | `rag.cors.max-age` | `3600` | Preflight request cache time (seconds) |
+
+`./scripts/dev.sh` enables CORS for the exact Vite origin calculated from
+`FRONTEND_PORT`. Production deployments should continue to configure an
+explicit allow-list.
 
 ## Cache Configuration
 

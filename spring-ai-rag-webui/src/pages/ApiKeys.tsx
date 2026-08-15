@@ -11,7 +11,7 @@ import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
 import styles from './ApiKeys.module.css';
 
-const MAX_EXPIRY_DAYS = 90;
+const DEFAULT_EXPIRY_DAYS = 365;
 
 function toLocalDateTimeInput(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
@@ -28,14 +28,23 @@ function toLocalDateTimeInput(date: Date): string {
   ].join('');
 }
 
-function createExpiryBounds() {
+function createExpiryDefaults() {
   const now = new Date();
   const minimum = new Date(now.getTime() + 5 * 60 * 1000);
-  const maximum = new Date(now.getTime() + MAX_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
+  const suggested = new Date(
+    now.getTime() + DEFAULT_EXPIRY_DAYS * 24 * 60 * 60 * 1000,
+  );
   return {
     minimum: toLocalDateTimeInput(minimum),
-    maximum: toLocalDateTimeInput(maximum),
+    suggested: toLocalDateTimeInput(suggested),
   };
+}
+
+function formatMutationError(fallback: string, error: unknown): string {
+  if (!(error instanceof Error) || !error.message.trim()) {
+    return fallback;
+  }
+  return `${fallback}: ${error.message}`;
 }
 
 export function ApiKeys() {
@@ -206,8 +215,8 @@ function getStatusBadge(key: ApiKeyResponse, t: (key: string) => string) {
 function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
-  const [expiryBounds] = useState(createExpiryBounds);
-  const [expiresAt, setExpiresAt] = useState(expiryBounds.maximum);
+  const [expiryDefaults] = useState(createExpiryDefaults);
+  const [expiresAt, setExpiresAt] = useState(expiryDefaults.suggested);
   const [restrictCollections, setRestrictCollections] = useState(false);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
@@ -224,8 +233,8 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
       setCreatedKey(response.data);
       queryClient.invalidateQueries({ queryKey: ['apikeys'] });
     },
-    onError: () => {
-      showToast(t('apiKeys.createError'), 'error');
+    onError: (error) => {
+      showToast(formatMutationError(t('apiKeys.createError'), error), 'error');
     },
   });
 
@@ -290,8 +299,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 className={styles.input}
                 value={expiresAt}
                 onChange={e => setExpiresAt(e.target.value)}
-                min={expiryBounds.minimum}
-                max={expiryBounds.maximum}
+                min={expiryDefaults.minimum}
                 required
               />
               <div className={styles.hint}>{t('apiKeys.expiresAtHint')}</div>

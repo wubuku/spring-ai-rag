@@ -63,7 +63,8 @@ One-command backend and frontend development:
 ```
 
 The launcher exports the complete repository-root `.env` to Maven / Spring Boot
-and starts:
+and starts. It also allows the exact Vite origin on the backend and verifies a
+root-authenticated management POST before reporting ready:
 
 ```text
 Backend: http://127.0.0.1:8081

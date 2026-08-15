@@ -458,6 +458,34 @@ verify_root_identity_through_proxy() {
   fi
 }
 
+verify_root_management_write_through_proxy() {
+  local response
+  local response_body
+  local http_status
+
+  response="$(
+    printf 'X-API-Key: %s\nContent-Type: application/json\nOrigin: %s\n' \
+        "${ROOT_CREDENTIAL}" "${FRONTEND_ORIGIN}" \
+      | curl --noproxy '*' -sS --connect-timeout 2 --max-time 10 \
+          --request POST \
+          --header @- \
+          --data '{}' \
+          --write-out $'\n%{http_code}' \
+          "${FRONTEND_ORIGIN}/api/v1/rag/api-keys"
+  )" || {
+    echo "ERROR: root management write verification through the Vite proxy failed." >&2
+    return 1
+  }
+
+  http_status="${response##*$'\n'}"
+  response_body="${response%$'\n'*}"
+  if [[ "${http_status}" != "400" \
+      || "${response_body}" != *"VALIDATION_FAILED"* ]]; then
+    echo "ERROR: Vite proxy management write verification failed (HTTP ${http_status})." >&2
+    return 1
+  fi
+}
+
 copy_generated_root_to_clipboard() {
   if command -v pbcopy >/dev/null 2>&1; then
     printf '%s' "${ROOT_CREDENTIAL}" | pbcopy
@@ -579,6 +607,8 @@ start_stack() {
   fi
   ROOT_CREDENTIAL="${RAG_ROOT_API_KEY}"
   validate_root_credential "${ROOT_CREDENTIAL}"
+  export RAG_CORS_ENABLED=true
+  export RAG_CORS_ALLOWED_ORIGINS_0="${FRONTEND_ORIGIN}"
 
   echo "Starting Spring Boot backend on ${BACKEND_URL} (profile=${SPRING_PROFILES_ACTIVE})..."
   (
@@ -629,6 +659,7 @@ start_stack() {
     "${FRONTEND_LOG}" \
     30
   verify_root_identity_through_proxy
+  verify_root_management_write_through_proxy
 
   STARTUP_COMPLETE=true
   trap - EXIT INT TERM

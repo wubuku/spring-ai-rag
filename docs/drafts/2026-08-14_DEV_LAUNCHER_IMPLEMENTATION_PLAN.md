@@ -1,6 +1,6 @@
 # 后端与 WebUI 一键开发启动器实施规划
 
-> 状态：规划基线已冻结，待连续三轮无修改审查通过后实施
+> 状态：已实施；2026-08-15 增补动态 Vite origin 与 root 管理写探针
 >
 > 日期：2026-08-14
 >
@@ -39,6 +39,11 @@ set +a
 这保证 `.env` 中不只当前旧脚本显式列出的模型和 PostgreSQL 变量，而是所有合法变量都
 会进入 Maven 进程及其 fork 出的 Spring Boot JVM。Vite 进程使用独立的最小环境，
 不得继承后端模型、数据库或 root credential。
+
+2026-08-15 真实浏览器回归发现：原启动器只验证 root identity GET，而默认后端 CORS
+未允许 `http://127.0.0.1:15173`，导致创建 API Key 的浏览器 POST 返回
+`403 Invalid CORS request`。当前实现会根据最终 `FRONTEND_PORT` 向后端注入精确 origin，
+并在 ready 前发送无副作用的无效创建请求，只有收到 `400 VALIDATION_FAILED` 才继续。
 
 ## 2. 用户工作流
 
@@ -351,6 +356,19 @@ X-API-Key: <本次 root credential>
       capabilities 包含 API_KEY_MANAGE
 ```
 
+管理写路径证明：
+
+```text
+POST http://127.0.0.1:${FRONTEND_PORT}/api/v1/rag/api-keys
+Origin: http://127.0.0.1:${FRONTEND_PORT}
+X-API-Key: <本次 root credential>
+Body: {}
+期望：HTTP 400，error=VALIDATION_FAILED
+```
+
+该探针不会创建数据库记录。`403 Invalid CORS request`、`401`、`2xx` 或 `5xx` 都会使
+启动器失败并清理受管进程。
+
 实现时通过 stdin header 文件语义传给 curl，例如 `curl --header @-`，不能把完整 root
 值拼进 curl 命令行参数。剪贴板同样只从 stdin 读取。日志 secret 扫描使用 stdin pattern，
 不能把待查 root 值作为 `grep` 命令行参数。
@@ -523,6 +541,7 @@ root identity 请求使用本次启动器进程内的 credential，由启动器�
   时只检查变量存在性，不输出值；
 - Vite 页面源码引用 dev client，而不是后端静态 bundle；
 - 前端 `/api` proxy 到本次 `BACKEND_PORT`；
+- 后端 CORS allow-list 使用本次精确 `FRONTEND_PORT`，管理 POST 探针通过；
 - `.dev/backend.log` 和 `.dev/frontend.log` 不包含 root credential；
 - `./scripts/dev.sh --stop` 后两个受管进程和端口都释放；
 - 再次 `--status` 正确报告 stopped；
@@ -543,6 +562,7 @@ http://127.0.0.1:15173/webui/unlock
 - 控制台没有启动配置错误；
 - 输入有效 root key 后可以进入管理台；
 - 前端 API 请求发送到 `15173` 的 Vite server 并由其代理到后端。
+- 创建 API Key 等写请求不会被后端 CORS 拒绝。
 
 本任务没有修改 WebUI 业务交互，现有 Mock Playwright 仍按项目门禁执行；真实启动器
 检查补充证明 dev server、后端和 proxy 的组合可用。

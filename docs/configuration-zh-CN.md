@@ -323,7 +323,7 @@ rag:
 - root 不入库、不写日志；WebUI 只在当前页面内存中持有，刷新后需重新解锁。
 - root 模式禁用空表 ADMIN 自动生成和 raw secret 日志分发。
 - root 签发的业务 Key固定为 `FULL_RAG` 数据面能力，不能管理 Key；expiry 必填、
-  必须在未来且最长 90 天。
+  必须在未来且不设固定的最长有效期。
 
 未配置 `RAG_ROOT_API_KEY` 时保持 legacy 行为：`rag.security.enabled` 控制认证开关，
 `rag.security.api-key` 和数据库 ADMIN/NORMAL 语义继续生效，query credential 仍兼容。
@@ -379,6 +379,9 @@ rag:
 | `rag.cors.allowed-methods` | `GET,POST,PUT,DELETE,OPTIONS` | 允许的 HTTP 方法 |
 | `rag.cors.allowed-headers` | `*` | 允许的请求头 |
 | `rag.cors.max-age` | `3600` | 预检请求缓存时间（秒） |
+
+`./scripts/dev.sh` 会根据 `FRONTEND_PORT` 计算并启用精确的 Vite origin。生产部署仍应
+显式配置 origin allow-list。
 
 ## 缓存配置
 

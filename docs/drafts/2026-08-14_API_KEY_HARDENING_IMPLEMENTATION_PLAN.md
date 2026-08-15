@@ -36,7 +36,8 @@ credential、principal、policy、quota 和 lifecycle 基础。
 
 - `RAG_ROOT_API_KEY` 可通过环境变量注入，并作为独立 environment-root principal。
 - root 可解锁 `/webui/unlock`，创建、列出、轮换和吊销业务 API Key。
-- root 创建的业务 Key 固定为 `FULL_RAG` 数据面能力，expiry 必填且最长 90 天。
+- root 创建的业务 Key 固定为 `FULL_RAG` 数据面能力，expiry 必填、必须在未来且不设
+  固定最长有效期。
 - 外部调用方不需要 WebUI，只需携带业务 Key 访问现有 RAG 数据面。
 - root 模式下 WebUI 凭据只保存在页面内存；管理和数据面只接受 Header credential。
 - 后端 root principal、root-only 管理 API、业务 Key 数据面隔离和 WebUI 流程均已验收。
@@ -557,7 +558,7 @@ bootstrap、ADMIN create/revoke/policy/expiry、可能级联到 ADMIN 的 family
 - `collectionScope=NONE` 或明确 LIST
 - `allowDelegation=false`
 - expiry 必填且在未来
-- production max TTL 建议默认 90 天
+- deployment/policy 可选 max TTL 默认关闭；如启用则必须显式配置并可审计
 - RPM 与 concurrency 必填或使用受控平台默认值
 - `maxContentAuditMode=METADATA_ONLY`
 
@@ -1125,7 +1126,8 @@ RAG_ROOT_API_KEY=<high-entropy-secret>
 3. WebUI 只在用户提交时发送到 `GET /api/v1/rag/auth/me` 验证；服务端返回 principal
    类型和能力，不返回 credential。
 4. 通过 root 创建的业务 Key仍写入现有 `rag_api_key` hash 路径，role 固定为 NORMAL，
-   语义固定为 `FULL_RAG`，expiry 必填且最长 90 天，可附带 Collection ACL。
+   语义固定为 `FULL_RAG`，expiry 必填、必须在未来且不设固定最长有效期，可附带
+   Collection ACL。
 5. 业务 Key不能调用 Key 管理 API；当前 NORMAL self-create 行为必须关闭。
 6. root 变更通过 Secret 更新和实例重启生效，不提供 WebUI 修改 root 的能力。
 7. 有效 root 自动启用 `/api/**` 的 root/数据库 Key 鉴权；未配置 root 时保持 legacy
@@ -1134,8 +1136,8 @@ RAG_ROOT_API_KEY=<high-entropy-secret>
    第一个业务 Key由 root 在 WebUI 或管理 API 中创建。
 9. MVP 模式只接受 `Authorization: Bearer` 或 `X-API-Key` Header，拒绝 query
    credential；create/rotate raw response 设置 `Cache-Control: no-store`。
-10. rotate 不继承永久或超长 expiry：新 expiry 为 `min(旧 expiry, now + 90 days)`；
-    旧 expiry 为空时使用 `now + 90 days`，旧 Key已过期时拒绝轮换。
+10. rotate 保留现有未来 expiry；旧 expiry 为空时使用 `now + 365 days`，旧 Key已过期
+    时拒绝轮换。
 
 ### 16.2 Production bootstrap
 
@@ -1465,7 +1467,7 @@ WebUI 默认只部署在 local/dev 或可信管理网络。没有 IAP/OIDC/mTLS 
 3. credential 只保存在 React auth context/内存；页面刷新后重新解锁。
 4. `/webui/api-keys` 只允许 root 进入，并支持创建、列表、轮换和吊销。
 5. 创建表单首版只有 `FULL_RAG` profile、名称、必填 expiry、全部或指定 Collections；
-   默认建议 90 天且服务端拒绝超过 90 天。
+   默认建议一年，不设置前端最大值；服务端只要求 expiry 在未来。
 6. raw business key 只显示一次，关闭 modal 后清理；可提供显式复制按钮。
 7. 列表只显示 key ID、名称、状态、expiry、last used 和 Collection scope，不显示 hash/raw。
 8. 外部调用示例使用 Header；不要求调用方打开或登录 WebUI。
@@ -1838,8 +1840,8 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 4. MVP 模式关闭旧 `ApiKeyBootstrapService` 自动 ADMIN 和 raw 日志分发；空表由 root
    显式创建第一个业务 Key。
 5. 增加 `GET /api/v1/rag/auth/me`，供 WebUI 验证 root 和读取 capabilities。
-6. 通过现有表签发 NORMAL `FULL_RAG` Key；服务端强制 expiry 在未来且不超过 90 天，
-   保持 revoke、last-used 和 Collection ACL，API-created Key不能管理 Key。
+6. 通过现有表签发 NORMAL `FULL_RAG` Key；服务端强制 expiry 在未来但不设固定最长
+   有效期，保持 revoke、last-used 和 Collection ACL，API-created Key不能管理 Key。
 7. 增加 WebUI unlock route、内存 auth context、管理 route guard 和显式退出。
 8. streaming credential 从 query 移到 Header；root 和业务 raw key 都不进入
    localStorage/sessionStorage、URL、日志或 console。
@@ -1853,8 +1855,9 @@ Milestone B 是最终清理门禁，但不是 Milestone A 后所有新消费者�
 - root 可创建、列表、轮换和吊销业务 Key。
 - 新业务 Key可调用检索、对话、文档写入、Collection 维护和向量更新等现有数据面，
   但调用管理 API 返回 403。
-- 缺失、已过期或超过 90 天的业务 Key expiry 创建请求被拒绝。
-- 轮换 legacy 永久/超长 Key时，新 Key被收敛到最长 90 天；已过期 Key不能轮换。
+- 缺失或已过期的业务 Key expiry 创建请求被拒绝；长期未来 expiry 可创建。
+- 轮换保留现有未来 expiry；legacy 永不过期 Key获得一年后的 expiry；已过期 Key不能
+  轮换。
 - 外部调用流程无需 WebUI。
 - 未配置 root 时保持 legacy 启动行为；配置弱值时启动失败。
 - 有效 root 配置下，未携带 root/业务 Key 的数据面请求返回 401。
@@ -2133,7 +2136,7 @@ Quota：
 - root unlock 成功/失败、刷新后重新输入、退出清空内存。
 - 业务 Key不能解锁管理控制台。
 - root 创建 `FULL_RAG` Key、raw shown-once、列表、轮换和吊销。
-- expiry 必填、默认 90 天且超过上限时展示服务端 validation error。
+- expiry 必填、默认一年且可提交长期未来值；过去时间展示服务端 validation error。
 - 启动时清除旧 `rag-api-key` / `rag-api-key-role`，Settings 不再提供持久化入口。
 - 外部业务 Key调用 RAG API 不依赖 WebUI。
 - prod 禁止 localStorage admin。
@@ -2304,8 +2307,9 @@ metrics tag 不含 keyId、familyId、owner、raw。
 - [x] WebUI 升级后主动清除旧 API Key localStorage 项，Settings 不再保存 credential。
 - [x] root 是唯一可创建、列表、轮换和吊销业务 Key 的主体。
 - [x] API-created Key 固定为 `FULL_RAG` 数据面权限，不能获得 root 或 Key 管理能力。
-- [x] API-created Key expiry 必填、在未来且不超过 90 天。
-- [x] rotate 不产生永久或超过 90 天的 Key，已过期 Key不能轮换。
+- [x] API-created Key expiry 必填、在未来且不设固定最长有效期。
+- [x] rotate 保留现有未来 expiry；legacy 永不过期 Key获得一年 expiry，已过期 Key不能
+  轮换。
 - [x] 业务 Key可完成现有 RAG 读取和写入主流程，并可受 Collection ACL 限制。
 - [x] 外部用户/系统只携带 Key 调用 API，不需要访问 WebUI。
 - [x] root/业务 raw key 不进入 DB 明文、URL、日志、console、localStorage 或 sessionStorage。
@@ -2412,7 +2416,7 @@ metrics tag 不含 keyId、familyId、owner、raw。
 3. MVP-0 只签发不能管理 Key 的 `FULL_RAG` 业务 Key，并限制为单实例、TLS、受控管理网络。
 4. 使用 family/version/operation/security-state 四类目标数据。
 5. 新 secret 改用 256 bit SecureRandom；public IDs 加长。
-6. external NORMAL expiry 必填，production max TTL 默认 90 天。
+6. external NORMAL expiry 必填；deployment/policy max TTL 为可选显式配置，默认关闭。
 7. NORMAL self-service create 默认关闭。
 8. role 只作为管理能力上限，数据面由显式 policy 决定。
 9. `/v1` 等新 external path 只接受 database family principal。

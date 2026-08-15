@@ -62,7 +62,8 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ./scripts/dev.sh
 ```
 
-该脚本完整导出仓库根目录 `.env` 给 Maven / Spring Boot，默认启动：
+该脚本完整导出仓库根目录 `.env` 给 Maven / Spring Boot，并为后端放行本次精确的
+Vite origin；只有 root 管理 POST 探针通过后才报告 ready。默认启动：
 
 ```text
 Backend: http://127.0.0.1:8081

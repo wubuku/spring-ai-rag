@@ -47,7 +47,10 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       clearCredential();
     }
-    const message = error.response?.data?.detail ?? error.message;
+    const message =
+      error.response?.data?.detail
+      ?? error.response?.data?.message
+      ?? error.message;
     return Promise.reject(new Error(message));
   }
 );

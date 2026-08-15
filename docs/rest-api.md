@@ -332,8 +332,8 @@ List business-key metadata. Raw secrets and hashes are never returned.
 
 ### `POST /api/v1/rag/api-keys`
 
-In root mode, `expiresAt` is required, must be in the future, and cannot be
-more than 90 days away. `allowedCollectionIds` is optional; omit it or send an
+In root mode, `expiresAt` is required and must be in the future. There is no
+fixed maximum lifetime. `allowedCollectionIds` is optional; omit it or send an
 empty list for all collections.
 
 **Request body**:
@@ -362,8 +362,8 @@ The raw secret appears only in the `201 Created` response, which includes
 
 Disable the old key and create a same-name replacement with the same Collection
 scope. The new raw secret appears only in this `201 Created` response.
-Root-mode rotation caps permanent or overlong legacy expiry at 90 days and
-rejects expired or disabled keys.
+Root-mode rotation preserves an existing future expiry. A legacy key without
+an expiry receives a one-year expiry; expired or disabled keys are rejected.
 
 ### `DELETE /api/v1/rag/api-keys/{keyId}`
 

@@ -279,7 +279,7 @@
     "rawKey": "Raw Key (shown only once)",
     "namePlaceholder": "e.g. Production Server",
     "expiresAt": "Expiration Date",
-    "expiresAtHint": "Required, with a maximum lifetime of 90 days. The suggested default is 90 days.",
+    "expiresAtHint": "Required and must be in the future. The suggested default is one year.",
     "create": "Create",
     "createError": "Failed to create API key",
     "keyCreated": "API key created successfully",

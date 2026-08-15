@@ -108,8 +108,9 @@ The current implementation provides an accepted standalone-service MVP:
 - `RAG_ROOT_API_KEY` provides an environment-root principal and automatically protects
   `/api/**` in root mode.
 - The root unlocks `/webui/unlock` and can create, list, rotate, and revoke business keys.
-- Root-created keys have a fixed `FULL_RAG` profile, require expiry no more than 90 days,
-  and are usable by external callers without the WebUI.
+- Root-created keys have a fixed `FULL_RAG` profile, require a future expiry
+  without a fixed maximum lifetime, and are usable by external callers without
+  the WebUI.
 - Root mode accepts `Authorization: Bearer` and `X-API-Key` headers and rejects query
   credentials; legacy static/query compatibility remains when root mode is disabled.
 - The WebUI keeps credentials in page memory and clears legacy localStorage credentials

@@ -3,6 +3,7 @@ package com.springairag.core.integration;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagWebSecurityConfiguration;
+import com.springairag.core.config.CorsConfig;
 import com.springairag.core.controller.ApiKeyController;
 import com.springairag.core.controller.ApiKeyIdentityController;
 import com.springairag.core.controller.GlobalExceptionHandler;
@@ -15,6 +16,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.http.HttpHeaders;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -31,12 +33,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         ApiKeyController.class,
         ApiKeyIdentityController.class
 })
-@Import({RagWebSecurityConfiguration.class, GlobalExceptionHandler.class})
+@Import({
+        RagWebSecurityConfiguration.class,
+        CorsConfig.class,
+        GlobalExceptionHandler.class
+})
 @EnableConfigurationProperties(RagProperties.class)
 @TestPropertySource(properties = {
         "rag.security.enabled=false",
         "rag.security.api-key=legacy-static-key",
-        "rag.security.root-api-key=root-2026-08-14-9f4c2a7b6d1e8a3c"
+        "rag.security.root-api-key=root-2026-08-14-9f4c2a7b6d1e8a3c",
+        "rag.cors.enabled=true",
+        "rag.cors.allowed-origins[0]=http://127.0.0.1:15173"
 })
 class ApiKeyRootModeWebIntegrationTest {
 
@@ -69,6 +77,8 @@ class ApiKeyRootModeWebIntegrationTest {
 
         mockMvc.perform(post("/api/v1/rag/api-keys")
                         .header("X-API-Key", ROOT_KEY)
+                        .header(HttpHeaders.ORIGIN,
+                                "http://127.0.0.1:15173")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
@@ -77,6 +87,9 @@ class ApiKeyRootModeWebIntegrationTest {
                                 }
                                 """))
                 .andExpect(status().isCreated())
+                .andExpect(header().string(
+                        HttpHeaders.ACCESS_CONTROL_ALLOW_ORIGIN,
+                        "http://127.0.0.1:15173"))
                 .andExpect(header().string("Cache-Control", "no-store"))
                 .andExpect(jsonPath("$.rawKey").value("rag_sk_once_only"));
 
@@ -87,6 +100,25 @@ class ApiKeyRootModeWebIntegrationTest {
 
         verify(apiKeyManagementService).generateManagedKey(any());
         verify(apiKeyManagementService).listKeys();
+    }
+
+    @Test
+    void rootManagementWriteRejectsUnconfiguredOrigin() throws Exception {
+        mockMvc.perform(post("/api/v1/rag/api-keys")
+                        .header("X-API-Key", ROOT_KEY)
+                        .header(HttpHeaders.ORIGIN,
+                                "http://127.0.0.1:15174")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "name":"Blocked Origin",
+                                  "expiresAt":"2027-08-15T00:00:00"
+                                }
+                                """))
+                .andExpect(status().isForbidden());
+
+        verify(apiKeyManagementService, never())
+                .generateManagedKey(any());
     }
 
     @Test

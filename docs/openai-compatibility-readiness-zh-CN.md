@@ -96,7 +96,8 @@
 - V24 增加 `allowed_collection_ids`，数据访问路径可按 Collection ACL 收敛。
 - `RAG_ROOT_API_KEY` 提供 environment-root principal；root 模式自动保护 `/api/**`。
 - root 可通过 `/webui/unlock` 解锁控制台，创建、列出、轮换和吊销业务 Key。
-- root 创建的业务 Key 固定为 `FULL_RAG`，expiry 必填且最长 90 天，外部调用方不需要 WebUI。
+- root 创建的业务 Key 固定为 `FULL_RAG`，expiry 必填、必须在未来且不设固定最长有效期，
+  外部调用方不需要 WebUI。
 - root 模式支持 `Authorization: Bearer` 和 `X-API-Key` Header，拒绝 query credential；
   未配置 root 时保留 legacy static/query 兼容行为。
 - WebUI credential 只保存在页面内存，旧 localStorage 凭据会在升级时清理。

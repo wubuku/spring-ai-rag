@@ -150,8 +150,8 @@ Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:
 - Only the root can create, list, rotate, and revoke business keys.
 - Root-created keys have a fixed `FULL_RAG` data-plane profile. They can read
   and write RAG data and may be Collection-scoped, but cannot manage keys.
-- Business-key expiry is required and limited to 90 days. Raw secrets appear
-  only in create or rotate responses.
+- Business-key expiry is required and must be in the future, with no fixed
+  maximum lifetime. Raw secrets appear only in create or rotate responses.
 - Root mode accepts only Bearer or `X-API-Key` headers, rejects query
   credentials, and disables legacy ADMIN bootstrap/raw-secret logging.
 
