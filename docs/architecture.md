@@ -315,7 +315,8 @@ POST /api/v1/rag/json-records/upsert
   v
 JsonRecordService
   | persist jsonbPayload + retrievalText
-  | identity: collectionId + json-record + externalId
+  | external identity: collectionKey + externalId
+  | resolver -> internal collectionId + json-record + externalId
   v
 RagDocument.content = retrievalText
 RagDocument.jsonbPayload = business JSONB
@@ -342,6 +343,9 @@ ranked JSON record response
 context. The caller owns the semantic relationship between the payload and
 `retrievalText`; the service stores both without trying to reconcile them.
 Payload-only updates create an audit version but preserve a fresh embedding.
+Public upsert/search requests prefer Collection keys and responses return the
+key alongside the deprecated internal ID; persistence, advisory locks, and
+retrieval candidates remain keyed by internal IDs.
 This is deliberately a dedicated JSONB path, leaving room for a future
 `xmlPayload` path with the same retrieval-text boundary without introducing a
 generic `payload` column.

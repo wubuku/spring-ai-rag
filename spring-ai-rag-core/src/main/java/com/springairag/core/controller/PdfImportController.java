@@ -179,7 +179,8 @@ public class PdfImportController {
     public ResponseEntity<Object> importPdfToRagWithoutEmbedding(
             @Parameter(description = "PDF file to import")
             @RequestParam("file") MultipartFile file,
-            @Parameter(description = "Optional collection ID to associate with the RAG document")
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey) {
 
@@ -227,6 +228,8 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
             @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey) {
         return startPdfToRagEmbedding(file, collectionId, collectionKey);
@@ -238,6 +241,8 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbeddingDefault(
             @RequestParam("file") MultipartFile file,
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey) {
         return startPdfToRagEmbedding(file, collectionId, collectionKey);
@@ -417,7 +422,8 @@ public class PdfImportController {
     public ResponseEntity<Object> triggerEmbeddingSync(
             @Parameter(description = "Virtual directory UUID of the imported PDF")
             @PathVariable("uuid") String uuid,
-            @Parameter(description = "Optional collection ID to associate with the RAG document")
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @Parameter(description = "Force re-embedding even if content unchanged (default: false)")
@@ -463,6 +469,8 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> triggerEmbeddingSse(
             @PathVariable("uuid") String uuid,
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
@@ -479,6 +487,8 @@ public class PdfImportController {
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> triggerEmbeddingSseDefault(
             @PathVariable("uuid") String uuid,
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {

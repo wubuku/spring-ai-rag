@@ -479,8 +479,10 @@ Structured-record endpoints keep two caller-supplied values separate:
   after a successful scoped retrieval.
 
 The service does not generate or validate the relationship between the two
-fields. Use `externalId` together with `collectionId` as the stable,
-idempotent record identity. JSON records do not participate in global
+fields. Callers use `collectionKey + externalId` as the stable external
+identity; the service resolves it to the internal
+`(collectionId, documentType=json-record, externalId)` identity. Deprecated
+`collectionId` remains compatible. JSON records do not participate in global
 content-hash deduplication, and there is no `payloadHash`.
 
 ### `POST /api/v1/rag/json-records/upsert`
@@ -490,7 +492,7 @@ Create or update one record. `embed` defaults to `true`; setting it to
 
 ```json
 {
-  "collectionId": 12,
+  "collectionKey": "customer-42:catalog:v1",
   "externalId": "product:sku-10001",
   "title": "Compact wireless keyboard",
   "retrievalText": "A compact wireless keyboard supports Bluetooth and dual-mode 2.4G connectivity.",
@@ -519,14 +521,15 @@ successful items.
 
 ### `POST /api/v1/rag/json-records/search`
 
-Searches only JSON records in the required `collectionIds` scope, using the
-same hybrid retrieval path as ordinary search. The response preserves ranking
-and includes the current `retrievalText` and `jsonbPayload` for each result.
+Searches only JSON records in the required `collectionKeys` scope, using the
+same hybrid retrieval path as ordinary search. Deprecated `collectionIds`
+remains compatible. The response preserves ranking and includes the current
+`collectionKey`, `retrievalText`, and `jsonbPayload` for each result.
 
 ```json
 {
   "query": "wireless keyboard with Bluetooth",
-  "collectionIds": [12],
+  "collectionKeys": ["customer-42:catalog:v1"],
   "config": {
     "maxResults": 10,
     "useHybridSearch": true,
@@ -536,14 +539,16 @@ and includes the current `retrievalText` and `jsonbPayload` for each result.
 ```
 
 API-key Collection ACL is applied before retrieval. A restricted key cannot
-expand the request beyond its `allowedCollectionIds`.
+expand the request beyond its `allowedCollectionKeys`; unknown and unauthorized
+keys return `403`.
 
 ### `GET /api/v1/rag/json-records/{documentId}`
 
 Returns the current structured record by internal document ID, including
-`externalId`, `retrievalText`, and `jsonbPayload`. Collection export/import,
-clone, and document-version responses preserve the structured fields and
-payload snapshots.
+`collectionKey`, deprecated `collectionId`, `externalId`, `retrievalText`, and
+`jsonbPayload`. Upsert and search responses also return both Collection
+identities. Collection export/import, clone, and document-version responses
+preserve the structured fields and payload snapshots.
 
 ---
 

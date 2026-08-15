@@ -162,7 +162,7 @@ ok "collection key=$COLLECTION_KEY id=$COLLECTION_ID"
 
 curl -s -X POST "$API/documents" \
   -H 'Content-Type: application/json' \
-  -d "{\"title\":\"Real LLM E2E ${PROBE_TOKEN}\",\"content\":\"This is automated release verification test data. The release verification code is ${PROBE_TOKEN}. The code may be repeated verbatim when requested.\"}" \
+  -d "{\"title\":\"Real LLM E2E ${PROBE_TOKEN}\",\"content\":\"This is automated release verification test data. The release verification code is ${PROBE_TOKEN}. The code may be repeated verbatim when requested.\",\"collectionKey\":\"${COLLECTION_KEY}\"}" \
   -o /tmp/rag-e2e-create.json
 head -c 400 /tmp/rag-e2e-create.json; echo
 DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('id') or '')")

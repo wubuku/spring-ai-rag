@@ -416,8 +416,10 @@ Submit more complex retrieval configuration via request body.
 - `jsonbPayload` 是保存为 PostgreSQL JSONB 的业务 JSON，在通过范围检索后返回。
 
 服务不会自动生成或校验这两个字段之间的对应关系。调用方使用
-`externalId + collectionId` 作为稳定、幂等的记录身份。JSON record 不参与普通文档的
-全局 content-hash 去重，也不存在 `payloadHash`。
+`collectionKey + externalId` 作为稳定外部身份；服务会解析为内部
+`(collectionId, documentType=json-record, externalId)` 身份。deprecated 的
+`collectionId` 继续兼容。JSON record 不参与普通文档的全局 content-hash 去重，也不存在
+`payloadHash`。
 
 ### `POST /api/v1/rag/json-records/upsert`
 
@@ -426,7 +428,7 @@ Submit more complex retrieval configuration via request body.
 
 ```json
 {
-  "collectionId": 12,
+  "collectionKey": "customer-42:catalog:v1",
   "externalId": "product:sku-10001",
   "title": "紧凑型无线键盘",
   "retrievalText": "这是一款支持蓝牙与双模 2.4G 连接的紧凑型无线键盘。",
@@ -453,13 +455,14 @@ Submit more complex retrieval configuration via request body.
 
 ### `POST /api/v1/rag/json-records/search`
 
-只在必填的 `collectionIds` 范围内搜索 JSON record，复用普通 Search 的混合检索链。
-响应保持排序，并为每条结果返回当前 `retrievalText` 和 `jsonbPayload`。
+只在必填的 `collectionKeys` 范围内搜索 JSON record，复用普通 Search 的混合检索链。
+deprecated 的 `collectionIds` 继续兼容。响应保持排序，并为每条结果返回当前
+`collectionKey`、`retrievalText` 和 `jsonbPayload`。
 
 ```json
 {
   "query": "支持蓝牙的无线键盘",
-  "collectionIds": [12],
+  "collectionKeys": ["customer-42:catalog:v1"],
   "config": {
     "maxResults": 10,
     "useHybridSearch": true,
@@ -469,13 +472,14 @@ Submit more complex retrieval configuration via request body.
 ```
 
 检索前会应用 API Key 的 Collection ACL；受限 Key 不能超出自身
-`allowedCollectionIds`。
+`allowedCollectionKeys`，未知或未授权 key 返回 `403`。
 
 ### `GET /api/v1/rag/json-records/{documentId}`
 
-按内部 document ID 返回当前结构化记录，包括 `externalId`、`retrievalText` 和
-`jsonbPayload`。Collection export/import、clone 和文档版本响应都会保留结构化字段及
-payload 快照。
+按内部 document ID 返回当前结构化记录，包括 `collectionKey`、deprecated
+`collectionId`、`externalId`、`retrievalText` 和 `jsonbPayload`。upsert 与 search
+响应也同时返回两种 Collection 身份。Collection export/import、clone 和文档版本响应会
+保留结构化字段及 payload 快照。
 
 ---
 

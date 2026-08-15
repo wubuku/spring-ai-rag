@@ -109,11 +109,12 @@ JSON record API 将调用者负责的业务数据保存到
 hash、分块、全文索引、embedding 和普通 RAG Prompt 上下文；服务不会自动生成或校验
 JSON 与描述是否一致。
 
-JSON record 使用 `(collectionId, documentType=json-record, externalId)` 作为幂等身份，
-不参与普通文档的全局 content-hash 去重，因此不同 payload 可以拥有相同描述。仅更新
-payload 会创建可审计版本，但不会使新鲜 embedding 失效；设计上没有 `payloadHash`。
-专用搜索 API 在检索排序完成后再批量补充当前 JSONB payload，不把 payload 复制到 embedding
-metadata，也不自动放入普通聊天 Prompt。
+JSON record 对外使用 `collectionKey + externalId` 作为稳定身份，并解析为内部
+`(collectionId, documentType=json-record, externalId)` 幂等键。deprecated 的 ID 输入
+继续兼容，响应同时返回两种身份。JSON record 不参与普通文档的全局 content-hash 去重，
+因此不同 payload 可以拥有相同描述。仅更新 payload 会创建可审计版本，但不会使新鲜
+embedding 失效；设计上没有 `payloadHash`。专用搜索 API 在检索排序完成后再批量补充当前
+JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入普通聊天 Prompt。
 
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。

@@ -240,6 +240,8 @@ public class RagDocumentController {
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String processingStatus,
             @RequestParam(required = false) Boolean enabled,
+            @Parameter(description = "Deprecated numeric Collection filter; use collectionKey",
+                    deprecated = true)
             @RequestParam(required = false) Long collectionId,
             @RequestParam(required = false) String collectionKey,
             @Parameter(description = "Filter documents created at or after this timestamp (ISO-8601, e.g. 2024-01-01T00:00:00)")
@@ -731,6 +733,8 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.upload", description = "Upload file and auto-embed", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
             @RequestParam("files") MultipartFile[] files,
+            @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
+                    deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "force", defaultValue = "false") boolean force) {

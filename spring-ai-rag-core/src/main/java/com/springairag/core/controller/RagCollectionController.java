@@ -145,7 +145,9 @@ public class RagCollectionController {
     /**
      * Get collection details.
      */
-    @Operation(summary = "Get collection details", description = "Query collection info and document count.")
+    @Operation(summary = "Get collection details",
+            description = "Deprecated numeric route. Query collection info and document count.",
+            deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Collection found"),
             @ApiResponse(responseCode = "404", description = "Collection not found or deleted")
@@ -205,7 +207,9 @@ public class RagCollectionController {
     /**
      * Update collection.
      */
-    @Operation(summary = "Update collection", description = "Update collection name, description, etc.")
+    @Operation(summary = "Update collection",
+            description = "Deprecated numeric route. Update mutable collection fields.",
+            deprecated = true)
     @PutMapping("/{id}")
     @Timed(value = "rag.collection.update", description = "Update collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<Map<String, Object>> update(
@@ -264,7 +268,9 @@ public class RagCollectionController {
     /**
      * Delete collection (soft delete).
      */
-    @Operation(summary = "Delete collection (soft delete)", description = "Soft-deletes the collection. Associated documents are unlinked (not deleted). Can be restored via POST /{id}/restore.")
+    @Operation(summary = "Delete collection (soft delete)",
+            description = "Deprecated numeric route. Soft-deletes the collection. Associated documents are unlinked (not deleted).",
+            deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Collection soft-deleted"),
             @ApiResponse(responseCode = "404", description = "Collection not found")
@@ -297,7 +303,9 @@ public class RagCollectionController {
     /**
      * Restore a deleted collection.
      */
-    @Operation(summary = "Restore deleted collection", description = "Restores a soft-deleted collection. Associated documents will NOT be re-linked automatically.")
+    @Operation(summary = "Restore deleted collection",
+            description = "Deprecated numeric route. Restores a soft-deleted collection without re-linking documents.",
+            deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Collection restored"),
             @ApiResponse(responseCode = "404", description = "Collection not found or not deleted")
@@ -337,7 +345,9 @@ public class RagCollectionController {
     /**
      * Clone collection (deep copy).
      */
-    @Operation(summary = "Clone collection", description = "Creates a deep copy of an existing collection. All documents are copied with PENDING processing status (embeddings are not copied and must be re-embedded).")
+    @Operation(summary = "Clone collection",
+            description = "Deprecated numeric source route. Creates a deep copy with an explicit target collectionKey; embeddings are not copied.",
+            deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Collection cloned successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid or missing target collectionKey"),
@@ -402,7 +412,9 @@ public class RagCollectionController {
     /**
      * List documents in a collection.
      */
-    @Operation(summary = "List documents in collection", description = "Query document list under the specified collection (paginated).")
+    @Operation(summary = "List documents in collection",
+            description = "Deprecated numeric route. Query documents in the collection.",
+            deprecated = true)
     @GetMapping("/{id}/documents")
     @Timed(value = "rag.collection.listDocuments", description = "List documents in collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionDocumentListResponse> listDocuments(
@@ -488,7 +500,9 @@ public class RagCollectionController {
     /**
      * Add document to collection.
      */
-    @Operation(summary = "Add document to collection", description = "Associate the specified document with a collection.")
+    @Operation(summary = "Add document to collection",
+            description = "Deprecated numeric route. Associate a document with the collection.",
+            deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Document added successfully, returns details"),
             @ApiResponse(responseCode = "404", description = "Collection not found")
@@ -544,7 +558,9 @@ public class RagCollectionController {
     /**
      * Export collection (with document metadata).
      */
-    @Operation(summary = "Export collection", description = "Export collection info and document metadata as JSON for backup and migration.")
+    @Operation(summary = "Export collection",
+            description = "Deprecated numeric route. Export collection info and documents as JSON.",
+            deprecated = true)
     @GetMapping("/{id}/export")
     @Timed(value = "rag.collection.export", description = "Export collection", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<CollectionExportResponse> exportCollection(@PathVariable Long id) {

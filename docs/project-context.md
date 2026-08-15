@@ -123,13 +123,16 @@ exposed as `retrievalText`. Only `retrievalText` is hashed, chunked, full-text
 indexed, embedded, and eligible for normal RAG prompt context. The service
 does not derive or verify the description against the JSON.
 
-JSON records use `(collectionId, documentType=json-record, externalId)` as
-their idempotent identity. They do not use global content-hash deduplication,
-so different payloads may share the same description. Payload-only updates
-create an auditable document version without invalidating a fresh embedding;
-there is intentionally no `payloadHash`. The dedicated search API enriches
-ranked results with the current JSONB payload after retrieval, and does not
-copy payload into embedding metadata or ordinary chat prompts.
+JSON records expose `collectionKey + externalId` as their stable external
+identity and resolve it to the internal
+`(collectionId, documentType=json-record, externalId)` idempotency key.
+Deprecated ID input remains compatible, and responses include both identities.
+They do not use global content-hash deduplication, so different payloads may
+share the same description. Payload-only updates create an auditable document
+version without invalidating a fresh embedding; there is intentionally no
+`payloadHash`. The dedicated search API enriches ranked results with the
+current JSONB payload after retrieval, and does not copy payload into embedding
+metadata or ordinary chat prompts.
 
 Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss

@@ -302,7 +302,8 @@ POST /api/v1/rag/json-records/upsert
   ▼
 JsonRecordService
   │ 保存 jsonbPayload + retrievalText
-  │ 身份：collectionId + json-record + externalId
+  │ 外部身份：collectionKey + externalId
+  │ Resolver -> 内部 collectionId + json-record + externalId
   ▼
 RagDocument.content = retrievalText
 RagDocument.jsonbPayload = 业务 JSONB
@@ -328,6 +329,8 @@ HybridRetrieverService -> 排序后的 document IDs
 `jsonbPayload` 不会复制到 embedding metadata 或普通聊天上下文。JSON 与
 `retrievalText` 的语义对应关系由调用者负责，服务只保存二者，不尝试互相校验。
 仅更新 payload 会创建审计版本，但保留新鲜 embedding。这是一条明确的 JSONB 专用路径，
+公开 upsert/search 请求优先使用 Collection key，响应在 deprecated 内部 ID 旁返回 key；
+持久化、advisory lock 与检索候选仍使用内部 ID。
 未来可以按相同的 retrieval-text 边界增加 `xmlPayload`，而不引入泛化的 `payload` 列。
 
 ---

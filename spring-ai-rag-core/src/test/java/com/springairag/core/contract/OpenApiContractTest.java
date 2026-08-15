@@ -775,6 +775,56 @@ class OpenApiContractTest {
                     .anySatisfy(node ->
                             assertThat(node.asText()).isEqualTo("collectionKey"));
         }
+
+        @Test
+        void legacyNumericCollectionOperationsAndParametersAreDeprecated()
+                throws Exception {
+            JsonNode paths = loadSpec().path("paths");
+
+            JsonNode collectionById = findPath(
+                    paths, "/rag/collections/{id}");
+            for (String method : java.util.List.of("get", "put", "delete")) {
+                assertThat(collectionById.path(method)
+                        .path("deprecated").asBoolean()).isTrue();
+            }
+            for (String path : java.util.List.of(
+                    "/rag/collections/{id}/restore",
+                    "/rag/collections/{id}/clone",
+                    "/rag/collections/{id}/export")) {
+                assertThat(findPath(paths, path).path("post").isMissingNode()
+                        ? findPath(paths, path).path("get")
+                                .path("deprecated").asBoolean()
+                        : findPath(paths, path).path("post")
+                                .path("deprecated").asBoolean())
+                        .isTrue();
+            }
+            JsonNode collectionDocuments = findPath(
+                    paths, "/rag/collections/{id}/documents");
+            assertThat(collectionDocuments.path("get")
+                    .path("deprecated").asBoolean()).isTrue();
+            assertThat(collectionDocuments.path("post")
+                    .path("deprecated").asBoolean()).isTrue();
+
+            JsonNode documents = findPath(paths, "/rag/documents")
+                    .path("get").path("parameters");
+            assertThat(iterable(documents.elements()))
+                    .anySatisfy(parameter -> {
+                        assertThat(parameter.path("name").asText())
+                                .isEqualTo("collectionId");
+                        assertThat(parameter.path("deprecated").asBoolean())
+                                .isTrue();
+                    });
+
+            JsonNode search = findPath(paths, "/rag/search")
+                    .path("get").path("parameters");
+            assertThat(iterable(search.elements()))
+                    .anySatisfy(parameter -> {
+                        assertThat(parameter.path("name").asText())
+                                .isEqualTo("collectionIds");
+                        assertThat(parameter.path("deprecated").asBoolean())
+                                .isTrue();
+                    });
+        }
     }
 
     @Nested

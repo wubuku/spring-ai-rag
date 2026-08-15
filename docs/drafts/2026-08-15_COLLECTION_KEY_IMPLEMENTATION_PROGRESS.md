@@ -32,7 +32,7 @@ Collection Key 迁移使用 `V27`、`V28`；如实施前发现新冲突，两个
 | 2 | 进度记录、V27/V28、实体、Repository、key 校验和统一 Resolver 基础 | 已完成 |
 | 3 | Collection 生命周期 API、冲突错误和 API Key ACL | 已完成 |
 | 4 | Document/Chat/Search/PDF/批量/SSE 入口 | 已完成 |
-| 5 | WebUI、脚本、正式中英文文档 | WebUI 已完成，待脚本与正式文档 |
+| 5 | WebUI、脚本、正式中英文文档 | 已完成 |
 | 6 | 后端编译、相关集成测试、前端 tsc/构建/Mock Playwright | 前端门禁已通过，待最终后端门禁 |
 | 7 | 基本门禁通过后的连续三轮代码收敛检查 | 待开始 |
 | 8 | 最终验证和交付 | 待开始 |
@@ -87,3 +87,8 @@ cd spring-ai-rag-webui && npm run test:run && npm run build
 - WebUI 全量单测 170 项、TypeScript/生产构建和 Mock Playwright 40 项全部通过；Playwright 已覆盖 Search/Files 的实际 `collectionKey(s)` 请求。
 - 文档交叉验证发现并补齐 `POST /collections/clone`：请求体使用 `sourceCollectionKey` 和新 `collectionKey`，旧 `/{id}/clone` 继续兼容；Controller、MockMvc 与 OpenAPI 专项测试已通过。
 - 常规 E2E、真实 LLM smoke 与三个 k6 脚本已改为每次运行显式生成唯一 key，并在 Collection、Document、Search、Chat 调用中优先使用 key；脚本语法检查已通过。
+- 正式 REST/架构/上下文/配置/测试/SSE/versioning 文档已同步双标识契约、by-key 路由、显式空 scope、ACL 防枚举、V27/V28 和验收命令。
+- 交叉检查并行 JSONB 实现时发现其外部请求仍只接受数字 Collection ID；已补充 `collectionKey(s)`、保留 deprecated ID、统一 Resolver/ACL、响应 key 映射、OpenAPI 和 key-only E2E 脚本。
+- JSONB key-only upsert/search、ID/key mismatch、显式空 key scope、Controller 绑定和 OpenAPI 聚焦 clean 测试已通过：42 项、0 failure、0 error。
+- 数字 Collection 生命周期路由及 Search/Document/PDF 的兼容 ID 参数开始补齐 OpenAPI deprecated 标记和契约断言。
+- 常规与真实 LLM E2E 的文档创建已直接携带 `collectionKey`；常规 E2E 的 Search、Chat、SSE 也显式使用 `collectionKey(s)`，避免验收脚本意外退化为全局范围。

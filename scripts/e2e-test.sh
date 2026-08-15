@@ -132,7 +132,7 @@ echo ""
 echo "3️⃣  创建文档"
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/documents" \
     -H "Content-Type: application/json" \
-    -d '{"title":"E2E自动化测试文档","content":"这是端到端测试创建的文档，用于验证CRUD和嵌入向量生成。Spring AI RAG 提供混合检索、查询改写和结果重排能力。向量存储使用PostgreSQL的pgvector扩展，支持HNSW索引实现高效的相似度搜索。嵌入模型使用BGE-M3，输出1024维向量。对话记忆通过Spring AI的MessageChatMemoryAdvisor实现，支持短期和长期记忆。领域扩展通过DomainRagExtension接口实现，支持自定义Prompt模板和检索配置。文档分块使用HierarchicalTextChunker，支持Markdown标题和段落级别的智能分块。","source":"e2e-test","documentType":"text","metadata":{"author":"e2e-script","priority":"high"}}')
+    -d "{\"title\":\"E2E自动化测试文档\",\"content\":\"这是端到端测试创建的文档，用于验证CRUD和嵌入向量生成。Spring AI RAG 提供混合检索、查询改写和结果重排能力。向量存储使用PostgreSQL的pgvector扩展，支持HNSW索引实现高效的相似度搜索。嵌入模型使用BGE-M3，输出1024维向量。对话记忆通过Spring AI的MessageChatMemoryAdvisor实现，支持短期和长期记忆。领域扩展通过DomainRagExtension接口实现，支持自定义Prompt模板和检索配置。文档分块使用HierarchicalTextChunker，支持Markdown标题和段落级别的智能分块。\",\"source\":\"e2e-test\",\"documentType\":\"text\",\"metadata\":{\"author\":\"e2e-script\",\"priority\":\"high\"},\"collectionKey\":\"$COLLECTION_KEY\"}")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "POST /documents" "200" "$CODE"
@@ -201,7 +201,10 @@ echo ""
 # 6. 直接检索
 # ────────────────────────────────────────
 echo "7️⃣  直接检索"
-RESP=$(curl -s -w "\n%{http_code}" "$API/search?query=Spring%20AI&maxResults=3")
+RESP=$(curl -s -w "\n%{http_code}" --get "$API/search" \
+    --data-urlencode "query=Spring AI" \
+    --data-urlencode "maxResults=3" \
+    --data-urlencode "collectionKeys=$COLLECTION_KEY")
 CODE=$(echo "$RESP" | tail -1)
 BODY=$(echo "$RESP" | sed '$d')
 assert_status "GET /search" "200" "$CODE"
@@ -215,7 +218,7 @@ echo "8️⃣  RAG 问答 (非流式)"
 set +e
 RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/chat/ask" \
     -H "Content-Type: application/json" \
-    -d '{"message":"Spring AI是什么？","sessionId":"e2e-test-session","maxResults":3}' \
+    -d "{\"message\":\"Spring AI是什么？\",\"sessionId\":\"e2e-test-session\",\"maxResults\":3,\"collectionKeys\":[\"$COLLECTION_KEY\"]}" \
     --connect-timeout 10 --max-time "$CHAT_TIMEOUT_SECONDS")
 CHAT_CURL_RC=$?
 set -e
@@ -243,7 +246,7 @@ set +e
 HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$API/chat/stream" \
     -H "Content-Type: application/json" \
     -H "Accept: text/event-stream" \
-    -d '{"message":"你好","sessionId":"e2e-stream-test"}' \
+    -d "{\"message\":\"你好\",\"sessionId\":\"e2e-stream-test\",\"collectionKeys\":[\"$COLLECTION_KEY\"]}" \
     --connect-timeout 10 --max-time "$CHAT_TIMEOUT_SECONDS")
 STREAM_CURL_RC=$?
 set -e

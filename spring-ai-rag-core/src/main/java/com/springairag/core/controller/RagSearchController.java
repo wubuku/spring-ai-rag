@@ -101,6 +101,8 @@ public class RagSearchController {
             @RequestParam(defaultValue = "true") boolean useHybrid,
             @RequestParam(defaultValue = "0.5") double vectorWeight,
             @RequestParam(defaultValue = "0.5") double fulltextWeight,
+            @Parameter(description = "Deprecated numeric Collection scope; use collectionKeys",
+                    deprecated = true)
             @RequestParam(required = false) List<Long> collectionIds,
             @RequestParam(required = false) List<String> collectionKeys,
             HttpServletRequest httpRequest) {
