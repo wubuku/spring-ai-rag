@@ -92,3 +92,4 @@ cd spring-ai-rag-webui && npm run test:run && npm run build
 - JSONB key-only upsert/search、ID/key mismatch、显式空 key scope、Controller 绑定和 OpenAPI 聚焦 clean 测试已通过：42 项、0 failure、0 error。
 - 数字 Collection 生命周期路由及 Search/Document/PDF 的兼容 ID 参数开始补齐 OpenAPI deprecated 标记和契约断言。
 - 常规与真实 LLM E2E 的文档创建已直接携带 `collectionKey`；常规 E2E 的 Search、Chat、SSE 也显式使用 `collectionKey(s)`，避免验收脚本意外退化为全局范围。
+- 首次最终 clean 编译发现 `RagSearchController` 的 OpenAPI `@Parameter` 缺少 import；已补齐并从 clean 聚焦测试重新验证。
