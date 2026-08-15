@@ -1,8 +1,8 @@
 # API Key WebUI MVP 实施进度
 
-> 状态：Phase 0 + Phase M0 已完成；验证硬门槛和连续三轮实现检查均通过
-> 最近更新：2026-08-14
-> 代码基线：`main` / `c2e932c`
+> 状态：Phase 0 + Phase M0 已实施并完成验收；验证硬门槛和连续三轮实现检查均通过
+> 最近更新：2026-08-15
+> 代码基线：`main` / `3b61b26`；MVP 功能提交：`ccc0e42`
 > 实施规划：[API Key 加固独立实施规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
 
 ## 1. 当前目标
@@ -129,10 +129,18 @@ shared quota 或多实例一致性。MVP 部署边界为单实例、TLS、受控
 终止条件已满足。三轮期间 tracked diff 保持不变，冻结指纹为
 `26651bbb7c8cf022150a0e77feee79d39f7c56c4349a4a7df6aa5e6561af5529`。
 
-## 7. 下一步
+## 7. 当前交付状态
 
-执行最终全量 diff 回看、secret scan、文档门禁、内嵌 WebUI 产物一致性和
-`git diff --check`；全部通过后提交并推送 `main`，确认远端一致且工作区干净。
+Phase 0 + Phase M0 已完成并提交。MVP 功能由 `ccc0e42` 实施，后续
+`3fa88cf` 增加全栈开发启动器，当前 `main` 已包含这些提交及后续文档更新。
+后端、前端、standalone HTTP、内嵌 WebUI 产物、文档门禁和连续三轮实现检查均已通过。
+
+当前没有待实施的 MVP-0 功能。后续仍未实施、且不应与 MVP-0 混称为“已完成”的工作包括：
+
+- V25+ family/version schema 与 plaintext secret contract；
+- 稳定 principal、细粒度 policy、共享 quota 和多实例吊销一致性；
+- 完整 lifecycle audit、最后 ADMIN 保护和公网管理面加固；
+- OpenAI Chat Completions `/v1` 兼容接口本身。
 
 ## 8. 实施日志
 

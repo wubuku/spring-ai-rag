@@ -4,8 +4,8 @@
 
 > **用途**：记录实现 OpenAI Chat Completions 服务端兼容层和外部调用方 API Key
 > 之前必须掌握的当前代码事实。
-> **代码基线**：commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`
-> **最近复核**：2026-08-14
+> **代码基线**：`main` / commit `3b61b26`；API Key MVP 实施提交：`ccc0e42`
+> **最近复核**：2026-08-15
 > **状态**：当前项目尚未暴露 `/v1/chat/completions`；本文是现状参考，不是已实现能力声明。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。目标架构、迁移、测试和回滚方案见
@@ -22,9 +22,10 @@
 > 把带检索策略、知识范围、领域 Prompt 和模型路由的完整 RAG deployment
 > 暴露为标准 `model`，使 OpenAI SDK、Agent 框架、IDE 和网关可以按模型服务接入。
 
-但协议兼容和服务可用性是两件事。当前系统已有内部 API Key、角色和 Collection ACL，
-尚不足以安全承载外部调用方。**API Key 生命周期、授权和多实例配额加固是 `/v1`
-上线前置条件，不能在兼容 Controller 上线后再补。**
+但协议兼容和服务可用性是两件事。当前系统已经完成“root API Key 解锁 WebUI +
+业务 API Key 分发”的独立 RAG 服务 MVP-0，并通过后端、前端和 standalone HTTP 验收；
+它仍不足以支撑公网、多实例和 production-ready 的外部调用。**完整 API Key 生命周期、
+授权和多实例配额加固仍是 `/v1` 上线前置条件，不能在兼容 Controller 上线后再补。**
 
 兼容层本身不是 Agent/subagent 编排器。它提供稳定的“RAG-as-a-model”边界；编排由
 调用方或后续独立模块承担。
@@ -39,7 +40,7 @@
 | `spring-ai-rag-core` | RAG 实现和可运行应用 | 承载内部执行层、兼容 Controller、deployment registry 和错误映射 |
 | `spring-ai-rag-starter` | 自动配置 | 必须同步注册 `/v1` 所需鉴权、限流和观测组件 |
 | `spring-ai-rag-documents` | 文档处理 | 不应依赖 OpenAI 协议 |
-| `spring-ai-rag-webui` | React 管理台 | MVP 不要求改用兼容接口；凭据存储和 query secret 仍需单独加固 |
+| `spring-ai-rag-webui` | React 管理台 | MVP 已提供 root-key unlock；不要求改用兼容接口，公网管理面仍需单独加固 |
 
 项目存在两种运行拓扑：
 
@@ -86,15 +87,19 @@
 
 ## 5. 当前 API Key 能力
 
-当前实现已经具备内部管理基础：
+当前实现已经具备并验收了独立服务 MVP-0：
 
 - raw secret 格式为 `rag_sk_` + 随机值，公开标识为 `rag_k_...`。
 - 认证时使用 SHA-256 hash 查询。
 - 支持创建、列举、吊销、轮换、过期时间和 `last_used_at`。
 - 角色为 `ADMIN` / `NORMAL`。
 - V24 增加 `allowed_collection_ids`，数据访问路径可按 Collection ACL 收敛。
-- `ApiKeyAuthFilter` 支持数据库 key，并保留可选 legacy static key。
-- 当前客户端凭据入口是 `X-API-Key`，旧 SSE 场景还允许 `?apiKey=`。
+- `RAG_ROOT_API_KEY` 提供 environment-root principal；root 模式自动保护 `/api/**`。
+- root 可通过 `/webui/unlock` 解锁控制台，创建、列出、轮换和吊销业务 Key。
+- root 创建的业务 Key 固定为 `FULL_RAG`，expiry 必填且最长 90 天，外部调用方不需要 WebUI。
+- root 模式支持 `Authorization: Bearer` 和 `X-API-Key` Header，拒绝 query credential；
+  未配置 root 时保留 legacy static/query 兼容行为。
+- WebUI credential 只保存在页面内存，旧 localStorage 凭据会在升级时清理。
 
 相关实现：
 
@@ -111,15 +116,15 @@
 | 缺口 | 当前代码事实 | 直接影响 |
 |------|--------------|----------|
 | 明文 secret schema | V23 和 `RagApiKey` 仍保留 `api_key` 字段及索引；service 当前虽未写入，schema 仍允许持久化 | 无法证明 secret 只出现一次且永不落库 |
-| 创建和委派 | NORMAL key 可自助创建子 key；null/static caller 被 ACL helper 视为 unrestricted | 管理面存在越权和无限委派风险 |
+| 创建和委派 | root MVP 已关闭 NORMAL 自助管理；legacy 模式仍保留历史创建/委派语义 | 完整 hardening 仍需收紧 legacy 兼容和 policy 委派边界 |
 | 轮换身份 | rotate 禁用旧 key 后创建新的独立 key | role、owner、policy 和 quota 无稳定承载对象 |
 | ADMIN 保护 | 没有事务化的最后一个 ADMIN 保护 | 并发操作可能使系统失去管理凭据 |
-| Bootstrap | 初始 ADMIN raw secret 写入启动日志 | 日志系统成为凭据分发和泄露面 |
+| Bootstrap | root MVP 模式已禁用空表 ADMIN/raw secret bootstrap；未配置 root 的 legacy 模式仍保留历史行为 | 完整 hardening 仍需统一 bootstrap/recovery 语义 |
 | 吊销一致性 | 认证有 30 秒进程内正向缓存 | 多实例吊销不能立即、全局生效 |
 | 使用时间写入 | 每次认证同步更新 `last_used_at` | 高频调用产生数据库写放大 |
-| 限流 | 本进程内计数；starter 中 order 0 早于鉴权 order 1 | 多副本配额被放大，且无法稳定按 principal 限流 |
-| raw key 进入限流 | `api-key` 策略直接使用 `X-API-Key` 值作为 identifier | secret 可能进入配置、日志或内存诊断面 |
-| URL 和凭据格式 | filter 只注册到 `/api/*`，且不接受 Bearer | 新增 `/v1/*` 会绕过现有控制，OpenAI SDK 也不能直接认证 |
+| 限流 | MVP 已在认证后优先使用稳定 key ID，但仍是本进程内计数；多实例 shared quota 未实现 | 多副本配额被放大，尚不能提供全局 quota 语义 |
+| raw key 进入限流 | root/已认证路径使用稳定 principal ID；legacy/未认证 fallback 仍可能使用 raw header | 完整 hardening 仍需彻底移除 raw secret 作为 limiter identifier |
+| URL 和凭据格式 | root MVP 已为 `/api/**` 提供 Bearer/Header 认证并拒绝 query；`/v1/*` 仍未实现 | 新增 `/v1/*` 时仍需独立注册兼容鉴权和 Bearer 契约 |
 | 故障语义 | 数据库 key 验证与 static fallback 并存 | 凭据存储故障时必须避免错误降级为绕过路径 |
 
 这些问题不是协议细节，而是外部服务是否“基本可用”的前提。稳定 family/principal、

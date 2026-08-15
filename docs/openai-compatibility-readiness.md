@@ -4,8 +4,8 @@
 
 > **Purpose**: Record the current code facts that must be understood before implementing
 > a server-side OpenAI Chat Completions adapter and external-caller API keys.
-> **Code baseline**: commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`
-> **Last verified**: 2026-08-14
+> **Code baseline**: `main` / commit `3b61b26`; API-key MVP implementation commit: `ccc0e42`
+> **Last verified**: 2026-08-15
 > **Status**: The project does not currently expose `/v1/chat/completions`. This is a
 > current-state reference, not a claim of implemented compatibility.
 
@@ -26,10 +26,11 @@ Exposing this project through an OpenAI Chat Completions interface has clear val
 > domain prompts, and model routing, as a standard `model` that OpenAI SDKs, agent
 > frameworks, IDEs, and gateways can consume.
 
-Protocol compatibility and service readiness are different concerns. The project already
-has internal API keys, roles, and collection ACLs, but those controls are not sufficient
-for external callers. **API-key lifecycle, authorization, and multi-instance quota
-hardening are prerequisites for enabling `/v1`, not follow-up work.**
+Protocol compatibility and service readiness are different concerns. The project has now
+implemented and verified the standalone-service MVP of a root API key unlocking the WebUI
+and issuing business API keys. That MVP is still insufficient for public, multi-instance,
+production-ready external callers. **Full API-key lifecycle, authorization, and
+multi-instance quota hardening remain prerequisites for enabling `/v1`, not follow-up work.**
 
 The adapter is not an agent/subagent orchestrator. It provides a stable
 "RAG-as-a-model" boundary; orchestration belongs to the caller or a later independent
@@ -45,7 +46,7 @@ module.
 | `spring-ai-rag-core` | RAG implementation and runnable app | Owns the internal execution layer, compatibility controller, deployment registry, and error mapping |
 | `spring-ai-rag-starter` | Auto-configuration | Must register authentication, rate limiting, and observability for `/v1` |
 | `spring-ai-rag-documents` | Document processing | Must remain independent of the OpenAI protocol |
-| `spring-ai-rag-webui` | React admin UI | The MVP need not switch APIs; credential storage and query secrets still require separate hardening |
+| `spring-ai-rag-webui` | React admin UI | The MVP now provides root-key unlock; it need not switch APIs, while public management still requires hardening |
 
 There are two runtime topologies:
 
@@ -97,16 +98,22 @@ new code must not assume otherwise.
 
 ## 5. Current API-Key Capabilities
 
-The current implementation provides an internal management foundation:
+The current implementation provides an accepted standalone-service MVP:
 
 - Raw secrets use a `rag_sk_` prefix; public identifiers use `rag_k_...`.
 - Authentication looks up a SHA-256 hash.
 - Create, list, revoke, rotate, expiration, and `last_used_at` are supported.
 - Roles are `ADMIN` and `NORMAL`.
 - V24 adds `allowed_collection_ids`, allowing data paths to enforce collection ACLs.
-- `ApiKeyAuthFilter` supports database keys and an optional legacy static key.
-- Credentials currently arrive through `X-API-Key`; legacy SSE usage also permits
-  `?apiKey=`.
+- `RAG_ROOT_API_KEY` provides an environment-root principal and automatically protects
+  `/api/**` in root mode.
+- The root unlocks `/webui/unlock` and can create, list, rotate, and revoke business keys.
+- Root-created keys have a fixed `FULL_RAG` profile, require expiry no more than 90 days,
+  and are usable by external callers without the WebUI.
+- Root mode accepts `Authorization: Bearer` and `X-API-Key` headers and rejects query
+  credentials; legacy static/query compatibility remains when root mode is disabled.
+- The WebUI keeps credentials in page memory and clears legacy localStorage credentials
+  during upgrade.
 
 Relevant code:
 
@@ -123,15 +130,15 @@ Relevant code:
 | Gap | Current code fact | Direct impact |
 |-----|-------------------|---------------|
 | Plaintext secret schema | V23 and `RagApiKey` retain an `api_key` column and index; the current service does not write it, but the schema permits storage | The system cannot prove that a secret is returned once and never persisted |
-| Creation and delegation | NORMAL keys can create child keys; null/static callers are considered unrestricted by the ACL helper | Management authorization can be bypassed or delegated without bounds |
+| Creation and delegation | Root MVP disables NORMAL self-service management; legacy mode retains historical creation/delegation semantics | Full hardening must close the legacy compatibility and policy-delegation gaps |
 | Rotation identity | Rotation disables one key and creates an independent key | No stable object carries role, owner, policy, or quota |
 | ADMIN protection | There is no transactional last-ADMIN guard | Concurrent operations can remove the final management credential |
-| Bootstrap | The initial ADMIN raw secret is written to startup logs | The logging system becomes a credential distribution and exposure surface |
+| Bootstrap | Root MVP disables empty-table ADMIN/raw-secret bootstrap; legacy mode without root retains historical behavior | Full hardening still needs one unified bootstrap/recovery contract |
 | Revocation consistency | Authentication has a 30-second in-process positive cache | Revocation is not immediately consistent across instances |
 | Last-used writes | Every authentication synchronously updates `last_used_at` | High request rates create database write amplification |
-| Rate limiting | Counters are in-process; starter order 0 runs before authentication order 1 | Replicas multiply quotas, and the limiter lacks a stable principal |
-| Raw key as limiter ID | The `api-key` strategy directly uses the `X-API-Key` value | Secrets can leak into configuration, logs, or diagnostics |
-| URL and credential format | Filters are registered only for `/api/*` and do not accept Bearer | New `/v1/*` routes bypass current controls, and OpenAI SDK auth does not work |
+| Rate limiting | The MVP prefers a stable key ID after authentication, but counters remain in-process and shared quotas are absent | Replicas multiply quotas, so global quota semantics are not available |
+| Raw key as limiter ID | Root/authenticated paths use a stable principal ID; legacy or unauthenticated fallback can still use the raw header | Full hardening must remove raw secrets as limiter identifiers entirely |
+| URL and credential format | Root MVP provides Bearer/header auth and rejects query credentials for `/api/**`; `/v1/*` is still absent | New `/v1/*` routes still need explicit compatibility authentication and Bearer wiring |
 | Failure semantics | Database validation and static fallback coexist | Credential-store failures must not downgrade into an authorization bypass |
 
 These are service-readiness requirements, not protocol details. Stable families and
