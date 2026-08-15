@@ -1,8 +1,9 @@
 # Embedding Profile 与固定维度向量迁移实施进度
 
 **日期**：2026-08-15
-**状态**：实施与验证完成，待提交
+**状态**：实施与验证完成，已提交并推送
 **对应规划**：[2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md](2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md)
+**最终提交**：`9d35b9c`，已推送至 `origin/main`
 **实施基线**：`main`，开始时 HEAD `2fb37de`、Flyway `V1-V24`；当前验证快照已包含并行 Collection Key/JSONB 变更，Flyway 为 `V1-V29`
 
 ## 1. 不可遗忘的交付约束
@@ -112,6 +113,7 @@
 | 2026-08-15（收尾） | 临时验证资源清理 | 删除本次验证创建的 PostgreSQL 容器 `spring-ai-rag-embedding-it-20260815`、`spring-ai-rag-runtime-verify-20260815` 及临时目录；未停止用户现有服务或其他开发者进程 |
 | 2026-08-15（提交前最终快照） | `mvn clean compile test-compile` | 全 reactor 成功；API 94 个生产类、Core 208 个生产类与 197 个测试类等均编译通过，仅有既有 deprecated API 警告 |
 | 2026-08-15（提交前最终快照） | JSONB/Collection Key 聚焦后端测试 | `OpenApiContractTest`、`RagJsonRecordControllerWebTest`、`JsonRecordServiceTest` 共 42 项通过，失败 0 |
+| 2026-08-15（收尾） | 提交与推送 | 创建提交 `9d35b9c`（191 个文件），已成功推送 `origin/main`；状态字段随后更新为已提交并推送 |
 
 ## 4. 代码审查计数
 
