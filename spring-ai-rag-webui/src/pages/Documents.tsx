@@ -21,7 +21,7 @@ export function Documents() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
-  // Read collectionId from URL on mount (e.g., when navigated from Collections page)
+  // Read the stable Collection key from the URL when navigating from Collections.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const urlCollectionKey = params.get('collectionKey');

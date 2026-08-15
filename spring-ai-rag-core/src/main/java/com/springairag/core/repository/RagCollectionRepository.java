@@ -59,7 +59,8 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      * Restore: clear the deleted flag.
      */
     @Modifying
-    @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null WHERE c.id = :id")
+    @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null " +
+           "WHERE c.id = :id AND c.deleted = true")
     int restore(@Param("id") Long id);
 
     /**

@@ -125,6 +125,23 @@ class CollectionIdentityResolverTest {
     }
 
     @Test
+    void restrictedSingleLookupDoesNotQueryGlobalKeyIndex() {
+        RagCollection active = collection(2L, "active", false);
+        RagCollection deleted = collection(4L, "deleted", true);
+        when(repository.findAllById(any())).thenReturn(List.of(active, deleted));
+
+        assertEquals(active, resolver.requireActiveWithinAllowed(
+                "active", List.of(2L, 4L)));
+        assertEquals(deleted, resolver.requireIncludingDeletedWithinAllowed(
+                "deleted", List.of(2L, 4L)));
+        assertThrows(RagException.class,
+                () -> resolver.requireActiveWithinAllowed(
+                        "deleted", List.of(2L, 4L)));
+        verify(repository, never()).findByCollectionKey("deleted");
+        verify(repository, never()).findByCollectionKeyAndDeletedFalse("active");
+    }
+
+    @Test
     void mapsKeysInOneRepositoryCall() {
         // 解析器会将输入去重为 Set，再按 Repository 的 Iterable 契约查询。
         when(repository.findAllById(any())).thenReturn(List.of(

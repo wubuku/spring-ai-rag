@@ -66,18 +66,43 @@ public class CollectionIdentityResolver {
                                 : "Collection not found: id=" + id));
     }
 
-    public Long resolveActiveId(Long id, String key) {
-        return requireActive(id, key).getId();
-    }
-
-    public Long resolveIncludingDeletedId(Long id, String key) {
+    public RagCollection requireIncludingDeleted(Long id, String key) {
         return findIncludingDeleted(id, key)
                 .orElseThrow(() -> new RagException(
                         ErrorCode.COLLECTION_NOT_FOUND,
                         key != null
                                 ? "Collection not found: collectionKey=" + key
-                                : "Collection not found: id=" + id))
-                .getId();
+                                : "Collection not found: id=" + id));
+    }
+
+    /**
+     * Resolve one active key only among IDs the caller is already authorized to use.
+     */
+    public RagCollection requireActiveWithinAllowed(
+            String key, Collection<Long> allowedIds) {
+        return findWithinAllowed(key, allowedIds, false)
+                .orElseThrow(() -> new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND,
+                        "Collection not found: collectionKey=" + key));
+    }
+
+    /**
+     * Resolve one key, including soft-deleted rows, only among authorized IDs.
+     */
+    public RagCollection requireIncludingDeletedWithinAllowed(
+            String key, Collection<Long> allowedIds) {
+        return findWithinAllowed(key, allowedIds, true)
+                .orElseThrow(() -> new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND,
+                        "Collection not found: collectionKey=" + key));
+    }
+
+    public Long resolveActiveId(Long id, String key) {
+        return requireActive(id, key).getId();
+    }
+
+    public Long resolveIncludingDeletedId(Long id, String key) {
+        return requireIncludingDeleted(id, key).getId();
     }
 
     public List<Long> resolveActiveIds(List<Long> ids, List<String> keys) {
@@ -161,6 +186,17 @@ public class CollectionIdentityResolver {
                     missingIds);
         }
         return Collections.unmodifiableMap(result);
+    }
+
+    private Optional<RagCollection> findWithinAllowed(
+            String key, Collection<Long> allowedIds, boolean includeDeleted) {
+        validatePair(null, key);
+        Objects.requireNonNull(allowedIds, "allowedIds must not be null");
+        return repository.findAllById(new LinkedHashSet<>(allowedIds)).stream()
+                .filter(collection -> includeDeleted
+                        || !Boolean.TRUE.equals(collection.getDeleted()))
+                .filter(collection -> key.equals(collection.getCollectionKey()))
+                .findFirst();
     }
 
     private void validatePair(Long id, String key) {

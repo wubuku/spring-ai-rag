@@ -2,10 +2,13 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfToRagResponse;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.MarkdownRendererService;
 import com.springairag.core.service.PdfImportService;
 import com.springairag.core.service.PdfToRagService;
@@ -23,6 +26,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import com.springairag.api.dto.PdfImportResponse;
 
@@ -326,6 +330,25 @@ class PdfImportControllerTest {
 
         assertThrows(SecurityException.class,
                 () -> controller.importPdfToRag(pdfFile, 99L, false));
+        verifyNoInteractions(pdfImportService, pdfToRagService);
+    }
+
+    @Test
+    void importPdfToRag_restrictedKeyHidesUnknownCollectionKey() {
+        authenticateRestrictedKey("10");
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        controller = new PdfImportController(
+                pdfImportService, markdownRendererService, pdfToRagService, resolver);
+        when(resolver.resolveActiveIdsWithinAllowed(
+                List.of("missing-or-unauthorized"), Set.of(10L)))
+                .thenThrow(new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND, "missing"));
+        MockMultipartFile pdfFile = new MockMultipartFile(
+                "file", "paper.pdf", "application/pdf", "PDF data".getBytes());
+
+        assertThrows(SecurityException.class,
+                () -> controller.importPdfToRagWithoutEmbedding(
+                        pdfFile, null, "missing-or-unauthorized"));
         verifyNoInteractions(pdfImportService, pdfToRagService);
     }
 

@@ -65,6 +65,16 @@ const mockKeys = [
     role: 'NORMAL',
     allowedCollectionIds: [10, 20],
   },
+  {
+    keyId: 'rag_k_key_scope',
+    name: 'Key Scoped',
+    createdAt: '2026-04-11T00:00:00',
+    lastUsedAt: undefined,
+    expiresAt: '2027-01-01T00:00:00',
+    enabled: true,
+    role: 'NORMAL',
+    allowedCollectionKeys: ['customer:manual'],
+  },
 ];
 
 describe('ApiKeys', () => {
@@ -109,6 +119,7 @@ describe('ApiKeys', () => {
       expect(screen.getByText('Test Key')).toBeInTheDocument();
       expect(screen.getByText('apiKeys.allCollections')).toBeInTheDocument();
       expect(screen.getByText('#10, #20')).toBeInTheDocument();
+      expect(screen.getByText('customer:manual')).toBeInTheDocument();
     });
   });
 

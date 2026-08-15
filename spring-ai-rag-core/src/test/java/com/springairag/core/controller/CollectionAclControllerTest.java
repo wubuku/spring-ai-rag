@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.CollectionRequest;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -62,6 +63,33 @@ class CollectionAclControllerTest {
 
         assertThrows(SecurityException.class, () -> controller.getById(9L));
         verifyNoInteractions(collectionRepository);
+    }
+
+    @Test
+    void restrictedByKeyLookupDoesNotExposeGlobalExistence() {
+        authenticateRestrictedKey(2L);
+        when(collectionRepository.findAllById(any())).thenReturn(List.of());
+
+        assertThrows(SecurityException.class,
+                () -> controller.getByKey("missing-or-unauthorized"));
+        verify(collectionRepository, never())
+                .findByCollectionKeyAndDeletedFalse("missing-or-unauthorized");
+    }
+
+    @Test
+    void restrictedByKeyLookupAllowsAnAuthorizedCollection() {
+        authenticateRestrictedKey(2L);
+        RagCollection collection = new RagCollection();
+        collection.setId(2L);
+        collection.setCollectionKey("allowed");
+        collection.setName("Allowed");
+        collection.setDeleted(false);
+        when(collectionRepository.findAllById(any())).thenReturn(List.of(collection));
+
+        controller.getByKey("allowed");
+
+        verify(collectionRepository, never())
+                .findByCollectionKeyAndDeletedFalse("allowed");
     }
 
     @Test

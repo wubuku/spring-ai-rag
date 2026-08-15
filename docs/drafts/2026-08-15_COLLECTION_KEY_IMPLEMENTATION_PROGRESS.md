@@ -2,7 +2,7 @@
 
 > 对应规划：[2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PLAN.md](2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PLAN.md)
 > 开始日期：2026-08-15
-> 当前状态：实施中
+> 当前状态：ACL 修复后的最终硬门槛全部通过，正在执行连续三轮无修改收敛检查，计数器为 0
 
 ## 1. 执行约束
 
@@ -33,8 +33,8 @@ Collection Key 迁移使用 `V27`、`V28`；如实施前发现新冲突，两个
 | 3 | Collection 生命周期 API、冲突错误和 API Key ACL | 已完成 |
 | 4 | Document/Chat/Search/PDF/批量/SSE 入口 | 已完成 |
 | 5 | WebUI、脚本、正式中英文文档 | 已完成 |
-| 6 | 后端编译、相关集成测试、前端 tsc/构建/Mock Playwright | 前端门禁已通过，待最终后端门禁 |
-| 7 | 基本门禁通过后的连续三轮代码收敛检查 | 待开始 |
+| 6 | 后端编译、相关集成测试、前端 tsc/构建/Mock Playwright | 已完成 |
+| 7 | 基本门禁通过后的连续三轮代码收敛检查 | 进行中，计数器 0/3 |
 | 8 | 最终验证和交付 | 待开始 |
 
 ## 4. 测试门禁
@@ -93,3 +93,31 @@ cd spring-ai-rag-webui && npm run test:run && npm run build
 - 数字 Collection 生命周期路由及 Search/Document/PDF 的兼容 ID 参数开始补齐 OpenAPI deprecated 标记和契约断言。
 - 常规与真实 LLM E2E 的文档创建已直接携带 `collectionKey`；常规 E2E 的 Search、Chat、SSE 也显式使用 `collectionKey(s)`，避免验收脚本意外退化为全局范围。
 - 首次最终 clean 编译发现 `RagSearchController` 的 OpenAPI `@Parameter` 缺少 import；已补齐并从 clean 聚焦测试重新验证。
+- 修复后 clean OpenAPI/JSONB 聚焦测试 43 项通过；全 reactor `mvn clean compile test-compile` 通过。
+- Collection/API Key/JSONB/OpenAPI/Chat/Search/PDF 专项回归 421 项通过，PostgreSQL 16 Testcontainers Collection Key 迁移与数据库约束集成测试 3 项通过。
+- 前端最终门禁重跑通过：Vitest 170 项、TypeScript/生产构建、独立 4180 预览上的 Mock Playwright 40 项全部成功；预览进程已停止。
+- 使用独立 PostgreSQL/pgvector 容器和后端 18082 端口完成真实运行时冒烟：V1-V29 启动迁移、create/by-key get/update、不可变字段 400、重复 key 409、key-only 文档与 JSON record、clone、export/import、软删除后不可复用及 restore 全部通过。
+- 并行工作区补充了健康检查真实表名修正（`rag_collections` -> `rag_collection`）；最终树重新执行全 reactor clean 编译/test-compile 成功，相关健康/就绪测试 14 项通过。
+- 收敛检查发现 import 直接保存 Collection 会绕过命名唯一约束到 409 的转换、restore 更新未限定软删除状态，以及规划文档与已执行 V27/V28 的长度函数/约束名/发布编排不一致；已统一修复，检查计数器重置为 0。
+- 修复后重新执行 `mvn clean compile test-compile` 成功；Collection Service/Controller、MockMvc 和 OpenAPI 聚焦测试 134 项通过，Collection/API Key/JSONB/OpenAPI/Chat/Search/PDF 宽范围回归 423 项通过。
+- 文档门禁 10/10、shell/k6 语法和 `git diff --check` 通过；Testcontainers 使用本机兼容参数 `-Dapi.version=1.40` 与 `TESTCONTAINERS_RYUK_DISABLED=true`，PostgreSQL 16/pgvector Collection Key 测试 3 项通过。
+- 使用隔离数据库和 18082 端口验证修复后的真实链路：创建 200、active restore 404、首次 import 200、重复 import 409 且错误码为 `DUPLICATE_RESOURCE`、软删除 200、删除后 restore 200；临时后端和数据库已停止。
+- 收敛检查第 1 轮未发现问题；第 2 轮发现 Spring Boot 内嵌 WebUI 仍引用旧 hash 产物，API Key Mock Playwright 也只建模 `allowedCollectionIds`，未实际覆盖新建受限 key 时提交 `allowedCollectionKeys`。该问题会导致发布 JAR 中的前端继续使用旧外部契约，因此检查计数器重置为 0。
+- API Key Mock Playwright 已改为实际选择 `sample-collection`，断言创建请求/响应中的 `allowedCollectionKeys`，同时保留响应 `allowedCollectionIds` 以覆盖兼容显示。下一步通过既有 Maven `webui` profile 重建并同步内嵌静态资源，然后重跑全部硬门禁。
+- Maven `webui` profile 已完成 TypeScript、生产构建和 40 个静态资源同步，`dist/` 与 Spring Boot 内嵌目录逐文件一致；定向 Playwright 首次运行已验证请求断言通过，仅因结果框与后台列表同时显示相同 key 触发 strict locator 歧义，已将可见性断言限定到一次性密钥结果框后重跑。
+- 收窄 locator 后 API Key 定向 Mock Playwright 1/1 通过；临时 Vite preview 已停止。开始重跑全量 Vitest、TypeScript/生产构建、全部 Mock Playwright、后端 clean 编译及专项回归。
+- 前端完整硬门禁通过：Vitest 170/170、`tsc -b` 与 Vite 生产构建成功、Mock Playwright 40/40；重建后的 `dist/` 与 Spring Boot 内嵌静态目录逐文件一致，临时 preview 已停止。
+- 全 reactor `mvn clean compile test-compile` 通过。首次专项回归误用 core 单模块命令，运行时加载本地仓库中的旧 API JAR，导致 Collection/JSONB 新 DTO 方法出现 `NoSuchMethodError` 并连带阻断 WebMvc context；源码已在 reactor clean 编译中成功，现改用 `-pl spring-ai-rag-core -am` 将 API/documents 纳入同一 reactor 后重跑，不将该命令依赖错误计为实现缺陷。
+- 修正 reactor 范围后专项回归通过：API Collection Key 校验 3 项、Core 481 项，失败 0、错误 0；覆盖 Collection、API Key ACL、JSONB、OpenAPI、Chat、Search、PDF 及控制器集成。
+- PostgreSQL 16/pgvector Testcontainers 验收 3/3 通过，真实执行并校验 Flyway V1-V29、V27/V28 分阶段迁移及 Collection Key 数据库约束；健康检查 WIP 与内嵌 WebUI 路由补充回归 21/21 通过。
+- 项目文档门禁 10/10、`git diff --check`、静态目录逐文件一致性和文本差异密钥扫描均通过。
+- 启动正式收敛检查前再次复核 API Key 响应兼容边界，发现 WebUI 范围显示先判断旧 `allowedCollectionIds`，key-only 新响应会误显示为“全部集合”；已改为 `allowedCollectionKeys` 优先、ID 仅作旧响应降级，并让 Vitest/Playwright 覆盖不含旧 ID 的 key-only 响应和原始 POST body。检查计数仍为 0，前端与静态资源门禁需重跑。
+- key-only 响应修复后的前端完整门禁再次通过：Vitest 170/170、`tsc -b` 与生产构建成功、Mock Playwright 40/40；API Key 场景明确断言创建 POST body 只含 `allowedCollectionKeys` 且结果页可在没有旧 ID 时显示业务 key。最新 40 个构建资源已重新同步，临时 preview 已停止。
+- 最终前端/静态资源快照后再次执行全 reactor `mvn clean compile test-compile` 成功，最新内嵌 WebUI 路由测试 7/7 通过。下一步冻结文件并按固定范围执行连续三轮无修改检查；无问题轮次仅在会话中输出 UTC 时间和总结，不再改写本进度文档。
+- 收敛检查第 1 轮发现 by-key Collection CRUD/文档操作以及 Document/PDF 单 key 写入先做全局 key 查询、后做 ACL，受限 API Key 可通过 404/403 差异探测未授权 key 是否存在，违反规划第 8 节防枚举顺序；检查计数重置为 0。
+- 已增加受限 ID 范围内的单 Collection active/including-deleted 解析入口，Collection by-key Controller 统一使用 ACL-aware 解析，Document/PDF 单 key 写入改为复用 `ApiKeyCollectionAccess.resolveCollectionIds`；不受限未知 key 保持 404，受限未知或未授权 key 统一 403。已一次性补充 Resolver、ACL 和 Collection Controller 覆盖，下一步执行编译及完整硬门禁。
+- ACL 修复后的聚焦回归 120 项通过；最终全 reactor `mvn clean compile test-compile` 通过，宽范围回归 API 15 项、Core 657 项通过，PostgreSQL 16/pgvector Collection Key 验收 3/3 通过。
+- 最终前端与发布产物门禁通过：Vitest 170/170、TypeScript/生产构建、Mock Playwright 40/40，`dist/` 与 Spring Boot 内嵌 WebUI 均为 40 个文件且逐文件一致。
+- 并行健康检查修复与内嵌 WebUI 回归 21/21 通过；项目文档门禁 10/10、Git whitespace 和 added-line secret scan 通过。自此冻结工作区，连续三轮无问题检查只在会话中记录，不再修改本进度文档。
+- 收敛检查重新开始后，第 1 轮无问题；第 2 轮发现 `ChatRequest.collectionKeys` 的 OpenAPI 描述把显式空列表误写为全量范围，与实际 400 fail-closed 契约冲突，前端兼容类型也仍把旧单值字段引导到数字 `collectionIds`。已统一修正 API 描述和前端开发注释，检查计数重置为 0。
+- 描述修正后的完整硬门禁再次通过：全 reactor clean compile/test-compile、API 15 + Core 657、PostgreSQL 3/3、Vitest 170/170、TypeScript/生产构建、Mock Playwright 40/40、文档 10/10，以及 40 个 WebUI 文件的内嵌产物一致性。工作区重新冻结，收敛检查从 0/3 开始。

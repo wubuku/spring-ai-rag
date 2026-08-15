@@ -125,7 +125,7 @@ public class RagCollectionController {
             description = "Query an active collection by its caller-supplied stable key.")
     @GetMapping("/by-key")
     public ResponseEntity<Map<String, Object>> getByKey(@RequestParam String collectionKey) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         long docCount = documentRepository.countByCollectionId(collection.getId());
@@ -136,7 +136,7 @@ public class RagCollectionController {
     public ResponseEntity<Map<String, Object>> updateByKey(
             @RequestParam String collectionKey,
             @Valid @RequestBody CollectionUpdateRequest request) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return update(collection.getId(), request);
@@ -294,7 +294,7 @@ public class RagCollectionController {
     @DeleteMapping("/by-key")
     public ResponseEntity<Map<String, String>> deleteByKey(
             @RequestParam String collectionKey) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return delete(collection.getId());
@@ -332,11 +332,7 @@ public class RagCollectionController {
     @PostMapping("/by-key/restore")
     public ResponseEntity<CollectionRestoreResponse> restoreByKey(
             @RequestParam String collectionKey) {
-        RagCollection collection = identityResolver.findIncludingDeleted(null, collectionKey)
-                .orElse(null);
-        if (collection == null) {
-            return ResponseEntity.notFound().build();
-        }
+        RagCollection collection = requireAccessibleIncludingDeletedCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return restore(collection.getId());
@@ -387,8 +383,8 @@ public class RagCollectionController {
             @Valid @RequestBody CollectionCloneRequest request) {
         ApiKeyCollectionAccess.requireCollectionCreationAllowed(
                 ApiKeyCollectionAccess.currentKey());
-        RagCollection source = identityResolver.requireActive(
-                null, request.getSourceCollectionKey());
+        RagCollection source = requireAccessibleActiveCollection(
+                request.getSourceCollectionKey());
         ApiKeyCollectionAccess.requireCollectionId(
                 source.getId(), ApiKeyCollectionAccess.currentKey());
         log.info("Cloning collection by key: sourceKey={}, targetKey={}",
@@ -468,7 +464,7 @@ public class RagCollectionController {
             @RequestParam(required = false) String keyword,
             @RequestParam(required = false) String documentType,
             @RequestParam(required = false) String processingStatus) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return listDocuments(collection.getId(), offset, limit, keyword,
@@ -549,7 +545,7 @@ public class RagCollectionController {
     public ResponseEntity<DocumentAddedResponse> addDocumentByKey(
             @RequestParam String collectionKey,
             @RequestBody Map<String, Long> request) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return addDocument(collection.getId(), request);
@@ -581,7 +577,7 @@ public class RagCollectionController {
     @GetMapping("/by-key/export")
     public ResponseEntity<CollectionExportResponse> exportCollectionByKey(
             @RequestParam String collectionKey) {
-        RagCollection collection = identityResolver.requireActive(null, collectionKey);
+        RagCollection collection = requireAccessibleActiveCollection(collectionKey);
         ApiKeyCollectionAccess.requireCollectionId(
                 collection.getId(), ApiKeyCollectionAccess.currentKey());
         return exportCollection(collection.getId());
@@ -620,6 +616,12 @@ public class RagCollectionController {
      * Import collection (create new collection from exported JSON data).
      */
     @Operation(summary = "Import collection", description = "Create a new collection and its documents from exported JSON data.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Collection imported"),
+            @ApiResponse(responseCode = "400", description = "Invalid import data or collectionKey"),
+            @ApiResponse(responseCode = "403", description = "Caller cannot create collections"),
+            @ApiResponse(responseCode = "409", description = "collectionKey already exists")
+    })
     @PostMapping("/import")
     @Timed(value = "rag.collection.import", description = "Import collection", percentiles = {0.5, 0.95, 0.99})
     @Transactional
@@ -632,8 +634,8 @@ public class RagCollectionController {
 
         log.info("Importing collection: name={}", name);
 
-        RagCollection collection = buildCollectionFromImport(importRequest);
-        collection = collectionRepository.saveAndFlush(collection);
+        RagCollection collection = collectionService.createCollection(
+                buildCollectionRequestFromImport(importRequest));
 
         int importedDocs = importDocuments(collection.getId(), importRequest.getDocuments());
 
@@ -662,18 +664,19 @@ public class RagCollectionController {
         }
     }
 
-    private RagCollection buildCollectionFromImport(CollectionImportRequest importData) {
-        RagCollection collection = new RagCollection();
-        collection.setCollectionKey(importData.getCollectionKey());
-        collection.setName(importData.getName());
-        collection.setDescription(importData.getDescription());
-        collection.setEmbeddingModel(importData.getEmbeddingModel());
-        collection.setDimensions(importData.getDimensions() != null
+    private CollectionRequest buildCollectionRequestFromImport(
+            CollectionImportRequest importData) {
+        CollectionRequest request = new CollectionRequest();
+        request.setCollectionKey(importData.getCollectionKey());
+        request.setName(importData.getName());
+        request.setDescription(importData.getDescription());
+        request.setEmbeddingModel(importData.getEmbeddingModel());
+        request.setDimensions(importData.getDimensions() != null
                 ? importData.getDimensions() : 1024);
-        collection.setEnabled(importData.getEnabled() != null
+        request.setEnabled(importData.getEnabled() != null
                 ? importData.getEnabled() : true);
-        collection.setMetadata(importData.getMetadata());
-        return collection;
+        request.setMetadata(importData.getMetadata());
+        return request;
     }
 
     private int importDocuments(
@@ -740,6 +743,21 @@ public class RagCollectionController {
             return (Map<String, Object>) obj;
         }
         return null;
+    }
+
+    private RagCollection requireAccessibleActiveCollection(String collectionKey) {
+        return ApiKeyCollectionAccess.requireActiveCollectionByKey(
+                collectionKey,
+                ApiKeyCollectionAccess.currentKey(),
+                identityResolver);
+    }
+
+    private RagCollection requireAccessibleIncludingDeletedCollection(
+            String collectionKey) {
+        return ApiKeyCollectionAccess.requireIncludingDeletedCollectionByKey(
+                collectionKey,
+                ApiKeyCollectionAccess.currentKey(),
+                identityResolver);
     }
 
     // Null-safe generic audit helper (AuditLogService is optional)

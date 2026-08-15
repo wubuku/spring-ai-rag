@@ -96,7 +96,7 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   message: string;
-  /** @deprecated use collectionIds */
+  /** @deprecated use collectionKeys */
   collectionId?: number;
   collectionIds?: number[];
   collectionKeys?: string[];

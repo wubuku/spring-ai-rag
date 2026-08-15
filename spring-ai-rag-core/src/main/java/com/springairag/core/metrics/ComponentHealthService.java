@@ -102,7 +102,7 @@ public class ComponentHealthService {
      * Check if core tables exist.
      */
     public ComponentStatus checkTables() {
-        String[] coreTables = {"rag_documents", "rag_embeddings", "rag_collections"};
+        String[] coreTables = {"rag_documents", "rag_embeddings", "rag_collection"};
         Map<String, Object> details = new LinkedHashMap<>();
         boolean allExist = true;
 

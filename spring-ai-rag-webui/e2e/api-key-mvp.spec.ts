@@ -13,6 +13,7 @@ interface MockKey {
   expiresAt: string;
   enabled: boolean;
   allowedCollectionIds?: number[];
+  allowedCollectionKeys?: string[];
 }
 
 test('root unlock manages shown-once business keys without browser persistence', async ({ page }) => {
@@ -22,6 +23,12 @@ test('root unlock manages shown-once business keys without browser persistence',
   const requestUrls: string[] = [];
   const managementCredentials: Array<string | undefined> = [];
   const keys: MockKey[] = [];
+  const createRequests: Array<{
+    name: string;
+    expiresAt: string;
+    allowedCollectionIds?: number[];
+    allowedCollectionKeys?: string[];
+  }> = [];
 
   page.on('console', message => consoleMessages.push(message.text()));
   page.on('request', request => requestUrls.push(request.url()));
@@ -82,7 +89,9 @@ test('root unlock manages shown-once business keys without browser persistence',
         name: string;
         expiresAt: string;
         allowedCollectionIds?: number[];
+        allowedCollectionKeys?: string[];
       };
+      createRequests.push(body);
       keys.push({
         keyId: 'rag_k_created',
         name: body.name,
@@ -90,7 +99,7 @@ test('root unlock manages shown-once business keys without browser persistence',
         createdAt: '2026-08-14T12:00:00',
         expiresAt: body.expiresAt,
         enabled: true,
-        allowedCollectionIds: body.allowedCollectionIds,
+        allowedCollectionKeys: body.allowedCollectionKeys,
       });
       await route.fulfill({
         status: 201,
@@ -100,7 +109,7 @@ test('root unlock manages shown-once business keys without browser persistence',
           rawKey: createdRawKey,
           name: body.name,
           expiresAt: body.expiresAt,
-          allowedCollectionIds: body.allowedCollectionIds,
+          allowedCollectionKeys: body.allowedCollectionKeys,
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });
@@ -151,10 +160,19 @@ test('root unlock manages shown-once business keys without browser persistence',
   await expiry.click({ position: { x: 80, y: 20 } });
   await expiry.pressSequentially('2099', { delay: 250 });
   await expect(expiry).toHaveValue(longExpiry);
+  await page.getByText('Selected collections', { exact: true }).click();
+  await page.getByRole('checkbox', { name: /Sample Collection/ }).check();
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   await expect(page.getByText(createdRawKey)).toBeVisible();
   expect(keys[0]?.expiresAt).toBe(`${longExpiry}:00`);
+  expect(keys[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
+  expect(createRequests).toHaveLength(1);
+  expect(createRequests[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
+  expect(createRequests[0]).not.toHaveProperty('allowedCollectionIds');
+  await expect(
+    page.locator('[class*="_rawKeyBox_"]').getByText('sample-collection', { exact: true }),
+  ).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(createdRawKey)).toHaveCount(0);
   await expect(page.getByText('rag_k_created')).toBeVisible();

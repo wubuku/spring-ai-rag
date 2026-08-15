@@ -2,6 +2,7 @@ package com.springairag.core.security;
 
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
@@ -150,6 +151,46 @@ class ApiKeyCollectionAccessTest {
         assertThrows(SecurityException.class,
                 () -> ApiKeyCollectionAccess.resolveCollectionIds(
                         null, List.of("missing"), restricted, resolver));
+    }
+
+    @Test
+    void singleKeyLookupPreserves404ForUnrestrictedAndHidesRestrictedExistence() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        RagException missing = new RagException(
+                ErrorCode.COLLECTION_NOT_FOUND, "missing");
+        when(resolver.requireActive(null, "missing")).thenThrow(missing);
+
+        assertSame(missing, assertThrows(RagException.class,
+                () -> ApiKeyCollectionAccess.requireActiveCollectionByKey(
+                        "missing", null, resolver)));
+
+        RagApiKey restricted = restrictedKey(3L);
+        when(resolver.requireActiveWithinAllowed("missing", Set.of(3L)))
+                .thenThrow(missing);
+        when(resolver.requireIncludingDeletedWithinAllowed("missing", Set.of(3L)))
+                .thenThrow(missing);
+
+        assertThrows(SecurityException.class,
+                () -> ApiKeyCollectionAccess.requireActiveCollectionByKey(
+                        "missing", restricted, resolver));
+        assertThrows(SecurityException.class,
+                () -> ApiKeyCollectionAccess.requireIncludingDeletedCollectionByKey(
+                        "missing", restricted, resolver));
+    }
+
+    @Test
+    void singleKeyLookupReturnsAuthorizedCollection() {
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        RagApiKey restricted = restrictedKey(3L);
+        RagCollection collection = new RagCollection();
+        collection.setId(3L);
+        collection.setCollectionKey("allowed");
+        when(resolver.requireActiveWithinAllowed("allowed", Set.of(3L)))
+                .thenReturn(collection);
+
+        assertSame(collection,
+                ApiKeyCollectionAccess.requireActiveCollectionByKey(
+                        "allowed", restricted, resolver));
     }
 
     private RagApiKey restrictedKey(Long... collectionIds) {

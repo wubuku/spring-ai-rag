@@ -389,7 +389,8 @@ class RagCollectionControllerTest {
     @Test
     void importCollection_createsCollectionAndDocuments() {
         RagCollection saved = createCollection(1L, "导入的知识库");
-        when(collectionRepository.saveAndFlush(any(RagCollection.class))).thenReturn(saved);
+        saved.setCollectionKey("legacy-import-test");
+        when(collectionService.createCollection(any(CollectionRequest.class))).thenReturn(saved);
 
         RagDocument savedDoc = new RagDocument();
         savedDoc.setId(10L);
@@ -412,7 +413,15 @@ class RagCollectionControllerTest {
         ResponseEntity<Map<String, Object>> response = controller.importCollection(importData);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(collectionRepository).saveAndFlush(any(RagCollection.class));
+        org.mockito.ArgumentCaptor<CollectionRequest> requestCaptor =
+                org.mockito.ArgumentCaptor.forClass(CollectionRequest.class);
+        verify(collectionService).createCollection(requestCaptor.capture());
+        CollectionRequest request = requestCaptor.getValue();
+        assertEquals("legacy-import-test", request.getCollectionKey());
+        assertEquals("导入的知识库", request.getName());
+        assertEquals("测试导入", request.getDescription());
+        assertEquals(1024, request.getDimensions());
+        assertEquals(true, request.getEnabled());
         verify(documentRepository).saveAndFlush(any(RagDocument.class));
     }
 

@@ -94,14 +94,14 @@ class ComponentHealthServiceTest {
         void allTablesExist() {
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_documents"), eq(Integer.class))).thenReturn(100);
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_embeddings"), eq(Integer.class))).thenReturn(500);
-            when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_collections"), eq(Integer.class))).thenReturn(10);
+            when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_collection"), eq(Integer.class))).thenReturn(10);
 
             ComponentHealthService.ComponentStatus status = healthService.checkTables();
 
             assertEquals("UP", status.status());
             assertEquals(100, status.details().get("rag_documents"));
             assertEquals(500, status.details().get("rag_embeddings"));
-            assertEquals(10, status.details().get("rag_collections"));
+            assertEquals(10, status.details().get("rag_collection"));
         }
 
         @Test
@@ -110,7 +110,7 @@ class ComponentHealthServiceTest {
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_documents"), eq(Integer.class))).thenReturn(100);
             when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_embeddings"), eq(Integer.class)))
                     .thenThrow(new RuntimeException("relation not found"));
-            when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_collections"), eq(Integer.class))).thenReturn(10);
+            when(jdbcTemplate.queryForObject(eq("SELECT COUNT(*) FROM rag_collection"), eq(Integer.class))).thenReturn(10);
 
             ComponentHealthService.ComponentStatus status = healthService.checkTables();
 

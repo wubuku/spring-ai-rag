@@ -546,9 +546,17 @@ public class RagDocumentController {
 
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey,
                                              com.springairag.core.entity.RagApiKey currentKey) {
-        Long resolved = collectionKey != null
-                ? collectionIdentityResolver.resolveActiveId(collectionId, collectionKey)
-                : collectionId;
+        Long resolved;
+        if (collectionKey != null) {
+            List<Long> resolvedIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                    collectionId == null ? null : List.of(collectionId),
+                    List.of(collectionKey),
+                    currentKey,
+                    collectionIdentityResolver);
+            resolved = resolvedIds.getFirst();
+        } else {
+            resolved = collectionId;
+        }
         return ApiKeyCollectionAccess.resolveWritableCollectionId(resolved, currentKey);
     }
 

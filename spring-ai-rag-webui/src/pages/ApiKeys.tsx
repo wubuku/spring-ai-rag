@@ -156,10 +156,10 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
       <span className={styles.keyId} title={keyItem.keyId}>{keyItem.keyId}</span>
       <span>{getRoleBadge(keyItem.role, t)}</span>
       <span className={styles.scope}>
-        {keyItem.allowedCollectionIds?.length
-          ? (keyItem.allowedCollectionKeys?.length
-            ? keyItem.allowedCollectionKeys.join(', ')
-            : keyItem.allowedCollectionIds.map(id => `#${id}`).join(', '))
+        {keyItem.allowedCollectionKeys?.length
+          ? keyItem.allowedCollectionKeys.join(', ')
+          : keyItem.allowedCollectionIds?.length
+            ? keyItem.allowedCollectionIds.map(id => `#${id}`).join(', ')
           : t('apiKeys.allCollections')}
       </span>
       <span className={styles.date}>{formatDate(keyItem.createdAt)}</span>
@@ -407,10 +407,10 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 {t('apiKeys.collectionAccess')}
               </div>
               <div className={styles.scope}>
-                {createdKey.allowedCollectionIds?.length
-                  ? (createdKey.allowedCollectionKeys?.length
-                    ? createdKey.allowedCollectionKeys.join(', ')
-                    : createdKey.allowedCollectionIds.map(id => `#${id}`).join(', '))
+                {createdKey.allowedCollectionKeys?.length
+                  ? createdKey.allowedCollectionKeys.join(', ')
+                  : createdKey.allowedCollectionIds?.length
+                    ? createdKey.allowedCollectionIds.map(id => `#${id}`).join(', ')
                   : t('apiKeys.allCollections')}
               </div>
               <div className={styles.warning}>{createdKey.warning}</div>

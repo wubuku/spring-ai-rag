@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.DocumentRequest;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
@@ -30,11 +31,13 @@ import static org.mockito.Mockito.*;
 class DocumentAclControllerTest {
 
     private RagDocumentRepository documentRepository;
+    private RagCollectionRepository collectionRepository;
     private RagDocumentController controller;
 
     @BeforeEach
     void setUp() {
         documentRepository = mock(RagDocumentRepository.class);
+        collectionRepository = mock(RagCollectionRepository.class);
         EmbeddingProfileProvider profileProvider = mock(EmbeddingProfileProvider.class);
         when(profileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 1L, "test-profile", "test", "test-model", "v1",
@@ -42,7 +45,7 @@ class DocumentAclControllerTest {
         controller = new RagDocumentController(
                 documentRepository,
                 mock(RagEmbeddingRepository.class),
-                mock(RagCollectionRepository.class),
+                collectionRepository,
                 mock(DocumentEmbedService.class),
                 mock(BatchDocumentService.class),
                 mock(DocumentVersionService.class),
@@ -81,6 +84,19 @@ class DocumentAclControllerTest {
                 isNull(), isNull(), any());
         verify(documentRepository, never()).searchDocuments(
                 any(), any(), any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void restrictedCreateByKeyDoesNotExposeGlobalCollectionExistence() {
+        when(collectionRepository.findAllById(any())).thenReturn(List.of());
+        DocumentRequest request = new DocumentRequest("Scoped document", "content");
+        request.setCollectionKey("missing-or-unauthorized");
+
+        assertThrows(SecurityException.class,
+                () -> controller.createDocument(request));
+        verify(collectionRepository, never())
+                .findByCollectionKeyAndDeletedFalse("missing-or-unauthorized");
+        verifyNoInteractions(documentRepository);
     }
 
     private void authenticateRestrictedKey(Long... ids) {

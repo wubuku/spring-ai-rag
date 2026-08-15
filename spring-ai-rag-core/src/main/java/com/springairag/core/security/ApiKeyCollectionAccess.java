@@ -2,6 +2,7 @@ package com.springairag.core.security;
 
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.service.CollectionIdentityResolver;
@@ -214,6 +215,45 @@ public final class ApiKeyCollectionAccess {
                 throw new SecurityException("Collection is not authorized");
             }
             throw e;
+        }
+    }
+
+    /**
+     * Resolve an active Collection by key without exposing global key existence
+     * to a caller restricted to an internal ID allow-list.
+     */
+    public static RagCollection requireActiveCollectionByKey(
+            String requestedKey,
+            RagApiKey caller,
+            CollectionIdentityResolver resolver) {
+        if (isUnrestricted(caller)) {
+            return resolver.requireActive(null, requestedKey);
+        }
+        try {
+            return resolver.requireActiveWithinAllowed(
+                    requestedKey,
+                    restrictedCollectionIds(caller).orElseThrow());
+        } catch (com.springairag.core.exception.RagException e) {
+            throw new SecurityException("Collection is not authorized");
+        }
+    }
+
+    /**
+     * Restore uses the same anti-enumeration rule but includes soft-deleted rows.
+     */
+    public static RagCollection requireIncludingDeletedCollectionByKey(
+            String requestedKey,
+            RagApiKey caller,
+            CollectionIdentityResolver resolver) {
+        if (isUnrestricted(caller)) {
+            return resolver.requireIncludingDeleted(null, requestedKey);
+        }
+        try {
+            return resolver.requireIncludingDeletedWithinAllowed(
+                    requestedKey,
+                    restrictedCollectionIds(caller).orElseThrow());
+        } catch (com.springairag.core.exception.RagException e) {
+            throw new SecurityException("Collection is not authorized");
         }
     }
 

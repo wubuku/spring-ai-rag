@@ -274,11 +274,20 @@ public class PdfImportController {
     }
 
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey) {
-        Long resolved = collectionKey != null
-                ? collectionIdentityResolver.resolveActiveId(collectionId, collectionKey)
-                : collectionId;
+        var currentKey = ApiKeyCollectionAccess.currentKey();
+        Long resolved;
+        if (collectionKey != null) {
+            List<Long> resolvedIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                    collectionId == null ? null : List.of(collectionId),
+                    List.of(collectionKey),
+                    currentKey,
+                    collectionIdentityResolver);
+            resolved = resolvedIds.getFirst();
+        } else {
+            resolved = collectionId;
+        }
         return ApiKeyCollectionAccess.resolveWritableCollectionId(
-                resolved, ApiKeyCollectionAccess.currentKey());
+                resolved, currentKey);
     }
 
     private ResponseEntity<SseEmitter> startPdfToRagEmbedding(

@@ -1,10 +1,17 @@
 # Collection Key 实施规划
 
-> 状态：Draft / 待实施
+> 状态：Implemented / 已实施（2026-08-15）
 > 编写日期：2026-08-15
 > 代码基线：`main` @ `2fb37dedc5cd50c30ad76e62fafa525ab4cd36ea`
 > 目标：为 Collection 增加调用方提供的、全局唯一、稳定且不可变的 128 ASCII 字符以内业务键，同时保留 `Long id` 作为内部数据库主键
-> 重要说明：本文描述目标设计，不代表当前代码已经支持 `collectionKey`
+> 实施与验证记录：[2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md](2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md)
+
+> 实施偏差说明：已发布到仓库的 V27/V28 校验使用 `char_length`；V27 和 V28
+> 复用约束名 `ck_rag_collection_collection_key_ascii`，由 V28 删除后重建为严格约束。
+> 两者对限定为 ASCII 的 key 与原规划的字节长度语义等价。当前仓库同时携带 V27/V28，
+> 因此部署语义是“启动最终构建前排空旧写入实例”的协调式 contract cutover，
+> 不是由两个应用版本实现的滚动 expand/contract。既有 Flyway 文件已经执行验证，
+> 后续不得修改其校验和。
 
 ## 1. 执行摘要
 
@@ -114,7 +121,8 @@ Collection Key 迁移必须使用实施时的下一个可用 Flyway 版本；按
 - 让所有主要外部入口能够接受 `collectionKey` 或 `collectionKeys`。
 - 保留数字 ID 契约作为兼容层，不在本次直接删除。
 - 保持 API Key 限权请求 fail closed，且不因 key 查询暴露未授权 Collection 是否存在。
-- 为已有数据和滚动部署提供可执行迁移路径，并明确旧二进制只能在 contract 阶段前回滚。
+- 为已有数据提供可执行迁移路径，并明确当前最终构建采用协调式 cutover：
+  启动前停止旧写入实例，contract 完成后不能回滚到省略 key 的旧二进制。
 - 同步 WebUI、自动化测试、运维脚本和正式中英文文档。
 
 ### 3.2 非目标
@@ -212,7 +220,8 @@ Collection Key 迁移必须使用实施时的下一个可用 Flyway 版本；按
 | Unicode | 不允许 |
 | 规范化 | 不执行 |
 
-因为只接受 ASCII，一个字符等于一个 UTF-8 字节，“最多 128 个字符”和数据库 `VARCHAR(128)`、`octet_length <= 128` 的含义一致。
+因为只接受 ASCII，一个字符等于一个 UTF-8 字节，“最多 128 个字符”和数据库
+`VARCHAR(128)`、`char_length <= 128` 的含义一致。
 
 合法示例：
 
@@ -270,12 +279,15 @@ collection_key VARCHAR(128) COLLATE "C"
 
 CONSTRAINT ck_rag_collection_collection_key_ascii
 CHECK (
-    octet_length(collection_key) BETWEEN 1 AND 128
+    char_length(collection_key) BETWEEN 1 AND 128
     AND collection_key !~ '[^!-~]'
 )
 ```
 
-`NOT NULL` 单独设置。V27 过渡 CHECK 名称为 `ck_rag_collection_collection_key_ascii_expand`；V28 最终 CHECK 名称为 `ck_rag_collection_collection_key_ascii`；唯一约束为 `uk_rag_collection_collection_key`；不可变 trigger/function 使用固定名称 `trg_rag_collection_key_immutable` / `fn_rag_collection_key_immutable`，供测试、异常转换和运维诊断使用。
+`NOT NULL` 单独设置。V27 过渡 CHECK 与 V28 最终 CHECK 复用
+`ck_rag_collection_collection_key_ascii`：V28 先删除允许 NULL 的版本，再以同名重建严格版本。
+唯一约束为 `uk_rag_collection_collection_key`；不可变 trigger/function 使用固定名称
+`trg_rag_collection_key_immutable` / `fn_rag_collection_key_immutable`，供测试、异常转换和运维诊断使用。
 
 ## 6. 数据库迁移设计
 
@@ -298,11 +310,14 @@ spring-ai-rag-core/src/main/resources/db/migration/
 1. 增加暂时可空的 `collection_key VARCHAR(128) COLLATE "C"`。
 2. 对所有当前已有行，包括软删除行，回填一个确定性且未占用的 `legacy-collection-<id>` 候选。
 3. 如果候选已被调用方占用，按 `legacy-collection-<id>-<attempt>` 递增 attempt，直到找到未占用候选；任何候选超过 128 字符时直接使迁移失败，不截断。
-4. 增加名为 `ck_rag_collection_collection_key_ascii_expand`、允许 NULL 过渡状态的 ASCII CHECK：
-   `collection_key IS NULL OR (octet_length(collection_key) BETWEEN 1 AND 128 AND collection_key !~ '[^!-~]')`。
+4. 增加名为 `ck_rag_collection_collection_key_ascii`、允许 NULL 过渡状态的 ASCII CHECK：
+   `collection_key IS NULL OR (char_length(collection_key) BETWEEN 1 AND 128 AND collection_key !~ '[^!-~]')`。
 5. 增加命名唯一约束 `uk_rag_collection_collection_key`。PostgreSQL UNIQUE 对多个 NULL 不冲突，允许旧实例在过渡期间写 NULL。
-6. 增加名为 `trg_rag_collection_key_immutable` 的 UPDATE 不可变 trigger，由 `fn_rag_collection_key_immutable` 实现；当 `NEW.collection_key IS DISTINCT FROM OLD.collection_key` 时拒绝更新。
-7. 增加列注释，说明“外部稳定业务键、区分大小写、不可变、软删除后不复用”。
+6. 增加名为 `trg_rag_collection_key_immutable` 的 UPDATE 不可变 trigger，由
+   `fn_rag_collection_key_immutable` 实现；允许 expand 窗口中的 `NULL -> 回填值`，
+   已有非 NULL key 发生变化时拒绝更新。
+7. 身份语义记录在实体 Javadoc、正式文档和本规划中；已执行的 V27 未增加数据库列注释，
+   后续如需补充只能通过新迁移完成，不能改写 V27。
 
 V27/V28 的回填必须使用按 `id` 排序的 PL/pgSQL 循环或等价的数据库内算法，并在每次候选选择时查询现有 `collection_key` 值；唯一约束负责最终并发保障。它不保留用户可见的命名空间：`legacy-collection-*` 仍是合法的调用方 key；碰撞由迁移算法解决，而不是通过禁止用户前缀解决。
 
@@ -312,13 +327,17 @@ V28 只能在所有旧应用写入实例退出后执行：
 
 1. 再次回填任何 `collection_key IS NULL` 的行，使用与 V27 相同的未占用候选算法。
 2. 查询并记录仍产生 NULL 的来源；若存在则失败，不继续收紧约束。
-3. 删除 `ck_rag_collection_collection_key_ascii_expand`，增加最终严格 CHECK `ck_rag_collection_collection_key_ascii`。
+3. 删除允许 NULL 的 `ck_rag_collection_collection_key_ascii`，以同名增加最终严格 CHECK。
 4. 执行 `ALTER TABLE rag_collection ALTER COLUMN collection_key SET NOT NULL`。
 5. 保持 `uk_rag_collection_collection_key` 和不可变 trigger。
 
 V28 之后，数据库不再接受旧二进制省略 `collection_key` 的 INSERT。不能通过 trigger 为新 Collection 伪造业务身份。
 
-交付边界必须与现有 Flyway 自动执行方式匹配：首个发布版本只携带并执行 V27；V28 不能与 V27 一起进入会自动执行全部 pending migrations 的同一应用包。待所有旧写入实例退出并完成 NULL 统计后，再在后续发布版本携带 V28，或使用项目已验证的受控 Flyway target 明确只执行 V27。禁止依赖“先启动应用、稍后人工阻止 V28”这类不可验证的时序。
+原规划推荐由两个发布版本分别携带 V27 和 V28。实际仓库已经同时携带并验证两个迁移，
+所以当前构建不能提供跨应用版本的可空写入窗口：部署前必须先停止或排空所有仍省略
+`collection_key` 的旧写入实例，再启动会自动执行全部 pending migrations 的最终构建。
+若未来需要恢复真正的滚动 expand/contract，只能从发布编排或独立迁移制品层面拆分，
+不能改写已经存在的 V27/V28。
 
 ### 6.3 唯一约束与索引
 
@@ -330,7 +349,10 @@ CONSTRAINT uk_rag_collection_collection_key UNIQUE (collection_key)
 
 PostgreSQL 会为 UNIQUE constraint 创建唯一 B-tree index，不再额外创建重复的普通或唯一索引。应用捕获并发冲突时只识别该约束名。
 
-默认在一个 Flyway 事务中创建约束。若生产表规模评估显示直接建唯一约束会超过允许锁窗口，则在实施 PR 中把 V27 的唯一索引拆为非事务的 `CREATE UNIQUE INDEX CONCURRENTLY` 加 `ALTER TABLE ... USING INDEX` 两步；这是只影响部署方式的可逆边界，不改变数据和 API 设计。实施前必须记录生产 `rag_collection` 行数和可接受锁时长，不能无依据改用并发迁移。
+已执行的 V27 在 Flyway 事务中直接创建该 UNIQUE constraint。部署到尚未执行 V27
+且数据量较大的生产库前，必须记录 `rag_collection` 行数、写入流量和可接受锁时长。
+若评估认为锁窗口不可接受，应停止部署当前制品并设计独立的受控迁移发布流程；不得修改
+已验证的 V27 校验和，也不能在没有演练的情况下临时改为并发索引。
 
 ### 6.4 UPDATE 不可变 trigger
 
@@ -975,18 +997,18 @@ SPRING_PROFILES_ACTIVE=postgresql mvn -pl spring-ai-rag-core \
 
 退出条件：迁移编号无冲突，基线问题已记录。
 
-### 阶段 1：数据库 expand
+### 阶段 1：数据库 expand（迁移逻辑阶段）
 
 - 添加可空 column、冲突感知回填、过渡 CHECK、UNIQUE 和不可变 UPDATE trigger。
 - 增加 PostgreSQL/Flyway 集成测试。
-- 发布能识别 key 的兼容构建；在 V27 窗口内允许旧应用暂时写 NULL，但新 API 已要求 key。
+- V27 逻辑允许旧应用暂时写 NULL，新 API 已要求 key；当前仓库未产出只含 V27 的独立应用制品。
 
-退出条件：迁移验证 SQL 通过，V27 旧式 NULL INSERT 和新约束均有真实 PostgreSQL 测试，且所有写入实例已能升级到 key-aware 构建。
+退出条件：迁移验证 SQL 通过，V27 旧式 NULL INSERT 和新约束均有真实 PostgreSQL 测试。
 
-### 阶段 1b：数据库 contract
+### 阶段 1b：数据库 contract（迁移逻辑阶段）
 
 - 停止或排空所有仍可能省略 `collection_key` 的旧写入实例。
-- 在后续应用发布版本中加入并运行 V28，补齐剩余 NULL、设置严格 CHECK 和 `NOT NULL`。
+- V28 补齐剩余 NULL、设置严格 CHECK 和 `NOT NULL`；当前构建会在 V27 后立即继续执行 V28。
 - 用 `ddl-auto=validate` 启动最终实体版本。
 
 退出条件：NULL 数量为 0，旧二进制不再是可回滚目标，最终约束和不可变 trigger 均通过真实 PostgreSQL 测试。
@@ -1036,8 +1058,8 @@ SPRING_PROFILES_ACTIVE=postgresql mvn -pl spring-ai-rag-core \
 
 ### 阶段 7：发布验证
 
-- 先发布 V27 expand 和能识别 key 的兼容构建，再确认所有旧写入实例退出。
-- 执行 V28 contract，然后发布/验证最终 `nullable=false` 实体构建。
+- 当前构建启动前先确认所有旧写入实例退出，再由 Flyway 顺序执行 V27 expand 与 V28 contract。
+- 启动并验证最终 `nullable=false` 实体构建；不得把原始旧二进制作为回滚目标。
 - 观察 duplicate 409、resolver 404/403、NULL 回填和数据库异常。
 - 执行 E2E 和真实 LLM smoke。
 
@@ -1048,22 +1070,20 @@ SPRING_PROFILES_ACTIVE=postgresql mvn -pl spring-ai-rag-core \
 ### 18.1 推荐发布顺序
 
 1. 备份并记录 migration 前 Collection 统计。
-2. 发布只包含 V27 的 expand 版本和临时 `nullable=true` 的 key-aware 应用构建。
-3. 验证回填、唯一约束、过渡 CHECK 和 NULL 写入窗口。
-4. 滚动替换所有仍可能省略 key 的旧实例，并确认没有旧写入者。
-5. 在后续发布版本加入 V28 contract，验证严格 CHECK、`NOT NULL` 和最终实体。
-6. 发布/验证最终 `nullable=false` 构建、WebUI 和外部脚本/客户端。
-7. 监控至少一个完整发布周期。
+2. 停止或排空所有仍可能省略 key 的旧写入实例，并确认没有旧写入者。
+3. 部署当前最终构建，由 Flyway 顺序执行 V27/V28；验证回填、唯一约束、严格 CHECK 和 `NOT NULL`。
+4. 验证最终 `nullable=false` 构建、WebUI 和外部脚本/客户端。
+5. 监控至少一个完整发布周期。
 
 ### 18.2 应用回滚
 
-V27 expand 窗口内可以回滚到仍认识“可空 `collection_key`”的兼容构建：
+当前交付物同时携带 V27/V28，不提供可独立部署的 V27-only 应用版本，因此不能把
+expand 逻辑阶段当作生产滚动回滚窗口。迁移启动前的回滚点是数据库备份和尚未执行
+迁移的旧应用；迁移成功后，原始省略 `collection_key` 的旧二进制不再是可回滚目标。
 
-- 旧应用忽略额外列，`ddl-auto=validate` 允许数据库存在额外 column。
-- 旧应用 INSERT 缺少 key 会留下 NULL，只能在 V27 的过渡窗口内接受。
-- 新创建的业务 key 数据不会丢失。
-
-V28 contract 完成后，原始未改造的旧二进制不再是可回滚目标；回滚下限是能够识别并写入 `collection_key` 的兼容构建。这样避免用数据库 trigger 伪造业务身份，也避免用户合法 key 与系统生成 key 碰撞。
+V28 contract 完成后的应用回滚下限，是能够识别并写入非空 `collection_key`、且与最终
+schema 兼容的构建。这样避免用数据库 trigger 伪造业务身份，也避免用户合法 key 与
+系统生成 key 碰撞。
 
 ### 18.3 数据库回滚
 
@@ -1158,29 +1178,30 @@ docs/api-versioning.md
 
 以下条件全部满足才算实施完成：
 
-- [ ] `rag_collection.id` 仍为 `BIGINT` 主键，现有内部外键未改为 String。
-- [ ] 所有 Collection 都有非空、1-128 可见 ASCII 的 `collectionKey`。
-- [ ] 数据库精确、全局、包含软删除行地保证唯一。
-- [ ] `ABC` 与 `abc` 可共存，相同 key 并发创建只能成功一个。
-- [ ] key 创建后通过 API 和直接 SQL 都不能修改。
-- [ ] 创建、导入和克隆要求调用方显式提供 key。
-- [ ] 服务端不静默生成、trim、归一化或截断 key。
-- [ ] WebUI 只在用户点击时用 `crypto.randomUUID()` 填充输入。
-- [ ] Collection 全生命周期可以只使用 key 完成。
-- [ ] Document、Chat、Search、upload、PDF、batch 支持 key。
-- [ ] 旧数字 ID 路由和字段仍通过兼容测试并标记 deprecated。
-- [ ] ID/key 双输入不一致返回 400。
-- [ ] 未知 key 对 unrestricted 调用方返回 404。
-- [ ] restricted API Key 的未知/未授权 key 统一返回 403，不能枚举存在性。
-- [ ] 任何解析失败或显式空 scope 都不会扩大为全局检索。
-- [ ] duplicate key 的预检查和并发竞态都返回 409，不返回 500。
-- [ ] 非目标数据库异常仍返回数据库错误，不误报 duplicate。
-- [ ] API Key 管理可使用 `allowedCollectionKeys`，底层仍按 ID fail closed。
-- [ ] 响应和导出包含 key，文档响应不产生 N+1 查询。
-- [ ] PostgreSQL migrations、不可变 trigger、Controller、ACL、OpenAPI、WebUI 和 E2E 测试通过。
-- [ ] WebUI 静态资源按项目流程更新。
-- [ ] 正式中英文文档同步，API 示例不再只展示数字 Collection ID。
-- [ ] V27/V28 分阶段滚动发布，以及 V28 后回滚到 key-aware 兼容构建的路径已在测试环境验证。
+- [x] `rag_collection.id` 仍为 `BIGINT` 主键，现有内部外键未改为 String。
+- [x] 所有 Collection 都有非空、1-128 可见 ASCII 的 `collectionKey`。
+- [x] 数据库精确、全局、包含软删除行地保证唯一。
+- [x] `ABC` 与 `abc` 可共存，相同 key 并发创建只能成功一个。
+- [x] key 创建后通过 API 和直接 SQL 都不能修改。
+- [x] 创建、导入和克隆要求调用方显式提供 key。
+- [x] 服务端不静默生成、trim、归一化或截断 key。
+- [x] WebUI 只在用户点击时用 `crypto.randomUUID()` 填充输入。
+- [x] Collection 全生命周期可以只使用 key 完成。
+- [x] Document、Chat、Search、upload、PDF、batch 支持 key。
+- [x] 旧数字 ID 路由和字段仍通过兼容测试并标记 deprecated。
+- [x] ID/key 双输入不一致返回 400。
+- [x] 未知 key 对 unrestricted 调用方返回 404。
+- [x] restricted API Key 的未知/未授权 key 统一返回 403，不能枚举存在性。
+- [x] 任何解析失败或显式空 scope 都不会扩大为全局检索。
+- [x] duplicate key 的预检查和并发竞态都返回 409，不返回 500。
+- [x] 非目标数据库异常仍返回数据库错误，不误报 duplicate。
+- [x] API Key 管理可使用 `allowedCollectionKeys`，底层仍按 ID fail closed。
+- [x] 响应和导出包含 key，文档响应不产生 N+1 查询。
+- [x] PostgreSQL migrations、不可变 trigger、Controller、ACL、OpenAPI、WebUI 和 E2E 测试通过。
+- [x] WebUI 静态资源按项目流程更新。
+- [x] 正式中英文文档同步，API 示例不再只展示数字 Collection ID。
+- [x] V27/V28 已在 PostgreSQL 16/pgvector 测试中顺序通过；当前最终构建的协调式
+  cutover、停止旧写入实例的前提和回滚边界已经记录。
 
 ## 22. 与其他规划的协调
 

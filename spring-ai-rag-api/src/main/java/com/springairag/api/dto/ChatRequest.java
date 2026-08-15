@@ -47,11 +47,11 @@ public class ChatRequest {
             example = "[1, 2]", deprecated = true)
     private List<Long> collectionIds;
 
-    @Schema(description = "Limit retrieval to these stable external Collection keys (preferred over collectionIds). Empty/null = all documents.",
+    @Schema(description = "Limit retrieval to these stable external Collection keys (preferred over collectionIds). Omitted/null uses the caller's default scope; an explicit empty list is rejected.",
             example = "[\"customer-42:manual:v3\"]")
     private List<@ValidCollectionKey String> collectionKeys;
 
-    @Schema(description = "Limit retrieval to these document IDs (optional; intersected with collectionIds when both set)",
+    @Schema(description = "Limit retrieval to these document IDs (optional; intersected with the resolved Collection scope when both are set)",
             example = "[10, 20]")
     private List<Long> documentIds;
 

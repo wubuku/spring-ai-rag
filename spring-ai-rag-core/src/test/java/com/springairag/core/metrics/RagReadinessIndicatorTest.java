@@ -110,7 +110,7 @@ class RagReadinessIndicatorTest {
         components.put("pgvector", new ComponentHealthService.ComponentStatus("UP",
                 Map.of("version", "0.7.4"), null));
         components.put("tables", new ComponentHealthService.ComponentStatus("UP",
-                Map.of("rag_documents", 150, "rag_collections", 5), null));
+                Map.of("rag_documents", 150, "rag_collection", 5), null));
         components.put("cache", new ComponentHealthService.ComponentStatus("UP",
                 Map.of("hitRate", "82.3%", "hitCount", 823L, "missCount", 177L), null));
 

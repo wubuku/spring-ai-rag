@@ -65,8 +65,9 @@ export const filesApi = {
    * This is a convenience endpoint that combines import + RAG document creation.
    * Optionally triggers embedding.
    * @param file PDF File
-   * @param collectionId Optional collection ID to associate with
+   * @param collectionId Deprecated optional numeric Collection ID
    * @param embed Whether to trigger embedding (default: false - returns immediately)
+   * @param collectionKey Preferred stable Collection key
    */
   importPdfToRag: (file: File, collectionId?: number, embed: boolean = false, collectionKey?: string) => {
     const formData = new FormData();
@@ -87,8 +88,9 @@ export const filesApi = {
    * Trigger embedding for an already-imported PDF (Markdown already in fs_files).
    * Uses sync mode for immediate JSON response.
    * @param uuid Virtual directory UUID of the imported PDF
-   * @param collectionId Optional collection ID to associate
+   * @param collectionId Deprecated optional numeric Collection ID
    * @param forceReembed Whether to force re-embedding (default: false)
+   * @param collectionKey Preferred stable Collection key
    */
   triggerEmbedding: (uuid: string, collectionId?: number, forceReembed: boolean = false, collectionKey?: string) => {
     const params = new URLSearchParams();

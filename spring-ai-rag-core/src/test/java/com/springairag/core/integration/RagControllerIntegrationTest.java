@@ -472,6 +472,33 @@ class RagControllerIntegrationTest {
         }
 
         @Test
+        void getCollectionByKey_restrictedUnknownKeyReturns403WithoutGlobalLookup()
+                throws Exception {
+            com.springairag.core.entity.RagApiKey apiKey =
+                    new com.springairag.core.entity.RagApiKey();
+            apiKey.setRole(com.springairag.core.entity.ApiKeyRole.NORMAL);
+            apiKey.setAllowedCollectionIds("2");
+            when(collectionIdentityResolver.requireActiveWithinAllowed(
+                    "missing-or-unauthorized", Set.of(2L)))
+                    .thenThrow(new com.springairag.core.exception.RagException(
+                            com.springairag.api.enums.ErrorCode.COLLECTION_NOT_FOUND,
+                            "missing"));
+
+            mockMvc.perform(get("/api/v1/rag/collections/by-key")
+                            .param("collectionKey", "missing-or-unauthorized")
+                            .requestAttr(
+                                    com.springairag.core.filter.ApiKeyAuthFilter
+                                            .AUTHENTICATED_API_KEY_ENTITY,
+                                    apiKey))
+                    .andExpect(status().isForbidden())
+                    .andExpect(content().contentType("application/problem+json"))
+                    .andExpect(jsonPath("$.error").value("FORBIDDEN"));
+
+            verify(collectionIdentityResolver, never())
+                    .requireActive(null, "missing-or-unauthorized");
+        }
+
+        @Test
         void listCollections_returnsPaginated() throws Exception {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
@@ -502,6 +529,39 @@ class RagControllerIntegrationTest {
 
             mockMvc.perform(delete("/api/v1/rag/collections/{id}", 999))
                     .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void restoreCollection_activeCollectionReturns404() throws Exception {
+            when(ragCollectionService.restoreCollection(1L)).thenReturn(Optional.empty());
+
+            mockMvc.perform(post("/api/v1/rag/collections/{id}/restore", 1))
+                    .andExpect(status().isNotFound());
+        }
+
+        @Test
+        void importCollection_duplicateKeyReturns409() throws Exception {
+            when(ragCollectionService.createCollection(any()))
+                    .thenThrow(new com.springairag.core.exception.RagException(
+                            com.springairag.api.enums.ErrorCode.DUPLICATE_RESOURCE,
+                            "Collection key already exists: duplicate-import"));
+
+            mockMvc.perform(post("/api/v1/rag/collections/import")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "collectionKey": "duplicate-import",
+                                        "name": "Duplicate import",
+                                        "documents": []
+                                    }
+                                    """))
+                    .andExpect(status().isConflict())
+                    .andExpect(content().contentType("application/problem+json"))
+                    .andExpect(jsonPath("$.error").value("DUPLICATE_RESOURCE"))
+                    .andExpect(jsonPath("$.detail")
+                            .value("Collection key already exists: duplicate-import"));
+
+            verify(documentRepository, never()).saveAndFlush(any());
         }
 
         @Test
