@@ -1,7 +1,7 @@
 # JSONB 结构化记录实施进度
 
 > 对应规划：[JSONB 结构化记录导入、嵌入与检索实施规划](2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md)
-> 状态：实现与基本验证已完成，正在执行固定范围三轮无修改收敛检查。
+> 状态：实现与基本验证已完成，最终文档门禁已通过，正在执行固定范围三轮无修改收敛检查。
 > 开始日期：2026-08-15
 
 ## 执行规则
@@ -39,7 +39,7 @@
 | 3. Upsert、batch、search、ACL、错误 | 已完成 | 四个端点、幂等 identity、advisory lock、批量逐项失败隔离、ACL 和结构化冲突错误已实现；待测试收口 |
 | 4. Version / collection 生命周期 | 已完成 | payload-only 强制版本、版本快照、clone 保留 JSON 字段并建立新初始版本、typed import 复用 JSON persistence |
 | 5. 测试、脚本、正式文档 | 已完成 | 聚焦测试、一键门禁、真实 JSONB HTTP E2E 脚本和正式中英文文档已完成；project-docs 门禁通过 |
-| 6. 基本集成验证 | 已完成 | JSONB 全层一键门禁 11/11 通过；Mock Playwright 38/38 通过；后端 PostgreSQL profile 健康检查通过 |
+| 6. 基本集成验证 | 已完成 | JSONB 全层一键门禁 11/11 通过；Mock Playwright 40/40 通过；真实 JSONB HTTP E2E 29/29 通过；后端 PostgreSQL profile 健康检查通过 |
 | 7. 三轮实现代码收敛检查 | 进行中 | 基本门槛已绿，正在按固定范围执行连续 3 轮无修改检查 |
 
 ## 验证记录
@@ -55,6 +55,8 @@
 | 2026-08-15 | `JsonbStructuredRecordsPostgresIntegrationTest` | 通过 2/2；`-Dapi.version=1.40` 解决 Docker API 协商，`TESTCONTAINERS_RYUK_DISABLED=true` 绕过本机 Ryuk registry 证书问题；Flyway 空库迁移成功到 V29 |
 | 2026-08-15 | `./scripts/verify-jsonb-records.sh` gate-06 | 通过 11/11；API DTO、documents chunker、JSON service/controller/OpenAPI、PostgreSQL JSONB、`mvn clean compile test-compile`、WebUI Vitest/生产构建、Mock Playwright 38/38、project-docs、`git diff --check` 全部通过；日志与汇总在 `.verification/jsonb-verification/20260815-jsonb-gate-06/` |
 | 2026-08-15 | PostgreSQL profile 服务启动 | `SERVER_PORT=18082 LLM_PROVIDER=openai RAG_SECURITY_ENABLED=false ./scripts/start-real-e2e-server.sh` 启动成功；`/actuator/health` 返回 `UP`，数据库组件为 `UP` |
+| 2026-08-15 | 真实 JSONB HTTP E2E | `BASE_URL=http://127.0.0.1:18083` 下通过 29/29；覆盖 upsert/search/detail、collection scope、payload-only 不重嵌入、`retrievalText` 更新重嵌入、clone/export/import 和受限 API key allow/deny；未输出真实 key 或完整 payload |
+| 2026-08-15 | `./scripts/verify-jsonb-records.sh` gate-final-02 | 通过 11/11；API DTO 467、documents chunker 26、core JSONB/controller 93、PostgreSQL JSONB 2、WebUI Vitest 170、Mock Playwright 40/40、Maven clean compile/test-compile、project-docs 和 whitespace 全部通过；日志与汇总在 `.verification/jsonb-verification/20260815-jsonb-gate-final-02/` |
 
 ## 已知阻塞与处理
 
@@ -83,3 +85,8 @@
   测试导入，未修改业务实现，随后 gate-06 全部通过。
 - 2026-08-15 验证命令必须串行执行；尤其不能并发运行含 `mvn clean` 的门禁与其他 Maven
   测试，否则会删除对方正在使用的 `target/`，产生与业务无关的类缺失。
+- 2026-08-15 真实服务验证：启动脚本在本机执行环境中退出后，后台服务可能被一并回收；
+  真实 HTTP E2E 使用持久前台会话承载服务，启动参数仍复用
+  `scripts/start-real-e2e-server.sh`，避免误判“已启动”但随后连接失败。
+- 2026-08-15 最终门禁首轮发现新增草稿的行尾空格，修正后重新执行完整门禁；
+  `gate-final-02` 已通过，当前 `git diff HEAD --check`、暂存区和工作区 whitespace 检查均通过。
