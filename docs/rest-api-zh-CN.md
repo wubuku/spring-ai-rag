@@ -60,6 +60,20 @@ X-API-Key: your-api-key
 - 显式请求范围外集合返回 `403`。
 - 受限 Key 未提供集合过滤时，检索自动收敛到其允许列表。
 
+### Collection 检索范围语义
+
+Chat 和 Search 的 `collectionIds` 使用相同语义：
+
+- 对不受限调用方，省略或传 `[]` 表示不按 Collection 限制，将搜索全部可检索文档。
+- 传非空列表表示仅检索这些 Collection；后端支持一次指定多个 Collection。
+- 同时提供 `documentIds` 时，两者取交集。
+- 非空 Collection 范围没有任何文档时返回空结果，不会退化为全库检索。
+- 对受限 API Key，省略或传 `[]` 会自动使用 Key 的 `allowedCollectionIds`；
+  显式传入范围外 ID 返回 `403`。
+
+当前实现会先把 Collection 展开为 document IDs，再由向量和全文检索按
+`document_id IN (...)` 过滤。大规模 Collection 的性能与参数数量需要单独压测。
+
 ### API 密钥管理
 
 root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为
@@ -608,7 +622,8 @@ Update a collection.
 
 ### `DELETE /api/v1/rag/collections/{id}`
 
-Delete a collection.
+软删除 Collection，并解除其文档关联。该操作不会删除文档或 embeddings；解除关联后的文档
+仍可能出现在未指定 `collectionIds` 的全库检索中。
 
 ---
 

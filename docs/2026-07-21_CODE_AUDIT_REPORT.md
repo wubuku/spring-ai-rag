@@ -1,5 +1,11 @@
 # spring-ai-rag 全面代码审核报告
 
+> **状态：历史快照，已被后续实现取代。** 本报告保留 2026-07-21 审计当时的发现，
+> 正文中“Chat 不支持 Collection”“没有 Collection ACL”“仍为 SNAPSHOT”等结论已经过时。
+> 当前事实以 [项目上下文](project-context-zh-CN.md)、
+> [架构文档](architecture-zh-CN.md) 和
+> [P0 实施记录](drafts/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md) 为准。
+>
 > **Purpose**: 基于代码与规划文档交叉验证的能力盘点；重点回答「高价值能力缺口」与「下一步做什么」。  
 > **Date**: 2026-07-21  
 > **Scope**: `spring-ai-rag-api/core/starter/documents`、`spring-ai-rag-webui`、`demos`、`docs`、部署与测试资产  

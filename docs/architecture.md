@@ -181,7 +181,85 @@ ChatModel (DeepSeek / Anthropic / ...)
 Response + rag_chat_history persistence
 ```
 
-### 4.2 Document Embedding Flow
+### 4.2 Collection-Scoped Retrieval
+
+Collection is an active retrieval boundary, not only a document category in
+the administration UI.
+
+```text
+ChatRequest / SearchRequest
+  collectionIds? + documentIds?
+        |
+        v
+ApiKeyCollectionAccess.resolveCollectionIds
+  - unrestricted: preserve the requested scope
+  - restricted: constrain to allowedCollectionIds; reject outside IDs with 403
+        |
+        v
+CollectionDocumentResolver
+  - collectionIds -> RagDocument IDs
+  - intersect with explicit documentIds
+  - preserve an empty scope when a non-empty request resolves to zero documents
+        |
+        +-- Chat -> RagChatService.RetrievalScope
+        |           -> HybridSearchAdvisor
+        +-- Search -> RagSearchController
+                    -> HybridRetrieverService
+        |
+        v
+Vector and full-text SQL
+  WHERE document_id IN (...)
+        |
+        v
+Only chunks inside the effective scope are returned
+```
+
+Request semantics:
+
+| Input | Unrestricted caller | Restricted API key |
+|-------|---------------------|--------------------|
+| Omit `collectionIds` or send `[]` | No Collection filter | Use the key's allow-list |
+| Non-empty `collectionIds` | Search one or more Collections | Must be a subset of the allow-list or return `403` |
+| Include `documentIds` as well | Intersect with Collection membership | Apply ACL first, then intersect |
+| Non-empty scope resolves to zero documents | Return empty; never search the full corpus | Return empty; never search the full corpus |
+
+Data model and current boundaries:
+
+- `rag_documents.collection_id` is nullable, so a document belongs to at most
+  one Collection. Unassigned documents cannot be selected through
+  `collectionIds`, but may appear in unscoped retrieval or through explicit
+  `documentIds`.
+- Deleting a Collection soft-deletes it and clears `collection_id` from its
+  documents. It does not delete documents or `rag_embeddings`, so those
+  documents may still be found by full-corpus retrieval.
+- `rag_collection.embedding_model` and `dimensions` do not participate in
+  runtime model routing. Retrieval uses the global EmbeddingModel and the
+  shared `VECTOR(1024)` schema.
+- Collection and Document `enabled` states are not yet fully included in
+  retrieval SQL.
+- The current MVP expands Collections to a complete document-ID list and then
+  generates `IN (...)`. Large Collections should move toward retrieval SQL
+  that joins `rag_documents` and filters directly on `collection_id`.
+- WebUI Chat currently selects one Collection while the backend accepts
+  multiple. The standalone Search page has no Collection selector yet.
+
+Source anchors:
+
+- [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
+- [HybridSearchAdvisor](../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
+- [RagSearchController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
+- [HybridRetrieverService](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+
+Regression-test anchors:
+
+- [CollectionDocumentResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionDocumentResolverTest.java)
+- [RagSearchControllerTest](../spring-ai-rag-core/src/test/java/com/springairag/core/controller/RagSearchControllerTest.java)
+- [HybridSearchAdvisorTest](../spring-ai-rag-core/src/test/java/com/springairag/core/advisor/HybridSearchAdvisorTest.java)
+- [ApiKeyCollectionAccessTest](../spring-ai-rag-core/src/test/java/com/springairag/core/security/ApiKeyCollectionAccessTest.java)
+
+### 4.3 Document Embedding Flow
 
 ```
 POST /api/v1/rag/documents/{id}/embed

@@ -119,15 +119,35 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
     const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
     const accumulatedContentRef = useRef<string>('');
 
-    const send = useCallback(async (message: string, collectionId?: number, conversationId?: string) => {
+    const send = useCallback(async (
+        message: string,
+        collectionIds?: number[] | number,
+        conversationId?: string,
+        model?: string
+    ) => {
         close();
         setIsConnected(true);
         accumulatedContentRef.current = '';
 
+        const normalizedIds =
+            collectionIds == null
+                ? undefined
+                : Array.isArray(collectionIds)
+                    ? collectionIds
+                    : [collectionIds];
+
         const response = await fetch('/api/v1/rag/chat/stream', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, collectionId, sessionId: conversationId }),
+            headers: {
+                'Content-Type': 'application/json',
+                ...getCredentialHeaders(),
+            },
+            body: JSON.stringify({
+                message,
+                collectionIds: normalizedIds?.length ? normalizedIds : undefined,
+                sessionId: conversationId,
+                model,
+            }),
         });
 
         const reader = response.body.getReader();

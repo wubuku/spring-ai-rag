@@ -63,6 +63,24 @@ Database business keys may carry `allowedCollectionIds`:
 - Retrieval without an explicit collection filter is constrained to the
   key's allow-list.
 
+### Collection Retrieval Scope
+
+Chat and Search use the same `collectionIds` semantics:
+
+- For an unrestricted caller, omission or `[]` means no Collection filter and
+  searches all retrievable documents.
+- A non-empty list restricts retrieval to those Collections; the backend
+  accepts more than one Collection.
+- If `documentIds` is also present, the effective scope is their intersection.
+- A non-empty Collection scope with no documents returns an empty result and
+  never falls through to full-corpus retrieval.
+- For a restricted API key, omission or `[]` is replaced by the key's
+  `allowedCollectionIds`; an explicit outside ID returns `403`.
+
+The current implementation expands Collections to document IDs before vector
+and full-text retrieval applies a `document_id IN (...)` filter. Large
+Collections require dedicated parameter-size and performance testing.
+
 ### Rate Limiting
 
 When `rag.rate-limit.enabled` is true, all API requests are subject to a sliding-window rate limit.
@@ -692,7 +710,9 @@ Update a collection.
 
 ### `DELETE /api/v1/rag/collections/{id}`
 
-Delete a collection.
+Soft-delete a Collection and unlink its documents. This does not delete the
+documents or embeddings; unlinked documents may still appear in full-corpus
+retrieval when `collectionIds` is omitted.
 
 ---
 

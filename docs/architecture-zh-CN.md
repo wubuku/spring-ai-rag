@@ -181,7 +181,78 @@ ChatModel (DeepSeek / Anthropic / ...)
 响应 + rag_chat_history 持久化
 ```
 
-### 4.2 文档嵌入流
+### 4.2 Collection 范围检索
+
+Collection 已经是实际检索边界，不只是管理页面中的文档分类。
+
+```text
+ChatRequest / SearchRequest
+  collectionIds? + documentIds?
+        │
+        ▼
+ApiKeyCollectionAccess.resolveCollectionIds
+  - unrestricted：保留调用方范围
+  - restricted：限制为 allowedCollectionIds，越界返回 403
+        │
+        ▼
+CollectionDocumentResolver
+  - collectionIds -> RagDocument IDs
+  - 与显式 documentIds 取交集
+  - 非空范围解析为零文档时保留 empty scope
+        │
+        ├── Chat -> RagChatService.RetrievalScope
+        │           -> HybridSearchAdvisor
+        └── Search -> RagSearchController
+                    -> HybridRetrieverService
+        │
+        ▼
+向量与全文 SQL
+  WHERE document_id IN (...)
+        │
+        ▼
+仅返回有效范围内的 chunks
+```
+
+请求语义：
+
+| 输入 | 不受限调用方 | 受限 API Key |
+|------|--------------|---------------|
+| 省略 `collectionIds` 或传 `[]` | 不按 Collection 过滤 | 自动使用 Key 的允许列表 |
+| 非空 `collectionIds` | 检索指定一个或多个 Collection | 必须是允许列表的子集，否则 `403` |
+| 同时给出 `documentIds` | 与 Collection 所属文档取交集 | 先应用 ACL，再取交集 |
+| 非空范围解析后为零文档 | 返回空结果，不调用全库检索 | 返回空结果，不调用全库检索 |
+
+数据模型和当前边界：
+
+- `rag_documents.collection_id` 是可空外键，所以一个文档最多属于一个 Collection；
+  未归属文档不能通过 `collectionIds` 选中，但仍可出现在未限定 Collection 或显式
+  `documentIds` 的检索中。
+- 删除 Collection 会软删除集合并批量清空关联文档的 `collection_id`，不会删除文档或
+  `rag_embeddings`；这些文档之后仍可能被全库检索命中。
+- `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
+  全局 EmbeddingModel 和统一的 `VECTOR(1024)`。
+- Collection / Document 的 `enabled` 状态尚未完整加入检索 SQL。
+- Collection 先解析成完整 document ID 列表，再生成 `IN (...)`；这是可用的 MVP，
+  但大集合应改为检索 SQL 直接 JOIN `rag_documents` 并按 `collection_id` 过滤。
+- WebUI Chat 当前单选 Collection，后端支持多个；独立 Search 页面尚未暴露 Collection 选择。
+
+源码锚点：
+
+- [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
+- [HybridSearchAdvisor](../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
+- [RagSearchController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
+- [HybridRetrieverService](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+
+回归测试锚点：
+
+- [CollectionDocumentResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionDocumentResolverTest.java)
+- [RagSearchControllerTest](../spring-ai-rag-core/src/test/java/com/springairag/core/controller/RagSearchControllerTest.java)
+- [HybridSearchAdvisorTest](../spring-ai-rag-core/src/test/java/com/springairag/core/advisor/HybridSearchAdvisorTest.java)
+- [ApiKeyCollectionAccessTest](../spring-ai-rag-core/src/test/java/com/springairag/core/security/ApiKeyCollectionAccessTest.java)
+
+### 4.3 文档嵌入流
 
 ```
 POST /api/v1/rag/documents/{id}/embed

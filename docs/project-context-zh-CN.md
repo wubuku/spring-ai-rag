@@ -50,9 +50,34 @@ QueryRewriteAdvisor (+10)
 关键规则：
 
 - 对话与检索支持 Collection / Document 范围。
-- 请求明确给出空范围时必须 fail closed，不能退化为全库检索。
+- 非空 Collection / Document 范围解析后没有匹配文档时必须 fail closed，不能退化为全库检索。
 - `RerankAdvisor` 将检索上下文注入用户消息，兼容限制多个 system message 的 provider。
 - Spring AI memory 与业务审计历史分别存储。
+
+### Collection 当前语义
+
+Collection 不是仅用于展示的分类字段，而是已经进入写入、检索和权限链路的知识库边界：
+
+- `rag_documents.collection_id` 建立 Collection 与 Document 的一对多关系；单个文档最多属于一个
+  Collection，也可以不属于任何 Collection。
+- Chat 与 Search 后端接受多个 `collectionIds`。控制器先应用 API Key Collection ACL，
+  `CollectionDocumentResolver` 再将 Collection 展开为 document IDs，并与显式
+  `documentIds` 取交集；向量检索和全文检索最终按这些 document IDs 过滤。
+- 不受限调用方省略 `collectionIds` 或传 `[]` 表示不限定 Collection；受限 API Key
+  省略或传空列表时会被自动收敛到该 Key 的允许列表。请求非空范围但解析不到文档时返回空结果。
+- WebUI Chat 当前提供单 Collection 选择，后端协议支持多 Collection；Collections 页面可进入
+  对应文档列表。独立 Search 页面当前还没有 Collection 选择器。
+
+当前边界：
+
+- Collection 的 `embeddingModel`、`dimensions` 当前是管理/导入导出元数据，不会为每个
+  Collection 切换 EmbeddingModel；实际写入和查询仍使用全局 Embedding 配置。
+- Collection / Document 的 `enabled` 状态尚未完整下推到向量和全文检索 SQL，不能把
+  “disabled”直接理解为“保证不可检索”。
+- 删除 Collection 会软删除集合并解除文档关联，不会删除文档或 embeddings；解除关联后的文档
+  仍可能出现在未限定 Collection 的全库检索中。
+- 当前实现先把 Collection 展开为 document IDs，再生成 `document_id IN (...)` 查询；
+  超大 Collection 需要评估参数规模，并优先演进为数据库直接按 `collection_id` JOIN/过滤。
 
 详细设计见 [architecture-zh-CN.md](architecture-zh-CN.md)。
 

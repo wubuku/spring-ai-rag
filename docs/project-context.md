@@ -50,9 +50,44 @@ QueryRewriteAdvisor (+10)
 Key rules:
 
 - Chat and search support Collection / Document scope.
-- An explicitly empty scope must fail closed instead of becoming a full-corpus query.
+- A non-empty Collection / Document scope that resolves to no documents must fail closed instead of becoming a full-corpus query.
 - `RerankAdvisor` injects context into the user message for providers that restrict multiple system messages.
 - Spring AI memory and business audit history are stored separately.
+
+### Current Collection Semantics
+
+Collection is not merely a display category. It is an active knowledge-base
+boundary across ingestion, retrieval, and authorization:
+
+- `rag_documents.collection_id` defines the one-to-many relationship. A
+  document belongs to at most one Collection and may also be unassigned.
+- Chat and Search accept multiple `collectionIds`. Controllers first apply the
+  API-key Collection ACL. `CollectionDocumentResolver` then expands
+  Collections to document IDs and intersects them with explicit `documentIds`;
+  vector and full-text retrieval filter on the resulting document IDs.
+- For an unrestricted caller, omitted `collectionIds` or `[]` means no
+  Collection filter. For a restricted API key, omission or an empty list is
+  replaced by the key's allow-list. A requested non-empty scope that resolves
+  to no documents returns an empty result.
+- The WebUI Chat page currently selects one Collection, while the backend
+  protocol supports multiple Collections. The Collections page links to its
+  documents. The standalone Search page does not yet expose a Collection
+  selector.
+
+Current boundaries:
+
+- Collection `embeddingModel` and `dimensions` are management/import-export
+  metadata. They do not select a per-Collection EmbeddingModel; ingestion and
+  query embedding still use the global embedding configuration.
+- Collection and Document `enabled` states are not fully enforced by vector
+  and full-text retrieval SQL. Do not interpret "disabled" as guaranteed
+  non-retrievability.
+- Deleting a Collection soft-deletes it and unlinks its documents; it does not
+  delete documents or embeddings. Unlinked documents may still appear in
+  unscoped full-corpus retrieval.
+- Retrieval currently expands Collections to document IDs and generates a
+  `document_id IN (...)` filter. Very large Collections require parameter-size
+  testing and should evolve toward a direct `collection_id` join/filter.
 
 See [architecture.md](architecture.md).
 
