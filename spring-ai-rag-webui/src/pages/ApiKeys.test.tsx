@@ -193,6 +193,48 @@ describe('ApiKeys', () => {
     expect(expiry?.max).toBe('');
   });
 
+  it('preserves the browser-managed year across unrelated rerenders', () => {
+    mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    const nameInput = screen.getByPlaceholderText('apiKeys.namePlaceholder');
+    const expiry = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+    const setNativeValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set;
+
+    expect(expiry).not.toBeNull();
+    expect(setNativeValue).toBeDefined();
+
+    fireEvent.change(expiry!, { target: { value: '' } });
+    setNativeValue!.call(expiry, '2099-12-31T23:59');
+    fireEvent.change(nameInput, { target: { value: 'Slow Keyboard Entry' } });
+
+    expect(expiry).toHaveValue('2099-12-31T23:59');
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
+    expect(mockMutateFn).toHaveBeenCalledWith({
+      name: 'Slow Keyboard Entry',
+      expiresAt: '2099-12-31T23:59:00',
+    });
+  });
+
+  it('does not submit when the required expiration is empty', () => {
+    mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.createKey' }));
+    fireEvent.change(screen.getByPlaceholderText('apiKeys.namePlaceholder'), {
+      target: { value: 'Missing Expiry' },
+    });
+    const expiry = document.querySelector<HTMLInputElement>('input[type="datetime-local"]');
+    fireEvent.change(expiry!, { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
+
+    expect(mockMutateFn).not.toHaveBeenCalled();
+  });
+
   it('submits an expiration beyond 90 days unchanged', () => {
     mockUseQuery.mockReturnValue({ data: { data: [] }, isPending: false });
     render(<BrowserRouter><ApiKeys /></BrowserRouter>);

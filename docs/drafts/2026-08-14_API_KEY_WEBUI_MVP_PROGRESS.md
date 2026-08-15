@@ -1,9 +1,9 @@
 # API Key WebUI MVP 实施进度
 
-> 状态：Phase 0 + Phase M0 及 WebUI 创建/CORS、expiry 修复已实施并通过验收；
-> 本次修复连续三轮无修改检查已完成
+> 状态：Phase 0 + Phase M0、WebUI 创建/CORS/expiry 修复及日期键盘录入 follow-up
+> 均已实施并通过验收；本次 follow-up 连续三轮无修改检查已完成
 > 最近更新：2026-08-15
-> 代码基线（本次提交前）：`main` / `6780200`；MVP 功能提交：`ccc0e42`
+> 代码基线（本次提交前）：`main` / `1614abb`；MVP 功能提交：`ccc0e42`
 > 实施规划：[API Key 加固独立实施规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
 
 ## 1. 当前目标
@@ -75,6 +75,7 @@ shared quota 或多实例一致性。MVP 部署边界为单实例、TLS、受控
 | WebUI unlock | 已完成 | `/webui/unlock`、内存 credential、退出和 route guard |
 | 外部业务 Key | 已完成 | 可调用读写数据面，管理 API 返回 403 |
 | WebUI 创建/CORS/expiry 修复 | 已完成 | 浏览器 POST 通过、长期 expiry 可创建、动态端口 CORS 通过 |
+| 日期键盘录入 follow-up | 已完成 | 慢速输入 `2099` 不被 React 回写截断 |
 | Secret transport | 已完成 | root 模式拒绝 query，限流使用稳定 principal ID |
 | 验证硬门槛 | 已完成 | 后端/前端全部指定验证通过 |
 | 本次修复实现三轮检查 | 已完成 | 连续三轮无代码修改 |
@@ -106,7 +107,7 @@ shared quota 或多实例一致性。MVP 部署边界为单实例、TLS、受控
 - `mvn test`：API `530`、documents `74`、core `2599`、starter `48`，
   合计 `3251/3251`。
 - `mvn clean compile test-compile`：五模块 reactor 成功。
-- 前端 ESLint、TypeScript `--noEmit`、production build、Vitest `161/161`、
+- 前端 ESLint、TypeScript `--noEmit`、production build、Vitest `163/163`、
   API Key MVP Mock Playwright `1/1` 均通过。
 - `-Pwebui` 已重新构建内嵌静态资源；`dist/index.html`、源码静态目录和运行时入口
   bundle 一致，后端直接提供页面和入口 bundle。
@@ -116,6 +117,8 @@ shared quota 或多实例一致性。MVP 部署边界为单实例、TLS、受控
   raw key、业务 Key `/auth/me` 和集合读取 `200`、WebUI 吊销 `204`、吊销后业务 Key
   `401`，以及 URL/console/localStorage/sessionStorage 无 root 或业务 secret。
 - 内嵌后端 WebUI 可 root 解锁，expiry 输入无最大值且默认建议约 365 天。
+- 日期控件已改为浏览器原生维护值；Chromium 以每字符 250ms 输入 `2099` 后，控件值、
+  React 重渲染后的值和创建请求均保留完整年份。
 - 本轮创建的测试 Key 和此前遗留的精确测试记录均已清理，没有残留 `real-e2e-*` 测试
   Key。
 
@@ -278,3 +281,16 @@ standalone HTTP、内嵌 WebUI 产物、文档门禁和本次修复的三轮实�
 - 内嵌后端 WebUI 与 Vite bundle 入口一致，页面可解锁，expiry 无 `max` 且默认 365 天。
 - 自定义 `FRONTEND_PORT=16183` 启动时动态 CORS 管理写探针通过。
 - 仅删除本轮和此前遗留的精确测试 API Key 记录，数据库无 `real-e2e-*` 残留。
+
+### 2026-08-15：日期键盘录入 follow-up
+
+- 复现并定位 `datetime-local` 受控输入的时序风险：浏览器分段年份尚未完整时，React
+  可能把中间空值写回 DOM，导致慢速输入 `2099` 被截断。
+- expiry 改为 `defaultValue` 驱动的非受控原生字段；提交时通过 `FormData` 读取当前
+  最终值，不再逐键同步日期字符串到 React state。
+- 保留 `required`、动态 `min`、默认一年和无固定 `max`；空日期不会发起创建请求。
+- Vitest `163/163`、ESLint、TypeScript、production build、Chromium Mock E2E `1/1`
+  和 Maven 内嵌 WebUI 同步均通过。
+- 实际 Vite 页面以每字符 250ms 输入 `2099`，中间值按 `0002 -> 0020 -> 0209 -> 2099`
+  演进；React 重渲染后仍保持完整年份。
+- 基础验证后连续三轮固定范围检查均未发现问题、未修改代码，计数 `3/3`。

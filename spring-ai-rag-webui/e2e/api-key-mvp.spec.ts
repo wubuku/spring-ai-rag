@@ -15,22 +15,6 @@ interface MockKey {
   allowedCollectionIds?: number[];
 }
 
-function futureLocalDateTimeInput(days: number): string {
-  const date = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
-  const pad = (value: number) => String(value).padStart(2, '0');
-  return [
-    date.getFullYear(),
-    '-',
-    pad(date.getMonth() + 1),
-    '-',
-    pad(date.getDate()),
-    'T',
-    pad(date.getHours()),
-    ':',
-    pad(date.getMinutes()),
-  ].join('');
-}
-
 test('root unlock manages shown-once business keys without browser persistence', async ({ page }) => {
   const createdRawKey = `${MOCK_BUSINESS_API_KEY}_created`;
   const rotatedRawKey = `${MOCK_BUSINESS_API_KEY}_rotated`;
@@ -162,8 +146,11 @@ test('root unlock manages shown-once business keys without browser persistence',
   const expiry = page.locator('input[type="datetime-local"]');
   await expect(expiry).not.toHaveValue('');
   await expect(expiry).not.toHaveAttribute('max');
-  const longExpiry = futureLocalDateTimeInput(400);
-  await expiry.fill(longExpiry);
+  const longExpiry = '2099-12-31T23:59';
+  await expiry.fill('2027-12-31T23:59');
+  await expiry.click({ position: { x: 80, y: 20 } });
+  await expiry.pressSequentially('2099', { delay: 250 });
+  await expect(expiry).toHaveValue(longExpiry);
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   await expect(page.getByText(createdRawKey)).toBeVisible();

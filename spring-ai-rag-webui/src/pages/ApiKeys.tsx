@@ -216,7 +216,6 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [expiryDefaults] = useState(createExpiryDefaults);
-  const [expiresAt, setExpiresAt] = useState(expiryDefaults.suggested);
   const [restrictCollections, setRestrictCollections] = useState(false);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState<number[]>([]);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
@@ -238,12 +237,19 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!name.trim() || !expiresAt) return;
+    const expiresAtValue = new FormData(e.currentTarget).get('expiresAt');
+    if (!name.trim()
+        || typeof expiresAtValue !== 'string'
+        || !expiresAtValue) {
+      return;
+    }
     const data: ApiKeyCreateRequest = {
       name: name.trim(),
-      expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt,
+      expiresAt: expiresAtValue.length === 16
+        ? `${expiresAtValue}:00`
+        : expiresAtValue,
     };
     if (restrictCollections) {
       data.allowedCollectionIds = selectedCollectionIds;
@@ -296,9 +302,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <label className={styles.label}>{t('apiKeys.expiresAt')} {t('common.required')}</label>
               <input
                 type="datetime-local"
+                name="expiresAt"
                 className={styles.input}
-                value={expiresAt}
-                onChange={e => setExpiresAt(e.target.value)}
+                defaultValue={expiryDefaults.suggested}
                 min={expiryDefaults.minimum}
                 required
               />
@@ -371,7 +377,6 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 disabled={
                   createMutation.isPending
                   || !name.trim()
-                  || !expiresAt
                   || (restrictCollections && selectedCollectionIds.length === 0)
                 }
               >
