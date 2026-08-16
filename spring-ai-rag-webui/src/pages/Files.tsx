@@ -325,7 +325,7 @@ export function Files() {
                 {String(error)}
               </div>
             ) : treeData?.data?.entries?.length === 0 ? (
-              <div style={{ padding: '1rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
+              <div className={styles.treeEmpty}>
                 {t('files.empty')}
               </div>
             ) : (

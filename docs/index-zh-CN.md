@@ -25,6 +25,8 @@
 | 规划 OpenAI 兼容服务 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
 | 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
 | 使用 JSONB 结构化记录检索 | [REST API](rest-api-zh-CN.md) | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| 治理 WebUI 水平对齐 | [WebUI 对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | [实施进度](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PROGRESS.md) |
+| 新增 / 修改 WebUI 样式 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
@@ -65,6 +67,8 @@
 | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（规划检查完成，待批准） |
 | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | 已实施：清理无效 `rag_vector_store` 路径，使用不可变模型身份、固定维度列、Profile 级状态和可回滚换模流程 |
 | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
+| [WebUI 水平对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | 清理模板样式污染，建立普通内容默认起始对齐、有限语义居中和自动防回归门禁 |
+| [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 
 ### 配置、API、数据
 

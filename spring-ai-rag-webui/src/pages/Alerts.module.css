@@ -135,7 +135,7 @@
   min-width: 120px;
   font-size: 0.875rem;
   color: var(--color-text-secondary);
-  text-align: right;
+  text-align: end;
 }
 
 .input {
@@ -279,14 +279,14 @@
 /* ===== Empty / Loading ===== */
 
 .empty {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-secondary);
   font-size: 0.9rem;
 }
 
 .loading {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-secondary);
 }

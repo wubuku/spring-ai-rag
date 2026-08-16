@@ -36,6 +36,7 @@
 10. **注释与文档语言**：代码注释、Javadoc、用户可见说明优先**中文**（项目约定）；对外英文文档与中文成对维护时需同步。
 11. **境内 Docker / 构建网络**：拉镜像或构建超时先看 [docs/china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md)，优先 `scripts/docker-build-local.sh`；不要把区域镜像硬编码进 Dockerfile。
 12. **1.0 发版 / 验产物**：按 [docs/release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) 与 `scripts/verify-release.sh`；检索默认与 goldenset 见 [docs/quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md)。
+13. **WebUI 对齐**：普通页面内容默认 `text-align: start`；上传投放区等明确空间语义才允许居中，新增居中必须通过 `npm run check:alignment`。见 [WebUI 水平对齐指南](docs/webui-alignment-guidelines-zh-CN.md)。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 

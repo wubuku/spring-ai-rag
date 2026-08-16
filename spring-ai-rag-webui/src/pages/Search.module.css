@@ -127,7 +127,7 @@
   background: none;
   border: none;
   cursor: pointer;
-  text-align: left;
+  text-align: start;
   transition: background 0.1s ease;
 }
 
@@ -265,13 +265,13 @@
 }
 
 .loading {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-muted);
 }
 
 .empty {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-muted);
 }

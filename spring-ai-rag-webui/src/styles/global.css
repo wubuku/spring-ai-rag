@@ -11,6 +11,12 @@
   --color-success: #22c55e;
   --color-warning: #f59e0b;
   --color-error: #ef4444;
+
+  /* Preserve the current typography baseline while removing the Vite template styles. */
+  font-size: 18px;
+  letter-spacing: 0.18px;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 [data-theme="dark"] {
@@ -34,6 +40,12 @@
   padding: 0;
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
 body {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--color-bg);
@@ -41,6 +53,11 @@ body {
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  min-height: 100svh;
+  text-align: start;
 }
 
 button {
@@ -66,4 +83,10 @@ a:hover {
   font-weight: 700;
   margin-bottom: 1.25rem;
   color: var(--color-text);
+}
+
+@media (max-width: 1024px) {
+  :root {
+    font-size: 16px;
+  }
 }

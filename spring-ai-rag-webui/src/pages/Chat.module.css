@@ -91,7 +91,7 @@
   padding: 0.625rem 1rem;
   background: none;
   border: none;
-  text-align: left;
+  text-align: start;
   cursor: pointer;
   font-size: 0.875rem;
   color: var(--color-text);
@@ -111,6 +111,7 @@
 }
 
 .emptyState {
+  /* alignment-policy: allow-center -- complete chat empty state */
   text-align: center;
   color: var(--color-text-muted);
   padding: 2rem;

@@ -116,7 +116,7 @@
 .charCount {
   font-size: 0.75rem;
   color: var(--color-text-muted);
-  text-align: right;
+  text-align: end;
 }
 
 .error {

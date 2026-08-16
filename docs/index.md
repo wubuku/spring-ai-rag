@@ -25,6 +25,8 @@
 | Plan OpenAI compatibility | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
 | Plan embedding-model / vector migration | [Project context](project-context.md) | [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
 | Use JSONB structured-record retrieval | [REST API](rest-api.md) | [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| Govern WebUI horizontal alignment | [WebUI alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | [Implementation progress](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PROGRESS.md) |
+| Add / modify WebUI styles | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
@@ -65,6 +67,8 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Expose RAG deployments as compatible model services; consumes the separate API-key prerequisite (planning review complete; awaiting approval) |
 | [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | Implemented: remove the unused `rag_vector_store` path and use immutable model identity, fixed-size columns, Profile-scoped state, and rollback-safe migration |
 | [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | Implemented caller-supplied JSONB plus natural-language descriptions; only descriptions are indexed/embedded, with collection / external-ID idempotency |
+| [WebUI horizontal-alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | Remove template-style pollution and establish start-aligned application content, limited semantic centering, and automated regression checks |
+| [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
 
 ### Config, API, data
 

@@ -2,6 +2,7 @@
   border: 2px dashed var(--color-border);
   border-radius: 8px;
   padding: 2rem;
+  /* alignment-policy: allow-center -- file upload drop zone */
   text-align: center;
   margin-bottom: 1.5rem;
   transition: all 0.2s ease;
@@ -111,14 +112,14 @@
 
 .progressText {
   width: 40px;
-  text-align: right;
+  text-align: end;
   font-size: 0.75rem;
   color: var(--color-text-muted);
 }
 
 .loading,
 .error {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-muted);
 }
@@ -193,7 +194,7 @@
 .table th,
 .table td {
   padding: 0.75rem 1rem;
-  text-align: left;
+  text-align: start;
   border-bottom: 1px solid var(--color-border);
 }
 
@@ -230,7 +231,7 @@
   cursor: pointer;
   font-size: inherit;
   font-weight: inherit;
-  text-align: left;
+  text-align: start;
   padding: 0;
 }
 
@@ -284,6 +285,7 @@
 }
 
 .empty {
+  /* alignment-policy: allow-center -- table-wide empty state */
   text-align: center;
   padding: 2rem !important;
   color: var(--color-text-muted);

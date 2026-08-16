@@ -30,6 +30,7 @@
   border: 2px dashed var(--color-border, #d1d5db);
   border-radius: 8px;
   padding: 2rem;
+  /* alignment-policy: allow-center -- file upload drop zone */
   text-align: center;
   cursor: pointer;
   transition: border-color 0.2s, background 0.2s;
@@ -295,7 +296,7 @@
 .previewContent td {
   border: 1px solid #dfe2e5;
   padding: 0.5em 0.8em;
-  text-align: left;
+  text-align: start;
 }
 
 .previewContent th {
@@ -346,6 +347,15 @@
   gap: 0.75rem;
   color: var(--color-text-muted, #9ca3af);
   font-size: 0.875rem;
+  /* alignment-policy: allow-center -- bounded file preview placeholder */
+  text-align: center;
+}
+
+.treeEmpty {
+  padding: 1rem;
+  color: var(--color-text-muted, #6b7280);
+  font-size: 0.8rem;
+  text-align: start;
 }
 
 .previewEmptyIcon {

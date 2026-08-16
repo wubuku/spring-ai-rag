@@ -7,8 +7,6 @@ import { ApiKeyAuthProvider } from './auth/ApiKeyAuthProvider';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { Unlock } from './pages/Unlock';
 
-import './styles/global.css';
-
 // Route-level code splitting: each page becomes a separate chunk.
 // Lazy-loaded pages are split into their own JS files by Vite,
 // dramatically reducing the initial bundle size (721KB → per-route chunks).

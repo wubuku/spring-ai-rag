@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import './index.css';
+import './styles/global.css';
 import './i18n'; // i18n configuration (react-i18next + language detector)
 import App from './App.tsx';
 import { clearLegacyCredentialStorage } from './auth/credentialStore';

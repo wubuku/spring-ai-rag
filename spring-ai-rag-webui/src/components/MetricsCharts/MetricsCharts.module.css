@@ -48,7 +48,7 @@
 }
 
 .loading {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-muted);
 }

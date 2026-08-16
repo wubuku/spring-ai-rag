@@ -89,7 +89,7 @@
 .htmlContent td {
   border: 1px solid #dfe2e5;
   padding: 0.5em 0.8em;
-  text-align: left;
+  text-align: start;
 }
 
 .htmlContent th {
@@ -162,6 +162,7 @@
   gap: 1rem;
   color: var(--color-text-muted, #6b7280);
   padding: 2rem;
+  /* alignment-policy: allow-center -- bounded file preview fallback */
   text-align: center;
 }
 

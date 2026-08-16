@@ -55,7 +55,7 @@
 
 .loading,
 .empty {
-  text-align: center;
+  text-align: start;
   padding: 2rem;
   color: var(--color-text-muted);
 }
@@ -288,8 +288,14 @@
 }
 
 .collectionOption code {
+  display: inline-flex;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--color-surface-hover);
   color: var(--color-text-muted);
   font-size: 0.75rem;
+  font-family: ui-monospace, Consolas, monospace;
+  line-height: 1.35;
 }
 
 .scopeError {

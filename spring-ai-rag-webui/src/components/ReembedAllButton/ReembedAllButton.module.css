@@ -41,7 +41,7 @@
 
 .text {
   flex: 1;
-  text-align: left;
+  text-align: start;
   font-weight: 500;
 }
 
