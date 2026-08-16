@@ -184,10 +184,11 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V30.
+- Flyway is currently V1–V31.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
-  external-document synchronization schema.
+  external-document synchronization schema; V31 normalizes stored external
+  document identities without rewriting the already-released V30 migration.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 

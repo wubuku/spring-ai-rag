@@ -193,6 +193,20 @@ provider 来验证内容变化更新；只有在明确记录 provider 故障时�
 `EXTERNAL_DOCUMENT_E2E_EMBED=false`。该模式可以验证持久化与 no-embedding 状态，但不计入
 完整 embedding 验收门禁。
 
+迁移矩阵默认使用 Testcontainers：
+
+```bash
+mvn -pl spring-ai-rag-core \
+  -Dtest=ExternalDocumentSyncPostgresIntegrationTest \
+  -Dexternal-document.it.enabled=true \
+  test
+```
+
+Docker 不可用时，可通过 `EXTERNAL_DOCUMENT_IT_JDBC_URL`、
+`EXTERNAL_DOCUMENT_IT_USERNAME` 和 `EXTERNAL_DOCUMENT_IT_PASSWORD` 指向专用的一次性
+PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`。该测试会反复
+调用 `Flyway.clean()`，绝不能指向开发库或生产库。
+
 ## 覆盖率
 
 JaCoCo 已集成到所有模块：
@@ -224,7 +238,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V30、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V31、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -278,7 +292,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V30，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V31，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -304,7 +318,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V30，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V31，并验证 JSONB round-trip、
 仅更新 payload 的版本记录、相同描述下不同记录共存以及级联清理：
 
 ```bash

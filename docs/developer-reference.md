@@ -13,12 +13,13 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 |------|-------|
 | Java | 21+ |
 | Maven | 3.9+ |
-| Default port | `8081` |
+| Service / backend-only default port | `8081` |
+| `dev.sh` backend port | `18082` |
 | Local profile | `postgresql` |
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V30 |
+| Flyway | V1–V31 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -67,7 +68,7 @@ and starts. It also allows the exact Vite origin on the backend and verifies a
 root-authenticated management POST before reporting ready:
 
 ```text
-Backend: http://127.0.0.1:8081
+Backend: http://127.0.0.1:18082
 WebUI:   http://127.0.0.1:15173/webui/unlock
 ```
 
@@ -79,9 +80,14 @@ Status, stop, and port overrides:
 ```bash
 ./scripts/dev.sh --status
 ./scripts/dev.sh --stop
-BACKEND_PORT=18082 FRONTEND_PORT=15174 ./scripts/dev.sh
+BACKEND_PORT=19082 FRONTEND_PORT=15174 ./scripts/dev.sh
 RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
 ```
+
+The launcher never performs automatic Flyway repair. If startup detects a
+migration checksum mismatch, it prints the relevant cause. Restore the applied
+migration and place later changes in a new migration instead of rewriting
+schema history.
 
 Backend only:
 
@@ -99,7 +105,7 @@ export SPRING_PROFILES_ACTIVE=postgresql
 mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 ```
 
-Port cleanup and health:
+Port cleanup and health for the backend-only `8081` process:
 
 ```bash
 lsof -ti :8081 | xargs kill -9 2>/dev/null
@@ -107,6 +113,12 @@ curl -fsS http://127.0.0.1:8081/actuator/health
 ```
 
 Swagger: `http://127.0.0.1:8081/swagger-ui.html`
+
+For the full-stack launcher, use `18082` instead:
+
+```bash
+curl -fsS http://127.0.0.1:18082/actuator/health
+```
 
 ## 4. Database
 

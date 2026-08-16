@@ -534,7 +534,9 @@ unused `rag_vector_store` table when it is absent or empty. V27/V28 adds the
 required, globally unique, immutable `rag_collection.collection_key`;
 V29 adds JSONB structured-record columns and payload-aware version snapshots.
 V30 adds external-document source revisions, tombstones, version snapshots, and
-a Collection-scoped external identity constraint.
+a Collection-scoped external identity constraint. V31 normalizes stored external
+IDs using the same ASCII trim semantics as the API and rebuilds the partial
+unique index.
 
 ## Profile Overview
 

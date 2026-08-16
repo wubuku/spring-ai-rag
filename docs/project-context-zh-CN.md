@@ -160,9 +160,10 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V30。
+- Flyway 当前为 V1–V31。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
-  结构化记录；V30 增加外部文档同步 schema。
+  结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
+  已存储的外部文档身份。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 

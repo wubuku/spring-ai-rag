@@ -12,8 +12,10 @@ BACKEND_LOG="${STATE_DIR}/backend.log"
 FRONTEND_LOG="${STATE_DIR}/frontend.log"
 STATE_FILE="${STATE_DIR}/state.env"
 
-REQUESTED_BACKEND_PORT="${BACKEND_PORT:-8081}"
-REQUESTED_FRONTEND_PORT="${FRONTEND_PORT:-15173}"
+DEFAULT_BACKEND_PORT="18082"
+DEFAULT_FRONTEND_PORT="15173"
+REQUESTED_BACKEND_PORT="${BACKEND_PORT:-${DEFAULT_BACKEND_PORT}}"
+REQUESTED_FRONTEND_PORT="${FRONTEND_PORT:-${DEFAULT_FRONTEND_PORT}}"
 REQUESTED_ENV_FILE="${DEV_ENV_FILE:-${REPO_ROOT}/.env}"
 OPEN_BROWSER_SETTING="${RAG_DEV_OPEN_BROWSER:-true}"
 CALLER_ROOT_API_KEY="${RAG_ROOT_API_KEY:-}"
@@ -41,7 +43,7 @@ Usage:
   ./scripts/dev.sh --stop
 
 Overrides:
-  BACKEND_PORT=8081
+  BACKEND_PORT=18082
   FRONTEND_PORT=15173
   DEV_ENV_FILE=/path/to/.env
   RAG_DEV_OPEN_BROWSER=false
@@ -273,8 +275,8 @@ assert_port_free() {
 }
 
 load_state() {
-  BACKEND_PORT="8081"
-  FRONTEND_PORT="15173"
+  BACKEND_PORT="${DEFAULT_BACKEND_PORT}"
+  FRONTEND_PORT="${DEFAULT_FRONTEND_PORT}"
   BACKEND_URL="http://127.0.0.1:${BACKEND_PORT}"
   FRONTEND_URL="http://127.0.0.1:${FRONTEND_PORT}/webui/unlock"
   if [[ -f "${STATE_FILE}" ]]; then
@@ -427,6 +429,7 @@ wait_for_http() {
       echo " failed."
       echo "ERROR: ${label} process exited before becoming ready." >&2
       echo "Log: ${log_file}" >&2
+      print_startup_diagnostics "${label}" "${log_file}"
       return 1
     fi
     printf '.'
@@ -436,7 +439,36 @@ wait_for_http() {
   echo " timeout."
   echo "ERROR: ${label} did not become ready: ${url}" >&2
   echo "Log: ${log_file}" >&2
+  print_startup_diagnostics "${label}" "${log_file}"
   return 1
+}
+
+print_startup_diagnostics() {
+  local label="$1"
+  local log_file="$2"
+
+  [[ -f "${log_file}" ]] || return 0
+
+  if grep -q "Migration checksum mismatch" "${log_file}"; then
+    echo "Detected Flyway migration checksum mismatch." >&2
+    echo "An already-applied migration differs from the repository copy." >&2
+    echo "Do not run automatic Flyway repair; restore migration history or add a new migration." >&2
+    sed -n '/Migration checksum mismatch/,+3p' "${log_file}" \
+      | tail -n 4 \
+      | sed 's/^/  /' >&2
+    return 0
+  fi
+
+  if grep -q "Port .* was already in use" "${log_file}"; then
+    echo "Detected a backend port conflict. Set BACKEND_PORT to a free port." >&2
+    grep "Port .* was already in use" "${log_file}" \
+      | tail -n 1 \
+      | sed 's/^/  /' >&2
+    return 0
+  fi
+
+  echo "Last ${label} log lines:" >&2
+  tail -n 30 "${log_file}" | sed 's/^/  /' >&2
 }
 
 verify_root_identity_through_proxy() {

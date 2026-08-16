@@ -139,8 +139,9 @@ find . -name '*.md' \
 
 - `docs/index.md` 与 `docs/index-zh-CN.md` 是否结构一致。
 - 仓库入口是否只链接 Git 跟踪文件。
-- 端口是否为 `8081`，真实 LLM 端口是否为 `18081`。
-- Flyway 是否为 V1–V30。
+- 服务默认端口是否为 `8081`，`scripts/dev.sh` 后端端口是否为 `18082`，
+  真实 LLM 端口是否为 `18081`。
+- Flyway 是否为 V1–V31。
 - OpenAI / Embedding `base-url` 示例是否没有尾部 `/v1`。
 
 ### 计划

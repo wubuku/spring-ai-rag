@@ -6,6 +6,10 @@
 >
 > 目标入口：`./scripts/dev.sh`
 >
+> 2026-08-16 后续修订：一键开发栈的默认后端端口已由 `8081` 调整为 `18082`。
+> 下文保留最初实施时的基线和验收记录；当前可执行命令以
+> [开发者参考](../developer-reference-zh-CN.md) 为准。
+>
 > 相关参考：[开发者参考](../developer-reference-zh-CN.md)、
 > [配置参考](../configuration-zh-CN.md)、
 > [API Key WebUI MVP 实施进度](2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md)

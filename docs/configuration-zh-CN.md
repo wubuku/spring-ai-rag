@@ -517,7 +517,8 @@ Embedding Profile 注册器管理。`postgresql` profile 提供 PostgreSQL 运�
 V25/V26 创建 Profile/状态结构，并在 `rag_vector_store` 不存在或为空时清理该无效表；
 V27/V28 增加必填、全局唯一、不可变的 `rag_collection.collection_key`；V29 增加 JSONB
 结构化记录列和 payload 感知的版本快照；V30 增加外部文档来源版本、tombstone、版本快照
-以及 Collection 范围的外部身份唯一约束。
+以及 Collection 范围的外部身份唯一约束；V31 使用与 API 一致的 ASCII trim 语义规范化已存
+external ID，并重建局部唯一索引。
 
 ## Profile 一览
 

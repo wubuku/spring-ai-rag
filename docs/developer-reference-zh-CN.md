@@ -13,12 +13,13 @@
 |------|----|
 | Java | 21+ |
 | Maven | 3.9+ |
-| 默认端口 | `8081` |
+| 服务 / 后端单独启动默认端口 | `8081` |
+| `dev.sh` 后端端口 | `18082` |
 | 本地 profile | `postgresql` |
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V30 |
+| Flyway | V1–V31 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -66,7 +67,7 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 Vite origin；只有 root 管理 POST 探针通过后才报告 ready。默认启动：
 
 ```text
-Backend: http://127.0.0.1:8081
+Backend: http://127.0.0.1:18082
 WebUI:   http://127.0.0.1:15173/webui/unlock
 ```
 
@@ -76,9 +77,13 @@ credential；macOS 默认复制到剪贴板，不写入文件或日志。状态�
 ```bash
 ./scripts/dev.sh --status
 ./scripts/dev.sh --stop
-BACKEND_PORT=18082 FRONTEND_PORT=15174 ./scripts/dev.sh
+BACKEND_PORT=19082 FRONTEND_PORT=15174 ./scripts/dev.sh
 RAG_DEV_OPEN_BROWSER=false ./scripts/dev.sh
 ```
+
+启动器绝不自动执行 Flyway repair。若启动时检测到迁移 checksum 不一致，它会直接输出
+相关根因；正确处理方式是恢复已经执行过的迁移，并把后续变化放入新的迁移，而不是改写
+schema 历史。
 
 只启动后端：
 
@@ -96,7 +101,7 @@ export SPRING_PROFILES_ACTIVE=postgresql
 mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 ```
 
-端口占用和健康检查：
+后端单独运行 `8081` 时的端口清理和健康检查：
 
 ```bash
 lsof -ti :8081 | xargs kill -9 2>/dev/null
@@ -104,6 +109,12 @@ curl -fsS http://127.0.0.1:8081/actuator/health
 ```
 
 Swagger：`http://127.0.0.1:8081/swagger-ui.html`
+
+使用前后端一键启动器时，改用 `18082`：
+
+```bash
+curl -fsS http://127.0.0.1:18082/actuator/health
+```
 
 ## 4. 数据库
 

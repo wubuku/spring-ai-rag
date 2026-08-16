@@ -199,6 +199,22 @@ working embedding provider for the content-changing update. Use
 outage; that run validates persistence and no-embedding status but does not
 count as the completed embedding acceptance gate.
 
+The migration matrix normally uses Testcontainers:
+
+```bash
+mvn -pl spring-ai-rag-core \
+  -Dtest=ExternalDocumentSyncPostgresIntegrationTest \
+  -Dexternal-document.it.enabled=true \
+  test
+```
+
+If Docker is unavailable, provide a dedicated disposable PostgreSQL database
+through `EXTERNAL_DOCUMENT_IT_JDBC_URL`, `EXTERNAL_DOCUMENT_IT_USERNAME`, and
+`EXTERNAL_DOCUMENT_IT_PASSWORD`, and explicitly set
+`EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`. The test calls `Flyway.clean()`
+repeatedly; never point these variables at a development or production
+database.
+
 ## Coverage
 
 JaCoCo is integrated into all modules:
@@ -231,7 +247,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V30, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V31, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -290,7 +306,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V30 from an empty schema, and exercises the vector query with actual
+Flyway V1-V31 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -321,7 +337,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V30 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V31 from an empty database, and verifies JSONB round-trip,
 payload-only versioning, identical descriptions with distinct records, and
 cascade cleanup:
 

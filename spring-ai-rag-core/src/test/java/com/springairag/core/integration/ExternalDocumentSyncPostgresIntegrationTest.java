@@ -31,12 +31,28 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class ExternalDocumentSyncPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;
+    private static DataSource testDataSource;
     private static JdbcTemplate jdbcTemplate;
 
     @BeforeAll
     static void startDatabase() {
         assumeTrue(Boolean.getBoolean("external-document.it.enabled"),
                 "Set -Dexternal-document.it.enabled=true to run PostgreSQL integration tests");
+
+        String externalJdbcUrl = System.getenv("EXTERNAL_DOCUMENT_IT_JDBC_URL");
+        if (externalJdbcUrl != null && !externalJdbcUrl.isBlank()) {
+            if (!"YES".equals(System.getenv("EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM"))) {
+                throw new IllegalStateException(
+                        "Set EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES only for a disposable database");
+            }
+            testDataSource = dataSource(
+                    externalJdbcUrl,
+                    System.getenv("EXTERNAL_DOCUMENT_IT_USERNAME"),
+                    System.getenv("EXTERNAL_DOCUMENT_IT_PASSWORD"));
+            jdbcTemplate = new JdbcTemplate(testDataSource);
+            return;
+        }
+
         try {
             assumeTrue(DockerClientFactory.instance().isDockerAvailable(),
                     "Docker is not available for PostgreSQL integration tests");
@@ -56,7 +72,11 @@ class ExternalDocumentSyncPostgresIntegrationTest {
                 .withUsername("postgres")
                 .withPassword("postgres");
         postgres.start();
-        jdbcTemplate = new JdbcTemplate(dataSource(postgres));
+        testDataSource = dataSource(
+                postgres.getJdbcUrl(),
+                postgres.getUsername(),
+                postgres.getPassword());
+        jdbcTemplate = new JdbcTemplate(testDataSource);
     }
 
     @AfterAll
@@ -114,7 +134,7 @@ class ExternalDocumentSyncPostgresIntegrationTest {
     }
 
     @Test
-    void v29ToV30NormalizesLegacyExternalIdsBeforeEnforcingIdentity() {
+    void v29ToV31NormalizesLegacyExternalIdsBeforeEnforcingIdentity() {
         migrateToV29();
         long collectionId = insertCollection();
         long documentId = insertLegacyDocument(collectionId, "\t legacy-id \n");
@@ -129,7 +149,22 @@ class ExternalDocumentSyncPostgresIntegrationTest {
     }
 
     @Test
-    void v30RejectsNormalizedExternalIdentityDuplicatesWithoutChangingRows() {
+    void v30ToV31NormalizesLegacyExternalIdsWithoutChecksumRepair() {
+        migrateToV30();
+        long collectionId = insertCollection();
+        long documentId = insertDocument(collectionId, "\t legacy-id \n", "text");
+
+        flyway().migrate();
+
+        assertEquals("legacy-id", jdbcTemplate.queryForObject(
+                "SELECT external_id FROM rag_documents WHERE id = ?",
+                String.class, documentId));
+        assertThrows(DataIntegrityViolationException.class, () -> insertDocument(
+                collectionId, "legacy-id", "json-record"));
+    }
+
+    @Test
+    void v31RejectsNormalizedExternalIdentityDuplicatesWithoutChangingRows() {
         migrateToV29();
         long collectionId = insertCollection();
         long firstDocumentId = insertLegacyDocument(collectionId, "legacy-id");
@@ -142,11 +177,25 @@ class ExternalDocumentSyncPostgresIntegrationTest {
         assertEquals("\tlegacy-id\n", jdbcTemplate.queryForObject(
                 "SELECT external_id FROM rag_documents WHERE id = ?",
                 String.class, secondDocumentId));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes "
+                        + "WHERE schemaname = 'public' "
+                        + "AND indexname = 'uk_rag_doc_external_identity'",
+                Long.class));
+        assertEquals("30", jdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history "
+                        + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
+                String.class));
     }
 
     private void migrateToV29() {
         flyway().clean();
         flyway(MigrationVersion.fromVersion("29")).migrate();
+    }
+
+    private void migrateToV30() {
+        flyway().clean();
+        flyway(MigrationVersion.fromVersion("30")).migrate();
     }
 
     private long insertCollection() {
@@ -184,7 +233,7 @@ class ExternalDocumentSyncPostgresIntegrationTest {
 
     private Flyway flyway(MigrationVersion target) {
         var configuration = Flyway.configure()
-                .dataSource(dataSource(postgres))
+                .dataSource(testDataSource)
                 .locations("classpath:db/migration")
                 .cleanDisabled(false);
         if (target != null) {
@@ -194,11 +243,11 @@ class ExternalDocumentSyncPostgresIntegrationTest {
     }
 
     private static DataSource dataSource(
-            PostgreSQLContainer<?> container) {
+            String jdbcUrl, String username, String password) {
         PGSimpleDataSource dataSource = new PGSimpleDataSource();
-        dataSource.setUrl(container.getJdbcUrl());
-        dataSource.setUser(container.getUsername());
-        dataSource.setPassword(container.getPassword());
+        dataSource.setUrl(jdbcUrl);
+        dataSource.setUser(username);
+        dataSource.setPassword(password);
         return dataSource;
     }
 }
