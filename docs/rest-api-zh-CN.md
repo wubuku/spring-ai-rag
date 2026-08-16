@@ -109,6 +109,27 @@ Chat 和 Search 接受 `collectionScopeMode`：
 组成一个候选并集并统一竞争 global top-k；本次不支持按每个 Collection 保底召回的
 `EACH_COLLECTION`。
 
+#### 外部客户端最佳实践
+
+1. 新客户端应显式发送 `collectionScopeMode`；兼容推导主要用于旧客户端平滑迁移，
+   不应作为新集成的隐式业务规则。
+2. 对外持久化和传输 `collectionKey`，不要保存数据库 `collectionId`。数字 ID 仅用于
+   旧客户端兼容和内部诊断。
+3. 用户明确选择一个或多个知识库时使用 `SELECTED_COLLECTIONS + collectionKeys`；
+   只有确实需要调用方全部默认可见内容时才使用 `CALLER_VISIBLE`；需要排除未归属文档
+   但不限定具体知识库时使用 `ANY_COLLECTION`。
+4. `collectionKeys` 只随 `SELECTED_COLLECTIONS` 发送。不要发送显式空列表；客户端应
+   先去重并限制在 100 个以内，稳定排序有利于缓存键、日志和测试保持一致。
+5. 对生产 connector 或业务服务创建受限 API Key，并配置 `allowedCollectionKeys`。
+   请求级 selected 范围用于表达本次业务意图，API Key allow-list 用作独立的权限上限。
+6. Chat、SSE Chat、GET/POST Search 应传递相同的 scope 语义。上线前先用 Search 端点
+   观察直接召回结果，再验证 Chat 生成，便于区分检索问题和 LLM 生成问题。
+7. 多个 selected Collection 共享一个 global top-k，不保证每个 Collection 都返回结果。
+   需要逐 Collection 覆盖时不要把当前语义当作保证；后续设计边界见
+   [TODO：`EACH_COLLECTION`](TODO-zh-CN.md#each_collection-召回覆盖模式)。
+8. 对 `400` 修正请求组合或上限；对 restricted caller 的 `403` 按未授权处理，不根据
+   错误猜测 Collection 是否存在；不受限调用方的未知 key 返回 `404`。
+
 ### API 密钥管理
 
 root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为

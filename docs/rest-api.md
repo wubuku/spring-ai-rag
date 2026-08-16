@@ -120,6 +120,36 @@ They do not expand a Collection into all of its document IDs. Multiple
 Collections form one candidate union and compete for the global top-k;
 per-Collection quota/coverage (`EACH_COLLECTION`) is not supported.
 
+#### External-client best practices
+
+1. New clients should send `collectionScopeMode` explicitly. Compatibility
+   inference exists mainly for gradual migration of older clients and should
+   not become an implicit business rule in new integrations.
+2. Persist and transmit `collectionKey`, not the database `collectionId`.
+   Numeric IDs remain only for legacy compatibility and internal diagnosis.
+3. Use `SELECTED_COLLECTIONS + collectionKeys` when a user explicitly chooses
+   one or more knowledge bases. Use `CALLER_VISIBLE` only when all
+   caller-visible content is intended. Use `ANY_COLLECTION` when unassigned
+   documents must be excluded without naming specific knowledge bases.
+4. Send `collectionKeys` only with `SELECTED_COLLECTIONS`. Do not send an
+   explicit empty list. Deduplicate on the client, stay within 100 keys, and
+   sort stably for consistent cache keys, logs, and tests.
+5. Give each production connector or business service a restricted API key
+   with `allowedCollectionKeys`. The request scope expresses the current
+   business intent; the API-key allow-list is an independent authorization
+   ceiling.
+6. Carry the same scope semantics through Chat, SSE Chat, and GET/POST Search.
+   Before release, inspect direct retrieval through Search and then validate
+   Chat generation so retrieval defects can be separated from LLM behavior.
+7. Selected Collections share one global top-k; every Collection is not
+   guaranteed to contribute a result. Do not treat the current behavior as a
+   per-Collection coverage guarantee. See
+   [TODO: `EACH_COLLECTION`](TODO.md#each_collection-retrieval-coverage-mode)
+   for the deferred design boundary.
+8. Correct invalid combinations or limits after a `400`. Treat `403` for a
+   restricted caller as unauthorized without inferring whether the Collection
+   exists. An unrestricted caller receives `404` for an unknown key.
+
 ### Rate Limiting
 
 When `rag.rate-limit.enabled` is true, all API requests are subject to a sliding-window rate limit.
