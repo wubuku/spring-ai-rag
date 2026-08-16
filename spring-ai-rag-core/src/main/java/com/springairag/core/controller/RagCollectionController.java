@@ -15,6 +15,7 @@ import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -275,10 +276,11 @@ public class RagCollectionController {
      * Delete collection (soft delete).
      */
     @Operation(summary = "Delete collection (soft delete)",
-            description = "Deprecated numeric route. Soft-deletes the collection. Associated documents are unlinked (not deleted).",
+            description = "Deprecated numeric route. Soft-deletes the collection and unlinks legacy documents. Returns 409 when external-managed documents would lose their stable identity.",
             deprecated = true)
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Collection soft-deleted"),
+            @ApiResponse(responseCode = "409", description = "Collection contains external-managed documents"),
             @ApiResponse(responseCode = "404", description = "Collection not found")
     })
     @DeleteMapping("/{id}")
@@ -514,8 +516,9 @@ public class RagCollectionController {
     public ResponseEntity<DocumentAddedResponse> addDocument(
             @PathVariable Long id,
             @RequestBody Map<String, Long> request) {
+        var currentKey = ApiKeyCollectionAccess.currentKey();
         ApiKeyCollectionAccess.requireCollectionId(
-                id, ApiKeyCollectionAccess.currentKey());
+                id, currentKey);
 
         Long documentId = request.get("documentId");
         if (documentId == null) {
@@ -528,10 +531,10 @@ public class RagCollectionController {
 
         return documentRepository.findById(documentId)
                 .map(doc -> {
-                    if (doc.getCollectionId() != null) {
-                        ApiKeyCollectionAccess.requireCollectionId(
-                                doc.getCollectionId(),
-                                ApiKeyCollectionAccess.currentKey());
+                    ApiKeyCollectionAccess.requireDocumentAccess(doc, currentKey);
+                    if (doc.getExternalId() != null && !doc.getExternalId().isBlank()) {
+                        throw new DocumentRevisionConflictException(
+                                "External-managed documents must be synchronized by external identity");
                     }
                     doc.setCollectionId(id);
                     documentRepository.save(doc);
@@ -738,8 +741,10 @@ public class RagCollectionController {
                 : docData.getContent().getBytes(java.nio.charset.StandardCharsets.UTF_8).length * 1L);
         doc.setContentHash(DigestUtils.sha256(docData.getContent()));
         doc.setOriginalFilename(docData.getOriginalFilename());
-        doc.setExternalId(docData.getExternalId());
-        doc.setSourceRevision(docData.getSourceRevision());
+        doc.setExternalId(normalizeImportedIdentity(
+                docData.getExternalId(), "externalId"));
+        doc.setSourceRevision(normalizeImportedIdentity(
+                docData.getSourceRevision(), "sourceRevision"));
         doc.setSourceDeletedAt(docData.getSourceDeletedAt());
         doc.setJsonbPayload(docData.getJsonbPayload() == null
                 ? null : docData.getJsonbPayload().deepCopy());
@@ -749,6 +754,18 @@ public class RagCollectionController {
                 : docData.getEnabled());
         doc.setProcessingStatus("PENDING");
         return doc;
+    }
+
+    private String normalizeImportedIdentity(String value, String field) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String normalized = value.trim();
+        if (normalized.length() > 255) {
+            throw new IllegalArgumentException(
+                    field + " must not exceed 255 characters");
+        }
+        return normalized;
     }
 
     @SuppressWarnings("unchecked")

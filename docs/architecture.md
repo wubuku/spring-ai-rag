@@ -372,6 +372,36 @@ This is deliberately a dedicated JSONB path, leaving room for a future
 `xmlPayload` path with the same retrieval-text boundary without introducing a
 generic `payload` column.
 
+### 4.5 External Document Synchronization Flow
+
+```text
+POST /api/v1/rag/documents/upsert
+  |
+  v
+ExternalDocumentService
+  | resolve writable collection through API-key ACL
+  | pg_advisory_xact_lock(collectionId + externalId)
+  | CAS / exact-replay decision + version snapshot
+  v
+rag_documents (same documentId)
+  | content change -> current embedding becomes stale
+  v
+DocumentEmbedService (after the persistence transaction)
+  | chunk -> provider -> validate -> atomically replace active Profile rows
+  v
+fresh COMPLETED state, or FAILED state for the current content hash
+```
+
+Ordinary external documents and JSON records share the Collection-level unique
+identity `(collection_id, external_id)` and the advisory-lock namespace.
+`sourceRevision` is opaque; equality and optional
+`expectedSourceRevision` compare-and-set are the only ordering checks. Source
+deletion is a tombstone (`enabled=false` plus `source_deleted_at`), allowing a
+later newer revision to restore the same internal document. Retrieval requires
+an enabled document and a fresh completed state for the active Embedding
+Profile, so old vectors remain physically available for diagnosis without
+being returned to callers.
+
 ---
 
 ## 5. Database Design

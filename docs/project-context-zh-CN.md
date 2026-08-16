@@ -126,6 +126,20 @@ JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
 
+### 外部文档同步
+
+普通外部文档使用相同的稳定外部身份形式：`collectionKey + externalId`，并由调用方
+提供 opaque 的 `sourceRevision`。`POST /documents/upsert` 保留内部 `documentId`，
+支持精确重放和可选的 `expectedSourceRevision` CAS，并记录版本快照。内容变化会先使
+检索 freshness 失效，再同步重新 embedding；embedding 失败会记录在新内容 hash 上，
+旧向量会被检索 freshness 条件排除。来源删除使用 `enabled=false` tombstone，新版本
+可以恢复同一个内部文档。外部 connector 可使用
+`POST /documents/batch-upsert`、`GET /documents/by-external-id` 和对应的来源删除端点。
+JSON record 仍保持专用的 payload/retrieval-text 语义。
+
+完整请求/响应契约、冲突处理和客户同步最佳实践见
+[REST API：外部文档幂等同步](rest-api-zh-CN.md)。
+
 ## 5. 多模型
 
 - 旧 provider Bean 路径仍用于兼容默认模型。
@@ -161,6 +175,7 @@ JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入
 | `/api-keys` | API Key 管理 |
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
+| `/documents/upsert` | 普通外部文档幂等同步 |
 
 契约见 [rest-api-zh-CN.md](rest-api-zh-CN.md) 和 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
 

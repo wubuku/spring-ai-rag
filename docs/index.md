@@ -18,6 +18,8 @@
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
+| Synchronize external documents / content sources | [REST API: External Document Synchronization](rest-api.md) | [Project context: External Document Synchronization](project-context.md), [live HTTP acceptance](developer-reference.md) |
+| Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
 | Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | Plan OpenAI compatibility | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
 | Plan embedding-model / vector migration | [Project context](project-context.md) | [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
@@ -50,6 +52,8 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 |-----|-------------|
 | [architecture.md](architecture.md) | Modules, three-Bean model, Advisor chain, dual memory, domain extension |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
+| [rest-api.md](rest-api.md) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
+| [TODO.md](TODO.md) / [TODO-zh-CN.md](TODO-zh-CN.md) | Current follow-up work outside the public API and its revisit criteria |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | Comparison with reference projects; phase status |
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | Hybrid search plan (may lag code) |

@@ -76,6 +76,19 @@ public class CollectionIdentityResolver {
     }
 
     /**
+     * Hold a shared row lock for the remainder of the current transaction.
+     */
+    public RagCollection requireActiveForShare(Long id) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException("collectionId must be positive");
+        }
+        return repository.findActiveByIdForShare(id)
+                .orElseThrow(() -> new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND,
+                        "Collection not found: id=" + id));
+    }
+
+    /**
      * Resolve one active key only among IDs the caller is already authorized to use.
      */
     public RagCollection requireActiveWithinAllowed(

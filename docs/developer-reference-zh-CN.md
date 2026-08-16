@@ -235,6 +235,24 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 需要跳过 ACL 时必须显式使用 `--skip-acl`，并把该事实记录在验证结果中。脚本不会打印
 API Key 或完整 payload，临时响应写入被忽略的 `.verification/jsonb-e2e/` 后清理。
 
+### 外部文档同步真实 HTTP E2E
+
+在已经启动的 PostgreSQL profile 服务上运行普通外部文档同步流程：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/external-documents-e2e.sh
+```
+
+脚本会验证 `embed=false` 创建、精确重放、带
+`expectedSourceRevision` 的更新、CAS 冲突、同 revision 冲突、批量 upsert、按外部身份
+查询、tombstone 删除与重放，以及新版本恢复。默认还会验证内容变化后的成功重新
+embedding。只有 embedding provider 确实不可用时才设置
+`EXTERNAL_DOCUMENT_E2E_EMBED=false`；此时脚本会明确记录 embedding 检查被跳过，不会
+伪报 embedding 完成。日志写入被忽略的 `.verification/external-documents-e2e/`，脚本不会
+输出 API Key 或完整文档内容。
+
 ## 8. Goldenset 与发布门禁
 
 检索 goldenset：

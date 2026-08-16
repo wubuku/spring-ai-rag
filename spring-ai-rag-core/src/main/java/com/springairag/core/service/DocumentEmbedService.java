@@ -7,6 +7,7 @@ import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
 
 import java.util.Objects;
@@ -32,6 +33,7 @@ import java.util.function.Consumer;
 public class DocumentEmbedService {
 
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
+    private static final int MAX_ERROR_LENGTH = 500;
 
     private final HierarchicalTextChunker chunker;
     private final RagProperties ragProperties;
@@ -121,7 +123,7 @@ public class DocumentEmbedService {
         try {
             results = embeddingBatchService.createEmbeddingsBatch(texts);
         } catch (RuntimeException e) {
-            String error = "Embedding provider call failed: " + e.getMessage();
+            String error = safeError("Embedding provider call failed: " + e.getMessage());
             persistenceService.recordFailureIfNoCompleted(
                     documentId,
                     prep.documentVersion(),
@@ -138,6 +140,7 @@ public class DocumentEmbedService {
 
         String validationError = validateEmbeddingResults(chunks, results, profile);
         if (validationError != null) {
+            validationError = safeError(validationError);
             persistenceService.recordFailureIfNoCompleted(
                     documentId,
                     prep.documentVersion(),
@@ -535,8 +538,17 @@ public class DocumentEmbedService {
         result.put("embeddingProfileKey", profile.profileKey());
         result.put("embeddingDimensions", profile.dimensions());
         if (error != null) {
-            result.put("error", error);
+            result.put("error", safeError(error));
         }
         return result;
+    }
+
+    private String safeError(String error) {
+        if (error == null || error.isBlank()) {
+            return "Embedding failed";
+        }
+        String masked = SensitiveDataMaskingConverter.maskSensitiveData(error);
+        return masked.length() <= MAX_ERROR_LENGTH
+                ? masked : masked.substring(0, MAX_ERROR_LENGTH);
     }
 }

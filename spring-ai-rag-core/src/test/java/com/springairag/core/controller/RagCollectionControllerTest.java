@@ -7,16 +7,24 @@ import com.springairag.api.dto.CollectionRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.CollectionCloneRequest;
 import com.springairag.api.dto.DocumentAddedResponse;
+import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RagCollectionService;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.*;
 import org.springframework.http.ResponseEntity;
+import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -35,6 +43,11 @@ class RagCollectionControllerTest {
     private RagCollectionService collectionService;
     private AuditLogService auditLogService;
     private RagCollectionController controller;
+
+    @AfterEach
+    void tearDown() {
+        RequestContextHolder.resetRequestAttributes();
+    }
 
     @BeforeEach
     void setUp() {
@@ -446,6 +459,35 @@ class RagCollectionControllerTest {
     }
 
     @Test
+    void importCollectionNormalizesExternalIdentityFields() {
+        RagCollection saved = createCollection(1L, "外部文档导入");
+        saved.setCollectionKey("external-import-test");
+        when(collectionService.createCollection(any(CollectionRequest.class))).thenReturn(saved);
+        when(documentRepository.saveAndFlush(any(RagDocument.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        CollectionImportRequest importData = new CollectionImportRequest();
+        importData.setName("外部文档导入");
+        importData.setCollectionKey("external-import-test");
+
+        CollectionImportRequest.ImportedDocument docData =
+                new CollectionImportRequest.ImportedDocument();
+        docData.setTitle("外部文档");
+        docData.setContent("内容");
+        docData.setExternalId("  cms:article:10  ");
+        docData.setSourceRevision("  etag:10  ");
+        importData.setDocuments(List.of(docData));
+
+        controller.importCollection(importData);
+
+        org.mockito.ArgumentCaptor<RagDocument> documentCaptor =
+                org.mockito.ArgumentCaptor.forClass(RagDocument.class);
+        verify(documentRepository).saveAndFlush(documentCaptor.capture());
+        assertEquals("cms:article:10", documentCaptor.getValue().getExternalId());
+        assertEquals("etag:10", documentCaptor.getValue().getSourceRevision());
+    }
+
+    @Test
     void importCollection_missingName_returns400() {
         CollectionImportRequest importData = new CollectionImportRequest();
         importData.setDescription("no name");
@@ -460,6 +502,51 @@ class RagCollectionControllerTest {
         importData.setName("  ");
         assertThrows(IllegalArgumentException.class,
                 () -> controller.importCollection(importData));
+    }
+
+    @Test
+    void addDocument_externalManagedDocument_cannotMoveCollections() {
+        RagDocument document = new RagDocument();
+        document.setId(10L);
+        document.setCollectionId(1L);
+        document.setExternalId("cms:article:10");
+        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+
+        assertThrows(com.springairag.core.exception.DocumentRevisionConflictException.class,
+                () -> controller.addDocument(2L, Map.of("documentId", 10L)));
+
+        verify(documentRepository, never()).save(any(RagDocument.class));
+    }
+
+    @Test
+    void addDocument_checksSourceAclBeforeExternalIdentityConflict() {
+        setRestrictedKey(2L);
+        RagDocument document = new RagDocument();
+        document.setId(10L);
+        document.setCollectionId(3L);
+        document.setExternalId("cms:article:10");
+        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+
+        assertThrows(SecurityException.class,
+                () -> controller.addDocument(2L, Map.of("documentId", 10L)));
+
+        verify(documentRepository, never()).save(any(RagDocument.class));
+    }
+
+    @Test
+    void addDocument_restrictedKeyCannotClaimUnscopedDocument() {
+        setRestrictedKey(2L);
+        RagDocument document = new RagDocument();
+        document.setId(10L);
+        when(collectionRepository.existsById(2L)).thenReturn(true);
+        when(documentRepository.findById(10L)).thenReturn(Optional.of(document));
+
+        assertThrows(SecurityException.class,
+                () -> controller.addDocument(2L, Map.of("documentId", 10L)));
+
+        verify(documentRepository, never()).save(any(RagDocument.class));
     }
 
     @Test
@@ -531,5 +618,17 @@ class RagCollectionControllerTest {
         assertEquals("source-key", response.getBody().sourceCollectionKey());
         assertEquals("target-key", response.getBody().clonedCollectionKey());
         verify(collectionService).cloneCollection(1L, "target-key");
+    }
+
+    private void setRestrictedKey(Long... collectionIds) {
+        RagApiKey key = new RagApiKey();
+        key.setRole(ApiKeyRole.NORMAL);
+        key.setAllowedCollectionIds(
+                ApiKeyCollectionAccess.serializeAllowedIds(
+                        List.of(collectionIds)));
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
+        RequestContextHolder.setRequestAttributes(
+                new ServletRequestAttributes(request));
     }
 }

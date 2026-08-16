@@ -1,9 +1,11 @@
 package com.springairag.core.repository;
 
 import com.springairag.core.entity.RagCollection;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -65,6 +67,14 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      * Find by ID (excluding deleted).
      */
     Optional<RagCollection> findByIdAndDeletedFalse(Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT c FROM RagCollection c WHERE c.id = :id AND c.deleted = false")
+    Optional<RagCollection> findActiveByIdForShare(@Param("id") Long id);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT c FROM RagCollection c WHERE c.id = :id AND c.deleted = false")
+    Optional<RagCollection> findActiveByIdForUpdate(@Param("id") Long id);
 
     Optional<RagCollection> findByCollectionKey(String collectionKey);
 

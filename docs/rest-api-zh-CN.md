@@ -500,6 +500,124 @@ deprecated 的 `collectionIds` 继续兼容。响应保持排序，并为每条�
 响应也同时返回两种 Collection 身份。Collection export/import、clone 和文档版本响应会
 保留结构化字段及 payload 快照。
 
+## 外部文档：幂等同步
+
+这些端点用于同步由外部系统负责身份和版本的普通文本文档。服务不会主动抓取 URL
+或文件；调用方读取外部来源后，将当前文档表示提交给 RAG 服务。
+
+稳定身份是 `collectionKey + externalId`。`externalId` 会去除首尾空白、区分大小写，
+长度最多 255 个字符，并且在来源对象生命周期内必须保持稳定。
+`sourceRevision` 是调用方提供的非空 opaque 版本令牌，例如 ETag、上游行版本、
+commit ID 或 canonical payload hash。服务不会按 opaque 版本的大小比较新旧。
+
+### `POST /api/v1/rag/documents/upsert`
+
+创建或更新一条普通文档。当前 API Key 必须对目标 Collection 具有写权限。
+
+```json
+{
+  "collectionKey": "customer-42:manual:v3",
+  "externalId": "cms:article:10001",
+  "sourceRevision": "etag:8b4d9f",
+  "expectedSourceRevision": "etag:7a3c21",
+  "title": "退款政策",
+  "content": "当前退款政策是……",
+  "source": "cms",
+  "documentType": "markdown",
+  "metadata": {
+    "locale": "zh-CN"
+  },
+  "embed": true
+}
+```
+
+`title` 和 `content` 必填。`documentType` 默认是 `text`；`json-record` 必须使用
+JSON 结构化记录 API。`embed` 默认是 `true`；请求内容最多 1,000,000 个字符。
+
+服务在更新来源文档时保留同一个内部 `documentId`。内容变化会创建版本快照、使旧
+embedding 不再参与检索，并同步重建活动 Profile 的 embedding。只有 metadata 或来源版本
+变化且当前 embedding 已新鲜时，不会调用 embedding provider。
+
+即使文档持久化成功但 embedding 失败，响应仍为 HTTP 200：
+
+```json
+{
+  "documentId": 42,
+  "collectionKey": "customer-42:manual:v3",
+  "externalId": "cms:article:10001",
+  "sourceRevision": "etag:8b4d9f",
+  "action": "UPDATED",
+  "contentChanged": true,
+  "versionNumber": 4,
+  "embeddingStatus": "COMPLETED",
+  "embeddingProfileKey": "bge-m3-1024",
+  "embeddingFresh": true,
+  "processingStatus": "COMPLETED",
+  "sourceDeletedAt": null,
+  "errorCode": null,
+  "error": null
+}
+```
+
+`action` 为 `CREATED`、`UPDATED` 或 `UNCHANGED`。
+`embeddingStatus` 为 `COMPLETED`、`CACHED`、`NOT_REQUESTED` 或 `FAILED`。
+`NOT_REQUESTED` 始终表示本次请求使用了 `embed=false`；即使已经存在可用 embedding，
+也可能同时返回 `embeddingFresh=true`。`FAILED` 表示新的文档内容已经提交，但在重试
+embedding 前不可检索；旧向量可能仍然物理保留用于诊断，但 freshness 条件会排除它。
+若文档仍然 stale，使用相同请求重放即可重试 embedding。
+
+`expectedSourceRevision` 是可选的 compare-and-set 前置版本。服务会先判断精确重放，
+所以客户端可以安全重试“请求已成功但响应丢失”的场景。同一 revision 对应不同受管
+字段时返回 `409`；expected revision 与当前版本不匹配时也返回 `409`。不提供该字段时
+由最后完成序列化的写入者覆盖，因此可能乱序投递的 connector 应使用 CAS。
+
+### `POST /api/v1/rag/documents/batch-upsert`
+
+请求体为 `{ "items": [ ... ] }`，最多 50 项，累计内容最多 5,000,000 个字符。每项
+独立处理并保持输入顺序；某项返回 `PERSISTENCE_FAILED` 或 `FAILED` 不会回滚同一批中
+已经成功的其他项。
+
+### `GET /api/v1/rag/documents/by-external-id`
+
+按外部身份查询当前普通文档，不要求外部系统把内部 ID 作为自己的身份：
+
+```text
+GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&externalId=cms%3Aarticle%3A10001
+```
+
+响应沿用普通文档详情结构，并包含 `externalId`、`sourceRevision`、
+`sourceDeletedAt`、处理状态和 embedding freshness。未授权 Collection 返回 `403`，
+不存在的身份返回 `404`。
+
+### `DELETE /api/v1/rag/documents/by-external-id`
+
+记录外部来源删除，但保留稳定身份：
+
+```text
+DELETE /api/v1/rag/documents/by-external-id
+  ?collectionKey=customer-42%3Amanual%3Av3
+  &externalId=cms%3Aarticle%3A10001
+  &sourceRevision=etag%3Adeleted-9
+  &expectedSourceRevision=etag%3A8b4d9f
+```
+
+该操作创建 tombstone（`enabled=false`、设置 `sourceDeletedAt`），返回 `DELETED`。
+重放同一个删除版本返回 `UNCHANGED`。之后使用新版本 upsert 可以恢复同一个内部
+`documentId`；旧删除版本不能再次作为 upsert 重放。旧的
+`DELETE /documents/{documentId}` 仍然是硬删除，语义不同。
+
+### 推荐同步模式
+
+1. 从来源对象的不可变身份生成稳定 `externalId`。
+2. 每次 upsert 和删除都携带来源当前的 opaque revision。
+3. 保存响应中的 revision 和内部 ID 仅用于诊断；后续调用继续使用外部身份。
+4. 如果投递可能重复或乱序，使用 `expectedSourceRevision`。遇到 `409` 时重新读取
+   来源再同步，不要把它当成创建失败。
+5. 将 `embeddingFresh=false` 或 `embeddingStatus=FAILED` 视为需要运维重试的状态；
+   重放相同请求是安全的。
+6. 每个 connector 使用独立 API Key，并限制到它负责的 Collection；不要把 root key
+   分发给外部 connector。
+
 ---
 
 ## Documents — Document Management
@@ -791,8 +909,10 @@ Paginated collection query.
 更新请求体只包含可变字段：`name`、`description`、`embeddingModel`、`dimensions`、
 `enabled` 和 `metadata`。更新请求体出现 `collectionKey` 时返回 `400`，不支持重命名。
 
-删除为软删除，并解除文档关联，但不会删除文档或 embedding。key 仍保持占用。恢复沿用
-原 key，且不会自动恢复文档关联。
+删除为软删除，并解除普通旧文档关联，但不会删除文档或 embedding。若 Collection 中
+存在非空 `externalId` 的外部托管文档，则返回 `409`，因为解绑会破坏
+`collectionKey + externalId` 稳定身份。删除 Collection 前必须先显式硬删除或迁移这些
+外部托管文档。key 仍保持占用；恢复沿用原 key，且不会自动恢复普通旧文档关联。
 
 ---
 

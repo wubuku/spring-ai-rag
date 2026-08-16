@@ -133,6 +133,7 @@ class JsonRecordServiceTest {
         assertEquals(10L, response.collectionId());
         assertEquals("collection-10", response.collectionKey());
         assertEquals(10L, request.getCollectionId());
+        verify(collectionIdentityResolver).requireActiveForShare(10L);
     }
 
     @Test

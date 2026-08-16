@@ -350,6 +350,34 @@ HybridRetrieverService -> 排序后的 document IDs
 持久化、advisory lock 与检索候选仍使用内部 ID。
 未来可以按相同的 retrieval-text 边界增加 `xmlPayload`，而不引入泛化的 `payload` 列。
 
+### 4.5 外部文档同步流程
+
+```text
+POST /api/v1/rag/documents/upsert
+  │
+  ▼
+ExternalDocumentService
+  │ 通过 API Key ACL 解析可写 Collection
+  │ pg_advisory_xact_lock(collectionId + externalId)
+  │ CAS / 精确重放判断 + 版本快照
+  ▼
+rag_documents（保留同一个 documentId）
+  │ 内容变化 -> 当前 embedding 变为 stale
+  ▼
+DocumentEmbedService（持久化事务提交后）
+  │ 分块 -> provider -> 校验 -> 原子替换活动 Profile 向量行
+  ▼
+当前 content hash 的 fresh COMPLETED，或 FAILED 状态
+```
+
+普通外部文档与 JSON record 共享 Collection 级唯一身份
+`(collection_id, external_id)` 以及 advisory lock 命名空间。
+`sourceRevision` 是 opaque 令牌；版本只做相等判断和可选的
+`expectedSourceRevision` compare-and-set，不按大小判断新旧。来源删除使用 tombstone
+（`enabled=false` 加 `source_deleted_at`），之后更高版本可以恢复同一个内部文档。
+检索要求文档 enabled 且活动 Embedding Profile 存在当前内容的 fresh completed 状态，
+因此旧向量可以物理保留用于诊断，但不会返回给调用方。
+
 ---
 
 ## 5. 数据库设计

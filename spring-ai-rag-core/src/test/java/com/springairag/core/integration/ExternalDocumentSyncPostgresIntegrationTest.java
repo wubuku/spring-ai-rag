@@ -1,6 +1,8 @@
 package com.springairag.core.integration;
 
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.FlywayException;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,7 +80,7 @@ class ExternalDocumentSyncPostgresIntegrationTest {
         assertEquals("rev-1", jdbcTemplate.queryForObject(
                 "SELECT source_revision FROM rag_documents WHERE id = ?",
                 String.class, documentId));
-        assertEquals("NO", jdbcTemplate.queryForObject(
+        assertEquals("YES", jdbcTemplate.queryForObject(
                 "SELECT is_nullable FROM information_schema.columns "
                         + "WHERE table_name = 'rag_documents' "
                         + "AND column_name = 'source_revision'",
@@ -111,6 +113,42 @@ class ExternalDocumentSyncPostgresIntegrationTest {
                 Long.class));
     }
 
+    @Test
+    void v29ToV30NormalizesLegacyExternalIdsBeforeEnforcingIdentity() {
+        migrateToV29();
+        long collectionId = insertCollection();
+        long documentId = insertLegacyDocument(collectionId, "\t legacy-id \n");
+
+        flyway().migrate();
+
+        assertEquals("legacy-id", jdbcTemplate.queryForObject(
+                "SELECT external_id FROM rag_documents WHERE id = ?",
+                String.class, documentId));
+        assertThrows(DataIntegrityViolationException.class, () -> insertDocument(
+                collectionId, "legacy-id", "json-record"));
+    }
+
+    @Test
+    void v30RejectsNormalizedExternalIdentityDuplicatesWithoutChangingRows() {
+        migrateToV29();
+        long collectionId = insertCollection();
+        long firstDocumentId = insertLegacyDocument(collectionId, "legacy-id");
+        long secondDocumentId = insertLegacyDocument(collectionId, "\tlegacy-id\n");
+
+        assertThrows(FlywayException.class, () -> flyway().migrate());
+        assertEquals(2L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_documents WHERE id IN (?, ?)",
+                Long.class, firstDocumentId, secondDocumentId));
+        assertEquals("\tlegacy-id\n", jdbcTemplate.queryForObject(
+                "SELECT external_id FROM rag_documents WHERE id = ?",
+                String.class, secondDocumentId));
+    }
+
+    private void migrateToV29() {
+        flyway().clean();
+        flyway(MigrationVersion.fromVersion("29")).migrate();
+    }
+
     private long insertCollection() {
         return jdbcTemplate.queryForObject(
                 "INSERT INTO rag_collection "
@@ -130,12 +168,29 @@ class ExternalDocumentSyncPostgresIntegrationTest {
                 Long.class, collectionId, documentType, externalId);
     }
 
+    private long insertLegacyDocument(long collectionId, String externalId) {
+        return jdbcTemplate.queryForObject(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, document_type, external_id, "
+                        + "content_hash, processing_status) "
+                        + "VALUES (?, 'Legacy document', 'Content', 'text', ?, "
+                        + "'legacy-hash-' || ?, 'PENDING') RETURNING id",
+                Long.class, collectionId, externalId, UUID.randomUUID().toString());
+    }
+
     private Flyway flyway() {
-        return Flyway.configure()
+        return flyway(null);
+    }
+
+    private Flyway flyway(MigrationVersion target) {
+        var configuration = Flyway.configure()
                 .dataSource(dataSource(postgres))
                 .locations("classpath:db/migration")
-                .cleanDisabled(false)
-                .load();
+                .cleanDisabled(false);
+        if (target != null) {
+            configuration.target(target);
+        }
+        return configuration.load();
     }
 
     private static DataSource dataSource(

@@ -1,6 +1,6 @@
 # 外部文档幂等更新与重索引实施规划
 
-> 状态：规划审查通过，待实施  
+> 状态：实施已完成，验收通过
 > 规划日期：2026-08-16  
 > 实施授权：已完成连续三轮系统性审查，无实质问题且期间无修改；可直接开始实施  
 > 进度账本：[外部文档幂等更新与重索引实施进度](2026-08-16_EXTERNAL_DOCUMENT_UPSERT_AND_REINDEX_IMPLEMENTATION_PROGRESS.md)
@@ -453,15 +453,27 @@ ALTER TABLE rag_document_versions
 创建新唯一索引前执行冲突预检：
 
 ```sql
-SELECT collection_id, external_id, COUNT(*)
-FROM rag_documents
-WHERE collection_id IS NOT NULL
-  AND external_id IS NOT NULL
-GROUP BY collection_id, external_id
+WITH trim_chars AS (
+    SELECT STRING_AGG(CHR(code), '' ORDER BY code) AS chars
+    FROM GENERATE_SERIES(1, 32) AS codes(code)
+)
+SELECT d.collection_id,
+       BTRIM(d.external_id, trim_chars.chars) AS normalized_external_id,
+       COUNT(*)
+FROM rag_documents d
+CROSS JOIN trim_chars
+WHERE d.collection_id IS NOT NULL
+  AND d.external_id IS NOT NULL
+  AND BTRIM(d.external_id, trim_chars.chars) <> ''
+GROUP BY d.collection_id, BTRIM(d.external_id, trim_chars.chars)
 HAVING COUNT(*) > 1;
 ```
 
-若存在任何冲突，迁移直接 `RAISE EXCEPTION`，不得自动选赢家、重命名或删除数据。
+预检按服务入口的 Java `trim()` 规范化规则执行：移除首尾 ASCII `1–32` 控制空白，
+包括普通空格、制表符和换行。若存在任何规范化后的冲突，迁移直接 `RAISE EXCEPTION`，
+不得自动选赢家、重命名或删除数据。若没有冲突，迁移可以把历史 external ID 的首尾
+空白规范化为同一规则下的值；这不是选择赢家，而是把历史值对齐到公共 API 已冻结的
+trim 语义。规范化后的空字符串不属于外部托管身份，不参与唯一索引。
 
 预检通过后：
 
@@ -471,7 +483,8 @@ DROP INDEX IF EXISTS uk_rag_doc_structured_identity;
 CREATE UNIQUE INDEX uk_rag_doc_external_identity
     ON rag_documents (collection_id, external_id)
     WHERE collection_id IS NOT NULL
-      AND external_id IS NOT NULL;
+      AND external_id IS NOT NULL
+      AND external_id <> '';
 ```
 
 保留 `idx_rag_doc_collection_type`。

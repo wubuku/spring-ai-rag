@@ -48,6 +48,21 @@ class CollectionIdentityResolverTest {
     }
 
     @Test
+    void sharedLifecycleLockRequiresAnActiveCollection() {
+        RagCollection collection = collection(7L, "customer:manual", false);
+        when(repository.findActiveByIdForShare(7L))
+                .thenReturn(Optional.of(collection));
+        when(repository.findActiveByIdForShare(8L))
+                .thenReturn(Optional.empty());
+
+        assertEquals(collection, resolver.requireActiveForShare(7L));
+        assertThrows(RagException.class,
+                () -> resolver.requireActiveForShare(8L));
+        assertThrows(IllegalArgumentException.class,
+                () -> resolver.requireActiveForShare(null));
+    }
+
+    @Test
     void acceptsMatchingIdAndKeyAndRejectsMismatch() {
         RagCollection collection = collection(7L, "customer:manual", false);
         when(repository.findByCollectionKeyAndDeletedFalse("customer:manual"))

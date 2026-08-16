@@ -1,6 +1,6 @@
 # 外部文档幂等更新与重索引实施进度
 
-> 状态：实施进行中（规划基线已审查通过）  
+> 状态：实施已完成，最终验收通过（规划基线已审查通过）
 > 日期：2026-08-16  
 > 配套规划：[外部文档幂等更新与重索引实施规划](2026-08-16_EXTERNAL_DOCUMENT_UPSERT_AND_REINDEX_IMPLEMENTATION_PLAN.md)
 
@@ -61,20 +61,34 @@
 | 代码库与文档探索 | 已完成 | 已确认普通文档、JSON record、Embedding、版本、导入导出、ACL、OpenAPI、WebUI 和测试主路径 |
 | 规划初稿 | 已完成 | 已冻结 API、数据模型、并发、失败恢复、兼容、迁移和验收方案 |
 | 规划三轮审查 | 已完成 | 修正后连续无修改 `3/3`，已允许实施 |
-| 后端与迁移实施 | 进行中 | 已新增外部同步 DTO、V30、实体字段、freshness 统计、失败状态修复、ExternalDocumentService 和四个 Controller endpoint；导出/导入、Collection clone 已保留 source revision/tombstone；普通 external document 与 JSON record 已统一 advisory lock 命名空间；`mvn -pl spring-ai-rag-core -am -DskipTests compile` 已通过 |
+| 后端与迁移实施 | 已完成 | 已新增外部同步 DTO、V30、实体字段、freshness 统计、失败状态修复、ExternalDocumentService 和四个 Controller endpoint；导出/导入、Collection clone 已保留 source revision/tombstone；普通 external document 与 JSON record 已统一 advisory lock 命名空间；API/core 增量编译已通过 |
 | 后端状态机测试 | 已完成 | `ExternalDocumentServiceTest` 6/6、`ExternalDocumentControllerWebTest` 4/4、`DocumentEmbedServiceTest` 7/7、OpenAPI contract 52 项通过；修复并验证“fresh embedding 仍重复调用 provider”问题 |
 | PostgreSQL 迁移测试 | 已完成（环境跳过） | `ExternalDocumentSyncPostgresIntegrationTest` 已加入并能在 Docker 不可用时明确 skip；当前机器 Testcontainers 因 Docker API client 1.32 < daemon 要求 1.40，未执行容器内断言 |
 | WebUI 实施 | 已完成 | 文档 API 类型与既有 embed 重试入口已扩展；文档列表展示 externalId/sourceRevision、embedding freshness/processingError，并支持对 stale 文档重试 embedding；Vitest 7/7、生产构建通过，当前源码 Vite Mock Playwright 5/5 |
-| WebUI 与长青文档实施 | 未开始 | 后端契约稳定后开始 |
-| 基本集成验证 | 进行中 | 任务相关后端测试与前端门禁已通过；待执行 `mvn clean compile test-compile`、真实服务启动/HTTP smoke、文档门禁 |
-| 实现三轮审查 | 未开始 | 计数 `0/3` |
-| 最终 diff 与文档门禁 | 未开始 | 只确认本任务增量，不清理并行修改 |
+| WebUI 与长青文档实施 | 已完成 | 双语 REST、架构、项目上下文、开发者参考和测试指南已同步；新增 `scripts/external-documents-e2e.sh`，脚本语法与局部 diff 检查通过 |
+| 基本集成验证 | 已完成 | `mvn clean compile test-compile` 已重新通过；任务相关 focused 后端回归最终 `142/142` 通过；PostgreSQL 容器测试因本机 Docker API client `1.32 < 1.40` 明确跳过；前端 `npx tsc -b`、Vitest `178/178`、生产构建和正确 Vite 目标 `BASE_URL=http://127.0.0.1:15175 npm run test:e2e` 的 Mock Playwright `36/36` 通过；项目文档门禁 10 项通过 |
+| 实现三轮审查 | 已完成，连续无修改 `3/3` | 修复 live E2E 凭据前置条件后，连续三轮固定范围审查均未发现实质问题，期间未修改业务代码 |
+| 最终 diff 与文档门禁 | 已完成 | 文档门禁、脚本语法、`git diff --check` 和最终差异边界核验通过；未使用 stash/reset/checkout，未清理并行工作区修改 |
 
 ## 7. 下一步
 
 规划系统性审查已完成：修正后连续三轮无实质问题且未修改文档，计数 `3/3`。
 当前已完成后端契约/迁移/服务主体实现，以及导入导出、clone、JSON advisory lock 收尾；
-API/core 增量编译已通过。下一步补齐后端测试，先完成后端基本验证，再进入 WebUI。
+API/core 增量编译已通过。双语长青文档和真实 HTTP external-document smoke 已补齐；
+前端 tsc/Vitest/build/Playwright 和真实服务 smoke 已通过；完整 Maven 门禁已因迁移测试夹具的
+Flyway target API 调用错误完成最小适配并重新通过，任务相关 focused 后端回归最终 `142/142` 已通过。
+PostgreSQL 容器断言仍受本机 Docker API 版本阻塞；前端 `npx tsc -b`、Vitest `178/178`、
+生产构建，以及在临时 Vite `15175` 目标上运行的 Mock Playwright `36/36` 均已通过。
+基本门槛完成后曾进入实现审查；普通文档导入的稳定身份规范化、Collection 生命周期
+并发保护、批量逐项隔离、Collection 删除身份保护和旧 add-document ACL 均已修复并通过
+相关 focused 回归。最新重新开始的第 1 轮发现 V30 只按 PostgreSQL 默认 `BTRIM`
+规范化普通空格，未覆盖 Java `trim()` 会移除的 ASCII 1–32 控制空白，可能保留两个 API
+层等价的逻辑身份。迁移现已构造 Java-compatible trim 字符集，在冲突预检和更新中统一
+使用；并将 `generate_series` 的列别名改为显式 `AS codes(code)`，避免迁移解析歧义。
+V29→V30 成功与 fail-closed 测试也扩展到制表符/换行。第 2 轮进一步发现
+`scripts/external-documents-e2e.sh` 会创建临时 Collection，但前置说明错误地把受限业务
+Key 列为可用凭据；现已限定为 root 或不受限 ADMIN Key。随后脚本检查和 Maven 硬门槛已重新
+通过；当前实现审查已连续无修改 `3/3`，最终差异边界核验也已完成。
 
 ## 8. 规划审查记录
 
@@ -82,3 +96,15 @@ API/core 增量编译已通过。下一步补齐后端测试，先完成后端�
 |---|---|---|---|
 | 2026-08-16 11:06 CST | 初始第 1 轮：API、validation、导入兼容、事务后响应 | 旧 export 的 null revision 缺少兼容导入；query 参数约束缺少 `@Validated` 落点；embedding 后响应可能使用旧实体状态 | 已补充 legacy null revision 首次认领、Controller + Service 双层校验、embedding 后 reload；规划已修改，计数归零 |
 | 2026-08-16 11:12 CST | 重启后第 2 轮：迁移、版本、导入导出、Embedding freshness、ACL | 进度文档把 multipart/PDF 适配误列为首阶段，与规划正文的非目标冲突；公共写入入口没有明确写出既有 writable collection resolver；metadata-only 更新与默认 `embed=true` 的 freshness miss 语义不完整；opaque revision 不应使用大小比较表述 | 已统一为后续扩展，补充稳定 key 解析后的 writable resolver，明确 freshness miss 时补嵌入，并改为只做 opaque revision 相等/CAS 判断；文档已修改，计数归零 |
+| 2026-08-16 12:19 CST | 实现审查第 2 轮：旧 Collection add-document 兼容路径 | 规划要求 external-managed 文档不得通过旧 add-document API 改变 Collection，但实现仍直接修改 `collectionId`，会造成稳定身份命名空间漂移 | `RagCollectionController.addDocument` 对非空 `externalId` 返回 `DOCUMENT_REVISION_CONFLICT`；新增回归测试并重置实现审查计数为 `0` |
+| 2026-08-16 12:22 CST | 实现审查第 2 轮：Embedding 失败错误持久化 | provider 异常文本原样写入文档和 embedding state 的 processing error，可能把 API key/token 等敏感信息保存到数据库；仅响应层脱敏不够 | 在 `DocumentEmbedService` 生成失败结果前脱敏截断，并在 `EmbeddingPersistenceService` 入库前再次防御性脱敏截断；补回归断言，计数仍为 `0` |
+| 2026-08-16 12:35 CST | 重启后的实现审查第 1 轮：批量 API 与稳定身份兼容路径 | 批量请求的嵌套 `@Valid` 会让单个非法 item 导致整个请求 400，无法按项返回 `PERSISTENCE_FAILED`；Collection 软删除会解绑所有文档，令 external-managed 文档失去 `collectionKey + externalId` 身份 | 已移除 item 级入口 Bean Validation，保留容器限制并由 service 逐项校验；对包含 external-managed 文档的旧 Collection 软删除路径 fail closed，要求先显式 purge；已补测试与双语 REST 说明，计数保持 `0` |
+| 2026-08-16 12:42 CST | 重新开始的实现审查第 1 轮：旧 add-document 来源 ACL | 兼容路径在来源文档权限检查前判断 `externalId`，受限 Key 可区分未授权文档类型；来源 `collectionId=null` 时还会跳过 ACL 并允许受限 Key 认领文档 | 已先统一执行 `requireDocumentAccess`，再判断 external-managed 冲突和移动；补未授权 external 文档及 null Collection 文档回归测试，计数保持 `0` |
+| 2026-08-16 12:46 CST | 重新开始的实现审查第 1 轮：Collection 生命周期并发 | 软删除先计数再解绑，而外部 upsert/delete 只锁文档身份、不锁 Collection；两事务可交错，使计数保护失效或把文档写入已删除 Collection | 已使用 JPA 行级共享/排他锁：普通外部文档与 JSON record 写事务持 Collection `PESSIMISTIC_READ`，软删除持 `PESSIMISTIC_WRITE`；锁后再次确认 Collection active，并补锁解析/调用测试，计数保持 `0` |
+| 2026-08-16 12:50 CST | 实现审查第 1 轮：`embed=false` 响应语义 | 实现会在已有 fresh embedding 时把 `embed=false` 报为 `CACHED`，与已冻结的 `NOT_REQUESTED` 契约不一致，调用方无法判断本次是否执行 embedding | 移除错误的状态覆盖逻辑；新增 fresh-cache 场景回归测试；同步中英文 REST 说明；实现审查计数重置为 `0/3` |
+| 2026-08-16 12:56 CST | 实现审查第 1 轮：真实 E2E 清理 | Collection 软删除已对 external-managed 文档 fail closed，但 E2E `EXIT` 清理仍只删除 Collection，会留下临时文档和 Collection | 清理阶段先硬删除脚本创建的普通 external 文档，再删除 Collection；记录 batch 文档 ID；脚本语法检查后实现审查计数仍为 `0/3` |
+| 2026-08-16 13:02 CST | 实现审查第 1 轮：V29→V30 外部 ID 规范化 | 服务入口按 trim 语义查找身份，但 V30 只按原始 external_id 预检/建索引，历史 `"id"` 与 `" id "` 可能形成两个逻辑身份 | V30 按 `BTRIM` 预检，先在无冲突时规范化历史值，空白值排除唯一身份；补 V29→V30 成功与冲突 fail-closed 测试，并同步规划；实现审查计数重置为 `0/3` |
+| 2026-08-16 13:16 CST | 实现审查第 2 轮：Collection 导入身份规范化 | 普通文档导入直接保存 raw `externalId`/`sourceRevision`，与 API upsert 的 trim 语义不一致；导入 `" id "` 后 upsert `"id"` 可能创建第二条稳定身份 | 导入路径统一 trim，空白值转为 `null`，长度超过 255 直接拒绝；新增 Controller 回归测试；实现审查计数重置为 `0/3`，待硬门槛重新验证 |
+| 2026-08-16 13:32 CST | 重新开始的实现审查第 1 轮：V30 与 Java trim 语义 | PostgreSQL 默认 `BTRIM` 只移除普通空格；历史 `"\tid\n"` 与 `"id"` 仍可能在 API 层成为同一身份，却绕过迁移预检和唯一索引 | V30 构造 ASCII 1–32 trim 字符集并用于冲突预检与规范化；迁移测试增加制表符/换行成功和冲突场景；审查计数保持 `0/3` |
+| 2026-08-16 13:35 CST | 重新开始的实现审查第 1 轮：迁移 SQL 可执行性 | 新增 `generate_series` 生成 trim 字符集时未显式声明输出列名，可能导致 SQL 解析依赖方言默认行为；规划稿索引谓词仍保留旧 `BTRIM` 示例 | 改为 `AS codes(code)`，规划稿同步为实际 `trim_chars` 和 `external_id <> ''` 语义；代码审查计数保持 `0/3`，需重新通过硬门槛 |
+| 2026-08-16 13:39 CST | 重新开始的实现审查第 2 轮：live E2E 凭据前置条件 | 脚本创建临时 Collection，但说明允许受限业务 Key；当前 ACL 会拒绝受限 Key 创建 Collection，导致验收路径误导或直接失败 | 将脚本前置条件改为 root 或不受限 ADMIN Key，并保留受限业务 Key 仅用于已存在 Collection 的 API 调用语义；审查计数重置为 `0/3` |

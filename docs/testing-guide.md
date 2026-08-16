@@ -180,6 +180,25 @@ root credential is available, use `--skip-acl` explicitly and record the skip.
 The script does not call a Chat LLM and does not print API keys or complete
 payloads.
 
+### External Document Synchronization Acceptance Gate
+
+The ordinary external-document path has service, MockMvc, OpenAPI, migration,
+and live HTTP coverage. Run the live flow against a PostgreSQL-profile server:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/external-documents-e2e.sh
+```
+
+It covers stable identity, exact replay, source-revision CAS, same-revision
+conflict, batch isolation, lookup by external identity, tombstone deletion and
+replay, restoration, and embedding freshness. The default run requires a
+working embedding provider for the content-changing update. Use
+`EXTERNAL_DOCUMENT_E2E_EMBED=false` only for an explicitly documented provider
+outage; that run validates persistence and no-embedding status but does not
+count as the completed embedding acceptance gate.
+
 ## Coverage
 
 JaCoCo is integrated into all modules:

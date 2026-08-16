@@ -139,6 +139,13 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
 
     long countByCollectionIdIn(List<Long> collectionIds);
 
+    @Query("SELECT COUNT(d) FROM RagDocument d "
+            + "WHERE d.collectionId = :collectionId "
+            + "AND d.externalId IS NOT NULL "
+            + "AND TRIM(d.externalId) <> ''")
+    long countExternalManagedByCollectionId(
+            @Param("collectionId") Long collectionId);
+
     /**
      * Query by collection ID (no pagination).
      */

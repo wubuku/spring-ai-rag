@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
@@ -22,6 +23,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -147,6 +150,43 @@ class ExternalDocumentControllerWebTest {
                                 """))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("DOCUMENT_REVISION_CONFLICT"));
+    }
+
+    @Test
+    void batchValidationIsDelegatedPerItemInsteadOfRejectingWholeRequest() throws Exception {
+        when(externalDocumentService.batchUpsert(any()))
+                .thenReturn(new ExternalDocumentBatchUpsertResponse(
+                        List.of(),
+                        new ExternalDocumentBatchUpsertResponse.Summary(
+                                2, 1, 0, 0, 1, 0)));
+
+        mockMvc.perform(post("/api/v1/rag/documents/batch-upsert")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "items": [
+                                    {
+                                      "collectionKey": "customer-42:manual:v1",
+                                      "externalId": "doc-valid",
+                                      "sourceRevision": "rev-1",
+                                      "title": "Valid",
+                                      "content": "Valid content"
+                                    },
+                                    {
+                                      "collectionKey": "customer-42:manual:v1",
+                                      "externalId": "doc-invalid",
+                                      "sourceRevision": " ",
+                                      "title": "Invalid",
+                                      "content": "Invalid content"
+                                    }
+                                  ]
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.summary.total").value(2))
+                .andExpect(jsonPath("$.summary.persistenceFailed").value(1));
+
+        verify(externalDocumentService).batchUpsert(any());
     }
 
     @Test

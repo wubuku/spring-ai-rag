@@ -145,6 +145,24 @@ Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss
 filter. JSON records use one record-level chunk.
 
+### External Document Synchronization
+
+Ordinary external documents use the same stable external identity shape:
+`collectionKey + externalId`, with caller-supplied opaque `sourceRevision`.
+`POST /documents/upsert` preserves the internal `documentId`, supports exact
+replay and optional `expectedSourceRevision` CAS, and records version snapshots.
+Content changes invalidate retrieval freshness before synchronous re-embedding;
+embedding failure is persisted against the new content hash and old vectors are
+excluded from retrieval. Source deletion is an enabled=false tombstone that can
+be restored by a newer revision. `POST /documents/batch-upsert`,
+`GET /documents/by-external-id`, and the corresponding source-delete endpoint
+are available to external connectors. JSON records retain their dedicated
+payload/retrieval-text semantics.
+
+See [REST API — External Documents](rest-api.md) for the complete
+request/response contract, conflict handling, and client synchronization
+best practices.
+
 ## 5. Multi-Model Runtime
 
 - Legacy provider beans remain for default-model compatibility.
@@ -181,6 +199,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/api-keys` | API-key management |
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
+| `/documents/upsert` | Idempotent ordinary external-document synchronization |
 
 See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 

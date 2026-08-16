@@ -377,6 +377,7 @@ public class JsonRecordService {
             String originalFilename,
             Boolean enabledOverride) {
         String externalId = request.getExternalId().trim();
+        lockActiveCollection(request.getCollectionId());
         lockIdentity(request.getCollectionId(), externalId);
         String contentHash = DigestUtils.sha256(request.getRetrievalText());
         JsonNode payload = request.getJsonbPayload().deepCopy();
@@ -467,6 +468,12 @@ public class JsonRecordService {
             }
             return null;
         });
+    }
+
+    private void lockActiveCollection(Long collectionId) {
+        if (transactionTemplate != null) {
+            collectionIdentityResolver.requireActiveForShare(collectionId);
+        }
     }
 
     private String changedFields(

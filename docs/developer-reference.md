@@ -247,6 +247,27 @@ credential, and record that skip. The script never prints API keys or complete
 payloads; temporary responses are removed from ignored
 `.verification/jsonb-e2e/` storage on exit.
 
+### External Document Synchronization HTTP E2E
+
+Run the ordinary external-document synchronization flow against an already
+running PostgreSQL-profile service:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/external-documents-e2e.sh
+```
+
+The script verifies create with `embed=false`, exact replay, update with
+`expectedSourceRevision`, CAS conflict, same-revision conflict, batch upsert,
+lookup by external identity, tombstone deletion/replay, and restoration with a
+new revision. By default it also verifies successful re-embedding after content
+change. Set `EXTERNAL_DOCUMENT_E2E_EMBED=false` only when the embedding provider
+is intentionally unavailable; the run then records the embedding check as
+skipped rather than claiming a completed vector path. Logs are written under
+ignored `.verification/external-documents-e2e/` and the script never prints API
+keys or complete document content.
+
 ## 8. Goldenset And Release Gates
 
 Retrieval goldenset:

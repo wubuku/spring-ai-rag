@@ -567,6 +567,141 @@ Returns the current structured record by internal document ID, including
 identities. Collection export/import, clone, and document-version responses
 preserve the structured fields and payload snapshots.
 
+## External Documents — Idempotent Synchronization
+
+These endpoints are for ordinary text documents whose source system owns the
+document identity and revision. They do not fetch URLs or files. The caller
+reads the source, then sends the current representation to the RAG service.
+
+The stable identity is the pair `collectionKey + externalId`. `externalId` is
+trimmed, case-sensitive, limited to 255 characters, and must remain stable for
+the lifetime of the source object. `sourceRevision` is an opaque, non-empty
+caller token, such as an ETag, upstream row version, commit ID, or canonical
+payload hash. The service does not compare opaque revisions by ordering.
+
+### `POST /api/v1/rag/documents/upsert`
+
+Create or update one ordinary document. The endpoint requires a writable
+Collection under the current API key's Collection ACL.
+
+```json
+{
+  "collectionKey": "customer-42:manual:v3",
+  "externalId": "cms:article:10001",
+  "sourceRevision": "etag:8b4d9f",
+  "expectedSourceRevision": "etag:7a3c21",
+  "title": "Refund policy",
+  "content": "The current refund policy is ...",
+  "source": "cms",
+  "documentType": "markdown",
+  "metadata": {
+    "locale": "en-US"
+  },
+  "embed": true
+}
+```
+
+`title` and `content` are required. `documentType` defaults to `text`;
+`json-record` must use the JSON structured-record API. `embed` defaults to
+`true`. The request content limit is 1,000,000 characters.
+
+The service keeps the same internal `documentId` when a source document is
+updated. Content changes create a version snapshot, invalidate the old
+embedding for retrieval, and synchronously rebuild the active Profile
+embedding. Metadata-only or source-revision-only changes do not call the
+provider when a fresh embedding already exists.
+
+The response is HTTP 200 even when persistence succeeds but embedding fails:
+
+```json
+{
+  "documentId": 42,
+  "collectionKey": "customer-42:manual:v3",
+  "externalId": "cms:article:10001",
+  "sourceRevision": "etag:8b4d9f",
+  "action": "UPDATED",
+  "contentChanged": true,
+  "versionNumber": 4,
+  "embeddingStatus": "COMPLETED",
+  "embeddingProfileKey": "bge-m3-1024",
+  "embeddingFresh": true,
+  "processingStatus": "COMPLETED",
+  "sourceDeletedAt": null,
+  "errorCode": null,
+  "error": null
+}
+```
+
+`action` is `CREATED`, `UPDATED`, or `UNCHANGED`. `embeddingStatus` is one of
+`COMPLETED`, `CACHED`, `NOT_REQUESTED`, or `FAILED`. `NOT_REQUESTED` always
+means that this request used `embed=false`; it can still report
+`embeddingFresh=true` when a usable embedding already existed. `FAILED` means
+the new document content was committed but is not retrievable until embedding
+is retried; the old vector may remain physically stored for diagnosis but is
+excluded by the freshness predicate. Replaying the same request retries
+embedding when the document is still stale.
+
+`expectedSourceRevision` is an optional compare-and-set guard. Exact replay is
+checked first so a client can safely retry after losing a successful response.
+The same revision with different managed fields returns `409`. A mismatching
+expected revision also returns `409`. If the guard is omitted, the last
+serialized writer wins, so connectors with out-of-order delivery should use
+the guard.
+
+### `POST /api/v1/rag/documents/batch-upsert`
+
+Accepts `{ "items": [ ... ] }` with 1–50 items and a total content limit of
+5,000,000 characters. Each item is processed independently and results retain
+input order. One item can report `PERSISTENCE_FAILED` or `FAILED` without
+rolling back successful items in the same batch.
+
+### `GET /api/v1/rag/documents/by-external-id`
+
+Query the current ordinary document without exposing an internal ID as the
+source-system identity:
+
+```text
+GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&externalId=cms%3Aarticle%3A10001
+```
+
+The response is the normal document detail shape plus `externalId`,
+`sourceRevision`, `sourceDeletedAt`, processing status, and embedding
+freshness. An unauthorized Collection returns `403`; a missing identity
+returns `404`.
+
+### `DELETE /api/v1/rag/documents/by-external-id`
+
+Record a source-managed deletion without losing the stable identity:
+
+```text
+DELETE /api/v1/rag/documents/by-external-id
+  ?collectionKey=customer-42%3Amanual%3Av3
+  &externalId=cms%3Aarticle%3A10001
+  &sourceRevision=etag%3Adeleted-9
+  &expectedSourceRevision=etag%3A8b4d9f
+```
+
+This creates a tombstone (`enabled=false`, `sourceDeletedAt` set) and returns
+`DELETED`. Replaying the same deletion revision returns `UNCHANGED`. A later
+upsert with a new revision can restore the same internal document ID. The old
+deletion revision cannot be replayed as an upsert. The legacy
+`DELETE /documents/{documentId}` remains a hard-delete operation and has
+different semantics.
+
+### Recommended synchronization pattern
+
+1. Derive a stable `externalId` from the source object's immutable identity.
+2. Send the source's current opaque revision with every upsert and deletion.
+3. Persist the returned revision and internal ID only for diagnostics; use the
+   external identity for future calls.
+4. Use `expectedSourceRevision` when delivery can be duplicated or arrive out
+   of order. Treat `409` as a synchronization conflict requiring a fresh
+   source read, not as a create failure.
+5. Treat `embeddingFresh=false` or `embeddingStatus=FAILED` as an operational
+   retry condition. Replaying the same request is safe.
+6. Use a separate API key per connector and restrict it to the connector's
+   Collections. Do not put the root key in an external connector.
+
 ---
 
 ## Documents — Document Management
@@ -899,9 +1034,13 @@ The update body contains only mutable fields: `name`, `description`,
 `collectionKey` in an update body returns `400`; renaming a key is not
 supported.
 
-Delete is a soft delete and unlinks documents without deleting documents or
-embeddings. The key remains reserved. Restore preserves the same key and does
-not re-link documents automatically.
+Delete is a soft delete and unlinks legacy documents without deleting documents
+or embeddings. A Collection containing any document with a nonblank
+`externalId` returns `409`, because unlinking would destroy the
+`collectionKey + externalId` identity. Explicitly hard-delete or migrate those
+external-managed documents before deleting the Collection. The key remains
+reserved. Restore preserves the same key and does not re-link legacy documents
+automatically.
 
 ---
 

@@ -176,6 +176,23 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 脚本需要真实 embedding provider；没有 root 凭据时只能显式使用 `--skip-acl`，
 并在验证记录中注明。该脚本不调用 Chat LLM，也不会输出 API Key 或完整 payload。
 
+### 外部文档同步验收门禁
+
+普通外部文档路径具备 Service、MockMvc、OpenAPI、迁移和真实 HTTP 覆盖。对已经启动的
+PostgreSQL profile 服务运行：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/external-documents-e2e.sh
+```
+
+它覆盖稳定身份、精确重放、来源版本 CAS、同 revision 冲突、批量隔离、按外部身份查询、
+tombstone 删除与重放、恢复和 embedding freshness。默认运行需要可用的 embedding
+provider 来验证内容变化更新；只有在明确记录 provider 故障时才使用
+`EXTERNAL_DOCUMENT_E2E_EMBED=false`。该模式可以验证持久化与 no-embedding 状态，但不计入
+完整 embedding 验收门禁。
+
 ## 覆盖率
 
 JaCoCo 已集成到所有模块：

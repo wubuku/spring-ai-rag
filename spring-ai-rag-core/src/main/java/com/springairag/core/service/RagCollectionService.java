@@ -6,6 +6,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
+import com.springairag.core.exception.DocumentRevisionConflictException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
@@ -95,7 +96,11 @@ public class RagCollectionService {
     }
 
     /**
-     * Soft-deletes a collection and unlinks all associated documents.
+     * Soft-deletes a collection and unlinks legacy documents.
+     *
+     * <p>External-managed documents cannot be unlinked because their stable
+     * identity includes the Collection. They must be explicitly purged before
+     * this legacy deletion flow is allowed.
      *
      * @param id collection ID
      * @return deletion result containing unlinked document count, or empty if collection not found
@@ -105,8 +110,15 @@ public class RagCollectionService {
         Objects.requireNonNull(id, "id must not be null");
         log.info("Soft-deleting collection: id={}", id);
 
-        return collectionRepository.findByIdAndDeletedFalse(id)
+        return collectionRepository.findActiveByIdForUpdate(id)
                 .map(collection -> {
+                    long externalManaged =
+                            documentRepository.countExternalManagedByCollectionId(id);
+                    if (externalManaged > 0) {
+                        throw new DocumentRevisionConflictException(
+                                "Collection contains external-managed documents; "
+                                        + "purge them explicitly before deleting the collection");
+                    }
                     // Batch clear collection_id of associated documents (avoid loading one by one)
                     long count = documentRepository.countByCollectionId(id);
                     if (count > 0) {

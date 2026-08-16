@@ -2,6 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingVectorColumns;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.RetrievalUtils;
 import com.springairag.documents.chunk.TextChunk;
@@ -17,6 +18,8 @@ import java.util.Map;
  */
 @Service
 public class EmbeddingPersistenceService {
+
+    private static final int MAX_ERROR_LENGTH = 500;
 
     private final JdbcTemplate jdbcTemplate;
 
@@ -155,6 +158,7 @@ public class EmbeddingPersistenceService {
             EmbeddingProfile profile,
             String chunkerVersion,
             String error) {
+        String safeError = sanitizeError(error);
         Map<String, Object> document = lockDocument(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();
         String actualHash = (String) document.get("content_hash");
@@ -175,17 +179,26 @@ public class EmbeddingPersistenceService {
                 profile.id(),
                 expectedContentHash,
                 chunkerVersion,
-                error);
+                safeError);
         int updated = jdbcTemplate.update(
                 "UPDATE rag_documents SET processing_status = 'FAILED', processing_error = ?, "
                         + "version = version + 1, updated_at = NOW() WHERE id = ? AND version = ?",
-                error,
+                safeError,
                 documentId,
                 expectedVersion);
         if (updated != 1) {
             throw new IllegalStateException(
                     "Document changed during embedding failure commit: " + documentId);
         }
+    }
+
+    private String sanitizeError(String error) {
+        if (error == null || error.isBlank()) {
+            return "Embedding failed";
+        }
+        String masked = SensitiveDataMaskingConverter.maskSensitiveData(error);
+        return masked.length() <= MAX_ERROR_LENGTH
+                ? masked : masked.substring(0, MAX_ERROR_LENGTH);
     }
 
     private Map<String, Object> lockDocument(long documentId) {

@@ -95,6 +95,7 @@ public class ExternalDocumentService {
             throw new IllegalArgumentException("External document batch is limited to 50 items");
         }
         long contentLength = requests.stream()
+                .filter(Objects::nonNull)
                 .map(ExternalDocumentUpsertRequest::getContent)
                 .filter(Objects::nonNull)
                 .mapToLong(String::length)
@@ -188,6 +189,7 @@ public class ExternalDocumentService {
                     "documentType=json-record must use the JSON record API");
         }
 
+        lockActiveCollection(collectionId);
         lockIdentity(collectionId, externalId);
         String contentHash = DigestUtils.sha256(content);
         RagDocument document = documentRepository
@@ -278,6 +280,7 @@ public class ExternalDocumentService {
             String externalId,
             String sourceRevision,
             String expectedSourceRevision) {
+        lockActiveCollection(collectionId);
         lockIdentity(collectionId, externalId);
         RagDocument document = documentRepository
                 .findByCollectionIdAndExternalId(collectionId, externalId)
@@ -342,7 +345,7 @@ public class ExternalDocumentService {
                 errorCode = ErrorCode.EMBEDDING_FAILED.getCode();
                 error = safeError(e);
             }
-        } else if (fresh) {
+        } else if (embed && fresh) {
             embeddingStatus = "CACHED";
             embeddingProfileKey = embeddingProfileProvider.getActiveProfile().profileKey();
         }
@@ -351,9 +354,6 @@ public class ExternalDocumentService {
         fresh = documentEmbedService.hasFreshEmbedding(reloaded);
         if (embeddingProfileKey == null) {
             embeddingProfileKey = embeddingProfileProvider.getActiveProfile().profileKey();
-        }
-        if (fresh && "NOT_REQUESTED".equals(embeddingStatus)) {
-            embeddingStatus = "CACHED";
         }
         return new ExternalDocumentUpsertResponse(
                 reloaded.getId(),
@@ -417,6 +417,12 @@ public class ExternalDocumentService {
             }
             return null;
         });
+    }
+
+    private void lockActiveCollection(Long collectionId) {
+        if (transactionTemplate != null) {
+            collectionIdentityResolver.requireActiveForShare(collectionId);
+        }
     }
 
     private boolean sameManagedFields(

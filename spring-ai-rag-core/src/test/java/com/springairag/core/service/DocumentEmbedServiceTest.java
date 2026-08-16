@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -90,13 +91,17 @@ class DocumentEmbedServiceTest {
         when(documentRepository.findById(2L)).thenReturn(Optional.of(document));
         when(embeddingBatchService.createEmbeddingsBatch(anyList())).thenAnswer(invocation -> {
             List<String> texts = invocation.getArgument(0);
-            return List.of(new EmbeddingBatchService.EmbeddingResult(
-                    texts.getFirst(), null, "provider failure"));
+            return texts.stream()
+                    .map(text -> new EmbeddingBatchService.EmbeddingResult(
+                            text, null, "provider apiKey=secret-value"))
+                    .toList();
         });
 
         Map<String, Object> result = service.embedDocument(2L);
 
         assertEquals("FAILED", result.get("status"));
+        assertFalse(((String) result.get("error")).contains("secret-value"));
+        assertTrue(((String) result.get("error")).contains("***REDACTED***"));
         verify(persistenceService, never()).replace(
                 any(Long.class), any(Long.class), any(String.class), any(),
                 any(String.class), anyList(), anyList());

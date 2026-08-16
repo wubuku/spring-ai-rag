@@ -1,5 +1,6 @@
 package com.springairag.core.service;
 
+import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
@@ -21,6 +22,7 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -149,6 +151,29 @@ class ExternalDocumentServiceTest {
     }
 
     @Test
+    void embedFalseReportsNotRequestedEvenWhenFreshEmbeddingExists() {
+        RagDocument document = document(41L, "doc-1", "rev-1", "First content");
+        when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
+                .thenReturn(Optional.of(document));
+        when(documentVersionService.forceRecordVersion(
+                any(RagDocument.class), eq("UPDATE"), any(String.class)))
+                .thenReturn(version(2));
+        when(documentRepository.findById(41L)).thenReturn(Optional.of(document));
+        when(documentEmbedService.hasFreshEmbedding(document)).thenReturn(true);
+
+        ExternalDocumentUpsertRequest request =
+                request("doc-1", "rev-2", "Updated title", "First content");
+        request.setEmbed(false);
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("UPDATED", response.action());
+        assertEquals("NOT_REQUESTED", response.embeddingStatus());
+        assertTrue(response.embeddingFresh());
+        verify(documentEmbedService, never()).embedDocument(anyLong(), eq(false));
+    }
+
+    @Test
     void sameRevisionWithDifferentContentIsRejected() {
         RagDocument document = document(41L, "doc-1", "rev-1", "Old content");
         when(documentRepository.findByCollectionIdAndExternalId(10L, "doc-1"))
@@ -230,6 +255,29 @@ class ExternalDocumentServiceTest {
                 collection.getCollectionKey(), "doc-1", "rev-2", null);
         assertEquals("UNCHANGED", replay.action());
         verify(documentRepository).saveAndFlush(document);
+    }
+
+    @Test
+    void batchIsolatesValidationFailuresAndPreservesInputOrder() {
+        ExternalDocumentUpsertRequest valid =
+                request("doc-valid", "rev-1", "Valid", "Valid content");
+        valid.setEmbed(false);
+        ExternalDocumentUpsertRequest invalid =
+                request("doc-invalid", " ", "Invalid", "Invalid content");
+        when(documentRepository.findByCollectionIdAndExternalId(
+                10L, "doc-valid")).thenReturn(Optional.empty());
+
+        ExternalDocumentBatchUpsertResponse response =
+                service.batchUpsert(List.of(valid, invalid));
+
+        assertEquals(2, response.items().size());
+        assertEquals("doc-valid", response.items().get(0).externalId());
+        assertEquals("CREATED", response.items().get(0).action());
+        assertEquals("doc-invalid", response.items().get(1).externalId());
+        assertEquals("PERSISTENCE_FAILED", response.items().get(1).action());
+        assertEquals("BAD_REQUEST", response.items().get(1).errorCode());
+        assertEquals(1, response.summary().created());
+        assertEquals(1, response.summary().persistenceFailed());
     }
 
     private ExternalDocumentUpsertRequest request(
