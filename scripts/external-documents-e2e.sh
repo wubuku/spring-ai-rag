@@ -419,7 +419,7 @@ write_update "$RESTORE_REQUEST" "rev-4" "rev-3" \
 RESTORE_RESPONSE="$LOG_DIR/restore.json"
 RESTORE_CODE=$(request POST "$API/documents/upsert" "$RESTORE_RESPONSE" "$OPERATOR_KEY" \
   "$(cat "$RESTORE_REQUEST")")
-require_json "newer source revision restored document" "$RESTORE_RESPONSE" "$RESTORE_CODE"
+require_json "distinct subsequent source revision restored document" "$RESTORE_RESPONSE" "$RESTORE_CODE"
 python3 - "$RESTORE_RESPONSE" "$DOCUMENT_ID" <<'PY'
 import json
 import sys
@@ -429,7 +429,7 @@ if data.get("action") != "UPDATED" or str(data.get("documentId")) != sys.argv[2]
 if data.get("processingStatus") not in ("PENDING", "COMPLETED"):
     raise SystemExit("restore returned an invalid processing status")
 PY
-pass "newer source revision restores the same document identity"
+pass "distinct subsequent source revision restores the same document identity"
 
 echo
 echo "External document live HTTP E2E passed: ${PASS_COUNT} checks"

@@ -19,7 +19,7 @@
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
-| 同步外部文档 / 内容源 | [REST API：外部文档幂等同步](rest-api-zh-CN.md) | [项目上下文：外部文档同步](project-context-zh-CN.md)、[真实 HTTP 验收](developer-reference-zh-CN.md) |
+| 同步外部文档 / 内容源 | [REST API：外部文档幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization) | [项目上下文：外部文档同步](project-context-zh-CN.md#external-document-synchronization)、[真实 HTTP 验收](developer-reference-zh-CN.md#external-document-synchronization-http-e2e) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
 | 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | 规划 OpenAI 兼容服务 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
@@ -53,7 +53,7 @@
 |------|------|
 | [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、三 Bean、Advisor 链、双表记忆、领域扩展 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
-| [rest-api-zh-CN.md](rest-api-zh-CN.md) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
+| [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
 | [TODO-zh-CN.md](TODO-zh-CN.md) / [TODO.md](TODO.md) | 当前未纳入 API 的后续改进与触发条件 |
 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `DomainRagExtension` 扩展开发 |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | 与参考项目对比、Phase 完成状态 |
@@ -157,5 +157,6 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 - **入口文档保持短**：`CLAUDE.md`、`AGENTS.md` 只放硬性提示 + 链接；稳定认知下沉到 `project-context*`，命令下沉到 `developer-reference*`。
 - **本地状态保持本地**：OpenClaw 状态文件继续 gitignore，可以引用项目长青文档，项目文档不能反向依赖它们。
 - **改行为就改文档**：配置项 → `configuration*`；API → `rest-api*`；架构决策 → `architecture*`。**中英文成对存在时必须同步更新。**
-- **规划类文档**（`*-plan.md`、`drafts/`）可能滞后于代码，以代码与 `IMPLEMENTATION_COMPARISON.md` 为准。
+- **规划类文档**（`*-plan.md`、`drafts/`）可能滞后于代码；以当前代码和长青 reference/guide
+  为准，`IMPLEMENTATION_COMPARISON.md` 仅作为补充状态与历史对照。
 - **不要把密钥写进文档**；密钥只在 `.env`（已 gitignore）。

@@ -19,7 +19,7 @@
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
-| Synchronize external documents / content sources | [REST API: External Document Synchronization](rest-api.md) | [Project context: External Document Synchronization](project-context.md), [live HTTP acceptance](developer-reference.md) |
+| Synchronize external documents / content sources | [REST API: External Document Synchronization](rest-api.md#external-documents-idempotent-synchronization) | [Project context: External Document Synchronization](project-context.md#external-document-synchronization), [live HTTP acceptance](developer-reference.md#external-document-synchronization-http-e2e) |
 | Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
 | Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | Plan OpenAI compatibility | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
@@ -53,7 +53,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 |-----|-------------|
 | [architecture.md](architecture.md) | Modules, three-Bean model, Advisor chain, dual memory, domain extension |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
-| [rest-api.md](rest-api.md) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
+| [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
 | [TODO.md](TODO.md) / [TODO-zh-CN.md](TODO-zh-CN.md) | Current follow-up work outside the public API and its revisit criteria |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | Comparison with reference projects; phase status |
@@ -157,5 +157,7 @@ Conclusions: [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md).
 - **Keep entry docs short**: `CLAUDE.md` and `AGENTS.md` hold hard tips + links only; sink stable context into `project-context*` and commands into `developer-reference*`.
 - **Keep local state local**: OpenClaw state files are gitignored and may reference project docs, never the reverse.
 - **Docs follow code**: config → `configuration*`; API → `rest-api*`; design → `architecture*`. **Keep EN/ZH pairs in sync** when both exist.
-- **Plan docs** (`*-plan.md`, `drafts/`) may lag; prefer code and `IMPLEMENTATION_COMPARISON.md`.
+- **Plan docs** (`*-plan.md`, `drafts/`) may lag; prefer current code and
+  evergreen reference/guides. Use `IMPLEMENTATION_COMPARISON.md` only as
+  supplementary status and historical comparison.
 - **Never commit secrets**; keys live only in `.env` (gitignored).

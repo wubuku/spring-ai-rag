@@ -9,7 +9,7 @@
 
 | 项目 | 优先级 | 状态 |
 |------|--------|------|
-| 在显式选中的多个 Collection 中保证每个 Collection 都有机会贡献候选 | P2/P3 | 延后，暂不阻塞当前版本 |
+| 在显式选中的多个 Collection 中保证每个 Collection 都有机会贡献候选 | 非紧急 Backlog / 无目标版本 | 延后，暂不阻塞当前版本 |
 
 ### 当前行为
 
@@ -51,7 +51,7 @@ document ID”的主要性能问题；普通的并集检索不需要 `EACH_COLLE
 - goldenset 或线上指标显示，全局 top-k 长期被少数大型 Collection 占满，导致其他
   Collection 的有效结果系统性不可见；
 - 调用方能够接受有限的 selected Collection 数量、额外延迟和候选预算；
-- 已经定义“没有相关内容时允许少于每个 Collection 一个结果”的产品语义。
+- 已经定义“没有相关内容时允许某个 Collection 返回零个结果，不强制填充”的产品语义。
 
 ### 未来实施的硬约束
 

@@ -51,7 +51,7 @@
 | 包结构、稳定能力、关键边界 | [project-context-zh-CN.md](docs/project-context-zh-CN.md) |
 | 架构 / 能力状态 / 领域扩展 | [architecture-zh-CN.md](docs/architecture-zh-CN.md) · [IMPLEMENTATION_COMPARISON.md](docs/IMPLEMENTATION_COMPARISON.md) · [extension-guide-zh-CN.md](docs/extension-guide-zh-CN.md) |
 | 配置 / HTTP API / SSE | [configuration-zh-CN.md](docs/configuration-zh-CN.md) · [rest-api-zh-CN.md](docs/rest-api-zh-CN.md) · [SSE-PROTOCOL.md](docs/SSE-PROTOCOL.md) |
-| 外部文档同步 / 重索引 | [rest-api-zh-CN.md](docs/rest-api-zh-CN.md) § 外部文档：幂等同步 · [project-context-zh-CN.md](docs/project-context-zh-CN.md) |
+| 外部文档同步 / 重索引 | [rest-api-zh-CN.md](docs/rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 · [project-context-zh-CN.md](docs/project-context-zh-CN.md#external-document-synchronization) |
 | 后续改进 TODO | [TODO-zh-CN.md](docs/TODO-zh-CN.md)（[EN](docs/TODO.md)） |
 | 多模型与外部 `models.json` | [multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) |
 | 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |

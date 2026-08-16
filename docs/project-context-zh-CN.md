@@ -83,7 +83,9 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
   Collection 切换 EmbeddingModel；实际写入和查询仍使用全局 Embedding 配置。
 - 向量和全文检索会排除 disabled 文档，并要求活动 Embedding Profile 存在新鲜的
   completed 状态。
-- 删除 Collection 会软删除集合并解除文档关联，不会删除文档或 embeddings；解除关联后的文档
+- 删除 Collection 会尝试软删除集合；若其中存在 `externalId` 非空的外部托管文档则返回
+  `409`，不会执行删除，因为解除关联会破坏 `collectionKey + externalId` 稳定身份。
+  没有这类文档时，只解除普通 legacy 文档关联，不会删除文档或 embeddings；解除关联后的文档
   仍可能出现在未限定 Collection 的全库检索中；被删除 Collection 的 key 不可复用。
 - `RetrievalScopeSql` 将 Collection 条件直接下推到 Vector 和所有 Full-text SQL：
   任意已归属 Collection 使用 `d.collection_id IS NOT NULL`，selected 使用
@@ -126,14 +128,17 @@ JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
 
+<a id="external-document-synchronization"></a>
+
 ### 外部文档同步
 
 普通外部文档使用相同的稳定外部身份形式：`collectionKey + externalId`，并由调用方
 提供 opaque 的 `sourceRevision`。`POST /documents/upsert` 保留内部 `documentId`，
 支持精确重放和可选的 `expectedSourceRevision` CAS，并记录版本快照。内容变化会先使
 检索 freshness 失效，再同步重新 embedding；embedding 失败会记录在新内容 hash 上，
-旧向量会被检索 freshness 条件排除。来源删除使用 `enabled=false` tombstone，新版本
-可以恢复同一个内部文档。外部 connector 可使用
+旧向量会被检索 freshness 条件排除。来源删除使用 `enabled=false` tombstone；之后使用与
+tombstone 不同的后续 `sourceRevision` 可以恢复同一个内部文档，服务不比较 revision 的大小
+或新旧。外部 connector 可使用
 `POST /documents/batch-upsert`、`GET /documents/by-external-id` 和对应的来源删除端点。
 JSON record 仍保持专用的 payload/retrieval-text 语义。
 
@@ -202,7 +207,8 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 - hash 查询。
 - `ADMIN` / `NORMAL` 角色。
 - 过期、吊销、轮换和 `last_used_at`。
-- `allowedCollectionIds`。
+- `allowedCollectionKeys`（推荐对外字段）；deprecated 的 `allowedCollectionIds` 继续兼容。
+  V24 的存储和运行时授权仍使用 `rag_api_key.allowed_collection_ids` 中的内部 ID。
 - Chat、Search、Collection、Document、PDF-to-RAG 数据面 ACL。
 
 该 MVP 只承诺单实例、TLS、受控管理网络，还不是完整的多租户外部凭据系统：

@@ -259,9 +259,13 @@ Data model and current boundaries:
 - API-key management exposes `allowedCollectionKeys`; V24 storage and runtime
   authorization continue to use internal IDs in
   `rag_api_key.allowed_collection_ids`.
-- Deleting a Collection soft-deletes it and clears `collection_id` from its
-  documents. It does not delete documents or `rag_embeddings`, so those
-  documents may still be found by full-corpus retrieval.
+- Deleting a Collection attempts a soft delete. If it contains any externally managed
+  document with a nonblank `externalId`, the service returns `409` and does not
+  delete the Collection, because clearing `collection_id` would destroy the
+  stable `collectionKey + externalId` identity. Otherwise it clears
+  `collection_id` only from legacy documents and does not delete documents or
+  `rag_embeddings`, so those documents may still be found by full-corpus
+  retrieval.
 - `rag_collection.embedding_model` and `dimensions` do not participate in
   per-Collection model routing. The active global EmbeddingModel is bound to
   one immutable Embedding Profile for each write and query.
@@ -394,10 +398,11 @@ fresh COMPLETED state, or FAILED state for the current content hash
 
 Ordinary external documents and JSON records share the Collection-level unique
 identity `(collection_id, external_id)` and the advisory-lock namespace.
-`sourceRevision` is opaque; equality and optional
-`expectedSourceRevision` compare-and-set are the only ordering checks. Source
-deletion is a tombstone (`enabled=false` plus `source_deleted_at`), allowing a
-later newer revision to restore the same internal document. Retrieval requires
+`sourceRevision` is opaque; the service only checks equality and an optional
+`expectedSourceRevision` compare-and-set, and does not compare revision size or
+freshness. Source deletion is a tombstone (`enabled=false` plus
+`source_deleted_at`), allowing a distinct subsequent `sourceRevision` to
+restore the same internal document. Retrieval requires
 an enabled document and a fresh completed state for the active Embedding
 Profile, so old vectors remain physically available for diagnosis without
 being returned to callers.
@@ -431,8 +436,8 @@ rag_audit_log           # Audit logs (collection operations)
 | Table | Key Columns | Description |
 |-------|-------------|-------------|
 | `rag_collection` | id, collection_key, name, description, embedding_model | Internal numeric identity plus stable external Collection key |
-| `rag_documents` | title, content, content_hash, collection_id, external_id, jsonb_payload | Document metadata and structured-record payload |
-| `rag_document_versions` | document_id, version_number, content_snapshot, jsonb_payload_snapshot | Document and JSONB version audit |
+| `rag_documents` | title, content, content_hash, collection_id, external_id, source_revision, source_deleted_at, jsonb_payload | Document metadata, source state, and structured-record payload |
+| `rag_document_versions` | document_id, version_number, content_snapshot, source_revision_snapshot, jsonb_payload_snapshot | Document, source revision, and JSONB version audit |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile-scoped cache and completion state |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |

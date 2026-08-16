@@ -597,6 +597,8 @@ Returns the current structured record by internal document ID, including
 identities. Collection export/import, clone, and document-version responses
 preserve the structured fields and payload snapshots.
 
+<a id="external-documents-idempotent-synchronization"></a>
+
 ## External Documents — Idempotent Synchronization
 
 These endpoints are for ordinary text documents whose source system owns the
@@ -682,8 +684,9 @@ the guard.
 
 Accepts `{ "items": [ ... ] }` with 1–50 items and a total content limit of
 5,000,000 characters. Each item is processed independently and results retain
-input order. One item can report `PERSISTENCE_FAILED` or `FAILED` without
-rolling back successful items in the same batch.
+input order. An item may report `action=PERSISTENCE_FAILED` for a persistence
+failure or `embeddingStatus=FAILED` when persistence succeeded but embedding
+failed; successful items in the same batch are not rolled back.
 
 ### `GET /api/v1/rag/documents/by-external-id`
 
@@ -712,8 +715,9 @@ DELETE /api/v1/rag/documents/by-external-id
 ```
 
 This creates a tombstone (`enabled=false`, `sourceDeletedAt` set) and returns
-`DELETED`. Replaying the same deletion revision returns `UNCHANGED`. A later
-upsert with a new revision can restore the same internal document ID. The old
+`DELETED`. Replaying the same deletion revision returns `UNCHANGED`. An upsert
+with a distinct subsequent `sourceRevision` can restore the same internal
+document ID; the service does not compare revision size or freshness. The old
 deletion revision cannot be replayed as an upsert. The legacy
 `DELETE /documents/{documentId}` remains a hard-delete operation and has
 different semantics.

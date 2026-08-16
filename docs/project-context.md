@@ -91,10 +91,13 @@ Current boundaries:
   query embedding still use the global embedding configuration.
 - Vector and full-text retrieval exclude disabled documents and require a fresh
   completed state for the active Embedding Profile.
-- Deleting a Collection soft-deletes it and unlinks its documents; it does not
-  delete documents or embeddings. Unlinked documents may still appear in
-  unscoped full-corpus retrieval. The deleted Collection's key cannot be
-  reused.
+- Deleting a Collection attempts a soft delete. If it contains any externally managed
+  document with a nonblank `externalId`, the service returns `409` and does not
+  delete the Collection, because unlinking would destroy the stable
+  `collectionKey + externalId` identity. Otherwise it only unlinks legacy
+  documents; it does not delete documents or embeddings. Unlinked documents
+  may still appear in unscoped full-corpus retrieval. The deleted Collection's
+  key cannot be reused.
 - `RetrievalScopeSql` pushes Collection filters directly into vector and all
   full-text SQL paths: `d.collection_id IS NOT NULL` for any assigned
   Collection, or `d.collection_id = ANY (?)` with a JDBC `bigint[]` parameter
@@ -145,6 +148,8 @@ Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss
 filter. JSON records use one record-level chunk.
 
+<a id="external-document-synchronization"></a>
+
 ### External Document Synchronization
 
 Ordinary external documents use the same stable external identity shape:
@@ -154,7 +159,8 @@ replay and optional `expectedSourceRevision` CAS, and records version snapshots.
 Content changes invalidate retrieval freshness before synchronous re-embedding;
 embedding failure is persisted against the new content hash and old vectors are
 excluded from retrieval. Source deletion is an enabled=false tombstone that can
-be restored by a newer revision. `POST /documents/batch-upsert`,
+be restored by a distinct subsequent `sourceRevision`; the service does not
+compare revision size or freshness. `POST /documents/batch-upsert`,
 `GET /documents/by-external-id`, and the corresponding source-delete endpoint
 are available to external connectors. JSON records retain their dedicated
 payload/retrieval-text semantics.
@@ -227,7 +233,9 @@ Database API keys support:
 - Hash lookup.
 - `ADMIN` / `NORMAL` roles.
 - Expiration, revocation, rotation, and `last_used_at`.
-- `allowedCollectionIds`.
+- `allowedCollectionKeys` is the preferred external field; deprecated
+  `allowedCollectionIds` remains compatible. V24 storage and runtime
+  authorization still use internal IDs in `rag_api_key.allowed_collection_ids`.
 - Data-plane ACLs for Chat, Search, Collections, Documents, and PDF-to-RAG.
 
 This MVP is limited to a single instance, TLS, and a trusted management

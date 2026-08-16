@@ -9,7 +9,7 @@
 
 | Item | Priority | Status |
 |------|----------|--------|
-| Give every explicitly selected Collection an opportunity to contribute candidates | P2/P3 | Deferred; not a current-release blocker |
+| Give every explicitly selected Collection an opportunity to contribute candidates | Non-urgent backlog / no target release | Deferred; not a current-release blocker |
 
 ### Current behavior
 
@@ -65,7 +65,7 @@ Open a dedicated implementation plan when one of these conditions holds:
 - Callers can accept a bounded number of selected Collections, extra latency,
   and an explicit candidate budget.
 - Product semantics define that a Collection with no relevant content may
-  legitimately contribute fewer than one result.
+  legitimately contribute zero results without forced padding.
 
 ### Future implementation constraints
 

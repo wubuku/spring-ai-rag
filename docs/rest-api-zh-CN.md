@@ -521,6 +521,8 @@ deprecated 的 `collectionIds` 继续兼容。响应保持排序，并为每条�
 响应也同时返回两种 Collection 身份。Collection export/import、clone 和文档版本响应会
 保留结构化字段及 payload 快照。
 
+<a id="external-documents-idempotent-synchronization"></a>
+
 ## 外部文档：幂等同步
 
 这些端点用于同步由外部系统负责身份和版本的普通文本文档。服务不会主动抓取 URL
@@ -595,7 +597,8 @@ embedding 前不可检索；旧向量可能仍然物理保留用于诊断，但 
 ### `POST /api/v1/rag/documents/batch-upsert`
 
 请求体为 `{ "items": [ ... ] }`，最多 50 项，累计内容最多 5,000,000 个字符。每项
-独立处理并保持输入顺序；某项返回 `PERSISTENCE_FAILED` 或 `FAILED` 不会回滚同一批中
+独立处理并保持输入顺序；某项可能以 `action=PERSISTENCE_FAILED` 表示持久化失败，
+或以 `embeddingStatus=FAILED` 表示文档已持久化但 embedding 失败，不会回滚同一批中
 已经成功的其他项。
 
 ### `GET /api/v1/rag/documents/by-external-id`
@@ -623,8 +626,9 @@ DELETE /api/v1/rag/documents/by-external-id
 ```
 
 该操作创建 tombstone（`enabled=false`、设置 `sourceDeletedAt`），返回 `DELETED`。
-重放同一个删除版本返回 `UNCHANGED`。之后使用新版本 upsert 可以恢复同一个内部
-`documentId`；旧删除版本不能再次作为 upsert 重放。旧的
+重放同一个删除版本返回 `UNCHANGED`。之后使用与 tombstone 不同的后续
+`sourceRevision` upsert 可以恢复同一个内部 `documentId`。服务不比较 revision 的大小
+或新旧；旧删除版本不能再次作为 upsert 重放。旧的
 `DELETE /documents/{documentId}` 仍然是硬删除，语义不同。
 
 ### 推荐同步模式

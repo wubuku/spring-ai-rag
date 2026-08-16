@@ -250,7 +250,9 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
   使用 query parameter，不使用 path segment，因为合法 key 可以包含 URL 保留标点。
 - API Key 管理对外使用 `allowedCollectionKeys`；V24 存储和运行时授权仍在
   `rag_api_key.allowed_collection_ids` 中保存内部 ID。
-- 删除 Collection 会软删除集合并批量清空关联文档的 `collection_id`，不会删除文档或
+- 删除 Collection 会尝试软删除集合；若存在 `externalId` 非空的外部托管文档则返回 `409`，
+  不会执行删除，因为清空 `collection_id` 会破坏 `collectionKey + externalId` 稳定身份。
+  没有这类文档时才会批量清空普通 legacy 文档的 `collection_id`，不会删除文档或
   `rag_embeddings`；这些文档之后仍可能被全库检索命中。
 - `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
   全局 EmbeddingModel，但每次写入和查询都会绑定到一个不可变 Embedding Profile。
@@ -374,7 +376,8 @@ DocumentEmbedService（持久化事务提交后）
 `(collection_id, external_id)` 以及 advisory lock 命名空间。
 `sourceRevision` 是 opaque 令牌；版本只做相等判断和可选的
 `expectedSourceRevision` compare-and-set，不按大小判断新旧。来源删除使用 tombstone
-（`enabled=false` 加 `source_deleted_at`），之后更高版本可以恢复同一个内部文档。
+（`enabled=false` 加 `source_deleted_at`）。之后使用与 tombstone 不同的后续
+`sourceRevision` 可以恢复同一个内部文档；服务不比较 revision 的大小或新旧。
 检索要求文档 enabled 且活动 Embedding Profile 存在当前内容的 fresh completed 状态，
 因此旧向量可以物理保留用于诊断，但不会返回给调用方。
 
@@ -407,8 +410,8 @@ rag_audit_log           # 审计日志（集合操作）
 | 表 | 关键列 | 说明 |
 |---|--------|------|
 | `rag_collection` | id, collection_key, name, description, embedding_model | 内部数字身份与稳定外部 Collection key |
-| `rag_documents` | title, content, content_hash, collection_id, external_id, jsonb_payload | 文档元数据与结构化记录 payload |
-| `rag_document_versions` | document_id, version_number, content_snapshot, jsonb_payload_snapshot | 文档与 JSONB 版本审计 |
+| `rag_documents` | title, content, content_hash, collection_id, external_id, source_revision, source_deleted_at, jsonb_payload | 文档元数据、外部来源状态与结构化记录 payload |
+| `rag_document_versions` | document_id, version_number, content_snapshot, source_revision_snapshot, jsonb_payload_snapshot | 文档、外部来源 revision 与 JSONB 版本审计 |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile 级缓存与完成状态 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
