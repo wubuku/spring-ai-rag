@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Settings } from './Settings';
 import { modelsApi } from '../api/models';
 
@@ -79,6 +79,10 @@ describe('Settings', () => {
     render(<Settings />);
     const provider = await screen.findByTestId('settings-provider-select');
     const model = screen.getByTestId('settings-model-select');
+    await waitFor(() => {
+      expect(provider).toBeEnabled();
+      expect(model).toBeEnabled();
+    });
 
     fireEvent.change(provider, { target: { value: 'openrouter' } });
     fireEvent.change(model, {

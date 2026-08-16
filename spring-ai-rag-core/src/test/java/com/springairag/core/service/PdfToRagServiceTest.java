@@ -4,6 +4,7 @@ import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.FsFileRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.util.DigestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -53,7 +54,8 @@ class PdfToRagServiceTest {
 
         FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 100L);
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(invocation -> {
             RagDocument doc = invocation.getArgument(0);
             doc.setId(42L);
@@ -83,19 +85,31 @@ class PdfToRagServiceTest {
     }
 
     @Test
-    void importPdfToRag_duplicateContent_returnsExistingDocument() {
+    void importPdfToRag_sameSource_returnsExistingDocument() {
         String entryPath = "uuid-456/default.md";
         String filename = "same-content.pdf";
         String markdown = "# Same Content";
+        String contentHash = DigestUtils.sha256(markdown);
 
         FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 50L);
         RagDocument existing = new RagDocument();
         existing.setId(99L);
-        existing.setTitle("Existing Doc");
+        existing.setTitle("same-content");
         existing.setContent(markdown);
+        existing.setContentHash(contentHash);
+        existing.setSource("pdf-import:" + entryPath);
+        existing.setDocumentType("markdown");
+        existing.setOriginalFilename(filename);
+        existing.setSize((long) markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        existing.setMetadata(Map.of(
+                "importedFrom", "pdf",
+                "fsFilesPath", entryPath,
+                "uuid", "uuid-456"));
 
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(
+                "pdf-import:" + entryPath))
+                .thenReturn(Optional.of(existing));
 
         PdfToRagService.PdfToRagResult result = service.importPdfToRag(
                 entryPath, filename, null, false, false);
@@ -103,6 +117,58 @@ class PdfToRagServiceTest {
         assertEquals(99L, result.documentId());
         assertFalse(result.newlyCreated());
         verify(documentRepository, never()).save(any());
+    }
+
+    @Test
+    void importPdfToRag_sameContentDifferentSource_createsDistinctDocument() {
+        String entryPath = "uuid-new/default.md";
+        String markdown = "# Same Content";
+        FsFile fsFile = new FsFile(
+                entryPath, true, null, markdown, "text/markdown", 50L);
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(
+                "pdf-import:" + entryPath))
+                .thenReturn(Optional.empty());
+        when(documentRepository.save(any(RagDocument.class))).thenAnswer(invocation -> {
+            RagDocument doc = invocation.getArgument(0);
+            doc.setId(100L);
+            return doc;
+        });
+
+        PdfToRagService.PdfToRagResult result = service.importPdfToRag(
+                entryPath, "copy.pdf", null, false, false);
+
+        assertEquals(100L, result.documentId());
+        assertTrue(result.newlyCreated());
+        verify(documentRepository, never()).findByContentHash(anyString());
+    }
+
+    @Test
+    void importPdfToRag_existingSourceWithChangedContent_updatesDocument() {
+        String entryPath = "uuid-updated/default.md";
+        String markdown = "# Updated";
+        FsFile fsFile = new FsFile(
+                entryPath, true, null, markdown, "text/markdown", 50L);
+        RagDocument existing = new RagDocument();
+        existing.setId(101L);
+        existing.setContent("# Old");
+        existing.setContentHash(DigestUtils.sha256("# Old"));
+        existing.setSource("pdf-import:" + entryPath);
+
+        when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(
+                "pdf-import:" + entryPath))
+                .thenReturn(Optional.of(existing));
+        when(documentRepository.save(existing)).thenReturn(existing);
+
+        PdfToRagService.PdfToRagResult result = service.importPdfToRag(
+                entryPath, "updated.pdf", null, false, false);
+
+        assertFalse(result.newlyCreated());
+        assertEquals(markdown, existing.getContent());
+        assertEquals(DigestUtils.sha256(markdown), existing.getContentHash());
+        assertEquals("updated.pdf", existing.getOriginalFilename());
+        verify(documentRepository).save(existing);
     }
 
     @Test
@@ -134,7 +200,8 @@ class PdfToRagServiceTest {
 
         FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 80L);
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(invocation -> {
             RagDocument doc = invocation.getArgument(0);
             doc.setId(7L);
@@ -159,7 +226,8 @@ class PdfToRagServiceTest {
         String entryPath = "fail-uuid/default.md";
         FsFile fsFile = new FsFile(entryPath, true, null, "Content", "text/markdown", 50L);
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(invocation -> {
             RagDocument doc = invocation.getArgument(0);
             doc.setId(1L);
@@ -180,7 +248,8 @@ class PdfToRagServiceTest {
         // Test: filename without .pdf
         FsFile fsFile = new FsFile("u/default.md", true, null, "x", "text/markdown", 1L);
         when(fsFileRepository.findById(anyString())).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
             RagDocument d = inv.getArgument(0);
             d.setId(1L);
@@ -200,7 +269,8 @@ class PdfToRagServiceTest {
         String entryPath = "sse-uuid/default.md";
         FsFile fsFile = new FsFile(entryPath, true, null, "Content here", "text/markdown", 50L);
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
             RagDocument d = inv.getArgument(0);
             d.setId(10L);
@@ -238,7 +308,8 @@ class PdfToRagServiceTest {
 
         FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 100L);
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
             RagDocument d = inv.getArgument(0);
             d.setId(55L);
@@ -270,11 +341,22 @@ class PdfToRagServiceTest {
         FsFile fsFile = new FsFile(entryPath, true, null, markdown, "text/markdown", 80L);
         RagDocument existing = new RagDocument();
         existing.setId(88L);
-        existing.setTitle("Already There");
+        existing.setTitle("PDF Import " + uuid);
         existing.setContent(markdown);
+        existing.setContentHash(DigestUtils.sha256(markdown));
+        existing.setSource("pdf-import:" + entryPath);
+        existing.setDocumentType("markdown");
+        existing.setOriginalFilename(entryPath);
+        existing.setSize((long) markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        existing.setMetadata(Map.of(
+                "importedFrom", "pdf",
+                "fsFilesPath", entryPath,
+                "uuid", uuid));
 
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(
+                "pdf-import:" + entryPath))
+                .thenReturn(Optional.of(existing));
         when(documentEmbedService.embedDocument(eq(88L), eq(false)))
                 .thenReturn(Map.of("status", "CACHED", "chunksCreated", 3, "message", "already done"));
 
@@ -308,12 +390,19 @@ class PdfToRagServiceTest {
         RagDocument existing = new RagDocument();
         existing.setId(5L);
         existing.setContent(markdown);
-        existing.setContentHash("hash123");
-        existing.setEmbeddedContentHash("hash123"); // matches → cached
+        existing.setContentHash(DigestUtils.sha256(markdown));
+        existing.setEmbeddedContentHash(DigestUtils.sha256(markdown));
         existing.setProcessingStatus("COMPLETED");
+        existing.setDocumentType("markdown");
+        existing.setSize((long) markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+        existing.setMetadata(Map.of(
+                "importedFrom", "pdf",
+                "fsFilesPath", entryPath,
+                "uuid", uuid));
 
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.of(existing));
 
         PdfToRagService.PdfToRagResult result = service.triggerEmbedding(uuid, null, false);
 
@@ -336,7 +425,8 @@ class PdfToRagServiceTest {
         existing.setCollectionId(null);
 
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of(existing));
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.of(existing));
         when(documentRepository.save(any())).thenReturn(existing);
         when(documentEmbedService.embedDocument(eq(1L), anyBoolean()))
                 .thenReturn(Map.of("status", "COMPLETED", "chunksCreated", 1));
@@ -356,7 +446,8 @@ class PdfToRagServiceTest {
         FsFile fsFile = new FsFile(entryPath, true, null, "Content", "text/markdown", 50L);
 
         when(fsFileRepository.findById(entryPath)).thenReturn(Optional.of(fsFile));
-        when(documentRepository.findByContentHash(anyString())).thenReturn(List.of());
+        when(documentRepository.findFirstBySourceOrderByIdAsc(anyString()))
+                .thenReturn(Optional.empty());
         when(documentRepository.save(any(RagDocument.class))).thenAnswer(inv -> {
             RagDocument d = inv.getArgument(0);
             d.setId(20L);

@@ -2,6 +2,7 @@ package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
+import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.RetrievalScopeSql;
 import org.slf4j.Logger;
@@ -118,6 +119,8 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
         // Use pre-built search_vector_zh column (with GIN index)
         // Use websearch_to_tsquery for Google-style search syntax
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
+                + "d.title AS document_title, d.source AS document_source, "
+                + "d.original_filename AS original_filename, "
                 + "ts_rank_cd(e.search_vector_zh, "
                 + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
@@ -154,11 +157,8 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             @SuppressWarnings("unchecked")
             Map<String, Object> meta = (Map<String, Object>) metadata;
             r.setMetadata(meta);
-            Object title = meta.get("title");
-            if (title instanceof String && !((String) title).isBlank()) {
-                r.setTitle((String) title);
-            }
         }
+        RetrievalResultProvenance.applyDocumentFields(r, row);
         return r;
     }
 }

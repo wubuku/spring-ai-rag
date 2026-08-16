@@ -17,13 +17,16 @@ public class RetrievalResult {
     @Schema(description = "Matched text snippet")
     private String chunkText;
 
-    @Schema(description = "Fused combined score", example = "0.85")
+    @Schema(description = "Fused ranking score for ordering results within the same query/config; not a calibrated probability or percentage",
+            example = "0.85")
     private double score;
 
-    @Schema(description = "Vector search score", example = "0.90")
+    @Schema(description = "Raw vector cosine-similarity score; zero means no vector contribution in a fused result",
+            example = "0.90")
     private double vectorScore;
 
-    @Schema(description = "Fulltext search score", example = "0.80")
+    @Schema(description = "Raw provider-specific full-text score; zero means no full-text contribution in a fused result",
+            example = "0.80")
     private double fulltextScore;
 
     @Schema(description = "Text chunk index within document", example = "2")
@@ -31,6 +34,26 @@ public class RetrievalResult {
 
     @Schema(description = "Source document title", example = "Spring AI Reference")
     private String title;
+
+    @Schema(description = "Source identifier recorded on the logical RAG document",
+            example = "pdf-import:550e8400-e29b-41d4-a716-446655440000/default.md")
+    private String source;
+
+    @Schema(description = "Original source filename when known",
+            example = "spring-ai-reference.pdf")
+    private String originalFilename;
+
+    @Schema(description = "File-management directory for a traceable PDF result",
+            example = "550e8400-e29b-41d4-a716-446655440000/")
+    private String fileDirectoryPath;
+
+    @Schema(description = "Converted file that was indexed for a traceable PDF result",
+            example = "550e8400-e29b-41d4-a716-446655440000/default.md")
+    private String indexedFilePath;
+
+    @Schema(description = "Original PDF artifact for a traceable PDF result",
+            example = "550e8400-e29b-41d4-a716-446655440000/original.pdf")
+    private String originalFilePath;
 
     @Schema(description = "Additional metadata")
     private Map<String, Object> metadata;
@@ -57,6 +80,29 @@ public class RetrievalResult {
 
     public String getTitle() { return title; }
     public void setTitle(String title) { this.title = title; }
+
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+
+    public String getOriginalFilename() { return originalFilename; }
+    public void setOriginalFilename(String originalFilename) {
+        this.originalFilename = originalFilename;
+    }
+
+    public String getFileDirectoryPath() { return fileDirectoryPath; }
+    public void setFileDirectoryPath(String fileDirectoryPath) {
+        this.fileDirectoryPath = fileDirectoryPath;
+    }
+
+    public String getIndexedFilePath() { return indexedFilePath; }
+    public void setIndexedFilePath(String indexedFilePath) {
+        this.indexedFilePath = indexedFilePath;
+    }
+
+    public String getOriginalFilePath() { return originalFilePath; }
+    public void setOriginalFilePath(String originalFilePath) {
+        this.originalFilePath = originalFilePath;
+    }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

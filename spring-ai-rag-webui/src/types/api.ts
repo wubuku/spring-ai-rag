@@ -137,10 +137,18 @@ export interface ChatStreamEvent {
 export interface RetrievalResult {
   documentId: number;
   title: string;
-  content: string;
+  content?: string;
+  chunkText?: string;
   score: number;
+  vectorScore?: number;
+  fulltextScore?: number;
   collectionId?: number;
   collectionKey?: string;
+  source?: string;
+  originalFilename?: string;
+  fileDirectoryPath?: string;
+  indexedFilePath?: string;
+  originalFilePath?: string;
 }
 
 export interface SearchRequest {

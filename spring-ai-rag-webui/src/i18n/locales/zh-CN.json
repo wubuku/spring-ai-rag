@@ -163,7 +163,18 @@
     "historyCleared": "搜索历史已清除",
     "recentSearches": "最近搜索",
     "collection": "集合",
-    "allCollections": "全部集合"
+    "allCollections": "全部集合",
+    "resultIndicatorTitle": "本次检索排序第 {{rank}}。匹配依据：{{channel}}。内部排序分不是相关性百分比。",
+    "originalPdfFallback": "original.pdf",
+    "viewFileDirectory": "查看文件目录",
+    "viewIndexedFile": "查看索引文件",
+    "openOriginalPdf": "打开原始 PDF",
+    "openOriginalPdfError": "打开原始 PDF 失败：{{error}}",
+    "matchChannel": {
+      "hybrid": "内容含义 + 关键词",
+      "semantic": "内容含义匹配",
+      "keyword": "关键词匹配"
+    }
   },
   "metrics": {
     "title": "系统指标",
@@ -359,6 +370,9 @@
     "refresh": "刷新",
     "empty": "此目录为空",
     "root": "根目录",
+    "sortImportedAt": "导入时间",
+    "sortNewestFirstTitle": "当前按导入时间倒序，点击切换为正序",
+    "sortOldestFirstTitle": "当前按导入时间正序，点击切换为倒序",
     "collectionPrefix": "集合前缀",
     "collectionPrefixPlaceholder": "例如：papers/2024",
     "ragCollection": "RAG 集合",

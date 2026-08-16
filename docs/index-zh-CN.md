@@ -18,6 +18,7 @@
 | 改核心架构 / Pipeline | [architecture-zh-CN.md](architecture-zh-CN.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
+| 理解文件管理、PDF 导入和添加到 RAG | [文件管理与 PDF-to-RAG 流程](file-management-and-pdf-rag-zh-CN.md) | [REST API：PDF 与文件产物](rest-api-zh-CN.md#pdf-与文件产物-api) |
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
 | 同步外部文档 / 内容源 | [REST API：外部文档幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization) | [项目上下文：外部文档同步](project-context-zh-CN.md#external-document-synchronization)、[真实 HTTP 验收](developer-reference-zh-CN.md#external-document-synchronization-http-e2e) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
@@ -55,6 +56,7 @@
 |------|------|
 | [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、三 Bean、Advisor 链、双表记忆、领域扩展 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
+| [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
 | [TODO-zh-CN.md](TODO-zh-CN.md) / [TODO.md](TODO.md) | 当前未纳入 API 的后续改进与触发条件 |
 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `DomainRagExtension` 扩展开发 |

@@ -3,6 +3,8 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { collectionsApi } from '../api/collections';
 import { searchApi } from '../api/search';
+import { ToastProvider } from '../components/Toast';
+import { MemoryRouter } from 'react-router-dom';
 import { Search } from './Search';
 
 vi.mock('../api/search', () => ({
@@ -14,6 +16,12 @@ vi.mock('../api/search', () => ({
 vi.mock('../api/collections', () => ({
   collectionsApi: {
     list: vi.fn(),
+  },
+}));
+
+vi.mock('../api/files', () => ({
+  filesApi: {
+    getRawFile: vi.fn(),
   },
 }));
 
@@ -40,7 +48,11 @@ function renderSearch() {
     client,
     ...render(
       <QueryClientProvider client={client}>
-        <Search />
+        <ToastProvider>
+          <MemoryRouter>
+            <Search />
+          </MemoryRouter>
+        </ToastProvider>
       </QueryClientProvider>,
     ),
   };
@@ -135,5 +147,39 @@ describe('Search', () => {
         collectionKeys: ['alpha:manual', 'zeta:manual'],
       });
     });
+  });
+
+  it('preserves file provenance returned by the Search API', async () => {
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          chunkText: 'Indexed text',
+          score: 0.8,
+          source: 'pdf-import:uuid-7/default.md',
+          originalFilename: 'manual.pdf',
+          fileDirectoryPath: 'uuid-7/',
+          indexedFilePath: 'uuid-7/default.md',
+          originalFilePath: 'uuid-7/original.pdf',
+        }],
+      },
+    });
+
+    renderSearch();
+    await submit('manual');
+
+    expect(await screen.findByText('manual.pdf')).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: 'search.viewFileDirectory',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: 'search.viewIndexedFile',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('button', {
+      name: 'search.openOriginalPdf',
+    })).toBeInTheDocument();
   });
 });

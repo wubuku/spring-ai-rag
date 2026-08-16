@@ -15,6 +15,7 @@
 | **Dashboard** | System health overview, document/collection counts, active sessions, system metrics |
 | **Documents** | Upload files, browse with keyword search, preview chunk content inline, batch delete |
 | **Collections** | Create knowledge bases, manage document associations, export/import |
+| **Files** | Import and preview PDF conversion artifacts, order imports by time, and add converted Markdown to RAG |
 | **Chat** | RAG chat with SSE streaming, three Collection scope modes, multi-Collection selection, history, and export |
 | **Search** | Hybrid search with three Collection scope modes, multi-Collection selection, and configurable retrieval parameters |
 | **Metrics** | RAG system metrics (queries/sec, avg latency, cache hit rate), LLM performance charts |
@@ -111,6 +112,9 @@ src/
 | Documents | GET | `/api/v1/rag/documents?page=0&size=20&title=keyword` |
 | Documents | POST | `/api/v1/rag/documents/batch` |
 | Documents | POST | `/api/v1/rag/documents/upload` |
+| PDF artifact import | POST | `/api/v1/rag/files/pdf` |
+| File artifact tree | GET | `/api/v1/rag/files/tree` |
+| Add imported PDF to RAG | POST | `/api/v1/rag/files/{uuid}/embed?embed=sync` |
 | Document SSE | POST | `/api/v1/rag/documents/{id}/embed/stream` |
 | Batch SSE | POST | `/api/v1/rag/documents/batch/embed/stream` |
 | Collections | GET | `/api/v1/rag/collections/{id}/documents?keyword=` |

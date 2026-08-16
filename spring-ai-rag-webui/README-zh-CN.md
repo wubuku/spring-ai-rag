@@ -15,6 +15,7 @@
 | **Dashboard** | 系统健康概览，文档/集合数量，活跃会话，系统指标 |
 | **Documents** | 上传文件，关键词搜索文档，行内预览分块内容，批量删除 |
 | **Collections** | 创建知识库，管理文档关联，导出/导入 |
+| **Files** | 导入和预览 PDF 转换产物，按导入时间排序，并把转换后的 Markdown 添加到 RAG |
 | **Chat** | RAG 对话，支持 SSE 流式、三种 Collection 范围模式、多 Collection 选择、历史与导出 |
 | **Search** | 混合检索，支持三种 Collection 范围模式、多 Collection 选择和检索参数 |
 | **Metrics** | RAG 系统指标（查询速率、平均延迟、缓存命中率），LLM 性能图表 |
@@ -111,6 +112,9 @@ src/
 | 文档列表 | GET | `/api/v1/rag/documents?page=0&size=20&title=keyword` |
 | 文档批量创建 | POST | `/api/v1/rag/documents/batch` |
 | 文件上传 | POST | `/api/v1/rag/documents/upload` |
+| PDF 产物导入 | POST | `/api/v1/rag/files/pdf` |
+| 文件产物目录树 | GET | `/api/v1/rag/files/tree` |
+| 把已导入 PDF 添加到 RAG | POST | `/api/v1/rag/files/{uuid}/embed?embed=sync` |
 | 单文档 SSE 嵌入 | POST | `/api/v1/rag/documents/{id}/embed/stream` |
 | 批量 SSE 嵌入 | POST | `/api/v1/rag/documents/batch/embed/stream` |
 | 集合内文档搜索 | GET | `/api/v1/rag/collections/{id}/documents?keyword=` |

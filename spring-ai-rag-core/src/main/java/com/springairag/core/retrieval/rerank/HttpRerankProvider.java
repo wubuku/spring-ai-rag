@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.retrieval.RetrievalResultProvenance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -154,6 +155,7 @@ public class HttpRerankProvider implements RerankProvider {
             copy.setFulltextScore(src.getFulltextScore());
             copy.setChunkIndex(src.getChunkIndex());
             copy.setMetadata(src.getMetadata());
+            RetrievalResultProvenance.copy(src, copy);
             out.add(copy);
         }
         return out;

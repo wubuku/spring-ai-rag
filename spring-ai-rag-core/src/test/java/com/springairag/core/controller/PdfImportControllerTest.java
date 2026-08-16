@@ -24,6 +24,7 @@ import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.io.IOException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -200,23 +201,36 @@ class PdfImportControllerTest {
 
     @Test
     void listTree_withFiles_returnsTree() {
+        OffsetDateTime subdirOlder = OffsetDateTime.parse("2026-08-16T08:00:00+08:00");
+        OffsetDateTime subdirNewer = OffsetDateTime.parse("2026-08-16T09:00:00+08:00");
+        OffsetDateTime directFileCreatedAt = OffsetDateTime.parse("2026-08-16T10:00:00+08:00");
+
         FsFile subdirFile = new FsFile();
         subdirFile.setPath("/papers/subdir/file.txt");
         subdirFile.setIsText(true);
+        subdirFile.setCreatedAt(subdirOlder);
+
+        FsFile newerSubdirFile = new FsFile();
+        newerSubdirFile.setPath("/papers/subdir/image.png");
+        newerSubdirFile.setCreatedAt(subdirNewer);
 
         FsFile mdFile = new FsFile();
         mdFile.setPath("/papers/test.md");
         mdFile.setMimeType("text/markdown");
         mdFile.setFileSize(1234L);
         mdFile.setIsText(true);
+        mdFile.setCreatedAt(directFileCreatedAt);
 
-        when(pdfImportService.listChildren(anyString())).thenReturn(List.of(subdirFile, mdFile));
+        when(pdfImportService.listChildren(anyString()))
+                .thenReturn(List.of(subdirFile, newerSubdirFile, mdFile));
 
         ResponseEntity<FileTreeResponse> response = controller.listTree("/papers");
 
         assertEquals(200, response.getStatusCode().value());
         assertNotNull(response.getBody());
         assertEquals(2, response.getBody().total());
+        assertEquals(subdirNewer, response.getBody().entries().get(0).createdAt());
+        assertEquals(directFileCreatedAt, response.getBody().entries().get(1).createdAt());
     }
 
     @Test

@@ -31,12 +31,15 @@ vi.mock('../components/Toast', () => ({
 }));
 
 vi.mock('../components/FilePreview/FilePreview', () => ({
-  FilePreview: () => null,
+  FilePreview: ({ entry }: { entry: { path: string } }) => (
+    <div data-testid="file-preview">{entry.path}</div>
+  ),
 }));
 
 describe('Files', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, '', '/webui/files');
     (filesApi.triggerEmbedding as ReturnType<typeof vi.fn>).mockResolvedValue({
       documentId: 1,
       title: 'Sample PDF',
@@ -70,17 +73,45 @@ describe('Files', () => {
           data: {
             path,
             entries: path
-              ? []
+              ? path === 'sample-pdf/'
+                ? [
+                    {
+                      name: 'default.md',
+                      path: 'sample-pdf/default.md',
+                      type: 'file',
+                      mimeType: 'text/markdown',
+                      size: 100,
+                      createdAt: '2026-08-15T09:00:00Z',
+                    },
+                  ]
+                : []
               : [
+                  {
+                    name: 'older-pdf',
+                    path: 'older-pdf/',
+                    type: 'directory',
+                    mimeType: null,
+                    size: 0,
+                    createdAt: '2026-08-14T09:00:00Z',
+                  },
                   {
                     name: 'sample-pdf',
                     path: 'sample-pdf/',
                     type: 'directory',
                     mimeType: null,
                     size: 0,
+                    createdAt: '2026-08-15T09:00:00Z',
+                  },
+                  {
+                    name: 'newest-pdf',
+                    path: 'newest-pdf/',
+                    type: 'directory',
+                    mimeType: null,
+                    size: 0,
+                    createdAt: '2026-08-16T09:00:00Z',
                   },
                 ],
-            total: path ? 0 : 1,
+            total: path ? 0 : 3,
           },
         },
         isPending: false,
@@ -107,5 +138,45 @@ describe('Files', () => {
         'customer:manual',
       );
     });
+  });
+
+  it('sorts imports newest first by default and toggles to oldest first', () => {
+    render(<Files />);
+
+    const paths = () => screen.getAllByTestId('file-tree-entry')
+      .map(entry => entry.getAttribute('data-entry-path'));
+
+    expect(paths()).toEqual(['newest-pdf/', 'sample-pdf/', 'older-pdf/']);
+
+    fireEvent.click(screen.getByTestId('files-import-time-sort'));
+
+    expect(paths()).toEqual(['older-pdf/', 'sample-pdf/', 'newest-pdf/']);
+  });
+
+  it('opens a safe file deep link and previews the indexed file', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=sample-pdf%2F&file=sample-pdf%2Fdefault.md',
+    );
+
+    render(<Files />);
+
+    expect(await screen.findByTestId('file-preview'))
+      .toHaveTextContent('sample-pdf/default.md');
+    expect(screen.getByTitle('sample-pdf/')).toBeInTheDocument();
+  });
+
+  it('rejects unsafe deep links and falls back to the root directory', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=..%2Fsecret%2F&file=..%2Fsecret%2Fdefault.md',
+    );
+
+    render(<Files />);
+
+    expect(screen.getByTitle('files.root')).toBeInTheDocument();
+    expect(screen.queryByTestId('file-preview')).not.toBeInTheDocument();
   });
 });

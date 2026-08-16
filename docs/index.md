@@ -18,6 +18,7 @@
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
+| Understand Files, PDF import, and Add to RAG | [File management and PDF-to-RAG workflow](file-management-and-pdf-rag.md) | [REST API: PDF and file artifacts](rest-api.md#pdf-and-file-artifact-apis) |
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
 | Synchronize external documents / content sources | [REST API: External Document Synchronization](rest-api.md#external-documents-idempotent-synchronization) | [Project context: External Document Synchronization](project-context.md#external-document-synchronization), [live HTTP acceptance](developer-reference.md#external-document-synchronization-http-e2e) |
 | Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
@@ -55,6 +56,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 |-----|-------------|
 | [architecture.md](architecture.md) | Modules, three-Bean model, Advisor chain, dual memory, domain extension |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
+| [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
 | [TODO.md](TODO.md) / [TODO-zh-CN.md](TODO-zh-CN.md) | Current follow-up work outside the public API and its revisit criteria |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |

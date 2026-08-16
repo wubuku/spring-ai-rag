@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { filesApi, type TreeEntry } from '../api/files';
@@ -25,6 +25,75 @@ function pathSegments(virtualPath: string): { label: string; path: string }[] {
   }));
 }
 
+interface FileDeepLink {
+  directoryPath: string;
+  filePath: string | null;
+}
+
+function normalizeVirtualPath(
+  rawPath: string | null,
+  directory: boolean,
+): string | null {
+  if (rawPath === null) return directory ? '' : null;
+  const withoutLeadingSlash = rawPath.replace(/^\/+/, '');
+  if (!withoutLeadingSlash) return directory ? '' : null;
+  if (withoutLeadingSlash.includes('\\')) return null;
+  for (const character of withoutLeadingSlash) {
+    if (character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127) {
+      return null;
+    }
+  }
+  const segments = withoutLeadingSlash.split('/');
+  if (segments.at(-1) === '') segments.pop();
+  if (segments.length === 0
+      || segments.some(segment =>
+        !segment || segment === '.' || segment === '..')) {
+    return null;
+  }
+  const normalized = segments.join('/');
+  return directory ? `${normalized}/` : normalized;
+}
+
+function readInitialDeepLink(): FileDeepLink {
+  const params = new URLSearchParams(window.location.search);
+  const requestedDirectory = params.get('path');
+  const normalizedDirectory = normalizeVirtualPath(requestedDirectory, true);
+  if (requestedDirectory !== null && normalizedDirectory === null) {
+    return { directoryPath: '', filePath: null };
+  }
+  const directoryPath = normalizedDirectory ?? '';
+  const filePath = normalizeVirtualPath(params.get('file'), false);
+  const expectedParent = filePath?.includes('/')
+    ? filePath.slice(0, filePath.lastIndexOf('/') + 1)
+    : '';
+  return {
+    directoryPath,
+    filePath: filePath && expectedParent === directoryPath ? filePath : null,
+  };
+}
+
+type ImportTimeSortDirection = 'desc' | 'asc';
+
+function sortByImportTime(
+  entries: TreeEntry[],
+  direction: ImportTimeSortDirection,
+): TreeEntry[] {
+  return [...entries].sort((left, right) => {
+    const leftTime = left.createdAt ? Date.parse(left.createdAt) : Number.NaN;
+    const rightTime = right.createdAt ? Date.parse(right.createdAt) : Number.NaN;
+    const leftHasTime = Number.isFinite(leftTime);
+    const rightHasTime = Number.isFinite(rightTime);
+
+    if (leftHasTime && rightHasTime && leftTime !== rightTime) {
+      return direction === 'desc' ? rightTime - leftTime : leftTime - rightTime;
+    }
+    if (leftHasTime !== rightHasTime) {
+      return leftHasTime ? -1 : 1;
+    }
+    return left.name.localeCompare(right.name);
+  });
+}
+
 // ─── FileIcon ───────────────────────────────────────────────────────────────
 
 function FileIcon({ entry }: { entry: TreeEntry }) {
@@ -41,9 +110,11 @@ function FileIcon({ entry }: { entry: TreeEntry }) {
 export function Files() {
   const { t } = useTranslation();
   const { showToast } = useToast();
+  const initialDeepLink = useMemo(readInitialDeepLink, []);
+  const pendingDeepLinkFile = useRef(initialDeepLink.filePath);
 
   // Current directory path (trailing slash for directories)
-  const [currentPath, setCurrentPath] = useState('');
+  const [currentPath, setCurrentPath] = useState(initialDeepLink.directoryPath);
   const [selectedEntry, setSelectedEntry] = useState<TreeEntry | null>(null);
   const [previewKey, setPreviewKey] = useState(0); // force preview reload
   const [dragOver, setDragOver] = useState(false);
@@ -53,6 +124,8 @@ export function Files() {
   const [selectedCollectionKey, setSelectedCollectionKey] = useState('');
   const [embeddingState, setEmbeddingState] = useState<'idle' | 'embedding' | 'done' | 'error'>('idle');
   const [embeddingMessage, setEmbeddingMessage] = useState('');
+  const [importTimeSortDirection, setImportTimeSortDirection] =
+    useState<ImportTimeSortDirection>('desc');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch tree for current path
@@ -66,10 +139,30 @@ export function Files() {
     queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
   });
   const collections = collectionsData?.data?.collections ?? [];
+  const sortedEntries = useMemo(
+    () => sortByImportTime(
+      treeData?.data?.entries ?? [],
+      importTimeSortDirection,
+    ),
+    [treeData?.data?.entries, importTimeSortDirection],
+  );
+
+  useEffect(() => {
+    const targetPath = pendingDeepLinkFile.current;
+    if (!targetPath || isPending || !treeData?.data?.entries) return;
+    const targetEntry = treeData.data.entries.find(
+      entry => entry.type === 'file' && entry.path === targetPath,
+    );
+    if (targetEntry) {
+      setSelectedEntry(targetEntry);
+    }
+    pendingDeepLinkFile.current = null;
+  }, [isPending, treeData?.data?.entries]);
 
   // ── Navigation ──────────────────────────────────────────────────────────
 
   const navigateTo = useCallback((path: string) => {
+    pendingDeepLinkFile.current = null;
     setCurrentPath(path);
     setSelectedEntry(null);
   }, []);
@@ -309,7 +402,32 @@ export function Files() {
         {/* Tree panel */}
         <div className={styles.treePanel}>
           <div className={styles.treeHeader}>
-            {currentPath ? currentPath : t('files.root')}
+            <span className={styles.treeHeaderPath} title={currentPath || t('files.root')}>
+              {currentPath ? currentPath : t('files.root')}
+            </span>
+            <button
+              type="button"
+              className={styles.sortButton}
+              data-testid="files-import-time-sort"
+              onClick={() => setImportTimeSortDirection(direction =>
+                direction === 'desc' ? 'asc' : 'desc'
+              )}
+              title={t(
+                importTimeSortDirection === 'desc'
+                  ? 'files.sortNewestFirstTitle'
+                  : 'files.sortOldestFirstTitle',
+              )}
+              aria-label={t(
+                importTimeSortDirection === 'desc'
+                  ? 'files.sortNewestFirstTitle'
+                  : 'files.sortOldestFirstTitle',
+              )}
+            >
+              <span>{t('files.sortImportedAt')}</span>
+              <span aria-hidden="true">
+                {importTimeSortDirection === 'desc' ? '↓' : '↑'}
+              </span>
+            </button>
           </div>
           <div className={styles.treeBody}>
             {isPending ? (
@@ -346,11 +464,13 @@ export function Files() {
                     <span className={styles.treeName}>..</span>
                   </div>
                 )}
-                {treeData?.data?.entries?.map(entry => (
+                {sortedEntries.map(entry => (
                   <div
                     key={entry.path}
                     className={`${styles.treeItem} ${selectedEntry?.path === entry.path ? styles.active : ''}`}
                     onClick={() => handleEntryClick(entry)}
+                    data-testid="file-tree-entry"
+                    data-entry-path={entry.path}
                   >
                     <FileIcon entry={entry} />
                     <span className={styles.treeName} title={entry.name}>

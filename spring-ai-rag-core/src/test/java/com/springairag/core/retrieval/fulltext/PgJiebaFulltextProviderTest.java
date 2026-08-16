@@ -78,6 +78,9 @@ class PgJiebaFulltextProviderTest {
         Map<String, Object> row = new HashMap<>();
         row.put("id", 1L); row.put("chunk_text", "测试文档"); row.put("document_id", 1L);
         row.put("chunk_index", 0); row.put("metadata", null); row.put("rank", 0.75);
+        row.put("document_title", "中文 PDF");
+        row.put("document_source", "pdf-import:uuid-zh/default.md");
+        row.put("original_filename", "中文资料.pdf");
 
         when(jdbc.queryForList(contains("ts_rank"), any(Object[].class))).thenReturn(List.of(row));
 
@@ -86,6 +89,9 @@ class PgJiebaFulltextProviderTest {
 
         assertEquals(1, results.size());
         assertEquals(0.75, results.get(0).getFulltextScore(), 0.001);
+        assertEquals("中文 PDF", results.get(0).getTitle());
+        assertEquals("uuid-zh/", results.get(0).getFileDirectoryPath());
+        assertEquals("中文资料.pdf", results.get(0).getOriginalFilename());
         verify(jdbc).queryForList(contains("ts_rank"), any(Object[].class));
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
@@ -94,6 +100,8 @@ class PgJiebaFulltextProviderTest {
         assertTrue(sql.contains("s.status = 'COMPLETED'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
+        assertTrue(sql.contains("d.source AS document_source"));
+        assertTrue(sql.contains("d.original_filename AS original_filename"));
     }
 
     @Test

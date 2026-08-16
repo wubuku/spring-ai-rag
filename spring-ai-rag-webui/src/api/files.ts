@@ -6,6 +6,7 @@ export interface TreeEntry {
   type: 'file' | 'directory';
   mimeType: string | null;
   size: number;
+  createdAt?: string | null;
 }
 
 export interface TreeResponse {

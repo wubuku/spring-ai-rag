@@ -230,7 +230,9 @@ public class HybridRetrieverService {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
-                + "::text AS embedding, e.document_id, e.chunk_index, e.metadata";
+                + "::text AS embedding, e.document_id, e.chunk_index, e.metadata, "
+                + "d.title AS document_title, d.source AS document_source, "
+                + "d.original_filename AS original_filename";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
                 + "AND e." + vectorColumn + " IS NOT NULL ";
         RetrievalScopeSql.Fragment fragment =
@@ -294,12 +296,8 @@ public class HybridRetrieverService {
             @SuppressWarnings("unchecked")
             Map<String, Object> metaMap = (Map<String, Object>) metadata;
             r.setMetadata(metaMap);
-            // Title stored in embedding metadata (set by DocumentEmbedService when creating embeddings)
-            Object title = metaMap.get("title");
-            if (title instanceof String && !((String) title).isBlank()) {
-                r.setTitle((String) title);
-            }
         }
+        RetrievalResultProvenance.applyDocumentFields(r, row);
         return r;
     }
 }

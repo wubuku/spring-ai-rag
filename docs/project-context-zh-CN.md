@@ -96,6 +96,19 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 
 详细设计见 [architecture-zh-CN.md](architecture-zh-CN.md)。
 
+### 文件产物与 RAG 桥接
+
+`fs_files` 保存按路径寻址的导入产物，并根据路径前缀合成目录。当前 WebUI 文件管理流程
+专用于 PDF：每次导入创建一个 UUID 目录，其中包含原始 PDF、`default.md` 和转换资源。
+这些产物可以预览，但还不是可检索的 RAG 文档。
+
+**添加到 RAG** 会读取 `default.md`，按 `pdf-import:{uuid}/default.md` 来源创建或复用
+`rag_documents` 记录，关联可选 Collection，并触发 embedding，从而桥接两个层次。不同
+UUID 即使内容相同也保留独立文档；内容哈希只负责 embedding 新鲜度。Search API/WebUI
+可进一步追溯到文件目录、被索引的 Markdown 和原始 PDF。文档管理的上传路径则把支持的
+文本文件直接写入 `rag_documents`，不会创建 `fs_files` 产物。详见
+[文件管理、PDF 导入与 RAG 联动](file-management-and-pdf-rag-zh-CN.md)。
+
 ## 4. 检索与质量
 
 - Embedding 默认使用 SiliconFlow `BAAI/bge-m3`。

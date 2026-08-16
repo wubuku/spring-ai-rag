@@ -185,10 +185,10 @@ spring-ai-rag/
 | A/B | `/api/v1/rag/ab-tests` | 实验管理 |
 | 告警 | `/api/v1/rag/alerts` | 监控告警 |
 | 缓存 | `GET /api/v1/rag/cache/stats` | 嵌入缓存命中率 |
-| **PDF** | `POST /api/v1/files/pdf` | 上传并转换 PDF 为 Markdown |
-| **PDF** | `GET /api/v1/files/preview/{uuid}/default.html` | 预览转换后的 HTML（使用 `<base>` 标签） |
-| **PDF** | `GET /api/v1/files/raw/{uuid}/{filename}` | 获取原始文件（图片、PDF 等） |
-| **PDF** | `GET /api/v1/files/tree` | 查看文件目录树 |
+| **PDF** | `POST /api/v1/rag/files/pdf` | 上传并转换 PDF 为 Markdown |
+| **PDF** | `GET /api/v1/rag/files/preview/{uuid}/default.html` | 预览转换后的 HTML（使用 `<base>` 标签） |
+| **PDF** | `GET /api/v1/rag/files/raw/{uuid}/{filename}` | 获取原始文件（图片、PDF 等） |
+| **PDF** | `GET /api/v1/rag/files/tree` | 查看文件目录树 |
 | 健康 | `/actuator/health` | Actuator 健康检查 |
 
 ## 两种集成方式

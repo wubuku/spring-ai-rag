@@ -2,6 +2,7 @@ package com.springairag.api.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 
+import java.time.OffsetDateTime;
 import java.util.Objects;
 
 /**
@@ -23,8 +24,16 @@ public record FileTreeEntryResponse(
         String mimeType,
 
         @Schema(description = "File size in bytes (0 for directories)", example = "2048")
-        long size
+        long size,
+
+        @Schema(description = "Storage creation time. For a synthetic directory, the latest creation time "
+                + "among its descendant files.", example = "2026-08-16T09:30:00+08:00", nullable = true)
+        OffsetDateTime createdAt
 ) {
+    public FileTreeEntryResponse(String name, String path, String type, String mimeType, long size) {
+        this(name, path, type, mimeType, size, null);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -34,12 +43,13 @@ public record FileTreeEntryResponse(
                 Objects.equals(name, that.name) &&
                 Objects.equals(path, that.path) &&
                 Objects.equals(type, that.type) &&
-                Objects.equals(mimeType, that.mimeType);
+                Objects.equals(mimeType, that.mimeType) &&
+                Objects.equals(createdAt, that.createdAt);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, path, type, mimeType, size);
+        return Objects.hash(name, path, type, mimeType, size, createdAt);
     }
 
     @Override
@@ -50,6 +60,7 @@ public record FileTreeEntryResponse(
                 ", type='" + type + '\'' +
                 ", mimeType='" + mimeType + '\'' +
                 ", size=" + size +
+                ", createdAt=" + createdAt +
                 '}';
     }
 }

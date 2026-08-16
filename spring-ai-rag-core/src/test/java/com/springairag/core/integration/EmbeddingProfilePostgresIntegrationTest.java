@@ -157,6 +157,12 @@ class EmbeddingProfilePostgresIntegrationTest {
                 new EmbeddingPersistenceService(jdbcTemplate);
         long documentA = insertDocument("A", "shared searchable content", "hash-a");
         long documentB = insertDocument("B", "shared searchable content", "hash-b");
+        jdbcTemplate.update(
+                "UPDATE rag_documents "
+                        + "SET source = ?, original_filename = ? WHERE id = ?",
+                "pdf-import:traceability-test/default.md",
+                "source-manual.pdf",
+                documentA);
 
         transactionTemplate.executeWithoutResult(status -> persistence.replace(
                 documentA, 0L, "hash-a", profileA, "chunker-v1",
@@ -184,6 +190,7 @@ class EmbeddingProfilePostgresIntegrationTest {
         assertEquals(1, vectorResults.size());
         assertEquals(String.valueOf(documentA),
                 vectorResults.getFirst().getDocumentId());
+        assertPdfProvenance(vectorResults.getFirst());
 
         PgEnglishFtsProvider english = new PgEnglishFtsProvider(jdbcTemplate);
         assertTrue(english.isAvailable());
@@ -192,6 +199,7 @@ class EmbeddingProfilePostgresIntegrationTest {
         assertEquals(1, fulltextResults.size());
         assertEquals(String.valueOf(documentA),
                 fulltextResults.getFirst().getDocumentId());
+        assertPdfProvenance(fulltextResults.getFirst());
 
         jdbcTemplate.update(
                 "UPDATE rag_documents SET content_hash = 'changed' WHERE id = ?",
@@ -336,6 +344,15 @@ class EmbeddingProfilePostgresIntegrationTest {
 
     private EmbeddingProfileRegistry registry() {
         return new EmbeddingProfileRegistry(jdbcTemplate, new RagProperties());
+    }
+
+    private void assertPdfProvenance(RetrievalResult result) {
+        assertEquals("A", result.getTitle());
+        assertEquals("pdf-import:traceability-test/default.md", result.getSource());
+        assertEquals("source-manual.pdf", result.getOriginalFilename());
+        assertEquals("traceability-test/", result.getFileDirectoryPath());
+        assertEquals("traceability-test/default.md", result.getIndexedFilePath());
+        assertEquals("traceability-test/original.pdf", result.getOriginalFilePath());
     }
 
     private EmbeddingProfile insertProfile(

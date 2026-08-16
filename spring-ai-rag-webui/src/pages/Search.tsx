@@ -1,15 +1,20 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { searchApi } from '../api/search';
+import { useNavigate } from 'react-router-dom';
+import { searchApi, type SearchResult } from '../api/search';
+import { filesApi } from '../api/files';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
 import { SearchResults } from '../components/SearchResults';
+import { useToast } from '../components/Toast';
 import { useSearchHistory } from '../hooks/useSearchHistory';
 import type { CollectionScopeMode } from '../types/api';
 import styles from './Search.module.css';
 
 export function Search() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { showToast } = useToast();
   const [query, setQuery] = useState<string>('');
   const [useHybrid, setUseHybrid] = useState(true);
   const [scopeMode, setScopeMode] =
@@ -63,6 +68,34 @@ export function Search() {
     setUseHybrid(item.useHybrid);
     setShowHistory(false);
   };
+
+  const handleViewDirectory = useCallback((path: string) => {
+    const params = new URLSearchParams({ path });
+    navigate(`/files?${params.toString()}`);
+  }, [navigate]);
+
+  const handleViewIndexedFile = useCallback((
+    directoryPath: string,
+    filePath: string,
+  ) => {
+    const params = new URLSearchParams({
+      path: directoryPath,
+      file: filePath,
+    });
+    navigate(`/files?${params.toString()}`);
+  }, [navigate]);
+
+  const handleOpenOriginalFile = useCallback(async (path: string) => {
+    try {
+      const blob = await filesApi.getRawFile(path);
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      showToast(t('search.openOriginalPdfError', { error: message }), 'error');
+    }
+  }, [showToast, t]);
 
   return (
     <div>
@@ -158,15 +191,23 @@ export function Search() {
 
       {data?.data && (
         <SearchResults
-          results={data.data.results.map((r: {documentId?:string|number; title?:string; content?:string; chunkText?:string; score?:string|number; fulltextScore?:number; vectorScore?:number}) => ({
+          results={data.data.results.map((r: SearchResult) => ({
             documentId: r.documentId ?? 'unknown',
             title: String(r.title || `Document ${r.documentId}`),
             content: String(r.content || r.chunkText || ''),
-            score: (typeof r.score === 'number' ? r.score : r.fulltextScore) ?? 0,
+            score: r.score,
             fulltextScore: r.fulltextScore,
             vectorScore: r.vectorScore,
+            source: r.source,
+            originalFilename: r.originalFilename,
+            fileDirectoryPath: r.fileDirectoryPath,
+            indexedFilePath: r.indexedFilePath,
+            originalFilePath: r.originalFilePath,
           }))}
           query={data.data.query}
+          onViewDirectory={handleViewDirectory}
+          onViewIndexedFile={handleViewIndexedFile}
+          onOpenOriginalFile={handleOpenOriginalFile}
         />
       )}
     </div>

@@ -185,10 +185,10 @@ spring-ai-rag/
 | A/B | `/api/v1/rag/ab-tests` | Experiment management |
 | Alert | `/api/v1/rag/alerts` | Monitoring alerts |
 | Cache | `GET /api/v1/rag/cache/stats` | Embedding cache hit rate |
-| **PDF** | `POST /api/v1/files/pdf` | Upload and convert PDF to Markdown |
-| **PDF** | `GET /api/v1/files/preview/{uuid}/default.html` | Preview HTML (uses `<base>` tag) |
-| **PDF** | `GET /api/v1/files/raw/{uuid}/{filename}` | Get raw file (images, PDF) |
-| **PDF** | `GET /api/v1/files/tree` | List file directory tree |
+| **PDF** | `POST /api/v1/rag/files/pdf` | Upload and convert PDF to Markdown |
+| **PDF** | `GET /api/v1/rag/files/preview/{uuid}/default.html` | Preview HTML (uses `<base>` tag) |
+| **PDF** | `GET /api/v1/rag/files/raw/{uuid}/{filename}` | Get raw file (images, PDF) |
+| **PDF** | `GET /api/v1/rag/files/tree` | List file directory tree |
 | Health | `/actuator/health` | Actuator health check |
 
 ## Two Integration Modes

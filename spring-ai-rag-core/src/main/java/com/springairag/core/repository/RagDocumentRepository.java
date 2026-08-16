@@ -115,6 +115,8 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
      */
     List<RagDocument> findByContentHash(String contentHash);
 
+    Optional<RagDocument> findFirstBySourceOrderByIdAsc(String source);
+
     Optional<RagDocument> findByCollectionIdAndDocumentTypeAndExternalId(
             Long collectionId, String documentType, String externalId);
 

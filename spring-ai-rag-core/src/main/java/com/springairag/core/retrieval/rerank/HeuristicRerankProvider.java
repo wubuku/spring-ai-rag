@@ -2,6 +2,7 @@ package com.springairag.core.retrieval.rerank;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.retrieval.RetrievalResultProvenance;
 
 import java.util.Arrays;
 import java.util.Comparator;
@@ -58,6 +59,7 @@ public class HeuristicRerankProvider implements RerankProvider {
                     out.setFulltextScore(r.getFulltextScore());
                     out.setChunkIndex(r.getChunkIndex());
                     out.setMetadata(r.getMetadata());
+                    RetrievalResultProvenance.copy(r, out);
                     return out;
                 })
                 .sorted(Comparator.comparingDouble(RetrievalResult::getScore).reversed())

@@ -278,11 +278,21 @@ class RetrievalUtilsTest {
     @Test
     void fuseResults_vectorOnlyResults() {
         RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "vec only", 0, 0.8);
+        v1.setSource("pdf-import:uuid/default.md");
+        v1.setOriginalFilename("manual.pdf");
+        v1.setFileDirectoryPath("uuid/");
+        v1.setIndexedFilePath("uuid/default.md");
+        v1.setOriginalFilePath("uuid/original.pdf");
         List<RetrievalResult> fused = RetrievalUtils.fuseResults(
                 List.of(v1), List.of(), 10, 0.5f, 0.5f);
 
         assertEquals(1, fused.size());
         assertTrue(fused.get(0).getFulltextScore() == 0);
+        assertEquals(v1.getSource(), fused.get(0).getSource());
+        assertEquals(v1.getOriginalFilename(), fused.get(0).getOriginalFilename());
+        assertEquals(v1.getFileDirectoryPath(), fused.get(0).getFileDirectoryPath());
+        assertEquals(v1.getIndexedFilePath(), fused.get(0).getIndexedFilePath());
+        assertEquals(v1.getOriginalFilePath(), fused.get(0).getOriginalFilePath());
     }
 
     @Test

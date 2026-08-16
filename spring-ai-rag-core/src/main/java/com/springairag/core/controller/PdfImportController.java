@@ -31,12 +31,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
-import java.util.TreeSet;
+import java.util.TreeMap;
 
 /**
  * PDF Import and File Preview Controller
@@ -968,7 +968,7 @@ public class PdfImportController {
     }
 
     private List<FileTreeEntryResponse> buildTreeEntries(List<FsFile> files, String parentPath) {
-        Set<String> dirs = new TreeSet<>();
+        Map<String, OffsetDateTime> directoryCreatedAt = new TreeMap<>();
         List<FileTreeEntryResponse> entries = new ArrayList<>();
 
         for (FsFile f : files) {
@@ -979,13 +979,22 @@ public class PdfImportController {
             if (slashIdx == -1) {
                 entries.add(toFileEntry(f, relative, cleanPath));
             } else {
-                dirs.add(relative.substring(0, slashIdx));
+                String directory = relative.substring(0, slashIdx);
+                OffsetDateTime currentLatest = directoryCreatedAt.get(directory);
+                if (!directoryCreatedAt.containsKey(directory)
+                        || (f.getCreatedAt() != null
+                        && (currentLatest == null || f.getCreatedAt().isAfter(currentLatest)))) {
+                    directoryCreatedAt.put(directory, f.getCreatedAt());
+                }
             }
         }
 
         // Add synthetic directory entries (directories have no MIME type)
-        for (String dir : dirs) {
-            entries.add(toDirectoryEntry(dir, parentPath));
+        for (Map.Entry<String, OffsetDateTime> directory : directoryCreatedAt.entrySet()) {
+            entries.add(toDirectoryEntry(
+                    directory.getKey(),
+                    parentPath,
+                    directory.getValue()));
         }
 
         // Sort: directories first, then files alphabetically
@@ -1014,17 +1023,22 @@ public class PdfImportController {
                 cleanPath,
                 "file",
                 f.getMimeType() != null ? f.getMimeType() : "application/octet-stream",
-                f.getFileSize() != null ? f.getFileSize() : 0
+                f.getFileSize() != null ? f.getFileSize() : 0,
+                f.getCreatedAt()
         );
     }
 
-    private FileTreeEntryResponse toDirectoryEntry(String dir, String parentPath) {
+    private FileTreeEntryResponse toDirectoryEntry(
+            String dir,
+            String parentPath,
+            OffsetDateTime createdAt) {
         return new FileTreeEntryResponse(
                 dir,
                 parentPath + dir + "/",
                 "directory",
                 null,
-                0
+                0,
+                createdAt
         );
     }
 }

@@ -480,8 +480,15 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
     {
       "documentId": 1,
       "title": "Introduction to Spring AI",
-      "score": 0.92,
-      "chunk": "Retrieved text snippet...",
+      "score": 0.5,
+      "vectorScore": 0.92,
+      "fulltextScore": 0.0,
+      "chunkText": "Retrieved text snippet...",
+      "source": "pdf-import:550e8400-e29b-41d4-a716-446655440000/default.md",
+      "originalFilename": "spring-ai-reference.pdf",
+      "fileDirectoryPath": "550e8400-e29b-41d4-a716-446655440000/",
+      "indexedFilePath": "550e8400-e29b-41d4-a716-446655440000/default.md",
+      "originalFilePath": "550e8400-e29b-41d4-a716-446655440000/original.pdf",
       "metadata": {}
     }
   ],
@@ -489,6 +496,34 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
   "query": "Spring AI"
 }
 ```
+
+Score semantics:
+
+- `score` is the fused ranking signal used to order results within the same
+  query and retrieval configuration. It is not a calibrated probability or
+  relevance percentage, and it may exceed `1.0` for some ranking providers.
+- `vectorScore` is the raw vector cosine-similarity score. In a fused result,
+  `0` means that the result did not receive a vector contribution.
+- `fulltextScore` is the raw provider-specific full-text score. In a fused
+  result, `0` means that the result did not receive a full-text contribution.
+- Compare result order first. Raw component scores are useful for diagnosing
+  whether a result was found through semantic vector retrieval, keyword
+  retrieval, or both; they are not directly interchangeable.
+
+Provenance fields:
+
+- `source` and `originalFilename` come from the current `rag_documents` row;
+  ordinary documents may also return them.
+- `fileDirectoryPath`, `indexedFilePath`, and `originalFilePath` are returned
+  only when the service validates a safe relative
+  `pdf-import:{uuid}/default.md` source.
+- These paths let clients trace a hit to the Files directory, the converted
+  Markdown that was embedded, and the original PDF. Fetch the original through
+  `/api/v1/rag/files/raw` with the API key in a request header; do not put
+  credentials in URLs.
+- Historical rows that already have a `pdf-import:` source gain these fields
+  without re-embedding. An older PDF import that was globally content-hash
+  merged into a row without that source cannot be reconstructed reliably.
 
 ---
 
@@ -940,7 +975,39 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 
 ---
 
-### PDF-to-RAG Collection Scope
+<a id="pdf-and-file-artifact-apis"></a>
+
+### PDF And File Artifact APIs
+
+`POST /api/v1/rag/files/pdf` converts one PDF and stores the original,
+`default.md`, and extracted assets under a new UUID path in `fs_files`. It does
+not create a searchable RAG document. The legacy `collection` form field is
+currently ignored; it is not a RAG `collectionKey`.
+
+`GET /api/v1/rag/files/tree?path=...` lists direct files and synthetic
+directories. Each entry includes:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Last path segment |
+| `path` | string | Full virtual path |
+| `type` | string | `file` or `directory` |
+| `mimeType` | string/null | File MIME type; null for directories |
+| `size` | long | Bytes; zero for directories |
+| `createdAt` | timestamp/null | File storage time; for a directory, the latest time among descendant files |
+
+`POST /api/v1/rag/files/{uuid}/embed` reads `{uuid}/default.md`, creates or
+reuses a RAG document by the stable
+`pdf-import:{uuid}/default.md` source, and triggers embedding. Repeating the
+same UUID/source reuses one logical document. Different UUIDs create distinct
+documents even when converted content is identical. The content hash remains
+the embedding-freshness signal; it is no longer the PDF identity.
+`POST /api/v1/rag/files/pdf-to-rag` combines import and RAG registration.
+
+The data-layer relationship and WebUI behavior are documented in
+[File Management, PDF Import, And RAG Integration](file-management-and-pdf-rag.md).
+
+#### PDF-to-RAG Collection Scope
 
 The following multipart endpoints prefer `collectionKey`; deprecated
 `collectionId` remains compatible:
@@ -953,8 +1020,9 @@ omitting `embed`, returns an SSE progress stream. For `/{uuid}/embed`,
 `embed=sync` returns JSON and `embed=sse`, or omission, returns SSE. If both
 Collection identifiers are supplied, they must match.
 
-The `collection` parameter on `POST /api/v1/rag/files/pdf` is unrelated: it is
-only a virtual file-directory prefix and is not a RAG Collection identity.
+The legacy `collection` parameter on `POST /api/v1/rag/files/pdf` is unrelated
+and currently ignored. Imports always use a UUID directory. It is not a RAG
+Collection identity.
 
 ---
 
@@ -1116,6 +1184,14 @@ sent to:
 ```http
 POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
 ```
+
+Because `rag_documents.collection_id` is single-valued, this operation
+reassociates or moves an ordinary document that already belongs to another
+Collection, without re-embedding it. The caller must be allowed to access both
+the source document and target Collection. Externally managed documents with a
+nonblank `externalId` return `409`; keep synchronizing those documents by their
+stable `collectionKey + externalId` identity instead of moving them through
+this compatibility association route.
 
 ---
 

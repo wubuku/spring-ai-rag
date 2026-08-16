@@ -109,6 +109,24 @@ Current boundaries:
 
 See [architecture.md](architecture.md).
 
+### File Artifacts And The RAG Bridge
+
+`fs_files` stores path-addressed import artifacts and synthesizes directories
+from path prefixes. The current WebUI Files workflow is PDF-specific: one
+import creates a UUID directory containing the original PDF, `default.md`, and
+converted assets. These artifacts are previewable but are not searchable RAG
+documents.
+
+**Add to RAG** bridges the layers by reading `default.md`, creating or reusing
+a `rag_documents` row by the `pdf-import:{uuid}/default.md` source,
+associating an optional Collection, and triggering embedding. Different UUIDs
+retain distinct documents even when their content is identical; the content
+hash only controls embedding freshness. The Search API/WebUI can then trace a
+hit to its Files directory, indexed Markdown, and original PDF. The Documents
+upload path instead ingests supported text files directly into `rag_documents`
+without creating `fs_files` artifacts.
+See [File Management, PDF Import, And RAG Integration](file-management-and-pdf-rag.md).
+
 ## 4. Retrieval And Quality
 
 - Embedding defaults to SiliconFlow `BAAI/bge-m3`.

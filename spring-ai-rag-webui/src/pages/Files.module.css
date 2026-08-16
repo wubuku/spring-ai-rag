@@ -114,6 +114,44 @@
   letter-spacing: 0.05em;
   border-bottom: 1px solid var(--color-border, #e5e7eb);
   background: var(--color-surface, #f9fafb);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 42px;
+}
+
+.treeHeaderPath {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sortButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  padding: 0.2rem 0.4rem;
+  border: 1px solid var(--color-border, #d1d5db);
+  border-radius: 4px;
+  background: var(--color-background, #fff);
+  color: var(--color-text, #374151);
+  font: inherit;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  cursor: pointer;
+}
+
+.sortButton:hover {
+  background: var(--color-hover, #f3f4f6);
+}
+
+.sortButton:focus-visible {
+  outline: 2px solid var(--color-primary, #3b82f6);
+  outline-offset: 2px;
 }
 
 .treeBody {

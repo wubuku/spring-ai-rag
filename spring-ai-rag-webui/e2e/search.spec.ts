@@ -122,4 +122,105 @@ test.describe('Search', () => {
     );
     expect(overflow).toBe(false);
   });
+
+  test('shows a plain-language match basis instead of a zero percent score', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: 'Spring AI',
+          total: 1,
+          results: [{
+            documentId: '19',
+            title: 'Spring AI Reference',
+            chunkText: 'Spring AI retrieval result',
+            score: 0.5,
+            vectorScore: 0.7089,
+            fulltextScore: 0,
+            chunkIndex: 0,
+          }],
+        }),
+      });
+    });
+
+    await searchInput(page).fill('Spring AI');
+    await page.getByRole('button', { name: 'Search' }).click();
+
+    await expect(page.getByText('Meaning match')).toBeVisible();
+    await expect(page.getByText('#1')).toHaveCount(0);
+    await expect(page.getByText('0.0%')).toHaveCount(0);
+  });
+
+  test('navigates from a PDF result to the indexed file preview', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: 'manual',
+          total: 1,
+          results: [{
+            documentId: '7',
+            title: 'Sample PDF',
+            chunkText: 'Indexed Markdown',
+            score: 0.8,
+            vectorScore: 0.7,
+            fulltextScore: 0.4,
+            source: 'pdf-import:sample-pdf/default.md',
+            originalFilename: 'sample.pdf',
+            fileDirectoryPath: 'sample-pdf/',
+            indexedFilePath: 'sample-pdf/default.md',
+            originalFilePath: 'sample-pdf/original.pdf',
+          }],
+        }),
+      });
+    });
+
+    await searchInput(page).fill('manual');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await page.getByRole('button', { name: 'View indexed file' }).click();
+
+    await expect(page).toHaveURL(/\/webui\/files\?/);
+    await expect(page).toHaveURL(/path=sample-pdf%2F/);
+    await expect(page).toHaveURL(/file=sample-pdf%2Fdefault.md/);
+    await expect(page.getByText('Indexed Markdown')).toBeVisible();
+  });
+
+  test('opens the original PDF through an authenticated API request', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: 'manual',
+          total: 1,
+          results: [{
+            documentId: '7',
+            title: 'Sample PDF',
+            chunkText: 'Indexed Markdown',
+            score: 0.8,
+            source: 'pdf-import:sample-pdf/default.md',
+            originalFilename: 'sample.pdf',
+            fileDirectoryPath: 'sample-pdf/',
+            indexedFilePath: 'sample-pdf/default.md',
+            originalFilePath: 'sample-pdf/original.pdf',
+          }],
+        }),
+      });
+    });
+
+    await searchInput(page).fill('manual');
+    await page.getByRole('button', { name: 'Search' }).click();
+
+    const rawRequest = page.waitForRequest(request =>
+      request.url().includes('/api/v1/rag/files/raw?')
+    );
+    await page.getByRole('button', { name: 'Open original PDF' }).click();
+    const request = await rawRequest;
+
+    expect(new URL(request.url()).searchParams.get('path'))
+      .toBe('sample-pdf/original.pdf');
+    expect(request.headers()['x-api-key']).toBeTruthy();
+  });
 });

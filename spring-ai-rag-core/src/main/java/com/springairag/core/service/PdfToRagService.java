@@ -16,7 +16,6 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.function.Consumer;
 
 /**
@@ -180,7 +179,7 @@ public class PdfToRagService {
     // ---- Document building ----
 
     /**
-     * Fetch the Markdown file from fs_files, deduplicate by content hash,
+     * Fetch the Markdown file from fs_files, identify it by its stable PDF source,
      * and create or reuse a RagDocument entry.
      *
      * @param markdownPath      path in fs_files (e.g. "uuid/default.md")
@@ -204,24 +203,25 @@ public class PdfToRagService {
 
         String contentHash = computeSha256(content);
         String uuid = extractUuid(markdownPath);
+        String source = "pdf-import:" + markdownPath;
 
-        var existing = documentRepository.findByContentHash(contentHash);
-        if (!existing.isEmpty()) {
-            RagDocument doc = existing.get(0);
-            log.info("Duplicate content detected, using existing document id={}", doc.getId());
-            boolean updated = false;
-            if (collectionId != null && !collectionId.equals(doc.getCollectionId())) {
-                doc.setCollectionId(collectionId);
+        var existing = documentRepository.findFirstBySourceOrderByIdAsc(source);
+        if (existing.isPresent()) {
+            RagDocument doc = existing.get();
+            boolean updated = updateExistingDocument(
+                    doc, content, contentHash, title, originalFilename,
+                    collectionId, markdownPath, uuid);
+            if (updated) {
                 doc = documentRepository.save(doc);
-                updated = true;
             }
+            log.info("Existing PDF source detected, using document id={}", doc.getId());
             return new DocumentBuildResult(doc, false, updated, uuid);
         }
 
         RagDocument doc = new RagDocument();
         doc.setTitle(title);
         doc.setContent(content);
-        doc.setSource("pdf-import:" + markdownPath);
+        doc.setSource(source);
         doc.setDocumentType("markdown");
         doc.setOriginalFilename(originalFilename != null ? originalFilename : fsFile.getPath());
         doc.setContentHash(contentHash);
@@ -234,6 +234,53 @@ public class PdfToRagService {
         doc = documentRepository.save(doc);
         log.info("RAG document created: id={}", doc.getId());
         return new DocumentBuildResult(doc, true, false, uuid);
+    }
+
+    private boolean updateExistingDocument(
+            RagDocument doc,
+            String content,
+            String contentHash,
+            String title,
+            String originalFilename,
+            Long collectionId,
+            String markdownPath,
+            String uuid) {
+        boolean updated = false;
+        updated |= setIfChanged(doc.getContent(), content, doc::setContent);
+        updated |= setIfChanged(doc.getContentHash(), contentHash, doc::setContentHash);
+        updated |= setIfChanged(
+                doc.getSize(),
+                (long) content.getBytes(StandardCharsets.UTF_8).length,
+                doc::setSize);
+        updated |= setIfChanged(doc.getDocumentType(), "markdown", doc::setDocumentType);
+        updated |= setIfChanged(
+                doc.getMetadata(),
+                Map.of(
+                        "importedFrom", "pdf",
+                        "fsFilesPath", markdownPath,
+                        "uuid", uuid),
+                doc::setMetadata);
+        if (originalFilename != null && !originalFilename.isBlank()) {
+            updated |= setIfChanged(doc.getTitle(), title, doc::setTitle);
+            updated |= setIfChanged(
+                    doc.getOriginalFilename(),
+                    originalFilename,
+                    doc::setOriginalFilename);
+        }
+        if (collectionId != null) {
+            updated |= setIfChanged(
+                    doc.getCollectionId(), collectionId, doc::setCollectionId);
+        }
+        return updated;
+    }
+
+    private <T> boolean setIfChanged(
+            T current, T replacement, Consumer<T> setter) {
+        if (Objects.equals(current, replacement)) {
+            return false;
+        }
+        setter.accept(replacement);
+        return true;
     }
 
     // ---- Embedding ----

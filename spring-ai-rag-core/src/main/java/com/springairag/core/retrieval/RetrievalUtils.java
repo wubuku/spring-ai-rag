@@ -236,6 +236,7 @@ public final class RetrievalUtils {
         out.setFulltextScore(e.fulltextScore);
         out.setChunkIndex(r.getChunkIndex());
         out.setMetadata(r.getMetadata());
+        RetrievalResultProvenance.copy(r, out);
         return out;
     }
 

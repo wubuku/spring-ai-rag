@@ -32,6 +32,11 @@ class HttpRerankProviderTest {
                 result("b", "second", 0.2),
                 result("c", "third", 0.3)
         );
+        original.get(2).setSource("pdf-import:uuid-c/default.md");
+        original.get(2).setOriginalFilename("third.pdf");
+        original.get(2).setFileDirectoryPath("uuid-c/");
+        original.get(2).setIndexedFilePath("uuid-c/default.md");
+        original.get(2).setOriginalFilePath("uuid-c/original.pdf");
         String json = """
                 {"results":[
                   {"index":2,"relevance_score":0.99},
@@ -43,6 +48,11 @@ class HttpRerankProviderTest {
         assertEquals(2, out.size());
         assertEquals("c", out.get(0).getDocumentId());
         assertEquals(0.99, out.get(0).getScore(), 1e-6);
+        assertEquals(original.get(2).getSource(), out.get(0).getSource());
+        assertEquals(original.get(2).getOriginalFilename(),
+                out.get(0).getOriginalFilename());
+        assertEquals(original.get(2).getOriginalFilePath(),
+                out.get(0).getOriginalFilePath());
         assertEquals("a", out.get(1).getDocumentId());
     }
 

@@ -229,24 +229,75 @@ export async function mockAllApiCalls(page: Page) {
 
   page.route(/\/api\/v1\/rag\/files\/tree.*/, route => {
     const path = new URL(route.request().url()).searchParams.get('path') ?? '';
+    const importedPdfEntries = [
+      {
+        name: 'default.md',
+        path: 'sample-pdf/default.md',
+        type: 'file',
+        mimeType: 'text/markdown',
+        size: 128,
+        createdAt: '2026-08-15T09:00:00Z',
+      },
+      {
+        name: 'original.pdf',
+        path: 'sample-pdf/original.pdf',
+        type: 'file',
+        mimeType: 'application/pdf',
+        size: 1024,
+        createdAt: '2026-08-15T09:00:00Z',
+      },
+    ];
     route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         path,
         entries: path
-          ? []
+          ? path === 'sample-pdf/' ? importedPdfEntries : []
           : [
+              {
+                name: 'older-pdf',
+                path: 'older-pdf/',
+                type: 'directory',
+                mimeType: null,
+                size: 0,
+                createdAt: '2026-08-14T09:00:00Z',
+              },
               {
                 name: 'sample-pdf',
                 path: 'sample-pdf/',
                 type: 'directory',
                 mimeType: null,
                 size: 0,
+                createdAt: '2026-08-15T09:00:00Z',
+              },
+              {
+                name: 'newest-pdf',
+                path: 'newest-pdf/',
+                type: 'directory',
+                mimeType: null,
+                size: 0,
+                createdAt: '2026-08-16T09:00:00Z',
               },
             ],
-        total: path ? 0 : 1,
+        total: path ? 0 : 3,
       }),
+    });
+  });
+
+  page.route(/\/api\/v1\/rag\/files\/preview.*/, route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<div><h1>Sample PDF</h1><p>Indexed Markdown</p></div>',
+    });
+  });
+
+  page.route(/\/api\/v1\/rag\/files\/raw.*/, route => {
+    route.fulfill({
+      status: 200,
+      contentType: 'application/pdf',
+      body: '%PDF-1.4 mock',
     });
   });
 

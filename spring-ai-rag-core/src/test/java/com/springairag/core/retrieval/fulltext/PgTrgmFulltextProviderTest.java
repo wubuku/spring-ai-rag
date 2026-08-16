@@ -128,8 +128,6 @@ class PgTrgmFulltextProviderTest {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
         when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class))).thenReturn(true);
-        when(jdbc.update(anyString(), (Object) any())).thenReturn(1);
-
         // Row with NULL score_trgm (similarity() can return NULL for edge cases)
         Map<String, Object> nullScoreRow = new HashMap<>();
         nullScoreRow.put("id", 1);
@@ -138,14 +136,16 @@ class PgTrgmFulltextProviderTest {
         nullScoreRow.put("chunk_text", "test content");
         nullScoreRow.put("chunk_index", 0);
         nullScoreRow.put("metadata", Collections.emptyMap());
+        nullScoreRow.put("document_title", "PDF");
+        nullScoreRow.put("document_source", "pdf-import:uuid-trgm/default.md");
+        nullScoreRow.put("original_filename", "trgm.pdf");
 
-        when(jdbc.queryForList(anyString(), (Object[]) any()))
-                .thenReturn(List.of(nullScoreRow));
-
-        PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
+        PgTrgmFulltextProvider provider =
+                new TestPgTrgmProviderWithFixedSearch(jdbc, List.of(nullScoreRow));
         List<RetrievalResult> results = provider.search("test", null, null, 5, 0.0, 1L);
-        // Should not throw NPE; should handle null score gracefully
-        assertDoesNotThrow(() -> provider.search("test", null, null, 5, 0.0, 1L));
+        assertEquals(1, results.size());
+        assertEquals("uuid-trgm/default.md", results.get(0).getIndexedFilePath());
+        assertEquals("trgm.pdf", results.get(0).getOriginalFilename());
     }
 
     @Test
@@ -167,6 +167,8 @@ class PgTrgmFulltextProviderTest {
         assertTrue(sql.contains("s.status = 'COMPLETED'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
+        assertTrue(sql.contains("d.source AS document_source"));
+        assertTrue(sql.contains("d.original_filename AS original_filename"));
         verify(jdbc).queryForObject(anyString(), eq(Integer.class));
     }
 

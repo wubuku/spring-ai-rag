@@ -291,6 +291,22 @@ class OpenApiContractTest {
         }
 
         @Test
+        @DisplayName("RetrievalResult schema exposes file provenance fields")
+        void retrievalResultSchema_hasFileProvenanceFields() throws Exception {
+            JsonNode properties = loadSpec()
+                    .path("components")
+                    .path("schemas")
+                    .path("RetrievalResult")
+                    .path("properties");
+
+            assertThat(properties.has("source")).isTrue();
+            assertThat(properties.has("originalFilename")).isTrue();
+            assertThat(properties.has("fileDirectoryPath")).isTrue();
+            assertThat(properties.has("indexedFilePath")).isTrue();
+            assertThat(properties.has("originalFilePath")).isTrue();
+        }
+
+        @Test
         @DisplayName("CollectionScopeMode exposes all supported values")
         void collectionScopeModeSchema_hasSupportedValues() throws Exception {
             MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))

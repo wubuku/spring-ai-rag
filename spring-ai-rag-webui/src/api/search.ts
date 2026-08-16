@@ -3,11 +3,19 @@ import type { CollectionScopeMode } from '../types/api';
 
 export interface SearchResult {
   documentId: string;
-  title: string;
-  content: string;
-  score: number;
+  title?: string;
+  content?: string;
+  chunkText?: string;
+  score?: number;
+  vectorScore?: number;
+  fulltextScore?: number;
   collectionId?: number;
   collectionKey?: string;
+  source?: string;
+  originalFilename?: string;
+  fileDirectoryPath?: string;
+  indexedFilePath?: string;
+  originalFilePath?: string;
 }
 
 export interface SearchResponse {

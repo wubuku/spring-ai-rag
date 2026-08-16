@@ -412,8 +412,15 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
     {
       "documentId": 1,
       "title": "Introduction to Spring AI",
-      "score": 0.92,
-      "chunk": "Retrieved text snippet...",
+      "score": 0.5,
+      "vectorScore": 0.92,
+      "fulltextScore": 0.0,
+      "chunkText": "Retrieved text snippet...",
+      "source": "pdf-import:550e8400-e29b-41d4-a716-446655440000/default.md",
+      "originalFilename": "spring-ai-reference.pdf",
+      "fileDirectoryPath": "550e8400-e29b-41d4-a716-446655440000/",
+      "indexedFilePath": "550e8400-e29b-41d4-a716-446655440000/default.md",
+      "originalFilePath": "550e8400-e29b-41d4-a716-446655440000/original.pdf",
       "metadata": {}
     }
   ],
@@ -421,6 +428,28 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
   "query": "Spring AI"
 }
 ```
+
+分数字段语义：
+
+- `score` 是同一次查询、同一套检索配置内用于排序的融合信号。它不是经过校准的概率或
+  相关性百分比；部分排序提供方产生的值还可能超过 `1.0`。
+- `vectorScore` 是原始向量余弦相似度；在融合结果中，`0` 表示该结果没有向量检索贡献。
+- `fulltextScore` 是全文检索提供方产生的原始分数；在融合结果中，`0` 表示该结果没有
+  全文检索贡献。
+- 使用方应优先看结果顺序。组件分数适合诊断结果来自语义向量检索、关键词检索还是两者
+  共同命中，但不同组件的原始分数不能直接互换比较。
+
+来源字段语义：
+
+- `source` 和 `originalFilename` 来自当前 `rag_documents` 记录；普通文档也可能返回这两个
+  字段。
+- 只有服务端确认 `source` 是安全的 `pdf-import:{uuid}/default.md` 相对路径时，才返回
+  `fileDirectoryPath`、`indexedFilePath` 和 `originalFilePath`。
+- 三个文件路径字段允许调用方追溯到文件管理目录、实际用于嵌入的 Markdown 和原始 PDF。
+  读取原始文件仍必须调用带 API Key 请求头的 `/api/v1/rag/files/raw`，不要把凭据放入
+  URL。
+- 历史 PDF 文档若已保存 `pdf-import:` source，无需重新嵌入即可获得这些字段；早期被全局
+  内容哈希合并、因而没有 PDF source 的记录无法可靠反推来源。
 
 ---
 
@@ -812,7 +841,35 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 
 ---
 
-### PDF-to-RAG Collection 范围
+<a id="pdf-与文件产物-api"></a>
+
+### PDF 与文件产物 API
+
+`POST /api/v1/rag/files/pdf` 转换一个 PDF，并把原始文件、`default.md` 和提取资源保存到
+`fs_files` 中新的 UUID 路径下。它不会创建可检索的 RAG 文档。历史兼容表单字段
+`collection` 当前会被忽略，也不是 RAG `collectionKey`。
+
+`GET /api/v1/rag/files/tree?path=...` 返回直接文件和合成目录。每个条目包含：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `name` | string | 最后一个路径段 |
+| `path` | string | 完整虚拟路径 |
+| `type` | string | `file` 或 `directory` |
+| `mimeType` | string/null | 文件 MIME 类型；目录为 null |
+| `size` | long | 文件字节数；目录为 0 |
+| `createdAt` | timestamp/null | 文件存储时间；目录取其后代文件中的最新时间 |
+
+`POST /api/v1/rag/files/{uuid}/embed` 读取 `{uuid}/default.md`，按稳定来源
+`pdf-import:{uuid}/default.md` 创建或复用 RAG 文档，并触发 embedding。相同 UUID/source
+重复调用会复用同一逻辑文档；不同 UUID 即使转换内容相同也创建不同文档。内容哈希继续用于
+判断 embedding 新鲜度，不再承担 PDF 文件身份。`POST /api/v1/rag/files/pdf-to-rag`
+合并导入和注册到 RAG。
+
+数据层关系和 WebUI 行为见
+[文件管理、PDF 导入与 RAG 联动](file-management-and-pdf-rag-zh-CN.md)。
+
+#### PDF-to-RAG Collection 范围
 
 以下 multipart 端点推荐使用 `collectionKey`，同时兼容 deprecated 的 `collectionId`：
 
@@ -823,8 +880,8 @@ Upload text files and embed in one step. Suitable for direct file submission fro
 进度流。`/{uuid}/embed` 的 `embed=sync` 返回 JSON，`embed=sse` 或省略时返回 SSE。
 同时提供两个 Collection 标识时，两者必须一致。
 
-`POST /api/v1/rag/files/pdf` 的 `collection` 参数与此无关：它只表示虚拟文件目录前缀，
-不是 RAG Collection 身份。
+`POST /api/v1/rag/files/pdf` 的历史兼容 `collection` 参数与此无关，且当前会被忽略；
+导入始终使用 UUID 目录。它不是 RAG Collection 身份。
 
 ---
 
@@ -978,6 +1035,11 @@ GET /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%
 ```http
 POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%3Av3
 ```
+
+`rag_documents.collection_id` 是单值外键，因此该操作对已经属于其他 Collection 的普通
+文档表现为重关联/迁移，不需要重新嵌入。调用方必须同时有原文档和目标 Collection 的访问
+权。`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
+`collectionKey + externalId` 同步，不能用兼容关联接口改变身份命名空间。
 
 ---
 

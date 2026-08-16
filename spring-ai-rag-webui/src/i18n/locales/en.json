@@ -161,7 +161,18 @@
     "historyCleared": "Search history cleared",
     "recentSearches": "Recent Searches",
     "collection": "Collection",
-    "allCollections": "All collections"
+    "allCollections": "All collections",
+    "resultIndicatorTitle": "Rank {{rank}} in this search. Match basis: {{channel}}. Internal ranking scores are not relevance percentages.",
+    "originalPdfFallback": "original.pdf",
+    "viewFileDirectory": "View file directory",
+    "viewIndexedFile": "View indexed file",
+    "openOriginalPdf": "Open original PDF",
+    "openOriginalPdfError": "Failed to open original PDF: {{error}}",
+    "matchChannel": {
+      "hybrid": "Meaning + keyword",
+      "semantic": "Meaning match",
+      "keyword": "Keyword match"
+    }
   },
   "metrics": {
     "title": "Metrics",
@@ -357,6 +368,9 @@
     "refresh": "Refresh",
     "empty": "This directory is empty",
     "root": "Root",
+    "sortImportedAt": "Imported",
+    "sortNewestFirstTitle": "Newest imports first; click for oldest first",
+    "sortOldestFirstTitle": "Oldest imports first; click for newest first",
     "collectionPrefix": "Collection prefix",
     "collectionPrefixPlaceholder": "e.g. papers/2024",
     "ragCollection": "RAG collection",

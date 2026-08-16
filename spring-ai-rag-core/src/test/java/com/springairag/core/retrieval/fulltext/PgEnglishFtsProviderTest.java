@@ -73,6 +73,9 @@ class PgEnglishFtsProviderTest {
         row.put("document_id", 42L);
         row.put("chunk_index", 3);
         row.put("metadata", null);
+        row.put("document_title", "English PDF");
+        row.put("document_source", "pdf-import:uuid-en/default.md");
+        row.put("original_filename", "english.pdf");
         row.put("rank", 0.65);
 
         when(jdbc.queryForList(contains("ts_rank_cd"), any(Object[].class))).thenReturn(List.of(row));
@@ -85,6 +88,9 @@ class PgEnglishFtsProviderTest {
         assertEquals("42", results.get(0).getDocumentId());
         assertEquals("test document content", results.get(0).getChunkText());
         assertEquals(3, results.get(0).getChunkIndex());
+        assertEquals("English PDF", results.get(0).getTitle());
+        assertEquals("uuid-en/default.md", results.get(0).getIndexedFilePath());
+        assertEquals("uuid-en/original.pdf", results.get(0).getOriginalFilePath());
         verify(jdbc).queryForList(contains("ts_rank_cd"), any(Object[].class));
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
@@ -93,6 +99,8 @@ class PgEnglishFtsProviderTest {
         assertTrue(sql.contains("s.status = 'COMPLETED'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
+        assertTrue(sql.contains("d.source AS document_source"));
+        assertTrue(sql.contains("d.original_filename AS original_filename"));
     }
 
     @Test

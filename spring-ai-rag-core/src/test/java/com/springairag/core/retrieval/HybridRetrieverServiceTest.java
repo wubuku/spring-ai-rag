@@ -78,6 +78,9 @@ class HybridRetrieverServiceTest {
         row.put("chunk_text", chunkText);
         row.put("embedding", embedding);
         row.put("metadata", null);
+        row.put("document_title", "Document " + docId);
+        row.put("document_source", null);
+        row.put("original_filename", null);
         return row;
     }
 
@@ -379,6 +382,9 @@ class HybridRetrieverServiceTest {
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
 
         Map<String, Object> row = mockDbRow(42L, "doc-xyz", 3, "测试块内容", queryVec);
+        row.put("document_title", "PDF guide");
+        row.put("document_source", "pdf-import:uuid-xyz/default.md");
+        row.put("original_filename", "guide.pdf");
         when(jdbcTemplate.queryForList(contains("embedding_1024 <=>"), any(Object[].class)))
                 .thenReturn(List.of(row));
         when(jdbcTemplate.queryForList(contains("similarity"), any(Object[].class)))
@@ -395,6 +401,12 @@ class HybridRetrieverServiceTest {
         assertEquals("测试块内容", result.getChunkText());
         assertEquals(3, result.getChunkIndex());
         assertTrue(result.getScore() > 0, "分数应大于 0");
+        assertEquals("PDF guide", result.getTitle());
+        assertEquals("pdf-import:uuid-xyz/default.md", result.getSource());
+        assertEquals("guide.pdf", result.getOriginalFilename());
+        assertEquals("uuid-xyz/", result.getFileDirectoryPath());
+        assertEquals("uuid-xyz/default.md", result.getIndexedFilePath());
+        assertEquals("uuid-xyz/original.pdf", result.getOriginalFilePath());
     }
 
     @Test
@@ -462,6 +474,11 @@ class HybridRetrieverServiceTest {
         r.setVectorScore(0.90);
         r.setFulltextScore(0.80);
         r.setChunkIndex(2);
+        r.setSource("pdf-import:uuid/default.md");
+        r.setOriginalFilename("manual.pdf");
+        r.setFileDirectoryPath("uuid/");
+        r.setIndexedFilePath("uuid/default.md");
+        r.setOriginalFilePath("uuid/original.pdf");
 
         assertEquals("doc-1", r.getDocumentId());
         assertEquals("测试内容", r.getChunkText());
@@ -469,6 +486,11 @@ class HybridRetrieverServiceTest {
         assertEquals(0.90, r.getVectorScore(), 0.001);
         assertEquals(0.80, r.getFulltextScore(), 0.001);
         assertEquals(2, r.getChunkIndex());
+        assertEquals("pdf-import:uuid/default.md", r.getSource());
+        assertEquals("manual.pdf", r.getOriginalFilename());
+        assertEquals("uuid/", r.getFileDirectoryPath());
+        assertEquals("uuid/default.md", r.getIndexedFilePath());
+        assertEquals("uuid/original.pdf", r.getOriginalFilePath());
     }
 
     @Test
