@@ -45,6 +45,9 @@ public class RagDocumentVersion {
     @Column(name = "content_hash", length = 64, nullable = false)
     private String contentHash;
 
+    @Column(name = "source_revision_snapshot", length = 255)
+    private String sourceRevisionSnapshot;
+
     /**
      * Content snapshot (full text)
      */
@@ -101,6 +104,7 @@ public class RagDocumentVersion {
         RagDocumentVersion version = new RagDocumentVersion();
         version.setDocumentId(doc.getId());
         version.setContentHash(doc.getContentHash());
+        version.setSourceRevisionSnapshot(doc.getSourceRevision());
         version.setContentSnapshot(doc.getContent());
         version.setSize(doc.getSize());
         version.setChangeType(changeType);
@@ -124,6 +128,11 @@ public class RagDocumentVersion {
 
     public String getContentHash() { return contentHash; }
     public void setContentHash(String contentHash) { this.contentHash = contentHash; }
+
+    public String getSourceRevisionSnapshot() { return sourceRevisionSnapshot; }
+    public void setSourceRevisionSnapshot(String sourceRevisionSnapshot) {
+        this.sourceRevisionSnapshot = sourceRevisionSnapshot;
+    }
 
     public String getContentSnapshot() { return contentSnapshot; }
     public void setContentSnapshot(String contentSnapshot) { this.contentSnapshot = contentSnapshot; }

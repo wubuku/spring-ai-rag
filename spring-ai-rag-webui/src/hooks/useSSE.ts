@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getCredentialHeaders } from '../auth/credentialStore';
+import type { CollectionScopeMode } from '../types/api';
 
 export interface ChatStreamChunkEvent {
   choices: Array<{
@@ -31,15 +32,29 @@ export interface UseChatSSEOptions {
   onDone?: () => void;
 }
 
-export interface UseChatSSEReturn {
-  isConnected: boolean;
-  send: (
+export interface ChatSSESendOptions {
+  message: string;
+  collectionIds?: number[] | number;
+  conversationId?: string;
+  model?: string;
+  collectionScopeMode?: CollectionScopeMode;
+  collectionKeys?: string[] | string;
+}
+
+interface ChatSSESend {
+  (options: ChatSSESendOptions): void;
+  (
     message: string,
     collectionIds?: number[] | number,
     conversationId?: string,
     model?: string,
     collectionKeys?: string[] | string
-  ) => void;
+  ): void;
+}
+
+export interface UseChatSSEReturn {
+  isConnected: boolean;
+  send: ChatSSESend;
   close: () => void;
 }
 
@@ -88,29 +103,40 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
 
   const send = useCallback(
     async (
-      message: string,
+      request: ChatSSESendOptions | string,
       collectionIds?: number[] | number,
       conversationId?: string,
       model?: string,
       collectionKeys?: string[] | string
     ) => {
+      const sendOptions: ChatSSESendOptions =
+        typeof request === 'string'
+          ? {
+              message: request,
+              collectionIds,
+              conversationId,
+              model,
+              collectionKeys,
+            }
+          : request;
+
       close();
       setIsConnected(true);
       accumulatedContentRef.current = '';
 
       // Normalize singular collectionId for backward compatibility
       const normalizedIds: number[] | undefined =
-        collectionIds === undefined || collectionIds === null
+        sendOptions.collectionIds === undefined || sendOptions.collectionIds === null
           ? undefined
-          : Array.isArray(collectionIds)
-            ? collectionIds
-            : [collectionIds];
+          : Array.isArray(sendOptions.collectionIds)
+            ? sendOptions.collectionIds
+            : [sendOptions.collectionIds];
       const normalizedKeys: string[] | undefined =
-        collectionKeys === undefined || collectionKeys === null
+        sendOptions.collectionKeys === undefined || sendOptions.collectionKeys === null
           ? undefined
-          : Array.isArray(collectionKeys)
-            ? collectionKeys
-            : [collectionKeys];
+          : Array.isArray(sendOptions.collectionKeys)
+            ? sendOptions.collectionKeys
+            : [sendOptions.collectionKeys];
 
       try {
         const response = await fetch('/api/v1/rag/chat/stream', {
@@ -120,11 +146,12 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
             ...getCredentialHeaders(),
           },
           body: JSON.stringify({
-            message,
+            message: sendOptions.message,
             collectionIds: normalizedIds && normalizedIds.length > 0 ? normalizedIds : undefined,
+            collectionScopeMode: sendOptions.collectionScopeMode,
             collectionKeys: normalizedKeys && normalizedKeys.length > 0 ? normalizedKeys : undefined,
-            sessionId: conversationId ?? undefined,
-            model: model || undefined,
+            sessionId: sendOptions.conversationId ?? undefined,
+            model: sendOptions.model || undefined,
           }),
         });
 

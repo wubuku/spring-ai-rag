@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.RetrievalScope;
 
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +28,13 @@ public class NoOpFulltextSearchProvider implements FulltextSearchProvider {
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                         List<Long> excludeIds, int limit, double minScore,
                                         long embeddingProfileId) {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId) {
         return Collections.emptyList();
     }
 }

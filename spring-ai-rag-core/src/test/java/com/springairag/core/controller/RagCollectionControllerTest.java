@@ -116,7 +116,8 @@ class RagCollectionControllerTest {
         RagCollection c2 = createCollection(2L, "知识库B");
         Page<RagCollection> page = new PageImpl<>(List.of(c1, c2));
 
-        when(collectionRepository.searchCollections(isNull(), isNull(), any(Pageable.class)))
+        when(collectionRepository.searchCollections(
+                isNull(), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
         when(documentRepository.countByCollectionId(1L)).thenReturn(3L);
         when(documentRepository.countByCollectionId(2L)).thenReturn(7L);
@@ -134,7 +135,8 @@ class RagCollectionControllerTest {
         RagCollection c = createCollection(1L, "RAG 知识库");
         Page<RagCollection> page = new PageImpl<>(List.of(c));
 
-        when(collectionRepository.searchCollections(eq("RAG"), isNull(), any(Pageable.class)))
+        when(collectionRepository.searchCollections(
+                eq("RAG"), isNull(), isNull(), any(Pageable.class)))
                 .thenReturn(page);
         when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
@@ -143,6 +145,24 @@ class RagCollectionControllerTest {
         assertEquals(200, response.getStatusCode().value());
         List<?> collections = (List<?>) response.getBody().get("collections");
         assertEquals(1, collections.size());
+    }
+
+    @Test
+    void list_withQuery_searchesNameAndCollectionKey() {
+        RagCollection collection = createCollection(1L, "Manual");
+        collection.setCollectionKey("customer-42:manual:v3");
+        Page<RagCollection> page = new PageImpl<>(List.of(collection));
+        when(collectionRepository.searchCollections(
+                isNull(), eq("manual:v3"), isNull(), any(Pageable.class)))
+                .thenReturn(page);
+        when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.list(0, 20, null, "manual:v3", null);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(collectionRepository).searchCollections(
+                isNull(), eq("manual:v3"), isNull(), any(Pageable.class));
     }
 
     @Test

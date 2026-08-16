@@ -38,6 +38,7 @@ vi.mock('../api/documents', () => ({
   documentsApi: {
     list: vi.fn(),
     delete: vi.fn(),
+    embed: vi.fn(),
   },
 }));
 
@@ -135,5 +136,40 @@ describe('Documents', () => {
 
     render(<Documents />);
     expect(screen.getByRole('button', { name: /common.previous/ })).toBeDisabled();
+  });
+
+  it('shows external identity and retry action for stale embeddings', () => {
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 1,
+            title: 'External Doc',
+            content: 'Content',
+            contentHash: 'abc123',
+            documentType: 'txt',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            externalId: 'cms:article:1',
+            sourceRevision: 'etag:2',
+            embeddingFresh: false,
+            enabled: true,
+            processingError: 'provider unavailable',
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    render(<Documents />);
+
+    expect(screen.getByText('cms:article:1')).toBeInTheDocument();
+    expect(screen.getByText('etag:2')).toBeInTheDocument();
+    expect(screen.getByText('documents.embeddingStale')).toBeInTheDocument();
+    expect(screen.getByText('provider unavailable')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'documents.retryEmbedding' }))
+      .toBeInTheDocument();
   });
 });

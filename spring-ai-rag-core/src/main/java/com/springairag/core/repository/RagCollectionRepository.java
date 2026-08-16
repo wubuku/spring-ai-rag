@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -29,11 +30,34 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
                                            @Param("enabled") Boolean enabled,
                                            Pageable pageable);
 
+    @Query("SELECT c FROM RagCollection c WHERE c.deleted = false AND " +
+           "(COALESCE(:name, '') = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
+           "(COALESCE(:query, '') = '' OR " +
+           "LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(c.collectionKey) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
+           "(:enabled IS NULL OR c.enabled = :enabled)")
+    Page<RagCollection> searchCollections(@Param("name") String name,
+                                           @Param("query") String query,
+                                           @Param("enabled") Boolean enabled,
+                                           Pageable pageable);
+
     @Query("SELECT c FROM RagCollection c WHERE c.deleted = false AND c.id IN :ids AND " +
            "(COALESCE(:name, '') = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
            "(:enabled IS NULL OR c.enabled = :enabled)")
     Page<RagCollection> searchCollectionsByIds(@Param("ids") List<Long> ids,
                                                 @Param("name") String name,
+                                                @Param("enabled") Boolean enabled,
+                                                Pageable pageable);
+
+    @Query("SELECT c FROM RagCollection c WHERE c.deleted = false AND c.id IN :ids AND " +
+           "(COALESCE(:name, '') = '' OR LOWER(c.name) LIKE LOWER(CONCAT('%', :name, '%'))) AND " +
+           "(COALESCE(:query, '') = '' OR " +
+           "LOWER(c.name) LIKE LOWER(CONCAT('%', :query, '%')) OR " +
+           "LOWER(c.collectionKey) LIKE LOWER(CONCAT('%', :query, '%'))) AND " +
+           "(:enabled IS NULL OR c.enabled = :enabled)")
+    Page<RagCollection> searchCollectionsByIds(@Param("ids") List<Long> ids,
+                                                @Param("name") String name,
+                                                @Param("query") String query,
                                                 @Param("enabled") Boolean enabled,
                                                 Pageable pageable);
 
@@ -45,6 +69,9 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
     Optional<RagCollection> findByCollectionKey(String collectionKey);
 
     Optional<RagCollection> findByCollectionKeyAndDeletedFalse(String collectionKey);
+
+    List<RagCollection> findAllByCollectionKeyInAndDeletedFalse(
+            Collection<String> collectionKeys);
 
     boolean existsByCollectionKey(String collectionKey);
 

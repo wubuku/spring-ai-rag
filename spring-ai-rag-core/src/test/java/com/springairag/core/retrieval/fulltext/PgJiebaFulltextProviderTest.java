@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -93,6 +94,43 @@ class PgJiebaFulltextProviderTest {
         assertTrue(sql.contains("s.status = 'COMPLETED'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
+    }
+
+    @Test
+    @DisplayName("scope predicates are pushed into pg_jieba SQL")
+    void searchInScope_pushesCollectionDocumentAndTypePredicates() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(
+                contains("search_vector_zh"), eq(Boolean.class)))
+                .thenReturn(true);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        PgJiebaFulltextProvider provider = new PgJiebaFulltextProvider(jdbc);
+        provider.searchInScope(
+                "记录",
+                RetrievalScope.selectedCollections(
+                        List.of(2L, 4L), List.of(10L), "json-record"),
+                null, 5, 0.0, 7L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("d.collection_id = ANY (?)"));
+        assertTrue(sql.contains("e.document_id = ANY (?)"));
+        assertTrue(sql.contains("d.document_type = ?"));
+        assertTrue(sql.contains("e.embedding_profile_id = 7"));
+        Object[] args = argsCaptor.getValue();
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
+        assertEquals("json-record", args[3]);
     }
 
     @Test

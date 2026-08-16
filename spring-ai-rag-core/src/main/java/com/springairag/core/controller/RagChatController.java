@@ -8,10 +8,11 @@ import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
-import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,20 +68,20 @@ public class RagChatController {
     private final ChatExportService chatExportService;
     private final RagSseProperties sseProperties;
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
-    private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionRetrievalScopeResolver retrievalScopeResolver;
 
     @Autowired
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
                              ChatExportService chatExportService,
                              RagSseProperties sseProperties,
-                             @Autowired(required = false) CollectionIdentityResolver collectionIdentityResolver,
+                             CollectionRetrievalScopeResolver retrievalScopeResolver,
                              @Autowired(required = false) AuditLogService auditLogService) {
         this.ragChatService = ragChatService;
         this.historyRepository = historyRepository;
         this.chatExportService = chatExportService;
         this.sseProperties = sseProperties;
-        this.collectionIdentityResolver = collectionIdentityResolver;
+        this.retrievalScopeResolver = retrievalScopeResolver;
         this.auditLogService = auditLogService;
     }
 
@@ -111,12 +112,14 @@ public class RagChatController {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
-        applyCollectionAcl(request, httpRequest);
+        RetrievalScope scope = resolveScope(request, httpRequest);
         log.info("RAG ask: sessionId={}, domain={}, collectionIds={}, message={}",
                 request.getSessionId(), request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
-        ChatResponse response = ragChatService.chat(request);
+        ChatResponse response = scope != null
+                ? ragChatService.chat(request, scope)
+                : ragChatService.chat(request);
         return ResponseEntity.ok(response);
     }
 
@@ -139,12 +142,14 @@ public class RagChatController {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
-        applyCollectionAcl(request, httpRequest);
+        RetrievalScope scope = resolveScope(request, httpRequest);
         log.info("RAG chat: sessionId={}, domain={}, message={}",
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
-        ChatResponse response = ragChatService.chat(request);
+        ChatResponse response = scope != null
+                ? ragChatService.chat(request, scope)
+                : ragChatService.chat(request);
         return ResponseEntity.ok(response);
     }
 
@@ -198,7 +203,7 @@ public class RagChatController {
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
         }
-        applyCollectionAcl(request, httpRequest);
+        RetrievalScope scope = resolveScope(request, httpRequest);
         String sessionId = request.getSessionId();
         log.info("RAG stream: sessionId={}, domain={}, collectionIds={}, message={}",
                 sessionId, request.getDomainId(), request.getCollectionIds(),
@@ -213,7 +218,9 @@ public class RagChatController {
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
 
         // Full ChatRequest path: collectionIds / documentIds / model parity with /ask
-        ragChatService.chatStream(request)
+        (scope != null
+                ? ragChatService.chatStream(request, scope)
+                : ragChatService.chatStream(request))
                 .subscribe(
                         chunk -> {
                             String json = "{\"choices\":[{\"delta\":{\"content\":\"" + SseEmitters.escapeJson(chunk) + "\"}}]}";
@@ -322,14 +329,22 @@ public class RagChatController {
         if (auditLogService != null) auditLogService.logDelete(entityType, entityId, message);
     }
 
-    private void applyCollectionAcl(ChatRequest request, HttpServletRequest httpRequest) {
+    private RetrievalScope resolveScope(
+            ChatRequest request, HttpServletRequest httpRequest) {
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
-        if (request.getCollectionKeys() != null && collectionIdentityResolver == null) {
-            throw new IllegalStateException("Collection key resolver is unavailable");
+        if (retrievalScopeResolver != null) {
+            return retrievalScopeResolver.resolve(
+                    request.getCollectionScopeMode(),
+                    request.getCollectionIds(),
+                    request.getCollectionKeys(),
+                    request.getDocumentIds(),
+                    null,
+                    key);
         }
+        // 仅供旧 Java 构造器测试兼容；Spring 生产构造器总是注入新 resolver。
         request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
-                request.getCollectionIds(), request.getCollectionKeys(), key,
-                collectionIdentityResolver));
+                request.getCollectionIds(), key));
+        return null;
     }
 
 }

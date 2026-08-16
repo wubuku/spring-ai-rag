@@ -215,13 +215,11 @@ public class RagCollectionService {
                         if (documentVersionService != null) {
                             for (int i = 0; i < clonedDocs.size(); i++) {
                                 RagDocument clonedDoc = clonedDocs.get(i);
-                                if (RagDocument.JSON_RECORD.equals(clonedDoc.getDocumentType())) {
-                                    documentVersionService.forceRecordVersion(
-                                            clonedDoc,
-                                            "CREATE",
-                                            "Cloned from document " + sourceDocs.get(i).getId()
-                                                    + " in collection " + id);
-                                }
+                                documentVersionService.forceRecordVersion(
+                                        clonedDoc,
+                                        "CREATE",
+                                        "Cloned from document " + sourceDocs.get(i).getId()
+                                                + " in collection " + id);
                             }
                         }
                     }
@@ -295,6 +293,8 @@ public class RagCollectionService {
         doc.setSize(source.getSize());
         doc.setContentHash(source.getContentHash());
         doc.setExternalId(source.getExternalId());
+        doc.setSourceRevision(source.getSourceRevision());
+        doc.setSourceDeletedAt(source.getSourceDeletedAt());
         doc.setJsonbPayload(source.getJsonbPayload() == null
                 ? null : source.getJsonbPayload().deepCopy());
         doc.setOriginalFilename(source.getOriginalFilename());

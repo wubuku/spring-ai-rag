@@ -6,6 +6,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +58,8 @@ public class CollectionImportRequest {
         private Map<String, Object> metadata;
         private Long size;
         private String externalId;
+        private String sourceRevision;
+        private LocalDateTime sourceDeletedAt;
         private JsonNode jsonbPayload;
         private String originalFilename;
         private Boolean enabled;
@@ -75,6 +78,12 @@ public class CollectionImportRequest {
         public void setSize(Long size) { this.size = size; }
         public String getExternalId() { return externalId; }
         public void setExternalId(String externalId) { this.externalId = externalId; }
+        public String getSourceRevision() { return sourceRevision; }
+        public void setSourceRevision(String sourceRevision) { this.sourceRevision = sourceRevision; }
+        public LocalDateTime getSourceDeletedAt() { return sourceDeletedAt; }
+        public void setSourceDeletedAt(LocalDateTime sourceDeletedAt) {
+            this.sourceDeletedAt = sourceDeletedAt;
+        }
         public JsonNode getJsonbPayload() { return jsonbPayload; }
         public void setJsonbPayload(JsonNode jsonbPayload) { this.jsonbPayload = jsonbPayload; }
         public String getOriginalFilename() { return originalFilename; }

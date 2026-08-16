@@ -237,9 +237,14 @@
 
 .contextRow {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
+}
+
+.scopeControl {
+  flex: 1 1 100%;
+  min-width: 0;
 }
 
 .contextControl {

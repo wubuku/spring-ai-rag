@@ -118,7 +118,7 @@ public class CollectionIdentityResolver {
                 : ids.stream().map(id -> resolveActiveId(id, null)).toList();
         List<Long> resolvedKeys = keys == null
                 ? null
-                : keys.stream().map(key -> resolveActiveId(null, key)).toList();
+                : resolveActiveKeyIds(keys);
         if (resolvedIds != null && resolvedKeys != null
                 && !new LinkedHashSet<>(resolvedIds).equals(new LinkedHashSet<>(resolvedKeys))) {
             throw new IllegalArgumentException(
@@ -126,6 +126,34 @@ public class CollectionIdentityResolver {
         }
         List<Long> result = resolvedKeys != null ? resolvedKeys : resolvedIds;
         return List.copyOf(new LinkedHashSet<>(result));
+    }
+
+    private List<Long> resolveActiveKeyIds(List<String> keys) {
+        LinkedHashSet<String> requestedKeys = new LinkedHashSet<>();
+        for (String key : keys) {
+            if (key == null || !CollectionKeyValidator.isValid(key)) {
+                throw new IllegalArgumentException(
+                        "collectionKey must contain 1-128 visible ASCII characters");
+            }
+            requestedKeys.add(key);
+        }
+
+        Map<String, RagCollection> foundByKey = new HashMap<>();
+        repository.findAllByCollectionKeyInAndDeletedFalse(requestedKeys)
+                .forEach(collection ->
+                        foundByKey.put(collection.getCollectionKey(), collection));
+
+        List<Long> resolved = new java.util.ArrayList<>(requestedKeys.size());
+        for (String key : requestedKeys) {
+            RagCollection collection = foundByKey.get(key);
+            if (collection == null) {
+                throw new RagException(
+                        ErrorCode.COLLECTION_NOT_FOUND,
+                        "Collection not found: collectionKey=" + key);
+            }
+            resolved.add(collection.getId());
+        }
+        return List.copyOf(resolved);
     }
 
     /**

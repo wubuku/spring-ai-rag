@@ -2,12 +2,13 @@ package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
+import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.retrieval.RetrievalScopeSql;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * pg_jieba Chinese tokenization full-text search strategy.
@@ -78,12 +79,21 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                         List<Long> excludeIds, int limit, double minScore,
                                         long embeddingProfileId) {
+        return searchInScope(query, RetrievalScope.forDocumentIds(documentIds),
+                excludeIds, limit, minScore, embeddingProfileId);
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId) {
         if (!available) return Collections.emptyList();
         if (query == null || query.isBlank()) return Collections.emptyList();
+        if (scope != null && scope.matchNone()) return Collections.emptyList();
 
         try {
             List<Map<String, Object>> rows =
-                    executeSearch(query.trim(), documentIds, limit, embeddingProfileId);
+                    executeSearch(query.trim(), scope, limit, embeddingProfileId);
             log.debug("pg_jieba search for '{}' returned {} rows", query, rows.size());
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
@@ -103,38 +113,27 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
     }
 
     private List<Map<String, Object>> executeSearch(
-            String query, List<Long> documentIds, int limit, long embeddingProfileId) {
+            String query, RetrievalScope retrievalScope,
+            int limit, long embeddingProfileId) {
         // Use pre-built search_vector_zh column (with GIN index)
         // Use websearch_to_tsquery for Google-style search syntax
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
                 + "ts_rank_cd(e.search_vector_zh, "
                 + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
-        if (documentIds != null && !documentIds.isEmpty()) {
-            String placeholders = documentIds.stream()
-                    .map(id -> "?").collect(Collectors.joining(","));
-            String sql = String.format(
-                    select + scope
-                            + "AND e.document_id IN (%s) "
-                            + "AND e.search_vector_zh IS NOT NULL "
-                            + "AND e.search_vector_zh @@ websearch_to_tsquery('"
-                            + TS_CONFIG + "', ?) "
-                            + "ORDER BY rank DESC LIMIT ?",
-                    placeholders);
-            List<Object> args = new ArrayList<>();
-            args.add(query);
-            args.addAll(documentIds);
-            args.add(query);
-            args.add(limit);
-            return jdbcTemplate.queryForList(sql, args.toArray());
-        }
-
-        String sql = select + scope
+        RetrievalScopeSql.Fragment fragment =
+                RetrievalScopeSql.build(retrievalScope);
+        String sql = select + scope + fragment.sql()
                 + "AND e.search_vector_zh IS NOT NULL "
                 + "AND e.search_vector_zh @@ websearch_to_tsquery('"
                 + TS_CONFIG + "', ?) "
                 + "ORDER BY rank DESC LIMIT ?";
-        return jdbcTemplate.queryForList(sql, query, query, limit);
+        List<Object> args = new ArrayList<>();
+        args.add(query);
+        args.addAll(fragment.args());
+        args.add(query);
+        args.add(limit);
+        return jdbcTemplate.queryForList(sql, args.toArray());
     }
 
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {

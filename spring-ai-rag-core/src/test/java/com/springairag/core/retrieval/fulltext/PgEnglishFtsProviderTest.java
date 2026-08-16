@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -108,7 +109,9 @@ class PgEnglishFtsProviderTest {
         row.put("metadata", Map.of("source", "pdf"));
         row.put("rank", 0.8);
 
-        when(jdbc.queryForList(contains("document_id IN"), any(Object[].class))).thenReturn(List.of(row));
+        when(jdbc.queryForList(
+                contains("document_id = ANY (?)"),
+                any(Object[].class))).thenReturn(List.of(row));
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
         List<RetrievalResult> results = provider.search("machine learning",
@@ -117,6 +120,42 @@ class PgEnglishFtsProviderTest {
         assertEquals(1, results.size());
         assertEquals("10", results.get(0).getDocumentId());
         assertEquals(Map.of("source", "pdf"), results.get(0).getMetadata());
+    }
+
+    @Test
+    @DisplayName("scope predicates are pushed into English FTS SQL")
+    void searchInScope_pushesCollectionDocumentAndTypePredicates() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(
+                contains("search_vector_en"), eq(Boolean.class)))
+                .thenReturn(true);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
+        provider.searchInScope(
+                "records",
+                RetrievalScope.selectedCollections(
+                        List.of(2L, 4L), List.of(10L), "json-record"),
+                null, 5, 0.0, 7L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("d.collection_id = ANY (?)"));
+        assertTrue(sql.contains("e.document_id = ANY (?)"));
+        assertTrue(sql.contains("d.document_type = ?"));
+        assertTrue(sql.contains("e.embedding_profile_id = 7"));
+        Object[] args = argsCaptor.getValue();
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
+        assertEquals("json-record", args[3]);
     }
 
     @Test

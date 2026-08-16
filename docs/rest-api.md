@@ -88,24 +88,37 @@ mismatch returns `400`.
 
 ### Collection Retrieval Scope
 
-Chat and Search prefer `collectionKeys`; deprecated `collectionIds` has the
-same scope semantics:
+Chat and Search accept `collectionScopeMode`:
 
-- For an unrestricted caller, omitting both fields means no Collection filter
-  and searches all retrievable documents.
-- A non-empty list restricts retrieval to those Collections; the backend
-  accepts more than one Collection.
-- If `documentIds` is also present, the effective scope is their intersection.
-- A non-empty Collection scope with no documents returns an empty result and
-  never falls through to full-corpus retrieval.
-- For a restricted API key, omission is replaced by the key's internal
-  allow-list; an explicit unknown or outside key returns `403`.
-- An explicitly present but empty `collectionKeys` or `collectionIds` scope
-  returns `400`; it is never treated as an omitted global scope.
+| Mode | Unrestricted caller | Restricted API key |
+|------|---------------------|--------------------|
+| `CALLER_VISIBLE` | All retrievable documents, including unassigned documents | Documents inside the key's Collection allow-list |
+| `ANY_COLLECTION` | All retrievable documents with `collection_id IS NOT NULL` | Documents inside the key's Collection allow-list; never expands access |
+| `SELECTED_COLLECTIONS` | The union of explicitly selected Collections | The selected Collections must be a subset of the allow-list |
 
-The current implementation expands Collections to document IDs before vector
-and full-text retrieval applies a `document_id IN (...)` filter. Large
-Collections require dedicated parameter-size and performance testing.
+Compatibility inference keeps existing clients working:
+
+- Omit the mode and all Collection fields: infer `CALLER_VISIBLE`.
+- Omit the mode and send non-empty `collectionKeys` or deprecated
+  `collectionIds`: infer `SELECTED_COLLECTIONS`.
+- `CALLER_VISIBLE` and `ANY_COLLECTION` reject any present Collection list.
+- `SELECTED_COLLECTIONS` requires a non-empty key or ID list.
+- Explicit empty Collection lists return `400`.
+- At most 100 Collection identities and 1000 `documentIds` may be supplied.
+- If keys and IDs are both present, they must identify the same set.
+- `documentIds` and `documentType`, when used, are intersected with the
+  authorized Collection scope.
+
+Unknown unrestricted keys return `404`. For restricted callers, unknown or
+unauthorized keys return `403` to avoid leaking Collection existence.
+Deprecated unrestricted numeric IDs that do not exist simply match no rows.
+
+Vector, English FTS, pg_jieba, and pg_trgm retrieval apply the effective scope
+directly in PostgreSQL with `d.collection_id = ANY (?)`,
+`d.collection_id IS NOT NULL`, and optional JDBC `bigint[]` document filters.
+They do not expand a Collection into all of its document IDs. Multiple
+Collections form one candidate union and compete for the global top-k;
+per-Collection quota/coverage (`EACH_COLLECTION`) is not supported.
 
 ### Rate Limiting
 
@@ -181,6 +194,7 @@ Non-streaming RAG Q&A, returns a complete answer.
   "sessionId": "session-001",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
   "collectionKeys": ["medical:guidelines:v3", "medical:drugs:v2"],
   "documentIds": [10, 20],
   "maxResults": 5,
@@ -196,6 +210,7 @@ Non-streaming RAG Q&A, returns a complete answer.
 | `sessionId` | string | | Session ID, maximum 36 characters; generated when omitted |
 | `domainId` | string | | Domain extension ID |
 | `model` | string | | Runtime model reference from `GET /rag/models`; omitted uses the default chain |
+| `collectionScopeMode` | enum | | `CALLER_VISIBLE`, `ANY_COLLECTION`, or `SELECTED_COLLECTIONS` |
 | `collectionKeys` | string[] | | Preferred stable Collection scope |
 | `collectionIds` | long[] | | Deprecated numeric compatibility scope |
 | `documentIds` | long[] | | Restrict retrieval to these documents; intersects with collections |
@@ -423,6 +438,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 | `useHybrid` | bool | true | Use hybrid search |
 | `vectorWeight` | double | 0.5 | Vector search weight |
 | `fulltextWeight` | double | 0.5 | Full-text search weight |
+| `collectionScopeMode` | enum | `CALLER_VISIBLE` | Explicit Collection scope mode |
 | `collectionKeys` | string[] | | Preferred repeated Collection scope parameter |
 | `collectionIds` | long[] | | Deprecated repeated numeric scope parameter |
 
@@ -455,6 +471,7 @@ Submit more complex retrieval configuration via request body.
 ```json
 {
   "query": "Spring AI",
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
   "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
@@ -857,6 +874,7 @@ Paginated collection query.
 | `offset` | int | 0 | Number of collections to skip |
 | `limit` | int | 20 | Maximum number of collections to return |
 | `name` | string | | Optional collection-name filter |
+| `query` | string | | Case-insensitive substring match on name or exact stored key text |
 | `enabled` | boolean | | Optional enabled-state filter |
 
 Restricted API keys see only their allowed Collections.

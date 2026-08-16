@@ -140,6 +140,7 @@ public final class DocumentMapper {
                 v.getDocumentId(),
                 v.getVersionNumber(),
                 v.getContentHash(),
+                v.getSourceRevisionSnapshot(),
                 v.getSize(),
                 v.getChangeType(),
                 v.getChangeDescription(),
@@ -190,7 +191,12 @@ public final class DocumentMapper {
                 doc.getContent() != null ? truncate(doc.getContent(), CONTENT_PREVIEW_MAX_LEN) : null,
                 null, // content is null in list view
                 doc.getMetadata(),
-                collectionKey
+                collectionKey,
+                doc.getExternalId(),
+                doc.getSourceRevision(),
+                doc.getSourceDeletedAt(),
+                doc.getProcessingError(),
+                chunkCount > 0
         );
     }
 
@@ -235,7 +241,12 @@ public final class DocumentMapper {
                 chunkCount,
                 doc.getContent(),
                 doc.getMetadata(),
-                collectionKey
+                collectionKey,
+                doc.getExternalId(),
+                doc.getSourceRevision(),
+                doc.getSourceDeletedAt(),
+                doc.getProcessingError(),
+                chunkCount > 0
         );
     }
 

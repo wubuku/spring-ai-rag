@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -69,6 +70,12 @@ public record CollectionExportResponse(
             @Schema(description = "Structured-record external identity")
             String externalId,
 
+            @Schema(description = "Opaque source revision for external synchronization")
+            String sourceRevision,
+
+            @Schema(description = "Source-managed tombstone timestamp")
+            LocalDateTime sourceDeletedAt,
+
             @Schema(description = "Structured JSONB payload")
             JsonNode jsonbPayload,
 
@@ -86,7 +93,26 @@ public record CollectionExportResponse(
                 Map<String, Object> metadata,
                 Long size) {
             this(title, source, content, documentType, metadata, size,
-                    null, null, null, true);
+                    null, null, null, null, null, true);
+        }
+
+        /**
+         * Backward-compatible constructor for callers that already supplied
+         * structured-record fields but predate external synchronization fields.
+         */
+        public ExportedDocumentSummary(
+                String title,
+                String source,
+                String content,
+                String documentType,
+                Map<String, Object> metadata,
+                Long size,
+                String externalId,
+                JsonNode jsonbPayload,
+                String originalFilename,
+                Boolean enabled) {
+            this(title, source, content, documentType, metadata, size,
+                    externalId, null, null, jsonbPayload, originalFilename, enabled);
         }
 
         @Override
@@ -101,6 +127,8 @@ public record CollectionExportResponse(
                     && Objects.equals(metadata, that.metadata)
                     && Objects.equals(size, that.size)
                     && Objects.equals(externalId, that.externalId)
+                    && Objects.equals(sourceRevision, that.sourceRevision)
+                    && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
                     && Objects.equals(jsonbPayload, that.jsonbPayload)
                     && Objects.equals(originalFilename, that.originalFilename)
                     && Objects.equals(enabled, that.enabled);
@@ -109,7 +137,8 @@ public record CollectionExportResponse(
         @Override
         public int hashCode() {
             return Objects.hash(title, source, content, documentType, metadata, size,
-                    externalId, jsonbPayload, originalFilename, enabled);
+                    externalId, sourceRevision, sourceDeletedAt,
+                    jsonbPayload, originalFilename, enabled);
         }
 
         @Override
@@ -122,6 +151,8 @@ public record CollectionExportResponse(
                     ", metadata=" + metadata +
                     ", size=" + size +
                     ", externalId='" + externalId + "'" +
+                    ", sourceRevision='" + sourceRevision + "'" +
+                    ", sourceDeletedAt=" + sourceDeletedAt +
                     ", hasJsonbPayload=" + (jsonbPayload != null) +
                     ", originalFilename='" + originalFilename + "'" +
                     ", enabled=" + enabled +

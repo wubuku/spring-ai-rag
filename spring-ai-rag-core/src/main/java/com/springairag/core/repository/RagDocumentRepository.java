@@ -118,6 +118,9 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     Optional<RagDocument> findByCollectionIdAndDocumentTypeAndExternalId(
             Long collectionId, String documentType, String externalId);
 
+    Optional<RagDocument> findByCollectionIdAndExternalId(
+            Long collectionId, String externalId);
+
     @Query("SELECT d.id FROM RagDocument d " +
            "WHERE d.collectionId IN :collectionIds " +
            "AND d.documentType = :documentType " +

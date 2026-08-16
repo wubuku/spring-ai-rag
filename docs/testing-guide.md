@@ -212,7 +212,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V29, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V30, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -266,11 +266,43 @@ create, by-key get/update, clone with a new target key, export/import with a new
 key, soft delete, restore, duplicate conflict, and document/search/chat key
 inputs.
 
+### Multi-Collection Retrieval Acceptance Gate
+
+The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
+provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
+The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
+Flyway V1-V30 from an empty schema, and exercises the vector query with actual
+PostgreSQL `bigint[]` bindings:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Dmulti.collection.it.enabled=true \
+  -Dtestcontainers.pg.image=pgvector/pgvector:pg16 \
+  -Dtest=MultiCollectionRetrievalPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+The matrix verifies that unrestricted `CALLER_VISIBLE` includes unassigned
+documents, `ANY_COLLECTION` excludes them, selected A+B cannot return another
+Collection, an empty selected Collection stays empty, selected Collections and
+explicit document IDs intersect in SQL, JSON records honor `document_type`, and
+disabled, stale, or wrong-Profile documents remain excluded. Focused provider
+tests separately verify that English FTS, pg_jieba, and pg_trgm use the same
+`RetrievalScopeSql` predicates.
+
+WebUI acceptance covers all three modes, multi-selection, server-side
+Collection search and pagination, selected-empty blocking, and the Chat SSE
+object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
+`npm run build`, and the core Mock Playwright suite.
+
 ### JSONB Structured-Record Acceptance Gate
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V29 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V30 from an empty database, and verifies JSONB round-trip,
 payload-only versioning, identical descriptions with distinct records, and
 cascade cleanup:
 

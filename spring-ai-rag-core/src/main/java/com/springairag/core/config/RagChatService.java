@@ -16,6 +16,7 @@ import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.resilience.LlmCircuitBreaker;
 import com.springairag.core.service.CollectionDocumentResolver;
 import org.slf4j.Logger;
@@ -213,14 +214,21 @@ public class RagChatService {
      * RAG Q&amp;A (built from ChatRequest), returns full response with citation sources
      */
     public ChatResponse chat(ChatRequest request) {
-        RetrievalScope scope = resolveRetrievalScope(request);
+        return chat(request, resolveLegacyRetrievalScope(request));
+    }
+
+    /**
+     * 使用 Controller 已完成 ACL 解析的范围执行聊天。
+     */
+    public ChatResponse chat(ChatRequest request, RetrievalScope scope) {
         return executeChat(
                 request.getMessage(),
                 request.getSessionId(),
                 request.getDomainId(),
                 request.getMetadata(),
                 request.getModel(),
-                scope
+                scope,
+                request.getMaxResults()
         );
     }
 
@@ -231,11 +239,13 @@ public class RagChatService {
      */
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
             Map<String, Object> metadata, String model) {
-        return executeChat(userMessage, sessionId, domainId, metadata, model, RetrievalScope.unscoped());
+        return executeChat(userMessage, sessionId, domainId, metadata,
+                model, RetrievalScope.unscoped(), 0);
     }
 
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
-            Map<String, Object> metadata, String model, RetrievalScope scope) {
+            Map<String, Object> metadata, String model,
+            RetrievalScope scope, int maxResults) {
         // Circuit breaker check (fast-fail if OPEN) — before any model attempt
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
@@ -260,7 +270,8 @@ public class RagChatService {
                         s.system(systemPrompt);
                     }
                     s.user(finalMessage);
-                    s.advisors(buildAdvisorParams(sessionId, domainId, metadata, finalScope));
+                    s.advisors(buildAdvisorParams(
+                            sessionId, domainId, metadata, finalScope, maxResults));
                     return invokeChatClient(s, System.currentTimeMillis());
                 };
                 LlmCallResult callResult = invokeWithRetry(llmCall);
@@ -402,11 +413,13 @@ public class RagChatService {
     /** Builds Advisor parameters (session ID, domain, metadata, retrieval scope) */
     private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
             String sessionId, String domainId, Map<String, Object> metadata) {
-        return buildAdvisorParams(sessionId, domainId, metadata, RetrievalScope.unscoped());
+        return buildAdvisorParams(
+                sessionId, domainId, metadata, RetrievalScope.unscoped(), 0);
     }
 
     private java.util.function.Consumer<ChatClient.AdvisorSpec> buildAdvisorParams(
-            String sessionId, String domainId, Map<String, Object> metadata, RetrievalScope scope) {
+            String sessionId, String domainId, Map<String, Object> metadata,
+            RetrievalScope scope, int maxResults) {
         RetrievalScope s = scope != null ? scope : RetrievalScope.unscoped();
         return a -> {
             a.param(ChatMemory.CONVERSATION_ID, sessionId);
@@ -416,16 +429,9 @@ public class RagChatService {
             if (domainId != null) {
                 a.param("domainId", domainId);
             }
-            if (s.filterRequested()) {
-                a.param(HybridSearchAdvisor.FILTER_REQUESTED_KEY, Boolean.TRUE);
-                // Always pass a list (possibly empty) so HybridSearchAdvisor never searches all
-                a.param(HybridSearchAdvisor.DOCUMENT_IDS_KEY,
-                        s.documentIds() != null ? s.documentIds() : List.of());
-            } else if (s.documentIds() != null) {
-                a.param(HybridSearchAdvisor.DOCUMENT_IDS_KEY, s.documentIds());
-            }
-            if (s.maxResults() > 0) {
-                a.param(HybridSearchAdvisor.MAX_RESULTS_KEY, s.maxResults());
+            a.param(HybridSearchAdvisor.RETRIEVAL_SCOPE_KEY, s);
+            if (maxResults > 0) {
+                a.param(HybridSearchAdvisor.MAX_RESULTS_KEY, maxResults);
             }
         };
     }
@@ -433,11 +439,10 @@ public class RagChatService {
     /**
      * Resolve collection/document filters from ChatRequest into a retrieval scope.
      */
-    RetrievalScope resolveRetrievalScope(ChatRequest request) {
+    RetrievalScope resolveLegacyRetrievalScope(ChatRequest request) {
         if (request == null) {
             return RetrievalScope.unscoped();
         }
-        int maxResults = request.getMaxResults() > 0 ? request.getMaxResults() : 5;
         boolean collectionFilter = CollectionDocumentResolver.hasCollectionFilter(request.getCollectionIds());
         boolean documentFilter = request.getDocumentIds() != null && !request.getDocumentIds().isEmpty();
         boolean filterRequested = collectionFilter || documentFilter;
@@ -450,23 +455,10 @@ public class RagChatService {
             resolved = request.getDocumentIds();
         }
 
-        if (filterRequested && resolved == null) {
-            resolved = List.of();
+        if (filterRequested && (resolved == null || resolved.isEmpty())) {
+            return RetrievalScope.noMatches();
         }
-        return new RetrievalScope(resolved, filterRequested, maxResults);
-    }
-
-    /**
-     * Retrieval scope passed into advisor params.
-     *
-     * @param documentIds     null = no document filter; empty + filterRequested = no hits
-     * @param filterRequested true when caller asked for collection/document isolation
-     * @param maxResults      retrieval limit for HybridSearchAdvisor
-     */
-    record RetrievalScope(List<Long> documentIds, boolean filterRequested, int maxResults) {
-        static RetrievalScope unscoped() {
-            return new RetrievalScope(null, false, 0);
-        }
+        return RetrievalScope.forDocumentIds(resolved);
     }
 
     /** Extracts reranked retrieval results from advisor context as citation sources */
@@ -504,31 +496,39 @@ public class RagChatService {
      * RAG Q&amp;A (streaming, returns Flux with per-token output)
      */
     public Flux<String> chatStream(String userMessage, String sessionId) {
-        return chatStream(userMessage, sessionId, null, null, RetrievalScope.unscoped());
+        return chatStream(userMessage, sessionId, null, null,
+                RetrievalScope.unscoped(), 0);
     }
 
     /**
      * RAG Q&amp;A (streaming, with domain support)
      */
     public Flux<String> chatStream(String userMessage, String sessionId, String domainId) {
-        return chatStream(userMessage, sessionId, domainId, null, RetrievalScope.unscoped());
+        return chatStream(userMessage, sessionId, domainId, null,
+                RetrievalScope.unscoped(), 0);
     }
 
     /**
      * RAG Q&amp;A (streaming from full ChatRequest — collection/model parity with non-stream).
      */
     public Flux<String> chatStream(ChatRequest request) {
-        RetrievalScope scope = resolveRetrievalScope(request);
+        return chatStream(request, resolveLegacyRetrievalScope(request));
+    }
+
+    public Flux<String> chatStream(
+            ChatRequest request, RetrievalScope scope) {
         return chatStream(
                 request.getMessage(),
                 request.getSessionId(),
                 request.getDomainId(),
                 request.getModel(),
-                scope);
+                scope,
+                request.getMaxResults());
     }
 
     private Flux<String> chatStream(String userMessage, String sessionId, String domainId,
-                                    String model, RetrievalScope scope) {
+                                    String model, RetrievalScope scope,
+                                    int maxResults) {
         ChatClient effectiveClient = this.chatClient;
         if (model != null && !model.isBlank() && chatModelRouter != null) {
             ChatModel resolved = chatModelRouter.resolveRequired(model);
@@ -545,7 +545,8 @@ public class RagChatService {
         }
 
         spec.user(userMessage);
-        spec.advisors(buildAdvisorParams(sessionId, domainId, null, scope));
+        spec.advisors(buildAdvisorParams(
+                sessionId, domainId, null, scope, maxResults));
 
         return spec.stream().content();
     }

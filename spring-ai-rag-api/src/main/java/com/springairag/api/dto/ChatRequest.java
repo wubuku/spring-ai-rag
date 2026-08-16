@@ -1,11 +1,14 @@
 package com.springairag.api.dto;
 
-import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Size;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.validation.ValidCollectionKey;
+import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Size;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,17 +46,25 @@ public class ChatRequest {
     @Schema(description = "Specify model (optional, e.g. \"minimax\" or \"openai/deepseek-chat\", null uses default model)", example = "minimax")
     private String model;
 
+    @Schema(description = "Collection retrieval scope. Omitted preserves compatibility: "
+            + "Collection fields imply SELECTED_COLLECTIONS; otherwise CALLER_VISIBLE.",
+            example = "SELECTED_COLLECTIONS")
+    private CollectionScopeMode collectionScopeMode;
+
+    @Size(max = 100, message = "At most 100 collection IDs may be selected")
     @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
             example = "[1, 2]", deprecated = true)
-    private List<Long> collectionIds;
+    private List<@Positive(message = "Collection IDs must be positive") Long> collectionIds;
 
+    @Size(max = 100, message = "At most 100 collection keys may be selected")
     @Schema(description = "Limit retrieval to these stable external Collection keys (preferred over collectionIds). Omitted/null uses the caller's default scope; an explicit empty list is rejected.",
             example = "[\"customer-42:manual:v3\"]")
     private List<@ValidCollectionKey String> collectionKeys;
 
+    @Size(max = 1000, message = "At most 1000 document IDs may be selected")
     @Schema(description = "Limit retrieval to these document IDs (optional; intersected with the resolved Collection scope when both are set)",
             example = "[10, 20]")
-    private List<Long> documentIds;
+    private List<@Positive(message = "Document IDs must be positive") Long> documentIds;
 
     @Schema(description = "Additional metadata (passed through to domain extension)")
     private Map<String, Object> metadata;
@@ -86,6 +97,11 @@ public class ChatRequest {
     public String getModel() { return model; }
     public void setModel(String model) { this.model = model; }
 
+    public CollectionScopeMode getCollectionScopeMode() { return collectionScopeMode; }
+    public void setCollectionScopeMode(CollectionScopeMode collectionScopeMode) {
+        this.collectionScopeMode = collectionScopeMode;
+    }
+
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
@@ -110,6 +126,7 @@ public class ChatRequest {
                 && Objects.equals(sessionId, that.sessionId)
                 && Objects.equals(domainId, that.domainId)
                 && Objects.equals(model, that.model)
+                && collectionScopeMode == that.collectionScopeMode
                 && Objects.equals(collectionIds, that.collectionIds)
                 && Objects.equals(collectionKeys, that.collectionKeys)
                 && Objects.equals(documentIds, that.documentIds)
@@ -119,7 +136,8 @@ public class ChatRequest {
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
-                domainId, model, collectionIds, collectionKeys, documentIds, metadata);
+                domainId, model, collectionScopeMode, collectionIds, collectionKeys,
+                documentIds, metadata);
     }
 
     @Override
@@ -127,7 +145,8 @@ public class ChatRequest {
         return "ChatRequest{message=" + message + ", sessionId=" + sessionId
                 + ", maxResults=" + maxResults + ", useHybridSearch=" + useHybridSearch
                 + ", useRerank=" + useRerank + ", domainId=" + domainId
-                + ", model=" + model + ", collectionIds=" + collectionIds
+                + ", model=" + model + ", collectionScopeMode=" + collectionScopeMode
+                + ", collectionIds=" + collectionIds
                 + ", collectionKeys=" + collectionKeys
                 + ", documentIds=" + documentIds + ", metadata=" + metadata + "}";
     }

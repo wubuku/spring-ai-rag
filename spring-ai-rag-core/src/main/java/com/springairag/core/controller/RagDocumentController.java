@@ -22,6 +22,11 @@ import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.api.dto.ReembedMissingResponse;
 import com.springairag.api.dto.ReembedResultResponse;
+import com.springairag.api.dto.ExternalDocumentBatchUpsertRequest;
+import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
+import com.springairag.api.dto.ExternalDocumentDeleteResponse;
+import com.springairag.api.dto.ExternalDocumentUpsertRequest;
+import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
@@ -36,6 +41,7 @@ import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
@@ -47,6 +53,8 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -58,6 +66,7 @@ import org.springframework.http.ResponseEntity;
 
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.time.LocalDateTime;
@@ -78,6 +87,7 @@ import java.util.stream.Collectors;
 @RestController
 @ApiVersion("v1")
 @RequestMapping("/rag/documents")
+@Validated
 @Tag(name = "RAG Documents", description = "Document management (CRUD + embedding vector generation)")
 public class RagDocumentController {
 
@@ -92,6 +102,7 @@ public class RagDocumentController {
     private final EmbeddingProfileProvider embeddingProfileProvider;
     private final CollectionIdentityResolver collectionIdentityResolver;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private ExternalDocumentService externalDocumentService;
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -114,6 +125,11 @@ public class RagDocumentController {
         this.auditLogService = auditLogService;
     }
 
+    @Autowired(required = false)
+    public void setExternalDocumentService(ExternalDocumentService externalDocumentService) {
+        this.externalDocumentService = externalDocumentService;
+    }
+
     public RagDocumentController(RagDocumentRepository documentRepository,
                                  RagEmbeddingRepository embeddingRepository,
                                  RagCollectionRepository collectionRepository,
@@ -127,6 +143,73 @@ public class RagDocumentController {
                 embeddingProfileProvider,
                 new CollectionIdentityResolver(collectionRepository),
                 auditLogService);
+    }
+
+    @Operation(summary = "Upsert an externally managed document",
+            description = "Idempotently create or update an ordinary document by collectionKey and externalId.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document persisted"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "403", description = "Collection access denied"),
+            @ApiResponse(responseCode = "409", description = "Source revision conflict")
+    })
+    @PostMapping("/upsert")
+    @Timed(value = "rag.documents.external-upsert", description = "Upsert external document")
+    public ResponseEntity<ExternalDocumentUpsertResponse> upsertExternalDocument(
+            @Valid @RequestBody ExternalDocumentUpsertRequest request) {
+        return ResponseEntity.ok(requireExternalDocumentService().upsert(request));
+    }
+
+    @Operation(summary = "Batch upsert externally managed documents",
+            description = "Processes each external document independently and preserves input order.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Batch processed"),
+            @ApiResponse(responseCode = "400", description = "Invalid request"),
+            @ApiResponse(responseCode = "403", description = "Collection access denied")
+    })
+    @PostMapping("/batch-upsert")
+    @Timed(value = "rag.documents.external-batch-upsert",
+            description = "Batch upsert external documents")
+    public ResponseEntity<ExternalDocumentBatchUpsertResponse> batchUpsertExternalDocuments(
+            @Valid @RequestBody ExternalDocumentBatchUpsertRequest request) {
+        return ResponseEntity.ok(requireExternalDocumentService().batchUpsert(request.getItems()));
+    }
+
+    @Operation(summary = "Get an externally managed document by source identity",
+            description = "Returns the current document state by collectionKey and externalId.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Document returned"),
+            @ApiResponse(responseCode = "400", description = "Invalid query"),
+            @ApiResponse(responseCode = "403", description = "Collection access denied"),
+            @ApiResponse(responseCode = "404", description = "Document not found")
+    })
+    @GetMapping("/by-external-id")
+    @Timed(value = "rag.documents.external-get", description = "Get external document")
+    public ResponseEntity<DocumentDetailResponse> getExternalDocument(
+            @RequestParam @NotBlank @Size(max = 128) String collectionKey,
+            @RequestParam @NotBlank @Size(max = 255) String externalId) {
+        return ResponseEntity.ok(requireExternalDocumentService()
+                .getByExternalIdentity(collectionKey, externalId));
+    }
+
+    @Operation(summary = "Tombstone an externally managed document",
+            description = "Idempotently disable a document for source-managed deletion.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Source deletion applied"),
+            @ApiResponse(responseCode = "400", description = "Invalid query"),
+            @ApiResponse(responseCode = "403", description = "Collection access denied"),
+            @ApiResponse(responseCode = "404", description = "Document not found"),
+            @ApiResponse(responseCode = "409", description = "Source revision conflict")
+    })
+    @DeleteMapping("/by-external-id")
+    @Timed(value = "rag.documents.external-delete", description = "Delete external document")
+    public ResponseEntity<ExternalDocumentDeleteResponse> deleteExternalDocument(
+            @RequestParam @NotBlank @Size(max = 128) String collectionKey,
+            @RequestParam @NotBlank @Size(max = 255) String externalId,
+            @RequestParam @NotBlank @Size(max = 255) String sourceRevision,
+            @RequestParam(required = false) @Size(max = 255) String expectedSourceRevision) {
+        return ResponseEntity.ok(requireExternalDocumentService().sourceDelete(
+                collectionKey, externalId, sourceRevision, expectedSourceRevision));
     }
 
     // ==================== CRUD ====================
@@ -966,6 +1049,13 @@ public class RagDocumentController {
                         document, ApiKeyCollectionAccess.currentKey());
             }
         }
+    }
+
+    private ExternalDocumentService requireExternalDocumentService() {
+        if (externalDocumentService == null) {
+            throw new IllegalStateException("External document service is not available");
+        }
+        return externalDocumentService;
     }
 
     // ==================== Date Parsing Helper ====================

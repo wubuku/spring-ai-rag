@@ -533,6 +533,8 @@ configuration. Flyway V25/V26 creates the Profile/state schema and removes the
 unused `rag_vector_store` table when it is absent or empty. V27/V28 adds the
 required, globally unique, immutable `rag_collection.collection_key`;
 V29 adds JSONB structured-record columns and payload-aware version snapshots.
+V30 adds external-document source revisions, tombstones, version snapshots, and
+a Collection-scoped external identity constraint.
 
 ## Profile Overview
 

@@ -2,6 +2,7 @@ package com.springairag.core.advisor;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.RetrievalLoggingService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,6 +31,7 @@ import java.util.List;
  *
  * <p>Context Keys (read, optional advisor params):
  * <ul>
+ *   <li>{@code retrievalScope} — authorized {@link RetrievalScope}</li>
  *   <li>{@code documentIds} — List&lt;Long&gt; scope filter; empty list means no hits when filter requested</li>
  *   <li>{@code maxResults} — Integer retrieval limit (default 10)</li>
  *   <li>{@code filterRequested} — Boolean; when true and documentIds empty, return no hits</li>
@@ -45,6 +47,9 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
 
     /** Advisor param: document ID scope (List&lt;Long&gt;) */
     public static final String DOCUMENT_IDS_KEY = "documentIds";
+
+    /** Advisor param: authorized retrieval scope */
+    public static final String RETRIEVAL_SCOPE_KEY = "retrievalScope";
 
     /** Advisor param: max results (Integer) */
     public static final String MAX_RESULTS_KEY = "maxResults";
@@ -100,7 +105,10 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
             return request;
         }
 
-        List<Long> documentIds = extractDocumentIds(request);
+        RetrievalScope retrievalScope = extractRetrievalScope(request);
+        List<Long> documentIds = retrievalScope == null
+                ? extractDocumentIds(request)
+                : null;
         int limit = extractMaxResults(request);
         boolean filterRequested = Boolean.TRUE.equals(request.context().get(FILTER_REQUESTED_KEY))
                 || (documentIds != null && documentIds.isEmpty());
@@ -108,7 +116,13 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
         // Isolation: explicit filter with zero matching docs must not fall through to global search
         List<RetrievalResult> results;
         long startMs = System.currentTimeMillis();
-        if (filterRequested && (documentIds == null || documentIds.isEmpty())) {
+        if (retrievalScope != null && retrievalScope.matchNone()) {
+            log.info("[HybridSearchAdvisor] retrieval scope matches no documents");
+            results = List.of();
+        } else if (retrievalScope != null) {
+            results = hybridRetriever.searchInScope(
+                    query, retrievalScope, null, limit);
+        } else if (filterRequested && (documentIds == null || documentIds.isEmpty())) {
             log.info("[HybridSearchAdvisor] collection/document filter resolved to zero docs — returning empty results");
             results = List.of();
         } else {
@@ -116,8 +130,9 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
         }
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[HybridSearchAdvisor] hybrid search returned {} results in {}ms, query: \"{}\", documentIds={}",
-                results.size(), elapsedMs, query, documentIds);
+        log.info("[HybridSearchAdvisor] hybrid search returned {} results in {}ms, query: \"{}\", scope={}",
+                results.size(), elapsedMs, query,
+                scopeSummary(retrievalScope, documentIds));
 
         recordMetricsAndLog(request, query, elapsedMs, results);
 
@@ -149,6 +164,24 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
             return ids;
         }
         return null;
+    }
+
+    private RetrievalScope extractRetrievalScope(ChatClientRequest request) {
+        Object raw = request.context().get(RETRIEVAL_SCOPE_KEY);
+        return raw instanceof RetrievalScope scope ? scope : null;
+    }
+
+    private String scopeSummary(
+            RetrievalScope scope, List<Long> legacyDocumentIds) {
+        if (scope == null) {
+            return legacyDocumentIds == null
+                    ? "legacy-unscoped"
+                    : "legacy-document-count=" + legacyDocumentIds.size();
+        }
+        return "collectionFilter=" + scope.collectionFilter()
+                + ", collectionCount=" + scope.collectionIds().size()
+                + ", documentCount=" + scope.documentIds().size()
+                + ", documentType=" + scope.documentType();
     }
 
     private int extractMaxResults(ChatClientRequest request) {

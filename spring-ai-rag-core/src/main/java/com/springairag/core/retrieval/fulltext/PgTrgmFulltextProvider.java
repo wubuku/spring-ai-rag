@@ -2,12 +2,13 @@ package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
+import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.retrieval.RetrievalScopeSql;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * pg_trgm fuzzy full-text search strategy
@@ -76,15 +77,24 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                         List<Long> excludeIds, int limit, double minScore,
                                         long embeddingProfileId) {
+        return searchInScope(query, RetrievalScope.forDocumentIds(documentIds),
+                excludeIds, limit, minScore, embeddingProfileId);
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId) {
         if (!available) return Collections.emptyList();
         if (query == null || query.isBlank()) return Collections.emptyList();
+        if (scope != null && scope.matchNone()) return Collections.emptyList();
         
         try {
             // Set low threshold to get more results
             jdbcTemplate.update("SET pg_trgm.similarity_threshold = ?", SIMILARITY_THRESHOLD);
             
             List<Map<String, Object>> rows =
-                    executeSearch(query.trim(), documentIds, limit, embeddingProfileId);
+                    executeSearch(query.trim(), scope, limit, embeddingProfileId);
             log.debug("pg_trgm search for '{}' returned {} rows", query, rows.size());
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
@@ -105,31 +115,22 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     }
     
     List<Map<String, Object>> executeSearch(
-            String query, List<Long> documentIds, int limit, long embeddingProfileId) {
+            String query, RetrievalScope retrievalScope,
+            int limit, long embeddingProfileId) {
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
                 + "similarity(e.chunk_text, ?) AS score_trgm";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
-        if (documentIds != null && !documentIds.isEmpty()) {
-            String placeholders = documentIds.stream()
-                    .map(id -> "?").collect(Collectors.joining(","));
-            String sql = String.format(
-                    select + scope
-                            + "AND e.document_id IN (%s) "
-                            + "AND e.chunk_text %% ? "
-                            + "ORDER BY score_trgm DESC LIMIT ?",
-                    placeholders);
-            List<Object> args = new ArrayList<>();
-            args.add(query);
-            args.addAll(documentIds);
-            args.add(query);
-            args.add(limit);
-            return jdbcTemplate.queryForList(sql, args.toArray());
-        }
-        
-        String sql = select + scope
+        RetrievalScopeSql.Fragment fragment =
+                RetrievalScopeSql.build(retrievalScope);
+        String sql = select + scope + fragment.sql()
                 + "AND e.chunk_text % ? "
                 + "ORDER BY score_trgm DESC LIMIT ?";
-        return jdbcTemplate.queryForList(sql, query, query, limit);
+        List<Object> args = new ArrayList<>();
+        args.add(query);
+        args.addAll(fragment.args());
+        args.add(query);
+        args.add(limit);
+        return jdbcTemplate.queryForList(sql, args.toArray());
     }
     
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {

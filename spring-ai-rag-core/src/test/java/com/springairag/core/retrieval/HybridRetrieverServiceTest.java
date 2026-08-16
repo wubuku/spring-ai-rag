@@ -142,7 +142,7 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
-    @DisplayName("Vector search: SQL contains IN clause when documentIds provided")
+    @DisplayName("Vector search: SQL contains JDBC array predicate when documentIds provided")
     void search_vectorWithDocumentIds_filtersByDocument() {
         float[] queryVec = mockEmbedding();
         when(embeddingModel.embed(anyString())).thenReturn(queryVec);
@@ -151,13 +151,54 @@ class HybridRetrieverServiceTest {
 
         service.search("query", List.of(1L, 2L, 3L), null, 5);
 
-        // 验证至少一次 queryForList 调用的 SQL 包含 IN 子句
+        // 验证至少一次 queryForList 调用的 SQL 包含固定形状 ANY predicate
         @SuppressWarnings("unchecked")
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbcTemplate, atLeastOnce()).queryForList(sqlCaptor.capture(), any(Object[].class));
-        boolean hasInClause = sqlCaptor.getAllValues().stream()
-                .anyMatch(sql -> sql.contains("IN"));
-        assertTrue(hasInClause, "documentIds 不为空时 SQL 应包含 IN 子句");
+        boolean hasArrayPredicate = sqlCaptor.getAllValues().stream()
+                .anyMatch(sql -> sql.contains("e.document_id = ANY (?)"));
+        assertTrue(hasArrayPredicate,
+                "documentIds 不为空时 SQL 应包含 JDBC array predicate");
+    }
+
+    @Test
+    @DisplayName("Vector search: selected collection, document and type filters are pushed into one SQL query")
+    void searchInScope_pushesAllScopePredicatesToVectorSql() {
+        when(embeddingModel.embed("scoped")).thenReturn(mockEmbedding());
+        when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(2L, 4L), List.of(10L, 11L), "json-record");
+        RetrievalConfig config = RetrievalConfig.builder()
+                .maxResults(7)
+                .useHybridSearch(false)
+                .build();
+
+        service.searchInScope("scoped", scope, null, 7, config);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("d.collection_id = ANY (?)"));
+        assertTrue(sql.contains("e.document_id = ANY (?)"));
+        assertTrue(sql.contains("d.document_type = ?"));
+        assertTrue(sql.contains("s.status = 'COMPLETED'"));
+        assertTrue(sql.contains("s.content_hash = d.content_hash"));
+        assertTrue(sql.contains("d.enabled = true"));
+
+        Object[] args = argsCaptor.getValue();
+        assertEquals(5, args.length);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[0]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        assertEquals("json-record", args[2]);
+        assertEquals(7, args[4]);
     }
 
     @Test

@@ -1,6 +1,6 @@
 # SSE 流式协议设计文档
 
-> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-08-15
+> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-08-16
 
 ## 1. 当前实现的协议格式
 
@@ -67,22 +67,26 @@ data:{"error":{"message":"Service unavailable","type":"internal_error"}}
 
 ```java
 @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-public SseEmitter stream(@Valid @RequestBody ChatRequest request) {
-    // ...
-    SseEmitter emitter = new SseEmitter(0L); // 无超时
+public SseEmitter stream(
+        @Valid @RequestBody ChatRequest request,
+        HttpServletRequest httpRequest) {
+    RetrievalScope scope = resolveScope(request, httpRequest);
+    SseEmitter emitter = SseEmitters.create();
+    String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
 
-    ragChatService.chatStream(request.getMessage(), request.getSessionId(), request.getDomainId())
+    (scope != null
+            ? ragChatService.chatStream(request, scope)
+            : ragChatService.chatStream(request))
             .subscribe(
                     chunk -> {
-                        // Content 块：OpenAI 兼容格式
-                        String json = "{\"choices\":[{\"delta\":{\"content\":\"" + escapeJson(chunk) + "\"}}]}";
-                        emitter.send(SseEmitter.event().data(json));
+                        String json = "{\"choices\":[{\"delta\":{\"content\":\""
+                                + SseEmitters.escapeJson(chunk) + "\"}}]}";
+                        SseEmitters.sendRaw(emitter, null, json, "chat chunk");
                     },
                     emitter::completeWithError,
                     () -> {
-                        // Done 事件
                         String doneJson = "{\"traceId\":\"" + traceId + "\",\"status\":\"complete\"}";
-                        emitter.send(SseEmitter.event().name("done").data(doneJson));
+                        SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
                         emitter.complete();
                     }
             );
@@ -117,24 +121,34 @@ private String escapeJson(String text) {
 
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
     const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
-    const accumulatedContentRef = useRef<string>('');
 
     const send = useCallback(async (
-        message: string,
-        collectionKeys?: string[] | string,
+        request: ChatSSESendOptions | string,
+        collectionIds?: number[] | number,
         conversationId?: string,
-        model?: string
+        model?: string,
+        collectionKeys?: string[] | string
     ) => {
+        const sendOptions =
+            typeof request === 'string'
+                ? { message: request, collectionIds, conversationId, model, collectionKeys }
+                : request;
+
         close();
         setIsConnected(true);
-        accumulatedContentRef.current = '';
 
-        const normalizedKeys =
-            collectionKeys == null
+        const normalizedIds =
+            sendOptions.collectionIds == null
                 ? undefined
-                : Array.isArray(collectionKeys)
-                    ? collectionKeys
-                    : [collectionKeys];
+                : Array.isArray(sendOptions.collectionIds)
+                    ? sendOptions.collectionIds
+                    : [sendOptions.collectionIds];
+        const normalizedKeys =
+            sendOptions.collectionKeys == null
+                ? undefined
+                : Array.isArray(sendOptions.collectionKeys)
+                    ? sendOptions.collectionKeys
+                    : [sendOptions.collectionKeys];
 
         const response = await fetch('/api/v1/rag/chat/stream', {
             method: 'POST',
@@ -143,10 +157,18 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
                 ...getCredentialHeaders(),
             },
             body: JSON.stringify({
-                message,
-                collectionKeys: normalizedKeys,
-                sessionId: conversationId,
-                model,
+                message: sendOptions.message,
+                collectionIds:
+                    normalizedIds && normalizedIds.length > 0
+                        ? normalizedIds
+                        : undefined,
+                collectionScopeMode: sendOptions.collectionScopeMode,
+                collectionKeys:
+                    normalizedKeys && normalizedKeys.length > 0
+                        ? normalizedKeys
+                        : undefined,
+                sessionId: sendOptions.conversationId,
+                model: sendOptions.model,
             }),
         });
 
@@ -184,9 +206,28 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
 }
 ```
 
-`collectionKeys` 为 `undefined` 表示省略 Collection 范围；显式 `[]` 必须原样发送并由
-后端返回 `400`，前端不得把显式空范围归一化为省略。deprecated 的 `collectionIds`
-继续兼容；同时提供两者时必须解析为同一 Collection 集合。
+object request 是当前 WebUI 的主入口：
+
+```typescript
+send({
+    message,
+    conversationId,
+    model,
+    collectionScopeMode,
+    collectionKeys:
+        collectionScopeMode === 'SELECTED_COLLECTIONS'
+            ? selectedCollectionKeys
+            : undefined,
+});
+```
+
+- `CALLER_VISIBLE` / `ANY_COLLECTION` 发送 mode，但不发送 `collectionKeys`。
+- `SELECTED_COLLECTIONS` 只在至少选择一个 key 时允许提交，key 会排序后发送。
+- WebUI 不发送 `collectionKeys: []`。直接 HTTP 调用若显式发送空列表，后端返回 `400`；
+  selected mode 若省略 key/ID 列表也返回 `400`。
+- 省略 mode 但发送非空 key/ID 列表时，后端兼容推导为 `SELECTED_COLLECTIONS`。
+- deprecated 的 `collectionIds` 与旧位置参数 overload 继续兼容；同时提供 ID 与 key 时，
+  两者必须解析为同一 Collection 集合。
 
 ### 3.2 SSE 事件解析器
 
@@ -247,6 +288,17 @@ const { send, isConnected } = useChatSSE({
         );
     },
 });
+
+send({
+    message: userMessage,
+    conversationId,
+    model: effectiveSelectedModel,
+    collectionScopeMode: scopeMode,
+    collectionKeys:
+        scopeMode === 'SELECTED_COLLECTIONS'
+            ? [...selectedCollectionKeys].sort()
+            : undefined,
+});
 ```
 
 ## 5. curl 测试命令
@@ -255,7 +307,7 @@ const { send, isConnected } = useChatSSE({
 # 测试 SSE 端点（显示原始格式）
 curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H 'Content-Type: application/json' \
-  -d '{"message":"你好","collectionKeys":["customer-42:manual:v3"]}' \
+  -d '{"message":"你好","collectionScopeMode":"SELECTED_COLLECTIONS","collectionKeys":["customer-42:manual:v3"]}' \
   --no-buffer
 
 # 期望输出：

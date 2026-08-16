@@ -2,6 +2,7 @@ package com.springairag.core.advisor;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -165,6 +166,33 @@ class HybridSearchAdvisorTest {
         verify(hybridRetriever).search(eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5));
         Object contextResults = result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
         assertEquals(1, ((List<?>) contextResults).size());
+    }
+
+    @Test
+    void before_withRetrievalScope_passesSameScopeToRetriever() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(2L, 4L), List.of(10L), "json-record");
+        List<RetrievalResult> mockResults =
+                List.of(createResult("10", "scoped", 0.9));
+        when(hybridRetriever.searchInScope(
+                eq("scoped query"), same(scope), isNull(), eq(6)))
+                .thenReturn(mockResults);
+
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(new Prompt(new UserMessage("scoped query")))
+                .context(Map.of(
+                        HybridSearchAdvisor.RETRIEVAL_SCOPE_KEY, scope,
+                        HybridSearchAdvisor.MAX_RESULTS_KEY, 6))
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        verify(hybridRetriever).searchInScope(
+                eq("scoped query"), same(scope), isNull(), eq(6));
+        verify(hybridRetriever, never()).search(
+                anyString(), any(), any(), anyInt());
+        assertEquals(1, ((List<?>) result.context()
+                .get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY)).size());
     }
 
     @Test

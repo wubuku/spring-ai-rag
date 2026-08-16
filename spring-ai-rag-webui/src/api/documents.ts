@@ -14,6 +14,13 @@ export interface Document {
   collectionKey: string | null;
   collectionName: string | null;
   chunkCount: number;
+  externalId?: string | null;
+  sourceRevision?: string | null;
+  sourceDeletedAt?: string | null;
+  processingStatus?: string | null;
+  processingError?: string | null;
+  embeddingFresh?: boolean;
+  enabled?: boolean;
 }
 
 export interface DocumentListResponse {
@@ -30,6 +37,9 @@ export const documentsApi = {
   get: (id: number) => apiClient.get<Document>(`/documents/${id}`),
 
   delete: (id: number) => apiClient.delete(`/documents/${id}`),
+
+  embed: (id: number, force = false) =>
+    apiClient.post(`/documents/${id}/embed`, null, { params: { force } }),
 
   batchCreate: (
     docs: Array<{

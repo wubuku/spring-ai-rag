@@ -9,6 +9,7 @@ import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
@@ -17,6 +18,7 @@ import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -38,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -65,6 +68,8 @@ class JsonRecordServiceTest {
     private EmbeddingProfileProvider embeddingProfileProvider;
     @Mock
     private CollectionIdentityResolver collectionIdentityResolver;
+    @Mock
+    private CollectionRetrievalScopeResolver retrievalScopeResolver;
     @Mock
     private JdbcTemplate jdbcTemplate;
     @Mock
@@ -311,6 +316,60 @@ class JsonRecordServiceTest {
         assertEquals(1L, response.results().getFirst().documentId());
         assertEquals(payload, response.results().getFirst().jsonbPayload());
         verify(reRankingService, never()).rerank(any(), anyList(), any(Integer.class));
+    }
+
+    @Test
+    void productionSearchUsesDirectJsonScopeWithoutPreloadingDocumentIds()
+            throws Exception {
+        JsonRecordService productionService = new JsonRecordService(
+                documentRepository,
+                documentVersionService,
+                documentEmbedService,
+                hybridRetrieverService,
+                reRankingService,
+                embeddingProfileProvider,
+                collectionIdentityResolver,
+                new RagProperties(),
+                objectMapper,
+                jdbcTemplate,
+                retrievalScopeResolver,
+                transactionManager);
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(10L), null, RagDocument.JSON_RECORD);
+        when(retrievalScopeResolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null, List.of("records:v1"),
+                null, RagDocument.JSON_RECORD, null))
+                .thenReturn(scope);
+        when(hybridRetrieverService.searchInScope(
+                eq("spring"), same(scope), eq((List<Long>) null),
+                eq(5), any(RetrievalConfig.class)))
+                .thenReturn(List.of(retrieval("1", 0.9)));
+
+        JsonNode payload = objectMapper.readTree("{\"id\":1}");
+        RagDocument document = document(
+                1L, 1L, "one", "Spring record.", payload.toString());
+        when(documentRepository.findByIdInAndDocumentTypeAndEnabledTrue(
+                List.of(1L), RagDocument.JSON_RECORD))
+                .thenReturn(List.of(document));
+
+        JsonRecordSearchRequest request = new JsonRecordSearchRequest();
+        request.setQuery("spring");
+        request.setCollectionKeys(List.of("records:v1"));
+        request.setConfig(RetrievalConfig.builder()
+                .maxResults(5)
+                .useRerank(false)
+                .build());
+
+        JsonRecordSearchResponse response = productionService.search(request);
+
+        assertEquals(1, response.results().size());
+        verify(hybridRetrieverService).searchInScope(
+                eq("spring"), same(scope), eq((List<Long>) null),
+                eq(5), any(RetrievalConfig.class));
+        verify(documentRepository, never())
+                .findEnabledIdsByCollectionIdsAndDocumentType(
+                        anyList(), any());
     }
 
     @Test

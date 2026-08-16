@@ -47,14 +47,15 @@ class CollectionAclControllerTest {
     void restrictedKeyListsOnlyAllowedCollections() {
         authenticateRestrictedKey(2L, 4L);
         when(collectionRepository.searchCollectionsByIds(
-                eq(List.of(2L, 4L)), isNull(), isNull(), any()))
+                eq(List.of(2L, 4L)), isNull(), isNull(), isNull(), any()))
                 .thenReturn(new PageImpl<>(List.of()));
 
         controller.list(0, 20, null, null);
 
         verify(collectionRepository).searchCollectionsByIds(
-                eq(List.of(2L, 4L)), isNull(), isNull(), any());
-        verify(collectionRepository, never()).searchCollections(any(), any(), any());
+                eq(List.of(2L, 4L)), isNull(), isNull(), isNull(), any());
+        verify(collectionRepository, never())
+                .searchCollections(any(), any(), any(), any());
     }
 
     @Test

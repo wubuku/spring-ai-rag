@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
+import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
 import { chatApi } from '../api/chat';
-import { collectionsApi } from '../api/collections';
 import { evaluationApi } from '../api/evaluation';
 import { modelsApi } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
-import type { ChatSource } from '../types/api';
+import type { ChatSource, CollectionScopeMode } from '../types/api';
 import styles from './Chat.module.css';
 
 interface Message {
@@ -24,7 +24,10 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | undefined>();
-  const [selectedCollectionKey, setSelectedCollectionKey] = useState<string>('');
+  const [scopeMode, setScopeMode] =
+    useState<CollectionScopeMode>('CALLER_VISIBLE');
+  const [selectedCollectionKeys, setSelectedCollectionKeys] =
+    useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(getSelectedModel());
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
@@ -33,15 +36,6 @@ export function Chat() {
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
-
-  const { data: collectionsData } = useQuery({
-    queryKey: ['chat-collections'],
-    queryFn: async () => {
-      const res = await collectionsApi.list({ page: 0, size: 200 });
-      return res.data;
-    },
-  });
-  const collections = collectionsData?.collections ?? [];
 
   const { data: modelsData } = useQuery({
     queryKey: ['chat-models'],
@@ -116,7 +110,12 @@ export function Chat() {
   }, [conversationId, messages.length]);
 
   const handleSend = () => {
-    if (!input.trim() || isConnected) return;
+    if (!input.trim()
+        || isConnected
+        || (scopeMode === 'SELECTED_COLLECTIONS'
+          && selectedCollectionKeys.length === 0)) {
+      return;
+    }
     const userMsg = input.trim();
     setInput('');
     const newId = crypto.randomUUID();
@@ -125,13 +124,15 @@ export function Chat() {
       { id: newId, role: 'user', content: userMsg },
       { id: crypto.randomUUID(), role: 'assistant', content: '', isStreaming: true },
     ]);
-    const collectionKeys =
-      selectedCollectionKey !== '' ? [selectedCollectionKey] : undefined;
-    if (collectionKeys) {
-      send(userMsg, undefined, conversationId, effectiveSelectedModel || undefined, collectionKeys);
-    } else {
-      send(userMsg, undefined, conversationId, effectiveSelectedModel || undefined);
-    }
+    send({
+      message: userMsg,
+      conversationId,
+      model: effectiveSelectedModel || undefined,
+      collectionScopeMode: scopeMode,
+      collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
+        ? [...selectedCollectionKeys].sort()
+        : undefined,
+    });
   };
 
   const submitFeedback = async (type: 'THUMBS_UP' | 'THUMBS_DOWN', queryHint?: string) => {
@@ -293,26 +294,15 @@ export function Chat() {
 
         <div className={styles.composer}>
           <div className={styles.contextRow}>
-            <div className={styles.contextControl}>
-              <label htmlFor="chat-collection" className={styles.contextLabel}>
-                {t('chat.collection')}
-              </label>
-              <select
-                id="chat-collection"
-                className={styles.contextSelect}
-                value={selectedCollectionKey}
-                onChange={e => setSelectedCollectionKey(e.target.value)}
+            <div className={styles.scopeControl}>
+              <CollectionScopeSelector
+                idPrefix="chat"
+                mode={scopeMode}
+                selectedKeys={selectedCollectionKeys}
+                onModeChange={setScopeMode}
+                onSelectedKeysChange={setSelectedCollectionKeys}
                 disabled={isConnected}
-                data-testid="chat-collection-select"
-              >
-                <option value="">{t('chat.allCollections')}</option>
-                {collections.map(c => (
-                  <option key={c.collectionKey} value={c.collectionKey}>
-                    {c.name}
-                    {c.documentCount != null ? ` (${c.documentCount})` : ''}
-                  </option>
-                ))}
-              </select>
+              />
             </div>
             <div className={styles.contextControl}>
               <label htmlFor="chat-model" className={styles.contextLabel}>
@@ -351,7 +341,12 @@ export function Chat() {
             />
             <button
               onClick={handleSend}
-              disabled={isConnected || !input.trim()}
+              disabled={
+                isConnected
+                || !input.trim()
+                || (scopeMode === 'SELECTED_COLLECTIONS'
+                  && selectedCollectionKeys.length === 0)
+              }
               className={styles.sendBtn}
             >
               {isConnected ? '...' : t('chat.send')}

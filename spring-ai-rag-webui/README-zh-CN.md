@@ -15,8 +15,8 @@
 | **Dashboard** | 系统健康概览，文档/集合数量，活跃会话，系统指标 |
 | **Documents** | 上传文件，关键词搜索文档，行内预览分块内容，批量删除 |
 | **Collections** | 创建知识库，管理文档关联，导出/导入 |
-| **Chat** | RAG 对话助手，支持 SSE 流式响应，对话历史侧边栏，导出 JSON/Markdown |
-| **Search** | 实时混合检索（向量 + 全文），可配置检索参数 |
+| **Chat** | RAG 对话，支持 SSE 流式、三种 Collection 范围模式、多 Collection 选择、历史与导出 |
+| **Search** | 混合检索，支持三种 Collection 范围模式、多 Collection 选择和检索参数 |
 | **Metrics** | RAG 系统指标（查询速率、平均延迟、缓存命中率），LLM 性能图表 |
 | **Alerts** | SLO 监控，告警历史，静默计划（维护窗口） |
 | **Settings** | LLM 提供商选择、检索参数、缓存配置——持久化到 localStorage |
@@ -79,6 +79,7 @@ src/
 │   └── metrics.ts         # 指标概览
 ├── components/            # 共享 UI 组件
 │   ├── ChatSidebar/       # 对话历史侧边栏（localStorage）
+│   ├── CollectionScopeSelector/  # 共享范围模式、搜索、分页和多选
 │   ├── CreateCollectionModal/  # 集合创建表单
 │   ├── Layout/            # 应用外壳（侧边栏 + 顶栏）
 │   ├── Skeleton/          # 加载骨架屏
@@ -129,14 +130,29 @@ src/
 
 ### SSE 流式
 
-对话使用 `useSSE` Hook：
+对话使用 `useChatSSE`，并以 object request 发送：
 
 ```typescript
-const { messages, sendMessage, isStreaming } = useSSE({
-  endpoint: '/api/v1/rag/chat/stream',
-  sessionId: conversationId,
+const { send, isConnected } = useChatSSE({
+  onChunk: content => appendStreamingContent(content),
+  onDone: () => finishStreamingMessage(),
+});
+
+send({
+  message,
+  conversationId,
+  model,
+  collectionScopeMode: scopeMode,
+  collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
+    ? [...selectedCollectionKeys].sort()
+    : undefined,
 });
 ```
+
+`CALLER_VISIBLE` 检索调用方默认可见范围；`ANY_COLLECTION` 排除未归属文档，但不会扩大
+受限 API Key 的 allow-list；`SELECTED_COLLECTIONS` 检索 1-100 个 selected key 的并集。
+共享选择器每页加载 50 个 Collection，支持服务端 name/key 搜索和跨页保留选择，并禁止
+selected 模式在没有 key 时提交。
 
 ### 文件上传
 

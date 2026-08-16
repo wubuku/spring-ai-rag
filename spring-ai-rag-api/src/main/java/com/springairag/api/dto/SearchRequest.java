@@ -1,10 +1,13 @@
 package com.springairag.api.dto;
 
+import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
-import com.springairag.api.validation.ValidCollectionKey;
+
 import java.util.List;
 import java.util.Objects;
 
@@ -19,13 +22,21 @@ public class SearchRequest {
     @Schema(description = "Query text", example = "What is Spring AI?", requiredMode = Schema.RequiredMode.REQUIRED)
     private String query;
 
+    @Size(max = 1000, message = "At most 1000 document IDs may be selected")
     @Schema(description = "Limit to document ID list (empty means search all)", example = "[1, 2, 3]")
-    private List<Long> documentIds;
+    private List<@Positive(message = "Document IDs must be positive") Long> documentIds;
 
+    @Schema(description = "Collection retrieval scope. Omitted preserves compatibility: "
+            + "Collection fields imply SELECTED_COLLECTIONS; otherwise CALLER_VISIBLE.",
+            example = "SELECTED_COLLECTIONS")
+    private CollectionScopeMode collectionScopeMode;
+
+    @Size(max = 100, message = "At most 100 collection IDs may be selected")
     @Schema(description = "Deprecated compatibility field. Use collectionKeys.",
             example = "[1, 2, 3]", deprecated = true)
-    private List<Long> collectionIds;
+    private List<@Positive(message = "Collection IDs must be positive") Long> collectionIds;
 
+    @Size(max = 100, message = "At most 100 collection keys may be selected")
     @Schema(description = "Stable external Collection keys (preferred over collectionIds)", example = "[\"customer-42:manual:v3\"]")
     private List<@ValidCollectionKey String> collectionKeys;
 
@@ -45,6 +56,11 @@ public class SearchRequest {
     public List<Long> getDocumentIds() { return documentIds; }
     public void setDocumentIds(List<Long> documentIds) { this.documentIds = documentIds; }
 
+    public CollectionScopeMode getCollectionScopeMode() { return collectionScopeMode; }
+    public void setCollectionScopeMode(CollectionScopeMode collectionScopeMode) {
+        this.collectionScopeMode = collectionScopeMode;
+    }
+
     public List<Long> getCollectionIds() { return collectionIds; }
     public void setCollectionIds(List<Long> collectionIds) { this.collectionIds = collectionIds; }
 
@@ -61,6 +77,7 @@ public class SearchRequest {
         SearchRequest that = (SearchRequest) o;
         return Objects.equals(query, that.query) &&
                 Objects.equals(documentIds, that.documentIds) &&
+                collectionScopeMode == that.collectionScopeMode &&
                 Objects.equals(collectionIds, that.collectionIds) &&
                 Objects.equals(collectionKeys, that.collectionKeys) &&
                 Objects.equals(config, that.config);
@@ -68,7 +85,8 @@ public class SearchRequest {
 
     @Override
     public int hashCode() {
-        return Objects.hash(query, documentIds, collectionIds, collectionKeys, config);
+        return Objects.hash(query, documentIds, collectionScopeMode,
+                collectionIds, collectionKeys, config);
     }
 
     @Override
@@ -76,6 +94,7 @@ public class SearchRequest {
         return "SearchRequest{" +
                 "query='" + query + '\'' +
                 ", documentIds=" + documentIds +
+                ", collectionScopeMode=" + collectionScopeMode +
                 ", collectionIds=" + collectionIds +
                 ", collectionKeys=" + collectionKeys +
                 ", config=" + config +

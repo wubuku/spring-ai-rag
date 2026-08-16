@@ -82,10 +82,10 @@ class CollectionIdentityResolverTest {
                 .thenReturn(Optional.of(collection(1L, "one", false)));
         when(repository.findByIdAndDeletedFalse(2L))
                 .thenReturn(Optional.of(collection(2L, "two", false)));
-        when(repository.findByCollectionKeyAndDeletedFalse("two"))
-                .thenReturn(Optional.of(collection(2L, "two", false)));
-        when(repository.findByCollectionKeyAndDeletedFalse("one"))
-                .thenReturn(Optional.of(collection(1L, "one", false)));
+        when(repository.findAllByCollectionKeyInAndDeletedFalse(any()))
+                .thenReturn(List.of(
+                        collection(2L, "two", false),
+                        collection(1L, "one", false)));
 
         assertEquals(List.of(2L, 1L), resolver.resolveActiveIds(
                 List.of(1L, 2L), List.of("two", "one")));
@@ -102,10 +102,25 @@ class CollectionIdentityResolverTest {
 
         when(repository.findByIdAndDeletedFalse(1L))
                 .thenReturn(Optional.of(collection(1L, "one", false)));
-        when(repository.findByCollectionKeyAndDeletedFalse("two"))
-                .thenReturn(Optional.of(collection(2L, "two", false)));
+        when(repository.findAllByCollectionKeyInAndDeletedFalse(any()))
+                .thenReturn(List.of(collection(2L, "two", false)));
         assertThrows(IllegalArgumentException.class,
                 () -> resolver.resolveActiveIds(List.of(1L), List.of("two")));
+    }
+
+    @Test
+    void activeKeysUseOneBatchRepositoryCallAndPreserveOrder() {
+        when(repository.findAllByCollectionKeyInAndDeletedFalse(any()))
+                .thenReturn(List.of(
+                        collection(1L, "one", false),
+                        collection(2L, "two", false)));
+
+        assertEquals(List.of(2L, 1L),
+                resolver.resolveActiveIds(
+                        null, List.of("two", "one", "two")));
+        verify(repository).findAllByCollectionKeyInAndDeletedFalse(any());
+        verify(repository, never())
+                .findByCollectionKeyAndDeletedFalse(any());
     }
 
     @Test

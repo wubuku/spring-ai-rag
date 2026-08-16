@@ -207,7 +207,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V29、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V30、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -256,10 +256,38 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 运行时 smoke 使用唯一 key 覆盖创建、by-key 获取/更新、使用新目标 key 克隆、使用新 key
 导出/导入、软删除、恢复、重复冲突，以及文档/Search/Chat 的 key 输入。
 
+### 多 Collection 检索范围验收门禁
+
+范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
+Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
+PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
+Flyway V1-V30，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dapi.version=1.40 \
+  -Dmulti.collection.it.enabled=true \
+  -Dtestcontainers.pg.image=pgvector/pgvector:pg16 \
+  -Dtest=MultiCollectionRetrievalPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false \
+  test
+```
+
+该矩阵验证：不受限 `CALLER_VISIBLE` 包含未归属文档；`ANY_COLLECTION` 排除未归属文档；
+selected A+B 不会返回其他 Collection；空 selected Collection 保持空结果；selected
+Collection 与显式 document ID 在 SQL 中取交集；JSON record 遵守 `document_type`；
+disabled、stale 或错误 Profile 的文档仍被排除。English FTS、pg_jieba 与 pg_trgm
+是否使用相同 `RetrievalScopeSql` predicate，由各 provider 的聚焦测试单独验证。
+
+WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页、selected 空范围禁止提交，
+以及 Chat SSE object request。执行 `npm run test:run`、`npx tsc -b --pretty false`、
+`npm run build` 和核心 Mock Playwright。
+
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V29，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V30，并验证 JSONB round-trip、
 仅更新 payload 的版本记录、相同描述下不同记录共存以及级联清理：
 
 ```bash

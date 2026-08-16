@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -30,7 +31,7 @@ class PgTrgmFulltextProviderTest {
 
         @Override
         java.util.List<java.util.Map<String, Object>> executeSearch(String query,
-                java.util.List<Long> documentIds, int limit, long embeddingProfileId) {
+                RetrievalScope scope, int limit, long embeddingProfileId) {
             // Returns fixed result for testing; filtering by minScore and excludeIds is tested separately
             return fixedResult;
         }
@@ -167,5 +168,43 @@ class PgTrgmFulltextProviderTest {
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
         verify(jdbc).queryForObject(anyString(), eq(Integer.class));
+    }
+
+    @Test
+    @DisplayName("scope predicates are pushed into pg_trgm SQL")
+    void searchInScope_pushesCollectionDocumentAndTypePredicates() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(
+                contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
+        when(jdbc.update(anyString(), (Object) any())).thenReturn(1);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        PgTrgmFulltextProvider provider = new PgTrgmFulltextProvider(jdbc);
+        provider.searchInScope(
+                "records",
+                RetrievalScope.selectedCollections(
+                        List.of(2L, 4L), List.of(10L), "json-record"),
+                null, 5, 0.0, 7L);
+
+        ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        assertTrue(sql.contains("d.collection_id = ANY (?)"));
+        assertTrue(sql.contains("e.document_id = ANY (?)"));
+        assertTrue(sql.contains("d.document_type = ?"));
+        assertTrue(sql.contains("e.embedding_profile_id = 7"));
+        Object[] args = argsCaptor.getValue();
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[1]);
+        assertInstanceOf(
+                org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
+        assertEquals("json-record", args[3]);
     }
 }

@@ -187,47 +187,56 @@ Collection 已经是实际检索边界，不只是管理页面中的文档分类
 
 ```text
 ChatRequest / SearchRequest
-  collectionKeys? + deprecated collectionIds? + documentIds?
+  collectionScopeMode? + collectionKeys? + deprecated collectionIds?
+  + documentIds?
         │
         ▼
-ApiKeyCollectionAccess.resolveCollectionIds
-  + CollectionIdentityResolver
-  - 按原值校验 1-128 个可见 ASCII 字符，不做归一化
-  - ID/key 集合必须标识同一批活动 Collection
-  - restricted：只在允许的内部 ID 中解析；未知/越界 key 返回 403
-  - unrestricted 未知 key 返回 404
-  - 输出内部 Long ID
+CollectionRetrievalScopeResolver
+  - 省略 collectionScopeMode 时推导兼容模式
+  - 校验模式/列表组合及 100/1000 项上限
+  - 通过 CollectionIdentityResolver 批量解析 key -> Long ID
+  - 先应用 ApiKeyCollectionAccess，再生成有效范围
         │
         ▼
-CollectionDocumentResolver
-  - collectionIds -> RagDocument IDs
-  - 与显式 documentIds 取交集
-  - 非空范围解析为零文档时保留 empty scope
+RetrievalScope
+  collectionFilter = NONE | ANY_ASSIGNED | SELECTED
+  collectionIds + documentIds + 服务端 documentType + matchNone
         │
-        ├── Chat -> RagChatService.RetrievalScope
-        │           -> HybridSearchAdvisor
-        └── Search -> RagSearchController
-                    -> HybridRetrieverService
+        ├── Chat -> RagChatService -> HybridSearchAdvisor
+        ├── Search -> RagSearchController
+        └── JSON record -> JsonRecordService
         │
         ▼
-向量与全文 SQL
-  WHERE document_id IN (...)
+HybridRetrieverService.searchInScope
+  + RetrievalScopeSql
+  - NONE：不加 Collection predicate
+  - ANY_ASSIGNED：d.collection_id IS NOT NULL
+  - SELECTED：d.collection_id = ANY (?)，参数为 JDBC bigint[]
+  - 文档：e.document_id = ANY (?)，参数为 JDBC bigint[]
+  - JSON record：d.document_type = ?
         │
         ▼
-仅返回有效范围内的 chunks
+Vector、English FTS、pg_jieba、pg_trgm 使用同一组 predicate
 ```
 
 请求语义：
 
-| 输入 | 不受限调用方 | 受限 API Key |
+| 模式 | 不受限调用方 | 受限 API Key |
 |------|--------------|---------------|
-| 同时省略两种身份字段 | 不按 Collection 过滤 | 自动使用 Key 的允许列表 |
-| 显式空 `collectionKeys` 或 `collectionIds` | 返回 `400` | 返回 `400` |
-| 非空 `collectionKeys` | 按大小写精确解析 key | 必须在允许列表中解析，否则 `403` |
-| deprecated 非空 `collectionIds` | 检索一个或多个 Collection | 必须是允许列表的子集，否则 `403` |
-| 同时提供 key 和 ID 集合 | 集合必须一致，忽略顺序 | 应用 ACL 后集合必须一致 |
-| 同时给出 `documentIds` | 与 Collection 所属文档取交集 | 先应用 ACL，再取交集 |
-| 非空范围解析后为零文档 | 返回空结果，不调用全库检索 | 返回空结果，不调用全库检索 |
+| `CALLER_VISIBLE` | 全部可检索文档，包括未归属文档 | Key 的 Collection allow-list 内文档 |
+| `ANY_COLLECTION` | 所有 `collection_id IS NOT NULL` 的可检索文档 | Key 的 Collection allow-list 内文档，不会扩权 |
+| `SELECTED_COLLECTIONS` | 指定 Collection 的并集 | 指定集合必须是 allow-list 子集 |
+
+省略 `collectionScopeMode` 时，只要出现 Collection 列表就推导为
+`SELECTED_COLLECTIONS`，否则使用 `CALLER_VISIBLE`。`CALLER_VISIBLE` 与
+`ANY_COLLECTION` 不允许出现任何 Collection 列表；`SELECTED_COLLECTIONS`
+必须提供非空 key 或 ID 列表。同时提供两种列表时，两者必须标识同一集合，忽略顺序。
+`documentIds` 始终作为额外交集，不能绕过授权。请求最多接受 100 个 Collection 身份和
+1000 个 document ID。
+
+key 按原值、区分大小写地一次批量解析。不受限调用方的未知 key 返回 `404`；受限调用方
+统一返回 `403`，避免泄露范围外 Collection。deprecated 的未知数字 ID 保持兼容：
+对不受限调用方不匹配任何行，受限调用方返回 `403`。
 
 数据模型和当前边界：
 
@@ -246,15 +255,21 @@ CollectionDocumentResolver
 - `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
   全局 EmbeddingModel，但每次写入和查询都会绑定到一个不可变 Embedding Profile。
 - 向量和全文检索都要求活动 Profile、最新 content hash 对应的 `COMPLETED` 状态，以及启用的文档。
-- Collection 先解析成完整 document ID 列表，再生成 `IN (...)`；这是可用的 MVP，
-  但大集合应改为检索 SQL 直接 JOIN `rag_documents` 并按 `collection_id` 过滤。
-- WebUI Chat 和 Search 当前单选 Collection 并发送其 key；后端 Chat/Search 契约支持多个 key。
+- Collection 条件通过 `d.collection_id` 直接下推到检索 SQL；selected ID 与显式
+  document ID 使用 PostgreSQL `bigint[]` JDBC 数组参数。因此范围成本取决于选中的
+  Collection 数量，而不是这些 Collection 包含的全部文档数。
+- 结果是在有效 Collection 并集上计算一次全局 top-k；“每个选中 Collection 都必须贡献
+  结果”的独立 `EACH_COLLECTION` 行为尚未实现。
+- WebUI Chat 与 Search 均提供三种模式；selected 模式支持服务端搜索、每页 50 项、
+  跨页多选，最多选择 100 个 Collection key。
 
 源码锚点：
 
 - [CollectionIdentityResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
 - [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
-- [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [CollectionRetrievalScopeResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionRetrievalScopeResolver.java)
+- [RetrievalScope](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScope.java)
+- [RetrievalScopeSql](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScopeSql.java)
 - [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
 - [HybridSearchAdvisor](../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
 - [RagSearchController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
@@ -262,7 +277,9 @@ CollectionDocumentResolver
 
 回归测试锚点：
 
-- [CollectionDocumentResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionDocumentResolverTest.java)
+- [CollectionRetrievalScopeResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionRetrievalScopeResolverTest.java)
+- [RetrievalScopeSqlTest](../spring-ai-rag-core/src/test/java/com/springairag/core/retrieval/RetrievalScopeSqlTest.java)
+- [MultiCollectionRetrievalPostgresIntegrationTest](../spring-ai-rag-core/src/test/java/com/springairag/core/integration/MultiCollectionRetrievalPostgresIntegrationTest.java)
 - [RagSearchControllerTest](../spring-ai-rag-core/src/test/java/com/springairag/core/controller/RagSearchControllerTest.java)
 - [HybridSearchAdvisorTest](../spring-ai-rag-core/src/test/java/com/springairag/core/advisor/HybridSearchAdvisorTest.java)
 - [ApiKeyCollectionAccessTest](../spring-ai-rag-core/src/test/java/com/springairag/core/security/ApiKeyCollectionAccessTest.java)

@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CollectionScopeMode } from '../types/api';
 
 export interface SearchResult {
   documentId: string;
@@ -22,6 +23,7 @@ export const searchApi = {
     useHybrid?: boolean;
     vectorWeight?: number;
     fulltextWeight?: number;
+    collectionScopeMode?: CollectionScopeMode;
     collectionKeys?: string[];
   }) => apiClient.get<SearchResponse>('/search', {
     params,

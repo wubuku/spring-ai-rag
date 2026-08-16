@@ -119,6 +119,57 @@ describe('useChatSSE', () => {
     );
   });
 
+  it('accepts an object request with an explicit collection scope', async () => {
+    setupMockStream();
+    const { result } = renderHook(() => useChatSSE({}));
+
+    await act(async () => {
+      result.current.send({
+        message: 'Scoped hello',
+        conversationId: 'conv-2',
+        model: 'openrouter/model',
+        collectionScopeMode: 'SELECTED_COLLECTIONS',
+        collectionKeys: ['manual', 'faq'],
+      });
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/rag/chat/stream',
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: 'Scoped hello',
+          collectionScopeMode: 'SELECTED_COLLECTIONS',
+          collectionKeys: ['manual', 'faq'],
+          sessionId: 'conv-2',
+          model: 'openrouter/model',
+        }),
+      }),
+    );
+  });
+
+  it('omits empty collection keys from object requests', async () => {
+    setupMockStream();
+    const { result } = renderHook(() => useChatSSE({}));
+
+    await act(async () => {
+      result.current.send({
+        message: 'Visible documents',
+        collectionScopeMode: 'CALLER_VISIBLE',
+        collectionKeys: [],
+      });
+    });
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      '/api/v1/rag/chat/stream',
+      expect.objectContaining({
+        body: JSON.stringify({
+          message: 'Visible documents',
+          collectionScopeMode: 'CALLER_VISIBLE',
+        }),
+      }),
+    );
+  });
+
   it('sends the in-memory credential in a header and never in the URL', async () => {
     setupMockStream();
     setCredential('root-secret');

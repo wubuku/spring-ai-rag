@@ -161,16 +161,6 @@ public class EmbeddingPersistenceService {
         if (actualVersion != expectedVersion || !expectedContentHash.equals(actualHash)) {
             return;
         }
-        Integer completed = jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM rag_document_embedding_state "
-                        + "WHERE document_id = ? AND embedding_profile_id = ? "
-                        + "AND status = 'COMPLETED'",
-                Integer.class,
-                documentId,
-                profile.id());
-        if (completed != null && completed > 0) {
-            return;
-        }
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "

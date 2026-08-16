@@ -13,6 +13,7 @@ import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagStructuredRecordProperties;
@@ -24,9 +25,11 @@ import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.DigestUtils;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -53,11 +56,13 @@ public class JsonRecordService {
     private final ReRankingService reRankingService;
     private final EmbeddingProfileProvider embeddingProfileProvider;
     private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionRetrievalScopeResolver retrievalScopeResolver;
     private final RagStructuredRecordProperties properties;
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
 
+    @Autowired
     public JsonRecordService(
             RagDocumentRepository documentRepository,
             DocumentVersionService documentVersionService,
@@ -69,6 +74,7 @@ public class JsonRecordService {
             com.springairag.core.config.RagProperties ragProperties,
             ObjectMapper objectMapper,
             JdbcTemplate jdbcTemplate,
+            CollectionRetrievalScopeResolver retrievalScopeResolver,
             @Nullable PlatformTransactionManager transactionManager) {
         this.documentRepository = documentRepository;
         this.documentVersionService = documentVersionService;
@@ -77,12 +83,31 @@ public class JsonRecordService {
         this.reRankingService = reRankingService;
         this.embeddingProfileProvider = embeddingProfileProvider;
         this.collectionIdentityResolver = collectionIdentityResolver;
+        this.retrievalScopeResolver = retrievalScopeResolver;
         this.properties = ragProperties.getStructuredRecords();
         this.objectMapper = objectMapper;
         this.jdbcTemplate = jdbcTemplate;
         this.transactionTemplate = transactionManager == null
                 ? null
                 : new TransactionTemplate(transactionManager);
+    }
+
+    JsonRecordService(
+            RagDocumentRepository documentRepository,
+            DocumentVersionService documentVersionService,
+            DocumentEmbedService documentEmbedService,
+            HybridRetrieverService hybridRetrieverService,
+            ReRankingService reRankingService,
+            EmbeddingProfileProvider embeddingProfileProvider,
+            CollectionIdentityResolver collectionIdentityResolver,
+            com.springairag.core.config.RagProperties ragProperties,
+            ObjectMapper objectMapper,
+            JdbcTemplate jdbcTemplate,
+            @Nullable PlatformTransactionManager transactionManager) {
+        this(documentRepository, documentVersionService, documentEmbedService,
+                hybridRetrieverService, reRankingService, embeddingProfileProvider,
+                collectionIdentityResolver, ragProperties, objectMapper, jdbcTemplate,
+                null, transactionManager);
     }
 
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
@@ -156,11 +181,24 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "collectionKeys or collectionIds must be provided");
         }
-        List<Long> collectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
-                request.getCollectionIds(),
-                request.getCollectionKeys(),
-                ApiKeyCollectionAccess.currentKey(),
-                collectionIdentityResolver);
+        RetrievalScope retrievalScope = null;
+        List<Long> collectionIds;
+        if (retrievalScopeResolver != null) {
+            retrievalScope = retrievalScopeResolver.resolve(
+                    CollectionScopeMode.SELECTED_COLLECTIONS,
+                    request.getCollectionIds(),
+                    request.getCollectionKeys(),
+                    null,
+                    RagDocument.JSON_RECORD,
+                    ApiKeyCollectionAccess.currentKey());
+            collectionIds = retrievalScope.collectionIds();
+        } else {
+            collectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
+                    request.getCollectionIds(),
+                    request.getCollectionKeys(),
+                    ApiKeyCollectionAccess.currentKey(),
+                    collectionIdentityResolver);
+        }
         if (collectionIds == null || collectionIds.isEmpty()) {
             return new JsonRecordSearchResponse(request.getQuery(), List.of());
         }
@@ -174,13 +212,6 @@ public class JsonRecordService {
             throw new IllegalArgumentException("maxResults must be at least 1");
         }
 
-        List<Long> candidateIds = documentRepository
-                .findEnabledIdsByCollectionIdsAndDocumentType(
-                        collectionIds, RagDocument.JSON_RECORD);
-        if (candidateIds.isEmpty()) {
-            return new JsonRecordSearchResponse(request.getQuery(), List.of());
-        }
-
         RetrievalConfig effectiveConfig = RetrievalConfig.builder()
                 .maxResults(limit)
                 .minScore(config.getMinScore())
@@ -189,8 +220,23 @@ public class JsonRecordService {
                 .vectorWeight(config.getVectorWeight())
                 .fulltextWeight(config.getFulltextWeight())
                 .build();
-        List<RetrievalResult> ranked = hybridRetrieverService.search(
-                request.getQuery(), candidateIds, null, limit, effectiveConfig);
+        List<RetrievalResult> ranked;
+        if (retrievalScope != null) {
+            ranked = hybridRetrieverService.searchInScope(
+                    request.getQuery(), retrievalScope, null,
+                    limit, effectiveConfig);
+        } else {
+            List<Long> candidateIds = documentRepository
+                    .findEnabledIdsByCollectionIdsAndDocumentType(
+                            collectionIds, RagDocument.JSON_RECORD);
+            if (candidateIds.isEmpty()) {
+                return new JsonRecordSearchResponse(
+                        request.getQuery(), List.of());
+            }
+            ranked = hybridRetrieverService.search(
+                    request.getQuery(), candidateIds, null,
+                    limit, effectiveConfig);
+        }
         if (config.isUseRerank()) {
             ranked = reRankingService.rerank(request.getQuery(), ranked, limit);
         }
@@ -412,7 +458,7 @@ public class JsonRecordService {
     }
 
     private void lockIdentity(Long collectionId, String externalId) {
-        String lockKey = collectionId + ":json-record:" + externalId;
+        String lockKey = collectionId + ":external-document:" + externalId;
         jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
             try (var statement = connection.prepareStatement(
                     "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {

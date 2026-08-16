@@ -71,6 +71,7 @@ class OpenApiContractTest {
             "ChatRequest",
             "ChatResponse",
             "SearchRequest",
+            "CollectionScopeMode",
             "RetrievalResult",
             "DocumentRequest",
             "CollectionRequest",
@@ -80,7 +81,12 @@ class OpenApiContractTest {
             "ErrorResponse",
             "HealthResponse",
             "BatchDocumentRequest",
-            "BatchCreateResponse"
+            "BatchCreateResponse",
+            "ExternalDocumentUpsertRequest",
+            "ExternalDocumentBatchUpsertRequest",
+            "ExternalDocumentUpsertResponse",
+            "ExternalDocumentBatchUpsertResponse",
+            "ExternalDocumentDeleteResponse"
     );
 
     // Endpoints that MUST be documented
@@ -89,6 +95,9 @@ class OpenApiContractTest {
             "/rag/search",
             "/rag/documents",
             "/rag/collections",
+            "/rag/documents/upsert",
+            "/rag/documents/batch-upsert",
+            "/rag/documents/by-external-id",
             "/rag/health",
             "/rag/models"
     );
@@ -279,6 +288,29 @@ class OpenApiContractTest {
             assertThat(properties.has("type")).isTrue();
             assertThat(properties.has("title")).isTrue();
             assertThat(properties.has("status")).isTrue();
+        }
+
+        @Test
+        @DisplayName("CollectionScopeMode exposes all supported values")
+        void collectionScopeModeSchema_hasSupportedValues() throws Exception {
+            MvcResult result = mockMvc.perform(get(OPENAPI_SPEC_PATH))
+                    .andExpect(status().isOk())
+                    .andReturn();
+
+            JsonNode schemas = objectMapper.readTree(
+                    result.getResponse().getContentAsString())
+                    .get("components").get("schemas");
+            JsonNode values = schemas.get("CollectionScopeMode").get("enum");
+
+            assertThat(values).isNotNull();
+            assertThat(java.util.stream.StreamSupport
+                    .stream(values.spliterator(), false)
+                    .map(JsonNode::asText)
+                    .toList())
+                    .containsExactly(
+                            "CALLER_VISIBLE",
+                            "ANY_COLLECTION",
+                            "SELECTED_COLLECTIONS");
         }
 
         @Test

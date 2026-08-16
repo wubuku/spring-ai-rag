@@ -86,6 +86,18 @@ public class RagDocument {
     private String externalId;
 
     /**
+     * Opaque caller-supplied source revision for external synchronization.
+     */
+    @Column(name = "source_revision", length = 255)
+    private String sourceRevision;
+
+    /**
+     * Tombstone timestamp for source-managed deletion.
+     */
+    @Column(name = "source_deleted_at")
+    private LocalDateTime sourceDeletedAt;
+
+    /**
      * Business JSON payload. It is never copied into embedding metadata.
      */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -180,6 +192,14 @@ public class RagDocument {
 
     public String getExternalId() { return externalId; }
     public void setExternalId(String externalId) { this.externalId = externalId; }
+
+    public String getSourceRevision() { return sourceRevision; }
+    public void setSourceRevision(String sourceRevision) { this.sourceRevision = sourceRevision; }
+
+    public LocalDateTime getSourceDeletedAt() { return sourceDeletedAt; }
+    public void setSourceDeletedAt(LocalDateTime sourceDeletedAt) {
+        this.sourceDeletedAt = sourceDeletedAt;
+    }
 
     public JsonNode getJsonbPayload() { return jsonbPayload; }
     public void setJsonbPayload(JsonNode jsonbPayload) { this.jsonbPayload = jsonbPayload; }

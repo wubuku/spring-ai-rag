@@ -33,4 +33,16 @@ test.describe('Documents', () => {
     const hasTitle = await page.getByRole('heading', { name: /documents/i }).isVisible().catch(() => false);
     expect(hasTable || hasEmpty || hasUpload || hasTitle).toBeTruthy();
   });
+
+  test('shows external identity freshness and offers embedding retry', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/documents');
+
+    await expect(page.getByText('cms:sample:1')).toBeVisible();
+    await expect(page.getByText('etag:sample-1')).toBeVisible();
+    const retry = page.getByRole('button', { name: 'Retry embedding' });
+    await expect(retry).toBeVisible();
+    await retry.click();
+    await expect(page.getByText('Embedding retry started')).toBeVisible();
+  });
 });

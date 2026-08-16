@@ -58,6 +58,17 @@ export function Documents() {
     },
   });
 
+  const embedMutation = useMutation({
+    mutationFn: (id: number) => documentsApi.embed(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('documents.embeddingRetried'), 'success');
+    },
+    onError: () => {
+      showToast(t('documents.embeddingRetryError'), 'error');
+    },
+  });
+
   const { uploadFiles, isUploading } = useFileUpload({
     onComplete: fileName => {
       showToast(`${fileName} ${t('documents.uploaded')}`, 'success');
@@ -195,8 +206,10 @@ export function Documents() {
                   <th>{t('documents.documentId')}</th>
                   <th>{t('documents.title') || 'Title'}</th>
                   <th>Collection</th>
+                  <th>{t('documents.externalId')}</th>
+                  <th>{t('documents.sourceRevision')}</th>
                   <th>{t('documents.documentType')}</th>
-                  <th>Chunks</th>
+                  <th>{t('documents.embeddingStatus')}</th>
                   <th>{t('documents.createdAt')}</th>
                   <th>{t('documents.contentHash')}</th>
                   <th>{t('documents.actions')}</th>
@@ -212,8 +225,26 @@ export function Documents() {
                       </button>
                     </td>
                     <td>{doc.collectionName ?? '—'}</td>
+                    <td className={styles.externalId} title={doc.externalId ?? undefined}>
+                      {doc.externalId ?? '—'}
+                    </td>
+                    <td className={styles.revision} title={doc.sourceRevision ?? undefined}>
+                      {doc.sourceRevision ?? '—'}
+                    </td>
                     <td>{doc.documentType ?? '—'}</td>
-                    <td>{doc.chunkCount}</td>
+                    <td>
+                      <span
+                        className={doc.embeddingFresh ? styles.fresh : styles.stale}
+                        title={doc.processingError ?? undefined}
+                      >
+                        {doc.embeddingFresh
+                          ? t('documents.embeddingFresh')
+                          : t('documents.embeddingStale')}
+                      </span>
+                      {doc.processingError && (
+                        <div className={styles.processingError}>{doc.processingError}</div>
+                      )}
+                    </td>
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
                     <td>
@@ -224,6 +255,15 @@ export function Documents() {
                         >
                           {t('versions.button', 'Versions')}
                         </button>
+                        {doc.embeddingFresh === false && doc.enabled !== false && (
+                          <button
+                            onClick={() => embedMutation.mutate(doc.id)}
+                            className={styles.retryBtn}
+                            disabled={embedMutation.isPending}
+                          >
+                            {t('documents.retryEmbedding')}
+                          </button>
+                        )}
                         <button
                           onClick={() => deleteMutation.mutate(doc.id)}
                           className={styles.deleteBtn}
@@ -237,7 +277,7 @@ export function Documents() {
                 ))}
                 {data?.data?.documents?.length === 0 && (
                   <tr>
-                    <td colSpan={8} className={styles.empty}>
+                    <td colSpan={11} className={styles.empty}>
                       {t('documents.noDocuments')}
                     </td>
                   </tr>

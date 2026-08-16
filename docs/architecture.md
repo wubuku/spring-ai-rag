@@ -188,47 +188,60 @@ the administration UI.
 
 ```text
 ChatRequest / SearchRequest
-  collectionKeys? + deprecated collectionIds? + documentIds?
+  collectionScopeMode? + collectionKeys? + deprecated collectionIds?
+  + documentIds?
         |
         v
-ApiKeyCollectionAccess.resolveCollectionIds
-  + CollectionIdentityResolver
-  - validate 1-128 visible-ASCII keys without normalization
-  - require ID/key sets to identify the same active Collections
-  - restricted: resolve only inside allowed internal IDs; unknown/outside key -> 403
-  - unrestricted unknown key -> 404
-  - return internal Long IDs
+CollectionRetrievalScopeResolver
+  - infer the compatibility mode when collectionScopeMode is omitted
+  - validate the mode/list combination and 100/1000 item limits
+  - use CollectionIdentityResolver for batched key -> Long ID resolution
+  - apply ApiKeyCollectionAccess before producing an effective scope
         |
         v
-CollectionDocumentResolver
-  - collectionIds -> RagDocument IDs
-  - intersect with explicit documentIds
-  - preserve an empty scope when a non-empty request resolves to zero documents
+RetrievalScope
+  collectionFilter = NONE | ANY_ASSIGNED | SELECTED
+  collectionIds + documentIds + server-owned documentType + matchNone
         |
-        +-- Chat -> RagChatService.RetrievalScope
-        |           -> HybridSearchAdvisor
+        +-- Chat -> RagChatService -> HybridSearchAdvisor
         +-- Search -> RagSearchController
-                    -> HybridRetrieverService
+        +-- JSON records -> JsonRecordService
         |
         v
-Vector and full-text SQL
-  WHERE document_id IN (...)
+HybridRetrieverService.searchInScope
+  + RetrievalScopeSql
+  - NONE: no Collection predicate
+  - ANY_ASSIGNED: d.collection_id IS NOT NULL
+  - SELECTED: d.collection_id = ANY (?) with a JDBC bigint[] parameter
+  - documents: e.document_id = ANY (?) with a JDBC bigint[] parameter
+  - JSON records: d.document_type = ?
         |
         v
-Only chunks inside the effective scope are returned
+The same predicates constrain vector, English FTS, pg_jieba, and pg_trgm
 ```
 
 Request semantics:
 
-| Input | Unrestricted caller | Restricted API key |
-|-------|---------------------|--------------------|
-| Omit both identity fields | No Collection filter | Use the key's allow-list |
-| Explicit empty `collectionKeys` or `collectionIds` | Return `400` | Return `400` |
-| Non-empty `collectionKeys` | Resolve exact, case-sensitive keys | Must resolve inside the allow-list or return `403` |
-| Deprecated non-empty `collectionIds` | Search one or more Collections | Must be a subset of the allow-list or return `403` |
-| Supply both key and ID sets | Sets must match; ordering is ignored | Sets must match after ACL enforcement |
-| Include `documentIds` as well | Intersect with Collection membership | Apply ACL first, then intersect |
-| Non-empty scope resolves to zero documents | Return empty; never search the full corpus | Return empty; never search the full corpus |
+| Mode | Unrestricted caller | Restricted API key |
+|------|---------------------|--------------------|
+| `CALLER_VISIBLE` | All retrievable documents, including unassigned documents | Documents in the key's Collection allow-list |
+| `ANY_COLLECTION` | All retrievable documents whose `collection_id` is not null | Documents in the key's Collection allow-list; never expands access |
+| `SELECTED_COLLECTIONS` | The union of the selected Collections | The selected set must be a subset of the allow-list |
+
+When `collectionScopeMode` is omitted, a present Collection list implies
+`SELECTED_COLLECTIONS`; otherwise the request uses `CALLER_VISIBLE`.
+`CALLER_VISIBLE` and `ANY_COLLECTION` reject any present Collection list.
+`SELECTED_COLLECTIONS` requires a non-empty key or ID list. Supplying both
+lists requires them to identify the same set, independent of ordering.
+`documentIds` is always an additional intersection, not an authorization
+bypass. Requests accept at most 100 Collection identities and 1000 document
+IDs.
+
+Keys are resolved exactly and case-sensitively in one batch. An unknown key
+returns `404` to an unrestricted caller and `403` to a restricted caller to
+avoid revealing out-of-scope Collections. Deprecated unknown numeric IDs keep
+their compatibility behavior: they match no rows for an unrestricted caller,
+while restricted retrieval returns `403`.
 
 Data model and current boundaries:
 
@@ -255,17 +268,24 @@ Data model and current boundaries:
 - Vector and full-text retrieval require the active Profile, a fresh
   `COMPLETED` document embedding state, a matching current content hash, and an
   enabled document.
-- The current MVP expands Collections to a complete document-ID list and then
-  generates `IN (...)`. Large Collections should move toward retrieval SQL
-  that joins `rag_documents` and filters directly on `collection_id`.
-- WebUI Chat and Search currently select one Collection and send its key;
-  backend Chat and Search contracts accept multiple keys.
+- Collection constraints are pushed directly into retrieval SQL through
+  `d.collection_id`; selected IDs and explicit document IDs use PostgreSQL
+  `bigint[]` JDBC array parameters. Scope cost therefore depends on the number
+  of selected Collections rather than all documents contained in them.
+- Results use one global top-k across the effective Collection union. The
+  separate "each selected Collection must contribute results" behavior
+  (`EACH_COLLECTION`) is not implemented.
+- WebUI Chat and Search expose all three modes. Selected mode supports
+  server-side search, 50-item pages, cross-page multi-selection, and at most
+  100 Collection keys.
 
 Source anchors:
 
 - [CollectionIdentityResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
 - [ApiKeyCollectionAccess](../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
-- [CollectionDocumentResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [CollectionRetrievalScopeResolver](../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionRetrievalScopeResolver.java)
+- [RetrievalScope](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScope.java)
+- [RetrievalScopeSql](../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScopeSql.java)
 - [RagChatService](../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
 - [HybridSearchAdvisor](../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
 - [RagSearchController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
@@ -273,7 +293,9 @@ Source anchors:
 
 Regression-test anchors:
 
-- [CollectionDocumentResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionDocumentResolverTest.java)
+- [CollectionRetrievalScopeResolverTest](../spring-ai-rag-core/src/test/java/com/springairag/core/service/CollectionRetrievalScopeResolverTest.java)
+- [RetrievalScopeSqlTest](../spring-ai-rag-core/src/test/java/com/springairag/core/retrieval/RetrievalScopeSqlTest.java)
+- [MultiCollectionRetrievalPostgresIntegrationTest](../spring-ai-rag-core/src/test/java/com/springairag/core/integration/MultiCollectionRetrievalPostgresIntegrationTest.java)
 - [RagSearchControllerTest](../spring-ai-rag-core/src/test/java/com/springairag/core/controller/RagSearchControllerTest.java)
 - [HybridSearchAdvisorTest](../spring-ai-rag-core/src/test/java/com/springairag/core/advisor/HybridSearchAdvisorTest.java)
 - [ApiKeyCollectionAccessTest](../spring-ai-rag-core/src/test/java/com/springairag/core/security/ApiKeyCollectionAccessTest.java)

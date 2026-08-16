@@ -5,12 +5,14 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionDocumentResolver;
-import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
@@ -52,31 +54,35 @@ public class RagSearchController {
     private static final int MAX_SEARCH_LIMIT = 1000;
 
     private final HybridRetrieverService hybridRetriever;
-    private final CollectionDocumentResolver collectionDocumentResolver;
+    private final CollectionDocumentResolver legacyCollectionDocumentResolver;
     private final ReRankingService reRankingService;
-    private final CollectionIdentityResolver collectionIdentityResolver;
+    private final CollectionRetrievalScopeResolver retrievalScopeResolver;
 
     @Autowired
     public RagSearchController(HybridRetrieverService hybridRetriever,
-                               CollectionDocumentResolver collectionDocumentResolver,
                                ReRankingService reRankingService,
-                               @Autowired(required = false)
-                               CollectionIdentityResolver collectionIdentityResolver) {
+                               CollectionRetrievalScopeResolver retrievalScopeResolver) {
         this.hybridRetriever = hybridRetriever;
-        this.collectionDocumentResolver = collectionDocumentResolver;
         this.reRankingService = reRankingService;
-        this.collectionIdentityResolver = collectionIdentityResolver;
+        this.retrievalScopeResolver = retrievalScopeResolver;
+        this.legacyCollectionDocumentResolver = null;
     }
 
     RagSearchController(HybridRetrieverService hybridRetriever,
                         CollectionDocumentResolver collectionDocumentResolver) {
-        this(hybridRetriever, collectionDocumentResolver, null, null);
+        this.hybridRetriever = hybridRetriever;
+        this.reRankingService = null;
+        this.retrievalScopeResolver = null;
+        this.legacyCollectionDocumentResolver = collectionDocumentResolver;
     }
 
     RagSearchController(HybridRetrieverService hybridRetriever,
                         CollectionDocumentResolver collectionDocumentResolver,
                         ReRankingService reRankingService) {
-        this(hybridRetriever, collectionDocumentResolver, reRankingService, null);
+        this.hybridRetriever = hybridRetriever;
+        this.reRankingService = reRankingService;
+        this.retrievalScopeResolver = null;
+        this.legacyCollectionDocumentResolver = collectionDocumentResolver;
     }
 
     /**
@@ -102,6 +108,8 @@ public class RagSearchController {
             @RequestParam(defaultValue = "true") boolean useHybrid,
             @RequestParam(defaultValue = "0.5") double vectorWeight,
             @RequestParam(defaultValue = "0.5") double fulltextWeight,
+            @RequestParam(required = false)
+            CollectionScopeMode collectionScopeMode,
             @Parameter(description = "Deprecated numeric Collection scope; use collectionKeys",
                     deprecated = true)
             @RequestParam(required = false) List<Long> collectionIds,
@@ -136,17 +144,30 @@ public class RagSearchController {
                 .build();
 
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
-        List<Long> effectiveCollectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
-                collectionIds, collectionKeys, key, collectionIdentityResolver);
-        List<Long> resolvedDocIds = collectionDocumentResolver.resolveDocumentIds(
-                null, effectiveCollectionIds);
-        if (CollectionDocumentResolver.hasCollectionFilter(effectiveCollectionIds)
-                && (resolvedDocIds == null || resolvedDocIds.isEmpty())) {
-            return ResponseEntity.ok(SearchResponse.of(List.of(), query));
+        List<RetrievalResult> results;
+        if (retrievalScopeResolver != null) {
+            RetrievalScope scope = retrievalScopeResolver.resolve(
+                    collectionScopeMode,
+                    collectionIds,
+                    collectionKeys,
+                    null,
+                    null,
+                    key);
+            results = hybridRetriever.searchInScope(
+                    query, scope, null, limit, config);
+        } else {
+            List<Long> effectiveCollectionIds =
+                    ApiKeyCollectionAccess.resolveCollectionIds(collectionIds, key);
+            List<Long> resolvedDocIds =
+                    legacyCollectionDocumentResolver.resolveDocumentIds(
+                            null, effectiveCollectionIds);
+            if (CollectionDocumentResolver.hasCollectionFilter(effectiveCollectionIds)
+                    && (resolvedDocIds == null || resolvedDocIds.isEmpty())) {
+                return ResponseEntity.ok(SearchResponse.of(List.of(), query));
+            }
+            results = hybridRetriever.search(
+                    query, resolvedDocIds, null, limit, config);
         }
-
-        List<RetrievalResult> results = hybridRetriever.search(
-                query, resolvedDocIds, null, limit, config);
 
         log.info("Direct search returned {} results", results.size());
         return ResponseEntity.ok(SearchResponse.of(results, query));
@@ -155,7 +176,16 @@ public class RagSearchController {
     ResponseEntity<?> search(String query, int limit, boolean useHybrid,
                              double vectorWeight, double fulltextWeight) {
         return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
-                null, null, null);
+                null, null, null, null);
+    }
+
+    ResponseEntity<?> search(
+            String query, int limit, boolean useHybrid,
+            double vectorWeight, double fulltextWeight,
+            List<Long> collectionIds, List<String> collectionKeys,
+            HttpServletRequest httpRequest) {
+        return search(query, limit, useHybrid, vectorWeight, fulltextWeight,
+                null, collectionIds, collectionKeys, httpRequest);
     }
 
     /**
@@ -173,32 +203,48 @@ public class RagSearchController {
             HttpServletRequest httpRequest) {
 
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
-        request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
-                request.getCollectionIds(), request.getCollectionKeys(), key,
-                collectionIdentityResolver));
-        log.info("Direct search with config: query={}, collectionIds={}, documentIds={}",
-                request.getQuery(), request.getCollectionIds(), request.getDocumentIds());
+        log.info("Direct search with config: query={}, scopeMode={}, collectionCount={}, documentCount={}",
+                request.getQuery(), request.getCollectionScopeMode(),
+                request.getCollectionIds() == null && request.getCollectionKeys() == null
+                        ? 0
+                        : Math.max(
+                                request.getCollectionIds() == null
+                                        ? 0 : request.getCollectionIds().size(),
+                                request.getCollectionKeys() == null
+                                        ? 0 : request.getCollectionKeys().size()),
+                request.getDocumentIds() == null
+                        ? 0 : request.getDocumentIds().size());
 
         RetrievalConfig config = request.getConfig() != null ? request.getConfig()
                 : RetrievalConfig.builder().build();
 
-        // Resolve collectionIds to documentIds if provided
-        List<Long> resolvedDocIds = collectionDocumentResolver.resolveDocumentIds(
-                request.getDocumentIds(), request.getCollectionIds());
-
-        // Isolation: collection filter with zero docs → empty results (do not search all)
-        if (CollectionDocumentResolver.hasCollectionFilter(request.getCollectionIds())
-                && (resolvedDocIds == null || resolvedDocIds.isEmpty())) {
-            log.info("Collection filter matched zero documents — returning empty search results");
-            return ResponseEntity.ok(List.of());
+        List<RetrievalResult> results;
+        if (retrievalScopeResolver != null) {
+            RetrievalScope scope = retrievalScopeResolver.resolve(
+                    request.getCollectionScopeMode(),
+                    request.getCollectionIds(),
+                    request.getCollectionKeys(),
+                    request.getDocumentIds(),
+                    null,
+                    key);
+            results = hybridRetriever.searchInScope(
+                    request.getQuery(), scope, null,
+                    config.getMaxResults(), config);
+        } else {
+            request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
+                    request.getCollectionIds(), key));
+            List<Long> resolvedDocIds =
+                    legacyCollectionDocumentResolver.resolveDocumentIds(
+                            request.getDocumentIds(), request.getCollectionIds());
+            if (CollectionDocumentResolver.hasCollectionFilter(
+                    request.getCollectionIds())
+                    && (resolvedDocIds == null || resolvedDocIds.isEmpty())) {
+                return ResponseEntity.ok(List.of());
+            }
+            results = hybridRetriever.search(
+                    request.getQuery(), resolvedDocIds, null,
+                    config.getMaxResults(), config);
         }
-
-        List<RetrievalResult> results = hybridRetriever.search(
-                request.getQuery(),
-                resolvedDocIds,
-                null,
-                config.getMaxResults(),
-                config);
         if (config.isUseRerank() && reRankingService != null) {
             results = reRankingService.rerank(
                     request.getQuery(), results, config.getMaxResults());

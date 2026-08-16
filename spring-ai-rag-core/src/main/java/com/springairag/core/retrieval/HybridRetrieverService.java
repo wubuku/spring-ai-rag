@@ -25,7 +25,6 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 /**
  * Hybrid retrieval service.
@@ -120,7 +119,8 @@ public class HybridRetrieverService {
      */
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                          List<Long> excludeIds, int limit) {
-        return search(query, documentIds, excludeIds, limit,
+        return searchInScope(query, RetrievalScope.forDocumentIds(documentIds),
+                excludeIds, limit,
                 RetrievalConfig.builder().maxResults(limit).build());
     }
 
@@ -130,6 +130,30 @@ public class HybridRetrieverService {
     public List<RetrievalResult> search(String query, List<Long> documentIds,
                                          List<Long> excludeIds, int limit,
                                          RetrievalConfig config) {
+        return searchInScope(query, RetrievalScope.forDocumentIds(documentIds),
+                excludeIds, limit, config);
+    }
+
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope,
+            List<Long> excludeIds, int limit) {
+        return searchInScope(query, scope, excludeIds, limit,
+                RetrievalConfig.builder().maxResults(limit).build());
+    }
+
+    /**
+     * 使用授权后的统一范围执行混合检索。
+     */
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope requestedScope,
+            List<Long> excludeIds, int limit,
+            RetrievalConfig config) {
+        RetrievalScope scope = requestedScope != null
+                ? requestedScope
+                : RetrievalScope.unscoped();
+        if (scope.matchNone()) {
+            return List.of();
+        }
         log.debug("Executing hybrid search for query: {}", query);
         EmbeddingProfile profile = profileProvider.getActiveProfile();
 
@@ -143,13 +167,13 @@ public class HybridRetrieverService {
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
         if (!isFulltextAvailable(config, fulltextProvider)) {
-            return vectorSearch(query, documentIds, excludeIds, effectiveLimit, profile);
+            return vectorSearch(query, scope, excludeIds, effectiveLimit, profile);
         }
 
         // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
         CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
                 .supplyAsync(() -> vectorSearch(
-                        query, documentIds, excludeIds, effectiveLimit * 2, profile), taskExecutor)
+                        query, scope, excludeIds, effectiveLimit * 2, profile), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Vector search timed out after {}s, falling back to empty result: {}",
@@ -158,9 +182,9 @@ public class HybridRetrieverService {
                 });
 
         CompletableFuture<List<RetrievalResult>> fulltextFuture = CompletableFuture
-                .supplyAsync(() -> fulltextProvider.search(
+                .supplyAsync(() -> fulltextProvider.searchInScope(
                         query,
-                        documentIds,
+                        scope,
                         excludeIds,
                         effectiveLimit * 2,
                         retrieval.getMinScore(),
@@ -184,14 +208,14 @@ public class HybridRetrieverService {
     /**
      * Vector search.
      */
-    private List<RetrievalResult> vectorSearch(String query, List<Long> documentIds,
+    private List<RetrievalResult> vectorSearch(String query, RetrievalScope scope,
                                                List<Long> excludeIds, int limit,
                                                EmbeddingProfile profile) {
         try {
             float[] queryVector = embeddingModel.embed(query);
             validateQueryVector(queryVector, profile);
             List<Map<String, Object>> rows =
-                    executeVectorQuery(queryVector, documentIds, limit, profile);
+                    executeVectorQuery(queryVector, scope, limit, profile);
             return mapVectorResults(rows, queryVector, excludeIds);
         } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
             log.error("Vector search failed", e);
@@ -200,7 +224,8 @@ public class HybridRetrieverService {
     }
 
     private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
-                                                          List<Long> documentIds, int limit,
+                                                          RetrievalScope retrievalScope,
+                                                          int limit,
                                                           EmbeddingProfile profile) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
@@ -208,26 +233,15 @@ public class HybridRetrieverService {
                 + "::text AS embedding, e.document_id, e.chunk_index, e.metadata";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
                 + "AND e." + vectorColumn + " IS NOT NULL ";
-        if (documentIds != null && !documentIds.isEmpty()) {
-            String placeholders = documentIds.stream()
-                    .map(id -> "?").collect(Collectors.joining(","));
-            String sql = String.format(
-                    select + scope
-                            + "AND e.document_id IN (%s) "
-                            + "ORDER BY e." + vectorColumn
-                            + " <=> CAST(? AS vector) LIMIT ?",
-                    placeholders);
-            List<Object> args = new ArrayList<>(documentIds);
-            args.add(vectorStr);
-            args.add(limit);
-            return jdbcTemplate.queryForList(sql, args.toArray());
-        }
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
-                select + scope
-                        + "ORDER BY e." + vectorColumn
-                        + " <=> CAST(? AS vector) LIMIT ?",
-                vectorStr, limit);
-        return rows;
+        RetrievalScopeSql.Fragment fragment =
+                RetrievalScopeSql.build(retrievalScope);
+        String sql = select + scope + fragment.sql()
+                + "ORDER BY e." + vectorColumn
+                + " <=> CAST(? AS vector) LIMIT ?";
+        List<Object> args = new ArrayList<>(fragment.args());
+        args.add(vectorStr);
+        args.add(limit);
+        return jdbcTemplate.queryForList(sql, args.toArray());
     }
 
     private void validateQueryVector(float[] queryVector, EmbeddingProfile profile) {

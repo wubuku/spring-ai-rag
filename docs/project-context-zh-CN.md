@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-15。
+> **最近复核**：2026-08-16。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -63,16 +63,19 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
   仍保持占用。
 - `rag_documents.collection_id` 建立 Collection 与 Document 的一对多关系；单个文档最多属于一个
   Collection，也可以不属于任何 Collection。
-- Chat 与 Search 推荐多个 `collectionKeys`，deprecated 的 `collectionIds` 继续兼容。
-  `CollectionIdentityResolver` 与 `ApiKeyCollectionAccess` 校验 ID/key 集合一致性并转换为
-  已授权内部 ID，再由 `CollectionDocumentResolver` 展开并与显式 `documentIds` 取交集。
-- 不受限调用方同时省略两种身份字段表示不限定 Collection；受限 API Key 省略范围时继承
-  允许列表。显式空范围返回 `400`；受限调用方的未知或未授权 key 返回 `403`。已授权非空
-  范围没有文档时返回空结果。
+- Chat 与 Search 支持 `CALLER_VISIBLE`、`ANY_COLLECTION` 和
+  `SELECTED_COLLECTIONS`。省略 mode 但提供 Collection 列表时保持旧的 selected 语义；
+  mode 与列表都省略时表示 `CALLER_VISIBLE`。受限 API Key 不会通过 mode 扩权：
+  caller-visible 和 any-Collection 都收敛为该 Key 的 allow-list。
+- `CollectionRetrievalScopeResolver` 负责请求校验、通过 `CollectionIdentityResolver`
+  批量且区分大小写地解析 key、应用 `ApiKeyCollectionAccess`，并生成不可变
+  `RetrievalScope`。显式 `documentIds` 是额外交集。selected 输入为空或非法返回 `400`；
+  受限调用方的未知/未授权 key 返回 `403`；不受限调用方的未知 key 返回 `404`。
 - Collection CRUD、恢复、克隆、文档关联、导入导出、文档写入、上传、PDF-to-RAG、
   WebUI 和 API Key 管理均在外部边界使用稳定 key；数据库关系和检索仍使用数字 ID。
-- WebUI Chat 与 Search 当前单选 Collection key，后端协议支持多个 key；Collections、
-  Documents、Files 和 API Keys 页面也在外部边界使用 key。
+- WebUI Chat 与 Search 均提供三种模式。selected 模式支持服务端 Collection 搜索、
+  每页 50 项、跨页多选和最多 100 个 key；Collections、Documents、Files 和 API Keys
+  页面也在外部边界使用 key。
 
 当前边界：
 
@@ -82,8 +85,12 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
   completed 状态。
 - 删除 Collection 会软删除集合并解除文档关联，不会删除文档或 embeddings；解除关联后的文档
   仍可能出现在未限定 Collection 的全库检索中；被删除 Collection 的 key 不可复用。
-- 当前实现先把 Collection 展开为 document IDs，再生成 `document_id IN (...)` 查询；
-  超大 Collection 需要评估参数规模，并优先演进为数据库直接按 `collection_id` JOIN/过滤。
+- `RetrievalScopeSql` 将 Collection 条件直接下推到 Vector 和所有 Full-text SQL：
+  任意已归属 Collection 使用 `d.collection_id IS NOT NULL`，selected 使用
+  `d.collection_id = ANY (?)` 和 JDBC `bigint[]` 参数；显式 document ID 使用独立的
+  `bigint[]` predicate。
+- 检索在有效 Collection 并集上计算一次全局 top-k；尚未提供保证每个 selected
+  Collection 都贡献结果的 `EACH_COLLECTION` 模式。
 
 详细设计见 [architecture-zh-CN.md](architecture-zh-CN.md)。
 
@@ -134,9 +141,9 @@ JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V29。
+- Flyway 当前为 V1–V30。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
-  结构化记录。
+  结构化记录；V30 增加外部文档同步 schema。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 

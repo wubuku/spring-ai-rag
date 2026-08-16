@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-15.
+> **Last reviewed**: 2026-08-16.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -65,22 +65,24 @@ boundary across ingestion, retrieval, and authorization:
   and remains reserved after soft deletion.
 - `rag_documents.collection_id` defines the one-to-many relationship. A
   document belongs to at most one Collection and may also be unassigned.
-- Chat and Search prefer multiple `collectionKeys`; deprecated
-  `collectionIds` remains compatible. `CollectionIdentityResolver` and
-  `ApiKeyCollectionAccess` validate matching ID/key sets and convert them to
-  authorized internal IDs before `CollectionDocumentResolver` expands and
-  intersects with explicit `documentIds`.
-- For an unrestricted caller, omitting both identity fields means no
-  Collection filter. A restricted API key inherits its allow-list when scope
-  is omitted. An explicitly empty scope returns `400`; a restricted caller's
-  unknown or unauthorized key returns `403`. A non-empty authorized scope
-  with no documents returns an empty result.
+- Chat and Search accept `CALLER_VISIBLE`, `ANY_COLLECTION`, and
+  `SELECTED_COLLECTIONS`. Omitted mode plus a Collection list preserves the
+  legacy selected behavior; omitting both mode and lists means
+  `CALLER_VISIBLE`. Restricted API keys never gain access through a mode:
+  caller-visible and any-Collection both resolve to the key's allow-list.
+- `CollectionRetrievalScopeResolver` validates the request, batches
+  case-sensitive key resolution through `CollectionIdentityResolver`, applies
+  `ApiKeyCollectionAccess`, and produces an immutable `RetrievalScope`.
+  Explicit `documentIds` are an additional intersection. Empty or invalid
+  selected input returns `400`; restricted unknown/unauthorized keys return
+  `403`; unrestricted unknown keys return `404`.
 - Collection CRUD, restore, clone, document association, import/export,
   document ingestion, upload, PDF-to-RAG, WebUI, and API-key management expose
   the stable key. Database relationships and retrieval remain numeric.
-- WebUI Chat and Search currently select one Collection key; backend protocols
-  support multiple keys. Collections, Documents, Files, and API Keys also use
-  keys at their external boundary.
+- WebUI Chat and Search expose all three modes. Selected mode supports
+  server-side Collection search, 50-item pages, cross-page multi-selection,
+  and up to 100 keys. Collections, Documents, Files, and API Keys also use keys
+  at their external boundary.
 
 Current boundaries:
 
@@ -93,9 +95,14 @@ Current boundaries:
   delete documents or embeddings. Unlinked documents may still appear in
   unscoped full-corpus retrieval. The deleted Collection's key cannot be
   reused.
-- Retrieval currently expands Collections to document IDs and generates a
-  `document_id IN (...)` filter. Very large Collections require parameter-size
-  testing and should evolve toward a direct `collection_id` join/filter.
+- `RetrievalScopeSql` pushes Collection filters directly into vector and all
+  full-text SQL paths: `d.collection_id IS NOT NULL` for any assigned
+  Collection, or `d.collection_id = ANY (?)` with a JDBC `bigint[]` parameter
+  for selected Collections. Explicit document IDs use a separate `bigint[]`
+  predicate.
+- Retrieval computes one global top-k across the effective Collection union.
+  It does not yet provide an `EACH_COLLECTION` mode that guarantees a result
+  contribution from every selected Collection.
 
 See [architecture.md](architecture.md).
 
@@ -153,9 +160,10 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V29.
+- Flyway is currently V1–V30.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
-  Collection business key; V29 adds JSONB structured records.
+  Collection business key; V29 adds JSONB structured records; V30 adds the
+  external-document synchronization schema.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 

@@ -1,14 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { Search } from './Search';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { collectionsApi } from '../api/collections';
 import { searchApi } from '../api/search';
-
-const mockRefetch = vi.fn();
-const mockUseQuery = vi.fn();
-
-vi.mock('@tanstack/react-query', () => ({
-  useQuery: (...args: unknown[]) => mockUseQuery(...args),
-}));
+import { Search } from './Search';
 
 vi.mock('../api/search', () => ({
   searchApi: {
@@ -22,102 +17,122 @@ vi.mock('../api/collections', () => ({
   },
 }));
 
+const collections = [
+  {
+    id: 10,
+    collectionKey: 'zeta:manual',
+    name: 'Zeta Manual',
+    documentCount: 2,
+  },
+  {
+    id: 11,
+    collectionKey: 'alpha:manual',
+    name: 'Alpha Manual',
+    documentCount: 3,
+  },
+];
+
+function renderSearch() {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+  return {
+    client,
+    ...render(
+      <QueryClientProvider client={client}>
+        <Search />
+      </QueryClientProvider>,
+    ),
+  };
+}
+
+async function submit(query = 'test query') {
+  fireEvent.change(screen.getByPlaceholderText(/search.placeholder/), {
+    target: { value: query },
+  });
+  fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
+  await waitFor(() => expect(searchApi.search).toHaveBeenCalled());
+}
+
 describe('Search', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { query: 'test', total: 0, results: [] },
     });
-    mockUseQuery.mockImplementation((options: {
-      queryKey: unknown[];
-      queryFn: () => unknown;
-    }) => {
-      if (options.queryKey[0] === 'search-collections') {
-        return {
-          data: {
-            data: {
-              collections: [
-                {
-                  id: 10,
-                  collectionKey: 'customer:manual',
-                  name: 'Knowledge Base',
-                  documentCount: 0,
-                },
-              ],
-            },
-          },
-          isPending: false,
-        };
-      }
-      return {
-        data: undefined,
-        isPending: false,
-        refetch: () => {
-          mockRefetch();
-          return options.queryFn();
-        },
-      };
+    (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        collections,
+        total: collections.length,
+        offset: 0,
+        limit: 50,
+      },
     });
   });
 
-  it('renders page title', () => {
-    render(<Search />);
-    const h1 = document.querySelector('h1');
-    expect(h1).toBeInTheDocument();
-    expect(h1).toHaveTextContent('search.title');
-  });
+  it('renders the basic search controls', () => {
+    renderSearch();
 
-  it('shows search input', () => {
-    render(<Search />);
+    expect(screen.getByText('search.title')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/search.placeholder/)).toBeInTheDocument();
-  });
-
-  it('shows hybrid checkbox', () => {
-    render(<Search />);
-    expect(screen.getByLabelText(/Hybrid/)).toBeInTheDocument();
-  });
-
-  it('shows search button', () => {
-    render(<Search />);
-    expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeInTheDocument();
-  });
-
-  it('search button is disabled when input is empty', () => {
-    render(<Search />);
+    expect(screen.getByLabelText(/Hybrid/)).toBeChecked();
     expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
   });
 
-  it('search button is enabled when input has text', () => {
-    render(<Search />);
-    const input = screen.getByPlaceholderText(/search.placeholder/);
-    fireEvent.change(input, { target: { value: 'test' } });
-    expect(screen.getByRole('button', { name: /search.searchButton/ })).not.toBeDisabled();
-  });
+  it('sends CALLER_VISIBLE without collection keys by default', async () => {
+    const { client } = renderSearch();
+    await submit();
 
-  it('calls refetch when form is submitted', () => {
-    render(<Search />);
-    const input = screen.getByPlaceholderText(/search.placeholder/);
-    fireEvent.change(input, { target: { value: 'test query' } });
-    fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
-    expect(mockRefetch).toHaveBeenCalled();
-  });
-
-  it('searches by the selected collection key', async () => {
-    render(<Search />);
-
-    fireEvent.change(screen.getByTestId('search-collection-select'), {
-      target: { value: 'customer:manual' },
+    expect(searchApi.search).toHaveBeenCalledWith({
+      query: 'test query',
+      useHybrid: true,
+      collectionScopeMode: 'CALLER_VISIBLE',
+      collectionKeys: undefined,
     });
+    expect(client.getQueryCache().getAll().map(query => query.queryKey))
+      .toContainEqual([
+        'search',
+        'test query',
+        true,
+        'CALLER_VISIBLE',
+        [],
+      ]);
+  });
+
+  it('sends ANY_COLLECTION without stale collection keys', async () => {
+    renderSearch();
+    fireEvent.click(screen.getByTestId('search-scope-ANY_COLLECTION'));
+    await submit('assigned only');
+
+    expect(searchApi.search).toHaveBeenCalledWith({
+      query: 'assigned only',
+      useHybrid: true,
+      collectionScopeMode: 'ANY_COLLECTION',
+      collectionKeys: undefined,
+    });
+  });
+
+  it('requires selected collections and sends sorted repeated keys', async () => {
+    renderSearch();
+    fireEvent.click(screen.getByTestId('search-scope-SELECTED_COLLECTIONS'));
     fireEvent.change(screen.getByPlaceholderText(/search.placeholder/), {
-      target: { value: 'test query' },
+      target: { value: 'selected query' },
     });
+
+    expect(screen.getByRole('button', { name: /search.searchButton/ })).toBeDisabled();
+
+    const zeta = await screen.findByRole('checkbox', { name: /Zeta Manual/ });
+    const alpha = screen.getByRole('checkbox', { name: /Alpha Manual/ });
+    fireEvent.click(zeta);
+    fireEvent.click(alpha);
     fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
 
     await waitFor(() => {
       expect(searchApi.search).toHaveBeenCalledWith({
-        query: 'test query',
+        query: 'selected query',
         useHybrid: true,
-        collectionKeys: ['customer:manual'],
+        collectionScopeMode: 'SELECTED_COLLECTIONS',
+        collectionKeys: ['alpha:manual', 'zeta:manual'],
       });
     });
   });

@@ -13,8 +13,10 @@ import com.springairag.core.repository.*;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import com.springairag.core.service.UserFeedbackService;
 import com.springairag.core.versioning.ApiVersionConfig;
@@ -41,6 +43,7 @@ import java.util.*;
 
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -106,6 +109,7 @@ class RagControllerIntegrationTest {
     // ==================== Search ====================
     @MockBean private HybridRetrieverService hybridRetrieverService;
     @MockBean private CollectionDocumentResolver collectionDocumentResolver;
+    @MockBean private CollectionRetrievalScopeResolver collectionRetrievalScopeResolver;
     @MockBean private ReRankingService reRankingService;
 
     // ==================== Document ====================
@@ -123,6 +127,14 @@ class RagControllerIntegrationTest {
         when(embeddingProfileProvider.getActiveProfile()).thenReturn(new EmbeddingProfile(
                 1L, "test-profile", "test", "test-model", "v1",
                 1024, "COSINE", "PROVIDER_DEFAULT", true));
+        lenient().when(collectionRetrievalScopeResolver.resolve(
+                nullable(com.springairag.api.enums.CollectionScopeMode.class),
+                nullable(List.class),
+                nullable(List.class),
+                nullable(List.class),
+                nullable(String.class),
+                nullable(com.springairag.core.entity.RagApiKey.class)))
+                .thenReturn(RetrievalScope.unscoped());
     }
 
     // ==================== Collection ====================
@@ -159,7 +171,9 @@ class RagControllerIntegrationTest {
                     com.springairag.api.dto.ChatResponse.builder()
                             .answer("mock reply")
                             .build();
-            when(ragChatService.chat(any(com.springairag.api.dto.ChatRequest.class)))
+            when(ragChatService.chat(
+                    any(com.springairag.api.dto.ChatRequest.class),
+                    any(RetrievalScope.class)))
                     .thenReturn(mockResponse);
 
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -180,7 +194,9 @@ class RagControllerIntegrationTest {
                     com.springairag.api.dto.ChatResponse.builder()
                             .answer("领域回复")
                             .build();
-            when(ragChatService.chat(any(com.springairag.api.dto.ChatRequest.class)))
+            when(ragChatService.chat(
+                    any(com.springairag.api.dto.ChatRequest.class),
+                    any(RetrievalScope.class)))
                     .thenReturn(mockResponse);
 
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -286,9 +302,9 @@ class RagControllerIntegrationTest {
         @Test
         void search_get_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
-            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
-                    .thenReturn(null);
-            when(hybridRetrieverService.search(eq("test query"), isNull(), isNull(), eq(5), any()))
+            when(hybridRetrieverService.searchInScope(
+                    eq("test query"), any(RetrievalScope.class),
+                    isNull(), eq(5), any()))
                     .thenReturn(List.of(result));
 
             mockMvc.perform(get("/api/v1/rag/search")
@@ -302,9 +318,9 @@ class RagControllerIntegrationTest {
 
         @Test
         void search_get_defaultParams() throws Exception {
-            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
-                    .thenReturn(null);
-            when(hybridRetrieverService.search(eq("default"), isNull(), isNull(), eq(10), any()))
+            when(hybridRetrieverService.searchInScope(
+                    eq("default"), any(RetrievalScope.class),
+                    isNull(), eq(10), any()))
                     .thenReturn(List.of());
 
             mockMvc.perform(get("/api/v1/rag/search")
@@ -316,9 +332,9 @@ class RagControllerIntegrationTest {
         @Test
         void search_post_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
-            when(collectionDocumentResolver.resolveDocumentIds(isNull(), isNull()))
-                    .thenReturn(null);
-            when(hybridRetrieverService.search(anyString(), isNull(), isNull(), anyInt(), any()))
+            when(hybridRetrieverService.searchInScope(
+                    anyString(), any(RetrievalScope.class),
+                    isNull(), anyInt(), any()))
                     .thenReturn(List.of(result));
 
             mockMvc.perform(post("/api/v1/rag/search")
@@ -336,6 +352,34 @@ class RagControllerIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$").isArray())
                     .andExpect(jsonPath("$.length()").value(1));
+        }
+
+        @Test
+        void search_get_invalidScopeModeReturns400() throws Exception {
+            mockMvc.perform(get("/api/v1/rag/search")
+                            .param("query", "invalid mode")
+                            .param("collectionScopeMode", "UNKNOWN"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        void search_post_collectionLimitIsValidated() throws Exception {
+            String keys = java.util.stream.IntStream.range(0, 101)
+                    .mapToObj(index -> "\"key-" + index + "\"")
+                    .collect(java.util.stream.Collectors.joining(","));
+
+            mockMvc.perform(post("/api/v1/rag/search")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                      "query": "too many",
+                                      "collectionScopeMode": "SELECTED_COLLECTIONS",
+                                      "collectionKeys": [%s]
+                                    }
+                                    """.formatted(keys)))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.error")
+                            .value("VALIDATION_FAILED"));
         }
     }
 
@@ -503,7 +547,8 @@ class RagControllerIntegrationTest {
             RagCollection collection = new RagCollection();
             collection.setId(1L);
             collection.setName("集合A");
-            when(collectionRepository.searchCollections(isNull(), isNull(), any(PageRequest.class)))
+            when(collectionRepository.searchCollections(
+                    isNull(), isNull(), isNull(), any(PageRequest.class)))
                     .thenReturn(new PageImpl<>(List.of(collection)));
             when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
@@ -511,6 +556,24 @@ class RagControllerIntegrationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.collections").isArray())
                     .andExpect(jsonPath("$.total").value(1));
+        }
+
+        @Test
+        void listCollections_queryIsForwardedForNameOrKeySearch()
+                throws Exception {
+            when(collectionRepository.searchCollections(
+                    isNull(), eq("manual:v3"), isNull(),
+                    any(PageRequest.class)))
+                    .thenReturn(new PageImpl<>(List.of()));
+
+            mockMvc.perform(get("/api/v1/rag/collections")
+                            .param("query", "manual:v3"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.collections").isArray());
+
+            verify(collectionRepository).searchCollections(
+                    isNull(), eq("manual:v3"), isNull(),
+                    any(PageRequest.class));
         }
 
         @Test

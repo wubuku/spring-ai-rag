@@ -80,19 +80,34 @@ key 时，两者解析出的 Collection 集合必须一致；比较时忽略顺�
 
 ### Collection 检索范围语义
 
-Chat 和 Search 推荐使用 `collectionKeys`；deprecated 的 `collectionIds` 使用相同范围
-语义：
+Chat 和 Search 接受 `collectionScopeMode`：
 
-- 对不受限调用方，同时省略两个字段表示不按 Collection 限制，将搜索全部可检索文档。
-- 传非空列表表示仅检索这些 Collection；后端支持一次指定多个 Collection。
-- 同时提供 `documentIds` 时，两者取交集。
-- 非空 Collection 范围没有任何文档时返回空结果，不会退化为全库检索。
-- 对受限 API Key，省略范围时使用 Key 的内部允许列表；显式传入未知或未授权 key
-  返回 `403`。
-- 显式传入空的 `collectionKeys` 或 `collectionIds` 返回 `400`，绝不会当作省略范围。
+| 模式 | 不受限调用方 | 受限 API Key |
+|------|--------------|---------------|
+| `CALLER_VISIBLE` | 全部可检索文档，包括未归属 Collection 的文档 | Key 的 Collection allow-list 内文档 |
+| `ANY_COLLECTION` | 所有 `collection_id IS NOT NULL` 的可检索文档 | Key 的 Collection allow-list 内文档，不会扩大权限 |
+| `SELECTED_COLLECTIONS` | 显式指定 Collection 的并集 | 指定 Collection 必须是 allow-list 子集 |
 
-当前实现会先把 Collection 展开为 document IDs，再由向量和全文检索按
-`document_id IN (...)` 过滤。大规模 Collection 的性能与参数数量需要单独压测。
+兼容推导规则：
+
+- 同时省略 mode 和所有 Collection 字段：推导为 `CALLER_VISIBLE`。
+- 省略 mode 但传入非空 `collectionKeys` 或 deprecated `collectionIds`：
+  推导为 `SELECTED_COLLECTIONS`。
+- `CALLER_VISIBLE` 与 `ANY_COLLECTION` 不允许出现任何 Collection 列表。
+- `SELECTED_COLLECTIONS` 必须提供非空 key 或 ID 列表。
+- 显式空 Collection 列表返回 `400`。
+- Collection 身份最多 100 个，`documentIds` 最多 1000 个。
+- 同时提供 key 和 ID 时，两者必须标识同一集合。
+- `documentIds` 与内部使用的 `documentType` 会和授权后的 Collection 范围取交集。
+
+不受限调用方传入未知 key 返回 `404`；受限调用方传入未知或未授权 key 返回 `403`，
+避免泄露 Collection 是否存在。deprecated 的未知数字 ID 对不受限调用方只会零命中。
+
+向量、English FTS、pg_jieba 与 pg_trgm 检索会直接在 PostgreSQL 使用
+`d.collection_id = ANY (?)`、`d.collection_id IS NOT NULL` 和可选 JDBC
+`bigint[]` 文档过滤，不再把 Collection 展开为全部 document IDs。多个 Collection
+组成一个候选并集并统一竞争 global top-k；本次不支持按每个 Collection 保底召回的
+`EACH_COLLECTION`。
 
 ### API 密钥管理
 
@@ -238,6 +253,7 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
   "sessionId": "session-001",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
   "collectionKeys": ["medical:guidelines:v3", "medical:drugs:v2"],
   "documentIds": [10, 20],
   "maxResults": 5,
@@ -253,6 +269,7 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 | `sessionId` | string | | 会话 ID，最长 36 字符；省略时自动生成 |
 | `domainId` | string | | 领域扩展 ID |
 | `model` | string | | `GET /rag/models` 返回的运行时模型引用；省略时使用默认链 |
+| `collectionScopeMode` | enum | | `CALLER_VISIBLE`、`ANY_COLLECTION` 或 `SELECTED_COLLECTIONS` |
 | `collectionKeys` | string[] | | 推荐的稳定 Collection 范围 |
 | `collectionIds` | long[] | | deprecated 数字兼容范围 |
 | `documentIds` | long[] | | 仅检索这些文档；与集合范围取交集 |
@@ -362,6 +379,7 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
 | `useHybrid` | bool | true | Use hybrid search |
 | `vectorWeight` | double | 0.5 | Vector search weight |
 | `fulltextWeight` | double | 0.5 | Full-text search weight |
+| `collectionScopeMode` | enum | `CALLER_VISIBLE` | 显式 Collection 范围模式 |
 | `collectionKeys` | string[] | | 推荐的重复 Collection 范围参数 |
 | `collectionIds` | long[] | | deprecated 的重复数字范围参数 |
 
@@ -394,6 +412,7 @@ Submit more complex retrieval configuration via request body.
 ```json
 {
   "query": "Spring AI",
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
   "collectionKeys": ["customer-42:manual:v3"],
   "documentIds": [1, 2, 3],
   "config": {
@@ -750,6 +769,7 @@ Paginated collection query.
 | `offset` | int | 0 | Number of collections to skip |
 | `limit` | int | 20 | Maximum number of collections to return |
 | `name` | string | | Optional collection-name filter |
+| `query` | string | | 对名称或原样存储 key 执行不区分大小写的子串匹配 |
 | `enabled` | boolean | | Optional enabled-state filter |
 
 受限 API Key 只能看到允许范围内的 Collection。

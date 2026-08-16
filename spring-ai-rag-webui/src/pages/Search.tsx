@@ -2,33 +2,36 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { searchApi } from '../api/search';
-import { collectionsApi } from '../api/collections';
+import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
 import { SearchResults } from '../components/SearchResults';
 import { useSearchHistory } from '../hooks/useSearchHistory';
+import type { CollectionScopeMode } from '../types/api';
 import styles from './Search.module.css';
 
 export function Search() {
   const { t } = useTranslation();
   const [query, setQuery] = useState<string>('');
   const [useHybrid, setUseHybrid] = useState(true);
-  const [selectedCollectionKey, setSelectedCollectionKey] = useState('');
+  const [scopeMode, setScopeMode] =
+    useState<CollectionScopeMode>('CALLER_VISIBLE');
+  const [selectedCollectionKeys, setSelectedCollectionKeys] =
+    useState<string[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
 
-  const { data: collectionsData } = useQuery({
-    queryKey: ['search-collections'],
-    queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
-  });
-  const collections = collectionsData?.data?.collections ?? [];
+  const sortedCollectionKeys = [...selectedCollectionKeys].sort();
+  const selectedScopeIsValid =
+    scopeMode !== 'SELECTED_COLLECTIONS' || sortedCollectionKeys.length > 0;
 
   const { data, isPending, refetch } = useQuery({
-    queryKey: ['search', query, useHybrid, selectedCollectionKey],
+    queryKey: ['search', query, useHybrid, scopeMode, sortedCollectionKeys],
     queryFn: () => searchApi.search({
       query,
       useHybrid,
-      collectionKeys: selectedCollectionKey
-        ? [selectedCollectionKey]
+      collectionScopeMode: scopeMode,
+      collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
+        ? sortedCollectionKeys
         : undefined,
     }),
     enabled: false,
@@ -48,7 +51,7 @@ export function Search() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) return;
+    if (!query.trim() || !selectedScopeIsValid) return;
     setHasSearched(true);
     addQuery(query, useHybrid);
     refetch();
@@ -133,27 +136,20 @@ export function Search() {
           />
           Hybrid
         </label>
-        <label className={styles.collectionLabel} htmlFor="search-collection">
-          <span>{t('search.collection')}</span>
-          <select
-            id="search-collection"
-            data-testid="search-collection-select"
-            value={selectedCollectionKey}
-            onChange={event => setSelectedCollectionKey(event.target.value)}
-            className={styles.collectionSelect}
-          >
-            <option value="">{t('search.allCollections')}</option>
-            {collections.map(collection => (
-              <option
-                key={collection.collectionKey}
-                value={collection.collectionKey}
-              >
-                {collection.name} ({collection.collectionKey})
-              </option>
-            ))}
-          </select>
-        </label>
-        <button type="submit" disabled={!query.trim()} className={styles.searchBtn}>
+        <div className={styles.scopeSelector}>
+          <CollectionScopeSelector
+            idPrefix="search"
+            mode={scopeMode}
+            selectedKeys={selectedCollectionKeys}
+            onModeChange={setScopeMode}
+            onSelectedKeysChange={setSelectedCollectionKeys}
+          />
+        </div>
+        <button
+          type="submit"
+          disabled={!query.trim() || !selectedScopeIsValid}
+          className={styles.searchBtn}
+        >
           {t('search.searchButton')}
         </button>
       </form>

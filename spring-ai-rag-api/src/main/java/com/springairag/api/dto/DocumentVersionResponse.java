@@ -24,6 +24,9 @@ public record DocumentVersionResponse(
         @Schema(description = "Content hash", example = "sha256:abc123...")
         String contentHash,
 
+        @Schema(description = "Caller-supplied source revision snapshot")
+        String sourceRevisionSnapshot,
+
         @Schema(description = "Size in bytes", example = "4096")
         Long size,
 
@@ -52,8 +55,23 @@ public record DocumentVersionResponse(
             String changeDescription,
             LocalDateTime createdAt,
             String contentSnapshot) {
-        this(id, documentId, versionNumber, contentHash, size, changeType,
+        this(id, documentId, versionNumber, contentHash, null, size, changeType,
                 changeDescription, createdAt, contentSnapshot, null);
+    }
+
+    public DocumentVersionResponse(
+            Long id,
+            Long documentId,
+            int versionNumber,
+            String contentHash,
+            Long size,
+            String changeType,
+            String changeDescription,
+            LocalDateTime createdAt,
+            String contentSnapshot,
+            JsonNode jsonbPayloadSnapshot) {
+        this(id, documentId, versionNumber, contentHash, null, size, changeType,
+                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot);
     }
 
     @Override
@@ -65,6 +83,7 @@ public record DocumentVersionResponse(
                 && Objects.equals(id, that.id)
                 && Objects.equals(documentId, that.documentId)
                 && Objects.equals(contentHash, that.contentHash)
+                && Objects.equals(sourceRevisionSnapshot, that.sourceRevisionSnapshot)
                 && Objects.equals(size, that.size)
                 && Objects.equals(changeType, that.changeType)
                 && Objects.equals(changeDescription, that.changeDescription)
@@ -75,7 +94,7 @@ public record DocumentVersionResponse(
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, documentId, versionNumber, contentHash, size, changeType,
+        return Objects.hash(id, documentId, versionNumber, contentHash, sourceRevisionSnapshot, size, changeType,
                 changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot);
     }
 
@@ -86,6 +105,7 @@ public record DocumentVersionResponse(
                 ", documentId=" + documentId +
                 ", versionNumber=" + versionNumber +
                 ", contentHash='" + contentHash + "'" +
+                ", sourceRevisionSnapshot='" + sourceRevisionSnapshot + "'" +
                 ", size=" + size +
                 ", changeType='" + changeType + "'" +
                 ", changeDescription='" + changeDescription + "'" +

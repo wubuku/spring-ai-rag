@@ -106,7 +106,13 @@ describe('Chat', () => {
     await act(async () => {
       fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
     });
-    expect(mockSend).toHaveBeenCalledWith('Hello', undefined, undefined, undefined);
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Hello',
+      conversationId: undefined,
+      model: undefined,
+      collectionScopeMode: 'CALLER_VISIBLE',
+      collectionKeys: undefined,
+    });
   });
 
   it('Shift+Enter does not submit', async () => {
@@ -132,7 +138,13 @@ describe('Chat', () => {
     await act(async () => {
       fireEvent.click(sendBtn);
     });
-    expect(mockSend).toHaveBeenCalledWith('Test query', undefined, undefined, undefined);
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Test query',
+      conversationId: undefined,
+      model: undefined,
+      collectionScopeMode: 'CALLER_VISIBLE',
+      collectionKeys: undefined,
+    });
   });
 
   it('send button is disabled and shows ... when isConnected is true', () => {
@@ -190,15 +202,16 @@ describe('Chat', () => {
     fireEvent.change(textarea, { target: { value: 'Use this model' } });
     fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
 
-    expect(mockSend).toHaveBeenCalledWith(
-      'Use this model',
-      undefined,
-      undefined,
-      'openrouter/xiaomi/mimo-v2-pro'
-    );
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Use this model',
+      conversationId: undefined,
+      model: 'openrouter/xiaomi/mimo-v2-pro',
+      collectionScopeMode: 'CALLER_VISIBLE',
+      collectionKeys: undefined,
+    });
   });
 
-  it('passes the selected collection key to SSE', async () => {
+  it('passes multiple selected collection keys to SSE', async () => {
     (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: {
         collections: [
@@ -208,26 +221,62 @@ describe('Chat', () => {
             name: 'Knowledge Base',
             documentCount: 2,
           },
+          {
+            id: 11,
+            collectionKey: 'customer:faq',
+            name: 'FAQ',
+            documentCount: 3,
+          },
         ],
-        total: 1,
+        total: 2,
       },
     });
     renderChat();
 
-    const collectionSelect = await screen.findByTestId('chat-collection-select');
-    await screen.findByRole('option', { name: /Knowledge Base/ });
-    await userEvent.selectOptions(collectionSelect, 'customer:manual');
+    fireEvent.click(screen.getByTestId('chat-scope-SELECTED_COLLECTIONS'));
+    const manual = await screen.findByRole('checkbox', { name: /Knowledge Base/ });
+    const faq = screen.getByRole('checkbox', { name: /FAQ/ });
+    fireEvent.click(manual);
+    fireEvent.click(faq);
     fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
       target: { value: 'Scoped question' },
     });
     fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
 
-    expect(mockSend).toHaveBeenCalledWith(
-      'Scoped question',
-      undefined,
-      undefined,
-      undefined,
-      ['customer:manual'],
-    );
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Scoped question',
+      conversationId: undefined,
+      model: undefined,
+      collectionScopeMode: 'SELECTED_COLLECTIONS',
+      collectionKeys: ['customer:faq', 'customer:manual'],
+    });
+  });
+
+  it('sends ANY_COLLECTION without selected keys', async () => {
+    renderChat();
+    fireEvent.click(screen.getByTestId('chat-scope-ANY_COLLECTION'));
+    fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
+      target: { value: 'Assigned documents only' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
+
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Assigned documents only',
+      conversationId: undefined,
+      model: undefined,
+      collectionScopeMode: 'ANY_COLLECTION',
+      collectionKeys: undefined,
+    });
+  });
+
+  it('does not submit an empty selected collection scope', () => {
+    renderChat();
+    fireEvent.click(screen.getByTestId('chat-scope-SELECTED_COLLECTIONS'));
+    fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
+      target: { value: 'Blocked until a collection is selected' },
+    });
+
+    expect(screen.getByRole('button', { name: /chat.send/ })).toBeDisabled();
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });

@@ -5,10 +5,13 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.CollectionDocumentResolver;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
@@ -33,15 +36,20 @@ class RagSearchControllerTest {
     private HybridRetrieverService hybridRetriever;
     private RagDocumentRepository documentRepository;
     private ReRankingService reRankingService;
+    private CollectionRetrievalScopeResolver scopeResolver;
     private RagSearchController controller;
+    private RagSearchController productionController;
 
     @BeforeEach
     void setUp() {
         hybridRetriever = mock(HybridRetrieverService.class);
         documentRepository = mock(RagDocumentRepository.class);
         reRankingService = mock(ReRankingService.class);
+        scopeResolver = mock(CollectionRetrievalScopeResolver.class);
         CollectionDocumentResolver resolver = new CollectionDocumentResolver(documentRepository);
         controller = new RagSearchController(hybridRetriever, resolver, reRankingService);
+        productionController = new RagSearchController(
+                hybridRetriever, reRankingService, scopeResolver);
         when(reRankingService.rerank(anyString(), anyList(), anyInt()))
                 .thenAnswer(invocation -> invocation.getArgument(1));
     }
@@ -382,6 +390,66 @@ class RagSearchControllerTest {
                 () -> controller.searchWithConfig(
                         req, requestForRestrictedKey(2L, 4L)));
         verifyNoInteractions(hybridRetriever);
+    }
+
+    @Test
+    @DisplayName("Production GET path passes ANY_COLLECTION scope directly to retriever")
+    void productionGet_passesResolvedScopeWithoutDocumentExpansion() {
+        RetrievalScope scope = RetrievalScope.anyAssigned(null, null);
+        when(scopeResolver.resolve(
+                CollectionScopeMode.ANY_COLLECTION,
+                null, null, null, null, null))
+                .thenReturn(scope);
+        when(hybridRetriever.searchInScope(
+                eq("query"), same(scope), isNull(), eq(5),
+                any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+
+        ResponseEntity<?> response = productionController.search(
+                "query", 5, true, 0.5, 0.5,
+                CollectionScopeMode.ANY_COLLECTION,
+                null, null, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(hybridRetriever).searchInScope(
+                eq("query"), same(scope), isNull(), eq(5),
+                any(RetrievalConfig.class));
+        verifyNoInteractions(documentRepository);
+    }
+
+    @Test
+    @DisplayName("Production POST path preserves selected collections and document intersection")
+    void productionPost_passesResolvedScopeWithoutDocumentExpansion() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(2L, 4L), List.of(10L, 11L), null);
+        when(scopeResolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null, List.of("two", "four"),
+                List.of(10L, 11L), null, null))
+                .thenReturn(scope);
+        when(hybridRetriever.searchInScope(
+                eq("query"), same(scope), isNull(), eq(8),
+                any(RetrievalConfig.class)))
+                .thenReturn(List.of());
+
+        SearchRequest request = new SearchRequest("query");
+        request.setCollectionScopeMode(
+                CollectionScopeMode.SELECTED_COLLECTIONS);
+        request.setCollectionKeys(List.of("two", "four"));
+        request.setDocumentIds(List.of(10L, 11L));
+        request.setConfig(RetrievalConfig.builder()
+                .maxResults(8)
+                .useRerank(false)
+                .build());
+
+        ResponseEntity<List<RetrievalResult>> response =
+                productionController.searchWithConfig(request, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        verify(hybridRetriever).searchInScope(
+                eq("query"), same(scope), isNull(), eq(8),
+                any(RetrievalConfig.class));
+        verifyNoInteractions(documentRepository);
     }
 
     private MockHttpServletRequest requestForRestrictedKey(Long... ids) {

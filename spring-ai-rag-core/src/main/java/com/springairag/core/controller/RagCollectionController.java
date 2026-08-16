@@ -177,6 +177,7 @@ public class RagCollectionController {
             @RequestParam(defaultValue = "0") int offset,
             @RequestParam(defaultValue = "20") int limit,
             @RequestParam(required = false) String name,
+            @RequestParam(required = false) String query,
             @RequestParam(required = false) Boolean enabled) {
 
         int page = offset / limit;
@@ -186,9 +187,9 @@ public class RagCollectionController {
                 ApiKeyCollectionAccess.currentKey());
         var pageResult = restrictedIds
                 .map(ids -> collectionRepository.searchCollectionsByIds(
-                        List.copyOf(ids), name, enabled, pageable))
+                        List.copyOf(ids), name, query, enabled, pageable))
                 .orElseGet(() -> collectionRepository.searchCollections(
-                        name, enabled, pageable));
+                        name, query, enabled, pageable));
 
         List<Map<String, Object>> items = pageResult.getContent().stream()
                 .map(c -> {
@@ -202,6 +203,11 @@ public class RagCollectionController {
                 "total", pageResult.getTotalElements(),
                 "offset", offset,
                 "limit", limit));
+    }
+
+    ResponseEntity<Map<String, Object>> list(
+            int offset, int limit, String name, Boolean enabled) {
+        return list(offset, limit, name, null, enabled);
     }
 
     /**
@@ -593,6 +599,8 @@ public class RagCollectionController {
                         doc.getMetadata(),
                         doc.getSize(),
                         doc.getExternalId(),
+                        doc.getSourceRevision(),
+                        doc.getSourceDeletedAt(),
                         doc.getJsonbPayload(),
                         doc.getOriginalFilename(),
                         doc.getEnabled()))
@@ -685,6 +693,13 @@ public class RagCollectionController {
         if (docList != null) {
             java.util.Set<String> externalIds = new java.util.HashSet<>();
             for (CollectionImportRequest.ImportedDocument docData : docList) {
+                if (docData.getExternalId() != null
+                        && !docData.getExternalId().isBlank()
+                        && !externalIds.add(docData.getExternalId().trim())) {
+                    throw new IllegalArgumentException(
+                            "Duplicate document externalId in import: "
+                                    + docData.getExternalId());
+                }
                 if (RagDocument.JSON_RECORD.equals(docData.getDocumentType())) {
                     if (docData.getExternalId() == null
                             || docData.getExternalId().isBlank()
@@ -692,11 +707,6 @@ public class RagCollectionController {
                             || docData.getJsonbPayload().isNull()) {
                         throw new IllegalArgumentException(
                                 "json-record import requires externalId and jsonbPayload");
-                    }
-                    if (!externalIds.add(docData.getExternalId().trim())) {
-                        throw new IllegalArgumentException(
-                                "Duplicate JSON record externalId in import: "
-                                        + docData.getExternalId());
                     }
                     if (jsonRecordService == null) {
                         throw new IllegalStateException(
@@ -729,10 +739,14 @@ public class RagCollectionController {
         doc.setContentHash(DigestUtils.sha256(docData.getContent()));
         doc.setOriginalFilename(docData.getOriginalFilename());
         doc.setExternalId(docData.getExternalId());
+        doc.setSourceRevision(docData.getSourceRevision());
+        doc.setSourceDeletedAt(docData.getSourceDeletedAt());
         doc.setJsonbPayload(docData.getJsonbPayload() == null
                 ? null : docData.getJsonbPayload().deepCopy());
         doc.setCollectionId(collectionId);
-        doc.setEnabled(docData.getEnabled() == null ? true : docData.getEnabled());
+        doc.setEnabled(docData.getEnabled() == null
+                ? docData.getSourceDeletedAt() == null
+                : docData.getEnabled());
         doc.setProcessingStatus("PENDING");
         return doc;
     }

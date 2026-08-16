@@ -49,7 +49,8 @@ public interface RagEmbeddingRepository extends JpaRepository<RagEmbedding, Long
             + "WHERE s.document_id = :documentId "
             + "AND s.embedding_profile_id = :embeddingProfileId "
             + "AND s.status = 'COMPLETED' "
-            + "AND s.content_hash = d.content_hash",
+            + "AND s.content_hash = d.content_hash "
+            + "AND d.enabled = true",
             nativeQuery = true)
     long countFreshChunksByDocumentIdAndProfileId(
             @Param("documentId") Long documentId,

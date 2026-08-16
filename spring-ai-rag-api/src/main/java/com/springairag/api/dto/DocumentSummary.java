@@ -60,7 +60,13 @@ public record DocumentSummary(
         Map<String, Object> metadata,
 
         @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
-        String collectionKey
+        String collectionKey,
+
+        String externalId,
+        String sourceRevision,
+        LocalDateTime sourceDeletedAt,
+        String processingError,
+        boolean embeddingFresh
 ) {
     public DocumentSummary(Long id, String title, String source, String documentType,
                            String processingStatus, LocalDateTime createdAt, Long size,
@@ -69,8 +75,35 @@ public record DocumentSummary(
                            String contentPreview, String content, Map<String, Object> metadata) {
         this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
                 enabled, updatedAt, collectionId, collectionName, chunkCount, contentPreview,
-                content, metadata, null);
+                content, metadata, null, null, null, null, null, false);
     }
+
+    public DocumentSummary(Long id, String title, String source, String documentType,
+                           String processingStatus, LocalDateTime createdAt, Long size,
+                           String contentHash, boolean enabled, LocalDateTime updatedAt,
+                           Long collectionId, String collectionName, long chunkCount,
+                           String contentPreview, String content, Map<String, Object> metadata,
+                           String collectionKey) {
+        this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
+                enabled, updatedAt, collectionId, collectionName, chunkCount, contentPreview,
+                content, metadata, collectionKey, null, null, null, null, false);
+    }
+
+    /**
+     * Compatibility constructor for callers that already supply collectionKey.
+     */
+    public DocumentSummary(Long id, String title, String source, String documentType,
+                           String processingStatus, LocalDateTime createdAt, Long size,
+                           String contentHash, Boolean enabled, LocalDateTime updatedAt,
+                           Long collectionId, String collectionName, long chunkCount,
+                           String contentPreview, String content, Map<String, Object> metadata,
+                           String collectionKey) {
+        this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
+                Boolean.TRUE.equals(enabled), updatedAt, collectionId, collectionName,
+                chunkCount, contentPreview, content, metadata, collectionKey,
+                null, null, null, null, false);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -89,6 +122,11 @@ public record DocumentSummary(
                 && Objects.equals(collectionId, that.collectionId)
                 && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(collectionName, that.collectionName)
+                && Objects.equals(externalId, that.externalId)
+                && Objects.equals(sourceRevision, that.sourceRevision)
+                && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
+                && Objects.equals(processingError, that.processingError)
+                && embeddingFresh == that.embeddingFresh
                 && Objects.equals(contentPreview, that.contentPreview)
                 && Objects.equals(content, that.content)
                 && Objects.equals(metadata, that.metadata);
@@ -99,7 +137,8 @@ public record DocumentSummary(
         return Objects.hash(id, title, source, documentType, processingStatus,
                 createdAt, size, contentHash, enabled, updatedAt,
                 collectionId, collectionName, chunkCount, contentPreview, content, metadata,
-                collectionKey);
+                collectionKey, externalId, sourceRevision, sourceDeletedAt,
+                processingError, embeddingFresh);
     }
 
     @Override
@@ -110,6 +149,8 @@ public record DocumentSummary(
                 + "', enabled=" + enabled + ", updatedAt=" + updatedAt
                 + ", collectionId=" + collectionId + ", collectionName='" + collectionName
                 + "', collectionKey='" + collectionKey
+                + "', externalId='" + externalId
+                + "', sourceRevision='" + sourceRevision
                 + "', chunkCount=" + chunkCount + ", contentPreview='" + contentPreview
                 + "', content='" + (content != null && content.length() > 50
                         ? content.substring(0, 50) + "..." : content) + "'"

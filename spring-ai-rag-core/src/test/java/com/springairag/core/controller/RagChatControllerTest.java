@@ -4,11 +4,14 @@ import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.ChatExportService;
+import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
@@ -36,7 +39,9 @@ class RagChatControllerTest {
     private ChatExportService chatExportService;
     private RagSseProperties sseProperties;
     private AuditLogService auditLogService;
+    private CollectionRetrievalScopeResolver scopeResolver;
     private RagChatController controller;
+    private RagChatController productionController;
 
     @BeforeEach
     void setUp() {
@@ -45,7 +50,11 @@ class RagChatControllerTest {
         chatExportService = mock(ChatExportService.class);
         sseProperties = new RagSseProperties();
         auditLogService = mock(AuditLogService.class);
+        scopeResolver = mock(CollectionRetrievalScopeResolver.class);
         controller = new RagChatController(ragChatService, historyRepository, chatExportService, sseProperties, auditLogService);
+        productionController = new RagChatController(
+                ragChatService, historyRepository, chatExportService,
+                sseProperties, scopeResolver, auditLogService);
     }
 
     // ==================== ask ====================
@@ -149,6 +158,44 @@ class RagChatControllerTest {
         assertNotNull(emitter);
         verify(ragChatService).chatStream(argThat(r ->
                 r.getCollectionIds() != null && r.getCollectionIds().equals(List.of(1L, 2L))));
+    }
+
+    @Test
+    void productionChatEndpointsUseTheSameResolvedScope() {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(2L, 4L), null, null);
+        when(scopeResolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null, List.of("two", "four"),
+                null, null, null))
+                .thenReturn(scope);
+        ChatResponse expected = ChatResponse.builder().answer("ok").build();
+        when(ragChatService.chat(any(ChatRequest.class), same(scope)))
+                .thenReturn(expected);
+        when(ragChatService.chatStream(
+                any(ChatRequest.class), same(scope)))
+                .thenReturn(Flux.empty());
+
+        ChatRequest ask = selectedScopeRequest();
+        ChatRequest chat = selectedScopeRequest();
+        ChatRequest stream = selectedScopeRequest();
+
+        assertEquals(200,
+                productionController.ask(ask, null).getStatusCode().value());
+        assertEquals(200,
+                productionController.chat(chat, null).getStatusCode().value());
+        assertNotNull(productionController.stream(stream, null));
+
+        verify(scopeResolver, times(3)).resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null, List.of("two", "four"),
+                null, null, null);
+        verify(ragChatService, times(2)).chat(
+                any(ChatRequest.class), same(scope));
+        verify(ragChatService).chatStream(
+                any(ChatRequest.class), same(scope));
+        verify(ragChatService, never()).chat(any(ChatRequest.class));
+        verify(ragChatService, never()).chatStream(any(ChatRequest.class));
     }
 
     // ==================== getHistory ====================
@@ -373,5 +420,13 @@ class RagChatControllerTest {
 
         assertEquals(200, response.getStatusCode().value());
         verify(chatExportService).exportAsJson(sessionId, 0);
+    }
+
+    private ChatRequest selectedScopeRequest() {
+        ChatRequest request = new ChatRequest("Scoped question", "scope-session");
+        request.setCollectionScopeMode(
+                CollectionScopeMode.SELECTED_COLLECTIONS);
+        request.setCollectionKeys(List.of("two", "four"));
+        return request;
     }
 }

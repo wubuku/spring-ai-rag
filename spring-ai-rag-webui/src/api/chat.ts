@@ -1,4 +1,5 @@
 import { apiClient } from './client';
+import type { CollectionScopeMode } from '../types/api';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -13,6 +14,7 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   message: string;
+  collectionScopeMode?: CollectionScopeMode;
   /** @deprecated use collectionKeys */
   collectionId?: number;
   collectionIds?: number[];

@@ -1,4 +1,9 @@
 // Health API
+export type CollectionScopeMode =
+  | 'CALLER_VISIBLE'
+  | 'ANY_COLLECTION'
+  | 'SELECTED_COLLECTIONS';
+
 export interface ComponentHealth {
   database?: string;
   pgvector?: string;
@@ -47,6 +52,15 @@ export interface Document {
   updatedAt: string;
   collectionId?: number;
   collectionKey?: string;
+  collectionName?: string;
+  chunkCount?: number;
+  externalId?: string | null;
+  sourceRevision?: string | null;
+  sourceDeletedAt?: string | null;
+  processingStatus?: string | null;
+  processingError?: string | null;
+  embeddingFresh?: boolean;
+  enabled?: boolean;
 }
 
 export interface DocumentListResponse {
@@ -96,6 +110,7 @@ export interface ChatMessage {
 
 export interface ChatRequest {
   message: string;
+  collectionScopeMode?: CollectionScopeMode;
   /** @deprecated use collectionKeys */
   collectionId?: number;
   collectionIds?: number[];
@@ -130,6 +145,8 @@ export interface RetrievalResult {
 
 export interface SearchRequest {
   query: string;
+  collectionScopeMode?: CollectionScopeMode;
+  collectionKeys?: string[];
   collectionId?: number;
   topK?: number;
   vectorWeight?: number;

@@ -257,8 +257,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "29" ]] || {
-    echo "Expected latest Flyway migration V29, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "30" ]] || {
+    echo "Expected latest Flyway migration V30, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -266,7 +266,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V29' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V30' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \

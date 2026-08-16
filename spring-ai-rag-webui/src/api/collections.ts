@@ -22,11 +22,12 @@ export interface CollectionListResponse {
 }
 
 export const collectionsApi = {
-  list: (params?: { page?: number; size?: number }) =>
+  list: (params?: { page?: number; size?: number; query?: string }) =>
     apiClient.get<CollectionListResponse>('/collections', {
       params: {
         offset: (params?.page ?? 0) * (params?.size ?? 20),
         limit: params?.size ?? 20,
+        query: params?.query || undefined,
       },
     }),
 

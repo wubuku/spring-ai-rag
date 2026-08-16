@@ -57,7 +57,13 @@ public record DocumentDetailResponse(
         Map<String, Object> metadata,
 
         @Schema(description = "Stable external Collection key", example = "customer-42:manual:v3")
-        String collectionKey
+        String collectionKey,
+
+        String externalId,
+        String sourceRevision,
+        LocalDateTime sourceDeletedAt,
+        String processingError,
+        boolean embeddingFresh
 ) {
     public DocumentDetailResponse(Long id, String title, String source, String documentType,
                                   String processingStatus, LocalDateTime createdAt,
@@ -66,8 +72,20 @@ public record DocumentDetailResponse(
                                   long chunkCount, String content, Map<String, Object> metadata) {
         this(id, title, source, documentType, processingStatus, createdAt, updatedAt, size,
                 contentHash, enabled, collectionId, collectionName, chunkCount, content,
-                metadata, null);
+                metadata, null, null, null, null, null, false);
     }
+
+    public DocumentDetailResponse(Long id, String title, String source, String documentType,
+                                  String processingStatus, LocalDateTime createdAt,
+                                  LocalDateTime updatedAt, Long size, String contentHash,
+                                  boolean enabled, Long collectionId, String collectionName,
+                                  long chunkCount, String content, Map<String, Object> metadata,
+                                  String collectionKey) {
+        this(id, title, source, documentType, processingStatus, createdAt, updatedAt, size,
+                contentHash, enabled, collectionId, collectionName, chunkCount, content,
+                metadata, collectionKey, null, null, null, null, false);
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -87,6 +105,11 @@ public record DocumentDetailResponse(
                 && Objects.equals(collectionId, that.collectionId)
                 && Objects.equals(collectionKey, that.collectionKey)
                 && Objects.equals(collectionName, that.collectionName)
+                && Objects.equals(externalId, that.externalId)
+                && Objects.equals(sourceRevision, that.sourceRevision)
+                && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
+                && Objects.equals(processingError, that.processingError)
+                && embeddingFresh == that.embeddingFresh
                 && Objects.equals(content, that.content)
                 && Objects.equals(metadata, that.metadata);
     }
@@ -95,7 +118,8 @@ public record DocumentDetailResponse(
     public int hashCode() {
         return Objects.hash(id, title, source, documentType, processingStatus, createdAt, updatedAt,
                 size, contentHash, enabled, collectionId, collectionName, chunkCount, content,
-                metadata, collectionKey);
+                metadata, collectionKey, externalId, sourceRevision, sourceDeletedAt,
+                processingError, embeddingFresh);
     }
 
     @Override
@@ -113,6 +137,10 @@ public record DocumentDetailResponse(
                 ", enabled=" + enabled +
                 ", collectionId=" + collectionId +
                 ", collectionKey='" + collectionKey + '\'' +
+                ", externalId='" + externalId + '\'' +
+                ", sourceRevision='" + sourceRevision + '\'' +
+                ", sourceDeletedAt=" + sourceDeletedAt +
+                ", embeddingFresh=" + embeddingFresh +
                 ", collectionName='" + collectionName + '\'' +
                 ", chunkCount=" + chunkCount +
                 ", contentLength=" + (content != null ? content.length() : 0) +

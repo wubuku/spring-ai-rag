@@ -15,8 +15,8 @@
 | **Dashboard** | System health overview, document/collection counts, active sessions, system metrics |
 | **Documents** | Upload files, browse with keyword search, preview chunk content inline, batch delete |
 | **Collections** | Create knowledge bases, manage document associations, export/import |
-| **Chat** | RAG-powered conversational AI with SSE streaming, conversation history sidebar, export to JSON/Markdown |
-| **Search** | Real-time hybrid search (vector + full-text), configurable retrieval parameters |
+| **Chat** | RAG chat with SSE streaming, three Collection scope modes, multi-Collection selection, history, and export |
+| **Search** | Hybrid search with three Collection scope modes, multi-Collection selection, and configurable retrieval parameters |
 | **Metrics** | RAG system metrics (queries/sec, avg latency, cache hit rate), LLM performance charts |
 | **Alerts** | SLO monitoring, alert history, silence schedules for maintenance windows |
 | **Settings** | LLM provider selection, retrieval parameters, cache configuration — persisted to localStorage |
@@ -79,6 +79,7 @@ src/
 │   └── metrics.ts         # Metrics overview
 ├── components/            # Shared UI components
 │   ├── ChatSidebar/       # Chat history sidebar (localStorage)
+│   ├── CollectionScopeSelector/  # Shared scope mode, search, pagination, and multi-select
 │   ├── CreateCollectionModal/  # Collection creation form
 │   ├── Layout/            # App shell (sidebar + header)
 │   ├── Skeleton/          # Loading placeholder
@@ -129,14 +130,31 @@ src/
 
 ### SSE Streaming
 
-Chat uses the `useSSE` hook:
+Chat uses `useChatSSE` and sends an object request:
 
 ```typescript
-const { messages, sendMessage, isStreaming } = useSSE({
-  endpoint: '/api/v1/rag/chat/stream',
-  sessionId: conversationId,
+const { send, isConnected } = useChatSSE({
+  onChunk: content => appendStreamingContent(content),
+  onDone: () => finishStreamingMessage(),
+});
+
+send({
+  message,
+  conversationId,
+  model,
+  collectionScopeMode: scopeMode,
+  collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
+    ? [...selectedCollectionKeys].sort()
+    : undefined,
 });
 ```
+
+`CALLER_VISIBLE` searches the caller's default visible scope.
+`ANY_COLLECTION` excludes unassigned documents without expanding a restricted
+API key's allow-list. `SELECTED_COLLECTIONS` searches the union of one to 100
+selected keys. The shared selector loads 50 Collections per page, supports
+server-side name/key search and cross-page selection, and prevents submitting
+selected mode with no keys.
 
 ### File Upload
 

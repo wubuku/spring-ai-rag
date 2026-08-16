@@ -109,6 +109,20 @@ export async function mockAllApiCalls(page: Page) {
 
   // Mock documents list
   page.route(/\/api\/v1\/rag\/documents.*/, route => {
+    if (route.request().method() === 'POST'
+        && new URL(route.request().url()).pathname.endsWith('/embed')) {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 1,
+          status: 'COMPLETED',
+          chunks: 3,
+          embeddings: 3,
+        }),
+      });
+      return;
+    }
     route.fulfill({
       status: 200,
       contentType: 'application/json',
@@ -120,6 +134,12 @@ export async function mockAllApiCalls(page: Page) {
             documentType: 'TEXT',
             createdAt: new Date().toISOString(),
             contentHash: 'abc123def456',
+            externalId: 'cms:sample:1',
+            sourceRevision: 'etag:sample-1',
+            processingStatus: 'COMPLETED',
+            processingError: null,
+            embeddingFresh: false,
+            enabled: true,
           },
         ],
         total: 1,
@@ -144,10 +164,18 @@ export async function mockAllApiCalls(page: Page) {
             dimensions: 1024,
             documentCount: 5,
           },
+          {
+            id: 2,
+            collectionKey: 'product-manual',
+            name: 'Product Manual',
+            embeddingModel: 'bge-m3',
+            dimensions: 1024,
+            documentCount: 8,
+          },
         ],
-        total: 1,
-        page: 0,
-        size: 20,
+        total: 2,
+        offset: 0,
+        limit: 50,
       }),
     });
   });
@@ -187,7 +215,7 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock search endpoint
-  page.route('/api/v1/rag/search', route => {
+  page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
     route.fulfill({
       status: 200,
       contentType: 'application/json',
