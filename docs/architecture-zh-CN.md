@@ -334,6 +334,27 @@ EmbeddingBatchService
 `rag_document_embedding_state`。模型调用在写事务外执行；短事务只替换该 Profile 的向量行。
 批量调用失败或结果不完整时，旧的已完成向量保持可用。
 
+可选的持久化路径由 `rag.embedding-jobs.enabled=true` 开启：
+
+```text
+POST /api/v1/rag/embedding-jobs
+  │ documentIds 或授权后的 Collection scope
+  ▼
+rag_embedding_jobs（V33）
+  │ active job coalesce + bounded retry
+  ▼
+EmbeddingJobWorker
+  │ SKIP LOCKED claim + lease
+  │ provider 调用前后检查取消/Profile/version/content hash
+  ▼
+DocumentEmbedService.embedDocumentForJob
+  │ commit guard 通过后原子替换活动 Profile 向量
+  ▼
+SUCCEEDED | FAILED | CANCELLED | STALE
+```
+
+任务表不复制文档正文。同步 embed API 继续存在；job worker 默认关闭，允许按部署逐步启用。
+
 ### 4.4 JSON 结构化记录流程
 
 ```text
@@ -356,6 +377,9 @@ RagDocument.jsonbPayload = 业务 JSONB
 
 POST /api/v1/rag/json-records/search
   │
+  ├── 可选 payloadContains -> jsonb_payload @> ?::jsonb
+  │   下推到 vector / pg_trgm / English FTS / pg_jieba 候选 SQL
+  │
   ▼
 HybridRetrieverService -> 排序后的 document IDs
   │
@@ -371,6 +395,9 @@ HybridRetrieverService -> 排序后的 document IDs
 仅更新 payload 会创建审计版本，但保留新鲜 embedding。这是一条明确的 JSONB 专用路径，
 公开 upsert/search 请求优先使用 Collection key，响应在 deprecated 内部 ID 旁返回 key；
 持久化、advisory lock 与检索候选仍使用内部 ID。
+V34 为 enabled `json-record` 增加 partial GIN `jsonb_path_ops` 索引。
+可选 `searchJsonRecords` Spring AI Tool 默认关闭；启用后由服务端注入授权范围，模型只能
+提供自然语言 query、JSON 子树和结果数，不能提供 Collection、SQL 或 JSONPath。
 未来可以按相同的 retrieval-text 边界增加 `xmlPayload`，而不引入泛化的 `payload` 列。
 
 ### 4.5 外部文档同步流程
@@ -402,6 +429,33 @@ DocumentEmbedService（持久化事务提交后）
 检索要求文档 enabled 且活动 Embedding Profile 存在当前内容的 fresh completed 状态，
 因此旧向量可以物理保留用于诊断，但不会返回给调用方。
 
+### 4.6 OpenAI Chat Completions 兼容流
+
+```text
+OpenAI client
+  │ GET /v1/models 或 POST /v1/chat/completions
+  ▼
+OpenAiCompatibilityController
+  │ model alias + text-only messages[]
+  ▼
+OpenAiChatRequestMapper
+  │ body rag.scope / repeated X-RAG-Collection-Key
+  ▼
+CollectionRetrievalScopeResolver + API Key ACL
+  ▼
+transport-neutral ChatCommand
+  ▼
+ChatExecutionService
+  │
+  ├── non-stream -> chat.completion JSON
+  └── stream     -> chat.completion.chunk* -> data: [DONE]
+```
+
+兼容 Controller 默认不注册。model alias 只绑定 mode、memory 和内部模型候选链，不绑定
+固定 Collection；Collection 必须按请求解析。它与原生 `/api/v1/rag/chat/stream`
+共享执行内核，但使用独立 DTO、错误信封和标准 SSE 映射，不暴露原生 RAG
+`tool_start/tool_result/sources/done` 事件。
+
 ---
 
 ## 5. 数据库设计
@@ -412,8 +466,10 @@ DocumentEmbedService（持久化事务提交后）
 rag_collection (1) ──→ (N) rag_documents
 rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
+rag_documents  (1) ──→ (N) rag_embedding_jobs
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
+rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
 
 rag_chat_history        # 对话历史（独立表）
 rag_retrieval_logs      # 检索日志
@@ -436,6 +492,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile 级缓存与完成状态 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at | V33 持久化 embedding/reindex 状态机 |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms | 检索质量追踪 |
 
@@ -445,6 +502,8 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_embeddings.embedding_1024`：Profile 专属 partial HNSW 索引（向量近邻搜索）
 - `rag_documents.content_hash`：B-Tree（哈希去重）
 - `rag_documents`：GIN 索引（全文检索，jiebacfg 中文分词）
+- `rag_documents.jsonb_payload`：V34 partial GIN `jsonb_path_ops`（enabled JSON record 的 `@>` 包含过滤）
+- `rag_embedding_jobs`：活动任务 partial unique、claim、batch 与 document 索引
 
 ### 5.3 全文检索配置
 

@@ -58,6 +58,10 @@ public class RagProperties {
     private final RagPdfProperties pdf = new RagPdfProperties();
     private final RagStructuredRecordProperties structuredRecords = new RagStructuredRecordProperties();
     private final RagChatProperties chat = new RagChatProperties();
+    private final RagOpenAiCompatibilityProperties openAiCompatibility =
+            new RagOpenAiCompatibilityProperties();
+    private final RagEmbeddingJobProperties embeddingJobs =
+            new RagEmbeddingJobProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -137,5 +141,13 @@ public class RagProperties {
 
     public RagChatProperties getChat() {
         return chat;
+    }
+
+    public RagOpenAiCompatibilityProperties getOpenAiCompatibility() {
+        return openAiCompatibility;
+    }
+
+    public RagEmbeddingJobProperties getEmbeddingJobs() {
+        return embeddingJobs;
     }
 }

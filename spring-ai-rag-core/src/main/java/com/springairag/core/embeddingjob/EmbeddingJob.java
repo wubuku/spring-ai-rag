@@ -1,0 +1,29 @@
+package com.springairag.core.embeddingjob;
+
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
+/**
+ * embedding job 数据库快照。
+ */
+public record EmbeddingJob(
+        UUID id,
+        UUID batchId,
+        long documentId,
+        long embeddingProfileId,
+        boolean force,
+        String contentHash,
+        long documentVersion,
+        EmbeddingJobStatus status,
+        int attemptCount,
+        int maxAttempts,
+        OffsetDateTime availableAt,
+        String leaseOwner,
+        OffsetDateTime leaseExpiresAt,
+        OffsetDateTime cancelRequestedAt,
+        String lastError,
+        OffsetDateTime createdAt,
+        OffsetDateTime startedAt,
+        OffsetDateTime finishedAt,
+        OffsetDateTime updatedAt) {
+}

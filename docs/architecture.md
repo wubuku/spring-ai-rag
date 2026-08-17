@@ -363,6 +363,28 @@ calls happen outside the write transaction; only a short transaction deletes
 and replaces the Profile-scoped rows. A failed or incomplete batch leaves the
 previous completed vectors available.
 
+An optional durable path is enabled with `rag.embedding-jobs.enabled=true`:
+
+```text
+POST /api/v1/rag/embedding-jobs
+  | documentIds or authorized Collection scope
+  v
+rag_embedding_jobs (V33)
+  | active-job coalescing + bounded retry
+  v
+EmbeddingJobWorker
+  | SKIP LOCKED claim + lease
+  | recheck cancellation/Profile/version/content hash around provider calls
+  v
+DocumentEmbedService.embedDocumentForJob
+  | atomically replace active-Profile vectors after the commit guard passes
+  v
+SUCCEEDED | FAILED | CANCELLED | STALE
+```
+
+The job table never copies document content. Synchronous embed APIs remain
+available, and the worker is disabled by default for controlled rollout.
+
 ### 4.4 JSON Structured-Record Flow
 
 ```text
@@ -385,6 +407,9 @@ RagDocument.jsonbPayload = business JSONB
 
 POST /api/v1/rag/json-records/search
   |
+  +-- optional payloadContains -> jsonb_payload @> ?::jsonb
+  |   pushed into vector / pg_trgm / English FTS / pg_jieba candidate SQL
+  |
   v
 HybridRetrieverService -> ranked document IDs
   |
@@ -402,6 +427,11 @@ Payload-only updates create an audit version but preserve a fresh embedding.
 Public upsert/search requests prefer Collection keys and responses return the
 key alongside the deprecated internal ID; persistence, advisory locks, and
 retrieval candidates remain keyed by internal IDs.
+V34 adds a partial GIN `jsonb_path_ops` index for enabled `json-record`
+containment queries. The optional Spring AI `searchJsonRecords` tool is disabled
+by default. When enabled, the server injects authorized scope, while the model
+may provide only a natural-language query, JSON subtree, and result count, not
+Collections, SQL, or JSONPath.
 This is deliberately a dedicated JSONB path, leaving room for a future
 `xmlPayload` path with the same retrieval-text boundary without introducing a
 generic `payload` column.
@@ -437,6 +467,35 @@ an enabled document and a fresh completed state for the active Embedding
 Profile, so old vectors remain physically available for diagnosis without
 being returned to callers.
 
+### 4.6 OpenAI Chat Completions Compatibility Flow
+
+```text
+OpenAI client
+  | GET /v1/models or POST /v1/chat/completions
+  v
+OpenAiCompatibilityController
+  | model alias + text-only messages[]
+  v
+OpenAiChatRequestMapper
+  | body rag.scope / repeated X-RAG-Collection-Key
+  v
+CollectionRetrievalScopeResolver + API-key ACL
+  v
+transport-neutral ChatCommand
+  v
+ChatExecutionService
+  |
+  +-- non-stream -> chat.completion JSON
+  +-- stream     -> chat.completion.chunk* -> data: [DONE]
+```
+
+The compatibility controller is not registered by default. A model alias binds
+mode, memory, and internal model candidates, never a fixed Collection;
+Collection scope is resolved per request. It shares the execution core with
+native `/api/v1/rag/chat/stream` but uses isolated DTOs, error envelopes, and
+standard SSE mapping without native RAG
+`tool_start/tool_result/sources/done` events.
+
 ---
 
 ## 5. Database Design
@@ -447,8 +506,10 @@ being returned to callers.
 rag_collection (1) ──→ (N) rag_documents
 rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
+rag_documents  (1) ──→ (N) rag_embedding_jobs
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
+rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
 
 rag_chat_history        # Conversation history (standalone table)
 rag_retrieval_logs      # Retrieval logs
@@ -471,6 +532,7 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile-scoped cache and completion state |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at | V33 durable embedding/reindex state machine |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms | Retrieval quality tracking |
 
@@ -481,6 +543,8 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_embeddings.embedding_1024`: Profile-specific partial HNSW indexes (vector nearest-neighbor search)
 - `rag_documents.content_hash`: B-Tree (hash-based deduplication)
 - `rag_documents`: GIN index (full-text search with jiebacfg Chinese tokenizer)
+- `rag_documents.jsonb_payload`: V34 partial GIN `jsonb_path_ops` for enabled JSON-record `@>` containment
+- `rag_embedding_jobs`: active-job partial unique, claim, batch, and document indexes
 
 ### 5.3 Full-Text Search Configuration
 

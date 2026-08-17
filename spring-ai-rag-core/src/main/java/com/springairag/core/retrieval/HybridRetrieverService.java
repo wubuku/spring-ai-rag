@@ -148,6 +148,18 @@ public class HybridRetrieverService {
             String query, RetrievalScope requestedScope,
             List<Long> excludeIds, int limit,
             RetrievalConfig config) {
+        return searchInScope(
+                query, requestedScope, excludeIds, limit, config, null);
+    }
+
+    /**
+     * 使用授权范围和可选 JSONB containment 条件执行混合检索。
+     */
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope requestedScope,
+            List<Long> excludeIds, int limit,
+            RetrievalConfig config,
+            JsonbContainmentFilter payloadFilter) {
         RetrievalScope scope = requestedScope != null
                 ? requestedScope
                 : RetrievalScope.unscoped();
@@ -168,14 +180,17 @@ public class HybridRetrieverService {
 
         if (!isFulltextAvailable(config, fulltextProvider)) {
             double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
-            return vectorSearch(query, scope, excludeIds, effectiveLimit, profile, minScore);
+            return vectorSearch(
+                    query, scope, excludeIds, effectiveLimit,
+                    profile, minScore, payloadFilter);
         }
 
         // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
         CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
                 .supplyAsync(() -> vectorSearch(
                         query, scope, excludeIds, effectiveLimit * 2, profile,
-                        config != null ? config.getMinScore() : retrieval.getMinScore()), taskExecutor)
+                        config != null ? config.getMinScore() : retrieval.getMinScore(),
+                        payloadFilter), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Vector search timed out after {}s, falling back to empty result: {}",
@@ -190,7 +205,8 @@ public class HybridRetrieverService {
                         excludeIds,
                         effectiveLimit * 2,
                         config != null ? config.getMinScore() : retrieval.getMinScore(),
-                        profile.id()), taskExecutor)
+                        profile.id(),
+                        payloadFilter), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Fulltext search [{}] timed out after {}s, falling back to empty result: {}",
@@ -213,12 +229,14 @@ public class HybridRetrieverService {
     private List<RetrievalResult> vectorSearch(String query, RetrievalScope scope,
                                                List<Long> excludeIds, int limit,
                                                EmbeddingProfile profile,
-                                               double minScore) {
+                                               double minScore,
+                                               JsonbContainmentFilter payloadFilter) {
         try {
             float[] queryVector = embeddingModel.embed(query);
             validateQueryVector(queryVector, profile);
             List<Map<String, Object>> rows =
-                    executeVectorQuery(queryVector, scope, limit, profile);
+                    executeVectorQuery(
+                            queryVector, scope, limit, profile, payloadFilter);
             return mapVectorResults(rows, queryVector, excludeIds, minScore);
         } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
             log.error("Vector search failed", e);
@@ -229,7 +247,8 @@ public class HybridRetrieverService {
     private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
                                                           RetrievalScope retrievalScope,
                                                           int limit,
-                                                          EmbeddingProfile profile) {
+                                                          EmbeddingProfile profile,
+                                                          JsonbContainmentFilter payloadFilter) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
@@ -239,7 +258,7 @@ public class HybridRetrieverService {
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
                 + "AND e." + vectorColumn + " IS NOT NULL ";
         RetrievalScopeSql.Fragment fragment =
-                RetrievalScopeSql.build(retrievalScope);
+                RetrievalScopeSql.build(retrievalScope, payloadFilter);
         String sql = select + scope + fragment.sql()
                 + "ORDER BY e." + vectorColumn
                 + " <=> CAST(? AS vector) LIMIT ?";

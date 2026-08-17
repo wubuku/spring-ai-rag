@@ -17,12 +17,14 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,6 +42,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
@@ -292,11 +295,10 @@ class JsonRecordServiceTest {
         document.setJsonbPayload(payload);
         RetrievalResult rankedOne = retrieval("1", 0.9);
         RetrievalResult duplicate = retrieval("1", 0.8);
-        when(documentRepository.findEnabledIdsByCollectionIdsAndDocumentType(
-                List.of(10L), RagDocument.JSON_RECORD)).thenReturn(List.of(1L));
-        when(hybridRetrieverService.search(
-                eq("spring"), eq(List.of(1L)), eq((List<Long>) null),
-                eq(5), any(RetrievalConfig.class)))
+        when(hybridRetrieverService.searchInScope(
+                eq("spring"), any(RetrievalScope.class),
+                eq((List<Long>) null), eq(5),
+                any(RetrievalConfig.class), isNull()))
                 .thenReturn(List.of(rankedOne, duplicate));
         when(documentRepository.findByIdInAndDocumentTypeAndEnabledTrue(
                 List.of(1L), RagDocument.JSON_RECORD))
@@ -343,8 +345,8 @@ class JsonRecordServiceTest {
                 null, RagDocument.JSON_RECORD, null))
                 .thenReturn(scope);
         when(hybridRetrieverService.searchInScope(
-                eq("spring"), same(scope), eq((List<Long>) null),
-                eq(5), any(RetrievalConfig.class)))
+                eq("spring"), eq(scope), eq((List<Long>) null),
+                eq(5), any(RetrievalConfig.class), isNull()))
                 .thenReturn(List.of(retrieval("1", 0.9)));
 
         JsonNode payload = objectMapper.readTree("{\"id\":1}");
@@ -366,11 +368,75 @@ class JsonRecordServiceTest {
 
         assertEquals(1, response.results().size());
         verify(hybridRetrieverService).searchInScope(
-                eq("spring"), same(scope), eq((List<Long>) null),
-                eq(5), any(RetrievalConfig.class));
+                eq("spring"), eq(scope), eq((List<Long>) null),
+                eq(5), any(RetrievalConfig.class), isNull());
         verify(documentRepository, never())
                 .findEnabledIdsByCollectionIdsAndDocumentType(
                         anyList(), any());
+    }
+
+    @Test
+    void searchPushesValidatedPayloadContainmentIntoRetriever()
+            throws Exception {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("customer-42:records:v1")))
+                .thenReturn(List.of(10L));
+        when(hybridRetrieverService.searchInScope(
+                eq("sofa"), any(RetrievalScope.class),
+                eq((List<Long>) null), eq(5),
+                any(RetrievalConfig.class),
+                any(JsonbContainmentFilter.class)))
+                .thenReturn(List.of());
+
+        JsonRecordSearchRequest request = new JsonRecordSearchRequest();
+        request.setQuery("sofa");
+        request.setCollectionKeys(List.of("customer-42:records:v1"));
+        request.setPayloadContains(objectMapper.readTree(
+                "{\"status\":\"active\",\"category\":{\"code\":\"sofa\"}}"));
+        request.setConfig(RetrievalConfig.builder()
+                .maxResults(5)
+                .useRerank(false)
+                .build());
+
+        service.search(request);
+
+        ArgumentCaptor<JsonbContainmentFilter> filterCaptor =
+                ArgumentCaptor.forClass(JsonbContainmentFilter.class);
+        verify(hybridRetrieverService).searchInScope(
+                eq("sofa"), any(RetrievalScope.class),
+                eq((List<Long>) null), eq(5),
+                any(RetrievalConfig.class),
+                filterCaptor.capture());
+        assertEquals(
+                "{\"status\":\"active\",\"category\":{\"code\":\"sofa\"}}",
+                filterCaptor.getValue().canonicalJson());
+    }
+
+    @Test
+    void searchRejectsInvalidPayloadContainmentShapes() throws Exception {
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(10L), null, RagDocument.JSON_RECORD);
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.searchAuthorized(
+                        "sofa", objectMapper.readTree("[]"), scope, null));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.searchAuthorized(
+                        "sofa", objectMapper.readTree("{}"), scope, null));
+
+        String oversized = "{\"value\":\""
+                + "x".repeat(17_000) + "\"}";
+        assertThrows(IllegalArgumentException.class, () ->
+                service.searchAuthorized(
+                        "sofa", objectMapper.readTree(oversized), scope, null));
+
+        JsonNode nested = objectMapper.readTree(
+                "{\"a\":{\"b\":{\"c\":{\"d\":{\"e\":{\"f\":{\"g\":{\"h\":{\"i\":1}}}}}}}}}");
+        assertThrows(IllegalArgumentException.class, () ->
+                service.searchAuthorized("sofa", nested, scope, null));
+        verify(hybridRetrieverService, never()).searchInScope(
+                any(), any(), any(), any(Integer.class),
+                any(), any(JsonbContainmentFilter.class));
     }
 
     @Test
@@ -388,8 +454,6 @@ class JsonRecordServiceTest {
         when(collectionIdentityResolver.resolveActiveIds(
                 null, List.of("customer-42:records:v1")))
                 .thenReturn(List.of(10L));
-        when(documentRepository.findEnabledIdsByCollectionIdsAndDocumentType(
-                List.of(10L), RagDocument.JSON_RECORD)).thenReturn(List.of());
 
         JsonRecordSearchRequest request = new JsonRecordSearchRequest();
         request.setQuery("spring");

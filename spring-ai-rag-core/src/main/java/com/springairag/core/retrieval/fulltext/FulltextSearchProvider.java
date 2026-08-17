@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.RetrievalScope;
 
 import java.util.Collections;
@@ -78,6 +79,27 @@ public interface FulltextSearchProvider {
                 excludeIds,
                 limit,
                 minScore,
+                embeddingProfileId);
+    }
+
+    /**
+     * 使用统一检索范围和可选 JSONB containment 条件执行全文检索。
+     *
+     * <p>旧扩展 provider 无法表达 payload filter 时必须 fail closed。</p>
+     */
+    default List<RetrievalResult> searchInScope(
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            double minScore,
+            long embeddingProfileId,
+            JsonbContainmentFilter payloadFilter) {
+        if (payloadFilter != null) {
+            return Collections.emptyList();
+        }
+        return searchInScope(
+                query, scope, excludeIds, limit, minScore,
                 embeddingProfileId);
     }
 }

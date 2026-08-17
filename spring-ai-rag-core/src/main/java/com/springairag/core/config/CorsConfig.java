@@ -43,5 +43,10 @@ public class CorsConfig implements WebMvcConfigurer {
                 .allowedMethods(cors.getAllowedMethods().split(","))
                 .allowedHeaders(cors.getAllowedHeaders().split(","))
                 .maxAge(cors.getMaxAge());
+        registry.addMapping("/v1/**")
+                .allowedOrigins(origins)
+                .allowedMethods(cors.getAllowedMethods().split(","))
+                .allowedHeaders(cors.getAllowedHeaders().split(","))
+                .maxAge(cors.getMaxAge());
     }
 }

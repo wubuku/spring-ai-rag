@@ -5,10 +5,9 @@
 #   ./scripts/verify-jsonb-records.sh
 #   ./scripts/verify-jsonb-records.sh --skip-playwright
 #
-# Testcontainers defaults are deliberately environment-overridable:
-#   TESTCONTAINERS_API_VERSION=1.40
-#   TESTCONTAINERS_RYUK_DISABLED=true
+# PostgreSQL defaults are deliberately environment-overridable:
 #   TESTCONTAINERS_PG_IMAGE=pgvector/pgvector:pg16
+#   JSONB_IT_JDBC_URL=jdbc:postgresql://127.0.0.1:5432/test
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -17,9 +16,12 @@ RUN_ID="${JSONB_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 # Keep logs outside Maven's target/ because the compile gate runs `mvn clean`.
 LOG_DIR="${JSONB_VERIFY_LOG_DIR:-.verification/jsonb-verification/${RUN_ID}}"
 PLAYWRIGHT_PORT="${JSONB_PLAYWRIGHT_PORT:-4174}"
-TESTCONTAINERS_API_VERSION="${TESTCONTAINERS_API_VERSION:-1.40}"
-TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
 TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
+JSONB_IT_JDBC_URL="${JSONB_IT_JDBC_URL:-}"
+JSONB_IT_USERNAME="${JSONB_IT_USERNAME:-postgres}"
+JSONB_IT_PASSWORD="${JSONB_IT_PASSWORD:-postgres}"
+POSTGRES_CONTAINER=""
+PLAYWRIGHT_PREVIEW_PID=""
 SKIP_PLAYWRIGHT=0
 
 usage() {
@@ -41,11 +43,11 @@ Options:
 Environment:
   JSONB_VERIFY_LOG_DIR       Verification output directory (default: .verification/jsonb-verification/<run-id>)
   JSONB_VERIFY_RUN_ID        Stable run identifier
-  JSONB_PLAYWRIGHT_PORT      Vite preview port (default: 4174)
-  TESTCONTAINERS_API_VERSION Docker API version for Testcontainers (default: 1.40)
-  TESTCONTAINERS_RYUK_DISABLED
-                             Disable Ryuk when the local registry path is unavailable
+  JSONB_PLAYWRIGHT_PORT      Preferred Vite preview port (default: 4174; falls back if busy)
   TESTCONTAINERS_PG_IMAGE    PostgreSQL/pgvector image
+  JSONB_IT_JDBC_URL          Reuse an external isolated PostgreSQL database
+  JSONB_IT_USERNAME          External database username
+  JSONB_IT_PASSWORD          External database password
 EOF
 }
 
@@ -83,8 +85,8 @@ run_step() {
   echo "=== ${name} ==="
   echo "log: ${log_path}"
   set +e
-  "$@" 2>&1 | tee "$log_path"
-  local rc=${PIPESTATUS[0]}
+  "$@" > >(tee "$log_path") 2>&1
+  local rc=$?
   set -e
   if [[ "$rc" -ne 0 ]]; then
     echo "FAIL: ${name} (exit ${rc})" >&2
@@ -106,12 +108,73 @@ check_commands() {
   done
 }
 
+find_available_port() {
+  node - "$1" <<'NODE'
+const net = require('node:net');
+const preferred = Number(process.argv[2]);
+
+function probe(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(null));
+    server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
+      const address = server.address();
+      const selected = typeof address === 'object' && address ? address.port : null;
+      server.close(() => resolve(selected));
+    });
+  });
+}
+
+(async () => {
+  const preferredPort = await probe(preferred);
+  const selected = preferredPort ?? await probe(0);
+  if (selected === null) {
+    process.exit(1);
+  }
+  process.stdout.write(String(selected));
+})();
+NODE
+}
+
 check_docker() {
+  if [[ -n "$JSONB_IT_JDBC_URL" ]]; then
+    echo "Using caller-provided PostgreSQL URL."
+    return
+  fi
   command -v docker >/dev/null || {
-    echo "Docker CLI is required for the PostgreSQL integration gate." >&2
+    echo "Docker is required unless JSONB_IT_JDBC_URL is set." >&2
     return 1
   }
   docker version
+}
+
+start_postgres() {
+  if [[ -n "$JSONB_IT_JDBC_URL" ]]; then
+    return
+  fi
+  POSTGRES_CONTAINER="spring-ai-rag-jsonb-${RUN_ID}-$$"
+  docker run -d --rm \
+    --name "$POSTGRES_CONTAINER" \
+    -e POSTGRES_DB=spring_ai_rag_jsonb_test \
+    -e POSTGRES_USER="$JSONB_IT_USERNAME" \
+    -e POSTGRES_PASSWORD="$JSONB_IT_PASSWORD" \
+    -p 127.0.0.1::5432 \
+    "$TESTCONTAINERS_PG_IMAGE" >/dev/null
+  local attempt port
+  for attempt in $(seq 1 30); do
+    if docker exec "$POSTGRES_CONTAINER" \
+        pg_isready -U "$JSONB_IT_USERNAME" \
+        -d spring_ai_rag_jsonb_test >/dev/null 2>&1; then
+      break
+    fi
+    if [[ "$attempt" == "30" ]]; then
+      echo "PostgreSQL did not become ready." >&2
+      return 1
+    fi
+    sleep 1
+  done
+  port="$(docker port "$POSTGRES_CONTAINER" 5432/tcp | sed 's/.*://')"
+  JSONB_IT_JDBC_URL="jdbc:postgresql://127.0.0.1:${port}/spring_ai_rag_jsonb_test"
 }
 
 backend_api_tests() {
@@ -125,18 +188,18 @@ documents_tests() {
 
 core_json_tests() {
   mvn -pl spring-ai-rag-core -am \
-    -Dtest=JsonRecordServiceTest,RagJsonRecordControllerWebTest,RagControllerIntegrationTest,OpenApiContractTest \
+    -Dtest=JsonRecordServiceTest,JsonRecordSearchToolTest,RagJsonRecordControllerWebTest,HybridRetrieverServiceTest,RetrievalScopeSqlTest,PgTrgmFulltextProviderTest,RagControllerIntegrationTest,OpenApiContractTest,ChatExecutionServiceTest \
     -Dsurefire.failIfNoSpecifiedTests=false test
 }
 
 postgres_json_tests() {
-  TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
-    mvn -pl spring-ai-rag-core -am \
-      "-Dapi.version=${TESTCONTAINERS_API_VERSION}" \
-      -Djsonb.it.enabled=true \
-      "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
-      -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
-      -Dsurefire.failIfNoSpecifiedTests=false test
+  mvn -pl spring-ai-rag-core -am \
+    -Djsonb.it.enabled=true \
+    "-Djsonb.it.jdbc-url=${JSONB_IT_JDBC_URL}" \
+    "-Djsonb.it.username=${JSONB_IT_USERNAME}" \
+    "-Djsonb.it.password=${JSONB_IT_PASSWORD}" \
+    -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
+    -Dsurefire.failIfNoSpecifiedTests=false test
 }
 
 backend_compile() {
@@ -151,47 +214,66 @@ webui_unit_and_build() {
   )
 }
 
+cleanup_playwright_preview() {
+  if [[ -n "${PLAYWRIGHT_PREVIEW_PID:-}" ]]; then
+    kill "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1 || true
+    wait "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1 || true
+    PLAYWRIGHT_PREVIEW_PID=""
+  fi
+}
+
 webui_playwright() {
   local preview_log="$LOG_DIR/playwright-preview.log"
-  local preview_pid
+  local requested_port="$PLAYWRIGHT_PORT"
+  local preview_html=""
+
+  PLAYWRIGHT_PORT="$(find_available_port "$requested_port")"
+  if [[ "$PLAYWRIGHT_PORT" != "$requested_port" ]]; then
+    echo "Preferred Playwright port ${requested_port} is busy; using ${PLAYWRIGHT_PORT}."
+  fi
 
   (
     cd spring-ai-rag-webui
-    exec npx vite preview --host 127.0.0.1 --port "$PLAYWRIGHT_PORT" --strictPort
+    exec ./node_modules/.bin/vite preview \
+      --host 127.0.0.1 \
+      --port "$PLAYWRIGHT_PORT" \
+      --strictPort
   ) >"$preview_log" 2>&1 &
-  preview_pid=$!
-
-  cleanup_preview() {
-    kill "$preview_pid" >/dev/null 2>&1 || true
-    wait "$preview_pid" >/dev/null 2>&1 || true
-  }
-  trap cleanup_preview RETURN
+  PLAYWRIGHT_PREVIEW_PID=$!
 
   local attempt
   for attempt in $(seq 1 30); do
-    if ! kill -0 "$preview_pid" >/dev/null 2>&1; then
+    if ! kill -0 "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1; then
       echo "Vite preview exited before becoming ready; see ${preview_log}" >&2
+      cleanup_playwright_preview
       return 1
     fi
     if rg -q "error when starting preview server|Port .* is already in use" "$preview_log"; then
       echo "Vite preview could not bind port ${PLAYWRIGHT_PORT}; see ${preview_log}" >&2
+      cleanup_playwright_preview
       return 1
     fi
-    if curl --fail --silent --show-error --connect-timeout 1 --max-time 2 \
-      "http://127.0.0.1:${PLAYWRIGHT_PORT}/webui/" >/dev/null 2>&1; then
+    preview_html="$(curl --fail --silent --show-error --connect-timeout 1 --max-time 2 \
+      "http://127.0.0.1:${PLAYWRIGHT_PORT}/webui/" 2>/dev/null || true)"
+    if rg -q "Local:" "$preview_log" \
+        && grep -Fq "<title>spring-ai-rag WebUI</title>" <<<"$preview_html"; then
       break
     fi
     if [[ "$attempt" == "30" ]]; then
-      echo "Vite preview did not become ready; see ${preview_log}" >&2
+      echo "Spring AI RAG Vite preview did not become ready; see ${preview_log}" >&2
+      cleanup_playwright_preview
       return 1
     fi
     sleep 1
   done
 
+  local rc=0
   (
     cd spring-ai-rag-webui
     BASE_URL="http://127.0.0.1:${PLAYWRIGHT_PORT}" npx playwright test
-  )
+  ) || rc=$?
+  cleanup_playwright_preview
+  return "$rc"
 }
 
 write_summary() {
@@ -204,8 +286,6 @@ write_summary() {
     echo "- Branch: \`$(git branch --show-current)\`"
     echo "- Commit: \`$(git rev-parse --short HEAD)\`"
     echo "- Passed steps: **${PASS_COUNT}**"
-    echo "- Testcontainers API version: \`${TESTCONTAINERS_API_VERSION}\`"
-    echo "- Testcontainers Ryuk disabled: \`${TESTCONTAINERS_RYUK_DISABLED}\`"
     echo "- PostgreSQL image: \`${TESTCONTAINERS_PG_IMAGE}\`"
     echo
     echo "| Step | Status | Exit | Log |"
@@ -218,7 +298,15 @@ write_summary() {
   } > "$LOG_DIR/summary.md"
 }
 
-trap write_summary EXIT
+finish() {
+  cleanup_playwright_preview
+  write_summary
+  if [[ -n "$POSTGRES_CONTAINER" ]]; then
+    docker stop "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
+  fi
+}
+
+trap finish EXIT
 
 : > "$LOG_DIR/summary.tsv"
 run_step "Prerequisites" check_commands
@@ -226,6 +314,7 @@ run_step "Docker environment" check_docker
 run_step "API DTO tests" backend_api_tests
 run_step "Documents chunker tests" documents_tests
 run_step "Core JSONB and controller tests" core_json_tests
+run_step "Isolated PostgreSQL startup" start_postgres
 run_step "PostgreSQL JSONB integration tests" postgres_json_tests
 run_step "Maven clean compile test-compile" backend_compile
 run_step "WebUI Vitest and production build" webui_unit_and_build

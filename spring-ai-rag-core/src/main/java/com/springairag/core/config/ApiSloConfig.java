@@ -28,6 +28,7 @@ public class ApiSloConfig implements WebMvcConfigurer {
 
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
-        registry.addInterceptor(sloInterceptor).addPathPatterns("/api/**");
+        registry.addInterceptor(sloInterceptor)
+                .addPathPatterns("/api/**", "/v1/**");
     }
 }

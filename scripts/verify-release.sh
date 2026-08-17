@@ -11,6 +11,7 @@ BASE_URL="${BASE_URL:-http://127.0.0.1:8081}"
 REAL_LLM_BASE_URL="${REAL_LLM_BASE_URL:-http://127.0.0.1:18081}"
 DOCKER_TAG="${VERIFY_DOCKER_TAG:-spring-ai-rag:verify-1.0.0}"
 RUNTIME_SERVER_PORT="${RUNTIME_SERVER_PORT:-18081}"
+PLAYWRIGHT_PREVIEW_PID=""
 
 RUN_DOCKER=1
 RUN_HELM=1
@@ -18,6 +19,7 @@ RUN_PLAYWRIGHT=1
 RUN_NPM_CI=1
 RUN_RUNTIME_E2E=0
 RUN_GOLDENSET=0
+RUN_QUALITY_REGRESSION=0
 RUN_REAL_LLM=0
 START_LOCAL_RUNTIME=0
 USE_OFFICIAL_IMAGES=0
@@ -43,6 +45,8 @@ Options:
       --official-images   Use official Docker Hub base images
       --with-runtime-e2e  Run scripts/e2e-test.sh against BASE_URL
       --with-goldenset    Run retrieval goldenset against BASE_URL
+      --with-quality-regression
+                          Run the versioned retrieval regression gate
       --with-real-llm     Run real LLM smoke against REAL_LLM_BASE_URL
       --with-local-runtime
                           Start a PostgreSQL-profile server, run all runtime
@@ -52,7 +56,7 @@ Options:
 Environment:
   VERIFY_LOG_DIR          Override log directory
   VERIFY_GENERATED_AT     Override summary timestamp (useful for reproducible records)
-  PLAYWRIGHT_PORT         Vite preview port (default: 4173)
+  PLAYWRIGHT_PORT         Preferred Vite preview port (default: 4173; falls back if busy)
   BASE_URL                Runtime E2E/goldenset URL (default: http://127.0.0.1:8081)
   REAL_LLM_BASE_URL       Real LLM server URL (default: http://127.0.0.1:18081)
   RUNTIME_SERVER_PORT     Managed local runtime port (default: 18081)
@@ -70,11 +74,13 @@ while [[ $# -gt 0 ]]; do
     --official-images) USE_OFFICIAL_IMAGES=1; shift ;;
     --with-runtime-e2e) RUN_RUNTIME_E2E=1; shift ;;
     --with-goldenset) RUN_GOLDENSET=1; shift ;;
+    --with-quality-regression) RUN_QUALITY_REGRESSION=1; shift ;;
     --with-real-llm) RUN_REAL_LLM=1; shift ;;
     --with-local-runtime)
       START_LOCAL_RUNTIME=1
       RUN_RUNTIME_E2E=1
       RUN_GOLDENSET=1
+      RUN_QUALITY_REGRESSION=1
       RUN_REAL_LLM=1
       shift
       ;;
@@ -157,6 +163,34 @@ require_commands() {
       return 1
     }
   done
+}
+
+find_available_port() {
+  node - "$1" <<'NODE'
+const net = require('node:net');
+const preferred = Number(process.argv[2]);
+
+function probe(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', () => resolve(null));
+    server.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
+      const address = server.address();
+      const selected = typeof address === 'object' && address ? address.port : null;
+      server.close(() => resolve(selected));
+    });
+  });
+}
+
+(async () => {
+  const preferredPort = await probe(preferred);
+  const selected = preferredPort ?? await probe(0);
+  if (selected === null) {
+    process.exit(1);
+  }
+  process.stdout.write(String(selected));
+})();
+NODE
 }
 
 check_shell_syntax() {
@@ -249,21 +283,44 @@ check_embedded_webui_bundle() {
 
 playwright_suite() {
   local preview_log="$WORK_LOG_DIR/playwright-preview.log"
-  local preview_pid=""
+  local requested_port="$PLAYWRIGHT_PORT"
+  local preview_html=""
+
+  PLAYWRIGHT_PORT="$(find_available_port "$requested_port")"
+  if [[ "$PLAYWRIGHT_PORT" != "$requested_port" ]]; then
+    echo "Preferred Playwright port ${requested_port} is busy; using ${PLAYWRIGHT_PORT}."
+  fi
 
   (
     cd spring-ai-rag-webui
-    npx vite preview --host 127.0.0.1 --port "$PLAYWRIGHT_PORT"
+    exec ./node_modules/.bin/vite preview \
+      --host 127.0.0.1 \
+      --port "$PLAYWRIGHT_PORT" \
+      --strictPort
   ) >"$preview_log" 2>&1 &
-  preview_pid=$!
+  PLAYWRIGHT_PREVIEW_PID=$!
 
-  local attempts=0
-  until curl -fsS "http://127.0.0.1:${PLAYWRIGHT_PORT}/webui/" >/dev/null; do
-    attempts=$((attempts + 1))
-    if [[ "$attempts" -ge 30 ]]; then
-      echo "Vite preview did not become ready; see $preview_log"
-      kill "$preview_pid" >/dev/null 2>&1 || true
-      wait "$preview_pid" >/dev/null 2>&1 || true
+  local attempt
+  for attempt in $(seq 1 30); do
+    if ! kill -0 "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1; then
+      echo "Vite preview exited before becoming ready; see $preview_log"
+      cleanup_playwright_preview
+      return 1
+    fi
+    if rg -q "error when starting preview server|Port .* is already in use" "$preview_log"; then
+      echo "Vite preview could not bind port ${PLAYWRIGHT_PORT}; see $preview_log"
+      cleanup_playwright_preview
+      return 1
+    fi
+    preview_html="$(curl -fsS --connect-timeout 1 --max-time 2 \
+      "http://127.0.0.1:${PLAYWRIGHT_PORT}/webui/" 2>/dev/null || true)"
+    if rg -q "Local:" "$preview_log" \
+        && grep -Fq "<title>spring-ai-rag WebUI</title>" <<<"$preview_html"; then
+      break
+    fi
+    if [[ "$attempt" == "30" ]]; then
+      echo "Spring AI RAG Vite preview did not become ready; see $preview_log"
+      cleanup_playwright_preview
       return 1
     fi
     sleep 1
@@ -274,9 +331,16 @@ playwright_suite() {
     cd spring-ai-rag-webui
     BASE_URL="http://127.0.0.1:${PLAYWRIGHT_PORT}" npx playwright test
   ) || rc=$?
-  kill "$preview_pid" >/dev/null 2>&1 || true
-  wait "$preview_pid" >/dev/null 2>&1 || true
+  cleanup_playwright_preview
   return "$rc"
+}
+
+cleanup_playwright_preview() {
+  if [[ -n "${PLAYWRIGHT_PREVIEW_PID:-}" ]]; then
+    kill "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1 || true
+    wait "$PLAYWRIGHT_PREVIEW_PID" >/dev/null 2>&1 || true
+    PLAYWRIGHT_PREVIEW_PID=""
+  fi
 }
 
 helm_verification() {
@@ -310,6 +374,10 @@ runtime_e2e() {
 
 goldenset() {
   BASE_URL="$BASE_URL" bash scripts/run-retrieval-goldenset.sh
+}
+
+quality_regression() {
+  BASE_URL="$BASE_URL" bash scripts/verify-quality-regression.sh
 }
 
 real_llm_smoke() {
@@ -388,6 +456,7 @@ write_summary() {
 }
 
 finalize() {
+  cleanup_playwright_preview
   write_summary
   cleanup_local_runtime_server
   rm -rf "$WORK_LOG_DIR"
@@ -447,6 +516,13 @@ if [[ "$RUN_GOLDENSET" == "1" ]]; then
   run_gate "Retrieval goldenset" goldenset
 else
   skip_gate "Retrieval goldenset" "enable with --with-goldenset"
+fi
+
+if [[ "$RUN_QUALITY_REGRESSION" == "1" ]]; then
+  run_gate "Retrieval quality regression" quality_regression
+else
+  skip_gate "Retrieval quality regression" \
+    "enable with --with-quality-regression"
 fi
 
 if [[ "$RUN_REAL_LLM" == "1" ]]; then

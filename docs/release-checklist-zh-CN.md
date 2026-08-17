@@ -12,7 +12,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V29
+- [x] Flyway 迁移范围为 V1-V34
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] OpenAI 兼容 base URL 末尾不带 `/v1`
@@ -36,9 +36,17 @@
 - [x] Helm lint/template 与 Docker 镜像构建
 - [x] PostgreSQL profile 服务启动与 `scripts/e2e-test.sh`
 - [x] Retrieval goldenset
+- [x] 版本化真实检索回归可通过 `--with-quality-regression` 或 `--with-local-runtime` 执行
 - [x] 本机 `.env` 凭据可用时执行真实 LLM 冒烟
 - [x] 密钥扫描与 `git diff --check`
 - [x] 连续三轮无改动收敛检查
+
+### 2026-08-17 增量门禁
+
+- [x] OpenAI 兼容专项脚本覆盖 alias、scope/ACL、JSON/SSE 与错误信封
+- [x] Embedding jobs 专项脚本覆盖 V33、coalesce、lease 与 `SKIP LOCKED`
+- [x] JSONB 专项脚本覆盖 `payloadContains` 与 V34 GIN planner
+- [x] 真实检索数据集与 baseline 已提交，质量门禁对外部依赖失败返回非零
 
 ### 最终证据（2026-07-21）
 

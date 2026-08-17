@@ -117,6 +117,39 @@ app:
 YAML 模型注册表，见
 [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md)。
 
+### OpenAI Chat Completions 服务端兼容
+
+受控兼容入口默认关闭。启用后提供 `GET /v1/models`、`GET /v1/models/{id}` 和
+`POST /v1/chat/completions`；公开的 model alias 表示 RAG pipeline 与后端候选链，
+**不保存固定 Collection**。Collection 范围由每次请求的 `rag.scope` 或重复发送的
+`X-RAG-Collection-Key` Header 提供，并继续受 API Key ACL 限制。
+
+```yaml
+rag:
+  openai-compatibility:
+    enabled: ${RAG_OPENAI_COMPATIBILITY_ENABLED:false}
+    require-explicit-scope: ${RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE:false}
+    models:
+      rag-default:
+        candidates: []
+        mode: KNOWLEDGE
+        memory: STATELESS
+        allow-request-mode-override: false
+        allow-request-memory-override: false
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.openai-compatibility.enabled` | `false` | 注册 `/v1/models` 与 `/v1/chat/completions` |
+| `rag.openai-compatibility.require-explicit-scope` | `false` | 要求每个请求显式提供 `rag.scope` 或 Collection Header |
+| `rag.openai-compatibility.models.<alias>.candidates` | `[]` | 内部 `provider/modelId` 候选链；空列表使用全局 primary/fallback |
+| `rag.openai-compatibility.models.<alias>.mode` | `KNOWLEDGE` | alias 的默认 Chat 模式 |
+| `rag.openai-compatibility.models.<alias>.memory` | `STATELESS` | alias 的默认记忆模式 |
+| `allow-request-*-override` | `false` | 是否允许请求覆盖 alias 的 mode/memory |
+
+当前是 text-only、`n=1` 的受控预览；不支持的 OpenAI 参数会明确返回兼容错误信封，
+不会静默忽略。协议与范围示例见 [REST API](rest-api-zh-CN.md)。
+
 ## 嵌入模型配置
 
 嵌入模型配置独立于 Chat 提供者，始终生效。
@@ -158,6 +191,30 @@ rag:
 内新向量还会双写旧 `embedding` 列。更换模型必须创建新 Profile 并完整重嵌入，不能只改
 `dimensions`、把旧向量 cast 成新向量，或在一次检索中混用多个 Profile。Legacy 向量只能
 通过显式认领并提供正确确认值接入。
+
+### 持久化 Embedding Jobs
+
+默认关闭的 job worker 用于持久化、可重试的批量 embedding/reindex。它不会改变既有同步
+embed API；启用后可通过 `/api/v1/rag/embedding-jobs` 创建、查询、取消和重试任务。
+
+```yaml
+rag:
+  embedding-jobs:
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
+    lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
+    default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
+    max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
+    max-documents-per-batch: 1000
+    retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
+```
+
+worker 使用 PostgreSQL lease 与 `SKIP LOCKED` 支持多 worker claim，并在提交向量前校验
+活动 Profile、任务 lease、取消标记、document version 与 content hash。相同
+document/Profile/content hash 的活动任务会合并，`force` 可原子升级既有活动任务。
+仍有重试次数时，过期租约会被重新 claim；若最后一次允许的尝试也发生租约过期，任务会
+原子转为 `FAILED` 并清空租约字段，不会永久停留在 `RUNNING`。
 
 ## 检索配置
 
@@ -260,11 +317,19 @@ rag:
     max-batch-size: 20
     max-batch-payload-bytes: 10485760
     max-search-results: 20
+    max-payload-filter-bytes: 16384
+    max-payload-filter-depth: 8
+    agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
+    agent-tool-max-results: 5
+    agent-tool-max-payload-bytes: 32768
 ```
 
 这些限制用于保护 JSONB 请求、批量请求和响应大小，不会改变 embedding 输入：
 只有调用者提供的 `retrievalText` 会被分块和嵌入。`jsonbPayload` 以 JSONB 保存，不计算
-hash；API 设计上也没有 payload hash 配置。
+hash；API 设计上也没有 payload hash 配置。`payloadContains` 使用 PostgreSQL
+`jsonb @>` 做精确子树包含过滤，默认限制 16 KiB 和 8 层嵌套。可选的
+`searchJsonRecords` Spring AI Tool 默认关闭；启用后仍由服务端注入 Collection/ACL
+范围，模型只能提供查询、payload 子树和结果数。
 
 ## Chat 执行配置
 

@@ -263,6 +263,19 @@ rag:
     # When configured, /api/** requires this root key or a valid database-backed business key.
     root-api-key: ${RAG_ROOT_API_KEY:}
 
+  openai-compatibility:
+    # 受控网络预览入口。默认关闭，不改变现有 /api/v1/rag/**。
+    enabled: ${RAG_OPENAI_COMPATIBILITY_ENABLED:false}
+    require-explicit-scope: ${RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE:false}
+    models:
+      rag-default:
+        # 空列表表示使用 ChatModelRouter 当前 primary/fallback。
+        candidates: []
+        mode: KNOWLEDGE
+        memory: STATELESS
+        allow-request-mode-override: false
+        allow-request-memory-override: false
+
   embedding:
     api-key: ${SILICONFLOW_API_KEY:}
     # ⚠️ IMPORTANT: Spring AI OpenAiEmbeddingModel automatically appends /v1/embeddings
@@ -278,6 +291,17 @@ rag:
     migration-mode: ${RAG_EMBEDDING_MIGRATION_MODE:none}
     migration-legacy-profile-key: ${RAG_EMBEDDING_MIGRATION_LEGACY_PROFILE_KEY:}
     migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
+
+  embedding-jobs:
+    # 异步任务面默认关闭；旧同步 embed API 不受影响。
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
+    lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
+    default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
+    max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
+    max-documents-per-batch: 1000
+    retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
 
   # RAG retrieval configuration
   retrieval:
@@ -319,6 +343,11 @@ rag:
     max-batch-size: 20
     max-batch-payload-bytes: 10485760
     max-search-results: 20
+    max-payload-filter-bytes: 16384
+    max-payload-filter-depth: 8
+    agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
+    agent-tool-max-results: 5
+    agent-tool-max-payload-bytes: 32768
 
   chat:
     default-mode: KNOWLEDGE

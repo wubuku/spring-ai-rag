@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V32 |
+| Flyway | V1–V34 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -260,6 +260,32 @@ correctness evidence. Real provider calls are opt-in:
 
 Without that option the real LLM step is recorded as `SKIP`.
 
+### OpenAI Compatibility Verification
+
+```bash
+./scripts/verify-openai-compatibility.sh
+```
+
+The gate covers model aliases, request-scoped Collection scope/ACL, complete
+text-only messages, non-streaming OpenAI JSON, compatible error envelopes, SSE
+chunk ordering, and `[DONE]`, followed by relevant `test-compile`, shell
+syntax, and whitespace checks. Evidence is written under
+`.verification/openai-compatibility/<run-id>/`. The runtime controller remains
+disabled unless `RAG_OPENAI_COMPATIBILITY_ENABLED=true`.
+
+### Durable Embedding Jobs Verification
+
+```bash
+./scripts/verify-embedding-jobs.sh
+```
+
+The gate covers the service, worker, HTTP API, V33 migration, active-job
+coalescing, and two-worker `SKIP LOCKED` claims. It starts an isolated
+`pgvector/pgvector:pg16` container by default. Reuse a caller-provided isolated
+database with `EMBEDDING_JOBS_IT_JDBC_URL`, `EMBEDDING_JOBS_IT_USERNAME`, and
+`EMBEDDING_JOBS_IT_PASSWORD`. Evidence is written under
+`.verification/embedding-jobs/<run-id>/`.
+
 ### JSONB Structured-Record Verification
 
 Run the focused, repeatable gate for the JSONB implementation and its
@@ -270,11 +296,10 @@ surrounding API, database, WebUI, documentation, and whitespace checks:
 ```
 
 Use `--skip-playwright` only when browser binaries are unavailable and record
-the skipped gate. The PostgreSQL Testcontainers step defaults to
-`-Dapi.version=1.40` and `TESTCONTAINERS_RYUK_DISABLED=true` because some
-OrbStack/proxy environments cannot negotiate the older default Docker API or
-pull Ryuk through the local certificate path. Override these values with
-`TESTCONTAINERS_API_VERSION`, `TESTCONTAINERS_RYUK_DISABLED`, and
+the skipped gate. The script starts isolated PostgreSQL itself, avoiding the
+Testcontainers 1.20.4 / newer Docker daemon API negotiation issue. Reuse a
+caller-provided isolated database with `JSONB_IT_JDBC_URL`,
+`JSONB_IT_USERNAME`, and `JSONB_IT_PASSWORD`; override the image with
 `TESTCONTAINERS_PG_IMAGE`. Logs and a Markdown summary are written to
 `.verification/jsonb-verification/<run-id>/`.
 The Mock Playwright preview uses `JSONB_PLAYWRIGHT_PORT` (default `4174`) with
@@ -339,12 +364,31 @@ Retrieval goldenset:
 BASE_URL=http://127.0.0.1:8081 ./scripts/run-retrieval-goldenset.sh
 ```
 
+Versioned live retrieval regression:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
+```
+
+The dataset and committed baseline live under `testdata/regression/`. The
+runner creates fixtures by stable `collectionKey + externalId`, checks Hit
+Rate, MRR, Recall@K, nDCG, metric floors, baseline regression, Collection-decoy
+leakage, and an explicit-empty JSONB case, then writes JSON artifacts and a
+Markdown summary under `.verification/quality-regression/<run-id>/`. When
+`RAG_API_KEY` is not set explicitly, it safely reads `RAG_API_KEY` /
+`RAG_ROOT_API_KEY` from `.env` without printing the credential.
+
 One-command release verification:
 
 ```bash
 ./scripts/verify-release.sh
+./scripts/verify-release.sh --with-quality-regression
 ./scripts/verify-release.sh --with-local-runtime
 ```
+
+`--with-quality-regression` adds the versioned gate against the running
+`BASE_URL`. `--with-local-runtime` includes HTTP E2E, goldenset, quality
+regression, and real-LLM smoke.
 
 Logs and summaries are written to `target/release-verification/<run-id>/`. See [release-checklist.md](release-checklist.md).
 

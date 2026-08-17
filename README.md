@@ -23,6 +23,9 @@ A general-purpose RAG (Retrieval-Augmented Generation) service framework built o
 - **Fulltext Strategy**: Configurable `auto` (auto-detect) / `pg_jieba` / `pg_trgm` / `none`
 - **Three Chat Modes**: KNOWLEDGE uses Spring AI Modular RAG, AGENT uses Tool Calling, and PLAIN skips retrieval
 - **Runtime Multi-Model Routing**: Select configured OpenAI-compatible or Anthropic models per chat request
+- **OpenAI Compatibility Preview**: Opt-in `/v1/models` and `/v1/chat/completions` with request-scoped Collections
+- **Durable Embedding Jobs**: Opt-in persistent re-embedding queue with leases, retries, cancellation, and coalescing
+- **JSONB Structured Retrieval**: Caller-owned JSONB payload plus natural-language retrieval text and containment filters
 - **Domain Extension**: Implement `DomainRagExtension` to inject domain prompts and retrieval strategies
 - **SSE Streaming**: Server-Sent Events for real-time responses
 - **A/B Experiment Framework**: Parallel multi-model comparison with automatic latency / token / quality metrics
@@ -45,7 +48,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-Flyway runs V1–V32 migrations automatically on startup (tables + embedding profiles + fixed-dimension HNSW indexes + fulltext GIN indexes + JSONB structured records + external-document synchronization + principal-scoped chat history, source snapshots, and session leases).
+Flyway runs V1–V34 migrations automatically on startup (tables + embedding profiles + fixed-dimension HNSW indexes + fulltext GIN indexes + JSONB structured records and containment indexes + external-document synchronization + principal-scoped chat history/source snapshots/session leases + durable embedding jobs).
 
 ### 2. Add Dependency
 
@@ -66,7 +69,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway auto-migration (V1–V32)
+  # Flyway auto-migration (V1–V34)
   flyway:
     enabled: true
 

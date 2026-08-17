@@ -66,11 +66,15 @@ mvn clean package -DskipTests
 BASE_URL=http://127.0.0.1:8081 \
   ./scripts/verify-release.sh --with-runtime-e2e --with-goldenset
 
+# 对已启动服务追加版本化真实检索回归
+BASE_URL=http://127.0.0.1:18081 \
+  ./scripts/verify-release.sh --with-quality-regression
+
 # 真实 LLM 服务通常由 scripts/start-real-e2e-server.sh 启动在 18081
 ./scripts/verify-release.sh --with-real-llm
 
 # 完整本地门禁：自动启动 postgresql profile 服务，执行 HTTP E2E、
-# goldenset 与真实 LLM smoke，归档日志后停止该服务
+# goldenset、质量回归与真实 LLM smoke，归档日志后停止该服务
 ./scripts/verify-release.sh --with-local-runtime
 ```
 
@@ -238,7 +242,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V32、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V34、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -292,7 +296,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V32，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V34，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -318,8 +322,9 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V32，并验证 JSONB round-trip、
-仅更新 payload 的版本记录、相同描述下不同记录共存以及级联清理：
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V34，并验证 JSONB round-trip、
+嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
+记录共存以及级联清理：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -342,6 +347,41 @@ Mock Playwright、project-docs 和空白检查，并将结果记录到
 浏览器 preview 对 `JSONB_PLAYWRIGHT_PORT`（默认 `4174`）使用严格端口绑定；若本地已有
 服务占用该端口，请指定空闲端口。完整门禁必须串行运行，因为 Maven clean 会删除模块的
 `target/` 输出。
+
+### OpenAI 兼容预览验收门禁
+
+```bash
+./scripts/verify-openai-compatibility.sh
+```
+
+固定范围包括 model alias、body/Header Collection scope 合并、API Key ACL、完整
+text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/finish chunk 顺序和
+最终 `[DONE]`。脚本还执行 focused tests、`test-compile`、Shell 语法和空白检查，证据写入
+`.verification/openai-compatibility/<run-id>/`。
+
+### 持久化 Embedding Jobs 验收门禁
+
+```bash
+./scripts/verify-embedding-jobs.sh
+```
+
+脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
+执行 V1–V34，验证 V33 active-job coalesce、force 原子升级和并发 worker
+`SKIP LOCKED` claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
+`EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
+
+### 真实检索质量回归门禁
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+  ./scripts/verify-quality-regression.sh
+```
+
+门禁先校验 `testdata/regression/retrieval-core-v1.json` 与提交的 baseline 契约，再调用
+真实 embedding/search API。它按稳定 `collectionKey + externalId` 判断 relevant
+identity，检查 Hit Rate、MRR、Recall@K、nDCG、每 case minimum、相对 baseline 回退、
+Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库或 embedding 失败必须
+返回非零，不能伪装为质量通过。
 
 ### Chat 对话能力重构验收门禁
 

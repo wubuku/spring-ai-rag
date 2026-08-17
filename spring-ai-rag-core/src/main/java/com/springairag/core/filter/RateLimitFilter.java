@@ -1,6 +1,7 @@
 package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.openai.OpenAiErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -190,6 +191,16 @@ public class RateLimitFilter extends OncePerRequestFilter {
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         response.setHeader(RETRY_AFTER_HEADER, "60");
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            "Rate limit exceeded. Max " + limit
+                                    + " requests per minute.",
+                            "rate_limit_error",
+                            null,
+                            "rate_limit_exceeded")));
+            return;
+        }
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("TOO_MANY_REQUESTS")
                 .message("Rate limit exceeded. Max " + limit + " requests per minute.")

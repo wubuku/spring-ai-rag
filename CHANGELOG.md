@@ -8,6 +8,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased] - 2026-08-17
+
+### Added
+- Disabled-by-default OpenAI Chat Completions compatibility preview with model aliases, complete text-only messages, standard JSON/SSE envelopes, and request-scoped Collection selection
+- Flyway V33 durable embedding/reindex jobs with coalescing, leases, bounded retries, cancellation, stale-write fencing, and management APIs
+- JSONB `payloadContains` retrieval using SQL-pushed PostgreSQL containment, V34 partial GIN indexing, and an optional server-scoped `searchJsonRecords` Spring AI tool
+- Versioned live retrieval regression fixtures, committed baseline, one-command quality gate, and release-verifier integration
+
+### Changed
+- Flyway inventory is now V1–V34
+- OpenAI, embedding-job, JSONB, documentation, and quality-regression verification are available as dedicated one-command scripts
+
 ## [1.0.0] - 2026-07-21
 
 ### Added

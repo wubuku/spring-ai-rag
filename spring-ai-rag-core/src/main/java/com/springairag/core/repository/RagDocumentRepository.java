@@ -134,6 +134,19 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     List<RagDocument> findByIdInAndDocumentTypeAndEnabledTrue(
             List<Long> ids, String documentType);
 
+    @Query("SELECT d.id FROM RagDocument d WHERE d.enabled = true ORDER BY d.id")
+    List<Long> findEnabledIds(Pageable pageable);
+
+    @Query("SELECT d.id FROM RagDocument d WHERE d.enabled = true "
+            + "AND d.collectionId IS NOT NULL ORDER BY d.id")
+    List<Long> findEnabledAssignedIds(Pageable pageable);
+
+    @Query("SELECT d.id FROM RagDocument d WHERE d.enabled = true "
+            + "AND d.collectionId IN :collectionIds ORDER BY d.id")
+    List<Long> findEnabledIdsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds,
+            Pageable pageable);
+
     /**
      * Count documents in a collection.
      */

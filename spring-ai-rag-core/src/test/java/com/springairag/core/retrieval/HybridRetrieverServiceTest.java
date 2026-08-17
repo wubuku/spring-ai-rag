@@ -205,6 +205,42 @@ class HybridRetrieverServiceTest {
     }
 
     @Test
+    @DisplayName("Vector search: JSONB containment is bound before ORDER BY and LIMIT")
+    void searchInScope_pushesJsonbContainmentBeforeLimit() {
+        when(embeddingModel.embed("filtered")).thenReturn(mockEmbedding());
+        when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        RetrievalScope scope = RetrievalScope.selectedCollections(
+                List.of(2L), null, "json-record");
+        RetrievalConfig config = RetrievalConfig.builder()
+                .maxResults(3)
+                .useHybridSearch(false)
+                .build();
+        service.searchInScope(
+                "filtered", scope, null, 3, config,
+                new JsonbContainmentFilter(
+                        "{\"status\":\"active\"}"));
+
+        ArgumentCaptor<String> sqlCaptor =
+                ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbcTemplate).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+
+        String sql = sqlCaptor.getValue();
+        int filterPosition = sql.indexOf(
+                "d.jsonb_payload @> CAST(? AS jsonb)");
+        assertTrue(filterPosition > 0);
+        assertTrue(filterPosition < sql.indexOf("ORDER BY"));
+        assertTrue(filterPosition < sql.indexOf("LIMIT ?"));
+        assertEquals(
+                "{\"status\":\"active\"}",
+                argsCaptor.getValue()[2]);
+    }
+
+    @Test
     @DisplayName("Vector search: returns empty when embedding fails")
     void search_embeddingFails_returnsEmpty() {
         when(embeddingModel.embed(anyString())).thenThrow(new RuntimeException("API 超时"));

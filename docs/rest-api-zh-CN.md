@@ -8,7 +8,7 @@
 
 > 启动后可通过 `/swagger-ui.html` 访问 Swagger UI。
 >
-> 基础路径：`/api/v1/rag`
+> 主要基础路径：`/api/v1/rag`。默认关闭的 OpenAI 兼容预览使用 `/v1`。
 
 ---
 
@@ -259,6 +259,66 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 ```
 
 ---
+
+## OpenAI Chat Completions 兼容预览
+
+设置 `RAG_OPENAI_COMPATIBILITY_ENABLED=true` 后注册以下端点：
+
+- `GET /v1/models`
+- `GET /v1/models/{id}`
+- `POST /v1/chat/completions`
+
+model ID 是服务端配置的 RAG alias，例如 `rag-default`，表示 Chat mode、memory 策略和
+后端模型候选链。alias 不保存 Collection；每次请求通过 `rag.scope` 或重复的
+`X-RAG-Collection-Key` Header 表达检索范围，再与当前 API Key ACL 取交集。
+
+```json
+{
+  "model": "rag-default",
+  "messages": [
+    {"role": "system", "content": "回答时引用知识库内容。"},
+    {"role": "user", "content": "查找风格基调"}
+  ],
+  "stream": false,
+  "rag": {
+    "scope": {
+      "mode": "SELECTED_COLLECTIONS",
+      "collection_keys": ["brand:guides"]
+    },
+    "document_ids": [42]
+  }
+}
+```
+
+也可以按 Collection 重复 Header，不使用逗号拼接：
+
+```bash
+curl http://localhost:8081/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -H 'X-RAG-Collection-Key: brand:guides' \
+  -H 'X-RAG-Collection-Key: brand:faq' \
+  -d '{"model":"rag-default","messages":[{"role":"user","content":"查找风格基调"}]}'
+```
+
+body 与 Header 同时出现时必须表示相同的 Collection key 集合。省略两者时默认使用
+`CALLER_VISIBLE`；若 `RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE=true`，省略范围返回 `400`。
+
+当前兼容子集：
+
+- 支持 text-only `system`、`developer`、`user`、`assistant` 消息；
+- 支持字符串 content 或仅包含 `{type:"text", text:"..."}` 的 content parts；
+- `n` 只支持 `1`，`stream` 支持 `false/true`；
+- 暂不支持 `temperature`、`top_p`、token 上限、tools/functions、logprobs、
+  structured output 和 `stream_options`；传入时返回明确的 OpenAI 错误信封；
+- 未知 alias 返回 `404 model_not_found`。
+
+非流式返回 `chat.completion`。流式返回标准 `data: <chunk>`，最后发送
+`data: [DONE]`；项目专用 tool/source 事件不会泄漏到该协议。认证、限流和运行时错误
+同样使用 `{ "error": { "message", "type", "param", "code" } }` 信封。
+
+该入口默认关闭，只定位为受控网络预览；公网、多实例生产 readiness 边界见
+[OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md)。
 
 ## Chat — RAG 问答
 
@@ -603,6 +663,10 @@ deprecated 的 `collectionIds` 继续兼容。响应保持排序，并为每条�
 {
   "query": "支持蓝牙的无线键盘",
   "collectionKeys": ["customer-42:catalog:v1"],
+  "payloadContains": {
+    "status": "active",
+    "attributes": {"wireless": true}
+  },
   "config": {
     "maxResults": 10,
     "useHybridSearch": true,
@@ -613,6 +677,14 @@ deprecated 的 `collectionIds` 继续兼容。响应保持排序，并为每条�
 
 检索前会应用 API Key 的 Collection ACL；受限 Key 不能超出自身
 `allowedCollectionKeys`，未知或未授权 key 返回 `403`。
+可选 `payloadContains` 必须是非空 JSON object，使用 PostgreSQL `jsonb @>` 精确子树
+包含语义，并在向量、pg_trgm、English FTS、pg_jieba 的候选 SQL 中下推。默认限制为
+16 KiB、最大 8 层；数组遵循 PostgreSQL JSONB containment 语义。
+
+设置 `RAG_JSON_AGENT_TOOL_ENABLED=true` 后，`AGENT` 模式额外注册
+`searchJsonRecords`。模型只能提供 `query`、可选 `payloadContains` 和 `maxResults`；
+Collection、document 与 API Key 范围由服务端上下文注入，工具不会接受 SQL、JSONPath
+或 Collection 参数。
 
 ### `GET /api/v1/rag/json-records/{documentId}`
 
@@ -818,6 +890,44 @@ Get document statistics (total count, embedded count, etc.).
 ### `POST /api/v1/rag/documents/{id}/embed`
 
 Generate embedding vectors for a specified document.
+
+---
+
+## Embedding Jobs — 持久化重嵌入任务
+
+设置 `RAG_EMBEDDING_JOBS_ENABLED=true` 后，可使用持久化、可取消和可重试的
+embedding/reindex 任务。默认关闭时，创建和重试返回 `503 EMBEDDING_JOBS_DISABLED`；
+既有同步 embed API 不受影响。
+
+### `POST /api/v1/rag/embedding-jobs`
+
+按显式 document IDs 或 Collection scope 创建任务，两者必须二选一。成功返回
+`202 Accepted`。同一 document/Profile/content hash 的活动任务会合并，并在 item 上
+返回 `coalesced=true`。
+
+```json
+{
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
+  "collectionKeys": ["customer-42:manual:v3"],
+  "force": false,
+  "maxAttempts": 3
+}
+```
+
+Collection scope 最多展开 1000 个 enabled 文档；也可改为
+`{"documentIds":[1,2,3],"force":true}`。所有目标都执行 API Key Collection ACL。
+
+### 查询与控制
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/v1/rag/embedding-jobs/{id}` | 获取一个授权可见的任务 |
+| `GET /api/v1/rag/embedding-jobs?batchId=&status=&page=0&size=50` | 分页过滤任务 |
+| `POST /api/v1/rag/embedding-jobs/{id}/cancel` | 请求取消 |
+| `POST /api/v1/rag/embedding-jobs/{id}/retry?maxAttempts=4` | 重试 `FAILED`、`STALE` 或 `CANCELLED` 任务 |
+
+状态为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELLED`、`STALE`。任务表不复制
+文档正文，只记录 document/Profile/content hash/version、lease、重试和终态信息。
 
 ---
 

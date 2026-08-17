@@ -87,6 +87,7 @@ class GeneralRagAutoConfigurationBeanTest {
             RagProperties properties = new RagProperties();
             FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
             assertTrue(registration.getUrlPatterns().contains("/api/*"));
+            assertTrue(registration.getUrlPatterns().contains("/v1/*"));
         }
 
         @Test

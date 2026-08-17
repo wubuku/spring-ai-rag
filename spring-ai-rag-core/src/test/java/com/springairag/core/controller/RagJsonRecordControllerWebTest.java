@@ -14,8 +14,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.mockito.ArgumentCaptor;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -93,12 +95,24 @@ class RagJsonRecordControllerWebTest {
                 .content("""
                                 {
                                   "query": "spring",
-                                  "collectionKeys": ["customer-42:records:v1"]
+                                  "collectionKeys": ["customer-42:records:v1"],
+                                  "payloadContains": {
+                                    "status": "active"
+                                  }
                                 }
                                 """))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.query").value("spring"))
                 .andExpect(jsonPath("$.results").isArray())
                 .andExpect(jsonPath("$.results").isEmpty());
+
+        ArgumentCaptor<com.springairag.api.dto.JsonRecordSearchRequest> request =
+                ArgumentCaptor.forClass(
+                        com.springairag.api.dto.JsonRecordSearchRequest.class);
+        verify(jsonRecordService).search(request.capture());
+        org.junit.jupiter.api.Assertions.assertEquals(
+                "active",
+                request.getValue().getPayloadContains()
+                        .path("status").asText());
     }
 }

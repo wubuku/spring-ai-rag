@@ -4,7 +4,8 @@
 
 > Swagger UI available at `/swagger-ui.html` after startup.
 >
-> Base path: `/api/v1/rag`
+> Main base path: `/api/v1/rag`. The disabled-by-default OpenAI compatibility
+> preview uses `/v1`.
 
 ---
 
@@ -209,6 +210,73 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 ```
 
 ---
+
+## OpenAI Chat Completions Compatibility Preview
+
+Set `RAG_OPENAI_COMPATIBILITY_ENABLED=true` to register:
+
+- `GET /v1/models`
+- `GET /v1/models/{id}`
+- `POST /v1/chat/completions`
+
+A model ID is a configured RAG alias such as `rag-default`, representing Chat
+mode, memory policy, and a backend candidate chain. An alias never stores a
+Collection. Each request supplies retrieval scope through `rag.scope` or
+repeated `X-RAG-Collection-Key` headers, then the server intersects that scope
+with the current API-key ACL.
+
+```json
+{
+  "model": "rag-default",
+  "messages": [
+    {"role": "system", "content": "Ground answers in the knowledge base."},
+    {"role": "user", "content": "Find the visual tone guidelines"}
+  ],
+  "stream": false,
+  "rag": {
+    "scope": {
+      "mode": "SELECTED_COLLECTIONS",
+      "collection_keys": ["brand:guides"]
+    },
+    "document_ids": [42]
+  }
+}
+```
+
+Collection headers are repeated and are never comma-joined:
+
+```bash
+curl http://localhost:8081/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -H 'X-RAG-Collection-Key: brand:guides' \
+  -H 'X-RAG-Collection-Key: brand:faq' \
+  -d '{"model":"rag-default","messages":[{"role":"user","content":"Find the visual tone guidelines"}]}'
+```
+
+When body and headers are both present, they must identify the same Collection
+key set. Omitting both uses `CALLER_VISIBLE`; setting
+`RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE=true` makes omission a `400`.
+
+Current compatibility subset:
+
+- text-only `system`, `developer`, `user`, and `assistant` messages;
+- string content or content parts containing only `{type:"text", text:"..."}`;
+- `n=1`, with both `stream=false` and `stream=true`;
+- `temperature`, `top_p`, token limits, tools/functions, logprobs, structured
+  output, and `stream_options` are not supported and return explicit OpenAI
+  error envelopes instead of being ignored;
+- unknown aliases return `404 model_not_found`.
+
+Non-streaming requests return `chat.completion`. Streaming returns standard
+`data: <chunk>` records followed by `data: [DONE]`; project-specific tool and
+source events are not exposed on this protocol. Authentication, rate-limit,
+and runtime errors use the same
+`{"error":{"message","type","param","code"}}` envelope.
+
+This endpoint is disabled by default and is a controlled-network preview. See
+[OpenAI compatibility readiness](openai-compatibility-readiness.md) for public
+and multi-instance production boundaries.
 
 ## Chat — RAG Q&A
 
@@ -690,6 +758,10 @@ remains compatible. The response preserves ranking and includes the current
 {
   "query": "wireless keyboard with Bluetooth",
   "collectionKeys": ["customer-42:catalog:v1"],
+  "payloadContains": {
+    "status": "active",
+    "attributes": {"wireless": true}
+  },
   "config": {
     "maxResults": 10,
     "useHybridSearch": true,
@@ -701,6 +773,16 @@ remains compatible. The response preserves ranking and includes the current
 API-key Collection ACL is applied before retrieval. A restricted key cannot
 expand the request beyond its `allowedCollectionKeys`; unknown and unauthorized
 keys return `403`.
+Optional `payloadContains` must be a non-empty JSON object. It uses PostgreSQL
+`jsonb @>` exact subtree containment and is pushed into vector, pg_trgm,
+English FTS, and pg_jieba candidate SQL. Defaults limit it to 16 KiB and depth
+8; arrays follow PostgreSQL JSONB containment semantics.
+
+With `RAG_JSON_AGENT_TOOL_ENABLED=true`, `AGENT` mode also registers
+`searchJsonRecords`. The model may provide only `query`, optional
+`payloadContains`, and `maxResults`; Collection, document, and API-key scope is
+injected by the server. The tool accepts no SQL, JSONPath, or Collection
+arguments.
 
 ### `GET /api/v1/rag/json-records/{documentId}`
 
@@ -926,6 +1008,47 @@ Get document statistics (total count, embedded count, etc.).
 ### `POST /api/v1/rag/documents/{id}/embed`
 
 Generate embedding vectors for a specified document.
+
+---
+
+## Embedding Jobs — Durable Re-Embedding
+
+Set `RAG_EMBEDDING_JOBS_ENABLED=true` to use durable, cancellable, retryable
+embedding/reindex jobs. While disabled, create and retry return
+`503 EMBEDDING_JOBS_DISABLED`; existing synchronous embed APIs remain
+unchanged.
+
+### `POST /api/v1/rag/embedding-jobs`
+
+Create jobs from either explicit document IDs or a Collection scope, never
+both. Success returns `202 Accepted`. An active job for the same
+document/Profile/content hash is coalesced and reports `coalesced=true`.
+
+```json
+{
+  "collectionScopeMode": "SELECTED_COLLECTIONS",
+  "collectionKeys": ["customer-42:manual:v3"],
+  "force": false,
+  "maxAttempts": 3
+}
+```
+
+A Collection scope may expand to at most 1000 enabled documents. Callers may
+instead send `{"documentIds":[1,2,3],"force":true}`. API-key Collection ACLs
+apply to every target.
+
+### Query And Control
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/rag/embedding-jobs/{id}` | Get one authorized-visible job |
+| `GET /api/v1/rag/embedding-jobs?batchId=&status=&page=0&size=50` | Filter and page jobs |
+| `POST /api/v1/rag/embedding-jobs/{id}/cancel` | Request cancellation |
+| `POST /api/v1/rag/embedding-jobs/{id}/retry?maxAttempts=4` | Retry a `FAILED`, `STALE`, or `CANCELLED` job |
+
+Statuses are `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, and
+`STALE`. The job table never copies document content; it stores only
+document/Profile/content hash/version, lease, retry, and terminal-state data.
 
 ---
 

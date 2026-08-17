@@ -172,6 +172,9 @@ WebUI 使用 React Router `BrowserRouter`，生产 basename 为 `/webui`。能�
 - 支持 vector + full-text 混合检索。
 - 生产 profile 推荐启用 query rewrite 和本地 heuristic rerank。
 - Goldenset 使用 Precision@K、MRR 和 nDCG。
+- `testdata/regression/retrieval-core-v1.json` 使用稳定
+  `collectionKey + externalId` 身份固化真实检索回归；runner 同时检查质量下限、提交的
+  baseline、Collection 泄漏和显式空结果。
 
 小型在线 goldenset 的 baseline 与 quality 组合都达到满分；重排增益由确定性 MRR 测试证明，不能把该样本解释为统计显著提升。
 
@@ -191,6 +194,10 @@ JSON record 对外使用 `collectionKey + externalId` 作为稳定身份，并�
 因此不同 payload 可以拥有相同描述。仅更新 payload 会创建可审计版本，但不会使新鲜
 embedding 失效；设计上没有 `payloadHash`。专用搜索 API 在检索排序完成后再批量补充当前
 JSONB payload，不把 payload 复制到 embedding metadata，也不自动放入普通聊天 Prompt。
+搜索可选 `payloadContains`，使用 PostgreSQL `jsonb @>` 子树包含语义，并下推到所有向量
+与全文候选 SQL；V34 提供 partial GIN `jsonb_path_ops` 索引。默认关闭的
+`searchJsonRecords` Spring AI Tool 复用同一服务和授权上下文，不接受模型提供的
+Collection、SQL 或 JSONPath。
 
 普通非空短文档至少保留一个 chunk；`minChunkSize` 是尽力而为的分块质量目标，不是
 静默丢弃文档的准入过滤器。JSON record 固定使用一个 record-level chunk。
@@ -231,11 +238,12 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V32。
+- Flyway 当前为 V1–V34。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
-  status 与 session lease。
+  status 与 session lease；V33 增加持久化 embedding jobs、lease 与活动任务合并索引；
+  V34 增加 JSON record payload containment 的 partial GIN 索引。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 
@@ -254,6 +262,8 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档幂等同步 |
+| `/embedding-jobs` | 默认关闭的持久化 embedding/reindex 任务 |
+| `/v1/models`, `/v1/chat/completions` | 默认关闭的 OpenAI 兼容受控预览 |
 
 契约见 [rest-api-zh-CN.md](rest-api-zh-CN.md) 和 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
 
@@ -302,16 +312,23 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 
 ```text
 已有：spring-ai-rag -> OpenAI-compatible provider
-未实现：OpenAI client / Agent -> spring-ai-rag
+受控预览：OpenAI client / Agent -> spring-ai-rag
 ```
 
-项目当前没有标准 `POST /v1/chat/completions` 或 Models API。原生 Chat SSE 包含
-OpenAI-like content delta 以及项目专用的工具、来源、完成和错误事件，因此不能宣称
-Chat Completions 兼容。
+设置 `rag.openai-compatibility.enabled=true` 后，项目提供 `GET /v1/models`、
+`GET /v1/models/{id}` 与 text-only `POST /v1/chat/completions`。model alias 表示
+RAG mode、memory 和后端候选链，不保存固定 Collection；请求通过 `rag.scope` 或重复
+`X-RAG-Collection-Key` 选择范围，再经过统一 Collection resolver 与 API Key ACL。
+非流式和标准 SSE 都复用 transport-neutral `ChatCommand` / `ChatExecutionService`。
 
-规划中的兼容层将完整 RAG deployment 暴露为 `model`，默认关闭、默认无状态，并要求先完成外部 API Key、Bearer 鉴权和多实例限流加固。
+该能力默认关闭，当前兼容子集为 `n=1`、text-only messages，不支持 tools、structured
+output 或采样参数。原生 `/api/v1/rag/chat/stream` 仍保留项目专用工具、来源和终态事件；
+两种 SSE 协议不能混用。
 
-目标方案见 [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)。
+受控预览可用于可信网络集成，但这不等于公网、多实例 production-ready。API Key family、
+共享 quota、即时多实例吊销等加固仍按 readiness 文档保留为后续边界。
+
+当前状态与边界见 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md)。
 
 ## 9. 1.0 稳定基线
 
@@ -324,6 +341,9 @@ Chat Completions 兼容。
 - WebUI 生产 bundle 内嵌到 Core。
 - 中国境内友好的 Docker 构建路径。
 - 一键发布验证。
+- 请求级 Collection scope 的 OpenAI 兼容受控预览。
+- 默认关闭的持久化 embedding jobs。
+- JSONB containment / Agent Tool 与版本化真实检索回归门禁。
 
 2026-07-21 完整门禁：
 
@@ -341,7 +361,8 @@ Real LLM 10/10
 ## 10. 明确边界
 
 - 不可变 `1.0.0` source/image Tag 尚未创建，留给正式发布流水线。
-- OpenAI 服务端兼容仍是规划，不是当前能力。
+- OpenAI 服务端兼容已实现为默认关闭的受控预览，不代表公网或多实例生产就绪。
+- 持久化 embedding worker 与 JSON Agent Tool 默认关闭；启用前应按部署验证容量和成本。
 - OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等是本地状态，不属于项目文档体系。
 - 项目级 Skills 位于 `.agents/skills/`，工作流可以引用本文，但不复制项目事实。
 

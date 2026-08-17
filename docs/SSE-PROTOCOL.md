@@ -10,7 +10,9 @@
 
 `POST /api/v1/rag/chat/stream` 返回 `text/event-stream`。文本增量沿用
 OpenAI-like `choices[].delta.content` 结构，但本端点不是标准
-`POST /v1/chat/completions`，还包含 RAG 专用事件。
+`POST /v1/chat/completions`，还包含 RAG 专用事件。默认关闭的 OpenAI 兼容预览已经提供
+独立的 `/v1/chat/completions`：该端点只发送标准 `data: <chunk>` 和最终
+`data: [DONE]`，不发送本页的 event name、工具或来源事件。
 
 当前事件：
 
@@ -209,6 +211,7 @@ curl --no-buffer -X POST \
 - `spring-ai-rag-webui/src/hooks/useSSE.test.ts`
 - `spring-ai-rag-webui/e2e/chat.spec.ts`
 - `spring-ai-rag-core/src/test/java/com/springairag/core/integration/RagControllerIntegrationTest.java`
+- `spring-ai-rag-core/src/test/java/com/springairag/core/controller/OpenAiCompatibilityControllerWebTest.java`
 
 ## 8. 其他 SSE 入口
 
@@ -220,3 +223,7 @@ PDF 导入与 Embedding 进度端点仍使用各自的进度事件，不采用 C
 
 这些端点的 Collection 身份优先使用 URL 编码后的 `collectionKey`；deprecated 的
 `collectionId` 继续兼容。
+
+OpenAI 兼容流的请求、scope 和错误信封见
+[中文 REST API](rest-api-zh-CN.md#openai-chat-completions-兼容预览) /
+[English REST API](rest-api.md#openai-chat-completions-compatibility-preview)。

@@ -66,11 +66,15 @@ The default release verification also runs this gate.
 BASE_URL=http://127.0.0.1:8081 \
   ./scripts/verify-release.sh --with-runtime-e2e --with-goldenset
 
+# Add versioned live retrieval regression against a running service
+BASE_URL=http://127.0.0.1:18081 \
+  ./scripts/verify-release.sh --with-quality-regression
+
 # The real-LLM server normally runs on 18081 via start-real-e2e-server.sh
 ./scripts/verify-release.sh --with-real-llm
 
 # Complete local gate: start a PostgreSQL-profile server, run HTTP E2E,
-# goldenset, and real-LLM smoke, archive logs, then stop that server
+# goldenset, quality regression, and real-LLM smoke, archive logs, then stop it
 ./scripts/verify-release.sh --with-local-runtime
 ```
 
@@ -247,7 +251,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V32, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V34, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -306,7 +310,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V32 from an empty schema, and exercises the vector query with actual
+Flyway V1-V34 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -337,9 +341,9 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V32 from an empty database, and verifies JSONB round-trip,
-payload-only versioning, identical descriptions with distinct records, and
-cascade cleanup:
+executes Flyway V1-V34 from an empty database, and verifies JSONB round-trip,
+nested `payloadContains`, V34 GIN planner use, payload-only versioning,
+identical descriptions with distinct records, and cascade cleanup:
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -362,6 +366,46 @@ compile, WebUI build, Mock Playwright, project-docs, and whitespace checks.
 The browser preview binds strictly to `JSONB_PLAYWRIGHT_PORT` (default `4174`);
 use an unused port when another local service occupies it. Run the complete
 gate serially because the Maven clean phase removes module `target/` output.
+
+### OpenAI Compatibility Preview Acceptance Gate
+
+```bash
+./scripts/verify-openai-compatibility.sh
+```
+
+The fixed scope covers model aliases, body/header Collection-scope merging,
+API-key ACLs, complete text-only messages, unknown-alias errors,
+non-streaming JSON, SSE role/content/finish chunk order, and final `[DONE]`.
+The script also runs focused tests, `test-compile`, shell syntax, and whitespace
+checks, writing evidence under
+`.verification/openai-compatibility/<run-id>/`.
+
+### Durable Embedding Jobs Acceptance Gate
+
+```bash
+./scripts/verify-embedding-jobs.sh
+```
+
+The script serially runs service/worker/controller focused tests, starts
+isolated PostgreSQL, migrates an empty database through V1–V34, verifies V33
+active-job coalescing, atomic force upgrades, and concurrent-worker
+`SKIP LOCKED` claims, then runs `test-compile`, shell syntax, and whitespace
+checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
+
+### Live Retrieval Quality Regression Gate
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+  ./scripts/verify-quality-regression.sh
+```
+
+The gate first validates the contract between
+`testdata/regression/retrieval-core-v1.json` and the committed baseline, then
+calls real embedding/search APIs. Stable `collectionKey + externalId`
+identities define relevance. It checks Hit Rate, MRR, Recall@K, nDCG, per-case
+minimums, baseline regression, Collection-decoy leakage, and an explicit-empty
+JSONB result. Provider, database, or embedding failures return nonzero and are
+never reported as quality passes.
 
 ### Chat Capability Redesign Acceptance Gate
 

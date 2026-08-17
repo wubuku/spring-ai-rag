@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -23,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -194,6 +196,35 @@ class DocumentEmbedServiceTest {
         @SuppressWarnings("unchecked")
         Map<String, Object> summary = (Map<String, Object>) batch.get("summary");
         assertEquals(1, summary.get("skipped"));
+    }
+
+    @Test
+    void jobCommitGuardIsRecheckedBeforeVersionRetry() {
+        RagDocument captured = document(7L, longContent(), "hash-7");
+        captured.setVersion(7L);
+        RagDocument changed = document(7L, longContent(), "hash-7");
+        changed.setVersion(8L);
+        when(documentRepository.findById(7L))
+                .thenReturn(Optional.of(captured), Optional.of(changed));
+        mockSuccessfulEmbeddings();
+        doThrow(new IllegalStateException("version changed"))
+                .when(persistenceService).replace(
+                eq(7L), eq(7L), eq("hash-7"), eq(PROFILE),
+                any(String.class), anyList(), anyList());
+        AtomicInteger checks = new AtomicInteger();
+
+        assertThrows(EmbeddingCommitRejectedException.class, () ->
+                service.embedDocumentForJob(7L, false, () -> {
+                    if (checks.incrementAndGet() > 1) {
+                        throw new EmbeddingCommitRejectedException(
+                                "snapshot changed");
+                    }
+                }));
+
+        assertEquals(2, checks.get());
+        verify(persistenceService, never()).replace(
+                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE),
+                any(String.class), anyList(), anyList());
     }
 
     private void mockSuccessfulEmbeddings() {

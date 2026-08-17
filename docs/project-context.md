@@ -209,6 +209,10 @@ local.
 - Retrieval combines vector and full-text signals.
 - The production profile recommends query rewrite and local heuristic reranking.
 - Goldenset metrics include Precision@K, MRR, and nDCG.
+- `testdata/regression/retrieval-core-v1.json` uses stable
+  `collectionKey + externalId` identities for live retrieval regression. The
+  runner checks metric floors, the committed baseline, Collection leakage, and
+  explicit empty-result behavior.
 
 The small online goldenset gave perfect baseline and quality scores. Deterministic MRR tests demonstrate reranking gain; the online sample is not statistical evidence.
 
@@ -233,6 +237,11 @@ version without invalidating a fresh embedding; there is intentionally no
 `payloadHash`. The dedicated search API enriches ranked results with the
 current JSONB payload after retrieval, and does not copy payload into embedding
 metadata or ordinary chat prompts.
+Search optionally accepts `payloadContains`, using PostgreSQL `jsonb @>` subtree
+containment pushed into every vector and full-text candidate query. V34 provides
+a partial GIN `jsonb_path_ops` index. The disabled-by-default Spring AI
+`searchJsonRecords` tool reuses the same service and authorized context and
+does not accept model-supplied Collections, SQL, or JSONPath.
 
 Ordinary non-blank short documents are retained as at least one chunk.
 `minChunkSize` is a best-effort chunk-quality target, not a document-loss
@@ -279,13 +288,15 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V32.
+- Flyway is currently V1–V34.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
   document identities without rewriting the already-released V30 migration;
   V32 adds principal-owned Chat history, source snapshots, turn status, and
-  session leases.
+  session leases; V33 adds durable embedding jobs, leases, and active-job
+  coalescing indexes; V34 adds the JSON-record payload-containment partial GIN
+  index.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 
@@ -304,6 +315,8 @@ The main namespace is `/api/v1/rag/**`:
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | Idempotent ordinary external-document synchronization |
+| `/embedding-jobs` | Disabled-by-default durable embedding/reindex jobs |
+| `/v1/models`, `/v1/chat/completions` | Disabled-by-default controlled OpenAI compatibility preview |
 
 See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
 
@@ -354,17 +367,29 @@ Do not confuse the two directions:
 
 ```text
 Implemented: spring-ai-rag -> OpenAI-compatible provider
-Not implemented: OpenAI client / Agent -> spring-ai-rag
+Controlled preview: OpenAI client / Agent -> spring-ai-rag
 ```
 
-The project does not currently expose a standard `POST /v1/chat/completions` or
-Models API. The native Chat SSE includes an OpenAI-like content delta plus
-project-specific tool, source, completion, and error events, so it must not be
-advertised as Chat Completions compatibility.
+With `rag.openai-compatibility.enabled=true`, the project exposes
+`GET /v1/models`, `GET /v1/models/{id}`, and text-only
+`POST /v1/chat/completions`. A model alias identifies RAG mode, memory, and a
+backend candidate chain, never a fixed Collection. Requests select scope
+through `rag.scope` or repeated `X-RAG-Collection-Key` headers, then use the
+shared Collection resolver and API-key ACL. Both JSON and standard SSE reuse the
+transport-neutral `ChatCommand` / `ChatExecutionService`.
 
-The planned compatibility layer presents a complete RAG deployment as a `model`. It is disabled and stateless by default, and requires external API-key, Bearer-authentication, and multi-instance rate-limit hardening first.
+The feature is disabled by default. Its current subset is text-only, `n=1`, and
+does not support tools, structured output, or sampling parameters. Native
+`/api/v1/rag/chat/stream` retains project-specific tool, source, and terminal
+events; the two SSE protocols are not interchangeable.
 
-See the [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md).
+The controlled preview is suitable for trusted-network integration, but it is
+not public, multi-instance production readiness. API-key families, shared
+quotas, and immediate cross-instance revocation remain explicit future
+boundaries.
+
+See [OpenAI compatibility readiness](openai-compatibility-readiness.md) for the
+current status and boundaries.
 
 ## 9. Stable 1.0 Baseline
 
@@ -377,6 +402,9 @@ Implemented:
 - Embedded production WebUI bundle.
 - Mainland-China-friendly Docker build path.
 - One-command release verification.
+- Request-scoped Collection selection in the controlled OpenAI compatibility preview.
+- Disabled-by-default durable embedding jobs.
+- JSONB containment / Agent tool support and versioned live retrieval regression.
 
 Full gate on 2026-07-21:
 
@@ -394,7 +422,10 @@ See [P1 / 1.0 readiness progress](drafts/2026-07-21_P1_10_READINESS_PROGRESS.md)
 ## 10. Explicit Boundaries
 
 - The immutable `1.0.0` source/image tag has not been created; the release pipeline owns it.
-- Server-side OpenAI compatibility remains a plan, not a current feature.
+- Server-side OpenAI compatibility exists as a disabled-by-default controlled
+  preview; it is not public or multi-instance production readiness.
+- The durable embedding worker and JSON Agent tool remain disabled by default;
+  deployments should validate capacity and cost before enabling them.
 - OpenClaw `TOOLS.md`, `MEMORY.md`, `memory/`, `HEARTBEAT.md`, and related files are local state outside the project documentation system.
 - Project Skills live under `.agents/skills/`; workflows may link here but must not duplicate project facts.
 

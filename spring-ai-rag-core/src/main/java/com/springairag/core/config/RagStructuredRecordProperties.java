@@ -10,6 +10,11 @@ public class RagStructuredRecordProperties {
     private int maxBatchSize = 20;
     private int maxBatchPayloadBytes = 10_485_760;
     private int maxSearchResults = 20;
+    private int maxPayloadFilterBytes = 16_384;
+    private int maxPayloadFilterDepth = 8;
+    private boolean agentToolEnabled = false;
+    private int agentToolMaxResults = 5;
+    private int agentToolMaxPayloadBytes = 32_768;
 
     public int getMaxJsonbPayloadBytes() {
         return maxJsonbPayloadBytes;
@@ -49,5 +54,45 @@ public class RagStructuredRecordProperties {
 
     public void setMaxSearchResults(int maxSearchResults) {
         this.maxSearchResults = maxSearchResults;
+    }
+
+    public int getMaxPayloadFilterBytes() {
+        return maxPayloadFilterBytes;
+    }
+
+    public void setMaxPayloadFilterBytes(int maxPayloadFilterBytes) {
+        this.maxPayloadFilterBytes = Math.max(1, maxPayloadFilterBytes);
+    }
+
+    public int getMaxPayloadFilterDepth() {
+        return maxPayloadFilterDepth;
+    }
+
+    public void setMaxPayloadFilterDepth(int maxPayloadFilterDepth) {
+        this.maxPayloadFilterDepth = Math.max(1, maxPayloadFilterDepth);
+    }
+
+    public boolean isAgentToolEnabled() {
+        return agentToolEnabled;
+    }
+
+    public void setAgentToolEnabled(boolean agentToolEnabled) {
+        this.agentToolEnabled = agentToolEnabled;
+    }
+
+    public int getAgentToolMaxResults() {
+        return agentToolMaxResults;
+    }
+
+    public void setAgentToolMaxResults(int agentToolMaxResults) {
+        this.agentToolMaxResults = Math.max(1, agentToolMaxResults);
+    }
+
+    public int getAgentToolMaxPayloadBytes() {
+        return agentToolMaxPayloadBytes;
+    }
+
+    public void setAgentToolMaxPayloadBytes(int agentToolMaxPayloadBytes) {
+        this.agentToolMaxPayloadBytes = Math.max(1, agentToolMaxPayloadBytes);
     }
 }

@@ -1,5 +1,6 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
@@ -31,6 +32,9 @@ public class JsonRecordSearchRequest {
 
     @Valid
     private RetrievalConfig config;
+
+    @Schema(description = "Optional non-empty JSON object matched with PostgreSQL JSONB containment")
+    private JsonNode payloadContains;
 
     public JsonRecordSearchRequest() {
     }
@@ -65,5 +69,13 @@ public class JsonRecordSearchRequest {
 
     public void setConfig(RetrievalConfig config) {
         this.config = config;
+    }
+
+    public JsonNode getPayloadContains() {
+        return payloadContains;
+    }
+
+    public void setPayloadContains(JsonNode payloadContains) {
+        this.payloadContains = payloadContains;
     }
 }

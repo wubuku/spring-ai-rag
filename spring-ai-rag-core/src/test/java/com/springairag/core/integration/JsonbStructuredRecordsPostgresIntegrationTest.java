@@ -10,6 +10,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
+import java.util.List;
 import java.util.UUID;
 
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -17,6 +18,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Real PostgreSQL acceptance tests for the JSONB structured-record migration.
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 class JsonbStructuredRecordsPostgresIntegrationTest {
 
     private static PostgreSQLContainer<?> postgres;
+    private static DataSource dataSource;
     private static JdbcTemplate jdbcTemplate;
 
     @BeforeAll
@@ -35,6 +38,18 @@ class JsonbStructuredRecordsPostgresIntegrationTest {
         assumeTrue(Boolean.getBoolean("jsonb.it.enabled"),
                 "Set -Djsonb.it.enabled=true to run PostgreSQL JSONB integration tests");
 
+        String externalJdbcUrl = System.getProperty("jsonb.it.jdbc-url");
+        if (externalJdbcUrl != null && !externalJdbcUrl.isBlank()) {
+            PGSimpleDataSource pg = new PGSimpleDataSource();
+            pg.setUrl(externalJdbcUrl);
+            pg.setUser(System.getProperty(
+                    "jsonb.it.username", "postgres"));
+            pg.setPassword(System.getProperty(
+                    "jsonb.it.password", "postgres"));
+            dataSource = pg;
+            jdbcTemplate = new JdbcTemplate(dataSource);
+            return;
+        }
         String image = System.getProperty(
                 "testcontainers.pg.image",
                 System.getenv().getOrDefault(
@@ -47,7 +62,8 @@ class JsonbStructuredRecordsPostgresIntegrationTest {
                 .withPassword("postgres");
         postgres.start();
 
-        jdbcTemplate = new JdbcTemplate(dataSource(postgres));
+        dataSource = dataSource(postgres);
+        jdbcTemplate = new JdbcTemplate(dataSource);
     }
 
     @AfterAll
@@ -60,13 +76,13 @@ class JsonbStructuredRecordsPostgresIntegrationTest {
     @BeforeEach
     void migrateFromEmptyDatabase() {
         Flyway.configure()
-                .dataSource(dataSource(postgres))
+                .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .cleanDisabled(false)
                 .load()
                 .clean();
         Flyway.configure()
-                .dataSource(dataSource(postgres))
+                .dataSource(dataSource)
                 .locations("classpath:db/migration")
                 .load()
                 .migrate();
@@ -139,6 +155,55 @@ class JsonbStructuredRecordsPostgresIntegrationTest {
         assertEquals(0L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM rag_document_embedding_state WHERE document_id = ?",
                 Long.class, documentId));
+    }
+
+    @Test
+    void payloadContainmentUsesNestedSemanticsAndGinIndex() {
+        long collectionId = insertCollection();
+        insertJsonDocument(
+                collectionId,
+                "active-sofa",
+                "{\"status\":\"active\",\"category\":{\"code\":\"sofa\"}}");
+        insertJsonDocument(
+                collectionId,
+                "inactive-sofa",
+                "{\"status\":\"inactive\",\"category\":{\"code\":\"sofa\"}}");
+        jdbcTemplate.update(
+                "INSERT INTO rag_documents "
+                        + "(collection_id, title, content, document_type, external_id, "
+                        + "content_hash, jsonb_payload, processing_status) "
+                        + "SELECT ?, 'JSON record', 'Description', 'json-record', "
+                        + "'noise-' || series_id, 'same-description-hash', "
+                        + "jsonb_build_object('status', 'inactive', 'sequence', series_id), "
+                        + "'PENDING' "
+                        + "FROM generate_series(1, 5000) AS series_id",
+                collectionId);
+        jdbcTemplate.execute("ANALYZE rag_documents");
+
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_documents "
+                        + "WHERE collection_id = ? "
+                        + "AND document_type = 'json-record' "
+                        + "AND enabled = true "
+                        + "AND jsonb_payload @> ?::jsonb",
+                Long.class,
+                collectionId,
+                "{\"status\":\"active\","
+                        + "\"category\":{\"code\":\"sofa\"}}"));
+
+        jdbcTemplate.execute("SET enable_seqscan = off");
+        List<String> plan = jdbcTemplate.query(
+                "EXPLAIN SELECT id FROM rag_documents "
+                        + "WHERE document_type = 'json-record' "
+                        + "AND enabled = true "
+                        + "AND jsonb_payload @> ?::jsonb",
+                (resultSet, rowNum) -> resultSet.getString(1),
+                "{\"status\":\"active\"}");
+        assertTrue(
+                plan.stream().anyMatch(line ->
+                        line.contains(
+                                "idx_rag_documents_jsonb_payload_path_ops")),
+                () -> "Expected V34 GIN index in query plan: " + plan);
     }
 
     private long insertCollection() {

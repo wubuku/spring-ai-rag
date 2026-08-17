@@ -1,6 +1,7 @@
 package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
@@ -117,21 +118,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         if (rootMode && request.getParameterMap().containsKey("apiKey")) {
             log.warn("Query API credential rejected in root mode: {} {}",
                     request.getMethod(), path);
-            sendUnauthorized(response,
+            sendUnauthorized(response, path,
                     "Query-string API credentials are not accepted. Use Authorization: Bearer or X-API-Key.");
             return;
         }
 
         CredentialResult credentialResult = resolveCredential(request, rootMode);
         if (credentialResult.error() != null) {
-            sendUnauthorized(response, credentialResult.error());
+            sendUnauthorized(response, path, credentialResult.error());
             return;
         }
         String requestApiKey = credentialResult.credential();
 
         if (requestApiKey == null || requestApiKey.isBlank()) {
             log.warn("API Key missing: {} {}", request.getMethod(), path);
-            sendUnauthorized(response, rootMode
+            sendUnauthorized(response, path, rootMode
                     ? "Missing API Key. Provide Authorization: Bearer or X-API-Key header."
                     : "Missing API Key. Provide X-API-Key header or ?apiKey= query parameter.");
             return;
@@ -157,7 +158,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
             } catch (DataAccessException e) {
                 log.error("API credential store unavailable: {} {}",
                         request.getMethod(), path);
-                sendServiceUnavailable(response);
+                sendServiceUnavailable(response, path);
                 return;
             }
             if (validatedKey != null) {
@@ -184,7 +185,7 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         }
 
         log.warn("API Key invalid: {} {}", request.getMethod(), path);
-        sendUnauthorized(response, "Invalid API Key.");
+        sendUnauthorized(response, path, "Invalid API Key.");
     }
 
     private CredentialResult resolveCredential(HttpServletRequest request, boolean rootMode) {
@@ -243,9 +244,21 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
                 path.startsWith("/error");
     }
 
-    private void sendUnauthorized(HttpServletResponse response, String message) throws IOException {
+    private void sendUnauthorized(
+            HttpServletResponse response,
+            String path,
+            String message) throws IOException {
         response.setStatus(HttpStatus.UNAUTHORIZED.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            message,
+                            "authentication_error",
+                            null,
+                            "invalid_api_key")));
+            return;
+        }
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("UNAUTHORIZED")
                 .message(message)
@@ -253,9 +266,20 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
     }
 
-    private void sendServiceUnavailable(HttpServletResponse response) throws IOException {
+    private void sendServiceUnavailable(
+            HttpServletResponse response,
+            String path) throws IOException {
         response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            "API credential service is unavailable.",
+                            "server_error",
+                            null,
+                            "credential_service_unavailable")));
+            return;
+        }
         ErrorResponse errorResponse = ErrorResponse.builder()
                 .error("CREDENTIAL_SERVICE_UNAVAILABLE")
                 .status(HttpStatus.SERVICE_UNAVAILABLE.value())

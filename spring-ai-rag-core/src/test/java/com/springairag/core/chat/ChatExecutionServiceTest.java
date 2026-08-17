@@ -23,6 +23,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.document.Document;
@@ -165,6 +166,61 @@ class ChatExecutionServiceTest {
                 KnowledgeSearchTool.CONTEXT_KEY));
         assertEquals(0, context.trace().retrievalCalls());
         assertEquals(false, result.metadata().get("retrievalExecuted"));
+    }
+
+    @Test
+    void transportMessagesArePassedInOrderWithoutServerHistory() {
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        ClientFixture client = clientFixture("answer", Map.of());
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, null));
+        when(promptCustomizers.hasCustomizers()).thenReturn(true);
+        when(promptCustomizers.customizeUserMessage(
+                eq("latest"), eq(Map.of())))
+                .thenReturn("customized latest");
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = new ChatCommand(
+                "latest",
+                "session-1",
+                principal,
+                principal.memoryConversationId("session-1"),
+                ChatMode.PLAIN,
+                MemoryMode.STATELESS,
+                null,
+                null,
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                Map.of(),
+                List.of(
+                        new ChatInputMessage(
+                                ChatInputMessage.Role.SYSTEM, "client system"),
+                        new ChatInputMessage(
+                                ChatInputMessage.Role.USER, "first"),
+                        new ChatInputMessage(
+                                ChatInputMessage.Role.ASSISTANT, "reply"),
+                        new ChatInputMessage(
+                                ChatInputMessage.Role.USER, "latest")),
+                List.of());
+
+        service.execute(command);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Message>> messages =
+                ArgumentCaptor.forClass(List.class);
+        verify(client.spec()).messages(messages.capture());
+        assertEquals(4, messages.getValue().size());
+        assertTrue(messages.getValue().getFirst()
+                instanceof org.springframework.ai.chat.messages.SystemMessage);
+        assertEquals("first", messages.getValue().get(1).getText());
+        assertEquals("customized latest",
+                messages.getValue().getLast().getText());
+        verify(historyRepository, never()).findBySessionId(
+                anyString(), any(Integer.class));
     }
 
     @Test
@@ -372,6 +428,52 @@ class ChatExecutionServiceTest {
                 anyString(), anyString(), anyString(), any(), any());
     }
 
+    @Test
+    void configuredCandidateChainSkipsUnavailableAndIneligibleModels() {
+        ChatModelRouter.ChatModelCandidate noStreaming =
+                candidate("no-streaming", false, false, false);
+        ChatModelRouter.ChatModelCandidate fallback =
+                candidate("fallback", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        StreamClientFixture client = streamClientFixture(
+                Flux.just(streamResponse("fallback answer", Map.of())));
+        when(modelRouter.resolveCandidateRequired("missing"))
+                .thenThrow(new IllegalArgumentException("not registered"));
+        when(modelRouter.resolveCandidateRequired("no-streaming"))
+                .thenReturn(noStreaming);
+        when(modelRouter.resolveCandidateRequired("fallback"))
+                .thenReturn(fallback);
+        when(clientFactory.create(any(), same(fallback), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), fallback, context, null));
+        ChatCommand base = command(ChatMode.PLAIN, "missing");
+        ChatCommand command = new ChatCommand(
+                base.message(),
+                base.sessionId(),
+                base.principal(),
+                base.memoryConversationId(),
+                base.mode(),
+                base.memoryMode(),
+                base.modelRef(),
+                base.domainId(),
+                base.retrievalScope(),
+                base.retrievalOptions(),
+                base.clientMetadata(),
+                base.inputMessages(),
+                List.of("missing", "no-streaming", "fallback"));
+
+        List<ChatEvent> events = service.stream(command)
+                .collectList()
+                .block();
+
+        assertTrue(events.stream().anyMatch(event ->
+                event instanceof ChatEvent.Completed completed
+                        && "fallback".equals(completed.resolvedModel())));
+        verify(clientFactory, never()).create(
+                any(), same(noStreaming), anyList());
+        verify(clientFactory).create(any(), same(fallback), anyList());
+    }
+
     private ChatCommand command(ChatMode mode, String modelRef) {
         ChatPrincipal principal = ChatPrincipal.local();
         return new ChatCommand(
@@ -442,6 +544,7 @@ class ChatExecutionServiceTest {
         when(client.prompt()).thenReturn(spec);
         when(spec.system(anyString())).thenReturn(spec);
         when(spec.user(anyString())).thenReturn(spec);
+        when(spec.messages(anyList())).thenReturn(spec);
         when(spec.advisors(any(Consumer.class))).thenReturn(spec);
         when(spec.toolCallbacks(any(KnowledgeSearchTool.class))).thenReturn(spec);
         when(spec.toolContext(any())).thenReturn(spec);
@@ -465,6 +568,7 @@ class ChatExecutionServiceTest {
         when(client.prompt()).thenReturn(spec);
         when(spec.system(anyString())).thenReturn(spec);
         when(spec.user(anyString())).thenReturn(spec);
+        when(spec.messages(anyList())).thenReturn(spec);
         when(spec.advisors(any(Consumer.class))).thenReturn(spec);
         when(spec.toolCallbacks(any(KnowledgeSearchTool.class))).thenReturn(spec);
         when(spec.toolContext(any())).thenReturn(spec);

@@ -2,6 +2,7 @@ package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.RetrievalScopeSql;
@@ -88,13 +89,25 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
     public List<RetrievalResult> searchInScope(
             String query, RetrievalScope scope, List<Long> excludeIds,
             int limit, double minScore, long embeddingProfileId) {
+        return searchInScope(
+                query, scope, excludeIds, limit, minScore,
+                embeddingProfileId, null);
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId,
+            JsonbContainmentFilter payloadFilter) {
         if (!available) return Collections.emptyList();
         if (query == null || query.isBlank()) return Collections.emptyList();
         if (scope != null && scope.matchNone()) return Collections.emptyList();
 
         try {
             List<Map<String, Object>> rows =
-                    executeSearch(query.trim(), scope, limit, embeddingProfileId);
+                    executeSearch(
+                            query.trim(), scope, limit,
+                            embeddingProfileId, payloadFilter);
             log.debug("pg_jieba search for '{}' returned {} rows", query, rows.size());
             return rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
@@ -114,7 +127,8 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
 
     private List<Map<String, Object>> executeSearch(
             String query, RetrievalScope retrievalScope,
-            int limit, long embeddingProfileId) {
+            int limit, long embeddingProfileId,
+            JsonbContainmentFilter payloadFilter) {
         // Use pre-built search_vector_zh column (with GIN index)
         // Use websearch_to_tsquery for Google-style search syntax
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
@@ -124,7 +138,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                 + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
         RetrievalScopeSql.Fragment fragment =
-                RetrievalScopeSql.build(retrievalScope);
+                RetrievalScopeSql.build(retrievalScope, payloadFilter);
         String sql = select + scope + fragment.sql()
                 + "AND e.search_vector_zh IS NOT NULL "
                 + "AND e.search_vector_zh @@ websearch_to_tsquery('"

@@ -33,6 +33,24 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/run-retrieval-goldenset.sh
 两轮结果均通过 `POST /api/v1/rag/evaluation/evaluate` 持久化。脚本输出平均
 Precision@K、MRR、nDCG 及其差值；MRR 或 nDCG 回退时返回失败。
 
+## 版本化真实检索回归
+
+Goldenset 用于比较重排开关；版本化回归用于阻止真实检索能力在后续提交中退化：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
+```
+
+- 数据集：`testdata/regression/retrieval-core-v1.json`
+- baseline：`testdata/regression/retrieval-core-v1-baseline.json`
+- 稳定 relevant identity：`collectionKey + externalId`
+- 指标：Hit Rate、MRR、Recall@K、nDCG
+- 安全断言：selected Collection 不泄漏 decoy；明确 JSONB 空结果保持零命中
+
+脚本会对 absolute minimum 和 baseline 允许回退量同时判定，provider、数据库、embedding
+或 HTTP 失败均返回非零。`verify-release.sh --with-quality-regression` 可对已启动服务追加
+该门禁，`--with-local-runtime` 默认包含它。
+
 ### 对比基线与生产质量组合
 
 ```bash

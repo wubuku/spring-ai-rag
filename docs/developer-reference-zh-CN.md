@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V32 |
+| Flyway | V1–V34 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -251,6 +251,30 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 
 未开启时，真实 LLM 步骤会明确记录为 `SKIP`。
 
+### OpenAI 兼容一键验证
+
+```bash
+./scripts/verify-openai-compatibility.sh
+```
+
+该脚本验证 model alias、请求级 Collection scope/ACL、完整 text-only messages、
+非流式 OpenAI JSON、兼容错误信封、SSE chunk 顺序和 `[DONE]`，并执行相关
+`test-compile`、Shell 语法和空白门禁。日志写入
+`.verification/openai-compatibility/<run-id>/`。兼容 Controller 默认关闭；运行服务时
+需要显式设置 `RAG_OPENAI_COMPATIBILITY_ENABLED=true`。
+
+### 持久化 Embedding Jobs 一键验证
+
+```bash
+./scripts/verify-embedding-jobs.sh
+```
+
+脚本覆盖 service、worker、HTTP API、V33 migration、活动任务 coalesce 与双 worker
+`SKIP LOCKED` claim。默认自动启动隔离的 `pgvector/pgvector:pg16` 容器；已有数据库时可用
+`EMBEDDING_JOBS_IT_JDBC_URL`、`EMBEDDING_JOBS_IT_USERNAME` 和
+`EMBEDDING_JOBS_IT_PASSWORD` 覆盖。验证日志位于
+`.verification/embedding-jobs/<run-id>/`。
+
 ### JSONB 结构化记录一键验证
 
 运行 JSONB 实现及其 API、数据库、WebUI、文档和空白检查的可重复门禁：
@@ -260,10 +284,10 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 ```
 
 只有在浏览器依赖不可用时才使用 `--skip-playwright`，并在验证记录中明确记载跳过。
-PostgreSQL Testcontainers 步骤默认使用 `-Dapi.version=1.40` 和
-`TESTCONTAINERS_RYUK_DISABLED=true`，用于规避部分 OrbStack / 代理环境的旧 Docker API
-协商失败或 Ryuk 镜像证书问题。可通过 `TESTCONTAINERS_API_VERSION`、
-`TESTCONTAINERS_RYUK_DISABLED`、`TESTCONTAINERS_PG_IMAGE` 覆盖。日志和 Markdown 汇总写入
+脚本默认自动启动隔离 PostgreSQL，绕开 Testcontainers 1.20.4 与新 Docker daemon API
+协商不兼容；也可通过 `JSONB_IT_JDBC_URL`、`JSONB_IT_USERNAME`、
+`JSONB_IT_PASSWORD` 复用调用者提供的隔离数据库。镜像可用
+`TESTCONTAINERS_PG_IMAGE` 覆盖。日志和 Markdown 汇总写入
 `.verification/jsonb-verification/<run-id>/`。
 Mock Playwright preview 使用 `JSONB_PLAYWRIGHT_PORT`（默认 `4174`），并启用严格端口绑定，
 不会复用无关进程。如果端口已被占用，请指定空闲端口，例如：
@@ -319,12 +343,28 @@ embedding。只有 embedding provider 确实不可用时才设置
 BASE_URL=http://127.0.0.1:8081 ./scripts/run-retrieval-goldenset.sh
 ```
 
+版本化真实检索回归：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
+```
+
+数据集和提交的 baseline 位于 `testdata/regression/`。runner 使用稳定
+`collectionKey + externalId` 身份创建 fixture，检查 Hit Rate、MRR、Recall@K、nDCG、
+minimum、相对 baseline 回退、Collection decoy 泄漏和 JSONB 明确空结果，并把 JSON
+artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`。未显式设置
+`RAG_API_KEY` 时会安全读取 `.env` 的 `RAG_API_KEY` / `RAG_ROOT_API_KEY`，不会输出密钥。
+
 发布级一键验证：
 
 ```bash
 ./scripts/verify-release.sh
+./scripts/verify-release.sh --with-quality-regression
 ./scripts/verify-release.sh --with-local-runtime
 ```
+
+`--with-quality-regression` 对已经启动的 `BASE_URL` 追加版本化回归；
+`--with-local-runtime` 默认包含 HTTP E2E、goldenset、质量回归和真实 LLM smoke。
 
 日志和汇总写入 `target/release-verification/<run-id>/`。门禁详情见 [release-checklist-zh-CN.md](release-checklist-zh-CN.md)。
 

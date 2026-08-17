@@ -8,6 +8,18 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [未发布] - 2026-08-17
+
+### 新增
+- 默认关闭的 OpenAI Chat Completions 兼容预览：model alias、完整 text-only messages、标准 JSON/SSE 信封与请求级 Collection 范围
+- Flyway V33 持久化 embedding/reindex jobs：活动任务合并、lease、有界重试、取消、陈旧写入 fencing 与管理 API
+- JSONB `payloadContains`：SQL 下推的 PostgreSQL containment、V34 partial GIN 索引和可选的服务端授权 `searchJsonRecords` Spring AI Tool
+- 版本化真实检索 fixture、提交的 baseline、一键质量门禁与 release verifier 集成
+
+### 变更
+- Flyway 迁移范围更新为 V1–V34
+- OpenAI、embedding jobs、JSONB、文档和质量回归均提供独立一键验证脚本
+
 ## [1.0.0] - 2026-07-21
 
 ### 新增

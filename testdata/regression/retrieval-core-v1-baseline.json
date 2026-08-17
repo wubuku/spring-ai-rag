@@ -1,0 +1,22 @@
+{
+  "dataset": "retrieval-core",
+  "version": 1,
+  "establishedAt": "2026-08-17",
+  "embeddingProfileKey": "siliconflow-bge-m3-1024-v1",
+  "k": 5,
+  "retrievalConfig": {
+    "maxResults": 5,
+    "minScore": 0.0,
+    "useHybridSearch": true,
+    "useRerank": true,
+    "vectorWeight": 0.55,
+    "fulltextWeight": 0.45
+  },
+  "aggregate": {
+    "precisionAtK": 0.36,
+    "recallAtK": 1.0,
+    "mrr": 1.0,
+    "ndcg": 1.0,
+    "hitRate": 1.0
+  }
+}

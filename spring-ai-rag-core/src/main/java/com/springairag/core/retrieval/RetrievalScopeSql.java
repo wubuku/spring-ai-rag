@@ -14,6 +14,12 @@ public final class RetrievalScopeSql {
     }
 
     public static Fragment build(RetrievalScope requestedScope) {
+        return build(requestedScope, null);
+    }
+
+    public static Fragment build(
+            RetrievalScope requestedScope,
+            JsonbContainmentFilter payloadFilter) {
         RetrievalScope scope = requestedScope != null
                 ? requestedScope
                 : RetrievalScope.unscoped();
@@ -39,6 +45,10 @@ public final class RetrievalScopeSql {
         if (scope.documentType() != null) {
             sql.append("AND d.document_type = ? ");
             args.add(scope.documentType());
+        }
+        if (payloadFilter != null) {
+            sql.append("AND d.jsonb_payload @> CAST(? AS jsonb) ");
+            args.add(payloadFilter.canonicalJson());
         }
         return new Fragment(sql.toString(), args);
     }

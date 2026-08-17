@@ -24,6 +24,7 @@ import com.springairag.core.exception.StructuredRecordConflictException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -181,8 +182,7 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "collectionKeys or collectionIds must be provided");
         }
-        RetrievalScope retrievalScope = null;
-        List<Long> collectionIds;
+        RetrievalScope retrievalScope;
         if (retrievalScopeResolver != null) {
             retrievalScope = retrievalScopeResolver.resolve(
                     CollectionScopeMode.SELECTED_COLLECTIONS,
@@ -191,22 +191,52 @@ public class JsonRecordService {
                     null,
                     RagDocument.JSON_RECORD,
                     ApiKeyCollectionAccess.currentKey());
-            collectionIds = retrievalScope.collectionIds();
         } else {
-            collectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
+            List<Long> collectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
                     request.getCollectionIds(),
                     request.getCollectionKeys(),
                     ApiKeyCollectionAccess.currentKey(),
                     collectionIdentityResolver);
+            retrievalScope = RetrievalScope.selectedCollections(
+                    collectionIds, null, RagDocument.JSON_RECORD);
         }
-        if (collectionIds == null || collectionIds.isEmpty()) {
+        if (retrievalScope.matchNone()
+                || retrievalScope.collectionIds().isEmpty()) {
             return new JsonRecordSearchResponse(request.getQuery(), List.of());
         }
-        request.setCollectionIds(collectionIds);
+        request.setCollectionIds(retrievalScope.collectionIds());
+        return searchAuthorized(
+                request.getQuery(),
+                request.getPayloadContains(),
+                retrievalScope,
+                request.getConfig());
+    }
 
-        RetrievalConfig config = request.getConfig() == null
+    /**
+     * 使用服务端已经授权的不可变 scope 检索 JSON 记录。
+     */
+    public JsonRecordSearchResponse searchAuthorized(
+            String query,
+            JsonNode payloadContains,
+            RetrievalScope authorizedScope,
+            RetrievalConfig requestedConfig) {
+        if (query == null || query.isBlank()) {
+            throw new IllegalArgumentException("query must not be blank");
+        }
+        if (query.length() > 10_000) {
+            throw new IllegalArgumentException(
+                    "query must not exceed 10000 characters");
+        }
+        RetrievalScope retrievalScope = jsonRecordScope(authorizedScope);
+        if (retrievalScope.matchNone()) {
+            return new JsonRecordSearchResponse(query, List.of());
+        }
+        JsonbContainmentFilter payloadFilter =
+                validatePayloadFilter(payloadContains);
+
+        RetrievalConfig config = requestedConfig == null
                 ? RetrievalConfig.builder().build()
-                : request.getConfig();
+                : requestedConfig;
         int limit = Math.min(config.getMaxResults(), properties.getMaxSearchResults());
         if (limit < 1) {
             throw new IllegalArgumentException("maxResults must be at least 1");
@@ -220,25 +250,11 @@ public class JsonRecordService {
                 .vectorWeight(config.getVectorWeight())
                 .fulltextWeight(config.getFulltextWeight())
                 .build();
-        List<RetrievalResult> ranked;
-        if (retrievalScope != null) {
-            ranked = hybridRetrieverService.searchInScope(
-                    request.getQuery(), retrievalScope, null,
-                    limit, effectiveConfig);
-        } else {
-            List<Long> candidateIds = documentRepository
-                    .findEnabledIdsByCollectionIdsAndDocumentType(
-                            collectionIds, RagDocument.JSON_RECORD);
-            if (candidateIds.isEmpty()) {
-                return new JsonRecordSearchResponse(
-                        request.getQuery(), List.of());
-            }
-            ranked = hybridRetrieverService.search(
-                    request.getQuery(), candidateIds, null,
-                    limit, effectiveConfig);
-        }
-        if (config.isUseRerank()) {
-            ranked = reRankingService.rerank(request.getQuery(), ranked, limit);
+        List<RetrievalResult> ranked = hybridRetrieverService.searchInScope(
+                query, retrievalScope, null,
+                limit, effectiveConfig, payloadFilter);
+        if (config.isUseRerank() && !ranked.isEmpty()) {
+            ranked = reRankingService.rerank(query, ranked, limit);
         }
 
         LinkedHashMap<Long, RetrievalResult> uniqueRanked = new LinkedHashMap<>();
@@ -249,18 +265,24 @@ public class JsonRecordService {
             }
         }
         if (uniqueRanked.isEmpty()) {
-            return new JsonRecordSearchResponse(request.getQuery(), List.of());
+            return new JsonRecordSearchResponse(query, List.of());
         }
 
         List<RagDocument> documents = documentRepository
                 .findByIdInAndDocumentTypeAndEnabledTrue(
                         new ArrayList<>(uniqueRanked.keySet()), RagDocument.JSON_RECORD);
         Map<Long, RagDocument> byId = documents.stream()
-                .filter(doc -> collectionIds.contains(doc.getCollectionId()))
+                .filter(doc -> scopeAllows(retrievalScope, doc))
                 .collect(java.util.stream.Collectors.toMap(
                         RagDocument::getId, doc -> doc, (left, right) -> left));
-        Map<Long, String> collectionKeys =
-                collectionIdentityResolver.mapKeys(collectionIds);
+        List<Long> resultCollectionIds = byId.values().stream()
+                .map(RagDocument::getCollectionId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        Map<Long, String> collectionKeys = resultCollectionIds.isEmpty()
+                ? Map.of()
+                : collectionIdentityResolver.mapKeys(resultCollectionIds);
 
         List<JsonRecordSearchResult> results = new ArrayList<>();
         for (Map.Entry<Long, RetrievalResult> entry : uniqueRanked.entrySet()) {
@@ -286,7 +308,83 @@ public class JsonRecordService {
                 break;
             }
         }
-        return new JsonRecordSearchResponse(request.getQuery(), results);
+        return new JsonRecordSearchResponse(query, results);
+    }
+
+    private RetrievalScope jsonRecordScope(RetrievalScope authorizedScope) {
+        RetrievalScope scope = authorizedScope != null
+                ? authorizedScope
+                : RetrievalScope.noMatches();
+        if (scope.matchNone()) {
+            return RetrievalScope.noMatches();
+        }
+        if (scope.documentType() != null
+                && !RagDocument.JSON_RECORD.equals(scope.documentType())) {
+            return RetrievalScope.noMatches();
+        }
+        return new RetrievalScope(
+                scope.collectionFilter(),
+                scope.collectionIds(),
+                scope.documentIds(),
+                RagDocument.JSON_RECORD,
+                false);
+    }
+
+    private boolean scopeAllows(RetrievalScope scope, RagDocument document) {
+        if (document == null
+                || !Boolean.TRUE.equals(document.getEnabled())
+                || !RagDocument.JSON_RECORD.equals(document.getDocumentType())) {
+            return false;
+        }
+        if (!scope.documentIds().isEmpty()
+                && !scope.documentIds().contains(document.getId())) {
+            return false;
+        }
+        return switch (scope.collectionFilter()) {
+            case NONE -> true;
+            case ANY_ASSIGNED -> document.getCollectionId() != null;
+            case SELECTED -> scope.collectionIds().contains(
+                    document.getCollectionId());
+        };
+    }
+
+    private JsonbContainmentFilter validatePayloadFilter(JsonNode filter) {
+        if (filter == null) {
+            return null;
+        }
+        if (!filter.isObject()) {
+            throw new IllegalArgumentException(
+                    "payloadContains must be a JSON object");
+        }
+        if (filter.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "payloadContains must not be an empty object");
+        }
+        byte[] serialized = serializePayload(filter);
+        if (serialized.length > properties.getMaxPayloadFilterBytes()) {
+            throw new IllegalArgumentException(
+                    "payloadContains exceeds "
+                            + properties.getMaxPayloadFilterBytes() + " bytes");
+        }
+        int depth = jsonDepth(filter);
+        if (depth > properties.getMaxPayloadFilterDepth()) {
+            throw new IllegalArgumentException(
+                    "payloadContains depth exceeds "
+                            + properties.getMaxPayloadFilterDepth());
+        }
+        return new JsonbContainmentFilter(
+                new String(serialized, StandardCharsets.UTF_8));
+    }
+
+    private int jsonDepth(JsonNode node) {
+        if (node == null || !node.isContainerNode()) {
+            return 0;
+        }
+        int childDepth = 0;
+        for (JsonNode child : node) {
+            childDepth = Math.max(childDepth, jsonDepth(child));
+        }
+        return 1 + childDepth;
     }
 
     public JsonRecordDetailResponse getDetail(Long documentId) {

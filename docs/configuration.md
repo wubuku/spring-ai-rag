@@ -119,6 +119,43 @@ the configured primary/fallback chain. An external JSON file fully replaces
 the YAML model registry; see
 [multi-model-external-config.md](multi-model-external-config.md).
 
+### OpenAI Chat Completions Server Compatibility
+
+The controlled adapter is disabled by default. When enabled, it exposes
+`GET /v1/models`, `GET /v1/models/{id}`, and `POST /v1/chat/completions`.
+A public model alias identifies a RAG pipeline and backend candidate chain; it
+does **not** contain a fixed Collection. Each request supplies Collection scope
+through `rag.scope` or repeated `X-RAG-Collection-Key` headers, still bounded by
+the API-key ACL.
+
+```yaml
+rag:
+  openai-compatibility:
+    enabled: ${RAG_OPENAI_COMPATIBILITY_ENABLED:false}
+    require-explicit-scope: ${RAG_OPENAI_REQUIRE_EXPLICIT_SCOPE:false}
+    models:
+      rag-default:
+        candidates: []
+        mode: KNOWLEDGE
+        memory: STATELESS
+        allow-request-mode-override: false
+        allow-request-memory-override: false
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.openai-compatibility.enabled` | `false` | Register `/v1/models` and `/v1/chat/completions` |
+| `rag.openai-compatibility.require-explicit-scope` | `false` | Require every request to supply `rag.scope` or a Collection header |
+| `rag.openai-compatibility.models.<alias>.candidates` | `[]` | Internal `provider/modelId` candidate chain; empty uses the global primary/fallback |
+| `rag.openai-compatibility.models.<alias>.mode` | `KNOWLEDGE` | Default Chat mode for the alias |
+| `rag.openai-compatibility.models.<alias>.memory` | `STATELESS` | Default memory mode for the alias |
+| `allow-request-*-override` | `false` | Whether the request may override alias mode/memory |
+
+The current controlled preview is text-only and supports `n=1`. Unsupported
+OpenAI parameters return an explicit compatible error envelope instead of
+being silently ignored. See [REST API](rest-api.md) for protocol and scope
+examples.
+
 ## Embedding Model Configuration
 
 Embedding model configuration is independent of the Chat provider and is always active.
@@ -162,6 +199,34 @@ legacy `embedding` column during the compatibility window. Changing models requi
 Profile and a complete re-embedding; do not change only `dimensions`, cast old vectors, or
 mix Profiles in one retrieval query. Legacy vector adoption is explicit and requires the
 configured confirmation value.
+
+### Persistent Embedding Jobs
+
+The opt-in job worker provides durable, retryable batch embedding/reindexing.
+It does not replace the existing synchronous embed APIs. When enabled, callers
+create, inspect, cancel, and retry jobs through
+`/api/v1/rag/embedding-jobs`.
+
+```yaml
+rag:
+  embedding-jobs:
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
+    claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
+    lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
+    default-max-attempts: ${RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS:3}
+    max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
+    max-documents-per-batch: 1000
+    retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
+```
+
+Workers use PostgreSQL leases and `SKIP LOCKED` for multi-worker claims. Before
+committing vectors, they recheck the active Profile, lease, cancellation flag,
+document version, and content hash. An active job for the same
+document/Profile/content hash is coalesced; `force` can atomically upgrade that
+active job. An expired lease is reclaimed while retry attempts remain. If the
+final allowed attempt expires, the job is atomically marked `FAILED` and its
+lease fields are cleared, so it cannot remain permanently `RUNNING`.
 
 ## Retrieval Configuration
 
@@ -266,12 +331,21 @@ rag:
     max-batch-size: 20
     max-batch-payload-bytes: 10485760
     max-search-results: 20
+    max-payload-filter-bytes: 16384
+    max-payload-filter-depth: 8
+    agent-tool-enabled: ${RAG_JSON_AGENT_TOOL_ENABLED:false}
+    agent-tool-max-results: 5
+    agent-tool-max-payload-bytes: 32768
 ```
 
 These limits protect JSONB request, batch, and response sizes. They do not
 alter the embedding input: only caller-supplied `retrievalText` is chunked and
 embedded. `jsonbPayload` is stored as JSONB and is not hashed; the API
-intentionally has no payload hash setting.
+intentionally has no payload hash setting. `payloadContains` uses PostgreSQL
+`jsonb @>` exact subtree containment and defaults to a 16 KiB serialized limit
+and maximum depth 8. The optional Spring AI `searchJsonRecords` tool is disabled
+by default. When enabled, the server injects Collection/ACL scope; the model may
+only supply the query, payload subtree, and result limit.
 
 ## Chat Execution Configuration
 

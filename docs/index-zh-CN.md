@@ -23,9 +23,10 @@
 | 同步外部文档 / 内容源 | [REST API：外部文档幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization) | [项目上下文：外部文档同步](project-context-zh-CN.md#external-document-synchronization)、[真实 HTTP 验收](developer-reference-zh-CN.md#external-document-synchronization-http-e2e) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
 | 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
-| 规划 OpenAI 兼容服务 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) |
+| 接入 OpenAI 兼容预览 | [REST API：OpenAI 兼容预览](rest-api-zh-CN.md#openai-chat-completions-兼容预览) | [OpenAI 兼容就绪度与边界](openai-compatibility-readiness-zh-CN.md) |
 | 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
-| 使用 JSONB 结构化记录检索 | [REST API](rest-api-zh-CN.md) | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| 使用 JSONB 结构化记录检索 | [REST API：JSONB Payload 检索](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索) | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| 运行持久化嵌入任务 / 质量回归 | [开发者参考](developer-reference-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 治理 WebUI 水平对齐 | [WebUI 对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | [实施进度](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PROGRESS.md) |
 | 新增 / 修改 WebUI 样式 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
@@ -64,11 +65,12 @@
 | [hybrid-search-enhancement-plan.md](hybrid-search-enhancement-plan.md) | 混合检索增强规划（可能滞后于代码） |
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
-| [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 当前 RAG 执行、运行拓扑、API Key 能力和外部服务安全缺口 |
+| [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 默认关闭的受控预览、请求级 Collection scope、当前兼容子集与公网安全缺口 |
 | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（规划检查完成，待批准） |
-| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 将 RAG deployment 暴露为兼容模型服务；消费独立 API Key 前置工程（规划检查完成，待批准） |
+| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 历史目标设计；当前受控预览状态以 live readiness / REST API 为准 |
 | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | 已实施：清理无效 `rag_vector_store` 路径，使用不可变模型身份、固定维度列、Profile 级状态和可回滚换模流程 |
 | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
+| [下一批最高价值功能规划](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) / [English](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) | 已实施：动态 Collection 范围的 OpenAI 兼容协议、持久化嵌入任务、JSON containment/Tool 与真实检索回归门禁 |
 | [WebUI 水平对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | 清理模板样式污染，建立普通内容默认起始对齐、有限语义居中和自动防回归门禁 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 
@@ -120,12 +122,12 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V32** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V34** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |
 | `demos/` | basic / component / domain / multi-model |
-| `scripts/` | `start-server.sh`、`e2e-test.sh`、k6、Playwright |
+| `scripts/` | 启动、E2E、OpenAI/jobs/JSONB 专项验证、goldenset 与质量回归 |
 
 ---
 

@@ -1,0 +1,248 @@
+{
+  "dataset": "retrieval-core",
+  "version": 1,
+  "description": "Stable JSON-record fixtures for exact terms, scoped retrieval, JSONB containment, and empty-result regressions.",
+  "k": 5,
+  "retrievalConfig": {
+    "maxResults": 5,
+    "minScore": 0.0,
+    "useHybridSearch": true,
+    "useRerank": true,
+    "vectorWeight": 0.55,
+    "fulltextWeight": 0.45
+  },
+  "aggregateMinimum": {
+    "hitRate": 1.0,
+    "mrr": 0.5,
+    "recallAtK": 1.0,
+    "ndcg": 0.6
+  },
+  "maximumRegression": {
+    "hitRate": 0.0,
+    "mrr": 0.15,
+    "recallAtK": 0.0,
+    "ndcg": 0.15
+  },
+  "collections": [
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "name": "Retrieval regression core v1"
+    },
+    {
+      "collectionKey": "regression:retrieval-decoy:v1",
+      "name": "Retrieval regression decoy v1"
+    }
+  ],
+  "records": [
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "externalId": "sofa-001",
+      "title": "破皮沙发维修记录",
+      "retrievalText": "精确检索词：破皮沙发。这是一条家具维修记录，描述客厅沙发表面破皮、需要补色和更换受损皮面的处理建议。",
+      "jsonbPayload": {
+        "status": "active",
+        "category": {
+          "code": "sofa"
+        },
+        "recordType": "repair"
+      }
+    },
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "externalId": "style-001",
+      "title": "风格基调规范",
+      "retrievalText": "精确短语：风格基调。界面文案和视觉表达应保持克制、清晰、专业，避免浮夸装饰和含混措辞。",
+      "jsonbPayload": {
+        "status": "active",
+        "category": {
+          "code": "design"
+        },
+        "recordType": "guideline"
+      }
+    },
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "externalId": "model-zx-9007",
+      "title": "ZX-9007 产品说明",
+      "retrievalText": "产品型号 ZX-9007 是一款室内空气质量传感器，支持温度、湿度和颗粒物监测。",
+      "jsonbPayload": {
+        "status": "active",
+        "category": {
+          "code": "sensor"
+        },
+        "model": "ZX-9007"
+      }
+    },
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "externalId": "scope-primary",
+      "title": "Collection 范围主记录",
+      "retrievalText": "范围隔离校验词 ZR-SCOPE-ONLY。该记录属于主回归 Collection。",
+      "jsonbPayload": {
+        "status": "active",
+        "recordType": "scope-check"
+      }
+    },
+    {
+      "collectionKey": "regression:retrieval-core:v1",
+      "externalId": "unrelated-001",
+      "title": "无关烹饪记录",
+      "retrievalText": "意大利面烹饪记录，包含鸡蛋、奶酪、黑胡椒和面条。",
+      "jsonbPayload": {
+        "status": "active",
+        "category": {
+          "code": "cooking"
+        }
+      }
+    },
+    {
+      "collectionKey": "regression:retrieval-decoy:v1",
+      "externalId": "scope-decoy",
+      "title": "Collection 范围干扰记录",
+      "retrievalText": "范围隔离校验词 ZR-SCOPE-ONLY。该记录只属于干扰 Collection，不能泄露到主 Collection 的检索结果。",
+      "jsonbPayload": {
+        "status": "active",
+        "recordType": "scope-check"
+      }
+    }
+  ],
+  "cases": [
+    {
+      "id": "exact-term-sofa",
+      "endpoint": "search",
+      "query": "破皮沙发",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "relevant": [
+        {
+          "collectionKey": "regression:retrieval-core:v1",
+          "externalId": "sofa-001"
+        }
+      ],
+      "minimum": {
+        "hitRate": 1.0,
+        "mrr": 0.5,
+        "recallAtK": 1.0
+      }
+    },
+    {
+      "id": "quoted-style-tone",
+      "endpoint": "search",
+      "query": "找到和 “风格基调” 有关的内容",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "relevant": [
+        {
+          "collectionKey": "regression:retrieval-core:v1",
+          "externalId": "style-001"
+        }
+      ],
+      "minimum": {
+        "hitRate": 1.0,
+        "mrr": 0.333333,
+        "recallAtK": 1.0
+      }
+    },
+    {
+      "id": "exact-product-code",
+      "endpoint": "search",
+      "query": "ZX-9007",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "relevant": [
+        {
+          "collectionKey": "regression:retrieval-core:v1",
+          "externalId": "model-zx-9007"
+        }
+      ],
+      "minimum": {
+        "hitRate": 1.0,
+        "mrr": 0.5,
+        "recallAtK": 1.0
+      }
+    },
+    {
+      "id": "selected-collection-isolation",
+      "endpoint": "search",
+      "query": "ZR-SCOPE-ONLY",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "relevant": [
+        {
+          "collectionKey": "regression:retrieval-core:v1",
+          "externalId": "scope-primary"
+        }
+      ],
+      "forbidden": [
+        {
+          "collectionKey": "regression:retrieval-decoy:v1",
+          "externalId": "scope-decoy"
+        }
+      ],
+      "minimum": {
+        "hitRate": 1.0,
+        "mrr": 0.5,
+        "recallAtK": 1.0
+      }
+    },
+    {
+      "id": "jsonb-active-sofa",
+      "endpoint": "json-records",
+      "query": "破皮沙发",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "payloadContains": {
+        "status": "active",
+        "category": {
+          "code": "sofa"
+        }
+      },
+      "relevant": [
+        {
+          "collectionKey": "regression:retrieval-core:v1",
+          "externalId": "sofa-001"
+        }
+      ],
+      "minimum": {
+        "hitRate": 1.0,
+        "mrr": 1.0,
+        "recallAtK": 1.0
+      }
+    },
+    {
+      "id": "jsonb-explicit-empty-result",
+      "endpoint": "json-records",
+      "query": "破皮沙发",
+      "scope": {
+        "mode": "SELECTED_COLLECTIONS",
+        "collectionKeys": [
+          "regression:retrieval-core:v1"
+        ]
+      },
+      "payloadContains": {
+        "status": "does-not-exist"
+      },
+      "expectedEmpty": true
+    }
+  ]
+}

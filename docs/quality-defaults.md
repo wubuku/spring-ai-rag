@@ -33,6 +33,27 @@ It persists both evaluations through `POST /api/v1/rag/evaluation/evaluate`,
 prints average Precision@K, MRR, and nDCG plus the delta, and fails if MRR or
 nDCG regresses.
 
+## Versioned Live Retrieval Regression
+
+The goldenset compares reranking modes. The versioned regression gate prevents
+later commits from degrading live retrieval:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
+```
+
+- Dataset: `testdata/regression/retrieval-core-v1.json`
+- Baseline: `testdata/regression/retrieval-core-v1-baseline.json`
+- Stable relevant identity: `collectionKey + externalId`
+- Metrics: Hit Rate, MRR, Recall@K, nDCG
+- Safety assertions: selected Collections do not leak decoys, and an explicit
+  empty JSONB case remains empty
+
+The gate checks both absolute minimums and allowed regression from baseline.
+Provider, database, embedding, or HTTP failures return nonzero.
+`verify-release.sh --with-quality-regression` adds it against an existing
+service, while `--with-local-runtime` includes it by default.
+
 ### Compare baseline vs quality
 
 Run the server with the `prod` profile so the quality variant uses the

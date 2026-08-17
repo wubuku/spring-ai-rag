@@ -53,6 +53,7 @@ class RagWebSecurityConfigurationTest {
                         mock(ApiKeyManagementService.class));
 
         assertTrue(registration.getUrlPatterns().contains("/api/*"));
+        assertTrue(registration.getUrlPatterns().contains("/v1/*"));
         assertEquals(-10, registration.getOrder());
         assertNotNull(registration.getFilter());
     }

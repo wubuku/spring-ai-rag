@@ -15,6 +15,7 @@ import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.RagMetricsService;
+import com.springairag.core.rag.JsonRecordSearchTool;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.RetrievalDocumentMapper;
@@ -27,6 +28,7 @@ import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.document.Document;
@@ -60,6 +62,7 @@ public class ChatExecutionService {
     private final ChatModelRouter modelRouter;
     private final ModeAwareChatClientFactory clientFactory;
     private final KnowledgeSearchTool knowledgeSearchTool;
+    private final JsonRecordSearchTool jsonRecordSearchTool;
     private final RagChatHistoryRepository historyRepository;
     private final DomainExtensionRegistry domainExtensions;
     private final PromptCustomizerChain promptCustomizers;
@@ -85,8 +88,8 @@ public class ChatExecutionService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RetryTemplate retryTemplate) {
         this(modelRouter, clientFactory, knowledgeSearchTool, historyRepository,
-                domainExtensions, promptCustomizers, documentMapper, objectMapper,
-                ragProperties, metricsService, retryTemplate, null);
+                null, domainExtensions, promptCustomizers, documentMapper,
+                objectMapper, ragProperties, metricsService, retryTemplate, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -95,6 +98,8 @@ public class ChatExecutionService {
             ModeAwareChatClientFactory clientFactory,
             KnowledgeSearchTool knowledgeSearchTool,
             RagChatHistoryRepository historyRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            JsonRecordSearchTool jsonRecordSearchTool,
             DomainExtensionRegistry domainExtensions,
             PromptCustomizerChain promptCustomizers,
             RetrievalDocumentMapper documentMapper,
@@ -109,6 +114,7 @@ public class ChatExecutionService {
         this.modelRouter = modelRouter;
         this.clientFactory = clientFactory;
         this.knowledgeSearchTool = knowledgeSearchTool;
+        this.jsonRecordSearchTool = jsonRecordSearchTool;
         this.historyRepository = historyRepository;
         this.domainExtensions = domainExtensions;
         this.promptCustomizers = promptCustomizers;
@@ -387,19 +393,12 @@ public class ChatExecutionService {
             ModeAwareChatClientFactory.Attempt attempt,
             ChatCommand command) {
         ChatClient.ChatClientRequestSpec spec = attempt.client().prompt();
-        String systemPrompt = buildSystemPrompt(command);
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            spec.system(systemPrompt);
-        }
-        spec.user(customizeUserMessage(command));
+        applyInputMessages(spec, command);
         spec.advisors(advisor -> advisor.param(
                 ProjectDocumentRetriever.CONTEXT_KEY,
                 attempt.retrievalContext()));
         if (command.mode() == ChatMode.AGENT) {
-            spec.toolCallbacks(knowledgeSearchTool);
-            spec.toolContext(Map.of(
-                    KnowledgeSearchTool.CONTEXT_KEY,
-                    attempt.retrievalContext()));
+            applyAgentTools(spec, attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
@@ -412,19 +411,12 @@ public class ChatExecutionService {
             ModeAwareChatClientFactory.Attempt attempt,
             ChatCommand command) {
         ChatClient.ChatClientRequestSpec spec = attempt.client().prompt();
-        String systemPrompt = buildSystemPrompt(command);
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            spec.system(systemPrompt);
-        }
-        spec.user(customizeUserMessage(command));
+        applyInputMessages(spec, command);
         spec.advisors(advisor -> advisor.param(
                 ProjectDocumentRetriever.CONTEXT_KEY,
                 attempt.retrievalContext()));
         if (command.mode() == ChatMode.AGENT) {
-            spec.toolCallbacks(knowledgeSearchTool);
-            spec.toolContext(Map.of(
-                    KnowledgeSearchTool.CONTEXT_KEY,
-                    attempt.retrievalContext()));
+            applyAgentTools(spec, attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
@@ -438,6 +430,22 @@ public class ChatExecutionService {
             throw new IllegalStateException("LLM returned no usable chat response");
         }
         return response;
+    }
+
+    private void applyAgentTools(
+            ChatClient.ChatClientRequestSpec spec,
+            AuthorizedRetrievalContext retrievalContext) {
+        if (jsonRecordSearchTool != null
+                && jsonRecordSearchTool.isEnabled()) {
+            spec.toolCallbacks(
+                    knowledgeSearchTool,
+                    jsonRecordSearchTool);
+        } else {
+            spec.toolCallbacks(knowledgeSearchTool);
+        }
+        spec.toolContext(Map.of(
+                KnowledgeSearchTool.CONTEXT_KEY,
+                retrievalContext));
     }
 
     private ChatExecutionResult toResult(
@@ -608,6 +616,45 @@ public class ChatExecutionService {
     private List<ChatModelRouter.ChatModelCandidate> eligibleCandidates(
             ChatCommand command,
             boolean streaming) {
+        if (!command.modelCandidates().isEmpty()) {
+            List<ChatModelRouter.ChatModelCandidate> configured = new ArrayList<>();
+            boolean resolvedAny = false;
+            for (String ref : command.modelCandidates()) {
+                try {
+                    ChatModelRouter.ChatModelCandidate candidate =
+                            modelRouter.resolveCandidateRequired(ref);
+                    resolvedAny = true;
+                    if (isEligible(candidate, command.mode(), streaming)) {
+                        configured.add(candidate);
+                    } else {
+                        log.warn("Configured chat model candidate is not eligible "
+                                        + "for mode {}{}: {}",
+                                command.mode(),
+                                streaming ? " with streaming" : "",
+                                candidate.ref());
+                    }
+                } catch (IllegalArgumentException e) {
+                    log.warn("Configured chat model candidate is unavailable: {}",
+                            ref);
+                }
+            }
+            if (!configured.isEmpty()) {
+                return List.copyOf(configured);
+            }
+            if (!resolvedAny) {
+                throw new RagException(
+                        ErrorCode.SERVICE_UNAVAILABLE,
+                        "No configured model candidate is available");
+            }
+            ErrorCode code = streaming
+                    ? ErrorCode.MODEL_STREAMING_UNSUPPORTED
+                    : ErrorCode.MODEL_CAPABILITY_UNSUPPORTED;
+            throw new RagException(
+                    code,
+                    "No configured model candidate supports mode "
+                            + command.mode()
+                            + (streaming ? " with streaming" : ""));
+        }
         List<ChatModelRouter.ChatModelCandidate> all =
                 modelRouter.orderedCandidateDescriptors(command.modelRef());
         if (command.modelRef() != null && !command.modelRef().isBlank()) {
@@ -709,6 +756,53 @@ public class ChatExecutionService {
         return promptCustomizers.customizeUserMessage(
                 command.message(),
                 command.clientMetadata());
+    }
+
+    private void applyInputMessages(
+            ChatClient.ChatClientRequestSpec spec,
+            ChatCommand command) {
+        if (command.inputMessages().isEmpty()) {
+            String systemPrompt = buildSystemPrompt(command);
+            if (systemPrompt != null && !systemPrompt.isBlank()) {
+                spec.system(systemPrompt);
+            }
+            spec.user(customizeUserMessage(command));
+            return;
+        }
+
+        List<String> systemParts = new ArrayList<>();
+        String serverPrompt = buildSystemPrompt(command);
+        if (serverPrompt != null && !serverPrompt.isBlank()) {
+            systemParts.add(serverPrompt);
+        }
+        List<Message> conversation = new ArrayList<>();
+        int latestUserIndex = -1;
+        for (int index = 0; index < command.inputMessages().size(); index++) {
+            if (command.inputMessages().get(index).role()
+                    == ChatInputMessage.Role.USER) {
+                latestUserIndex = index;
+            }
+        }
+        for (int index = 0; index < command.inputMessages().size(); index++) {
+            ChatInputMessage input = command.inputMessages().get(index);
+            switch (input.role()) {
+                case SYSTEM -> systemParts.add(
+                        "[client system]\n" + input.content());
+                case DEVELOPER -> systemParts.add(
+                        "[client developer]\n" + input.content());
+                case USER -> conversation.add(new UserMessage(
+                        index == latestUserIndex
+                                ? customizeUserMessage(command)
+                                : input.content()));
+                case ASSISTANT -> conversation.add(
+                        new AssistantMessage(input.content()));
+            }
+        }
+        if (!systemParts.isEmpty()) {
+            conversation.addFirst(new SystemMessage(
+                    String.join("\n\n---\n\n", systemParts)));
+        }
+        spec.messages(List.copyOf(conversation));
     }
 
     private Map<String, Object> usage(Usage usage) {

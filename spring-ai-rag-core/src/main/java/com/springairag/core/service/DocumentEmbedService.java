@@ -102,6 +102,36 @@ public class DocumentEmbedService {
      */
     public Map<String, Object> embedDocumentWithProgress(Long documentId, boolean force,
             java.util.function.Consumer<EmbedProgressEvent> progressCallback) {
+        return embedDocumentInternal(
+                documentId,
+                force,
+                progressCallback,
+                EmbeddingCommitGuard.allowAll(),
+                true);
+    }
+
+    /**
+     * 持久化 worker 专用入口。provider 失败由 job 状态机记录，不改写文档版本；
+     * provider 成功后必须先通过提交门。
+     */
+    public Map<String, Object> embedDocumentForJob(
+            Long documentId,
+            boolean force,
+            EmbeddingCommitGuard commitGuard) {
+        return embedDocumentInternal(
+                documentId,
+                force,
+                null,
+                Objects.requireNonNull(commitGuard),
+                false);
+    }
+
+    private Map<String, Object> embedDocumentInternal(
+            Long documentId,
+            boolean force,
+            java.util.function.Consumer<EmbedProgressEvent> progressCallback,
+            EmbeddingCommitGuard commitGuard,
+            boolean recordProviderFailure) {
         Objects.requireNonNull(documentId);
         EmbeddingProfile profile = profileProvider.getActiveProfile();
         log.info("Generating embeddings for document: id={}, force={}, profile={}",
@@ -124,13 +154,15 @@ public class DocumentEmbedService {
             results = embeddingBatchService.createEmbeddingsBatch(texts);
         } catch (RuntimeException e) {
             String error = safeError("Embedding provider call failed: " + e.getMessage());
-            persistenceService.recordFailureIfNoCompleted(
-                    documentId,
-                    prep.documentVersion(),
-                    prep.contentHash(),
-                    profile,
-                    prep.chunkerVersion(),
-                    error);
+            if (recordProviderFailure) {
+                persistenceService.recordFailureIfNoCompleted(
+                        documentId,
+                        prep.documentVersion(),
+                        prep.contentHash(),
+                        profile,
+                        prep.chunkerVersion(),
+                        error);
+            }
             log.warn("Document {} embedding provider call failed without replacing old vectors",
                     documentId, e);
             return buildResult(documentId, 0, 0, "FAILED", profile, error);
@@ -141,13 +173,15 @@ public class DocumentEmbedService {
         String validationError = validateEmbeddingResults(chunks, results, profile);
         if (validationError != null) {
             validationError = safeError(validationError);
-            persistenceService.recordFailureIfNoCompleted(
-                    documentId,
-                    prep.documentVersion(),
-                    prep.contentHash(),
-                    profile,
-                    prep.chunkerVersion(),
-                    validationError);
+            if (recordProviderFailure) {
+                persistenceService.recordFailureIfNoCompleted(
+                        documentId,
+                        prep.documentVersion(),
+                        prep.contentHash(),
+                        profile,
+                        prep.chunkerVersion(),
+                        validationError);
+            }
             log.warn("Document {} embedding failed without replacing old vectors: {}",
                     documentId, validationError);
             return buildResult(documentId, 0, 0, "FAILED", profile, validationError);
@@ -156,7 +190,7 @@ public class DocumentEmbedService {
         maybeEmit(progressCallback,
                 EmbedProgressEvent.storing(documentId, chunks.size(), chunks.size()));
         replaceWithOneVersionRetry(
-                documentId, prep, profile, chunks, results);
+                documentId, prep, profile, chunks, results, commitGuard);
         maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, chunks.size()));
         log.info("Document {} embedding completed: chunks={}, profile={}",
                 documentId, chunks.size(), profile.profileKey());
@@ -473,7 +507,9 @@ public class DocumentEmbedService {
             EmbedPrepareResult prep,
             EmbeddingProfile profile,
             List<TextChunk> chunks,
-            List<EmbeddingBatchService.EmbeddingResult> results) {
+            List<EmbeddingBatchService.EmbeddingResult> results,
+            EmbeddingCommitGuard commitGuard) {
+        commitGuard.verify();
         try {
             persistenceService.replace(
                     documentId,
@@ -492,6 +528,7 @@ public class DocumentEmbedService {
             if (!reusable || currentVersion == prep.documentVersion()) {
                 throw firstFailure;
             }
+            commitGuard.verify();
             persistenceService.replace(
                     documentId,
                     currentVersion,

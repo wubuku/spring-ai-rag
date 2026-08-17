@@ -83,7 +83,7 @@ public class GeneralRagAutoConfiguration {
                 rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
                 rateLimit.getStrategy(), rateLimit.getKeyLimits());
         FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/api/*");
+        registration.addUrlPatterns("/api/*", "/v1/*");
         registration.setOrder(0);
         return registration;
     }

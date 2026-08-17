@@ -43,7 +43,7 @@ public class RagWebSecurityConfiguration {
                 rootCredentialResolver);
         FilterRegistrationBean<ApiKeyAuthFilter> registration =
                 new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/api/*");
+        registration.addUrlPatterns("/api/*", "/v1/*");
         // 认证先于限流，确保限流只使用稳定 principal ID，不接触 root 明文。
         registration.setOrder(-10);
         return registration;

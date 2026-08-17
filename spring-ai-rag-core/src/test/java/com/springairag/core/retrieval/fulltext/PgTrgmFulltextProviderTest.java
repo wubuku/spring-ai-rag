@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -208,5 +209,47 @@ class PgTrgmFulltextProviderTest {
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[2]);
         assertEquals("json-record", args[3]);
+    }
+
+    @Test
+    @DisplayName("JSONB containment is bound before trigram LIMIT")
+    void searchInScope_payloadFilterIsPushedIntoSql() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class)))
+                .thenReturn(1);
+        when(jdbc.queryForObject(
+                contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
+        when(jdbc.update(anyString(), (Object) any())).thenReturn(1);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of());
+
+        PgTrgmFulltextProvider provider =
+                new PgTrgmFulltextProvider(jdbc);
+        provider.searchInScope(
+                "sofa",
+                RetrievalScope.selectedCollections(
+                        List.of(7L), null, "json-record"),
+                null,
+                5,
+                0.1,
+                1L,
+                new JsonbContainmentFilter(
+                        "{\"status\":\"active\"}"));
+
+        ArgumentCaptor<String> sqlCaptor =
+                ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Object[]> argsCaptor =
+                ArgumentCaptor.forClass(Object[].class);
+        verify(jdbc).queryForList(
+                sqlCaptor.capture(), argsCaptor.capture());
+        String sql = sqlCaptor.getValue();
+        int filterPosition = sql.indexOf(
+                "d.jsonb_payload @> CAST(? AS jsonb)");
+        assertTrue(filterPosition > 0);
+        assertTrue(filterPosition < sql.indexOf("ORDER BY"));
+        assertEquals(
+                "{\"status\":\"active\"}",
+                argsCaptor.getValue()[3]);
     }
 }

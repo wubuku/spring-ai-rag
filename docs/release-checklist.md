@@ -12,7 +12,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V29
+- [x] Flyway inventory is V1-V34
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] OpenAI-compatible base URLs do not end in `/v1`
@@ -36,9 +36,17 @@ Release date: `2026-07-21`
 - [x] Helm lint/template and Docker image build
 - [x] PostgreSQL-profile server startup and `scripts/e2e-test.sh`
 - [x] Retrieval goldenset run
+- [x] Versioned live retrieval regression is available through `--with-quality-regression` or `--with-local-runtime`
 - [x] Real LLM smoke test when local `.env` credentials are available
 - [x] Secret scan and `git diff --check`
 - [x] Three consecutive no-change convergence reviews
+
+### 2026-08-17 Additive Gates
+
+- [x] OpenAI compatibility verification covers aliases, scope/ACL, JSON/SSE, and error envelopes
+- [x] Embedding-job verification covers V33, coalescing, leases, and `SKIP LOCKED`
+- [x] JSONB verification covers `payloadContains` and the V34 GIN planner
+- [x] The live retrieval dataset and baseline are committed, and external-dependency failures return nonzero
 
 ### Final Evidence (2026-07-21)
 

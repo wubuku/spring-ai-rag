@@ -77,6 +77,7 @@ public enum ErrorCode {
     LLM_CIRCUIT_OPEN(503, "LLM Circuit Breaker Open"),
     LLM_UNAVAILABLE(503, "LLM Service Unavailable"),
     CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
+    EMBEDDING_JOBS_DISABLED(503, "Embedding Jobs Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

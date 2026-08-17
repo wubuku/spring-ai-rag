@@ -23,6 +23,9 @@
 - **全文检索策略**：可配置 `auto`（自动检测）/ `pg_jieba` / `pg_trgm` / `none`
 - **三种对话模式**：KNOWLEDGE 使用 Spring AI Modular RAG，AGENT 使用 Tool Calling，PLAIN 不检索
 - **运行时多模型路由**：每次对话可选择已配置的 OpenAI 兼容或 Anthropic 模型
+- **OpenAI 兼容预览**：可选 `/v1/models` 与 `/v1/chat/completions`，Collection 按请求指定
+- **持久化 Embedding Jobs**：可选重嵌入队列，支持 lease、重试、取消与活动任务合并
+- **JSONB 结构化检索**：调用者提供 JSONB payload 与自然语言描述，并支持 containment 过滤
 - **领域扩展**：实现 `DomainRagExtension` 注入领域 Prompt 和检索策略
 - **SSE 流式输出**：Server-Send Events 实时响应
 - **A/B 实验框架**：多模型并行对比，自动收集延迟/token/质量指标
@@ -45,7 +48,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V32 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录 + 外部文档同步 + 按 principal 隔离的 Chat 历史、来源快照与会话 lease）。
+应用启动时 Flyway 自动执行 V1-V34 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录与 containment 索引 + 外部文档同步 + 按 principal 隔离的 Chat 历史/来源快照/会话 lease + 持久化 embedding jobs）。
 
 ### 2. 添加依赖
 
@@ -66,7 +69,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V32）
+  # Flyway 自动迁移（V1-V34）
   flyway:
     enabled: true
 
