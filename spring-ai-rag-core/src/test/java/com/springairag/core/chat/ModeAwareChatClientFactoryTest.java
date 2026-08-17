@@ -112,6 +112,85 @@ class ModeAwareChatClientFactoryTest {
     }
 
     @Test
+    void knowledgeModeUsesSpringAiMultiQueryExpansionAndPreservesExactTerm() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setQueryTransformer("spring-ai");
+        AtomicInteger modelCalls = new AtomicInteger();
+        ChatModel model = mock(ChatModel.class);
+        when(model.getDefaultOptions()).thenReturn(
+                ChatOptions.builder().model("test-model").build());
+        when(model.call(any(Prompt.class))).thenAnswer(invocation -> {
+            modelCalls.incrementAndGet();
+            return new ChatResponse(
+                List.of(new Generation(new AssistantMessage(
+                            "破皮沙发\n皮沙发破损"))),
+                    ChatResponseMetadata.builder().build());
+        });
+
+        ProjectDocumentRetriever retriever = mock(ProjectDocumentRetriever.class);
+        Document document = Document.builder()
+                .id("153:0")
+                .text("旧机器和破皮沙发沉在仓库阴影里。")
+                .metadata(Map.of(
+                        "documentId", "153",
+                        "chunkIndex", 0,
+                        "title", "仓库分镜"))
+                .build();
+        when(retriever.retrieve(any(Query.class))).thenReturn(List.of(document));
+        ProjectRerankPostProcessor postProcessor = mock(
+                ProjectRerankPostProcessor.class);
+        when(postProcessor.process(any(Query.class), anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+
+        ModeAwareChatClientFactory configuredFactory =
+                new ModeAwareChatClientFactory(
+                        retriever,
+                        postProcessor,
+                        new CitationQueryAugmenter(properties),
+                        properties,
+                        List.of(),
+                        mock(ToolCallingManager.class));
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = new ChatCommand(
+                "找到和 “破皮沙发” 有关的内容",
+                "session-transformer",
+                principal,
+                principal.memoryConversationId("session-transformer"),
+                ChatMode.KNOWLEDGE,
+                MemoryMode.STATELESS,
+                null,
+                null,
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                Map.of());
+
+        ModeAwareChatClientFactory.Attempt attempt =
+                configuredFactory.create(
+                        command,
+                        candidate("knowledge", model),
+                        List.of());
+        attempt.client().prompt()
+                .user(command.message())
+                .advisors(advisor -> advisor.param(
+                        ProjectDocumentRetriever.CONTEXT_KEY,
+                        attempt.retrievalContext()))
+                .call()
+                .chatClientResponse();
+
+        ArgumentCaptor<Query> query = ArgumentCaptor.forClass(Query.class);
+        verify(retriever, org.mockito.Mockito.times(3))
+                .retrieve(query.capture());
+        List<String> retrievedQueries = query.getAllValues().stream()
+                .map(Query::text)
+                .toList();
+        assertEquals(3, retrievedQueries.size());
+        assertTrue(retrievedQueries.contains("找到和 “破皮沙发” 有关的内容"));
+        assertTrue(retrievedQueries.contains("破皮沙发"));
+        assertTrue(retrievedQueries.contains("皮沙发破损"));
+        assertEquals(2, modelCalls.get());
+    }
+
+    @Test
     void plainModeDoesNotRunRetrievalAdvisor() {
         ChatModel model = model("plain answer");
         ChatCommand command = command(ChatMode.PLAIN);

@@ -24,9 +24,10 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.preretrieval.query.expansion.MultiQueryExpander;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
-import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -42,6 +43,29 @@ public class ModeAwareChatClientFactory {
 
     private static final Logger log =
             LoggerFactory.getLogger(ModeAwareChatClientFactory.class);
+
+    private static final String EXACT_SEARCH_QUERY_PROMPT = """
+            You are an information-retrieval query expansion component.
+            Generate exactly {number} search query variants for the original query.
+            Output one variant per line and output nothing else.
+
+            Preserve the user's search intent. Exact terms are important: never
+            replace, translate, normalize away, or omit product names, proper
+            nouns, quoted phrases, identifiers, model numbers, codes, or unusual
+            wording from the original query.
+            At least one variant must be an exact lexical-search query that repeats
+            the important terms verbatim and removes only conversational instructions
+            such as "find", "search", or "related content".
+            Other variants may add concise semantic context, but must retain all
+            important exact terms.
+
+            Original query:
+            {query}
+
+            Query variants:
+            """;
+    private static final PromptTemplate EXACT_SEARCH_QUERY_PROMPT_TEMPLATE =
+            new PromptTemplate(EXACT_SEARCH_QUERY_PROMPT);
 
     private static final int ATTEMPT_ADVISOR_ORDER =
             BaseAdvisor.HIGHEST_PRECEDENCE + 100;
@@ -155,6 +179,10 @@ public class ModeAwareChatClientFactory {
         if (transformer != null) {
             builder.queryTransformers(transformer);
         }
+        MultiQueryExpander expander = buildQueryExpander(candidate);
+        if (expander != null) {
+            builder.queryExpander(expander);
+        }
         return builder.build();
     }
 
@@ -170,17 +198,34 @@ public class ModeAwareChatClientFactory {
         if (options != null) {
             rawBuilder.defaultOptions(options.copy());
         }
-        QueryTransformer rewrite = RewriteQueryTransformer.builder()
-                .chatClientBuilder(rawBuilder.clone())
-                .build();
         QueryTransformer compression = CompressionQueryTransformer.builder()
                 .chatClientBuilder(rawBuilder.clone())
                 .build();
         return new HistoryAwareQueryTransformer(
-                rewrite,
+                null,
                 compression,
                 Duration.ofSeconds(
                         Math.max(1, knowledge.getQueryTransformTimeoutSeconds())));
+    }
+
+    private MultiQueryExpander buildQueryExpander(
+            ChatModelRouter.ChatModelCandidate candidate) {
+        RagChatProperties.KnowledgeProperties knowledge =
+                ragProperties.getChat().getKnowledge();
+        if (!"spring-ai".equalsIgnoreCase(knowledge.getQueryTransformer())) {
+            return null;
+        }
+        ChatClient.Builder rawBuilder = ChatClient.builder(candidate.model());
+        ChatOptions options = candidate.model().getDefaultOptions();
+        if (options != null) {
+            rawBuilder.defaultOptions(options.copy());
+        }
+        return MultiQueryExpander.builder()
+                .chatClientBuilder(rawBuilder)
+                .promptTemplate(EXACT_SEARCH_QUERY_PROMPT_TEMPLATE)
+                .includeOriginal(knowledge.isQueryExpanderIncludeOriginal())
+                .numberOfQueries(knowledge.getQueryExpanderVariants())
+                .build();
     }
 
     private List<Advisor> customAdvisors(

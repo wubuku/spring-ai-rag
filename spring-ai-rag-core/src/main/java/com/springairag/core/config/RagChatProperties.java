@@ -48,7 +48,9 @@ public class RagChatProperties {
 
     public static class KnowledgeProperties {
         private String queryTransformer = "none";
-        private int queryTransformTimeoutSeconds = 10;
+        private int queryTransformTimeoutSeconds = 30;
+        private int queryExpanderVariants = 2;
+        private boolean queryExpanderIncludeOriginal = true;
         private boolean allowEmptyContext = false;
 
         public String getQueryTransformer() {
@@ -65,6 +67,22 @@ public class RagChatProperties {
 
         public void setQueryTransformTimeoutSeconds(int queryTransformTimeoutSeconds) {
             this.queryTransformTimeoutSeconds = queryTransformTimeoutSeconds;
+        }
+
+        public int getQueryExpanderVariants() {
+            return queryExpanderVariants;
+        }
+
+        public void setQueryExpanderVariants(int queryExpanderVariants) {
+            this.queryExpanderVariants = Math.max(1, Math.min(5, queryExpanderVariants));
+        }
+
+        public boolean isQueryExpanderIncludeOriginal() {
+            return queryExpanderIncludeOriginal;
+        }
+
+        public void setQueryExpanderIncludeOriginal(boolean queryExpanderIncludeOriginal) {
+            this.queryExpanderIncludeOriginal = queryExpanderIncludeOriginal;
         }
 
         public boolean isAllowEmptyContext() {

@@ -6,14 +6,15 @@
 > **冻结规划**：[对话能力重构实施规划](2026-08-17_CHAT_CAPABILITY_REDESIGN_IMPLEMENTATION_PLAN.md)
 > **冻结审查快照 SHA-256**：
 > `cd0edd9cc0c24017806217df348aa5c015b4d417ecef0a26dc5b72a3fded5b1c`
-> **当前完整文件 SHA-256**（复算时将本行哈希替换为 `SELF_HASH_PLACEHOLDER`）：
+> **原始冻结版本完整文件 SHA-256**：
 > `cc04119a18eddadfae1b3a7662f9c079b737e2f19516503803a09a6c6e0d5848`
 
 本文件只跟踪实施进展和验证证据，不替代冻结规划或正式项目文档。关键行为落地后，
 必须同步更新对应中英文长青文档。
 
-冻结审查快照哈希是在规划页加入“状态 / 快照哈希”头部前计算的；完整文件包含该头部，
-因此两者不会相同。规划正文在连续三轮审查后未再改动。
+冻结审查快照哈希是在规划页加入“状态 / 快照哈希”头部前计算的；原始完整文件包含该
+头部，因此两者不会相同。后续只为反映最终代码补充了 Spring AI 多查询扩展实施事实，
+不改变冻结时的架构决策。
 
 ## 1. 规划审查
 
@@ -103,6 +104,22 @@
   和 `18081` 端口已释放。
 - 真实联调首轮曾因脚本未发送 root key 在 Collection 创建处收到
   `UNAUTHORIZED`；该失败和修复已记录，未进入数据写入或模型业务调用。
+
+### 最终精确词检索修复验证
+
+- 首轮 `KNOWLEDGE` 查询不再使用单一 `RewriteQueryTransformer`，改用 Spring AI 内置
+  `MultiQueryExpander`；默认保留原始请求并生成两个变体。有历史时继续先使用内置
+  `CompressionQueryTransformer`。
+- 项目只提供领域无关的扩展提示词，要求至少一个变体逐字保留产品名、引号短语、编号、
+  代码和其他特殊词；结果由内置 `ConcatenationDocumentJoiner` 合并去重。
+- 后端核心测试 `ModeAwareChatClientFactoryTest`、`ChatExecutionServiceTest`：
+  `14/14` 通过；验证完整原始请求、`破皮沙发` 精确词和语义变体都会进入项目检索器。
+- 运行中的 `dev.sh` 服务接口验证通过：Search 返回文档 `153`；Chat 请求
+  `找到和 “破皮沙发” 有关的内容` 的 `sources` 包含文档 `153`，
+  `metadata.retrieval.sourceCount=20`。
+- WebUI TypeScript、生产构建和核心 Mock Playwright `11/11` 通过；Playwright
+  只使用 DOM、请求 JSON、URL 和断言，未使用截图。
+- `verify-project-docs.sh`：`10/10`；相关脚本 `bash -n` 和 `git diff --check` 通过。
 
 ### 2026-08-17 19:16 CST：生产非流式入口首轮接入
 

@@ -324,7 +324,9 @@ rag:
     default-mode: KNOWLEDGE
     knowledge:
       query-transformer: none
-      query-transform-timeout-seconds: 10
+      query-transform-timeout-seconds: ${RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS:30}
+      query-expander-variants: ${RAG_CHAT_QUERY_EXPANDER_VARIANTS:2}
+      query-expander-include-original: ${RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL:true}
       allow-empty-context: false
     agent:
       enabled: true

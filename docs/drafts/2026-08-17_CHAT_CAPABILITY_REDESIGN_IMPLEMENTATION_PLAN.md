@@ -1,6 +1,7 @@
 # 对话能力重构实施规划
 
-> **状态**：规划已冻结，实施中。冻结正文 SHA-256：
+> **状态**：规划已冻结并实施完成；正文已按最终查询扩展实现同步。原始冻结正文
+> SHA-256：
 > `cd0edd9cc0c24017806217df348aa5c015b4d417ecef0a26dc5b72a3fded5b1c`。
 > **规划日期**：2026-08-17
 > **代码基线**：`main` @ `43600dd7f94f112dee694fab4ed3fd28088a8e26`，Spring AI
@@ -8,8 +9,8 @@
 > **工作区说明**：该基线已包含 Query Rewrite、Chat 会话导航、PDF 来源追踪等前序
 > 实现。实施时不得批量回退这些能力；先用 characterization tests 固定有效行为，再
 > 逐步替换被本规划明确淘汰的实现。
-> **规划边界**：本文只定义实施方案，不代表能力已经上线。连续三轮无修改检查的时间、
-> 范围和结论在会话中汇报，不写入本文，以免检查记录本身破坏“连续无修改”条件。
+> **规划边界**：本文定义实施方案；实际上线状态和验证证据以配套实施进度文档为准。
+> 2026-08-17 的正文同步只修正首轮查询扩展事实，不改变已冻结的架构决策。
 
 相关现状与接口文档：
 
@@ -232,7 +233,7 @@ WebUI Chat 已有：
 |---|---|
 | Modular RAG Advisor | `RetrievalAugmentationAdvisor` |
 | 检索适配 | `DocumentRetriever` |
-| Query 转换 | `QueryTransformer`、`RewriteQueryTransformer`、`CompressionQueryTransformer` |
+| Query 转换/扩展 | `QueryTransformer`、`CompressionQueryTransformer`、`MultiQueryExpander` |
 | 检索后处理 | `DocumentPostProcessor` |
 | Context 注入 | `QueryAugmenter`、`ContextualQueryAugmenter` |
 | 工具声明 | `@Tool`、`@ToolParam`、`ToolCallback` |
@@ -359,8 +360,10 @@ public enum ChatMode {
 rag:
   chat:
     knowledge:
-      query-transformer: none       # application.yml / 本地默认
-      query-transform-timeout: 10s
+      query-transformer: none       # application.yml 基础默认
+      query-transform-timeout-seconds: 30
+      query-expander-variants: 2
+      query-expander-include-original: true
 ```
 
 `application-prod.yml` 推荐：
@@ -372,17 +375,20 @@ rag:
       query-transformer: spring-ai
 ```
 
-`spring-ai` 策略只编排 Spring AI 内置 transformer：
+`spring-ai` 策略只编排 Spring AI 内置能力：
 
-- 无有效历史：`RewriteQueryTransformer`
-- 有前序 user/assistant turn：`CompressionQueryTransformer`
+- 无有效历史：不调用首轮 `RewriteQueryTransformer`，直接由内置
+  `MultiQueryExpander` 生成检索变体；
+- 有前序 user/assistant turn：先由内置 `CompressionQueryTransformer` 压缩为当前
+  检索语义，再由内置 `MultiQueryExpander` 扩展检索查询；
+- `MultiQueryExpander` 默认保留原始请求，并生成两个额外变体。项目只提供一段领域无关
+  的提示词，要求至少一个变体逐字保留产品名、引号短语、编号、代码和其他特殊词；
+- 内置 `ConcatenationDocumentJoiner` 负责合并和去重不同查询的结果。
 
-Spring AI 1.1.4 的 `RetrievalAugmentationAdvisor` 会把传入的
-`queryTransformers(List)` 全部串行执行，因此不能把上述两个 transformer 同时直接注册。
-新增一个项目侧薄路由 `HistoryAwareQueryTransformer implements QueryTransformer`，
-它检查 `Query.history()` 后**只委派其中一个** Spring AI transformer；`none` 策略则不向
-Advisor 注册任何 transformer。该路由不重写 prompt、不调用模型、不实现语言规则，只做
-生命周期编排。
+项目侧 `HistoryAwareQueryTransformer implements QueryTransformer` 只负责从结构化
+`Query.history()` 中识别是否存在前序对话，并在需要时委派内置 compression；它不解析
+自然语言、不实现中文 Pattern、不自行合并查询。`none` 策略则不向 Advisor 注册查询
+转换器或扩展器。
 
 选择依据是消息结构，不是自然语言内容。路由外层只增加：
 
@@ -400,8 +406,9 @@ Advisor 注册任何 transformer。该路由不重写 prompt、不调用模型�
 
 取舍：
 
-- 本地 `none` 避免每个简单请求多一次 LLM call。
-- production `spring-ai` 优先解决完整命令句、含上下文 follow-up 的检索质量。
+- 基础配置的 `none` 允许最小嵌入场景避免额外 LLM call；正常开发使用的
+  `postgresql`/`local` profile 与 production 均启用 `spring-ai`。
+- `spring-ai` 优先解决完整命令句、精确词保护和含上下文 follow-up 的检索质量。
 - `AGENT` 的工具调用本身通常需要“生成 tool call + 根据结果作答”两次模型交互，
   但支持多次自主检索。
 - 所有策略都必须用 goldenset 记录质量、延迟和调用次数，不能只凭主观选择默认值。
@@ -1487,7 +1494,9 @@ rag:
     default-mode: KNOWLEDGE
     knowledge:
       query-transformer: none
-      query-transform-timeout: 10s
+      query-transform-timeout-seconds: 30
+      query-expander-variants: 2
+      query-expander-include-original: true
       allow-empty-context: false
     agent:
       enabled: true
@@ -1728,7 +1737,7 @@ scripts/real-llm-e2e-smoke.sh
 | retrieval options merge | global/domain/request 优先级和 cap |
 | Chat compatibility defaults | 省略字段无 domain 保持 5/true/true；显式 domain 才应用 domain defaults |
 | client metadata isolation | 大小/深度限制、不可覆盖 Advisor/ToolContext 保留键、customizer 只读 |
-| query transformer router | first turn rewrite、follow-up compression、失败回退 |
+| query transformer/expander | 首轮保留原始查询并扩展、follow-up compression、失败回退、结果合并去重 |
 | effective retrieval query | transformer 后 query 同时用于 retrieve 与 rerank，最终回答仍保留原始 user query |
 | advisor scope/order | ATTEMPT 每次 candidate/retry 执行；MODEL_CALL 在 AGENT 每轮执行；core coordinator 整回合一次；band 稳定 |
 | ChatClient factory isolation | 只缓存无状态模板；每 attempt 新建 Memory Advisor/ChatClient；并发 session 不串状态 |

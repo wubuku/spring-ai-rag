@@ -187,6 +187,13 @@ rag:
 2. `fulltextScore=0` 表示结果仅由向量语义通道召回，不代表文档包含该关键词。
 3. PDF 提取文本可能含肉眼近似、码位不同的 CJK Radical/Kangxi Radical 字符。例如
    `风格基调` 与 `⻛格基调` 看起来接近，但全文检索不会视为同一词。
+4. 正常的 `postgresql` profile 已启用 Spring AI 查询转换；如果服务是在该配置加入前启动的，
+   必须重启服务。否则 `metadata.retrieval.effectiveQuery` 仍可能显示完整命令句。
+5. Spring AI 多查询扩展会额外调用一次 Chat 模型。默认
+   `query-expander-include-original=true`，会把原始请求保留在检索集合中，同时用生成的
+   变体提高语义召回。`30s` 超时用于历史压缩；如果模型或网络更慢，可谨慎设置
+   `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` 提高上限，并检查后端日志中的 transformer
+   回退警告。
 
 **排查**：
 
@@ -196,12 +203,22 @@ curl "http://localhost:8081/api/v1/rag/search?query=风格基调&limit=5"
 curl --get "http://localhost:8081/api/v1/rag/search" \
   --data-urlencode 'query=找到 “风格基调” 相关的内容' \
   --data 'limit=5'
+
+# 查看 Chat 实际使用的检索词（需要配置 API Key）
+curl -sS -H "X-API-Key: $RAG_ROOT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"找到和 “风格基调” 有关的内容","mode":"KNOWLEDGE"}' \
+  http://localhost:8081/api/v1/rag/chat/ask \
+  | jq '.metadata.retrieval'
 ```
 
-打开 Pipeline INFO 日志后，应看到原始问题与聚焦后的检索词：
+启用 Spring AI 多查询策略后，`metadata.retrieval.effectiveQuery` 可能对应某一个扩展查询。
+应同时检查响应 sources 和后端日志，确认原始精确词与语义变体都参与了检索。打开 Pipeline
+INFO 日志后，应看到原始问题与扩展检索词：
 
 ```text
-original query: "找到 “风格基调” 相关的内容" → retrieval query: "风格基调"
+original query: "找到 “风格基调” 相关的内容" → retrieval queries:
+  "找到 “风格基调” 相关的内容", "风格基调", "风格基调搜索"
 ```
 
 若怀疑 PDF 字符映射问题，可检查包含相邻词的实际存储文本；修复抽取规则后需重新导入并嵌入

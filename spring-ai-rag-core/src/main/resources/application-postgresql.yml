@@ -1,2 +1,10 @@
 # PostgreSQL profile marker.
 # Database, Flyway and Embedding Profile configuration live in application.yml.
+#
+# The normal local development stack uses this profile. Keep KNOWLEDGE aligned
+# with the local and production profiles so natural-language chat requests are
+# transformed by Spring AI before reaching the project retriever.
+rag:
+  chat:
+    knowledge:
+      query-transformer: spring-ai

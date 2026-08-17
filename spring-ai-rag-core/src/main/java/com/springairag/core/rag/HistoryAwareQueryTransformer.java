@@ -15,10 +15,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 根据结构化历史在 Spring AI 内置 rewrite/compression 之间做薄路由。
+ * 根据结构化历史决定是否调用 Spring AI 内置的对话压缩转换器。
  *
- * <p>该类不解析自然语言，也不自行改写查询；它只保证每轮最多调用一个内置
- * transformer，并在超时或失败时回退原查询。</p>
+ * <p>该类不解析自然语言，也不自行改写查询；首轮直接保留原查询，有前序对话时才委派
+ * compression transformer，并在超时或失败时回退原查询。</p>
  */
 public final class HistoryAwareQueryTransformer implements QueryTransformer {
 

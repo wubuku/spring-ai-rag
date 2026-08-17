@@ -281,7 +281,9 @@ rag:
     default-mode: KNOWLEDGE
     knowledge:
       query-transformer: none
-      query-transform-timeout-seconds: 10
+      query-transform-timeout-seconds: 30
+      query-expander-variants: 2
+      query-expander-include-original: true
       allow-empty-context: false
     agent:
       enabled: true
@@ -298,8 +300,10 @@ rag:
 | Property | Default | Description |
 |---|---|---|
 | `rag.chat.default-mode` | `KNOWLEDGE` | Mode used when `ChatRequest.mode` is omitted |
-| `rag.chat.knowledge.query-transformer` | `none` | `none` or `spring-ai`; production profile uses `spring-ai` |
-| `rag.chat.knowledge.query-transform-timeout-seconds` | `10` | Timeout for Spring AI rewrite/compression transformers |
+| `rag.chat.knowledge.query-transformer` | `none` | `none` or `spring-ai`; `postgresql`, `local`, and `prod` profiles use `spring-ai` |
+| `rag.chat.knowledge.query-transform-timeout-seconds` | `30` | Timeout for the Spring AI history compression call; override with `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` |
+| `rag.chat.knowledge.query-expander-variants` | `2` | Number of LLM-generated search variants when the `spring-ai` strategy is enabled; override with `RAG_CHAT_QUERY_EXPANDER_VARIANTS` |
+| `rag.chat.knowledge.query-expander-include-original` | `true` | Keep the original request as an additional retrieval query; override with `RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL` |
 | `rag.chat.knowledge.allow-empty-context` | `false` | When false, an empty retrieval result produces an explicit no-evidence instruction |
 | `rag.chat.agent.enabled` | `true` | Enable `AGENT` mode |
 | `rag.chat.agent.max-tool-rounds` | `3` | Maximum Spring AI tool-call rounds per attempt |
@@ -314,6 +318,15 @@ Mode behavior:
 
 - `KNOWLEDGE` always executes Spring AI Modular RAG through the project hybrid
   retriever and optional reranker.
+- In the normal `postgresql`, `local`, and `prod` profiles, the project uses
+  Spring AI's built-in `CompressionQueryTransformer` for follow-up history and
+  built-in `MultiQueryExpander` for the retrieval query. The expander keeps the
+  original request and generates two additional variants by default. Its
+  project-supplied prompt requires exact lexical variants to preserve product
+  names, quoted phrases, identifiers, and other unusual terms. Spring AI's
+  built-in `ConcatenationDocumentJoiner` merges and de-duplicates all results.
+  This prevents a semantic rewrite from discarding an exact term such as
+  `破皮沙发`.
 - `AGENT` uses Spring AI Tool Calling. A model must declare
   `capabilities.toolCalling=true`; Collection/document/credential scope remains
   server-owned.

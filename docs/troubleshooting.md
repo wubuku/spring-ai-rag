@@ -251,6 +251,16 @@ nothing relevant.
 3. PDF extraction can produce visually similar but code-point-distinct CJK Radical or
    Kangxi Radical characters. For example, `风格基调` and `⻛格基调` look similar but
    are not equal to full-text search.
+4. The normal `postgresql` profile enables Spring AI query transformation before
+   `KNOWLEDGE` retrieval. If the running service was started before this setting
+   was added, restart it; otherwise `metadata.retrieval.effectiveQuery` may still
+   show the entire command sentence.
+5. Spring AI multi-query expansion makes an additional Chat-model call. The
+   default `query-expander-include-original=true` keeps the original request in
+   the retrieval set while generated variants improve semantic recall. The
+   `30s` timeout applies to history compression; if the model or network is
+   slower, raise `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` deliberately and
+   check the transformer fallback warning in the backend log.
 
 **Troubleshooting**:
 
@@ -260,12 +270,23 @@ curl "http://localhost:8081/api/v1/rag/search?query=visual-tone&limit=5"
 curl --get "http://localhost:8081/api/v1/rag/search" \
   --data-urlencode 'query=find content related to "visual tone"' \
   --data 'limit=5'
+
+# Inspect the Chat retrieval query (requires the configured API key)
+curl -sS -H "X-API-Key: $RAG_ROOT_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"find content related to \"visual tone\"","mode":"KNOWLEDGE"}' \
+  http://localhost:8081/api/v1/rag/chat/ask \
+  | jq '.metadata.retrieval'
 ```
 
-With Pipeline INFO logging, the original and focused retrieval queries should appear:
+With the Spring AI multi-query strategy enabled, `metadata.retrieval.effectiveQuery`
+may reflect one of the expanded queries. Check the response sources and backend
+logs for the original exact term as well as the semantic variants. With Pipeline
+INFO logging, the original and expanded retrieval queries should appear:
 
 ```text
-original query: "find content related to \"visual tone\"" → retrieval query: "visual tone"
+original query: "find content related to \"visual tone\"" → retrieval queries:
+  "find content related to \"visual tone\"", "visual tone", "visual tone search"
 ```
 
 If PDF character mapping is suspected, inspect the stored text around a neighboring
