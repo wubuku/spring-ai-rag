@@ -30,11 +30,11 @@ class DomainExtensionPipelineIntegrationTest {
     // ─────────────────────────────────────────────
 
     @Test
-    @DisplayName("system prompt contains {context} placeholder")
-    void defaultExtension_promptContainsContext() {
+    @DisplayName("system prompt leaves context injection to the RAG pipeline")
+    void defaultExtension_promptDoesNotContainContext() {
         DefaultDomainRagExtension def = new DefaultDomainRagExtension();
-        assertTrue(def.getSystemPromptTemplate().contains("{context}"),
-                "默认提示词应包含 {context} 占位符");
+        assertFalse(def.getSystemPromptTemplate().contains("{context}"),
+                "默认领域提示词不应自行注入检索上下文");
     }
 
     @Test

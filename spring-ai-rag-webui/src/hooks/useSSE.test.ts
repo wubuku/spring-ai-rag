@@ -20,7 +20,14 @@ describe('useChatSSE', () => {
   });
 
   const setupMockStream = () => {
-    const chunks = ['data: {"type":"chunk","content":"Hello"}\n\n', 'data: {"type":"sources","sources":[],"conversationId":"c1"}\n\n', 'event: done\ndata: {"sessionId":"c1","status":"complete"}\n\n'];
+    setupStream([
+      'data: {"type":"chunk","content":"Hello"}\n\n',
+      'data: {"type":"sources","sources":[],"conversationId":"c1"}\n\n',
+      'event: done\ndata: {"sessionId":"c1","status":"complete"}\n\n',
+    ]);
+  };
+
+  const setupStream = (chunks: string[]) => {
     let index = 0;
     const stream = new ReadableStream({
       pull(controller) {
@@ -72,7 +79,104 @@ describe('useChatSSE', () => {
       result.current.send('Hello');
     });
 
-    expect(onDone).toHaveBeenCalledWith('c1');
+    expect(onDone).toHaveBeenCalledWith({
+      sessionId: 'c1',
+      status: 'complete',
+    });
+  });
+
+  it('parses structured CRLF events, multiline data, and an EOF tail block', async () => {
+    setupStream([
+      'event: content\r\ndata: {"choices":[\r\ndata: {"delta":{"content":"Hello"}}]}\r\n\r\n',
+      'event: tool_start\r\ndata: {"tool":"searchKnowledge","toolCallId":"call-1","query":"style"}\r\n\r\n',
+      'event: tool_result\r\ndata: {"tool":"searchKnowledge","toolCallId":"call-1","resultCount":2,"elapsedMs":9}\r\n\r\n',
+      'event: sources\r\ndata: {"sessionId":"session-1","sources":[{"citationId":"S1","documentId":"doc-1","title":"Guide","chunkText":"Evidence"}]}\r\n\r\n',
+      'event: done\r\ndata: {"sessionId":"session-1","status":"complete"}',
+    ]);
+    const onChunk = vi.fn();
+    const onToolStart = vi.fn();
+    const onToolResult = vi.fn();
+    const onSources = vi.fn();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onChunk,
+      onToolStart,
+      onToolResult,
+      onSources,
+      onDone,
+    }));
+
+    await act(async () => {
+      result.current.send({ message: 'Find evidence', mode: 'AGENT' });
+    });
+
+    expect(onChunk).toHaveBeenCalledWith('Hello');
+    expect(onToolStart).toHaveBeenCalledWith({
+      tool: 'searchKnowledge',
+      toolCallId: 'call-1',
+      query: 'style',
+    });
+    expect(onToolResult).toHaveBeenCalledWith({
+      tool: 'searchKnowledge',
+      toolCallId: 'call-1',
+      resultCount: 2,
+      elapsedMs: 9,
+    });
+    expect(onSources).toHaveBeenCalledWith([
+      expect.objectContaining({
+        citationId: 'S1',
+        documentId: 'doc-1',
+        title: 'Guide',
+      }),
+    ], 'session-1');
+    expect(onDone).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      status: 'complete',
+    });
+  });
+
+  it('accepts only the first terminal event', async () => {
+    setupStream([
+      'event: done\ndata: {"sessionId":"session-1","status":"complete"}\n\n',
+      'event: done\ndata: {"sessionId":"session-2","status":"complete"}\n\n',
+      'event: error\ndata: {"error":{"message":"late error"}}\n\n',
+    ]);
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onDone).toHaveBeenCalledTimes(1);
+    expect(onDone).toHaveBeenCalledWith({
+      sessionId: 'session-1',
+      status: 'complete',
+    });
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('maps a structured error and suppresses a later done event', async () => {
+    setupStream([
+      'event: error\ndata: {"error":{"code":"LLM_UNAVAILABLE","message":"model unavailable"},"traceId":"trace-1","sessionId":"session-1"}\n\n',
+      'event: done\ndata: {"sessionId":"session-1","status":"complete"}\n\n',
+    ]);
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone, onError }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onError).toHaveBeenCalledWith('model unavailable', {
+      message: 'model unavailable',
+      code: 'LLM_UNAVAILABLE',
+      traceId: 'trace-1',
+      sessionId: 'session-1',
+    });
+    expect(onDone).not.toHaveBeenCalled();
   });
 
   it('includes the selected model in the request body', async () => {
@@ -204,9 +308,15 @@ describe('useChatSSE', () => {
   });
 
   it('close cancels the reader', async () => {
+    const cancel = vi.fn();
     mockFetch.mockResolvedValue({
       ok: true,
-      body: { getReader: () => ({ read: () => new Promise(() => {}), cancel: vi.fn() }), cancel: vi.fn() },
+      body: {
+        getReader: () => ({
+          read: () => new Promise(() => {}),
+          cancel,
+        }),
+      },
     });
     const { result } = renderHook(() =>
       useChatSSE({ onChunk: vi.fn(), onSources: vi.fn(), onError: vi.fn(), onDone: vi.fn() })
@@ -219,6 +329,7 @@ describe('useChatSSE', () => {
       result.current.close();
     });
     expect(result.current.isConnected).toBe(false);
+    expect(cancel).toHaveBeenCalledTimes(1);
   });
 
   it('close is called on unmount when connection is open', async () => {

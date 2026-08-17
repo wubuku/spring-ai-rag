@@ -84,7 +84,8 @@ public class ConfiguredChatModelFactory {
                         reason,
                         model.reasoning(),
                         model.contextWindow(),
-                        model.maxTokens()));
+                        model.maxTokens(),
+                        model.normalizedCapabilities()));
             }
         }
         return List.copyOf(result);
@@ -300,7 +301,8 @@ public class ConfiguredChatModelFactory {
             String unavailableReason,
             boolean reasoning,
             Integer contextWindow,
-            Integer maxTokens
+            Integer maxTokens,
+            MultiModelProperties.ModelCapabilities capabilities
     ) {
         public Map<String, Object> toMap() {
             Map<String, Object> result = new LinkedHashMap<>();
@@ -321,6 +323,10 @@ public class ConfiguredChatModelFactory {
             if (maxTokens != null) {
                 result.put("maxTokens", maxTokens);
             }
+            result.put("capabilities",
+                    capabilities != null
+                            ? capabilities.normalized()
+                            : MultiModelProperties.ModelCapabilities.defaults().normalized());
             result.put("source", "configured");
             return result;
         }

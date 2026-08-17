@@ -1,6 +1,6 @@
 # Domain Extension Guide
 
-> 📖 English | 📖 中文
+> [English](extension-guide.md) | [中文](extension-guide-zh-CN.md)
 
 > Core design philosophy of spring-ai-rag: **Domain Decoupling**. One general-purpose RAG engine supports N vertical domains.
 
@@ -22,8 +22,9 @@ Extension points:
 
 | Interface | Purpose | Required |
 |-----------|---------|----------|
-| `DomainRagExtension` | Domain Prompt + retrieval config + answer post-processing | ✅ |
+| `DomainRagExtension` | Mode-safe domain Prompt + retrieval config | Yes |
 | `PromptCustomizer` | Fine-grained Prompt control (chainable) | Optional |
+| `RagAdvisorProvider` | Inject Spring AI Advisors by mode and scope | Optional |
 
 ---
 
@@ -48,16 +49,17 @@ public class MedicalDomainExtension implements DomainRagExtension {
     @Override
     public String getSystemPromptTemplate() {
         return """
-                You are a medical health knowledge assistant. Answer the user's question based on the retrieved medical literature.
+                You are a healthcare assistant.
 
                 Rules:
-                1. Strictly base on reference materials; do not fabricate medical information
-                2. Clearly mark "For reference only, not medical advice"
-                3. When medication advice is involved, remind users to consult a professional doctor
-
-                References:
-                {context}
+                1. Clearly state that the answer is for reference, not medical advice
+                2. For medication questions, direct users to a qualified clinician
                 """;
+    }
+
+    @Override
+    public String getSystemPromptTemplate(ChatMode mode) {
+        return getSystemPromptTemplate();
     }
 
     @Override
@@ -72,24 +74,6 @@ public class MedicalDomainExtension implements DomainRagExtension {
                 .build();
     }
 
-    @Override
-    public String postProcessAnswer(String answer) {
-        // Auto-append disclaimer
-        if (!answer.contains("disclaimer")) {
-            return answer + "\n\n---\n⚠️ Disclaimer: The above is for reference only and does not constitute medical advice."
-                    + " For health concerns, please consult a professional doctor.";
-        }
-        return answer;
-    }
-
-    @Override
-    public boolean isApplicable(String query) {
-        // Simple keyword check (use NLP classifier in production)
-        String lower = query.toLowerCase();
-        return lower.contains("disease") || lower.contains("symptom")
-                || lower.contains("medicine") || lower.contains("treatment")
-                || lower.contains("doctor") || lower.contains("health");
-    }
 }
 ```
 
@@ -121,10 +105,16 @@ curl -X POST http://localhost:8081/api/v1/rag/chat/ask \
 |--------|----------|-------------|
 | `getDomainId()` | ✅ | Unique domain identifier (English, e.g., `medical`, `legal`) |
 | `getDomainName()` | ✅ | Domain display name (e.g., "Healthcare") |
-| `getSystemPromptTemplate()` | ✅ | System prompt template; `{context}` placeholder is replaced by retrieved documents |
+| `getSystemPromptTemplate()` | ✅ | Compatibility entry point; role, safety, and style instructions only |
+| `getSystemPromptTemplate(ChatMode)` | | Mode-safe instructions for `KNOWLEDGE`, `AGENT`, and `PLAIN` |
 | `getRetrievalConfig()` | | Retrieval config (default: 10 results, 0.5 threshold, hybrid search) |
-| `postProcessAnswer()` | | Answer post-processing (default: return as-is) |
-| `isApplicable()` | | Query domain detection (default: accept all) |
+| `postProcessAnswer()` | deprecated | Not called by production Chat; whole-answer transforms are unsafe for true streaming |
+| `isApplicable()` | deprecated | Chat uses caller-selected `domainId` and performs no implicit domain classification |
+
+`CitationQueryAugmenter` and `KnowledgeSearchTool` inject evidence, so new
+templates must not contain `{context}`. Legacy templates remain compatible in
+`KNOWLEDGE`; `AGENT/PLAIN` returns `DOMAIN_MODE_UNSUPPORTED` until the
+extension overrides the mode-aware method.
 
 ### PromptCustomizer
 
@@ -175,27 +165,53 @@ public class DomainConfig {
 }
 ```
 
-Requests select via `domainId`; unspecified uses the first registered extension.
+Requests select an extension explicitly through `domainId`. Omitting it uses
+generic Chat defaults rather than the first registered extension. Unknown IDs
+return `UNKNOWN_DOMAIN`.
 
 ---
 
 ## Extension and RAG Pipeline Collaboration
 
 ```
-Request → QueryRewriteAdvisor (query rewrite, domain-agnostic)
-    → HybridSearchAdvisor (hybrid retrieval, uses domain RetrievalConfig)
-    → RerankAdvisor (reranking, uses domain RetrievalConfig)
-    → Assemble Prompt (domain System Prompt + retrieval context)
-    → PromptCustomizer chain (fine-grained customization)
+Request → ChatCommandMapper (merge explicit domain RetrievalConfig)
+    → ChatExecutionService
+      → KNOWLEDGE: RetrievalAugmentationAdvisor + project retrieval
+      → AGENT: ToolCallAdvisor + authorized searchKnowledge
+      → PLAIN: ChatClient + Memory
+    → mode instruction + domain instruction
+    → PromptCustomizer chain
     → ChatClient.call/stream()
-    → DomainRagExtension.postProcessAnswer()
     → Response
 ```
 
-Domain extensions affect 3 stages:
+Domain extensions affect 2 stages:
 1. **Retrieval stage**: `getRetrievalConfig()` controls retrieval parameters
-2. **Prompt assembly**: `getSystemPromptTemplate()` provides domain Prompt
-3. **Result processing**: `postProcessAnswer()` post-processes the answer
+2. **Prompt assembly**: the mode-aware Prompt method provides domain instructions
+
+### RagAdvisorProvider
+
+Existing providers default to `KNOWLEDGE + ATTEMPT`. Opt into other modes
+explicitly:
+
+```java
+@Override
+public Set<ChatMode> supportedModes() {
+    return Set.of(ChatMode.KNOWLEDGE, ChatMode.PLAIN);
+}
+
+@Override
+public AdvisorScope advisorScope() {
+    return AdvisorScope.ATTEMPT;
+}
+```
+
+- `ATTEMPT`: once per model candidate/retry, outside Memory and the mode advisor.
+- `MODEL_CALL`: inside the mode advisor, so AGENT executes it for every model
+  call in the tool loop. Use only repeatable, idempotent advisors without
+  turn-level state.
+- `getOrder()` determines relative order inside one scope; the framework maps
+  providers into stable, non-overlapping order bands.
 
 ---
 
@@ -203,9 +219,9 @@ Domain extensions affect 3 stages:
 
 ### Prompt Templates
 
-- Include `{context}` placeholder, which RAG replaces with retrieved document fragments
+- Do not include `{context}`; RAG or Tool Calling injects evidence
 - Clearly define role and answer rules
-- Keep under 20 lines; complex logic belongs in `postProcessAnswer()`
+- Keep instructions safe for all three modes; override the mode-aware method only when needed
 
 ### Retrieval Config
 
@@ -213,11 +229,8 @@ Domain extensions affect 3 stages:
 - Customer service/FAQ scenarios: lower `minScore` (0.3) for higher recall
 - Long-document domains: increase `maxResults` (15+) for more complete context
 
-### Answer Post-Processing
-
-- Append disclaimers (medical, legal domains)
-- Format output (add Markdown structure)
-- Quality check (verify key information is not missing)
+Medical, legal, and similar disclaimers belong in domain system instructions
+or a streaming-safe Advisor, not in the deprecated whole-answer hook.
 
 ---
 

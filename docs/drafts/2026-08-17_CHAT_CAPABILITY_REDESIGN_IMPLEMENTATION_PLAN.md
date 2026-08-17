@@ -1,12 +1,13 @@
 # 对话能力重构实施规划
 
-> **状态**：规划中，待用户 Review 后实施。
+> **状态**：规划已冻结，实施中。冻结正文 SHA-256：
+> `cd0edd9cc0c24017806217df348aa5c015b4d417ecef0a26dc5b72a3fded5b1c`。
 > **规划日期**：2026-08-17
-> **代码基线**：`main` @ `a1e05ed5126a372a10229d6de936b1f8ac33f745`，Spring AI
+> **代码基线**：`main` @ `43600dd7f94f112dee694fab4ed3fd28088a8e26`，Spring AI
 > `1.1.4`，Flyway 当前上限 V31。
-> **工作区说明**：规划期间工作区存在 Query Rewrite、Chat 会话导航、PDF 来源追踪等
-> 并行 WIP。实施时不得 stash、reset、覆盖或丢弃这些修改；先用 characterization tests
-> 固定有效行为，再逐步替换被本规划明确淘汰的实现。
+> **工作区说明**：该基线已包含 Query Rewrite、Chat 会话导航、PDF 来源追踪等前序
+> 实现。实施时不得批量回退这些能力；先用 characterization tests 固定有效行为，再
+> 逐步替换被本规划明确淘汰的实现。
 > **规划边界**：本文只定义实施方案，不代表能力已经上线。连续三轮无修改检查的时间、
 > 范围和结论在会话中汇报，不写入本文，以免检查记录本身破坏“连续无修改”条件。
 
@@ -338,7 +339,10 @@ public enum ChatMode {
 - `AGENT` 请求若显式 model 不支持 tools，返回 `400 MODEL_CAPABILITY_UNSUPPORTED`，
   不静默降级为另一个语义。
 - 未显式 model 时，router 可从候选链中选择第一个支持 tools 的候选。
-- `PLAIN` 忽略 retrieval tuning 字段，并在响应 metadata 标明没有执行 retrieval。
+- `PLAIN` 不执行 retrieval，并在响应 metadata 标明没有执行 retrieval。若请求显式携带
+  collection/document scope 或通过 presence tracking 检测到 retrieval tuning override，
+  返回 `400 RETRIEVAL_OPTIONS_NOT_ALLOWED`，避免“看似限制了范围但实际被忽略”的误解；
+  DTO 自带而未显式提交的兼容默认不触发该错误。
 - WebUI 显式展示三个模式；默认仍为 `KNOWLEDGE`。后续只有在真实评估证明
   `AGENT` 更稳定时才考虑改变 UI 默认值。
 
@@ -373,7 +377,14 @@ rag:
 - 无有效历史：`RewriteQueryTransformer`
 - 有前序 user/assistant turn：`CompressionQueryTransformer`
 
-选择依据是消息结构，不是自然语言内容。外层只增加：
+Spring AI 1.1.4 的 `RetrievalAugmentationAdvisor` 会把传入的
+`queryTransformers(List)` 全部串行执行，因此不能把上述两个 transformer 同时直接注册。
+新增一个项目侧薄路由 `HistoryAwareQueryTransformer implements QueryTransformer`，
+它检查 `Query.history()` 后**只委派其中一个** Spring AI transformer；`none` 策略则不向
+Advisor 注册任何 transformer。该路由不重写 prompt、不调用模型、不实现语言规则，只做
+生命周期编排。
+
+选择依据是消息结构，不是自然语言内容。路由外层只增加：
 
 - 使用只绑定当前 resolved `ChatModel` 的专用 raw `ChatClient.Builder`，不继承业务
   ChatClient 的 Memory、RAG、Tool 或自定义 Advisor，避免 transformer 递归进入主链；
@@ -431,6 +442,9 @@ public sessionId + authenticated principal stable ID
 ```
 
 - public `sessionId` 仍用于 URL/API 展示；
+- public `sessionId` 的唯一合法格式固定为 `[A-Za-z0-9._~-]{1,36}`。body、path、
+  自动生成值和内部 service 入口统一经过同一个 validator；拒绝空白、斜杠、反斜杠、
+  `%` 编码绕过、控制字符、Unicode 视觉混淆字符和超过 36 字符的值；
 - `memoryConversationId` 使用稳定单向摘要/UUID 派生，满足 Spring AI JDBC schema
   `VARCHAR(36)`，不直接拼 raw API key；
 - database key 使用 `keyId`，environment root、legacy static 和 auth-disabled local
@@ -440,9 +454,59 @@ public sessionId + authenticated principal stable ID
 - `SERVER` 模式对同一 `(principal, sessionId)` 只允许一个 in-flight turn；第二个请求
   立即返回 `409 SESSION_BUSY`，不排队，避免 Memory Advisor 写入、取消补偿和 history
   顺序互相覆盖。`STATELESS` 不受此限制。
-- coordinator 在执行前保存 `ChatMemory.get(memoryConversationId)` 快照。成功完成由
-  Memory Advisor 正常提交；在 error/cancel 时用 `clear + add(snapshot)` 恢复 turn 前
-  状态。该补偿必须在 session guard 释放前完成。
+- 该 single-flight 不能只用 JVM 内 `ConcurrentHashMap`。默认 PostgreSQL 实现使用
+  `rag_chat_session_lease`：以 `(owner_principal_id, session_id)` 为主键，原子写入
+  `owner_token`、`acquired_at`、`expires_at`，只有当前 token 可以续租和释放。
+- call 与 stream 都必须周期续租，不能假设非流式一定短于初始 TTL。coordinator 为整个
+  逻辑请求建立绝对 deadline：非流式来自 `rag.timeout.chat-ask-ms`，流式来自
+  `rag.timeout.chat-stream-ms`；Query Transformer、retrieval、rerank、每个 candidate
+  retry/fallback、tool rounds 和最终持久化事务共享剩余预算，不能每层
+  重新获得一份完整 timeout。lease TTL 必须大于续租周期并留出数据库抖动余量。
+- 任一次 token-fenced renew 返回 0 行或数据库失败，都视为失去 session 所有权：立即取消
+  后续模型/工具工作，不再写 Memory/history，也不发送 `done`，只发送/抛出
+  `CHAT_SESSION_LEASE_LOST`。不能在 lease 已丢失时提交 request-local Memory 或 release，
+  因为新 owner 可能已经 acquire；共享持久化状态在模型执行期间未被旧请求修改。
+- coordinator 到达绝对 deadline 时取消当前执行，在仍持有 lease 的前提下完成
+  request-local 工作并 token-fenced 释放 lease，不提交 history/JDBC Memory，再以
+  `CHAT_TIMEOUT` 终止；进程崩溃后 lease 自动过期，不永久阻塞会话。
+- 不能让 `MessageChatMemoryAdvisor` 在长时间模型调用期间直接写共享
+  `JdbcChatMemoryRepository`。它的 `before/after` 没有 lease token 参数；一旦续租失败，
+  旧请求仍可能晚到写入新 owner 已重建的 Memory，无法实现 fencing。
+- 每次成功 acquire 后，coordinator 从按 owner/session 查询到的已提交业务 history 读取
+  最近 `maxMessages`，建立本次 attempt 专属的 Spring AI
+  `MessageWindowChatMemory`（默认 `InMemoryChatMemoryRepository`），并交给
+  `MessageChatMemoryAdvisor`。因此仍使用 Spring AI 的 Memory 生命周期和窗口规则，但模型
+  执行期间只修改请求内状态，不触碰共享 JDBC memory。
+- 每个 candidate/retry 都从同一已提交 baseline 创建新的 request-local ChatMemory。
+  attempt 失败、超时、取消或丢租时直接丢弃该实例，不执行共享 Memory snapshot 恢复；
+  fallback 不会继承失败 attempt 的 user/tool/assistant 消息。
+- 最终成功 attempt 先得到完整 answer 和 request-local memory state，再进入一个短事务：
+  coordinator 先通过原子状态机从 `RUNNING` 转为 `COMMITTING`，停止周期 renew 并等待正在
+  执行的 renew 完成；只有尚未观察到 lease lost 才能进入事务。renew callback 在
+  `COMMITTING/TERMINAL` 状态不得再把成功释放后的 0-row 结果误报为丢租。
+- 最终持久化短事务
+  对 `(ownerPrincipalId, sessionId, ownerToken)` 做未过期 token-fenced ownership check
+  并锁住 lease 行，写入业务 history，把该 principal/session 的共享 JDBC ChatMemory
+  通过 `ChatMemory.clear + add(committedMessages)` 同步到同一 committed window，最后
+  删除/释放 lease。history 与 JDBC memory 使用同一 Spring transaction；任一步失败整体
+  回滚，不发送成功响应或 `done`。事务持有 lease 行锁后，其他实例的 expiry takeover 会
+  等待该短事务完成，不能与 commit 交叉。
+- Spring AI 1.1.4 的 JDBC Memory 自动配置只向
+  `JdbcChatMemoryRepository.builder()` 传入 `JdbcTemplate` 和 dialect，没有传入应用的
+  `PlatformTransactionManager`；repository 因此会自行创建
+  `DataSourceTransactionManager`。这不能作为与 JPA history 写入原子性的隐含保证。
+  实施时由项目显式提供 `JdbcChatMemoryRepository` Bean，使用同一 `JdbcTemplate`、
+  PostgreSQL dialect 和应用实际的 `PlatformTransactionManager` 构建，让 Spring AI 的
+  `@ConditionalOnMissingBean` 自动配置退让。coordinator 的最终提交也使用这个 transaction
+  manager；集成测试必须覆盖 Memory 写入后失败和 history 写入后失败两种故障注入，证明
+  两张表都回滚。禁止依赖两个不同 transaction manager 对同一 DataSource “碰巧加入”
+  同一事务。
+- 业务 history 是崩溃恢复与下一 turn baseline 的 canonical source；共享 JDBC
+  ChatMemory 是同步的 Spring AI 持久化投影，不作为 acquire 后模型上下文的唯一真相源。
+  进程在模型调用期间崩溃不会留下共享孤儿 user message；若历史提交前崩溃，两者都不变。
+- clear/delete 会话也必须先获取同一 lease；活动生成期间返回 `409 SESSION_BUSY`，避免
+  一边清理 history/memory、一边由完成回调重新写回。clear、cancel release 和 TTL cleanup
+  使用同一 `RUNNING -> COMMITTING -> TERMINAL` renewer 停止/等待协议。
 
 ### 5.4 来源与 score 语义
 
@@ -541,7 +605,7 @@ record ChatCommand(
     String domainId,
     RetrievalScope retrievalScope,
     RetrievalOptions retrievalOptions,
-    Map<String, Object> metadata
+    Map<String, Object> clientMetadata
 ) {}
 ```
 
@@ -553,6 +617,7 @@ database key 的 stable `keyId`、legacy static 和 auth-disabled local。它只
 
 ```text
 maxResults
+minScore
 useHybridSearch
 useRerank
 vectorWeight
@@ -567,9 +632,27 @@ request/domain/global 优先级真实可实现，同时不破坏既有 JSON 字�
 - 保留现有字段、默认值、getter/setter 签名；
 - setter 被 Jackson 或 Java 调用时设置对应的 `explicitlySet` transient flag；
 - `ChatCommandMapper` 只在 flag 为 true 时生成 request override；
-- omitted request 仍保持现有 global default；只有选定 domain 且字段省略时，domain
-  default 才参与合成；
+- 省略字段且没有显式 `domainId` 时保留当前 Chat API 兼容默认：
+  `maxResults=5`、`useHybridSearch=true`、`useRerank=true`。不能直接改用
+  `rag.retrieval.default-limit=10`，否则旧请求会静默改变结果集大小；
+- 只有调用者显式选择一个存在的 `domainId` 且字段省略时，domain default 才参与合成；
+- global retrieval properties 提供 weights、threshold 和 hard caps；Chat API compatibility
+  defaults 是该 endpoint 的独立默认层。后续若要把 5 改成 10，应作为版本化行为变更，
+  不能借本次 presence 修复顺带改变；
 - 为 JSON 省略、显式 true/false/5 和 Java 直接调用分别写 contract tests。
+
+客户端 `metadata` 与内部执行 context 必须分区：
+
+- `ChatRequest.metadata` 只作为有大小、深度、key/value 类型限制的 `clientMetadata`
+  传给 `PromptCustomizer` 和业务 history；默认上限 32 个 key、序列化后 16 KiB、
+  最大深度 4，只允许 JSON scalar/list/object；
+- 它不能再像当前 `metadata.forEach(a::param)` 一样写入 Advisor context，也不能写入
+  `toolContext`，否则调用者可覆盖 conversation ID、retrieval scope、trace collector、
+  tool budget 等服务端保留键；
+- Advisor context 与 ToolContext 只由 `ChatCommandMapper` / coordinator 使用常量 key
+  构造不可变 Map；若 client metadata 包含保留前缀 `rag.` / `spring.ai.` 或已知内部 key，
+  保留在 client metadata 命名空间中供 customizer 读取，但绝不提升为内部参数；
+- `PromptCustomizer` 收到 `Collections.unmodifiableMap(clientMetadata)`，不能回写执行状态。
 
 `ChatExecutionResult` 至少包含：
 
@@ -619,7 +702,14 @@ RetrievalAugmentationAdvisor.builder()
 - 实现 Spring AI `DocumentRetriever`。
 - 从 `Query.text()` 读取 transformer 后的检索 query。
 - 从 `Query.context()` 读取服务端 `RetrievalExecutionContext`。
-- 调用 `HybridRetrieverService.searchInScope(...)`。
+- 将本次实际使用的 transformer 后 query 写入 request-scoped
+  `RetrievalTraceCollector`；不能只依赖 `DocumentPostProcessor` 收到的 `Query.text()`。
+  Spring AI 1.1.4 的 `RetrievalAugmentationAdvisor` 在 post-processing 阶段传入的是
+  `originalQuery`，而不是 `transformedQuery`。
+- 调用扩展后的 `HybridRetrieverService.searchInScope(...)`，显式传入 effective
+  `RetrievalOptions`。当前 service 的部分路径仍读取全局 `rag.retrieval.min-score`；
+  实施时必须让 vector channel 使用 effective `minScore`，而 PostgreSQL FTS `@@`
+  布尔命中不受 vector threshold 再过滤。
 - 把 `RetrievalResult` 映射为 Spring AI `Document`。
 - 所有来源、score、chunk 和 provenance 放入 metadata。
 - 不解析 HTTP 请求，不读取 ThreadLocal API Key，不自行扩权。
@@ -628,7 +718,9 @@ RetrievalAugmentationAdvisor.builder()
 
 - 实现 `DocumentPostProcessor`。
 - `useRerank=false` 时原样返回。
-- `useRerank=true` 时通过共享 mapper 调用 `ReRankingService`。
+- `useRerank=true` 时通过共享 mapper 调用 `ReRankingService`，rerank query 必须从
+  request-scoped `RetrievalTraceCollector` 读取由 `ProjectDocumentRetriever` 登记的
+  effective retrieval query，不能使用 Spring AI 传入的 `originalQuery.text()`。
 - 不丢失 Spring AI Document metadata。
 - 记录 rerank step metrics。
 
@@ -638,8 +730,9 @@ RetrievalAugmentationAdvisor.builder()
 - 使用 `[S1]`、`[S2]` 等稳定引用标签格式化 context。
 - 空结果时生成明确的“当前授权范围内未检索到材料”提示。
 - 保留原始用户 query 供最终回答；转换后的 query 只用于 retrieval/rerank。
-- 把最终 documents 保留在标准
-  `RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT` 中。
+- 来源提取依赖 `RetrievalAugmentationAdvisor` 已写入标准
+  `RetrievalAugmentationAdvisor.DOCUMENT_CONTEXT` 的最终 documents；augmenter 本身
+  不重复维护另一份来源 context。
 
 #### `RetrievalDocumentMapper`
 
@@ -657,7 +750,7 @@ RetrievalAugmentationAdvisor.builder()
 )
 KnowledgeToolResult searchKnowledge(
     @ToolParam(description = "Concise standalone search query") String query,
-    @ToolParam(description = "Requested result count") Integer maxResults,
+    @ToolParam(required = false, description = "Requested result count") Integer maxResults,
     ToolContext toolContext
 )
 ```
@@ -665,6 +758,9 @@ KnowledgeToolResult searchKnowledge(
 关键约束：
 
 - Tool schema 只向模型暴露 `query` 和可选 `maxResults`。
+- schema characterization test 必须确认 `ToolContext` 不出现在 schema，且
+  `maxResults` 不在 required 列表；Spring AI 1.1.4 的 `@ToolParam` 默认
+  `required=true`，不能只因 Java 类型是 `Integer` 就假设可选。
 - `ToolContext` 由 Spring AI 自动注入，不进入模型参数 schema。
 - `ToolContext` 包含不可变 `AuthorizedRetrievalContext`：
   - 已授权 `RetrievalScope`
@@ -749,7 +845,8 @@ SQL 范围；database key A 也不能读取、续写、导出或删除 key B 的
 
 ### 6.6 模型 capability
 
-扩展 `models.json` / `MultiModelProperties.ModelItem`：
+能力是**模型实例级声明**，不是 provider/API 协议级推断。配置模型扩展
+`models.json` / `MultiModelProperties.ModelItem`：
 
 ```json
 {
@@ -762,15 +859,101 @@ SQL 范围；database key A 也不能读取、续写、导出或删除 key B 的
 }
 ```
 
-规则：
+Java 配置模型使用一个值对象，不让 nullable 语义散落到路由代码：
 
-- `toolCalling` 未配置时保守视为 `false`。
-- 不仅按 `apiType=openai` 或 Java class 推断。
-- `GET /api/v1/rag/models` 返回 capabilities。
-- WebUI 根据 capabilities 启用/禁用 `AGENT`。
-- `AGENT` fallback 只考虑 `toolCalling=true` 的候选。
-- 显式选择不支持 tools 的模型时返回清晰 400。
-- capability 是 operator 声明，不等于运行健康；真实 LLM smoke 验证至少一个工具模型。
+```java
+public record ModelCapabilities(Boolean streaming, Boolean toolCalling) {
+    public boolean supportsStreaming() {
+        return streaming == null || streaming;
+    }
+
+    public boolean supportsToolCalling() {
+        return Boolean.TRUE.equals(toolCalling);
+    }
+}
+```
+
+兼容默认值固定为：
+
+- `streaming` 未配置时为 `true`。现有模型都已暴露 streaming API，升级不能因新增字段而
+  把它们静默排除；operator 可显式写 `false` 禁止流式路由。
+- `toolCalling` 未配置时为 `false`。工具支持需要 operator 明确确认，不能因某模型使用
+  OpenAI/Anthropic 适配器就假定其真实端点、模型版本和网关都支持 tools。
+
+该字段必须完整贯穿以下链路，不能只改 record：
+
+1. `MultiModelProperties.ModelItem` 增加 `ModelCapabilities capabilities`。
+2. `MultiModelConfigLoader.ModelsJsonRoot.ModelJson` 增加嵌套
+   `CapabilitiesJson`；`toModelItem`、`equals/hashCode/toString` 同步。
+3. `ConfiguredChatModelFactory.ModelDescriptor` 输出规范化后的
+   `capabilities: {streaming: boolean, toolCalling: boolean}`。
+4. `ChatModelRouter` 不再只在候选阶段传裸 `ChatModel`；内部使用包含 canonical ref、
+   model 和 normalized capabilities 的 `ChatModelCandidate`，从而让 call/stream/mode
+   过滤与最终 `resolvedModel` 使用同一真相源。
+5. `GET /api/v1/rag/models` 保持现有顶层 DTO 兼容，在每个 `models[]` item 中新增
+   `capabilities`；`ModelDetailResponse` 的 models 明细使用同一 descriptor。
+6. `spring-ai-rag-webui/src/api/models.ts` 与相关 mock/fixture 同步类型，WebUI 只根据
+   服务端返回的规范化布尔值控制模式和模型选项。
+
+旧 Spring Boot 自动配置产生的 `ChatModel` Bean 不在 `ModelItem` 中，因此增加
+`app.models.legacy-capabilities` 显式映射，key 使用 Router 已支持的 legacy provider
+alias（当前即其 canonical ref）：
+
+```yaml
+app:
+  models:
+    legacy-capabilities:
+      openai:
+        streaming: true
+        toolCalling: false
+      anthropic:
+        streaming: true
+        toolCalling: false
+```
+
+- `MultiModelProperties` 增加 `Map<String, ModelCapabilities> legacyCapabilities`，默认
+  空 map；查找 key 大小写不敏感。
+- 外部 `models.json` 的 `models.legacyCapabilities` 使用相同结构。由于外部文件当前
+  是完整覆盖而非 merge，加载时也必须覆盖/清空该 map，防止 YAML 声明残留。
+- 未命中 legacy 映射时同样使用 `streaming=true/toolCalling=false`。
+- 不按 `OpenAiChatModel`、`AnthropicChatModel`、`MiniMaxChatModel` class 或
+  `apiType` 自动打开 tools；class 仍只用于当前 legacy provider alias 识别。
+- 若同一 legacy provider 出现多个 Bean，当前 Router 的覆盖行为必须在 Phase 0
+  characterization 后改为启动失败或要求显式唯一 alias，不能让 capability 配到一个
+  Bean、实际却路由到另一个。
+
+路由规则：
+
+- `PLAIN` / `KNOWLEDGE` 非流式候选只要求 available。
+- streaming endpoint 在候选构建阶段排除 `streaming=false`；显式选择该模型时返回
+  `400 MODEL_STREAMING_UNSUPPORTED`，默认/fallback 路由则跳过并继续下一候选。
+- `AGENT` 的 call 和 stream 都只考虑 `toolCalling=true`；stream 还同时要求
+  `streaming=true`。
+- `toolCalling=true` 仍不是充分条件。`ToolCallAdvisor` 要求本次 Prompt options 实现
+  Spring AI `ToolCallingChatOptions`；candidate 初始化必须从该 model 的 default options
+  复制出 request-local options，并验证其类型。声明支持 tools 但 adapter/default options
+  不满足该接口时，该模型标记为配置错误/不可用于 AGENT；显式请求返回
+  `MODEL_CAPABILITY_UNSUPPORTED`，默认链跳过。禁止到 tool loop 内才暴露
+  `IllegalArgumentException`。
+- request-local options copy 必须保留实际 model ID、temperature/token 等既有设置，再由
+  Spring AI `.tools(...)` / `.toolContext(...)` 注入 tools；不能为了得到
+  `ToolCallingChatOptions` 创建一个丢失 model 路由信息的空 options。
+- 显式选择不支持当前 mode/transport 的模型返回清晰 400，不能悄悄换模型；未显式选模
+  时才允许按过滤后的默认 fallback chain 继续。
+- `AGENT` fallback 不能退化到非 tool model，也不能回落到 KNOWLEDGE/PLAIN。
+- capability 是 operator 声明，不等于运行健康；真实 LLM smoke 至少验证一个
+  `toolCalling=true` 的模型确实完成工具调用。
+
+测试与文档同步范围：
+
+- `MultiModelProperties` YAML binding、`MultiModelConfigLoader` JSON override/default、
+  equality 和 external-file integration tests；
+- `ConfiguredChatModelFactoryTest`、`ChatModelRouterTest`、`ModelController` 集成测试；
+- `application.yml` 示例为现有 chat models 显式补充 capabilities；不确定工具支持的
+  模型保持 `toolCalling:false`，由真实 smoke 验证后再开启；
+- `docs/configuration*`、`docs/multi-model-external-config*` 说明两个默认值、完整覆盖
+  语义、legacy 映射和“声明不等于健康”；
+- WebUI model fixture 必须同时含支持/不支持工具和支持/不支持 streaming 的模型。
 
 ### 6.7 Advisor 与工具顺序
 
@@ -778,21 +961,23 @@ SQL 范围；database key A 也不能读取、续写、导出或删除 key B 的
 
 ```text
 KNOWLEDGE:
-  custom pre-advisors
+  attempt-scoped custom advisors
   -> MessageChatMemoryAdvisor (SERVER only)
   -> RetrievalAugmentationAdvisor
-  -> custom advisors that must observe the augmented request
+  -> explicitly opted-in per-model-call advisors
   -> model
 
 AGENT:
-  custom pre-advisors
+  attempt-scoped custom advisors
   -> MessageChatMemoryAdvisor (SERVER only)
   -> BudgetedToolCallAdvisor
+  -> explicitly opted-in per-model-call advisors
   -> model
 
 PLAIN:
-  custom advisors compatible with PLAIN
+  attempt-scoped custom advisors compatible with PLAIN
   -> MessageChatMemoryAdvisor (SERVER only)
+  -> explicitly opted-in per-model-call advisors
   -> model
 ```
 
@@ -805,16 +990,58 @@ PLAIN:
   `conversationHistoryEnabled=true` 维护该 turn 内的 assistant tool call、
   `ToolResponseMessage` 和递归调用；Memory 不应在每个 tool round 重复运行；
 - `STATELESS` 不安装 Memory Advisor，ToolCallAdvisor 仍保留内部单-turn history。
+- `AGENT` 中位于 `BudgetedToolCallAdvisor` 内层的 Advisor 会被
+  `callAdvisorChain.copy(this)` 带入每个 tool round；因此只有明确声明可重复、幂等且
+  不写 turn 级状态的 provider 才能进入 per-model-call 作用域。
+- Advisor 仍属于一次具体 ChatClient invocation。candidate fallback 或 retry 会创建新
+  invocation，因此外层 provider 只能承诺“每个 model attempt 一次”，不能承诺整个逻辑
+  user turn 只执行一次。真正的 turn 级鉴权、lease、审计 begin/end 和 persistence 由
+  `ChatExecutionService` 的 core 内部 coordinator 在候选循环外执行。
 
-实施时必须显式设置 order，不能依赖两者默认值：Spring AI 1.1.4 的
+实施时必须显式设置不重叠的 order band，不能依赖默认值或继续把公开 provider 的任意
+整数直接混入内置链：
+
+```text
+HIGHEST_PRECEDENCE + 100..199  attempt-scoped custom advisors
+HIGHEST_PRECEDENCE + 200       MessageChatMemoryAdvisor
+HIGHEST_PRECEDENCE + 300       RetrievalAugmentationAdvisor / BudgetedToolCallAdvisor
+HIGHEST_PRECEDENCE + 400..499  explicitly opted-in per-model-call advisors
+```
+
+同一 band 内先按 `RagAdvisorProvider#getOrder()` 排序，再由 factory 包装为该 band
+中的稳定 order；超过 band 容量时启动失败，不能产生相同 order 的不确定链。Spring AI
+1.1.4 的
 `MessageChatMemoryAdvisor` 默认 order 为 `HIGHEST_PRECEDENCE + 1000`，
 `ToolCallAdvisor` 默认 order 为 `HIGHEST_PRECEDENCE + 300`，默认组合不满足上述
 AGENT 外层 Memory 语义。通过 call/stream characterization tests 固定实际 request、
 response 和递归顺序。
 
-`RagAdvisorProvider` 增加向后兼容的 `supportedModes()` default method，旧 provider
-默认只应用于 `KNOWLEDGE`，避免现有 RAG-oriented provider 在 `PLAIN` 中意外触发检索；
-明确通用的 safety/telemetry advisor 由实现者 opt in 到其他模式。
+`RagAdvisorProvider` 增加两个有 default 的兼容方法：
+
+```java
+default Set<ChatMode> supportedModes() {
+    return Set.of(ChatMode.KNOWLEDGE);
+}
+
+default AdvisorScope advisorScope() {
+    return AdvisorScope.ATTEMPT;
+}
+```
+
+- 旧 provider 无需重新编译即可保持 `KNOWLEDGE + ATTEMPT`，避免在 `PLAIN` 中意外触发
+  检索，也避免在 AGENT 每个 tool round 重复执行。
+- 通用 safety/telemetry advisor 可显式 opt in 其他模式。
+- `MODEL_CALL` 是高风险显式 opt in；其 call/stream 行为必须支持一次 turn 内执行多次。
+- 本轮不新增公共逻辑请求拦截器 SPI。它若直接暴露 core 的 `ChatCommand` /
+  `ChatExecutionResult` 会造成 API -> core 循环依赖；若未来确需第三方 turn hook，应
+  另行设计完全位于 API 模块的安全 observation DTO，而不是泄露授权执行对象。
+- 旧 Javadoc 推荐的 `+15/+25/+35` 曾分别表示“改写后/检索后/rerank 后”，但
+  `RetrievalAugmentationAdvisor` 把这些步骤封装在一个 Advisor 内，不能再承诺仅靠
+  `BaseAdvisor#getOrder()` 插入其内部阶段。Phase 0 必须清点项目和 demos 中的现有
+  provider：每 attempt before/after 的迁移到 `ATTEMPT`；真正的逻辑 turn 行为放在
+  core coordinator；依赖阶段中间结果的迁移到 Spring AI
+  `QueryTransformer`、`DocumentPostProcessor`、`QueryAugmenter`，或项目的共享
+  retrieval mapper/trace 扩展点。禁止用多个平行自定义 RAG Advisor 重建旧流水线。
 
 ### 6.8 Domain extension
 
@@ -823,18 +1050,37 @@ response 和递归顺序。
 ```text
 global hard caps
   > request explicit values（不得超过 cap）
-  > domain defaults
-  > global defaults
+  > explicitly selected domain defaults
+  > Chat endpoint compatibility defaults
+  > global retrieval defaults for fields not owned by Chat compatibility
 ```
 
 这里的“request explicit values”依赖第 6.2 节的 presence tracking，不能把 primitive
 getter 当前返回的默认值一律视为显式 override。
 
+Domain 解析规则同时收口：
+
+- `domainId` 省略时不使用 `DomainExtensionRegistry` 当前“第一个 bean 是默认值”的隐式
+  规则；Chat 使用通用 system instruction 和 Chat endpoint compatibility defaults。
+- 显式 `domainId` 必须命中已注册 extension；未知值返回 `400 UNKNOWN_DOMAIN`，不能静默
+  回退为无 domain。
+- 若产品需要默认 domain，未来增加显式配置 `rag.chat.default-domain-id` 并在启动时验证；
+  不依赖 Spring bean 注入顺序。
+- `DefaultDomainRagExtension` 可作为显式 `domainId=default` 的 extension 保留，但不能
+  因为它恰好先注册就自动改变所有 Chat 请求。
+
 `getSystemPromptTemplate()` 继续提供领域 instruction，但 context 注入归
 `CitationQueryAugmenter` / `KnowledgeSearchTool`：
 
-- 新版 domain template 不应包含 `{context}`。
-- 为现有扩展兼容：发现 `{context}` 时以空串渲染并记录一次迁移 warning。
+- 新版 domain template 不应包含 `{context}`，并按 mode 组合：
+  - `KNOWLEDGE`：领域 instruction + `CitationQueryAugmenter` 的 context；
+  - `AGENT`：领域 instruction + “仅通过 `searchKnowledge` 获取知识库证据”的 agent
+    instruction，不能在 system prompt 中伪造空的“参考资料”段；
+  - `PLAIN`：只保留领域 safety/style instruction，不加入 grounding/引用规则，也不注册
+    retrieval tool。
+- 为现有扩展兼容：发现 `{context}` 时以空串渲染并记录一次迁移 warning；migration
+  adapter 同时移除仅用于占位的“References/参考资料”尾段。若无法可靠识别自定义模板，
+  显式 domain 在 `AGENT/PLAIN` 返回配置错误并要求迁移，不能把误导性 prompt 静默上线。
 - 默认 extension 更新为纯领域/grounding instruction。
 
 `postProcessAnswer()` 暂不激活。它无法在不缓存全部 token 的情况下与真流式保持对等。
@@ -847,15 +1093,29 @@ getter 当前返回的默认值一律视为显式 override。
 
 ### 7.1 ChatClient factory
 
-新增 `ModeAwareChatClientFactory`，按以下 key 创建或缓存客户端：
+新增 `ModeAwareChatClientFactory`。它可以按以下 key 缓存**不可变的无状态描述符**、
+resolved model、query transformer 和共享只读组件：
 
 ```text
 resolved model identity
 chat mode
-memory mode
 query transformer policy
 domain policy identity/version
 ```
+
+但不能缓存已经绑定某次 request-local `MessageWindowChatMemory`、
+`MessageChatMemoryAdvisor`、`RetrievalTraceCollector`、ToolContext 或 event sink 的
+`ChatClient`。每个 candidate/retry attempt 都必须：
+
+1. 从 committed history baseline 创建新的 request-local Memory（`STATELESS` 则省略）；
+2. 创建绑定该 Memory 的新 `MessageChatMemoryAdvisor`；
+3. 将本 attempt 的 trace/tool/event context 作为 request-scoped context 注入；
+4. 用缓存的无状态模板和当前 Advisor 列表构建 attempt-local `ChatClient`。
+
+factory cache value 不得是可变 `ChatClient.Builder`，也不得引用 `ChatCommand`、
+principal、session、scope、metadata 或任何可变请求状态；实现可缓存 immutable record
+和纯 factory function，但每次都从 `ChatClient.builder(resolvedModel)` 开始装配。增加并发
+测试证明两个 session/attempt 不共享 options、Memory 或 collector。
 
 不能继续把 `RerankAdvisor` 的 API compatibility adapter 固定在应用启动时的单一
 `spring.ai.openai.base-url`。重构后 context 统一注入 user prompt，避免动态模型使用
@@ -881,13 +1141,20 @@ explicit requested model（若有）
 流式 fallback 边界：
 
 - 第一个 client-visible event 发送前失败，可以切到下一候选；
+- 每个 candidate/retry 使用从同一 committed history baseline 创建的独立
+  request-local ChatMemory；切换时直接丢弃失败 attempt；
 - 发送任何 content/tool/source event 后，不得切换模型拼接响应；
 - 已开始后失败，发送 `event:error` 并终止。
 
 ### 7.3 Resilience
 
-- Circuit breaker、retry 和 metrics 统一包围每个 candidate attempt。
+- Circuit breaker、retry 和 metrics 统一包围每个 candidate attempt；breaker key 使用
+  canonical model ref（至少 provider/modelId），不能让 primary 的故障打开一个全局
+  breaker 后直接阻断健康 fallback。
 - retry 只能在该 attempt 尚未向客户端发送事件时进行。
+- `SERVER` 模式下每次失败 attempt/retry 都丢弃其 request-local ChatMemory；下一个
+  attempt 从本逻辑 turn 开始时读取的 committed history baseline 新建窗口，不能复用未知
+  attempt state。
 - Tool callback 的 retrieval 超时独立于 LLM timeout。
 - 用户取消不是模型失败，不计入 circuit breaker failure。
 - Query Transformer 失败回退原 query，不使整个 `KNOWLEDGE` 请求失败。
@@ -938,10 +1205,15 @@ data:{"traceId":"...","sessionId":"...","error":{"code":"...","message":"..."}}
 - 使用 `.stream().chatClientResponse()`，不再只取 `.content()`。
 - 在统一 coordinator 中提取 delta、最终 response context、usage 和 finish reason。
 - `RetrievalTraceCollector` 使用线程安全集合和 request-scoped event sink。
+- request trace 下为每个 candidate/retry 创建独立 attempt collector。KNOWLEDGE 在首个
+  client-visible event 前失败时丢弃该 attempt 的 sources、usage、step metrics 和
+  transformed query；只有成功 attempt 原子 commit 到最终 result。AGENT 一旦发出
+  `tool_start` 就已越过 fallback 边界，不再切换候选。
 - Controller 保存 Reactor `Disposable`。
 - `SseEmitter#onCompletion`、`onTimeout`、`onError` 都 dispose subscription。
-- completion 后统一提交 history；error/cancel 在 session guard 内恢复 Memory 快照，
-  再按配置决定是否提交 cancelled partial。
+- completion 后执行 token-fenced history + JDBC Memory 短事务；error/cancel 默认直接
+  丢弃 request-local Memory，再按配置决定是否把 cancelled partial 构造成一个新的
+  committed window 并原子提交。
 - JSON 使用 Jackson DTO 序列化，不手工拼字符串。
 
 ### 8.3 取消与重连
@@ -992,18 +1264,75 @@ ALTER TABLE rag_chat_history
     ADD COLUMN sources JSONB,
     ADD COLUMN turn_status VARCHAR(20) NOT NULL DEFAULT 'COMPLETE';
 
-CREATE INDEX ... ON rag_chat_history(owner_principal_id, session_id, created_at);
+ALTER TABLE rag_chat_history
+    ADD CONSTRAINT ck_rag_chat_history_session_id
+        CHECK (session_id ~ '^[A-Za-z0-9._~-]{1,36}$') NOT VALID,
+    ADD CONSTRAINT ck_rag_chat_history_owner_principal_id
+        CHECK (
+            owner_principal_id IS NULL
+            OR char_length(owner_principal_id) BETWEEN 1 AND 128
+        ),
+    ADD CONSTRAINT ck_rag_chat_history_turn_status
+        CHECK (turn_status IN ('COMPLETE', 'CANCELLED'));
+
+CREATE INDEX ... ON rag_chat_history
+    (owner_principal_id, session_id, created_at DESC, id DESC);
+CREATE INDEX ... ON rag_chat_history (created_at, owner_principal_id, session_id);
+
+CREATE TABLE rag_chat_session_lease (
+    owner_principal_id VARCHAR(128) NOT NULL,
+    session_id VARCHAR(36) NOT NULL,
+    owner_token VARCHAR(36) NOT NULL,
+    acquired_at TIMESTAMPTZ NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (owner_principal_id, session_id),
+    CONSTRAINT ck_rag_chat_session_lease_owner
+        CHECK (char_length(owner_principal_id) BETWEEN 1 AND 128),
+    CONSTRAINT ck_rag_chat_session_lease_session
+        CHECK (session_id ~ '^[A-Za-z0-9._~-]{1,36}$'),
+    CONSTRAINT ck_rag_chat_session_lease_token
+        CHECK (owner_token ~ '^[A-Za-z0-9._~-]{1,36}$'),
+    CONSTRAINT ck_rag_chat_session_lease_expiry
+        CHECK (expires_at > acquired_at)
+);
+
+CREATE INDEX ... ON rag_chat_session_lease (expires_at);
 ```
+
+V1 允许 `session_id VARCHAR(255)` 且没有字符约束，历史数据库可能存在不符合新公开合同的
+值。因此迁移先以 `NOT VALID` 增加 history session check：新写入立即受约束，旧行不会
+阻断升级；不得在本轮静默改写、截断或删除旧 session ID。待运维导出/清理遗留值后，可在
+后续 migration 执行 `VALIDATE CONSTRAINT`。lease 表只接收新请求，直接使用严格约束。
 
 保存规则：
 
 - 所有新记录写 `owner_principal_id`；database key 使用 stable `keyId` 的 namespaced
-  形式，不保存 raw credential。
+  形式（推荐 `db:<keyId>`、`root:environment-root`、`legacy:static`、
+  `local:auth-disabled`），不保存 raw credential；构造后必须满足 1-128 字符。
 - repository 的 find/delete/export 均要求 principal，不再暴露只收 sessionId 的生产
   API；root 管理路径可显式跨 principal，不能靠传 `null` 绕过。
-- 旧记录保持 `owner_principal_id IS NULL`：environment root、legacy static 和
-  auth-disabled local 可作为兼容/运维入口访问；普通 database key 不得读取或 claim，
-  避免把历史错误归属给第一个请求者。
+- lease acquire 使用单条 PostgreSQL `INSERT ... ON CONFLICT ... DO UPDATE ... WHERE
+  expires_at < clock_timestamp()` 并检查 affected row；renew 必须同时匹配
+  `owner_token` 且要求当前 `expires_at > clock_timestamp()`，过期 lease 不允许被迟到
+  renew 复活。release 同时匹配 `owner_token`。不持有覆盖整个 LLM/SSE 生命周期的数据库
+  transaction 或专用连接。
+- 每次 lease acquire 成功后按 `created_at,id` 正序读取受控窗口内的
+  COMPLETE/CANCELLED history，创建只属于本次 attempt 的
+  `MessageWindowChatMemory` + `InMemoryChatMemoryRepository` baseline；读取/映射失败返回
+  503 并保留 lease 到短 TTL 后重试，不能继续生成。acquire 时不先改写共享 JDBC memory。
+- 旧记录保持 `owner_principal_id IS NULL`，永不自动 claim/backfill。environment root、
+  legacy static 和 auth-disabled local 可从兼容/运维读取与导出路径访问这些旧记录；
+  普通 database key 不得读取。任何 principal 都不得把无 owner turn 放入
+  principal-scoped ChatMemory rebuild，否则会把旧共享上下文混入新安全 namespace。
+- 只有 session ID 本身符合新 public 格式的 null-owner 记录可由普通兼容 read/export
+  endpoint 访问。不符合 `[A-Za-z0-9._~-]{1,36}` 的旧 session 无法安全放入 path/body
+  contract，只允许显式管理员迁移工具或数据库运维导出/删除；普通 validator 不为旧数据
+  放宽，也不提供编码绕过。
+- 普通 history clear/delete 只删除当前 principal 明确拥有的行；即使调用者是
+  environment root、legacy static 或 auth-disabled local，也不得顺带删除
+  `owner_principal_id IS NULL` 的旧共享记录。删除无 owner 记录只能走显式、仅管理员可用
+  的 legacy cleanup contract，并记录审计；本轮若不新增该管理端点，则只支持数据库运维
+  清理，不伪装成普通会话 clear。
 - `related_document_ids` 暂时保留兼容，并由 sources 派生。
 - `sources` 保存当时的 source snapshot，不在历史读取时重新检索。
 - snapshot 只保存 `ChatSource` allow-list 字段和裁剪 snippet，不保存任意 metadata、
@@ -1012,16 +1341,46 @@ CREATE INDEX ... ON rag_chat_history(owner_principal_id, session_id, created_at)
   `mode`、`memoryMode`、`requestedModel`、`resolvedModel`、`traceId`、
   `finishReason`、`usage`、`stepMetrics`。
 - 正常完成保存完整 turn。
+- 业务 history 现在同时承担下一 turn baseline，因此成功响应的 history 写入不再是可吞
+  异常的 best-effort side effect。Repository 提供会抛错的 durable save；coordinator
+  在短事务中锁住并校验未过期 lease token、写 history、通过 `ChatMemory.clear + add`
+  替换共享 JDBC memory 投影，再释放 lease。只有整个事务提交成功才发送非流式成功响应
+  或流式 `done`。
+- 最终持久化事务任一步失败时整体回滚并发送结构化
+  `CHAT_HISTORY_PERSIST_FAILED` / HTTP 503；已经发送的 stream content 保留为未提交
+  partial，但不发送 `done`。该 code 表示 durable turn state（history + memory
+  projection）提交失败；审计日志记录 traceId，不记录完整内容。
+- 最终事务的 ownership check 使用
+  `SELECT ... FOR UPDATE WHERE owner_principal_id=? AND session_id=? AND owner_token=?`
+  并在锁内验证 `expires_at > clock_timestamp()`；未命中或已过期映射为
+  `CHAT_SESSION_LEASE_LOST`，不是 persistence failure。事务超时使用逻辑 deadline 的剩余
+  预算，deadline 已耗尽时不进入提交。
 - `turn_status` 使用受控枚举值 `COMPLETE` / `CANCELLED`；普通历史默认返回两者，并由
   UI 明确标记 cancelled partial。
-- 用户取消默认不保存 partial，且恢复 turn 前 ChatMemory 快照；只有
-  `persist-cancelled-partial=true` 且已有非空 partial 时，才在 guard 内先恢复快照，
-  再把原 user + partial assistant 同步追加到 ChatMemory 和业务历史并标记
+- 用户取消默认不保存 partial，直接丢弃 request-local Memory 并 token-fenced 释放
+  lease；只有 `persist-cancelled-partial=true` 且已有非空 partial 时，才从 committed
+  baseline 新建一个临时 `MessageWindowChatMemory`，依次追加原 user 和 partial
+  assistant，然后在上述同一短事务中写业务 history、共享 JDBC memory 并标记
   `CANCELLED`。
 - LLM 失败不写普通 history turn；通过结构化日志、metrics 和现有 audit 机制记录。
-- TTL cleanup 同时清理业务历史；Spring AI memory 继续按会话 clear/窗口策略管理。
+- TTL cleanup 不能只删除业务历史而保留不再访问的 JDBC memory。cleanup 先按 cutoff
+  找出 `owner_principal_id IS NOT NULL` 的受影响 distinct
+  `(ownerPrincipalId, sessionId)`，逐会话获取同一
+  `rag_chat_session_lease`；成功后删除过期业务 history，并用剩余未过期的已提交 turn
+  重建该会话 ChatMemory（无剩余则 clear），最后 token-fenced 释放。busy 会话跳过并在
+  下轮重试，不能与活动生成并发清理。`owner_principal_id IS NULL` 没有唯一、安全的
+  principal namespace，常规 TTL job 必须跳过，不能猜测 owner 或清理某个可能仍共享的
+  legacy ChatMemory；它们只由上一条显式 legacy cleanup/数据库运维流程删除。cleanup
+  必须分页/限批，避免一次 cron 长事务锁住全表。
 
-数据库迁移不修改已执行的 V1-V31。
+数据库迁移不修改已执行的 V1-V31。迁移测试必须同时覆盖：
+
+1. 空数据库从 V1-V{next} 全量启动；
+2. 带合法旧 history、非法/超长 legacy session ID 和 null-owner history 的 V31
+   fixture 原地升级；
+3. 新写入非法 session/status/lease expiry 被约束拒绝；
+4. owner/session 查询索引与 TTL/lease expiry 索引存在；
+5. legacy 行不被改写、认领或删除，应用侧也不把它们重建进 principal ChatMemory。
 
 ## 10. API 兼容方案
 
@@ -1077,10 +1436,12 @@ resolvedModel
 旧字段保持。
 
 History、export 和 clear endpoint 继续保留 URL，但都从 `HttpServletRequest` 解析
-`ChatPrincipal` 并按 owner 查询。public `sessionId` 限制为 1-36 个允许字符；path
-参数执行同样校验。对“不存在”和“属于其他 principal”返回相同的 not-found 语义，
+`ChatPrincipal` 并按 owner 查询。public `sessionId` 精确限制为
+`[A-Za-z0-9._~-]{1,36}`；body/path/自动生成值执行同一个 validator。对“不存在”和
+“属于其他 principal”返回相同的 not-found 语义，
 避免 session 枚举。environment root 的跨 owner 管理能力如需开放，使用单独明确的
-admin contract，不让普通 endpoint 隐式越权。
+admin contract，不让普通 endpoint 隐式越权。旧 null-owner 记录只按第 9 节的只读
+兼容规则暴露；普通 clear 不删除它们。
 
 ### 10.4 OpenAI compatibility 边界
 
@@ -1088,6 +1449,33 @@ admin contract，不让普通 endpoint 隐式越权。
 `MemoryMode.STATELESS`，使后续兼容层只做协议 mapper，而不是再复制执行链。
 
 现有自定义 Chat SSE 不能宣称完整 OpenAI Chat Completions streaming compatibility。
+
+### 10.5 Typed errors
+
+本轮新增的协议错误必须进入 API 模块的 `ErrorCode` 单一真相源，并由
+`RagException`/专用子类映射；不能靠解析 `IllegalArgumentException` 文本：
+
+```text
+UNKNOWN_DOMAIN                         400
+RETRIEVAL_OPTIONS_NOT_ALLOWED          400
+MODEL_CAPABILITY_UNSUPPORTED           400
+MODEL_STREAMING_UNSUPPORTED            400
+CHAT_AGENT_DISABLED                    400
+SESSION_NOT_FOUND                      404
+SESSION_BUSY                           409
+CHAT_SESSION_LEASE_LOST                409
+CHAT_HISTORY_PERSIST_FAILED            503
+CHAT_TIMEOUT                           504
+```
+
+- 对“不存在”和“属于其他 principal”的 history/export/clear 都返回同一个
+  `SESSION_NOT_FOUND`，不暴露 owner。
+- SSE 在 HTTP headers 已提交后使用同名 code 的结构化 `event:error`；首事件前失败可由
+  Controller advice 返回普通 RFC 7807。
+- `SESSION_BUSY` 与 lease lost 都是可重试冲突，但语义不同；客户端可保留已有 partial，
+  不自动重放请求。
+- `GlobalExceptionHandler`、OpenAPI 示例、WebUI error mapping 和 controller integration
+  tests 必须同步这些 code/status。
 
 ## 11. 配置设计
 
@@ -1141,13 +1529,19 @@ rag:
 2. 固定全文 `@@` 不受 vector min-score 过滤的正确行为。
 3. 记录当前 dirty files，禁止批量回退。
 4. 证明 `useHybridSearch` / `useRerank` 当前未生效，作为新测试的红线起点。
+5. 清点所有 `RagAdvisorProvider` 实现，标记其真实依赖是 attempt before/after、增强后
+   prompt，还是旧 query/retrieval/rerank 中间阶段；阶段级依赖必须列出目标标准扩展点。
+6. 为 public session ID、null-owner history 读取/导出/clear/TTL 和 principal memory
+   rebuild 增加安全 characterization/目标 contract tests，先固定不得 claim 或跨 owner
+   混入 Memory 的边界。
 
 完成门槛：不改变生产行为，测试能描述现状和目标差距。
 
 ### Phase 1：内部契约与共享检索适配
 
-1. 新增 API `ChatMode`，以及 core 内部 `MemoryMode`、`ChatPrincipal`、
-   `ChatCommand`、`RetrievalOptions`、`ChatExecutionResult`、`ChatEvent`。
+1. 新增 API `ChatMode`、`AdvisorScope`，以及 core 内部 `MemoryMode`、
+   `ChatPrincipal`、`ChatCommand`、`RetrievalOptions`、`ChatExecutionResult`、
+   `ChatEvent`。
 2. 新增 `AuthorizedKnowledgeRetriever`、`RetrievalDocumentMapper`、
    `RetrievalTraceCollector`。
 3. 让 request/domain/global retrieval options 真正合成。
@@ -1160,13 +1554,14 @@ rag:
 1. 实现 `ProjectDocumentRetriever`。
 2. 实现 `ProjectRerankPostProcessor`。
 3. 实现 `CitationQueryAugmenter`。
-4. 组装 `RetrievalAugmentationAdvisor`。
-5. 接入 Spring AI query transformers 和 resilient fallback。
-6. 从标准 `DOCUMENT_CONTEXT` 提取 sources。
-7. 让 hybrid/rerank/maxResults 生效。
-8. 删除旧三 Advisor 的主生产注册；保留不含语言 Pattern 的短期 legacy retrieval
+4. 实现 `HistoryAwareQueryTransformer`，确保每轮只执行 rewrite/compression 之一。
+5. 组装 `RetrievalAugmentationAdvisor`。
+6. 接入 Spring AI query transformers 和 resilient fallback。
+7. 从标准 `DOCUMENT_CONTEXT` 提取 sources。
+8. 让 hybrid/rerank/maxResults 生效。
+9. 删除旧三 Advisor 的主生产注册；保留不含语言 Pattern 的短期 legacy retrieval
    adapter 和一次性迁移测试。
-9. 删除 `QueryRewritingService` 的语言 Pattern 与专用 context key，不允许 legacy
+10. 删除 `QueryRewritingService` 的语言 Pattern 与专用 context key，不允许 legacy
    engine 继续依赖它们。
 
 完成门槛：报告中的 `风格基调` 场景在真实 PostgreSQL fixture 中通过，且无语言 Pattern。
@@ -1190,7 +1585,10 @@ rag:
 3. stream 改用 `ChatClientResponse`。
 4. 使用 principal-namespaced memory ID 和 `ChatMemory.clear`。
 5. 增加 history owner + sources migration 和 DTO。
-6. 增加结构化 SSE events、取消与 error。
+6. 增加 PostgreSQL session lease、request-local Spring AI ChatMemory、token-fenced
+   history/JDBC-memory 原子提交、结构化 SSE events、取消与 error。
+7. 显式提供使用项目 `PlatformTransactionManager` 的
+   `JdbcChatMemoryRepository` Bean，固定 history/Memory/lease 的共同事务边界。
 
 完成门槛：同 fixture 下 call/stream answer、sources、mode、model 和 history 语义一致。
 
@@ -1228,6 +1626,8 @@ spring-ai-rag-api/.../dto/ChatResponse.java
 spring-ai-rag-api/.../dto/ChatHistoryResponse.java
 spring-ai-rag-api/.../dto/ChatSource.java                 # new
 spring-ai-rag-api/.../enums/ChatMode.java                 # new
+spring-ai-rag-api/.../enums/ErrorCode.java
+spring-ai-rag-api/.../service/AdvisorScope.java            # new
 spring-ai-rag-api/.../service/RagAdvisorProvider.java
 spring-ai-rag-api/.../service/DomainRagExtension.java
 ```
@@ -1243,6 +1643,8 @@ spring-ai-rag-core/pom.xml
 .../chat/ChatEvent.java                                   # new
 .../chat/ChatExecutionService.java                        # new
 .../chat/ModeAwareChatClientFactory.java                  # new
+.../chat/ChatSessionLeaseCoordinator.java                 # new
+.../chat/ChatSessionException.java                        # new/typed errors
 .../chat/AuthorizedRetrievalContext.java                  # new
 .../chat/RetrievalTraceCollector.java                     # new
 .../chat/KnowledgeSearchTool.java                         # new
@@ -1251,15 +1653,22 @@ spring-ai-rag-core/pom.xml
 .../rag/ProjectRerankPostProcessor.java                   # new
 .../rag/CitationQueryAugmenter.java                       # new
 .../rag/RetrievalDocumentMapper.java                      # new
+.../rag/HistoryAwareQueryTransformer.java                 # new
 .../config/RagChatProperties.java                         # new
+.../config/ChatMemoryRepositoryConfig.java                # new/shared transaction manager
 .../config/MultiModelProperties.java
+.../config/MultiModelConfigLoader.java
 .../config/ConfiguredChatModelFactory.java
 .../config/ChatModelRouter.java
 .../config/RagChatService.java                            # shrink/delegate or replace
 .../controller/RagChatController.java
+.../controller/GlobalExceptionHandler.java
+.../service/ChatHistoryCleanupService.java
+.../service/ChatExportService.java
 .../repository/RagChatHistoryRepository.java
+.../repository/RagChatHistoryJpaRepository.java
 .../entity/RagChatHistory.java
-.../db/migration/V{next}__add_chat_history_owner_sources.sql
+.../db/migration/V{next}__add_chat_history_owner_sources_lease.sql
 ```
 
 旧实现候选清理：
@@ -1317,13 +1726,28 @@ scripts/real-llm-e2e-smoke.sh
 |---|---|
 | `RetrievalDocumentMapper` | 字段完整、score 语义、metadata round trip |
 | retrieval options merge | global/domain/request 优先级和 cap |
+| Chat compatibility defaults | 省略字段无 domain 保持 5/true/true；显式 domain 才应用 domain defaults |
+| client metadata isolation | 大小/深度限制、不可覆盖 Advisor/ToolContext 保留键、customizer 只读 |
 | query transformer router | first turn rewrite、follow-up compression、失败回退 |
-| model capability | 未声明 false、agent candidate 过滤、显式不支持报错 |
+| effective retrieval query | transformer 后 query 同时用于 retrieve 与 rerank，最终回答仍保留原始 user query |
+| advisor scope/order | ATTEMPT 每次 candidate/retry 执行；MODEL_CALL 在 AGENT 每轮执行；core coordinator 整回合一次；band 稳定 |
+| ChatClient factory isolation | 只缓存无状态模板；每 attempt 新建 Memory Advisor/ChatClient；并发 session 不串状态 |
+| model capability | streaming 缺省 true、tools 缺省 false；配置/legacy/JSON 三路径；声明与 `ToolCallingChatOptions` 双校验；call/stream/agent candidate 过滤；显式不支持报错 |
 | tool budget | rounds、calls、重复 query、result/character cap |
+| tool schema | ToolContext 不暴露，maxResults 明确 optional，重复工具名 fail fast |
 | source collector | 多 call 去重、citation ID 稳定、并发安全 |
+| attempt isolation | failed candidate 的 sources/usage/metrics/query 不进入 fallback 成功结果 |
 | source projection | metadata allow-list、snippet cap、排除 raw JSONB/XML payload |
 | principal namespace | 同 session 不同 principal 生成不同 memory ID，输出固定 36 字符 |
+| session ID contract | body/path/自动生成统一 `[A-Za-z0-9._~-]{1,36}`；编码绕过和旧非法值兼容 |
+| session lease | acquire/renew/release token fencing、busy、过期不可续租、expiry takeover、DB check/index、时钟来自 PostgreSQL |
+| memory commit fencing | attempt 只写 request-local memory；成功时 lease 行锁 + token/expiry 校验；history/JDBC projection 同事务 |
+| JDBC Memory transaction manager | 项目 Bean 显式注入共同 `PlatformTransactionManager`；两种写入顺序的故障注入都整体回滚 |
+| renew/terminal race | COMMITTING 前停止并 join renewer；成功 release 后的 0-row renew 不得反向标记 lease lost |
+| logical deadline | call/stream 共用绝对 deadline；nested retry/fallback/tool 不重置预算；renew 失败立即失去所有权 |
 | history mapper | sources/status/model/mode round trip |
+| TTL cleanup | owner 非空时分页按会话加 lease并重建/清空 memory；busy 下轮重试；null-owner 跳过 |
+| typed errors | ErrorCode/status、RFC 7807 与 SSE error 同名映射 |
 | SSE mapper | 所有 event JSON、转义、单 done/error |
 
 ### 14.3 Spring AI 真实链集成测试
@@ -1332,13 +1756,18 @@ scripts/real-llm-e2e-smoke.sh
 
 1. `KNOWLEDGE`：
    - Query Transformer -> DocumentRetriever -> PostProcessor -> QueryAugmenter -> model；
+   - PostProcessor 收到 Spring AI 的 original Query 时，仍从 request-scoped trace 使用
+     DocumentRetriever 登记的 transformed query 做 rerank；
    - final response 含标准 document context；
    - useHybrid/useRerank 开关生效。
 2. `AGENT`：
    - 模型第一轮返回 `searchKnowledge` tool call；
    - Spring AI 执行工具；
    - 第二轮收到 `ToolResponseMessage` 并生成最终答案；
-   - streaming 使用同一 ToolCallAdvisor loop。
+   - streaming 使用同一 ToolCallAdvisor loop；
+   - ATTEMPT provider 每次 candidate/retry 运行一次，MODEL_CALL provider 明确按 tool
+     round 运行，core coordinator 的 lease/persistence 在整个逻辑请求只运行一次，
+     Memory 不重复写入。
 3. Memory：
    - 同 session 多轮；
    - 不同 session 隔离；
@@ -1346,7 +1775,13 @@ scripts/real-llm-e2e-smoke.sh
    - 同 principal/session 并发第二请求返回 `409 SESSION_BUSY`；
    - STATELESS 不读写 memory；
    - clear 同时清业务历史和 ChatMemory；
-   - stream error/cancel 恢复 turn 前 memory snapshot；
+   - failed candidate/retry 丢弃 request-local memory 后再 fallback，不重复写 user message；
+   - history/JDBC memory 任一 durable write 失败则同事务回滚且不产生成功终态；
+   - Spring context 使用项目显式的 `JdbcChatMemoryRepository` Bean；分别在 Memory 后续
+     阶段和 history 后续阶段故障注入，数据库中不存在半提交；
+   - stream error/cancel 丢弃 request-local memory，不修改共享投影；
+   - 模型调用期间 lease expiry takeover 后，旧 request 的晚到 assistant 不会写入共享
+     JDBC memory；
    - 开启 cancelled partial 持久化时，业务 history 与 ChatMemory 保持一致。
 4. fallback：
    - 首 candidate 失败后成功；
@@ -1366,7 +1801,14 @@ scripts/real-llm-e2e-smoke.sh
 - vector-only / hybrid / rerank 开关；
 - FTS `@@` 命中不被 vector min-score 过滤；
 - JSON record 不泄露到普通 document type 范围；
-- owner + sources migration、旧 null-owner 兼容规则和历史读取。
+- owner + sources migration；从 V31 带合法/非法旧 session 与 null-owner 数据升级；
+  新约束/索引；旧 null-owner 只读兼容、普通 clear/TTL 跳过且不进入 Memory rebuild。
+- domain 未指定、显式已知和显式未知三种解析；bean 注册顺序不改变默认 Chat 行为。
+- KNOWLEDGE/AGENT/PLAIN 的 domain prompt 组合不向 PLAIN 注入 grounding，也不向
+  AGENT 注入空的 legacy context 占位段。
+- 两个应用实例争抢同一 principal/session 时最多一个成功；lease 过期后重新 acquire
+  会与每次正常 acquire 一样，从已提交 history 创建 request-local baseline；模拟旧
+  owner 晚到完成时，token-fenced commit 失败且不会污染新 owner 的共享 JDBC projection。
 
 ### 14.5 Controller/SSE 集成
 
@@ -1377,12 +1819,21 @@ scripts/real-llm-e2e-smoke.sh
 - SSE event 顺序。
 - tool start/result。
 - sources before done。
+- history commit 发生在 done 前；commit 失败发送 error、不发送 done。
 - error after stream started。
 - emitter timeout/client cancel dispose。
-- active stream 期间同 session 第二请求返回 409，取消完成后 guard 释放。
+- active stream 期间同 session 第二请求返回 409，取消完成后 lease 释放。
+- stream lease 定期续租；complete/error/cancel/timeout/disconnect 后 token-fenced 释放。
+- 非流式在长 transformer/retry/fallback 下也续租；模拟 renew 失败后终止且不提交成功
+  history。
+- 模拟 lease 已过期但尚未被新 owner takeover，旧 token 的迟到 renew 仍返回 0，不能复活
+  lease 或继续提交。
+- coordinator deadline 覆盖整个逻辑请求，candidate/retry/tool round 不能重置预算。
 - ACL 403/zero-match。
 - history reload/clear/export。
 - key A 不能 read/continue/export/clear key B 的同名 session，且错误不泄露存在性。
+- TTL cleanup 在 lease 内删除过期 turn 并从剩余 committed history 重建 memory；busy
+  session 不被并发清理。
 
 ### 14.6 WebUI
 
@@ -1441,12 +1892,21 @@ Mock Playwright：
 2. PostgreSQL/Testcontainers Chat tests；
 3. `mvn clean compile test-compile`；
 4. `mvn test`；
-5. WebUI `npm run test:run`；
-6. WebUI `npm run build`；
-7. Chat 核心 Mock Playwright；
-8. `./scripts/verify-project-docs.sh`；
-9. `git diff --check`；
-10. 输出日志目录和 gate summary。
+5. 使用隔离 PostgreSQL/Testcontainers 或现有测试数据库、dummy model credentials 启动
+   Spring Boot，等待 `/actuator/health` 为 `UP` 后停止；该门禁不发起外部 LLM/Embedding
+   调用，但必须实际执行 Flyway、JPA validate、Spring context 与 Web server 启动；
+6. WebUI `npm run test:run`；
+7. WebUI `npx tsc -b --pretty false`；
+8. WebUI `npm run build`；
+9. Chat 核心 Mock Playwright；
+10. `./scripts/verify-project-docs.sh`；
+11. `git diff --check`；
+12. 输出日志目录和 gate summary。
+
+默认启动 smoke 复用现有等待 health、PID 清理与端口隔离约定，但不能调用会加载 `.env`
+并面向真实模型的 `start-real-e2e-server.sh`。若新增 helper，应由测试脚本自行启动临时
+PostgreSQL/pgvector 容器或复用 Testcontainers，随机选择可用后端端口，注入 dummy
+credentials，并在成功、失败和信号退出时都清理 Java 进程与容器。
 
 `--with-real-llm` 追加：
 
@@ -1510,9 +1970,16 @@ source projection。这些属于共同安全与协议外壳，legacy/new engine 
 
 - 应用回滚可切 `rag.chat.engine=legacy`，但该 adapter 不包含已否决的语言 Pattern。
 - 回滚只影响 KNOWLEDGE retrieval engine；principal/session/history 安全修复不可关闭。
+- 回滚配置也不能放宽 public session ID 校验、允许读取/claim 其他 owner、把 null-owner
+  history 注入 ChatMemory，或绕过 lease/持久化顺序。
+- 这里的“应用回滚”仅指新版本内切换 `rag.chat.engine=legacy`。部署旧二进制会重新使用
+  未按 principal 限定的 repository/Memory 路径并写出新的 null-owner history，不是可接受
+  的安全回滚；进入多 principal 生产阶段后禁止回滚到本迁移前二进制。若新 engine 故障，
+  只能使用同一安全外壳内的 legacy engine flag 或向前修复。
 - 新增 owner、sources、turn status 列都是 additive，可保留。
 - 新 mode 字段省略仍兼容。
-- capability 字段未声明默认 false，不影响 KNOWLEDGE。
+- capability 中 `toolCalling` 未声明默认 false，`streaming` 未声明默认 true，不影响
+  现有 KNOWLEDGE/PLAIN call 与 stream。
 - 不回滚已正确的 FTS threshold 修复。
 
 ### 17.3 可观测指标
@@ -1553,8 +2020,8 @@ tool result 或 JSON payload。
 12. WebUI 不显示 score 百分比，能恢复历史来源并打开对应文档。
 13. 清空 history 使用 ChatMemory API 并清两类存储。
 14. 报告中的 `风格基调` 场景通过 PostgreSQL fixture 和真实 LLM smoke。
-15. focused tests、`mvn clean compile test-compile`、`mvn test`、WebUI test/build、
-    Mock Playwright、文档门禁全部通过。
+15. focused tests、`mvn clean compile test-compile`、`mvn test`、无外部模型调用的后端
+    启动/health smoke、WebUI test/独立 tsc/build、Mock Playwright、文档门禁全部通过。
 16. 一键脚本成功；真实 LLM 未运行时明确显示 skipped。
 17. 正式中英文文档同步，不再把语言 Pattern 作为解决方案。
 
@@ -1568,15 +2035,16 @@ tool result 或 JSON payload。
 | ToolContext 异步丢失 | request-scoped immutable object，不用 ThreadLocal |
 | 流式工具事件竞态 | 单 coordinator、thread-safe collector、事件顺序测试 |
 | Query Transformer 增加成本 | dev none、prod 显式 spring-ai、metrics/goldenset |
-| 动态 model capability 误报 | 显式配置默认 false、真实 smoke |
+| 动态 model capability 误报 | tools 显式配置且默认 false、streaming 兼容默认 true、legacy 映射、真实 smoke |
 | 来源 metadata 在 Document 转换中丢失 | 单一 mapper round-trip tests |
 | domain hook 与流式冲突 | 不激活 text postProcess，先 deprecated |
 | legacy WIP 被误删 | Phase 0 文件清单和 characterization，逐组件替换 |
-| 自定义 Advisor SPI 回归 | supportedModes default compatibility + starter tests |
+| 自定义 Advisor SPI 回归 | supportedModes/advisorScope default compatibility + starter tests |
+| 旧 Advisor order 假设能插入标准 RAG 内部阶段 | Phase 0 清点；迁移到标准 transformer/post-processor/augmenter；ATTEMPT/MODEL_CALL 明确作用域 |
 | 历史 schema 回滚 | additive JSONB migration |
 | session ID 被当作授权凭据 | owner principal 列、内部 memory namespace、跨 key 集成测试 |
 | source snapshot 泄露结构化 payload | DTO allow-list、snippet cap、原始 payload 只走授权数据 API |
-| 取消/失败留下孤儿 user memory | per-session single-flight、turn 前快照、guard 内补偿恢复 |
+| 取消/失败/fallback 留下孤儿或重复 memory | PostgreSQL lease、每 attempt 独立 request-local ChatMemory、最终 token-fenced 原子提交 |
 
 ## 20. 实施时禁止事项
 

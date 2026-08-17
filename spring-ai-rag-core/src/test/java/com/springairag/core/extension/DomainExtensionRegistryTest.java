@@ -1,7 +1,10 @@
 package com.springairag.core.extension;
 
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.service.DomainRagExtension;
+import com.springairag.core.exception.RagException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,6 +30,26 @@ class DomainExtensionRegistryTest {
         @Override public String getDomainId() { return domainId; }
         @Override public String getDomainName() { return domainName; }
         @Override public String getSystemPromptTemplate() { return "test prompt for " + domainId; }
+    }
+
+    static class LegacyContextDomainExtension extends TestDomainExtension {
+        LegacyContextDomainExtension() {
+            super("legacy", "Legacy");
+        }
+
+        @Override
+        public String getSystemPromptTemplate() {
+            return "领域安全规则\n\n参考资料：\n{context}";
+        }
+    }
+
+    static class ModeAwareDomainExtension extends LegacyContextDomainExtension {
+        @Override
+        public String getSystemPromptTemplate(ChatMode mode) {
+            return mode == ChatMode.KNOWLEDGE
+                    ? getSystemPromptTemplate()
+                    : "仅保留领域安全规则";
+        }
     }
 
     @Test
@@ -108,6 +131,51 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
+    @DisplayName("legacy context prompt remains compatible with KNOWLEDGE")
+    void legacyContextPrompt_knowledgeMode_removesPlaceholder() {
+        DomainExtensionRegistry registry = new DomainExtensionRegistry(
+                List.of(new LegacyContextDomainExtension()));
+
+        assertEquals(
+                "领域安全规则\n\n参考资料：",
+                registry.getSystemPromptTemplate("legacy", ChatMode.KNOWLEDGE));
+    }
+
+    @Test
+    @DisplayName("legacy context prompt is rejected for PLAIN and AGENT")
+    void legacyContextPrompt_nonKnowledgeMode_usesTypedError() {
+        DomainExtensionRegistry registry = new DomainExtensionRegistry(
+                List.of(new LegacyContextDomainExtension()));
+
+        RagException plain = assertThrows(
+                RagException.class,
+                () -> registry.getSystemPromptTemplate(
+                        "legacy", ChatMode.PLAIN));
+        RagException agent = assertThrows(
+                RagException.class,
+                () -> registry.getSystemPromptTemplate(
+                        "legacy", ChatMode.AGENT));
+
+        assertEquals(
+                ErrorCode.DOMAIN_MODE_UNSUPPORTED,
+                plain.getErrorCodeEnum());
+        assertEquals(
+                ErrorCode.DOMAIN_MODE_UNSUPPORTED,
+                agent.getErrorCodeEnum());
+    }
+
+    @Test
+    @DisplayName("mode-aware prompt can preserve domain safety rules in PLAIN")
+    void modeAwarePrompt_plainMode_isAccepted() {
+        DomainExtensionRegistry registry = new DomainExtensionRegistry(
+                List.of(new ModeAwareDomainExtension()));
+
+        assertEquals(
+                "仅保留领域安全规则",
+                registry.getSystemPromptTemplate("legacy", ChatMode.PLAIN));
+    }
+
+    @Test
     @DisplayName("extensions with blank domainId are skipped")
     void blankDomainId_skipped() {
         TestDomainExtension blank = new TestDomainExtension("", "Blank");
@@ -131,9 +199,9 @@ class DomainExtensionRegistryTest {
     }
 
     @Test
-    @DisplayName("DefaultDomainRagExtension system prompt contains {context} placeholder")
-    void defaultExtension_promptContainsContextPlaceholder() {
+    @DisplayName("DefaultDomainRagExtension leaves context injection to the RAG pipeline")
+    void defaultExtension_promptDoesNotContainContextPlaceholder() {
         DefaultDomainRagExtension ext = new DefaultDomainRagExtension();
-        assertTrue(ext.getSystemPromptTemplate().contains("{context}"));
+        assertFalse(ext.getSystemPromptTemplate().contains("{context}"));
     }
 }

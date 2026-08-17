@@ -21,7 +21,7 @@
 
 - **混合检索**：向量检索（pgvector HNSW）+ 全文检索（pg_jieba 分词 / pg_trgm 三元组）
 - **全文检索策略**：可配置 `auto`（自动检测）/ `pg_jieba` / `pg_trgm` / `none`
-- **Advisor 链式 Pipeline**：查询改写 → 混合检索 → 重排序 → 上下文注入
+- **三种对话模式**：KNOWLEDGE 使用 Spring AI Modular RAG，AGENT 使用 Tool Calling，PLAIN 不检索
 - **运行时多模型路由**：每次对话可选择已配置的 OpenAI 兼容或 Anthropic 模型
 - **领域扩展**：实现 `DomainRagExtension` 注入领域 Prompt 和检索策略
 - **SSE 流式输出**：Server-Send Events 实时响应
@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-应用启动时 Flyway 自动执行 V1-V31 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录字段 + 外部文档同步及身份规范化）。
+应用启动时 Flyway 自动执行 V1-V32 迁移（建表 + Embedding Profile + 固定维度 HNSW 索引 + 全文检索 GIN 索引 + JSONB 结构化记录 + 外部文档同步 + 按 principal 隔离的 Chat 历史、来源快照与会话 lease）。
 
 ### 2. 添加依赖
 
@@ -66,7 +66,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway 自动迁移（V1-V31）
+  # Flyway 自动迁移（V1-V32）
   flyway:
     enabled: true
 

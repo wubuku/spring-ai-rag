@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V31 |
+| Flyway | V1–V32 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -206,10 +206,59 @@ BASE_URL=http://127.0.0.1:4173 npx playwright test
 
 ```bash
 ./scripts/start-real-e2e-server.sh
-BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/real-llm-e2e-smoke.sh
 ```
 
-The flow performs provider preflight, unique-document creation, embedding, search, ask, and stream. Mock Playwright is not a substitute for real-LLM validation.
+The flow performs provider preflight, unique-document creation, embedding, search, ask, and
+stream. When `RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or the
+equivalent `X-API-Key` header); the script also loads the root key from `.env`. Mock
+Playwright is not a substitute for real-LLM validation.
+
+### Chat Capability Verification
+
+Run the Chat redesign gate serially because it includes Maven clean output:
+
+```bash
+./scripts/verify-chat-capability.sh
+```
+
+The script verifies `KNOWLEDGE`, `AGENT`, and `PLAIN` mode execution, Spring AI
+Tool Calling boundaries, principal-scoped memory/history, V32 session leases,
+structured SSE, WebUI mode/capability/source rendering, and Chat export
+snapshots. It records every step under
+`.verification/chat-capability/<run-id>/summary.md`.
+
+PostgreSQL/Testcontainers defaults:
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+If Docker is unavailable, the script records the PostgreSQL gate as `SKIP`
+instead of claiming it passed. `--skip-postgres` is an explicit equivalent and
+must remain visible in the recorded summary. The known Docker API `1.32`
+versus daemon minimum `1.40` problem is documented in
+[china-network-guide.md](china-network-guide.md).
+
+The Chat Mock Playwright gate runs against a strict, overridable Vite preview
+port:
+
+```bash
+CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
+```
+
+It uses DOM, network, URL, and test assertions only; screenshots are not
+correctness evidence. Real provider calls are opt-in:
+
+```bash
+./scripts/verify-chat-capability.sh --with-real-llm
+```
+
+Without that option the real LLM step is recorded as `SKIP`.
 
 ### JSONB Structured-Record Verification
 

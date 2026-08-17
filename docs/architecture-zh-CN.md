@@ -88,73 +88,92 @@ spring-ai-rag (parent pom)
 - `chatModel` 用 `@ConditionalOnMissingBean` 避免冲突
 - `ApiAdapterFactory` 自动检测 API 兼容性（如 MiniMax 不支持多 system 消息）
 
-### 3.2 Advisor 链式 RAG Pipeline
+### 3.2 模式化 Chat Pipeline
 
-Spring AI 的 `BaseAdvisor` 机制串联检索流程，每个 Advisor 独立、可插拔：
+生产 Chat 不使用语言相关正则猜测检索意图。公开请求显式选择模式；省略时保持 RAG
+兼容默认值 `KNOWLEDGE`：
 
+| 模式 | Spring AI 组合 | 检索行为 |
+|---|---|---|
+| `KNOWLEDGE` | `RetrievalAugmentationAdvisor` | 每轮固定执行一次授权 RAG |
+| `AGENT` | `ToolCallAdvisor` + `searchKnowledge` | 模型可执行零到多次检索 |
+| `PLAIN` | `ChatClient` + Memory | 不执行检索 |
+
+```text
+RagChatController
+  -> CollectionRetrievalScopeResolver
+  -> ChatCommandMapper
+  -> ChatExecutionService
+       -> request-local MessageChatMemoryAdvisor
+       -> KNOWLEDGE:
+            RetrievalAugmentationAdvisor
+              -> ProjectDocumentRetriever
+              -> ProjectRerankPostProcessor
+              -> CitationQueryAugmenter
+       -> AGENT:
+            BudgetedToolCallAdvisor
+              -> KnowledgeSearchTool
+              -> 服务端 ToolContext
+       -> PLAIN:
+            仅 ChatClient
+  -> ChatSessionCoordinator
+       -> 原子提交 history + source snapshot + JDBC Memory
 ```
-用户查询
-  │
-  ▼
-┌─────────────────────────┐  order=+10
-│  QueryRewriteAdvisor    │  查询聚焦 + 同义词扩展 + 领域限定词 + LLM 辅助改写
-│  输入: 原始 query        │
-│  输出: 聚焦检索 query    │
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐  order=+20
-│  HybridSearchAdvisor    │  混合检索：向量相似度 + 全文检索 + RRF 融合
-│  输入: 聚焦检索 query    │
-│  输出: context attributes│  (hybrid.search.results)
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐  order=+30
-│  RerankAdvisor          │  重排 + 上下文注入：取 Top-K 结果注入 Prompt
-│  输入: 检索结果          │
-│  输出: 增强后的 Prompt   │  (通过 augmentUserMessage)
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐
-│  MessageChatMemoryAdvisor│ 对话记忆：多轮上下文
-└───────────┬─────────────┘
-            ▼
-        ChatModel → 响应
-```
 
-**数据传递**：Advisors 之间通过 `ChatClientRequest.context().getAttributes()` 共享数据，避免方法签名耦合。
-回答生成仍使用用户原始消息；检索与重排使用 `rewrite.retrieval-query`。对于
-“找到『风格基调』相关内容”这类明确检索命令，Advisor 会提取主题词，避免命令词污染查询向量。
+`ProjectDocumentRetriever` 将项目更强的检索栈适配到 Spring AI Modular RAG
+契约。向量检索、中英文全文检索、RRF 融合、rerank、Embedding Profile 过滤、
+Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
+KNOWLEDGE 与 AGENT 工具共享。
+
+旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍可作为组件级/
+兼容 API 使用，但不是生产 mode-aware Chat 的执行链。
 
 ### 3.3 双表对话记忆
 
 | 表 | 用途 | 管理方 |
 |---|------|--------|
 | `spring_ai_chat_memory` | LLM 上下文窗口 | Spring AI 自动管理 |
-| `rag_chat_history` | 业务审计 + 历史查询 | 应用层写入 |
+| `rag_chat_history` | 按 principal 归属的业务历史、来源与审计 | 应用事务 |
 
 ```
-请求 → ChatClient → spring_ai_chat_memory（给 LLM 用）
-                  ↘ rag_chat_history（业务审计，保留 user_message + ai_response）
+已完成 turn
+  -> rag_chat_history（owner、user/assistant、sources、mode/model/status）
+  -> spring_ai_chat_memory（有界模型上下文）
+  -> 由 rag_chat_session_lease 保护的同一事务
 ```
+
+`ChatSessionCoordinator` 对 `owner_principal_id + session_id` 提供 single-flight，
+续租带 token fencing 的数据库 lease，并原子提交 history 与 JDBC Memory。历史查询、
+导出、清空和会话 baseline 都按认证 principal 隔离；不存在与属于其他 principal 的
+session 都返回 `SESSION_NOT_FOUND`，避免会话枚举。
+
+客户端取消会 dispose 模型流，不提交未完成 turn；流式 fallback 只允许发生在第一个
+客户端可见事件之前。
 
 ### 3.4 领域扩展机制
 
-通过 `DomainRagExtension` 接口实现领域定制，核心框架无需修改：
+通过 `DomainRagExtension` 接口实现显式领域定制：
 
 ```java
 public interface DomainRagExtension {
-    String getDomainId();                           // 领域标识
-    String customizeSystemPrompt(String base);      // 定制系统提示词
-    Map<String, Double> getRetrievalWeights();      // 自定义检索权重
-    List<RetrievalResult> postProcess(...);         // 后处理检索结果
+    String getDomainId();
+    String getDomainName();
+    String getSystemPromptTemplate();
+    default String getSystemPromptTemplate(ChatMode mode);
+    default RetrievalConfig getRetrievalConfig();
 }
 ```
 
 **注册流程**：
 1. 实现 `DomainRagExtension` 并标注 `@Component`
 2. `DomainExtensionRegistry` 构造时自动发现所有实现
-3. 请求携带 `domainId` 参数时，自动激活对应扩展
-4. 无匹配时使用 `DefaultDomainRagExtension`（无修改透传）
+3. 请求显式携带 `domainId` 时激活对应扩展；未知 ID 返回 `UNKNOWN_DOMAIN`
+4. 省略 `domainId` 时使用通用 Chat 默认值，不受 Spring Bean 注册顺序影响
+
+检索上下文由 `CitationQueryAugmenter` 或 `KnowledgeSearchTool` 注入，领域提示词不应包含
+`{context}`。旧模板在 `KNOWLEDGE` 中仍可兼容；在 `AGENT/PLAIN` 中必须覆盖模式感知方法，
+否则返回 `DOMAIN_MODE_UNSUPPORTED`。`postProcessAnswer()` 与 `isApplicable()` 是 legacy
+API，新生产 Chat 主链不调用。
 
 ---
 
@@ -167,20 +186,20 @@ POST /api/v1/rag/chat/ask
   │
   ▼
 RagChatController
-  │ validate request
+  │ 解析 principal + Collection/document 范围
   ▼
-ChatClient.prompt(query)
-  │
-  ├──→ QueryRewriteAdvisor    (改写查询)
-  ├──→ HybridSearchAdvisor    (向量+全文检索)
-  ├──→ RerankAdvisor          (重排+注入上下文)
-  ├──→ MessageChatMemoryAdvisor (多轮记忆)
-  │
+ChatCommandMapper
+  │ 合并请求覆盖项、领域检索配置和默认值
   ▼
-ChatModel (DeepSeek / Anthropic / ...)
-  │
+ChatExecutionService
+  ├── KNOWLEDGE -> Spring AI Modular RAG + 项目检索
+  ├── AGENT     -> Spring AI Tool Calling + 授权检索工具
+  └── PLAIN     -> 模型 + Memory，不检索
   ▼
-响应 + rag_chat_history 持久化
+ChatSessionCoordinator
+  │ lease fencing + 原子提交 history/source/memory
+  ▼
+ChatResponse 或结构化 SSE 事件
 ```
 
 ### 4.2 Collection 范围检索

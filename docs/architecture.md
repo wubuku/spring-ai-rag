@@ -88,75 +88,101 @@ Switch models via `app.llm.provider` config — no code changes required:
 - `chatModel` uses `@ConditionalOnMissingBean` to avoid conflicts
 - `ApiAdapterFactory` auto-detects API compatibility (e.g., MiniMax doesn't support multiple system messages)
 
-### 3.2 Advisor Chain RAG Pipeline
+### 3.2 Mode-Aware Chat Pipeline
 
-Spring AI's `BaseAdvisor` mechanism chains the retrieval flow; each Advisor is independent and pluggable:
+Production Chat does not infer retrieval intent with language-specific regular
+expressions. The public request selects an explicit mode; omitting it preserves
+the RAG-compatible `KNOWLEDGE` default:
 
+| Mode | Spring AI composition | Retrieval behavior |
+|---|---|---|
+| `KNOWLEDGE` | `RetrievalAugmentationAdvisor` | Always runs authorized RAG once |
+| `AGENT` | `ToolCallAdvisor` + `searchKnowledge` | The model may retrieve zero or more times |
+| `PLAIN` | `ChatClient` + Memory | Does not retrieve |
+
+```text
+RagChatController
+  -> CollectionRetrievalScopeResolver
+  -> ChatCommandMapper
+  -> ChatExecutionService
+       -> request-local MessageChatMemoryAdvisor
+       -> KNOWLEDGE:
+            RetrievalAugmentationAdvisor
+              -> ProjectDocumentRetriever
+              -> ProjectRerankPostProcessor
+              -> CitationQueryAugmenter
+       -> AGENT:
+            BudgetedToolCallAdvisor
+              -> KnowledgeSearchTool
+              -> server-owned ToolContext
+       -> PLAIN:
+            ChatClient only
+  -> ChatSessionCoordinator
+       -> atomic history + source snapshot + JDBC Memory commit
 ```
-User Query
-  │
-  ▼
-┌─────────────────────────┐  order=+10
-│  QueryRewriteAdvisor    │  Query focusing + synonyms + domain qualifiers + LLM-assisted rewrites
-│  Input: raw query       │
-│  Output: focused query  │
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐  order=+20
-│  HybridSearchAdvisor    │  Hybrid retrieval: vector similarity + full-text search + RRF fusion
-│  Input: focused query   │
-│  Output: context attributes│  (hybrid.search.results)
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐  order=+30
-│  RerankAdvisor          │  Rerank + context injection: Top-K results injected into Prompt
-│  Input: retrieval results│
-│  Output: enhanced Prompt │  (via augmentUserMessage)
-└───────────┬─────────────┘
-            ▼
-┌─────────────────────────┐
-│  MessageChatMemoryAdvisor│  Conversation memory: multi-turn context
-└───────────┬─────────────┘
-            ▼
-        ChatModel → Response
-```
 
-**Data passing**: Advisors share data via `ChatClientRequest.context().getAttributes()`, avoiding method signature coupling.
-Answer generation still receives the original user message. Retrieval and reranking use
-`rewrite.retrieval-query`. For explicit commands such as “find content related to
-‘visual tone’”, the advisor extracts the subject so command words do not distort the
-query embedding.
+`ProjectDocumentRetriever` adapts the project's stronger retrieval stack to
+Spring AI's Modular RAG contract. Vector search, Chinese/English full text,
+RRF fusion, reranking, Embedding Profile filtering, Collection/API-key ACL,
+document type, and document ID scope therefore remain shared by direct Search,
+KNOWLEDGE, and the AGENT tool.
+
+The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor` remain
+component-level/compatibility APIs, but they are not the production
+mode-aware Chat pipeline.
 
 ### 3.3 Dual-Table Conversation Memory
 
 | Table | Purpose | Managed by |
 |-------|---------|------------|
 | `spring_ai_chat_memory` | LLM context window | Spring AI auto-management |
-| `rag_chat_history` | Business audit + history | Application layer writes |
+| `rag_chat_history` | Principal-owned business history, sources, and audit | Application transaction |
 
 ```
-Request → ChatClient → spring_ai_chat_memory (for LLM)
-                  ↘ rag_chat_history (business audit, retains user_message + ai_response)
+Committed turn
+  -> rag_chat_history (owner, user/assistant, sources, mode/model/status)
+  -> spring_ai_chat_memory (bounded model context)
+  -> one transaction guarded by rag_chat_session_lease
 ```
+
+`ChatSessionCoordinator` provides single-flight execution per
+`owner_principal_id + session_id`, renews a token-fenced database lease, and
+commits history plus JDBC Memory atomically. History, export, clear, and
+conversation baselines are scoped to the authenticated principal. Missing and
+foreign sessions both produce `SESSION_NOT_FOUND`, avoiding session
+enumeration.
+
+Client cancellation disposes the model stream and does not commit an
+incomplete turn. Streaming fallback is allowed only before the first
+client-visible event.
 
 ### 3.4 Domain Extension Mechanism
 
-Domain customization via `DomainRagExtension` interface — core framework requires no changes:
+Explicit domain customization uses the `DomainRagExtension` interface:
 
 ```java
 public interface DomainRagExtension {
-    String getDomainId();                           // Domain identifier
-    String customizeSystemPrompt(String base);      // Customize system prompt
-    Map<String, Double> getRetrievalWeights();      // Custom retrieval weights
-    List<RetrievalResult> postProcess(...);         // Post-process retrieval results
+    String getDomainId();
+    String getDomainName();
+    String getSystemPromptTemplate();
+    default String getSystemPromptTemplate(ChatMode mode);
+    default RetrievalConfig getRetrievalConfig();
 }
 ```
 
 **Registration flow**:
 1. Implement `DomainRagExtension` and annotate with `@Component`
 2. `DomainExtensionRegistry` auto-discovers all implementations at construction
-3. When a request carries a `domainId` parameter, the corresponding extension is auto-activated
-4. If no match, use `DefaultDomainRagExtension` (pass-through with no modifications)
+3. A request explicitly carrying `domainId` activates that extension; unknown IDs
+   return `UNKNOWN_DOMAIN`
+4. Omitting `domainId` uses generic Chat defaults and is independent of Spring bean
+   registration order
+
+`CitationQueryAugmenter` or `KnowledgeSearchTool` injects retrieval context, so domain
+prompts should not contain `{context}`. Legacy templates remain compatible in
+`KNOWLEDGE`; `AGENT/PLAIN` require the mode-aware method or return
+`DOMAIN_MODE_UNSUPPORTED`. `postProcessAnswer()` and `isApplicable()` are legacy APIs
+and are not invoked by the production Chat path.
 
 ---
 
@@ -169,20 +195,20 @@ POST /api/v1/rag/chat/ask
   │
   ▼
 RagChatController
-  │ validate request
+  │ resolve principal + Collection/document scope
   ▼
-ChatClient.prompt(query)
-  │
-  ├──→ QueryRewriteAdvisor    (rewrite query)
-  ├──→ HybridSearchAdvisor    (vector + full-text retrieval)
-  ├──→ RerankAdvisor          (rerank + inject context)
-  ├──→ MessageChatMemoryAdvisor (multi-turn memory)
-  │
+ChatCommandMapper
+  │ merge request overrides, domain retrieval config, and defaults
   ▼
-ChatModel (DeepSeek / Anthropic / ...)
-  │
+ChatExecutionService
+  ├── KNOWLEDGE -> Spring AI Modular RAG + project retrieval
+  ├── AGENT     -> Spring AI Tool Calling + authorized search tool
+  └── PLAIN     -> model + memory without retrieval
   ▼
-Response + rag_chat_history persistence
+ChatSessionCoordinator
+  │ lease fencing + atomic history/source/memory commit
+  ▼
+ChatResponse or structured SSE events
 ```
 
 ### 4.2 Collection-Scoped Retrieval

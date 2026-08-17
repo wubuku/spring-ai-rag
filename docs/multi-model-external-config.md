@@ -49,7 +49,11 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
               "cacheWrite": 0
             },
             "contextWindow": 600000,
-            "maxTokens": 32000
+            "maxTokens": 32000,
+            "capabilities": {
+              "streaming": true,
+              "toolCalling": true
+            }
           }
         ]
       },
@@ -74,7 +78,11 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
               "cacheWrite": 10
             },
             "contextWindow": 200000,
-            "maxTokens": 8192
+            "maxTokens": 8192,
+            "capabilities": {
+              "streaming": true,
+              "toolCalling": false
+            }
           },
           {
             "id": "embo-01",
@@ -118,6 +126,12 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
 Supported chat `apiType` values are `openai`, `openai-chat`,
 `openai-completions`, `anthropic`, and `anthropic-messages`.
 
+`capabilities.streaming` is backward-compatible and defaults to `true` when
+omitted. `capabilities.toolCalling` is conservative and defaults to `false`.
+Set Tool Calling to `true` only after verifying that the concrete
+provider/model accepts tool schemas and returns tool calls through the selected
+API type. Spring AI adapter support alone is not sufficient evidence.
+
 ## Verify
 
 After startup, query the effective registry:
@@ -126,5 +140,7 @@ After startup, query the effective registry:
 curl http://localhost:8081/api/v1/rag/models
 ```
 
-The response includes `defaultModel`, model-level `ref` values, availability,
-and an `unavailableReason` when credentials or provider settings are missing.
+The response includes `defaultModel`, model-level `ref` values, normalized
+`capabilities`, availability, and an `unavailableReason` when credentials or
+provider settings are missing. `AGENT` Chat requires
+`capabilities.toolCalling=true`.

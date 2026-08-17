@@ -1,6 +1,7 @@
 package com.springairag.api.service;
 
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.enums.ChatMode;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -21,6 +22,24 @@ class DomainRagExtensionTest {
         RetrievalConfig config = ext.getRetrievalConfig();
         assertNotNull(config);
         assertEquals(10, config.getMaxResults());
+    }
+
+    @Test
+    void modeAwarePromptDefaultsToLegacyPrompt() {
+        DomainRagExtension ext = new DomainRagExtension() {
+            @Override public String getDomainId() { return "test"; }
+            @Override public String getDomainName() { return "测试领域"; }
+            @Override public String getSystemPromptTemplate() {
+                return "legacy prompt";
+            }
+        };
+
+        assertEquals(
+                "legacy prompt",
+                ext.getSystemPromptTemplate(ChatMode.KNOWLEDGE));
+        assertEquals(
+                "legacy prompt",
+                ext.getSystemPromptTemplate(ChatMode.PLAIN));
     }
 
     @Test

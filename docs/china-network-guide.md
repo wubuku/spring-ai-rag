@@ -49,7 +49,7 @@ docker build -f docker/Dockerfile \
 
 ## Testcontainers Docker API And Ryuk
 
-The JSONB PostgreSQL integration test uses Testcontainers with
+The JSONB and Chat PostgreSQL integration tests use Testcontainers with
 `pgvector/pgvector:pg16`. On some OrbStack installations Testcontainers
 negotiates Docker API `1.32` while the local daemon requires at least `1.40`.
 Some proxy/certificate setups also fail while pulling the Ryuk helper image.
@@ -68,6 +68,18 @@ TESTCONTAINERS_API_VERSION=1.40 \
 TESTCONTAINERS_RYUK_DISABLED=true \
 ./scripts/verify-jsonb-records.sh --skip-playwright
 ```
+
+The Chat gate uses the same environment workaround:
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+If Docker remains unavailable, the Chat verifier records the PostgreSQL step as
+`SKIP`; do not change application YAML or Dockerfiles to embed a regional
+registry just to work around a developer network.
 
 Disabling Ryuk is a local-environment workaround, not an application setting.
 Prefer restoring a trusted registry/certificate path and re-enabling Ryuk in

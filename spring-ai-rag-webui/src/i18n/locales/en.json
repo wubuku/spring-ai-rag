@@ -155,7 +155,16 @@
     "hint": "I will search through your knowledge base to find the most relevant information.",
     "collection": "Knowledge base",
     "allCollections": "All collections",
-    "model": "Model"
+    "model": "Model",
+    "mode": "Chat mode",
+    "modeKnowledge": "Knowledge Q&A",
+    "modeAgent": "Agent retrieval",
+    "modePlain": "Plain chat",
+    "stop": "Stop generation",
+    "toolActivity": "Retrieval activity",
+    "toolSearching": "Searching",
+    "toolFinished": "Found {{count}} result(s) ({{ms}} ms)",
+    "untitledSource": "Untitled source"
   },
   "search": {
     "title": "Search",

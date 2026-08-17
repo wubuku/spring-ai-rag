@@ -21,8 +21,13 @@ public class MedicalRagExtension implements DomainRagExtension {
     public String getSystemPromptTemplate() {
         return """
             You are a professional medical consultation assistant...
-            Reference materials: {context}
-            """;  // Use {context} placeholder
+            All answers are informational and do not replace professional diagnosis.
+            """;
+    }
+
+    @Override
+    public String getSystemPromptTemplate(ChatMode mode) {
+        return getSystemPromptTemplate();
     }
 
     @Override
@@ -121,8 +126,11 @@ No framework code needs to be modified. Each domain extension is developed, test
 
 | Component | Role | Auto-discovery |
 |-----------|------|----------------|
-| `DomainRagExtension` | Domain Prompt template + retrieval config | @Component auto-registers |
+| `DomainRagExtension` | Mode-safe domain Prompt + retrieval config | @Component auto-registers |
 | `PromptCustomizer` | Prompt chain customization | @Component auto-registers |
 | `RagAdvisorProvider` | Custom Advisor injection | @Component auto-registers |
 
-Multiple implementations are sorted by `getOrder()`, and the Starter automatically scans and assembles them.
+Domain prompts do not contain `{context}`; Spring AI RAG or Tool Calling
+injects evidence for KNOWLEDGE/AGENT. `RagAdvisorProvider` declares its
+execution boundary through `supportedModes()` and `advisorScope()`, with
+`getOrder()` sorting providers inside one scope.

@@ -1,7 +1,10 @@
 package com.springairag.api.service;
 
+import com.springairag.api.enums.ChatMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -28,5 +31,7 @@ class RagAdvisorProviderTest {
 
         assertEquals("TestAdvisor", provider.getName());
         assertEquals(100, provider.getOrder());
+        assertEquals(Set.of(ChatMode.KNOWLEDGE), provider.supportedModes());
+        assertEquals(AdvisorScope.ATTEMPT, provider.advisorScope());
     }
 }

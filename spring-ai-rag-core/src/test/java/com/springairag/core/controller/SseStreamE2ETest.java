@@ -1,6 +1,8 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.ChatRequest;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
 import com.springairag.core.repository.RagChatHistoryRepository;
@@ -19,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -51,14 +54,25 @@ class SseStreamE2ETest {
 
     private void stubStream(String message, String sessionId, String domainId,
                             Flux<String> result) {
-        when(ragChatService.chatStream(argThat(request ->
-                matches(request, message, sessionId, domainId))))
-                .thenReturn(result);
+        Flux<ChatEvent> events = result
+                .map(chunk -> (ChatEvent) new ChatEvent.ContentDelta(chunk))
+                .concatWith(Flux.just((ChatEvent) new ChatEvent.Completed(
+                        null,
+                        sessionId,
+                        null,
+                        null,
+                        ChatMode.KNOWLEDGE,
+                        Map.of(),
+                        null,
+                        List.of())));
+        when(ragChatService.chatEvents(argThat(request ->
+                matches(request, message, sessionId, domainId)), isNull()))
+                .thenReturn(events);
     }
 
     private void verifyStream(String message, String sessionId, String domainId) {
-        verify(ragChatService).chatStream(argThat(request ->
-                matches(request, message, sessionId, domainId)));
+        verify(ragChatService).chatEvents(argThat(request ->
+                matches(request, message, sessionId, domainId)), isNull());
     }
 
     private boolean matches(ChatRequest request, String message,

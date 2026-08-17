@@ -4,6 +4,8 @@ export type CollectionScopeMode =
   | 'ANY_COLLECTION'
   | 'SELECTED_COLLECTIONS';
 
+export type ChatMode = 'KNOWLEDGE' | 'AGENT' | 'PLAIN';
+
 export interface ComponentHealth {
   database?: string;
   pgvector?: string;
@@ -97,9 +99,18 @@ export interface CollectionListResponse {
 // Chat API
 export interface ChatSource {
   documentId: string | number;
+  citationId?: string;
+  chunkIndex?: number;
   title?: string;
+  chunkText?: string;
   score?: number;
-  chunkContent?: string;
+  vectorScore?: number;
+  fulltextScore?: number;
+  originalFilename?: string;
+  documentType?: string;
+  collectionKey?: string;
+  sourceType?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatMessage {
@@ -108,28 +119,56 @@ export interface ChatMessage {
   sources?: ChatSource[];
 }
 
+export interface ChatHistoryRecord {
+  id: number;
+  sessionId: string;
+  userMessage: string;
+  aiResponse: string;
+  relatedDocumentIds?: number[];
+  metadata?: Record<string, unknown>;
+  sources?: ChatSource[];
+  status?: string;
+  mode?: ChatMode;
+  requestedModel?: string;
+  resolvedModel?: string;
+  createdAt: string;
+}
+
 export interface ChatRequest {
   message: string;
+  mode?: ChatMode;
   collectionScopeMode?: CollectionScopeMode;
   /** @deprecated use collectionKeys */
   collectionId?: number;
   collectionIds?: number[];
   collectionKeys?: string[];
+  sessionId?: string;
+  /** @deprecated use sessionId */
   conversationId?: string;
+  model?: string;
   useHybridSearch?: boolean;
+  useRerank?: boolean;
+  maxResults?: number;
 }
 
 export interface ChatResponse {
-  response: string;
-  conversationId: string;
+  answer: string;
+  sessionId: string;
+  traceId?: string;
+  mode?: ChatMode;
+  requestedModel?: string;
+  resolvedModel?: string;
+  usage?: Record<string, unknown>;
+  finishReason?: string;
+  metadata?: Record<string, unknown>;
   sources?: ChatSource[];
 }
 
 export interface ChatStreamEvent {
-  type: 'chunk' | 'done' | 'sources' | 'error';
+  type: 'content' | 'tool_start' | 'tool_result' | 'done' | 'sources' | 'error';
   data?: string;
   sources?: ChatSource[];
-  conversationId?: string;
+  sessionId?: string;
   error?: string;
 }
 
@@ -201,5 +240,5 @@ export interface ChatStreamChunkEvent {
 export interface ChatStreamSourcesEvent {
   type: 'sources';
   sources: ChatSource[];
-  conversationId: string;
+  sessionId: string;
 }

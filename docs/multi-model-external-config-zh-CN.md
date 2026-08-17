@@ -48,7 +48,11 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
               "cacheWrite": 0
             },
             "contextWindow": 600000,
-            "maxTokens": 32000
+            "maxTokens": 32000,
+            "capabilities": {
+              "streaming": true,
+              "toolCalling": true
+            }
           }
         ]
       },
@@ -73,7 +77,11 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
               "cacheWrite": 10
             },
             "contextWindow": 200000,
-            "maxTokens": 8192
+            "maxTokens": 8192,
+            "capabilities": {
+              "streaming": true,
+              "toolCalling": false
+            }
           },
           {
             "id": "embo-01",
@@ -117,6 +125,11 @@ export MODELS_CONFIG_FILE=file:/etc/spring-ai/models.json
 Chat 模型支持的 `apiType` 为 `openai`、`openai-chat`、
 `openai-completions`、`anthropic` 和 `anthropic-messages`。
 
+省略 `capabilities.streaming` 时为兼容旧配置默认按 `true` 处理；
+`capabilities.toolCalling` 保守地默认为 `false`。只有确认具体 provider/model 会通过
+所选 API 类型接受 tool schema 并返回 tool call 后，才设置为 `true`；仅仅因为 Spring
+AI adapter 支持工具选项并不足以证明上游模型支持。
+
 ## 验证
 
 启动后查询实际生效的模型注册表：
@@ -125,5 +138,6 @@ Chat 模型支持的 `apiType` 为 `openai`、`openai-chat`、
 curl http://localhost:8081/api/v1/rag/models
 ```
 
-响应包含 `defaultModel`、模型级 `ref`、可用状态；当凭据或 provider
-配置缺失时还会包含 `unavailableReason`。
+响应包含 `defaultModel`、模型级 `ref`、规范化 `capabilities` 和可用状态；当凭据或
+provider 配置缺失时还会包含 `unavailableReason`。`AGENT` Chat 要求
+`capabilities.toolCalling=true`。

@@ -1,354 +1,222 @@
-# SSE 流式协议设计文档
+# SSE 流式协议
 
-> 状态：**已实现** | 日期：2026-04-06 | 更新：2026-08-16
+> 状态：**已实现** | 最近复核：2026-08-17
+>
+> Chat HTTP 请求与非流式响应见
+> [REST API](rest-api.md#chat--rag-qa) /
+> [中文 REST API](rest-api-zh-CN.md#chat--rag-问答)。
 
-## 1. 当前实现的协议格式
+## 1. 协议边界
 
-### 1.1 协议概述
+`POST /api/v1/rag/chat/stream` 返回 `text/event-stream`。文本增量沿用
+OpenAI-like `choices[].delta.content` 结构，但本端点不是标准
+`POST /v1/chat/completions`，还包含 RAG 专用事件。
 
-采用 **OpenAI 兼容格式**，与 Spring AI OpenAI 集成保持兼容，同时支持 RAG 特有功能。
+当前事件：
 
+| Event | 作用 |
+|---|---|
+| `content` | 模型文本增量 |
+| `tool_start` | AGENT 模式开始调用知识检索工具 |
+| `tool_result` | AGENT 模式完成一次知识检索 |
+| `sources` | 本轮最终引用来源快照 |
+| `done` | 成功终态 |
+| `error` | 失败终态 |
+
+`done` 与 `error` 互斥。成功流中 `sources` 在 `done` 前发送。心跳使用 SSE
+comment，不是业务事件。
+
+## 2. 事件格式
+
+### 2.1 `content`
+
+```text
+event:content
+data:{"choices":[{"delta":{"content":"Spring AI"}}]}
 ```
-Content-Type: text/event-stream
-Cache-Control: no-cache
-X-Trace-Id: {traceId}   # 可选，传递请求追踪 ID
 
-# Content 块（OpenAI 兼容）
-data:{"choices":[{"delta":{"content":"你"}}]}
-data:{"choices":[{"delta":{"content":"好"}}]}
-data:{"choices":[{"delta":{"content":"，"}}]}
-...
+WebUI 解析器同时兼容旧的无 event name 内容块：
 
-# 完成事件
-event:done
-data:{"traceId":"xxx","status":"complete"}
+```text
+data:{"choices":[{"delta":{"content":"Spring AI"}}]}
 ```
 
-### 1.2 事件类型
+### 2.2 `tool_start`
 
-| Event | Format | Description |
-|-------|--------|-------------|
-| `content` | `data:{"choices":[{"delta":{"content":"..."}}]}` | 文本内容块（无 event name，默认类型） |
-| `done` | `event:done\ndata:{"traceId":"...","status":"complete"}` | 传输完成 |
+主要出现在 `AGENT` 模式：
 
-### 1.3 Content 块格式
+```text
+event:tool_start
+data:{"tool":"searchKnowledge","toolCallId":"call-1","query":"风格基调"}
+```
 
-```json
-// 单个 content 块
-data:{"choices":[{"delta":{"content":"你"}}]}
+`toolCallId` 在上游未提供时可能省略。工具 schema 只允许模型提供 `query` 和可选
+`maxResults`；Collection、document 和 API Key 范围由服务端 `ToolContext` 注入，
+模型不能扩大授权范围。
 
-// OpenAI 兼容结构
-{
-  "choices": [{
-    "delta": {
-      "content": "文本内容"
-    }
+### 2.3 `tool_result`
+
+```text
+event:tool_result
+data:{"tool":"searchKnowledge","toolCallId":"call-1","resultCount":2,"elapsedMs":18}
+```
+
+该事件只表示一次工具调用完成。最终去重后的引用以 `sources` 事件为准。
+同一 Chat turn 内 citation ID 按来源首次出现顺序稳定分配；多次工具调用命中同一
+chunk 时复用原 ID，并与最终 `sources` 快照保持一致。超出唯一来源预算的结果不会暴露
+为模型可引用的 source，也不计入 `resultCount`。工具输出字符预算裁掉的来源同样不会
+进入最终 `sources` 快照。
+
+### 2.4 `sources`
+
+```text
+event:sources
+data:{
+  "sessionId":"session-001",
+  "sources":[{
+    "citationId":"S1",
+    "documentId":"42",
+    "chunkIndex":0,
+    "title":"Brand Guide",
+    "chunkText":"The visual tone is restrained.",
+    "score":0.73,
+    "vectorScore":0.81,
+    "fulltextScore":0.12,
+    "originalFilename":"brand-guide.pdf",
+    "documentType":"PDF",
+    "collectionKey":"brand:guides",
+    "sourceType":"DOCUMENT"
   }]
 }
 ```
 
-### 1.4 Done 事件格式
+`score`、`vectorScore` 和 `fulltextScore` 是当前检索配置下的排序信号，不是概率或
+百分比。客户端不应显示为“73% 相关”。
 
-```json
-// 完成
+### 2.5 `done`
+
+```text
 event:done
-data:{"traceId":"abc123","status":"complete"}
+data:{
+  "traceId":"a1b2c3",
+  "sessionId":"session-001",
+  "requestedModel":"openrouter/xiaomi/mimo-v2-pro",
+  "resolvedModel":"openrouter/xiaomi/mimo-v2-pro",
+  "mode":"KNOWLEDGE",
+  "usage":{"promptTokens":120,"completionTokens":36,"totalTokens":156},
+  "finishReason":"STOP",
+  "stepMetrics":[],
+  "status":"complete"
+}
+```
 
-// 错误（如果发生）
+字段可能因 provider 元数据能力而为空，但 key 保持稳定。收到 `done` 后客户端应停止
+loading 状态；重复终态必须忽略。
+
+### 2.6 `error`
+
+```text
 event:error
-data:{"error":{"message":"Service unavailable","type":"internal_error"}}
-```
-
-## 2. 后端实现
-
-### 2.1 RagChatController.java
-
-**文件**：`spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java`
-
-```java
-@PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-public SseEmitter stream(
-        @Valid @RequestBody ChatRequest request,
-        HttpServletRequest httpRequest) {
-    RetrievalScope scope = resolveScope(request, httpRequest);
-    SseEmitter emitter = SseEmitters.create();
-    String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
-
-    (scope != null
-            ? ragChatService.chatStream(request, scope)
-            : ragChatService.chatStream(request))
-            .subscribe(
-                    chunk -> {
-                        String json = "{\"choices\":[{\"delta\":{\"content\":\""
-                                + SseEmitters.escapeJson(chunk) + "\"}}]}";
-                        SseEmitters.sendRaw(emitter, null, json, "chat chunk");
-                    },
-                    emitter::completeWithError,
-                    () -> {
-                        String doneJson = "{\"traceId\":\"" + traceId + "\",\"status\":\"complete\"}";
-                        SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
-                        emitter.complete();
-                    }
-            );
-    return emitter;
+data:{
+  "error":{
+    "code":"MODEL_CAPABILITY_UNSUPPORTED",
+    "message":"Model does not support tool calling"
+  },
+  "traceId":"a1b2c3",
+  "sessionId":"session-001"
 }
 ```
 
-### 2.2 escapeJson 辅助函数
+发生错误后不会再发送 `done`。HTTP headers 已提交后，流内业务错误通过该事件表达；
+连接建立前的校验错误仍使用普通 HTTP Problem Detail。
 
-```java
-private String escapeJson(String text) {
-    if (text == null) return "";
-    return text
-            .replace("\\", "\\\\")
-            .replace("\"", "\\\"")
-            .replace("\n", "\\n")
-            .replace("\r", "\\r")
-            .replace("\t", "\\t");
-}
+## 3. 顺序与终态
+
+典型 `KNOWLEDGE` 流：
+
+```text
+content* -> sources -> done
 ```
 
-## 3. 前端实现
+典型 `AGENT` 流：
 
-### 3.1 useSSE.ts
-
-**文件**：`spring-ai-rag-webui/src/hooks/useSSE.ts`
-
-```typescript
-// SSE 协议：OpenAI 兼容格式
-// - Content events: data:{"choices":[{"delta":{"content":"..."}}]}
-// - Done event:     event:done\ndata:{"traceId":"...","status":"complete"}
-
-export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
-    const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
-
-    const send = useCallback(async (
-        request: ChatSSESendOptions | string,
-        collectionIds?: number[] | number,
-        conversationId?: string,
-        model?: string,
-        collectionKeys?: string[] | string
-    ) => {
-        const sendOptions =
-            typeof request === 'string'
-                ? { message: request, collectionIds, conversationId, model, collectionKeys }
-                : request;
-
-        close();
-        setIsConnected(true);
-
-        const normalizedIds =
-            sendOptions.collectionIds == null
-                ? undefined
-                : Array.isArray(sendOptions.collectionIds)
-                    ? sendOptions.collectionIds
-                    : [sendOptions.collectionIds];
-        const normalizedKeys =
-            sendOptions.collectionKeys == null
-                ? undefined
-                : Array.isArray(sendOptions.collectionKeys)
-                    ? sendOptions.collectionKeys
-                    : [sendOptions.collectionKeys];
-
-        const response = await fetch('/api/v1/rag/chat/stream', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                ...getCredentialHeaders(),
-            },
-            body: JSON.stringify({
-                message: sendOptions.message,
-                collectionIds:
-                    normalizedIds && normalizedIds.length > 0
-                        ? normalizedIds
-                        : undefined,
-                collectionScopeMode: sendOptions.collectionScopeMode,
-                collectionKeys:
-                    normalizedKeys && normalizedKeys.length > 0
-                        ? normalizedKeys
-                        : undefined,
-                sessionId: sendOptions.conversationId,
-                model: sendOptions.model,
-            }),
-        });
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-
-            // Process complete SSE events (separated by \n\n)
-            while (buffer.includes('\n\n')) {
-                const eventEnd = buffer.indexOf('\n\n');
-                const eventBlock = buffer.slice(0, eventEnd);
-                buffer = buffer.slice(eventEnd + 2);
-
-                const event = parseSSEEvent(eventBlock);
-                if (!event) continue;
-
-                if (event.type === 'content' && event.data) {
-                    // OpenAI format: {"choices":[{"delta":{"content":"..."}}]}
-                    const content = extractContentFromChoices(event.data);
-                    if (content) {
-                        onChunkRef.current?.(content);
-                    }
-                } else if (event.type === 'done') {
-                    onDoneRef.current?.();
-                }
-            }
-        }
-    }, [close]);
-}
+```text
+tool_start -> tool_result -> content* -> sources -> done
 ```
 
-object request 是当前 WebUI 的主入口：
+工具与内容事件的具体交错由模型 provider 和 Spring AI Tool Calling 流决定。客户端只
+能依赖以下不变量：
 
-```typescript
-send({
-    message,
-    conversationId,
-    model,
-    collectionScopeMode,
-    collectionKeys:
-        collectionScopeMode === 'SELECTED_COLLECTIONS'
-            ? selectedCollectionKeys
-            : undefined,
-});
+1. `sources` 在成功 `done` 前。
+2. `done` 与 `error` 只取其一。
+3. 任一终态后忽略后续事件。
+4. 每个事件可使用 LF 或 CRLF；多个 `data:` 行按 SSE 规则拼接。
+5. EOF 前没有空行的最后一个完整事件仍应被处理。
+
+## 4. 取消、超时与 fallback
+
+- 浏览器停止生成会调用 stream reader `cancel()`。
+- `SseEmitter` completion、timeout 和 error 都会 dispose 后端 Reactor
+  subscription。
+- 客户端取消的未完成 turn 不写入 `rag_chat_history`，也不提交到
+  `spring_ai_chat_memory`。
+- 流式 fallback 只允许发生在第一个客户端可见事件之前。一旦已经发出
+  `content`、工具事件或其他业务事件，后续失败不会切换模型拼接另一条流。
+- `rag.timeout.chat-stream-ms` 控制服务端流式 deadline。
+
+## 5. Heartbeat
+
+`rag.sse.heartbeat-interval-seconds` 默认 `30`。启用时服务端发送 SSE comment：
+
+```text
+: heartbeat
 ```
 
-- `CALLER_VISIBLE` / `ANY_COLLECTION` 发送 mode，但不发送 `collectionKeys`。
-- `SELECTED_COLLECTIONS` 只在至少选择一个 key 时允许提交，key 会排序后发送。
-- WebUI 不发送 `collectionKeys: []`。直接 HTTP 调用若显式发送空列表，后端返回 `400`；
-  selected mode 若省略 key/ID 列表也返回 `400`。
-- 省略 mode 但发送非空 key/ID 列表时，后端兼容推导为 `SELECTED_COLLECTIONS`。
-- deprecated 的 `collectionIds` 与旧位置参数 overload 继续兼容；同时提供 ID 与 key 时，
-  两者必须解析为同一 Collection 集合。
+comment 只用于避免代理关闭空闲连接，客户端不得把它显示为消息。配置为 `0` 时关闭
+心跳。
 
-### 3.2 SSE 事件解析器
-
-```typescript
-function parseSSEEvent(block: string): { type: string; data: string } | null {
-    if (!block.trim()) return null;
-
-    let eventType = 'content'; // Default to content (OpenAI format uses no event type)
-    let eventData = '';
-
-    const lines = block.split('\n');
-    for (const line of lines) {
-        if (line.startsWith('event:')) {
-            eventType = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
-            eventData = line.slice(5);
-        }
-    }
-
-    if (!eventData) return null;
-    return { type: eventType, data: eventData };
-}
-
-function extractContentFromChoices(jsonStr: string): string | null {
-    try {
-        const parsed = JSON.parse(jsonStr);
-        if (parsed.choices && parsed.choices.length > 0) {
-            return parsed.choices[0].delta.content ?? null;
-        }
-    } catch { /* not JSON or wrong format */ }
-    return null;
-}
-```
-
-## 4. Chat.tsx 集成
-
-**文件**：`spring-ai-rag-webui/src/pages/Chat.tsx`
-
-```typescript
-const { send, isConnected } = useChatSSE({
-    onChunk: (content: string) => {
-        // Append chunk to the last streaming assistant message
-        setMessages(prev => {
-            const lastMsg = prev[prev.length - 1];
-            if (lastMsg?.isStreaming) {
-                return prev.map(msg =>
-                    msg.id === lastMsg.id
-                        ? { ...msg, content: msg.content + content }
-                        : msg
-                );
-            }
-            return prev;
-        });
-    },
-    onDone: () => {
-        setMessages(prev =>
-            prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
-        );
-    },
-});
-
-send({
-    message: userMessage,
-    conversationId,
-    model: effectiveSelectedModel,
-    collectionScopeMode: scopeMode,
-    collectionKeys:
-        scopeMode === 'SELECTED_COLLECTIONS'
-            ? [...selectedCollectionKeys].sort()
-            : undefined,
-});
-```
-
-## 5. curl 测试命令
+## 6. 请求示例
 
 ```bash
-# 测试 SSE 端点（显示原始格式）
-curl -s -X POST http://localhost:8081/api/v1/rag/chat/stream \
+curl --no-buffer -X POST \
+  http://localhost:8081/api/v1/rag/chat/stream \
   -H 'Content-Type: application/json' \
-  -d '{"message":"你好","collectionScopeMode":"SELECTED_COLLECTIONS","collectionKeys":["customer-42:manual:v3"]}' \
-  --no-buffer
-
-# 期望输出：
-# data:{"choices":[{"delta":{"content":"Hello"}}]}
-# data:{"choices":[{"delta":{"content":"!"}}]}
-# ...
-# event:done
-# data:{"traceId":"abc123","status":"complete"}
+  -H "Authorization: Bearer ${RAG_BUSINESS_API_KEY}" \
+  -d '{
+    "message":"查找风格基调相关资料",
+    "mode":"AGENT",
+    "model":"openrouter/xiaomi/mimo-v2-pro",
+    "collectionScopeMode":"SELECTED_COLLECTIONS",
+    "collectionKeys":["brand:guides"]
+  }'
 ```
 
-## 6. PDF 与 Embedding SSE 的 Collection 身份
+`AGENT` 要求所选模型在 `GET /api/v1/rag/models` 中声明
+`capabilities.toolCalling=true`。
 
-以下 SSE 入口推荐使用 query parameter `collectionKey`，deprecated 的 `collectionId`
-继续兼容：
+## 7. 前端实现要求
 
-- `POST /api/v1/rag/files/pdf-to-rag?embed=true&collectionKey=...`
-- `POST /api/v1/rag/files/{uuid}/embed?embed=sse&collectionKey=...`
+当前 WebUI `useSSE`：
 
-key 可包含 URL 保留标点，调用方必须进行 URL 编码，例如 `+` 编码为 `%2B`、`#` 编码为
-`%23`。同时提供 ID 和 key 时，两者必须指向同一活动 Collection。SSE 事件 payload
-保持现有进度/完成格式；Collection 身份只影响请求范围，不改变事件协议。
+- 支持 `content/tool_start/tool_result/sources/done/error`；
+- 支持 CRLF、多行 `data:` 和 EOF 尾块；
+- `error` 后忽略 `done`，重复 `done` 只处理一次；
+- stop/close 调用 reader `cancel()`；
+- 历史重新加载时从 history API 恢复 sources。
 
-## 7. 与旧格式的对比
+对应测试位于：
 
-| 特性 | 旧格式 (event:chunk) | 新格式 (OpenAI 兼容) |
-|------|---------------------|---------------------|
-| Content 格式 | `event:chunk\ndata:纯文本` | `data:{"choices":[{"delta":{"content":"..."}}]}` |
-| Done 格式 | `event:done\ndata:{...}` | `event:done\ndata:{...}` (相同) |
-| 兼容性 | 自定义 | OpenAI/ Spring AI 兼容 |
-| 前端解析 | 需识别 event name | 统一解析 data: JSON |
+- `spring-ai-rag-webui/src/hooks/useSSE.test.ts`
+- `spring-ai-rag-webui/e2e/chat.spec.ts`
+- `spring-ai-rag-core/src/test/java/com/springairag/core/integration/RagControllerIntegrationTest.java`
 
-## 8. 已知限制
+## 8. 其他 SSE 入口
 
-1. **sources 事件**：当前实现未发送 sources 事件（来源文档在 done 之后通过另一个 API 获取）
-2. **error 事件**：错误通过 `completeWithError` 传递，未使用 `event:error`
-3. **token 统计**：未发送 token 使用量元数据
-4. **heartbeat**：无心跳保活（`SseEmitter(0L)` 表示无限超时）
+PDF 导入与 Embedding 进度端点仍使用各自的进度事件，不采用 Chat 的工具/来源事件：
 
-## 9. 未来改进方向
+- `POST /api/v1/rag/files/pdf-to-rag`
+- `POST /api/v1/rag/files/{uuid}/embed`
+- Document batch embedding SSE
 
-- [ ] 添加 sources 事件（`event:sources\ndata:{"sources":[...]}`)
-- [ ] 添加 error 事件规范化
-- [ ] 添加 token 使用量元数据
-- [ ] 添加 heartbeat 保活
+这些端点的 Collection 身份优先使用 URL 编码后的 `collectionKey`；deprecated 的
+`collectionId` 继续兼容。

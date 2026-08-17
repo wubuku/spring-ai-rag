@@ -216,9 +216,9 @@ rag:
 | `rag.query-rewrite.llm-enabled` | `false` | 启用 LLM 辅助改写 |
 | `rag.query-rewrite.llm-max-rewrites` | `3` | LLM 改写最大数 |
 
-查询聚焦不会修改发送给模型的原始问题。它只为检索与重排生成更短的
-`rewrite.retrieval-query`：例如 `找到 “风格基调” 相关的内容` 会以
-`风格基调` 执行检索。普通问题不会被截断。
+这些属性配置旧的/组件级 `QueryRewriteAdvisor`，不控制生产 mode-aware Chat。
+生产 `KNOWLEDGE` 的查询转换由 `rag.chat.knowledge.query-transformer` 控制；
+`AGENT` 由模型通过 Spring AI Tool Calling 形成工具查询。
 
 ## 重排序配置
 
@@ -266,6 +266,51 @@ rag:
 只有调用者提供的 `retrievalText` 会被分块和嵌入。`jsonbPayload` 以 JSONB 保存，不计算
 hash；API 设计上也没有 payload hash 配置。
 
+## Chat 执行配置
+
+```yaml
+rag:
+  chat:
+    default-mode: KNOWLEDGE
+    knowledge:
+      query-transformer: none
+      query-transform-timeout-seconds: 10
+      allow-empty-context: false
+    agent:
+      enabled: true
+      max-tool-rounds: 3
+      max-retrieval-calls: 3
+      max-results-per-call: 10
+      max-unique-sources: 20
+      max-tool-result-characters: 24000
+    history:
+      lease-ttl-seconds: 30
+      lease-renew-interval-seconds: 10
+```
+
+| 属性 | 默认值 | 说明 |
+|---|---|---|
+| `rag.chat.default-mode` | `KNOWLEDGE` | `ChatRequest.mode` 省略时使用的模式 |
+| `rag.chat.knowledge.query-transformer` | `none` | `none` 或 `spring-ai`；生产 profile 使用 `spring-ai` |
+| `rag.chat.knowledge.query-transform-timeout-seconds` | `10` | Spring AI rewrite/compression transformer 超时 |
+| `rag.chat.knowledge.allow-empty-context` | `false` | false 时，零召回会向模型注入明确的“无证据”指令 |
+| `rag.chat.agent.enabled` | `true` | 是否启用 `AGENT` 模式 |
+| `rag.chat.agent.max-tool-rounds` | `3` | 单次 attempt 的 Spring AI 工具调用轮数上限 |
+| `rag.chat.agent.max-retrieval-calls` | `3` | 单次 attempt 未命中缓存的知识检索调用上限 |
+| `rag.chat.agent.max-results-per-call` | `10` | 单次工具检索的服务端结果数上限 |
+| `rag.chat.agent.max-unique-sources` | `20` | 多次工具调用累计保留的唯一 source chunk 上限 |
+| `rag.chat.agent.max-tool-result-characters` | `24000` | 工具结果序列化字符上限；会以合法 JSON 安全减少结果/截断 snippet |
+| `rag.chat.history.lease-ttl-seconds` | `30` | 单个 principal/session 请求的数据库 lease TTL |
+| `rag.chat.history.lease-renew-interval-seconds` | `10` | lease 续租间隔 |
+
+模式语义：
+
+- `KNOWLEDGE` 始终通过项目混合检索器和可选 reranker 执行 Spring AI Modular RAG。
+- `AGENT` 使用 Spring AI Tool Calling；模型必须声明
+  `capabilities.toolCalling=true`，Collection/document/credential 范围仍由服务端持有。
+- `PLAIN` 不检索，并拒绝检索专用的请求覆盖项。
+- 客户端取消的 partial turn 不会持久化。
+
 ## 对话记忆配置
 
 ```yaml
@@ -293,7 +338,11 @@ rag:
 
 系统维护双表：
 - `spring_ai_chat_memory`：Spring AI 自动管理，给 LLM 上下文用
-- `rag_chat_history`：业务审计表，保留完整 `user_message` + `ai_response`，按 TTL 自动清理
+- `rag_chat_history`：按 principal 归属的业务历史，保存完整 `user_message`、
+  `ai_response`、来源快照、mode/model 元数据，并按 TTL 清理
+
+完成 turn 会在 `rag_chat_session_lease` 保护下原子更新两类存储。历史、导出、清空与
+Memory baseline 均按认证 principal 隔离。
 
 ## 异步线程池配置
 

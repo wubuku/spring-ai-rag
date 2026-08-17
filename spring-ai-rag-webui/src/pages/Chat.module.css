@@ -169,8 +169,33 @@
 }
 
 .source {
-  margin-left: 0.25rem;
+  display: block;
+  margin: 0.25rem 0 0;
   color: var(--color-primary);
+}
+
+.citationId {
+  display: inline-block;
+  min-width: 2rem;
+  font-weight: 700;
+}
+
+.sourceMeta {
+  color: var(--color-text-muted);
+}
+
+.toolActivity {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.toolItem {
+  display: block;
 }
 
 .cursor {

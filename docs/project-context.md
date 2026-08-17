@@ -38,21 +38,66 @@ Security, rate limiting, and auto-configuration changes must verify both.
 
 ## 3. RAG Execution
 
-Default advisor order:
+Production Chat uses an explicit mode-aware execution path:
 
 ```text
-QueryRewriteAdvisor (+10)
-  -> HybridSearchAdvisor (+20)
-  -> RerankAdvisor (+30)
-  -> MessageChatMemoryAdvisor
+RagChatController
+  -> CollectionRetrievalScopeResolver
+  -> ChatCommandMapper
+  -> ChatExecutionService
+     -> KNOWLEDGE: Spring AI RetrievalAugmentationAdvisor
+        + ProjectDocumentRetriever
+        + ProjectRerankPostProcessor
+        + CitationQueryAugmenter
+     -> AGENT: Spring AI ToolCallAdvisor
+        + KnowledgeSearchTool
+        + server-owned ToolContext
+     -> PLAIN: ChatClient + Memory only
+  -> principal-scoped session lease
+  -> atomic history + source snapshot + JDBC Memory commit
 ```
 
 Key rules:
 
-- Chat and search support Collection / Document scope.
-- A non-empty Collection / Document scope that resolves to no documents must fail closed instead of becoming a full-corpus query.
-- `RerankAdvisor` injects context into the user message for providers that restrict multiple system messages.
-- Spring AI memory and business audit history are stored separately.
+- `KNOWLEDGE` is the compatibility default and always retrieves.
+- `AGENT` lets a tool-capable model decide whether and how often to call the
+  authorized knowledge search tool. The tool schema cannot carry Collection,
+  document, or credential scope.
+- `PLAIN` performs no retrieval and rejects retrieval-specific request
+  overrides.
+- Chat and Search share the project hybrid retriever and support Collection /
+  Document scope. A non-empty scope that resolves to no documents fails closed
+  instead of becoming a full-corpus query.
+- The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor`
+  remain component-level/compatibility APIs, not the production Chat path.
+- `RagAdvisorProvider` defaults to `KNOWLEDGE + ATTEMPT`. ATTEMPT providers
+  run outside Memory and the mode advisor; explicitly opted-in `MODEL_CALL`
+  providers run inside the mode advisor and therefore execute for each AGENT
+  tool-call round. Arbitrary provider orders are mapped into stable,
+  non-overlapping bands.
+- `DomainRagExtension` applies only when the request explicitly selects
+  `domainId`; omitting it does not select the first bean. Domain prompts provide
+  instructions while RAG/tools inject evidence. Legacy `{context}` prompts
+  cannot be used directly in `AGENT/PLAIN`, and
+  `postProcessAnswer/isApplicable` are not part of the new Chat path.
+- Spring AI Memory and business history are stored separately but completed
+  turns are committed atomically.
+
+### Chat Sessions And Streaming
+
+- Session history, export, clear, Memory baselines, and active leases are
+  scoped to the authenticated principal.
+- V32 stores `owner_principal_id`, a JSONB source snapshot, and turn status in
+  `rag_chat_history`; `rag_chat_session_lease` provides cross-instance
+  single-flight and token fencing.
+- A missing session and a session owned by another principal both return
+  `SESSION_NOT_FOUND`.
+- Chat SSE emits `content`, `tool_start`, `tool_result`, `sources`, `done`, and
+  `error`. `done` and `error` are mutually exclusive terminal events.
+- Client cancellation disposes the model subscription and does not persist an
+  incomplete turn. Streaming fallback is permitted only before the first
+  client-visible event.
+- Citation scores are ranking signals, not calibrated probabilities.
 
 ### Current Collection Semantics
 
@@ -221,6 +266,11 @@ best practices.
 - `ChatModelRouter` owns explicit selection, defaults, and fallback.
 - Chat, Settings, and model comparison accept concrete model references.
 - External `models.json` can override YAML model configuration.
+- Each model exposes normalized `capabilities.streaming` and
+  `capabilities.toolCalling`. Streaming defaults to compatible `true` when
+  omitted; Tool Calling must be explicitly `true`.
+- `AGENT` rejects an explicitly selected model without Tool Calling support.
+  Default routing skips ineligible candidates.
 
 See [multi-model-external-config.md](multi-model-external-config.md).
 
@@ -229,11 +279,13 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V31.
+- Flyway is currently V1–V32.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
-  document identities without rewriting the already-released V30 migration.
+  document identities without rewriting the already-released V30 migration;
+  V32 adds principal-owned Chat history, source snapshots, turn status, and
+  session leases.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 
@@ -243,7 +295,7 @@ The main namespace is `/api/v1/rag/**`:
 
 | Area | Capability |
 |------|------------|
-| `/chat`, `/chat/stream` | RAG chat |
+| `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN chat and structured SSE |
 | `/documents` | Document management and embedding |
 | `/search` | Hybrid retrieval |
 | `/collections` | Knowledge collections |
@@ -305,7 +357,10 @@ Implemented: spring-ai-rag -> OpenAI-compatible provider
 Not implemented: OpenAI client / Agent -> spring-ai-rag
 ```
 
-The project does not currently expose a standard `POST /v1/chat/completions` or Models API. Existing SSE only emits a partial OpenAI-like delta and is not Chat Completions compatible.
+The project does not currently expose a standard `POST /v1/chat/completions` or
+Models API. The native Chat SSE includes an OpenAI-like content delta plus
+project-specific tool, source, completion, and error events, so it must not be
+advertised as Chat Completions compatibility.
 
 The planned compatibility layer presents a complete RAG deployment as a `model`. It is disabled and stateless by default, and requires external API-key, Bearer-authentication, and multi-instance rate-limit hardening first.
 

@@ -1,6 +1,9 @@
 package com.springairag.api.service;
 
+import com.springairag.api.enums.ChatMode;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+
+import java.util.Set;
 
 /**
  * Custom Advisor Provider Interface
@@ -33,4 +36,18 @@ public interface RagAdvisorProvider {
      * Create Advisor instance.
      */
     BaseAdvisor createAdvisor();
+
+    /**
+     * 该 Advisor 支持的对话模式。
+     */
+    default Set<ChatMode> supportedModes() {
+        return Set.of(ChatMode.KNOWLEDGE);
+    }
+
+    /**
+     * Advisor 的执行作用域。
+     */
+    default AdvisorScope advisorScope() {
+        return AdvisorScope.ATTEMPT;
+    }
 }

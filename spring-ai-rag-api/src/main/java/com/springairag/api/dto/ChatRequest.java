@@ -1,6 +1,8 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.validation.ValidCollectionKey;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Max;
@@ -40,6 +42,10 @@ public class ChatRequest {
     @Schema(description = "Whether to use reranking", example = "true", defaultValue = "true")
     private boolean useRerank = true;
 
+    @Schema(description = "Chat mode. Omitted defaults to KNOWLEDGE.",
+            example = "KNOWLEDGE", defaultValue = "KNOWLEDGE")
+    private ChatMode mode = ChatMode.KNOWLEDGE;
+
     @Schema(description = "Domain extension identifier (optional)", example = "medical")
     private String domainId;
 
@@ -69,6 +75,15 @@ public class ChatRequest {
     @Schema(description = "Additional metadata (passed through to domain extension)")
     private Map<String, Object> metadata;
 
+    @JsonIgnore
+    private transient boolean maxResultsExplicitlySet;
+
+    @JsonIgnore
+    private transient boolean useHybridSearchExplicitlySet;
+
+    @JsonIgnore
+    private transient boolean useRerankExplicitlySet;
+
     public ChatRequest() {}
 
     public ChatRequest(String message, String sessionId) {
@@ -83,13 +98,40 @@ public class ChatRequest {
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
     public int getMaxResults() { return maxResults; }
-    public void setMaxResults(int maxResults) { this.maxResults = maxResults; }
+    public void setMaxResults(int maxResults) {
+        this.maxResults = maxResults;
+        this.maxResultsExplicitlySet = true;
+    }
 
     public boolean isUseHybridSearch() { return useHybridSearch; }
-    public void setUseHybridSearch(boolean useHybridSearch) { this.useHybridSearch = useHybridSearch; }
+    public void setUseHybridSearch(boolean useHybridSearch) {
+        this.useHybridSearch = useHybridSearch;
+        this.useHybridSearchExplicitlySet = true;
+    }
 
     public boolean isUseRerank() { return useRerank; }
-    public void setUseRerank(boolean useRerank) { this.useRerank = useRerank; }
+    public void setUseRerank(boolean useRerank) {
+        this.useRerank = useRerank;
+        this.useRerankExplicitlySet = true;
+    }
+
+    public ChatMode getMode() {
+        return mode != null ? mode : ChatMode.KNOWLEDGE;
+    }
+    public void setMode(ChatMode mode) {
+        this.mode = mode != null ? mode : ChatMode.KNOWLEDGE;
+    }
+
+    @JsonIgnore
+    public boolean isMaxResultsExplicitlySet() { return maxResultsExplicitlySet; }
+
+    @JsonIgnore
+    public boolean isUseHybridSearchExplicitlySet() {
+        return useHybridSearchExplicitlySet;
+    }
+
+    @JsonIgnore
+    public boolean isUseRerankExplicitlySet() { return useRerankExplicitlySet; }
 
     public String getDomainId() { return domainId; }
     public void setDomainId(String domainId) { this.domainId = domainId; }
@@ -124,6 +166,7 @@ public class ChatRequest {
                 && useRerank == that.useRerank
                 && Objects.equals(message, that.message)
                 && Objects.equals(sessionId, that.sessionId)
+                && mode == that.mode
                 && Objects.equals(domainId, that.domainId)
                 && Objects.equals(model, that.model)
                 && collectionScopeMode == that.collectionScopeMode
@@ -136,7 +179,7 @@ public class ChatRequest {
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
-                domainId, model, collectionScopeMode, collectionIds, collectionKeys,
+                mode, domainId, model, collectionScopeMode, collectionIds, collectionKeys,
                 documentIds, metadata);
     }
 
@@ -144,7 +187,8 @@ public class ChatRequest {
     public String toString() {
         return "ChatRequest{message=" + message + ", sessionId=" + sessionId
                 + ", maxResults=" + maxResults + ", useHybridSearch=" + useHybridSearch
-                + ", useRerank=" + useRerank + ", domainId=" + domainId
+                + ", useRerank=" + useRerank + ", mode=" + getMode()
+                + ", domainId=" + domainId
                 + ", model=" + model + ", collectionScopeMode=" + collectionScopeMode
                 + ", collectionIds=" + collectionIds
                 + ", collectionKeys=" + collectionKeys

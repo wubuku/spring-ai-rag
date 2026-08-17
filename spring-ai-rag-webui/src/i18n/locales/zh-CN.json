@@ -157,7 +157,16 @@
     "hint": "我会检索您的知识库，找到最相关的信息来回答您的问题。",
     "collection": "知识库",
     "allCollections": "全部知识库",
-    "model": "模型"
+    "model": "模型",
+    "mode": "对话模式",
+    "modeKnowledge": "知识库问答",
+    "modeAgent": "智能检索",
+    "modePlain": "普通对话",
+    "stop": "停止生成",
+    "toolActivity": "检索过程",
+    "toolSearching": "正在检索",
+    "toolFinished": "已找到 {{count}} 条结果（{{ms}} ms）",
+    "untitledSource": "未命名来源"
   },
   "search": {
     "title": "文档检索",

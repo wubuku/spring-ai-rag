@@ -1,6 +1,9 @@
 package com.springairag.core.extension;
 
 import com.springairag.api.service.DomainRagExtension;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -84,6 +87,31 @@ public class DomainExtensionRegistry {
     public String getSystemPromptTemplate(String domainId) {
         DomainRagExtension ext = getExtension(domainId);
         return ext != null ? ext.getSystemPromptTemplate() : null;
+    }
+
+    /**
+     * 获取模式感知的领域 instruction，并阻止旧 RAG 模板污染 AGENT/PLAIN。
+     */
+    public String getSystemPromptTemplate(String domainId, ChatMode mode) {
+        DomainRagExtension extension = getExtension(domainId);
+        if (extension == null) {
+            return null;
+        }
+        ChatMode effectiveMode = mode != null ? mode : ChatMode.KNOWLEDGE;
+        String template = extension.getSystemPromptTemplate(effectiveMode);
+        if (template == null || template.isBlank()) {
+            return null;
+        }
+        if (effectiveMode != ChatMode.KNOWLEDGE
+                && template.contains("{context}")) {
+            throw new RagException(
+                    ErrorCode.DOMAIN_MODE_UNSUPPORTED,
+                    "Domain '" + extension.getDomainId()
+                            + "' uses a legacy {context} prompt and must implement "
+                            + "getSystemPromptTemplate(ChatMode) before it can be used in "
+                            + effectiveMode + " mode");
+        }
+        return template.replace("{context}", "").trim();
     }
 
     /**

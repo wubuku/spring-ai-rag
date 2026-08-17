@@ -10,6 +10,12 @@ import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RagPipelineMetrics;
 import com.springairag.core.advisor.RerankAdvisor;
+import com.springairag.core.chat.ChatCommand;
+import com.springairag.core.chat.ChatCommandMapper;
+import com.springairag.core.chat.ChatEvent;
+import com.springairag.core.chat.ChatExecutionResult;
+import com.springairag.core.chat.ChatExecutionService;
+import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.exception.LlmCircuitOpenException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
@@ -86,6 +92,8 @@ public class RagChatService {
     private final LlmCircuitBreaker circuitBreaker; // optional, null when not enabled
     private final RetryTemplate retryTemplate; // LLM call retry template, optional
     private final CollectionDocumentResolver collectionDocumentResolver; // optional for unit tests
+    private ChatExecutionService modeAwareExecutionService;
+    private ChatCommandMapper chatCommandMapper;
 
     /**
      * Returns the LLM circuit breaker instance (may be null when not enabled)
@@ -147,6 +155,18 @@ public class RagChatService {
                 .map(a -> a.getClass().getSimpleName())
                 .reduce((a, b) -> a + " → " + b).orElse("none");
         log.info("RagChatService initialized with {} max messages, advisors: {}", maxMessages, advisorNames);
+    }
+
+    /**
+     * 生产环境启用三模式执行链。保留旧构造器，供兼容 API 和既有手工单测夹具使用。
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    void configureModeAwareExecution(
+            ChatExecutionService executionService,
+            ChatCommandMapper commandMapper) {
+        this.modeAwareExecutionService = executionService;
+        this.chatCommandMapper = commandMapper;
+        log.info("RagChatService mode-aware execution enabled");
     }
 
     private ChatMemory buildChatMemory(JdbcChatMemoryRepository repo, int maxMessages) {
@@ -221,6 +241,26 @@ public class RagChatService {
      * 使用 Controller 已完成 ACL 解析的范围执行聊天。
      */
     public ChatResponse chat(ChatRequest request, RetrievalScope scope) {
+        if (modeAwareExecutionService != null && chatCommandMapper != null) {
+            assertCircuitBreakerAllowsCall();
+            try {
+                ChatCommand command = chatCommandMapper.map(
+                        request,
+                        scope,
+                        ChatPrincipal.fromCurrentRequest());
+                ChatExecutionResult result =
+                        modeAwareExecutionService.execute(command);
+                if (circuitBreaker != null) {
+                    circuitBreaker.recordSuccess();
+                }
+                return toChatResponse(result);
+            } catch (RuntimeException e) {
+                if (circuitBreaker != null) {
+                    circuitBreaker.recordFailure();
+                }
+                throw e;
+            }
+        }
         return executeChat(
                 request.getMessage(),
                 request.getSessionId(),
@@ -230,6 +270,54 @@ public class RagChatService {
                 scope,
                 request.getMaxResults()
         );
+    }
+
+    /**
+     * Structured streaming entry point used by the SSE controller.
+     */
+    public Flux<ChatEvent> chatEvents(
+            ChatRequest request,
+            RetrievalScope scope) {
+        if (modeAwareExecutionService == null || chatCommandMapper == null) {
+            return Flux.error(new IllegalStateException(
+                    "Mode-aware chat execution is not configured"));
+        }
+        assertCircuitBreakerAllowsCall();
+        ChatCommand command = chatCommandMapper.map(
+                request,
+                scope,
+                ChatPrincipal.fromCurrentRequest());
+        return modeAwareExecutionService.stream(command)
+                .doOnComplete(() -> {
+                    if (circuitBreaker != null) {
+                        circuitBreaker.recordSuccess();
+                    }
+                })
+                .doOnError(error -> {
+                    if (circuitBreaker != null) {
+                        circuitBreaker.recordFailure();
+                    }
+                });
+    }
+
+    public Flux<ChatEvent> chatEvents(ChatRequest request) {
+        return chatEvents(request, resolveLegacyRetrievalScope(request));
+    }
+
+    private ChatResponse toChatResponse(ChatExecutionResult result) {
+        return ChatResponse.builder()
+                .answer(result.answer())
+                .sessionId(result.sessionId())
+                .traceId(result.traceId())
+                .mode(result.mode())
+                .requestedModel(result.requestedModel())
+                .resolvedModel(result.resolvedModel())
+                .sources(result.sources())
+                .usage(result.usage())
+                .finishReason(result.finishReason())
+                .metadata(result.metadata())
+                .stepMetrics(result.stepMetrics())
+                .build();
     }
 
     /**
@@ -246,11 +334,7 @@ public class RagChatService {
     private ChatResponse executeChat(String userMessage, String sessionId, String domainId,
             Map<String, Object> metadata, String model,
             RetrievalScope scope, int maxResults) {
-        // Circuit breaker check (fast-fail if OPEN) — before any model attempt
-        if (circuitBreaker != null && !circuitBreaker.allowCall()) {
-            log.warn("LLM circuit breaker is OPEN, rejecting request");
-            throw new LlmCircuitOpenException();
-        }
+        assertCircuitBreakerAllowsCall();
 
         String systemPrompt = buildSystemPrompt(domainId, metadata);
         String finalMessage = customizeUserMessage(userMessage, metadata);
@@ -306,6 +390,13 @@ public class RagChatService {
             throw lastFailure;
         }
         throw new IllegalStateException("No chat model available to handle request");
+    }
+
+    private void assertCircuitBreakerAllowsCall() {
+        if (circuitBreaker != null && !circuitBreaker.allowCall()) {
+            log.warn("LLM circuit breaker is OPEN, rejecting request");
+            throw new LlmCircuitOpenException();
+        }
     }
 
     /**

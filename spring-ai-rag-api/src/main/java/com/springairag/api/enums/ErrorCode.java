@@ -22,6 +22,12 @@ public enum ErrorCode {
     INVALID_REQUEST_BODY(400, "Invalid Request Body"),
     VALIDATION_FAILED(400, "Validation Failed"),
     TYPE_MISMATCH(400, "Type Mismatch"),
+    UNKNOWN_DOMAIN(400, "Unknown Domain"),
+    RETRIEVAL_OPTIONS_NOT_ALLOWED(400, "Retrieval Options Not Allowed"),
+    MODEL_CAPABILITY_UNSUPPORTED(400, "Model Capability Unsupported"),
+    MODEL_STREAMING_UNSUPPORTED(400, "Model Streaming Unsupported"),
+    CHAT_AGENT_DISABLED(400, "Chat Agent Disabled"),
+    DOMAIN_MODE_UNSUPPORTED(400, "Domain Chat Mode Unsupported"),
 
     // ==================== 401 Unauthorized ====================
 
@@ -36,6 +42,7 @@ public enum ErrorCode {
     NOT_FOUND(404, "Resource Not Found"),
     DOCUMENT_NOT_FOUND(404, "Document Not Found"),
     COLLECTION_NOT_FOUND(404, "Collection Not Found"),
+    SESSION_NOT_FOUND(404, "Chat Session Not Found"),
 
     // ==================== 405 Method Not Allowed ====================
 
@@ -46,6 +53,8 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(409, "Duplicate Resource"),
     STRUCTURED_RECORD_CONFLICT(409, "Structured Record Conflict"),
     DOCUMENT_REVISION_CONFLICT(409, "Document Revision Conflict"),
+    SESSION_BUSY(409, "Chat Session Busy"),
+    CHAT_SESSION_LEASE_LOST(409, "Chat Session Lease Lost"),
 
     // ==================== 422 Unprocessable Entity ====================
 
@@ -67,10 +76,12 @@ public enum ErrorCode {
     SERVICE_UNAVAILABLE(503, "Service Unavailable"),
     LLM_CIRCUIT_OPEN(503, "LLM Circuit Breaker Open"),
     LLM_UNAVAILABLE(503, "LLM Service Unavailable"),
+    CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
 
     // ==================== 504 Gateway Timeout ====================
 
-    GATEWAY_TIMEOUT(504, "Gateway Timeout");
+    GATEWAY_TIMEOUT(504, "Gateway Timeout"),
+    CHAT_TIMEOUT(504, "Chat Timeout");
 
     private final int httpStatus;
     private final String title;

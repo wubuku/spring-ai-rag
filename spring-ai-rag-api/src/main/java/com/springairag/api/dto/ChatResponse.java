@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.springairag.api.enums.ChatMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -10,6 +12,7 @@ import java.util.Objects;
  * RAG chat response
  */
 @Schema(description = "RAG chat response")
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ChatResponse {
 
     @Schema(description = "LLM-generated answer text")
@@ -19,7 +22,14 @@ public class ChatResponse {
     private String traceId;
 
     @Schema(description = "Source document citations")
-    private List<SourceDocument> sources;
+    private List<ChatSource> sources;
+
+    private String sessionId;
+    private ChatMode mode;
+    private String requestedModel;
+    private String resolvedModel;
+    private Map<String, Object> usage;
+    private String finishReason;
 
     @Schema(description = "Response metadata (contains sessionId, etc.)")
     private Map<String, Object> metadata;
@@ -39,8 +49,28 @@ public class ChatResponse {
     public String getTraceId() { return traceId; }
     public void setTraceId(String traceId) { this.traceId = traceId; }
 
-    public List<SourceDocument> getSources() { return sources; }
-    public void setSources(List<SourceDocument> sources) { this.sources = sources; }
+    public List<ChatSource> getSources() { return sources; }
+    public void setSources(List<? extends ChatSource> sources) {
+        this.sources = sources != null ? List.copyOf(sources) : null;
+    }
+
+    public String getSessionId() { return sessionId; }
+    public void setSessionId(String sessionId) { this.sessionId = sessionId; }
+
+    public ChatMode getMode() { return mode; }
+    public void setMode(ChatMode mode) { this.mode = mode; }
+
+    public String getRequestedModel() { return requestedModel; }
+    public void setRequestedModel(String requestedModel) { this.requestedModel = requestedModel; }
+
+    public String getResolvedModel() { return resolvedModel; }
+    public void setResolvedModel(String resolvedModel) { this.resolvedModel = resolvedModel; }
+
+    public Map<String, Object> getUsage() { return usage; }
+    public void setUsage(Map<String, Object> usage) { this.usage = usage; }
+
+    public String getFinishReason() { return finishReason; }
+    public void setFinishReason(String finishReason) { this.finishReason = finishReason; }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
@@ -56,13 +86,20 @@ public class ChatResponse {
         return Objects.equals(answer, that.answer)
                 && Objects.equals(traceId, that.traceId)
                 && Objects.equals(sources, that.sources)
+                && Objects.equals(sessionId, that.sessionId)
+                && mode == that.mode
+                && Objects.equals(requestedModel, that.requestedModel)
+                && Objects.equals(resolvedModel, that.resolvedModel)
+                && Objects.equals(usage, that.usage)
+                && Objects.equals(finishReason, that.finishReason)
                 && Objects.equals(metadata, that.metadata)
                 && Objects.equals(stepMetrics, that.stepMetrics);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(answer, traceId, sources, metadata, stepMetrics);
+        return Objects.hash(answer, traceId, sources, sessionId, mode, requestedModel,
+                resolvedModel, usage, finishReason, metadata, stepMetrics);
     }
 
     @Override
@@ -80,7 +117,13 @@ public class ChatResponse {
 
         public ChatResponseBuilder answer(String answer) { response.setAnswer(answer); return this; }
         public ChatResponseBuilder traceId(String traceId) { response.setTraceId(traceId); return this; }
-        public ChatResponseBuilder sources(List<SourceDocument> sources) { response.setSources(sources); return this; }
+        public ChatResponseBuilder sources(List<? extends ChatSource> sources) { response.setSources(sources); return this; }
+        public ChatResponseBuilder sessionId(String sessionId) { response.setSessionId(sessionId); return this; }
+        public ChatResponseBuilder mode(ChatMode mode) { response.setMode(mode); return this; }
+        public ChatResponseBuilder requestedModel(String value) { response.setRequestedModel(value); return this; }
+        public ChatResponseBuilder resolvedModel(String value) { response.setResolvedModel(value); return this; }
+        public ChatResponseBuilder usage(Map<String, Object> value) { response.setUsage(value); return this; }
+        public ChatResponseBuilder finishReason(String value) { response.setFinishReason(value); return this; }
         public ChatResponseBuilder metadata(Map<String, Object> metadata) { response.setMetadata(metadata); return this; }
         public ChatResponseBuilder stepMetrics(List<StepMetricRecord> stepMetrics) { response.setStepMetrics(stepMetrics); return this; }
         public ChatResponse build() { return response; }
@@ -142,56 +185,7 @@ public class ChatResponse {
      * Source document snippet
      */
     @Schema(description = "Source document citation snippet")
-    public static class SourceDocument {
-
-        @Schema(description = "Source document ID", example = "doc-456")
-        private String documentId;
-
-        @Schema(description = "Source document title", example = "Spring AI Reference")
-        private String title;
-
-        @Schema(description = "Matched text snippet", example = "Return policy: Within 7 days of receiving the product...")
-        private String chunkText;
-
-        @Schema(description = "Relevance score (0-1)", example = "0.92")
-        private double score;
-
-        public SourceDocument() {}
-
-        public String getDocumentId() { return documentId; }
-        public void setDocumentId(String documentId) { this.documentId = documentId; }
-
-        public String getTitle() { return title; }
-        public void setTitle(String title) { this.title = title; }
-
-        public String getChunkText() { return chunkText; }
-        public void setChunkText(String chunkText) { this.chunkText = chunkText; }
-
-        public double getScore() { return score; }
-        public void setScore(double score) { this.score = score; }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            SourceDocument that = (SourceDocument) o;
-            return Double.compare(that.score, score) == 0
-                    && Objects.equals(documentId, that.documentId)
-                    && Objects.equals(title, that.title)
-                    && Objects.equals(chunkText, that.chunkText);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(documentId, title, chunkText, score);
-        }
-
-        @Override
-        public String toString() {
-            return "SourceDocument{documentId='" + documentId + "', title='" + title
-                    + "', chunkText='" + (chunkText != null && chunkText.length() > 50
-                            ? chunkText.substring(0, 50) + "..." : chunkText)
-                    + "', score=" + score + "}";
-        }
+    @Deprecated
+    public static class SourceDocument extends ChatSource {
     }
 }

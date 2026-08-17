@@ -29,11 +29,11 @@ class DefaultDomainRagExtensionTest {
     }
 
     @Test
-    void systemPromptTemplate_containsPlaceholder() {
+    void systemPromptTemplate_isModeAgnosticInstruction() {
         String template = extension.getSystemPromptTemplate();
         assertNotNull(template);
-        assertTrue(template.contains("{context}"),
-                "System prompt template must contain {context} placeholder");
+        assertFalse(template.contains("{context}"),
+                "领域提示词不再负责注入检索上下文");
     }
 
     @Test

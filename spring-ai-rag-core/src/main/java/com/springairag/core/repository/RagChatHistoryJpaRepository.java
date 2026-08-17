@@ -20,6 +20,29 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
      */
     List<RagChatHistory> findBySessionIdOrderByCreatedAtDesc(String sessionId, org.springframework.data.domain.Pageable pageable);
 
+    @Query("""
+            SELECT h FROM RagChatHistory h
+            WHERE h.sessionId = :sessionId
+              AND (h.ownerPrincipalId = :ownerPrincipalId
+                   OR (:includeLegacy = true AND h.ownerPrincipalId IS NULL))
+            ORDER BY h.createdAt DESC, h.id DESC
+            """)
+    List<RagChatHistory> findVisibleByOwnerAndSessionNewestFirst(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId,
+            @Param("includeLegacy") boolean includeLegacy,
+            org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+            SELECT h FROM RagChatHistory h
+            WHERE h.ownerPrincipalId = :ownerPrincipalId
+              AND h.sessionId = :sessionId
+            ORDER BY h.createdAt ASC, h.id ASC
+            """)
+    List<RagChatHistory> findOwnedBySessionAsc(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId);
+
     /**
      * Query all history by session ID (no pagination, descending by time).
      */
@@ -44,12 +67,38 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
     List<RagChatHistory> findTopNBySessionIdNewestFirst(@Param("sessionId") String sessionId,
                                                          @Param("limit") int limit);
 
+    @Query(value = """
+            SELECT * FROM rag_chat_history
+            WHERE session_id = :sessionId
+              AND (
+                    owner_principal_id = :ownerPrincipalId
+                    OR (:includeLegacy = true AND owner_principal_id IS NULL)
+                  )
+            ORDER BY created_at DESC, id DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<RagChatHistory> findVisibleTopNNewestFirst(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId,
+            @Param("includeLegacy") boolean includeLegacy,
+            @Param("limit") int limit);
+
     /**
      * Delete all history by session ID.
      */
     @Modifying
     @Query("DELETE FROM RagChatHistory h WHERE h.sessionId = :sessionId")
     int deleteBySessionId(@Param("sessionId") String sessionId);
+
+    @Modifying
+    @Query("""
+            DELETE FROM RagChatHistory h
+            WHERE h.ownerPrincipalId = :ownerPrincipalId
+              AND h.sessionId = :sessionId
+            """)
+    int deleteOwnedBySession(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId);
 
     /**
      * Delete chat history older than the given cutoff (TTL cleanup).

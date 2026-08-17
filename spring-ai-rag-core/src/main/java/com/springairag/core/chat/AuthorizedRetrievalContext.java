@@ -1,0 +1,35 @@
+package com.springairag.core.chat;
+
+import com.springairag.core.retrieval.RetrievalScope;
+
+/**
+ * Immutable server-owned context passed to Modular RAG and tools.
+ */
+public record AuthorizedRetrievalContext(
+        RetrievalScope scope,
+        RetrievalOptions options,
+        RetrievalTraceCollector trace,
+        String sessionId,
+        ChatPrincipal principal,
+        int maxToolResultCharacters) {
+
+    public AuthorizedRetrievalContext {
+        scope = scope != null ? scope : RetrievalScope.unscoped();
+        options = options != null
+                ? options
+                : new RetrievalOptions(5, 0.3, true, true, 0.5, 0.5);
+        trace = trace != null ? trace : new RetrievalTraceCollector();
+        sessionId = SessionIdValidator.resolve(sessionId);
+        principal = principal != null ? principal : ChatPrincipal.local();
+        maxToolResultCharacters = Math.max(1024, maxToolResultCharacters);
+    }
+
+    public AuthorizedRetrievalContext(
+            RetrievalScope scope,
+            RetrievalOptions options,
+            RetrievalTraceCollector trace,
+            String sessionId,
+            ChatPrincipal principal) {
+        this(scope, options, trace, sessionId, principal, 24_000);
+    }
+}

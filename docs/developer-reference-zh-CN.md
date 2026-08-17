@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V31 |
+| Flyway | V1–V32 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -201,10 +201,55 @@ BASE_URL=http://127.0.0.1:4173 npx playwright test
 
 ```bash
 ./scripts/start-real-e2e-server.sh
-BASE_URL=http://127.0.0.1:18081 ./scripts/real-llm-e2e-smoke.sh
+BASE_URL=http://127.0.0.1:18081 \
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/real-llm-e2e-smoke.sh
 ```
 
-该流程会执行 provider preflight、创建唯一文档、embedding、search、ask 和 stream。Mock Playwright 不能替代真实 LLM 验证。
+该流程会执行 provider preflight、创建唯一文档、embedding、search、ask 和 stream。
+如果配置了 `RAG_ROOT_API_KEY`，必须通过 `RAG_API_KEY` 或等价的 `X-API-Key` 传给
+数据面请求；脚本也会自动从 `.env` 读取 root key。Mock Playwright 不能替代真实
+LLM 验证。
+
+### Chat 对话能力一键验证
+
+该门禁包含 Maven clean 输出，必须串行执行：
+
+```bash
+./scripts/verify-chat-capability.sh
+```
+
+脚本会验证 `KNOWLEDGE`、`AGENT`、`PLAIN` 三种模式，Spring AI Tool Calling 边界，
+principal 隔离的 Memory/历史，V32 会话 lease，结构化 SSE，WebUI 模式/能力/来源展示，
+以及 Chat 导出来源快照。每一步都会记录到
+`.verification/chat-capability/<run-id>/summary.md`。
+
+PostgreSQL/Testcontainers 默认配置：
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+Docker 不可用时，脚本会把 PostgreSQL 门禁记录为 `SKIP`，不会伪称通过。显式使用
+`--skip-postgres` 也必须在 summary 中保留。Docker API `1.32` 与 daemon 最低 `1.40`
+不匹配的已知问题见 [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md)。
+
+Chat Mock Playwright 使用严格绑定且可覆盖的 Vite preview 端口：
+
+```bash
+CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
+```
+
+浏览器门禁只使用 DOM、网络、URL 和测试断言；截图不作为正确性证据。真实 Provider 调用
+必须显式开启：
+
+```bash
+./scripts/verify-chat-capability.sh --with-real-llm
+```
+
+未开启时，真实 LLM 步骤会明确记录为 `SKIP`。
 
 ### JSONB 结构化记录一键验证
 

@@ -21,7 +21,7 @@ A general-purpose RAG (Retrieval-Augmented Generation) service framework built o
 
 - **Hybrid Search**: Vector search (pgvector HNSW) + fulltext search (pg_jieba tokenizer / pg_trgm trigram)
 - **Fulltext Strategy**: Configurable `auto` (auto-detect) / `pg_jieba` / `pg_trgm` / `none`
-- **Advisor Chain Pipeline**: QueryRewrite → HybridSearch → Rerank → Context Injection
+- **Three Chat Modes**: KNOWLEDGE uses Spring AI Modular RAG, AGENT uses Tool Calling, and PLAIN skips retrieval
 - **Runtime Multi-Model Routing**: Select configured OpenAI-compatible or Anthropic models per chat request
 - **Domain Extension**: Implement `DomainRagExtension` to inject domain prompts and retrieval strategies
 - **SSE Streaming**: Server-Sent Events for real-time responses
@@ -45,7 +45,7 @@ psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_trgm;"
 # psql spring_ai_rag_dev -c "CREATE EXTENSION IF NOT EXISTS pg_jieba;"
 ```
 
-Flyway runs V1–V31 migrations automatically on startup (tables + embedding profiles + fixed-dimension HNSW indexes + fulltext GIN indexes + JSONB structured-record fields + external-document synchronization and identity normalization).
+Flyway runs V1–V32 migrations automatically on startup (tables + embedding profiles + fixed-dimension HNSW indexes + fulltext GIN indexes + JSONB structured records + external-document synchronization + principal-scoped chat history, source snapshots, and session leases).
 
 ### 2. Add Dependency
 
@@ -66,7 +66,7 @@ spring:
     username: postgres
     password: ${DB_PASSWORD}
 
-  # Flyway auto-migration (V1–V31)
+  # Flyway auto-migration (V1–V32)
   flyway:
     enabled: true
 

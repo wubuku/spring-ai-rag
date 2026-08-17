@@ -49,7 +49,7 @@ docker build -f docker/Dockerfile \
 
 ## Testcontainers Docker API 与 Ryuk
 
-JSONB PostgreSQL 集成测试使用 `pgvector/pgvector:pg16`。部分 OrbStack 环境中，
+JSONB 和 Chat PostgreSQL 集成测试使用 `pgvector/pgvector:pg16`。部分 OrbStack 环境中，
 Testcontainers 会协商到 Docker API `1.32`，而本机 daemon 最低要求 `1.40`；部分代理/
 证书配置还会导致 Ryuk 辅助镜像拉取失败。项目验证脚本提供可移植覆盖：
 
@@ -65,6 +65,17 @@ TESTCONTAINERS_API_VERSION=1.40 \
 TESTCONTAINERS_RYUK_DISABLED=true \
 ./scripts/verify-jsonb-records.sh --skip-playwright
 ```
+
+Chat 门禁使用同一组环境覆盖：
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+如果 Docker 仍不可用，Chat 验证器会把 PostgreSQL 步骤记录为 `SKIP`；不要为了绕过开发者
+网络问题而把区域 registry 写死进 application YAML 或 Dockerfile。
 
 禁用 Ryuk 只是本地环境的排障手段，不是应用配置。CI 或共享环境应优先恢复可信的
 registry/证书链并重新启用 Ryuk。

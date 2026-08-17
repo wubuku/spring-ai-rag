@@ -220,10 +220,11 @@ rag:
 | `rag.query-rewrite.llm-enabled` | `false` | Enable LLM-assisted rewriting |
 | `rag.query-rewrite.llm-max-rewrites` | `3` | Max LLM rewrites per query |
 
-Query focusing does not modify the original question sent to the model. It creates a
-shorter `rewrite.retrieval-query` only for retrieval and reranking. For example,
-`find content related to "visual tone"` retrieves with `visual tone`; ordinary
-questions remain unchanged.
+These properties configure the legacy/component-level `QueryRewriteAdvisor`.
+They do not control the production mode-aware Chat path. Production
+`KNOWLEDGE` query transformation is configured under
+`rag.chat.knowledge.query-transformer`; `AGENT` relies on the model to form
+tool queries through Spring AI Tool Calling.
 
 ## Reranking Configuration
 
@@ -272,6 +273,53 @@ alter the embedding input: only caller-supplied `retrievalText` is chunked and
 embedded. `jsonbPayload` is stored as JSONB and is not hashed; the API
 intentionally has no payload hash setting.
 
+## Chat Execution Configuration
+
+```yaml
+rag:
+  chat:
+    default-mode: KNOWLEDGE
+    knowledge:
+      query-transformer: none
+      query-transform-timeout-seconds: 10
+      allow-empty-context: false
+    agent:
+      enabled: true
+      max-tool-rounds: 3
+      max-retrieval-calls: 3
+      max-results-per-call: 10
+      max-unique-sources: 20
+      max-tool-result-characters: 24000
+    history:
+      lease-ttl-seconds: 30
+      lease-renew-interval-seconds: 10
+```
+
+| Property | Default | Description |
+|---|---|---|
+| `rag.chat.default-mode` | `KNOWLEDGE` | Mode used when `ChatRequest.mode` is omitted |
+| `rag.chat.knowledge.query-transformer` | `none` | `none` or `spring-ai`; production profile uses `spring-ai` |
+| `rag.chat.knowledge.query-transform-timeout-seconds` | `10` | Timeout for Spring AI rewrite/compression transformers |
+| `rag.chat.knowledge.allow-empty-context` | `false` | When false, an empty retrieval result produces an explicit no-evidence instruction |
+| `rag.chat.agent.enabled` | `true` | Enable `AGENT` mode |
+| `rag.chat.agent.max-tool-rounds` | `3` | Maximum Spring AI tool-call rounds per attempt |
+| `rag.chat.agent.max-retrieval-calls` | `3` | Maximum uncached knowledge retrieval calls per attempt |
+| `rag.chat.agent.max-results-per-call` | `10` | Server cap for one tool retrieval |
+| `rag.chat.agent.max-unique-sources` | `20` | Maximum unique source chunks retained across tool calls |
+| `rag.chat.agent.max-tool-result-characters` | `24000` | Maximum serialized tool-result characters; results/snippets are safely truncated as valid JSON |
+| `rag.chat.history.lease-ttl-seconds` | `30` | Database lease TTL for one principal/session request |
+| `rag.chat.history.lease-renew-interval-seconds` | `10` | Lease renewal interval |
+
+Mode behavior:
+
+- `KNOWLEDGE` always executes Spring AI Modular RAG through the project hybrid
+  retriever and optional reranker.
+- `AGENT` uses Spring AI Tool Calling. A model must declare
+  `capabilities.toolCalling=true`; Collection/document/credential scope remains
+  server-owned.
+- `PLAIN` does not retrieve and rejects retrieval-specific request overrides.
+- Client-cancelled partial turns are not persisted.
+
 ## Conversation Memory Configuration
 
 ```yaml
@@ -299,7 +347,13 @@ rag:
 
 System maintains dual tables:
 - `spring_ai_chat_memory`: Spring AI auto-management, for LLM context
-- `rag_chat_history`: Business audit table, retains complete `user_message` + `ai_response`, auto-cleaned by TTL
+- `rag_chat_history`: Principal-owned business history with complete
+  `user_message`, `ai_response`, source snapshots, mode/model metadata, and TTL
+  cleanup
+
+Completed turns update both stores atomically under a
+`rag_chat_session_lease`. History, export, clear, and Memory baselines are
+scoped to the authenticated principal.
 
 ## Async Thread Pool Configuration
 

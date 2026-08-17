@@ -57,6 +57,7 @@ public class RagProperties {
     private final RagSseProperties sse = new RagSseProperties();
     private final RagPdfProperties pdf = new RagPdfProperties();
     private final RagStructuredRecordProperties structuredRecords = new RagStructuredRecordProperties();
+    private final RagChatProperties chat = new RagChatProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -132,5 +133,9 @@ public class RagProperties {
 
     public RagStructuredRecordProperties getStructuredRecords() {
         return structuredRecords;
+    }
+
+    public RagChatProperties getChat() {
+        return chat;
     }
 }

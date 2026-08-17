@@ -17,6 +17,7 @@ vi.mock('../hooks/useSSE', () => ({
   useChatSSE: vi.fn(() => ({
     send: mockSend,
     close: mockClose,
+    stop: mockClose,
     isConnected: false,
   })),
 }));
@@ -68,6 +69,7 @@ describe('Chat', () => {
     (useChatSSE as ReturnType<typeof vi.fn>).mockReturnValue({
       send: mockSend,
       close: mockClose,
+      stop: mockClose,
       isConnected: false,
     });
     (modelsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -127,8 +129,9 @@ describe('Chat', () => {
     });
     expect(mockSend).toHaveBeenCalledWith({
       message: 'Hello',
-      conversationId: undefined,
+      sessionId: undefined,
       model: undefined,
+      mode: 'KNOWLEDGE',
       collectionScopeMode: 'CALLER_VISIBLE',
       collectionKeys: undefined,
     });
@@ -159,23 +162,27 @@ describe('Chat', () => {
     });
     expect(mockSend).toHaveBeenCalledWith({
       message: 'Test query',
-      conversationId: undefined,
+      sessionId: undefined,
       model: undefined,
+      mode: 'KNOWLEDGE',
       collectionScopeMode: 'CALLER_VISIBLE',
       collectionKeys: undefined,
     });
   });
 
-  it('send button is disabled and shows ... when isConnected is true', () => {
+  it('send button becomes an enabled stop action when isConnected is true', () => {
     (useChatSSE as ReturnType<typeof vi.fn>).mockReturnValue({
       send: mockSend,
       close: mockClose,
+      stop: mockClose,
       isConnected: true,
     });
     renderChat();
-    // When connected, button should show "..." and be disabled
-    const sendBtn = screen.getByRole('button', { name: /\.\.\./i });
-    expect(sendBtn).toBeDisabled();
+    // The active request must be cancellable without re-enabling message submission.
+    const sendBtn = screen.getByRole('button', { name: /chat.stop/i });
+    expect(sendBtn).toBeEnabled();
+    fireEvent.click(sendBtn);
+    expect(mockClose).toHaveBeenCalled();
   });
 
   it('passes the selected runtime model to SSE', async () => {
@@ -223,8 +230,9 @@ describe('Chat', () => {
 
     expect(mockSend).toHaveBeenCalledWith({
       message: 'Use this model',
-      conversationId: undefined,
+      sessionId: undefined,
       model: 'openrouter/xiaomi/mimo-v2-pro',
+      mode: 'KNOWLEDGE',
       collectionScopeMode: 'CALLER_VISIBLE',
       collectionKeys: undefined,
     });
@@ -264,8 +272,9 @@ describe('Chat', () => {
 
     expect(mockSend).toHaveBeenCalledWith({
       message: 'Scoped question',
-      conversationId: undefined,
+      sessionId: undefined,
       model: undefined,
+      mode: 'KNOWLEDGE',
       collectionScopeMode: 'SELECTED_COLLECTIONS',
       collectionKeys: ['customer:faq', 'customer:manual'],
     });
@@ -281,9 +290,35 @@ describe('Chat', () => {
 
     expect(mockSend).toHaveBeenCalledWith({
       message: 'Assigned documents only',
-      conversationId: undefined,
+      sessionId: undefined,
       model: undefined,
+      mode: 'KNOWLEDGE',
       collectionScopeMode: 'ANY_COLLECTION',
+      collectionKeys: undefined,
+    });
+  });
+
+  it('omits retrieval scope when sending in PLAIN mode', async () => {
+    renderChat();
+    fireEvent.click(screen.getByTestId('chat-scope-SELECTED_COLLECTIONS'));
+    await userEvent.selectOptions(
+      screen.getByTestId('chat-mode-select'),
+      'PLAIN',
+    );
+
+    expect(screen.queryByTestId('chat-scope-CALLER_VISIBLE'))
+      .not.toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText(/chat.placeholder/), {
+      target: { value: 'Plain conversation' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /chat.send/ }));
+
+    expect(mockSend).toHaveBeenCalledWith({
+      message: 'Plain conversation',
+      sessionId: undefined,
+      model: undefined,
+      mode: 'PLAIN',
+      collectionScopeMode: undefined,
       collectionKeys: undefined,
     });
   });

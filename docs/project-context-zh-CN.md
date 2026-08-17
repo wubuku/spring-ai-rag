@@ -38,21 +38,55 @@ spring-ai-rag 是基于 Spring AI 的通用 RAG 框架，目标是：
 
 ## 3. RAG 执行链
 
-默认 Advisor 顺序：
+生产 Chat 使用显式的模式化执行路径：
 
 ```text
-QueryRewriteAdvisor (+10)
-  -> HybridSearchAdvisor (+20)
-  -> RerankAdvisor (+30)
-  -> MessageChatMemoryAdvisor
+RagChatController
+  -> CollectionRetrievalScopeResolver
+  -> ChatCommandMapper
+  -> ChatExecutionService
+     -> KNOWLEDGE: Spring AI RetrievalAugmentationAdvisor
+        + ProjectDocumentRetriever
+        + ProjectRerankPostProcessor
+        + CitationQueryAugmenter
+     -> AGENT: Spring AI ToolCallAdvisor
+        + KnowledgeSearchTool
+        + 服务端 ToolContext
+     -> PLAIN: 仅 ChatClient + Memory
+  -> 按 principal 隔离的 session lease
+  -> 原子提交 history + source snapshot + JDBC Memory
 ```
 
 关键规则：
 
-- 对话与检索支持 Collection / Document 范围。
-- 非空 Collection / Document 范围解析后没有匹配文档时必须 fail closed，不能退化为全库检索。
-- `RerankAdvisor` 将检索上下文注入用户消息，兼容限制多个 system message 的 provider。
-- Spring AI memory 与业务审计历史分别存储。
+- `KNOWLEDGE` 是兼容默认值，每轮固定检索。
+- `AGENT` 由支持工具调用的模型决定是否及调用多少次授权知识检索工具；工具 schema
+  不能携带 Collection、document 或 credential 范围。
+- `PLAIN` 不执行检索，并拒绝检索专用的请求覆盖项。
+- Chat 与 Search 共享项目混合检索器，支持 Collection / Document 范围；非空范围解析后
+  无文档时必须 fail closed，不能退化为全库检索。
+- 旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍是组件级/
+  兼容 API，不是生产 Chat 路径。
+- `RagAdvisorProvider` 默认只支持 `KNOWLEDGE + ATTEMPT`。框架把 ATTEMPT provider
+  放在 Memory/模式 Advisor 外层；显式 `MODEL_CALL` provider 放在模式 Advisor 内层，
+  因此会在 AGENT 每个工具调用轮次执行。provider 的任意原始 order 会映射到不重叠的
+  稳定区间。
+- `DomainRagExtension` 只在请求显式选择 `domainId` 时生效；省略 domain 不使用“第一个
+  Bean”。领域模板只提供 instruction，检索上下文由 RAG/工具注入。旧 `{context}` 模板
+  不能直接用于 `AGENT/PLAIN`；`postProcessAnswer/isApplicable` 不参与新 Chat 主链。
+- Spring AI Memory 与业务 history 分开存储，但完成 turn 会原子提交。
+
+### Chat 会话与流式协议
+
+- 会话 history、导出、清空、Memory baseline 和活动 lease 都按认证 principal 隔离。
+- V32 为 `rag_chat_history` 增加 `owner_principal_id`、JSONB 来源快照与 turn status；
+  `rag_chat_session_lease` 提供跨实例 single-flight 和 token fencing。
+- 不存在的 session 与属于其他 principal 的 session 都返回 `SESSION_NOT_FOUND`。
+- Chat SSE 发送 `content`、`tool_start`、`tool_result`、`sources`、`done` 和 `error`；
+  `done` 与 `error` 是互斥终态。
+- 客户端取消会 dispose 模型订阅，不持久化未完成 turn；流式 fallback 只允许发生在
+  第一个客户端可见事件之前。
+- 引用 score 是排序信号，不是经过校准的概率。
 
 ### Collection 当前语义
 
@@ -185,6 +219,10 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 - `ChatModelRouter` 负责显式模型选择、默认模型和 fallback。
 - Chat、Settings 和模型对比支持具体模型引用。
 - 外部 `models.json` 可以覆盖 YAML 模型配置。
+- 每个模型暴露规范化的 `capabilities.streaming` 与
+  `capabilities.toolCalling`。省略 streaming 时兼容为 `true`；Tool Calling 必须显式
+  配置为 `true`。
+- `AGENT` 会拒绝不支持 Tool Calling 的显式模型；默认路由会跳过不满足能力的候选。
 
 详见 [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md)。
 
@@ -193,10 +231,11 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V31。
+- Flyway 当前为 V1–V32。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
-  已存储的外部文档身份。
+  已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
+  status 与 session lease。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 
@@ -206,7 +245,7 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 
 | 区域 | 能力 |
 |------|------|
-| `/chat`, `/chat/stream` | RAG 对话 |
+| `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN 对话与结构化 SSE |
 | `/documents` | 文档管理与 embedding |
 | `/search` | 混合检索 |
 | `/collections` | 知识库 |
@@ -266,7 +305,9 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 未实现：OpenAI client / Agent -> spring-ai-rag
 ```
 
-项目当前没有标准 `POST /v1/chat/completions` 或 Models API。现有 SSE 只有部分 OpenAI-like delta，不能宣称 Chat Completions 兼容。
+项目当前没有标准 `POST /v1/chat/completions` 或 Models API。原生 Chat SSE 包含
+OpenAI-like content delta 以及项目专用的工具、来源、完成和错误事件，因此不能宣称
+Chat Completions 兼容。
 
 规划中的兼容层将完整 RAG deployment 暴露为 `model`，默认关闭、默认无状态，并要求先完成外部 API Key、Bearer 鉴权和多实例限流加固。
 

@@ -1,41 +1,16 @@
 import { apiClient } from './client';
-import type { CollectionScopeMode } from '../types/api';
+import type {
+  ChatHistoryRecord as ApiChatHistoryRecord,
+  ChatRequest as ApiChatRequest,
+  ChatResponse,
+} from '../types/api';
 
-export interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  sources?: Array<{
-    documentId: number;
-    title: string;
-    score: number;
-    chunkContent?: string;
-  }>;
-}
-
-export interface ChatHistoryRecord {
-  id: number;
-  sessionId: string;
-  userMessage: string;
-  aiResponse: string;
-  relatedDocumentIds?: number[];
-  metadata?: Record<string, unknown>;
-  createdAt: string;
-}
-
-export interface ChatRequest {
-  message: string;
-  collectionScopeMode?: CollectionScopeMode;
-  /** @deprecated use collectionKeys */
-  collectionId?: number;
-  collectionIds?: number[];
-  collectionKeys?: string[];
-  conversationId?: string;
-  useHybridSearch?: boolean;
-}
+export type ChatHistoryRecord = ApiChatHistoryRecord;
+export type ChatRequest = ApiChatRequest;
 
 export const chatApi = {
   ask: (data: ChatRequest) =>
-    apiClient.post<{ response: string; conversationId: string; sources?: unknown[] }>(
+    apiClient.post<ChatResponse>(
       '/chat',
       data
     ),

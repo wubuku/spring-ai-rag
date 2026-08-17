@@ -214,7 +214,14 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 
 ### `POST /api/v1/rag/chat/ask`
 
-Non-streaming RAG Q&A, returns a complete answer.
+Non-streaming Chat, returning one complete answer. The same endpoint supports
+three explicit execution modes:
+
+| Mode | Behavior |
+|---|---|
+| `KNOWLEDGE` | Always runs Spring AI Modular RAG through the project hybrid retriever; default when omitted |
+| `AGENT` | Lets a Tool Calling-capable model invoke the authorized `searchKnowledge` tool as needed |
+| `PLAIN` | Model + conversation memory only; no knowledge retrieval |
 
 **Request body:**
 
@@ -222,6 +229,7 @@ Non-streaming RAG Q&A, returns a complete answer.
 {
   "message": "What is Spring AI?",
   "sessionId": "session-001",
+  "mode": "KNOWLEDGE",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
   "collectionScopeMode": "SELECTED_COLLECTIONS",
@@ -238,6 +246,7 @@ Non-streaming RAG Q&A, returns a complete answer.
 |-------|------|----------|-------------|
 | `message` | string | ✅ | Query content (≤10000 chars) |
 | `sessionId` | string | | Session ID, maximum 36 characters; generated when omitted |
+| `mode` | enum | | `KNOWLEDGE`, `AGENT`, or `PLAIN`; default `KNOWLEDGE` |
 | `domainId` | string | | Domain extension ID |
 | `model` | string | | Runtime model reference from `GET /rag/models`; omitted uses the default chain |
 | `collectionScopeMode` | enum | | `CALLER_VISIBLE`, `ANY_COLLECTION`, or `SELECTED_COLLECTIONS` |
@@ -249,22 +258,64 @@ Non-streaming RAG Q&A, returns a complete answer.
 | `useRerank` | boolean | | Enable reranking, default true |
 | `metadata` | object | | Extended metadata |
 
+`maxResults`, `useHybridSearch`, and `useRerank` are effective execution
+overrides for `KNOWLEDGE` and `AGENT`. `PLAIN` rejects these fields and any
+Collection/document retrieval scope when explicitly supplied.
+
+`AGENT` requires a model whose registry entry has
+`capabilities.toolCalling=true` and whose Spring AI adapter exposes tool
+options. An explicitly selected incompatible model returns
+`MODEL_CAPABILITY_UNSUPPORTED`; default routing skips incompatible candidates.
+
+`domainId` selects an extension only by explicit ID; an unknown ID returns
+`UNKNOWN_DOMAIN`. Domain prompts do not inject retrieval context. A legacy
+template containing `{context}` remains compatible with `KNOWLEDGE`, but
+`AGENT` or `PLAIN` returns `DOMAIN_MODE_UNSUPPORTED` unless the extension
+implements `getSystemPromptTemplate(ChatMode)` with safe instructions for that
+mode.
+
 **Response:**
 
 ```json
 {
   "answer": "Spring AI is an AI application framework in the Spring ecosystem...",
+  "traceId": "a1b2c3",
   "sessionId": "session-001",
+  "mode": "KNOWLEDGE",
+  "requestedModel": "openrouter/xiaomi/mimo-v2-pro",
+  "resolvedModel": "openrouter/xiaomi/mimo-v2-pro",
+  "usage": {
+    "promptTokens": 120,
+    "completionTokens": 36,
+    "totalTokens": 156
+  },
+  "finishReason": "STOP",
   "sources": [
     {
-      "documentId": 1,
+      "citationId": "S1",
+      "documentId": "1",
+      "chunkIndex": 0,
       "title": "Introduction to Spring AI",
       "score": 0.92,
-      "chunk": "Spring AI provides ChatClient..."
+      "chunkText": "Spring AI provides ChatClient...",
+      "collectionKey": "spring-ai:docs",
+      "documentType": "PDF"
     }
-  ]
+  ],
+  "metadata": {
+    "sessionId": "session-001",
+    "retrievalExecuted": true
+  },
+  "stepMetrics": []
 }
 ```
+
+Source scores are ranking signals for the current query/configuration, not
+probabilities or percentages. `PLAIN` returns an empty source list.
+`metadata.retrievalExecuted` is based on actual retrieval attempts: it is
+always `false` for `PLAIN`, always `true` for a completed `KNOWLEDGE` pipeline,
+and may be `false` for `AGENT` when the model answers without calling
+`searchKnowledge`.
 
 ---
 
@@ -276,54 +327,65 @@ SSE streaming Q&A, returns answer chunks progressively.
 
 The same 36-character `sessionId` limit applies. Longer values return `400 VALIDATION_FAILED` before Chat Memory persistence.
 
-**Response:** `text/event-stream`
-
-```
-data: {"choices":[{"delta":{"content":"Spring AI is"}}]}
-
-data: {"choices":[{"delta":{"content":" an AI framework"}}]}
-
-event:done
-data:{"traceId":"...","status":"complete"}
-```
+**Response:** `text/event-stream` with `content`, `tool_start`, `tool_result`,
+`sources`, `done`, and `error` events. `done` and `error` are mutually
+exclusive. See [SSE-PROTOCOL.md](SSE-PROTOCOL.md) for payloads, ordering,
+heartbeat, cancellation, and fallback semantics.
 
 **curl example:**
 
 ```bash
 curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "What is RAG?", "sessionId": "s1", "model": "openrouter/xiaomi/mimo-v2-pro"}'
+  -d '{"message":"What is RAG?","sessionId":"s1","mode":"KNOWLEDGE","model":"openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
 ---
 
 ### `GET /api/v1/rag/chat/history/{sessionId}`
 
-Query chat history for a session.
+Query chat history for the authenticated principal's session, newest first.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `limit` | int | 50 | Number of records to return |
+| `limit` | int | 50 | Number of records to return; clamped to 1–500 |
 
-**Response:** `List<Map<String, Object>>`
+**Response:** `ChatHistoryResponse[]`
 
 ```json
 [
   {
     "id": 1,
-    "session_id": "s1",
-    "user_message": "What is RAG?",
-    "ai_response": "RAG is Retrieval-Augmented Generation...",
-    "created_at": "2026-04-02T16:00:00Z"
+    "sessionId": "s1",
+    "userMessage": "What is RAG?",
+    "aiResponse": "RAG is Retrieval-Augmented Generation...",
+    "relatedDocumentIds": [1],
+    "metadata": {},
+    "sources": [{
+      "citationId": "S1",
+      "documentId": "1",
+      "title": "RAG Guide",
+      "chunkText": "RAG combines retrieval and generation."
+    }],
+    "status": "COMPLETE",
+    "mode": "KNOWLEDGE",
+    "requestedModel": null,
+    "resolvedModel": "minimax/MiniMax-M2.7",
+    "createdAt": "2026-08-17T12:00:00"
   }
 ]
 ```
+
+An unknown session and a session owned by another principal both return
+`404 SESSION_NOT_FOUND`.
 
 ---
 
 ### `DELETE /api/v1/rag/chat/history/{sessionId}`
 
-Clear chat history for a session (only affects `rag_chat_history` table, not `spring_ai_chat_memory`).
+Clear the authenticated principal's business history and Spring AI Memory for
+the session as one lease-protected operation. If the session currently has an
+active request, the endpoint returns `409 SESSION_BUSY`.
 
 **Response:**
 
@@ -339,40 +401,56 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
 
 ### `GET /api/v1/rag/chat/export/{sessionId}`
 
-Export chat conversation history as a downloadable file.
+Export the authenticated principal's conversation history as a downloadable
+file. Unknown and foreign sessions return `404 SESSION_NOT_FOUND`.
 
 | Parameter | Type | Location | Description |
 |-----------|------|---------|-------------|
 | `format` | string | query | `json` or `md` (default: `json`) |
-| `limit` | int | query | Max messages to export (default: 50) |
+| `limit` | int | query | Max turn records to export; `0` means all (default `0`) |
 
-**Response:** Binary file download with `Content-Type: application/octet-stream` and `Content-Disposition: attachment; filename="conversation-{sessionId}.{format}"`
+**Response:** `application/json; charset=utf-8` or
+`text/markdown; charset=utf-8`, with
+`Content-Disposition: attachment; filename="{sessionId}.{format}"`.
 
 **JSON format response body:**
 ```json
 {
-  "conversationId": "s1",
-  "exportedAt": "2026-04-05T12:00:00Z",
-  "messageCount": 10,
+  "sessionId": "s1",
+  "totalMessages": 1,
   "messages": [
     { "role": "user", "content": "Hello", "timestamp": "..." },
-    { "role": "assistant", "content": "Hi!", "sources": [], "timestamp": "..." }
+    {
+      "role": "assistant",
+      "content": "Hi!",
+      "timestamp": "...",
+      "sources": [{
+        "citationId": "S1",
+        "documentId": "1",
+        "title": "Greeting Guide",
+        "chunkText": "..."
+      }]
+    }
   ]
 }
 ```
 
 **Markdown format response body:**
 ```markdown
-# Conversation: s1
-Exported: 2026-04-05
+# Chat Export: `s1`
 
----
+**Total messages:** 1
+**Exported at:** 2026-08-17T12:00:00
 
-## User (2026-04-05T10:00:00)
+## User [2026-08-17T11:59:59]
 Hello
 
-## Assistant (2026-04-05T10:00:01)
+## Assistant [2026-08-17T12:00:00]
 Hi!
+
+### Sources
+
+- **S1**: Greeting Guide
 ```
 
 ---
@@ -1711,6 +1789,10 @@ Get provider/model references that can be sent in `ChatRequest.model`.
       "reasoning": false,
       "contextWindow": 600000,
       "maxTokens": 32000,
+      "capabilities": {
+        "streaming": true,
+        "toolCalling": true
+      },
       "source": "configured"
     },
     {
@@ -1724,6 +1806,10 @@ Get provider/model references that can be sent in `ChatRequest.model`.
       "reasoning": false,
       "contextWindow": 200000,
       "maxTokens": 8192,
+      "capabilities": {
+        "streaming": true,
+        "toolCalling": false
+      },
       "source": "configured"
     }
   ]
@@ -1732,6 +1818,12 @@ Get provider/model references that can be sent in `ChatRequest.model`.
 
 Models that are configured but missing credentials remain in the list with
 `available: false` and an `unavailableReason`.
+
+`capabilities.streaming` defaults to `true` when omitted for backward
+compatibility. `capabilities.toolCalling` defaults to `false` and must be
+explicitly enabled only after the concrete upstream model/endpoint has been
+verified. `AGENT` mode requires Tool Calling; the WebUI uses this field to
+disable incompatible selections.
 
 ### `GET /api/v1/rag/models/{provider}`
 
@@ -1756,7 +1848,11 @@ Get a provider summary and its model-level entries.
       {
         "ref": "openrouter/xiaomi/mimo-v2-pro",
         "modelId": "xiaomi/mimo-v2-pro",
-        "available": true
+        "available": true,
+        "capabilities": {
+          "streaming": true,
+          "toolCalling": true
+        }
       }
     ]
   }

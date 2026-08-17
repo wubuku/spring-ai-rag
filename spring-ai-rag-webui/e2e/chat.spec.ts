@@ -38,10 +38,55 @@ test.describe('Chat', () => {
 
     await expect.poll(() => requestBody).toEqual({
       message: 'Use the selected scope',
+      mode: 'KNOWLEDGE',
       model: 'openrouter/xiaomi/mimo-v2-pro',
       collectionScopeMode: 'SELECTED_COLLECTIONS',
       collectionKeys: ['product-manual', 'sample-collection'],
     });
+  });
+
+  test('supports AGENT mode and renders structured tool activity and sources', async ({ page }) => {
+    let requestBody: Record<string, unknown> = {};
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requestBody = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: [
+          'event: tool_start',
+          'data: {"tool":"searchKnowledge","query":"风格基调"}',
+          '',
+          'event: tool_result',
+          'data: {"tool":"searchKnowledge","resultCount":2,"elapsedMs":8}',
+          '',
+          'event: content',
+          'data: {"content":"根据知识库，风格基调是克制、清晰。"}',
+          '',
+          'event: sources',
+          'data: {"sessionId":"agent-session-1","sources":[{"citationId":"S1","documentId":7,"title":"品牌风格指南","collectionKey":"product-manual","documentType":"TEXT"}]}',
+          '',
+          'event: done',
+          'data: {"sessionId":"agent-session-1","status":"complete","mode":"AGENT","resolvedModel":"minimax/MiniMax-M2.7"}',
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.getByTestId('chat-mode-select').selectOption('AGENT');
+    await page.locator('textarea').fill('查找“风格基调”相关内容');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect.poll(() => requestBody).toMatchObject({
+      message: '查找“风格基调”相关内容',
+      mode: 'AGENT',
+      model: 'minimax/MiniMax-M2.7',
+    });
+    await expect(page.getByText('Retrieval activity:')).toBeVisible();
+    await expect(page.getByText(/Found 2 result\(s\) \(8 ms\)/)).toBeVisible();
+    await expect(page.getByText('根据知识库，风格基调是克制、清晰。')).toBeVisible();
+    await expect(page.getByText('Sources:')).toBeVisible();
+    await expect(page.getByText('品牌风格指南')).toBeVisible();
+    await expect(page).toHaveURL(/\/webui\/chat\/agent-session-1$/);
   });
 
   test('switching back to CALLER_VISIBLE removes stale collection keys', async ({ page }) => {
@@ -66,6 +111,30 @@ test.describe('Chat', () => {
     expect(bodies[0]).not.toHaveProperty('collectionKeys');
   });
 
+  test('PLAIN mode omits retrieval scope from the request', async ({ page }) => {
+    let requestBody: Record<string, unknown> = {};
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requestBody = route.request().postDataJSON();
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        body: 'event: done\ndata: {"status":"complete","mode":"PLAIN"}\n\n',
+      });
+    });
+
+    await page.getByTestId('chat-scope-SELECTED_COLLECTIONS').check();
+    await page.getByTestId('chat-mode-select').selectOption('PLAIN');
+    await expect(page.getByTestId('chat-scope-CALLER_VISIBLE')).toHaveCount(0);
+    await page.locator('textarea').fill('Plain conversation');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect.poll(() => requestBody).toEqual({
+      message: 'Plain conversation',
+      mode: 'PLAIN',
+      model: 'minimax/MiniMax-M2.7',
+    });
+  });
+
   test('does not overflow on a mobile viewport', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByTestId('chat-scope-SELECTED_COLLECTIONS').check();
@@ -87,6 +156,13 @@ test.describe('Chat', () => {
           sessionId: 'mock-session-123',
           userMessage: 'Persist this question',
           aiResponse: 'Persisted answer',
+          mode: 'KNOWLEDGE',
+          sources: [{
+            citationId: 'S2',
+            documentId: 9,
+            title: 'Persisted source',
+            collectionKey: 'sample-collection',
+          }],
           createdAt: '2026-08-17T08:00:00',
         }]),
       });
@@ -105,5 +181,6 @@ test.describe('Chat', () => {
     await expect(page).toHaveURL(/\/webui\/chat\/mock-session-123$/);
     await expect(page.getByText('Persist this question')).toBeVisible();
     await expect(page.getByText('Persisted answer')).toBeVisible();
+    await expect(page.getByText('Persisted source')).toBeVisible();
   });
 });

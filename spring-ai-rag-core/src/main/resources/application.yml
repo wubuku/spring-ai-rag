@@ -113,13 +113,13 @@ spring:
         temperature: ${MINIMAX_TEMPERATURE:0.7}
 
   # Spring AI Chat Memory JDBC configuration
-  # Automatically creates spring_ai_chat_memory table
+  # Flyway V2 owns spring_ai_chat_memory; Spring AI must not initialize it again.
   ai:
     chat:
       memory:
         repository:
           jdbc:
-            initialize-schema: always
+            initialize-schema: never
             platform: postgresql
 
 # ============================================
@@ -136,10 +136,10 @@ app:
 
     providers:
       openrouter:
-        displayName: OpenRouter
-        baseUrl: https://openrouter.ai/api
-        apiKey: ${OPENROUTER_API_KEY:}
-        apiType: openai-completions
+        display-name: OpenRouter
+        base-url: https://openrouter.ai/api
+        api-key: ${OPENROUTER_API_KEY:}
+        api-type: openai-completions
         enabled: true
         priority: 1
         models:
@@ -147,20 +147,23 @@ app:
             name: MiMo V2 Pro
             type: chat
             reasoning: false
-            inputModalities: [text]
+            input-modalities: [text]
             cost:
               input: 0
               output: 0
-              cacheRead: 0
-              cacheWrite: 0
-            contextWindow: 600000
-            maxTokens: 32000
+              cache-read: 0
+              cache-write: 0
+            context-window: 600000
+            max-tokens: 32000
+            capabilities:
+              streaming: true
+              tool-calling: false
 
       minimax:
-        displayName: MiniMax
-        baseUrl: https://api.minimaxi.com/anthropic
-        apiKey: ${MINIMAX_API_KEY:}
-        apiType: anthropic-messages
+        display-name: MiniMax
+        base-url: https://api.minimaxi.com/anthropic
+        api-key: ${MINIMAX_API_KEY:}
+        api-type: anthropic-messages
         enabled: true
         priority: 2
         models:
@@ -168,45 +171,48 @@ app:
             name: MiniMax M2.7
             type: chat
             reasoning: false
-            inputModalities: [text]
+            input-modalities: [text]
             cost:
               input: 15
               output: 60
-              cacheRead: 2
-              cacheWrite: 10
-            contextWindow: 200000
-            maxTokens: 8192
+              cache-read: 2
+              cache-write: 10
+            context-window: 200000
+            max-tokens: 8192
+            capabilities:
+              streaming: true
+              tool-calling: false
           - id: embo-01
             name: Embedding V01
             type: embedding
-            inputModalities: [text]
+            input-modalities: [text]
             dimension: 1024
             cost:
               input: 0
               output: 0
 
       siliconflow:
-        displayName: SiliconFlow
-        baseUrl: https://api.siliconflow.cn
-        apiKey: ${SILICONFLOW_API_KEY:}
-        apiType: openai-chat
+        display-name: SiliconFlow
+        base-url: https://api.siliconflow.cn
+        api-key: ${SILICONFLOW_API_KEY:}
+        api-type: openai-chat
         enabled: true
         priority: 5
         models:
           - id: BGE-M3
             name: BGE-M3 Embedding
             type: embedding
-            inputModalities: [text]
+            input-modalities: [text]
             dimension: 1024
             cost:
               input: 0
               output: 0
 
       zhipu:
-        displayName: 智谱 GLM-5
-        baseUrl: https://open.bigmodel.cn/api/anthropic
-        apiKey: ${ZHIPU_API_KEY:}
-        apiType: anthropic-messages
+        display-name: 智谱 GLM-5
+        base-url: https://open.bigmodel.cn/api/anthropic
+        api-key: ${ZHIPU_API_KEY:}
+        api-type: anthropic-messages
         enabled: true
         priority: 3
         models:
@@ -214,22 +220,36 @@ app:
             name: GLM-5
             type: chat
             reasoning: true
-            inputModalities: [text]
+            input-modalities: [text]
             cost:
               input: 5
               output: 15
-              cacheRead: 0
-              cacheWrite: 0
-            contextWindow: 131072
-            maxTokens: 8192
+              cache-read: 0
+              cache-write: 0
+            context-window: 131072
+            max-tokens: 8192
+            capabilities:
+              streaming: true
+              tool-calling: false
 
-    chatModel:
+    legacy-capabilities:
+      openai:
+        streaming: true
+        tool-calling: false
+      anthropic:
+        streaming: true
+        tool-calling: false
+      minimax:
+        streaming: true
+        tool-calling: false
+
+    chat-model:
       primary: minimax/MiniMax-M2.7
       fallbacks:
         - openrouter/xiaomi/mimo-v2-pro
         - zhipu/GLM-5
 
-    embeddingModel:
+    embedding-model:
       primary: siliconflow/BGE-M3
       fallbacks:
         - minimax/embo-01
@@ -299,6 +319,23 @@ rag:
     max-batch-size: 20
     max-batch-payload-bytes: 10485760
     max-search-results: 20
+
+  chat:
+    default-mode: KNOWLEDGE
+    knowledge:
+      query-transformer: none
+      query-transform-timeout-seconds: 10
+      allow-empty-context: false
+    agent:
+      enabled: true
+      max-tool-rounds: 3
+      max-retrieval-calls: 3
+      max-results-per-call: 10
+      max-unique-sources: 20
+      max-tool-result-characters: 24000
+    history:
+      lease-ttl-seconds: 30
+      lease-renew-interval-seconds: 10
 
   # Chat memory configuration
   memory:

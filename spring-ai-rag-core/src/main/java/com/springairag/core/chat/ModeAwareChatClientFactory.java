@@ -1,0 +1,284 @@
+package com.springairag.core.chat;
+
+import com.springairag.api.enums.ChatMode;
+import com.springairag.api.service.AdvisorScope;
+import com.springairag.api.service.RagAdvisorProvider;
+import com.springairag.core.config.ChatModelRouter;
+import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.rag.CitationQueryAugmenter;
+import com.springairag.core.rag.HistoryAwareQueryTransformer;
+import com.springairag.core.rag.ProjectDocumentRetriever;
+import com.springairag.core.rag.ProjectRerankPostProcessor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
+import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
+import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
+import org.springframework.ai.rag.preretrieval.query.transformation.RewriteQueryTransformer;
+import org.springframework.stereotype.Component;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * 为每个模型候选和请求创建隔离的 ChatClient、Memory 与检索上下文。
+ */
+@Component
+public class ModeAwareChatClientFactory {
+
+    private static final Logger log =
+            LoggerFactory.getLogger(ModeAwareChatClientFactory.class);
+
+    private static final int ATTEMPT_ADVISOR_ORDER =
+            BaseAdvisor.HIGHEST_PRECEDENCE + 100;
+    private static final int MEMORY_ORDER = BaseAdvisor.HIGHEST_PRECEDENCE + 200;
+    private static final int MODE_ORDER = BaseAdvisor.HIGHEST_PRECEDENCE + 300;
+    private static final int MODEL_CALL_ADVISOR_ORDER =
+            BaseAdvisor.HIGHEST_PRECEDENCE + 400;
+    private static final int CUSTOM_ADVISOR_BAND_SIZE = 100;
+
+    private final ProjectDocumentRetriever documentRetriever;
+    private final ProjectRerankPostProcessor rerankPostProcessor;
+    private final CitationQueryAugmenter queryAugmenter;
+    private final RagProperties ragProperties;
+    private final List<RagAdvisorProvider> customAdvisorProviders;
+    private final ToolCallingManager toolCallingManager;
+
+    public ModeAwareChatClientFactory(
+            ProjectDocumentRetriever documentRetriever,
+            ProjectRerankPostProcessor rerankPostProcessor,
+            CitationQueryAugmenter queryAugmenter,
+            RagProperties ragProperties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            List<RagAdvisorProvider> customAdvisorProviders,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ToolCallingManager toolCallingManager) {
+        this.documentRetriever = documentRetriever;
+        this.rerankPostProcessor = rerankPostProcessor;
+        this.queryAugmenter = queryAugmenter;
+        this.ragProperties = ragProperties;
+        this.customAdvisorProviders = customAdvisorProviders != null
+                ? List.copyOf(customAdvisorProviders)
+                : List.of();
+        this.toolCallingManager = toolCallingManager != null
+                ? toolCallingManager
+                : ToolCallingManager.builder().build();
+    }
+
+    public Attempt create(
+            ChatCommand command,
+            ChatModelRouter.ChatModelCandidate candidate,
+            List<Message> baselineMessages) {
+        RagChatProperties.AgentProperties agent = ragProperties.getChat().getAgent();
+        RetrievalOptions options = command.mode() == ChatMode.AGENT
+                ? capAgentOptions(command.retrievalOptions(), agent)
+                : command.retrievalOptions();
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(
+                agent.getMaxRetrievalCalls(),
+                agent.getMaxToolRounds(),
+                agent.getMaxUniqueSources());
+        AuthorizedRetrievalContext retrievalContext =
+                new AuthorizedRetrievalContext(
+                        command.retrievalScope(),
+                        options,
+                        trace,
+                        command.sessionId(),
+                        command.principal(),
+                        agent.getMaxToolResultCharacters());
+
+        List<Advisor> advisors = new ArrayList<>();
+        advisors.addAll(customAdvisors(
+                command.mode(),
+                AdvisorScope.ATTEMPT,
+                ATTEMPT_ADVISOR_ORDER));
+
+        ChatMemory memory = null;
+        if (command.memoryMode() == MemoryMode.SERVER) {
+            memory = buildRequestLocalMemory(
+                    command.memoryConversationId(),
+                    baselineMessages);
+            advisors.add(MessageChatMemoryAdvisor.builder(memory)
+                    .conversationId(command.memoryConversationId())
+                    .order(MEMORY_ORDER)
+                    .build());
+        }
+
+        if (command.mode() == ChatMode.KNOWLEDGE) {
+            advisors.add(buildKnowledgeAdvisor(candidate));
+        } else if (command.mode() == ChatMode.AGENT) {
+            ensureToolOptions(candidate);
+            advisors.add(new BudgetedToolCallAdvisor(
+                    toolCallingManager,
+                    MODE_ORDER));
+        }
+        advisors.addAll(customAdvisors(
+                command.mode(),
+                AdvisorScope.MODEL_CALL,
+                MODEL_CALL_ADVISOR_ORDER));
+
+        ChatClient.Builder builder = ChatClient.builder(candidate.model())
+                .defaultAdvisors(advisors);
+        ChatOptions defaultOptions = candidate.model().getDefaultOptions();
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions.copy());
+        }
+        return new Attempt(
+                builder.build(),
+                candidate,
+                retrievalContext,
+                memory);
+    }
+
+    private RetrievalAugmentationAdvisor buildKnowledgeAdvisor(
+            ChatModelRouter.ChatModelCandidate candidate) {
+        RetrievalAugmentationAdvisor.Builder builder =
+                RetrievalAugmentationAdvisor.builder()
+                        .documentRetriever(documentRetriever)
+                        .documentPostProcessors(rerankPostProcessor)
+                        .queryAugmenter(queryAugmenter)
+                        .order(MODE_ORDER);
+        QueryTransformer transformer = buildQueryTransformer(candidate);
+        if (transformer != null) {
+            builder.queryTransformers(transformer);
+        }
+        return builder.build();
+    }
+
+    private QueryTransformer buildQueryTransformer(
+            ChatModelRouter.ChatModelCandidate candidate) {
+        RagChatProperties.KnowledgeProperties knowledge =
+                ragProperties.getChat().getKnowledge();
+        if (!"spring-ai".equalsIgnoreCase(knowledge.getQueryTransformer())) {
+            return null;
+        }
+        ChatClient.Builder rawBuilder = ChatClient.builder(candidate.model());
+        ChatOptions options = candidate.model().getDefaultOptions();
+        if (options != null) {
+            rawBuilder.defaultOptions(options.copy());
+        }
+        QueryTransformer rewrite = RewriteQueryTransformer.builder()
+                .chatClientBuilder(rawBuilder.clone())
+                .build();
+        QueryTransformer compression = CompressionQueryTransformer.builder()
+                .chatClientBuilder(rawBuilder.clone())
+                .build();
+        return new HistoryAwareQueryTransformer(
+                rewrite,
+                compression,
+                Duration.ofSeconds(
+                        Math.max(1, knowledge.getQueryTransformTimeoutSeconds())));
+    }
+
+    private List<Advisor> customAdvisors(
+            ChatMode mode,
+            AdvisorScope scope,
+            int firstOrder) {
+        List<RagAdvisorProvider> providers = customAdvisorProviders.stream()
+                .filter(provider -> {
+                    if (provider.getName() == null
+                            || provider.getName().isBlank()) {
+                        throw new IllegalStateException(
+                                "RagAdvisorProvider name must not be blank: "
+                                        + provider.getClass().getName());
+                    }
+                    if (provider.supportedModes() == null) {
+                        throw new IllegalStateException(
+                                "RagAdvisorProvider '" + provider.getName()
+                                        + "' returned null supportedModes");
+                    }
+                    if (provider.advisorScope() == null) {
+                        throw new IllegalStateException(
+                                "RagAdvisorProvider '" + provider.getName()
+                                        + "' returned null advisorScope");
+                    }
+                    return provider.supportedModes().contains(mode)
+                            && provider.advisorScope() == scope;
+                })
+                .sorted(Comparator
+                        .comparingInt(RagAdvisorProvider::getOrder)
+                        .thenComparing(RagAdvisorProvider::getName)
+                        .thenComparing(provider ->
+                                provider.getClass().getName()))
+                .toList();
+        if (providers.size() > CUSTOM_ADVISOR_BAND_SIZE) {
+            throw new IllegalStateException(
+                    "Too many " + scope + " RagAdvisorProvider instances for mode "
+                            + mode + ": " + providers.size()
+                            + " (maximum " + CUSTOM_ADVISOR_BAND_SIZE + ")");
+        }
+
+        List<Advisor> advisors = new ArrayList<>();
+        for (int index = 0; index < providers.size(); index++) {
+            RagAdvisorProvider provider = providers.get(index);
+            BaseAdvisor advisor = provider.createAdvisor();
+            if (advisor == null) {
+                log.warn("自定义 Advisor provider {} 返回 null，已忽略",
+                        provider.getName());
+                continue;
+            }
+            advisors.add(new OrderedAdvisorAdapter(
+                    advisor,
+                    provider.getName(),
+                    firstOrder + index));
+        }
+        return List.copyOf(advisors);
+    }
+
+    private ChatMemory buildRequestLocalMemory(
+            String conversationId,
+            List<Message> baselineMessages) {
+        ChatMemory memory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .maxMessages(Math.max(2, ragProperties.getMemory().getMaxMessages()))
+                .build();
+        if (baselineMessages != null && !baselineMessages.isEmpty()) {
+            memory.add(conversationId, baselineMessages);
+        }
+        return memory;
+    }
+
+    private RetrievalOptions capAgentOptions(
+            RetrievalOptions options,
+            RagChatProperties.AgentProperties agent) {
+        return new RetrievalOptions(
+                Math.min(options.maxResults(),
+                        Math.max(1, agent.getMaxResultsPerCall())),
+                options.minScore(),
+                options.useHybridSearch(),
+                options.useRerank(),
+                options.vectorWeight(),
+                options.fulltextWeight());
+    }
+
+    private void ensureToolOptions(
+            ChatModelRouter.ChatModelCandidate candidate) {
+        if (!(candidate.model().getDefaultOptions()
+                instanceof ToolCallingChatOptions)) {
+            throw new IllegalArgumentException(
+                    "Model '" + candidate.ref()
+                            + "' declares tool calling but its Spring AI adapter "
+                            + "does not expose ToolCallingChatOptions");
+        }
+    }
+
+    public record Attempt(
+            ChatClient client,
+            ChatModelRouter.ChatModelCandidate candidate,
+            AuthorizedRetrievalContext retrievalContext,
+            ChatMemory memory) {
+    }
+}

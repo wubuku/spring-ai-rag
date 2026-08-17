@@ -30,7 +30,8 @@ import java.util.List;
  * <ul>
  *   <li>{@code rewrite.original} — original query text (String)</li>
  *   <li>{@code rewrite.queries} — rewritten query list (List&lt;String&gt;), first element is the original query</li>
- *   <li>{@code rewrite.retrieval-query} — concise query used by retrieval and reranking</li>
+ *   <li>{@code rewrite.retrieval-query} — compatibility value for legacy advisors; equal to the
+ *       last user message unless an upstream standard transformer supplies a focused query</li>
  * </ul>
  */
 @Component
@@ -85,11 +86,10 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
         long startMs = System.currentTimeMillis();
         List<String> rewrittenQueries = queryRewritingService.rewriteQuery(originalQuery);
-        String retrievalQuery =
-                queryRewritingService.resolveRetrievalQuery(originalQuery);
-        if (retrievalQuery == null || retrievalQuery.isBlank()) {
-            retrievalQuery = originalQuery;
-        }
+        // Do not infer retrieval intent from language-specific command patterns here. The
+        // production Chat path uses Spring AI QueryTransformer/Tool Calling; this legacy advisor
+        // keeps the original query unless an upstream component explicitly provides another one.
+        String retrievalQuery = originalQuery;
         long elapsedMs = System.currentTimeMillis() - startMs;
 
         log.info("[QueryRewriteAdvisor] original query: \"{}\" → retrieval query: \"{}\", "

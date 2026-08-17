@@ -3,6 +3,9 @@ package com.springairag.core.repository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatHistoryResponse;
+import com.springairag.api.dto.ChatSource;
+import com.springairag.api.enums.ChatMode;
+import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.entity.RagChatHistory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +73,34 @@ public class RagChatHistoryRepository {
     }
 
     /**
+     * Durable production write. Failures propagate so the coordinator can roll back
+     * history, shared ChatMemory, and lease release as one transaction.
+     */
+    public RagChatHistory saveDurable(
+            ChatPrincipal principal,
+            String sessionId,
+            String userMessage,
+            String aiResponse,
+            String relatedDocumentIds,
+            List<ChatSource> sources,
+            String turnStatus,
+            Map<String, Object> metadata) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        Objects.requireNonNull(userMessage, "userMessage must not be null");
+        RagChatHistory entity = new RagChatHistory();
+        entity.setOwnerPrincipalId(principal.id());
+        entity.setSessionId(sessionId);
+        entity.setUserMessage(userMessage);
+        entity.setAiResponse(aiResponse);
+        entity.setRelatedDocumentIds(relatedDocumentIds);
+        entity.setSources(sources);
+        entity.setTurnStatus(turnStatus != null ? turnStatus : "COMPLETE");
+        entity.setMetadata(metadata);
+        return jpaRepository.saveAndFlush(entity);
+    }
+
+    /**
      * Query chat history by session ID.
      */
     public List<ChatHistoryResponse> findBySessionId(String sessionId, int limit) {
@@ -86,6 +117,44 @@ public class RagChatHistoryRepository {
      */
     public List<ChatHistoryResponse> findBySessionId(String sessionId) {
         return findBySessionId(sessionId, 50);
+    }
+
+    /**
+     * Principal-scoped history read used by production endpoints.
+     */
+    public List<ChatHistoryResponse> findByPrincipalAndSession(
+            ChatPrincipal principal,
+            String sessionId,
+            int limit) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        int safeLimit = Math.min(Math.max(limit, 1), 500);
+        return jpaRepository.findVisibleByOwnerAndSessionNewestFirst(
+                        principal.id(),
+                        sessionId,
+                        canReadLegacy(principal),
+                        PageRequest.of(0, safeLimit))
+                .stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    /**
+     * Canonical committed baseline. Legacy null-owner rows are intentionally excluded.
+     */
+    public List<ChatHistoryResponse> findOwnedBaseline(
+            ChatPrincipal principal,
+            String sessionId,
+            int limit) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        List<RagChatHistory> all = jpaRepository.findOwnedBySessionAsc(
+                principal.id(), sessionId);
+        int safeLimit = Math.min(Math.max(limit, 1), 500);
+        int from = Math.max(0, all.size() - safeLimit);
+        return all.subList(from, all.size()).stream()
+                .map(this::toDto)
+                .toList();
     }
 
     /**
@@ -107,6 +176,19 @@ public class RagChatHistoryRepository {
             log.debug("Failed to clear Spring AI ChatMemory for session {}: {}", sessionId, e.getMessage());
         }
         return deleted;
+    }
+
+    /**
+     * Deletes only rows owned by the current principal. Legacy null-owner rows are
+     * never removed through the ordinary session endpoint.
+     */
+    @Transactional
+    public int deleteByPrincipalAndSession(
+            ChatPrincipal principal,
+            String sessionId) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        return jpaRepository.deleteOwnedBySession(principal.id(), sessionId);
     }
 
     /**
@@ -144,7 +226,39 @@ public class RagChatHistoryRepository {
                 entity.getAiResponse(),
                 docIds,
                 entity.getMetadata(),
+                entity.getSources(),
+                entity.getTurnStatus(),
+                enumValue(entity.getMetadata(), "mode", ChatMode.class, ChatMode.KNOWLEDGE),
+                stringValue(entity.getMetadata(), "requestedModel"),
+                stringValue(entity.getMetadata(), "resolvedModel"),
                 entity.getCreatedAt()
         );
+    }
+
+    private boolean canReadLegacy(ChatPrincipal principal) {
+        return principal.id().equals("root:environment-root")
+                || principal.id().equals("legacy:static")
+                || principal.id().equals("local:auth-disabled");
+    }
+
+    private String stringValue(Map<String, Object> metadata, String key) {
+        Object value = metadata != null ? metadata.get(key) : null;
+        return value != null ? String.valueOf(value) : null;
+    }
+
+    private <E extends Enum<E>> E enumValue(
+            Map<String, Object> metadata,
+            String key,
+            Class<E> type,
+            E fallback) {
+        String value = stringValue(metadata, key);
+        if (value == null) {
+            return fallback;
+        }
+        try {
+            return Enum.valueOf(type, value);
+        } catch (IllegalArgumentException ignored) {
+            return fallback;
+        }
     }
 }

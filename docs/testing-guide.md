@@ -247,7 +247,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V31, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V32, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -306,7 +306,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V31 from an empty schema, and exercises the vector query with actual
+Flyway V1-V32 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -337,7 +337,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V31 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V32 from an empty database, and verifies JSONB round-trip,
 payload-only versioning, identical descriptions with distinct records, and
 cascade cleanup:
 
@@ -362,6 +362,75 @@ compile, WebUI build, Mock Playwright, project-docs, and whitespace checks.
 The browser preview binds strictly to `JSONB_PLAYWRIGHT_PORT` (default `4174`);
 use an unused port when another local service occupies it. Run the complete
 gate serially because the Maven clean phase removes module `target/` output.
+
+### Chat Capability Redesign Acceptance Gate
+
+The Chat implementation is verified as three explicit modes:
+
+- `KNOWLEDGE`: Spring AI Modular RAG with the project's hybrid retrieval and
+  rerank implementation.
+- `AGENT`: Spring AI Tool Calling with the server-owned retrieval scope.
+- `PLAIN`: ordinary ChatClient plus memory, without knowledge retrieval.
+
+Run the repeatable local gate:
+
+```bash
+./scripts/verify-chat-capability.sh
+```
+
+It runs the Chat execution, Tool Calling, memory/history, structured SSE,
+controller/integration, and export tests; the V32 PostgreSQL lease/atomicity
+test; `mvn clean compile test-compile`; full `mvn test`; installation of the
+current reactor artifacts followed by the independent
+`demos/demo-domain-extension` consumer tests; a Spring Boot startup/health
+smoke with temporary PostgreSQL and dummy model endpoints; WebUI Vitest,
+TypeScript, production build; Chat core Mock Playwright; project-docs; and
+whitespace checks. Logs and a Markdown result are written to
+`.verification/chat-capability/<run-id>/summary.md`.
+
+The demo is outside the root reactor. Running Maven directly in the demo may
+otherwise resolve an older local `spring-ai-rag-starter:1.0.0`; the one-click
+gate installs the current workspace artifacts before testing that consumer.
+
+The browser gate uses DOM visibility, request/response assertions, URL
+assertions, and test assertions. Screenshots are not used as correctness
+evidence. The browser suite covers mode/model requests, AGENT tool lifecycle,
+sources, history source restoration, selected Collections, and mobile
+overflow.
+
+The PostgreSQL gate is attempted by default. If Docker is unavailable or the
+daemon rejects the negotiated API version, the script records both Docker and
+PostgreSQL gates as `SKIP`; `PASS_WITH_SKIPS` is not a complete release gate.
+This repository has observed Testcontainers negotiating Docker API `1.32` while
+the local daemon required at least `1.40`. Use:
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+Use `--skip-postgres` only when the environment is intentionally unavailable
+and retain the generated summary. The local workaround and mainland-China
+registry/certificate notes are documented in
+[china-network-guide.md](china-network-guide.md) and
+[troubleshooting.md](troubleshooting.md).
+
+The backend smoke binds strictly to `CHAT_STARTUP_PORT=4210`; override it when
+that port is occupied. Use `--skip-startup` only when Docker is intentionally
+unavailable and retain the resulting `SKIP` record.
+
+Real provider verification is optional and explicit:
+
+```bash
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-chat-capability.sh --with-real-llm
+```
+
+The script loads real model configuration from `.env`; when
+`RAG_ROOT_API_KEY` is configured, it uses `X-API-Key` for data-plane calls.
+Without this option, the real LLM gate is recorded as `SKIP`; local tests and
+Mock Playwright never imply a real model/tool-capable endpoint was validated.
 
 ## Rules for Writing New Tests
 

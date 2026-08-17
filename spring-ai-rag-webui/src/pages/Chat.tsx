@@ -9,7 +9,12 @@ import { chatApi } from '../api/chat';
 import { evaluationApi } from '../api/evaluation';
 import { modelsApi } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
-import type { ChatSource, CollectionScopeMode } from '../types/api';
+import type { ChatMode, ChatSource, CollectionScopeMode } from '../types/api';
+import type {
+  ChatDoneEvent,
+  ChatToolResultEvent,
+  ChatToolStartEvent,
+} from '../hooks/useSSE';
 import styles from './Chat.module.css';
 
 interface Message {
@@ -17,7 +22,18 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   sources?: ChatSource[];
+  mode?: ChatMode;
+  toolActivity?: ChatToolActivity[];
   isStreaming?: boolean;
+}
+
+interface ChatToolActivity {
+  id: string;
+  tool: string;
+  query?: string;
+  resultCount?: number;
+  elapsedMs?: number;
+  status: 'running' | 'complete';
 }
 
 export function Chat() {
@@ -32,10 +48,12 @@ export function Chat() {
   const [selectedCollectionKeys, setSelectedCollectionKeys] =
     useState<string[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>(getSelectedModel());
+  const [mode, setMode] = useState<ChatMode>('KNOWLEDGE');
   const [showSidebar, setShowSidebar] = useState(false);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const skipHistoryLoadForSessionRef = useRef<string | undefined>(undefined);
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
   addSessionRef.current = addSession;
@@ -54,7 +72,7 @@ export function Chat() {
     availableModels[0]?.ref ??
     '';
 
-  const { send, isConnected } = useChatSSE({
+  const { send, isConnected, stop } = useChatSSE({
     onChunk: (content: string) => {
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
@@ -68,13 +86,58 @@ export function Chat() {
         return prev;
       });
     },
-    onSources: sources => {
+    onSources: (sources, nextSessionId) => {
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
           return prev.map(msg => (msg.id === lastMsg.id ? { ...msg, sources } : msg));
         }
         return prev;
+      });
+      // Keep the in-flight turn visible until the terminal `done` event.
+      // Navigating here would race the history effect and can erase fast streams.
+      void nextSessionId;
+    },
+    onToolStart: (event: ChatToolStartEvent) => {
+      setMessages(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (!lastMsg?.isStreaming) return prev;
+        const activity: ChatToolActivity = {
+          id: event.toolCallId ?? crypto.randomUUID(),
+          tool: event.tool,
+          query: event.query,
+          status: 'running',
+        };
+        return prev.map(msg => msg.id === lastMsg.id
+          ? { ...msg, toolActivity: [...(msg.toolActivity ?? []), activity] }
+          : msg);
+      });
+    },
+    onToolResult: (event: ChatToolResultEvent) => {
+      setMessages(prev => {
+        const lastMsg = prev[prev.length - 1];
+        if (!lastMsg?.isStreaming) return prev;
+        return prev.map(msg => {
+          if (msg.id !== lastMsg.id) return msg;
+          const activities = msg.toolActivity ?? [];
+          const targetId = event.toolCallId
+            ? event.toolCallId
+            : activities.find(activity =>
+                activity.tool === event.tool
+                && activity.status === 'running')?.id;
+          return {
+            ...msg,
+            toolActivity: activities.map(activity =>
+              activity.id === targetId
+                ? {
+                    ...activity,
+                    resultCount: event.resultCount,
+                    elapsedMs: event.elapsedMs,
+                    status: 'complete' as const,
+                  }
+                : activity),
+          };
+        });
       });
     },
     onError: error => {
@@ -89,12 +152,13 @@ export function Chat() {
         return prev;
       });
     },
-    onDone: nextConversationId => {
+    onDone: (event: ChatDoneEvent) => {
       setMessages(prev =>
         prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
       );
-      if (nextConversationId && nextConversationId !== conversationId) {
-        navigate(`/chat/${encodeURIComponent(nextConversationId)}`, { replace: true });
+      if (event.sessionId && event.sessionId !== conversationId) {
+        skipHistoryLoadForSessionRef.current = event.sessionId;
+        navigate(`/chat/${encodeURIComponent(event.sessionId)}`, { replace: true });
       }
     },
   });
@@ -103,6 +167,13 @@ export function Chat() {
     let active = true;
     if (!conversationId) {
       setMessages([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    if (skipHistoryLoadForSessionRef.current === conversationId) {
+      skipHistoryLoadForSessionRef.current = undefined;
       return () => {
         active = false;
       };
@@ -121,6 +192,8 @@ export function Chat() {
             id: `history-${record.id}-assistant`,
             role: 'assistant' as const,
             content: record.aiResponse,
+            sources: record.sources,
+            mode: record.mode,
           },
         ]);
         setMessages(historyMessages);
@@ -152,7 +225,8 @@ export function Chat() {
   const handleSend = () => {
     if (!input.trim()
         || isConnected
-        || (scopeMode === 'SELECTED_COLLECTIONS'
+        || (mode !== 'PLAIN'
+          && scopeMode === 'SELECTED_COLLECTIONS'
           && selectedCollectionKeys.length === 0)) {
       return;
     }
@@ -166,13 +240,30 @@ export function Chat() {
     ]);
     send({
       message: userMsg,
-      conversationId,
+      sessionId: conversationId,
       model: effectiveSelectedModel || undefined,
-      collectionScopeMode: scopeMode,
-      collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
+      mode,
+      collectionScopeMode: mode !== 'PLAIN' ? scopeMode : undefined,
+      collectionKeys: mode !== 'PLAIN' && scopeMode === 'SELECTED_COLLECTIONS'
         ? [...selectedCollectionKeys].sort()
         : undefined,
     });
+  };
+
+  const handleStop = () => {
+    stop();
+    setMessages(prev =>
+      prev.map(msg =>
+        msg.isStreaming
+          ? {
+              ...msg,
+              isStreaming: false,
+              toolActivity: msg.toolActivity?.map(activity =>
+                activity.status === 'running'
+                  ? { ...activity, status: 'complete' as const }
+                  : activity),
+            }
+          : msg));
   };
 
   const submitFeedback = async (type: 'THUMBS_UP' | 'THUMBS_DOWN', queryHint?: string) => {
@@ -197,6 +288,7 @@ export function Chat() {
   const handleNewChat = () => {
     navigate('/chat');
     setShowSidebar(false);
+    setMode('KNOWLEDGE');
   };
 
   const handleExport = async (format: 'json' | 'md') => {
@@ -294,8 +386,31 @@ export function Chat() {
                 <div className={styles.sources}>
                   <strong>{t('chat.sources')}:</strong>
                   {msg.sources.map((s, i) => (
-                    <span key={i} className={styles.source}>
-                      [{s.title ?? 'Document'} ({((s.score ?? 0) * 100).toFixed(0)}%)]
+                    <span key={s.citationId ?? `${s.documentId}-${i}`} className={styles.source}>
+                      <span className={styles.citationId}>{s.citationId ?? `[S${i + 1}]`}</span>
+                      <span>{s.title ?? t('chat.untitledSource')}</span>
+                      {s.collectionKey && (
+                        <span className={styles.sourceMeta}> · {s.collectionKey}</span>
+                      )}
+                      {s.documentType && (
+                        <span className={styles.sourceMeta}> · {s.documentType}</span>
+                      )}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {msg.toolActivity && msg.toolActivity.length > 0 && (
+                <div className={styles.toolActivity} aria-label={t('chat.toolActivity')}>
+                  <strong>{t('chat.toolActivity')}:</strong>
+                  {msg.toolActivity.map(activity => (
+                    <span key={activity.id} className={styles.toolItem}>
+                      {activity.status === 'running'
+                        ? t('chat.toolSearching')
+                        : t('chat.toolFinished', {
+                            count: activity.resultCount ?? 0,
+                            ms: activity.elapsedMs ?? 0,
+                          })}
+                      {activity.query ? `: ${activity.query}` : ''}
                     </span>
                   ))}
                 </div>
@@ -333,15 +448,39 @@ export function Chat() {
 
         <div className={styles.composer}>
           <div className={styles.contextRow}>
-            <div className={styles.scopeControl}>
-              <CollectionScopeSelector
-                idPrefix="chat"
-                mode={scopeMode}
-                selectedKeys={selectedCollectionKeys}
-                onModeChange={setScopeMode}
-                onSelectedKeysChange={setSelectedCollectionKeys}
+            {mode !== 'PLAIN' && (
+              <div className={styles.scopeControl}>
+                <CollectionScopeSelector
+                  idPrefix="chat"
+                  mode={scopeMode}
+                  selectedKeys={selectedCollectionKeys}
+                  onModeChange={setScopeMode}
+                  onSelectedKeysChange={setSelectedCollectionKeys}
+                  disabled={isConnected}
+                />
+              </div>
+            )}
+            <div className={styles.contextControl}>
+              <label htmlFor="chat-mode" className={styles.contextLabel}>
+                {t('chat.mode')}
+              </label>
+              <select
+                id="chat-mode"
+                className={styles.contextSelect}
+                value={mode}
+                onChange={event => setMode(event.target.value as ChatMode)}
                 disabled={isConnected}
-              />
+                data-testid="chat-mode-select"
+              >
+                <option value="KNOWLEDGE">{t('chat.modeKnowledge')}</option>
+                <option
+                  value="AGENT"
+                  disabled={!availableModels.some(model => model.capabilities?.toolCalling === true)}
+                >
+                  {t('chat.modeAgent')}
+                </option>
+                <option value="PLAIN">{t('chat.modePlain')}</option>
+              </select>
             </div>
             <div className={styles.contextControl}>
               <label htmlFor="chat-model" className={styles.contextLabel}>
@@ -379,16 +518,18 @@ export function Chat() {
               rows={1}
             />
             <button
-              onClick={handleSend}
+              onClick={isConnected ? handleStop : handleSend}
               disabled={
                 isConnected
-                || !input.trim()
-                || (scopeMode === 'SELECTED_COLLECTIONS'
-                  && selectedCollectionKeys.length === 0)
+                  ? false
+                  : !input.trim()
+                    || (mode !== 'PLAIN'
+                      && scopeMode === 'SELECTED_COLLECTIONS'
+                      && selectedCollectionKeys.length === 0)
               }
               className={styles.sendBtn}
             >
-              {isConnected ? '...' : t('chat.send')}
+              {isConnected ? t('chat.stop') : t('chat.send')}
             </button>
           </div>
         </div>

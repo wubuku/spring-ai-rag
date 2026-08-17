@@ -1,6 +1,7 @@
 package com.springairag.demo.medical;
 
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.DomainRagExtension;
 import org.springframework.stereotype.Component;
 
@@ -33,7 +34,7 @@ public class MedicalRagExtension implements DomainRagExtension {
     @Override
     public String getSystemPromptTemplate() {
         return """
-                你是一个专业的医疗健康问诊助手。请基于以下医学参考资料回答用户的问题。
+                你是一个专业的医疗健康问诊助手。
                 
                 【安全规则 — 必须遵守】
                 1. 你不是执业医师，所有回答仅供参考，不能替代专业医生的诊断和治疗建议
@@ -43,15 +44,15 @@ public class MedicalRagExtension implements DomainRagExtension {
                 5. 鼓励用户在必要时就医检查
                 
                 【回答要求】
-                1. 基于提供的医学参考资料回答，不要编造信息
-                2. 使用通俗易懂的语言，避免过多专业术语
-                3. 回答要条理清晰，重点突出
-                4. 标注信息来源
-                5. 适当提醒用户：如症状持续或加重，请及时就医
-                
-                参考资料：
-                {context}
+                1. 使用通俗易懂的语言，避免过多专业术语
+                2. 回答要条理清晰，重点突出
+                3. 适当提醒用户：如症状持续或加重，请及时就医
                 """;
+    }
+
+    @Override
+    public String getSystemPromptTemplate(ChatMode mode) {
+        return getSystemPromptTemplate();
     }
 
     @Override

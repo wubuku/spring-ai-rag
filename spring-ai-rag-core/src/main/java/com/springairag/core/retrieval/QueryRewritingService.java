@@ -17,7 +17,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -36,24 +35,6 @@ import java.util.regex.Pattern;
 public class QueryRewritingService {
 
     private static final Logger log = LoggerFactory.getLogger(QueryRewritingService.class);
-    private static final Pattern RETRIEVAL_INTENT = Pattern.compile(
-            "(找到|找出|查找|搜索|检索|查询|搜一下|查一下|关键字"
-                    + "|\\b(?:find|search|retrieve|look\\s+up|keyword)\\b)",
-            Pattern.CASE_INSENSITIVE);
-    private static final List<Pattern> QUOTED_TERM_PATTERNS = List.of(
-            Pattern.compile("“([^”\\r\\n]{1,200})”"),
-            Pattern.compile("\"([^\"\\r\\n]{1,200})\""),
-            Pattern.compile("‘([^’\\r\\n]{1,200})’"),
-            Pattern.compile("'([^'\\r\\n]{1,200})'"),
-            Pattern.compile("「([^」\\r\\n]{1,200})」"),
-            Pattern.compile("『([^』\\r\\n]{1,200})』"),
-            Pattern.compile("`([^`\\r\\n]{1,200})`"));
-    private static final Pattern CHINESE_RETRIEVAL_WRAPPER = Pattern.compile(
-            "^(?:请\\s*)?(?:帮我\\s*)?"
-                    + "(?:找到|找出|查找|搜索|检索|查询|搜一下|查一下)"
-                    + "\\s*(?:和|与|关于)?\\s*(.+?)\\s*"
-                    + "(?:相关的?|有关的?)\\s*"
-                    + "(?:内容|文档|资料|信息|记录)?[？?。.!！]*$");
 
     @Autowired(required = false)
     private RagProperties ragProperties;
@@ -167,44 +148,6 @@ public class QueryRewritingService {
 
         // Deduplicate
         return queries.stream().distinct().toList();
-    }
-
-    /**
-     * Resolve the concise text that should be sent to retrieval.
-     *
-     * <p>The original user message remains unchanged for answer generation. This method only removes
-     * explicit search-command wrappers such as {@code 找到 “风格基调” 相关的内容}, because embedding the
-     * command words can move nearest-neighbor retrieval away from the requested subject.
-     */
-    public String resolveRetrievalQuery(String originalQuery) {
-        if (config == null || !config.isEnabled()
-                || originalQuery == null || originalQuery.isBlank()) {
-            return originalQuery;
-        }
-
-        String normalized = originalQuery.replaceAll("\\s+", " ").trim();
-        if (!RETRIEVAL_INTENT.matcher(normalized).find()) {
-            return originalQuery;
-        }
-
-        for (Pattern pattern : QUOTED_TERM_PATTERNS) {
-            Matcher matcher = pattern.matcher(normalized);
-            if (matcher.find()) {
-                String candidate = matcher.group(1).trim();
-                if (!candidate.isBlank()) {
-                    return candidate;
-                }
-            }
-        }
-
-        Matcher wrapper = CHINESE_RETRIEVAL_WRAPPER.matcher(normalized);
-        if (wrapper.matches()) {
-            String candidate = wrapper.group(1).trim();
-            if (!candidate.isBlank()) {
-                return candidate;
-            }
-        }
-        return originalQuery;
     }
 
     /**

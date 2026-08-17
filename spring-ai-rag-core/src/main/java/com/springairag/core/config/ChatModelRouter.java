@@ -28,15 +28,18 @@ public class ChatModelRouter {
 
     private final ModelRegistry modelRegistry;
     private final ConfiguredChatModelFactory configuredFactory;
+    private final MultiModelProperties multiModelProperties;
     private final Map<String, ChatModel> legacyModelsByProvider = new ConcurrentHashMap<>();
 
     @Autowired
     public ChatModelRouter(
             ModelRegistry modelRegistry,
             ConfiguredChatModelFactory configuredFactory,
+            MultiModelProperties multiModelProperties,
             @Autowired(required = false) List<ChatModel> chatModels) {
         this.modelRegistry = modelRegistry;
         this.configuredFactory = configuredFactory;
+        this.multiModelProperties = multiModelProperties;
         registerLegacyModels(chatModels);
     }
 
@@ -46,6 +49,17 @@ public class ChatModelRouter {
     ChatModelRouter(ModelRegistry modelRegistry, List<ChatModel> chatModels) {
         this.modelRegistry = modelRegistry;
         this.configuredFactory = null;
+        this.multiModelProperties = new MultiModelProperties();
+        registerLegacyModels(chatModels);
+    }
+
+    ChatModelRouter(
+            ModelRegistry modelRegistry,
+            ConfiguredChatModelFactory configuredFactory,
+            List<ChatModel> chatModels) {
+        this.modelRegistry = modelRegistry;
+        this.configuredFactory = configuredFactory;
+        this.multiModelProperties = new MultiModelProperties();
         registerLegacyModels(chatModels);
     }
 
@@ -147,6 +161,110 @@ public class ChatModelRouter {
         return List.copyOf(ordered);
     }
 
+    /**
+     * 返回带 canonical ref 与 capability 的有序候选，供 Chat 执行层统一过滤。
+     */
+    public List<ChatModelCandidate> orderedCandidateDescriptors(
+            String preferredModelRef) {
+        List<ChatModelCandidate> result = new ArrayList<>();
+        if (preferredModelRef != null && !preferredModelRef.isBlank()) {
+            addUniqueCandidate(result, resolveCandidateRequired(preferredModelRef));
+        }
+
+        String primary = modelRegistry.getPrimaryChatModelName();
+        if (primary != null && !primary.isBlank()) {
+            addUniqueCandidate(result, resolveCandidate(primary));
+        }
+        List<String> fallbacks = modelRegistry.getFallbackChatModelNames();
+        if (fallbacks != null) {
+            for (String fallback : fallbacks) {
+                addUniqueCandidate(result, resolveCandidate(fallback));
+            }
+        }
+        legacyModelsByProvider.keySet().stream().sorted()
+                .map(this::resolveCandidate)
+                .forEach(candidate -> addUniqueCandidate(result, candidate));
+
+        if (result.isEmpty()) {
+            for (ChatModel model : getAllOrdered()) {
+                addUniqueCandidate(result, candidateForModel(model));
+            }
+        }
+        return List.copyOf(result);
+    }
+
+    public ChatModelCandidate resolveCandidateRequired(String modelRef) {
+        ChatModelCandidate candidate = resolveCandidate(modelRef);
+        if (candidate != null) {
+            return candidate;
+        }
+        String reason = configuredFactory != null
+                ? configuredFactory.getUnavailableReason(modelRef)
+                : "model is not registered";
+        throw new IllegalArgumentException(
+                "Unknown or unavailable chat model '" + modelRef + "': " + reason
+                        + ". Available models: " + getAvailableModelRefs());
+    }
+
+    private ChatModelCandidate resolveCandidate(String modelRef) {
+        ChatModel model = resolve(modelRef);
+        if (model == null) {
+            return null;
+        }
+        String canonical = configuredFactory != null
+                ? configuredFactory.canonicalRef(modelRef)
+                : null;
+        if (canonical != null) {
+            MultiModelProperties.ModelItem item =
+                    multiModelProperties.getModelItem(canonical);
+            return new ChatModelCandidate(
+                    canonical,
+                    model,
+                    item != null
+                            ? item.normalizedCapabilities()
+                            : MultiModelProperties.ModelCapabilities.defaults());
+        }
+        String provider = legacyProviderFor(model);
+        String ref = provider != null ? provider : modelRef.trim();
+        return new ChatModelCandidate(
+                ref,
+                model,
+                multiModelProperties.getLegacyCapabilities(ref));
+    }
+
+    private ChatModelCandidate candidateForModel(ChatModel model) {
+        if (model == null) {
+            return null;
+        }
+        if (configuredFactory != null) {
+            for (ConfiguredChatModelFactory.ModelDescriptor descriptor
+                    : configuredFactory.listChatModels()) {
+                ChatModel resolved = configuredFactory.resolve(descriptor.ref());
+                if (resolved == model) {
+                    return new ChatModelCandidate(
+                            descriptor.ref(),
+                            model,
+                            descriptor.capabilities());
+                }
+            }
+        }
+        String provider = legacyProviderFor(model);
+        return provider == null
+                ? null
+                : new ChatModelCandidate(
+                        provider,
+                        model,
+                        multiModelProperties.getLegacyCapabilities(provider));
+    }
+
+    private String legacyProviderFor(ChatModel model) {
+        return legacyModelsByProvider.entrySet().stream()
+                .filter(entry -> entry.getValue() == model)
+                .map(Map.Entry::getKey)
+                .findFirst()
+                .orElse(null);
+    }
+
     public List<String> getAvailableProviders() {
         Set<String> providers = new LinkedHashSet<>();
         for (Map<String, Object> model : getModelsInfo()) {
@@ -192,6 +310,8 @@ public class ChatModelRouter {
                 info.put("name", modelId != null ? modelId : modelRegistry.getDisplayName(provider));
                 info.put("apiType", legacyApiType(model));
                 info.put("available", true);
+                info.put("capabilities",
+                        multiModelProperties.getLegacyCapabilities(provider).normalized());
                 info.put("source", "legacy");
                 result.add(info);
             }
@@ -257,6 +377,40 @@ public class ChatModelRouter {
     private static void addUnique(List<ChatModel> models, ChatModel candidate) {
         if (candidate != null && !models.contains(candidate)) {
             models.add(candidate);
+        }
+    }
+
+    private static void addUniqueCandidate(
+            List<ChatModelCandidate> candidates,
+            ChatModelCandidate candidate) {
+        if (candidate == null) {
+            return;
+        }
+        boolean duplicate = candidates.stream()
+                .anyMatch(existing -> existing.ref().equalsIgnoreCase(candidate.ref())
+                        || existing.model() == candidate.model());
+        if (!duplicate) {
+            candidates.add(candidate);
+        }
+    }
+
+    public record ChatModelCandidate(
+            String ref,
+            ChatModel model,
+            MultiModelProperties.ModelCapabilities capabilities) {
+
+        public ChatModelCandidate {
+            capabilities = capabilities != null
+                    ? capabilities
+                    : MultiModelProperties.ModelCapabilities.defaults();
+        }
+
+        public boolean supportsStreaming() {
+            return capabilities.supportsStreaming();
+        }
+
+        public boolean supportsToolCalling() {
+            return capabilities.supportsToolCalling();
         }
     }
 

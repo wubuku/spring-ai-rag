@@ -92,6 +92,14 @@ public class MultiModelConfigLoader {
         properties.setEmbeddingModel(jsonModels.embeddingModel != null
                 ? toModelRouting(jsonModels.embeddingModel)
                 : null);
+        properties.setLegacyCapabilities(jsonModels.legacyCapabilities != null
+                ? jsonModels.legacyCapabilities.entrySet().stream()
+                        .collect(java.util.stream.Collectors.toMap(
+                                java.util.Map.Entry::getKey,
+                                entry -> toCapabilities(entry.getValue()),
+                                (left, right) -> right,
+                                LinkedHashMap::new))
+                : java.util.Map.of());
     }
 
     private MultiModelProperties.ProviderConfig toProviderConfig(String providerId, ModelsJsonRoot.ProviderJson p) {
@@ -127,8 +135,17 @@ public class MultiModelConfigLoader {
                 cost,
                 m.contextWindow,
                 m.maxTokens,
-                m.dimension
+                m.dimension,
+                toCapabilities(m.capabilities)
         );
+    }
+
+    private MultiModelProperties.ModelCapabilities toCapabilities(
+            ModelsJsonRoot.CapabilitiesJson capabilities) {
+        return capabilities == null
+                ? MultiModelProperties.ModelCapabilities.defaults()
+                : new MultiModelProperties.ModelCapabilities(
+                        capabilities.streaming, capabilities.toolCalling);
     }
 
     private MultiModelProperties.ModelRouting toModelRouting(ModelsJsonRoot.RoutingJson r) {
@@ -165,6 +182,7 @@ public class MultiModelConfigLoader {
             public java.util.Map<String, ProviderJson> providers;
             public RoutingJson chatModel;
             public RoutingJson embeddingModel;
+            public java.util.Map<String, CapabilitiesJson> legacyCapabilities;
 
             @Override
             public boolean equals(Object o) {
@@ -173,12 +191,14 @@ public class MultiModelConfigLoader {
                 ModelsJson that = (ModelsJson) o;
                 return Objects.equals(providers, that.providers)
                         && Objects.equals(chatModel, that.chatModel)
-                        && Objects.equals(embeddingModel, that.embeddingModel);
+                        && Objects.equals(embeddingModel, that.embeddingModel)
+                        && Objects.equals(legacyCapabilities, that.legacyCapabilities);
             }
 
             @Override
             public int hashCode() {
-                return Objects.hash(providers, chatModel, embeddingModel);
+                return Objects.hash(providers, chatModel, embeddingModel,
+                        legacyCapabilities);
             }
 
             @Override
@@ -235,6 +255,7 @@ public class MultiModelConfigLoader {
             public Integer contextWindow;
             public Integer maxTokens;
             public Integer dimension;
+            public CapabilitiesJson capabilities;
 
             @Override
             public boolean equals(Object o) {
@@ -249,13 +270,14 @@ public class MultiModelConfigLoader {
                         && Objects.equals(cost, that.cost)
                         && Objects.equals(contextWindow, that.contextWindow)
                         && Objects.equals(maxTokens, that.maxTokens)
-                        && Objects.equals(dimension, that.dimension);
+                        && Objects.equals(dimension, that.dimension)
+                        && Objects.equals(capabilities, that.capabilities);
             }
 
             @Override
             public int hashCode() {
                 return Objects.hash(id, name, type, reasoning, inputModalities,
-                        cost, contextWindow, maxTokens, dimension);
+                        cost, contextWindow, maxTokens, dimension, capabilities);
             }
 
             @Override
@@ -263,7 +285,8 @@ public class MultiModelConfigLoader {
                 return "ModelJson{id=" + id + ", name=" + name + ", type=" + type
                         + ", reasoning=" + reasoning + ", inputModalities=" + inputModalities
                         + ", cost=" + cost + ", contextWindow=" + contextWindow
-                        + ", maxTokens=" + maxTokens + ", dimension=" + dimension + "}";
+                        + ", maxTokens=" + maxTokens + ", dimension=" + dimension
+                        + ", capabilities=" + capabilities + "}";
             }
 
             public static class CostJson {
@@ -293,6 +316,31 @@ public class MultiModelConfigLoader {
                     return "CostJson{input=" + input + ", output=" + output
                             + ", cacheRead=" + cacheRead + ", cacheWrite=" + cacheWrite + "}";
                 }
+            }
+        }
+
+        public static class CapabilitiesJson {
+            public Boolean streaming;
+            public Boolean toolCalling;
+
+            @Override
+            public boolean equals(Object o) {
+                if (this == o) return true;
+                if (o == null || getClass() != o.getClass()) return false;
+                CapabilitiesJson that = (CapabilitiesJson) o;
+                return Objects.equals(streaming, that.streaming)
+                        && Objects.equals(toolCalling, that.toolCalling);
+            }
+
+            @Override
+            public int hashCode() {
+                return Objects.hash(streaming, toolCalling);
+            }
+
+            @Override
+            public String toString() {
+                return "CapabilitiesJson{streaming=" + streaming
+                        + ", toolCalling=" + toolCalling + "}";
             }
         }
 

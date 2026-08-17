@@ -2,6 +2,7 @@ package com.springairag.core.config;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.bind.ConstructorBinding;
 
 import java.util.List;
 import java.util.Map;
@@ -50,6 +51,10 @@ public class MultiModelProperties {
     @Schema(description = "Embedding model routing config")
     private ModelRouting embeddingModel;
 
+    @Schema(description = "Capabilities for legacy provider-only ChatModel beans")
+    private Map<String, ModelCapabilities> legacyCapabilities =
+            new java.util.HashMap<>();
+
     // ─── Getters & Setters ─────────────────────────────────────────────
 
     public String getConfigFile() {
@@ -84,6 +89,28 @@ public class MultiModelProperties {
         this.embeddingModel = embeddingModel;
     }
 
+    public Map<String, ModelCapabilities> getLegacyCapabilities() {
+        return legacyCapabilities;
+    }
+
+    public void setLegacyCapabilities(
+            Map<String, ModelCapabilities> legacyCapabilities) {
+        this.legacyCapabilities = legacyCapabilities != null
+                ? new java.util.HashMap<>(legacyCapabilities)
+                : new java.util.HashMap<>();
+    }
+
+    public ModelCapabilities getLegacyCapabilities(String provider) {
+        if (provider == null || legacyCapabilities == null) {
+            return ModelCapabilities.defaults();
+        }
+        return legacyCapabilities.entrySet().stream()
+                .filter(entry -> provider.equalsIgnoreCase(entry.getKey()))
+                .map(Map.Entry::getValue)
+                .findFirst()
+                .orElse(ModelCapabilities.defaults());
+    }
+
     // ─── equals / hashCode / toString ─────────────────────────────────
 
     @Override
@@ -94,12 +121,14 @@ public class MultiModelProperties {
         return Objects.equals(configFile, that.configFile)
                 && Objects.equals(providers, that.providers)
                 && Objects.equals(chatModel, that.chatModel)
-                && Objects.equals(embeddingModel, that.embeddingModel);
+                && Objects.equals(embeddingModel, that.embeddingModel)
+                && Objects.equals(legacyCapabilities, that.legacyCapabilities);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(configFile, providers, chatModel, embeddingModel);
+        return Objects.hash(configFile, providers, chatModel, embeddingModel,
+                legacyCapabilities);
     }
 
     @Override
@@ -109,6 +138,7 @@ public class MultiModelProperties {
                 ", providers=" + providers +
                 ", chatModel=" + chatModel +
                 ", embeddingModel=" + embeddingModel +
+                ", legacyCapabilities=" + legacyCapabilities +
                 '}';
     }
 
@@ -165,6 +195,36 @@ public class MultiModelProperties {
     }
 
     /**
+     * 模型实例能力声明。未配置 streaming 时保持兼容为 true；Tool Calling 必须显式开启。
+     */
+    @Schema(description = "Model capabilities")
+    public record ModelCapabilities(
+            @Schema(description = "Whether streaming is supported")
+            Boolean streaming,
+
+            @Schema(description = "Whether tool calling is supported")
+            Boolean toolCalling
+    ) {
+        public static ModelCapabilities defaults() {
+            return new ModelCapabilities(null, null);
+        }
+
+        public boolean supportsStreaming() {
+            return streaming == null || streaming;
+        }
+
+        public boolean supportsToolCalling() {
+            return Boolean.TRUE.equals(toolCalling);
+        }
+
+        public Map<String, Boolean> normalized() {
+            return Map.of(
+                    "streaming", supportsStreaming(),
+                    "toolCalling", supportsToolCalling());
+        }
+    }
+
+    /**
      * Configuration for a single model (chat and embedding are stored together in ProviderConfig.models[]).
      */
     @Schema(description = "Single model configuration (chat or embedding)")
@@ -194,14 +254,42 @@ public class MultiModelProperties {
             Integer maxTokens,
 
             @Schema(description = "Embedding dimension (embedding only)", example = "1024")
-            Integer dimension
+            Integer dimension,
+
+            @Schema(description = "Runtime capabilities")
+            ModelCapabilities capabilities
     ) {
+        public ModelItem(
+                String id,
+                String name,
+                String type,
+                boolean reasoning,
+                List<String> inputModalities,
+                ModelCost cost,
+                Integer contextWindow,
+                Integer maxTokens,
+                Integer dimension) {
+            this(id, name, type, reasoning, inputModalities, cost, contextWindow,
+                    maxTokens, dimension, ModelCapabilities.defaults());
+        }
+
+        @ConstructorBinding
+        public ModelItem {
+            if (capabilities == null) {
+                capabilities = ModelCapabilities.defaults();
+            }
+        }
+
         public boolean isChat() {
             return "chat".equalsIgnoreCase(type);
         }
 
         public boolean isEmbedding() {
             return "embedding".equalsIgnoreCase(type);
+        }
+
+        public ModelCapabilities normalizedCapabilities() {
+            return capabilities != null ? capabilities : ModelCapabilities.defaults();
         }
     }
 

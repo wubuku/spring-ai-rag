@@ -13,6 +13,10 @@ export interface ModelInfo {
   contextWindow?: number;
   maxTokens?: number;
   source?: 'configured' | 'legacy';
+  capabilities?: {
+    streaming?: boolean;
+    toolCalling?: boolean;
+  };
 }
 
 export interface ModelListResponse {

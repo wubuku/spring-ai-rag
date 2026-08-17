@@ -45,6 +45,9 @@ rag:
     min-score: 0.25
     vector-weight: 0.55
     fulltext-weight: 0.45
+  chat:
+    knowledge:
+      query-transformer: spring-ai
 
 logging:
   level:

@@ -167,13 +167,15 @@ public class HybridRetrieverService {
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
 
         if (!isFulltextAvailable(config, fulltextProvider)) {
-            return vectorSearch(query, scope, excludeIds, effectiveLimit, profile);
+            double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
+            return vectorSearch(query, scope, excludeIds, effectiveLimit, profile, minScore);
         }
 
         // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
         CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
                 .supplyAsync(() -> vectorSearch(
-                        query, scope, excludeIds, effectiveLimit * 2, profile), taskExecutor)
+                        query, scope, excludeIds, effectiveLimit * 2, profile,
+                        config != null ? config.getMinScore() : retrieval.getMinScore()), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
                     log.warn("Vector search timed out after {}s, falling back to empty result: {}",
@@ -187,7 +189,7 @@ public class HybridRetrieverService {
                         scope,
                         excludeIds,
                         effectiveLimit * 2,
-                        retrieval.getMinScore(),
+                        config != null ? config.getMinScore() : retrieval.getMinScore(),
                         profile.id()), taskExecutor)
                 .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                 .exceptionallyCompose(ex -> {
@@ -210,13 +212,14 @@ public class HybridRetrieverService {
      */
     private List<RetrievalResult> vectorSearch(String query, RetrievalScope scope,
                                                List<Long> excludeIds, int limit,
-                                               EmbeddingProfile profile) {
+                                               EmbeddingProfile profile,
+                                               double minScore) {
         try {
             float[] queryVector = embeddingModel.embed(query);
             validateQueryVector(queryVector, profile);
             List<Map<String, Object>> rows =
                     executeVectorQuery(queryVector, scope, limit, profile);
-            return mapVectorResults(rows, queryVector, excludeIds);
+            return mapVectorResults(rows, queryVector, excludeIds, minScore);
         } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
             log.error("Vector search failed", e);
             return Collections.emptyList();
@@ -266,7 +269,8 @@ public class HybridRetrieverService {
     }
 
     private List<RetrievalResult> mapVectorResults(List<Map<String, Object>> rows,
-                                                     float[] queryVector, List<Long> excludeIds) {
+                                                     float[] queryVector, List<Long> excludeIds,
+                                                     double minScore) {
         return rows.stream()
                 .filter(row -> isNotExcluded(row, excludeIds))
                 .map(row -> {
@@ -274,6 +278,7 @@ public class HybridRetrieverService {
                     double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
                     return toRetrievalResult(row, score, score, 0.0);
                 })
+                .filter(result -> result.getScore() >= minScore)
                 .toList();
     }
 

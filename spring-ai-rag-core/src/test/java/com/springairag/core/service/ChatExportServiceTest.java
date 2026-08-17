@@ -1,5 +1,8 @@
 package com.springairag.core.service;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.ChatSource;
 import com.springairag.core.entity.RagChatHistory;
 import com.springairag.core.repository.RagChatHistoryJpaRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,11 +20,13 @@ class ChatExportServiceTest {
 
     private RagChatHistoryJpaRepository historyRepository;
     private ChatExportService service;
+    private ObjectMapper objectMapper;
 
     @BeforeEach
     void setUp() {
         historyRepository = mock(RagChatHistoryJpaRepository.class);
-        service = new ChatExportService(historyRepository);
+        objectMapper = new ObjectMapper().findAndRegisterModules();
+        service = new ChatExportService(historyRepository, objectMapper);
     }
 
     // ==================== JSON export ====================
@@ -53,6 +58,27 @@ class ChatExportServiceTest {
         assertTrue(json.contains("\"role\": \"user\""));
         assertTrue(json.contains("\"content\": \"Hi there\""));
         assertTrue(json.contains("\"role\": \"assistant\""));
+    }
+
+    @Test
+    void exportAsJson_preservesAssistantSourceSnapshot() throws Exception {
+        RagChatHistory record = createRecord(
+                1L, "s1", "Question", "Answer", now());
+        record.setSources(List.of(source()));
+        when(historyRepository.findBySessionIdAsc("s1"))
+                .thenReturn(List.of(record));
+
+        JsonNode json = objectMapper.readTree(
+                service.exportAsJson("s1", 0));
+        JsonNode assistant = json.path("messages").get(1);
+
+        assertEquals("assistant", assistant.path("role").asText());
+        assertEquals("S1", assistant.path("sources").get(0)
+                .path("citationId").asText());
+        assertEquals("brand:guides", assistant.path("sources").get(0)
+                .path("collectionKey").asText());
+        assertEquals("风格基调应保持克制。", assistant.path("sources").get(0)
+                .path("chunkText").asText());
     }
 
     @Test
@@ -240,6 +266,24 @@ class ChatExportServiceTest {
         assertTrue(md.contains("What is Spring AI?"));
         assertTrue(md.contains("## Assistant ["));
         assertTrue(md.contains("It is a framework."));
+    }
+
+    @Test
+    void exportAsMarkdown_preservesAssistantSourceSnapshot() {
+        RagChatHistory record = createRecord(
+                1L, "s1", "Question", "Answer", now());
+        record.setSources(List.of(source()));
+        when(historyRepository.findBySessionIdAsc("s1"))
+                .thenReturn(List.of(record));
+
+        String markdown = new String(
+                service.exportAsMarkdown("s1", 0),
+                StandardCharsets.UTF_8);
+
+        assertTrue(markdown.contains("### Sources"));
+        assertTrue(markdown.contains("**S1**: 品牌规范"));
+        assertTrue(markdown.contains("`brand:guides`"));
+        assertTrue(markdown.contains("风格基调应保持克制。"));
     }
 
     @Test
@@ -510,6 +554,18 @@ class ChatExportServiceTest {
         r.setAiResponse(aiResp);
         r.setCreatedAt(createdAt);
         return r;
+    }
+
+    private ChatSource source() {
+        ChatSource source = new ChatSource();
+        source.setCitationId("S1");
+        source.setDocumentId("11");
+        source.setChunkIndex(0);
+        source.setTitle("品牌规范");
+        source.setChunkText("风格基调应保持克制。");
+        source.setCollectionKey("brand:guides");
+        source.setDocumentType("PDF");
+        return source;
     }
 
     private LocalDateTime now() {

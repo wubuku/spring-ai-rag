@@ -43,6 +43,7 @@ _PRESERVE_SF_KEY="${SILICONFLOW_API_KEY-}"
 _PRESERVE_MM_KEY="${SPRING_AI_MINIMAX_API_KEY-}"
 _PRESERVE_OPENAI_KEY="${SPRING_AI_OPENAI_API_KEY-}"
 _PRESERVE_ANTH_KEY="${ANTHROPIC_API_KEY-}"
+_PRESERVE_ROOT_KEY="${RAG_ROOT_API_KEY-}"
 
 if [[ -f .env ]]; then
   # shellcheck disable=SC2046
@@ -53,6 +54,13 @@ fi
 [[ -n "${_PRESERVE_MM_KEY}" ]] && export SPRING_AI_MINIMAX_API_KEY="${_PRESERVE_MM_KEY}"
 [[ -n "${_PRESERVE_OPENAI_KEY}" ]] && export SPRING_AI_OPENAI_API_KEY="${_PRESERVE_OPENAI_KEY}"
 [[ -n "${_PRESERVE_ANTH_KEY}" ]] && export ANTHROPIC_API_KEY="${_PRESERVE_ANTH_KEY}"
+[[ -n "${_PRESERVE_ROOT_KEY}" ]] && export RAG_ROOT_API_KEY="${_PRESERVE_ROOT_KEY}"
+
+ROOT_API_KEY="${RAG_ROOT_API_KEY:-${RAG_API_KEY:-}}"
+API_AUTH_ARGS=()
+if [[ -n "$ROOT_API_KEY" ]]; then
+  API_AUTH_ARGS=(-H "X-API-Key: ${ROOT_API_KEY}")
+fi
 
 export PROBE_TOKEN="REAL_E2E_$(date +%s)_$RANDOM"
 PASS=0
@@ -68,10 +76,11 @@ need() { command -v "$1" >/dev/null || { echo "need $1"; exit 2; }; }
 cleanup() {
   set +e
   if [[ -n "$DOC_ID" ]]; then
-    curl -s -X DELETE "$API/documents/$DOC_ID" >/dev/null
+    curl -s "${API_AUTH_ARGS[@]}" -X DELETE "$API/documents/$DOC_ID" >/dev/null
   fi
   if [[ -n "$COLLECTION_KEY" ]]; then
-    curl -s -X DELETE "$API/collections/by-key?collectionKey=$COLLECTION_KEY" >/dev/null
+    curl -s "${API_AUTH_ARGS[@]}" -X DELETE \
+      "$API/collections/by-key?collectionKey=$COLLECTION_KEY" >/dev/null
   fi
 }
 trap cleanup EXIT
@@ -150,7 +159,7 @@ fi
 ok "chat API HTTP 200 (${CHAT_DESC})"
 
 step "1) Create isolated collection and document with verification code=$PROBE_TOKEN"
-curl -s -X POST "$API/collections" \
+curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/collections" \
   -H 'Content-Type: application/json' \
   -d "{\"collectionKey\":\"${COLLECTION_KEY}\",\"name\":\"real-llm-e2e-${PROBE_TOKEN}\",\"description\":\"Isolated real LLM release verification collection\",\"domainId\":\"default\"}" \
   -o /tmp/rag-e2e-collection.json
@@ -160,7 +169,7 @@ RETURNED_COLLECTION_KEY=$(python3 -c "import json; print(json.load(open('/tmp/ra
   || { bad "create collection or collectionKey mismatch"; exit 1; }
 ok "collection key=$COLLECTION_KEY id=$COLLECTION_ID"
 
-curl -s -X POST "$API/documents" \
+curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/documents" \
   -H 'Content-Type: application/json' \
   -d "{\"title\":\"Real LLM E2E ${PROBE_TOKEN}\",\"content\":\"This is automated release verification test data. The release verification code is ${PROBE_TOKEN}. The code may be repeated verbatim when requested.\",\"collectionKey\":\"${COLLECTION_KEY}\"}" \
   -o /tmp/rag-e2e-create.json
@@ -170,7 +179,8 @@ DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json
 export DOC_ID
 ok "document id=$DOC_ID"
 
-curl -s -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
+curl -s "${API_AUTH_ARGS[@]}" -X POST \
+  "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
   -H 'Content-Type: application/json' \
   -d "{\"documentId\":$DOC_ID}" \
   -o /tmp/rag-e2e-associate.json
@@ -187,7 +197,8 @@ PY
 ok "document associated with isolated collection"
 
 step "2) Embed document (real embedding)"
-curl -s -X POST "$API/documents/${DOC_ID}/embed?force=true" -o /tmp/rag-e2e-embed.json
+curl -s "${API_AUTH_ARGS[@]}" -X POST \
+  "$API/documents/${DOC_ID}/embed?force=true" -o /tmp/rag-e2e-embed.json
 head -c 400 /tmp/rag-e2e-embed.json; echo
 python3 - <<'PY'
 import json,sys
@@ -202,7 +213,7 @@ PY
 ok "embed stored vectors"
 
 step "3) Search for probe token"
-curl -s -X POST "$API/search" \
+curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/search" \
   -H 'Content-Type: application/json' \
   -d "{\"query\":\"${PROBE_TOKEN}\",\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID],\"config\":{\"maxResults\":5,\"minScore\":0,\"useHybridSearch\":true,\"useRerank\":true}}" \
   -o /tmp/rag-e2e-search.json
@@ -230,7 +241,7 @@ PY
 ok "search returned only the isolated document"
 
 step "4) Chat ask (REAL LLM)"
-curl -s -X POST "$API/chat/ask" \
+curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/chat/ask" \
   -H 'Content-Type: application/json' \
   -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
   --max-time 180 \
@@ -255,7 +266,7 @@ if [[ $ask_rc -eq 0 ]]; then ok "chat answer contains verification code"; else b
 if [[ "$SKIP_STREAM" != "1" ]]; then
   step "5) Chat stream (REAL LLM, sample)"
   set +e
-  curl -s -N -X POST "$API/chat/stream" \
+  curl -s -N "${API_AUTH_ARGS[@]}" -X POST "$API/chat/stream" \
     -H 'Content-Type: application/json' \
     -d "{\"message\":\"Using only the selected release-verification document, return the release verification code exactly. The code begins with REAL_E2E_.\",\"maxResults\":5,\"useHybridSearch\":true,\"useRerank\":true,\"collectionKeys\":[\"${COLLECTION_KEY}\"],\"documentIds\":[$DOC_ID]}" \
     --max-time 180 \

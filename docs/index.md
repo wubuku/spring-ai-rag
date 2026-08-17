@@ -54,7 +54,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 
 | Doc | Description |
 |-----|-------------|
-| [architecture.md](architecture.md) | Modules, three-Bean model, Advisor chain, dual memory, domain extension |
+| [architecture.md](architecture.md) | Modules, runtime model routing, three Chat modes, dual memory, domain extension |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
 | [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
@@ -117,10 +117,10 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 |------|---------|
 | `spring-ai-rag-api/` | DTOs, SPI (`DomainRagExtension`, etc.) |
 | `spring-ai-rag-core/` | Implementation + runnable `SpringAiRagApplication` |
-| `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
+| `spring-ai-rag-core/.../chat/`, `.../rag/` | Mode-aware Chat execution, Modular RAG, and Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V31** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V32** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |

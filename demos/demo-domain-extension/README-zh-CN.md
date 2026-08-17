@@ -21,8 +21,13 @@ public class MedicalRagExtension implements DomainRagExtension {
     public String getSystemPromptTemplate() {
         return """
             你是一个专业的医疗问诊助手...
-            参考资料：{context}
-            """;  // 使用 {context} 占位符
+            所有回答仅供参考，不能替代专业诊断。
+            """;
+    }
+
+    @Override
+    public String getSystemPromptTemplate(ChatMode mode) {
+        return getSystemPromptTemplate();
     }
 
     @Override
@@ -121,8 +126,10 @@ mvn spring-boot:run -Dspring-boot.run.arguments="--DEEPSEEK_API_KEY=sk-xxx --SIL
 
 | 组件 | 作用 | 自动发现 |
 |------|------|----------|
-| `DomainRagExtension` | 领域 Prompt 模板 + 检索配置 | @Component 自动注册 |
+| `DomainRagExtension` | 模式安全的领域 Prompt + 检索配置 | @Component 自动注册 |
 | `PromptCustomizer` | Prompt 链式定制 | @Component 自动注册 |
 | `RagAdvisorProvider` | 自定义 Advisor 注入 | @Component 自动注册 |
 
-多个实现按 `getOrder()` 排序，Starter 自动扫描并组装。
+领域 Prompt 不包含 `{context}`；KNOWLEDGE/AGENT 分别由 Spring AI RAG 与工具调用注入
+证据。`RagAdvisorProvider` 通过 `supportedModes()` 和 `advisorScope()` 声明执行边界，
+同一作用域内按 `getOrder()` 排序。

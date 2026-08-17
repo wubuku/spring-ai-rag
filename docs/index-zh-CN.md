@@ -54,7 +54,7 @@
 
 | 文档 | 说明 |
 |------|------|
-| [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、三 Bean、Advisor 链、双表记忆、领域扩展 |
+| [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、运行时模型路由、三种 Chat 模式、双表记忆、领域扩展 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
 | [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
@@ -117,10 +117,10 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 |------|------|
 | `spring-ai-rag-api/` | DTO、SPI（`DomainRagExtension` 等） |
 | `spring-ai-rag-core/` | 实现 + `SpringAiRagApplication` 可运行入口 |
-| `spring-ai-rag-core/.../advisor/` | QueryRewrite → HybridSearch → Rerank |
+| `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V31** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V32** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |

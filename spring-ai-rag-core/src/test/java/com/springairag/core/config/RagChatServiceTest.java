@@ -3,13 +3,19 @@ package com.springairag.core.config;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.enums.ChatMode;
 import com.springairag.core.advisor.HybridSearchAdvisor;
 import com.springairag.core.advisor.QueryRewriteAdvisor;
 import com.springairag.core.advisor.RerankAdvisor;
+import com.springairag.core.chat.ChatCommand;
+import com.springairag.core.chat.ChatCommandMapper;
+import com.springairag.core.chat.ChatExecutionResult;
+import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -211,6 +217,48 @@ class RagChatServiceTest {
         assertEquals("皮肤类型分类标准", response.getSources().get(0).getChunkText());
         assertEquals(0.95, response.getSources().get(0).getScore(), 0.001);
         assertEquals("doc-2", response.getSources().get(1).getDocumentId());
+    }
+
+    @Test
+    @DisplayName("Spring production adapter delegates ChatRequest to mode-aware execution")
+    void chat_withModeAwareExecution_delegatesAndMapsFullResponse() {
+        RagChatService service = createService();
+        ChatExecutionService executionService = mock(ChatExecutionService.class);
+        ChatCommandMapper commandMapper = mock(ChatCommandMapper.class);
+        ChatCommand command = mock(ChatCommand.class);
+        ChatRequest request = new ChatRequest("问题", "session-mode");
+        request.setMode(ChatMode.PLAIN);
+        RetrievalScope scope = RetrievalScope.unscoped();
+        ChatExecutionResult result = new ChatExecutionResult(
+                "回答",
+                "session-mode",
+                "trace-1",
+                "requested",
+                "resolved",
+                ChatMode.PLAIN,
+                List.of(),
+                Map.of("totalTokens", 12),
+                "STOP",
+                List.of(),
+                Map.of("retrievalExecuted", false));
+
+        when(commandMapper.map(eq(request), same(scope), any()))
+                .thenReturn(command);
+        when(executionService.execute(command)).thenReturn(result);
+        service.configureModeAwareExecution(executionService, commandMapper);
+
+        ChatResponse response = service.chat(request, scope);
+
+        assertEquals("回答", response.getAnswer());
+        assertEquals("session-mode", response.getSessionId());
+        assertEquals("trace-1", response.getTraceId());
+        assertEquals(ChatMode.PLAIN, response.getMode());
+        assertEquals("requested", response.getRequestedModel());
+        assertEquals("resolved", response.getResolvedModel());
+        assertEquals(12, response.getUsage().get("totalTokens"));
+        assertEquals(false, response.getMetadata().get("retrievalExecuted"));
+        verify(executionService).execute(command);
+        verifyNoInteractions(chatClient);
     }
 
     @Test

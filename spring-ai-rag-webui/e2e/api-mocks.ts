@@ -200,6 +200,10 @@ export async function mockAllApiCalls(page: Page) {
             name: 'MiniMax M2.7',
             apiType: 'anthropic-messages',
             available: true,
+            capabilities: {
+              streaming: true,
+              toolCalling: true,
+            },
           },
           {
             ref: 'openrouter/xiaomi/mimo-v2-pro',
@@ -209,6 +213,10 @@ export async function mockAllApiCalls(page: Page) {
             name: 'MiMo V2 Pro',
             apiType: 'openai-completions',
             available: true,
+            capabilities: {
+              streaming: true,
+              toolCalling: true,
+            },
           },
         ],
       }),
@@ -374,7 +382,23 @@ export async function mockAllApiCalls(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: 'data: {"choices":[{"delta":{"content":"Test response"}}]}\n\nevent: done\ndata: {"sessionId":"mock-session-123","status":"complete"}\n\n',
+      body: [
+        'event: tool_start',
+        'data: {"tool":"searchKnowledge","toolCallId":"mock-tool-call-1","query":"What is RAG?"}',
+        '',
+        'event: tool_result',
+        'data: {"tool":"searchKnowledge","toolCallId":"mock-tool-call-1","resultCount":1,"elapsedMs":12}',
+        '',
+        'event: content',
+        'data: {"content":"Test response"}',
+        '',
+        'event: sources',
+        'data: {"sessionId":"mock-session-123","sources":[{"citationId":"S1","documentId":1,"title":"RAG Guide","collectionKey":"sample-collection","documentType":"TEXT"}]}',
+        '',
+        'event: done',
+        'data: {"sessionId":"mock-session-123","status":"complete","mode":"KNOWLEDGE","resolvedModel":"minimax/MiniMax-M2.7"}',
+        '',
+      ].join('\n'),
     });
   });
 

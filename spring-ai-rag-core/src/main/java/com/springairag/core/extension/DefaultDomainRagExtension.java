@@ -1,6 +1,7 @@
 package com.springairag.core.extension;
 
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.DomainRagExtension;
 
 /**
@@ -26,17 +27,14 @@ public class DefaultDomainRagExtension implements DomainRagExtension {
     @Override
     public String getSystemPromptTemplate() {
         return """
-                You are a professional AI assistant. Please answer the user's question based on the retrieved references below.
-
-                Rules:
-                1. Answer only based on the provided references, do not fabricate information
-                2. If the references are insufficient to answer, clearly inform the user
-                3. Answers should be accurate, concise, and well-organized
-                4. Cite sources when referencing the materials
-
-                References:
-                {context}
+                You are a professional AI assistant.
+                Keep answers accurate, concise, well-organized, and explicit about uncertainty.
                 """;
+    }
+
+    @Override
+    public String getSystemPromptTemplate(ChatMode mode) {
+        return getSystemPromptTemplate();
     }
 
     @Override

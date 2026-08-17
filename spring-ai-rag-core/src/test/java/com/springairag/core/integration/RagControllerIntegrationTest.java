@@ -2,7 +2,10 @@ package com.springairag.core.integration;
 
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.api.dto.ChatSource;
+import com.springairag.api.enums.ChatMode;
 import com.springairag.api.service.AbTestService;
+import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagChatService;
@@ -36,9 +39,12 @@ import org.springframework.http.MediaType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
+import reactor.core.publisher.Flux;
 
 import java.time.LocalDateTime;
 import java.time.ZonedDateTime;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 import static org.mockito.ArgumentMatchers.*;
@@ -48,6 +54,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * REST Controller Integration Tests
@@ -254,6 +262,103 @@ class RagControllerIntegrationTest {
         }
 
         @Test
+        void chatStream_emitsStructuredEventsInProtocolOrder() throws Exception {
+            ChatSource source = new ChatSource();
+            source.setCitationId("S1");
+            source.setDocumentId("doc-1");
+            source.setTitle("风格手册");
+            source.setChunkText("风格基调应保持克制、清晰。");
+
+            when(ragChatService.chatEvents(
+                    any(com.springairag.api.dto.ChatRequest.class),
+                    any(RetrievalScope.class)))
+                    .thenReturn(Flux.just(
+                            new ChatEvent.ContentDelta("已找到："),
+                            new ChatEvent.ToolStarted(
+                                    "call-1", "searchKnowledge", "风格基调"),
+                            new ChatEvent.ToolFinished(
+                                    "call-1", "searchKnowledge", 1, 12),
+                            new ChatEvent.SourcesAvailable(
+                                    "sse-session", List.of(source)),
+                            new ChatEvent.Completed(
+                                    "trace-1",
+                                    "sse-session",
+                                    "requested-model",
+                                    "resolved-model",
+                                    ChatMode.AGENT,
+                                    Map.of("totalTokens", 12),
+                                    "STOP",
+                                    List.of())));
+
+            MvcResult started = mockMvc.perform(post("/api/v1/rag/chat/stream")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "message": "找到风格基调",
+                                        "sessionId": "sse-session",
+                                        "mode": "AGENT"
+                                    }
+                                    """))
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
+
+            MvcResult completed = mockMvc.perform(asyncDispatch(started))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(
+                            MediaType.TEXT_EVENT_STREAM))
+                    .andReturn();
+
+            String body = new String(
+                    completed.getResponse().getContentAsByteArray(),
+                    StandardCharsets.UTF_8);
+            assertEventOrder(
+                    body,
+                    "event:content",
+                    "event:tool_start",
+                    "event:tool_result",
+                    "event:sources",
+                    "event:done");
+            assertTrue(body.contains("\"content\":\"已找到：\""), body);
+            assertTrue(body.contains("\"tool\":\"searchKnowledge\""), body);
+            assertTrue(body.contains("\"resultCount\":1"), body);
+            assertTrue(body.contains("\"citationId\":\"S1\""), body);
+            assertTrue(body.contains("\"sessionId\":\"sse-session\""), body);
+            assertFalse(body.contains("event:error"), body);
+        }
+
+        @Test
+        void chatStream_emitsErrorWithoutDoneWhenExecutionFails() throws Exception {
+            when(ragChatService.chatEvents(
+                    any(com.springairag.api.dto.ChatRequest.class),
+                    any(RetrievalScope.class)))
+                    .thenReturn(Flux.error(new RuntimeException("model unavailable")));
+
+            MvcResult started = mockMvc.perform(post("/api/v1/rag/chat/stream")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("""
+                                    {
+                                        "message": "测试错误",
+                                        "sessionId": "sse-error"
+                                    }
+                                    """))
+                    .andExpect(request().asyncStarted())
+                    .andReturn();
+
+            MvcResult completed = mockMvc.perform(asyncDispatch(started))
+                    .andExpect(status().isOk())
+                    .andExpect(content().contentTypeCompatibleWith(
+                            MediaType.TEXT_EVENT_STREAM))
+                    .andReturn();
+
+            String body = new String(
+                    completed.getResponse().getContentAsByteArray(),
+                    StandardCharsets.UTF_8);
+            assertTrue(body.contains("event:error"));
+            assertTrue(body.contains("\"message\":\"model unavailable\""));
+            assertFalse(body.contains("event:done"));
+        }
+
+        @Test
         void chatAsk_missingSessionId_returns200() throws Exception {
             // sessionId is optional — controller auto-generates for new conversations
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -271,7 +376,10 @@ class RagControllerIntegrationTest {
             List<ChatHistoryResponse> history = List.of(
                     new ChatHistoryResponse(1L, "session-001", "你好", "你好！", null, null, LocalDateTime.now())
             );
-            when(historyRepository.findBySessionId("session-001", 50))
+            when(historyRepository.findByPrincipalAndSession(
+                    any(com.springairag.core.chat.ChatPrincipal.class),
+                    eq("session-001"),
+                    eq(50)))
                     .thenReturn(history);
 
             mockMvc.perform(get("/api/v1/rag/chat/history/{sessionId}", "session-001"))
@@ -281,9 +389,24 @@ class RagControllerIntegrationTest {
                     .andExpect(jsonPath("$[0].userMessage").value("你好"));
         }
 
+        private void assertEventOrder(String body, String... eventNames) {
+            int previous = -1;
+            for (String eventName : eventNames) {
+                int current = body.indexOf(eventName);
+                assertTrue(current >= 0, "Missing SSE event: " + eventName);
+                assertTrue(
+                        current > previous,
+                        "SSE event out of order: " + eventName);
+                previous = current;
+            }
+        }
+
         @Test
         void clearHistory_deletesRecords() throws Exception {
-            when(historyRepository.deleteBySessionId("clear-session")).thenReturn(3);
+            when(historyRepository.deleteByPrincipalAndSession(
+                    any(com.springairag.core.chat.ChatPrincipal.class),
+                    eq("clear-session")))
+                    .thenReturn(3);
 
             mockMvc.perform(delete("/api/v1/rag/chat/history/{sessionId}", "clear-session"))
                     .andExpect(status().isOk())

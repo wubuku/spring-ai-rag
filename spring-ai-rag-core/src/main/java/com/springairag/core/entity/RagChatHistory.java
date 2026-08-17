@@ -1,11 +1,13 @@
 package com.springairag.core.entity;
 
+import com.springairag.api.dto.ChatSource;
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -17,7 +19,9 @@ import java.util.Map;
 @Entity
 @Table(name = "rag_chat_history", indexes = {
     @Index(name = "idx_rag_chat_session", columnList = "session_id"),
-    @Index(name = "idx_rag_chat_created", columnList = "created_at")
+    @Index(name = "idx_rag_chat_created", columnList = "created_at"),
+    @Index(name = "idx_rag_chat_owner_session_created",
+            columnList = "owner_principal_id,session_id,created_at,id")
 })
 public class RagChatHistory {
 
@@ -30,6 +34,12 @@ public class RagChatHistory {
      */
     @Column(name = "session_id", nullable = false, length = 255)
     private String sessionId;
+
+    /**
+     * Stable authenticated principal ID. Null is reserved for pre-V32 legacy rows.
+     */
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
 
     /**
      * User message
@@ -48,6 +58,19 @@ public class RagChatHistory {
      */
     @Column(name = "related_document_ids", columnDefinition = "TEXT")
     private String relatedDocumentIds;
+
+    /**
+     * Citation snapshot captured when the turn was committed.
+     */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "sources", columnDefinition = "jsonb")
+    private List<ChatSource> sources;
+
+    /**
+     * Durable turn state. Current values are COMPLETE and CANCELLED.
+     */
+    @Column(name = "turn_status", nullable = false, length = 20)
+    private String turnStatus = "COMPLETE";
 
     /**
      * Chat metadata (JSONB format).
@@ -74,6 +97,11 @@ public class RagChatHistory {
     public String getSessionId() { return sessionId; }
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
+    public String getOwnerPrincipalId() { return ownerPrincipalId; }
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
+    }
+
     public String getUserMessage() { return userMessage; }
     public void setUserMessage(String userMessage) { this.userMessage = userMessage; }
 
@@ -82,6 +110,14 @@ public class RagChatHistory {
 
     public String getRelatedDocumentIds() { return relatedDocumentIds; }
     public void setRelatedDocumentIds(String relatedDocumentIds) { this.relatedDocumentIds = relatedDocumentIds; }
+
+    public List<ChatSource> getSources() { return sources; }
+    public void setSources(List<ChatSource> sources) {
+        this.sources = sources != null ? List.copyOf(sources) : null;
+    }
+
+    public String getTurnStatus() { return turnStatus; }
+    public void setTurnStatus(String turnStatus) { this.turnStatus = turnStatus; }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

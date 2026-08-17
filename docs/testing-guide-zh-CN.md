@@ -238,7 +238,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V31、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V32、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -292,7 +292,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V31，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V32，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -318,7 +318,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V31，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V32，并验证 JSONB round-trip、
 仅更新 payload 的版本记录、相同描述下不同记录共存以及级联清理：
 
 ```bash
@@ -342,6 +342,64 @@ Mock Playwright、project-docs 和空白检查，并将结果记录到
 浏览器 preview 对 `JSONB_PLAYWRIGHT_PORT`（默认 `4174`）使用严格端口绑定；若本地已有
 服务占用该端口，请指定空闲端口。完整门禁必须串行运行，因为 Maven clean 会删除模块的
 `target/` 输出。
+
+### Chat 对话能力重构验收门禁
+
+Chat 实现被明确验证为三种模式：
+
+- `KNOWLEDGE`：Spring AI Modular RAG，内部使用项目自己的混合检索和 rerank。
+- `AGENT`：Spring AI Tool Calling，检索范围由服务端控制。
+- `PLAIN`：普通 ChatClient 加 Memory，不执行知识检索。
+
+运行可重复的本地门禁：
+
+```bash
+./scripts/verify-chat-capability.sh
+```
+
+该脚本会执行 Chat 执行链、Tool Calling、Memory/历史、结构化 SSE、
+Controller/集成和导出测试；V32 PostgreSQL lease/原子性测试；`mvn clean
+compile test-compile`；完整 `mvn test`；安装当前 reactor 产物并测试独立的
+`demos/demo-domain-extension` 消费者；使用临时 PostgreSQL 和 dummy 模型端点执行
+Spring Boot 启动/健康烟测；WebUI Vitest、TypeScript、生产构建；Chat 核心 Mock
+Playwright；project-docs 和空白检查。日志及 Markdown 结果写入
+`.verification/chat-capability/<run-id>/summary.md`。
+
+独立 demo 不属于根 reactor。直接在 demo 目录运行 Maven 可能链接本地仓库里的旧
+`spring-ai-rag-starter:1.0.0`；一键脚本会先安装当前工作区产物，再运行 demo 测试，
+以验证新增 API 对外部消费者确实可编译。
+
+浏览器门禁只使用 DOM 可见性、请求/响应断言、URL 断言和测试断言，不使用截图作为正确性
+证据。浏览器套件覆盖模式/模型请求、AGENT 工具生命周期、来源、历史来源恢复、选定
+Collection 和移动端横向溢出。
+
+PostgreSQL 门禁默认执行。如果 Docker 不可用，或 daemon 拒绝当前协商的 API 版本，脚本会
+把 Docker 和 PostgreSQL 门禁都记录为 `SKIP`；`PASS_WITH_SKIPS` 不等于完整发布门禁。本项目
+曾遇到 Testcontainers 协商 Docker API `1.32`，而本机 daemon 要求最低 `1.40`。可使用：
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+只有在环境确实不可用时才使用 `--skip-postgres`，并保留生成的 summary。境内 registry/证书、
+Docker API 和 Ryuk 的排障经验见 [china-network-guide-zh-CN.md](china-network-guide-zh-CN.md)
+和 [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md)。
+
+后端启动烟测默认使用严格绑定的 `CHAT_STARTUP_PORT=4210`，可在端口冲突时覆盖。只有
+明确不具备 Docker 环境时才使用 `--skip-startup`，并保留该 `SKIP` 记录。
+
+真实 Provider 验证必须显式开启：
+
+```bash
+RAG_API_KEY="$RAG_ROOT_API_KEY" \
+./scripts/verify-chat-capability.sh --with-real-llm
+```
+
+脚本会从 `.env` 读取真实模型配置；如果服务启用了 `RAG_ROOT_API_KEY`，会使用
+`X-API-Key` 访问数据面。未传该选项时，真实 LLM 门禁会明确记录为 `SKIP`；本地测试
+和 Mock Playwright 不代表真实模型或真实 Tool Calling endpoint 已验证。
 
 ## 编写新测试的规则
 

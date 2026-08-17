@@ -1,6 +1,7 @@
 package com.springairag.demo.medical;
 
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.enums.ChatMode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -26,10 +27,11 @@ class MedicalRagExtensionTest {
     }
 
     @Test
-    @DisplayName("system prompt contains {context} placeholder")
-    void systemPrompt_containsContextPlaceholder() {
+    @DisplayName("system prompt leaves context injection to the RAG pipeline")
+    void systemPrompt_doesNotContainContextPlaceholder() {
         String prompt = extension.getSystemPromptTemplate();
-        assertTrue(prompt.contains("{context}"), "提示词必须包含 {context} 占位符");
+        assertFalse(prompt.contains("{context}"), "提示词不应包含 {context} 占位符");
+        assertEquals(prompt, extension.getSystemPromptTemplate(ChatMode.PLAIN));
     }
 
     @Test

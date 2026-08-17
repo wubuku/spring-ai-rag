@@ -264,7 +264,13 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 
 ### `POST /api/v1/rag/chat/ask`
 
-非流式 RAG 问答，返回完整答案。
+非流式 Chat，返回完整答案。同一端点支持三种显式执行模式：
+
+| 模式 | 行为 |
+|---|---|
+| `KNOWLEDGE` | 始终通过项目混合检索器执行 Spring AI Modular RAG；省略时默认使用 |
+| `AGENT` | 由支持 Tool Calling 的模型按需调用授权 `searchKnowledge` 工具 |
+| `PLAIN` | 仅模型 + 对话 Memory，不检索知识库 |
 
 **请求体：**
 
@@ -272,6 +278,7 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 {
   "message": "什么是 Spring AI？",
   "sessionId": "session-001",
+  "mode": "KNOWLEDGE",
   "domainId": "medical",
   "model": "openrouter/xiaomi/mimo-v2-pro",
   "collectionScopeMode": "SELECTED_COLLECTIONS",
@@ -288,6 +295,7 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 |------|------|------|------|
 | `message` | string | ✅ | 问题内容（不超过 10000 字符） |
 | `sessionId` | string | | 会话 ID，最长 36 字符；省略时自动生成 |
+| `mode` | enum | | `KNOWLEDGE`、`AGENT` 或 `PLAIN`；默认 `KNOWLEDGE` |
 | `domainId` | string | | 领域扩展 ID |
 | `model` | string | | `GET /rag/models` 返回的运行时模型引用；省略时使用默认链 |
 | `collectionScopeMode` | enum | | `CALLER_VISIBLE`、`ANY_COLLECTION` 或 `SELECTED_COLLECTIONS` |
@@ -299,22 +307,59 @@ All error responses follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7
 | `useRerank` | boolean | | 是否启用重排序，默认 true |
 | `metadata` | object | | 扩展元数据 |
 
+`maxResults`、`useHybridSearch` 与 `useRerank` 会真实覆盖 `KNOWLEDGE` 和
+`AGENT` 的执行参数。`PLAIN` 显式传入这些字段或任何 Collection/document 检索范围时
+返回 `400`。
+
+`AGENT` 要求模型注册项声明 `capabilities.toolCalling=true`，且 Spring AI adapter
+提供工具选项。显式选择不兼容模型时返回 `MODEL_CAPABILITY_UNSUPPORTED`；默认路由会
+跳过不兼容候选。
+
+`domainId` 只按显式 ID 选择领域扩展；未知 ID 返回 `UNKNOWN_DOMAIN`。领域 Prompt
+不负责拼接检索上下文。仍含 `{context}` 的 legacy 模板可继续用于 `KNOWLEDGE`，但在
+`AGENT` 或 `PLAIN` 中会返回 `DOMAIN_MODE_UNSUPPORTED`，除非扩展实现
+`getSystemPromptTemplate(ChatMode)` 提供对应模式的安全 instruction。
+
 **响应：**
 
 ```json
 {
   "answer": "Spring AI 是 Spring 生态的 AI 应用框架……",
+  "traceId": "a1b2c3",
   "sessionId": "session-001",
+  "mode": "KNOWLEDGE",
+  "requestedModel": "openrouter/xiaomi/mimo-v2-pro",
+  "resolvedModel": "openrouter/xiaomi/mimo-v2-pro",
+  "usage": {
+    "promptTokens": 120,
+    "completionTokens": 36,
+    "totalTokens": 156
+  },
+  "finishReason": "STOP",
   "sources": [
     {
-      "documentId": 1,
+      "citationId": "S1",
+      "documentId": "1",
+      "chunkIndex": 0,
       "title": "Spring AI 介绍",
       "score": 0.92,
-      "chunk": "Spring AI provides ChatClient..."
+      "chunkText": "Spring AI provides ChatClient...",
+      "collectionKey": "spring-ai:docs",
+      "documentType": "PDF"
     }
-  ]
+  ],
+  "metadata": {
+    "sessionId": "session-001",
+    "retrievalExecuted": true
+  },
+  "stepMetrics": []
 }
 ```
+
+来源 score 是当前查询/配置下的排序信号，不是概率或百分比。`PLAIN` 返回空来源列表。
+`metadata.retrievalExecuted` 依据实际检索尝试生成：`PLAIN` 始终为 `false`，
+完成 `KNOWLEDGE` pipeline 后始终为 `true`；`AGENT` 若模型未调用
+`searchKnowledge`，则可以为 `false`。
 
 ---
 
@@ -326,54 +371,63 @@ SSE 流式问答，逐块返回答案。
 
 `sessionId` 同样限制为最长 36 字符；超限请求在进入 Chat Memory 前返回 `400 VALIDATION_FAILED`。
 
-**响应：** `text/event-stream`
-
-```
-data: {"choices":[{"delta":{"content":"Spring AI 是"}}]}
-
-data: {"choices":[{"delta":{"content":" Spring 生态的 AI 框架"}}]}
-
-event:done
-data:{"traceId":"...","status":"complete"}
-```
+**响应：** `text/event-stream`，包含 `content`、`tool_start`、`tool_result`、
+`sources`、`done` 与 `error`。`done` 和 `error` 是互斥终态。事件 payload、顺序、
+heartbeat、取消和 fallback 语义见 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
 
 **curl 示例：**
 
 ```bash
 curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -H "Content-Type: application/json" \
-  -d '{"message": "什么是 RAG？", "sessionId": "s1", "model": "openrouter/xiaomi/mimo-v2-pro"}'
+  -d '{"message":"什么是 RAG？","sessionId":"s1","mode":"KNOWLEDGE","model":"openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
 ---
 
 ### `GET /api/v1/rag/chat/history/{sessionId}`
 
-Query chat history for a session.
+查询认证 principal 所拥有的 session history，按创建时间倒序返回。
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `limit` | int | 50 | Number of records to return |
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `limit` | int | 50 | 返回记录数；服务端限制为 1–500 |
 
-**Response:** `List<Map<String, Object>>`
+**响应：** `ChatHistoryResponse[]`
 
 ```json
 [
   {
     "id": 1,
-    "session_id": "s1",
-    "user_message": "What is RAG?",
-    "ai_response": "RAG is Retrieval-Augmented Generation...",
-    "created_at": "2026-04-02T16:00:00Z"
+    "sessionId": "s1",
+    "userMessage": "什么是 RAG？",
+    "aiResponse": "RAG 是检索增强生成。",
+    "relatedDocumentIds": [1],
+    "metadata": {},
+    "sources": [{
+      "citationId": "S1",
+      "documentId": "1",
+      "title": "RAG 指南",
+      "chunkText": "RAG 结合检索与生成。"
+    }],
+    "status": "COMPLETE",
+    "mode": "KNOWLEDGE",
+    "requestedModel": null,
+    "resolvedModel": "minimax/MiniMax-M2.7",
+    "createdAt": "2026-08-17T12:00:00"
   }
 ]
 ```
+
+不存在的 session 与属于其他 principal 的 session 都返回
+`404 SESSION_NOT_FOUND`。
 
 ---
 
 ### `DELETE /api/v1/rag/chat/history/{sessionId}`
 
-Clear chat history for a session (only affects `rag_chat_history` table, not `spring_ai_chat_memory`).
+在 lease 保护下同时清理当前 principal 的业务 history 与 Spring AI Memory。session
+存在活动请求时返回 `409 SESSION_BUSY`。
 
 **Response:**
 
@@ -384,6 +438,23 @@ Clear chat history for a session (only affects `rag_chat_history` table, not `sp
   "deletedCount": 10
 }
 ```
+
+---
+
+### `GET /api/v1/rag/chat/export/{sessionId}`
+
+将当前 principal 的会话导出为下载文件。不存在或属于其他 principal 的 session 返回
+`404 SESSION_NOT_FOUND`。
+
+| 参数 | 类型 | 位置 | 说明 |
+|---|---|---|---|
+| `format` | string | query | `json` 或 `md`，默认 `json` |
+| `limit` | int | query | 最大 turn 记录数；`0` 表示全部，默认 `0` |
+
+响应为 `application/json; charset=utf-8` 或
+`text/markdown; charset=utf-8`，文件名为 `{sessionId}.{format}`。JSON 和 Markdown
+中的 assistant 消息都会保留完成 turn 时保存的来源快照；CSV 不属于该 HTTP 端点支持的
+格式。
 
 ---
 
@@ -1372,6 +1443,10 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
       "reasoning": false,
       "contextWindow": 600000,
       "maxTokens": 32000,
+      "capabilities": {
+        "streaming": true,
+        "toolCalling": true
+      },
       "source": "configured"
     },
     {
@@ -1385,6 +1460,10 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
       "reasoning": false,
       "contextWindow": 200000,
       "maxTokens": 8192,
+      "capabilities": {
+        "streaming": true,
+        "toolCalling": false
+      },
       "source": "configured"
     }
   ]
@@ -1393,6 +1472,10 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
 
 已配置但缺少凭据的模型仍会返回，并带有 `available: false` 和
 `unavailableReason`。
+
+省略 `capabilities.streaming` 时为兼容旧配置默认按 `true` 处理。
+`capabilities.toolCalling` 默认 `false`，只有在具体上游模型/端点验证支持后才应显式
+开启。`AGENT` 模式要求 Tool Calling；WebUI 也使用该字段禁用不兼容选择。
 
 ### `GET /api/v1/rag/models/{provider}`
 
@@ -1417,7 +1500,11 @@ Get RAG service key metrics summary (request count, success rate, retrieval resu
       {
         "ref": "openrouter/xiaomi/mimo-v2-pro",
         "modelId": "xiaomi/mimo-v2-pro",
-        "available": true
+        "available": true,
+        "capabilities": {
+          "streaming": true,
+          "toolCalling": true
+        }
       }
     ]
   }
