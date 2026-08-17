@@ -97,14 +97,14 @@ User Query
   │
   ▼
 ┌─────────────────────────┐  order=+10
-│  QueryRewriteAdvisor    │  Query rewrite: synonym expansion + domain qualifiers + LLM-assisted
+│  QueryRewriteAdvisor    │  Query focusing + synonyms + domain qualifiers + LLM-assisted rewrites
 │  Input: raw query       │
-│  Output: rewritten query│
+│  Output: focused query  │
 └───────────┬─────────────┘
             ▼
 ┌─────────────────────────┐  order=+20
 │  HybridSearchAdvisor    │  Hybrid retrieval: vector similarity + full-text search + RRF fusion
-│  Input: rewritten query │
+│  Input: focused query   │
 │  Output: context attributes│  (hybrid.search.results)
 └───────────┬─────────────┘
             ▼
@@ -122,6 +122,10 @@ User Query
 ```
 
 **Data passing**: Advisors share data via `ChatClientRequest.context().getAttributes()`, avoiding method signature coupling.
+Answer generation still receives the original user message. Retrieval and reranking use
+`rewrite.retrieval-query`. For explicit commands such as “find content related to
+‘visual tone’”, the advisor extracts the subject so command words do not distort the
+query embedding.
 
 ### 3.3 Dual-Table Conversation Memory
 

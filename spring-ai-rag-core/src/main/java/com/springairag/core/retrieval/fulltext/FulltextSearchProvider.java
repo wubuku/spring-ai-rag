@@ -37,7 +37,10 @@ public interface FulltextSearchProvider {
      * @param documentIds  document ID filter (null means search all)
      * @param excludeIds   embedding IDs to exclude
      * @param limit        max results to return
-     * @param minScore     minimum relevance score threshold
+     * @param minScore     provider-specific minimum score threshold; boolean
+     *                     lexeme FTS providers may rely on the database match
+     *                     predicate instead because ts_rank is not comparable
+     *                     to vector similarity
      * @param embeddingProfileId active embedding profile ID
      * @return retrieval results list (sorted by relevance descending)
      */

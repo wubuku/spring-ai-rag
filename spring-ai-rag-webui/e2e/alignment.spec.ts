@@ -60,7 +60,7 @@ test.describe('WebUI alignment policy', () => {
 
     await expect(page.getByRole('heading', { name: 'Files' })).toHaveCSS('text-align', 'start');
     await expect(page.locator('main [class*="uploadArea"]')).toHaveCSS('text-align', 'center');
-    await expect(page.locator('main [class*="treeHeader"]')).toHaveCSS('text-align', 'start');
+    await expect(page.locator('main [class*="treeHeader_"]')).toHaveCSS('text-align', 'start');
     await expect(page.locator('main [class*="previewEmpty_"]')).toHaveCSS('text-align', 'center');
     await captureVisualEvidence(page.locator('main'), testInfo, 'files-alignment-desktop.png');
   });

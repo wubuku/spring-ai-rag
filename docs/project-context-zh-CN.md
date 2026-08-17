@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-16。
+> **最近复核**：2026-08-17。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -108,6 +108,26 @@ UUID 即使内容相同也保留独立文档；内容哈希只负责 embedding �
 可进一步追溯到文件目录、被索引的 Markdown 和原始 PDF。文档管理的上传路径则把支持的
 文本文件直接写入 `rag_documents`，不会创建 `fs_files` 产物。详见
 [文件管理、PDF 导入与 RAG 联动](file-management-and-pdf-rag-zh-CN.md)。
+
+### WebUI 浏览器导航契约
+
+WebUI 使用 React Router `BrowserRouter`，生产 basename 为 `/webui`。能够标识稳定页面
+上下文、并可通过后端重新加载的数据必须进入 path 或 query parameter，而不能只保存在
+组件局部 state。当前可寻址状态包括：
+
+- Search：已提交的 `query`、`hybrid`、`scopeMode` 和重复的 `collectionKey`；
+- Files：目录 `path`、预览文件 `file` 和导入时间排序 `sort=asc`；
+- Documents：`collectionKey`、`keyword` 和 `page`；
+- Chat 会话与 A/B 实验详情：`/chat/{sessionId}`、`/abtest/{experimentId}`；
+- Settings、Evaluation 和 Alerts 的活动标签页：`tab`。
+
+因此跨页跳转、浏览器后退/前进和直接打开深链接都可以恢复这些页面上下文。Root API Key
+仍只保存在页面内存；整页刷新会先进入 `/webui/unlock`，解锁后返回原始 pathname 和 query
+并重新加载数据。API Key、原始文件内容、未提交表单草稿、弹窗、菜单、hover/focus 和上传中
+状态不得写入 URL。
+
+新增或修改页面时，凡是用户会合理期望通过后退、前进、刷新或分享地址恢复的状态，都应增加
+对应的 Router 状态和 Mock Playwright 往返测试。仅瞬时 UI 状态继续使用局部 state。
 
 ## 4. 检索与质量
 

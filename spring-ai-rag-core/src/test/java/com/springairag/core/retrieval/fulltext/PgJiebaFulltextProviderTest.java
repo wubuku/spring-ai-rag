@@ -105,6 +105,34 @@ class PgJiebaFulltextProviderTest {
     }
 
     @Test
+    @DisplayName("boolean jieba match is retained when ts_rank is below vector minScore")
+    void search_retainsBooleanMatchWithLowTsRank() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(
+                contains("search_vector_zh"), eq(Boolean.class)))
+                .thenReturn(true);
+
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", 1L);
+        row.put("chunk_text", "工业区仓库");
+        row.put("document_id", 1L);
+        row.put("chunk_index", 0);
+        row.put("metadata", null);
+        row.put("rank", 0.1);
+        when(jdbc.queryForList(anyString(), any(Object[].class)))
+                .thenReturn(List.of(row));
+
+        PgJiebaFulltextProvider provider =
+                new PgJiebaFulltextProvider(jdbc);
+        List<RetrievalResult> results = provider.search(
+                "工业区仓库", null, null, 5, 0.3, 1L);
+
+        assertEquals(1, results.size());
+        assertEquals(0.1, results.get(0).getFulltextScore(), 0.001);
+    }
+
+    @Test
     @DisplayName("scope predicates are pushed into pg_jieba SQL")
     void searchInScope_pushesCollectionDocumentAndTypePredicates() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);

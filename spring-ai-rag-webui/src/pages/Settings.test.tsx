@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { Settings } from './Settings';
 import { modelsApi } from '../api/models';
 
@@ -19,6 +20,12 @@ const localStorageMock = {
 Object.defineProperty(window, 'localStorage', { value: localStorageMock });
 
 describe('Settings', () => {
+  const renderSettings = () => render(
+    <MemoryRouter>
+      <Settings />
+    </MemoryRouter>,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
     localStorageMock.getItem.mockReturnValue(null);
@@ -54,13 +61,13 @@ describe('Settings', () => {
   });
 
   it('renders page title', () => {
-    render(<Settings />);
+    renderSettings();
     // Mock i18n returns 'settings.title' key, which contains 'Settings'
     expect(screen.getByText(/settings\.title/i)).toBeInTheDocument();
   });
 
   it('renders settings tabs without an API key persistence tab', () => {
-    render(<Settings />);
+    renderSettings();
     // Mock returns keys: settings.llmProvider, settings.retrieval, settings.cache, language label
     expect(screen.getByRole('button', { name: /settings\.llmProvider/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /settings\.retrieval/i })).toBeInTheDocument();
@@ -69,14 +76,14 @@ describe('Settings', () => {
   });
 
   it('shows save button disabled when no changes', () => {
-    render(<Settings />);
+    renderSettings();
     const saveBtn = screen.getByRole('button', { name: /settings\.save/i });
     expect(saveBtn).toBeInTheDocument();
     expect(saveBtn).toBeDisabled();
   });
 
   it('allows selecting and persisting a configured runtime model', async () => {
-    render(<Settings />);
+    renderSettings();
     const provider = await screen.findByTestId('settings-provider-select');
     const model = screen.getByTestId('settings-model-select');
     await waitFor(() => {

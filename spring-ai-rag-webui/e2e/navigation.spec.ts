@@ -18,6 +18,9 @@ test.describe('Navigation', () => {
       'Metrics',
       'Evaluation',
       'Alerts',
+      'A/B Test',
+      'API Keys',
+      'Files',
       'Settings',
     ];
 
@@ -37,6 +40,9 @@ test.describe('Navigation', () => {
       '/webui/metrics',
       '/webui/evaluation',
       '/webui/alerts',
+      '/webui/abtest',
+      '/webui/api-keys',
+      '/webui/files',
       '/webui/settings',
     ];
 
@@ -50,5 +56,19 @@ test.describe('Navigation', () => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/');
     await expect(page).toHaveURL(/\/dashboard/);
+  });
+
+  test('sidebar navigation participates in browser back and forward history', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/dashboard');
+
+    await page.getByRole('link', { name: /Search/ }).click();
+    await expect(page).toHaveURL(/\/webui\/search$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/dashboard$/);
+
+    await page.goForward();
+    await expect(page).toHaveURL(/\/webui\/search$/);
   });
 });

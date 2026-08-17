@@ -20,7 +20,7 @@ describe('useChatSSE', () => {
   });
 
   const setupMockStream = () => {
-    const chunks = ['data: {"type":"chunk","content":"Hello"}\n\n', 'data: {"type":"sources","sources":[],"conversationId":"c1"}\n\n', 'event: done\ndata: {"status":"complete"}\n\n'];
+    const chunks = ['data: {"type":"chunk","content":"Hello"}\n\n', 'data: {"type":"sources","sources":[],"conversationId":"c1"}\n\n', 'event: done\ndata: {"sessionId":"c1","status":"complete"}\n\n'];
     let index = 0;
     const stream = new ReadableStream({
       pull(controller) {
@@ -61,6 +61,18 @@ describe('useChatSSE', () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: 'Hello', collectionIds: [1], sessionId: 'conv-1' }),
     }));
+  });
+
+  it('returns the server session ID from the done event', async () => {
+    setupMockStream();
+    const onDone = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onDone }));
+
+    await act(async () => {
+      result.current.send('Hello');
+    });
+
+    expect(onDone).toHaveBeenCalledWith('c1');
   });
 
   it('includes the selected model in the request body', async () => {

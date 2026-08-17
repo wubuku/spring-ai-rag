@@ -12,6 +12,16 @@ export interface ChatMessage {
   }>;
 }
 
+export interface ChatHistoryRecord {
+  id: number;
+  sessionId: string;
+  userMessage: string;
+  aiResponse: string;
+  relatedDocumentIds?: number[];
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}
+
 export interface ChatRequest {
   message: string;
   collectionScopeMode?: CollectionScopeMode;
@@ -31,7 +41,10 @@ export const chatApi = {
     ),
 
   getHistory: (conversationId: string, limit = 50) =>
-    apiClient.get<{ messages: ChatMessage[] }>(`/chat/history/${conversationId}?limit=${limit}`),
+    apiClient.get<ChatHistoryRecord[]>(
+      `/chat/history/${encodeURIComponent(conversationId)}`,
+      { params: { limit } },
+    ),
 
   clearHistory: (conversationId: string) => apiClient.delete(`/chat/history/${conversationId}`),
 

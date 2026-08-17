@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { Chat } from './Chat';
 import { useChatSSE } from '../hooks/useSSE';
 import { modelsApi } from '../api/models';
 import { collectionsApi } from '../api/collections';
+import { chatApi } from '../api/chat';
 
 // Mock useChatSSE at module level
 const mockSend = vi.fn();
@@ -31,17 +33,31 @@ vi.mock('../api/models', () => ({
   },
 }));
 
+vi.mock('../api/chat', () => ({
+  chatApi: {
+    getHistory: vi.fn(),
+    exportConversation: vi.fn(),
+  },
+}));
+
 vi.mock('../utils/modelPreference', () => ({
   getSelectedModel: vi.fn(() => ''),
   saveSelectedModel: vi.fn(),
 }));
 
-function renderChat(ui = <Chat />) {
+function renderChat(initialEntry = '/chat') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <Routes>
+          <Route path="/chat" element={<Chat />} />
+          <Route path="/chat/:sessionId" element={<Chat />} />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>
   );
 }
 
@@ -66,6 +82,9 @@ describe('Chat', () => {
     });
     (collectionsApi.list as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { collections: [], total: 0 },
+    });
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [],
     });
   });
 
@@ -278,5 +297,23 @@ describe('Chat', () => {
 
     expect(screen.getByRole('button', { name: /chat.send/ })).toBeDisabled();
     expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it('loads a directly addressed chat session from history', async () => {
+    (chatApi.getHistory as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: [{
+        id: 9,
+        sessionId: 'session-9',
+        userMessage: 'Earlier question',
+        aiResponse: 'Earlier answer',
+        createdAt: '2026-08-17T08:00:00',
+      }],
+    });
+
+    renderChat('/chat/session-9');
+
+    expect(await screen.findByText('Earlier question')).toBeInTheDocument();
+    expect(screen.getByText('Earlier answer')).toBeInTheDocument();
+    expect(chatApi.getHistory).toHaveBeenCalledWith('session-9');
   });
 });

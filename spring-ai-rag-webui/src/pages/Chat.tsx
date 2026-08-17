@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useChatSSE } from '../hooks/useSSE';
 import { ChatSidebar, useChatSessions } from '../components/ChatSidebar';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
@@ -21,9 +22,11 @@ interface Message {
 
 export function Chat() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const { sessionId } = useParams();
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [conversationId, setConversationId] = useState<string | undefined>();
+  const conversationId = sessionId || undefined;
   const [scopeMode, setScopeMode] =
     useState<CollectionScopeMode>('CALLER_VISIBLE');
   const [selectedCollectionKeys, setSelectedCollectionKeys] =
@@ -65,8 +68,7 @@ export function Chat() {
         return prev;
       });
     },
-    onSources: (sources, convId) => {
-      setConversationId(convId);
+    onSources: sources => {
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
@@ -87,12 +89,50 @@ export function Chat() {
         return prev;
       });
     },
-    onDone: () => {
+    onDone: nextConversationId => {
       setMessages(prev =>
         prev.map(msg => (msg.isStreaming ? { ...msg, isStreaming: false } : msg))
       );
+      if (nextConversationId && nextConversationId !== conversationId) {
+        navigate(`/chat/${encodeURIComponent(nextConversationId)}`, { replace: true });
+      }
     },
   });
+
+  useEffect(() => {
+    let active = true;
+    if (!conversationId) {
+      setMessages([]);
+      return () => {
+        active = false;
+      };
+    }
+
+    chatApi.getHistory(conversationId)
+      .then(response => {
+        if (!active) return;
+        const historyMessages = [...response.data].reverse().flatMap(record => [
+          {
+            id: `history-${record.id}-user`,
+            role: 'user' as const,
+            content: record.userMessage,
+          },
+          {
+            id: `history-${record.id}-assistant`,
+            role: 'assistant' as const,
+            content: record.aiResponse,
+          },
+        ]);
+        setMessages(historyMessages);
+      })
+      .catch(() => {
+        if (active) setMessages([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [conversationId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -155,8 +195,7 @@ export function Chat() {
   };
 
   const handleNewChat = () => {
-    setMessages([]);
-    setConversationId(undefined);
+    navigate('/chat');
     setShowSidebar(false);
   };
 
@@ -179,7 +218,7 @@ export function Chat() {
   };
 
   const handleSelectSession = (sessionId: string) => {
-    setConversationId(sessionId);
+    navigate(`/chat/${encodeURIComponent(sessionId)}`);
     setShowSidebar(false);
   };
 

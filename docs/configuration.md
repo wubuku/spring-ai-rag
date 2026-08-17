@@ -181,7 +181,7 @@ rag:
 | `rag.retrieval.fulltext-enabled` | `true` | Enable full-text retrieval (auto-degrades to pure vector if unavailable) |
 | `rag.retrieval.fulltext-strategy` | `auto` | Full-text strategy (see table below) |
 | `rag.retrieval.default-limit` | `10` | Default number of results to return |
-| `rag.retrieval.min-score` | `0.3` | Minimum similarity threshold |
+| `rag.retrieval.min-score` | `0.3` | Minimum similarity for fuzzy full-text providers such as `pg_trgm`; `pg_jieba` and English FTS use `@@` for lexical matching and `ts_rank` for ordering |
 
 > 💡 `vector-weight + fulltext-weight` is recommended to sum to `1.0`; the system auto-normalizes.
 
@@ -213,12 +213,17 @@ rag:
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `rag.query-rewrite.enabled` | `true` | Enable query rewriting |
+| `rag.query-rewrite.enabled` | `true` | Enable query focusing and rewriting |
 | `rag.query-rewrite.padding-count` | `2` | Number of expanded queries |
 | `rag.query-rewrite.synonym-dictionary` | `{}` | Synonym dictionary |
 | `rag.query-rewrite.domain-qualifiers` | `[]` | Domain qualifier terms |
 | `rag.query-rewrite.llm-enabled` | `false` | Enable LLM-assisted rewriting |
 | `rag.query-rewrite.llm-max-rewrites` | `3` | Max LLM rewrites per query |
+
+Query focusing does not modify the original question sent to the model. It creates a
+shorter `rewrite.retrieval-query` only for retrieval and reranking. For example,
+`find content related to "visual tone"` retrieves with `visual tone`; ordinary
+questions remain unchanged.
 
 ## Reranking Configuration
 

@@ -85,4 +85,20 @@ class WebUiConfigTest {
                 .andExpect(content().contentTypeCompatibleWith("text/html"))
                 .andExpect(content().string(containsString("<!doctype html")));
     }
+
+    @Test
+    void webuiNestedChatRoute_returnsHtml() throws Exception {
+        mockMvc.perform(get("/webui/chat/session-123"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(containsString("<!doctype html")));
+    }
+
+    @Test
+    void webuiNestedAbTestRoute_returnsHtml() throws Exception {
+        mockMvc.perform(get("/webui/abtest/1"))
+                .andExpect(status().isOk())
+                .andExpect(content().contentTypeCompatibleWith("text/html"))
+                .andExpect(content().string(containsString("<!doctype html")));
+    }
 }

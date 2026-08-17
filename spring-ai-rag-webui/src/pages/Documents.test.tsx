@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { Documents } from './Documents';
 
 // Mock functions at module level
@@ -43,6 +45,12 @@ vi.mock('../api/documents', () => ({
 }));
 
 describe('Documents', () => {
+  const renderDocuments = () => render(
+    <MemoryRouter>
+      <Documents />
+    </MemoryRouter>,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockUseMutation.mockReturnValue({
@@ -60,7 +68,7 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
     expect(h1).toHaveTextContent('documents.title');
@@ -73,7 +81,7 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     expect(screen.getByText(/documents.uploadHint/)).toBeInTheDocument();
   });
 
@@ -99,7 +107,7 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     expect(screen.getByText('Test Doc')).toBeInTheDocument();
   });
 
@@ -110,7 +118,7 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     expect(screen.getByText(/documents.noDocuments/)).toBeInTheDocument();
   });
 
@@ -121,7 +129,7 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     expect(screen.getByText(/Page 1 — documents\.totalDocuments: 50/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /common.previous/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /common.next/ })).toBeInTheDocument();
@@ -134,11 +142,12 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
     expect(screen.getByRole('button', { name: /common.previous/ })).toBeDisabled();
   });
 
-  it('shows external identity and retry action for stale embeddings', () => {
+  it('shows external identity and retry action in the row menu for stale embeddings', async () => {
+    const user = userEvent.setup();
     mockUseQuery.mockReturnValue({
       data: {
         data: {
@@ -163,13 +172,62 @@ describe('Documents', () => {
       error: null,
     });
 
-    render(<Documents />);
+    renderDocuments();
 
     expect(screen.getByText('cms:article:1')).toBeInTheDocument();
     expect(screen.getByText('etag:2')).toBeInTheDocument();
     expect(screen.getByText('documents.embeddingStale')).toBeInTheDocument();
     expect(screen.getByText('provider unavailable')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'documents.retryEmbedding' }))
+    await user.click(screen.getByRole('button', {
+      name: 'documents.openActions',
+    }));
+    expect(screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }))
       .toBeInTheDocument();
+  });
+
+  it('offers PDF source traceability actions only for a safe imported PDF source', async () => {
+    const user = userEvent.setup();
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 7,
+            title: 'Imported Manual',
+            content: 'Content',
+            source: 'pdf-import:uuid-7/default.md',
+            contentHash: 'abc123',
+            documentType: 'PDF',
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: true,
+            enabled: true,
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    await user.click(screen.getByRole('button', {
+      name: 'documents.openActions',
+    }));
+    const traceability = screen.getByRole('menuitem', {
+      name: /documents.sourceTraceability/,
+    });
+    expect(traceability).toBeEnabled();
+
+    await user.click(traceability);
+    expect(screen.getByRole('menuitem', {
+      name: 'documents.viewFileDirectory',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', {
+      name: 'documents.viewIndexedFile',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', {
+      name: 'documents.openOriginalPdf',
+    })).toBeInTheDocument();
   });
 });

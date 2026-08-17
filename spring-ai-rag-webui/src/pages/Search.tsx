@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { searchApi, type SearchResult } from '../api/search';
 import { filesApi } from '../api/files';
 import { CollectionScopeSelector } from '../components/CollectionScopeSelector';
@@ -11,35 +11,77 @@ import { useSearchHistory } from '../hooks/useSearchHistory';
 import type { CollectionScopeMode } from '../types/api';
 import styles from './Search.module.css';
 
+interface SearchUrlState {
+  query: string;
+  useHybrid: boolean;
+  scopeMode: CollectionScopeMode;
+  selectedCollectionKeys: string[];
+}
+
+function readSearchUrlState(search: string): SearchUrlState {
+  const params = new URLSearchParams(search);
+  const scopeModeParam = params.get('scopeMode');
+  const scopeMode: CollectionScopeMode =
+    scopeModeParam === 'ANY_COLLECTION' || scopeModeParam === 'SELECTED_COLLECTIONS'
+      ? scopeModeParam
+      : 'CALLER_VISIBLE';
+
+  return {
+    query: params.get('query')?.trim() ?? '',
+    useHybrid: params.get('hybrid') !== 'false',
+    scopeMode,
+    selectedCollectionKeys: params.getAll('collectionKey').sort(),
+  };
+}
+
 export function Search() {
   const { t } = useTranslation();
+  const location = useLocation();
   const navigate = useNavigate();
   const { showToast } = useToast();
-  const [query, setQuery] = useState<string>('');
-  const [useHybrid, setUseHybrid] = useState(true);
-  const [scopeMode, setScopeMode] =
-    useState<CollectionScopeMode>('CALLER_VISIBLE');
+  const urlState = useMemo(
+    () => readSearchUrlState(location.search),
+    [location.search],
+  );
+  const [query, setQuery] = useState<string>(urlState.query);
+  const [useHybrid, setUseHybrid] = useState(urlState.useHybrid);
+  const [scopeMode, setScopeMode] = useState<CollectionScopeMode>(urlState.scopeMode);
   const [selectedCollectionKeys, setSelectedCollectionKeys] =
-    useState<string[]>([]);
-  const [hasSearched, setHasSearched] = useState(false);
+    useState<string[]>(urlState.selectedCollectionKeys);
   const { history, addQuery, removeItem, clearHistory, showHistory, setShowHistory } = useSearchHistory();
   const historyRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setQuery(urlState.query);
+    setUseHybrid(urlState.useHybrid);
+    setScopeMode(urlState.scopeMode);
+    setSelectedCollectionKeys(urlState.selectedCollectionKeys);
+  }, [urlState]);
 
   const sortedCollectionKeys = [...selectedCollectionKeys].sort();
   const selectedScopeIsValid =
     scopeMode !== 'SELECTED_COLLECTIONS' || sortedCollectionKeys.length > 0;
 
+  const urlScopeIsValid =
+    urlState.scopeMode !== 'SELECTED_COLLECTIONS'
+    || urlState.selectedCollectionKeys.length > 0;
   const { data, isPending, refetch } = useQuery({
-    queryKey: ['search', query, useHybrid, scopeMode, sortedCollectionKeys],
+    queryKey: [
+      'search',
+      urlState.query,
+      urlState.useHybrid,
+      urlState.scopeMode,
+      urlState.selectedCollectionKeys,
+    ],
     queryFn: () => searchApi.search({
-      query,
-      useHybrid,
-      collectionScopeMode: scopeMode,
-      collectionKeys: scopeMode === 'SELECTED_COLLECTIONS'
-        ? sortedCollectionKeys
+      query: urlState.query,
+      useHybrid: urlState.useHybrid,
+      collectionScopeMode: urlState.scopeMode,
+      collectionKeys: urlState.scopeMode === 'SELECTED_COLLECTIONS'
+        ? urlState.selectedCollectionKeys
         : undefined,
     }),
-    enabled: false,
+    enabled: Boolean(urlState.query) && urlScopeIsValid,
   });
 
   // Close history panel on outside click
@@ -57,10 +99,22 @@ export function Search() {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim() || !selectedScopeIsValid) return;
-    setHasSearched(true);
     addQuery(query, useHybrid);
-    refetch();
     setShowHistory(false);
+
+    const params = new URLSearchParams();
+    params.set('query', query.trim());
+    params.set('hybrid', String(useHybrid));
+    params.set('scopeMode', scopeMode);
+    if (scopeMode === 'SELECTED_COLLECTIONS') {
+      sortedCollectionKeys.forEach(key => params.append('collectionKey', key));
+    }
+    const nextSearch = `?${params.toString()}`;
+    if (location.search === nextSearch) {
+      void refetch();
+    } else {
+      navigate(`/search${nextSearch}`);
+    }
   };
 
   const handleHistorySelect = (item: { query: string; useHybrid: boolean }) => {
@@ -187,7 +241,7 @@ export function Search() {
         </button>
       </form>
 
-      {hasSearched && isPending && <div className={styles.loading}>{t('common.loading')}</div>}
+      {urlState.query && isPending && <div className={styles.loading}>{t('common.loading')}</div>}
 
       {data?.data && (
         <SearchResults
@@ -204,7 +258,7 @@ export function Search() {
             indexedFilePath: r.indexedFilePath,
             originalFilePath: r.originalFilePath,
           }))}
-          query={data.data.query}
+          query={data.data.query || urlState.query}
           onViewDirectory={handleViewDirectory}
           onViewIndexedFile={handleViewIndexedFile}
           onOpenOriginalFile={handleOpenOriginalFile}

@@ -76,4 +76,34 @@ test.describe('Chat', () => {
     );
     expect(overflow).toBe(false);
   });
+
+  test('creates an addressable session and restores it from chat history', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/chat\/history\/mock-session-123.*/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{
+          id: 1,
+          sessionId: 'mock-session-123',
+          userMessage: 'Persist this question',
+          aiResponse: 'Persisted answer',
+          createdAt: '2026-08-17T08:00:00',
+        }]),
+      });
+    });
+
+    await page.locator('textarea').fill('Persist this question');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page).toHaveURL(/\/webui\/chat\/mock-session-123$/);
+
+    await page.reload();
+    await expect(page).toHaveURL(/\/webui\/unlock$/);
+    await page.getByTestId('root-api-key').fill(
+      'root_test_0123456789_abcdefghijklmnopqrstuvwxyz',
+    );
+    await page.getByRole('button', { name: 'Unlock' }).click();
+    await expect(page).toHaveURL(/\/webui\/chat\/mock-session-123$/);
+    await expect(page.getByText('Persist this question')).toBeVisible();
+    await expect(page.getByText('Persisted answer')).toBeVisible();
+  });
 });

@@ -131,6 +131,7 @@ export async function mockAllApiCalls(page: Page) {
           {
             id: 1,
             title: 'Sample Document',
+            source: 'pdf-import:sample-pdf/default.md',
             documentType: 'TEXT',
             createdAt: new Date().toISOString(),
             contentHash: 'abc123def456',
@@ -332,12 +333,39 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  // Mock alerts endpoint
+  // Mock alerts endpoints
   page.route(/\/api\/v1\/rag\/alerts.*/, route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const body = pathname.endsWith('/active')
+      || pathname.endsWith('/slos/configs')
+      || pathname.endsWith('/silence-schedules')
+      ? []
+      : {};
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ data: { alerts: [] } }),
+      body: JSON.stringify(body),
+    });
+  });
+
+  // Mock A/B experiment endpoints
+  page.route(/\/api\/v1\/rag\/experiments(?:\/.*)?(?:\?.*)?$/, route => {
+    const pathname = new URL(route.request().url()).pathname;
+    const experiment = {
+      id: 1,
+      experimentName: 'Retrieval Ranking Trial',
+      description: 'Compare retrieval ranking configurations',
+      status: 'DRAFT',
+      targetMetric: 'retrieval_precision',
+      sampleCount: 0,
+      createdAt: '2026-08-17T08:00:00Z',
+    };
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(
+        pathname.endsWith('/experiments') ? [experiment] : experiment,
+      ),
     });
   });
 
@@ -346,7 +374,7 @@ export async function mockAllApiCalls(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
-      body: 'data: {"type":"content","content":"Test response"}\n\ndata: [DONE]\n\n',
+      body: 'data: {"choices":[{"delta":{"content":"Test response"}}]}\n\nevent: done\ndata: {"sessionId":"mock-session-123","status":"complete"}\n\n',
     });
   });
 
@@ -374,7 +402,7 @@ export async function mockAllApiCalls(page: Page) {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ messages: [] }),
+        body: JSON.stringify([]),
       });
     } else if (method === 'DELETE') {
       route.fulfill({ status: 200, contentType: 'application/json', body: '{}' });

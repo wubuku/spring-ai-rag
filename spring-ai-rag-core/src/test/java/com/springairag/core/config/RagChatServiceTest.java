@@ -291,6 +291,12 @@ class RagChatServiceTest {
         assertNotNull(result);
         String joined = result.collectList().block().stream().reduce("", String::concat);
         assertEquals("Hello World", joined);
+        verify(historyRepository).save(
+                "session-1",
+                "你好",
+                "Hello World",
+                null,
+                Map.of("streaming", true));
     }
 
     @Test

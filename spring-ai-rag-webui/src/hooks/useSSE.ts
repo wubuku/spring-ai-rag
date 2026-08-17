@@ -29,7 +29,7 @@ export interface UseChatSSEOptions {
   onChunk?: (content: string) => void;
   onSources?: (sources: Array<{documentId: string | number; title?: string; content?: string; score?: number}>, conversationId?: string) => void;
   onError?: (error: string) => void;
-  onDone?: () => void;
+  onDone?: (conversationId?: string) => void;
 }
 
 export interface ChatSSESendOptions {
@@ -202,7 +202,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
               try {
                 const doneData = JSON.parse(event.data);
                 if (doneData.status === 'complete') {
-                  onDoneRef.current?.();
+                  onDoneRef.current?.(doneData.sessionId);
                 }
               } catch { /* ignore */ }
             } else if (event.type === 'error' && event.data) {

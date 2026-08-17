@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { Alerts } from './Alerts';
 
 const mockUseQuery = vi.fn();
@@ -9,6 +10,12 @@ vi.mock('@tanstack/react-query', () => ({
 }));
 
 describe('Alerts', () => {
+  const renderAlerts = () => render(
+    <MemoryRouter>
+      <Alerts />
+    </MemoryRouter>,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -19,7 +26,7 @@ describe('Alerts', () => {
       isPending: false,
     });
 
-    render(<Alerts />);
+    renderAlerts();
     const h1 = document.querySelector('h1');
     expect(h1).toBeInTheDocument();
     expect(h1).toHaveTextContent('alerts.title');
@@ -31,7 +38,7 @@ describe('Alerts', () => {
       isPending: true,
     });
 
-    render(<Alerts />);
+    renderAlerts();
     expect(screen.getByText('common.loading')).toBeInTheDocument();
   });
 
@@ -41,7 +48,7 @@ describe('Alerts', () => {
       isPending: false,
     });
 
-    render(<Alerts />);
+    renderAlerts();
     expect(screen.getByText('alerts.noActiveAlerts')).toBeInTheDocument();
   });
 
@@ -61,7 +68,7 @@ describe('Alerts', () => {
       isPending: false,
     });
 
-    render(<Alerts />);
+    renderAlerts();
     expect(screen.getByText('High Latency')).toBeInTheDocument();
     expect(screen.getByText('WARNING')).toBeInTheDocument();
     expect(screen.getByText('Average latency exceeded 1s')).toBeInTheDocument();

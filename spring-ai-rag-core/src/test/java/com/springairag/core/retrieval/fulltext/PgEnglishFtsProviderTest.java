@@ -167,8 +167,8 @@ class PgEnglishFtsProviderTest {
     }
 
     @Test
-    @DisplayName("search filters by minScore")
-    void search_respectsMinScore() {
+    @DisplayName("boolean English FTS match is retained when ts_rank is below vector minScore")
+    void search_retainsBooleanMatchWithLowTsRank() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);
         when(jdbc.queryForObject(contains("search_vector_en"), eq(Boolean.class))).thenReturn(true);
 
@@ -184,7 +184,8 @@ class PgEnglishFtsProviderTest {
 
         PgEnglishFtsProvider provider = new PgEnglishFtsProvider(jdbc);
         List<RetrievalResult> results = provider.search("query", null, null, 5, 0.5, 1L);
-        assertTrue(results.isEmpty());
+        assertEquals(1, results.size());
+        assertEquals(0.4, results.get(0).getFulltextScore(), 0.001);
     }
 
     @Test

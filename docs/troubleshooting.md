@@ -236,6 +236,43 @@ rag:
 
 ---
 
+### Search Shows Results but Chat Says Nothing Was Found
+
+**Symptom**: A short term returns semantic results on the Search page, but a full
+command such as “find content related to X” makes Chat say that the references contain
+nothing relevant.
+
+**Causes and interpretation**:
+
+1. Search and Chat use the same retrieval service, but command words can change the
+   query embedding and fill Chat's smaller Top-K with unrelated chunks.
+2. `fulltextScore=0` means the result came only from vector semantics; it does not prove
+   that the document contains the keyword.
+3. PDF extraction can produce visually similar but code-point-distinct CJK Radical or
+   Kangxi Radical characters. For example, `风格基调` and `⻛格基调` look similar but
+   are not equal to full-text search.
+
+**Troubleshooting**:
+
+```bash
+# Compare the short subject with the complete command
+curl "http://localhost:8081/api/v1/rag/search?query=visual-tone&limit=5"
+curl --get "http://localhost:8081/api/v1/rag/search" \
+  --data-urlencode 'query=find content related to "visual tone"' \
+  --data 'limit=5'
+```
+
+With Pipeline INFO logging, the original and focused retrieval queries should appear:
+
+```text
+original query: "find content related to \"visual tone\"" → retrieval query: "visual tone"
+```
+
+If PDF character mapping is suspected, inspect the stored text around a neighboring
+term. Reimport and re-embed affected documents after fixing extraction normalization.
+
+---
+
 ## LLM Issues
 
 ### LLM Call 401/403

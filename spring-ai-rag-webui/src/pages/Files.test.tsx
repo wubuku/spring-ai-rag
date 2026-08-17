@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import { Files } from './Files';
 import { filesApi } from '../api/files';
 
@@ -37,6 +38,14 @@ vi.mock('../components/FilePreview/FilePreview', () => ({
 }));
 
 describe('Files', () => {
+  const renderFiles = (
+    initialEntry = window.location.pathname + window.location.search,
+  ) => render(
+    <MemoryRouter initialEntries={[initialEntry]}>
+      <Files />
+    </MemoryRouter>,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
     window.history.replaceState({}, '', '/webui/files');
@@ -122,7 +131,7 @@ describe('Files', () => {
   });
 
   it('passes the selected collection key when embedding an imported PDF', async () => {
-    render(<Files />);
+    renderFiles();
 
     fireEvent.click(screen.getByText('sample-pdf'));
     fireEvent.change(screen.getByTestId('files-rag-collection-select'), {
@@ -141,7 +150,7 @@ describe('Files', () => {
   });
 
   it('sorts imports newest first by default and toggles to oldest first', () => {
-    render(<Files />);
+    renderFiles();
 
     const paths = () => screen.getAllByTestId('file-tree-entry')
       .map(entry => entry.getAttribute('data-entry-path'));
@@ -153,6 +162,15 @@ describe('Files', () => {
     expect(paths()).toEqual(['older-pdf/', 'sample-pdf/', 'newest-pdf/']);
   });
 
+  it('restores ascending import-time sorting from a direct URL', () => {
+    renderFiles('/webui/files?sort=asc');
+
+    const paths = screen.getAllByTestId('file-tree-entry')
+      .map(entry => entry.getAttribute('data-entry-path'));
+
+    expect(paths).toEqual(['older-pdf/', 'sample-pdf/', 'newest-pdf/']);
+  });
+
   it('opens a safe file deep link and previews the indexed file', async () => {
     window.history.replaceState(
       {},
@@ -160,11 +178,27 @@ describe('Files', () => {
       '/webui/files?path=sample-pdf%2F&file=sample-pdf%2Fdefault.md',
     );
 
-    render(<Files />);
+    renderFiles();
 
     expect(await screen.findByTestId('file-preview'))
       .toHaveTextContent('sample-pdf/default.md');
     expect(screen.getByTitle('sample-pdf/')).toBeInTheDocument();
+  });
+
+  it('updates the preview when the file changes within the same directory', async () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/webui/files?path=sample-pdf%2F',
+    );
+
+    renderFiles();
+
+    await screen.findByTitle('default.md');
+    fireEvent.click(screen.getByTitle('default.md'));
+
+    expect(await screen.findByTestId('file-preview'))
+      .toHaveTextContent('sample-pdf/default.md');
   });
 
   it('rejects unsafe deep links and falls back to the root directory', () => {
@@ -174,7 +208,7 @@ describe('Files', () => {
       '/webui/files?path=..%2Fsecret%2F&file=..%2Fsecret%2Fdefault.md',
     );
 
-    render(<Files />);
+    renderFiles();
 
     expect(screen.getByTitle('files.root')).toBeInTheDocument();
     expect(screen.queryByTestId('file-preview')).not.toBeInTheDocument();

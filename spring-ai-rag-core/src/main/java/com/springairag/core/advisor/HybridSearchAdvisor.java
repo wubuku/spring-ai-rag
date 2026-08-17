@@ -99,7 +99,7 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
             return request;
         }
 
-        String query = AdvisorUtils.extractUserMessage(request);
+        String query = AdvisorUtils.extractRetrievalQuery(request);
         if (query == null || query.isBlank()) {
             log.debug("[HybridSearchAdvisor] query is empty, skipping search");
             return request;

@@ -40,9 +40,42 @@ test.describe('Documents', () => {
 
     await expect(page.getByText('cms:sample:1')).toBeVisible();
     await expect(page.getByText('etag:sample-1')).toBeVisible();
-    const retry = page.getByRole('button', { name: 'Retry embedding' });
+    await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
+    const retry = page.getByRole('menuitem', { name: 'Retry embedding' });
     await expect(retry).toBeVisible();
     await retry.click();
     await expect(page.getByText('Embedding retry started')).toBeVisible();
+  });
+
+  test('opens the indexed PDF artifact from the row action menu', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/documents');
+
+    await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
+    await page.getByRole('menuitem', { name: /File\/PDF source traceability/ }).click();
+    await page.getByRole('menuitem', { name: 'View indexed file' }).click();
+
+    await expect(page).toHaveURL(
+      /\/webui\/files\?path=sample-pdf%2F&file=sample-pdf%2Fdefault\.md$/,
+    );
+    await expect(page.getByText('Indexed Markdown')).toBeVisible();
+  });
+
+  test('restores document filters after navigating away and back', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/documents');
+
+    const collectionFilter = page.getByTestId('documents-collection-filter');
+    await collectionFilter.selectOption('sample-collection');
+    await expect(page).toHaveURL(/collectionKey=sample-collection/);
+
+    await page.getByRole('link', { name: /Search/ }).click();
+    await expect(page).toHaveURL(/\/webui\/search$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(
+      /\/webui\/documents\?collectionKey=sample-collection$/,
+    );
+    await expect(collectionFilter).toHaveValue('sample-collection');
   });
 });

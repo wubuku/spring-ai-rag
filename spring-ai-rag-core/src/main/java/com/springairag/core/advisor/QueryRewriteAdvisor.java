@@ -30,6 +30,7 @@ import java.util.List;
  * <ul>
  *   <li>{@code rewrite.original} — original query text (String)</li>
  *   <li>{@code rewrite.queries} — rewritten query list (List&lt;String&gt;), first element is the original query</li>
+ *   <li>{@code rewrite.retrieval-query} — concise query used by retrieval and reranking</li>
  * </ul>
  */
 @Component
@@ -42,6 +43,9 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
     /** Context key: rewritten query list (List&lt;String&gt;) */
     public static final String CTX_REWRITE_QUERIES = "rewrite.queries";
+
+    /** Context key: focused query used by retrieval and reranking */
+    public static final String CTX_RETRIEVAL_QUERY = "rewrite.retrieval-query";
 
     private final QueryRewritingService queryRewritingService;
     private final AdvisorMetrics advisorMetrics;
@@ -81,10 +85,17 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
 
         long startMs = System.currentTimeMillis();
         List<String> rewrittenQueries = queryRewritingService.rewriteQuery(originalQuery);
+        String retrievalQuery =
+                queryRewritingService.resolveRetrievalQuery(originalQuery);
+        if (retrievalQuery == null || retrievalQuery.isBlank()) {
+            retrievalQuery = originalQuery;
+        }
         long elapsedMs = System.currentTimeMillis() - startMs;
 
-        log.info("[QueryRewriteAdvisor] original query: \"{}\" → {} rewritten, {}ms: {}",
-                originalQuery, rewrittenQueries.size(), elapsedMs, rewrittenQueries);
+        log.info("[QueryRewriteAdvisor] original query: \"{}\" → retrieval query: \"{}\", "
+                        + "{} rewritten, {}ms: {}",
+                originalQuery, retrievalQuery,
+                rewrittenQueries.size(), elapsedMs, rewrittenQueries);
 
         // Record Micrometer metrics for Prometheus + in-memory pipeline metrics
         RagPipelineMetrics.getOrCreate(request.context())
@@ -95,6 +106,7 @@ public class QueryRewriteAdvisor extends AbstractRagAdvisor {
         return request.mutate()
                 .context(CTX_ORIGINAL_QUERY, originalQuery)
                 .context(CTX_REWRITE_QUERIES, rewrittenQueries)
+                .context(CTX_RETRIEVAL_QUERY, retrievalQuery)
                 .build();
     }
 }

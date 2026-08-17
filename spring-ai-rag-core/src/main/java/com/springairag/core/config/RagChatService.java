@@ -548,6 +548,14 @@ public class RagChatService {
         spec.advisors(buildAdvisorParams(
                 sessionId, domainId, null, scope, maxResults));
 
-        return spec.stream().content();
+        StringBuilder accumulatedAnswer = new StringBuilder();
+        return spec.stream().content()
+                .doOnNext(accumulatedAnswer::append)
+                .doOnComplete(() -> historyRepository.save(
+                        sessionId,
+                        userMessage,
+                        accumulatedAnswer.toString(),
+                        null,
+                        Map.of("streaming", true)));
     }
 }

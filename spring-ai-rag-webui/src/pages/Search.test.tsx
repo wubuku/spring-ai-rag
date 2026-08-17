@@ -40,7 +40,7 @@ const collections = [
   },
 ];
 
-function renderSearch() {
+function renderSearch(initialEntries = ['/search']) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -49,7 +49,7 @@ function renderSearch() {
     ...render(
       <QueryClientProvider client={client}>
         <ToastProvider>
-          <MemoryRouter>
+          <MemoryRouter initialEntries={initialEntries}>
             <Search />
           </MemoryRouter>
         </ToastProvider>
@@ -181,5 +181,45 @@ describe('Search', () => {
     expect(screen.getByRole('button', {
       name: 'search.openOriginalPdf',
     })).toBeInTheDocument();
+  });
+
+  it('replays a search from URL state after a direct navigation', async () => {
+    (searchApi.search as ReturnType<typeof vi.fn>).mockResolvedValue({
+      data: {
+        query: 'manual',
+        total: 1,
+        results: [{
+          documentId: '7',
+          title: 'Manual',
+          chunkText: 'Indexed text',
+          score: 0.8,
+        }],
+      },
+    });
+
+    renderSearch([
+      '/search?query=manual&hybrid=false&scopeMode=ANY_COLLECTION',
+    ]);
+
+    expect(await screen.findByText('Manual')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/search.placeholder/)).toHaveValue('manual');
+    expect(screen.getByLabelText(/Hybrid/)).not.toBeChecked();
+    expect(searchApi.search).toHaveBeenCalledWith({
+      query: 'manual',
+      useHybrid: false,
+      collectionScopeMode: 'ANY_COLLECTION',
+      collectionKeys: undefined,
+    });
+  });
+
+  it('refetches when the submitted search already matches the current URL', async () => {
+    renderSearch([
+      '/search?query=manual&hybrid=true&scopeMode=CALLER_VISIBLE',
+    ]);
+
+    await waitFor(() => expect(searchApi.search).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /search.searchButton/ }));
+
+    await waitFor(() => expect(searchApi.search).toHaveBeenCalledTimes(2));
   });
 });

@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-16.
+> **Last reviewed**: 2026-08-17.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -126,6 +126,33 @@ hit to its Files directory, indexed Markdown, and original PDF. The Documents
 upload path instead ingests supported text files directly into `rag_documents`
 without creating `fs_files` artifacts.
 See [File Management, PDF Import, And RAG Integration](file-management-and-pdf-rag.md).
+
+### WebUI Browser Navigation Contract
+
+The WebUI uses React Router `BrowserRouter` with the production basename
+`/webui`. Stable page context that can be reloaded from backend data belongs in
+the path or query string instead of component-local state. The currently
+addressable state includes:
+
+- Search: committed `query`, `hybrid`, `scopeMode`, and repeated
+  `collectionKey` values;
+- Files: directory `path`, previewed `file`, and import-time `sort=asc`;
+- Documents: `collectionKey`, `keyword`, and `page`;
+- Chat sessions and A/B experiment details: `/chat/{sessionId}` and
+  `/abtest/{experimentId}`;
+- active Settings, Evaluation, and Alerts tabs: `tab`.
+
+Cross-page links, browser back/forward, and direct deep links can therefore
+restore these contexts. The Root API Key remains page-memory only: a full
+reload first opens `/webui/unlock`, then returns to the original pathname and
+query and reloads its data after a successful unlock. API keys, raw file
+content, unsubmitted form drafts, modals, menus, hover/focus, and in-progress
+upload state must not be placed in URLs.
+
+When adding or changing a page, any state that users reasonably expect to
+restore through back, forward, reload, or a shared address requires matching
+Router state and a Mock Playwright round-trip test. Transient UI state remains
+local.
 
 ## 4. Retrieval And Quality
 

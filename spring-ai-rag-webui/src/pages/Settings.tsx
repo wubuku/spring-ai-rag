@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { modelsApi, type ModelInfo } from '../api/models';
 import { getSelectedModel, saveSelectedModel } from '../utils/modelPreference';
 import styles from './Settings.module.css';
@@ -26,7 +27,12 @@ const SETTINGS_KEY = 'user_settings';
 
 export function Settings() {
   const { t, i18n } = useTranslation();
-  const [activeTab, setActiveTab] = useState<'llm' | 'retrieval' | 'cache' | 'language'>('llm');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const activeTab: 'llm' | 'retrieval' | 'cache' | 'language' =
+    tabParam === 'retrieval' || tabParam === 'cache' || tabParam === 'language'
+      ? tabParam
+      : 'llm';
   const [saved, setSaved] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   const lastSavedRef = useRef<{
@@ -190,7 +196,9 @@ export function Settings() {
           <button
             key={tab.id}
             className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-            onClick={() => setActiveTab(tab.id)}
+            onClick={() => setSearchParams(
+              tab.id === 'llm' ? {} : { tab: tab.id },
+            )}
           >
             {tab.label}
           </button>

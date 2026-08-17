@@ -143,6 +143,14 @@ Blob through the authenticated API client, so the API key remains in a request
 header. Ordinary results and sources that fail the safe PDF-path convention do
 not show file actions.
 
+The Documents page consolidates each row's actions under an **...** menu. For
+PDF documents whose source satisfies the safe
+`pdf-import:<directory>/default.md` convention, its **File/PDF source
+traceability** submenu provides the same **View file directory**, **View indexed
+file**, and **Open original PDF** actions. Ordinary documents explicitly show
+that no file source is available, and arbitrary `source` values are never
+treated as file paths.
+
 Historical rows that already have a `pdf-import:` source become traceable
 without re-embedding. If an older import was globally content-hash merged into
 a row without a PDF source, the database has no reliable relationship to

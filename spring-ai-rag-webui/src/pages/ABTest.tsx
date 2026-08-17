@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useParams } from 'react-router-dom';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ResponsiveContainer,
@@ -8,8 +9,6 @@ import {
 import { abtestApi, type CreateExperimentRequest } from '../api/abtest';
 import { useToast } from '../components/Toast';
 import styles from './ABTest.module.css';
-
-type Tab = 'list' | 'detail';
 
 const STATUS_COLORS: Record<string, string> = {
   DRAFT: '#9ca3af',
@@ -21,17 +20,23 @@ const STATUS_COLORS: Record<string, string> = {
 
 export function ABTest() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('list');
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  const navigate = useNavigate();
+  const { experimentId } = useParams();
+  const selectedId = experimentId && /^\d+$/.test(experimentId)
+    ? Number(experimentId)
+    : null;
 
   return (
     <div>
       <h1 className="page-title">{t('abtest.title')}</h1>
-      {tab === 'list' && (
-        <ExperimentList onSelect={id => { setSelectedId(id); setTab('detail'); }} />
+      {selectedId === null && (
+        <ExperimentList onSelect={id => navigate(`/abtest/${id}`)} />
       )}
-      {tab === 'detail' && selectedId !== null && (
-        <ExperimentDetail experimentId={selectedId} onBack={() => setTab('list')} />
+      {selectedId !== null && (
+        <ExperimentDetail
+          experimentId={selectedId}
+          onBack={() => navigate('/abtest')}
+        />
       )}
     </div>
   );

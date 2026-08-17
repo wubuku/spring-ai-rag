@@ -32,6 +32,8 @@ class QueryRewriteAdvisorTest {
         String original = "Spring Boot 怎么配置数据库";
         List<String> rewritten = List.of(original, "Spring Boot 数据库配置方法", "Spring Boot 数据库连接设置");
         when(queryRewritingService.rewriteQuery(original)).thenReturn(rewritten);
+        when(queryRewritingService.resolveRetrievalQuery(original))
+                .thenReturn("Spring Boot 数据库配置");
 
         Prompt prompt = new Prompt(new UserMessage(original));
         ChatClientRequest request = ChatClientRequest.builder().prompt(prompt).build();
@@ -40,7 +42,10 @@ class QueryRewriteAdvisorTest {
 
         assertEquals(original, result.context().get(QueryRewriteAdvisor.CTX_ORIGINAL_QUERY));
         assertEquals(rewritten, result.context().get(QueryRewriteAdvisor.CTX_REWRITE_QUERIES));
+        assertEquals("Spring Boot 数据库配置",
+                result.context().get(QueryRewriteAdvisor.CTX_RETRIEVAL_QUERY));
         verify(queryRewritingService).rewriteQuery(original);
+        verify(queryRewritingService).resolveRetrievalQuery(original);
     }
 
     @Test
@@ -103,6 +108,8 @@ class QueryRewriteAdvisorTest {
         String lastQuery = "最后一个用户消息";
         List<String> rewritten = List.of(lastQuery);
         when(queryRewritingService.rewriteQuery(lastQuery)).thenReturn(rewritten);
+        when(queryRewritingService.resolveRetrievalQuery(lastQuery))
+                .thenReturn(lastQuery);
 
         Prompt prompt = new Prompt(List.of(
                 new UserMessage("第一个消息"),
@@ -121,6 +128,8 @@ class QueryRewriteAdvisorTest {
         String original = "test query";
         List<String> rewritten = List.of(original, "rewritten");
         when(queryRewritingService.rewriteQuery(original)).thenReturn(rewritten);
+        when(queryRewritingService.resolveRetrievalQuery(original))
+                .thenReturn(original);
 
         Prompt prompt = new Prompt(new UserMessage(original));
         ChatClientRequest request = ChatClientRequest.builder().prompt(prompt).build();

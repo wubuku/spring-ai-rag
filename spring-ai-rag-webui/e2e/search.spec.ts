@@ -187,6 +187,83 @@ test.describe('Search', () => {
     await expect(page.getByText('Indexed Markdown')).toBeVisible();
   });
 
+  test('restores search results after returning from the indexed file', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: 'manual',
+          total: 1,
+          results: [{
+            documentId: '7',
+            title: 'Sample PDF',
+            chunkText: 'Indexed Markdown',
+            score: 0.8,
+            vectorScore: 0.7,
+            fulltextScore: 0.4,
+            source: 'pdf-import:sample-pdf/default.md',
+            originalFilename: 'sample.pdf',
+            fileDirectoryPath: 'sample-pdf/',
+            indexedFilePath: 'sample-pdf/default.md',
+            originalFilePath: 'sample-pdf/original.pdf',
+          }],
+        }),
+      });
+    });
+
+    await searchInput(page).fill('manual');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page.getByText('Sample PDF')).toBeVisible();
+
+    await page.getByRole('button', { name: 'View indexed file' }).click();
+    await expect(page.getByText('Indexed Markdown')).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/search\?query=manual/);
+    await expect(page.getByText('Sample PDF')).toBeVisible();
+    await expect(page.getByText('Indexed Markdown')).toBeVisible();
+
+    await page.goForward();
+    await expect(page).toHaveURL(
+      /\/webui\/files\?path=sample-pdf%2F&file=sample-pdf%2Fdefault\.md$/,
+    );
+    await expect(page.getByText('Indexed Markdown')).toBeVisible();
+  });
+
+  test('restores a search URL after a full page reload and unlock', async ({ page }) => {
+    await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
+      route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          query: 'manual',
+          total: 1,
+          results: [{
+            documentId: '7',
+            title: 'Reloaded PDF result',
+            chunkText: 'Reloaded indexed content',
+            score: 0.8,
+          }],
+        }),
+      });
+    });
+
+    await searchInput(page).fill('manual');
+    await page.getByRole('button', { name: 'Search' }).click();
+    await expect(page.getByText('Reloaded PDF result')).toBeVisible();
+
+    await page.reload();
+    await expect(page).toHaveURL(/\/webui\/unlock$/);
+    await page.getByTestId('root-api-key').fill(
+      'root_test_0123456789_abcdefghijklmnopqrstuvwxyz',
+    );
+    await page.getByRole('button', { name: 'Unlock' }).click();
+
+    await expect(page).toHaveURL(/\/webui\/search\?query=manual/);
+    await expect(page.getByText('Reloaded PDF result')).toBeVisible();
+  });
+
   test('opens the original PDF through an authenticated API request', async ({ page }) => {
     await page.route(/\/api\/v1\/rag\/search(?:\?.*)?$/, route => {
       route.fulfill({

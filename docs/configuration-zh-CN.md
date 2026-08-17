@@ -177,7 +177,7 @@ rag:
 | `rag.retrieval.fulltext-enabled` | `true` | 启用全文检索（不可用时自动降级为纯向量检索） |
 | `rag.retrieval.fulltext-strategy` | `auto` | 全文检索策略（见下表） |
 | `rag.retrieval.default-limit` | `10` | 默认返回结果数 |
-| `rag.retrieval.min-score` | `0.3` | 最低相似度阈值（低于此分数的结果被过滤） |
+| `rag.retrieval.min-score` | `0.3` | 模糊全文提供者（如 `pg_trgm`）的最低相似度；`pg_jieba` / English FTS 以 `@@` 判定词法命中，再用 `ts_rank` 排序 |
 
 > 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`，系统会自动归一化。
 
@@ -209,12 +209,16 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.query-rewrite.enabled` | `true` | 启用查询改写 |
+| `rag.query-rewrite.enabled` | `true` | 启用查询聚焦与改写 |
 | `rag.query-rewrite.padding-count` | `2` | 扩展查询数 |
 | `rag.query-rewrite.synonym-dictionary` | `{}` | 同义词词典 |
 | `rag.query-rewrite.domain-qualifiers` | `[]` | 领域限定词 |
 | `rag.query-rewrite.llm-enabled` | `false` | 启用 LLM 辅助改写 |
 | `rag.query-rewrite.llm-max-rewrites` | `3` | LLM 改写最大数 |
+
+查询聚焦不会修改发送给模型的原始问题。它只为检索与重排生成更短的
+`rewrite.retrieval-query`：例如 `找到 “风格基调” 相关的内容` 会以
+`风格基调` 执行检索。普通问题不会被截断。
 
 ## 重排序配置
 

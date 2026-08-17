@@ -67,6 +67,17 @@ public class WebUiConfig implements WebMvcConfigurer {
         }
 
         /**
+         * Serves known two-segment WebUI routes without intercepting static assets.
+         */
+        @GetMapping(
+                value = {"/webui/chat/{identifier}", "/webui/abtest/{identifier}"},
+                produces = MediaType.TEXT_HTML_VALUE
+        )
+        public String webuiNestedRoute(@PathVariable String identifier) {
+            return WEBUI_INDEX;
+        }
+
+        /**
          * Catch-all for SPA client-side routes at root level (/chat, /documents, etc.).
          * @param path the URL path (e.g. "chat", "documents", "search")
          * @return the React SPA index.html

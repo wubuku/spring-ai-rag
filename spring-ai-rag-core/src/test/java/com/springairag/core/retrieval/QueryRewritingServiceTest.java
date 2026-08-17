@@ -128,6 +128,46 @@ class QueryRewritingServiceTest {
         assertTrue(results.contains("test test"));
     }
 
+    // ========== resolveRetrievalQuery ==========
+
+    @Test
+    void resolveRetrievalQuery_extractsCurlyQuotedKeyword() {
+        assertEquals("风格基调",
+                service.resolveRetrievalQuery("找到 “风格基调” 相关的内容"));
+    }
+
+    @Test
+    void resolveRetrievalQuery_stripsChineseRetrievalWrapper() {
+        assertEquals("破皮沙发",
+                service.resolveRetrievalQuery("找到破皮沙发相关的文档"));
+    }
+
+    @Test
+    void resolveRetrievalQuery_extractsKeywordCommandQuotes() {
+        assertEquals("破皮沙发",
+                service.resolveRetrievalQuery("用关键字“破皮沙发”检索"));
+    }
+
+    @Test
+    void resolveRetrievalQuery_extractsEnglishQuotedKeyword() {
+        assertEquals("visual tone",
+                service.resolveRetrievalQuery(
+                        "find content related to \"visual tone\""));
+    }
+
+    @Test
+    void resolveRetrievalQuery_preservesOrdinaryQuestion() {
+        String query = "如何找到适合项目的风格基调？";
+        assertEquals(query, service.resolveRetrievalQuery(query));
+    }
+
+    @Test
+    void resolveRetrievalQuery_disabled_preservesOriginal() {
+        service = createService(false, 2);
+        String query = "找到 “风格基调” 相关的内容";
+        assertEquals(query, service.resolveRetrievalQuery(query));
+    }
+
     // ========== generatePaddingQueries ==========
 
     @Test

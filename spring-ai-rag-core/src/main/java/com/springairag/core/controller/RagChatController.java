@@ -213,7 +213,7 @@ public class RagChatController {
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         // SSE protocol: OpenAI-compatible format
         //   chunk: data:{"choices":[{"delta":{"content":"..."}}]}
-        //   done:  event:done data:{"traceId":"...","status":"complete"}
+        //   done:  event:done data:{"traceId":"...","sessionId":"...","status":"complete"}
         //   heartbeat: comment (: heartbeat\n\n) if enabled
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
 
@@ -232,7 +232,11 @@ public class RagChatController {
                         },
                         () -> {
                             heartbeat.stop();
-                            String doneJson = "{\"traceId\":\"" + (traceId != null ? traceId : "") + "\",\"status\":\"complete\"}";
+                            String doneJson = "{\"traceId\":\""
+                                    + (traceId != null ? traceId : "")
+                                    + "\",\"sessionId\":\""
+                                    + SseEmitters.escapeJson(sessionId)
+                                    + "\",\"status\":\"complete\"}";
                             SseEmitters.sendRaw(emitter, "done", doneJson, "chat done");
                             emitter.complete();
                         }

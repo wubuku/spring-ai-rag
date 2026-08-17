@@ -97,14 +97,14 @@ Spring AI 的 `BaseAdvisor` 机制串联检索流程，每个 Advisor 独立、�
   │
   ▼
 ┌─────────────────────────┐  order=+10
-│  QueryRewriteAdvisor    │  查询改写：同义词扩展 + 领域限定词 + LLM 辅助改写
+│  QueryRewriteAdvisor    │  查询聚焦 + 同义词扩展 + 领域限定词 + LLM 辅助改写
 │  输入: 原始 query        │
-│  输出: 改写后 query      │
+│  输出: 聚焦检索 query    │
 └───────────┬─────────────┘
             ▼
 ┌─────────────────────────┐  order=+20
 │  HybridSearchAdvisor    │  混合检索：向量相似度 + 全文检索 + RRF 融合
-│  输入: 改写后 query      │
+│  输入: 聚焦检索 query    │
 │  输出: context attributes│  (hybrid.search.results)
 └───────────┬─────────────┘
             ▼
@@ -122,6 +122,8 @@ Spring AI 的 `BaseAdvisor` 机制串联检索流程，每个 Advisor 独立、�
 ```
 
 **数据传递**：Advisors 之间通过 `ChatClientRequest.context().getAttributes()` 共享数据，避免方法签名耦合。
+回答生成仍使用用户原始消息；检索与重排使用 `rewrite.retrieval-query`。对于
+“找到『风格基调』相关内容”这类明确检索命令，Advisor 会提取主题词，避免命令词污染查询向量。
 
 ### 3.3 双表对话记忆
 

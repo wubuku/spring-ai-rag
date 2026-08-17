@@ -146,6 +146,14 @@ export default function App() {
                 }
               />
               <Route
+                path="abtest/:experimentId"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <ABTest />
+                  </Suspense>
+                }
+              />
+              <Route
                 path="api-keys"
                 element={
                   <Suspense fallback={<PageFallback />}>

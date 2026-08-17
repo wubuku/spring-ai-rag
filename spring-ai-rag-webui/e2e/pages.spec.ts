@@ -46,9 +46,15 @@ test.describe('Settings', () => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/settings');
     await page.getByRole('button', { name: /Retrieval/i }).click();
+    await expect(page).toHaveURL(/\/webui\/settings\?tab=retrieval$/);
     await expect(page.getByText(/retrieval|top\s*k|vector|weight/i).first()).toBeVisible();
     await page.getByRole('button', { name: /Cache/i }).click();
+    await expect(page).toHaveURL(/\/webui\/settings\?tab=cache$/);
     await expect(page.getByText(/cache|enabled|ttl/i).first()).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/settings\?tab=retrieval$/);
+    await expect(page.getByText(/retrieval|top\s*k|vector|weight/i).first()).toBeVisible();
   });
 
   test('shows save button', async ({ page }) => {
@@ -99,5 +105,52 @@ test.describe('Alerts', () => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/alerts');
     await expect(page.getByRole('heading', { name: 'Alerts' })).toBeVisible();
+  });
+
+  test('restores the selected alerts tab with browser navigation', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/alerts');
+
+    await page.getByRole('button', { name: 'SLO Config', exact: true }).click();
+    await expect(page).toHaveURL(/\/webui\/alerts\?tab=slo-configs$/);
+    await page.getByRole('button', { name: 'Silence Plans' }).click();
+    await expect(page).toHaveURL(/\/webui\/alerts\?tab=silence-schedules$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/alerts\?tab=slo-configs$/);
+    await expect(
+      page.getByRole('button', { name: 'SLO Config', exact: true }),
+    ).toBeVisible();
+  });
+});
+
+test.describe('Evaluation navigation', () => {
+  test('restores evaluation tabs with browser navigation', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/evaluation');
+
+    await page.getByRole('tab', { name: 'History' }).click();
+    await expect(page).toHaveURL(/\/webui\/evaluation\?tab=history$/);
+    await page.getByRole('tab', { name: 'Feedback' }).click();
+    await expect(page).toHaveURL(/\/webui\/evaluation\?tab=feedback$/);
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/evaluation\?tab=history$/);
+    await expect(page.getByRole('tab', { name: 'History' })).toBeVisible();
+  });
+});
+
+test.describe('A/B Test navigation', () => {
+  test('uses an addressable experiment route and browser history', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/abtest');
+
+    await page.getByRole('button', { name: 'Details' }).click();
+    await expect(page).toHaveURL(/\/webui\/abtest\/1$/);
+    await expect(page.getByText('Retrieval Ranking Trial')).toBeVisible();
+
+    await page.goBack();
+    await expect(page).toHaveURL(/\/webui\/abtest$/);
+    await expect(page.getByRole('button', { name: 'Details' })).toBeVisible();
   });
 });

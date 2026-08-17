@@ -98,7 +98,6 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                         double rank = rankNum != null ? rankNum.doubleValue() : 0.0;
                         return toResult(row, rank);
                     })
-                    .filter(r -> r.getScore() >= minScore)
                     .limit(limit)
                     .toList();
         } catch (Exception e) {

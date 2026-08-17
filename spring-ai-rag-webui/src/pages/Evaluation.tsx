@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import styles from './Evaluation.module.css';
 
@@ -16,7 +17,12 @@ function fmt(n: unknown): string {
 export function Evaluation() {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('report');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: Tab =
+    tabParam === 'history' || tabParam === 'feedback' || tabParam === 'judge'
+      ? tabParam
+      : 'report';
 
   const reportQ = useQuery({
     queryKey: ['evaluation-report'],
@@ -93,7 +99,7 @@ export function Evaluation() {
             type="button"
             role="tab"
             className={tab === id ? styles.tabActive : styles.tab}
-            onClick={() => setTab(id)}
+            onClick={() => setSearchParams(id === 'report' ? {} : { tab: id })}
           >
             {label}
           </button>

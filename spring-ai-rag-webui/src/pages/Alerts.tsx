@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
 import { alertsApi, type SloConfig, type SilenceSchedule } from '../api/alerts';
 import styles from './Alerts.module.css';
 
@@ -8,7 +9,12 @@ type Tab = 'alerts' | 'slo-configs' | 'silence-schedules';
 
 export function Alerts() {
   const { t } = useTranslation();
-  const [tab, setTab] = useState<Tab>('alerts');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab');
+  const tab: Tab =
+    tabParam === 'slo-configs' || tabParam === 'silence-schedules'
+      ? tabParam
+      : 'alerts';
   const [showSloForm, setShowSloForm] = useState(false);
   const [showSilenceForm, setShowSilenceForm] = useState(false);
 
@@ -19,19 +25,19 @@ export function Alerts() {
       <div className={styles.tabs}>
         <button
           className={`${styles.tab} ${tab === 'alerts' ? styles.tabActive : ''}`}
-          onClick={() => setTab('alerts')}
+          onClick={() => setSearchParams({})}
         >
           {t('alerts.active')}
         </button>
         <button
           className={`${styles.tab} ${tab === 'slo-configs' ? styles.tabActive : ''}`}
-          onClick={() => setTab('slo-configs')}
+          onClick={() => setSearchParams({ tab: 'slo-configs' })}
         >
           {t('alerts.sloConfig')}
         </button>
         <button
           className={`${styles.tab} ${tab === 'silence-schedules' ? styles.tabActive : ''}`}
-          onClick={() => setTab('silence-schedules')}
+          onClick={() => setSearchParams({ tab: 'silence-schedules' })}
         >
           {t('alerts.silencePlans')}
         </button>

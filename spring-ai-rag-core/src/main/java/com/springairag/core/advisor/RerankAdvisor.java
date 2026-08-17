@@ -100,7 +100,7 @@ public class RerankAdvisor extends AbstractRagAdvisor {
             return request;
         }
 
-        String query = AdvisorUtils.extractUserMessage(request);
+        String query = AdvisorUtils.extractRetrievalQuery(request);
 
         long startMs = System.currentTimeMillis();
         List<RetrievalResult> reranked = rerankingService.rerank(query, results, maxResults);

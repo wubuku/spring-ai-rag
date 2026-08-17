@@ -199,6 +199,32 @@ class RerankAdvisorTest {
     }
 
     @Test
+    void before_usesFocusedRetrievalQueryFromRewriteContext() {
+        RerankAdvisor advisor = createAdvisor(openAiAdapter);
+        List<RetrievalResult> searchResults = List.of(
+                createResult("doc-1", "风格基调内容", 0.9)
+        );
+        when(rerankingService.rerank(
+                eq("风格基调"), anyList(), eq(5)))
+                .thenReturn(searchResults);
+
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(new Prompt(new UserMessage(
+                        "找到 “风格基调” 相关的内容")))
+                .context(Map.of(
+                        HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY,
+                        searchResults,
+                        QueryRewriteAdvisor.CTX_RETRIEVAL_QUERY,
+                        "风格基调"))
+                .build();
+
+        advisor.before(request, null);
+
+        verify(rerankingService).rerank(
+                eq("风格基调"), same(searchResults), eq(5));
+    }
+
+    @Test
     void before_noResultsInContext_skipsRerank() {
         RerankAdvisor advisor = createAdvisor(openAiAdapter);
 

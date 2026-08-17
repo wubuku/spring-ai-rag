@@ -1,34 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState } from 'react';
 import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
+import { filesApi } from '../api/files';
 import { useFileUpload } from '../hooks/useFileUpload';
 import { useToast } from '../components/Toast';
 import { Skeleton } from '../components/Skeleton';
+import { DocumentActionsMenu } from '../components/DocumentActionsMenu/DocumentActionsMenu';
 import { VersionHistoryModal } from '../components/VersionHistoryModal/VersionHistoryModal';
 import styles from './Documents.module.css';
 
 export function Documents() {
   const { t } = useTranslation();
-  const [page, setPage] = useState(0);
-  const [keyword, setKeyword] = useState('');
-  const [selectedCollection, setSelectedCollection] = useState<string | undefined>(undefined);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const rawPage = Number(searchParams.get('page') ?? 0);
+  const page = Number.isInteger(rawPage) && rawPage >= 0 ? rawPage : 0;
+  const keyword = searchParams.get('keyword') ?? '';
+  const selectedCollection = searchParams.get('collectionKey') || undefined;
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<{ id: number; title: string } | null>(null);
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
-
-  // Read the stable Collection key from the URL when navigating from Collections.
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const urlCollectionKey = params.get('collectionKey');
-    if (urlCollectionKey) {
-      setSelectedCollection(urlCollectionKey);
-    }
-  }, []);
 
   const { data: collectionsData } = useQuery({
     queryKey: ['collections-all'],
@@ -100,14 +97,28 @@ export function Documents() {
   };
 
   const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setKeyword(e.target.value);
-    setPage(0);
+    const next = new URLSearchParams(searchParams);
+    const value = e.target.value;
+    if (value) next.set('keyword', value);
+    else next.delete('keyword');
+    next.delete('page');
+    setSearchParams(next, { replace: true });
   };
 
   const handleCollectionChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const val = e.target.value;
-    setSelectedCollection(val === '' ? undefined : val);
-    setPage(0);
+    const next = new URLSearchParams(searchParams);
+    const value = e.target.value;
+    if (value) next.set('collectionKey', value);
+    else next.delete('collectionKey');
+    next.delete('page');
+    setSearchParams(next);
+  };
+
+  const handlePageChange = (nextPage: number) => {
+    const next = new URLSearchParams(searchParams);
+    if (nextPage > 0) next.set('page', String(nextPage));
+    else next.delete('page');
+    setSearchParams(next);
   };
 
   const handlePreview = async (doc: { id: number; title: string; content: string }) => {
@@ -122,6 +133,34 @@ export function Documents() {
       console.error('Failed to fetch document content:', err);
     }
   };
+
+  const handleViewDirectory = useCallback((path: string) => {
+    const params = new URLSearchParams({ path });
+    navigate(`/files?${params.toString()}`);
+  }, [navigate]);
+
+  const handleViewIndexedFile = useCallback((
+    directoryPath: string,
+    filePath: string,
+  ) => {
+    const params = new URLSearchParams({
+      path: directoryPath,
+      file: filePath,
+    });
+    navigate(`/files?${params.toString()}`);
+  }, [navigate]);
+
+  const handleOpenOriginalFile = useCallback(async (path: string) => {
+    try {
+      const blob = await filesApi.getRawFile(path);
+      const objectUrl = URL.createObjectURL(blob);
+      window.open(objectUrl, '_blank', 'noopener,noreferrer');
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60_000);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      showToast(t('documents.openOriginalPdfError', { error: message }), 'error');
+    }
+  }, [showToast, t]);
 
   const collections = collectionsData?.data?.collections ?? [];
 
@@ -166,8 +205,10 @@ export function Documents() {
         {keyword && (
           <button
             onClick={() => {
-              setKeyword('');
-              setPage(0);
+              const next = new URLSearchParams(searchParams);
+              next.delete('keyword');
+              next.delete('page');
+              setSearchParams(next);
             }}
             className={styles.clearBtn}
           >
@@ -175,6 +216,7 @@ export function Documents() {
           </button>
         )}
         <select
+          data-testid="documents-collection-filter"
           value={selectedCollection ?? ''}
           onChange={handleCollectionChange}
           className={styles.filterSelect}
@@ -247,31 +289,19 @@ export function Documents() {
                     </td>
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
                     <td className={styles.hash}>{doc.contentHash?.slice(0, 8)}...</td>
-                    <td>
-                      <div className={styles.actions}>
-                        <button
-                          onClick={() => setVersionsDoc({ id: doc.id, title: doc.title })}
-                          className={styles.versionsBtn}
-                        >
-                          {t('versions.button', 'Versions')}
-                        </button>
-                        {doc.embeddingFresh === false && doc.enabled !== false && (
-                          <button
-                            onClick={() => embedMutation.mutate(doc.id)}
-                            className={styles.retryBtn}
-                            disabled={embedMutation.isPending}
-                          >
-                            {t('documents.retryEmbedding')}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => deleteMutation.mutate(doc.id)}
-                          className={styles.deleteBtn}
-                          disabled={deleteMutation.isPending}
-                        >
-                          {t('documents.delete')}
-                        </button>
-                      </div>
+                    <td className={styles.actionCell}>
+                      <DocumentActionsMenu
+                        ragDocument={doc}
+                        embeddingPending={embedMutation.isPending}
+                        deletePending={deleteMutation.isPending}
+                        onPreview={() => handlePreview(doc)}
+                        onVersions={() => setVersionsDoc({ id: doc.id, title: doc.title })}
+                        onRetryEmbedding={() => embedMutation.mutate(doc.id)}
+                        onDelete={() => deleteMutation.mutate(doc.id)}
+                        onViewDirectory={handleViewDirectory}
+                        onViewIndexedFile={handleViewIndexedFile}
+                        onOpenOriginalFile={handleOpenOriginalFile}
+                      />
                     </td>
                   </tr>
                 ))}
@@ -288,7 +318,7 @@ export function Documents() {
 
           <div className={styles.pagination}>
             <button
-              onClick={() => setPage(p => p - 1)}
+              onClick={() => handlePageChange(page - 1)}
               disabled={page === 0}
               className={styles.pageBtn}
             >
@@ -298,7 +328,7 @@ export function Documents() {
               Page {page + 1} — {t('documents.totalDocuments')}: {data?.data?.total ?? 0}
             </span>
             <button
-              onClick={() => setPage(p => p + 1)}
+              onClick={() => handlePageChange(page + 1)}
               disabled={
                 !data?.data?.documents?.length || (page + 1) * PAGE_SIZE >= (data?.data?.total ?? 0)
               }

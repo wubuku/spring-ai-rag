@@ -57,6 +57,30 @@ class HybridSearchAdvisorTest {
     }
 
     @Test
+    void before_usesFocusedRetrievalQueryFromRewriteContext() {
+        List<RetrievalResult> mockResults =
+                List.of(createResult("doc-1", "风格基调内容", 0.9));
+        when(hybridRetriever.search(
+                eq("风格基调"), isNull(), isNull(), eq(10)))
+                .thenReturn(mockResults);
+
+        ChatClientRequest request = ChatClientRequest.builder()
+                .prompt(new Prompt(new UserMessage(
+                        "找到 “风格基调” 相关的内容")))
+                .context(Map.of(
+                        QueryRewriteAdvisor.CTX_RETRIEVAL_QUERY,
+                        "风格基调"))
+                .build();
+
+        ChatClientRequest result = advisor.before(request, null);
+
+        verify(hybridRetriever).search(
+                eq("风格基调"), isNull(), isNull(), eq(10));
+        assertEquals(1, ((List<?>) result.context()
+                .get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY)).size());
+    }
+
+    @Test
     void before_recordsPipelineMetrics() {
         List<RetrievalResult> mockResults = Arrays.asList(
                 createResult("doc-1", "Spring Boot 是一个框架", 0.9),
