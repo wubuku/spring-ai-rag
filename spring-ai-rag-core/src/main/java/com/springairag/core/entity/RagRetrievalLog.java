@@ -6,6 +6,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.time.ZonedDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * RAG retrieval log entity.
@@ -66,6 +67,21 @@ public class RagRetrievalLog {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
+
+    @Column(name = "trace_id")
+    private UUID traceId;
+
+    @Column(name = "owner_principal_id", length = 128)
+    private String ownerPrincipalId;
+
+    @Column(name = "operation", length = 32)
+    private String operation;
+
+    @Column(name = "outcome_code", length = 64)
+    private String outcomeCode;
+
+    @Column(name = "empty_reason_code", length = 64)
+    private String emptyReasonCode;
 
     /** Created at */
     @Column(name = "created_at", nullable = false)
@@ -164,6 +180,46 @@ public class RagRetrievalLog {
 
     public void setMetadata(Map<String, Object> metadata) {
         this.metadata = metadata;
+    }
+
+    public UUID getTraceId() {
+        return traceId;
+    }
+
+    public void setTraceId(UUID traceId) {
+        this.traceId = traceId;
+    }
+
+    public String getOwnerPrincipalId() {
+        return ownerPrincipalId;
+    }
+
+    public void setOwnerPrincipalId(String ownerPrincipalId) {
+        this.ownerPrincipalId = ownerPrincipalId;
+    }
+
+    public String getOperation() {
+        return operation;
+    }
+
+    public void setOperation(String operation) {
+        this.operation = operation;
+    }
+
+    public String getOutcomeCode() {
+        return outcomeCode;
+    }
+
+    public void setOutcomeCode(String outcomeCode) {
+        this.outcomeCode = outcomeCode;
+    }
+
+    public String getEmptyReasonCode() {
+        return emptyReasonCode;
+    }
+
+    public void setEmptyReasonCode(String emptyReasonCode) {
+        this.emptyReasonCode = emptyReasonCode;
     }
 
     public ZonedDateTime getCreatedAt() {

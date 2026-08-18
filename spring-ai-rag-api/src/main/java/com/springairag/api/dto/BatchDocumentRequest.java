@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.validation.ValidCollectionKey;
 
 import java.util.List;
@@ -37,6 +38,9 @@ public class BatchDocumentRequest {
     @Schema(description = "Whether to force re-embedding (only effective when embed=true, true=ignore existing embeddings and regenerate)", example = "false")
     private boolean force = false;
 
+    @Schema(description = "Embedding policy. When provided it overrides embed. Omitted keeps legacy embed=true→SYNC / embed=false→SKIP.")
+    private EmbeddingPolicy embeddingPolicy;
+
     public BatchDocumentRequest() {}
 
     public BatchDocumentRequest(List<DocumentRequest> documents) {
@@ -53,6 +57,10 @@ public class BatchDocumentRequest {
     public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
     public boolean isForce() { return force; }
     public void setForce(boolean force) { this.force = force; }
+    public EmbeddingPolicy getEmbeddingPolicy() { return embeddingPolicy; }
+    public void setEmbeddingPolicy(EmbeddingPolicy embeddingPolicy) {
+        this.embeddingPolicy = embeddingPolicy;
+    }
 
     @Override
     public boolean equals(Object o) {
@@ -63,12 +71,13 @@ public class BatchDocumentRequest {
                 force == that.force &&
                 Objects.equals(documents, that.documents) &&
                 Objects.equals(collectionId, that.collectionId) &&
-                Objects.equals(collectionKey, that.collectionKey);
+                Objects.equals(collectionKey, that.collectionKey) &&
+                embeddingPolicy == that.embeddingPolicy;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(documents, embed, collectionId, collectionKey, force);
+        return Objects.hash(documents, embed, collectionId, collectionKey, force, embeddingPolicy);
     }
 
     @Override

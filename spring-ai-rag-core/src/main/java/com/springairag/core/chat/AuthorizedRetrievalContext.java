@@ -1,5 +1,6 @@
 package com.springairag.core.chat;
 
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 
 /**
@@ -11,7 +12,8 @@ public record AuthorizedRetrievalContext(
         RetrievalTraceCollector trace,
         String sessionId,
         ChatPrincipal principal,
-        int maxToolResultCharacters) {
+        int maxToolResultCharacters,
+        RetrievalFilters filters) {
 
     public AuthorizedRetrievalContext {
         scope = scope != null ? scope : RetrievalScope.unscoped();
@@ -22,6 +24,7 @@ public record AuthorizedRetrievalContext(
         sessionId = SessionIdValidator.resolve(sessionId);
         principal = principal != null ? principal : ChatPrincipal.local();
         maxToolResultCharacters = Math.max(1024, maxToolResultCharacters);
+        filters = filters != null ? filters : RetrievalFilters.none();
     }
 
     public AuthorizedRetrievalContext(
@@ -30,6 +33,17 @@ public record AuthorizedRetrievalContext(
             RetrievalTraceCollector trace,
             String sessionId,
             ChatPrincipal principal) {
-        this(scope, options, trace, sessionId, principal, 24_000);
+        this(scope, options, trace, sessionId, principal, 24_000, RetrievalFilters.none());
+    }
+
+    public AuthorizedRetrievalContext(
+            RetrievalScope scope,
+            RetrievalOptions options,
+            RetrievalTraceCollector trace,
+            String sessionId,
+            ChatPrincipal principal,
+            int maxToolResultCharacters) {
+        this(scope, options, trace, sessionId, principal, maxToolResultCharacters,
+                RetrievalFilters.none());
     }
 }

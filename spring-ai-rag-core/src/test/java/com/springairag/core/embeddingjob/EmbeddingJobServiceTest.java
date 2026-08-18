@@ -1,5 +1,6 @@
 package com.springairag.core.embeddingjob;
 
+import com.springairag.api.dto.CollectionEmbeddingReadinessResponse;
 import com.springairag.api.dto.EmbeddingJobBatchResponse;
 import com.springairag.api.dto.EmbeddingJobCreateRequest;
 import com.springairag.api.enums.ErrorCode;
@@ -9,6 +10,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,6 +35,7 @@ class EmbeddingJobServiceTest {
 
     private EmbeddingJobRepository jobRepository;
     private RagDocumentRepository documentRepository;
+    private CollectionRetrievalScopeResolver scopeResolver;
     private EmbeddingProfileProvider profileProvider;
     private RagProperties properties;
 
@@ -40,6 +43,7 @@ class EmbeddingJobServiceTest {
     void setUp() {
         jobRepository = mock(EmbeddingJobRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
+        scopeResolver = mock(CollectionRetrievalScopeResolver.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         properties = new RagProperties();
     }
@@ -72,7 +76,9 @@ class EmbeddingJobServiceTest {
                 anyString(),
                 anyLong(),
                 anyBoolean(),
-                anyInt()))
+                anyInt(),
+                any(),
+                any()))
                 .thenAnswer(invocation -> {
                     long documentId = invocation.getArgument(1);
                     UUID batch = invocation.getArgument(0);
@@ -163,11 +169,36 @@ class EmbeddingJobServiceTest {
                 properties.getEmbeddingJobs().getDefaultMaxAttempts());
     }
 
+    @Test
+    void readinessRequiresCollectionKeyAndDelegatesAfterAclResolve() {
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(RetrievalScope.selectedCollections(
+                        List.of(5L), List.of(), null));
+        when(profileProvider.getActiveProfile()).thenReturn(profile());
+        CollectionEmbeddingReadinessResponse expected =
+                new CollectionEmbeddingReadinessResponse(
+                        "customer-42:manual:v3", "test", 3, 1, 1, 0, 0, 1);
+        when(jobRepository.readiness(5L, "customer-42:manual:v3", profile()))
+                .thenReturn(expected);
+
+        assertEquals(expected, service().readiness("customer-42:manual:v3"));
+        assertThrows(IllegalArgumentException.class, () -> service().readiness(" "));
+    }
+
+    @Test
+    void readinessRejectsUnauthorizedCollection() {
+        when(scopeResolver.resolve(any(), any(), any(), any(), any(), any()))
+                .thenReturn(RetrievalScope.noMatches());
+
+        assertThrows(SecurityException.class,
+                () -> service().readiness("hidden-collection"));
+    }
+
     private EmbeddingJobService service() {
         return new EmbeddingJobService(
                 jobRepository,
                 documentRepository,
-                mock(CollectionRetrievalScopeResolver.class),
+                scopeResolver,
                 profileProvider,
                 properties);
     }

@@ -118,4 +118,29 @@ export const evaluationApi = {
     apiClient.get<FeedbackItem[]>('/evaluation/feedback/history', {
       params: { page: params?.page ?? 0, size: params?.size ?? 20 },
     }),
+
+  listSuites: () =>
+    apiClient.get<Array<{ id: string; suiteKey: string; name: string }>>('/evaluation/suites'),
+
+  createSuite: (data: { suiteKey: string; name: string }) =>
+    apiClient.post('/evaluation/suites', data),
+
+  createVersion: (suiteKey: string, definition: unknown) =>
+    apiClient.post(`/evaluation/suites/${encodeURIComponent(suiteKey)}/versions`, { definition }),
+
+  createRun: (data: { suiteKey: string; version?: number }) =>
+    apiClient.post<{ id: string; status: string }>('/evaluation/runs', data),
+
+  getRun: (runId: string) =>
+    apiClient.get(`/evaluation/runs/${encodeURIComponent(runId)}`),
+
+  compareRuns: (leftRunId: string, rightRunId: string) =>
+    apiClient.get('/evaluation/runs/compare', { params: { leftRunId, rightRunId } }),
+
+  listCitationTraces: () =>
+    apiClient.get<{ items: Array<{
+      traceId: string;
+      citationStatus?: string;
+      outcomeCode?: string;
+    }> }>('/retrieval-traces', { params: { page: 0, size: 20 } }),
 };

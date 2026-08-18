@@ -8,6 +8,7 @@ import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,13 +87,14 @@ class KnowledgeSearchToolTest {
         result.setTitle("品牌规范");
         result.setChunkText("风格基调应保持克制。");
         result.setScore(0.8);
-        when(hybridRetriever.searchInScope(
+        when(hybridRetriever.searchInScopeDetailed(
                 eq("风格基调"),
                 same(scope),
                 any(),
                 eq(3),
+                any(),
                 any()))
-                .thenReturn(List.of(result));
+                .thenReturn(RetrievalOutcome.ofResults(List.of(result)));
         ToolContext toolContext = new ToolContext(Map.of(
                 KnowledgeSearchTool.CONTEXT_KEY,
                 authorized));
@@ -111,11 +113,12 @@ class KnowledgeSearchToolTest {
         assertEquals(first, second);
         ArgumentCaptor<RetrievalScope> usedScope =
                 ArgumentCaptor.forClass(RetrievalScope.class);
-        verify(hybridRetriever, times(1)).searchInScope(
+        verify(hybridRetriever, times(1)).searchInScopeDetailed(
                 eq("风格基调"),
                 usedScope.capture(),
                 any(),
                 eq(3),
+                any(),
                 any());
         assertSame(scope, usedScope.getValue());
         assertEquals(1, trace.retrievalCalls());
@@ -135,12 +138,12 @@ class KnowledgeSearchToolTest {
         RetrievalResult first = result("11", "First");
         RetrievalResult shared = result("12", "Shared");
         RetrievalResult overBudget = result("13", "Over budget");
-        when(hybridRetriever.searchInScope(
-                eq("first query"), any(), any(), eq(3), any()))
-                .thenReturn(List.of(first, shared));
-        when(hybridRetriever.searchInScope(
-                eq("second query"), any(), any(), eq(3), any()))
-                .thenReturn(List.of(shared, overBudget));
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("first query"), any(), any(), eq(3), any(), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of(first, shared)));
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("second query"), any(), any(), eq(3), any(), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of(shared, overBudget)));
         ToolContext toolContext = new ToolContext(Map.of(
                 KnowledgeSearchTool.CONTEXT_KEY,
                 authorized));
@@ -201,13 +204,14 @@ class KnowledgeSearchToolTest {
         result.setChunkText("x".repeat(5000));
         RetrievalResult removed = result("12", "Removed source");
         removed.setChunkText("y".repeat(5000));
-        when(hybridRetriever.searchInScope(
+        when(hybridRetriever.searchInScopeDetailed(
                 eq("budget"),
                 any(),
                 any(),
                 eq(3),
+                any(),
                 any()))
-                .thenReturn(List.of(result, removed));
+                .thenReturn(RetrievalOutcome.ofResults(List.of(result, removed)));
 
         String output = tool.call(
                 "{\"query\":\"budget\"}",
@@ -253,13 +257,14 @@ class KnowledgeSearchToolTest {
         result.setChunkText("x".repeat(5000));
         result.setScore(0.8);
         String query = "\\\"".repeat(2500);
-        when(hybridRetriever.searchInScope(
+        when(hybridRetriever.searchInScopeDetailed(
                 eq(query),
                 any(),
                 any(),
                 eq(1),
+                any(),
                 any()))
-                .thenReturn(List.of(result));
+                .thenReturn(RetrievalOutcome.ofResults(List.of(result)));
 
         String output = tool.call(
                 objectMapper.writeValueAsString(Map.of("query", query)),

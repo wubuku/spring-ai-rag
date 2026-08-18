@@ -306,6 +306,9 @@ three explicit execution modes:
   "maxResults": 5,
   "useHybridSearch": true,
   "useRerank": true,
+  "filters": {
+    "metadataContains": { "source": "manual" }
+  },
   "metadata": {}
 }
 ```
@@ -324,7 +327,11 @@ three explicit execution modes:
 | `maxResults` | int | | Number of retrieval results, default 5 |
 | `useHybridSearch` | boolean | | Enable vector + full-text retrieval, default true |
 | `useRerank` | boolean | | Enable reranking, default true |
-| `metadata` | object | | Extended metadata |
+| `filters` | object | | Optional JSONB containment; `PLAIN` rejects it with `400` |
+| `metadata` | object | | Extended metadata. When enabled, includes protocol-level `citationValidation` |
+
+`citationValidation` only parses the agreed `[S1]` tokens. It is not a coverage
+score.
 
 `maxResults`, `useHybridSearch`, and `useRerank` are effective execution
 overrides for `KNOWLEDGE` and `AGENT`. `PLAIN` rejects these fields and any
@@ -691,9 +698,30 @@ Submit more complex retrieval configuration via request body.
     "vectorWeight": 0.6,
     "fulltextWeight": 0.4,
     "minScore": 0.3
+  },
+  "filters": {
+    "metadataContains": {"source": "manual"},
+    "payloadContains": {"status": "active"}
   }
 }
 ```
+
+`filters.metadataContains` / `filters.payloadContains` must be non-empty JSON
+objects and use PostgreSQL `@>` pushed into every candidate query. Invalid
+objects, oversized filters, or unknown fields return `400`. The
+`X-RAG-Retrieval-Trace-Id` response header identifies the caller-visible
+diagnostic.
+
+---
+
+## Retrieval Diagnostics
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/v1/rag/retrieval-traces` | Page caller-visible diagnostics; filter by `outcomeCode`, `emptyReasonCode`, or `citationStatus` |
+| `GET /api/v1/rag/retrieval-traces/{traceId}` | One diagnostic detail |
+
+Query text is omitted by default. Persist failures are fail-open.
 
 ---
 
@@ -1042,7 +1070,8 @@ apply to every target.
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/v1/rag/embedding-jobs/{id}` | Get one authorized-visible job |
-| `GET /api/v1/rag/embedding-jobs?batchId=&status=&page=0&size=50` | Filter and page jobs |
+| `GET /api/v1/rag/embedding-jobs?batchId=&status=&collectionKey=&page=0&size=50` | Filter and page jobs; Collection ACL is applied before `LIMIT` |
+| `GET /api/v1/rag/collections/embedding-readiness?collectionKey=` | Exclusive Collection readiness buckets: fresh/queued/running/failed/stale |
 | `POST /api/v1/rag/embedding-jobs/{id}/cancel` | Request cancellation |
 | `POST /api/v1/rag/embedding-jobs/{id}/retry?maxAttempts=4` | Retry a `FAILED`, `STALE`, or `CANCELLED` job |
 
@@ -1056,7 +1085,9 @@ document/Profile/content hash/version, lease, retry, and terminal-state data.
 
 ### `POST /api/v1/rag/documents/batch`
 
-Batch create documents. Set the top-level `collectionKey` as the default
+Batch create documents. Optional `embeddingPolicy` (`SYNC` / `ASYNC` / `SKIP`)
+overrides the legacy `embed` flag; `ASYNC` enqueues in the same transaction and
+returns `embeddingJobId`. Set the top-level `collectionKey` as the default
 Collection for all items; an item may provide its own key. An item-level
 identity overrides the default after normal ID/key consistency and ACL checks.
 Set `embed=true` to embed in the same request.
@@ -1540,6 +1571,31 @@ Get feedback history.
 ### `GET /api/v1/rag/evaluation/feedback/type/{feedbackType}`
 
 Query feedback by type.
+
+---
+
+## Managed Quality Suites
+
+Available when `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true`. Disabled servers
+return `503 EVALUATION_SUITES_DISABLED`. A suite version is immutable after
+creation. Relevant documents must use `collectionKey + externalId`; internal
+document IDs are not a durable goldenset identity.
+
+| Endpoint | Description |
+|----------|-------------|
+| `POST /api/v1/rag/evaluation/suites` | Create a suite |
+| `GET /api/v1/rag/evaluation/suites` | List suites for the current principal |
+| `GET /api/v1/rag/evaluation/suites/{suiteKey}` | Get one suite owned by the current principal |
+| `POST /api/v1/rag/evaluation/suites/{suiteKey}/versions` | Import an immutable version |
+| `POST /api/v1/rag/evaluation/runs` | Create a PENDING run |
+| `GET /api/v1/rag/evaluation/runs/{runId}` | Get a run and its case results |
+| `GET /api/v1/rag/evaluation/runs/compare` | Compare two runs of the same version |
+| `POST /api/v1/rag/evaluation/semantic` | Optional Spring AI FactChecking/Relevancy adapter; returns `DISABLED` when unavailable |
+| `POST /api/v1/rag/evaluation/semantic/batch` | Same adapter for a bounded batch of items |
+
+Citation validation only checks `[S1]` tokens. Compare marks `environmentDrift`
+when the embedding profile, code revision, or corpus snapshot differs; drift is
+not reported as a quality improvement.
 
 ---
 

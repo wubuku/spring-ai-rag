@@ -115,13 +115,16 @@ public class JsonRecordSearchTool implements ToolCallback {
                     .vectorWeight(context.options().vectorWeight())
                     .fulltextWeight(context.options().fulltextWeight())
                     .build();
-            JsonRecordSearchResponse response =
-                    jsonRecordService.searchAuthorized(
-                            query, payloadContains, context.scope(), config);
-            List<RetrievalResult> traceResults = response.results().stream()
-                    .map(this::toRetrievalResult)
-                    .toList();
-            trace.record(traceResults);
+            JsonRecordService.DetailedSearchResult detailed =
+                    jsonRecordService.searchAuthorizedDetailed(
+                            query,
+                            context.filters(),
+                            payloadContains,
+                            context.scope(),
+                            config);
+            JsonRecordSearchResponse response = detailed.response();
+            List<RetrievalResult> traceResults = detailed.traceResults();
+            trace.recordOutcome(detailed.outcome());
 
             List<Map<String, Object>> records = new ArrayList<>();
             List<RetrievalResult> exposed = new ArrayList<>();
@@ -192,20 +195,6 @@ public class JsonRecordSearchTool implements ToolCallback {
             item.put("payloadOmitted", payload != null);
         }
         return item;
-    }
-
-    private RetrievalResult toRetrievalResult(JsonRecordSearchResult result) {
-        RetrievalResult retrieval = new RetrievalResult();
-        retrieval.setDocumentId(String.valueOf(result.documentId()));
-        retrieval.setChunkIndex(0);
-        retrieval.setChunkText(result.retrievalText());
-        retrieval.setTitle(result.title());
-        retrieval.setSource(result.source());
-        retrieval.setScore(result.score());
-        retrieval.setVectorScore(result.vectorScore());
-        retrieval.setFulltextScore(result.fulltextScore());
-        retrieval.setMetadata(result.metadata());
-        return retrieval;
     }
 
     private AuthorizedRetrievalContext context(ToolContext toolContext) {

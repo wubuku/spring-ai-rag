@@ -13,6 +13,7 @@ public class RagEmbeddingJobProperties {
     private int maxAttempts = 5;
     private int maxDocumentsPerBatch = 1000;
     private int retryBackoffSeconds = 10;
+    private int workerConcurrency = 4;
 
     public boolean isEnabled() { return enabled; }
     public void setEnabled(boolean enabled) { this.enabled = enabled; }
@@ -38,5 +39,9 @@ public class RagEmbeddingJobProperties {
     public int getRetryBackoffSeconds() { return retryBackoffSeconds; }
     public void setRetryBackoffSeconds(int value) {
         retryBackoffSeconds = Math.max(1, Math.min(3600, value));
+    }
+    public int getWorkerConcurrency() { return workerConcurrency; }
+    public void setWorkerConcurrency(int value) {
+        workerConcurrency = Math.max(1, Math.min(16, value));
     }
 }

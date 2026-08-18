@@ -238,12 +238,18 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V34。
+- Flyway 当前为 V1–V39。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
   status 与 session lease；V33 增加持久化 embedding jobs、lease 与活动任务合并索引；
-  V34 增加 JSON record payload containment 的 partial GIN 索引。
+  V34 增加 JSON record payload containment 的 partial GIN 索引；V35 扩展检索诊断；
+  V36 增加普通文档 metadata containment 索引；V37 扩展 embedding job 运营字段；
+  V38 增加受管评估套件；V39 用原子计数器、并发槽位和 CAS 状态替换显式悲观协调。
+- 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
+  `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
+  `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
+  触发的数据库内部短锁不属于该禁令。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 
@@ -263,6 +269,8 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档幂等同步 |
 | `/embedding-jobs` | 默认关闭的持久化 embedding/reindex 任务 |
+| `/retrieval-traces` | 当前调用方可见的检索诊断 |
+| `/collections/embedding-readiness` | Collection 嵌入就绪分类 |
 | `/v1/models`, `/v1/chat/completions` | 默认关闭的 OpenAI 兼容受控预览 |
 
 契约见 [rest-api-zh-CN.md](rest-api-zh-CN.md) 和 [SSE-PROTOCOL.md](SSE-PROTOCOL.md)。
@@ -363,6 +371,7 @@ Real LLM 10/10
 - 不可变 `1.0.0` source/image Tag 尚未创建，留给正式发布流水线。
 - OpenAI 服务端兼容已实现为默认关闭的受控预览，不代表公网或多实例生产就绪。
 - 持久化 embedding worker 与 JSON Agent Tool 默认关闭；启用前应按部署验证容量和成本。
+- 并发控制不使用应用显式悲观锁；`scripts/verify-no-pessimistic-locks.sh` 是回归门禁。
 - OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等是本地状态，不属于项目文档体系。
 - 项目级 Skills 位于 `.agents/skills/`，工作流可以引用本文，但不复制项目事实。
 

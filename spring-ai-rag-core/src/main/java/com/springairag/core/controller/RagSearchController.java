@@ -6,10 +6,19 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
+import com.springairag.core.retrieval.RetrievalFilterValidator;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.retrieval.RetrievalScopeSummary;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionDocumentResolver;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
@@ -57,6 +66,8 @@ public class RagSearchController {
     private final CollectionDocumentResolver legacyCollectionDocumentResolver;
     private final ReRankingService reRankingService;
     private final CollectionRetrievalScopeResolver retrievalScopeResolver;
+    private RetrievalDiagnosticsService diagnosticsService;
+    private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
 
     @Autowired
     public RagSearchController(HybridRetrieverService hybridRetriever,
@@ -66,6 +77,11 @@ public class RagSearchController {
         this.reRankingService = reRankingService;
         this.retrievalScopeResolver = retrievalScopeResolver;
         this.legacyCollectionDocumentResolver = null;
+    }
+
+    @Autowired(required = false)
+    void setDiagnosticsService(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
     }
 
     RagSearchController(HybridRetrieverService hybridRetriever,
@@ -145,16 +161,20 @@ public class RagSearchController {
 
         RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
         List<RetrievalResult> results;
+        RetrievalOutcome outcome = null;
+        RetrievalScope scope = null;
         if (retrievalScopeResolver != null) {
-            RetrievalScope scope = retrievalScopeResolver.resolve(
+            scope = retrievalScopeResolver.resolve(
                     collectionScopeMode,
                     collectionIds,
                     collectionKeys,
                     null,
                     null,
                     key);
-            results = hybridRetriever.searchInScope(
-                    query, scope, null, limit, config);
+            outcome = hybridRetriever.searchInScopeDetailed(
+                    query, scope, null, limit, config, resolveFilters(null));
+            results = outcome != null && outcome.results() != null
+                    ? outcome.results() : List.of();
         } else {
             List<Long> effectiveCollectionIds =
                     ApiKeyCollectionAccess.resolveCollectionIds(collectionIds, key);
@@ -170,7 +190,13 @@ public class RagSearchController {
         }
 
         log.info("Direct search returned {} results", results.size());
-        return ResponseEntity.ok(SearchResponse.of(results, query));
+        return traced(
+                SearchResponse.of(results, query),
+                httpRequest,
+                collectionScopeMode,
+                collectionKeys,
+                scope,
+                outcome);
     }
 
     ResponseEntity<?> search(String query, int limit, boolean useHybrid,
@@ -219,17 +245,22 @@ public class RagSearchController {
                 : RetrievalConfig.builder().build();
 
         List<RetrievalResult> results;
+        RetrievalOutcome outcome = null;
+        RetrievalScope scope = null;
         if (retrievalScopeResolver != null) {
-            RetrievalScope scope = retrievalScopeResolver.resolve(
+            scope = retrievalScopeResolver.resolve(
                     request.getCollectionScopeMode(),
                     request.getCollectionIds(),
                     request.getCollectionKeys(),
                     request.getDocumentIds(),
                     null,
                     key);
-            results = hybridRetriever.searchInScope(
+            RetrievalFilters filters = resolveFilters(request.getFilters());
+            outcome = hybridRetriever.searchInScopeDetailed(
                     request.getQuery(), scope, null,
-                    config.getMaxResults(), config);
+                    config.getMaxResults(), config, filters);
+            results = outcome != null && outcome.results() != null
+                    ? outcome.results() : List.of();
         } else {
             request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
                     request.getCollectionIds(), key));
@@ -245,13 +276,109 @@ public class RagSearchController {
                     request.getQuery(), resolvedDocIds, null,
                     config.getMaxResults(), config);
         }
-        if (config.isUseRerank() && reRankingService != null) {
-            results = reRankingService.rerank(
-                    request.getQuery(), results, config.getMaxResults());
+        if (config.isUseRerank() && reRankingService != null && !results.isEmpty()) {
+            long startedAt = System.nanoTime();
+            try {
+                results = reRankingService.rerank(
+                        request.getQuery(), results, config.getMaxResults());
+                if (outcome != null) {
+                    outcome = outcome.withRerank(
+                            new RetrievalBranchStage(
+                                    RetrievalBranchStage.RERANK,
+                                    "rerank",
+                                    RetrievalBranchStage.SUCCESS,
+                                    (System.nanoTime() - startedAt) / 1_000_000L,
+                                    outcome.results().size(),
+                                    results.size(),
+                                    null),
+                            results,
+                            false);
+                }
+            } catch (RuntimeException e) {
+                if (outcome != null) {
+                    outcome = outcome.withRerank(
+                            new RetrievalBranchStage(
+                                    RetrievalBranchStage.RERANK,
+                                    "rerank",
+                                    RetrievalBranchStage.ERROR,
+                                    (System.nanoTime() - startedAt) / 1_000_000L,
+                                    outcome.results().size(),
+                                    outcome.results().size(),
+                                    e.getClass().getSimpleName()),
+                            outcome.results(),
+                            true);
+                    results = outcome.results();
+                } else {
+                    throw e;
+                }
+            }
         }
 
         log.info("Direct search returned {} results", results.size());
-        return ResponseEntity.ok(results);
+        return traced(
+                results,
+                httpRequest,
+                request.getCollectionScopeMode(),
+                request.getCollectionKeys(),
+                scope,
+                outcome,
+                resolveFilters(request.getFilters()));
+    }
+
+    private RetrievalFilters resolveFilters(
+            com.springairag.api.dto.RetrievalFilterRequest request) {
+        return filterValidator.validate(request);
+    }
+
+    private <T> ResponseEntity<T> traced(
+            T body,
+            HttpServletRequest httpRequest,
+            CollectionScopeMode collectionScopeMode,
+            List<String> collectionKeys,
+            RetrievalScope scope,
+            RetrievalOutcome outcome) {
+        return traced(body, httpRequest, collectionScopeMode, collectionKeys,
+                scope, outcome, RetrievalFilters.none());
+    }
+
+    private <T> ResponseEntity<T> traced(
+            T body,
+            HttpServletRequest httpRequest,
+            CollectionScopeMode collectionScopeMode,
+            List<String> collectionKeys,
+            RetrievalScope scope,
+            RetrievalOutcome outcome,
+            RetrievalFilters filters) {
+        RetrievalFilters effective = filters != null ? filters : RetrievalFilters.none();
+        if (diagnosticsService == null
+                || !diagnosticsService.isEnabled()
+                || outcome == null) {
+            return ResponseEntity.ok(body);
+        }
+        try {
+            RetrievalTraceSession session = diagnosticsService.createSession(
+                    ChatPrincipal.from(httpRequest),
+                    RetrievalTraceHeaders.OPERATION_SEARCH,
+                    null);
+            session.attachScope(
+                    RetrievalScopeSummary.from(
+                            collectionScopeMode,
+                            scope,
+                            collectionKeys,
+                            effective,
+                            null),
+                    effective);
+            RetrievalOutcome tagged = outcome.withTraceId(session.traceId());
+            diagnosticsService.persistSearch(
+                    session, tagged, session.scopeSummary(), effective);
+            return ResponseEntity.ok()
+                    .header(RetrievalTraceHeaders.TRACE_ID, session.traceId().toString())
+                    .body(body);
+        } catch (Exception e) {
+            log.warn("Retrieval diagnostics failed; returning search results without trace: {}",
+                    e.getMessage());
+            return ResponseEntity.ok(body);
+        }
     }
 
     ResponseEntity<List<RetrievalResult>> searchWithConfig(SearchRequest request) {

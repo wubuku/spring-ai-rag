@@ -150,6 +150,40 @@ class PgTrgmFulltextProviderTest {
     }
 
     @Test
+    @DisplayName("detailed search reports candidates removed by minScore")
+    void detailedSearch_reportsRawCandidatesBeforeMinScore() {
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(1);
+        when(jdbc.queryForObject(contains("gin_trgm_ops"), eq(Boolean.class)))
+                .thenReturn(true);
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", 1L);
+        row.put("score_trgm", 0.2);
+        row.put("document_id", 10L);
+        row.put("chunk_text", "low score");
+        row.put("chunk_index", 0);
+        row.put("metadata", Collections.emptyMap());
+        row.put("document_title", "title");
+        row.put("document_source", "source");
+
+        PgTrgmFulltextProvider provider =
+                new TestPgTrgmProviderWithFixedSearch(jdbc, List.of(row));
+
+        FulltextSearchProvider.SearchResult result =
+                provider.searchInScopeDetailed(
+                        "query",
+                        RetrievalScope.unscoped(),
+                        null,
+                        5,
+                        0.8,
+                        1L,
+                        com.springairag.core.retrieval.RetrievalFilters.none());
+
+        assertTrue(result.results().isEmpty());
+        assertEquals(1, result.candidateCount());
+    }
+
+    @Test
     @DisplayName("SQL includes IN clause when documentIds are specified")
     void search_withDocumentIds_filtersByDocument() {
         JdbcTemplate jdbc = mock(JdbcTemplate.class);

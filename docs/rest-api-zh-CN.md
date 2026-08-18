@@ -347,6 +347,9 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
   "maxResults": 5,
   "useHybridSearch": true,
   "useRerank": true,
+  "filters": {
+    "metadataContains": { "source": "manual" }
+  },
   "metadata": {}
 }
 ```
@@ -365,7 +368,10 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 | `maxResults` | int | | 检索结果数，默认 5 |
 | `useHybridSearch` | boolean | | 是否启用向量 + 全文检索，默认 true |
 | `useRerank` | boolean | | 是否启用重排序，默认 true |
-| `metadata` | object | | 扩展元数据 |
+| `filters` | object | | 可选 JSONB containment；`PLAIN` 传入时返回 `400` |
+| `metadata` | object | | 扩展元数据。启用时包含协议级 `citationValidation` |
+
+`citationValidation` 只解析约定的 `[S1]` token，不是覆盖率评分。
 
 `maxResults`、`useHybridSearch` 与 `useRerank` 会真实覆盖 `KNOWLEDGE` 和
 `AGENT` 的执行参数。`PLAIN` 显式传入这些字段或任何 Collection/document 检索范围时
@@ -602,9 +608,28 @@ Submit more complex retrieval configuration via request body.
     "vectorWeight": 0.6,
     "fulltextWeight": 0.4,
     "minScore": 0.3
+  },
+  "filters": {
+    "metadataContains": {"source": "manual"},
+    "payloadContains": {"status": "active"}
   }
 }
 ```
+
+`filters.metadataContains` / `filters.payloadContains` 必须是非空 JSON 对象，使用
+PostgreSQL `@>` 下推到全部候选 SQL。非法对象、超限或未知字段返回 `400`。
+响应头 `X-RAG-Retrieval-Trace-Id` 指向当前调用方可查询的诊断。
+
+---
+
+## 检索诊断
+
+| 端点 | 说明 |
+|------|------|
+| `GET /api/v1/rag/retrieval-traces` | 当前调用方可见的诊断分页；可按 `outcomeCode`、`emptyReasonCode`、`citationStatus` 过滤 |
+| `GET /api/v1/rag/retrieval-traces/{traceId}` | 单条诊断详情 |
+
+默认不返回 query 明文。写入失败 fail-open。
 
 ---
 
@@ -922,7 +947,8 @@ Collection scope 最多展开 1000 个 enabled 文档；也可改为
 | 端点 | 说明 |
 |------|------|
 | `GET /api/v1/rag/embedding-jobs/{id}` | 获取一个授权可见的任务 |
-| `GET /api/v1/rag/embedding-jobs?batchId=&status=&page=0&size=50` | 分页过滤任务 |
+| `GET /api/v1/rag/embedding-jobs?batchId=&status=&collectionKey=&page=0&size=50` | 分页过滤任务；先按 Collection ACL 过滤再 LIMIT |
+| `GET /api/v1/rag/collections/embedding-readiness?collectionKey=` | Collection 就绪分类：fresh/queued/running/failed/stale，互斥计数 |
 | `POST /api/v1/rag/embedding-jobs/{id}/cancel` | 请求取消 |
 | `POST /api/v1/rag/embedding-jobs/{id}/retry?maxAttempts=4` | 重试 `FAILED`、`STALE` 或 `CANCELLED` 任务 |
 
@@ -937,7 +963,8 @@ Collection scope 最多展开 1000 个 enabled 文档；也可改为
 
 批量创建文档。顶层 `collectionKey` 是所有 item 的默认 Collection；item 也可提供自己的
 key。item 级身份覆盖默认值，但仍执行 ID/key 一致性和 ACL 校验。`embed=true` 表示在同一
-请求中完成 embedding。
+请求中完成 embedding。可选 `embeddingPolicy` 覆盖 `embed`：`SYNC` / `ASYNC` /
+`SKIP`。`ASYNC` 在同一事务入队并返回 `embeddingJobId`。
 
 ```json
 {
@@ -1364,6 +1391,29 @@ Get feedback history.
 ### `GET /api/v1/rag/evaluation/feedback/type/{feedbackType}`
 
 Query feedback by type.
+
+---
+
+## 受管质量套件
+
+设置 `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true` 后可用。关闭时返回
+`503 EVALUATION_SUITES_DISABLED`。suite version 一经创建不可变；相关文档必须使用
+`collectionKey + externalId`，不得使用内部文档 ID 作为长期基准。
+
+| 端点 | 说明 |
+|------|------|
+| `POST /api/v1/rag/evaluation/suites` | 创建套件 |
+| `GET /api/v1/rag/evaluation/suites` | 列出当前 principal 的套件 |
+| `GET /api/v1/rag/evaluation/suites/{suiteKey}` | 查询当前 principal 拥有的单个套件 |
+| `POST /api/v1/rag/evaluation/suites/{suiteKey}/versions` | 导入不可变 version |
+| `POST /api/v1/rag/evaluation/runs` | 创建 PENDING run |
+| `GET /api/v1/rag/evaluation/runs/{runId}` | 查询 run 与 case 结果 |
+| `GET /api/v1/rag/evaluation/runs/compare` | 比较同一 version 的两次 run |
+| `POST /api/v1/rag/evaluation/semantic` | 可选 Spring AI FactChecking/Relevancy 适配；不可用时 `DISABLED` |
+| `POST /api/v1/rag/evaluation/semantic/batch` | 同一适配器的有界批量接口 |
+
+citation 校验只检查 `[S1]` token。compare 在 embedding profile、代码修订或语料快照
+不同时标记 `environmentDrift`，不把漂移报告成质量提升。
 
 ---
 

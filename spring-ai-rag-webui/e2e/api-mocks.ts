@@ -72,6 +72,59 @@ export async function mockAllApiCalls(page: Page) {
     await route.fulfill({ status: 204, body: '' });
   });
 
+  await page.route('**/api/v1/rag/embedding-jobs**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          id: '11111111-1111-1111-1111-111111111111',
+          status: 'QUEUED',
+          origin: 'API',
+          documentId: 9,
+          attemptCount: 0,
+          maxAttempts: 3,
+        }],
+        page: 0,
+        size: 50,
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    });
+  });
+  await page.route('**/api/v1/rag/collections/embedding-readiness**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        collectionKey: 'furniture',
+        enabledDocuments: 1,
+        freshDocuments: 1,
+        queuedDocuments: 0,
+        runningDocuments: 0,
+        failedDocuments: 0,
+        staleOrMissingDocuments: 0,
+      }),
+    });
+  });
+  await page.route('**/api/v1/rag/retrieval-traces**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        items: [{
+          traceId: '22222222-2222-2222-2222-222222222222',
+          citationStatus: 'VALID',
+          outcomeCode: 'HITS',
+        }],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      }),
+    });
+  });
+
   // Evaluation endpoints (P0-5)
   await page.route('**/api/v1/rag/evaluation/**', async route => {
     const url = route.request().url();
@@ -85,6 +138,22 @@ export async function mockAllApiCalls(page: Page) {
     }
     if (url.includes('/feedback/stats')) {
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ thumbsUp: 1, thumbsDown: 0 }) });
+      return;
+    }
+    if (url.includes('/suites')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ id: 'suite-1', suiteKey: 'furniture-quality', name: 'Furniture' }]),
+      });
+      return;
+    }
+    if (url.includes('/runs')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ id: 'run-1', status: 'PENDING' }),
+      });
       return;
     }
     await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({}) });
@@ -455,6 +524,14 @@ export async function mockEvaluationApi(page: import('@playwright/test').Page) {
     }
     if (url.includes('/feedback/history')) {
       await route.fulfill({ json: [] });
+      return;
+    }
+    if (url.includes('/suites')) {
+      await route.fulfill({ json: [] });
+      return;
+    }
+    if (url.includes('/runs')) {
+      await route.fulfill({ json: { id: 'run-1', status: 'PENDING' } });
       return;
     }
     await route.fulfill({ json: {} });

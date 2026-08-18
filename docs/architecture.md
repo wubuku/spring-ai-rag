@@ -306,6 +306,12 @@ Data model and current boundaries:
   `d.collection_id`; selected IDs and explicit document IDs use PostgreSQL
   `bigint[]` JDBC array parameters. Scope cost therefore depends on the number
   of selected Collections rather than all documents contained in them.
+- Optional `filters.metadataContains` / `filters.payloadContains` use
+  PostgreSQL `@>` on the same candidate SQL (V36 GIN). This is not a query
+  language; unknown fields or empty objects return `400`.
+- Retrieval diagnostics (V35) store outcome / empty-reason / filter summaries
+  and omit query text by default. Empty Search/Chat responses include
+  `X-RAG-Retrieval-Trace-Id`. Persist failures are fail-open.
 - Results use one global top-k across the effective Collection union. The
   separate "each selected Collection must contribute results" behavior
   (`EACH_COLLECTION`) is not implemented.
@@ -369,11 +375,13 @@ An optional durable path is enabled with `rag.embedding-jobs.enabled=true`:
 POST /api/v1/rag/embedding-jobs
   | documentIds or authorized Collection scope
   v
-rag_embedding_jobs (V33)
+rag_embedding_jobs (V33/V37)
   | active-job coalescing + bounded retry
+  | origin / requested_by_principal_id
   v
 EmbeddingJobWorker
-  | SKIP LOCKED claim + lease
+  | conditional UPDATE ... RETURNING claim + lease + heartbeat
+  | worker-concurrency limit
   | recheck cancellation/Profile/version/content hash around provider calls
   v
 DocumentEmbedService.embedDocumentForJob
@@ -382,8 +390,12 @@ DocumentEmbedService.embedDocumentForJob
 SUCCEEDED | FAILED | CANCELLED | STALE
 ```
 
-The job table never copies document content. Synchronous embed APIs remain
-available, and the worker is disabled by default for controlled rollout.
+The job table never copies document content. Write APIs can choose
+`embeddingPolicy` `SYNC` / `ASYNC` / `SKIP`; omitted values keep
+`embed=true→SYNC` and `embed=false→SKIP`. Explicit embed/re-embed rejects
+`SKIP`. `ASYNC` requires `rag.embedding-jobs.enabled=true` or returns `503`.
+The worker is disabled by default for controlled rollout. The readiness API
+returns exclusive Collection buckets.
 
 ### 4.4 JSON Structured-Record Flow
 
@@ -425,8 +437,10 @@ context. The caller owns the semantic relationship between the payload and
 `retrievalText`; the service stores both without trying to reconcile them.
 Payload-only updates create an audit version but preserve a fresh embedding.
 Public upsert/search requests prefer Collection keys and responses return the
-key alongside the deprecated internal ID; persistence, advisory locks, and
-retrieval candidates remain keyed by internal IDs.
+key alongside the deprecated internal ID; persistence and retrieval candidates
+remain keyed by internal IDs. The database unique constraint, JPA `@Version`,
+and bounded transaction retries coordinate one external identity without
+advisory locks.
 V34 adds a partial GIN `jsonb_path_ops` index for enabled `json-record`
 containment queries. The optional Spring AI `searchJsonRecords` tool is disabled
 by default. When enabled, the server injects authorized scope, while the model
@@ -444,8 +458,8 @@ POST /api/v1/rag/documents/upsert
   v
 ExternalDocumentService
   | resolve writable collection through API-key ACL
-  | pg_advisory_xact_lock(collectionId + externalId)
-  | CAS / exact-replay decision + version snapshot
+  | unique identity + @Version/CAS + bounded transaction retry
+  | exact-replay decision + version snapshot
   v
 rag_documents (same documentId)
   | content change -> current embedding becomes stale
@@ -457,7 +471,9 @@ fresh COMPLETED state, or FAILED state for the current content hash
 ```
 
 Ordinary external documents and JSON records share the Collection-level unique
-identity `(collection_id, external_id)` and the advisory-lock namespace.
+identity `(collection_id, external_id)`. The unique index is the final arbiter
+for concurrent first creation; updates to existing rows use optimistic versions,
+with only bounded conflict retries.
 `sourceRevision` is opaque; the service only checks equality and an optional
 `expectedSourceRevision` compare-and-set, and does not compare revision size or
 freshness. Source deletion is a tombstone (`enabled=false` plus
@@ -466,6 +482,16 @@ restore the same internal document. Retrieval requires
 an enabled document and a fresh completed state for the active Embedding
 Profile, so old vectors remain physically available for diagnosis without
 being returned to callers.
+
+**Data-access concurrency rule:** production data access must not use explicit
+`SELECT ... FOR UPDATE`, `SKIP LOCKED`, JPA `PESSIMISTIC_*`, or PostgreSQL
+advisory locks. Workers use state/owner/lease/snapshot predicates with
+`UPDATE/DELETE ... RETURNING`; version allocation uses atomic counters;
+concurrency slots and external identities use unique constraints plus
+`ON CONFLICT DO NOTHING`; document commits use version/content-hash CAS.
+PostgreSQL may still take ordinary short-lived row or index locks internally
+for writes; those are not application-requested pessimistic coordination.
+`scripts/verify-no-pessimistic-locks.sh` enforces this rule.
 
 ### 4.6 OpenAI Chat Completions Compatibility Flow
 
@@ -496,6 +522,22 @@ native `/api/v1/rag/chat/stream` but uses isolated DTOs, error envelopes, and
 standard SSE mapping without native RAG
 `tool_start/tool_result/sources/done` events.
 
+### 4.7 Managed Quality Suites And Citations
+
+When enabled, Chat writes protocol-level `citationValidation` into metadata.
+It only parses the agreed `[S1]` tokens and is not a coverage score. Managed
+suites (V38) are disabled by default: a version is immutable after creation,
+and relevant documents must use `collectionKey + externalId`. Compare is
+limited to the same version and marks environment drift separately. The suite
+worker reloads the owner's current database API key (`db:{keyId}`) and
+re-authorizes definition Collections before search; a missing, disabled, or
+ACL-revoked key finishes the run as `FAILED` / `AUTHORIZATION_CHANGED`.
+`local:` / `root:` / `legacy:` principals stay unrestricted, matching HTTP
+auth-disabled behavior. Optional `POST /evaluation/semantic` adapts Spring AI
+1.1.4 evaluators by reflection (`FactCheckingEvaluator.builder`,
+`RelevancyEvaluator(ChatClient.Builder)`, `EvaluationRequest` with `Document`
+context) and returns `DISABLED` when the class or ChatClient is missing.
+
 ---
 
 ## 5. Database Design
@@ -519,6 +561,10 @@ rag_user_feedback       # User feedback
 rag_alerts              # Alert records
 rag_slo_config          # SLO configuration
 rag_retrieval_evaluations  # Retrieval quality evaluations
+rag_evaluation_suites      # Managed quality suites (V38, disabled by default)
+rag_evaluation_suite_versions
+rag_evaluation_runs
+rag_evaluation_case_results
 rag_audit_log           # Audit logs (collection operations)
 ```
 
@@ -532,9 +578,10 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile-scoped cache and completion state |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
-| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at | V33 durable embedding/reindex state machine |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at, origin | V33/V37 durable embedding/reindex state machine |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
-| `rag_retrieval_logs` | query, strategy, result_count, latency_ms | Retrieval quality tracking |
+| `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
+| `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |
 
 **Index Strategy**:
 - `rag_collection.collection_key`: named global unique constraint / B-Tree;
@@ -544,7 +591,8 @@ rag_audit_log           # Audit logs (collection operations)
 - `rag_documents.content_hash`: B-Tree (hash-based deduplication)
 - `rag_documents`: GIN index (full-text search with jiebacfg Chinese tokenizer)
 - `rag_documents.jsonb_payload`: V34 partial GIN `jsonb_path_ops` for enabled JSON-record `@>` containment
-- `rag_embedding_jobs`: active-job partial unique, claim, batch, and document indexes
+- `rag_documents.metadata`: V36 GIN for `metadataContains` `@>` pushdown
+- `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
 
 ### 5.3 Full-Text Search Configuration
 

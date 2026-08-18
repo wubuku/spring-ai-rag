@@ -509,16 +509,16 @@ public class DocumentEmbedService {
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results,
             EmbeddingCommitGuard commitGuard) {
-        commitGuard.verify();
         try {
-            persistenceService.replace(
+            replaceEmbeddings(
                     documentId,
                     prep.documentVersion(),
                     prep.contentHash(),
                     profile,
                     prep.chunkerVersion(),
                     chunks,
-                    results);
+                    results,
+                    commitGuard);
         } catch (IllegalStateException firstFailure) {
             RagDocument current = findDocument(documentId);
             long currentVersion = current.getVersion() == null ? 0 : current.getVersion();
@@ -528,16 +528,47 @@ public class DocumentEmbedService {
             if (!reusable || currentVersion == prep.documentVersion()) {
                 throw firstFailure;
             }
-            commitGuard.verify();
-            persistenceService.replace(
+            replaceEmbeddings(
                     documentId,
                     currentVersion,
                     prep.contentHash(),
                     profile,
                     prep.chunkerVersion(),
                     chunks,
-                    results);
+                    results,
+                    commitGuard);
         }
+    }
+
+    private void replaceEmbeddings(
+            long documentId,
+            long documentVersion,
+            String contentHash,
+            EmbeddingProfile profile,
+            String chunkerVersion,
+            List<TextChunk> chunks,
+            List<EmbeddingBatchService.EmbeddingResult> results,
+            EmbeddingCommitGuard commitGuard) {
+        if (EmbeddingCommitGuard.isAllowAll(commitGuard)) {
+            persistenceService.replace(
+                    documentId,
+                    documentVersion,
+                    contentHash,
+                    profile,
+                    chunkerVersion,
+                    chunks,
+                    results);
+            return;
+        }
+        persistenceService.replace(
+                documentId,
+                documentVersion,
+                contentHash,
+                profile,
+                chunkerVersion,
+                chunks,
+                results,
+                commitGuard);
     }
 
     private List<TextChunk> splitForEmbedding(RagDocument doc, String content) {

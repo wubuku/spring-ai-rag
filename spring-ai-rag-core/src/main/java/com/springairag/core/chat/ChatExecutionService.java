@@ -10,6 +10,10 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagProperties;
+import com.springairag.api.dto.CitationValidation;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.evaluation.CitationValidator;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
@@ -72,6 +76,8 @@ public class ChatExecutionService {
     private final RagMetricsService metricsService;
     private final RetryTemplate retryTemplate;
     private final ChatSessionCoordinator sessionCoordinator;
+    private RetrievalDiagnosticsService diagnosticsService;
+    private CitationValidator citationValidator;
 
     public ChatExecutionService(
             ChatModelRouter modelRouter,
@@ -126,6 +132,16 @@ public class ChatExecutionService {
         this.sessionCoordinator = sessionCoordinator;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDiagnosticsService(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setCitationValidator(CitationValidator citationValidator) {
+        this.citationValidator = citationValidator;
+    }
+
     public ChatExecutionResult execute(ChatCommand command) {
         validateMode(command);
         ChatSessionCoordinator.LeaseHandle lease =
@@ -141,11 +157,13 @@ public class ChatExecutionService {
             for (int index = 0; index < candidates.size(); index++) {
                 ChatModelRouter.ChatModelCandidate candidate = candidates.get(index);
                 long startedAt = System.currentTimeMillis();
+                ModeAwareChatClientFactory.Attempt attempt = null;
                 try {
-                    ModeAwareChatClientFactory.Attempt attempt =
+                    ModeAwareChatClientFactory.Attempt created =
                             clientFactory.create(command, candidate, baseline);
+                    attempt = created;
                     Supplier<ChatClientResponse> invocation =
-                            () -> invoke(attempt, command);
+                            () -> invoke(created, command);
                     Supplier<ChatClientResponse> retried = () ->
                             retryTemplate != null
                                     ? retryTemplate.execute(
@@ -179,14 +197,17 @@ public class ChatExecutionService {
                                 System.currentTimeMillis() - startedAt,
                             tokenCount(committedResult.usage()));
                     }
+                    markAttempt(command, attempt, true);
                     if (index > 0) {
                         log.info("Chat fallback succeeded: requested={}, resolved={}",
                                 command.modelRef(), candidate.ref());
                     }
                     return committedResult;
                 } catch (RagException e) {
+                    markAttempt(command, attempt, false);
                     throw e;
                 } catch (RuntimeException e) {
+                    markAttempt(command, attempt, false);
                     lastFailure = e;
                     if (metricsService != null) {
                         metricsService.recordFailure(
@@ -204,6 +225,7 @@ public class ChatExecutionService {
                     ErrorCode.LLM_UNAVAILABLE,
                     "No eligible chat model is available");
         } finally {
+            persistDiagnostics(command);
             if (sessionCoordinator != null) {
                 sessionCoordinator.release(lease);
             }
@@ -231,11 +253,13 @@ public class ChatExecutionService {
                 return streamCandidates(
                         command, baseline, candidates, 0, lease)
                         .doFinally(signal -> {
+                            persistDiagnostics(command);
                             if (sessionCoordinator != null) {
                                 sessionCoordinator.release(lease);
                             }
                         });
             } catch (RuntimeException e) {
+                persistDiagnostics(command);
                 if (sessionCoordinator != null) {
                     sessionCoordinator.release(lease);
                 }
@@ -367,8 +391,29 @@ public class ChatExecutionService {
                 result.mode(),
                 result.usage(),
                 result.finishReason(),
-                result.stepMetrics()));
+                result.stepMetrics(),
+                result.metadata()));
         return Flux.fromIterable(events);
+    }
+
+    private void markAttempt(
+            ChatCommand command,
+            ModeAwareChatClientFactory.Attempt attempt,
+            boolean succeeded) {
+        if (command.retrievalTraceSession() == null || attempt == null) {
+            return;
+        }
+        command.retrievalTraceSession().markAttemptFinished(
+                attempt.retrievalContext().trace().attemptKey(),
+                succeeded,
+                attempt.candidate() != null ? attempt.candidate().ref() : null);
+    }
+
+    private void persistDiagnostics(ChatCommand command) {
+        if (diagnosticsService == null || command.retrievalTraceSession() == null) {
+            return;
+        }
+        diagnosticsService.persist(command.retrievalTraceSession());
     }
 
     private List<ChatEvent> responseEvents(
@@ -464,6 +509,21 @@ public class ChatExecutionService {
         metadata.put("retrieval", attempt.retrievalContext().trace().summary());
         metadata.put("retrievalExecuted",
                 attempt.retrievalContext().trace().retrievalCalls() > 0);
+        if (command.retrievalTraceSession() != null) {
+            metadata.put(
+                    "retrievalTraceId",
+                    command.retrievalTraceSession().traceId().toString());
+        }
+        if (citationValidator != null
+                && ragProperties.getEvaluation().isCitationValidationEnabled()) {
+            CitationValidation validation = citationValidator.validate(
+                    command.mode(), answer, sources);
+            metadata.put("citationValidation", validation);
+            if (command.retrievalTraceSession() != null) {
+                command.retrievalTraceSession().setCitationValidation(
+                        citationMap(validation));
+            }
+        }
         return new ChatExecutionResult(
                 answer,
                 command.sessionId(),
@@ -825,5 +885,16 @@ public class ChatExecutionService {
     private int tokenCount(Map<String, Object> usage) {
         Object value = usage.get("totalTokens");
         return value instanceof Number number ? number.intValue() : 0;
+    }
+
+    private Map<String, Object> citationMap(CitationValidation validation) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("status", validation.status());
+        map.put("availableIds", validation.availableIds());
+        map.put("citedIds", validation.citedIds());
+        map.put("invalidIds", validation.invalidIds());
+        map.put("citedSourceCount", validation.citedSourceCount());
+        map.put("sourceCount", validation.sourceCount());
+        return map;
     }
 }

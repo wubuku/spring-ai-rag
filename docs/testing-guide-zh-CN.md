@@ -242,7 +242,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V34、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V39、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -296,7 +296,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V34，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V39，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -322,7 +322,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V34，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V39，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -366,9 +366,26 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V34，验证 V33 active-job coalesce、force 原子升级和并发 worker
-`SKIP LOCKED` claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
+执行 V1–V39，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
+
+### 下一轮高价值能力验收门禁
+
+```bash
+./scripts/verify-retrieval-diagnostics.sh
+./scripts/verify-retrieval-filters.sh
+./scripts/verify-embedding-operations.sh
+./scripts/verify-managed-quality.sh
+./scripts/verify-no-pessimistic-locks.sh
+# 或一次串行跑完 A–D：
+./scripts/verify-next-high-value-features.sh
+```
+
+固定范围分别覆盖检索诊断（V35）、metadata/payload 过滤（V36）、embedding 运营
+（V37，含 SYNC/ASYNC/SKIP、ACL 分页与就绪接口）、citation / 受管套件（V38），以及
+V39 后禁止显式悲观锁的静态门禁。完整聚合脚本必须串行运行，因为 Maven clean 会删除
+模块 `target/`。
 
 ### 真实检索质量回归门禁
 
@@ -421,6 +438,20 @@ PostgreSQL 门禁默认执行。如果 Docker 不可用，或 daemon 拒绝当�
 TESTCONTAINERS_API_VERSION=1.40 \
 TESTCONTAINERS_RYUK_DISABLED=true \
 ./scripts/verify-chat-capability.sh
+```
+
+`ChatSessionPostgresIntegrationTest` 也支持一次性外部数据库，便于绕过 Testcontainers
+Docker API 协商问题；该测试会执行 `Flyway.clean()`，不得指向开发库或生产库：
+
+```bash
+mvn -pl spring-ai-rag-core \
+  -Dtest=ChatSessionPostgresIntegrationTest \
+  -Dchat.it.enabled=true \
+  -Dchat.it.jdbc-url=jdbc:postgresql://127.0.0.1:5432/disposable_chat_test \
+  -Dchat.it.username=postgres \
+  -Dchat.it.password=postgres \
+  -Dchat.it.clean-confirm=YES \
+  test
 ```
 
 只有在环境确实不可用时才使用 `--skip-postgres`，并保留生成的 summary。境内 registry/证书、

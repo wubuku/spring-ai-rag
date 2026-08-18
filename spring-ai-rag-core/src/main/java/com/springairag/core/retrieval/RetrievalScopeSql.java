@@ -14,15 +14,40 @@ public final class RetrievalScopeSql {
     }
 
     public static Fragment build(RetrievalScope requestedScope) {
-        return build(requestedScope, null);
+        return build(requestedScope, RetrievalFilters.none());
     }
 
     public static Fragment build(
             RetrievalScope requestedScope,
             JsonbContainmentFilter payloadFilter) {
+        return build(requestedScope, RetrievalFilters.ofPayload(payloadFilter));
+    }
+
+    public static Fragment build(
+            RetrievalScope requestedScope,
+            RetrievalFilters filters) {
+        return build(requestedScope, filters, "e.document_id");
+    }
+
+    /**
+     * 针对 {@code rag_documents d} 的只读探针片段，document ID 使用 {@code d.id}。
+     */
+    public static Fragment buildDocumentOnly(
+            RetrievalScope requestedScope,
+            RetrievalFilters filters) {
+        return build(requestedScope, filters, "d.id");
+    }
+
+    private static Fragment build(
+            RetrievalScope requestedScope,
+            RetrievalFilters requestedFilters,
+            String documentIdColumn) {
         RetrievalScope scope = requestedScope != null
                 ? requestedScope
                 : RetrievalScope.unscoped();
+        RetrievalFilters filters = requestedFilters != null
+                ? requestedFilters
+                : RetrievalFilters.none();
         if (scope.matchNone()) {
             return new Fragment("AND 1 = 0 ", List.of());
         }
@@ -39,14 +64,18 @@ public final class RetrievalScopeSql {
             }
         }
         if (!scope.documentIds().isEmpty()) {
-            sql.append("AND e.document_id = ANY (?) ");
+            sql.append("AND ").append(documentIdColumn).append(" = ANY (?) ");
             args.add(bigintArray(scope.documentIds()));
         }
         if (scope.documentType() != null) {
             sql.append("AND d.document_type = ? ");
             args.add(scope.documentType());
         }
-        if (payloadFilter != null) {
+        if (filters.metadataContains() != null) {
+            sql.append("AND d.metadata @> CAST(? AS jsonb) ");
+            args.add(filters.metadataContains().canonicalJson());
+        }
+        for (JsonbContainmentFilter payloadFilter : filters.payloadContainsAll()) {
             sql.append("AND d.jsonb_payload @> CAST(? AS jsonb) ");
             args.add(payloadFilter.canonicalJson());
         }

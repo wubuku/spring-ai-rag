@@ -6,9 +6,11 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.dto.SearchRequest;
 import com.springairag.api.dto.SearchResponse;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.CollectionDocumentResolver;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
@@ -400,10 +402,10 @@ class RagSearchControllerTest {
                 CollectionScopeMode.ANY_COLLECTION,
                 null, null, null, null, null))
                 .thenReturn(scope);
-        when(hybridRetriever.searchInScope(
+        when(hybridRetriever.searchInScopeDetailed(
                 eq("query"), same(scope), isNull(), eq(5),
-                any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of()));
 
         ResponseEntity<?> response = productionController.search(
                 "query", 5, true, 0.5, 0.5,
@@ -411,9 +413,9 @@ class RagSearchControllerTest {
                 null, null, null);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(hybridRetriever).searchInScope(
+        verify(hybridRetriever).searchInScopeDetailed(
                 eq("query"), same(scope), isNull(), eq(5),
-                any(RetrievalConfig.class));
+                any(RetrievalConfig.class), any());
         verifyNoInteractions(documentRepository);
     }
 
@@ -427,10 +429,10 @@ class RagSearchControllerTest {
                 null, List.of("two", "four"),
                 List.of(10L, 11L), null, null))
                 .thenReturn(scope);
-        when(hybridRetriever.searchInScope(
+        when(hybridRetriever.searchInScopeDetailed(
                 eq("query"), same(scope), isNull(), eq(8),
-                any(RetrievalConfig.class)))
-                .thenReturn(List.of());
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of()));
 
         SearchRequest request = new SearchRequest("query");
         request.setCollectionScopeMode(
@@ -446,10 +448,42 @@ class RagSearchControllerTest {
                 productionController.searchWithConfig(request, null);
 
         assertEquals(200, response.getStatusCode().value());
-        verify(hybridRetriever).searchInScope(
+        verify(hybridRetriever).searchInScopeDetailed(
                 eq("query"), same(scope), isNull(), eq(8),
-                any(RetrievalConfig.class));
+                any(RetrievalConfig.class), any());
         verifyNoInteractions(documentRepository);
+    }
+
+    @Test
+    @DisplayName("Diagnostics failure does not fail Search")
+    void productionPost_diagnosticsFailureStillReturnsResults() {
+        RetrievalScope scope = RetrievalScope.unscoped();
+        when(scopeResolver.resolve(
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(scope);
+        RetrievalResult hit = createResult("doc-1", "token", 0.9);
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), same(scope), isNull(), eq(5),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of(hit)));
+        RetrievalDiagnosticsService diagnostics = mock(RetrievalDiagnosticsService.class);
+        when(diagnostics.isEnabled()).thenReturn(true);
+        when(diagnostics.createSession(any(), any(), nullable(String.class)))
+                .thenThrow(new RuntimeException("diagnostics boom"));
+        productionController.setDiagnosticsService(diagnostics);
+
+        SearchRequest request = new SearchRequest("query");
+        request.setConfig(RetrievalConfig.builder()
+                .maxResults(5)
+                .useRerank(false)
+                .build());
+
+        ResponseEntity<List<RetrievalResult>> response =
+                productionController.searchWithConfig(request, new MockHttpServletRequest());
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(1, response.getBody().size());
+        assertEquals("doc-1", response.getBody().get(0).getDocumentId());
     }
 
     private MockHttpServletRequest requestForRestrictedKey(Long... ids) {

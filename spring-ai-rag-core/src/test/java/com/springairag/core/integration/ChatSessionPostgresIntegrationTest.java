@@ -70,6 +70,20 @@ class ChatSessionPostgresIntegrationTest {
         assumeTrue(Boolean.getBoolean("chat.it.enabled"),
                 "Set -Dchat.it.enabled=true to run chat PostgreSQL integration tests");
 
+        String externalJdbcUrl = System.getProperty("chat.it.jdbc-url");
+        if (externalJdbcUrl != null && !externalJdbcUrl.isBlank()) {
+            if (!"YES".equals(System.getProperty("chat.it.clean-confirm"))) {
+                throw new IllegalStateException(
+                        "Set -Dchat.it.clean-confirm=YES only for a disposable database");
+            }
+            dataSource = dataSource(
+                    externalJdbcUrl,
+                    System.getProperty("chat.it.username", "postgres"),
+                    System.getProperty("chat.it.password", "postgres"));
+            jdbcTemplate = new JdbcTemplate(dataSource);
+            return;
+        }
+
         String image = System.getProperty(
                 "testcontainers.pg.image",
                 System.getenv().getOrDefault(
@@ -114,8 +128,8 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
-    void fullMigrationCreatesV32ContractsAndRejectsInvalidNewRows() {
-        assertEquals("32", jdbcTemplate.queryForObject(
+    void fullMigrationThroughV39PreservesChatContractsAndRejectsInvalidNewRows() {
+        assertEquals("39", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -530,10 +544,20 @@ class ChatSessionPostgresIntegrationTest {
 
     private static DataSource dataSource(
             PostgreSQLContainer<?> container) {
+        return dataSource(
+                container.getJdbcUrl(),
+                container.getUsername(),
+                container.getPassword());
+    }
+
+    private static DataSource dataSource(
+            String jdbcUrl,
+            String username,
+            String password) {
         PGSimpleDataSource dataSource = new PGSimpleDataSource();
-        dataSource.setUrl(container.getJdbcUrl());
-        dataSource.setUser(container.getUsername());
-        dataSource.setPassword(container.getPassword());
+        dataSource.setUrl(jdbcUrl);
+        dataSource.setUser(username);
+        dataSource.setPassword(password);
         return dataSource;
     }
 }

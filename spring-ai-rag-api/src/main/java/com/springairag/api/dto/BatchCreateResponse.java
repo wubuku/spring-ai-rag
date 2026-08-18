@@ -34,8 +34,20 @@ public record BatchCreateResponse(
             boolean newlyCreated,
 
             @Schema(description = "Error message (on failure)")
-            String error
+            String error,
+
+            @Schema(description = "Embedding dispatch action")
+            String embeddingAction,
+
+            @Schema(description = "Async embedding job ID")
+            java.util.UUID embeddingJobId,
+
+            @Schema(description = "Async embedding batch ID")
+            java.util.UUID embeddingBatchId
     ) {
+        public DocumentResult(Long documentId, String title, boolean newlyCreated, String error) {
+            this(documentId, title, newlyCreated, error, null, null, null);
+        }
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;

@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { ReembedAllButton } from '../components/ReembedAllButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { documentsApi } from '../api/documents';
 import { collectionsApi } from '../api/collections';
 import { filesApi } from '../api/files';
@@ -193,6 +193,11 @@ export function Documents() {
       </div>
 
       <ReembedAllButton />
+      <p>
+        <Link to={selectedCollection ? `/embeddings?collectionKey=${encodeURIComponent(selectedCollection)}` : '/embeddings'}>
+          {t('embeddings.openOperations')}
+        </Link>
+      </p>
 
       <div className={styles.searchRow}>
         <input

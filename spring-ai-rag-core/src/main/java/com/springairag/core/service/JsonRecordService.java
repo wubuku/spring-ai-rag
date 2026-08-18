@@ -23,14 +23,22 @@ import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.StructuredRecordConflictException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
+import com.springairag.core.retrieval.RetrievalFilterValidator;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.DigestUtils;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
@@ -50,6 +58,8 @@ import java.util.Objects;
 @Service
 public class JsonRecordService {
 
+    private static final int MAX_TRANSACTION_ATTEMPTS = 3;
+
     private final RagDocumentRepository documentRepository;
     private final DocumentVersionService documentVersionService;
     private final DocumentEmbedService documentEmbedService;
@@ -62,6 +72,8 @@ public class JsonRecordService {
     private final ObjectMapper objectMapper;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
+    private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
+    private EmbeddingDispatchService dispatchService;
 
     @Autowired
     public JsonRecordService(
@@ -111,12 +123,21 @@ public class JsonRecordService {
                 null, transactionManager);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDispatchService(EmbeddingDispatchService dispatchService) {
+        this.dispatchService = dispatchService;
+    }
+
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
         resolveRequestCollection(request);
         validateRequest(request);
-
-        PersistedRecord persisted = persist(request);
-        EmbeddingOutcome embedding = embedIfRequested(persisted, request.isEmbed());
+        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
+                request.getEmbeddingPolicy(), request.isEmbed());
+        EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
+        PersistedRecord persisted = persist(request, null, null, policy, queued);
+        EmbeddingOutcome embedding = queued[0] != null
+                ? outcomeFromDispatch(queued[0])
+                : embedIfRequested(persisted, policy == EmbeddingPolicy.SYNC);
         return toUpsertResponse(persisted, embedding);
     }
 
@@ -149,8 +170,13 @@ public class JsonRecordService {
             try {
                 resolveRequestCollection(request);
                 validateRequest(request);
-                PersistedRecord persisted = persist(request);
-                EmbeddingOutcome embedding = embedIfRequested(persisted, request.isEmbed());
+                EmbeddingPolicy itemPolicy = EmbeddingPolicyResolver.resolve(
+                        request.getEmbeddingPolicy(), request.isEmbed());
+                EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
+                PersistedRecord persisted = persist(request, null, null, itemPolicy, queued);
+                EmbeddingOutcome embedding = queued[0] != null
+                        ? outcomeFromDispatch(queued[0])
+                        : embedIfRequested(persisted, itemPolicy == EmbeddingPolicy.SYNC);
                 JsonRecordUpsertResponse response = toUpsertResponse(persisted, embedding);
                 results.add(response);
                 switch (persisted.action()) {
@@ -182,6 +208,8 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "collectionKeys or collectionIds must be provided");
         }
+        RetrievalFilters filters =
+                filterValidator.fromJsonRecordRequest(request);
         RetrievalScope retrievalScope;
         if (retrievalScopeResolver != null) {
             retrievalScope = retrievalScopeResolver.resolve(
@@ -200,14 +228,11 @@ public class JsonRecordService {
             retrievalScope = RetrievalScope.selectedCollections(
                     collectionIds, null, RagDocument.JSON_RECORD);
         }
-        if (retrievalScope.matchNone()
-                || retrievalScope.collectionIds().isEmpty()) {
-            return new JsonRecordSearchResponse(request.getQuery(), List.of());
-        }
         request.setCollectionIds(retrievalScope.collectionIds());
         return searchAuthorized(
                 request.getQuery(),
-                request.getPayloadContains(),
+                filters,
+                null,
                 retrievalScope,
                 request.getConfig());
     }
@@ -220,6 +245,34 @@ public class JsonRecordService {
             JsonNode payloadContains,
             RetrievalScope authorizedScope,
             RetrievalConfig requestedConfig) {
+        return searchAuthorized(
+                query, RetrievalFilters.none(), payloadContains,
+                authorizedScope, requestedConfig);
+    }
+
+    /**
+     * 调用者 filter 与 tool 额外 payload 条件取 AND，禁止 merge 覆盖。
+     */
+    public JsonRecordSearchResponse searchAuthorized(
+            String query,
+            RetrievalFilters callerFilters,
+            JsonNode extraPayloadContains,
+            RetrievalScope authorizedScope,
+            RetrievalConfig requestedConfig) {
+        return searchAuthorizedDetailed(
+                query,
+                callerFilters,
+                extraPayloadContains,
+                authorizedScope,
+                requestedConfig).response();
+    }
+
+    public DetailedSearchResult searchAuthorizedDetailed(
+            String query,
+            RetrievalFilters callerFilters,
+            JsonNode extraPayloadContains,
+            RetrievalScope authorizedScope,
+            RetrievalConfig requestedConfig) {
         if (query == null || query.isBlank()) {
             throw new IllegalArgumentException("query must not be blank");
         }
@@ -227,12 +280,9 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "query must not exceed 10000 characters");
         }
+        RetrievalFilters filters = filterValidator.narrowWithPayload(
+                callerFilters, extraPayloadContains);
         RetrievalScope retrievalScope = jsonRecordScope(authorizedScope);
-        if (retrievalScope.matchNone()) {
-            return new JsonRecordSearchResponse(query, List.of());
-        }
-        JsonbContainmentFilter payloadFilter =
-                validatePayloadFilter(payloadContains);
 
         RetrievalConfig config = requestedConfig == null
                 ? RetrievalConfig.builder().build()
@@ -250,11 +300,36 @@ public class JsonRecordService {
                 .vectorWeight(config.getVectorWeight())
                 .fulltextWeight(config.getFulltextWeight())
                 .build();
-        List<RetrievalResult> ranked = hybridRetrieverService.searchInScope(
+        RetrievalOutcome outcome = hybridRetrieverService.searchInScopeDetailed(
                 query, retrievalScope, null,
-                limit, effectiveConfig, payloadFilter);
+                limit, effectiveConfig, filters);
+        List<RetrievalResult> ranked = outcome.results();
         if (config.isUseRerank() && !ranked.isEmpty()) {
-            ranked = reRankingService.rerank(query, ranked, limit);
+            long rerankStartedAt = System.nanoTime();
+            List<RetrievalResult> beforeRerank = ranked;
+            boolean degraded = false;
+            String errorCode = null;
+            try {
+                ranked = reRankingService.rerank(
+                        query, beforeRerank, limit);
+            } catch (RuntimeException e) {
+                ranked = beforeRerank;
+                degraded = true;
+                errorCode = e.getClass().getSimpleName();
+            }
+            outcome = outcome.withRerank(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.RERANK,
+                            "rerank",
+                            degraded
+                                    ? RetrievalBranchStage.ERROR
+                                    : RetrievalBranchStage.SUCCESS,
+                            (System.nanoTime() - rerankStartedAt) / 1_000_000L,
+                            beforeRerank.size(),
+                            ranked.size(),
+                            errorCode),
+                    ranked,
+                    degraded);
         }
 
         LinkedHashMap<Long, RetrievalResult> uniqueRanked = new LinkedHashMap<>();
@@ -265,7 +340,10 @@ public class JsonRecordService {
             }
         }
         if (uniqueRanked.isEmpty()) {
-            return new JsonRecordSearchResponse(query, List.of());
+            return new DetailedSearchResult(
+                    new JsonRecordSearchResponse(query, List.of()),
+                    outcome,
+                    List.of());
         }
 
         List<RagDocument> documents = documentRepository
@@ -285,6 +363,7 @@ public class JsonRecordService {
                 : collectionIdentityResolver.mapKeys(resultCollectionIds);
 
         List<JsonRecordSearchResult> results = new ArrayList<>();
+        List<RetrievalResult> traceResults = new ArrayList<>();
         for (Map.Entry<Long, RetrievalResult> entry : uniqueRanked.entrySet()) {
             RagDocument doc = byId.get(entry.getKey());
             if (doc == null) {
@@ -304,11 +383,15 @@ public class JsonRecordService {
                     rankedResult.getVectorScore(),
                     rankedResult.getFulltextScore(),
                     doc.getMetadata()));
+            traceResults.add(rankedResult);
             if (results.size() == limit) {
                 break;
             }
         }
-        return new JsonRecordSearchResponse(query, results);
+        return new DetailedSearchResult(
+                new JsonRecordSearchResponse(query, results),
+                outcome,
+                traceResults);
     }
 
     private RetrievalScope jsonRecordScope(RetrievalScope authorizedScope) {
@@ -349,42 +432,7 @@ public class JsonRecordService {
     }
 
     private JsonbContainmentFilter validatePayloadFilter(JsonNode filter) {
-        if (filter == null) {
-            return null;
-        }
-        if (!filter.isObject()) {
-            throw new IllegalArgumentException(
-                    "payloadContains must be a JSON object");
-        }
-        if (filter.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "payloadContains must not be an empty object");
-        }
-        byte[] serialized = serializePayload(filter);
-        if (serialized.length > properties.getMaxPayloadFilterBytes()) {
-            throw new IllegalArgumentException(
-                    "payloadContains exceeds "
-                            + properties.getMaxPayloadFilterBytes() + " bytes");
-        }
-        int depth = jsonDepth(filter);
-        if (depth > properties.getMaxPayloadFilterDepth()) {
-            throw new IllegalArgumentException(
-                    "payloadContains depth exceeds "
-                            + properties.getMaxPayloadFilterDepth());
-        }
-        return new JsonbContainmentFilter(
-                new String(serialized, StandardCharsets.UTF_8));
-    }
-
-    private int jsonDepth(JsonNode node) {
-        if (node == null || !node.isContainerNode()) {
-            return 0;
-        }
-        int childDepth = 0;
-        for (JsonNode child : node) {
-            childDepth = Math.max(childDepth, jsonDepth(child));
-        }
-        return 1 + childDepth;
+        return filterValidator.validateObject(filter, "payloadContains");
     }
 
     public JsonRecordDetailResponse getDetail(Long documentId) {
@@ -418,7 +466,7 @@ public class JsonRecordService {
     }
 
     private PersistedRecord persist(JsonRecordUpsertRequest request) {
-        return persist(request, null, null);
+        return persist(request, null, null, EmbeddingPolicy.SKIP, null);
     }
 
     /**
@@ -449,7 +497,8 @@ public class JsonRecordService {
                 collectionId, ApiKeyCollectionAccess.currentKey());
 
         PersistedRecord persisted = persist(
-                request, imported.getOriginalFilename(), imported.getEnabled());
+                request, imported.getOriginalFilename(), imported.getEnabled(),
+                EmbeddingPolicy.SKIP, null);
         return toUpsertResponse(
                 persisted, new EmbeddingOutcome("NOT_REQUESTED", null, null));
     }
@@ -457,17 +506,45 @@ public class JsonRecordService {
     private PersistedRecord persist(
             JsonRecordUpsertRequest request,
             String originalFilename,
-            Boolean enabledOverride) {
-        try {
-            if (transactionTemplate == null) {
-                return persistInTransaction(request, originalFilename, enabledOverride);
-            }
-            return transactionTemplate.execute(status ->
-                    persistInTransaction(request, originalFilename, enabledOverride));
-        } catch (DataIntegrityViolationException e) {
-            throw new StructuredRecordConflictException(
-                    "Structured record identity already exists or is conflicting", e);
+            Boolean enabledOverride,
+            EmbeddingPolicy policy,
+            EmbeddingDispatchService.Result[] queuedOut) {
+        if (policy == EmbeddingPolicy.ASYNC && dispatchService == null) {
+            throw new com.springairag.core.exception.RagException(
+                    com.springairag.api.enums.ErrorCode.EMBEDDING_JOBS_DISABLED,
+                    "Persistent embedding jobs are disabled");
         }
+        if (transactionTemplate == null) {
+            PersistedRecord persisted = persistInTransaction(
+                    request, originalFilename, enabledOverride);
+            enqueueAsync(persisted, policy, queuedOut);
+            return persisted;
+        }
+        RuntimeException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt++) {
+            try {
+                if (queuedOut != null) {
+                    queuedOut[0] = null;
+                }
+                PersistedRecord result = transactionTemplate.execute(status -> {
+                    PersistedRecord persisted = persistInTransaction(
+                            request, originalFilename, enabledOverride);
+                    enqueueAsync(persisted, policy, queuedOut);
+                    return persisted;
+                });
+                return Objects.requireNonNull(
+                        result, "transaction callback returned null");
+            } catch (RuntimeException failure) {
+                if (!isRetryableConcurrencyFailure(failure)) {
+                    throw failure;
+                }
+                lastFailure = failure;
+            }
+        }
+        throw new StructuredRecordConflictException(
+                "Concurrent structured-record write did not converge after "
+                        + MAX_TRANSACTION_ATTEMPTS + " attempts",
+                lastFailure);
     }
 
     private PersistedRecord persistInTransaction(
@@ -475,8 +552,8 @@ public class JsonRecordService {
             String originalFilename,
             Boolean enabledOverride) {
         String externalId = request.getExternalId().trim();
-        lockActiveCollection(request.getCollectionId());
-        lockIdentity(request.getCollectionId(), externalId);
+        CollectionIdentityResolver.ActiveCollectionToken collectionToken =
+                beginActiveCollectionWrite(request.getCollectionId());
         String contentHash = DigestUtils.sha256(request.getRetrievalText());
         JsonNode payload = request.getJsonbPayload().deepCopy();
 
@@ -548,6 +625,7 @@ public class JsonRecordService {
                 : documentVersionService.getLatestVersion(doc.getId())
                         .map(RagDocumentVersion::getVersionNumber)
                         .orElse(0);
+        confirmActiveCollectionWrite(collectionToken);
         return new PersistedRecord(
                 doc,
                 created ? "CREATED" : changed ? "UPDATED" : "UNCHANGED",
@@ -556,22 +634,23 @@ public class JsonRecordService {
                 versionNumber);
     }
 
-    private void lockIdentity(Long collectionId, String externalId) {
-        String lockKey = collectionId + ":external-document:" + externalId;
-        jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
-            try (var statement = connection.prepareStatement(
-                    "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
-                statement.setString(1, lockKey);
-                statement.execute();
-            }
-            return null;
-        });
+    private CollectionIdentityResolver.ActiveCollectionToken beginActiveCollectionWrite(
+            Long collectionId) {
+        return transactionTemplate == null
+                ? null
+                : collectionIdentityResolver.beginActiveWrite(collectionId);
     }
 
-    private void lockActiveCollection(Long collectionId) {
-        if (transactionTemplate != null) {
-            collectionIdentityResolver.requireActiveForShare(collectionId);
+    private void confirmActiveCollectionWrite(
+            CollectionIdentityResolver.ActiveCollectionToken token) {
+        if (token != null) {
+            collectionIdentityResolver.confirmActiveWrite(token);
         }
+    }
+
+    private boolean isRetryableConcurrencyFailure(RuntimeException failure) {
+        return failure instanceof DataIntegrityViolationException
+                || failure instanceof ConcurrencyFailureException;
     }
 
     private String changedFields(
@@ -587,6 +666,30 @@ public class JsonRecordService {
             fields.add("metadata/title/source");
         }
         return "JSON structured record updated: " + String.join(",", fields);
+    }
+
+    private void enqueueAsync(
+            PersistedRecord persisted,
+            EmbeddingPolicy policy,
+            EmbeddingDispatchService.Result[] queuedOut) {
+        if (policy != EmbeddingPolicy.ASYNC || dispatchService == null || queuedOut == null) {
+            return;
+        }
+        queuedOut[0] = dispatchService.enqueueInCurrentTransaction(
+                persisted.document(),
+                persisted.contentChanged(),
+                false,
+                "JSON_UPSERT");
+    }
+
+    private EmbeddingOutcome outcomeFromDispatch(EmbeddingDispatchService.Result result) {
+        return new EmbeddingOutcome(
+                result.embeddingStatus(),
+                result.embeddingProfileKey(),
+                result.error(),
+                result.action().name(),
+                result.embeddingJobId(),
+                result.embeddingBatchId());
     }
 
     private EmbeddingOutcome embedIfRequested(PersistedRecord persisted, boolean embed) {
@@ -712,7 +815,10 @@ public class JsonRecordService {
                 persisted.versionNumber(),
                 embedding.status(),
                 embedding.profileKey(),
-                embedding.error());
+                embedding.error(),
+                embedding.action(),
+                embedding.jobId(),
+                embedding.batchId());
     }
 
     private JsonRecordUpsertResponse failedResponse(
@@ -775,6 +881,28 @@ public class JsonRecordService {
             int versionNumber) {
     }
 
-    private record EmbeddingOutcome(String status, String profileKey, String error) {
+    private record EmbeddingOutcome(
+            String status,
+            String profileKey,
+            String error,
+            String action,
+            java.util.UUID jobId,
+            java.util.UUID batchId) {
+        EmbeddingOutcome(String status, String profileKey, String error) {
+            this(status, profileKey, error, null, null, null);
+        }
+    }
+
+    public record DetailedSearchResult(
+            JsonRecordSearchResponse response,
+            RetrievalOutcome outcome,
+            List<RetrievalResult> traceResults) {
+        public DetailedSearchResult {
+            Objects.requireNonNull(response, "response must not be null");
+            Objects.requireNonNull(outcome, "outcome must not be null");
+            traceResults = traceResults == null
+                    ? List.of()
+                    : List.copyOf(traceResults);
+        }
     }
 }

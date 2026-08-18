@@ -208,13 +208,20 @@ rag:
     max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
     max-documents-per-batch: 1000
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
+    worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 ```
 
-worker 使用 PostgreSQL lease 与 `SKIP LOCKED` 支持多 worker claim，并在提交向量前校验
-活动 Profile、任务 lease、取消标记、document version 与 content hash。相同
+worker 使用 PostgreSQL lease 与带状态/过期条件的原子 `UPDATE ... RETURNING` 支持多
+worker claim，并在提交向量前校验活动 Profile、任务 lease、取消标记、document version
+与 content hash。相同
 document/Profile/content hash 的活动任务会合并，`force` 可原子升级既有活动任务。
 仍有重试次数时，过期租约会被重新 claim；若最后一次允许的尝试也发生租约过期，任务会
 原子转为 `FAILED` 并清空租约字段，不会永久停留在 `RUNNING`。
+
+导入与显式 embed 入口接受可选 `embeddingPolicy`：`SYNC` / `ASYNC` / `SKIP`。
+提供该字段时它覆盖旧的 `embed` 布尔值；省略时保持 `embed=true→SYNC`、
+`embed=false→SKIP`。显式 embed/re-embed 拒绝 `SKIP`。`ASYNC` 要求
+`rag.embedding-jobs.enabled=true`，否则返回 `503 EMBEDDING_JOBS_DISABLED`。
 
 ## 检索配置
 
@@ -248,6 +255,39 @@ rag:
 | `none` | 禁用全文检索，纯向量检索 | — |
 
 详见 [PostgreSQL 扩展文档](postgresql-extensions.md)。
+
+### 检索诊断
+
+```yaml
+rag:
+  retrieval-diagnostics:
+    enabled: ${RAG_RETRIEVAL_DIAGNOSTICS_ENABLED:true}
+    persist: ${RAG_RETRIEVAL_DIAGNOSTICS_PERSIST:true}
+    retention-days: ${RAG_RETRIEVAL_DIAGNOSTICS_RETENTION_DAYS:7}
+    store-query-text: ${RAG_RETRIEVAL_DIAGNOSTICS_STORE_QUERY_TEXT:false}
+    max-detail-bytes: ${RAG_RETRIEVAL_DIAGNOSTICS_MAX_DETAIL_BYTES:32768}
+```
+
+默认记录 outcome / empty-reason / filter 摘要，不写 query 明文。写入失败 fail-open，
+不影响 Search/Chat。
+
+### 评估套件与 citation
+
+```yaml
+rag:
+  evaluation:
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
+    max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
+    run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
+    max-cases-per-version: ${RAG_EVALUATION_MAX_CASES_PER_VERSION:200}
+    max-variants-per-run: ${RAG_EVALUATION_MAX_VARIANTS_PER_RUN:4}
+    semantic-batch-limit: ${RAG_EVALUATION_SEMANTIC_BATCH_LIMIT:50}
+```
+
+citation 校验只解析约定的 `[S1]` token，不是覆盖率分数。受管 suite worker 默认关闭。
+`max-concurrent-runs` 限制同时执行的 run；`run-concurrency` 限制单个 run 内并行执行的
+检索 case 数，取值上限为 8。
 
 ## 查询改写配置
 

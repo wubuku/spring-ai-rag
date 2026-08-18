@@ -25,6 +25,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -207,10 +208,22 @@ class DocumentEmbedServiceTest {
         when(documentRepository.findById(7L))
                 .thenReturn(Optional.of(captured), Optional.of(changed));
         mockSuccessfulEmbeddings();
-        doThrow(new IllegalStateException("version changed"))
-                .when(persistenceService).replace(
+        doAnswer(invocation -> {
+            EmbeddingCommitGuard guard = invocation.getArgument(7);
+            guard.verify();
+            throw new IllegalStateException("version changed");
+        }).when(persistenceService).replace(
                 eq(7L), eq(7L), eq("hash-7"), eq(PROFILE),
-                any(String.class), anyList(), anyList());
+                any(String.class), anyList(), anyList(),
+                any(EmbeddingCommitGuard.class));
+        doAnswer(invocation -> {
+            EmbeddingCommitGuard guard = invocation.getArgument(7);
+            guard.verify();
+            return null;
+        }).when(persistenceService).replace(
+                eq(7L), eq(8L), eq("hash-7"), eq(PROFILE),
+                any(String.class), anyList(), anyList(),
+                any(EmbeddingCommitGuard.class));
         AtomicInteger checks = new AtomicInteger();
 
         assertThrows(EmbeddingCommitRejectedException.class, () ->
@@ -222,9 +235,10 @@ class DocumentEmbedServiceTest {
                 }));
 
         assertEquals(2, checks.get());
-        verify(persistenceService, never()).replace(
+        verify(persistenceService).replace(
                 eq(7L), eq(8L), eq("hash-7"), eq(PROFILE),
-                any(String.class), anyList(), anyList());
+                any(String.class), anyList(), anyList(),
+                any(EmbeddingCommitGuard.class));
     }
 
     private void mockSuccessfulEmbeddings() {

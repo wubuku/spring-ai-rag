@@ -9,6 +9,7 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 显式认领缺少模型身份的 Legacy embedding。
@@ -100,29 +101,35 @@ public class LegacyEmbeddingMigrationService {
             return false;
         }
 
-        String content = jdbcTemplate.queryForObject(
-                "SELECT content FROM rag_documents WHERE id = ? FOR UPDATE",
-                String.class,
+        Map<String, Object> document = jdbcTemplate.queryForMap(
+                "SELECT content, version, content_hash "
+                        + "FROM rag_documents WHERE id = ?",
                 documentId);
-        String contentHash = jdbcTemplate.queryForObject(
-                "SELECT content_hash FROM rag_documents WHERE id = ?",
-                String.class,
-                documentId);
+        String content = (String) document.get("content");
+        long expectedVersion = ((Number) document.get("version")).longValue();
+        String contentHash = (String) document.get("content_hash");
         if (contentHash == null || contentHash.isBlank()) {
             contentHash = BatchDocumentService.computeSha256(content);
-            jdbcTemplate.update(
+            int initialized = jdbcTemplate.update(
                     "UPDATE rag_documents SET content_hash = ?, version = version + 1, "
-                            + "updated_at = NOW() WHERE id = ?",
-                    contentHash,
-                    documentId);
+                            + "updated_at = NOW() WHERE id = ? AND version = ? "
+                            + "AND (content_hash IS NULL OR content_hash = '')",
+                    contentHash, documentId, expectedVersion);
+            if (initialized != 1) {
+                return false;
+            }
+            expectedVersion++;
         }
 
-        jdbcTemplate.update(
+        int adopted = jdbcTemplate.update(
                 "UPDATE rag_embeddings SET embedding_1024 = embedding, "
                         + "embedding_profile_id = ? "
                         + "WHERE document_id = ? AND embedding_profile_id IS NULL",
                 profile.id(),
                 documentId);
+        if (adopted != indexes.size()) {
+            return false;
+        }
         jdbcTemplate.update(
                 "INSERT INTO rag_document_embedding_state "
                         + "(document_id, embedding_profile_id, content_hash, chunker_version, "
@@ -137,6 +144,14 @@ public class LegacyEmbeddingMigrationService {
                 profile.id(),
                 contentHash,
                 indexes.size());
+        int fenced = jdbcTemplate.update(
+                "UPDATE rag_documents SET version = version + 1, updated_at = NOW() "
+                        + "WHERE id = ? AND version = ?",
+                documentId, expectedVersion);
+        if (fenced != 1) {
+            throw new IllegalStateException(
+                    "Document changed during legacy embedding adoption: " + documentId);
+        }
         return true;
     }
 

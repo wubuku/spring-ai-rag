@@ -204,6 +204,8 @@ class RetrievalEvaluationServiceImplTest {
 
         assertEquals(1.0, metrics.getMrr());  // first relevant (1) at position 0 -> 1.0
         assertEquals(1.0, metrics.getHitRate());
+        assertEquals(2.0 / 3, metrics.getRecallAtK().get(3), 0.0001);
+        assertTrue(metrics.getNdcg() <= 1.0);
     }
 
     @Test

@@ -302,6 +302,7 @@ rag:
     max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
     max-documents-per-batch: 1000
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
+    worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 
   # RAG retrieval configuration
   retrieval:
@@ -313,6 +314,23 @@ rag:
     evaluation-k: 10
     # Timeout in seconds for LLM-based answer quality evaluation
     answer-quality-timeout-seconds: 30
+
+  retrieval-diagnostics:
+    enabled: ${RAG_RETRIEVAL_DIAGNOSTICS_ENABLED:true}
+    persist: ${RAG_RETRIEVAL_DIAGNOSTICS_PERSIST:true}
+    retention-days: ${RAG_RETRIEVAL_DIAGNOSTICS_RETENTION_DAYS:7}
+    # 打开后会把 query 明文写入 rag_retrieval_logs.query，有隐私代价。
+    store-query-text: ${RAG_RETRIEVAL_DIAGNOSTICS_STORE_QUERY_TEXT:false}
+    max-detail-bytes: ${RAG_RETRIEVAL_DIAGNOSTICS_MAX_DETAIL_BYTES:32768}
+
+  evaluation:
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
+    max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
+    run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
+    max-cases-per-version: ${RAG_EVALUATION_MAX_CASES_PER_VERSION:200}
+    max-variants-per-run: ${RAG_EVALUATION_MAX_VARIANTS_PER_RUN:4}
+    semantic-batch-limit: ${RAG_EVALUATION_SEMANTIC_BATCH_LIMIT:50}
 
   # Query rewriting configuration
   query-rewrite:

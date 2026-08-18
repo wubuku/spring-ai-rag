@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.RetrievalScopeSql;
@@ -85,7 +86,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
             int limit, double minScore, long embeddingProfileId) {
         return searchInScope(
                 query, scope, excludeIds, limit, minScore,
-                embeddingProfileId, null);
+                embeddingProfileId, RetrievalFilters.none());
     }
 
     @Override
@@ -93,17 +94,37 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
             String query, RetrievalScope scope, List<Long> excludeIds,
             int limit, double minScore, long embeddingProfileId,
             JsonbContainmentFilter payloadFilter) {
-        if (!available) return Collections.emptyList();
-        if (query == null || query.isBlank()) return Collections.emptyList();
-        if (scope != null && scope.matchNone()) return Collections.emptyList();
+        return searchInScope(
+                query, scope, excludeIds, limit, minScore,
+                embeddingProfileId, RetrievalFilters.ofPayload(payloadFilter));
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId,
+            RetrievalFilters filters) {
+        return searchInScopeDetailed(
+                query, scope, excludeIds, limit, minScore,
+                embeddingProfileId, filters).results();
+    }
+
+    @Override
+    public SearchResult searchInScopeDetailed(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId,
+            RetrievalFilters filters) {
+        if (!available) return SearchResult.success(List.of());
+        if (query == null || query.isBlank()) return SearchResult.success(List.of());
+        if (scope != null && scope.matchNone()) return SearchResult.success(List.of());
         
         try {
             List<Map<String, Object>> rows =
                     executeSearch(
                             query.trim(), scope, limit,
-                            embeddingProfileId, payloadFilter);
+                            embeddingProfileId, filters);
             log.debug("English FTS search for '{}' returned {} rows", query, rows.size());
-            return rows.stream()
+            return SearchResult.success(rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
                         // ts_rank can return NULL for edge cases
@@ -112,18 +133,18 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                         return toResult(row, rank);
                     })
                     .limit(limit)
-                    .toList();
+                    .toList());
         } catch (Exception e) {
             // Resilience: search failure returns empty list (graceful degradation)
             log.warn("English FTS search failed for query '{}': {}", query, e.getMessage());
-            return Collections.emptyList();
+            return SearchResult.failure(e.getClass().getSimpleName());
         }
     }
     
     private List<Map<String, Object>> executeSearch(
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
-            JsonbContainmentFilter payloadFilter) {
+            RetrievalFilters filters) {
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
@@ -131,7 +152,7 @@ public class PgEnglishFtsProvider implements FulltextSearchProvider {
                 + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
         RetrievalScopeSql.Fragment fragment =
-                RetrievalScopeSql.build(retrievalScope, payloadFilter);
+                RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
                 + "AND e.search_vector_en @@ websearch_to_tsquery('"
                 + TS_CONFIG + "', ?) "

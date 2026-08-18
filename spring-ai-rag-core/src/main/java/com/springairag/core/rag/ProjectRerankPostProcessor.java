@@ -3,6 +3,7 @@ package com.springairag.core.rag;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
@@ -37,9 +38,29 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
                 .map(this::toRetrievalResult)
                 .toList();
         String effectiveQuery = context.trace().effectiveQuery(query.text());
-        List<RetrievalResult> reranked = rerankingService.rerank(
-                effectiveQuery, results, context.options().maxResults());
-        context.trace().record(effectiveQuery, reranked);
+        long startedAt = System.nanoTime();
+        List<RetrievalResult> reranked;
+        boolean degraded = false;
+        String errorCode = null;
+        try {
+            reranked = rerankingService.rerank(
+                    effectiveQuery, results, context.options().maxResults());
+        } catch (RuntimeException e) {
+            reranked = results;
+            degraded = true;
+            errorCode = e.getClass().getSimpleName();
+        }
+        context.trace().recordRerank(
+                new RetrievalBranchStage(
+                        RetrievalBranchStage.RERANK,
+                        "rerank",
+                        degraded ? RetrievalBranchStage.ERROR : RetrievalBranchStage.SUCCESS,
+                        (System.nanoTime() - startedAt) / 1_000_000L,
+                        results.size(),
+                        reranked.size(),
+                        errorCode),
+                reranked,
+                degraded);
         return reranked.stream().map(mapper::toDocument).toList();
     }
 

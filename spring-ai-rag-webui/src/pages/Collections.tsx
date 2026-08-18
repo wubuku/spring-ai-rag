@@ -74,6 +74,12 @@ export function Collections() {
                   View Documents
                 </button>
                 <button
+                  onClick={() => navigate(`/embeddings?collectionKey=${encodeURIComponent(col.collectionKey)}`)}
+                  className={styles.viewBtn}
+                >
+                  {t('embeddings.openOperations')}
+                </button>
+                <button
                   onClick={() => deleteMutation.mutate(col.collectionKey)}
                   className={styles.deleteBtn}
                   disabled={deleteMutation.isPending}

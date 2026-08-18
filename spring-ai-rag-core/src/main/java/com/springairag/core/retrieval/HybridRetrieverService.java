@@ -22,9 +22,12 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Hybrid retrieval service.
@@ -47,8 +50,9 @@ public class HybridRetrieverService {
     private final Executor taskExecutor;
     private final RagRetrievalProperties retrieval;
     private final FulltextSearchProviderFactory fulltextProviderFactory;
-
+    private final RetrievalEmptyReasonProbe emptyReasonProbe;
     private final int retrievalTimeoutSeconds;
+    private final int probeTimeoutMs;
 
     @Autowired
     public HybridRetrieverService(
@@ -57,7 +61,8 @@ public class HybridRetrieverService {
             JdbcTemplate jdbcTemplate,
             RagProperties ragProperties,
             @Autowired(required = false) FulltextSearchProviderFactory fulltextProviderFactory,
-            @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor) {
+            @Autowired(required = false) @org.springframework.beans.factory.annotation.Qualifier("ragSearchExecutor") Executor taskExecutor,
+            @Autowired(required = false) RetrievalEmptyReasonProbe emptyReasonProbe) {
         this.embeddingModel = embeddingModel;
         this.profileProvider = profileProvider;
         this.jdbcTemplate = jdbcTemplate;
@@ -65,9 +70,28 @@ public class HybridRetrieverService {
         this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
         this.fulltextProviderFactory = fulltextProviderFactory;
+        this.emptyReasonProbe = emptyReasonProbe;
+        this.probeTimeoutMs = ragProperties.getRetrievalDiagnostics().getProbeTimeoutMs();
         log.info("HybridRetrieverService initialized, retrievalTimeout={}s, fulltextStrategy={}",
                 retrievalTimeoutSeconds,
                 fulltextProviderFactory != null ? "auto-detect" : "disabled (no factory)");
+    }
+
+    public HybridRetrieverService(
+            EmbeddingModel embeddingModel,
+            EmbeddingProfileProvider profileProvider,
+            JdbcTemplate jdbcTemplate,
+            RagProperties ragProperties,
+            FulltextSearchProviderFactory fulltextProviderFactory,
+            Executor taskExecutor) {
+        this(
+                embeddingModel,
+                profileProvider,
+                jdbcTemplate,
+                ragProperties,
+                fulltextProviderFactory,
+                taskExecutor,
+                null);
     }
 
     HybridRetrieverService(
@@ -91,7 +115,8 @@ public class HybridRetrieverService {
                 jdbcTemplate,
                 ragProperties,
                 fulltextProviderFactory,
-                taskExecutor);
+                taskExecutor,
+                null);
     }
 
     /**
@@ -160,95 +185,284 @@ public class HybridRetrieverService {
             List<Long> excludeIds, int limit,
             RetrievalConfig config,
             JsonbContainmentFilter payloadFilter) {
+        return searchInScopeDetailed(
+                query, requestedScope, excludeIds, limit, config,
+                RetrievalFilters.ofPayload(payloadFilter)).results();
+    }
+
+    /**
+     * 内部详细检索入口。公开 list API 只取结果列表。
+     */
+    public RetrievalOutcome searchInScopeDetailed(
+            String query,
+            RetrievalScope requestedScope,
+            List<Long> excludeIds,
+            int limit,
+            RetrievalConfig config,
+            RetrievalFilters filters) {
+        long startedAt = System.nanoTime();
         RetrievalScope scope = requestedScope != null
                 ? requestedScope
                 : RetrievalScope.unscoped();
-        if (scope.matchNone()) {
-            return List.of();
-        }
-        log.debug("Executing hybrid search for query: {}", query);
+        RetrievalFilters effectiveFilters = filters != null ? filters : RetrievalFilters.none();
         EmbeddingProfile profile = profileProvider.getActiveProfile();
+        Map<String, Object> scopeSummary = RetrievalScopeSummary.from(
+                null, scope, null, effectiveFilters, profile);
+        List<RetrievalOutcome.QueryStat> queryStats = List.of(
+                new RetrievalOutcome.QueryStat(0, query == null ? 0 : query.length()));
+        if (scope.matchNone()) {
+            RetrievalOutcomeCodes.Resolved resolved = RetrievalOutcomeCodes.resolve(
+                    true, false, false, 0, null, null, 0, 0, false, 0);
+            return new RetrievalOutcome(
+                    UUID.randomUUID(),
+                    List.of(),
+                    query,
+                    queryStats,
+                    scopeSummary,
+                    RetrievalScopeSummary.filterSummary(effectiveFilters),
+                    List.of(),
+                    null,
+                    null,
+                    resolved.outcomeCode(),
+                    resolved.emptyReasonCode(),
+                    elapsedMs(startedAt),
+                    0);
+        }
 
-        // Detect language and select fulltext provider
+        log.debug("Executing hybrid search for query: {}", query);
         FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
-        log.debug("Selected fulltext provider for query '{}': {}", query, fulltextProvider.getName());
-
         int effectiveLimit = (config != null && config.getMaxResults() > 0)
                 ? config.getMaxResults() : limit;
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
-
+        double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
+        RetrievalBranchStage vectorStage;
+        RetrievalBranchStage fulltextStage;
+        List<RetrievalResult> fused;
+        RetrievalBranchStage fusionStage = null;
         if (!isFulltextAvailable(config, fulltextProvider)) {
-            double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
-            return vectorSearch(
-                    query, scope, excludeIds, effectiveLimit,
-                    profile, minScore, payloadFilter);
+            BranchExecution vector = CompletableFuture
+                    .supplyAsync(() -> runVector(
+                            query, scope, excludeIds, effectiveLimit, profile,
+                            minScore, effectiveFilters), taskExecutor)
+                    .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
+                    .handle((value, error) -> error == null
+                            ? value
+                            : timeoutOrError(
+                                    RetrievalBranchStage.VECTOR,
+                                    "embedding",
+                                    error,
+                                    "Vector search"))
+                    .join();
+            vectorStage = vector.stage();
+            fulltextStage = new RetrievalBranchStage(
+                    RetrievalBranchStage.FULLTEXT,
+                    fulltextProvider.getName(),
+                    RetrievalBranchStage.DISABLED,
+                    0L, 0, 0, null);
+            fused = vector.results();
+        } else {
+            CompletableFuture<BranchExecution> vectorFuture = CompletableFuture
+                    .supplyAsync(() -> runVector(
+                            query, scope, excludeIds, effectiveLimit * 2, profile,
+                            minScore, effectiveFilters), taskExecutor)
+                    .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
+                    .handle((value, error) -> error == null
+                            ? value
+                            : timeoutOrError(
+                                    RetrievalBranchStage.VECTOR,
+                                    "embedding",
+                                    error,
+                                    "Vector search"));
+            CompletableFuture<BranchExecution> fulltextFuture = CompletableFuture
+                    .supplyAsync(() -> runFulltext(
+                            fulltextProvider, query, scope, excludeIds,
+                            effectiveLimit * 2, minScore, profile, effectiveFilters), taskExecutor)
+                    .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
+                    .handle((value, error) -> error == null
+                            ? value
+                            : timeoutOrError(
+                                    RetrievalBranchStage.FULLTEXT,
+                                    fulltextProvider.getName(),
+                                    error,
+                                    "Fulltext search [" + fulltextProvider.getName() + "]"));
+            BranchExecution vector = vectorFuture.join();
+            BranchExecution fulltext = fulltextFuture.join();
+            vectorStage = vector.stage();
+            fulltextStage = fulltext.stage();
+            long fusionStarted = System.nanoTime();
+            fused = RetrievalUtils.fuseResults(
+                    vector.results(), fulltext.results(), effectiveLimit, vWeight, fWeight);
+            fusionStage = new RetrievalBranchStage(
+                    RetrievalBranchStage.FUSION,
+                    "weighted-rrf",
+                    RetrievalBranchStage.SUCCESS,
+                    elapsedMs(fusionStarted),
+                    vector.results().size() + fulltext.results().size(),
+                    fused.size(),
+                    null);
+            log.debug("Vector search returned: {}, Fulltext({}) search returned: {}",
+                    vector.results().size(), fulltextProvider.getName(), fulltext.results().size());
         }
 
-        // Execute vector search and full-text search in parallel (each with timeout, degrades to empty on timeout)
-        CompletableFuture<List<RetrievalResult>> vectorFuture = CompletableFuture
-                .supplyAsync(() -> vectorSearch(
-                        query, scope, excludeIds, effectiveLimit * 2, profile,
-                        config != null ? config.getMinScore() : retrieval.getMinScore(),
-                        payloadFilter), taskExecutor)
-                .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
-                .exceptionallyCompose(ex -> {
-                    log.warn("Vector search timed out after {}s, falling back to empty result: {}",
-                            retrievalTimeoutSeconds, ex.getMessage());
-                    return CompletableFuture.completedFuture(Collections.emptyList());
-                });
-
-        CompletableFuture<List<RetrievalResult>> fulltextFuture = CompletableFuture
-                .supplyAsync(() -> fulltextProvider.searchInScope(
-                        query,
-                        scope,
-                        excludeIds,
-                        effectiveLimit * 2,
-                        config != null ? config.getMinScore() : retrieval.getMinScore(),
-                        profile.id(),
-                        payloadFilter), taskExecutor)
-                .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
-                .exceptionallyCompose(ex -> {
-                    log.warn("Fulltext search [{}] timed out after {}s, falling back to empty result: {}",
-                            fulltextProvider.getName(), retrievalTimeoutSeconds, ex.getMessage());
-                    return CompletableFuture.completedFuture(Collections.emptyList());
-                });
-
-        List<RetrievalResult> vectorResults = vectorFuture.join();
-        List<RetrievalResult> fulltextResults = fulltextFuture.join();
-
-        log.debug("Vector search returned: {}, Fulltext({}) search returned: {}",
-                vectorResults.size(), fulltextProvider.getName(), fulltextResults.size());
-
-        return RetrievalUtils.fuseResults(vectorResults, fulltextResults, effectiveLimit, vWeight, fWeight);
+        int rawCandidates = vectorStage.candidateCount() + fulltextStage.candidateCount();
+        RetrievalEmptyReasonProbe.Eligibility eligibility =
+                RetrievalEmptyReasonProbe.Eligibility.unavailable();
+        if (fused.isEmpty() && emptyReasonProbe != null) {
+            eligibility = emptyReasonProbe.count(
+                    scope, effectiveFilters, profile, probeTimeoutMs);
+        }
+        RetrievalOutcomeCodes.Resolved resolved = RetrievalOutcomeCodes.resolve(
+                false,
+                false,
+                false,
+                fused.size(),
+                vectorStage,
+                fulltextStage,
+                eligibility.enabledDocuments(),
+                eligibility.freshDocuments(),
+                eligibility.failed(),
+                rawCandidates);
+        return new RetrievalOutcome(
+                UUID.randomUUID(),
+                fused,
+                query,
+                queryStats,
+                scopeSummary,
+                RetrievalScopeSummary.filterSummary(effectiveFilters),
+                List.of(vectorStage, fulltextStage),
+                fusionStage,
+                null,
+                resolved.outcomeCode(),
+                resolved.emptyReasonCode(),
+                elapsedMs(startedAt),
+                rawCandidates);
     }
 
-    /**
-     * Vector search.
-     */
-    private List<RetrievalResult> vectorSearch(String query, RetrievalScope scope,
-                                               List<Long> excludeIds, int limit,
-                                               EmbeddingProfile profile,
-                                               double minScore,
-                                               JsonbContainmentFilter payloadFilter) {
+    private BranchExecution runVector(
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            EmbeddingProfile profile,
+            double minScore,
+            RetrievalFilters filters) {
+        long startedAt = System.nanoTime();
         try {
             float[] queryVector = embeddingModel.embed(query);
             validateQueryVector(queryVector, profile);
             List<Map<String, Object>> rows =
-                    executeVectorQuery(
-                            queryVector, scope, limit, profile, payloadFilter);
-            return mapVectorResults(rows, queryVector, excludeIds, minScore);
-        } catch (Exception e) { // Resilience: vector search failure should not crash retrieval
+                    executeVectorQuery(queryVector, scope, limit, profile, filters);
+            MappedVector mapped = mapVectorResultsDetailed(
+                    rows, queryVector, excludeIds, minScore);
+            return new BranchExecution(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.VECTOR,
+                            "embedding",
+                            RetrievalBranchStage.SUCCESS,
+                            elapsedMs(startedAt),
+                            mapped.candidateCount(),
+                            mapped.results().size(),
+                            null),
+                    mapped.results());
+        } catch (Exception e) {
             log.error("Vector search failed", e);
-            return Collections.emptyList();
+            return new BranchExecution(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.VECTOR,
+                            "embedding",
+                            RetrievalBranchStage.ERROR,
+                            elapsedMs(startedAt),
+                            0,
+                            0,
+                            normalizeErrorCode(e)),
+                    List.of());
         }
     }
 
-    private List<Map<String, Object>> executeVectorQuery(float[] queryVector,
-                                                          RetrievalScope retrievalScope,
-                                                          int limit,
-                                                          EmbeddingProfile profile,
-                                                          JsonbContainmentFilter payloadFilter) {
+    private BranchExecution runFulltext(
+            FulltextSearchProvider provider,
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            double minScore,
+            EmbeddingProfile profile,
+            RetrievalFilters filters) {
+        long startedAt = System.nanoTime();
+        try {
+            FulltextSearchProvider.SearchResult detailed =
+                    provider.searchInScopeDetailed(
+                    query, scope, excludeIds, limit, minScore, profile.id(), filters);
+            if (detailed.failed()) {
+                return new BranchExecution(
+                        new RetrievalBranchStage(
+                                RetrievalBranchStage.FULLTEXT,
+                                provider.getName(),
+                                RetrievalBranchStage.ERROR,
+                                elapsedMs(startedAt),
+                                0,
+                                0,
+                                detailed.errorCode()),
+                        List.of());
+            }
+            List<RetrievalResult> safe = detailed.results();
+            return new BranchExecution(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.FULLTEXT,
+                            provider.getName(),
+                            RetrievalBranchStage.SUCCESS,
+                            elapsedMs(startedAt),
+                            detailed.candidateCount(),
+                            safe.size(),
+                            null),
+                    safe);
+        } catch (Exception e) {
+            log.error("Fulltext search [{}] failed", provider.getName(), e);
+            return new BranchExecution(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.FULLTEXT,
+                            provider.getName(),
+                            RetrievalBranchStage.ERROR,
+                            elapsedMs(startedAt),
+                            0,
+                            0,
+                            normalizeErrorCode(e)),
+                    List.of());
+        }
+    }
+
+    private BranchExecution timeoutOrError(
+            String branch,
+            String provider,
+            Throwable error,
+            String logPrefix) {
+        boolean timeout = isTimeout(error);
+        if (timeout) {
+            log.warn("{} timed out after {}s, falling back to empty result: {}",
+                    logPrefix, retrievalTimeoutSeconds, error.getMessage());
+        } else {
+            log.warn("{} failed, falling back to empty result: {}",
+                    logPrefix, error.getMessage());
+        }
+        return new BranchExecution(
+                new RetrievalBranchStage(
+                        branch,
+                        provider,
+                        timeout ? RetrievalBranchStage.TIMEOUT : RetrievalBranchStage.ERROR,
+                        retrievalTimeoutSeconds * 1000L,
+                        0,
+                        0,
+                        timeout ? "TIMEOUT" : normalizeErrorCode(error)),
+                Collections.emptyList());
+    }
+
+    private List<Map<String, Object>> executeVectorQuery(
+            float[] queryVector,
+            RetrievalScope retrievalScope,
+            int limit,
+            EmbeddingProfile profile,
+            RetrievalFilters filters) {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
@@ -258,7 +472,7 @@ public class HybridRetrieverService {
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
                 + "AND e." + vectorColumn + " IS NOT NULL ";
         RetrievalScopeSql.Fragment fragment =
-                RetrievalScopeSql.build(retrievalScope, payloadFilter);
+                RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
                 + "ORDER BY e." + vectorColumn
                 + " <=> CAST(? AS vector) LIMIT ?";
@@ -290,15 +504,71 @@ public class HybridRetrieverService {
     private List<RetrievalResult> mapVectorResults(List<Map<String, Object>> rows,
                                                      float[] queryVector, List<Long> excludeIds,
                                                      double minScore) {
-        return rows.stream()
+        return mapVectorResultsDetailed(rows, queryVector, excludeIds, minScore).results();
+    }
+
+    private MappedVector mapVectorResultsDetailed(
+            List<Map<String, Object>> rows,
+            float[] queryVector,
+            List<Long> excludeIds,
+            double minScore) {
+        List<RetrievalResult> candidates = rows.stream()
                 .filter(row -> isNotExcluded(row, excludeIds))
                 .map(row -> {
                     float[] emb = RetrievalUtils.parseVector(row.get("embedding"));
                     double score = RetrievalUtils.cosineSimilarity(queryVector, emb);
                     return toRetrievalResult(row, score, score, 0.0);
                 })
+                .toList();
+        List<RetrievalResult> filtered = candidates.stream()
                 .filter(result -> result.getScore() >= minScore)
                 .toList();
+        return new MappedVector(candidates.size(), filtered);
+    }
+
+    private static long elapsedMs(long startedAtNanos) {
+        return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
+    }
+
+    private static boolean isTimeout(Throwable error) {
+        Throwable current = error;
+        while (current != null) {
+            if (current instanceof TimeoutException) {
+                return true;
+            }
+            if (current instanceof CompletionException
+                    && current.getCause() instanceof TimeoutException) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
+
+    private static String normalizeErrorCode(Throwable error) {
+        Throwable current = error;
+        while (current instanceof CompletionException && current.getCause() != null) {
+            current = current.getCause();
+        }
+        if (current == null) {
+            return "ERROR";
+        }
+        String name = current.getClass().getSimpleName();
+        return name.isBlank() ? "ERROR" : name;
+    }
+
+    private record BranchExecution(
+            RetrievalBranchStage stage,
+            List<RetrievalResult> results) {
+        private BranchExecution {
+            results = results == null ? List.of() : List.copyOf(results);
+        }
+    }
+
+    private record MappedVector(int candidateCount, List<RetrievalResult> results) {
+        private MappedVector {
+            results = results == null ? List.of() : List.copyOf(results);
+        }
     }
 
     private boolean isNotExcluded(Map<String, Object> row, List<Long> excludeIds) {

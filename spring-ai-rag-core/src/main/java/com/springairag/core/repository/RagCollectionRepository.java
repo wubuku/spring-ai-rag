@@ -1,13 +1,11 @@
 package com.springairag.core.repository;
 
 import com.springairag.core.entity.RagCollection;
-import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
@@ -68,14 +66,6 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      */
     Optional<RagCollection> findByIdAndDeletedFalse(Long id);
 
-    @Lock(LockModeType.PESSIMISTIC_READ)
-    @Query("SELECT c FROM RagCollection c WHERE c.id = :id AND c.deleted = false")
-    Optional<RagCollection> findActiveByIdForShare(@Param("id") Long id);
-
-    @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("SELECT c FROM RagCollection c WHERE c.id = :id AND c.deleted = false")
-    Optional<RagCollection> findActiveByIdForUpdate(@Param("id") Long id);
-
     Optional<RagCollection> findByCollectionKey(String collectionKey);
 
     Optional<RagCollection> findByCollectionKeyAndDeletedFalse(String collectionKey);
@@ -89,15 +79,30 @@ public interface RagCollectionRepository extends JpaRepository<RagCollection, Lo
      * Soft delete: mark as deleted.
      */
     @Modifying
-    @Query("UPDATE RagCollection c SET c.deleted = true, c.deletedAt = :deletedAt WHERE c.id = :id")
-    int softDelete(@Param("id") Long id, @Param("deletedAt") LocalDateTime deletedAt);
+    @Query("UPDATE RagCollection c SET c.deleted = true, c.deletedAt = :deletedAt, "
+            + "c.version = c.version + 1 WHERE c.id = :id AND c.deleted = false "
+            + "AND c.version = :expectedVersion")
+    int softDeleteIfVersion(
+            @Param("id") Long id,
+            @Param("expectedVersion") Long expectedVersion,
+            @Param("deletedAt") LocalDateTime deletedAt);
+
+    /**
+     * Advance the lifecycle version only when the caller still owns its read token.
+     */
+    @Modifying
+    @Query("UPDATE RagCollection c SET c.version = c.version + 1 "
+            + "WHERE c.id = :id AND c.deleted = false AND c.version = :expectedVersion")
+    int advanceActiveVersion(
+            @Param("id") Long id,
+            @Param("expectedVersion") Long expectedVersion);
 
     /**
      * Restore: clear the deleted flag.
      */
     @Modifying
-    @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null " +
-           "WHERE c.id = :id AND c.deleted = true")
+    @Query("UPDATE RagCollection c SET c.deleted = false, c.deletedAt = null, "
+           + "c.version = c.version + 1 WHERE c.id = :id AND c.deleted = true")
     int restore(@Param("id") Long id);
 
     /**

@@ -14,7 +14,7 @@ import java.sql.Statement;
 @Component
 public class EmbeddingProfileIndexManager {
 
-    private static final long INDEX_LOCK_KEY = 7_611_024_001L;
+    private static final int MAX_ATTEMPTS = 3;
     private final JdbcTemplate jdbcTemplate;
 
     public EmbeddingProfileIndexManager(JdbcTemplate jdbcTemplate) {
@@ -28,33 +28,53 @@ public class EmbeddingProfileIndexManager {
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String indexName = "idx_rag_emb_p_" + profile.id() + "_" + profile.dimensions() + "_hnsw";
 
+        RuntimeException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            try {
+                ensureIndexOnce(column, indexName, profile.id());
+                return;
+            } catch (RuntimeException e) {
+                lastFailure = e;
+                if (attempt == MAX_ATTEMPTS) {
+                    break;
+                }
+                try {
+                    Thread.sleep(attempt * 100L);
+                } catch (InterruptedException interrupted) {
+                    Thread.currentThread().interrupt();
+                    throw new IllegalStateException(
+                            "Interrupted while creating embedding profile index", interrupted);
+                }
+            }
+        }
+        throw lastFailure == null
+                ? new IllegalStateException("Failed to create embedding profile index")
+                : lastFailure;
+    }
+
+    private void ensureIndexOnce(String column, String indexName, long profileId) {
         jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
             boolean originalAutoCommit = connection.getAutoCommit();
             connection.setAutoCommit(true);
             try (Statement statement = connection.createStatement()) {
-                statement.execute("SELECT pg_advisory_lock(" + INDEX_LOCK_KEY + ")");
-                try {
-                    if (indexExistsAndValid(statement, indexName)) {
-                        return null;
-                    }
-                    if (indexExists(statement, indexName)) {
-                        statement.execute("DROP INDEX CONCURRENTLY " + indexName);
-                    }
-                    statement.execute(
-                            "CREATE INDEX CONCURRENTLY " + indexName
-                                    + " ON rag_embeddings USING hnsw ("
-                                    + column + " vector_cosine_ops) "
-                                    + "WITH (m='16', ef_construction='64') "
-                                    + "WHERE embedding_profile_id = " + profile.id()
-                                    + " AND " + column + " IS NOT NULL");
-                    if (!indexExistsAndValid(statement, indexName)) {
-                        throw new IllegalStateException(
-                                "Embedding profile index is not valid: " + indexName);
-                    }
+                if (indexExistsAndValid(statement, indexName)) {
                     return null;
-                } finally {
-                    statement.execute("SELECT pg_advisory_unlock(" + INDEX_LOCK_KEY + ")");
                 }
+                if (indexExists(statement, indexName)) {
+                    statement.execute("DROP INDEX CONCURRENTLY IF EXISTS " + indexName);
+                }
+                statement.execute(
+                        "CREATE INDEX CONCURRENTLY IF NOT EXISTS " + indexName
+                                + " ON rag_embeddings USING hnsw ("
+                                + column + " vector_cosine_ops) "
+                                + "WITH (m='16', ef_construction='64') "
+                                + "WHERE embedding_profile_id = " + profileId
+                                + " AND " + column + " IS NOT NULL");
+                if (!indexExistsAndValid(statement, indexName)) {
+                    throw new IllegalStateException(
+                            "Embedding profile index is not valid: " + indexName);
+                }
+                return null;
             } finally {
                 connection.setAutoCommit(originalAutoCommit);
             }

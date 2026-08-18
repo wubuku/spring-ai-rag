@@ -8,6 +8,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
+import com.springairag.api.enums.EmbeddingPolicy;
+
 import java.util.Map;
 
 /**
@@ -54,6 +56,9 @@ public class JsonRecordUpsertRequest {
 
     @Schema(description = "Generate embedding after persistence", defaultValue = "true")
     private boolean embed = true;
+
+    @Schema(description = "Authoritative embedding policy. When omitted, embed=true maps to SYNC")
+    private EmbeddingPolicy embeddingPolicy;
 
     public JsonRecordUpsertRequest() {
     }
@@ -128,5 +133,13 @@ public class JsonRecordUpsertRequest {
 
     public void setEmbed(boolean embed) {
         this.embed = embed;
+    }
+
+    public EmbeddingPolicy getEmbeddingPolicy() {
+        return embeddingPolicy;
+    }
+
+    public void setEmbeddingPolicy(EmbeddingPolicy embeddingPolicy) {
+        this.embeddingPolicy = embeddingPolicy;
     }
 }

@@ -111,10 +111,17 @@ public class ModeAwareChatClientFactory {
         RetrievalOptions options = command.mode() == ChatMode.AGENT
                 ? capAgentOptions(command.retrievalOptions(), agent)
                 : command.retrievalOptions();
-        RetrievalTraceCollector trace = new RetrievalTraceCollector(
-                agent.getMaxRetrievalCalls(),
-                agent.getMaxToolRounds(),
-                agent.getMaxUniqueSources());
+        String attemptKey = candidate.ref() + ":" + System.nanoTime();
+        RetrievalTraceCollector trace = command.retrievalTraceSession() != null
+                ? command.retrievalTraceSession().newAttemptCollector(
+                        attemptKey,
+                        agent.getMaxRetrievalCalls(),
+                        agent.getMaxToolRounds(),
+                        agent.getMaxUniqueSources())
+                : new RetrievalTraceCollector(
+                        agent.getMaxRetrievalCalls(),
+                        agent.getMaxToolRounds(),
+                        agent.getMaxUniqueSources());
         AuthorizedRetrievalContext retrievalContext =
                 new AuthorizedRetrievalContext(
                         command.retrievalScope(),
@@ -122,7 +129,8 @@ public class ModeAwareChatClientFactory {
                         trace,
                         command.sessionId(),
                         command.principal(),
-                        agent.getMaxToolResultCharacters());
+                        agent.getMaxToolResultCharacters(),
+                        command.retrievalFilters());
 
         List<Advisor> advisors = new ArrayList<>();
         advisors.addAll(customAdvisors(

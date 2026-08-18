@@ -5,13 +5,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.JsonRecordSearchResponse;
 import com.springairag.api.dto.JsonRecordSearchResult;
 import com.springairag.api.dto.RetrievalConfig;
+import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.JsonRecordService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -68,8 +72,10 @@ class JsonRecordSearchToolTest {
             throws Exception {
         RetrievalScope scope = RetrievalScope.selectedCollections(
                 List.of(7L), null, null);
-        RetrievalTraceCollector trace =
-                new RetrievalTraceCollector(3, 3, 10);
+        RetrievalTraceSession session = new RetrievalTraceSession(
+                ChatPrincipal.local(), "chat", "json-tool-session");
+        RetrievalTraceCollector trace = session.newAttemptCollector(
+                "attempt-1", 3, 3, 10);
         AuthorizedRetrievalContext context =
                 new AuthorizedRetrievalContext(
                         scope,
@@ -83,12 +89,13 @@ class JsonRecordSearchToolTest {
                 "{\"status\":\"active\",\"sku\":\"S-1\"}");
         JsonNode filter = objectMapper.readTree(
                 "{\"status\":\"active\"}");
-        when(service.searchAuthorized(
-                eq("破皮沙发"), eq(filter), same(scope),
+        JsonRecordSearchResponse response = new JsonRecordSearchResponse(
+                "破皮沙发",
+                List.of(result(payload)));
+        when(service.searchAuthorizedDetailed(
+                eq("破皮沙发"), any(RetrievalFilters.class), eq(filter), same(scope),
                 any(RetrievalConfig.class)))
-                .thenReturn(new JsonRecordSearchResponse(
-                        "破皮沙发",
-                        List.of(result(payload))));
+                .thenReturn(detailed(response));
 
         JsonNode output = objectMapper.readTree(tool.call(
                 "{\"query\":\"破皮沙发\","
@@ -102,11 +109,15 @@ class JsonRecordSearchToolTest {
         assertEquals("active", output.path("records").get(0)
                 .path("jsonbPayload").path("status").asText());
         assertEquals(1, trace.sources().size());
+        assertEquals(1, session.retrievals().size());
+        assertEquals(
+                com.springairag.core.retrieval.RetrievalOutcomeCodes.RESULTS_RETURNED,
+                session.latestOutcome().outcomeCode());
 
         ArgumentCaptor<RetrievalConfig> configCaptor =
                 ArgumentCaptor.forClass(RetrievalConfig.class);
-        verify(service).searchAuthorized(
-                eq("破皮沙发"), eq(filter), same(scope),
+        verify(service).searchAuthorizedDetailed(
+                eq("破皮沙发"), any(RetrievalFilters.class), eq(filter), same(scope),
                 configCaptor.capture());
         assertEquals(5, configCaptor.getValue().getMaxResults());
     }
@@ -129,12 +140,13 @@ class JsonRecordSearchToolTest {
         JsonNode payload = objectMapper.readTree(
                 "{\"description\":\""
                         + "x".repeat(100) + "\"}");
-        when(service.searchAuthorized(
-                eq("sofa"), eq(null), same(scope),
+        JsonRecordSearchResponse response = new JsonRecordSearchResponse(
+                "sofa",
+                List.of(result(payload)));
+        when(service.searchAuthorizedDetailed(
+                eq("sofa"), any(RetrievalFilters.class), eq(null), same(scope),
                 any(RetrievalConfig.class)))
-                .thenReturn(new JsonRecordSearchResponse(
-                        "sofa",
-                        List.of(result(payload))));
+                .thenReturn(detailed(response));
 
         JsonNode output = objectMapper.readTree(tool.call(
                 "{\"query\":\"sofa\"}",
@@ -195,5 +207,28 @@ class JsonRecordSearchToolTest {
                 0.8,
                 0.7,
                 Map.of("tenant", "demo"));
+    }
+
+    private JsonRecordService.DetailedSearchResult detailed(
+            JsonRecordSearchResponse response) {
+        List<RetrievalResult> traceResults = response.results().stream()
+                .map(result -> {
+                    RetrievalResult retrieval = new RetrievalResult();
+                    retrieval.setDocumentId(String.valueOf(result.documentId()));
+                    retrieval.setChunkIndex(0);
+                    retrieval.setChunkText(result.retrievalText());
+                    retrieval.setTitle(result.title());
+                    retrieval.setSource(result.source());
+                    retrieval.setScore(result.score());
+                    retrieval.setVectorScore(result.vectorScore());
+                    retrieval.setFulltextScore(result.fulltextScore());
+                    retrieval.setMetadata(result.metadata());
+                    return retrieval;
+                })
+                .toList();
+        return new JsonRecordService.DetailedSearchResult(
+                response,
+                RetrievalOutcome.ofResults(traceResults),
+                traceResults);
     }
 }

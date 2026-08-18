@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V34 |
+| Flyway | V1–V39 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -280,11 +280,30 @@ disabled unless `RAG_OPENAI_COMPATIBILITY_ENABLED=true`.
 ```
 
 The gate covers the service, worker, HTTP API, V33 migration, active-job
-coalescing, and two-worker `SKIP LOCKED` claims. It starts an isolated
+coalescing, and two-worker atomic conditional claims. It starts an isolated
 `pgvector/pgvector:pg16` container by default. Reuse a caller-provided isolated
 database with `EMBEDDING_JOBS_IT_JDBC_URL`, `EMBEDDING_JOBS_IT_USERNAME`, and
 `EMBEDDING_JOBS_IT_PASSWORD`. Evidence is written under
 `.verification/embedding-jobs/<run-id>/`.
+
+### Retrieval diagnostics / metadata filters / embedding operations / managed quality
+
+```bash
+./scripts/verify-retrieval-diagnostics.sh
+./scripts/verify-retrieval-filters.sh
+./scripts/verify-embedding-operations.sh
+./scripts/verify-managed-quality.sh
+./scripts/verify-no-pessimistic-locks.sh
+# or run A–D together:
+./scripts/verify-next-high-value-features.sh
+```
+
+These gates cover V35 diagnostics, V36 metadata `@>` pushdown, V37 embedding
+operations pagination/readiness, V38 managed suites plus citation validation,
+and the post-V39 data-access concurrency rule. The lock gate statically rejects
+`FOR UPDATE`, `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory
+locks. The other gates start isolated PostgreSQL by default; override with the
+matching `*_IT_JDBC_URL` variables.
 
 ### JSONB Structured-Record Verification
 

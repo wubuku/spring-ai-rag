@@ -20,6 +20,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionStatus;
 
 import java.util.Map;
 import java.util.List;
@@ -35,8 +38,10 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 
 @ExtendWith(MockitoExtension.class)
 class ExternalDocumentServiceTest {
@@ -61,6 +66,10 @@ class ExternalDocumentServiceTest {
     private CollectionIdentityResolver collectionIdentityResolver;
     @Mock
     private JdbcTemplate jdbcTemplate;
+    @Mock
+    private PlatformTransactionManager transactionManager;
+    @Mock
+    private TransactionStatus transactionStatus;
 
     private RagCollection collection;
     private ExternalDocumentService service;
@@ -75,7 +84,11 @@ class ExternalDocumentServiceTest {
 
         lenient().when(collectionIdentityResolver.requireActive(null, collection.getCollectionKey()))
                 .thenReturn(collection);
+        lenient().when(collectionIdentityResolver.beginActiveWrite(10L))
+                .thenReturn(new CollectionIdentityResolver.ActiveCollectionToken(10L, 0L));
         lenient().when(embeddingProfileProvider.getActiveProfile()).thenReturn(PROFILE);
+        lenient().when(transactionManager.getTransaction(any()))
+                .thenReturn(transactionStatus);
         lenient().when(jdbcTemplate.execute(any(ConnectionCallback.class))).thenReturn(null);
         lenient().when(collectionRepository.findById(10L)).thenReturn(Optional.of(collection));
         lenient().when(embeddingRepository.countFreshChunksByDocumentIdAndProfileId(
@@ -101,7 +114,7 @@ class ExternalDocumentServiceTest {
                 embeddingProfileProvider,
                 collectionIdentityResolver,
                 jdbcTemplate,
-                null);
+                transactionManager);
     }
 
     @Test
@@ -127,6 +140,8 @@ class ExternalDocumentServiceTest {
         verify(documentEmbedService).embedDocument(41L, false);
         verify(documentVersionService).forceRecordVersion(
                 any(RagDocument.class), eq("CREATE"), any(String.class));
+        verify(collectionIdentityResolver).confirmActiveWrite(
+                new CollectionIdentityResolver.ActiveCollectionToken(10L, 0L));
     }
 
     @Test
@@ -278,6 +293,31 @@ class ExternalDocumentServiceTest {
         assertEquals("BAD_REQUEST", response.items().get(1).errorCode());
         assertEquals(1, response.summary().created());
         assertEquals(1, response.summary().persistenceFailed());
+    }
+
+    @Test
+    void concurrentCreateRetriesAndConvergesToIdempotentReplay() {
+        RagDocument persisted = document(
+                41L, "doc-race", "rev-1", "First content");
+        when(documentRepository.findByCollectionIdAndExternalId(
+                10L, "doc-race"))
+                .thenReturn(Optional.empty(), Optional.of(persisted));
+        doThrow(new DataIntegrityViolationException("identity race"))
+                .when(documentRepository).saveAndFlush(any(RagDocument.class));
+        when(documentVersionService.getLatestVersion(41L))
+                .thenReturn(Optional.of(version(1)));
+        when(documentEmbedService.hasFreshEmbedding(persisted)).thenReturn(false);
+        ExternalDocumentUpsertRequest request =
+                request("doc-race", "rev-1", "First title", "First content");
+        request.setEmbed(false);
+
+        ExternalDocumentUpsertResponse response = service.upsert(request);
+
+        assertEquals("UNCHANGED", response.action());
+        verify(documentRepository, times(2))
+                .findByCollectionIdAndExternalId(10L, "doc-race");
+        verify(transactionManager).rollback(transactionStatus);
+        verify(transactionManager).commit(transactionStatus);
     }
 
     private ExternalDocumentUpsertRequest request(

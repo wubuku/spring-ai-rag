@@ -123,12 +123,12 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 | `spring-ai-rag-core/.../chat/`, `.../rag/` | Mode-aware Chat execution, Modular RAG, and Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V34** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V39** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |
 | `demos/` | basic / component / domain / multi-model |
-| `scripts/` | Startup, E2E, OpenAI/jobs/JSONB verification, goldenset, and quality regression |
+| `scripts/` | Startup, E2E, OpenAI/jobs/JSONB verification, retrieval diagnostics/filters, embedding operations, managed quality, goldenset, and quality regression |
 
 ---
 

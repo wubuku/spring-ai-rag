@@ -5,7 +5,7 @@ import { useSearchParams } from 'react-router-dom';
 import { evaluationApi } from '../api/evaluation';
 import styles from './Evaluation.module.css';
 
-type Tab = 'report' | 'history' | 'feedback' | 'judge';
+type Tab = 'report' | 'history' | 'feedback' | 'judge' | 'suites' | 'runs' | 'citations';
 
 function fmt(n: unknown): string {
   if (typeof n === 'number' && Number.isFinite(n)) {
@@ -20,7 +20,12 @@ export function Evaluation() {
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab');
   const tab: Tab =
-    tabParam === 'history' || tabParam === 'feedback' || tabParam === 'judge'
+    tabParam === 'history'
+    || tabParam === 'feedback'
+    || tabParam === 'judge'
+    || tabParam === 'suites'
+    || tabParam === 'runs'
+    || tabParam === 'citations'
       ? tabParam
       : 'report';
 
@@ -92,6 +97,9 @@ export function Evaluation() {
             ['history', t('evaluation.tabHistory')],
             ['feedback', t('evaluation.tabFeedback')],
             ['judge', t('evaluation.tabJudge')],
+            ['suites', t('evaluation.tabSuites')],
+            ['runs', t('evaluation.tabRuns')],
+            ['citations', t('evaluation.tabCitations')],
           ] as const
         ).map(([id, label]) => (
           <button
@@ -283,6 +291,132 @@ export function Evaluation() {
           </div>
         </section>
       )}
+
+      {tab === 'suites' && <SuitesPanel />}
+      {tab === 'runs' && <RunsPanel />}
+      {tab === 'citations' && <CitationsPanel />}
     </div>
+  );
+}
+
+function SuitesPanel() {
+  const { t } = useTranslation();
+  const [suiteKey, setSuiteKey] = useState('');
+  const [name, setName] = useState('');
+  const [definition, setDefinition] = useState('{"cases":[]}');
+  const suitesQ = useQuery({
+    queryKey: ['evaluation-suites'],
+    queryFn: async () => (await evaluationApi.listSuites()).data,
+  });
+  const createM = useMutation({
+    mutationFn: () => evaluationApi.createSuite({ suiteKey, name }),
+  });
+  const versionM = useMutation({
+    mutationFn: () => evaluationApi.createVersion(suiteKey, JSON.parse(definition)),
+  });
+  return (
+    <section className={styles.section} aria-label={t('evaluation.tabSuites')}>
+      {suitesQ.isError && <div className={styles.error} role="alert">{t('evaluation.suitesFailed')}</div>}
+      <div className={styles.muted}>
+        {t('evaluation.suitesHint')}
+      </div>
+      <ul>
+        {(Array.isArray(suitesQ.data) ? suitesQ.data : []).map(suite => (
+          <li key={suite.id}>{suite.suiteKey} — {suite.name}</li>
+        ))}
+      </ul>
+      <div className={styles.form}>
+        <label>
+          {t('evaluation.suiteKey')}
+          <input value={suiteKey} onChange={e => setSuiteKey(e.target.value)} />
+        </label>
+        <label>
+          {t('evaluation.suiteName')}
+          <input value={name} onChange={e => setName(e.target.value)} />
+        </label>
+        <button type="button" className={styles.primaryBtn} onClick={() => createM.mutate()}>
+          {t('evaluation.createSuite')}
+        </button>
+        <label>
+          {t('evaluation.definition')}
+          <textarea rows={8} value={definition} onChange={e => setDefinition(e.target.value)} />
+        </label>
+        <button type="button" className={styles.primaryBtn} onClick={() => versionM.mutate()}>
+          {t('evaluation.importVersion')}
+        </button>
+      </div>
+    </section>
+  );
+}
+
+function RunsPanel() {
+  const { t } = useTranslation();
+  const [suiteKey, setSuiteKey] = useState('');
+  const [runId, setRunId] = useState('');
+  const startM = useMutation({
+    mutationFn: () => evaluationApi.createRun({ suiteKey }),
+  });
+  const runQ = useQuery({
+    queryKey: ['evaluation-run', runId],
+    queryFn: async () => (await evaluationApi.getRun(runId)).data,
+    enabled: runId.length > 0,
+  });
+  return (
+    <section className={styles.section} aria-label={t('evaluation.tabRuns')}>
+      <div className={styles.form}>
+        <label>
+          {t('evaluation.suiteKey')}
+          <input value={suiteKey} onChange={e => setSuiteKey(e.target.value)} />
+        </label>
+        <button type="button" className={styles.primaryBtn} onClick={() => startM.mutate()}>
+          {t('evaluation.startRun')}
+        </button>
+        {startM.data?.data?.id && (
+          <div>{t('evaluation.runStatus')}: {startM.data.data.status}</div>
+        )}
+        <label>
+          {t('evaluation.runId')}
+          <input value={runId} onChange={e => setRunId(e.target.value)} />
+        </label>
+        {runQ.data && (
+          <pre className={styles.pre}>{JSON.stringify(runQ.data, null, 2)}</pre>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CitationsPanel() {
+  const { t } = useTranslation();
+  const tracesQ = useQuery({
+    queryKey: ['retrieval-traces-citations'],
+    queryFn: async () => (await evaluationApi.listCitationTraces()).data,
+  });
+  return (
+    <section className={styles.section} aria-label={t('evaluation.tabCitations')}>
+      <p className={styles.muted}>{t('evaluation.citationsHint')}</p>
+      {tracesQ.isPending && <div className={styles.muted}>{t('common.loading')}</div>}
+      {tracesQ.isError && <div className={styles.error} role="alert">{t('evaluation.citationsFailed')}</div>}
+      <div className={styles.tableWrap}>
+        <table className={styles.table}>
+          <thead>
+            <tr>
+              <th>{t('evaluation.traceId')}</th>
+              <th>{t('evaluation.citationStatus')}</th>
+              <th>{t('evaluation.outcome')}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(tracesQ.data?.items ?? []).map(item => (
+              <tr key={item.traceId}>
+                <td>{item.traceId}</td>
+                <td>{item.citationStatus ?? '—'}</td>
+                <td>{item.outcomeCode ?? '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

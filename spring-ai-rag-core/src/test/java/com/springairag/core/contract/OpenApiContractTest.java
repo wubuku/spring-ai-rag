@@ -86,7 +86,21 @@ class OpenApiContractTest {
             "ExternalDocumentBatchUpsertRequest",
             "ExternalDocumentUpsertResponse",
             "ExternalDocumentBatchUpsertResponse",
-            "ExternalDocumentDeleteResponse"
+            "ExternalDocumentDeleteResponse",
+            "RetrievalFilterRequest",
+            "RetrievalTracePageResponse",
+            "RetrievalTraceDetailResponse",
+            "EmbeddingJobPageResponse",
+            "CollectionEmbeddingReadinessResponse",
+            "EvaluationSuiteCreateRequest",
+            "EvaluationSuiteResponse",
+            "EvaluationSuiteVersionCreateRequest",
+            "EvaluationSuiteVersionResponse",
+            "EvaluationRunCreateRequest",
+            "EvaluationRunResponse",
+            "EvaluationCompareResponse",
+            "SemanticEvaluationRequest",
+            "SemanticEvaluationResponse"
     );
 
     // Endpoints that MUST be documented
@@ -99,7 +113,13 @@ class OpenApiContractTest {
             "/rag/documents/batch-upsert",
             "/rag/documents/by-external-id",
             "/rag/health",
-            "/rag/models"
+            "/rag/models",
+            "/rag/retrieval-traces",
+            "/rag/embedding-jobs",
+            "/rag/collections/embedding-readiness",
+            "/rag/evaluation/suites",
+            "/rag/evaluation/runs",
+            "/rag/evaluation/semantic"
     );
 
     // ==================== Mock all external dependencies ====================

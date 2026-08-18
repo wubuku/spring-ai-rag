@@ -16,6 +16,11 @@ import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatExecutionResult;
 import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.RetrievalScopeSummary;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.exception.LlmCircuitOpenException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
@@ -94,6 +99,7 @@ public class RagChatService {
     private final CollectionDocumentResolver collectionDocumentResolver; // optional for unit tests
     private ChatExecutionService modeAwareExecutionService;
     private ChatCommandMapper chatCommandMapper;
+    private RetrievalDiagnosticsService diagnosticsService;
 
     /**
      * Returns the LLM circuit breaker instance (may be null when not enabled)
@@ -169,6 +175,11 @@ public class RagChatService {
         log.info("RagChatService mode-aware execution enabled");
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void configureDiagnostics(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
+    }
+
     private ChatMemory buildChatMemory(JdbcChatMemoryRepository repo, int maxMessages) {
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repo)
@@ -241,13 +252,24 @@ public class RagChatService {
      * 使用 Controller 已完成 ACL 解析的范围执行聊天。
      */
     public ChatResponse chat(ChatRequest request, RetrievalScope scope) {
+        return chat(request, scope, null);
+    }
+
+    public ChatResponse chat(
+            ChatRequest request,
+            RetrievalScope scope,
+            RetrievalTraceSession session) {
         if (modeAwareExecutionService != null && chatCommandMapper != null) {
             assertCircuitBreakerAllowsCall();
             try {
-                ChatCommand command = chatCommandMapper.map(
+                ChatCommand command = attachDiagnostics(
+                        chatCommandMapper.map(
+                                request,
+                                scope,
+                                ChatPrincipal.fromCurrentRequest()),
                         request,
                         scope,
-                        ChatPrincipal.fromCurrentRequest());
+                        session);
                 ChatExecutionResult result =
                         modeAwareExecutionService.execute(command);
                 if (circuitBreaker != null) {
@@ -278,15 +300,26 @@ public class RagChatService {
     public Flux<ChatEvent> chatEvents(
             ChatRequest request,
             RetrievalScope scope) {
+        return chatEvents(request, scope, null);
+    }
+
+    public Flux<ChatEvent> chatEvents(
+            ChatRequest request,
+            RetrievalScope scope,
+            RetrievalTraceSession session) {
         if (modeAwareExecutionService == null || chatCommandMapper == null) {
             return Flux.error(new IllegalStateException(
                     "Mode-aware chat execution is not configured"));
         }
         assertCircuitBreakerAllowsCall();
-        ChatCommand command = chatCommandMapper.map(
+        ChatCommand command = attachDiagnostics(
+                chatCommandMapper.map(
+                        request,
+                        scope,
+                        ChatPrincipal.fromCurrentRequest()),
                 request,
                 scope,
-                ChatPrincipal.fromCurrentRequest());
+                session);
         return modeAwareExecutionService.stream(command)
                 .doOnComplete(() -> {
                     if (circuitBreaker != null) {
@@ -301,7 +334,43 @@ public class RagChatService {
     }
 
     public Flux<ChatEvent> chatEvents(ChatRequest request) {
-        return chatEvents(request, resolveLegacyRetrievalScope(request));
+        return chatEvents(request, resolveLegacyRetrievalScope(request), null);
+    }
+
+    private ChatCommand attachDiagnostics(
+            ChatCommand command,
+            ChatRequest request,
+            RetrievalScope scope,
+            RetrievalTraceSession session) {
+        ChatCommand next = command;
+        RetrievalFilters filters = command.retrievalFilters() != null
+                ? command.retrievalFilters()
+                : RetrievalFilters.none();
+        RetrievalTraceSession effective = session;
+        if (effective == null
+                && diagnosticsService != null
+                && diagnosticsService.isEnabled()) {
+            effective = diagnosticsService.createSession(
+                    command.principal(),
+                    RetrievalTraceHeaders.OPERATION_CHAT,
+                    command.sessionId());
+        }
+        if (effective != null) {
+            try {
+                effective.attachScope(
+                        RetrievalScopeSummary.from(
+                                request.getCollectionScopeMode(),
+                                scope,
+                                request.getCollectionKeys(),
+                                filters,
+                                null),
+                        filters);
+                next = next.withTraceSession(effective).withFilters(filters);
+            } catch (Exception e) {
+                log.warn("Retrieval diagnostics failed to attach chat scope: {}", e.getMessage());
+            }
+        }
+        return next;
     }
 
     private ChatResponse toChatResponse(ChatExecutionResult result) {

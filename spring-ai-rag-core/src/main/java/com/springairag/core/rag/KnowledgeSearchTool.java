@@ -95,15 +95,16 @@ public class KnowledgeSearchTool implements ToolCallback {
                     int limit = Math.min(
                             Math.max(requested, 1),
                             context.options().maxResults());
-                    results = context.scope().matchNone()
-                            ? List.of()
-                            : hybridRetriever.searchInScope(
-                                    query,
-                                    context.scope(),
-                                    null,
-                                    limit,
-                                    context.options().toConfig());
+                    var outcome = hybridRetriever.searchInScopeDetailed(
+                            query,
+                            context.scope(),
+                            null,
+                            limit,
+                            context.options().toConfig(),
+                            context.filters());
+                    results = outcome.results();
                     trace.record(query, results);
+                    trace.recordOutcome(outcome);
                 }
             }
             List<RetrievalResult> citableResults = results.stream()

@@ -2,6 +2,7 @@ package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 
 import java.util.Collections;
@@ -101,5 +102,94 @@ public interface FulltextSearchProvider {
         return searchInScope(
                 query, scope, excludeIds, limit, minScore,
                 embeddingProfileId);
+    }
+
+    /**
+     * 使用统一范围和已校验的 metadata/payload containment。
+     */
+    default List<RetrievalResult> searchInScope(
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            double minScore,
+            long embeddingProfileId,
+            RetrievalFilters filters) {
+        if (filters == null || filters.isEmpty()) {
+            return searchInScope(
+                    query, scope, excludeIds, limit, minScore,
+                    embeddingProfileId, (JsonbContainmentFilter) null);
+        }
+        if (filters.metadataContains() == null
+                && filters.payloadContainsAll().size() == 1) {
+            return searchInScope(
+                    query, scope, excludeIds, limit, minScore,
+                    embeddingProfileId, filters.payloadContainsAll().getFirst());
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * 供混合检索诊断使用的详细结果。公开 List API 继续 fail-open。
+     */
+    default SearchResult searchInScopeDetailed(
+            String query,
+            RetrievalScope scope,
+            List<Long> excludeIds,
+            int limit,
+            double minScore,
+            long embeddingProfileId,
+            RetrievalFilters filters) {
+        try {
+            return SearchResult.success(searchInScope(
+                    query, scope, excludeIds, limit, minScore,
+                    embeddingProfileId, filters));
+        } catch (RuntimeException e) {
+            return SearchResult.failure(e.getClass().getSimpleName());
+        }
+    }
+
+    record SearchResult(
+            List<RetrievalResult> results,
+            String errorCode,
+            int candidateCount) {
+
+        public SearchResult {
+            results = results == null ? List.of() : List.copyOf(results);
+            candidateCount = Math.max(candidateCount, results.size());
+        }
+
+        public SearchResult(
+                List<RetrievalResult> results,
+                String errorCode) {
+            this(
+                    results,
+                    errorCode,
+                    results == null ? 0 : results.size());
+        }
+
+        public static SearchResult success(List<RetrievalResult> results) {
+            return new SearchResult(
+                    results,
+                    null,
+                    results == null ? 0 : results.size());
+        }
+
+        public static SearchResult success(
+                List<RetrievalResult> results,
+                int candidateCount) {
+            return new SearchResult(results, null, candidateCount);
+        }
+
+        public static SearchResult failure(String errorCode) {
+            String code = errorCode == null || errorCode.isBlank()
+                    ? "ERROR"
+                    : errorCode;
+            return new SearchResult(List.of(), code, 0);
+        }
+
+        public boolean failed() {
+            return errorCode != null;
+        }
     }
 }

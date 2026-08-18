@@ -218,15 +218,23 @@ rag:
     max-attempts: ${RAG_EMBEDDING_JOBS_MAX_ATTEMPTS:5}
     max-documents-per-batch: 1000
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
+    worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
 ```
 
-Workers use PostgreSQL leases and `SKIP LOCKED` for multi-worker claims. Before
-committing vectors, they recheck the active Profile, lease, cancellation flag,
-document version, and content hash. An active job for the same
+Workers use PostgreSQL leases and atomic `UPDATE ... RETURNING` statements with
+state and expiry predicates for multi-worker claims. Before committing vectors,
+they recheck the active Profile, lease, cancellation flag, document version,
+and content hash. An active job for the same
 document/Profile/content hash is coalesced; `force` can atomically upgrade that
 active job. An expired lease is reclaimed while retry attempts remain. If the
 final allowed attempt expires, the job is atomically marked `FAILED` and its
 lease fields are cleared, so it cannot remain permanently `RUNNING`.
+
+Ingestion and explicit embed endpoints accept optional `embeddingPolicy`:
+`SYNC` / `ASYNC` / `SKIP`. When present it overrides the legacy `embed`
+boolean; when omitted, `embed=true` stays `SYNC` and `embed=false` stays
+`SKIP`. Explicit embed/re-embed rejects `SKIP`. `ASYNC` requires
+`rag.embedding-jobs.enabled=true` or returns `503 EMBEDDING_JOBS_DISABLED`.
 
 ## Retrieval Configuration
 
@@ -260,6 +268,41 @@ rag:
 | `none` | Disable full-text, pure vector only | — |
 
 See [PostgreSQL Extensions Documentation](postgresql-extensions.md).
+
+### Retrieval Diagnostics
+
+```yaml
+rag:
+  retrieval-diagnostics:
+    enabled: ${RAG_RETRIEVAL_DIAGNOSTICS_ENABLED:true}
+    persist: ${RAG_RETRIEVAL_DIAGNOSTICS_PERSIST:true}
+    retention-days: ${RAG_RETRIEVAL_DIAGNOSTICS_RETENTION_DAYS:7}
+    store-query-text: ${RAG_RETRIEVAL_DIAGNOSTICS_STORE_QUERY_TEXT:false}
+    max-detail-bytes: ${RAG_RETRIEVAL_DIAGNOSTICS_MAX_DETAIL_BYTES:32768}
+```
+
+The default stores outcome / empty-reason / filter summaries, not raw query
+text. Persist failures are fail-open and do not break Search or Chat.
+
+### Evaluation Suites And Citations
+
+```yaml
+rag:
+  evaluation:
+    managed-suites-enabled: ${RAG_EVALUATION_MANAGED_SUITES_ENABLED:false}
+    citation-validation-enabled: ${RAG_EVALUATION_CITATION_VALIDATION_ENABLED:true}
+    max-concurrent-runs: ${RAG_EVALUATION_MAX_CONCURRENT_RUNS:1}
+    run-concurrency: ${RAG_EVALUATION_RUN_CONCURRENCY:4}
+    max-cases-per-version: ${RAG_EVALUATION_MAX_CASES_PER_VERSION:200}
+    max-variants-per-run: ${RAG_EVALUATION_MAX_VARIANTS_PER_RUN:4}
+    semantic-batch-limit: ${RAG_EVALUATION_SEMANTIC_BATCH_LIMIT:50}
+```
+
+Citation validation only parses the agreed `[S1]` tokens. It is not a coverage
+score. The managed-suite worker is disabled by default.
+`max-concurrent-runs` bounds concurrently executing runs, while
+`run-concurrency` bounds parallel retrieval cases inside one run and is capped
+at 8.
 
 ## Query Rewrite Configuration
 

@@ -44,6 +44,10 @@ public class SearchRequest {
     @Schema(description = "Retrieval configuration parameters")
     private RetrievalConfig config;
 
+    @Valid
+    @Schema(description = "Optional metadata/payload containment filters")
+    private RetrievalFilterRequest filters;
+
     public SearchRequest() {}
 
     public SearchRequest(String query) {
@@ -70,6 +74,9 @@ public class SearchRequest {
     public RetrievalConfig getConfig() { return config; }
     public void setConfig(RetrievalConfig config) { this.config = config; }
 
+    public RetrievalFilterRequest getFilters() { return filters; }
+    public void setFilters(RetrievalFilterRequest filters) { this.filters = filters; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -80,13 +87,14 @@ public class SearchRequest {
                 collectionScopeMode == that.collectionScopeMode &&
                 Objects.equals(collectionIds, that.collectionIds) &&
                 Objects.equals(collectionKeys, that.collectionKeys) &&
-                Objects.equals(config, that.config);
+                Objects.equals(config, that.config) &&
+                Objects.equals(filters, that.filters);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(query, documentIds, collectionScopeMode,
-                collectionIds, collectionKeys, config);
+                collectionIds, collectionKeys, config, filters);
     }
 
     @Override
@@ -98,6 +106,7 @@ public class SearchRequest {
                 ", collectionIds=" + collectionIds +
                 ", collectionKeys=" + collectionKeys +
                 ", config=" + config +
+                ", filters=" + filters +
                 '}';
     }
 }

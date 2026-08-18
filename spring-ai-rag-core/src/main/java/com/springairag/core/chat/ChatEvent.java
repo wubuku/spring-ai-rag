@@ -44,10 +44,25 @@ public sealed interface ChatEvent
             com.springairag.api.enums.ChatMode mode,
             Map<String, Object> usage,
             String finishReason,
-            List<ChatResponse.StepMetricRecord> stepMetrics) implements ChatEvent {
+            List<ChatResponse.StepMetricRecord> stepMetrics,
+            Map<String, Object> metadata) implements ChatEvent {
         public Completed {
             usage = usage == null ? Map.of() : Map.copyOf(usage);
             stepMetrics = stepMetrics == null ? List.of() : List.copyOf(stepMetrics);
+            metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
+        }
+
+        public Completed(
+                String traceId,
+                String sessionId,
+                String requestedModel,
+                String resolvedModel,
+                com.springairag.api.enums.ChatMode mode,
+                Map<String, Object> usage,
+                String finishReason,
+                List<ChatResponse.StepMetricRecord> stepMetrics) {
+            this(traceId, sessionId, requestedModel, resolvedModel, mode, usage,
+                    finishReason, stepMetrics, Map.of());
         }
     }
 

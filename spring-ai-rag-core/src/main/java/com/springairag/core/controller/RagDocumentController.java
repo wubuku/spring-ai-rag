@@ -41,6 +41,9 @@ import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.service.ExternalDocumentService;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
@@ -103,6 +106,7 @@ public class RagDocumentController {
     private final CollectionIdentityResolver collectionIdentityResolver;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
     private ExternalDocumentService externalDocumentService;
+    private EmbeddingDispatchService dispatchService;
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -128,6 +132,11 @@ public class RagDocumentController {
     @Autowired(required = false)
     public void setExternalDocumentService(ExternalDocumentService externalDocumentService) {
         this.externalDocumentService = externalDocumentService;
+    }
+
+    @Autowired(required = false)
+    public void setDispatchService(EmbeddingDispatchService dispatchService) {
+        this.dispatchService = dispatchService;
     }
 
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -412,6 +421,10 @@ public class RagDocumentController {
 
     // ==================== Embedding Vectors ====================
 
+    public ResponseEntity<Object> embedDocument(Long id, boolean force) {
+        return embedDocument(id, force, null);
+    }
+
     @Operation(summary = "Generate embedding vectors", description = "Chunk document and generate embedding vectors stored in rag_embeddings. Skips existing embeddings by default; set force=true to re-embed.")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Embedding vectors generated"),
@@ -422,10 +435,23 @@ public class RagDocumentController {
     public ResponseEntity<Object> embedDocument(
             @PathVariable Long id,
             @Parameter(description = "Force re-embedding, bypassing the cache")
-            @RequestParam(defaultValue = "false") boolean force) {
+            @RequestParam(defaultValue = "false") boolean force,
+            @RequestParam(required = false) EmbeddingPolicy embeddingPolicy) {
         requireDocumentAccess(id);
         try {
-            Map<String, Object> result = documentEmbedService.embedDocument(id, force);
+            EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
+            Map<String, Object> result;
+            if (policy == EmbeddingPolicy.ASYNC) {
+                EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+                RagDocument document = documentRepository.findById(id)
+                        .orElseThrow(() -> new DocumentNotFoundException(id));
+                EmbeddingDispatchService.Result queued =
+                        dispatchService.enqueueInCurrentTransaction(
+                                document, true, force, "DOCUMENT_EMBED");
+                result = embedDispatchMap(queued, id);
+            } else {
+                result = documentEmbedService.embedDocument(id, force);
+            }
 
             auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
                     String.valueOf(id),
@@ -465,12 +491,18 @@ public class RagDocumentController {
     /**
      * Batch re-embed documents lacking embedding vectors.
      */
+    public ResponseEntity<ReembedMissingResponse> reembedMissing(boolean force) {
+        return reembedMissing(force, null);
+    }
+
     @Operation(summary = "Batch re-embed", description = "Automatically find all documents lacking embedding vectors and batch generate/store vectors. Used for data migration fixes or forced re-embedding.")
     @PostMapping("/embed-vector-reembed")
     @Timed(value = "rag.documents.reembed-missing", description = "Batch re-embed documents without embedding vectors", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ReembedMissingResponse> reembedMissing(
             @Parameter(description = "Whether to force re-embedding (skip existing vectors)")
-            @RequestParam(defaultValue = "false") boolean force) {
+            @RequestParam(defaultValue = "false") boolean force,
+            @RequestParam(required = false) EmbeddingPolicy embeddingPolicy) {
+        EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
         long embeddingProfileId = activeEmbeddingProfileId();
         List<RagDocument> missing = ApiKeyCollectionAccess.restrictedCollectionIds(
                         ApiKeyCollectionAccess.currentKey())
@@ -482,10 +514,13 @@ public class RagDocumentController {
             return ResponseEntity.ok(new ReembedMissingResponse(0, 0, 0, List.of()));
         }
 
-        log.info("Re-embedding {} documents without embeddings (force={})", missing.size(), force);
-        List<ReembedResultResponse> results = executeReembeddingBatch(missing, force);
+        log.info("Re-embedding {} documents without embeddings (force={}, policy={})",
+                missing.size(), force, policy);
+        List<ReembedResultResponse> results = executeReembeddingBatch(missing, force, policy);
 
-        long success = results.stream().filter(r -> "COMPLETED".equals(r.status())).count();
+        long success = results.stream()
+                .filter(r -> "COMPLETED".equals(r.status()) || "QUEUED".equals(r.status()))
+                .count();
         long failed = results.size() - success;
 
         auditCreate(AuditLogService.ENTITY_EMBED_CACHE,
@@ -501,17 +536,31 @@ public class RagDocumentController {
         ));
     }
 
-    private List<ReembedResultResponse> executeReembeddingBatch(List<RagDocument> documents, boolean force) {
+    private List<ReembedResultResponse> executeReembeddingBatch(
+            List<RagDocument> documents, boolean force, EmbeddingPolicy policy) {
         List<ReembedResultResponse> results = new ArrayList<>(documents.size());
         for (RagDocument doc : documents) {
-            ReembedResultResponse result = buildReembedResult(doc, force);
+            ReembedResultResponse result = buildReembedResult(doc, force, policy);
             results.add(result);
         }
         return results;
     }
 
-    private ReembedResultResponse buildReembedResult(RagDocument doc, boolean force) {
+    private ReembedResultResponse buildReembedResult(
+            RagDocument doc, boolean force, EmbeddingPolicy policy) {
         try {
+            if (policy == EmbeddingPolicy.ASYNC) {
+                EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+                EmbeddingDispatchService.Result queued =
+                        dispatchService.enqueueInCurrentTransaction(
+                                doc, true, force, "REEMBED_MISSING");
+                return new ReembedResultResponse(
+                        doc.getId(),
+                        doc.getTitle(),
+                        queued.embeddingStatus(),
+                        0,
+                        queued.action().name());
+            }
             Map<String, Object> result = documentEmbedService.embedDocument(doc.getId(), force);
             return new ReembedResultResponse(
                     doc.getId(),
@@ -614,7 +663,8 @@ public class RagDocumentController {
                 request.getDocuments(),
                 request.isEmbed(),
                 request.getCollectionId(),
-                request.isForce());
+                request.isForce(),
+                request.getEmbeddingPolicy());
 
         auditCreate(AuditLogService.ENTITY_DOCUMENT,
                 "batch",
@@ -691,11 +741,17 @@ public class RagDocumentController {
         return ResponseEntity.ok(result);
     }
 
+    public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
+            Map<String, List<Long>> request) {
+        return batchEmbedDocuments(request, null);
+    }
+
     @Operation(summary = "Batch generate embedding vectors", description = "Batch chunk and generate embeddings for multiple documents. Single document failure doesn't affect others.")
     @PostMapping("/batch/embed")
     @Timed(value = "rag.documents.batch-embed", description = "Batch generate embedding vectors", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchEmbedResponse> batchEmbedDocuments(
-            @RequestBody Map<String, List<Long>> request) {
+            @RequestBody Map<String, List<Long>> request,
+            @RequestParam(required = false) EmbeddingPolicy embeddingPolicy) {
         List<Long> ids = request.get("ids");
         if (ids == null || ids.isEmpty()) {
             throw new IllegalArgumentException("ids list cannot be empty");
@@ -704,6 +760,30 @@ public class RagDocumentController {
             throw new IllegalArgumentException("Batch embedding limited to 50 documents per request (API rate limit)");
         }
         requireDocumentAccess(ids);
+        EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
+        if (policy == EmbeddingPolicy.ASYNC) {
+            EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+            List<RagDocument> documents = documentRepository.findAllById(ids);
+            List<BatchEmbedResponse.BatchEmbedResultItem> items = new ArrayList<>();
+            int queued = 0;
+            for (RagDocument document : documents) {
+                EmbeddingDispatchService.Result result =
+                        dispatchService.enqueueInCurrentTransaction(
+                                document, true, false, "BATCH_EMBED");
+                items.add(new BatchEmbedResponse.BatchEmbedResultItem(
+                        document.getId(),
+                        result.embeddingStatus(),
+                        null,
+                        null,
+                        result.error(),
+                        result.action().name()));
+                queued++;
+            }
+            return ResponseEntity.ok(new BatchEmbedResponse(
+                    items,
+                    new BatchEmbedResponse.BatchEmbedSummary(
+                            ids.size(), queued, 0, 0, ids.size() - queued)));
+        }
         Map<String, Object> raw = documentEmbedService.batchEmbedDocuments(ids);
 
         @SuppressWarnings("unchecked")
@@ -828,11 +908,13 @@ public class RagDocumentController {
                     deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
-            @RequestParam(value = "force", defaultValue = "false") boolean force) {
+            @RequestParam(value = "force", defaultValue = "false") boolean force,
+            @RequestParam(value = "embeddingPolicy", required = false) EmbeddingPolicy embeddingPolicy) {
         collectionId = resolveWritableCollectionId(
                 collectionId, collectionKey, ApiKeyCollectionAccess.currentKey());
 
-        log.info("File upload request: {} files, collectionId={}", files.length, collectionId);
+        log.info("File upload request: {} files, collectionId={}, policy={}",
+                files.length, collectionId, embeddingPolicy);
 
         if (files == null || files.length == 0) {
             return ResponseEntity.badRequest().body(
@@ -844,7 +926,8 @@ public class RagDocumentController {
         int success = 0, failed = 0;
 
         for (MultipartFile file : files) {
-            FileUploadResponse.FileResult result = processUploadedFile(file, collectionId, force);
+            FileUploadResponse.FileResult result = processUploadedFile(
+                    file, collectionId, force, embeddingPolicy);
             results.add(result);
             if (result.error() == null) {
                 success++;
@@ -866,11 +949,12 @@ public class RagDocumentController {
 
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
             MultipartFile[] files, Long collectionId, boolean force) {
-        return uploadAndEmbed(files, collectionId, null, force);
+        return uploadAndEmbed(files, collectionId, null, force, null);
     }
 
     private FileUploadResponse.FileResult processUploadedFile(
-            MultipartFile file, Long collectionId, boolean force) {
+            MultipartFile file, Long collectionId, boolean force,
+            EmbeddingPolicy embeddingPolicy) {
         String filename = file.getOriginalFilename();
         if (filename == null || filename.isBlank()) {
             filename = "unnamed";
@@ -895,11 +979,14 @@ public class RagDocumentController {
             }
 
             BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
-                    List.of(docReq), true, collectionId, force);
+                    List.of(docReq), true, collectionId, force, embeddingPolicy);
             BatchCreateResponse.DocumentResult r = resp.results().getFirst();
 
             if (r.documentId() != null) {
-                return new FileUploadResponse.FileResult(filename, r.documentId(), content.title, true, 0, null);
+                return new FileUploadResponse.FileResult(
+                        filename, r.documentId(), content.title,
+                        !"SKIPPED".equals(r.embeddingAction()),
+                        0, null, r.embeddingAction(), r.embeddingJobId());
             } else {
                 return new FileUploadResponse.FileResult(
                         filename, null, content.title, false, 0,
@@ -1049,6 +1136,18 @@ public class RagDocumentController {
                         document, ApiKeyCollectionAccess.currentKey());
             }
         }
+    }
+
+    private Map<String, Object> embedDispatchMap(
+            EmbeddingDispatchService.Result queued, Long documentId) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("documentId", documentId);
+        result.put("status", queued.embeddingStatus());
+        result.put("embeddingAction", queued.action().name());
+        result.put("embeddingJobId", queued.embeddingJobId());
+        result.put("embeddingBatchId", queued.embeddingBatchId());
+        result.put("embeddingProfileKey", queued.embeddingProfileKey());
+        return result;
     }
 
     private ExternalDocumentService requireExternalDocumentService() {

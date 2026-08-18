@@ -127,7 +127,7 @@ class RagChatControllerTest {
     void stream_returnsSseEmitter() {
         ChatRequest request = new ChatRequest("流式问题", "session-stream");
 
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull()))
+        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
                 .thenReturn(Flux.just(
                         new ChatEvent.ContentDelta("Hello"),
                         new ChatEvent.ContentDelta(" World")));
@@ -137,7 +137,7 @@ class RagChatControllerTest {
         assertNotNull(emitter);
         verify(ragChatService).chatEvents(argThat(r ->
                 "流式问题".equals(r.getMessage()) &&
-                "session-stream".equals(r.getSessionId())), isNull());
+                "session-stream".equals(r.getSessionId())), isNull(), isNull());
     }
 
     @Test
@@ -145,14 +145,14 @@ class RagChatControllerTest {
         ChatRequest request = new ChatRequest("流式问题", "session-stream");
         request.setDomainId("medical");
 
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull()))
+        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
         SseEmitter emitter = controller.stream(request);
 
         assertNotNull(emitter);
         verify(ragChatService).chatEvents(
-                argThat(r -> "medical".equals(r.getDomainId())), isNull());
+                argThat(r -> "medical".equals(r.getDomainId())), isNull(), isNull());
     }
 
     @Test
@@ -160,7 +160,7 @@ class RagChatControllerTest {
         ChatRequest request = new ChatRequest("流式问题", "session-stream");
         request.setCollectionIds(List.of(1L, 2L));
 
-        when(ragChatService.chatEvents(any(ChatRequest.class), isNull()))
+        when(ragChatService.chatEvents(any(ChatRequest.class), isNull(), isNull()))
                 .thenReturn(Flux.just(new ChatEvent.ContentDelta("回答")));
 
         SseEmitter emitter = controller.stream(request);
@@ -169,7 +169,7 @@ class RagChatControllerTest {
         verify(ragChatService).chatEvents(argThat(r ->
                 r.getCollectionIds() != null
                         && r.getCollectionIds().equals(List.of(1L, 2L))),
-                isNull());
+                isNull(), isNull());
     }
 
     @Test
@@ -182,10 +182,10 @@ class RagChatControllerTest {
                 null, null, null))
                 .thenReturn(scope);
         ChatResponse expected = ChatResponse.builder().answer("ok").build();
-        when(ragChatService.chat(any(ChatRequest.class), same(scope)))
+        when(ragChatService.chat(any(ChatRequest.class), same(scope), isNull()))
                 .thenReturn(expected);
         when(ragChatService.chatEvents(
-                any(ChatRequest.class), same(scope)))
+                any(ChatRequest.class), same(scope), isNull()))
                 .thenReturn(Flux.empty());
 
         ChatRequest ask = selectedScopeRequest();
@@ -203,9 +203,9 @@ class RagChatControllerTest {
                 null, List.of("two", "four"),
                 null, null, null);
         verify(ragChatService, times(2)).chat(
-                any(ChatRequest.class), same(scope));
+                any(ChatRequest.class), same(scope), isNull());
         verify(ragChatService).chatEvents(
-                any(ChatRequest.class), same(scope));
+                any(ChatRequest.class), same(scope), isNull());
         verify(ragChatService, never()).chat(any(ChatRequest.class));
         verify(ragChatService, never()).chatEvents(
                 any(ChatRequest.class), isNull());
@@ -217,7 +217,7 @@ class RagChatControllerTest {
         request.setMode(ChatMode.PLAIN);
         ChatResponse expected = ChatResponse.builder().answer("ok").build();
         when(ragChatService.chat(
-                same(request), eq(RetrievalScope.unscoped())))
+                same(request), eq(RetrievalScope.unscoped()), isNull()))
                 .thenReturn(expected);
 
         ResponseEntity<ChatResponse> response =
@@ -226,7 +226,7 @@ class RagChatControllerTest {
         assertEquals(200, response.getStatusCode().value());
         verifyNoInteractions(scopeResolver);
         verify(ragChatService).chat(
-                same(request), eq(RetrievalScope.unscoped()));
+                same(request), eq(RetrievalScope.unscoped()), isNull());
     }
 
     // ==================== getHistory ====================

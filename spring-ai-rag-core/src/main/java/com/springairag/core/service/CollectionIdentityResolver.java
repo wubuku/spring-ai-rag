@@ -5,6 +5,7 @@ import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -76,16 +77,40 @@ public class CollectionIdentityResolver {
     }
 
     /**
-     * Hold a shared row lock for the remainder of the current transaction.
+     * Capture an active collection lifecycle version for an optimistic write.
+     *
+     * <p>The token is checked again after the caller has written its documents.
+     * A concurrent soft-delete or other lifecycle mutation then causes the
+     * transaction to fail and roll back.
      */
-    public RagCollection requireActiveForShare(Long id) {
+    public ActiveCollectionToken beginActiveWrite(Long id) {
         if (id == null || id <= 0) {
             throw new IllegalArgumentException("collectionId must be positive");
         }
-        return repository.findActiveByIdForShare(id)
-                .orElseThrow(() -> new RagException(
-                        ErrorCode.COLLECTION_NOT_FOUND,
-                        "Collection not found: id=" + id));
+        RagCollection collection = requireActive(id, null);
+        long version = collection.getVersion() == null ? 0L : collection.getVersion();
+        return new ActiveCollectionToken(id, version);
+    }
+
+    /**
+     * Consume a lifecycle version token using a conditional update.
+     */
+    public void confirmActiveWrite(ActiveCollectionToken token) {
+        if (token == null) {
+            return;
+        }
+        if (repository.advanceActiveVersion(token.collectionId(), token.version()) != 1) {
+            throw new ObjectOptimisticLockingFailureException(
+                    RagCollection.class, token.collectionId());
+        }
+    }
+
+    /**
+     * Compatibility name for callers that only need an active-collection
+     * snapshot. This method performs no database lock.
+     */
+    public RagCollection requireActiveForShare(Long id) {
+        return requireActive(id, null);
     }
 
     /**
@@ -238,6 +263,9 @@ public class CollectionIdentityResolver {
                         || !Boolean.TRUE.equals(collection.getDeleted()))
                 .filter(collection -> key.equals(collection.getCollectionKey()))
                 .findFirst();
+    }
+
+    public record ActiveCollectionToken(Long collectionId, long version) {
     }
 
     private void validatePair(Long id, String key) {

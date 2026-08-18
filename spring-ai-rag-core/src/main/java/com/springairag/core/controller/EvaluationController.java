@@ -4,6 +4,9 @@ import com.springairag.api.dto.AnswerQualityRequest;
 import com.springairag.api.dto.AnswerQualityResponse;
 import com.springairag.api.dto.EvaluateRequest;
 import com.springairag.api.dto.FeedbackRequest;
+import com.springairag.api.dto.SemanticEvaluationRequest;
+import com.springairag.api.dto.SemanticEvaluationResponse;
+import com.springairag.core.evaluation.SemanticEvaluationService;
 import com.springairag.core.entity.RagRetrievalEvaluation;
 import com.springairag.core.entity.RagUserFeedback;
 import com.springairag.core.service.AuditLogService;
@@ -42,6 +45,7 @@ public class EvaluationController {
     private final RetrievalEvaluationService evaluationService;
     private final UserFeedbackService userFeedbackService;
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private SemanticEvaluationService semanticEvaluationService;
 
     public EvaluationController(RetrievalEvaluationService evaluationService,
                                 UserFeedbackService userFeedbackService,
@@ -49,6 +53,11 @@ public class EvaluationController {
         this.evaluationService = evaluationService;
         this.userFeedbackService = userFeedbackService;
         this.auditLogService = auditLogService;
+    }
+
+    @Autowired(required = false)
+    void setSemanticEvaluationService(SemanticEvaluationService semanticEvaluationService) {
+        this.semanticEvaluationService = semanticEvaluationService;
     }
 
     /**
@@ -126,6 +135,28 @@ public class EvaluationController {
                 ZonedDateTime.now()
         );
         return ResponseEntity.ok(response);
+    }
+
+    @Operation(summary = "Spring AI semantic evaluation",
+            description = "Optional FactCheckingEvaluator or RelevancyEvaluator adapter. "
+                    + "Does not replace /answer-quality.")
+    @PostMapping("/semantic")
+    public ResponseEntity<SemanticEvaluationResponse> semantic(
+            @Valid @RequestBody SemanticEvaluationRequest request) {
+        return ResponseEntity.ok(requireSemantic().evaluate(request));
+    }
+
+    @PostMapping("/semantic/batch")
+    public ResponseEntity<List<SemanticEvaluationResponse>> semanticBatch(
+            @Valid @RequestBody List<SemanticEvaluationRequest> requests) {
+        return ResponseEntity.ok(requireSemantic().evaluateBatch(requests));
+    }
+
+    private SemanticEvaluationService requireSemantic() {
+        if (semanticEvaluationService == null) {
+            throw new IllegalStateException("Semantic evaluation is not available");
+        }
+        return semanticEvaluationService;
     }
 
     /**

@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.dto.EmbeddingJobBatchResponse;
 import com.springairag.api.dto.EmbeddingJobCreateRequest;
+import com.springairag.api.dto.EmbeddingJobPageResponse;
 import com.springairag.api.dto.EmbeddingJobResponse;
 import com.springairag.core.embeddingjob.EmbeddingJobService;
 import com.springairag.core.embeddingjob.EmbeddingJobStatus;
@@ -15,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.util.List;
 import java.util.UUID;
 
 /**
@@ -44,12 +44,13 @@ public class EmbeddingJobController {
     }
 
     @GetMapping
-    public List<EmbeddingJobResponse> list(
+    public EmbeddingJobPageResponse list(
             @RequestParam(required = false) UUID batchId,
             @RequestParam(required = false) EmbeddingJobStatus status,
+            @RequestParam(required = false) String collectionKey,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size) {
-        return service.list(batchId, status, page, size);
+        return service.listPage(batchId, status, collectionKey, page, size);
     }
 
     @PostMapping("/{id}/cancel")

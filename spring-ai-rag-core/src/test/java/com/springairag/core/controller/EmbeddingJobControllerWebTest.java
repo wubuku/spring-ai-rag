@@ -1,5 +1,6 @@
 package com.springairag.core.controller;
 
+import com.springairag.api.dto.CollectionEmbeddingReadinessResponse;
 import com.springairag.api.dto.EmbeddingJobBatchResponse;
 import com.springairag.api.dto.EmbeddingJobResponse;
 import com.springairag.core.config.RagProperties;
@@ -28,7 +29,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(EmbeddingJobController.class)
+@WebMvcTest({
+        EmbeddingJobController.class,
+        CollectionEmbeddingReadinessController.class
+})
 @Import({
         GlobalExceptionHandler.class,
         ApiVersionConfig.class,
@@ -82,9 +86,11 @@ class EmbeddingJobControllerWebTest {
         UUID batchId = UUID.randomUUID();
         when(service.get(jobId)).thenReturn(
                 response(jobId, batchId, "RUNNING", false));
-        when(service.list(eq(batchId), eq(EmbeddingJobStatus.RUNNING),
-                eq(0), eq(10))).thenReturn(List.of(
-                        response(jobId, batchId, "RUNNING", false)));
+        when(service.listPage(eq(batchId), eq(EmbeddingJobStatus.RUNNING),
+                eq(null), eq(0), eq(10))).thenReturn(
+                new com.springairag.api.dto.EmbeddingJobPageResponse(
+                        List.of(response(jobId, batchId, "RUNNING", false)),
+                        0, 10, 1, 1));
         when(service.cancel(jobId)).thenReturn(
                 response(jobId, batchId, "CANCELLED", false));
         when(service.retry(jobId, 4)).thenReturn(
@@ -101,7 +107,8 @@ class EmbeddingJobControllerWebTest {
                         .param("page", "0")
                         .param("size", "10"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].documentId").value(42));
+                .andExpect(jsonPath("$.items[0].documentId").value(42))
+                .andExpect(jsonPath("$.totalElements").value(1));
 
         mockMvc.perform(post(
                         "/api/v1/rag/embedding-jobs/{id}/cancel", jobId))
@@ -114,6 +121,29 @@ class EmbeddingJobControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("QUEUED"))
                 .andExpect(jsonPath("$.coalesced").value(true));
+    }
+
+    @Test
+    void embeddingReadinessReturnsExclusiveBuckets() throws Exception {
+        when(service.readiness("customer-42:manual:v3")).thenReturn(
+                new CollectionEmbeddingReadinessResponse(
+                        "customer-42:manual:v3",
+                        "bge-m3",
+                        5, 2, 1, 1, 0, 1));
+
+        mockMvc.perform(get("/api/v1/rag/collections/embedding-readiness")
+                        .param("collectionKey", "customer-42:manual:v3"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.collectionKey")
+                        .value("customer-42:manual:v3"))
+                .andExpect(jsonPath("$.activeEmbeddingProfileKey")
+                        .value("bge-m3"))
+                .andExpect(jsonPath("$.enabledDocuments").value(5))
+                .andExpect(jsonPath("$.freshDocuments").value(2))
+                .andExpect(jsonPath("$.queuedDocuments").value(1))
+                .andExpect(jsonPath("$.runningDocuments").value(1))
+                .andExpect(jsonPath("$.failedDocuments").value(0))
+                .andExpect(jsonPath("$.staleOrMissingDocuments").value(1));
     }
 
     private EmbeddingJobResponse response(

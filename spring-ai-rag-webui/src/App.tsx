@@ -22,6 +22,7 @@ const ApiKeys = lazy(() => import('./pages/ApiKeys').then(m => ({ default: m.Api
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const Files = lazy(() => import('./pages/Files').then(m => ({ default: m.Files })));
 const Evaluation = lazy(() => import('./pages/Evaluation').then(m => ({ default: m.Evaluation })));
+const Embeddings = lazy(() => import('./pages/Embeddings').then(m => ({ default: m.Embeddings })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -126,6 +127,14 @@ export default function App() {
                 element={
                   <Suspense fallback={<PageFallback />}>
                     <Evaluation />
+                  </Suspense>
+                }
+              />
+              <Route
+                path="embeddings"
+                element={
+                  <Suspense fallback={<PageFallback />}>
+                    <Embeddings />
                   </Suspense>
                 }
               />

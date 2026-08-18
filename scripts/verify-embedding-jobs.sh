@@ -118,7 +118,7 @@ postgres_tests() {
 
 run_step "Focused job service worker and HTTP tests" focused_tests
 run_step "Isolated PostgreSQL startup" start_postgres
-run_step "PostgreSQL V33 job integration tests" postgres_tests
+run_step "PostgreSQL V1-V39 job integration tests (V33 contracts)" postgres_tests
 run_step "Maven test compile" \
   mvn -pl spring-ai-rag-core -am test-compile -DskipTests
 run_step "Shell syntax" bash -n scripts/verify-embedding-jobs.sh

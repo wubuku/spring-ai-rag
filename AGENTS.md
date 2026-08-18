@@ -30,13 +30,14 @@
 4. **Embedding Profile 与固定向量列**：当前活动 Profile 为 1024 维，写入 `embedding_1024 VECTOR(1024)`；换模型必须创建新 Profile 并重嵌入，不能只改 dimensions。
 5. **写代码同步写测试**；`mvn test` 不过不算完成。Mock Playwright ≠ 真实 LLM 联调。
 6. **WebUI** 是独立前端：改 `spring-ai-rag-webui/` 后需构建；静态资源路径见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) / [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
-7. **Flyway 迁移** 在 `spring-ai-rag-core/src/main/resources/db/migration/`，当前 **V1–V34**；改 schema 必须加迁移，不要只改实体或改写已执行迁移。
+7. **Flyway 迁移** 在 `spring-ai-rag-core/src/main/resources/db/migration/`，当前 **V1–V39**；改 schema 必须加迁移，不要只改实体或改写已执行迁移。
 8. **真实 LLM 联调**用 `scripts/start-real-e2e-server.sh` + `scripts/real-llm-e2e-smoke.sh`（默认 18081，避免与日常 8081 冲突）；细节见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)、[docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md)。
 9. **密钥与隐私**：API Key、Token **不得**写入文档或提交到 git；只放 `.env`（已 gitignore）。
 10. **注释与文档语言**：代码注释、Javadoc、用户可见说明优先**中文**（项目约定）；对外英文文档与中文成对维护时需同步。
 11. **境内 Docker / 构建网络**：拉镜像或构建超时先看 [docs/china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md)，优先 `scripts/docker-build-local.sh`；不要把区域镜像硬编码进 Dockerfile。
 12. **1.0 发版 / 验产物**：按 [docs/release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) 与 `scripts/verify-release.sh`；检索默认与 goldenset 见 [docs/quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md)。
 13. **WebUI 对齐**：普通页面内容默认 `text-align: start`；上传投放区等明确空间语义才允许居中，新增居中必须通过 `npm run check:alignment`。见 [WebUI 水平对齐指南](docs/webui-alignment-guidelines-zh-CN.md)。
+14. **数据访问并发**：禁止显式悲观锁、`SKIP LOCKED` 和 PostgreSQL advisory lock；使用条件写入/CAS、版本号、唯一约束、lease 与有界重试。运行 `scripts/verify-no-pessimistic-locks.sh`。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 

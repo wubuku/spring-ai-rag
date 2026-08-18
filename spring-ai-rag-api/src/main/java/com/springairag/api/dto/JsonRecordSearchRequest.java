@@ -33,8 +33,15 @@ public class JsonRecordSearchRequest {
     @Valid
     private RetrievalConfig config;
 
+    @Schema(description = "Optional non-empty JSON object matched against document metadata")
+    private JsonNode metadataContains;
+
     @Schema(description = "Optional non-empty JSON object matched with PostgreSQL JSONB containment")
     private JsonNode payloadContains;
+
+    @Valid
+    @Schema(description = "Optional grouped filters. Cannot be combined with top-level metadataContains or payloadContains")
+    private RetrievalFilterRequest filters;
 
     public JsonRecordSearchRequest() {
     }
@@ -71,11 +78,27 @@ public class JsonRecordSearchRequest {
         this.config = config;
     }
 
+    public JsonNode getMetadataContains() {
+        return metadataContains;
+    }
+
+    public void setMetadataContains(JsonNode metadataContains) {
+        this.metadataContains = metadataContains;
+    }
+
     public JsonNode getPayloadContains() {
         return payloadContains;
     }
 
     public void setPayloadContains(JsonNode payloadContains) {
         this.payloadContains = payloadContains;
+    }
+
+    public RetrievalFilterRequest getFilters() {
+        return filters;
+    }
+
+    public void setFilters(RetrievalFilterRequest filters) {
+        this.filters = filters;
     }
 }

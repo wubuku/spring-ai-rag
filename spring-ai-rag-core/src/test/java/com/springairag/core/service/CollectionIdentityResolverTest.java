@@ -50,9 +50,9 @@ class CollectionIdentityResolverTest {
     @Test
     void sharedLifecycleLockRequiresAnActiveCollection() {
         RagCollection collection = collection(7L, "customer:manual", false);
-        when(repository.findActiveByIdForShare(7L))
+        when(repository.findByIdAndDeletedFalse(7L))
                 .thenReturn(Optional.of(collection));
-        when(repository.findActiveByIdForShare(8L))
+        when(repository.findByIdAndDeletedFalse(8L))
                 .thenReturn(Optional.empty());
 
         assertEquals(collection, resolver.requireActiveForShare(7L));
@@ -60,6 +60,23 @@ class CollectionIdentityResolverTest {
                 () -> resolver.requireActiveForShare(8L));
         assertThrows(IllegalArgumentException.class,
                 () -> resolver.requireActiveForShare(null));
+    }
+
+    @Test
+    void activeWriteTokenUsesCollectionVersionCas() {
+        RagCollection collection = collection(7L, "customer:manual", false);
+        collection.setVersion(4L);
+        when(repository.findByIdAndDeletedFalse(7L))
+                .thenReturn(Optional.of(collection));
+        when(repository.advanceActiveVersion(7L, 4L)).thenReturn(1);
+
+        CollectionIdentityResolver.ActiveCollectionToken token =
+                resolver.beginActiveWrite(7L);
+        resolver.confirmActiveWrite(token);
+
+        assertEquals(7L, token.collectionId());
+        assertEquals(4L, token.version());
+        verify(repository).advanceActiveVersion(7L, 4L);
     }
 
     @Test

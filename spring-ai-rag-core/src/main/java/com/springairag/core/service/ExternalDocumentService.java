@@ -5,7 +5,10 @@ import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.api.dto.DocumentDetailResponse;
+import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
@@ -20,6 +23,7 @@ import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import org.springframework.dao.ConcurrencyFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.lang.Nullable;
@@ -46,6 +50,7 @@ public class ExternalDocumentService {
 
     private static final int MAX_ERROR_LENGTH = 500;
     private static final int MAX_BATCH_CONTENT_LENGTH = 5_000_000;
+    private static final int MAX_TRANSACTION_ATTEMPTS = 3;
 
     private final RagDocumentRepository documentRepository;
     private final RagCollectionRepository collectionRepository;
@@ -56,6 +61,7 @@ public class ExternalDocumentService {
     private final CollectionIdentityResolver collectionIdentityResolver;
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
+    private EmbeddingDispatchService dispatchService;
 
     public ExternalDocumentService(
             RagDocumentRepository documentRepository,
@@ -79,11 +85,35 @@ public class ExternalDocumentService {
                 ? null : new TransactionTemplate(transactionManager);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDispatchService(EmbeddingDispatchService dispatchService) {
+        this.dispatchService = dispatchService;
+    }
+
     public ExternalDocumentUpsertResponse upsert(ExternalDocumentUpsertRequest request) {
         validateRequest(request);
         Long collectionId = resolveWritableCollection(request.getCollectionKey());
-        Persisted persisted = persist(request, collectionId);
-        return finishUpsert(persisted, request.isEmbed());
+        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
+                request.getEmbeddingPolicy(), request.isEmbed());
+        if (policy == EmbeddingPolicy.ASYNC && dispatchService == null) {
+            throw new RagException(
+                    ErrorCode.EMBEDDING_JOBS_DISABLED,
+                    "Persistent embedding jobs are disabled");
+        }
+        EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
+        Persisted persisted = executeInTransaction(() -> {
+            queued[0] = null;
+            Persisted next = persistInTransaction(request, collectionId);
+            if (policy == EmbeddingPolicy.ASYNC && dispatchService != null) {
+                queued[0] = dispatchService.enqueueInCurrentTransaction(
+                        next.document(),
+                        next.contentChanged(),
+                        false,
+                        "EXTERNAL_UPSERT");
+            }
+            return next;
+        });
+        return finishUpsert(persisted, policy, queued[0]);
     }
 
     public ExternalDocumentBatchUpsertResponse batchUpsert(
@@ -189,8 +219,8 @@ public class ExternalDocumentService {
                     "documentType=json-record must use the JSON record API");
         }
 
-        lockActiveCollection(collectionId);
-        lockIdentity(collectionId, externalId);
+        CollectionIdentityResolver.ActiveCollectionToken collectionToken =
+                beginActiveCollectionWrite(collectionId);
         String contentHash = DigestUtils.sha256(content);
         RagDocument document = documentRepository
                 .findByCollectionIdAndExternalId(collectionId, externalId)
@@ -223,6 +253,7 @@ public class ExternalDocumentService {
             document = documentRepository.saveAndFlush(document);
             RagDocumentVersion version = documentVersionService.forceRecordVersion(
                     document, "CREATE", "External document created");
+            confirmActiveCollectionWrite(collectionToken);
             return new Persisted(document, "CREATED", true, version.getVersionNumber());
         }
 
@@ -236,6 +267,7 @@ public class ExternalDocumentService {
             if (sameManagedFields(document, title, contentHash, source, documentType,
                     request.getMetadata())) {
                 int versionNumber = latestVersionNumber(document);
+                confirmActiveCollectionWrite(collectionToken);
                 return new Persisted(document, "UNCHANGED", false, versionNumber);
             }
             throw conflict("The same sourceRevision was used for different document content");
@@ -271,6 +303,7 @@ public class ExternalDocumentService {
                 document, "UPDATE", contentChanged
                         ? "External document content updated"
                         : "External document metadata/source revision updated");
+        confirmActiveCollectionWrite(collectionToken);
         return new Persisted(document, "UPDATED", contentChanged, version.getVersionNumber());
     }
 
@@ -279,9 +312,9 @@ public class ExternalDocumentService {
             String collectionKey,
             String externalId,
             String sourceRevision,
-            String expectedSourceRevision) {
-        lockActiveCollection(collectionId);
-        lockIdentity(collectionId, externalId);
+        String expectedSourceRevision) {
+        CollectionIdentityResolver.ActiveCollectionToken collectionToken =
+                beginActiveCollectionWrite(collectionId);
         RagDocument document = documentRepository
                 .findByCollectionIdAndExternalId(collectionId, externalId)
                 .orElseThrow(() -> new RagException(
@@ -295,6 +328,7 @@ public class ExternalDocumentService {
         boolean tombstone = !Boolean.TRUE.equals(document.getEnabled())
                 || document.getSourceDeletedAt() != null;
         if (tombstone && sourceRevision.equals(currentRevision)) {
+            confirmActiveCollectionWrite(collectionToken);
             return new ExternalDocumentDeleteResponse(
                     document.getId(), collectionKey, externalId, currentRevision,
                     "UNCHANGED", latestVersionNumber(document), false,
@@ -313,6 +347,7 @@ public class ExternalDocumentService {
         document = documentRepository.saveAndFlush(document);
         RagDocumentVersion version = documentVersionService.forceRecordVersion(
                 document, "DELETE", "External document source deleted");
+        confirmActiveCollectionWrite(collectionToken);
         return new ExternalDocumentDeleteResponse(
                 document.getId(), collectionKey, externalId, sourceRevision,
                 "DELETED", version.getVersionNumber(), false,
@@ -320,14 +355,41 @@ public class ExternalDocumentService {
     }
 
     private ExternalDocumentUpsertResponse finishUpsert(
-            Persisted persisted, boolean embed) {
+            Persisted persisted, EmbeddingPolicy policy,
+            EmbeddingDispatchService.Result queued) {
         RagDocument document = persisted.document();
         String embeddingStatus = "NOT_REQUESTED";
         String embeddingProfileKey = null;
         String errorCode = null;
         String error = null;
+        boolean embed = policy == EmbeddingPolicy.SYNC;
+        String embeddingAction = null;
+        java.util.UUID embeddingJobId = null;
+        java.util.UUID embeddingBatchId = null;
         boolean fresh = documentEmbedService.hasFreshEmbedding(document);
-        if (embed && Boolean.TRUE.equals(document.getEnabled()) && !fresh) {
+        if (queued != null) {
+            embeddingStatus = queued.embeddingStatus();
+            embeddingProfileKey = queued.embeddingProfileKey();
+            embeddingAction = queued.action().name();
+            embeddingJobId = queued.embeddingJobId();
+            embeddingBatchId = queued.embeddingBatchId();
+            if (queued.error() != null) {
+                errorCode = ErrorCode.EMBEDDING_FAILED.getCode();
+                error = safeError(queued.error());
+            }
+        } else if (policy == EmbeddingPolicy.SKIP) {
+            embeddingAction = com.springairag.api.enums.EmbeddingAction.SKIPPED.name();
+        } else if (dispatchService != null && policy == EmbeddingPolicy.SYNC) {
+            EmbeddingDispatchService.Result result = dispatchService.dispatchAfterCommit(
+                    document, policy, persisted.contentChanged(), "EXTERNAL_UPSERT");
+            embeddingStatus = result.embeddingStatus();
+            embeddingProfileKey = result.embeddingProfileKey();
+            embeddingAction = result.action().name();
+            if (result.error() != null) {
+                errorCode = ErrorCode.EMBEDDING_FAILED.getCode();
+                error = safeError(result.error());
+            }
+        } else if (embed && Boolean.TRUE.equals(document.getEnabled()) && !fresh) {
             try {
                 Map<String, Object> result = documentEmbedService.embedDocument(
                         document.getId(), false);
@@ -369,7 +431,10 @@ public class ExternalDocumentService {
                 reloaded.getProcessingStatus(),
                 reloaded.getSourceDeletedAt(),
                 errorCode,
-                error);
+                error,
+                embeddingAction,
+                embeddingJobId,
+                embeddingBatchId);
     }
 
     private DocumentDetailResponse toDetail(RagDocument document) {
@@ -407,21 +472,17 @@ public class ExternalDocumentService {
                 .orElse(null);
     }
 
-    private void lockIdentity(Long collectionId, String externalId) {
-        String lockKey = collectionId + ":external-document:" + externalId;
-        jdbcTemplate.execute((org.springframework.jdbc.core.ConnectionCallback<Void>) connection -> {
-            try (var statement = connection.prepareStatement(
-                    "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))")) {
-                statement.setString(1, lockKey);
-                statement.execute();
-            }
-            return null;
-        });
+    private CollectionIdentityResolver.ActiveCollectionToken beginActiveCollectionWrite(
+            Long collectionId) {
+        return transactionTemplate == null
+                ? null
+                : collectionIdentityResolver.beginActiveWrite(collectionId);
     }
 
-    private void lockActiveCollection(Long collectionId) {
-        if (transactionTemplate != null) {
-            collectionIdentityResolver.requireActiveForShare(collectionId);
+    private void confirmActiveCollectionWrite(
+            CollectionIdentityResolver.ActiveCollectionToken token) {
+        if (token != null) {
+            collectionIdentityResolver.confirmActiveWrite(token);
         }
     }
 
@@ -451,8 +512,28 @@ public class ExternalDocumentService {
         if (transactionTemplate == null) {
             return callback.get();
         }
-        T result = transactionTemplate.execute(status -> callback.get());
-        return Objects.requireNonNull(result, "transaction callback returned null");
+        RuntimeException lastFailure = null;
+        for (int attempt = 1; attempt <= MAX_TRANSACTION_ATTEMPTS; attempt++) {
+            try {
+                T result = transactionTemplate.execute(status -> callback.get());
+                return Objects.requireNonNull(
+                        result, "transaction callback returned null");
+            } catch (RuntimeException failure) {
+                if (!isRetryableConcurrencyFailure(failure)) {
+                    throw failure;
+                }
+                lastFailure = failure;
+            }
+        }
+        throw new DocumentRevisionConflictException(
+                "Concurrent external document write did not converge after "
+                        + MAX_TRANSACTION_ATTEMPTS + " attempts",
+                lastFailure);
+    }
+
+    private boolean isRetryableConcurrencyFailure(RuntimeException failure) {
+        return failure instanceof DataIntegrityViolationException
+                || failure instanceof ConcurrencyFailureException;
     }
 
     private void validateRequest(ExternalDocumentUpsertRequest request) {

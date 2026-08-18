@@ -75,6 +75,9 @@ public class ChatRequest {
     @Schema(description = "Additional metadata (passed through to domain extension)")
     private Map<String, Object> metadata;
 
+    @Schema(description = "Optional metadata/payload containment filters. Rejected in PLAIN mode.")
+    private RetrievalFilterRequest filters;
+
     @JsonIgnore
     private transient boolean maxResultsExplicitlySet;
 
@@ -156,6 +159,9 @@ public class ChatRequest {
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }
 
+    public RetrievalFilterRequest getFilters() { return filters; }
+    public void setFilters(RetrievalFilterRequest filters) { this.filters = filters; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -173,14 +179,15 @@ public class ChatRequest {
                 && Objects.equals(collectionIds, that.collectionIds)
                 && Objects.equals(collectionKeys, that.collectionKeys)
                 && Objects.equals(documentIds, that.documentIds)
-                && Objects.equals(metadata, that.metadata);
+                && Objects.equals(metadata, that.metadata)
+                && Objects.equals(filters, that.filters);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(message, sessionId, maxResults, useHybridSearch, useRerank,
                 mode, domainId, model, collectionScopeMode, collectionIds, collectionKeys,
-                documentIds, metadata);
+                documentIds, metadata, filters);
     }
 
     @Override
@@ -192,6 +199,7 @@ public class ChatRequest {
                 + ", model=" + model + ", collectionScopeMode=" + collectionScopeMode
                 + ", collectionIds=" + collectionIds
                 + ", collectionKeys=" + collectionKeys
-                + ", documentIds=" + documentIds + ", metadata=" + metadata + "}";
+                + ", documentIds=" + documentIds + ", metadata=" + metadata
+                + ", filters=" + filters + "}";
     }
 }

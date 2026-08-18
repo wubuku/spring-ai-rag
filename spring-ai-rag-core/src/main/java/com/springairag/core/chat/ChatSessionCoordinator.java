@@ -70,14 +70,13 @@ public class ChatSessionCoordinator {
               AND owner_token = ?
             """;
 
-    private static final String LOCK_SQL = """
-            SELECT owner_token
-            FROM rag_chat_session_lease
+    private static final String CONSUME_SQL = """
+            DELETE FROM rag_chat_session_lease
             WHERE owner_principal_id = ?
               AND session_id = ?
               AND owner_token = ?
               AND expires_at > clock_timestamp()
-            FOR UPDATE
+            RETURNING owner_token
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -189,7 +188,7 @@ public class ChatSessionCoordinator {
         try {
             transactionTemplate.executeWithoutResult(status -> {
                 if (!handle.stateless) {
-                    assertOwnedAndLock(handle);
+                    consumeLease(handle);
                 }
                 historyRepository.saveDurable(
                         command.principal(),
@@ -206,16 +205,6 @@ public class ChatSessionCoordinator {
                         sharedMemory.add(
                                 command.memoryConversationId(),
                                 committedMessages);
-                    }
-                }
-                if (!handle.stateless) {
-                    int released = jdbcTemplate.update(
-                            RELEASE_SQL,
-                            handle.principalId,
-                            handle.sessionId,
-                            handle.ownerToken);
-                    if (released != 1) {
-                        throw leaseLost();
                     }
                 }
             });
@@ -266,7 +255,7 @@ public class ChatSessionCoordinator {
         beginCommit(handle);
         try {
             Integer deleted = transactionTemplate.execute(status -> {
-                assertOwnedAndLock(handle);
+                consumeLease(handle);
                 int count = historyRepository.deleteByPrincipalAndSession(
                         principal, validSession);
                 if (count == 0) {
@@ -275,14 +264,6 @@ public class ChatSessionCoordinator {
                             "Chat session was not found");
                 }
                 sharedMemory.clear(memoryId);
-                int released = jdbcTemplate.update(
-                        RELEASE_SQL,
-                        handle.principalId,
-                        handle.sessionId,
-                        handle.ownerToken);
-                if (released != 1) {
-                    throw leaseLost();
-                }
                 return count;
             });
             handle.state.set(State.TERMINAL);
@@ -341,9 +322,14 @@ public class ChatSessionCoordinator {
         }
     }
 
-    private void assertOwnedAndLock(LeaseHandle handle) {
+    /**
+     * Atomically consumes the active lease at the beginning of the commit
+     * transaction. A rollback restores the lease row; a successful commit
+     * releases it without an explicit lock.
+     */
+    private void consumeLease(LeaseHandle handle) {
         List<String> rows = jdbcTemplate.query(
-                LOCK_SQL,
+                CONSUME_SQL,
                 (resultSet, rowNum) -> resultSet.getString(1),
                 handle.principalId,
                 handle.sessionId,

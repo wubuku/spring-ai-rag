@@ -50,6 +50,7 @@ class RagCollectionServiceTest {
     private RagCollection createCollection(Long id, String name) {
         RagCollection c = new RagCollection();
         c.setId(id);
+        c.setVersion(0L);
         c.setCollectionKey(id == null ? "collection-new" : "collection-" + id);
         c.setName(name);
         c.setDescription("Description of " + name);
@@ -160,8 +161,8 @@ class RagCollectionServiceTest {
         @DisplayName("rejects unlinking external-managed document identities")
         void externalManagedDocumentsRejectLegacySoftDelete() {
             RagCollection collection = createCollection(1L, "External");
-            when(collectionRepository.findActiveByIdForUpdate(1L))
-                    .thenReturn(Optional.of(collection));
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(collection));
             when(documentRepository.countExternalManagedByCollectionId(1L))
                     .thenReturn(1L);
 
@@ -170,15 +171,18 @@ class RagCollectionServiceTest {
 
             verify(documentRepository, never()).countByCollectionId(1L);
             verify(documentRepository, never()).clearCollectionIdByCollectionId(1L);
-            verify(collectionRepository, never()).softDelete(anyLong(), any());
+            verify(collectionRepository, never()).softDeleteIfVersion(
+                    anyLong(), anyLong(), any(LocalDateTime.class));
         }
 
         @Test
         @DisplayName("soft-deletes collection and unlinks documents")
         void existingCollection_unlinksDocumentsAndSoftDeletes() {
             RagCollection collection = createCollection(1L, "To Delete");
-            when(collectionRepository.findActiveByIdForUpdate(1L))
-                    .thenReturn(Optional.of(collection));
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(collection));
+            when(collectionRepository.softDeleteIfVersion(
+                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(5L);
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(1L);
@@ -188,7 +192,8 @@ class RagCollectionServiceTest {
             assertEquals(5L, result.get().documentsUnlinked());
 
             verify(documentRepository).clearCollectionIdByCollectionId(1L);
-            verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
+            verify(collectionRepository).softDeleteIfVersion(
+                    eq(1L), eq(0L), any(LocalDateTime.class));
             verify(auditLogService).logDelete(eq("Collection"), eq("1"), anyString());
         }
 
@@ -196,8 +201,10 @@ class RagCollectionServiceTest {
         @DisplayName("soft-deletes with zero documents when collection is empty")
         void emptyCollection_deletesWithZeroDocuments() {
             RagCollection collection = createCollection(1L, "Empty");
-            when(collectionRepository.findActiveByIdForUpdate(1L))
-                    .thenReturn(Optional.of(collection));
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(collection));
+            when(collectionRepository.softDeleteIfVersion(
+                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(1L);
@@ -205,19 +212,21 @@ class RagCollectionServiceTest {
             assertTrue(result.isPresent());
             assertEquals(0L, result.get().documentsUnlinked());
             verify(documentRepository, never()).clearCollectionIdByCollectionId(anyLong());
-            verify(collectionRepository).softDelete(eq(1L), any(LocalDateTime.class));
+            verify(collectionRepository).softDeleteIfVersion(
+                    eq(1L), eq(0L), any(LocalDateTime.class));
         }
 
         @Test
         @DisplayName("returns empty when collection not found")
         void nonExisting_returnsEmpty() {
-            when(collectionRepository.findActiveByIdForUpdate(999L))
-                    .thenReturn(Optional.empty());
+            when(collectionRepository.findByIdAndDeletedFalse(999L))
+                .thenReturn(Optional.empty());
 
             Optional<RagCollectionService.DeleteResult> result = service.deleteCollection(999L);
 
             assertTrue(result.isEmpty());
-            verify(collectionRepository, never()).softDelete(anyLong(), any());
+            verify(collectionRepository, never()).softDeleteIfVersion(
+                    anyLong(), anyLong(), any(LocalDateTime.class));
         }
 
         @Test
@@ -225,8 +234,10 @@ class RagCollectionServiceTest {
         void noAuditLogService_doesNotFail() {
             RagCollectionService svcNoAudit = new RagCollectionService(collectionRepository, documentRepository, null);
             RagCollection collection = createCollection(1L, "No Audit");
-            when(collectionRepository.findActiveByIdForUpdate(1L))
-                    .thenReturn(Optional.of(collection));
+            when(collectionRepository.findByIdAndDeletedFalse(1L))
+                .thenReturn(Optional.of(collection));
+            when(collectionRepository.softDeleteIfVersion(
+                    eq(1L), eq(0L), any(LocalDateTime.class))).thenReturn(1);
             when(documentRepository.countByCollectionId(1L)).thenReturn(0L);
 
             Optional<RagCollectionService.DeleteResult> result = svcNoAudit.deleteCollection(1L);

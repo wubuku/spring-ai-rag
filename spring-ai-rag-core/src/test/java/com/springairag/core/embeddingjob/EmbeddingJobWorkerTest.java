@@ -6,21 +6,28 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.EmbeddingCommitGuard;
 import com.springairag.core.service.EmbeddingCommitRejectedException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.OffsetDateTime;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.when;
 
 class EmbeddingJobWorkerTest {
@@ -41,7 +48,50 @@ class EmbeddingJobWorkerTest {
         when(profileProvider.getActiveProfile()).thenReturn(
                 new EmbeddingProfile(
                         9L, "test", "test", "test", "v1",
-                        1024, "COSINE", "NONE", true));
+                1024, "COSINE", "NONE", true));
+    }
+
+    @AfterEach
+    void tearDown() {
+        worker.shutdown();
+    }
+
+    @Test
+    void concurrentClaimsUseDistinctLeaseOwners() {
+        RagProperties properties = new RagProperties();
+        properties.getEmbeddingJobs().setWorkerConcurrency(2);
+        properties.getEmbeddingJobs().setClaimBatchSize(2);
+        worker.shutdown();
+        worker = new EmbeddingJobWorker(
+                repository, embedService, profileProvider, properties);
+        EmbeddingJob first = job(UUID.randomUUID(), null);
+        EmbeddingJob second = job(UUID.randomUUID(), null);
+        when(repository.claim(anyString(), eq(1), anyInt()))
+                .thenReturn(List.of(first), List.of(second));
+        when(repository.isCommitAllowed(
+                any(UUID.class), anyString(), anyLong()))
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
+                .thenReturn(true);
+        when(repository.find(any(UUID.class))).thenAnswer(invocation -> {
+            UUID id = invocation.getArgument(0);
+            return java.util.Optional.of(
+                    first.id().equals(id) ? first : second);
+        });
+        when(embedService.embedDocumentForJob(
+                anyLong(), anyBoolean(), any(EmbeddingCommitGuard.class)))
+                .thenReturn(Map.of("status", "COMPLETED"));
+
+        worker.poll();
+
+        ArgumentCaptor<String> owners = ArgumentCaptor.forClass(String.class);
+        verify(repository, timeout(2000).times(2))
+                .claim(owners.capture(), eq(1), anyInt());
+        assertEquals(2, owners.getAllValues().size());
+        assertNotEquals(
+                owners.getAllValues().get(0),
+                owners.getAllValues().get(1));
     }
 
     @Test
@@ -49,6 +99,9 @@ class EmbeddingJobWorkerTest {
         EmbeddingJob job = job();
         when(repository.isCommitAllowed(
                 any(UUID.class), anyString(), anyLong()))
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
                 .thenReturn(true);
         when(repository.find(job.id())).thenReturn(
                 java.util.Optional.of(job));
@@ -88,7 +141,10 @@ class EmbeddingJobWorkerTest {
         EmbeddingJob job = job();
         when(repository.isCommitAllowed(
                 any(UUID.class), anyString(), anyLong()))
-                .thenReturn(true, false);
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
+                .thenReturn(false);
         when(repository.isCancellationRequested(job.id()))
                 .thenReturn(true);
         when(embedService.embedDocumentForJob(
@@ -113,6 +169,9 @@ class EmbeddingJobWorkerTest {
         EmbeddingJob upgraded = job(true);
         when(repository.isCommitAllowed(
                 any(UUID.class), anyString(), anyLong()))
+                .thenReturn(true);
+        when(repository.claimCommitAllowed(
+                any(UUID.class), anyString(), anyLong(), anyInt()))
                 .thenReturn(true);
         when(repository.find(original.id()))
                 .thenReturn(
@@ -148,9 +207,20 @@ class EmbeddingJobWorkerTest {
     }
 
     private EmbeddingJob job(boolean force) {
+        return job(JOB_ID, "worker", force);
+    }
+
+    private EmbeddingJob job(UUID id, String leaseOwner) {
+        return job(id, leaseOwner, false);
+    }
+
+    private EmbeddingJob job(
+            UUID id,
+            String leaseOwner,
+            boolean force) {
         OffsetDateTime now = OffsetDateTime.now();
         return new EmbeddingJob(
-                JOB_ID,
+                id,
                 UUID.randomUUID(),
                 1L,
                 9L,
@@ -162,7 +232,7 @@ class EmbeddingJobWorkerTest {
                 1,
                 3,
                 now,
-                "worker",
+                leaseOwner,
                 now.plusMinutes(2),
                 null,
                 null,

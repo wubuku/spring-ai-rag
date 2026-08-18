@@ -1,6 +1,9 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.entity.FsFile;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.FsFileRepository;
@@ -16,6 +19,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -40,6 +44,7 @@ public class PdfToRagService {
     private final FsFileRepository fsFileRepository;
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
+    private EmbeddingDispatchService dispatchService;
 
     public PdfToRagService(FsFileRepository fsFileRepository,
                            RagDocumentRepository documentRepository,
@@ -47,6 +52,11 @@ public class PdfToRagService {
         this.fsFileRepository = fsFileRepository;
         this.documentRepository = documentRepository;
         this.documentEmbedService = documentEmbedService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDispatchService(EmbeddingDispatchService dispatchService) {
+        this.dispatchService = dispatchService;
     }
 
     // ---- Public API ----
@@ -82,6 +92,32 @@ public class PdfToRagService {
         }
 
         return toPdfToRagResult(result, embedResult);
+    }
+
+    @Transactional
+    public PdfToRagResult importPdfToRag(String entryMarkdownPath,
+                                          String originalFilename,
+                                          Long collectionId,
+                                          EmbeddingPolicy policy,
+                                          boolean forceReembed) {
+        Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
+        if (policy == EmbeddingPolicy.ASYNC) {
+            EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+            String title = deriveTitle(originalFilename);
+            DocumentBuildResult result = buildDocumentFromMarkdown(
+                    entryMarkdownPath, title, originalFilename, collectionId);
+            EmbeddingDispatchService.Result queued =
+                    dispatchService.enqueueInCurrentTransaction(
+                            result.doc(), result.newlyCreated() || forceReembed,
+                            forceReembed, "PDF_TO_RAG");
+            return new PdfToRagResult(
+                    result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
+                    queued.embeddingStatus(), queued.action().name(), null,
+                    queued.action().name(), queued.embeddingJobId(), queued.embeddingBatchId());
+        }
+        return importPdfToRag(
+                entryMarkdownPath, originalFilename, collectionId,
+                policy != EmbeddingPolicy.SKIP, forceReembed);
     }
 
     /**
@@ -143,6 +179,31 @@ public class PdfToRagService {
         EmbedResult embedResult = doEmbed(result.doc(), result.newlyCreated(), forceReembed);
 
         return toPdfToRagResult(result, embedResult);
+    }
+
+    public PdfToRagResult triggerEmbedding(
+            String uuid, Long collectionId, EmbeddingPolicy policy, boolean forceReembed) {
+        Objects.requireNonNull(uuid, "uuid must not be null");
+        if (policy == EmbeddingPolicy.SKIP) {
+            throw new com.springairag.core.exception.RagException(
+                    com.springairag.api.enums.ErrorCode.BAD_REQUEST,
+                    "embeddingPolicy=SKIP is not allowed on explicit embed endpoints");
+        }
+        if (policy == EmbeddingPolicy.ASYNC) {
+            EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+            String entryPath = uuid + "/default.md";
+            String title = deriveTitleFromMetadata(entryPath, uuid);
+            DocumentBuildResult result = buildDocumentFromMarkdown(
+                    entryPath, title, null, collectionId);
+            EmbeddingDispatchService.Result queued =
+                    dispatchService.enqueueInCurrentTransaction(
+                            result.doc(), true, forceReembed, "PDF_EMBED");
+            return new PdfToRagResult(
+                    result.doc().getId(), result.doc().getTitle(), result.newlyCreated(),
+                    queued.embeddingStatus(), queued.action().name(), null,
+                    queued.action().name(), queued.embeddingJobId(), queued.embeddingBatchId());
+        }
+        return triggerEmbedding(uuid, collectionId, forceReembed);
     }
 
     /**
@@ -369,8 +430,22 @@ public class PdfToRagService {
             boolean newlyCreated,
             String embedStatus,
             String embedMessage,
-            Integer chunksCreated
-    ) {}
+            Integer chunksCreated,
+            String embeddingAction,
+            UUID embeddingJobId,
+            UUID embeddingBatchId
+    ) {
+        public PdfToRagResult(
+                Long documentId,
+                String title,
+                boolean newlyCreated,
+                String embedStatus,
+                String embedMessage,
+                Integer chunksCreated) {
+            this(documentId, title, newlyCreated, embedStatus, embedMessage,
+                    chunksCreated, null, null, null);
+        }
+    }
 
     private record EmbedResult(String status, String message, Integer chunksCreated) {}
 

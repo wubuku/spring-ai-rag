@@ -25,5 +25,33 @@ public record EmbeddingJob(
         OffsetDateTime createdAt,
         OffsetDateTime startedAt,
         OffsetDateTime finishedAt,
-        OffsetDateTime updatedAt) {
+        OffsetDateTime updatedAt,
+        String origin,
+        String requestedByPrincipalId) {
+
+    public EmbeddingJob(
+            UUID id,
+            UUID batchId,
+            long documentId,
+            long embeddingProfileId,
+            boolean force,
+            String contentHash,
+            long documentVersion,
+            EmbeddingJobStatus status,
+            int attemptCount,
+            int maxAttempts,
+            OffsetDateTime availableAt,
+            String leaseOwner,
+            OffsetDateTime leaseExpiresAt,
+            OffsetDateTime cancelRequestedAt,
+            String lastError,
+            OffsetDateTime createdAt,
+            OffsetDateTime startedAt,
+            OffsetDateTime finishedAt,
+            OffsetDateTime updatedAt) {
+        this(id, batchId, documentId, embeddingProfileId, force, contentHash,
+                documentVersion, status, attemptCount, maxAttempts, availableAt,
+                leaseOwner, leaseExpiresAt, cancelRequestedAt, lastError,
+                createdAt, startedAt, finishedAt, updatedAt, null, null);
+    }
 }

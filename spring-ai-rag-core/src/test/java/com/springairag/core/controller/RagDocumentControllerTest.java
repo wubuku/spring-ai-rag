@@ -451,7 +451,7 @@ class RagDocumentControllerTest {
                 new BatchCreateResponse.DocumentResult(1L, "文档1", true, null),
                 new BatchCreateResponse.DocumentResult(2L, "文档2", true, null)
         ));
-        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false), isNull()))
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
@@ -473,7 +473,7 @@ class RagDocumentControllerTest {
                 new BatchCreateResponse.DocumentResult(20L, "新文档", true, null),
                 new BatchCreateResponse.DocumentResult(10L, "重复标题", false, null)
         ));
-        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false), isNull()))
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);
@@ -491,7 +491,7 @@ class RagDocumentControllerTest {
         var svcResponse = new BatchCreateResponse(0, 0, 1, List.of(
                 new BatchCreateResponse.DocumentResult(null, "文档", false, "DB error")
         ));
-        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false)))
+        when(batchDocumentService.batchCreateDocuments(eq(docs), eq(false), isNull(), eq(false), isNull()))
                 .thenReturn(svcResponse);
 
         var req = new com.springairag.api.dto.BatchDocumentRequest(docs);

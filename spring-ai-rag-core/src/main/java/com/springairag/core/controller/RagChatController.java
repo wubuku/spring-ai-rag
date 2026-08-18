@@ -7,9 +7,17 @@ import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.config.RagChatService;
 import com.springairag.core.config.RagSseProperties;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalFilters;
+import com.springairag.core.retrieval.RetrievalScopeSummary;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.ChatSessionCoordinator;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.chat.SessionIdValidator;
 import com.springairag.core.entity.RagApiKey;
 import com.springairag.api.enums.ErrorCode;
@@ -43,10 +51,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import jakarta.servlet.http.HttpServletResponse;
 import com.springairag.core.filter.RequestTraceFilter;
 
 import org.slf4j.MDC;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import jakarta.servlet.http.HttpServletResponse;
 import reactor.core.Disposable;
 
 import java.util.ArrayList;
@@ -81,6 +91,7 @@ public class RagChatController {
     private final AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
     private final CollectionRetrievalScopeResolver retrievalScopeResolver;
     private ChatSessionCoordinator sessionCoordinator;
+    private RetrievalDiagnosticsService diagnosticsService;
 
     @Autowired
     public RagChatController(RagChatService ragChatService,
@@ -101,6 +112,11 @@ public class RagChatController {
     void configureSessionCoordinator(
             ChatSessionCoordinator sessionCoordinator) {
         this.sessionCoordinator = sessionCoordinator;
+    }
+
+    @Autowired(required = false)
+    void configureDiagnostics(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
     }
 
     public RagChatController(RagChatService ragChatService,
@@ -135,10 +151,11 @@ public class RagChatController {
                 request.getSessionId(), request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
+        RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
         ChatResponse response = scope != null
-                ? ragChatService.chat(request, scope)
+                ? ragChatService.chat(request, scope, session)
                 : ragChatService.chat(request);
-        return ResponseEntity.ok(response);
+        return traced(response, session);
     }
 
     ResponseEntity<ChatResponse> ask(ChatRequest request) {
@@ -165,10 +182,11 @@ public class RagChatController {
                 request.getSessionId(), request.getDomainId(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
+        RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
         ChatResponse response = scope != null
-                ? ragChatService.chat(request, scope)
+                ? ragChatService.chat(request, scope, session)
                 : ragChatService.chat(request);
-        return ResponseEntity.ok(response);
+        return traced(response, session);
     }
 
     ResponseEntity<ChatResponse> chat(ChatRequest request) {
@@ -216,7 +234,8 @@ public class RagChatController {
     @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Timed(value = "rag.chat.stream", description = "RAG streaming chat", percentiles = {0.5, 0.95, 0.99})
     public SseEmitter stream(@Valid @RequestBody ChatRequest request,
-                               HttpServletRequest httpRequest) {
+                               HttpServletRequest httpRequest,
+                               HttpServletResponse httpResponse) {
         // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
@@ -227,6 +246,11 @@ public class RagChatController {
                 sessionId, request.getDomainId(), request.getCollectionIds(),
                 request.getMessage().length() > 100 ? request.getMessage().substring(0, 100) + "..." : request.getMessage());
 
+        RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
+        if (session != null && httpResponse != null) {
+            httpResponse.setHeader(
+                    RetrievalTraceHeaders.TRACE_ID, session.traceId().toString());
+        }
         SseEmitter emitter = SseEmitters.create();
         String traceId = MDC.get(RequestTraceFilter.TRACE_ID_KEY);
         HeartbeatHandles heartbeat = startHeartbeat(emitter);
@@ -249,7 +273,7 @@ public class RagChatController {
         });
 
         try {
-            Disposable disposable = ragChatService.chatEvents(request, scope)
+            Disposable disposable = ragChatService.chatEvents(request, scope, session)
                     .subscribe(
                             event -> sendChatEvent(
                                     emitter, event, traceId, sessionId),
@@ -325,6 +349,11 @@ public class RagChatController {
             payload.put("finishReason", completed.finishReason());
             payload.put("stepMetrics", completed.stepMetrics());
             payload.put("status", "complete");
+            if (completed.metadata() != null
+                    && completed.metadata().get("retrievalTraceId") != null) {
+                payload.put("retrievalTraceId",
+                        completed.metadata().get("retrievalTraceId"));
+            }
             SseEmitters.sendProgress(emitter, "done", payload, "chat done");
         } else if (event instanceof ChatEvent.Failed failed) {
             sendChatError(
@@ -378,10 +407,6 @@ public class RagChatController {
             super(message);
             this.code = code;
         }
-    }
-
-    SseEmitter stream(ChatRequest request) {
-        return stream(request, null);
     }
 
     /**
@@ -552,6 +577,54 @@ public class RagChatController {
         request.setCollectionIds(ApiKeyCollectionAccess.resolveCollectionIds(
                 request.getCollectionIds(), key));
         return null;
+    }
+
+    private RetrievalTraceSession beginChatTrace(
+            ChatRequest request,
+            RetrievalScope scope,
+            HttpServletRequest httpRequest) {
+        if (diagnosticsService == null || !diagnosticsService.isEnabled()) {
+            return null;
+        }
+        try {
+            RetrievalTraceSession session = diagnosticsService.createSession(
+                    ChatPrincipal.from(httpRequest),
+                    RetrievalTraceHeaders.OPERATION_CHAT,
+                    request.getSessionId());
+            RetrievalFilters filters = new com.springairag.core.retrieval.RetrievalFilterValidator()
+                    .validate(request.getFilters());
+            session.attachScope(
+                    RetrievalScopeSummary.from(
+                            request.getCollectionScopeMode(),
+                            scope,
+                            request.getCollectionKeys(),
+                            filters,
+                            null),
+                    filters);
+            return session;
+        } catch (Exception e) {
+            log.warn("Retrieval diagnostics failed to start chat trace: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private ResponseEntity<ChatResponse> traced(
+            ChatResponse response,
+            RetrievalTraceSession session) {
+        if (session == null) {
+            return ResponseEntity.ok(response);
+        }
+        return ResponseEntity.ok()
+                .header(RetrievalTraceHeaders.TRACE_ID, session.traceId().toString())
+                .body(response);
+    }
+
+    SseEmitter stream(ChatRequest request) {
+        return stream(request, null, null);
+    }
+
+    SseEmitter stream(ChatRequest request, HttpServletRequest httpRequest) {
+        return stream(request, httpRequest, null);
     }
 
 }

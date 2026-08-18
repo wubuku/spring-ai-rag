@@ -11,6 +11,8 @@ import org.springframework.stereotype.Repository;
 
 import java.time.ZonedDateTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Retrieval Log Repository
@@ -100,4 +102,53 @@ public interface RagRetrievalLogRepository extends JpaRepository<RagRetrievalLog
     @Modifying
     @Query("DELETE FROM RagRetrievalLog l WHERE l.createdAt < :cutoff")
     long deleteByCreatedAtBefore(@Param("cutoff") ZonedDateTime cutoff);
+
+    Optional<RagRetrievalLog> findByTraceId(UUID traceId);
+
+    @Query(value = """
+            SELECT * FROM rag_retrieval_logs
+            WHERE owner_principal_id = :owner
+              AND trace_id IS NOT NULL
+              AND (:operation IS NULL OR operation = :operation)
+              AND (:outcomeCode IS NULL OR outcome_code = :outcomeCode)
+              AND (:emptyReasonCode IS NULL OR empty_reason_code = :emptyReasonCode)
+              AND (:sessionId IS NULL OR session_id = :sessionId)
+              AND (:citationStatus IS NULL
+                   OR metadata #>> '{citationValidation,status}' = :citationStatus)
+            ORDER BY created_at DESC
+            """,
+            countQuery = """
+            SELECT COUNT(*) FROM rag_retrieval_logs
+            WHERE owner_principal_id = :owner
+              AND trace_id IS NOT NULL
+              AND (:operation IS NULL OR operation = :operation)
+              AND (:outcomeCode IS NULL OR outcome_code = :outcomeCode)
+              AND (:emptyReasonCode IS NULL OR empty_reason_code = :emptyReasonCode)
+              AND (:sessionId IS NULL OR session_id = :sessionId)
+              AND (:citationStatus IS NULL
+                   OR metadata #>> '{citationValidation,status}' = :citationStatus)
+            """,
+            nativeQuery = true)
+    Page<RagRetrievalLog> searchTraces(
+            @Param("owner") String owner,
+            @Param("operation") String operation,
+            @Param("outcomeCode") String outcomeCode,
+            @Param("emptyReasonCode") String emptyReasonCode,
+            @Param("sessionId") String sessionId,
+            @Param("citationStatus") String citationStatus,
+            Pageable pageable);
+
+    @Modifying
+    @Query(value = """
+            DELETE FROM rag_retrieval_logs
+            WHERE id IN (
+                SELECT id FROM rag_retrieval_logs
+                WHERE trace_id IS NOT NULL
+                  AND created_at < :cutoff
+                LIMIT :batchSize
+            )
+            """, nativeQuery = true)
+    int deleteExpiredTraces(
+            @Param("cutoff") ZonedDateTime cutoff,
+            @Param("batchSize") int batchSize);
 }

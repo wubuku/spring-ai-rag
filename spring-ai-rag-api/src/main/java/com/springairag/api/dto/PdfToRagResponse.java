@@ -40,8 +40,29 @@ public record PdfToRagResponse(
 
         @Schema(description = "Entry Markdown path in fs_files",
                 example = "550e8400-e29b-41d4-a716-446655440000/default.md")
-        String entryMarkdown
+        String entryMarkdown,
+
+        @Schema(description = "Embedding dispatch action")
+        String embeddingAction,
+
+        @Schema(description = "Async embedding job ID")
+        java.util.UUID embeddingJobId,
+
+        @Schema(description = "Async embedding batch ID")
+        java.util.UUID embeddingBatchId
 ) {
+    public PdfToRagResponse(
+            Long documentId,
+            String title,
+            boolean newlyCreated,
+            String embedStatus,
+            String embedMessage,
+            Integer chunksCreated,
+            String uuid,
+            String entryMarkdown) {
+        this(documentId, title, newlyCreated, embedStatus, embedMessage, chunksCreated,
+                uuid, entryMarkdown, null, null, null);
+    }
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;

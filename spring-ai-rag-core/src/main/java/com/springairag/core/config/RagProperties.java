@@ -62,6 +62,9 @@ public class RagProperties {
             new RagOpenAiCompatibilityProperties();
     private final RagEmbeddingJobProperties embeddingJobs =
             new RagEmbeddingJobProperties();
+    private final RagRetrievalDiagnosticsProperties retrievalDiagnostics =
+            new RagRetrievalDiagnosticsProperties();
+    private final RagEvaluationProperties evaluation = new RagEvaluationProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -149,5 +152,13 @@ public class RagProperties {
 
     public RagEmbeddingJobProperties getEmbeddingJobs() {
         return embeddingJobs;
+    }
+
+    public RagRetrievalDiagnosticsProperties getRetrievalDiagnostics() {
+        return retrievalDiagnostics;
+    }
+
+    public RagEvaluationProperties getEvaluation() {
+        return evaluation;
     }
 }

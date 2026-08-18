@@ -1,7 +1,8 @@
 package com.springairag.api.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.swagger.v3.oas.annotations.media.Schema;
+
+import java.util.UUID;
 
 /**
  * Result of one JSON structured-record upsert.
@@ -20,8 +21,28 @@ public record JsonRecordUpsertResponse(
         int versionNumber,
         String embeddingStatus,
         String embeddingProfileKey,
-        String error
+        String error,
+        String embeddingAction,
+        UUID embeddingJobId,
+        UUID embeddingBatchId
 ) {
+    public JsonRecordUpsertResponse(
+            Long documentId,
+            Long collectionId,
+            String collectionKey,
+            String externalId,
+            String action,
+            boolean contentChanged,
+            boolean payloadChanged,
+            int versionNumber,
+            String embeddingStatus,
+            String embeddingProfileKey,
+            String error) {
+        this(documentId, collectionId, collectionKey, externalId, action,
+                contentChanged, payloadChanged, versionNumber, embeddingStatus,
+                embeddingProfileKey, error, null, null, null);
+    }
+
     public JsonRecordUpsertResponse(
             Long documentId,
             Long collectionId,
@@ -35,6 +56,6 @@ public record JsonRecordUpsertResponse(
             String error) {
         this(documentId, collectionId, null, externalId, action, contentChanged,
                 payloadChanged, versionNumber, embeddingStatus,
-                embeddingProfileKey, error);
+                embeddingProfileKey, error, null, null, null);
     }
 }

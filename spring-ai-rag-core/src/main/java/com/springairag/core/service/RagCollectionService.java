@@ -110,8 +110,10 @@ public class RagCollectionService {
         Objects.requireNonNull(id, "id must not be null");
         log.info("Soft-deleting collection: id={}", id);
 
-        return collectionRepository.findActiveByIdForUpdate(id)
+        return collectionRepository.findByIdAndDeletedFalse(id)
                 .map(collection -> {
+                    long expectedVersion = collection.getVersion() == null
+                            ? 0L : collection.getVersion();
                     long externalManaged =
                             documentRepository.countExternalManagedByCollectionId(id);
                     if (externalManaged > 0) {
@@ -126,7 +128,12 @@ public class RagCollectionService {
                         log.info("Unlinked {} documents from collection {}", count, id);
                     }
 
-                    collectionRepository.softDelete(id, java.time.LocalDateTime.now());
+                    int deleted = collectionRepository.softDeleteIfVersion(
+                            id, expectedVersion, java.time.LocalDateTime.now());
+                    if (deleted != 1) {
+                        throw new DocumentRevisionConflictException(
+                                "Collection changed concurrently; retry the delete");
+                    }
                     log.info("Collection soft-deleted: id={}", id);
 
                     if (auditLogService != null) {

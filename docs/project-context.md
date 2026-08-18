@@ -288,7 +288,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V34.
+- Flyway is currently V1–V39.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -296,7 +296,15 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   V32 adds principal-owned Chat history, source snapshots, turn status, and
   session leases; V33 adds durable embedding jobs, leases, and active-job
   coalescing indexes; V34 adds the JSON-record payload-containment partial GIN
-  index.
+  index; V35 extends retrieval diagnostics; V36 adds ordinary-document metadata
+  containment indexes; V37 extends embedding-job operations fields; V38 adds
+  managed evaluation suites; V39 replaces explicit pessimistic coordination
+  with atomic counters, concurrency slots, and CAS state.
+- The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
+  `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
+  Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
+  unique constraints, leases, and bounded retries. Ordinary short-lived
+  database locks caused internally by DML are outside this prohibition.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 
@@ -316,6 +324,8 @@ The main namespace is `/api/v1/rag/**`:
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | Idempotent ordinary external-document synchronization |
 | `/embedding-jobs` | Disabled-by-default durable embedding/reindex jobs |
+| `/retrieval-traces` | Caller-visible retrieval diagnostics |
+| `/collections/embedding-readiness` | Collection embedding readiness buckets |
 | `/v1/models`, `/v1/chat/completions` | Disabled-by-default controlled OpenAI compatibility preview |
 
 See [rest-api.md](rest-api.md) and [SSE-PROTOCOL.md](SSE-PROTOCOL.md).
@@ -426,6 +436,8 @@ See [P1 / 1.0 readiness progress](drafts/2026-07-21_P1_10_READINESS_PROGRESS.md)
   preview; it is not public or multi-instance production readiness.
 - The durable embedding worker and JSON Agent tool remain disabled by default;
   deployments should validate capacity and cost before enabling them.
+- Concurrency control does not use application-requested pessimistic locks;
+  `scripts/verify-no-pessimistic-locks.sh` is the regression gate.
 - OpenClaw `TOOLS.md`, `MEMORY.md`, `memory/`, `HEARTBEAT.md`, and related files are local state outside the project documentation system.
 - Project Skills live under `.agents/skills/`; workflows may link here but must not duplicate project facts.
 

@@ -2,6 +2,10 @@ package com.springairag.core.controller;
 
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
+import com.springairag.core.exception.RagException;
 import com.springairag.api.dto.FileTreeEntryResponse;
 import com.springairag.api.dto.FileTreeResponse;
 import com.springairag.api.dto.PdfImportResponse;
@@ -173,7 +177,25 @@ public class PdfImportController {
             @ApiResponse(responseCode = "500", description = "Internal error during import or embedding")
     })
     @PostMapping(value = "/pdf-to-rag",
-            params = "embed=false",
+            params = "embeddingPolicy=ASYNC",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> importPdfToRagAsync(
+            @RequestParam("file") MultipartFile file,
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
+            @RequestParam(value = "embed", required = false) String embed) {
+        if ("sse".equalsIgnoreCase(embed)) {
+            throw new RagException(
+                    ErrorCode.BAD_REQUEST,
+                    "embeddingPolicy=ASYNC cannot be combined with embed=sse; observe the job API");
+        }
+        return importPdfToRagWithPolicy(
+                file, collectionId, collectionKey, EmbeddingPolicy.ASYNC);
+    }
+
+    @PostMapping(value = "/pdf-to-rag",
+            params = {"embed=false", "embeddingPolicy!=ASYNC"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Object> importPdfToRagWithoutEmbedding(
@@ -182,7 +204,12 @@ public class PdfImportController {
             @Parameter(description = "Deprecated numeric Collection ID; use collectionKey",
                     deprecated = true)
             @RequestParam(value = "collectionId", required = false) Long collectionId,
-            @RequestParam(value = "collectionKey", required = false) String collectionKey) {
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
+            @RequestParam(value = "embeddingPolicy", required = false) EmbeddingPolicy embeddingPolicy) {
+        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(embeddingPolicy, false);
+        if (policy != EmbeddingPolicy.SKIP) {
+            return importPdfToRagWithPolicy(file, collectionId, collectionKey, policy);
+        }
 
         try {
             String filename = requirePdfFilename(file);
@@ -223,7 +250,7 @@ public class PdfImportController {
     }
 
     @PostMapping(value = "/pdf-to-rag",
-            params = "embed=true",
+            params = {"embed=true", "embeddingPolicy!=ASYNC"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
@@ -236,7 +263,7 @@ public class PdfImportController {
     }
 
     @PostMapping(value = "/pdf-to-rag",
-            params = "!embed",
+            params = {"!embed", "embeddingPolicy!=ASYNC"},
             consumes = MediaType.MULTIPART_FORM_DATA_VALUE,
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> importPdfToRagWithEmbeddingDefault(
@@ -265,7 +292,45 @@ public class PdfImportController {
 
     ResponseEntity<Object> importPdfToRagWithoutEmbedding(
             MultipartFile file, Long collectionId) {
-        return importPdfToRagWithoutEmbedding(file, collectionId, null);
+        return importPdfToRagWithoutEmbedding(file, collectionId, null, null);
+    }
+
+    ResponseEntity<Object> importPdfToRagWithoutEmbedding(
+            MultipartFile file, Long collectionId, String collectionKey) {
+        return importPdfToRagWithoutEmbedding(file, collectionId, collectionKey, null);
+    }
+
+    private ResponseEntity<Object> importPdfToRagWithPolicy(
+            MultipartFile file, Long collectionId, String collectionKey, EmbeddingPolicy policy) {
+        try {
+            String filename = requirePdfFilename(file);
+            Long effectiveCollectionId = resolveWritableCollectionId(
+                    collectionId, collectionKey);
+            PdfImportService.PdfImportResult importResult = pdfImportService.importPdf(file, null);
+            PdfToRagService.PdfToRagResult ragResult = pdfToRagService.importPdfToRag(
+                    importResult.entryMarkdown(),
+                    filename,
+                    effectiveCollectionId,
+                    policy,
+                    false);
+            return ResponseEntity.ok(new PdfToRagResponse(
+                    ragResult.documentId(),
+                    ragResult.title(),
+                    ragResult.newlyCreated(),
+                    ragResult.embedStatus(),
+                    ragResult.embedMessage(),
+                    ragResult.chunksCreated(),
+                    importResult.uuid(),
+                    importResult.entryMarkdown(),
+                    ragResult.embeddingAction(),
+                    ragResult.embeddingJobId(),
+                    ragResult.embeddingBatchId()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(ErrorResponse.of(e.getMessage()));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(ErrorResponse.of("PDF-to-RAG import failed: " + e.getMessage()));
+        }
     }
 
     ResponseEntity<SseEmitter> importPdfToRagWithEmbedding(
@@ -426,7 +491,25 @@ public class PdfImportController {
             @ApiResponse(responseCode = "500", description = "Internal error during embedding")
     })
     @PostMapping(value = "/{uuid}/embed",
-            params = "embed=sync",
+            params = "embeddingPolicy=ASYNC",
+            produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<Object> triggerEmbeddingAsync(
+            @PathVariable("uuid") String uuid,
+            @RequestParam(value = "collectionId", required = false) Long collectionId,
+            @RequestParam(value = "collectionKey", required = false) String collectionKey,
+            @RequestParam(value = "embed", required = false) String embed,
+            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
+        if ("sse".equalsIgnoreCase(embed)) {
+            throw new RagException(
+                    ErrorCode.BAD_REQUEST,
+                    "embeddingPolicy=ASYNC cannot be combined with embed=sse; observe the job API");
+        }
+        return triggerEmbeddingWithPolicy(
+                uuid, collectionId, collectionKey, EmbeddingPolicy.ASYNC, forceReembed);
+    }
+
+    @PostMapping(value = "/{uuid}/embed",
+            params = {"embed=sync", "embeddingPolicy!=ASYNC"},
             produces = MediaType.APPLICATION_JSON_VALUE)
     public ResponseEntity<Object> triggerEmbeddingSync(
             @Parameter(description = "Virtual directory UUID of the imported PDF")
@@ -436,7 +519,13 @@ public class PdfImportController {
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @Parameter(description = "Force re-embedding even if content unchanged (default: false)")
-            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed) {
+            @RequestParam(value = "forceReembed", defaultValue = "false") boolean forceReembed,
+            @RequestParam(value = "embeddingPolicy", required = false) EmbeddingPolicy embeddingPolicy) {
+        EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(embeddingPolicy, true);
+        if (policy != EmbeddingPolicy.SYNC) {
+            return triggerEmbeddingWithPolicy(
+                    uuid, collectionId, collectionKey, policy, forceReembed);
+        }
 
         if (uuid == null || uuid.isBlank()) {
             return ResponseEntity.badRequest()
@@ -470,11 +559,42 @@ public class PdfImportController {
 
     ResponseEntity<Object> triggerEmbeddingSync(
             String uuid, Long collectionId, boolean forceReembed) {
-        return triggerEmbeddingSync(uuid, collectionId, null, forceReembed);
+        return triggerEmbeddingSync(uuid, collectionId, null, forceReembed, null);
+    }
+
+    ResponseEntity<Object> triggerEmbeddingSync(
+            String uuid, Long collectionId, String collectionKey, boolean forceReembed) {
+        return triggerEmbeddingSync(uuid, collectionId, collectionKey, forceReembed, null);
+    }
+
+    private ResponseEntity<Object> triggerEmbeddingWithPolicy(
+            String uuid, Long collectionId, String collectionKey,
+            EmbeddingPolicy policy, boolean forceReembed) {
+        if (policy == EmbeddingPolicy.SKIP) {
+            throw new RagException(
+                    ErrorCode.BAD_REQUEST,
+                    "embeddingPolicy=SKIP is not allowed on explicit embed endpoints");
+        }
+        Long effectiveCollectionId = resolveWritableCollectionId(
+                collectionId, collectionKey);
+        PdfToRagService.PdfToRagResult result = pdfToRagService.triggerEmbedding(
+                uuid, effectiveCollectionId, policy, forceReembed);
+        return ResponseEntity.ok(new PdfToRagResponse(
+                result.documentId(),
+                result.title(),
+                result.newlyCreated(),
+                result.embedStatus(),
+                result.embedMessage(),
+                result.chunksCreated(),
+                uuid,
+                uuid + "/default.md",
+                result.embeddingAction(),
+                result.embeddingJobId(),
+                result.embeddingBatchId()));
     }
 
     @PostMapping(value = "/{uuid}/embed",
-            params = "embed=sse",
+            params = {"embed=sse", "embeddingPolicy!=ASYNC"},
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> triggerEmbeddingSse(
             @PathVariable("uuid") String uuid,
@@ -492,7 +612,7 @@ public class PdfImportController {
     }
 
     @PostMapping(value = "/{uuid}/embed",
-            params = "!embed",
+            params = {"!embed", "embeddingPolicy!=ASYNC"},
             produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> triggerEmbeddingSseDefault(
             @PathVariable("uuid") String uuid,

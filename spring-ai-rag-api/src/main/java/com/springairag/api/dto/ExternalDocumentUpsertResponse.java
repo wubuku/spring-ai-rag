@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
+import java.util.UUID;
 
 /**
  * Result of an external document upsert.
@@ -22,6 +23,29 @@ public record ExternalDocumentUpsertResponse(
         String processingStatus,
         LocalDateTime sourceDeletedAt,
         String errorCode,
-        String error
+        String error,
+        String embeddingAction,
+        UUID embeddingJobId,
+        UUID embeddingBatchId
 ) {
+    public ExternalDocumentUpsertResponse(
+            Long documentId,
+            String collectionKey,
+            String externalId,
+            String sourceRevision,
+            String action,
+            boolean contentChanged,
+            int versionNumber,
+            String embeddingStatus,
+            String embeddingProfileKey,
+            boolean embeddingFresh,
+            String processingStatus,
+            LocalDateTime sourceDeletedAt,
+            String errorCode,
+            String error) {
+        this(documentId, collectionKey, externalId, sourceRevision, action,
+                contentChanged, versionNumber, embeddingStatus, embeddingProfileKey,
+                embeddingFresh, processingStatus, sourceDeletedAt, errorCode, error,
+                null, null, null);
+    }
 }

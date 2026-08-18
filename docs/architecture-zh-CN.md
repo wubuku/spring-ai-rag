@@ -281,6 +281,10 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
 - Collection 条件通过 `d.collection_id` 直接下推到检索 SQL；selected ID 与显式
   document ID 使用 PostgreSQL `bigint[]` JDBC 数组参数。因此范围成本取决于选中的
   Collection 数量，而不是这些 Collection 包含的全部文档数。
+- 可选 `filters.metadataContains` / `filters.payloadContains` 通过 PostgreSQL
+  `@>` 下推到同一候选 SQL（V36 GIN）。这不是查询语言；未知字段或空对象返回 `400`。
+- 检索诊断（V35）记录 outcome / empty-reason / 过滤器摘要，默认不存 query 明文。
+  Search/Chat 空结果会返回 `X-RAG-Retrieval-Trace-Id`；写入失败 fail-open。
 - 结果是在有效 Collection 并集上计算一次全局 top-k；“每个选中 Collection 都必须贡献
   结果”的独立 `EACH_COLLECTION` 行为尚未实现。
 - WebUI Chat 与 Search 均提供三种模式；selected 模式支持服务端搜索、每页 50 项、
@@ -340,11 +344,13 @@ EmbeddingBatchService
 POST /api/v1/rag/embedding-jobs
   │ documentIds 或授权后的 Collection scope
   ▼
-rag_embedding_jobs（V33）
+rag_embedding_jobs（V33/V37）
   │ active job coalesce + bounded retry
+  │ origin / requested_by_principal_id
   ▼
 EmbeddingJobWorker
-  │ SKIP LOCKED claim + lease
+  │ 条件 UPDATE ... RETURNING 原子 claim + lease + heartbeat
+  │ worker-concurrency 限制
   │ provider 调用前后检查取消/Profile/version/content hash
   ▼
 DocumentEmbedService.embedDocumentForJob
@@ -353,7 +359,10 @@ DocumentEmbedService.embedDocumentForJob
 SUCCEEDED | FAILED | CANCELLED | STALE
 ```
 
-任务表不复制文档正文。同步 embed API 继续存在；job worker 默认关闭，允许按部署逐步启用。
+任务表不复制文档正文。写入 API 可通过 `embeddingPolicy` 选择 `SYNC` / `ASYNC` /
+`SKIP`；省略时保持 `embed=true→SYNC`、`embed=false→SKIP`。显式 embed/re-embed 拒绝
+`SKIP`。`ASYNC` 要求 `rag.embedding-jobs.enabled=true`，否则 `503`。job worker 默认
+关闭，允许按部署逐步启用。就绪接口按 Collection 返回互斥计数。
 
 ### 4.4 JSON 结构化记录流程
 
@@ -394,7 +403,8 @@ HybridRetrieverService -> 排序后的 document IDs
 `retrievalText` 的语义对应关系由调用者负责，服务只保存二者，不尝试互相校验。
 仅更新 payload 会创建审计版本，但保留新鲜 embedding。这是一条明确的 JSONB 专用路径，
 公开 upsert/search 请求优先使用 Collection key，响应在 deprecated 内部 ID 旁返回 key；
-持久化、advisory lock 与检索候选仍使用内部 ID。
+持久化与检索候选仍使用内部 ID。同一外部身份由数据库唯一约束、JPA `@Version` 和有界
+事务重试协调，不使用 advisory lock。
 V34 为 enabled `json-record` 增加 partial GIN `jsonb_path_ops` 索引。
 可选 `searchJsonRecords` Spring AI Tool 默认关闭；启用后由服务端注入授权范围，模型只能
 提供自然语言 query、JSON 子树和结果数，不能提供 Collection、SQL 或 JSONPath。
@@ -408,8 +418,8 @@ POST /api/v1/rag/documents/upsert
   ▼
 ExternalDocumentService
   │ 通过 API Key ACL 解析可写 Collection
-  │ pg_advisory_xact_lock(collectionId + externalId)
-  │ CAS / 精确重放判断 + 版本快照
+  │ 唯一身份约束 + @Version/CAS + 有界事务重试
+  │ 精确重放判断 + 版本快照
   ▼
 rag_documents（保留同一个 documentId）
   │ 内容变化 -> 当前 embedding 变为 stale
@@ -421,13 +431,21 @@ DocumentEmbedService（持久化事务提交后）
 ```
 
 普通外部文档与 JSON record 共享 Collection 级唯一身份
-`(collection_id, external_id)` 以及 advisory lock 命名空间。
+`(collection_id, external_id)`。唯一索引是首次并发创建的最终仲裁者，已有行更新使用
+乐观版本；冲突只做有界重试。
 `sourceRevision` 是 opaque 令牌；版本只做相等判断和可选的
 `expectedSourceRevision` compare-and-set，不按大小判断新旧。来源删除使用 tombstone
 （`enabled=false` 加 `source_deleted_at`）。之后使用与 tombstone 不同的后续
 `sourceRevision` 可以恢复同一个内部文档；服务不比较 revision 的大小或新旧。
 检索要求文档 enabled 且活动 Embedding Profile 存在当前内容的 fresh completed 状态，
 因此旧向量可以物理保留用于诊断，但不会返回给调用方。
+
+**数据访问并发规则**：生产数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、
+JPA `PESSIMISTIC_*` 和 PostgreSQL advisory lock。worker 使用带状态、owner、lease 和
+快照条件的 `UPDATE/DELETE ... RETURNING`；版本分配使用原子计数器；并发槽位和外部身份
+使用唯一约束与 `ON CONFLICT DO NOTHING`；文档提交使用版本/content hash CAS。普通短事务
+写入仍会由 PostgreSQL 内部获取必要的行/索引锁，这不属于应用显式悲观协调。规则由
+`scripts/verify-no-pessimistic-locks.sh` 守护。
 
 ### 4.6 OpenAI Chat Completions 兼容流
 
@@ -456,6 +474,19 @@ ChatExecutionService
 共享执行内核，但使用独立 DTO、错误信封和标准 SSE 映射，不暴露原生 RAG
 `tool_start/tool_result/sources/done` 事件。
 
+### 4.7 受管质量套件与 Citation
+
+Chat 在启用时把协议级 `citationValidation` 写入 metadata；只解析约定的 `[S1]` token，
+不是覆盖率评分。受管套件（V38）默认关闭：version 一经创建不可变，相关文档必须使用
+`collectionKey + externalId`。compare 只允许同一 version，环境漂移单独标记。suite
+worker 会按 owner 的 `db:{keyId}` 重新加载当前数据库 API Key，并在检索前再次授权
+定义中的 Collection；Key 缺失、停用或 ACL 被收回时 run 以 `FAILED` /
+`AUTHORIZATION_CHANGED` 结束。`local:` / `root:` / `legacy:` principal 与 HTTP
+关闭鉴权时一样视为 unrestricted。可选 `POST /evaluation/semantic` 按 Spring AI
+1.1.4 反射适配（`FactCheckingEvaluator.builder`、
+`RelevancyEvaluator(ChatClient.Builder)`、带 `Document` 的 `EvaluationRequest`）；
+类或 ChatClient 缺失时返回 `DISABLED`。
+
 ---
 
 ## 5. 数据库设计
@@ -479,6 +510,10 @@ rag_user_feedback       # 用户反馈
 rag_alerts              # 告警记录
 rag_slo_config          # SLO 配置
 rag_retrieval_evaluations  # 检索质量评估
+rag_evaluation_suites      # 受管质量套件（V38，默认关闭）
+rag_evaluation_suite_versions
+rag_evaluation_runs
+rag_evaluation_case_results
 rag_audit_log           # 审计日志（集合操作）
 ```
 
@@ -492,9 +527,10 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile 级缓存与完成状态 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
-| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at | V33 持久化 embedding/reindex 状态机 |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at, origin | V33/V37 持久化 embedding/reindex 状态机 |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
-| `rag_retrieval_logs` | query, strategy, result_count, latency_ms | 检索质量追踪 |
+| `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
+| `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |
 
 **索引策略**：
 - `rag_collection.collection_key`：命名的全局唯一约束/B-Tree；可见 ASCII CHECK 和
@@ -503,7 +539,8 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.content_hash`：B-Tree（哈希去重）
 - `rag_documents`：GIN 索引（全文检索，jiebacfg 中文分词）
 - `rag_documents.jsonb_payload`：V34 partial GIN `jsonb_path_ops`（enabled JSON record 的 `@>` 包含过滤）
-- `rag_embedding_jobs`：活动任务 partial unique、claim、batch 与 document 索引
+- `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
+- `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
 
 ### 5.3 全文检索配置
 

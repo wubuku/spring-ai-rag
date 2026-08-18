@@ -1,8 +1,12 @@
 package com.springairag.core.embeddingjob;
 
+import com.springairag.api.dto.CollectionEmbeddingReadinessResponse;
 import com.springairag.api.dto.EmbeddingJobBatchResponse;
 import com.springairag.api.dto.EmbeddingJobCreateRequest;
+import com.springairag.api.dto.EmbeddingJobPageResponse;
 import com.springairag.api.dto.EmbeddingJobResponse;
+import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
@@ -87,7 +91,9 @@ public class EmbeddingJobService {
                                     ? document.getVersion()
                                     : 0L,
                             request.force(),
-                            maxAttempts);
+                            maxAttempts,
+                            "API",
+                            ChatPrincipal.fromCurrentRequest().id());
             if (result.coalesced()) {
                 coalesced++;
             }
@@ -112,16 +118,68 @@ public class EmbeddingJobService {
             EmbeddingJobStatus status,
             int page,
             int size) {
+        return listPage(batchId, status, null, page, size).items();
+    }
+
+    public EmbeddingJobPageResponse listPage(
+            UUID batchId,
+            EmbeddingJobStatus status,
+            String collectionKey,
+            int page,
+            int size) {
         RagApiKey caller = ApiKeyCollectionAccess.currentKey();
-        return jobRepository.list(
-                        batchId,
-                        status,
-                        size,
-                        Math.max(0, page) * Math.max(1, size))
-                .stream()
-                .filter(job -> isVisible(job.documentId(), caller))
-                .map(job -> toResponse(job, false))
-                .toList();
+        Long collectionId = resolveListCollectionId(collectionKey, caller);
+        java.util.List<Long> allowed = ApiKeyCollectionAccess
+                .restrictedCollectionIds(caller)
+                .map(java.util.ArrayList::new)
+                .orElse(null);
+        int pageSize = Math.max(1, Math.min(200, size));
+        int pageIndex = Math.max(0, page);
+        EmbeddingJobRepository.PageResult result = jobRepository.listPage(
+                batchId,
+                status,
+                collectionId,
+                allowed,
+                pageSize,
+                pageIndex * pageSize);
+        int totalPages = result.totalElements() == 0
+                ? 0
+                : (int) Math.ceil(result.totalElements() / (double) pageSize);
+        return new EmbeddingJobPageResponse(
+                result.items().stream()
+                        .map(job -> toResponse(job, false))
+                        .toList(),
+                pageIndex,
+                pageSize,
+                result.totalElements(),
+                totalPages);
+    }
+
+    public CollectionEmbeddingReadinessResponse readiness(String collectionKey) {
+        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        Long collectionId = resolveListCollectionId(collectionKey, caller);
+        if (collectionId == null) {
+            throw new IllegalArgumentException("collectionKey is required");
+        }
+        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        return jobRepository.readiness(collectionId, collectionKey, profile);
+    }
+
+    private Long resolveListCollectionId(String collectionKey, RagApiKey caller) {
+        if (collectionKey == null || collectionKey.isBlank()) {
+            return null;
+        }
+        RetrievalScope scope = scopeResolver.resolve(
+                CollectionScopeMode.SELECTED_COLLECTIONS,
+                null,
+                List.of(collectionKey),
+                null,
+                null,
+                caller);
+        if (scope.matchNone() || scope.collectionIds().isEmpty()) {
+            throw new SecurityException("Collection is not authorized");
+        }
+        return scope.collectionIds().getFirst();
     }
 
     public EmbeddingJobResponse cancel(UUID id) {
@@ -312,6 +370,8 @@ public class EmbeddingJobService {
                 job.startedAt(),
                 job.finishedAt(),
                 job.updatedAt(),
-                coalesced);
+                coalesced,
+                job.origin(),
+                job.requestedByPrincipalId());
     }
 }

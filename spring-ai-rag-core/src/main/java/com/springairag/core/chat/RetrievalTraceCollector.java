@@ -1,6 +1,9 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalBranchStage;
+import com.springairag.core.retrieval.RetrievalOutcome;
 
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -28,18 +31,42 @@ public class RetrievalTraceCollector {
             new ConcurrentLinkedQueue<>();
     private final AtomicInteger retrievalCalls = new AtomicInteger();
     private final AtomicInteger toolRounds = new AtomicInteger();
+    private final AtomicReference<RetrievalOutcome> latestOutcome =
+            new AtomicReference<>();
     private final int maxRetrievalCalls;
     private final int maxToolRounds;
     private final int maxUniqueSources;
+    private final RetrievalTraceSession parentSession;
+    private final String attemptKey;
+    private volatile boolean lastBudgetExhausted;
 
     public RetrievalTraceCollector() {
         this(3, 3, 20);
     }
 
     public RetrievalTraceCollector(int maxRetrievalCalls, int maxToolRounds, int maxUniqueSources) {
+        this(maxRetrievalCalls, maxToolRounds, maxUniqueSources, null, null);
+    }
+
+    public RetrievalTraceCollector(
+            int maxRetrievalCalls,
+            int maxToolRounds,
+            int maxUniqueSources,
+            RetrievalTraceSession parentSession,
+            String attemptKey) {
         this.maxRetrievalCalls = Math.max(1, maxRetrievalCalls);
         this.maxToolRounds = Math.max(1, maxToolRounds);
         this.maxUniqueSources = Math.max(1, maxUniqueSources);
+        this.parentSession = parentSession;
+        this.attemptKey = attemptKey;
+    }
+
+    public RetrievalTraceSession parentSession() {
+        return parentSession;
+    }
+
+    public String attemptKey() {
+        return attemptKey;
     }
 
     public void setEffectiveQuery(String query) {
@@ -56,9 +83,50 @@ public class RetrievalTraceCollector {
     public boolean tryBeginRetrieval(String query) {
         if (retrievalCalls.incrementAndGet() > maxRetrievalCalls) {
             retrievalCalls.decrementAndGet();
+            lastBudgetExhausted = true;
+            if (parentSession != null) {
+                parentSession.recordBudgetExhausted(attemptKey, query);
+            }
             return false;
         }
+        lastBudgetExhausted = false;
         return true;
+    }
+
+    public boolean lastBudgetExhausted() {
+        return lastBudgetExhausted;
+    }
+
+    public void recordOutcome(RetrievalOutcome outcome) {
+        if (outcome == null) {
+            return;
+        }
+        latestOutcome.set(outcome);
+        record(outcome.originalQuery(), outcome.results());
+        if (parentSession != null) {
+            parentSession.recordRetrieval(attemptKey, outcome);
+        }
+    }
+
+    public void recordRerank(
+            RetrievalBranchStage stage,
+            List<RetrievalResult> results,
+            boolean degraded) {
+        RetrievalOutcome previous = latestOutcome.get();
+        RetrievalOutcome replacement = (previous != null
+                ? previous
+                : RetrievalOutcome.ofResults(results))
+                .withRerank(stage, results, degraded);
+        latestOutcome.set(replacement);
+        record(replacement.originalQuery(), replacement.results());
+        if (parentSession != null) {
+            parentSession.replaceRetrieval(
+                    attemptKey, previous, replacement);
+        }
+    }
+
+    public RetrievalOutcome latestOutcome() {
+        return latestOutcome.get();
     }
 
     public boolean tryBeginToolRound() {
@@ -161,6 +229,10 @@ public class RetrievalTraceCollector {
             long elapsedMs) {
         toolEvents.add(new ChatEvent.ToolFinished(
                 toolCallId, tool, resultCount, elapsedMs));
+        if (parentSession != null) {
+            parentSession.recordToolCall(
+                    attemptKey, tool, resultCount, elapsedMs, lastBudgetExhausted);
+        }
     }
 
     public List<ChatEvent> drainToolEvents() {

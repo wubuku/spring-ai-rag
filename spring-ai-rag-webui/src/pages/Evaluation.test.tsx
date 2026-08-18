@@ -21,16 +21,22 @@ vi.mock('../api/evaluation', () => ({
     getFeedbackHistory: vi.fn().mockResolvedValue({ data: [] }),
     evaluate: vi.fn(),
     answerQuality: vi.fn(),
+    listSuites: vi.fn().mockResolvedValue({ data: [] }),
+    createSuite: vi.fn(),
+    createVersion: vi.fn(),
+    createRun: vi.fn(),
+    getRun: vi.fn(),
+    listCitationTraces: vi.fn().mockResolvedValue({ data: { items: [] } }),
   },
 }));
 
-function renderPage() {
+function renderPage(path = '/') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>
         <Evaluation />
       </MemoryRouter>
     </QueryClientProvider>
@@ -46,5 +52,11 @@ describe('Evaluation page', () => {
     renderPage();
     expect(screen.getByText('evaluation.title')).toBeInTheDocument();
     expect(await screen.findByText('evaluation.avgMrr')).toBeInTheDocument();
+  });
+
+  it('renders suites tab without crashing on an empty list', async () => {
+    renderPage('/?tab=suites');
+    expect(await screen.findByLabelText('evaluation.tabSuites')).toBeInTheDocument();
+    expect(screen.getByText('evaluation.suitesHint')).toBeInTheDocument();
   });
 });

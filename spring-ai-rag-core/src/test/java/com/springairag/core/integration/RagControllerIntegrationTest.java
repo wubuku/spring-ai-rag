@@ -15,7 +15,9 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.repository.*;
 import com.springairag.core.retrieval.EmbeddingBatchService;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.AlertService;
 import com.springairag.core.service.CollectionDocumentResolver;
@@ -181,7 +183,8 @@ class RagControllerIntegrationTest {
                             .build();
             when(ragChatService.chat(
                     any(com.springairag.api.dto.ChatRequest.class),
-                    any(RetrievalScope.class)))
+                    any(RetrievalScope.class),
+                    nullable(RetrievalTraceSession.class)))
                     .thenReturn(mockResponse);
 
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -204,7 +207,8 @@ class RagControllerIntegrationTest {
                             .build();
             when(ragChatService.chat(
                     any(com.springairag.api.dto.ChatRequest.class),
-                    any(RetrievalScope.class)))
+                    any(RetrievalScope.class),
+                    nullable(RetrievalTraceSession.class)))
                     .thenReturn(mockResponse);
 
             mockMvc.perform(post("/api/v1/rag/chat/ask")
@@ -271,7 +275,8 @@ class RagControllerIntegrationTest {
 
             when(ragChatService.chatEvents(
                     any(com.springairag.api.dto.ChatRequest.class),
-                    any(RetrievalScope.class)))
+                    any(RetrievalScope.class),
+                    nullable(RetrievalTraceSession.class)))
                     .thenReturn(Flux.just(
                             new ChatEvent.ContentDelta("已找到："),
                             new ChatEvent.ToolStarted(
@@ -330,7 +335,8 @@ class RagControllerIntegrationTest {
         void chatStream_emitsErrorWithoutDoneWhenExecutionFails() throws Exception {
             when(ragChatService.chatEvents(
                     any(com.springairag.api.dto.ChatRequest.class),
-                    any(RetrievalScope.class)))
+                    any(RetrievalScope.class),
+                    nullable(RetrievalTraceSession.class)))
                     .thenReturn(Flux.error(new RuntimeException("model unavailable")));
 
             MvcResult started = mockMvc.perform(post("/api/v1/rag/chat/stream")
@@ -425,10 +431,10 @@ class RagControllerIntegrationTest {
         @Test
         void search_get_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
-            when(hybridRetrieverService.searchInScope(
+            when(hybridRetrieverService.searchInScopeDetailed(
                     eq("test query"), any(RetrievalScope.class),
-                    isNull(), eq(5), any()))
-                    .thenReturn(List.of(result));
+                    isNull(), eq(5), any(), any()))
+                    .thenReturn(RetrievalOutcome.ofResults(List.of(result)));
 
             mockMvc.perform(get("/api/v1/rag/search")
                             .param("query", "test query")
@@ -441,10 +447,10 @@ class RagControllerIntegrationTest {
 
         @Test
         void search_get_defaultParams() throws Exception {
-            when(hybridRetrieverService.searchInScope(
+            when(hybridRetrieverService.searchInScopeDetailed(
                     eq("default"), any(RetrievalScope.class),
-                    isNull(), eq(10), any()))
-                    .thenReturn(List.of());
+                    isNull(), eq(10), any(), any()))
+                    .thenReturn(RetrievalOutcome.ofResults(List.of()));
 
             mockMvc.perform(get("/api/v1/rag/search")
                             .param("query", "default"))
@@ -455,10 +461,10 @@ class RagControllerIntegrationTest {
         @Test
         void search_post_returnsResults() throws Exception {
             RetrievalResult result = new RetrievalResult();
-            when(hybridRetrieverService.searchInScope(
+            when(hybridRetrieverService.searchInScopeDetailed(
                     anyString(), any(RetrievalScope.class),
-                    isNull(), anyInt(), any()))
-                    .thenReturn(List.of(result));
+                    isNull(), anyInt(), any(), any()))
+                    .thenReturn(RetrievalOutcome.ofResults(List.of(result)));
 
             mockMvc.perform(post("/api/v1/rag/search")
                             .contentType(MediaType.APPLICATION_JSON)

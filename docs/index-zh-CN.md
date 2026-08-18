@@ -123,12 +123,12 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V34** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V39** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |
 | `demos/` | basic / component / domain / multi-model |
-| `scripts/` | 启动、E2E、OpenAI/jobs/JSONB 专项验证、goldenset 与质量回归 |
+| `scripts/` | 启动、E2E、OpenAI/jobs/JSONB、检索诊断/过滤、embedding 运营、受管质量、goldenset 与质量回归 |
 
 ---
 

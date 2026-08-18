@@ -87,7 +87,34 @@ public class EmbeddingPersistenceService {
             String chunkerVersion,
             List<TextChunk> chunks,
             List<EmbeddingBatchService.EmbeddingResult> results) {
-        Map<String, Object> document = lockDocument(documentId);
+        replace(
+                documentId,
+                expectedVersion,
+                expectedContentHash,
+                profile,
+                chunkerVersion,
+                chunks,
+                results,
+                EmbeddingCommitGuard.allowAll());
+    }
+
+    /**
+     * 在文档快照 CAS 和可选 worker 提交门保护下原子替换向量。
+     */
+    @Transactional
+    public void replace(
+            long documentId,
+            long expectedVersion,
+            String expectedContentHash,
+            EmbeddingProfile profile,
+            String chunkerVersion,
+            List<TextChunk> chunks,
+            List<EmbeddingBatchService.EmbeddingResult> results,
+            EmbeddingCommitGuard commitGuard) {
+        // The worker guard performs its conditional lease transition inside this
+        // transaction. Ordinary document writes are fenced by the final version CAS.
+        commitGuard.verify();
+        Map<String, Object> document = readDocumentSnapshot(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();
         String actualHash = (String) document.get("content_hash");
         boolean enabled = Boolean.TRUE.equals(document.get("enabled"));
@@ -97,7 +124,6 @@ public class EmbeddingPersistenceService {
             throw new IllegalStateException(
                     "Document changed while embeddings were generated: " + documentId);
         }
-
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         jdbcTemplate.update(
                 "DELETE FROM rag_embeddings WHERE document_id = ? AND embedding_profile_id = ?",
@@ -159,7 +185,7 @@ public class EmbeddingPersistenceService {
             String chunkerVersion,
             String error) {
         String safeError = sanitizeError(error);
-        Map<String, Object> document = lockDocument(documentId);
+        Map<String, Object> document = readDocumentSnapshot(documentId);
         long actualVersion = ((Number) document.get("version")).longValue();
         String actualHash = (String) document.get("content_hash");
         if (actualVersion != expectedVersion || !expectedContentHash.equals(actualHash)) {
@@ -201,10 +227,10 @@ public class EmbeddingPersistenceService {
                 ? masked : masked.substring(0, MAX_ERROR_LENGTH);
     }
 
-    private Map<String, Object> lockDocument(long documentId) {
+    private Map<String, Object> readDocumentSnapshot(long documentId) {
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT version, content_hash, enabled FROM rag_documents "
-                        + "WHERE id = ? FOR UPDATE",
+                        + "WHERE id = ?",
                 documentId);
         if (rows.isEmpty()) {
             throw new IllegalStateException("Document not found during embedding commit: " + documentId);

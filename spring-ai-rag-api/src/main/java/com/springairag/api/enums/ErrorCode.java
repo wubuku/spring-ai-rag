@@ -55,6 +55,7 @@ public enum ErrorCode {
     DOCUMENT_REVISION_CONFLICT(409, "Document Revision Conflict"),
     SESSION_BUSY(409, "Chat Session Busy"),
     CHAT_SESSION_LEASE_LOST(409, "Chat Session Lease Lost"),
+    CONCURRENT_EVALUATION_LIMIT(409, "Concurrent Evaluation Limit"),
 
     // ==================== 422 Unprocessable Entity ====================
 
@@ -78,6 +79,7 @@ public enum ErrorCode {
     LLM_UNAVAILABLE(503, "LLM Service Unavailable"),
     CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
     EMBEDDING_JOBS_DISABLED(503, "Embedding Jobs Disabled"),
+    EVALUATION_SUITES_DISABLED(503, "Evaluation Suites Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

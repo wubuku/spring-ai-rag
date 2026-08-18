@@ -6,10 +6,16 @@ package com.springairag.core.service;
 @FunctionalInterface
 public interface EmbeddingCommitGuard {
 
+    EmbeddingCommitGuard ALLOW_ALL = () -> {
+    };
+
     void verify();
 
     static EmbeddingCommitGuard allowAll() {
-        return () -> {
-        };
+        return ALLOW_ALL;
+    }
+
+    static boolean isAllowAll(EmbeddingCommitGuard guard) {
+        return guard == ALLOW_ALL;
     }
 }

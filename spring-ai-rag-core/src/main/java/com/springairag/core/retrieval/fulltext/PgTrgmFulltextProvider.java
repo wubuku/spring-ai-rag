@@ -3,6 +3,7 @@ package com.springairag.core.retrieval.fulltext;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.RetrievalScopeSql;
@@ -89,7 +90,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             int limit, double minScore, long embeddingProfileId) {
         return searchInScope(
                 query, scope, excludeIds, limit, minScore,
-                embeddingProfileId, null);
+                embeddingProfileId, RetrievalFilters.none());
     }
 
     @Override
@@ -97,9 +98,29 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             String query, RetrievalScope scope, List<Long> excludeIds,
             int limit, double minScore, long embeddingProfileId,
             JsonbContainmentFilter payloadFilter) {
-        if (!available) return Collections.emptyList();
-        if (query == null || query.isBlank()) return Collections.emptyList();
-        if (scope != null && scope.matchNone()) return Collections.emptyList();
+        return searchInScope(
+                query, scope, excludeIds, limit, minScore,
+                embeddingProfileId, RetrievalFilters.ofPayload(payloadFilter));
+    }
+
+    @Override
+    public List<RetrievalResult> searchInScope(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId,
+            RetrievalFilters filters) {
+        return searchInScopeDetailed(
+                query, scope, excludeIds, limit, minScore,
+                embeddingProfileId, filters).results();
+    }
+
+    @Override
+    public SearchResult searchInScopeDetailed(
+            String query, RetrievalScope scope, List<Long> excludeIds,
+            int limit, double minScore, long embeddingProfileId,
+            RetrievalFilters filters) {
+        if (!available) return SearchResult.success(List.of());
+        if (query == null || query.isBlank()) return SearchResult.success(List.of());
+        if (scope != null && scope.matchNone()) return SearchResult.success(List.of());
         
         try {
             // Set low threshold to get more results
@@ -108,9 +129,9 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             List<Map<String, Object>> rows =
                     executeSearch(
                             query.trim(), scope, limit,
-                            embeddingProfileId, payloadFilter);
+                            embeddingProfileId, filters);
             log.debug("pg_trgm search for '{}' returned {} rows", query, rows.size());
-            return rows.stream()
+            List<RetrievalResult> candidates = rows.stream()
                     .filter(row -> !isExcluded(row, excludeIds))
                     .map(row -> {
                         // similarity() can return NULL for edge cases (e.g., empty strings)
@@ -118,27 +139,30 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
                         double score = scoreNum != null ? scoreNum.doubleValue() : 0.0;
                         return toResult(row, score);
                     })
+                    .toList();
+            List<RetrievalResult> results = candidates.stream()
                     .filter(r -> r.getScore() >= minScore)
                     .limit(limit)
                     .toList();
+            return SearchResult.success(results, candidates.size());
         } catch (Exception e) {
             // Resilience: search failure returns empty list (graceful degradation)
             log.warn("pg_trgm search failed for query '{}': {}", query, e.getMessage());
-            return Collections.emptyList();
+            return SearchResult.failure(e.getClass().getSimpleName());
         }
     }
     
     List<Map<String, Object>> executeSearch(
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
-            JsonbContainmentFilter payloadFilter) {
-        if (payloadFilter == null) {
+            RetrievalFilters filters) {
+        if (filters == null || filters.isEmpty()) {
             return executeSearch(
                     query, retrievalScope, limit, embeddingProfileId);
         }
         return executeSearchInternal(
                 query, retrievalScope, limit,
-                embeddingProfileId, payloadFilter);
+                embeddingProfileId, filters);
     }
 
     List<Map<String, Object>> executeSearch(
@@ -146,20 +170,20 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             int limit, long embeddingProfileId) {
         return executeSearchInternal(
                 query, retrievalScope, limit,
-                embeddingProfileId, null);
+                embeddingProfileId, RetrievalFilters.none());
     }
 
     private List<Map<String, Object>> executeSearchInternal(
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
-            JsonbContainmentFilter payloadFilter) {
+            RetrievalFilters filters) {
         String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
                 + "similarity(e.chunk_text, ?) AS score_trgm";
         String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
         RetrievalScopeSql.Fragment fragment =
-                RetrievalScopeSql.build(retrievalScope, payloadFilter);
+                RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
                 + "AND e.chunk_text % ? "
                 + "ORDER BY score_trgm DESC LIMIT ?";

@@ -7,6 +7,8 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
+import com.springairag.core.retrieval.RetrievalFilterValidator;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.springframework.stereotype.Component;
 
@@ -20,11 +22,13 @@ public class ChatCommandMapper {
 
     private final RagProperties ragProperties;
     private final DomainExtensionRegistry domainExtensions;
+    private final RetrievalFilterValidator filterValidator;
 
     public ChatCommandMapper(RagProperties ragProperties,
                              DomainExtensionRegistry domainExtensions) {
         this.ragProperties = ragProperties;
         this.domainExtensions = domainExtensions;
+        this.filterValidator = new RetrievalFilterValidator();
     }
 
     public ChatCommand map(
@@ -62,6 +66,7 @@ public class ChatCommandMapper {
                 request.isUseRerank());
         ChatPrincipal effectivePrincipal = principal != null ? principal : ChatPrincipal.local();
         String sessionId = SessionIdValidator.resolve(request.getSessionId());
+        RetrievalFilters filters = filterValidator.validate(request.getFilters());
         return new ChatCommand(
                 request.getMessage(),
                 sessionId,
@@ -73,7 +78,8 @@ public class ChatCommandMapper {
                 request.getDomainId(),
                 scope,
                 options,
-                request.getMetadata() != null ? request.getMetadata() : Map.of());
+                request.getMetadata() != null ? request.getMetadata() : Map.of())
+                .withFilters(filters);
     }
 
     private boolean hasRetrievalOverride(ChatRequest request) {
@@ -83,6 +89,7 @@ public class ChatCommandMapper {
                 || request.getCollectionScopeMode() != null
                 || request.getCollectionIds() != null
                 || request.getCollectionKeys() != null
-                || request.getDocumentIds() != null;
+                || request.getDocumentIds() != null
+                || request.getFilters() != null;
     }
 }

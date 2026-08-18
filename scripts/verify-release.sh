@@ -466,6 +466,7 @@ trap finalize EXIT
 
 run_gate "Prerequisites" require_commands
 run_gate "Project documentation" ./scripts/verify-project-docs.sh
+run_gate "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_gate "Shell syntax" check_shell_syntax
 run_gate "Git diff check" git diff --check
 run_gate "Release versions" check_release_versions

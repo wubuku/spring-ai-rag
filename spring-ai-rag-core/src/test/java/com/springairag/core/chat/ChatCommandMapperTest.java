@@ -1,6 +1,9 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.dto.ChatRequest;
+import com.springairag.api.dto.RetrievalFilterRequest;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
@@ -73,5 +76,41 @@ class ChatCommandMapperTest {
                         ChatPrincipal.local()));
 
         assertEquals(ErrorCode.UNKNOWN_DOMAIN, error.getErrorCodeEnum());
+    }
+
+    @Test
+    void knowledgeModeAttachesValidatedFilters() throws Exception {
+        ChatRequest request = new ChatRequest("按租户检索", "filter-session");
+        RetrievalFilterRequest filters = new RetrievalFilterRequest();
+        filters.setMetadataContains(new ObjectMapper().readTree(
+                "{\"tenant\":\"acme\"}"));
+        request.setFilters(filters);
+
+        ChatCommand command = mapper.map(
+                request, RetrievalScope.unscoped(), ChatPrincipal.local());
+
+        RetrievalFilters attached = command.retrievalFilters();
+        assertEquals("{\"tenant\":\"acme\"}",
+                attached.metadataContains().canonicalJson());
+    }
+
+    @Test
+    void plainModeRejectsFilters() throws Exception {
+        ChatRequest request = new ChatRequest("普通对话", "plain-session");
+        request.setMode(ChatMode.PLAIN);
+        RetrievalFilterRequest filters = new RetrievalFilterRequest();
+        filters.setMetadataContains(new ObjectMapper().readTree(
+                "{\"tenant\":\"acme\"}"));
+        request.setFilters(filters);
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> mapper.map(
+                        request,
+                        RetrievalScope.unscoped(),
+                        ChatPrincipal.local()));
+        assertEquals(
+                ErrorCode.RETRIEVAL_OPTIONS_NOT_ALLOWED,
+                error.getErrorCodeEnum());
     }
 }

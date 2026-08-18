@@ -7,7 +7,10 @@ import com.springairag.core.chat.ChatInputMessage;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.retrieval.RetrievalFilterValidator;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.api.enums.ChatMode;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -35,6 +38,7 @@ public class OpenAiChatRequestMapper {
     private final OpenAiModelAliasRegistry aliasRegistry;
     private final OpenAiRequestRetrievalScopeAdapter scopeAdapter;
     private final RagProperties properties;
+    private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
 
     public OpenAiChatRequestMapper(
             OpenAiModelAliasRegistry aliasRegistry,
@@ -57,10 +61,26 @@ public class OpenAiChatRequestMapper {
                     "rag",
                     "unsupported_parameter");
         }
+        if (rag != null
+                && rag.getFilters() != null
+                && !rag.getFilters().getAdditionalProperties().isEmpty()) {
+            throw OpenAiProtocolException.invalid(
+                    "Unsupported rag.filters fields: "
+                            + rag.getFilters().getAdditionalProperties().keySet(),
+                    "rag.filters",
+                    "unsupported_parameter");
+        }
+        RetrievalFilters filters = resolveFilters(rag);
         OpenAiModelAliasRegistry.ResolvedAlias alias = aliasRegistry.resolve(
                 request.getModel(),
                 rag != null ? rag.getMode() : null,
                 rag != null ? rag.getMemory() : null);
+        if (alias.mode() == ChatMode.PLAIN && !filters.isEmpty()) {
+            throw OpenAiProtocolException.invalid(
+                    "rag.filters is not allowed when mode is PLAIN",
+                    "rag.filters",
+                    "unsupported_parameter");
+        }
         RetrievalScope scope = scopeAdapter.resolve(rag, httpRequest);
         List<ChatInputMessage> inputMessages = parseMessages(
                 request.getMessages());
@@ -100,11 +120,28 @@ public class OpenAiChatRequestMapper {
                 retrievalOptions,
                 metadata,
                 inputMessages,
-                alias.candidates());
+                alias.candidates())
+                .withFilters(filters);
         return new MappedRequest(
                 alias.alias(),
                 Boolean.TRUE.equals(request.getStream()),
                 command);
+    }
+
+    private RetrievalFilters resolveFilters(OpenAiChatCompletionRequest.RagOptions rag) {
+        if (rag == null || rag.getFilters() == null) {
+            return RetrievalFilters.none();
+        }
+        try {
+            return filterValidator.validate(
+                    rag.getFilters().getMetadataContains(),
+                    rag.getFilters().getPayloadContains());
+        } catch (IllegalArgumentException e) {
+            throw OpenAiProtocolException.invalid(
+                    e.getMessage(),
+                    "rag.filters",
+                    "invalid_value");
+        }
     }
 
     private void validateRequest(OpenAiChatCompletionRequest request) {

@@ -7,9 +7,13 @@ import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.api.openai.OpenAiChatCompletionResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.api.openai.OpenAiModelResponse;
+import com.springairag.core.chat.ChatCommand;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatExecutionResult;
 import com.springairag.core.chat.ChatExecutionService;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.openai.OpenAiChatRequestMapper;
 import com.springairag.core.openai.OpenAiModelAliasRegistry;
 import jakarta.servlet.http.HttpServletRequest;
@@ -52,6 +56,7 @@ public class OpenAiCompatibilityController {
     private final OpenAiChatRequestMapper requestMapper;
     private final ChatExecutionService executionService;
     private final ObjectMapper objectMapper;
+    private RetrievalDiagnosticsService diagnosticsService;
 
     public OpenAiCompatibilityController(
             OpenAiModelAliasRegistry aliasRegistry,
@@ -62,6 +67,11 @@ public class OpenAiCompatibilityController {
         this.requestMapper = requestMapper;
         this.executionService = executionService;
         this.objectMapper = objectMapper;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDiagnosticsService(RetrievalDiagnosticsService diagnosticsService) {
+        this.diagnosticsService = diagnosticsService;
     }
 
     @GetMapping("/models")
@@ -85,27 +95,50 @@ public class OpenAiCompatibilityController {
             HttpServletRequest httpRequest) {
         OpenAiChatRequestMapper.MappedRequest mapped =
                 requestMapper.map(request, httpRequest);
+        ChatCommand command = attachTrace(mapped.command());
         String completionId = "chatcmpl-" + UUID.randomUUID()
                 .toString().replace("-", "");
         long created = Instant.now().getEpochSecond();
+        String traceId = command.retrievalTraceSession() != null
+                ? command.retrievalTraceSession().traceId().toString()
+                : null;
         if (!mapped.stream()) {
             ChatExecutionResult result =
-                    executionService.execute(mapped.command());
-            return ResponseEntity.ok()
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(jsonResponse(toResponse(
-                            completionId,
-                            created,
-                            mapped.modelAlias(),
-                            result)));
+                    executionService.execute(command);
+            ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
+                    .contentType(MediaType.APPLICATION_JSON);
+            if (traceId != null) {
+                builder.header(RetrievalTraceHeaders.TRACE_ID, traceId);
+            }
+            return builder.body(jsonResponse(toResponse(
+                    completionId,
+                    created,
+                    mapped.modelAlias(),
+                    result)));
         }
 
         SseEmitter stream = streamResponse(
-                completionId, created, mapped);
-        return ResponseEntity.ok()
+                completionId, created,
+                new OpenAiChatRequestMapper.MappedRequest(
+                        mapped.modelAlias(), mapped.stream(), command));
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok()
                 .contentType(MediaType.TEXT_EVENT_STREAM)
-                .cacheControl(CacheControl.noCache())
-                .body(stream);
+                .cacheControl(CacheControl.noCache());
+        if (traceId != null) {
+            builder.header(RetrievalTraceHeaders.TRACE_ID, traceId);
+        }
+        return builder.body(stream);
+    }
+
+    private ChatCommand attachTrace(ChatCommand command) {
+        if (diagnosticsService == null || !diagnosticsService.isEnabled()) {
+            return command;
+        }
+        RetrievalTraceSession session = diagnosticsService.createSession(
+                command.principal(),
+                RetrievalTraceHeaders.OPERATION_OPENAI_CHAT,
+                command.sessionId());
+        return command.withTraceSession(session);
     }
 
     private ResponseBodyEmitter jsonResponse(Object value) {

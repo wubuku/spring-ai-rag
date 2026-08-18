@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V34 |
+| Flyway | V1–V39 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -270,10 +270,27 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 ```
 
 脚本覆盖 service、worker、HTTP API、V33 migration、活动任务 coalesce 与双 worker
-`SKIP LOCKED` claim。默认自动启动隔离的 `pgvector/pgvector:pg16` 容器；已有数据库时可用
+原子条件 claim。默认自动启动隔离的 `pgvector/pgvector:pg16` 容器；已有数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL`、`EMBEDDING_JOBS_IT_USERNAME` 和
 `EMBEDDING_JOBS_IT_PASSWORD` 覆盖。验证日志位于
 `.verification/embedding-jobs/<run-id>/`。
+
+### 检索诊断 / metadata 过滤 / 嵌入运营 / 受管质量
+
+```bash
+./scripts/verify-retrieval-diagnostics.sh
+./scripts/verify-retrieval-filters.sh
+./scripts/verify-embedding-operations.sh
+./scripts/verify-managed-quality.sh
+./scripts/verify-no-pessimistic-locks.sh
+# 或一次跑完 A–D：
+./scripts/verify-next-high-value-features.sh
+```
+
+这些脚本分别覆盖 V35 诊断、V36 metadata `@>` 下推、V37 embedding 运营分页/readiness，
+V38 受管 suite 与 citation 校验，以及 V39 后的数据访问并发规则。禁锁脚本静态拒绝
+`FOR UPDATE`、`SKIP LOCKED`、JPA `PESSIMISTIC_*` 和 PostgreSQL advisory lock；
+其余脚本默认启动隔离 PostgreSQL，可用对应 `*_IT_JDBC_URL` 覆盖。
 
 ### JSONB 结构化记录一键验证
 

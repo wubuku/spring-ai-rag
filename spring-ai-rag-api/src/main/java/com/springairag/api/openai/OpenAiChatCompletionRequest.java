@@ -1,5 +1,6 @@
 package com.springairag.api.openai;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonAnySetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -122,6 +123,7 @@ public class OpenAiChatCompletionRequest {
         private List<Long> documentIds;
         private ChatMode mode;
         private String memory;
+        private Filters filters;
         private final Map<String, JsonNode> additionalProperties = new LinkedHashMap<>();
 
         public Scope getScope() { return scope; }
@@ -132,6 +134,35 @@ public class OpenAiChatCompletionRequest {
         public void setMode(ChatMode mode) { this.mode = mode; }
         public String getMemory() { return memory; }
         public void setMemory(String memory) { this.memory = memory; }
+        public Filters getFilters() { return filters; }
+        public void setFilters(Filters filters) { this.filters = filters; }
+        public Map<String, JsonNode> getAdditionalProperties() {
+            return Map.copyOf(additionalProperties);
+        }
+
+        @JsonAnySetter
+        public void putAdditionalProperty(String field, JsonNode value) {
+            additionalProperties.put(field, value);
+        }
+    }
+
+    public static class Filters {
+        @JsonProperty("metadata_contains")
+        @JsonAlias("metadataContains")
+        private JsonNode metadataContains;
+        @JsonProperty("payload_contains")
+        @JsonAlias("payloadContains")
+        private JsonNode payloadContains;
+        private final Map<String, JsonNode> additionalProperties = new LinkedHashMap<>();
+
+        public JsonNode getMetadataContains() { return metadataContains; }
+        public void setMetadataContains(JsonNode metadataContains) {
+            this.metadataContains = metadataContains;
+        }
+        public JsonNode getPayloadContains() { return payloadContains; }
+        public void setPayloadContains(JsonNode payloadContains) {
+            this.payloadContains = payloadContains;
+        }
         public Map<String, JsonNode> getAdditionalProperties() {
             return Map.copyOf(additionalProperties);
         }

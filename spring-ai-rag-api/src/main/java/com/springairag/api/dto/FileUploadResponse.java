@@ -66,8 +66,23 @@ public record FileUploadResponse(
             int chunks,
 
             @Schema(description = "Error message (on failure)")
-            String error
+            String error,
+
+            @Schema(description = "Embedding dispatch action")
+            String embeddingAction,
+
+            @Schema(description = "Async embedding job ID")
+            java.util.UUID embeddingJobId
     ) {
+        public FileResult(
+                String filename,
+                Long documentId,
+                String title,
+                boolean embedded,
+                int chunks,
+                String error) {
+            this(filename, documentId, title, embedded, chunks, error, null, null);
+        }
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;

@@ -66,13 +66,13 @@ class SseStreamE2ETest {
                         null,
                         List.of())));
         when(ragChatService.chatEvents(argThat(request ->
-                matches(request, message, sessionId, domainId)), isNull()))
+                matches(request, message, sessionId, domainId)), isNull(), isNull()))
                 .thenReturn(events);
     }
 
     private void verifyStream(String message, String sessionId, String domainId) {
         verify(ragChatService).chatEvents(argThat(request ->
-                matches(request, message, sessionId, domainId)), isNull());
+                matches(request, message, sessionId, domainId)), isNull(), isNull());
     }
 
     private boolean matches(ChatRequest request, String message,

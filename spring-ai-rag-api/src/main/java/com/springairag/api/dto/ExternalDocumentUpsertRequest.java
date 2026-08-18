@@ -5,6 +5,8 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
 
+import com.springairag.api.enums.EmbeddingPolicy;
+
 import java.util.Map;
 
 /**
@@ -51,6 +53,9 @@ public class ExternalDocumentUpsertRequest {
     @Schema(description = "Generate embedding after persistence", defaultValue = "true")
     private boolean embed = true;
 
+    @Schema(description = "Authoritative embedding policy. When omitted, embed=true maps to SYNC and embed=false maps to SKIP")
+    private EmbeddingPolicy embeddingPolicy;
+
     public String getCollectionKey() { return collectionKey; }
     public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
 
@@ -82,4 +87,9 @@ public class ExternalDocumentUpsertRequest {
 
     public boolean isEmbed() { return embed; }
     public void setEmbed(boolean embed) { this.embed = embed; }
+
+    public EmbeddingPolicy getEmbeddingPolicy() { return embeddingPolicy; }
+    public void setEmbeddingPolicy(EmbeddingPolicy embeddingPolicy) {
+        this.embeddingPolicy = embeddingPolicy;
+    }
 }

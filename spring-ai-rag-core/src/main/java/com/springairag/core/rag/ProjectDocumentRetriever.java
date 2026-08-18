@@ -41,16 +41,19 @@ public class ProjectDocumentRetriever implements DocumentRetriever {
             return List.of();
         }
         RetrievalScope scope = context.scope();
-        List<RetrievalResult> results = scope.matchNone()
-                ? List.of()
-                : hybridRetriever.searchInScope(
-                        retrievalQuery,
-                        scope,
-                        null,
-                        context.options().maxResults(),
-                        context.options().toConfig());
-        trace.record(retrievalQuery, results);
-        return results.stream().map(mapper::toDocument).toList();
+        var outcome = hybridRetriever.searchInScopeDetailed(
+                retrievalQuery,
+                scope,
+                null,
+                context.options().maxResults(),
+                context.options().toConfig(),
+                context.filters());
+        if (scope.matchNone() && outcome.results().isEmpty()) {
+            trace.recordOutcome(outcome);
+            return List.of();
+        }
+        trace.recordOutcome(outcome);
+        return outcome.results().stream().map(mapper::toDocument).toList();
     }
 
     private AuthorizedRetrievalContext context(Map<String, Object> values) {

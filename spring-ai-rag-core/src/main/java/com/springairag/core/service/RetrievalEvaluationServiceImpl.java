@@ -166,10 +166,12 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
         // Cumulative hit count for Precision@K / Recall@K
         Map<Integer, Double> precisionAtK = new LinkedHashMap<>();
         Map<Integer, Double> recallAtK = new LinkedHashMap<>();
+        Set<Long> seenRelevant = new HashSet<>();
         int hitCount = 0;
 
         for (int i = 0; i < Math.min(k, retrieved.size()); i++) {
-            if (relevantSet.contains(retrieved.get(i))) {
+            Long retrievedId = retrieved.get(i);
+            if (relevantSet.contains(retrievedId) && seenRelevant.add(retrievedId)) {
                 hitCount++;
             }
             int pos = i + 1;
@@ -208,8 +210,11 @@ public class RetrievalEvaluationServiceImpl implements RetrievalEvaluationServic
      */
     private double calculateNDCG(List<Long> retrieved, Set<Long> relevantSet, int k) {
         double dcg = 0.0;
+        Set<Long> seenRelevant = new HashSet<>();
         for (int i = 0; i < Math.min(k, retrieved.size()); i++) {
-            double relevance = relevantSet.contains(retrieved.get(i)) ? 1.0 : 0.0;
+            Long retrievedId = retrieved.get(i);
+            double relevance = relevantSet.contains(retrievedId)
+                    && seenRelevant.add(retrievedId) ? 1.0 : 0.0;
             dcg += relevance / (Math.log(i + 2) / Math.log(2)); // log2(position+1), position = i+1
         }
 

@@ -1,6 +1,8 @@
 package com.springairag.core.chat;
 
 import com.springairag.api.enums.ChatMode;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
+import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 
 import java.util.List;
@@ -22,7 +24,9 @@ public record ChatCommand(
         RetrievalOptions retrievalOptions,
         Map<String, Object> clientMetadata,
         List<ChatInputMessage> inputMessages,
-        List<String> modelCandidates) {
+        List<String> modelCandidates,
+        RetrievalTraceSession retrievalTraceSession,
+        RetrievalFilters retrievalFilters) {
 
     public ChatCommand {
         message = message != null ? message : "";
@@ -62,7 +66,40 @@ public record ChatCommand(
             Map<String, Object> clientMetadata) {
         this(message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
-                List.of(), List.of());
+                List.of(), List.of(), null, null);
+    }
+
+    public ChatCommand(
+            String message,
+            String sessionId,
+            ChatPrincipal principal,
+            String memoryConversationId,
+            ChatMode mode,
+            MemoryMode memoryMode,
+            String modelRef,
+            String domainId,
+            RetrievalScope retrievalScope,
+            RetrievalOptions retrievalOptions,
+            Map<String, Object> clientMetadata,
+            List<ChatInputMessage> inputMessages,
+            List<String> modelCandidates) {
+        this(message, sessionId, principal, memoryConversationId, mode, memoryMode,
+                modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
+                inputMessages, modelCandidates, null, null);
+    }
+
+    public ChatCommand withTraceSession(RetrievalTraceSession session) {
+        return new ChatCommand(
+                message, sessionId, principal, memoryConversationId, mode, memoryMode,
+                modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
+                inputMessages, modelCandidates, session, retrievalFilters);
+    }
+
+    public ChatCommand withFilters(RetrievalFilters filters) {
+        return new ChatCommand(
+                message, sessionId, principal, memoryConversationId, mode, memoryMode,
+                modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
+                inputMessages, modelCandidates, retrievalTraceSession, filters);
     }
 
     public static ChatCommand of(
@@ -88,7 +125,9 @@ public record ChatCommand(
                 options,
                 metadata,
                 List.of(),
-                List.of());
+                List.of(),
+                null,
+                null);
     }
 
     private static List<String> normalizeModelCandidates(List<String> candidates) {

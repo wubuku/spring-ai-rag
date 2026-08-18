@@ -251,7 +251,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V34, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V39, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -310,7 +310,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V34 from an empty schema, and exercises the vector query with actual
+Flyway V1-V39 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -341,7 +341,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V34 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V39 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -387,10 +387,28 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V34, verifies V33
-active-job coalescing, atomic force upgrades, and concurrent-worker
-`SKIP LOCKED` claims, then runs `test-compile`, shell syntax, and whitespace
+isolated PostgreSQL, migrates an empty database through V1–V39, verifies V33
+active-job coalescing, atomic force upgrades, and concurrent-worker atomic
+conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
+
+### Next High-Value Features Acceptance Gates
+
+```bash
+./scripts/verify-retrieval-diagnostics.sh
+./scripts/verify-retrieval-filters.sh
+./scripts/verify-embedding-operations.sh
+./scripts/verify-managed-quality.sh
+./scripts/verify-no-pessimistic-locks.sh
+# or run A–D serially:
+./scripts/verify-next-high-value-features.sh
+```
+
+The fixed scopes cover retrieval diagnostics (V35), metadata/payload filters
+(V36), embedding operations (V37, including SYNC/ASYNC/SKIP, ACL pagination,
+and readiness), citation / managed suites (V38), and the post-V39 static gate
+that prohibits explicit pessimistic coordination. The aggregator must run
+serially because Maven clean removes module `target/` output.
 
 ### Live Retrieval Quality Regression Gate
 
@@ -452,6 +470,21 @@ the local daemon required at least `1.40`. Use:
 TESTCONTAINERS_API_VERSION=1.40 \
 TESTCONTAINERS_RYUK_DISABLED=true \
 ./scripts/verify-chat-capability.sh
+```
+
+`ChatSessionPostgresIntegrationTest` also accepts a disposable external
+database to bypass Testcontainers Docker-API negotiation. It calls
+`Flyway.clean()`, so never point it at development or production:
+
+```bash
+mvn -pl spring-ai-rag-core \
+  -Dtest=ChatSessionPostgresIntegrationTest \
+  -Dchat.it.enabled=true \
+  -Dchat.it.jdbc-url=jdbc:postgresql://127.0.0.1:5432/disposable_chat_test \
+  -Dchat.it.username=postgres \
+  -Dchat.it.password=postgres \
+  -Dchat.it.clean-confirm=YES \
+  test
 ```
 
 Use `--skip-postgres` only when the environment is intentionally unavailable
