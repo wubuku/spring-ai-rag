@@ -71,6 +71,7 @@
 | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | 已实施：清理无效 `rag_vector_store` 路径，使用不可变模型身份、固定维度列、Profile 级状态和可回滚换模流程 |
 | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
 | [下一批最高价值功能规划](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) / [English](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) | 已实施：动态 Collection 范围的 OpenAI 兼容协议、持久化嵌入任务、JSON containment/Tool 与真实检索回归门禁 |
+| [下一批高价值功能规划（2026-08-18）](drafts/2026-08-18_NEXT_HIGH_VALUE_FEATURES_PLAN.md) | 等待 review：检索诊断、普通文档 metadata 过滤、嵌入任务运营控制面、受管质量套件与 citation 可信度 |
 | [WebUI 水平对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | 清理模板样式污染，建立普通内容默认起始对齐、有限语义居中和自动防回归门禁 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 
