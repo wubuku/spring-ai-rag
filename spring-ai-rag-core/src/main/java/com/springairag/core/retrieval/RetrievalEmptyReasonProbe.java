@@ -76,17 +76,39 @@ public class RetrievalEmptyReasonProbe {
                 RetrievalScopeSql.buildDocumentOnly(scope, filters);
         String sql = "SELECT COUNT(*) FILTER (WHERE d.enabled = true) AS enabled_docs, "
                 + "COUNT(*) FILTER (WHERE d.enabled = true "
-                + "AND s.status = 'COMPLETED' "
-                + "AND s.content_hash = d.content_hash "
-                + "AND s.chunker_version = CASE "
+                + "AND ("
+                + "(local.local_index_status = 'READY' "
+                + "AND local.content_hash = d.content_hash "
+                + "AND local.chunker_version = CASE "
                 + "WHEN d.document_type = 'json-record' THEN ? ELSE ? END "
-                + "AND COALESCE(s.chunk_count, 0) > 0) AS fresh_docs "
+                + "AND local.local_index_generation > 0 "
+                + "AND COALESCE(local.chunk_count, 0) > 0 "
+                + "AND ("
+                + "SELECT COUNT(*) "
+                + "FROM rag_document_chunks chunk "
+                + "WHERE chunk.document_id = d.id "
+                + "AND chunk.local_index_generation = local.local_index_generation "
+                + "AND chunk.content_hash = d.content_hash "
+                + "AND chunk.chunker_version = local.chunker_version"
+                + ") = local.chunk_count)"
+                + " OR "
+                + "(embedding.status = 'COMPLETED' "
+                + "AND embedding.content_hash = d.content_hash "
+                + "AND embedding.chunker_version = CASE "
+                + "WHEN d.document_type = 'json-record' THEN ? ELSE ? END "
+                + "AND COALESCE(embedding.chunk_count, 0) > 0)"
+                + ")) AS fresh_docs "
                 + "FROM rag_documents d "
-                + "LEFT JOIN rag_document_embedding_state s "
-                + "ON s.document_id = d.id AND s.embedding_profile_id = ? "
+                + "LEFT JOIN rag_document_local_index_state local "
+                + "ON local.document_id = d.id "
+                + "LEFT JOIN rag_document_embedding_state embedding "
+                + "ON embedding.document_id = d.id "
+                + "AND embedding.embedding_profile_id = ? "
                 + "WHERE 1 = 1 "
                 + fragment.sql();
         List<Object> args = new ArrayList<>();
+        args.add(descriptorProvider.jsonRecordDescriptor().chunkerVersion());
+        args.add(descriptorProvider.textDescriptor().chunkerVersion());
         args.add(descriptorProvider.jsonRecordDescriptor().chunkerVersion());
         args.add(descriptorProvider.textDescriptor().chunkerVersion());
         args.add(profile.id());

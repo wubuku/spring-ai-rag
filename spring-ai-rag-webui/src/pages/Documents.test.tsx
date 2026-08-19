@@ -235,6 +235,50 @@ describe('Documents', () => {
       .toBeInTheDocument();
   });
 
+  it('shows keyword-only lifecycle and keeps embedding retry available', async () => {
+    const user = userEvent.setup();
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 8,
+            title: 'Keyword Only Doc',
+            content: 'Keyword content',
+            contentHash: 'keyword123',
+            documentType: 'TEXT',
+            documentRevision: 2,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: false,
+            enabled: true,
+            lifecycle: {
+              documentState: 'ACTIVE',
+              searchability: 'KEYWORD_ONLY',
+              localIndexStatus: 'READY',
+              embeddingStatus: 'FAILED',
+              lastError: 'provider unavailable',
+              retryable: true,
+            },
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    expect(screen.getByText('documents.lifecycle.KEYWORD_ONLY')).toBeInTheDocument();
+    const status = screen.getByText('documents.lifecycle.KEYWORD_ONLY');
+    expect(status).toHaveAttribute('title', 'documents.keywordOnlyHint');
+    await user.click(screen.getByRole('button', {
+      name: 'documents.openActions',
+    }));
+    expect(screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }))
+      .toBeInTheDocument();
+  });
+
   it('offers restore instead of edit disable for a disabled local document', async () => {
     const user = userEvent.setup();
     mockUseQuery.mockReturnValue({

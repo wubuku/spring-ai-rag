@@ -30,5 +30,6 @@
   `2026-08-16_EXTERNAL_DOCUMENT_*`、`2026-08-16_FILE_RAG_*`
 - Chat、WebUI 与后续功能批次：`2026-08-17_*`、`2026-08-18_*`
 - 文档生命周期实施账本：`2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
+- 本地关键词/向量派生解耦：`2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V42 |
+| Flyway | V1–V43 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -67,6 +67,18 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ```bash
 ./scripts/verify-document-sync-runs.sh
 ```
+
+针对 V43 本地关键词/向量派生解耦边界：
+
+```bash
+KEYWORD_VECTOR_VERIFY_RUN_ID=full-gate-4 \
+KEYWORD_VECTOR_PLAYWRIGHT_PORT=4191 \
+./scripts/verify-keyword-vector-decoupling.sh
+```
+
+该门禁要求真实 PostgreSQL 生命周期/全文集成测试、
+`mvn clean compile test-compile`，以及 WebUI TypeScript、Vitest、production build、
+alignment 和无截图 Mock Playwright 检查。
 
 ## 3. 启动与健康检查
 

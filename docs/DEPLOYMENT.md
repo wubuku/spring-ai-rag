@@ -31,7 +31,7 @@ CREATE DATABASE spring_ai_rag
 ### 2.3 迁移
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
-`db/migration/V1__*.sql` 至当前最新迁移（目前为 `V42__*.sql`）。
+`db/migration/V1__*.sql` 至当前最新迁移（目前为 `V43__*.sql`）。
 
 如需手动迁移：
 

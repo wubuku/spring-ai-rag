@@ -144,7 +144,7 @@ state.
 | Change | Document revision | Old retrieval result | New embedding job |
 |---|---:|---|---|
 | Create with `SYNC`/`ASYNC` | increments | not applicable | yes |
-| `content` / `retrievalText` | increments | immediately stale and excluded | yes |
+| `content` / `retrievalText` | increments | old generation immediately excluded; new local chunks may be `KEYWORD_ONLY` | yes |
 | title/source/metadata only | increments | current document metadata is visible immediately | no |
 | `jsonbPayload` only | increments | current payload is visible immediately | no |
 | Change `collectionKey` on ordinary upsert | not an update of the same identity | old address remains unless explicitly tombstoned | target address follows create semantics |
@@ -153,9 +153,10 @@ state.
 | Permanent local delete | document removed | immediately excluded | pending jobs and derived rows removed/cancelled |
 
 The service never serves chunks from an old content hash while a new content
-revision is indexing. With the current storage model, that document is
-temporarily unavailable to both keyword and vector retrieval until the new
-derived state is `READY`.
+revision is indexing. V43 prepares profile-neutral local chunks independently
+from remote vectors, so the document may be available to keyword retrieval as
+`KEYWORD_ONLY` while the vector branch is queued, processing, or failed.
+`READY` means both local and vector branches are current.
 
 `embeddingPolicy` controls waiting and scheduling:
 
@@ -201,9 +202,11 @@ client. Ordering belongs to the source system.
 | `404` on tombstone | Reconcile source/client state; do not silently turn it into create. |
 
 Embedding provider failure after a document mutation does not roll back the
-source document. The lifecycle becomes `FAILED`, old chunks remain excluded,
-and the same accepted revision can be replayed or retried through embedding
-operations.
+source document. When the local index is current, lifecycle becomes
+`KEYWORD_ONLY` with a failed embedding branch; old chunks remain excluded.
+The same accepted revision can be replayed or retried through embedding
+operations. `embeddingFresh` and the compatibility top-level
+`embeddingStatus` describe only the vector branch.
 
 ## 6. Readiness
 
@@ -212,11 +215,17 @@ the document is searchable yet.
 
 Use the document lifecycle read model:
 
-- `READY`: current content is searchable;
-- `INDEXING`: durable work is queued or running;
-- `FAILED`: the current derivation failed and is retryable when indicated;
+- `READY`: current content is searchable through both keyword and vector branches;
+- `KEYWORD_ONLY`: current local keyword chunks are searchable, but vector work is
+  queued, processing, not requested, or failed;
+- `INDEXING`: the current local index is not ready and durable work is queued or running;
+- `FAILED`: the current local derivation failed and is retryable when indicated;
 - `NOT_REQUESTED`: the caller used `SKIP`;
 - `DISABLED`: disabled or tombstoned.
+
+For operational decisions, inspect `localIndexStatus`, `embeddingStatus`, and
+`searchability` together. Do not treat `embeddingFresh=false` as proof that
+the document cannot be found by keyword retrieval.
 
 For bulk workflows, prefer Collection embedding readiness over polling every
 document.

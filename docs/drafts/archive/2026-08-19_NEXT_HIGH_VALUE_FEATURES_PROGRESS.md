@@ -1,6 +1,6 @@
 # 下一批高价值功能实施进度
 
-> 对应规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 对应规划：[2026-08-19_NEXT_HIGH_VALUE_FEATURES_PLAN.md](2026-08-19_NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
 > 本账本用于跨多次操作恢复实施上下文。当前代码、迁移、自动化测试和
 > `docs/` 长青文档优先于本账本。

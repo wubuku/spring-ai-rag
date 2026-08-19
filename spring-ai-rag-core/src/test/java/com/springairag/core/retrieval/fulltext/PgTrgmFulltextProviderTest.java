@@ -198,8 +198,9 @@ class PgTrgmFulltextProviderTest {
         ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
         verify(jdbc).queryForList(sqlCaptor.capture(), any(Object[].class));
         String sql = sqlCaptor.getValue();
-        assertTrue(sql.contains("e.embedding_profile_id = 1"));
-        assertTrue(sql.contains("s.status = 'COMPLETED'"));
+        assertTrue(sql.contains("FROM rag_document_chunks e"));
+        assertTrue(sql.contains("v.embedding_profile_id = 1"));
+        assertTrue(sql.contains("s.local_index_status = 'READY'"));
         assertTrue(sql.contains("s.content_hash = d.content_hash"));
         assertTrue(sql.contains("d.enabled = true"));
         assertTrue(sql.contains("d.source AS document_source"));
@@ -236,7 +237,7 @@ class PgTrgmFulltextProviderTest {
         assertTrue(sql.contains("d.collection_id = ANY (?)"));
         assertTrue(sql.contains("e.document_id = ANY (?)"));
         assertTrue(sql.contains("d.document_type = ?"));
-        assertTrue(sql.contains("e.embedding_profile_id = 7"));
+        assertTrue(sql.contains("v.embedding_profile_id = 7"));
         Object[] args = argsCaptor.getValue();
         assertInstanceOf(
                 org.springframework.jdbc.support.SqlArrayValue.class, args[1]);

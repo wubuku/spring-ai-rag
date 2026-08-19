@@ -1,13 +1,20 @@
 package com.springairag.core.integration;
 
 import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingJobRepository;
 import com.springairag.core.embeddingjob.EmbeddingJobStatus;
 import com.springairag.core.retrieval.RetrievalEmptyReasonProbe;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.retrieval.fulltext.PgEnglishFtsProvider;
+import com.springairag.core.retrieval.fulltext.PgTrgmFulltextProvider;
+import com.springairag.core.service.DocumentChunkingService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentLifecycleService;
+import com.springairag.core.service.KeywordIndexPersistenceService;
+import com.springairag.core.entity.RagDocument;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.AfterAll;
@@ -27,6 +34,8 @@ import javax.sql.DataSource;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -54,6 +63,8 @@ class DocumentLifecyclePostgresIntegrationTest {
     private static DataSource dataSource;
     private JdbcTemplate jdbcTemplate;
     private EmbeddingJobRepository jobRepository;
+    private DocumentDerivationDescriptorProvider descriptorProvider;
+    private KeywordIndexPersistenceService keywordIndexService;
 
     @BeforeAll
     static void startDatabase() {
@@ -116,6 +127,207 @@ class DocumentLifecyclePostgresIntegrationTest {
         flyway(null).migrate();
         jdbcTemplate = new JdbcTemplate(dataSource);
         jobRepository = new EmbeddingJobRepository(jdbcTemplate);
+        descriptorProvider = new DocumentDerivationDescriptorProvider(
+                new RagProperties());
+        keywordIndexService = new KeywordIndexPersistenceService(
+                jdbcTemplate,
+                new DocumentChunkingService(
+                        new RagProperties(), descriptorProvider),
+                descriptorProvider);
+    }
+
+    @Test
+    void v42CurrentEmbeddingGroupBackfillsIntoProfileNeutralLocalChunks() {
+        flyway(null).clean();
+        flyway(MigrationVersion.fromVersion("42")).migrate();
+        jdbcTemplate = new JdbcTemplate(dataSource);
+
+        long collectionId = insertCollection("v42-backfill");
+        long documentId = insertDocument(
+                collectionId, "default", null, HASH_A);
+        long profileId = insertProfile("v42-backfill");
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count
+                ) VALUES (?, ?, ?, ?, 'COMPLETED', 2)
+                """,
+                documentId, profileId, HASH_A, TEXT_CHUNKER);
+        insertEmbedding(documentId, profileId, 0, "legacy first chunk", 0, 18);
+        insertEmbedding(documentId, profileId, 1, "legacy second chunk", 19, 39);
+
+        flyway(null).migrate();
+
+        assertEquals("43", jdbcTemplate.queryForObject(
+                "SELECT version FROM flyway_schema_history "
+                        + "WHERE success = true "
+                        + "ORDER BY installed_rank DESC LIMIT 1",
+                String.class));
+        assertEquals("READY", jdbcTemplate.queryForObject(
+                "SELECT local_index_status "
+                        + "FROM rag_document_local_index_state "
+                        + "WHERE document_id = ?",
+                String.class, documentId));
+        assertEquals(2L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_document_chunks "
+                        + "WHERE document_id = ? AND local_index_generation = 1",
+                Long.class, documentId));
+        assertEquals("legacy second chunk", jdbcTemplate.queryForObject(
+                "SELECT chunk_text FROM rag_document_chunks "
+                        + "WHERE document_id = ? AND chunk_index = 1",
+                String.class, documentId));
+        assertNotNull(jdbcTemplate.queryForObject(
+                "SELECT search_vector_en FROM rag_document_chunks "
+                        + "WHERE document_id = ? AND chunk_index = 0",
+                Object.class, documentId));
+    }
+
+    @Test
+    void localIndexReplaceIsIdempotentAndSkipRemovesOldGeneration() {
+        long collectionId = insertCollection("local-index");
+        long documentId = insertDocument(
+                collectionId, "default", null, HASH_A);
+        RagDocument document = documentEntity(
+                documentId, "old keyword body", HASH_A);
+
+        keywordIndexService.ensureCurrent(document);
+        long firstGeneration = localGeneration(documentId);
+        assertEquals("READY", localStatus(documentId));
+        assertTrue(localChunkCount(documentId) > 0);
+
+        keywordIndexService.ensureCurrent(document);
+        assertEquals(firstGeneration, localGeneration(documentId));
+
+        jdbcTemplate.update(
+                "UPDATE rag_document_chunks "
+                        + "SET content_hash = ? "
+                        + "WHERE document_id = ? AND local_index_generation = ?",
+                HASH_B, documentId, firstGeneration);
+        keywordIndexService.ensureCurrent(document);
+        assertTrue(localGeneration(documentId) > firstGeneration);
+        firstGeneration = localGeneration(documentId);
+
+        jdbcTemplate.update(
+                "UPDATE rag_documents SET content = ?, content_hash = ?, "
+                        + "version = version + 1 WHERE id = ?",
+                "new keyword needle", HASH_B, documentId);
+        document.setContent("new keyword needle");
+        document.setContentHash(HASH_B);
+        document.setVersion(1L);
+        keywordIndexService.ensureCurrent(document);
+
+        assertTrue(localGeneration(documentId) > firstGeneration);
+        assertEquals(0L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_document_chunks "
+                        + "WHERE document_id = ? AND chunk_text = 'old keyword body'",
+                Long.class, documentId));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_document_chunks "
+                        + "WHERE document_id = ? AND chunk_text = 'new keyword needle'",
+                Long.class, documentId));
+
+        keywordIndexService.markNotRequested(document);
+        assertEquals("NOT_REQUESTED", localStatus(documentId));
+        assertEquals(0L, localChunkCount(documentId));
+    }
+
+    @Test
+    void keywordOnlyLifecycleAndRealFulltextUseLocalChunksWithoutVectors() {
+        long collectionId = insertCollection("keyword-only");
+        long documentId = insertDocument(
+                collectionId, "default", null, HASH_A);
+        long profileId = insertProfile("keyword-only");
+        RagDocument document = documentEntity(
+                documentId, "needle searchable content", HASH_A);
+        keywordIndexService.ensureCurrent(document);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, processing_error
+                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 'provider unavailable')
+                """,
+                documentId, profileId, HASH_A, TEXT_CHUNKER);
+
+        EmbeddingProfile profile = new EmbeddingProfile(
+                profileId,
+                "lifecycle-keyword-only",
+                "test",
+                "model",
+                "v1",
+                1024,
+                "COSINE",
+                "NONE",
+                true);
+        EmbeddingProfileProvider profileProvider = mock(
+                EmbeddingProfileProvider.class);
+        when(profileProvider.getActiveProfile()).thenReturn(profile);
+        DocumentLifecycleService lifecycle = new DocumentLifecycleService(
+                jdbcTemplate, profileProvider, descriptorProvider);
+
+        var status = lifecycle.read(document);
+        assertEquals("KEYWORD_ONLY", status.searchability());
+        assertEquals("READY", status.localIndexStatus());
+        assertEquals("FAILED", status.embeddingStatus());
+        assertTrue(status.retryable());
+
+        PgTrgmFulltextProvider trgm = new PgTrgmFulltextProvider(
+                jdbcTemplate, new RagProperties());
+        assertTrue(trgm.isAvailable());
+        assertEquals(1, trgm.search(
+                "needle", java.util.List.of(documentId),
+                null, 5, 0.0, profileId).size());
+
+        PgEnglishFtsProvider english = new PgEnglishFtsProvider(
+                jdbcTemplate, new RagProperties());
+        assertTrue(english.isAvailable());
+        assertEquals(1, english.search(
+                "needle", java.util.List.of(documentId),
+                null, 5, 0.0, profileId).size());
+    }
+
+    @Test
+    void lifecycleDoesNotReportKeywordReadyWhenLocalChunksAreMissing() {
+        long collectionId = insertCollection("missing-local-chunks");
+        long documentId = insertDocument(
+                collectionId, "default", null, HASH_A);
+        long profileId = insertProfile("missing-local-chunks");
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_local_index_state (
+                    document_id, local_index_status, content_hash,
+                    chunker_version, local_index_generation, chunk_count
+                ) VALUES (?, 'READY', ?, ?, 1, 1)
+                """,
+                documentId, HASH_A, TEXT_CHUNKER);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count, processing_error
+                ) VALUES (?, ?, ?, ?, 'FAILED', 1, 'provider unavailable')
+                """,
+                documentId, profileId, HASH_A, TEXT_CHUNKER);
+
+        EmbeddingProfile profile = new EmbeddingProfile(
+                profileId,
+                "lifecycle-missing-local-chunks",
+                "test",
+                "model",
+                "v1",
+                1024,
+                "COSINE",
+                "NONE",
+                true);
+        EmbeddingProfileProvider profileProvider = mock(
+                EmbeddingProfileProvider.class);
+        when(profileProvider.getActiveProfile()).thenReturn(profile);
+        DocumentLifecycleService lifecycle = new DocumentLifecycleService(
+                jdbcTemplate, profileProvider, descriptorProvider);
+
+        var status = lifecycle.read(documentEntity(
+                documentId, "missing local chunks", HASH_A));
+
+        assertEquals("FAILED", status.searchability());
+        assertEquals("FAILED", status.localIndexStatus());
+        assertEquals("FAILED", status.embeddingStatus());
     }
 
     @Test
@@ -135,7 +347,7 @@ class DocumentLifecyclePostgresIntegrationTest {
 
         flyway(null).migrate();
 
-        assertEquals("42", jdbcTemplate.queryForObject(
+        assertEquals("43", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true "
                         + "ORDER BY installed_rank DESC LIMIT 1",
@@ -288,6 +500,93 @@ class DocumentLifecyclePostgresIntegrationTest {
                 profile,
                 2_000);
         assertEquals(1, freshEligibility.freshDocuments());
+
+        jdbcTemplate.update("""
+                UPDATE rag_document_embedding_state
+                SET status = 'FAILED', processing_error = 'provider unavailable'
+                WHERE document_id = ? AND embedding_profile_id = ?
+                """,
+                documentId, profileId);
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_local_index_state (
+                    document_id, local_index_status, content_hash,
+                    chunker_version, local_index_generation, chunk_count
+                ) VALUES (?, 'READY', ?, ?, 1, 1)
+                ON CONFLICT (document_id) DO UPDATE
+                SET local_index_status = EXCLUDED.local_index_status,
+                    content_hash = EXCLUDED.content_hash,
+                    chunker_version = EXCLUDED.chunker_version,
+                    local_index_generation = EXCLUDED.local_index_generation,
+                    chunk_count = EXCLUDED.chunk_count
+                """,
+                documentId, HASH_A, TEXT_CHUNKER);
+
+        var missingLocalChunks = probe.count(
+                RetrievalScope.selectedCollections(
+                        java.util.List.of(collectionId),
+                        java.util.List.of(),
+                        null),
+                RetrievalFilters.none(),
+                profile,
+                2_000);
+        assertEquals(0, missingLocalChunks.freshDocuments());
+
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_chunks (
+                    document_id, local_index_generation, content_hash,
+                    chunker_version, chunk_text, chunk_index,
+                    chunk_start_pos, chunk_end_pos
+                ) VALUES (?, 1, ?, ?, 'body', 0, 0, 4)
+                """,
+                documentId, HASH_A, TEXT_CHUNKER);
+        var localDiagnostic = jdbcTemplate.queryForMap("""
+                SELECT d.enabled,
+                       d.content_hash AS document_hash,
+                       local.local_index_status,
+                       local.content_hash AS local_hash,
+                       local.chunker_version AS local_chunker,
+                       local.local_index_generation,
+                       local.chunk_count,
+                       chunk.content_hash AS chunk_hash,
+                       chunk.chunker_version AS chunk_chunker,
+                       chunk.local_index_generation AS chunk_generation
+                FROM rag_documents d
+                JOIN rag_document_local_index_state local
+                  ON local.document_id = d.id
+                LEFT JOIN rag_document_chunks chunk
+                  ON chunk.document_id = d.id
+                 AND chunk.local_index_generation = local.local_index_generation
+                WHERE d.id = ?
+                """, documentId);
+        assertEquals(1L, jdbcTemplate.queryForObject("""
+                SELECT COUNT(*)
+                FROM rag_documents d
+                JOIN rag_document_local_index_state local
+                  ON local.document_id = d.id
+                JOIN rag_document_chunks chunk
+                  ON chunk.document_id = d.id
+                 AND chunk.local_index_generation = local.local_index_generation
+                 AND chunk.content_hash = d.content_hash
+                 AND chunk.chunker_version = local.chunker_version
+                WHERE d.id = ?
+                  AND d.enabled = true
+                  AND local.local_index_status = 'READY'
+                  AND local.content_hash = d.content_hash
+                  AND local.chunker_version = ?
+                  AND local.local_index_generation > 0
+                  AND local.chunk_count > 0
+                """,
+                Long.class, documentId, TEXT_CHUNKER),
+                localDiagnostic::toString);
+        var localOnly = probe.count(
+                RetrievalScope.selectedCollections(
+                        java.util.List.of(collectionId),
+                        java.util.List.of(),
+                        null),
+                RetrievalFilters.none(),
+                profile,
+                2_000);
+        assertEquals(1, localOnly.freshDocuments());
     }
 
     @Test
@@ -541,6 +840,64 @@ class DocumentLifecyclePostgresIntegrationTest {
                 documentId,
                 profileId,
                 TEXT_CHUNKER);
+    }
+
+    private RagDocument documentEntity(
+            long documentId, String content, String contentHash) {
+        RagDocument document = new RagDocument();
+        document.setId(documentId);
+        document.setVersion(0L);
+        document.setContent(content);
+        document.setContentHash(contentHash);
+        document.setDocumentType("text");
+        document.setEnabled(true);
+        return document;
+    }
+
+    private String localStatus(long documentId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT local_index_status "
+                        + "FROM rag_document_local_index_state "
+                        + "WHERE document_id = ?",
+                String.class,
+                documentId);
+    }
+
+    private long localGeneration(long documentId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT local_index_generation "
+                        + "FROM rag_document_local_index_state "
+                        + "WHERE document_id = ?",
+                Long.class,
+                documentId);
+    }
+
+    private long localChunkCount(long documentId) {
+        return jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM rag_document_chunks "
+                        + "WHERE document_id = ?",
+                Long.class,
+                documentId);
+    }
+
+    private void insertEmbedding(
+            long documentId,
+            long profileId,
+            int chunkIndex,
+            String chunkText,
+            int start,
+            int end) {
+        jdbcTemplate.update("""
+                INSERT INTO rag_embeddings (
+                    document_id, embedding_profile_id, chunk_text,
+                    chunk_index, embedding, embedding_1024,
+                    chunk_start_pos, chunk_end_pos
+                ) VALUES (?, ?, ?, ?,
+                    ('[' || repeat('0,', 1023) || '0]')::vector,
+                    ('[' || repeat('0,', 1023) || '0]')::vector,
+                    ?, ?)
+                """,
+                documentId, profileId, chunkText, chunkIndex, start, end);
     }
 
     private <T> T stateValue(

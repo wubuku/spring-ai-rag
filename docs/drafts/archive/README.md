@@ -41,6 +41,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Chat, WebUI, and later feature batches: `2026-08-17_*`, `2026-08-18_*`
 - Document-lifecycle implementation ledger:
   `2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
+- Local keyword/vector derivation decoupling:
+  `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

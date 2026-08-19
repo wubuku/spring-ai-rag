@@ -12,7 +12,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 将文档、Profile 状态和持久化任务归一为稳定的公开生命周期读模型。
+ * 将文档、本地关键词派生和活动 Profile 状态归一为公开生命周期读模型。
  */
 @Service
 public class DocumentLifecycleService {
@@ -46,93 +46,187 @@ public class DocumentLifecycleService {
         }
 
         EmbeddingProfile profile = profileProvider.getActiveProfile();
-        List<Map<String, Object>> rows = jdbcTemplate.queryForList("""
-                SELECT state.status,
-                       state.content_hash,
-                       state.chunker_version,
-                       state.chunk_count,
-                       state.processing_error,
-                       state.active_job_id,
+        List<Map<String, Object>> rows = jdbcTemplate.queryForList(
+                """
+                SELECT local.local_index_status,
+                       local.content_hash AS local_content_hash,
+                       local.chunker_version AS local_chunker_version,
+                       local.local_index_generation,
+                       local.chunk_count AS local_chunk_count,
+                       (
+                           SELECT COUNT(*)
+                           FROM rag_document_chunks local_chunk
+                           WHERE local_chunk.document_id = local.document_id
+                             AND local_chunk.local_index_generation =
+                                 local.local_index_generation
+                             AND local_chunk.content_hash = local.content_hash
+                             AND local_chunk.chunker_version =
+                                 local.chunker_version
+                       ) AS local_actual_chunk_count,
+                       local.processing_error AS local_error,
+                       embedding.status AS embedding_status,
+                       embedding.content_hash AS embedding_content_hash,
+                       embedding.chunker_version AS embedding_chunker_version,
+                       embedding.chunk_count AS embedding_chunk_count,
+                       embedding.active_job_id,
+                       embedding.processing_error AS embedding_error,
                        job.status AS job_status,
                        job.last_error AS job_error
-                FROM rag_document_embedding_state state
+                FROM rag_documents document
+                LEFT JOIN rag_document_local_index_state local
+                  ON local.document_id = document.id
+                LEFT JOIN rag_document_embedding_state embedding
+                  ON embedding.document_id = document.id
+                 AND embedding.embedding_profile_id = ?
                 LEFT JOIN rag_embedding_jobs job
-                  ON job.id = state.active_job_id
-                WHERE state.document_id = ?
-                  AND state.embedding_profile_id = ?
+                  ON job.id = embedding.active_job_id
+                WHERE document.id = ?
                 """,
-                document.getId(),
-                profile.id());
+                profile.id(), document.getId());
         if (rows.isEmpty()) {
-            return lifecycle(
-                    "NOT_REQUESTED", profile.profileKey(), null,
-                    null, "No derived index has been requested");
+            return notRequested(profile.profileKey(), null, null);
         }
 
         Map<String, Object> row = rows.getFirst();
-        String state = String.valueOf(row.get("status"));
-        boolean currentHash = document.getContentHash() != null
-                && document.getContentHash().equals(row.get("content_hash"));
-        boolean currentChunker = descriptorProvider.describe(document)
-                .chunkerVersion().equals(row.get("chunker_version"));
-        int chunkCount = row.get("chunk_count") instanceof Number number
-                ? number.intValue() : 0;
-        UUID activeJobId = row.get("active_job_id") instanceof UUID uuid
-                ? uuid : null;
-        String error = string(row.get("processing_error"));
+        String expectedChunker = descriptorProvider.describe(document)
+                .chunkerVersion();
+        String localState = string(row.get("local_index_status"));
+        String embeddingState = string(row.get("embedding_status"));
+        boolean localPresent = localState != null;
+        boolean embeddingPresent = embeddingState != null;
+        boolean localCurrent = localPresent
+                && "READY".equals(localState)
+                && equals(document.getContentHash(), row.get("local_content_hash"))
+                && equals(expectedChunker, row.get("local_chunker_version"))
+                && positive(row.get("local_index_generation"))
+                && positive(row.get("local_chunk_count"))
+                && positive(row.get("local_actual_chunk_count"))
+                && ((Number) row.get("local_actual_chunk_count")).intValue()
+                        == ((Number) row.get("local_chunk_count")).intValue();
+        boolean embeddingCurrent = embeddingPresent
+                && "COMPLETED".equals(embeddingState)
+                && equals(document.getContentHash(),
+                        row.get("embedding_content_hash"))
+                && equals(expectedChunker, row.get("embedding_chunker_version"))
+                && positive(row.get("embedding_chunk_count"));
+
+        String localStatus;
+        if (localCurrent) {
+            localStatus = "READY";
+        } else if (localPresent && "NOT_REQUESTED".equals(localState)
+                && !embeddingPresent) {
+            localStatus = "NOT_REQUESTED";
+        } else if (!localPresent && !embeddingPresent) {
+            localStatus = "NOT_REQUESTED";
+        } else {
+            localStatus = "FAILED";
+        }
+
+        String publicEmbeddingStatus;
+        if (!embeddingPresent || "NOT_REQUESTED".equals(embeddingState)) {
+            publicEmbeddingStatus = "NOT_REQUESTED";
+        } else if (embeddingCurrent) {
+            publicEmbeddingStatus = "READY";
+        } else if ("QUEUED".equals(embeddingState)
+                || "PROCESSING".equals(embeddingState)
+                || "RUNNING".equals(string(row.get("job_status")))) {
+            publicEmbeddingStatus = "INDEXING";
+        } else if ("FAILED".equals(embeddingState)
+                || "CANCELLED".equals(embeddingState)) {
+            publicEmbeddingStatus = "FAILED";
+        } else {
+            publicEmbeddingStatus = "NOT_REQUESTED";
+        }
+
+        String searchability;
+        if ("READY".equals(localStatus)
+                && "READY".equals(publicEmbeddingStatus)) {
+            searchability = "READY";
+        } else if ("READY".equals(localStatus)
+                && ("INDEXING".equals(publicEmbeddingStatus)
+                    || "FAILED".equals(publicEmbeddingStatus)
+                    || "NOT_REQUESTED".equals(publicEmbeddingStatus))) {
+            searchability = "KEYWORD_ONLY";
+        } else if ("INDEXING".equals(publicEmbeddingStatus)) {
+            searchability = "INDEXING";
+        } else if ("NOT_REQUESTED".equals(localStatus)
+                && "NOT_REQUESTED".equals(publicEmbeddingStatus)) {
+            searchability = "NOT_REQUESTED";
+        } else {
+            searchability = "FAILED";
+        }
+
+        String error = string(row.get("local_error"));
+        String errorCode = null;
+        if (error != null && !"READY".equals(localStatus)) {
+            errorCode = "LOCAL_INDEX_FAILED";
+        }
+        if (error == null) {
+            error = string(row.get("embedding_error"));
+        }
         if (error == null) {
             error = string(row.get("job_error"));
         }
+        if (error != null && "FAILED".equals(publicEmbeddingStatus)) {
+            errorCode = "EMBEDDING_FAILED";
+        }
+        if (error == null && "FAILED".equals(searchability)
+                && !localPresent) {
+            errorCode = "LOCAL_INDEX_MISSING";
+        }
 
-        if ("COMPLETED".equals(state) && currentHash
-                && currentChunker && chunkCount > 0) {
-            return new DocumentLifecycleResponse(
-                    "ACTIVE", "READY", "READY", "READY",
-                    profile.profileKey(), activeJobId,
-                    null, error, false);
-        }
-        if ("QUEUED".equals(state) || "PROCESSING".equals(state)) {
-            return new DocumentLifecycleResponse(
-                    "ACTIVE", "INDEXING", "INDEXING", "INDEXING",
-                    profile.profileKey(), activeJobId,
-                    null, error, true);
-        }
-        if ("FAILED".equals(state) || "CANCELLED".equals(state)) {
-            return new DocumentLifecycleResponse(
-                    "ACTIVE", "FAILED", "FAILED", "FAILED",
-                    profile.profileKey(), activeJobId,
-                    "CANCELLED".equals(state)
-                            ? "INDEXING_CANCELLED" : "EMBEDDING_FAILED",
-                    error, true);
-        }
-        return lifecycle(
-                "NOT_REQUESTED", profile.profileKey(), activeJobId,
-                null, error);
-    }
-
-    private DocumentLifecycleResponse lifecycle(
-            String searchability,
-            String profileKey,
-            UUID activeJobId,
-            String errorCode,
-            String error) {
         return new DocumentLifecycleResponse(
                 "ACTIVE",
                 searchability,
-                searchability,
-                searchability,
-                profileKey,
-                activeJobId,
+                localStatus,
+                publicEmbeddingStatus,
+                profile.profileKey(),
+                uuid(row.get("active_job_id")),
                 errorCode,
                 error,
-                !"READY".equals(searchability)
-                        && !"DISABLED".equals(searchability));
+                !"READY".equals(searchability));
+    }
+
+    private DocumentLifecycleResponse notRequested(
+            String profileKey, UUID activeJobId, String error) {
+        return new DocumentLifecycleResponse(
+                "ACTIVE",
+                "NOT_REQUESTED",
+                "NOT_REQUESTED",
+                "NOT_REQUESTED",
+                profileKey,
+                activeJobId,
+                null,
+                error,
+                true);
     }
 
     private String activeProfileKey() {
         try {
             return profileProvider.getActiveProfile().profileKey();
         } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
+
+    private static boolean positive(Object value) {
+        return value instanceof Number number && number.longValue() > 0;
+    }
+
+    private static boolean equals(String expected, Object actual) {
+        return expected != null && expected.equals(actual);
+    }
+
+    private static UUID uuid(Object value) {
+        if (value instanceof UUID uuid) {
+            return uuid;
+        }
+        if (value == null) {
+            return null;
+        }
+        try {
+            return UUID.fromString(String.valueOf(value));
+        } catch (IllegalArgumentException ignored) {
             return null;
         }
     }

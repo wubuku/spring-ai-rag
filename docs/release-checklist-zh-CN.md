@@ -12,7 +12,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V42
+- [x] Flyway 迁移范围为 V1-V43
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -55,6 +55,7 @@
 
 - [x] V40/V41 增加业务 revision、完整快照、source namespace 和 generation fencing
 - [x] V42 增加权威外部快照对账 run 和删除来源标记
+- [x] V43 将与 Profile 无关的本地关键词 chunk 与远程向量状态分离
 - [x] 正文变化使旧派生结果立即 stale；metadata/payload/Collection-only 更新不重嵌入
 - [x] 外部 reference client 与中英文最佳实践已提交
 - [x] PostgreSQL 生命周期验收显式要求 `skipped=0`

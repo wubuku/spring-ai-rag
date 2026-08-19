@@ -72,6 +72,7 @@ public class DocumentMutationService {
     private final JdbcTemplate jdbcTemplate;
     private final RagDocumentLifecycleProperties properties;
     private final ObjectMapper objectMapper;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService;
 
     public DocumentMutationService(
             RagDocumentRepository documentRepository,
@@ -96,6 +97,12 @@ public class DocumentMutationService {
         this.objectMapper = objectMapper;
         this.properties = ragProperties.getDocumentLifecycle();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setKeywordIndexPersistenceService(
+            KeywordIndexPersistenceService keywordIndexPersistenceService) {
+        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
     public CreatedLocal createLocal(
@@ -281,6 +288,7 @@ public class DocumentMutationService {
                     document,
                     scopeChanged ? "COLLECTION_MOVE" : "UPDATE",
                     "Local import synchronized");
+            ensureLocalForNonSkipMutation(document, policy, contentChanged);
             boolean needsDerivation = enabled && (contentChanged || force
                     || !documentEmbedService.hasFreshEmbedding(document));
             EmbeddingDispatchService.Result dispatch = needsDerivation
@@ -369,6 +377,8 @@ public class DocumentMutationService {
                     contentChanged
                             ? "Local document content updated"
                             : "Local document metadata or scope updated");
+            ensureLocalForNonSkipMutation(
+                    document, request.getEmbeddingPolicy(), contentChanged);
             EmbeddingDispatchService.Result dispatch = contentChanged
                     ? dispatch(
                             document, true, request.getEmbeddingPolicy(),
@@ -404,6 +414,7 @@ public class DocumentMutationService {
             document = documentRepository.saveAndFlush(document);
             RagDocumentVersion version = versionService.forceRecordVersion(
                     document, "DISABLE", "Local document disabled");
+            dispatchService.markNotRequestedInCurrentTransaction(document);
             dispatchService.cancelActiveInCurrentTransaction(document.getId());
             return new Prepared(
                     document.getId(), "DISABLED",
@@ -434,6 +445,8 @@ public class DocumentMutationService {
             document = documentRepository.saveAndFlush(document);
             RagDocumentVersion version = versionService.forceRecordVersion(
                     document, "RESTORE", "Local document restored");
+            ensureLocalForNonSkipMutation(
+                    document, request.getEmbeddingPolicy(), false);
             EmbeddingDispatchService.Result dispatch =
                     documentEmbedService.hasFreshEmbedding(document)
                             ? null
@@ -872,6 +885,7 @@ public class DocumentMutationService {
                     document,
                     "TOMBSTONE",
                     "Authoritative source snapshot marked document missing");
+            dispatchService.markNotRequestedInCurrentTransaction(document);
             dispatchService.cancelActiveInCurrentTransaction(documentId);
             return true;
         }));
@@ -941,6 +955,7 @@ public class DocumentMutationService {
             RagDocumentVersion version = versionService.forceRecordVersion(
                     document, "TOMBSTONE",
                     "External source tombstoned the document");
+            dispatchService.markNotRequestedInCurrentTransaction(document);
             dispatchService.cancelActiveInCurrentTransaction(document.getId());
             return new ExternalPrepared(
                     document.getId(), "DELETED",
@@ -1127,6 +1142,7 @@ public class DocumentMutationService {
                 created
                         ? "External document created"
                         : "External managed state updated");
+        ensureLocalForNonSkipMutation(document, policy, contentChanged);
         boolean needsDerivation = Boolean.TRUE.equals(document.getEnabled())
                 && (contentChanged
                     || !documentEmbedService.hasFreshEmbedding(document));
@@ -1553,6 +1569,18 @@ public class DocumentMutationService {
         }
         return dispatchService.enqueueInCurrentTransaction(
                 document, contentChanged, force, origin);
+    }
+
+    private void ensureLocalForNonSkipMutation(
+            RagDocument document,
+            EmbeddingPolicy policy,
+            boolean contentChanged) {
+        if (keywordIndexPersistenceService == null
+                || !Boolean.TRUE.equals(document.getEnabled())
+                || policy == EmbeddingPolicy.SKIP) {
+            return;
+        }
+        keywordIndexPersistenceService.ensureCurrent(document);
     }
 
     private DocumentMutationResponse finish(Prepared prepared) {

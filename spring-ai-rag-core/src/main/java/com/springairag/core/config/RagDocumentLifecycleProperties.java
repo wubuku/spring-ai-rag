@@ -10,7 +10,6 @@ public class RagDocumentLifecycleProperties {
     private int idempotencyTtlHours = 24;
     private boolean syncRunsEnabled;
     private boolean versionRestoreEnabled;
-    private boolean keywordIndexEnabled;
     private int syncRunMaxMissingAbsolute = 1_000;
     private int syncRunMaxMissingPercent = 20;
 
@@ -34,9 +33,6 @@ public class RagDocumentLifecycleProperties {
 
     public boolean isVersionRestoreEnabled() { return versionRestoreEnabled; }
     public void setVersionRestoreEnabled(boolean value) { versionRestoreEnabled = value; }
-
-    public boolean isKeywordIndexEnabled() { return keywordIndexEnabled; }
-    public void setKeywordIndexEnabled(boolean value) { keywordIndexEnabled = value; }
 
     public int getSyncRunMaxMissingAbsolute() { return syncRunMaxMissingAbsolute; }
     public void setSyncRunMaxMissingAbsolute(int value) {

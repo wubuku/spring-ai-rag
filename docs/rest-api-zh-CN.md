@@ -824,19 +824,34 @@ embedding 已新鲜时，不会调用 embedding provider。
   "embeddingJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
   "lifecycle": {
     "documentState": "ACTIVE",
-    "searchability": "INDEXING"
+    "searchability": "INDEXING",
+    "localIndexStatus": "READY",
+    "embeddingStatus": "INDEXING",
+    "activeEmbeddingProfileKey": "bge-m3-1024",
+    "activeJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
+    "lastErrorCode": null,
+    "lastError": null,
+    "retryable": true
   },
   "errorCode": null,
   "error": null
 }
 ```
 
-`action` 为 `CREATED`、`UPDATED` 或 `UNCHANGED`。
-`embeddingStatus` 为 `COMPLETED`、`CACHED`、`NOT_REQUESTED` 或 `FAILED`。
-`NOT_REQUESTED` 始终表示本次请求使用了 `embed=false`；即使已经存在可用 embedding，
-也可能同时返回 `embeddingFresh=true`。`FAILED` 表示新的文档内容已经提交，但在重试
-embedding 前不可检索；旧向量可能仍然物理保留用于诊断，但 freshness 条件会排除它。
-若文档仍然 stale，使用相同请求重放即可重试 embedding。
+`action` 为 `CREATED`、`UPDATED` 或 `UNCHANGED`。嵌套的 lifecycle 是规范的可检索就绪契约：
+
+- `localIndexStatus=READY`：当前关键词 chunk 已存在；
+- `embeddingStatus=READY`：活动 Profile 的当前向量已存在；
+- `searchability=READY`：两条分支都已针对当前正文；
+- `searchability=KEYWORD_ONLY`：关键词分支当前可用，但向量分支处于
+  `INDEXING`、`FAILED` 或 `NOT_REQUESTED`；
+- `searchability=NOT_REQUESTED`：两条分支都未请求；
+- `searchability=DISABLED`：文档已禁用或 tombstone。
+
+兼容性的顶层 `embeddingStatus` 和 `embeddingFresh` 只描述远程 embedding 分支，
+不能用来判断关键词检索是否可用。provider 失败不会回滚文档，也不会暴露旧 chunk：
+新的本地 chunk 仍以 `KEYWORD_ONLY` 可检索，旧正文由 hash 和 generation freshness
+排除。重放同一请求或调用 embedding 重试操作后，可以恢复为 `searchability=READY`。
 
 生产默认 `strictExternalCas=true`：已有 identity 的新 revision 必须携带
 `expectedSourceRevision`。服务会先判断精确重放，
@@ -1046,8 +1061,9 @@ Paginated document query.
 ### `GET /api/v1/rag/documents/{id}`
 
 按内部 ID 返回正文、metadata、`documentRevision` 和 lifecycle。`lifecycle.searchability`
-为 `READY`、`INDEXING`、`FAILED`、`NOT_REQUESTED` 或 `DISABLED`；mutation 成功不等于
-已经可检索。
+为 `READY`、`KEYWORD_ONLY`、`INDEXING`、`FAILED`、`NOT_REQUESTED` 或 `DISABLED`。
+请分别检查 `localIndexStatus` 和 `embeddingStatus`；`embeddingFresh=false` 不等于
+关键词检索不可用。
 
 ---
 

@@ -1,8 +1,8 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.retrieval.KeywordIndexSqlScope;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -64,7 +64,7 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             Boolean hasIndex = jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
-                    "WHERE tablename = 'rag_embeddings' " +
+                    "WHERE tablename = 'rag_document_chunks' " +
                     "  AND indexdef ILIKE '%gin_trgm_ops%')",
                     Boolean.class);
             boolean available = Boolean.TRUE.equals(hasIndex);
@@ -134,9 +134,6 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
         if (scope != null && scope.matchNone()) return SearchResult.success(List.of());
         
         try {
-            // Set low threshold to get more results
-            jdbcTemplate.update("SET pg_trgm.similarity_threshold = ?", SIMILARITY_THRESHOLD);
-            
             List<Map<String, Object>> rows =
                     executeSearch(
                             query.trim(), scope, limit,
@@ -188,24 +185,26 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
             RetrievalFilters filters) {
-        String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, "
+        String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
+                + "e.chunk_text, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
                 + "similarity(e.chunk_text, ?) AS score_trgm";
-        String scope = EmbeddingProfileSqlScope.fromAndFreshness(
+        String scope = KeywordIndexSqlScope.fromAndFreshness(
                 embeddingProfileId,
                 descriptorProvider.textDescriptor().chunkerVersion(),
                 descriptorProvider.jsonRecordDescriptor().chunkerVersion());
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
-                + "AND e.chunk_text % ? "
+                + "AND similarity(e.chunk_text, ?) >= ? "
                 + "ORDER BY score_trgm DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
         args.add(query);
         args.addAll(fragment.args());
         args.add(query);
+        args.add(SIMILARITY_THRESHOLD);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());
     }
@@ -220,7 +219,16 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {
         if (excludeIds == null || excludeIds.isEmpty()) return false;
-        return excludeIds.contains(((Number) row.get("id")).longValue());
+        Object embeddingId = row.get("embedding_id");
+        if (embeddingId instanceof Number number) {
+            return excludeIds.contains(number.longValue());
+        }
+        // Compatibility for fixed-result/unit-test rows from the pre-V43 SQL.
+        if (!row.containsKey("local_chunk_id")
+                && row.get("id") instanceof Number number) {
+            return excludeIds.contains(number.longValue());
+        }
+        return false;
     }
     
     private RetrievalResult toResult(Map<String, Object> row, double score) {

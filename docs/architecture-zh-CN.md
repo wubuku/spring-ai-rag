@@ -278,7 +278,9 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
   `rag_embeddings`；这些文档之后仍可能被全库检索命中。
 - `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
   全局 EmbeddingModel，但每次写入和查询都会绑定到一个不可变 Embedding Profile。
-- 向量和全文检索都要求活动 Profile、最新 content hash 对应的 `COMPLETED` 状态，以及启用的文档。
+- 向量检索要求活动 Profile、最新 content hash 对应的 `COMPLETED` 状态以及启用的文档。
+  全文检索改为使用与 Profile 无关的本地 chunk generation 及对应 local-index 状态；
+  向量任务排队或失败时，全文仍可通过 `KEYWORD_ONLY` 工作。
 - Collection 条件通过 `d.collection_id` 直接下推到检索 SQL；selected ID 与显式
   document ID 使用 PostgreSQL `bigint[]` JDBC 数组参数。因此范围成本取决于选中的
   Collection 数量，而不是这些 Collection 包含的全部文档数。
@@ -509,6 +511,8 @@ rag_collection (1) ──→ (N) rag_documents
 rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
 rag_documents  (1) ──→ (N) rag_embedding_jobs
+rag_documents  (1) ──→ (N) rag_document_chunks
+rag_documents  (1) ──→ (1) rag_document_local_index_state
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
 rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
@@ -539,6 +543,8 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
+| `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
+| `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | 当前本地关键词 generation 与 freshness |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |
@@ -548,17 +554,24 @@ rag_audit_log           # 审计日志（集合操作）
   UPDATE trigger 共同保证字符契约与不可变性
 - `rag_embeddings.embedding_1024`：Profile 专属 partial HNSW 索引（向量近邻搜索）
 - `rag_documents.content_hash`：B-Tree（哈希去重）
-- `rag_documents`：GIN 索引（全文检索，jiebacfg 中文分词）
+- `rag_document_chunks.search_vector_en`：English FTS 的 GIN 索引
+- `rag_document_chunks.chunk_text`：可选 pg_trgm GIN 索引
+- `rag_document_chunks`：安装 pg_jieba 时创建 `jiebacfg` 表达式 GIN 索引
 - `rag_documents.jsonb_payload`：V34 partial GIN `jsonb_path_ops`（enabled JSON record 的 `@>` 包含过滤）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
 
 ### 5.3 全文检索配置
 
-PostgreSQL 全文检索使用 `pg_jieba` 中文分词扩展：
+PostgreSQL 全文检索从当前 generation 的
+`rag_document_chunks` 与 `rag_document_local_index_state` 读取：
+- English FTS 使用 generated `search_vector_en`
+- pg_trgm 使用可选的 `chunk_text gin_trgm_ops` 索引
+- pg_jieba 使用可选的 `to_tsvector('jiebacfg', chunk_text)` 表达式索引
 - 搜索配置：`jiebacfg`（基于 jieba 分词器）
 - 支持中文 tokenization + ranking (`ts_rank`)
-- HybridRetrieverService 中向量检索和全文检索结果通过 RRF（Reciprocal Rank Fusion）融合
+- `rag_embeddings` 仍是向量真相源；HybridRetrieverService 通过 RRF
+  （Reciprocal Rank Fusion）融合向量和全文结果
 
 ---
 

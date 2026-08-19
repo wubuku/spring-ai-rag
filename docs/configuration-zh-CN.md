@@ -235,7 +235,6 @@ rag:
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
     sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
     version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
-    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
     sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
     sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
@@ -247,7 +246,6 @@ rag:
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | 本地 create/upload `Idempotency-Key` 记录的保留小时数，限制为 1–168 |
 | `rag.document-lifecycle.sync-runs-enabled` | `false` | 开启权威外部快照 Sync Run API；默认关闭，开启前应先完成一次性 PostgreSQL/E2E 验收 |
 | `rag.document-lifecycle.version-restore-enabled` | `false` | 开启本地文档 `FULL` 历史版本恢复 API；外部托管文档仍不可由该入口恢复 |
-| `rag.document-lifecycle.keyword-index-enabled` | `false` | 预留的本地关键词派生开关；当前 keyword/vector 解耦尚未交付，保持关闭 |
 | `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | `TOMBSTONE` 快照的绝对缺失保护阈值；超出且未显式确认时拒绝完成，限制为 1–100000 |
 | `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | `TOMBSTONE` 快照的相对缺失保护阈值（百分比）；限制为 1–100 |
 
@@ -255,6 +253,13 @@ rag:
 外部文档和 JSON record 使用
 `collectionKey + sourceNamespace + externalId` 身份及 opaque `sourceRevision`。正文 mutation
 与派生任务同事务提交；metadata、JSONB payload 或 Collection-only 变化不请求 embedding。
+
+对启用文档，所有非 `SKIP` 的正文 mutation 都会准备本地关键词 chunk。
+V43 将它们存入独立的 `rag_document_chunks`，并用独立的
+`rag_document_local_index_state` 记录 freshness；这条路径不依赖 embedding provider 或
+Profile。`SKIP` 会删除当前本地 chunk，并将本地状态标为 `NOT_REQUESTED`。因此远程
+embedding 分支排队、执行中或失败时，全文检索仍可通过 `KEYWORD_ONLY` 工作。当前没有
+额外的关键词索引开关配置。
 
 普通外部文本文档同步要求 `collectionKey`，且它必须指向真实存在的活动 Collection。
 JSON record upsert 仍兼容 deprecated 数字输入，但最终解析到同一个以 key 为准的规范地址。
@@ -730,7 +735,8 @@ V27/V28 增加必填、全局唯一、不可变的 `rag_collection.collection_ke
 external ID，并重建局部唯一索引；V32–V39 增加 Chat lease、持久化任务、过滤/诊断/质量
 运营和无悲观锁协调；V40/V41 增加文档业务 revision、完整快照、source namespace、
 generation fencing 与 lifecycle/idempotency contract；V42 增加权威外部快照对账 run
-以及 SOURCE/RECONCILIATION 删除标记。
+以及 SOURCE/RECONCILIATION 删除标记；V43 增加与 Profile 无关的本地关键词 chunk 和
+独立的本地索引生命周期状态。
 
 ## Profile 一览
 

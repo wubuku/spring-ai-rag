@@ -110,30 +110,30 @@ public class SearchCapabilities {
      */
     private void detectIndexes() {
         try {
-            // Detect jieba tsvector GIN index (search_vector_zh column)
+            // Detect jieba expression GIN index on local keyword chunks.
             hasZhIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
                     "WHERE schemaname = 'public' " +
-                    "  AND tablename = 'rag_embeddings' " +
+                    "  AND tablename = 'rag_document_chunks' " +
                     "  AND indexdef ILIKE '%search_vector_zh%gin%')",
                     Boolean.class));
 
-            // Detect english tsvector GIN index (search_vector_en column)
+            // Detect english generated tsvector GIN index.
             hasEnIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
                     "WHERE schemaname = 'public' " +
-                    "  AND tablename = 'rag_embeddings' " +
+                    "  AND tablename = 'rag_document_chunks' " +
                     "  AND indexdef ILIKE '%search_vector_en%gin%')",
                     Boolean.class));
 
-            // Detect trigram GIN index
+            // Detect trigram GIN index on local keyword chunks.
             hasTrgmIndex = Boolean.TRUE.equals(jdbcTemplate.queryForObject(
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
                     "WHERE schemaname = 'public' " +
-                    "  AND tablename = 'rag_embeddings' " +
+                    "  AND tablename = 'rag_document_chunks' " +
                     "  AND indexdef ILIKE '%gin_trgm_ops%')",
                     Boolean.class));
 

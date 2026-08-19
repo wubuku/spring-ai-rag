@@ -58,6 +58,8 @@ export function DocumentActionsMenu({
   const menuRef = useRef<HTMLDivElement>(null);
   const provenance = derivePdfProvenance(ragDocument.source);
   const externallyManaged = Boolean(ragDocument.externalId?.trim());
+  const embeddingRetryable = ragDocument.lifecycle?.retryable === true
+    || ragDocument.embeddingFresh === false;
 
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -182,7 +184,7 @@ export function DocumentActionsMenu({
               {t('documents.edit')}
             </button>
           )}
-          {ragDocument.embeddingFresh === false && ragDocument.enabled !== false && (
+          {embeddingRetryable && ragDocument.enabled !== false && (
             <button
               type="button"
               role="menuitem"

@@ -152,7 +152,8 @@ export function Documents() {
   });
 
   const embedMutation = useMutation({
-    mutationFn: (id: number) => documentsApi.embed(id),
+    mutationFn: ({ id, force }: { id: number; force: boolean }) =>
+      documentsApi.embed(id, force),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
       showToast(t('documents.embeddingRetried'), 'success');
@@ -405,7 +406,7 @@ export function Documents() {
                           doc.embeddingFresh,
                           doc.enabled,
                         )}`}
-                        title={doc.lifecycle?.lastError ?? doc.processingError ?? undefined}
+                        title={lifecycleTitle(doc, t)}
                       >
                         {lifecycleLabel(doc, t)}
                       </span>
@@ -425,7 +426,10 @@ export function Documents() {
                         onPreview={() => handlePreview(doc)}
                         onVersions={() => setVersionsDoc(doc)}
                         onEdit={() => handleEdit(doc)}
-                        onRetryEmbedding={() => embedMutation.mutate(doc.id)}
+                        onRetryEmbedding={() => embedMutation.mutate({
+                          id: doc.id,
+                          force: doc.lifecycle?.retryable === true,
+                        })}
                         onDisable={() => {
                           if (confirm(t('documents.disableConfirm'))) {
                             disableMutation.mutate(doc);
@@ -649,4 +653,18 @@ function lifecycleLabel(
     : document.lifecycle?.searchability
       || (document.embeddingFresh ? 'READY' : 'NOT_REQUESTED');
   return translate(`documents.lifecycle.${value}`);
+}
+
+function lifecycleTitle(
+  document: Document,
+  translate: (key: string) => string,
+): string | undefined {
+  const value = document.enabled === false
+    ? 'DISABLED'
+    : document.lifecycle?.searchability
+      || (document.embeddingFresh ? 'READY' : 'NOT_REQUESTED');
+  if (value === 'KEYWORD_ONLY') {
+    return translate('documents.keywordOnlyHint');
+  }
+  return document.lifecycle?.lastError ?? document.processingError ?? undefined;
 }

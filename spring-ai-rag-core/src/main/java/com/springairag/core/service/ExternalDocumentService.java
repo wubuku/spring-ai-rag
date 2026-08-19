@@ -63,6 +63,7 @@ public class ExternalDocumentService {
     private final TransactionTemplate transactionTemplate;
     private EmbeddingDispatchService dispatchService;
     private DocumentMutationService mutationService;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService;
 
     public ExternalDocumentService(
             RagDocumentRepository documentRepository,
@@ -92,6 +93,12 @@ public class ExternalDocumentService {
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setKeywordIndexPersistenceService(
+            KeywordIndexPersistenceService keywordIndexPersistenceService) {
+        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setMutationService(DocumentMutationService mutationService) {
         this.mutationService = mutationService;
     }
@@ -113,6 +120,7 @@ public class ExternalDocumentService {
         Persisted persisted = executeInTransaction(() -> {
             queued[0] = null;
             Persisted next = persistInTransaction(request, collectionId);
+            coordinateLocalIndex(next, policy);
             if (policy == EmbeddingPolicy.ASYNC && dispatchService != null) {
                 queued[0] = dispatchService.enqueueInCurrentTransaction(
                         next.document(),
@@ -381,6 +389,9 @@ public class ExternalDocumentService {
         document = documentRepository.saveAndFlush(document);
         RagDocumentVersion version = documentVersionService.forceRecordVersion(
                 document, "DELETE", "External document source deleted");
+        if (keywordIndexPersistenceService != null) {
+            keywordIndexPersistenceService.markNotRequested(document);
+        }
         confirmActiveCollectionWrite(collectionToken);
         return new ExternalDocumentDeleteResponse(
                 document.getId(), collectionKey, externalId, sourceRevision,
@@ -469,6 +480,24 @@ public class ExternalDocumentService {
                 embeddingAction,
                 embeddingJobId,
                 embeddingBatchId);
+    }
+
+    private void coordinateLocalIndex(
+            Persisted persisted, EmbeddingPolicy policy) {
+        if (keywordIndexPersistenceService == null) {
+            return;
+        }
+        RagDocument document = persisted.document();
+        if (policy == EmbeddingPolicy.SKIP) {
+            if (persisted.contentChanged()
+                    || !Boolean.TRUE.equals(document.getEnabled())) {
+                keywordIndexPersistenceService.markNotRequested(document);
+            }
+            return;
+        }
+        if (Boolean.TRUE.equals(document.getEnabled())) {
+            keywordIndexPersistenceService.ensureCurrent(document);
+        }
     }
 
     private DocumentDetailResponse toDetail(RagDocument document) {

@@ -12,7 +12,7 @@
 | Authoritative source snapshot reconciliation | Shipped in this batch | V42 API and reference client support bounded authoritative runs, preview fingerprints, deletion protection, and reconciliation tombstones |
 | Atomic Collection relocation for external documents | P1 | Changing `collectionKey` on ordinary upsert addresses another identity; the current tombstone-plus-create flow cannot preserve the internal ID/history or avoid a transient duplicate/gap |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
-| Decouple local chunks/full text from remote vectors | P1 / larger | Full-text retrieval still depends on `rag_embeddings` and a `COMPLETED` Profile, so provider failures also remove keyword retrieval |
+| Decouple local chunks/full text from remote vectors | Shipped in this batch | V43 stores profile-neutral local chunks/state; provider failures leave current content available as `KEYWORD_ONLY` while stale generations remain excluded |
 
 ### Current Boundaries
 
@@ -29,9 +29,9 @@
   durable-job, and commit-fencing paths.
 - Only versions with `snapshotCompleteness=FULL` are eligible for complete
   restoration. Older compatibility snapshots remain audit-only.
-- Future local full-text derivation must continue excluding old content
-  immediately while allowing new content to become `KEYWORD_ONLY` before
-  remote embedding succeeds and promotes it to `READY`.
+- V43 local full-text derivation excludes old content immediately and allows new
+  content to become `KEYWORD_ONLY` before remote embedding succeeds and
+  promotes the lifecycle to `READY`.
 - Concurrency remains based on conditional DML/CAS, unique constraints, leases,
   and bounded retries; explicit pessimistic locking remains forbidden.
 

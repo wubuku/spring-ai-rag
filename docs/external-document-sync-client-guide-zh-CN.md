@@ -118,7 +118,7 @@ tombstone 模型。调用者分别提供：
 | 变化 | 文档 revision | 旧检索结果 | 新 embedding 任务 |
 |---|---:|---|---|
 | 使用 `SYNC`/`ASYNC` 创建 | 增加 | 不适用 | 有 |
-| 修改 `content` / `retrievalText` | 增加 | 立即 stale 并退出检索 | 有 |
+| 修改 `content` / `retrievalText` | 增加 | 旧 generation 立即退出；新本地 chunk 可能先处于 `KEYWORD_ONLY` | 有 |
 | 只改标题/来源/metadata | 增加 | 当前文档属性立即生效 | 无 |
 | 只改 `jsonbPayload` | 增加 | 当前 payload 立即生效 | 无 |
 | 普通 upsert 改 `collectionKey` | 不是同一身份的更新 | 旧地址仍存在，除非显式 tombstone | 新地址按创建处理 |
@@ -126,8 +126,9 @@ tombstone 模型。调用者分别提供：
 | restore | 增加 | 已 fresh 则复用，否则按策略排队 | 仅需要时 |
 | 本地永久删除 | 主记录删除 | 立即退出检索 | 待执行任务与派生数据被取消/清理 |
 
-新正文索引期间，服务不会返回旧 content hash 的 chunk。在当前存储模型下，该文档会暂时同时
-退出关键词和向量检索，直到新的派生状态进入 `READY`。
+新正文索引期间，服务不会返回旧 content hash 的 chunk。V43 将与 Profile 无关的本地
+chunk 和远程向量分开准备，因此远程向量排队、执行中或失败时，文档仍可能以
+`KEYWORD_ONLY` 进入关键词检索；只有本地和向量两条分支都当前时才是 `READY`。
 
 `embeddingPolicy` 控制调度与等待：
 
@@ -167,8 +168,10 @@ Collection 由多个 connector 共同写入，必须在第一次投递前选择�
 | `401` / `403` | 停止并修复凭据或 Collection ACL。 |
 | tombstone 返回 `404` | 对账来源/client 状态，禁止静默转成创建。 |
 
-文档变更成功后的 embedding provider 失败不会回滚来源文档。lifecycle 会进入 `FAILED`，
-旧 chunk 继续被排除；可以重放同一已接受 revision，或通过 embedding 运维端点重试。
+文档变更成功后的 embedding provider 失败不会回滚来源文档。本地索引当前时，lifecycle
+会进入 `KEYWORD_ONLY`，同时 embedding 分支失败；旧 chunk 继续被排除。可以重放同一已
+接受 revision，或通过 embedding 运维端点重试。`embeddingFresh` 和兼容性的顶层
+`embeddingStatus` 只描述向量分支。
 
 ## 6. 可检索就绪
 
@@ -176,11 +179,15 @@ mutation 成功表示来源状态已被接受，不一定表示已可检索。
 
 使用文档 lifecycle 读模型：
 
-- `READY`：当前正文可检索；
-- `INDEXING`：持久化任务排队或执行中；
-- `FAILED`：当前派生失败；响应会标明是否可重试；
+- `READY`：当前正文同时可通过关键词和向量检索；
+- `KEYWORD_ONLY`：当前本地关键词 chunk 可检索，但向量任务排队、执行中、未请求或失败；
+- `INDEXING`：当前本地索引尚未就绪，持久化任务排队或执行中；
+- `FAILED`：当前本地派生失败；响应会标明是否可重试；
 - `NOT_REQUESTED`：调用方使用了 `SKIP`；
 - `DISABLED`：已停用或 tombstone。
+
+运维判断应同时读取 `localIndexStatus`、`embeddingStatus` 和 `searchability`。
+不要把 `embeddingFresh=false` 直接当作“关键词检索不到”。
 
 批量流程优先查询 Collection embedding readiness，不要逐文档高频轮询。
 

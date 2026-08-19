@@ -77,6 +77,7 @@ public class JsonRecordService {
     private EmbeddingDispatchService dispatchService;
     private DocumentMutationService mutationService;
     private DocumentLifecycleService lifecycleService;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService;
 
     @Autowired
     public JsonRecordService(
@@ -139,6 +140,12 @@ public class JsonRecordService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setLifecycleService(DocumentLifecycleService lifecycleService) {
         this.lifecycleService = lifecycleService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setKeywordIndexPersistenceService(
+            KeywordIndexPersistenceService keywordIndexPersistenceService) {
+        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
@@ -575,6 +582,7 @@ public class JsonRecordService {
         if (transactionTemplate == null) {
             PersistedRecord persisted = persistInTransaction(
                     request, originalFilename, enabledOverride);
+            coordinateLocalIndex(persisted, policy);
             enqueueAsync(persisted, policy, queuedOut);
             return persisted;
         }
@@ -587,6 +595,7 @@ public class JsonRecordService {
                 PersistedRecord result = transactionTemplate.execute(status -> {
                     PersistedRecord persisted = persistInTransaction(
                             request, originalFilename, enabledOverride);
+                    coordinateLocalIndex(persisted, policy);
                     enqueueAsync(persisted, policy, queuedOut);
                     return persisted;
                 });
@@ -738,6 +747,24 @@ public class JsonRecordService {
                 persisted.contentChanged(),
                 false,
                 "JSON_UPSERT");
+    }
+
+    private void coordinateLocalIndex(
+            PersistedRecord persisted, EmbeddingPolicy policy) {
+        if (keywordIndexPersistenceService == null) {
+            return;
+        }
+        RagDocument document = persisted.document();
+        if (policy == EmbeddingPolicy.SKIP) {
+            if (persisted.contentChanged()
+                    || !Boolean.TRUE.equals(document.getEnabled())) {
+                keywordIndexPersistenceService.markNotRequested(document);
+            }
+            return;
+        }
+        if (Boolean.TRUE.equals(document.getEnabled())) {
+            keywordIndexPersistenceService.ensureCurrent(document);
+        }
     }
 
     private EmbeddingOutcome outcomeFromDispatch(EmbeddingDispatchService.Result result) {

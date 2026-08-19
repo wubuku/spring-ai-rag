@@ -12,7 +12,7 @@
 | 权威来源全量快照对账 | 本批已交付 | V42 API 和 reference client 支持有界权威 run、preview fingerprint、删除保护和 reconciliation tombstone |
 | 外部文档原子 Collection 迁移 | P1 | 普通 upsert 改 `collectionKey` 会寻址另一身份；当前只能 tombstone + 新建，不能保留内部 ID、版本历史或避免短暂重复/空窗 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |
-| 本地 chunk/full-text 与远程向量解耦 | P1 / 较大 | 全文检索仍依赖 `rag_embeddings` 与 `COMPLETED` Profile；provider 故障会同时中断关键词检索 |
+| 本地 chunk/full-text 与远程向量解耦 | 本批已交付 | V43 保存与 Profile 无关的本地 chunk/state；provider 故障时当前正文仍以 `KEYWORD_ONLY` 可用，旧 generation 继续被排除 |
 
 ### 当前边界
 
@@ -24,8 +24,8 @@
 - 版本恢复不能直接回退计数器或覆盖历史；当前操作会创建新 revision、新完整快照，并复用
   现有 mutation impact、持久化 job 和 commit fencing。
 - 只有 `snapshotCompleteness=FULL` 的历史版本才具备完整恢复资格；旧兼容快照只用于审计。
-- 后续本地全文派生必须保持“旧正文立即退出”的一致性，同时允许新正文先进入
-  `KEYWORD_ONLY`，远程 embedding 成功后再进入 `READY`。
+- V43 本地全文派生保持“旧正文立即退出”，允许新正文先进入
+  `KEYWORD_ONLY`，远程 embedding 成功后再将 lifecycle 提升为 `READY`。
 - 所有并发协调继续使用条件 DML/CAS、唯一约束、lease 和有界重试，禁止显式悲观锁。
 
 剩余实施范围和批次顺序以

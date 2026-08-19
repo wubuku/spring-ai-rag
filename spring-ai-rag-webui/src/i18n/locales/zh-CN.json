@@ -72,6 +72,7 @@
     "retryEmbedding": "重试嵌入",
     "embeddingRetried": "已开始重试嵌入",
     "embeddingRetryError": "嵌入重试失败",
+    "keywordOnlyHint": "关键词检索可用；语义检索正在等待嵌入恢复。",
     "edit": "编辑文档",
     "editDocument": "编辑文档",
     "source": "来源",

@@ -222,6 +222,22 @@ export async function mockAllApiCalls(page: Page) {
         retryable: false,
       },
     };
+    const keywordOnlyDocument = {
+      ...localDocument,
+      id: 4,
+      title: 'Keyword Only Lifecycle Document',
+      contentHash: 'keyword123def456',
+      documentRevision: 6,
+      embeddingFresh: false,
+      lifecycle: {
+        documentState: 'ACTIVE',
+        searchability: 'KEYWORD_ONLY',
+        localIndexStatus: 'READY',
+        embeddingStatus: 'FAILED',
+        lastError: 'provider unavailable',
+        retryable: true,
+      },
+    };
 
     if (method === 'POST' && path.endsWith('/embed')) {
       await route.fulfill({
@@ -325,6 +341,7 @@ export async function mockAllApiCalls(page: Page) {
         documents: [
           localDocument,
           disabledDocument,
+          keywordOnlyDocument,
           {
             id: 1,
             title: 'Sample Document',
@@ -350,7 +367,7 @@ export async function mockAllApiCalls(page: Page) {
             },
           },
         ],
-        total: 3,
+        total: 4,
         page: 0,
         size: 20,
       }),

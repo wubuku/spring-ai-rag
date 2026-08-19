@@ -1,8 +1,8 @@
 package com.springairag.core.retrieval.fulltext;
 
 import com.springairag.api.dto.RetrievalResult;
-import com.springairag.core.retrieval.EmbeddingProfileSqlScope;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
+import com.springairag.core.retrieval.KeywordIndexSqlScope;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -66,7 +66,7 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
                     "SELECT EXISTS (" +
                     "SELECT 1 FROM pg_indexes " +
                     "WHERE schemaname = 'public' " +
-                    "  AND tablename = 'rag_embeddings' " +
+                    "  AND tablename = 'rag_document_chunks' " +
                     "  AND indexdef ILIKE '%search_vector_zh%gin%')",
                     Boolean.class);
             boolean indexAvailable = Boolean.TRUE.equals(hasIndex);
@@ -162,21 +162,22 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
             RetrievalFilters filters) {
         // Use pre-built search_vector_zh column (with GIN index)
         // Use websearch_to_tsquery for Google-style search syntax
-        String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, "
+        String select = "SELECT e.id AS local_chunk_id, v.id AS embedding_id, "
+                + "e.chunk_text, e.document_id, e.chunk_index, "
                 + currentMetadataSql() + ", "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
-                + "ts_rank_cd(e.search_vector_zh, "
+                + "ts_rank_cd(to_tsvector('" + TS_CONFIG + "', e.chunk_text), "
                 + "websearch_to_tsquery('" + TS_CONFIG + "', ?)) AS rank";
-        String scope = EmbeddingProfileSqlScope.fromAndFreshness(
+        String scope = KeywordIndexSqlScope.fromAndFreshness(
                 embeddingProfileId,
                 descriptorProvider.textDescriptor().chunkerVersion(),
                 descriptorProvider.jsonRecordDescriptor().chunkerVersion());
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
-                + "AND e.search_vector_zh IS NOT NULL "
-                + "AND e.search_vector_zh @@ websearch_to_tsquery('"
+                + "AND to_tsvector('" + TS_CONFIG + "', e.chunk_text) "
+                + "@@ websearch_to_tsquery('"
                 + TS_CONFIG + "', ?) "
                 + "ORDER BY rank DESC LIMIT ?";
         List<Object> args = new ArrayList<>();
@@ -197,7 +198,15 @@ public class PgJiebaFulltextProvider implements FulltextSearchProvider {
 
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {
         if (excludeIds == null || excludeIds.isEmpty()) return false;
-        return excludeIds.contains(((Number) row.get("id")).longValue());
+        Object embeddingId = row.get("embedding_id");
+        if (embeddingId instanceof Number number) {
+            return excludeIds.contains(number.longValue());
+        }
+        if (!row.containsKey("local_chunk_id")
+                && row.get("id") instanceof Number number) {
+            return excludeIds.contains(number.longValue());
+        }
+        return false;
     }
 
     private RetrievalResult toResult(Map<String, Object> row, double rank) {

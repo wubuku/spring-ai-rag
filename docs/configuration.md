@@ -249,7 +249,6 @@ rag:
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
     sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
     version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
-    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
     sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
     sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
@@ -261,7 +260,6 @@ rag:
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | Retention for local create/upload `Idempotency-Key` records, clamped to 1–168 hours |
 | `rag.document-lifecycle.sync-runs-enabled` | `false` | Enables the authoritative external snapshot Sync Run API; keep disabled until the disposable PostgreSQL/E2E acceptance passes |
 | `rag.document-lifecycle.version-restore-enabled` | `false` | Enables local `FULL` historical-version restore; externally managed documents remain source-owned |
-| `rag.document-lifecycle.keyword-index-enabled` | `false` | Reserved local keyword-derivation flag; keyword/vector decoupling is not delivered yet, so keep it disabled |
 | `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | Absolute missing-document safety threshold for `TOMBSTONE` runs; completion is rejected above it without explicit confirmation; clamped to 1–100000 |
 | `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | Relative missing-document safety threshold (percent) for `TOMBSTONE` runs; clamped to 1–100 |
 
@@ -271,6 +269,15 @@ and permanent delete. External text and JSON records use
 `sourceRevision`. Content mutations commit their durable derivation job in the
 same transaction. Metadata, JSONB payload, and Collection-only mutations do
 not request an embedding.
+
+For enabled documents, every non-`SKIP` content mutation prepares local
+keyword chunks in V43's `rag_document_chunks` table and records their
+independent freshness in `rag_document_local_index_state`. This path does not
+depend on an embedding provider or Profile. `SKIP` removes the current local
+chunks and marks local indexing `NOT_REQUESTED`. Full-text retrieval can
+therefore remain available as `KEYWORD_ONLY` while the remote embedding branch
+is queued, processing, or failed. There is no separate configuration flag for
+this behavior.
 
 For ordinary external-text synchronization, `collectionKey` is required and
 must identify a real active Collection. JSON-record upsert retains deprecated
@@ -776,7 +783,9 @@ unique index. V32–V39 add Chat leases, durable jobs, filter/diagnostic/quality
 operations, and non-pessimistic coordination. V40/V41 add document business
 revisions, complete snapshots, source namespaces, generation fencing, and the
 lifecycle/idempotency contract. V42 adds authoritative external snapshot
-reconciliation runs and source/reconciliation deletion markers.
+reconciliation runs and source/reconciliation deletion markers. V43 adds
+profile-neutral local keyword chunks and independent local-index lifecycle
+state.
 
 ## Profile Overview
 

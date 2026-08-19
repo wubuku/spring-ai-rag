@@ -311,7 +311,6 @@ rag:
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
     sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
     version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
-    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
     sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
     sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 

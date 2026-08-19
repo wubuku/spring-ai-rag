@@ -115,8 +115,8 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 
 - Collection 的 `embeddingModel`、`dimensions` 当前是管理/导入导出元数据，不会为每个
   Collection 切换 EmbeddingModel；实际写入和查询仍使用全局 Embedding 配置。
-- 向量和全文检索会排除 disabled 文档，并要求活动 Embedding Profile 存在新鲜的
-  completed 状态。
+- 向量检索会排除 disabled 文档，并要求活动 Embedding Profile 存在新鲜的
+  completed 状态。全文检索使用与 Profile 无关的本地 chunk，并要求当前本地索引状态。
 - 删除 Collection 会尝试软删除集合；若其中存在 `externalId` 非空的外部托管文档则返回
   `409`，不会执行删除，因为解除关联会破坏
   `collectionKey + sourceNamespace + externalId` 稳定身份。
@@ -262,9 +262,13 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 connector 修改来源拥有的文档。恢复正文会复用正常的 generation fencing；只恢复 metadata
 时不会调用 embedding provider。
 
-当前全文检索与向量检索共用 `rag_embeddings` chunk，并要求活动 Embedding Profile 状态为
-`COMPLETED`。因此正文变化到新 embedding 完成前，或 provider 失败时，该文档会同时退出
-关键词和向量检索；尚未实现独立的本地 chunk/full-text 派生状态。
+V43 将本地关键词派生与远程向量解耦。非 `SKIP` 的正文 mutation 会先把当前 chunk
+写入 `rag_document_chunks`，并在 `rag_document_local_index_state` 记录 freshness，
+再等待远程 provider。旧本地 generation 会立即退出检索，因此 provider 失败不会暴露旧文本。
+当本地索引是当前版本、但活动 Profile 的向量仍排队、执行中、未请求或失败时，lifecycle
+为 `KEYWORD_ONLY`；只有两条分支都当前时才是 `READY`。`embeddingFresh` 只表示向量
+freshness，不能用来判断关键词检索是否可用。`SKIP` 会删除当前本地 chunk，并报告
+`NOT_REQUESTED`。
 
 ## 5. 多模型
 
@@ -285,7 +289,7 @@ connector 修改来源拥有的文档。恢复正文会复用正常的 generatio
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V42。
+- Flyway 当前为 V1–V43。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -295,12 +299,17 @@ connector 修改来源拥有的文档。恢复正文会复用正常的 generatio
   V38 增加受管评估套件；V39 用原子计数器、并发槽位和 CAS 状态替换显式悲观协调；
   V40/V41 增加文档业务 revision、完整快照、来源 namespace、派生 generation 与
   lifecycle/idempotency schema，并收紧三元身份和活动任务约束；V42 增加权威外部快照
-  run、幂等 item ledger 以及 SOURCE/RECONCILIATION 删除标记。
+  run、幂等 item ledger 以及 SOURCE/RECONCILIATION 删除标记；V43 增加与 Profile 无关的
+  本地关键词 chunk 及独立的本地索引生命周期状态。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
   触发的数据库内部短锁不属于该禁令。
 - `vector` 必需，`pg_trgm` 推荐，`pg_jieba` 可选。
+- `rag_document_chunks` 是全文检索的真相源；V43 会创建 English generated
+  `tsvector`，并在对应数据库能力存在时创建 pg_trgm GIN 索引和 `jiebacfg` 表达式索引。
+- `rag_document_local_index_state` 为每份文档保存当前本地 generation。它独立于
+  embedding Profile 状态，通过条件 DML/generation 检查推进，不使用悲观锁。
 - Chat memory、业务历史、检索日志、评估、反馈、A/B、告警、API Key 和文件数据分别持久化。
 
 ### HTTP

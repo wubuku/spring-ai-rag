@@ -12,6 +12,7 @@ import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.KeywordIndexPersistenceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +32,7 @@ public class EmbeddingDispatchService {
     private final RagEmbeddingJobProperties jobProperties;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final EmbeddingJobExecutor jobExecutor;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService;
 
     @Autowired
     public EmbeddingDispatchService(
@@ -46,6 +48,12 @@ public class EmbeddingDispatchService {
         this.jobProperties = ragProperties.getEmbeddingJobs();
         this.descriptorProvider = descriptorProvider;
         this.jobExecutor = jobExecutor;
+    }
+
+    @Autowired(required = false)
+    void setKeywordIndexPersistenceService(
+            KeywordIndexPersistenceService keywordIndexPersistenceService) {
+        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
     public EmbeddingDispatchService(
@@ -79,6 +87,9 @@ public class EmbeddingDispatchService {
             boolean contentChanged,
             boolean force,
             String origin) {
+        if (keywordIndexPersistenceService != null) {
+            keywordIndexPersistenceService.ensureCurrent(document);
+        }
         if (!jobProperties.isEnabled()) {
             throw new RagException(
                     ErrorCode.EMBEDDING_JOBS_DISABLED,
@@ -165,6 +176,9 @@ public class EmbeddingDispatchService {
 
     @Transactional
     public Result markNotRequestedInCurrentTransaction(RagDocument document) {
+        if (keywordIndexPersistenceService != null) {
+            keywordIndexPersistenceService.markNotRequested(document);
+        }
         EmbeddingProfile profile = profileProvider.getActiveProfile();
         DocumentDerivationDescriptorProvider.Descriptor descriptor =
                 descriptor(document);

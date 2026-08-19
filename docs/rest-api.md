@@ -945,21 +945,38 @@ The response is HTTP 200 even when persistence succeeds but embedding fails:
   "embeddingJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
   "lifecycle": {
     "documentState": "ACTIVE",
-    "searchability": "INDEXING"
+    "searchability": "INDEXING",
+    "localIndexStatus": "READY",
+    "embeddingStatus": "INDEXING",
+    "activeEmbeddingProfileKey": "bge-m3-1024",
+    "activeJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
+    "lastErrorCode": null,
+    "lastError": null,
+    "retryable": true
   },
   "errorCode": null,
   "error": null
 }
 ```
 
-`action` is `CREATED`, `UPDATED`, or `UNCHANGED`. `embeddingStatus` is one of
-`COMPLETED`, `CACHED`, `NOT_REQUESTED`, or `FAILED`. `NOT_REQUESTED` always
-means that this request used `embed=false`; it can still report
-`embeddingFresh=true` when a usable embedding already existed. `FAILED` means
-the new document content was committed but is not retrievable until embedding
-is retried; the old vector may remain physically stored for diagnosis but is
-excluded by the freshness predicate. Replaying the same request retries
-embedding when the document is still stale.
+`action` is `CREATED`, `UPDATED`, or `UNCHANGED`. The nested lifecycle is the
+canonical readiness contract:
+
+- `localIndexStatus=READY` means current keyword chunks exist;
+- `embeddingStatus=READY` means the active Profile has current vectors;
+- `searchability=READY` means both branches are current;
+- `searchability=KEYWORD_ONLY` means keyword retrieval is current while the
+  vector branch is `INDEXING`, `FAILED`, or `NOT_REQUESTED`;
+- `searchability=NOT_REQUESTED` means neither branch was requested;
+- `searchability=DISABLED` applies to disabled/tombstoned documents.
+
+The compatibility top-level `embeddingStatus` and `embeddingFresh` fields
+describe the remote embedding branch only. Do not use them to decide whether
+keyword retrieval is available. A provider failure does not roll back the
+document or expose old chunks: the new local chunks remain searchable as
+`KEYWORD_ONLY`, while old content is excluded by hash and generation
+freshness. Replaying the same request or using the embedding retry operation
+can restore `searchability=READY`.
 
 Production defaults to `strictExternalCas=true`: a new revision for an
 existing identity requires `expectedSourceRevision`. Exact replay is checked
@@ -1198,9 +1215,10 @@ Paginated document query.
 ### `GET /api/v1/rag/documents/{id}`
 
 Returns content, metadata, `documentRevision`, and lifecycle by internal ID.
-`lifecycle.searchability` is one of `READY`, `INDEXING`, `FAILED`,
-`NOT_REQUESTED`, or `DISABLED`. A successful mutation is not necessarily
-search-ready.
+`lifecycle.searchability` is one of `READY`, `KEYWORD_ONLY`, `INDEXING`,
+`FAILED`, `NOT_REQUESTED`, or `DISABLED`. Inspect
+`localIndexStatus` and `embeddingStatus` separately: `embeddingFresh=false`
+does not imply that keyword retrieval is unavailable.
 
 ---
 

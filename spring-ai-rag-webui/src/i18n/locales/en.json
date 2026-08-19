@@ -70,6 +70,7 @@
     "retryEmbedding": "Retry embedding",
     "embeddingRetried": "Embedding retry started",
     "embeddingRetryError": "Embedding retry failed",
+    "keywordOnlyHint": "Keyword search is available; semantic search is waiting for embedding recovery.",
     "edit": "Edit document",
     "editDocument": "Edit document",
     "source": "Source",

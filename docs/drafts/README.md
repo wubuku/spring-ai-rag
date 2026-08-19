@@ -35,6 +35,4 @@ means there is no approved or in-progress active plan.
 
 ## Current Active Plans
 
-- [Next high-value features implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md):
-  authoritative source reconciliation, controlled version restore, and
-  decoupled local keyword versus remote-vector derivation.
+None.

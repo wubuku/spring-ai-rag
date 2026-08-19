@@ -1,6 +1,6 @@
 # PostgreSQL 扩展依赖分析
 
-> 最后更新：2026-04-03 | 基于代码分析 v1.0.0-SNAPSHOT (commit 6ead2e5)
+> 最后更新：2026-08-19 | 基于 V43 本地关键词/远程向量解耦实现
 
 ## 概述
 
@@ -11,8 +11,8 @@ spring-ai-rag 依赖 PostgreSQL 扩展实现检索能力。本文档分析各扩
 | 扩展 | 是否必需 | 实际用途 | 不可用时行为 |
 |------|---------|---------|-------------|
 | **vector** (pgvector) | ✅ 必需 | `VECTOR(1024)` 列 + HNSW 索引 + `<=>` 距离算子 | ❌ 迁移失败，应用无法启动 |
-| **pg_trgm** | ⚡ 可选 | `similarity()` 函数，全文模糊匹配 | ✅ 自动降级为纯向量检索 |
-| **pg_jieba** | ⚡ 可选 | 未在查询中使用（预留） | ✅ 跳过 jiebacfg 配置创建 |
+| **pg_trgm** | ⚡ 可选 | `similarity()` 函数 + `rag_document_chunks.chunk_text` 三元组索引 | ✅ 跳过 pg_trgm provider，仍可使用其他全文/向量分支 |
+| **pg_jieba** | ⚡ 可选 | `jiebacfg` 分词 + `rag_document_chunks` 表达式 GIN 索引 | ✅ 跳过 pg_jieba provider，仍可使用其他全文/向量分支 |
 
 ## 详细分析
 
@@ -171,7 +171,7 @@ rag:
 - ✅ 策略配置测试覆盖
 
 ### 可选优化
-- [ ] **全文检索 GIN 索引**：对 rag_embeddings.chunk_text 预建 `to_tsvector('jiebacfg')` 索引列，避免运行时计算（大数据集必做）
+- [x] **本地全文派生表**：V43 使用 `rag_document_chunks` 保存与 Profile 无关的关键词 chunk；English generated `tsvector` 总是创建，pg_trgm/pg_jieba 索引按数据库能力创建
 - [ ] **检索策略 A/B 测试**：利用已有的 AbTestService 对比 pg_jieba vs pg_trgm vs 纯向量效果
 - [ ] **混合检索权重自适应**：根据查询语言（中文/英文）自动调整 vector/fulltext 权重
 
@@ -179,7 +179,7 @@ rag:
 
 | 文件 | 说明 |
 |------|------|
-| `db/migration/V1__init_rag_schema.sql` | 扩展安装 + 表结构 |
+| `db/migration/V1__init_rag_schema.sql` / `V43__decouple_keyword_chunks_from_embeddings.sql` | 扩展安装 + 向量/本地全文表结构 |
 | `core/retrieval/HybridRetrieverService.java` | 混合检索核心实现 |
 | `core/config/RagProperties.java` | `rag.retrieval.*` 配置绑定 |
 | `core/retrieval/RetrievalUtils.java` | 分数融合算法 |

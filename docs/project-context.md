@@ -134,8 +134,9 @@ Current boundaries:
 - Collection `embeddingModel` and `dimensions` are management/import-export
   metadata. They do not select a per-Collection EmbeddingModel; ingestion and
   query embedding still use the global embedding configuration.
-- Vector and full-text retrieval exclude disabled documents and require a fresh
-  completed state for the active Embedding Profile.
+- Vector retrieval excludes disabled documents and requires a fresh completed
+  state for the active Embedding Profile. Full-text retrieval uses the
+  profile-neutral local chunks and requires the current local index state.
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because unlinking would destroy the stable
@@ -328,11 +329,16 @@ history or lets an external connector mutate source-owned documents. The
 restore path reuses normal content-change generation fencing; a metadata-only
 restore does not call the embedding provider.
 
-Full-text providers currently reuse chunks in `rag_embeddings` and require the
-active Embedding Profile state to be `COMPLETED`. Between a content mutation
-and successful re-embedding, or after provider failure, the document is
-unavailable to both keyword and vector retrieval. There is no independent
-local chunk/full-text derivation state yet.
+V43 decouples local keyword derivation from remote vectors. A non-`SKIP` content
+mutation prepares the current chunks in `rag_document_chunks` and records
+freshness in `rag_document_local_index_state` before remote provider work
+completes. The old local generation is excluded immediately, so a provider
+failure cannot expose stale text. The lifecycle is `KEYWORD_ONLY` when the
+local index is current but the active Profile vector is queued, processing,
+not requested, or failed; it becomes `READY` only when both branches are
+current. `embeddingFresh` describes only vector freshness and must not be used
+to decide whether keyword retrieval is available. `SKIP` removes current local
+chunks and reports `NOT_REQUESTED`.
 
 ## 5. Multi-Model Runtime
 
@@ -354,7 +360,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V42.
+- Flyway is currently V1–V43.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -369,13 +375,21 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   business revisions, complete snapshots, source namespaces, derivation
   generations, lifecycle/idempotency schema, and contracted triple-identity
   and active-job constraints; V42 adds authoritative external snapshot runs,
-  idempotent item ledgers, and source/reconciliation deletion markers.
+  idempotent item ledgers, and source/reconciliation deletion markers; V43
+  adds profile-neutral local keyword chunks and independent local-index
+  lifecycle state.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
   unique constraints, leases, and bounded retries. Ordinary short-lived
   database locks caused internally by DML are outside this prohibition.
 - `vector` is required, `pg_trgm` is recommended, and `pg_jieba` is optional.
+- `rag_document_chunks` is the full-text source of truth; its English generated
+  `tsvector`, optional pg_trgm GIN index, and optional `jiebacfg` expression
+  index are created by V43 when the corresponding capability exists.
+- `rag_document_local_index_state` stores one current local generation per
+  document. It is independent of embedding Profile state and is advanced with
+  conditional DML/generation checks, never pessimistic locks.
 - Chat memory, business history, retrieval logs, evaluation, feedback, A/B tests, alerts, API keys, and files are stored separately.
 
 ### HTTP

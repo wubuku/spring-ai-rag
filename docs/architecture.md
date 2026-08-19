@@ -299,9 +299,11 @@ Data model and current boundaries:
 - `rag_collection.embedding_model` and `dimensions` do not participate in
   per-Collection model routing. The active global EmbeddingModel is bound to
   one immutable Embedding Profile for each write and query.
-- Vector and full-text retrieval require the active Profile, a fresh
-  `COMPLETED` document embedding state, a matching current content hash, and an
-  enabled document.
+- Vector retrieval requires the active Profile, a fresh `COMPLETED` document
+  embedding state, a matching current content hash, and an enabled document.
+  Full-text retrieval uses the profile-neutral local chunk generation and its
+  matching local-index state instead; it can remain available as
+  `KEYWORD_ONLY` while vector work is pending or failed.
 - Collection constraints are pushed directly into retrieval SQL through
   `d.collection_id`; selected IDs and explicit document IDs use PostgreSQL
   `bigint[]` JDBC array parameters. Scope cost therefore depends on the number
@@ -562,6 +564,8 @@ rag_collection (1) ──→ (N) rag_documents
 rag_documents  (1) ──→ (N) rag_document_embedding_state
 rag_documents  (1) ──→ (N) rag_embeddings
 rag_documents  (1) ──→ (N) rag_embedding_jobs
+rag_documents  (1) ──→ (N) rag_document_chunks
+rag_documents  (1) ──→ (1) rag_document_local_index_state
 rag_embedding_profiles (1) ──→ (N) rag_document_embedding_state
 rag_embedding_profiles (1) ──→ (N) rag_embeddings
 rag_embedding_profiles (1) ──→ (N) rag_embedding_jobs
@@ -592,6 +596,8 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile-scoped freshness, active generation, and completion state |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
+| `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
+| `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |
@@ -602,17 +608,24 @@ rag_audit_log           # Audit logs (collection operations)
   immutability
 - `rag_embeddings.embedding_1024`: Profile-specific partial HNSW indexes (vector nearest-neighbor search)
 - `rag_documents.content_hash`: B-Tree (hash-based deduplication)
-- `rag_documents`: GIN index (full-text search with jiebacfg Chinese tokenizer)
+- `rag_document_chunks.search_vector_en`: GIN index for English FTS
+- `rag_document_chunks.chunk_text`: optional pg_trgm GIN index
+- `rag_document_chunks`: optional `jiebacfg` expression GIN index when pg_jieba is installed
 - `rag_documents.jsonb_payload`: V34 partial GIN `jsonb_path_ops` for enabled JSON-record `@>` containment
 - `rag_documents.metadata`: V36 GIN for `metadataContains` `@>` pushdown
 - `rag_embedding_jobs`: active-job partial unique, claim, batch, document, and status/created indexes
 
 ### 5.3 Full-Text Search Configuration
 
-PostgreSQL full-text search uses `pg_jieba` Chinese tokenizer extension:
+PostgreSQL full-text search reads the current generation from
+`rag_document_chunks` and `rag_document_local_index_state`:
+- English FTS uses the generated `search_vector_en` column
+- pg_trgm uses the optional `chunk_text gin_trgm_ops` index
+- pg_jieba uses the optional `to_tsvector('jiebacfg', chunk_text)` expression index
 - Search configuration: `jiebacfg` (based on jieba tokenizer)
 - Supports Chinese tokenization + ranking (`ts_rank`)
-- In HybridRetrieverService, vector retrieval and full-text search results are fused via RRF (Reciprocal Rank Fusion)
+- `rag_embeddings` remains the vector source of truth; HybridRetrieverService
+  fuses vector and full-text results via RRF (Reciprocal Rank Fusion)
 
 ---
 

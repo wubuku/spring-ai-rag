@@ -48,6 +48,29 @@ test.describe('Documents', () => {
     await expect(page.getByText('Embedding retry started')).toBeVisible();
   });
 
+  test('shows keyword-only status and retries only the failed embedding branch', async ({ page }) => {
+    await mockAllApiCalls(page);
+    const retryRequest = page.waitForRequest(request =>
+      request.method() === 'POST'
+      && new URL(request.url()).pathname === '/api/v1/rag/documents/4/embed');
+    await openProtectedPage(page, '/webui/documents');
+
+    const row = page.locator('tr').filter({
+      hasText: 'Keyword Only Lifecycle Document',
+    });
+    await expect(row).toContainText('Keyword searchable');
+    await expect(row.locator('[title*="Keyword search is available"]')).toBeVisible();
+    await row.getByRole('button', {
+      name: /Open actions for.*Keyword Only Lifecycle Document/,
+    }).click();
+    await expect(page.getByRole('menuitem', { name: 'Retry embedding' })).toBeVisible();
+    await page.getByRole('menuitem', { name: 'Retry embedding' }).click();
+
+    const request = await retryRequest;
+    expect(new URL(request.url()).searchParams.get('force')).toBe('true');
+    await expect(page.getByText('Embedding retry started')).toBeVisible();
+  });
+
   test('edits a local document with revision CAS and async index propagation', async ({ page }) => {
     await mockAllApiCalls(page);
     const patchRequest = page.waitForRequest(request =>

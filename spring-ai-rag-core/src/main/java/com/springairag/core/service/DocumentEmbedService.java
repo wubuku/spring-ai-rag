@@ -12,7 +12,6 @@ import com.springairag.core.repository.RagDocumentRepository;
 
 import java.util.Objects;
 import com.springairag.core.retrieval.EmbeddingBatchService;
-import com.springairag.documents.chunk.HierarchicalTextChunker;
 import com.springairag.documents.chunk.TextChunk;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -35,12 +34,13 @@ public class DocumentEmbedService {
     private static final Logger log = LoggerFactory.getLogger(DocumentEmbedService.class);
     private static final int MAX_ERROR_LENGTH = 500;
 
-    private final HierarchicalTextChunker chunker;
     private final RagProperties ragProperties;
     private final RagDocumentRepository documentRepository;
     private final EmbeddingBatchService embeddingBatchService;
     private final EmbeddingPersistenceService persistenceService;
     private final EmbeddingProfileProvider profileProvider;
+    private DocumentChunkingService chunkingService;
+    private KeywordIndexPersistenceService keywordIndexPersistenceService;
 
     public DocumentEmbedService(RagDocumentRepository documentRepository,
                                  EmbeddingBatchService embeddingBatchService,
@@ -51,11 +51,21 @@ public class DocumentEmbedService {
         this.embeddingBatchService = embeddingBatchService;
         this.persistenceService = persistenceService;
         this.profileProvider = profileProvider;
-        this.chunker = new HierarchicalTextChunker(
-                ragProperties.getChunk().getDefaultChunkSize(),
-                ragProperties.getChunk().getMinChunkSize(),
-                ragProperties.getChunk().getDefaultChunkOverlap());
         this.ragProperties = ragProperties;
+        this.chunkingService = new DocumentChunkingService(
+                ragProperties,
+                new DocumentDerivationDescriptorProvider(ragProperties));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setChunkingService(DocumentChunkingService chunkingService) {
+        this.chunkingService = chunkingService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setKeywordIndexPersistenceService(
+            KeywordIndexPersistenceService keywordIndexPersistenceService) {
+        this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
     /**
@@ -82,6 +92,10 @@ public class DocumentEmbedService {
         if (document == null || document.getId() == null
                 || document.getContentHash() == null
                 || document.getContentHash().isBlank()) {
+            return false;
+        }
+        if (keywordIndexPersistenceService != null
+                && !keywordIndexPersistenceService.hasFreshLocalIndex(document)) {
             return false;
         }
         EmbeddingProfile profile = profileProvider.getActiveProfile();
@@ -139,6 +153,9 @@ public class DocumentEmbedService {
 
         maybeEmit(progressCallback, EmbedProgressEvent.preparing(documentId));
 
+        if (keywordIndexPersistenceService != null) {
+            keywordIndexPersistenceService.ensureCurrent(findDocument(documentId));
+        }
         EmbedPrepareResult prep = prepareForEmbedding(documentId, force, profile);
         if (prep.cached() != null) {
             maybeEmit(progressCallback, EmbedProgressEvent.completed(documentId, 0));
@@ -437,7 +454,8 @@ public class DocumentEmbedService {
             doc.setContentHash(contentHash);
             doc.setVersion(version);
         }
-        String chunkerVersion = buildChunkerVersion(doc);
+        String chunkerVersion = chunkingService.prepare(doc)
+                .descriptor().chunkerVersion();
 
         if (!force) {
             EmbeddingPersistenceService.CacheState cache = persistenceService.findCacheState(
@@ -456,7 +474,7 @@ public class DocumentEmbedService {
             }
         }
 
-        List<TextChunk> chunks = splitForEmbedding(doc, content);
+        List<TextChunk> chunks = chunkingService.prepare(doc).chunks();
         if (chunks.isEmpty()) {
             Map<String, Object> failed = buildResult(
                     documentId, 0, 0, "FAILED", profile,
@@ -572,20 +590,11 @@ public class DocumentEmbedService {
     }
 
     private List<TextChunk> splitForEmbedding(RagDocument doc, String content) {
-        if (RagDocument.JSON_RECORD.equals(doc.getDocumentType())) {
-            return List.of(new TextChunk(content, 0, content.length()));
-        }
-        return chunker.split(content);
+        return chunkingService.prepare(doc).chunks();
     }
 
     private String buildChunkerVersion(RagDocument doc) {
-        if (RagDocument.JSON_RECORD.equals(doc.getDocumentType())) {
-            return "json-record-v1:single";
-        }
-        return "hierarchical-v2:"
-                + ragProperties.getChunk().getDefaultChunkSize() + ":"
-                + ragProperties.getChunk().getMinChunkSize() + ":"
-                + ragProperties.getChunk().getDefaultChunkOverlap();
+        return chunkingService.prepare(doc).descriptor().chunkerVersion();
     }
 
     private Map<String, Object> buildResult(

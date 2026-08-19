@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V42 |
+| Flyway | V1–V43 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -68,6 +68,18 @@ database:
 ```bash
 ./scripts/verify-document-sync-runs.sh
 ```
+
+For the V43 local-keyword/vector derivation boundary:
+
+```bash
+KEYWORD_VECTOR_VERIFY_RUN_ID=full-gate-4 \
+KEYWORD_VECTOR_PLAYWRIGHT_PORT=4191 \
+./scripts/verify-keyword-vector-decoupling.sh
+```
+
+This gate requires real PostgreSQL lifecycle/full-text integration tests,
+`mvn clean compile test-compile`, and the WebUI TypeScript, Vitest,
+production-build, alignment, and no-screenshot Mock Playwright checks.
 
 ## 3. Start And Health Check
 
