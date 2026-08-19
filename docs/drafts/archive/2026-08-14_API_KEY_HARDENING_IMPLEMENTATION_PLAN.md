@@ -8,7 +8,7 @@
 > 误标为完整 API Key hardening 或公网 production-ready
 > 当前进度：[API Key WebUI MVP 实施进度](2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md)
 > 上层消费者：[OpenAI Chat Completions 兼容 RAG 服务实施规划](2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)
-> 当前代码事实：[OpenAI 兼容服务就绪度与代码库上下文](../openai-compatibility-readiness-zh-CN.md)
+> 当前代码事实：[OpenAI 兼容服务就绪度与代码库上下文](../../openai-compatibility-readiness-zh-CN.md)
 > 历史来源：[API Key 管理重构规划](API-KEY-MANAGEMENT-PLAN.md) 记录了早期
 > bootstrap、ADMIN/NORMAL 和 Collection ACL 的来源；其 NORMAL 自助创建、日志输出
 > ADMIN secret 等结论不适用于本规划的外部生产服务目标。
@@ -173,22 +173,22 @@ Collection；业务 Key不能创建、列出、轮换或吊销其他 Key。root 
 
 | 职责 | 当前文件 | 关键事实 |
 |---|---|---|
-| API DTO | [`ApiKeyCreateRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java) | 只有 name、无时区 expiry、Collection IDs |
-| 创建响应 | [`ApiKeyCreatedResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreatedResponse.java) | raw key 只在 create/rotate response 返回 |
-| 元数据响应 | [`ApiKeyResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyResponse.java) | version/family 尚未区分 |
-| legacy entity | [`RagApiKey`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java) | 映射 key hash、role、ACL 和 plaintext `api_key` |
-| repository | [`RagApiKeyRepository`](../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java) | hash lookup、disable、每请求 last-used update |
-| lifecycle service | [`ApiKeyManagementService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java) | create/validate/revoke/rotate 和 30 秒 positive cache |
-| bootstrap | [`ApiKeyBootstrapService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyBootstrapService.java) | root 模式禁用空表 ADMIN/raw bootstrap；未配置 root 时保留 legacy 行为 |
-| 管理 API | [`ApiKeyController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java) | root 模式仅 environment root 可 create/list/revoke/rotate；legacy 模式保留旧语义 |
-| 认证 | [`ApiKeyAuthFilter`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java) | root 模式支持 Bearer/X-API-Key、拒绝 query；legacy 模式保留兼容 fallback |
-| Collection ACL | [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) | null/static/ADMIN/空 ACL 被视为 unrestricted |
-| 限流 | [`RateLimitFilter`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/RateLimitFilter.java) | JVM fixed window；认证后优先使用稳定 key ID，未认证/legacy fallback 仍可能使用 raw header |
-| starter/core 装配 | [`RagWebSecurityConfiguration`](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagWebSecurityConfiguration.java)、[`GeneralRagAutoConfiguration`](../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java) | core/starter 共用认证；auth order -10、limit order 0，当前均覆盖 `/api/*`，尚未覆盖 `/v1/*` |
-| 审计 | [`AuditLogService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/AuditLogService.java) | optional + catch-and-continue，不适合安全 lifecycle |
-| WebUI storage | [`credentialStore.ts`](../../spring-ai-rag-webui/src/auth/credentialStore.ts) | MVP 已改为页面内存，并在启动时清理旧 localStorage 项 |
-| WebUI stream | [`useSSE.ts`](../../spring-ai-rag-webui/src/hooks/useSSE.ts) | MVP 已将 streaming credential 改为 Header transport |
-| WebUI 路由 | [`App.tsx`](../../spring-ai-rag-webui/src/App.tsx) | MVP 已提供 `/webui/unlock`、protected route 和显式退出 |
+| API DTO | [`ApiKeyCreateRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java) | 只有 name、无时区 expiry、Collection IDs |
+| 创建响应 | [`ApiKeyCreatedResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreatedResponse.java) | raw key 只在 create/rotate response 返回 |
+| 元数据响应 | [`ApiKeyResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyResponse.java) | version/family 尚未区分 |
+| legacy entity | [`RagApiKey`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java) | 映射 key hash、role、ACL 和 plaintext `api_key` |
+| repository | [`RagApiKeyRepository`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java) | hash lookup、disable、每请求 last-used update |
+| lifecycle service | [`ApiKeyManagementService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java) | create/validate/revoke/rotate 和 30 秒 positive cache |
+| bootstrap | [`ApiKeyBootstrapService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyBootstrapService.java) | root 模式禁用空表 ADMIN/raw bootstrap；未配置 root 时保留 legacy 行为 |
+| 管理 API | [`ApiKeyController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java) | root 模式仅 environment root 可 create/list/revoke/rotate；legacy 模式保留旧语义 |
+| 认证 | [`ApiKeyAuthFilter`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java) | root 模式支持 Bearer/X-API-Key、拒绝 query；legacy 模式保留兼容 fallback |
+| Collection ACL | [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) | null/static/ADMIN/空 ACL 被视为 unrestricted |
+| 限流 | [`RateLimitFilter`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/RateLimitFilter.java) | JVM fixed window；认证后优先使用稳定 key ID，未认证/legacy fallback 仍可能使用 raw header |
+| starter/core 装配 | [`RagWebSecurityConfiguration`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagWebSecurityConfiguration.java)、[`GeneralRagAutoConfiguration`](../../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java) | core/starter 共用认证；auth order -10、limit order 0，当前均覆盖 `/api/*`，尚未覆盖 `/v1/*` |
+| 审计 | [`AuditLogService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/AuditLogService.java) | optional + catch-and-continue，不适合安全 lifecycle |
+| WebUI storage | [`credentialStore.ts`](../../../spring-ai-rag-webui/src/auth/credentialStore.ts) | MVP 已改为页面内存，并在启动时清理旧 localStorage 项 |
+| WebUI stream | [`useSSE.ts`](../../../spring-ai-rag-webui/src/hooks/useSSE.ts) | MVP 已将 streaming credential 改为 Header transport |
+| WebUI 路由 | [`App.tsx`](../../../spring-ai-rag-webui/src/App.tsx) | MVP 已提供 `/webui/unlock`、protected route 和显式退出 |
 | 传统登录 | core、starter、WebUI 和 Flyway | 没有 username/password、用户表、`formLogin`、`UserDetailsService` 或登录 session |
 
 ### 3.2 当前数据库

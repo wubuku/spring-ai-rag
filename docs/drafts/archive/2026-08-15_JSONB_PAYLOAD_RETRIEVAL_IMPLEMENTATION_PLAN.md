@@ -1144,7 +1144,7 @@ schema 变更是 additive，旧应用可以忽略 `external_id` / `jsonb_payload
 - vector 表与新增 migration 共存。
 
 镜像允许通过 `TESTCONTAINERS_PG_IMAGE` 覆盖；境内环境按
-[中国境内网络指南](../china-network-guide-zh-CN.md) 使用预拉取或可达镜像，
+[中国境内网络指南](../../china-network-guide-zh-CN.md) 使用预拉取或可达镜像，
 不能把区域镜像硬编码进测试或 Dockerfile。
 
 ## 19. 一键验证与记录在案

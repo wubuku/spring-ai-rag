@@ -17,7 +17,10 @@
 
 ## Evergreen Content
 
-- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V39, and release state
+- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V41, and release state
+- [ ] `docs/drafts/` contains only active plans plus its README pair
+- [ ] completed/cancelled/superseded plans live under `docs/drafts/archive/`
+- [ ] hubs and evergreen docs do not treat individual archived drafts as current truth
 - [ ] `developer-reference*` commands match repository scripts
 - [ ] Configuration changes update `configuration*`
 - [ ] API changes update `rest-api*`
@@ -39,7 +42,7 @@
 - [ ] Real LLM E2E defaults to `18081`
 - [ ] Local profile is `postgresql`
 - [ ] Vector dimension is `1024`
-- [ ] Flyway range is V1–V39
+- [ ] Flyway range is V1–V41
 - [ ] OpenAI / Embedding `base-url` examples do not append `/v1`
 - [ ] Secrets appear only as placeholders
 

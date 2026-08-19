@@ -119,11 +119,11 @@ Controller、Prompt 或 Tool 内复制一套检索 SQL/Agent 编排。
 
 稳定入口：
 
-- [项目上下文](../project-context-zh-CN.md)
-- [架构设计](../architecture-zh-CN.md)
-- [REST API](../rest-api-zh-CN.md)
-- [开发者参考](../developer-reference-zh-CN.md)
-- [测试指南](../testing-guide-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [架构设计](../../architecture-zh-CN.md)
+- [REST API](../../rest-api-zh-CN.md)
+- [开发者参考](../../developer-reference-zh-CN.md)
+- [测试指南](../../testing-guide-zh-CN.md)
 - [上一批实施进度](2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PROGRESS.md)
 
 ### 3.2 检索链现状

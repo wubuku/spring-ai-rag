@@ -100,14 +100,14 @@ collectionKeys
 
 当前数据模型允许 `rag_documents.collection_id = NULL`：
 
-- [`V1__init_rag_schema.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
+- [`V1__init_rag_schema.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
   中 `collection_id` 是可空外键；
-- [`RagDocument`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagDocument.java)
+- [`RagDocument`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagDocument.java)
   的 `collectionId` 没有 `nullable = false`；
 - 普通 Document 创建、上传、PDF 和批量入口允许调用方不提供
   `collectionId` / `collectionKey`；
 - 软删除 Collection 时，
-  [`RagCollectionService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)
+  [`RagCollectionService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)
   会保留文档并批量清空它们的 `collection_id`。
 
 因此，未归属文档主要来自两类场景：
@@ -1030,45 +1030,45 @@ Vitest 与 Mock Playwright 覆盖：
 
 API/ACL：
 
-- [`ChatRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
-- [`SearchRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java)
-- [`JsonRecordSearchRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/JsonRecordSearchRequest.java)
-- [`RagChatController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java)
-- [`RagSearchController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
-- [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
-- [`CollectionIdentityResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
+- [`ChatRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
+- [`SearchRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java)
+- [`JsonRecordSearchRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/JsonRecordSearchRequest.java)
+- [`RagChatController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java)
+- [`RagSearchController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagSearchController.java)
+- [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [`CollectionIdentityResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
 
 执行链：
 
-- [`CollectionDocumentResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
-- [`RagChatService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
-- [`HybridSearchAdvisor`](../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
-- [`HybridRetrieverService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
-- [`EmbeddingProfileSqlScope`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
-- [`PgJiebaFulltextProvider`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgJiebaFulltextProvider.java)
-- [`PgEnglishFtsProvider`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgEnglishFtsProvider.java)
-- [`PgTrgmFulltextProvider`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgTrgmFulltextProvider.java)
-- [`JsonRecordService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/JsonRecordService.java)
+- [`CollectionDocumentResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [`RagChatService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
+- [`HybridSearchAdvisor`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
+- [`HybridRetrieverService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+- [`EmbeddingProfileSqlScope`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
+- [`PgJiebaFulltextProvider`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgJiebaFulltextProvider.java)
+- [`PgEnglishFtsProvider`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgEnglishFtsProvider.java)
+- [`PgTrgmFulltextProvider`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/PgTrgmFulltextProvider.java)
+- [`JsonRecordService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/JsonRecordService.java)
 
 Schema/index：
 
-- [`V1__init_rag_schema.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
-- [`V25__embedding_profile_expand.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V25__embedding_profile_expand.sql)
-- [`V29__add_jsonb_structured_records.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql)
-- [`EmbeddingProfileIndexManager`](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/EmbeddingProfileIndexManager.java)
+- [`V1__init_rag_schema.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
+- [`V25__embedding_profile_expand.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V25__embedding_profile_expand.sql)
+- [`V29__add_jsonb_structured_records.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql)
+- [`EmbeddingProfileIndexManager`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/EmbeddingProfileIndexManager.java)
 
 UI：
 
-- [`Search.tsx`](../../spring-ai-rag-webui/src/pages/Search.tsx)
-- [`Chat.tsx`](../../spring-ai-rag-webui/src/pages/Chat.tsx)
-- [`useSSE.ts`](../../spring-ai-rag-webui/src/hooks/useSSE.ts)
+- [`Search.tsx`](../../../spring-ai-rag-webui/src/pages/Search.tsx)
+- [`Chat.tsx`](../../../spring-ai-rag-webui/src/pages/Chat.tsx)
+- [`useSSE.ts`](../../../spring-ai-rag-webui/src/hooks/useSSE.ts)
 
 现有文档：
 
-- [`rest-api-zh-CN.md`](../rest-api-zh-CN.md)
-- [`architecture-zh-CN.md`](../architecture-zh-CN.md)
-- [`project-context-zh-CN.md`](../project-context-zh-CN.md)
-- [`pgvector-index-comparison.md`](../pgvector-index-comparison.md)
+- [`rest-api-zh-CN.md`](../../rest-api-zh-CN.md)
+- [`architecture-zh-CN.md`](../../architecture-zh-CN.md)
+- [`project-context-zh-CN.md`](../../project-context-zh-CN.md)
+- [`pgvector-index-comparison.md`](../../pgvector-index-comparison.md)
 
 ## 15. 最终回答
 

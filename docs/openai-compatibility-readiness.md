@@ -10,12 +10,11 @@
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
 
-Documentation hub: [index.md](index.md). For the target architecture, migration, tests,
-and rollback, see the
-[OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md).
-The independent credential, authorization, rotation, revocation, and multi-instance quota
-work is specified in the
-[API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md).
+Documentation hub: [index.md](index.md). The callable contract and current
+configuration live in the [REST API reference](rest-api.md) and
+[configuration reference](configuration.md). Consult the
+[plan archive](drafts/archive/README.md) only when auditing historical target
+designs.
 
 ---
 
@@ -141,11 +140,10 @@ Relevant code:
 | URL and credential format | `/v1/*` uses Bearer/header authentication; root mode rejects query credentials and emits OpenAI error envelopes | Public enablement should remove legacy query/static compatibility and require managed principals |
 | Failure semantics | Database validation and static fallback coexist | Credential-store failures must not downgrade into an authorization bypass |
 
-These are service-readiness requirements, not protocol details. Stable families and
-principals, rotatable versions, explicit policy, shared quotas, migration, and fail-closed
-failure semantics are fully specified by the
-[API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md).
-Section 12 of the compatibility plan only defines how `/v1` consumes those capabilities.
+These are service-readiness requirements, not protocol details. If public-service
+hardening resumes, it must jointly design stable families/principals, rotatable
+versions, explicit policy, shared quotas, migration, and fail-closed failure
+semantics while preserving the compatibility boundaries recorded here.
 
 ---
 
@@ -176,12 +174,11 @@ Section 12 of the compatibility plan only defines how `/v1` consumes those capab
 
 1. This document: current controlled-preview facts and security boundaries.
 2. [REST API](rest-api.md) and [configuration](configuration.md): callable contract.
-3. [Next-feature implementation progress](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PROGRESS.md):
-   implementation and verification evidence.
-4. [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md):
-   credential model, lifecycle, authorization, quota, migration, tests, and rollback.
-5. Historical [compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md):
-   target-design source; current code and live references win when they differ.
+3. [Project context](project-context.md) and [testing guide](testing-guide.md):
+   stable capability boundaries and current verification entry points.
+4. [Historical plan archive](drafts/archive/README.md): read only for design
+   provenance and old verification evidence; current code and live references
+   win when they differ.
 
 ---
 

@@ -1,7 +1,7 @@
 # P1 / 1.0 就绪四项实施进度
 
 > **Purpose**: 跟踪「可卖 / 可发 1.0」第一梯队四项，避免多轮失忆。
-> **Prior P0**: `docs/drafts/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md`（已完成）
+> **Prior P0**: `docs/drafts/archive/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md`（已完成）
 > **Audit**: `docs/2026-07-21_CODE_AUDIT_REPORT.md`
 > **Started**: 2026-07-21
 

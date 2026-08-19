@@ -6,7 +6,7 @@
 > 适用基线：commit `9af7f666510b3a4df7cbfcd0b1ada3dad5178d48`；实施前仍须按 Phase 0A 重新核对代码与协议
 > 目标接口：`POST /v1/chat/completions`、`GET /v1/models`、`GET /v1/models/{id}`
 > 实施约束：未经批准不得修改生产代码；实施时必须同步补测试、文档并通过项目既有 E2E 门禁
-> 当前代码上下文：[OpenAI 兼容服务就绪度与代码库上下文](../openai-compatibility-readiness-zh-CN.md)
+> 当前代码上下文：[OpenAI 兼容服务就绪度与代码库上下文](../../openai-compatibility-readiness-zh-CN.md)
 > 安全前置工程：[API Key 加固独立实施规划](2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
 > 相关旧稿：[API-KEY-MANAGEMENT-PLAN.md](API-KEY-MANAGEMENT-PLAN.md) 解释了当前内部实现
 > 的来源；涉及 bootstrap、委派、secret、轮换、迁移和 WebUI 管理安全的目标决策，
@@ -222,26 +222,26 @@ OpenAI client / Agent -> spring-ai-rag
 
 ### 4.1 相关代码索引
 
-- [ChatRequest](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
-- [ChatResponse](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatResponse.java)
-- [RagChatService](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
-- [RagChatController](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java)
-- [AdvisorUtils](../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/AdvisorUtils.java)
-- [ChatModelRouter](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/ChatModelRouter.java)
-- [ConfiguredChatModelFactory](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/ConfiguredChatModelFactory.java)
-- [ApiKeyManagementService](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
-- [ApiKeyController](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)
-- [ApiKeyBootstrapService](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyBootstrapService.java)
-- [RagApiKey](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java)
-- [ApiKeyCollectionAccess](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
-- [CollectionDocumentResolver](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
-- [ApiKeyAuthFilter](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
-- [RateLimitFilter](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/RateLimitFilter.java)
-- [GeneralRagAutoConfiguration](../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java)
-- [GlobalExceptionHandler](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java)
-- [SseEmitters](../../spring-ai-rag-core/src/main/java/com/springairag/core/util/SseEmitters.java)
-- [现有 SSE 文档](../SSE-PROTOCOL.md)
-- [代码审计报告](../2026-07-21_CODE_AUDIT_REPORT.md)
+- [ChatRequest](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
+- [ChatResponse](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatResponse.java)
+- [RagChatService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
+- [RagChatController](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagChatController.java)
+- [AdvisorUtils](../../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/AdvisorUtils.java)
+- [ChatModelRouter](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/ChatModelRouter.java)
+- [ConfiguredChatModelFactory](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/ConfiguredChatModelFactory.java)
+- [ApiKeyManagementService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
+- [ApiKeyController](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)
+- [ApiKeyBootstrapService](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyBootstrapService.java)
+- [RagApiKey](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java)
+- [ApiKeyCollectionAccess](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [CollectionDocumentResolver](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [ApiKeyAuthFilter](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
+- [RateLimitFilter](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/RateLimitFilter.java)
+- [GeneralRagAutoConfiguration](../../../spring-ai-rag-starter/src/main/java/com/springairag/starter/GeneralRagAutoConfiguration.java)
+- [GlobalExceptionHandler](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java)
+- [SseEmitters](../../../spring-ai-rag-core/src/main/java/com/springairag/core/util/SseEmitters.java)
+- [现有 SSE 文档](../../SSE-PROTOCOL.md)
+- [代码审计报告](../../2026-07-21_CODE_AUDIT_REPORT.md)
 
 ## 5. 目标协议
 

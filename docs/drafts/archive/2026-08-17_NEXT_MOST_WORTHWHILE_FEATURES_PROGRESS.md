@@ -64,8 +64,8 @@
 
 - `docs/index.md`
 - `docs/index-zh-CN.md`
-- `docs/drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md`
-- `docs/drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md`
+- `docs/drafts/archive/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md`
+- `docs/drafts/archive/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md`
 
 后续若发现其他开发者的 WIP，按文件和行为边界协作，不回滚、不覆盖；若只因测试夹具
 阻塞编译，只做最小测试适配。

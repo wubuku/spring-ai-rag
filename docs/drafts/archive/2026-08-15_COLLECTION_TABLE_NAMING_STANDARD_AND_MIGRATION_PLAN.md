@@ -54,7 +54,7 @@ collection_id       // 外键列，单数
 本规划基于 `main` 分支 `65eaecb`。开始编写本规划时，工作区已有一个未提交的文件变更：
 
 ```text
-docs/drafts/2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md
+docs/drafts/archive/2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md
 ```
 
 该变更不属于本规划，实施过程中不得回滚、覆盖或 stash。最终交付时，用户已明确授权
@@ -62,7 +62,7 @@ docs/drafts/2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md
 
 ### 2.2 JPA 实体命名
 
-[`RagCollection.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java) 的实体类名为 `RagCollection`，并明确指定：
+[`RagCollection.java`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java) 的实体类名为 `RagCollection`，并明确指定：
 
 ```java
 @Table(name = "rag_collection", ...)
@@ -114,7 +114,7 @@ rag_user_feedback
 
 ### 2.4 正式 schema 使用单数表
 
-[`V1__init_rag_schema.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql) 首次创建：
+[`V1__init_rag_schema.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql) 首次创建：
 
 ```sql
 CREATE TABLE IF NOT EXISTS rag_collection (...)
@@ -128,17 +128,17 @@ collection_id BIGINT REFERENCES rag_collection(id)
 
 后续迁移继续以 `rag_collection` 为事实来源：
 
-- [`V13__add_performance_indexes.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V13__add_performance_indexes.sql)：集合名称索引。
-- [`V17__add_optimistic_locking_version.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V17__add_optimistic_locking_version.sql)：`version` 字段和索引。
-- [`V21__add_collection_soft_delete.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V21__add_collection_soft_delete.sql)：软删除字段和索引。
-- [`V27__add_collection_key_expand.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V27__add_collection_key_expand.sql)：`collection_key`、唯一约束、不可变函数和 trigger。
-- [`V28__require_collection_key.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V28__require_collection_key.sql)：Collection key 的最终非空约束。
+- [`V13__add_performance_indexes.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V13__add_performance_indexes.sql)：集合名称索引。
+- [`V17__add_optimistic_locking_version.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V17__add_optimistic_locking_version.sql)：`version` 字段和索引。
+- [`V21__add_collection_soft_delete.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V21__add_collection_soft_delete.sql)：软删除字段和索引。
+- [`V27__add_collection_key_expand.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V27__add_collection_key_expand.sql)：`collection_key`、唯一约束、不可变函数和 trigger。
+- [`V28__require_collection_key.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V28__require_collection_key.sql)：Collection key 的最终非空约束。
 
 因此，`rag_collection` 不是偶然的测试夹具名称，而是已经写入正式数据库迁移历史的真实表名。
 
 ### 2.5 修复前错误的实际影响
 
-[`ComponentHealthService.java`](../../spring-ai-rag-core/src/main/java/com/springairag/core/metrics/ComponentHealthService.java) 修复前配置：
+[`ComponentHealthService.java`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/metrics/ComponentHealthService.java) 修复前配置：
 
 ```java
 String[] coreTables = {"rag_documents", "rag_embeddings", "rag_collections"};
@@ -152,7 +152,7 @@ SELECT COUNT(*) FROM rag_collections
 
 但正式 schema 中没有 `rag_collections`，所以修复前的健康检查会把集合表标记为 `missing`，并将表组件标记为 `DEGRADED`。
 
-[`ComponentHealthServiceTest.java`](../../spring-ai-rag-core/src/test/java/com/springairag/core/metrics/ComponentHealthServiceTest.java) 修复前同样 mock 了 `rag_collections`，因此该单元测试没有验证真实 schema，而是把错误 SQL 固化成了测试预期。`RagReadinessIndicatorTest` 中的手工 Map fixture 也已在阶段 A 同步修正。
+[`ComponentHealthServiceTest.java`](../../../spring-ai-rag-core/src/test/java/com/springairag/core/metrics/ComponentHealthServiceTest.java) 修复前同样 mock 了 `rag_collections`，因此该单元测试没有验证真实 schema，而是把错误 SQL 固化成了测试预期。`RagReadinessIndicatorTest` 中的手工 Map fixture 也已在阶段 A 同步修正。
 
 这是一个健康检查实现与 schema 不一致的问题，不是数据迁移失败，也不是 Collection 业务数据损坏。
 
@@ -176,7 +176,7 @@ SELECT COUNT(*) FROM rag_collections
 
 ### 2.7 Flyway 与 Hibernate 边界
 
-[`application.yml`](../../spring-ai-rag-core/src/main/resources/application.yml) 配置：
+[`application.yml`](../../../spring-ai-rag-core/src/main/resources/application.yml) 配置：
 
 ```yaml
 spring:
@@ -653,12 +653,12 @@ Flyway versioned migration 没有自动 down migration。回滚必须是经过�
 
 ## 14. 参考入口
 
-- [项目文档 Skill](../../.agents/skills/project-docs/SKILL.md)
+- [项目文档 Skill](../../../.agents/skills/project-docs/SKILL.md)
 - [Collection Key 实施规划](2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PLAN.md)
 - [Collection Key 实施进度](2026-08-15_COLLECTION_KEY_IMPLEMENTATION_PROGRESS.md)
 - [Embedding Profile / Vector 迁移规划](2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md)
 - [JSONB Structured Records 规划](2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md)
-- [`RagCollection` 实体](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)
-- [`ComponentHealthService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/metrics/ComponentHealthService.java)
-- [`V1__init_rag_schema.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
-- [`application.yml`](../../spring-ai-rag-core/src/main/resources/application.yml)
+- [`RagCollection` 实体](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)
+- [`ComponentHealthService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/metrics/ComponentHealthService.java)
+- [`V1__init_rag_schema.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql)
+- [`application.yml`](../../../spring-ai-rag-core/src/main/resources/application.yml)

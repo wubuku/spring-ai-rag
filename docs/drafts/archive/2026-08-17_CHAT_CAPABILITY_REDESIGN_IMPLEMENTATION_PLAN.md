@@ -14,11 +14,11 @@
 
 相关现状与接口文档：
 
-- [项目架构](../architecture-zh-CN.md)
-- [REST API](../rest-api-zh-CN.md)
-- [SSE 协议](../SSE-PROTOCOL.md)
-- [配置参考](../configuration-zh-CN.md)
-- [测试指南](../testing-guide-zh-CN.md)
+- [项目架构](../../architecture-zh-CN.md)
+- [REST API](../../rest-api-zh-CN.md)
+- [SSE 协议](../../SSE-PROTOCOL.md)
+- [配置参考](../../configuration-zh-CN.md)
+- [测试指南](../../testing-guide-zh-CN.md)
 - [多 Collection 检索范围调研](2026-08-15_MULTI_COLLECTION_RETRIEVAL_SCOPE_RESEARCH.md)
 - [OpenAI Chat Completions 兼容规划](2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)
 
@@ -106,7 +106,7 @@
 
 ### 3.1 后端请求与执行链
 
-[`ChatRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
+[`ChatRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
 当前包含：
 
 - `message`、`sessionId`
@@ -119,9 +119,9 @@
 - `metadata`
 
 Controller 在进入 service 前通过
-[`CollectionRetrievalScopeResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionRetrievalScopeResolver.java)
+[`CollectionRetrievalScopeResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionRetrievalScopeResolver.java)
 解析 Collection key/ID、API Key allow-list 和 document ID，形成不可扩权的
-[`RetrievalScope`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScope.java)。
+[`RetrievalScope`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/RetrievalScope.java)。
 
 当前 `RagChatService` 默认链是：
 
@@ -151,7 +151,7 @@ QueryRewriteAdvisor (+10)
 
 ### 3.2 当前检索能力必须保留
 
-[`HybridRetrieverService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+[`HybridRetrieverService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
 已具备：
 
 - 活动 Embedding Profile 与固定维度校验；

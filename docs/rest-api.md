@@ -854,15 +854,32 @@ These endpoints are for ordinary text documents whose source system owns the
 document identity and revision. They do not fetch URLs or files. The caller
 reads the source, then sends the current representation to the RAG service.
 
-The stable identity is
-`collectionKey + sourceNamespace + externalId`. `sourceNamespace` defaults to
-the compatibility value `default`, but new connectors should send a stable
-source namespace explicitly. It is an identity boundary, not an authorization
-boundary; untrusted connectors should use separate Collections. `externalId` is
-trimmed, case-sensitive, limited to 255 characters, and must remain stable for
-the lifetime of the source object. `sourceRevision` is an opaque, non-empty
-caller token, such as an ETag, upstream row version, commit ID, or canonical
-payload hash. The service does not compare opaque revisions by ordering.
+The stable external address is
+`collectionKey + sourceNamespace + externalId`. The ordinary external-text
+endpoint requires `collectionKey`, which must identify a real active
+Collection. JSON-record upsert retains deprecated `collectionId` input for
+compatibility, but it resolves to the same canonical key-based address.
+`sourceNamespace` is optional: omitted or blank input is normalized to the
+compatibility value `default`. A connector should choose and send a stable
+explicit namespace when multiple connectors share a Collection or when source
+reconciliation is used. It is an identity boundary, not an authorization
+boundary; untrusted connectors should use separate Collections. `externalId`
+is trimmed, case-sensitive, limited to 255 characters, and must remain stable
+for the lifetime of the source object. `collectionKey` and `sourceNamespace`
+accept up to 128 characters. These limits must not be reduced in a later
+migration. `sourceRevision` is an opaque, non-empty caller token, such as an
+ETag, upstream row version, commit ID, or canonical payload hash. The service
+does not compare opaque revisions by ordering.
+
+The external address, state revision, and internal ID are separate concepts.
+Clients continue to address the document by the tuple; `sourceRevision`
+describes only the complete desired state at that address; the returned
+`documentId` is diagnostic. A Collection is currently both the placement
+target and the ACL boundary, so `externalId` is not globally unique and one
+source object may be explicitly placed in multiple Collections.
+`sourceNamespace=default` is not a default Collection marker. An unassigned
+(`NULL`) Collection is a local-document state, not an alternative external
+synchronization target.
 
 ### `POST /api/v1/rag/documents/upsert`
 
@@ -896,8 +913,15 @@ The service keeps the same internal `documentId` when a source document is
 updated. Content changes create a version snapshot, immediately exclude old
 chunks/embeddings, and persist a new-generation job in the same transaction.
 `SYNC` performs a bounded wait on that job; `ASYNC` returns immediately.
-Metadata-only, source-revision-only, and Collection-only changes do not call
-the provider when a fresh embedding already exists.
+Metadata-only and source-revision-only changes do not call the provider when a
+fresh embedding already exists.
+
+Ordinary upsert cannot atomically relocate an externally managed document to
+another Collection. Changing `collectionKey` addresses another tuple and may
+create a second document; it does not implicitly delete the old address. The
+current compatibility flow is to tombstone the old address and then upsert the
+target address, but that flow is not atomic and does not preserve the internal
+ID or version history.
 
 The response is HTTP 200 even when persistence succeeds but embedding fails:
 
@@ -1002,6 +1026,8 @@ different semantics.
    retry condition. Replaying the same request is safe.
 6. Use a separate API key per connector and restrict it to the connector's
    Collections. Do not put the root key in an external connector.
+7. Stabilize Collection-placement rules before the first import. Do not
+   simulate an atomic move by changing `collectionKey` on ordinary upsert.
 
 See the
 [External Document Synchronization Client Guide](external-document-sync-client-guide.md)

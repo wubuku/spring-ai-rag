@@ -3,7 +3,7 @@
 > 状态：规划、实施、验收与连续三轮无修改审查均已完成，待提交推送
 > 日期：2026-08-16
 > 配套进度：[文件 RAG 来源追溯实施进度](2026-08-16_FILE_RAG_TRACEABILITY_IMPLEMENTATION_PROGRESS.md)
-> 长青事实：[文件管理、PDF 导入与 RAG 联动](../file-management-and-pdf-rag-zh-CN.md)
+> 长青事实：[文件管理、PDF 导入与 RAG 联动](../../file-management-and-pdf-rag-zh-CN.md)
 
 ## 1. 目标
 

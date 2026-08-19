@@ -44,15 +44,15 @@
 
 ### 2.1 当前身份模型
 
-- [`RagCollection`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java) 使用 `Long id`、`@Id` 和 `GenerationType.IDENTITY`。
-- [`V1__init_rag_schema.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql) 将 `rag_collection.id` 定义为 `BIGSERIAL PRIMARY KEY`。
+- [`RagCollection`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java) 使用 `Long id`、`@Id` 和 `GenerationType.IDENTITY`。
+- [`V1__init_rag_schema.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V1__init_rag_schema.sql) 将 `rag_collection.id` 定义为 `BIGSERIAL PRIMARY KEY`。
 - `rag_documents.collection_id` 是 `BIGINT`，内部查询、统计、解绑、克隆和检索均按 `Long` 处理。
-- 当前 17 个 JPA 实体中，16 个使用 `Long` 主键；例外是 [`FsFile`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/FsFile.java) 使用路径字符串作为主键。Collection 没有必要偏离项目的内部数值主键模式。
-- [`application.yml`](../../spring-ai-rag-core/src/main/resources/application.yml) 配置 `spring.jpa.hibernate.ddl-auto=validate`，因此实体变更必须配套 Flyway 迁移，不能依赖 Hibernate 自动改表。
+- 当前 17 个 JPA 实体中，16 个使用 `Long` 主键；例外是 [`FsFile`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/FsFile.java) 使用路径字符串作为主键。Collection 没有必要偏离项目的内部数值主键模式。
+- [`application.yml`](../../../spring-ai-rag-core/src/main/resources/application.yml) 配置 `spring.jpa.hibernate.ddl-auto=validate`，因此实体变更必须配套 Flyway 迁移，不能依赖 Hibernate 自动改表。
 
 ### 2.2 当前 Collection API 与服务边界
 
-[`RagCollectionController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java) 当前提供：
+[`RagCollectionController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java) 当前提供：
 
 - `POST /rag/collections`
 - `GET /rag/collections/{id}`
@@ -66,18 +66,18 @@
 - `GET /rag/collections/{id}/export`
 - `POST /rag/collections/import`
 
-控制器仍承担部分创建、更新、导入和导出编排；[`RagCollectionService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java) 负责删除、恢复和克隆。实施时应把需要一致事务、唯一冲突转换和 key 解析的写操作收敛到 service 层，避免同一规则在控制器中重复。
+控制器仍承担部分创建、更新、导入和导出编排；[`RagCollectionService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java) 负责删除、恢复和克隆。实施时应把需要一致事务、唯一冲突转换和 key 解析的写操作收敛到 service 层，避免同一规则在控制器中重复。
 
 ### 2.3 数字 Collection ID 的影响面
 
 当前数字 ID 不只出现在 Collection CRUD，还贯穿以下入口：
 
-- [`ChatRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java) 的 `collectionIds`
-- [`SearchRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java) 的 `collectionIds`
-- [`DocumentRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/DocumentRequest.java) 的 `collectionId`
+- [`ChatRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java) 的 `collectionIds`
+- [`SearchRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java) 的 `collectionIds`
+- [`DocumentRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/DocumentRequest.java) 的 `collectionId`
 - 批量文档请求、文件上传和 PDF-to-RAG 的 `collectionId`
-- [`CollectionDocumentResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
-- [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [`CollectionDocumentResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+- [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
 - Collection 恢复、克隆、导入、导出和文档挂接
 - WebUI 的 Collection、Documents、Chat、Search、Files 和 API Keys 页面
 - 普通 E2E、真实 LLM E2E、WebUI E2E 和 k6 脚本
@@ -86,17 +86,17 @@
 
 ### 2.4 当前 API Key ACL
 
-- [`V24__api_key_allowed_collections.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V24__api_key_allowed_collections.sql) 增加 `rag_api_key.allowed_collection_ids VARCHAR(2048)`。
-- [`RagApiKey`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java) 将允许访问的 Collection 保存为逗号分隔的内部 ID。
-- [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) 以 `Long` 集合执行子集检查、默认 scope 收窄和写入权限检查。
+- [`V24__api_key_allowed_collections.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V24__api_key_allowed_collections.sql) 增加 `rag_api_key.allowed_collection_ids VARCHAR(2048)`。
+- [`RagApiKey`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java) 将允许访问的 Collection 保存为逗号分隔的内部 ID。
+- [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) 以 `Long` 集合执行子集检查、默认 scope 收窄和写入权限检查。
 
 本次不改变 ACL 的底层存储格式，以免同时引入权限数据迁移和请求身份迁移。对外改用 key，对内解析成 ID 后继续复用现有授权模型。
 
 ### 2.5 当前错误处理
 
-- [`ErrorCode`](../../spring-ai-rag-api/src/main/java/com/springairag/api/enums/ErrorCode.java) 已有 `VALIDATION_FAILED`、`BAD_REQUEST`、`FORBIDDEN`、`COLLECTION_NOT_FOUND` 和 `DUPLICATE_RESOURCE`。
-- [`RagException`](../../spring-ai-rag-core/src/main/java/com/springairag/core/exception/RagException.java) 可携带统一错误码。
-- [`GlobalExceptionHandler`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java) 会把一般数据库异常映射为 500。
+- [`ErrorCode`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/enums/ErrorCode.java) 已有 `VALIDATION_FAILED`、`BAD_REQUEST`、`FORBIDDEN`、`COLLECTION_NOT_FOUND` 和 `DUPLICATE_RESOURCE`。
+- [`RagException`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/exception/RagException.java) 可携带统一错误码。
+- [`GlobalExceptionHandler`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java) 会把一般数据库异常映射为 500。
 
 如果只增加数据库唯一约束，不做特定异常转换，并发创建同一 key 时会错误地返回 500。因此必须识别命名约束并转换为 `DUPLICATE_RESOURCE` / HTTP 409。
 
@@ -521,7 +521,7 @@ Resolver 需要明确模式：
 
 ### 9.3 创建与更新 DTO
 
-拆分当前 [`CollectionRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/CollectionRequest.java)：
+拆分当前 [`CollectionRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/CollectionRequest.java)：
 
 - `CollectionCreateRequest`：包含必填 `collectionKey` 和现有可创建字段。
 - `CollectionUpdateRequest`：不包含 `collectionKey`。
@@ -688,7 +688,7 @@ DTO 的 `equals`、`hashCode`、`toString` 和 record 构造参数必须同步�
 
 ### 12.1 外部契约
 
-[`ApiKeyCreateRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java) 增加首选：
+[`ApiKeyCreateRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java) 增加首选：
 
 ```json
 {
@@ -731,17 +731,17 @@ DTO 的 `equals`、`hashCode`、`toString` 和 record 构造参数必须同步�
 
 更新以下 API 模块及其调用方：
 
-- [`api/collections.ts`](../../spring-ai-rag-webui/src/api/collections.ts)
-- [`api/documents.ts`](../../spring-ai-rag-webui/src/api/documents.ts)
-- [`api/chat.ts`](../../spring-ai-rag-webui/src/api/chat.ts)
-- [`api/search.ts`](../../spring-ai-rag-webui/src/api/search.ts)
-- [`api/files.ts`](../../spring-ai-rag-webui/src/api/files.ts)
+- [`api/collections.ts`](../../../spring-ai-rag-webui/src/api/collections.ts)
+- [`api/documents.ts`](../../../spring-ai-rag-webui/src/api/documents.ts)
+- [`api/chat.ts`](../../../spring-ai-rag-webui/src/api/chat.ts)
+- [`api/search.ts`](../../../spring-ai-rag-webui/src/api/search.ts)
+- [`api/files.ts`](../../../spring-ai-rag-webui/src/api/files.ts)
 
 Collection 类型保留 `id: number` 仅用于兼容和展示诊断，业务状态、选择器 value、请求 payload 和导航使用 `collectionKey: string`。不要把 key 转成 number，也不要假设 UUID 格式。
 
 需要更新页面：
 
-- [`Collections.tsx`](../../spring-ai-rag-webui/src/pages/Collections.tsx)
+- [`Collections.tsx`](../../../spring-ai-rag-webui/src/pages/Collections.tsx)
 - `Documents.tsx`
 - `Chat.tsx`
 - `Search.tsx`
@@ -751,7 +751,7 @@ Collection 类型保留 `id: number` 仅用于兼容和展示诊断，业务状�
 
 ### 13.2 创建表单
 
-[`CreateCollectionModal`](../../spring-ai-rag-webui/src/components/CreateCollectionModal/CreateCollectionModal.tsx) 增加必填 key 输入：
+[`CreateCollectionModal`](../../../spring-ai-rag-webui/src/components/CreateCollectionModal/CreateCollectionModal.tsx) 增加必填 key 输入：
 
 - `maxLength=128`
 - 前端执行可见 ASCII 校验
@@ -881,7 +881,7 @@ spring-ai-rag-core/src/main/resources/static/webui/
 
 ### 14.6 OpenAPI 契约测试
 
-扩展 [`OpenApiContractTest`](../../spring-ai-rag-core/src/test/java/com/springairag/core/contract/OpenApiContractTest.java)，不能只检查 schema/path 存在：
+扩展 [`OpenApiContractTest`](../../../spring-ai-rag-core/src/test/java/com/springairag/core/contract/OpenApiContractTest.java)，不能只检查 schema/path 存在：
 
 - `collectionKey` 的 `required`、`minLength=1`、`maxLength=128`、pattern 和示例
 - create/update DTO 分离
@@ -918,13 +918,13 @@ spring-ai-rag-core/src/main/resources/static/webui/
 
 更新：
 
-- [`scripts/e2e-test.sh`](../../scripts/e2e-test.sh)
-- [`scripts/real-llm-e2e-smoke.sh`](../../scripts/real-llm-e2e-smoke.sh)
-- [`scripts/demo-e2e.sh`](../../scripts/demo-e2e.sh)
-- [`scripts/webui-e2e-test.js`](../../scripts/webui-e2e-test.js)
-- [`scripts/k6-load-test.js`](../../scripts/k6-load-test.js)
-- [`scripts/k6-session-stress.js`](../../scripts/k6-session-stress.js)
-- [`scripts/k6-vector-search-stress.js`](../../scripts/k6-vector-search-stress.js)
+- [`scripts/e2e-test.sh`](../../../scripts/e2e-test.sh)
+- [`scripts/real-llm-e2e-smoke.sh`](../../../scripts/real-llm-e2e-smoke.sh)
+- [`scripts/demo-e2e.sh`](../../../scripts/demo-e2e.sh)
+- [`scripts/webui-e2e-test.js`](../../../scripts/webui-e2e-test.js)
+- [`scripts/k6-load-test.js`](../../../scripts/k6-load-test.js)
+- [`scripts/k6-session-stress.js`](../../../scripts/k6-session-stress.js)
+- [`scripts/k6-vector-search-stress.js`](../../../scripts/k6-vector-search-stress.js)
 
 脚本作为调用方显式生成每次运行唯一的 key，例如 UUID 或 `e2e-<run-id>-<case>`，并确保：
 
@@ -936,7 +936,7 @@ spring-ai-rag-core/src/main/resources/static/webui/
 
 ## 15. 验证命令
 
-实施完成后按顺序执行，命令细节以 [`developer-reference-zh-CN.md`](../developer-reference-zh-CN.md) 和 [`testing-guide-zh-CN.md`](../testing-guide-zh-CN.md) 为准：
+实施完成后按顺序执行，命令细节以 [`developer-reference-zh-CN.md`](../../developer-reference-zh-CN.md) 和 [`testing-guide-zh-CN.md`](../../testing-guide-zh-CN.md) 为准：
 
 ```bash
 mvn -pl spring-ai-rag-api,spring-ai-rag-core -am test
@@ -968,12 +968,12 @@ SPRING_PROFILES_ACTIVE=postgresql mvn -pl spring-ai-rag-core \
 
 实施行为时同步更新中英文成对文档：
 
-- [`rest-api-zh-CN.md`](../rest-api-zh-CN.md) / [`rest-api.md`](../rest-api.md)
-- [`architecture-zh-CN.md`](../architecture-zh-CN.md) / [`architecture.md`](../architecture.md)
-- [`project-context-zh-CN.md`](../project-context-zh-CN.md) / [`project-context.md`](../project-context.md)
-- [`configuration-zh-CN.md`](../configuration-zh-CN.md) / [`configuration.md`](../configuration.md)
-- [`SSE-PROTOCOL.md`](../SSE-PROTOCOL.md)
-- [`api-versioning.md`](../api-versioning.md)
+- [`rest-api-zh-CN.md`](../../rest-api-zh-CN.md) / [`rest-api.md`](../../rest-api.md)
+- [`architecture-zh-CN.md`](../../architecture-zh-CN.md) / [`architecture.md`](../../architecture.md)
+- [`project-context-zh-CN.md`](../../project-context-zh-CN.md) / [`project-context.md`](../../project-context.md)
+- [`configuration-zh-CN.md`](../../configuration-zh-CN.md) / [`configuration.md`](../../configuration.md)
+- [`SSE-PROTOCOL.md`](../../SSE-PROTOCOL.md)
+- [`api-versioning.md`](../../api-versioning.md)
 
 各文档职责：
 
@@ -1231,9 +1231,9 @@ Collection Key 不改变 embedding profile、vector column 或维度策略。两
 恢复任务时按以下顺序读取即可，不需要重新全库探索：
 
 1. 本文第 4-10 节：冻结的数据、API、ACL 和错误契约。
-2. [`RagCollection`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)、[`RagCollectionRepository`](../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagCollectionRepository.java)、[`RagCollectionService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)。
-3. [`RagCollectionController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java) 和第 9 节 API 矩阵。
-4. [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) 和第 8、12 节。
+2. [`RagCollection`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagCollection.java)、[`RagCollectionRepository`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagCollectionRepository.java)、[`RagCollectionService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/RagCollectionService.java)。
+3. [`RagCollectionController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagCollectionController.java) 和第 9 节 API 矩阵。
+4. [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java) 和第 8、12 节。
 5. 第 14、15 节测试与验证门禁。
 6. 第 17 节按阶段实施，每阶段满足退出条件后再进入下一阶段。
 

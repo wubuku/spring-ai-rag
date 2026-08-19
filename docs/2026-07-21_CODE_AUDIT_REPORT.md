@@ -4,7 +4,7 @@
 > 正文中“Chat 不支持 Collection”“没有 Collection ACL”“仍为 SNAPSHOT”等结论已经过时。
 > 当前事实以 [项目上下文](project-context-zh-CN.md)、
 > [架构文档](architecture-zh-CN.md) 和
-> [P0 实施记录](drafts/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md) 为准。
+> [P0 实施记录](drafts/archive/2026-07-21_P0_IMPLEMENTATION_PROGRESS.md) 为准。
 >
 > **Purpose**: 基于代码与规划文档交叉验证的能力盘点；重点回答「高价值能力缺口」与「下一步做什么」。  
 > **Date**: 2026-07-21  

@@ -11,7 +11,8 @@ reconciliation is not part of the current API.
 
 ## 1. Choose A Stable Source Identity
 
-Every externally managed object is identified by:
+The current API uses this tuple as the stable external address of one RAG
+document placement:
 
 ```text
 collectionKey + sourceNamespace + externalId
@@ -19,11 +20,40 @@ collectionKey + sourceNamespace + externalId
 
 | Field | Rule |
 |---|---|
-| `collectionKey` | Stable target Collection business key. |
-| `sourceNamespace` | Stable connector/source ownership space such as `cms-main` or `erp-products`. Always send it explicitly. |
+| `collectionKey` | Stable target Collection business key. The ordinary external-document endpoint requires it and it must identify a real active Collection. JSON-record upsert retains deprecated `collectionId` input, but new clients and all later external-address operations should use the resolved key. |
+| `sourceNamespace` | Optional stable connector/source ownership space such as `cms-main` or `erp-products`. Omitted or blank is normalized to `default`; choose and send an explicit value when multiple connectors share a Collection or use source reconciliation. |
 | `externalId` | Immutable source object ID. Do not derive it from title or content. |
 | `sourceRevision` | Opaque token for the complete desired source state: ETag, row version, commit ID, or canonical-state hash. |
 | `expectedSourceRevision` | CAS precondition for updates and tombstones. |
+
+The current maximum lengths are deliberately generous and must not be reduced:
+`collectionKey` and `sourceNamespace` accept up to 128 characters, and
+`externalId` accepts up to 255 characters. These are client-controlled
+identifiers, not server-generated hashes.
+
+`sourceNamespace=default` is the compatibility namespace used when the field
+is omitted or blank. It does not identify a default Collection. `collectionKey`
+is the canonical Collection component of every external address; `null`
+Collection membership is reserved for local/unassigned documents and is not
+an external default target.
+
+Keep these concepts separate:
+
+- **External address**: `collectionKey + sourceNamespace + externalId`, used
+  for every lookup, upsert, and deletion.
+- **Source object ID**: `sourceNamespace + externalId`, derived stably by the
+  connector from the source system.
+- **State revision**: `sourceRevision`, the complete desired state currently
+  delivered at that address.
+- **Internal ID**: `documentId`, used only for server-side diagnostics and
+  operations.
+
+`collectionKey` is part of the external address because the current project
+has no independent tenant resource and a Collection is both a placement target
+and an ACL boundary. One source object may also be intentionally placed in
+multiple Collections. Do not flatten the tuple into an opaque concatenated
+string, and do not require `externalId` to be globally unique across the
+service.
 
 `sourceNamespace` is an identity boundary, not an authorization boundary. Two
 untrusted connectors must use different Collections, because a key with write
@@ -31,6 +61,25 @@ access to a Collection is not isolated to one namespace.
 
 The RAG service's internal `documentId` is useful for diagnostics only. A
 connector must persist and address the source identity above.
+
+### Collection relocation boundary
+
+The current ordinary upsert locates a document by the target tuple. It
+**cannot** atomically move an existing externally managed document to another
+Collection. Changing only `collectionKey` addresses another placement and may
+create a second document; it is not an ordinary update of the original.
+
+Until an explicit relocation API exists, a move requires:
+
+1. tombstoning the old tuple with a new revision;
+2. upserting the complete state at the target tuple;
+3. observing both operations until they converge.
+
+This compatibility flow is not atomic. It creates a new internal `documentId`,
+independent version history, and new derivation work. Systems that cannot
+accept a transient duplicate/gap or must preserve history should keep the
+Collection assignment stable and wait for a controlled atomic relocation
+operation instead of simulating a move with ordinary upsert.
 
 ## 2. Incremental CRUD Contract
 
@@ -98,7 +147,7 @@ state.
 | `content` / `retrievalText` | increments | immediately stale and excluded | yes |
 | title/source/metadata only | increments | current document metadata is visible immediately | no |
 | `jsonbPayload` only | increments | current payload is visible immediately | no |
-| Collection assignment only | increments | scope changes immediately | no |
+| Change `collectionKey` on ordinary upsert | not an update of the same identity | old address remains unless explicitly tombstoned | target address follows create semantics |
 | Disable/tombstone | increments | immediately excluded | no |
 | Restore | increments | reused if already fresh; otherwise queued by policy | only when needed |
 | Permanent local delete | document removed | immediately excluded | pending jobs and derived rows removed/cancelled |
@@ -130,6 +179,11 @@ For each source event:
    last-write-wins update.
 7. Observe lifecycle/readiness separately when downstream workflows require
    the content to be searchable.
+
+For a single-source Collection, omitting `sourceNamespace` is equivalent to
+sending `default`. For a Collection shared by multiple connectors, always
+choose a stable explicit namespace before the first delivery and keep it
+unchanged for the lifetime of that connector's identity.
 
 Do not compare opaque revision strings lexically or numerically in the RAG
 client. Ordering belongs to the source system.
@@ -200,6 +254,8 @@ for the next delivery batch.
 
 - Use a Collection-restricted API key, never the environment root key.
 - Make source identity and revisions stable before the first import.
+- Fix the Collection-placement rule before the first import; do not treat a
+  changed `collectionKey` as an ordinary update.
 - Use `ASYNC` for normal bulk/CDC delivery.
 - Persist checkpoint and source revision only after HTTP success.
 - Keep request logs free of API keys, full content, and sensitive payloads.

@@ -13,7 +13,8 @@ description: Create and maintain the tracked, bilingual, AI-agent-friendly docum
 
 1. **代码和已跟踪长青文档是项目真相源**。
 2. **导航优先于重复正文**：Hub → Guides → Reference。
-3. **现有文档不移动**；优先原地增量更新并从索引链接。
+3. **已有历史文件默认不移动**；只有用户明确要求，或活跃规划按已约定生命周期结束时，
+   才使用 `git mv` 归档。不要为了套模板搬迁 live reference。
 4. **行为变化同步文档与测试**。
 5. **中英文成对文档必须同步**。
 6. **密钥和本地状态不得进入 Git 文档**。
@@ -65,7 +66,8 @@ AGENTS.md / CLAUDE.md
   -> docs/index*.md
      -> docs/project-context*.md / docs/developer-reference*.md
      -> architecture* / configuration* / rest-api* / testing-guide*
-     -> implementation plans / drafts / component references
+     -> active drafts / component references
+     -> drafts/archive（仅历史追溯）
 ```
 
 现有 live 文档保持原位置。不要为了套用通用模板创建空目录并搬迁文件。
@@ -82,7 +84,8 @@ AGENTS.md / CLAUDE.md
 | 境内网络 | `docs/china-network-guide*` |
 | 发布状态和门禁 | `docs/release-checklist*`、相关进度记录 |
 | 稳定项目认知 | `docs/project-context*` |
-| 目标设计 | `docs/*-plan.md` 或 `docs/drafts/`，明确标注状态 |
+| 当前目标设计 | `docs/drafts/`，使用稳定文件名并明确状态 |
+| 历史规划/进度 | `docs/drafts/archive/`，仅追溯，不作为当前事实 |
 
 ## 6. 双语规则
 
@@ -111,15 +114,16 @@ foo-zh-CN.md
 | 类型 | 位置 | 规则 |
 |------|------|------|
 | Live | 现有 `docs/*.md` | 与代码同改 |
-| Draft | `docs/drafts/`、`docs/*-plan.md` | 标明状态，可能滞后 |
-| Historical | 原目录使用 `YYYY-MM-DD_` 前缀 | 保留来源和替代入口链接 |
+| Draft | `docs/drafts/` | 只保留正在准备或实施的方案，使用稳定文件名 |
+| Historical | `docs/drafts/archive/` | 使用 `YYYY-MM-DD_` 前缀；不默认阅读，不追新 |
 | Component reference | 组件目录内 README | 留在组件旁 |
 
-已有文件不移动。需要替换职责重叠的旧文档时：
+规划完成、取消或被替代时：
 
-1. 在原目录重命名为日期前缀。
-2. 新文件承担当前导航职责。
-3. 新旧文件双向链接。
+1. 先把已落地且仍有效的事实提炼到对应双语长青文档。
+2. 用 `git mv` 将 plan/progress 移入 `docs/drafts/archive/`，保留或补充日期前缀。
+3. `docs/index*` 只保留活跃规划和归档总入口，不列单份历史稿。
+4. 归档稿只修复迁移造成的链接问题，不继续维护实时准确性。
 
 ## 8. 工作流
 
@@ -148,7 +152,7 @@ find . -name '*.md' \
 
 1. 先修 Hub 和死链。
 2. 再修 live guides/reference。
-3. 最后处理 drafts 和历史文件。
+3. 最后处理 active drafts，并把已结束材料移入 archive。
 4. 能链接现有文档时不新建平行正文。
 
 ### 验证

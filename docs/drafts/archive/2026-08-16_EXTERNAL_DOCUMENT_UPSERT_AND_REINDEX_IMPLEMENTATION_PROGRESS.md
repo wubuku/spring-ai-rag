@@ -23,8 +23,8 @@
 
 开始本任务时，工作区已有未提交的多集合检索改动，涉及 API DTO、检索作用域、Controller、Repository、WebUI 和测试，并已有以下并行规划/进度文档：
 
-- `docs/drafts/2026-08-16_MULTI_COLLECTION_RETRIEVAL_IMPLEMENTATION_PLAN.md`
-- `docs/drafts/2026-08-16_MULTI_COLLECTION_RETRIEVAL_IMPLEMENTATION_PROGRESS.md`
+- `docs/drafts/archive/2026-08-16_MULTI_COLLECTION_RETRIEVAL_IMPLEMENTATION_PLAN.md`
+- `docs/drafts/archive/2026-08-16_MULTI_COLLECTION_RETRIEVAL_IMPLEMENTATION_PROGRESS.md`
 
 本任务不得修改或删除上述文档，也不得将多集合检索业务改动归入本任务。`JsonRecordService` 等少量潜在重叠文件必须基于当前工作树增量编辑，并在最终 `git diff` 中逐段复核。
 

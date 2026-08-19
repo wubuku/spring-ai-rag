@@ -246,6 +246,14 @@ rag:
 `collectionKey + sourceNamespace + externalId` 身份及 opaque `sourceRevision`。正文 mutation
 与派生任务同事务提交；metadata、JSONB payload 或 Collection-only 变化不请求 embedding。
 
+普通外部文本文档同步要求 `collectionKey`，且它必须指向真实存在的活动 Collection。
+JSON record upsert 仍兼容 deprecated 数字输入，但最终解析到同一个以 key 为准的规范地址。
+`sourceNamespace` 可以省略或为空白，服务会将其规范化为 `default`；
+`allow-non-default-namespace` 控制是否接受其他显式 namespace。当前标识长度上限为：
+`collectionKey` 和 `sourceNamespace` 各 128 个字符，`externalId` 255 个字符。
+这些上限属于外部 Client 契约，后续迁移不得缩短。`default` 是兼容 namespace，不是默认
+Collection；`NULL` Collection 只表示本地/未归属状态。
+
 ## 检索配置
 
 ```yaml

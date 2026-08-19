@@ -262,6 +262,17 @@ and permanent delete. External text and JSON records use
 same transaction. Metadata, JSONB payload, and Collection-only mutations do
 not request an embedding.
 
+For ordinary external-text synchronization, `collectionKey` is required and
+must identify a real active Collection. JSON-record upsert retains deprecated
+numeric input but resolves it to the same canonical key-based address.
+`sourceNamespace` may be omitted or blank and is
+normalized to `default`; `allow-non-default-namespace` controls whether other
+explicit namespaces are accepted. Current identifier limits are 128 characters
+for `collectionKey` and `sourceNamespace`, and 255 for `externalId`. These
+limits are part of the external client contract and must not be reduced by a
+future migration. `default` is a compatibility namespace, not a default
+Collection; a `NULL` Collection is only the local/unassigned state.
+
 ## Retrieval Configuration
 
 ```yaml

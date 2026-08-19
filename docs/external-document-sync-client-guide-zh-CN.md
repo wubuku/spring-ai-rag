@@ -9,7 +9,7 @@
 
 ## 1. 选择稳定的来源身份
 
-每个外部管理对象由以下三元组唯一标识：
+当前 API 使用以下三元组作为一份 RAG 文档投放的稳定外部地址：
 
 ```text
 collectionKey + sourceNamespace + externalId
@@ -17,16 +17,51 @@ collectionKey + sourceNamespace + externalId
 
 | 字段 | 规则 |
 |---|---|
-| `collectionKey` | 目标 Collection 的稳定业务 key。 |
-| `sourceNamespace` | 稳定的 connector/来源所有权空间，例如 `cms-main`、`erp-products`；应始终显式发送。 |
+| `collectionKey` | 目标 Collection 的稳定业务 key。普通外部文档端点必填，且必须指向真实存在的活动 Collection。JSON record upsert 仍兼容 deprecated `collectionId` 输入，但新 Client 和后续外部地址操作都应使用解析后的 key。 |
+| `sourceNamespace` | 可选的稳定 connector/来源所有权空间，例如 `cms-main`、`erp-products`。省略或空白会规范化为 `default`；多个 connector 共用一个 Collection 或使用来源对账时，应选择并显式发送稳定值。 |
 | `externalId` | 来源对象不可变 ID；不要从标题或正文生成。 |
 | `sourceRevision` | 完整期望状态的 opaque 版本，例如 ETag、行版本、commit ID 或规范状态 hash。 |
 | `expectedSourceRevision` | 更新和 tombstone 的 CAS 前置版本。 |
+
+当前最大长度已经为调用方预留了足够空间，且后续不得缩短：
+`collectionKey` 和 `sourceNamespace` 最多 128 个字符，`externalId` 最多 255 个字符。
+这些是调用方管理的标识符，不是服务端生成的 hash。
+
+`sourceNamespace=default` 是字段省略或空白时使用的兼容命名空间，不代表默认
+Collection。`collectionKey` 是所有外部地址中规范的 Collection 组成部分；`null`
+Collection 归属只用于本地/未归属文档，不能作为外部同步的默认目标。
+
+必须区分：
+
+- **外部地址**：`collectionKey + sourceNamespace + externalId`，用于每次查询、upsert 和删除；
+- **来源对象 ID**：`sourceNamespace + externalId`，由 connector 从来源系统稳定地产生；
+- **状态版本**：`sourceRevision`，表示该地址当前投放的完整期望状态；
+- **内部 ID**：`documentId`，只用于服务端诊断和运维。
+
+这里把 `collectionKey` 放入外部地址，是因为当前项目没有独立 tenant 资源，Collection
+同时承担投放目标和 ACL 边界；同一个来源对象也可能被有意投放到不同 Collection。不要把
+三元组拼成一个不可解析字符串，也不要认为 `externalId` 必须在整个服务中全局唯一。
 
 `sourceNamespace` 是身份边界，不是授权边界。两个互不信任的 connector 应使用不同
 Collection，因为对某 Collection 有写权限的 key 并不会被限制到某一个 namespace。
 
 RAG 服务内部 `documentId` 只用于诊断。connector 必须持久化并使用上述外部身份。
+
+### Collection 迁移边界
+
+当前普通 upsert 按目标三元组定位文档，**不能**把已有外部文档原子移动到另一个
+Collection。只修改请求中的 `collectionKey` 会寻址另一份投放，可能创建第二个文档；
+它不是原文档的普通更新。
+
+在新增显式迁移 API 前，需要移动时只能：
+
+1. 用新 revision tombstone 旧三元地址；
+2. 在目标 Collection 用新地址 upsert 完整状态；
+3. 分别等待两个操作收敛。
+
+该兼容流程不是原子的，会产生新的内部 `documentId`、独立版本历史和新的派生任务。
+对不能接受短暂重复/空窗或必须保留历史的系统，应保持 Collection 归属不变，等待受控的
+原子迁移能力，不要用普通 upsert 模拟移动。
 
 ## 2. 增量 CRUD 契约
 
@@ -86,7 +121,7 @@ tombstone 模型。调用者分别提供：
 | 修改 `content` / `retrievalText` | 增加 | 立即 stale 并退出检索 | 有 |
 | 只改标题/来源/metadata | 增加 | 当前文档属性立即生效 | 无 |
 | 只改 `jsonbPayload` | 增加 | 当前 payload 立即生效 | 无 |
-| 只改 Collection 归属 | 增加 | 检索范围立即变化 | 无 |
+| 普通 upsert 改 `collectionKey` | 不是同一身份的更新 | 旧地址仍存在，除非显式 tombstone | 新地址按创建处理 |
 | disable/tombstone | 增加 | 立即退出检索 | 无 |
 | restore | 增加 | 已 fresh 则复用，否则按策略排队 | 仅需要时 |
 | 本地永久删除 | 主记录删除 | 立即退出检索 | 待执行任务与派生数据被取消/清理 |
@@ -113,6 +148,10 @@ tombstone 模型。调用者分别提供：
 6. 遇到 `409` 时停止该 identity，重新读取来源和 RAG 当前状态，再生成新事件；禁止把旧事件
    当作 last-write-wins 覆盖。
 7. 下游流程要求可检索时，另外等待 lifecycle/readiness 收敛。
+
+单来源 Collection 可以省略 `sourceNamespace`，其语义等同于发送 `default`。如果一个
+Collection 由多个 connector 共同写入，必须在第一次投递前选择稳定的显式 namespace，并在
+该 connector 的 identity 生命周期内保持不变。
 
 不要在 RAG client 中按字符串或数字比较 opaque revision 的新旧；顺序由来源系统负责。
 
@@ -175,6 +214,7 @@ JSONL 文件视为不可变；下一批投递使用新的文件和 checkpoint。
 
 - 使用只允许目标 Collection 的 API Key，不使用 environment root key。
 - 首次导入前先稳定来源 identity 和 revision 规则。
+- 首次导入前固定 Collection 投放规则；不要把改 `collectionKey` 当作普通更新。
 - 普通批量/CDC 投递默认使用 `ASYNC`。
 - HTTP 成功后才持久化 checkpoint 和已接受 revision。
 - 日志不得记录 API Key、完整正文和敏感 payload。

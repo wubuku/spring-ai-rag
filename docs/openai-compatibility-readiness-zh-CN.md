@@ -8,10 +8,9 @@
 > **最近复核**：2026-08-17
 > **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
 
-文档总入口：[index-zh-CN.md](index-zh-CN.md)。目标架构、迁移、测试和回滚方案见
-[OpenAI Chat Completions 兼容实施规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)。
-独立的凭据、授权、轮换、吊销和多实例配额工程见
-[API Key 加固实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)。
+文档总入口：[index-zh-CN.md](index-zh-CN.md)。当前可调用契约和配置以
+[REST API](rest-api-zh-CN.md) 与 [配置参考](configuration-zh-CN.md) 为准；旧目标设计
+只在需要审计历史时从 [规划归档](drafts/archive/README-zh-CN.md) 查阅。
 
 ---
 
@@ -128,10 +127,9 @@
 | URL 和凭据格式 | `/v1/*` 已接入 Bearer/Header 认证；root 模式拒绝 query credential，并使用 OpenAI 错误信封 | 公网启用仍应关闭 legacy query/static 兼容并明确只允许受管 principal |
 | 故障语义 | 数据库 key 验证与 static fallback 并存 | 凭据存储故障时必须避免错误降级为绕过路径 |
 
-这些问题不是协议细节，而是外部服务是否“基本可用”的前提。稳定 family/principal、
-可轮换 version、显式 policy、共享 quota、迁移和 fail-closed 故障语义由
-[API Key 加固实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)
-完整定义；兼容规划第 12 节只定义 `/v1` 如何消费这些能力。
+这些问题不是协议细节，而是外部服务是否“基本可用”的前提。后续若重启公开服务加固，
+必须同时设计稳定 family/principal、可轮换 version、显式 policy、共享 quota、迁移和
+fail-closed 故障语义，并保持本文记录的兼容边界。
 
 ---
 
@@ -157,12 +155,10 @@
 
 1. 本文：确认受控预览的当前实现事实和安全边界。
 2. [REST API](rest-api-zh-CN.md) 与 [配置参考](configuration-zh-CN.md)：当前可调用契约。
-3. [下一批高价值功能实施进度](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PROGRESS.md)：
-   实施与验证证据。
-4. [API Key 加固实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)：
-   凭据模型、生命周期、授权、quota、迁移、测试和回滚。
-5. 历史 [兼容实施规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)：
-   目标设计来源；与当前代码冲突时以本文和 live reference 为准。
+3. [项目上下文](project-context-zh-CN.md) 与 [测试指南](testing-guide-zh-CN.md)：
+   稳定能力边界和当前验证入口。
+4. [历史规划归档](drafts/archive/README-zh-CN.md)：仅在追溯设计来源和旧验证证据时阅读；
+   与当前代码冲突时以本文和 live reference 为准。
 
 ---
 

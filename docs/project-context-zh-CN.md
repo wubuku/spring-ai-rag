@@ -212,16 +212,37 @@ Collection、SQL 或 JSONPath。
 `sourceRevision`。`POST /documents/upsert` 保留内部 `documentId`，支持精确重放和默认
 严格的 `expectedSourceRevision` CAS，并记录完整版本快照。内容变化会先使检索 freshness
 失效，再在同一事务中创建新 generation 的持久化 embedding 任务；metadata、payload 或
-Collection-only 变化不调用 embedding provider。旧 worker 必须通过 generation、hash、
-chunker version、Profile 和 lease 提交门，不能覆盖新正文。来源删除使用
+来源版本变化不调用 embedding provider。旧 worker 必须通过 generation、hash、chunker
+version、Profile 和 lease 提交门，不能覆盖新正文。来源删除使用
 `enabled=false` tombstone；之后使用与 tombstone 不同的后续 `sourceRevision` 可以恢复
 同一个内部文档。外部 connector 可使用
 `POST /documents/batch-upsert`、`GET /documents/by-external-id` 和对应的来源删除端点。
 JSON record 仍保持专用的 payload/retrieval-text 语义。
 
+普通外部文本文档同步要求 `collectionKey`，并且它必须解析到真实存在的活动 Collection。
+JSON record upsert 仍兼容 deprecated 数字输入，但最终解析到同一个以 key 为准的规范地址。
+本地文档的 `collection_id` 可以为 `NULL`，这表示未归属，而不是默认 Collection。数据库中
+`source_namespace` 为非空列；请求省略或传空白时规范化为兼容值 `default`，配置允许时
+调用方也可以选择其他 namespace。当前标识长度上限为：`collectionKey` 和
+`sourceNamespace` 各 128 个字符，`externalId` 255 个字符；后续迁移不得缩短这些上限。
+
+不定义 `__DEFAULT__` 这类特殊 sentinel。`default` 就是兼容 namespace 的字面值，也可以
+由调用方显式发送；它不会创建或选择默认 Collection。`sourceNamespace` 是身份/来源对账
+分区，不是检索范围或 ACL 维度。当前 Search 和 Chat 会在有效授权的 Collection 范围内跨
+namespace 检索。
+
+该三元组是当前投放地址和 ACL 作用域，不表示 `externalId` 在全服务全局唯一。普通
+upsert 不能原子改变外部文档的 Collection；修改 `collectionKey` 会寻址另一份投放，旧
+地址不会自动删除。当前 tombstone 旧地址再 upsert 新地址的兼容流程会产生新的内部文档
+和版本历史；保留同一 `documentId` 的显式原子迁移仍是后续能力。
+
 完整请求/响应契约、冲突处理和客户同步最佳实践见
 [REST API：外部文档幂等同步](rest-api-zh-CN.md)与
 [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。
+
+当前 reference client 只覆盖 webhook/CDC 增量事件。API 尚不支持声明某个
+`collectionKey + sourceNamespace` 的 manifest 为权威全量快照的 begin/upload/complete
+对账协议，因此 client 只能显式发送 tombstone，不能根据不完整批次推断缺失删除。
 
 ### 本地文档生命周期
 
@@ -231,6 +252,14 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检索，直到 lifecycle
 `searchability=READY`。标题、来源、metadata 和 Collection-only 修改立即读取当前主记录，
 不会重嵌入。外部托管文档拒绝本地 CRUD，必须通过来源身份和 tombstone 契约操作。
+
+版本历史 API 当前只支持列表、读取和 diff，不支持把旧快照恢复为新 revision。V40/V41
+之后产生的 `FULL` 快照已保存未来安全恢复所需的正文和受管字段；旧的
+`CONTENT_AND_METADATA_ONLY` 快照不能被当作完整状态恢复。
+
+当前全文检索与向量检索共用 `rag_embeddings` chunk，并要求活动 Embedding Profile 状态为
+`COMPLETED`。因此正文变化到新 embedding 完成前，或 provider 失败时，该文档会同时退出
+关键词和向量检索；尚未实现独立的本地 chunk/full-text 派生状态。
 
 ## 5. 多模型
 
@@ -325,9 +354,8 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 - 缺少事务化最后一个 ADMIN 保护。
 - 多实例吊销、共享限流和写放大尚未解决。
 
-这些边界见 [openai-compatibility-readiness-zh-CN.md](openai-compatibility-readiness-zh-CN.md)，
-实施顺序和验收标准见
-[API Key 加固实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md)。
+这些边界及公开启用前置条件见
+[openai-compatibility-readiness-zh-CN.md](openai-compatibility-readiness-zh-CN.md)。
 
 ## 8. OpenAI 兼容方向
 
@@ -380,7 +408,8 @@ HTTP E2E 66/66
 Real LLM 10/10
 ```
 
-验证记录见 [P1 / 1.0 就绪实施进度](drafts/2026-07-21_P1_10_READINESS_PROGRESS.md)。
+当前可重复验证入口见 [测试指南](testing-guide-zh-CN.md) 和
+[1.0 发布门禁](release-checklist-zh-CN.md)；历史计数只作为归档证据保留。
 
 ## 10. 明确边界
 
@@ -399,5 +428,6 @@ Real LLM 10/10
 1. 当前代码和迁移。
 2. `docs/` 中的 live reference / guide。
 3. `AGENTS.md` 和 `CLAUDE.md` 的入口规则。
-4. `docs/drafts/` 与 `*-plan.md`。
-5. 本地 Agent 状态文件。
+4. `docs/drafts/` 中的当前活跃规划。
+5. `docs/drafts/archive/` 中的历史规划与实施记录。
+6. 本地 Agent 状态文件。

@@ -64,6 +64,7 @@
 
 代码根目录为 `spring-ai-rag-{api,core,starter,documents}/`、`spring-ai-rag-webui/`、`demos/`；脚本入口统一查 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)。
 多数正式文档有去掉 `-zh-CN` 的英文对应文件，修改时必须成对更新。`docs/drafts/` 与 `*-plan.md` 可能滞后于代码。
+`docs/drafts/` 只放当前活跃规划；`docs/drafts/archive/` 仅供历史追溯，不是默认事实入口。
 
 ---
 

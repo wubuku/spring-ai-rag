@@ -164,7 +164,7 @@ Batch A 必须把 title/source/original filename/Collection/document metadata/pa
 
 ### 2.6 当前 client 指引的优点与缺口
 
-[REST API：外部文档幂等同步](../rest-api-zh-CN.md#external-documents-idempotent-synchronization)
+[REST API：外部文档幂等同步](../../rest-api-zh-CN.md#external-documents-idempotent-synchronization)
 已经正确说明：
 
 - 稳定 `externalId`；

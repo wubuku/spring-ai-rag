@@ -258,8 +258,8 @@ Ordinary external documents use the stable triple
 supports exact replay and strict-by-default `expectedSourceRevision` CAS, and
 records complete snapshots. Content changes invalidate retrieval freshness and
 persist a new-generation embedding job in the same transaction. Metadata,
-payload, and Collection-only changes do not call the embedding provider. Old
-workers must pass generation, hash, chunker-version, Profile, and lease commit
+payload, and source-revision-only changes do not call the embedding provider.
+Old workers must pass generation, hash, chunker-version, Profile, and lease commit
 fences and cannot overwrite newer content. Source deletion is an enabled=false
 tombstone restorable by a distinct subsequent `sourceRevision`.
 `POST /documents/batch-upsert`,
@@ -267,11 +267,41 @@ tombstone restorable by a distinct subsequent `sourceRevision`.
 are available to external connectors. JSON records retain their dedicated
 payload/retrieval-text semantics.
 
+For ordinary external-text synchronization, `collectionKey` is required and
+must resolve to an active real Collection. JSON-record upsert retains
+deprecated numeric input, but resolves it to the same canonical key-based
+address. Local documents may have `collection_id IS NULL`, which means
+unassigned, not a default Collection. The non-null
+`source_namespace` column normalizes omitted or blank input to the compatibility
+value `default`; clients may choose another namespace when the configuration
+allows it. Current identifier limits are 128 characters for `collectionKey`
+and `sourceNamespace`, and 255 for `externalId`; future migrations must not
+reduce them.
+
+No `__DEFAULT__` sentinel is defined. `default` is the literal compatibility
+namespace, and it may also be sent explicitly; it never creates or selects a
+default Collection. `sourceNamespace` is an identity/source-reconciliation
+partition, not a retrieval-scope or ACL dimension. Search and Chat currently
+cross namespaces within the effective authorized Collection scope.
+
+The tuple is the current placement address and ACL scope; it does not make
+`externalId` globally unique across the service. Ordinary upsert cannot
+atomically change the Collection of an externally managed document. A changed
+`collectionKey` addresses another placement and does not delete the old one.
+The compatibility flow of tombstoning the old address and upserting the target
+creates a new internal document and version history; an explicit atomic
+relocation preserving `documentId` remains future work.
+
 See [REST API — External Documents](rest-api.md) for the complete
 request/response contract, conflict handling, and client synchronization
 best practices, and
 [External Document Synchronization Client Guide](external-document-sync-client-guide.md)
 for the runnable connector algorithm.
+
+The reference client currently covers incremental webhook/CDC events only. The
+API has no begin/upload/complete reconciliation contract declaring a manifest
+authoritative for one `collectionKey + sourceNamespace`. Clients must therefore
+send explicit tombstones and must not infer deletions from an incomplete batch.
 
 ### Local Document Lifecycle
 
@@ -284,6 +314,17 @@ excluded immediately and the document stays unavailable until lifecycle
 `searchability=READY`. Title, source, metadata, and Collection-only changes
 read current document values immediately and do not re-embed. Externally
 managed documents reject local CRUD and must use source identity and tombstones.
+
+Version-history APIs currently support list, read, and diff only. They do not
+restore an old snapshot as a new revision. `FULL` snapshots created after
+V40/V41 contain the content and managed fields needed for a safe future
+restore; historical `CONTENT_AND_METADATA_ONLY` rows are not complete state.
+
+Full-text providers currently reuse chunks in `rag_embeddings` and require the
+active Embedding Profile state to be `COMPLETED`. Between a content mutation
+and successful re-embedding, or after provider failure, the document is
+unavailable to both keyword and vector retrieval. There is no independent
+local chunk/full-text derivation state yet.
 
 ## 5. Multi-Model Runtime
 
@@ -388,8 +429,8 @@ network. It is not yet a complete multi-tenant external credential system:
 - There is no transactional last-ADMIN guard.
 - Multi-instance revocation, shared limiting, and write amplification remain unresolved.
 
-See [openai-compatibility-readiness.md](openai-compatibility-readiness.md) and the
-[API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md).
+See [openai-compatibility-readiness.md](openai-compatibility-readiness.md) for
+these boundaries and the prerequisites for public enablement.
 
 ## 8. OpenAI Compatibility Direction
 
@@ -448,7 +489,9 @@ HTTP E2E 66/66
 Real LLM 10/10
 ```
 
-See [P1 / 1.0 readiness progress](drafts/2026-07-21_P1_10_READINESS_PROGRESS.md).
+See the [testing guide](testing-guide.md) and
+[1.0 release gates](release-checklist.md) for repeatable current verification.
+Historical counts remain available only as archived evidence.
 
 ## 10. Explicit Boundaries
 
@@ -470,5 +513,6 @@ When information conflicts, use:
 1. Current code and migrations.
 2. Live references and guides under `docs/`.
 3. Entry rules in `AGENTS.md` and `CLAUDE.md`.
-4. `docs/drafts/` and `*-plan.md`.
-5. Local Agent state.
+4. Current active plans under `docs/drafts/`.
+5. Historical plans and implementation records under `docs/drafts/archive/`.
+6. Local Agent state.

@@ -22,13 +22,12 @@
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
 | 同步外部文档 / 内容源 | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) | [REST API 契约](rest-api-zh-CN.md#external-documents-idempotent-synchronization)、[一键生命周期验收](developer-reference-zh-CN.md#document-lifecycle-verification) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
-| 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
+| 了解外部 API Key / OpenAI 兼容安全边界 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [配置参考](configuration-zh-CN.md) |
 | 接入 OpenAI 兼容预览 | [REST API：OpenAI 兼容预览](rest-api-zh-CN.md#openai-chat-completions-兼容预览) | [OpenAI 兼容就绪度与边界](openai-compatibility-readiness-zh-CN.md) |
-| 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
-| 使用 JSONB 结构化记录检索 | [REST API：JSONB Payload 检索](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索) | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| 规划嵌入模型换模 / 向量迁移 | [项目上下文](project-context-zh-CN.md) | [架构文档](architecture-zh-CN.md) |
+| 使用 JSONB 结构化记录检索 | [REST API：JSONB Payload 检索](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索) | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) |
 | 运行持久化嵌入任务 / 质量回归 | [开发者参考](developer-reference-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
-| 治理 WebUI 水平对齐 | [WebUI 对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | [实施进度](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PROGRESS.md) |
-| 新增 / 修改 WebUI 样式 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) |
+| 治理或修改 WebUI 水平对齐 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
@@ -67,15 +66,9 @@
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | 多模型增强规划 |
 | [multi-model-external-config-zh-CN.md](multi-model-external-config-zh-CN.md) | 外部 `models.json` 配置 |
 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | 默认关闭的受控预览、请求级 Collection scope、当前兼容子集与公网安全缺口 |
-| [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | 外部调用凭据、policy、轮换、吊销、审计、配额和迁移前置工程（规划检查完成，待批准） |
-| [OpenAI Chat Completions 兼容规划](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | 历史目标设计；当前受控预览状态以 live readiness / REST API 为准 |
-| [Embedding Profile 与固定维度向量迁移规划](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | 已实施：清理无效 `rag_vector_store` 路径，使用不可变模型身份、固定维度列、Profile 级状态和可回滚换模流程 |
-| [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
-| [下一批最高价值功能规划](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) / [English](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) | 已实施：动态 Collection 范围的 OpenAI 兼容协议、持久化嵌入任务、JSON containment/Tool 与真实检索回归门禁 |
-| [下一批高价值功能规划（2026-08-18）](drafts/2026-08-18_NEXT_HIGH_VALUE_FEATURES_PLAN.md) | 等待 review：检索诊断、普通文档 metadata 过滤、嵌入任务运营控制面、受管质量套件与 citation 可信度 |
-| [文档生命周期与派生索引一致性规划](drafts/2026-08-18_DOCUMENT_LIFECYCLE_AND_INDEX_CONSISTENCY_PLAN.md) | Phase 0 + Batch A 已实施并验收中：统一文档 CRUD、索引/嵌入连带更新、外部来源 namespace 与增量 reference client；后续批次仍是规划 |
-| [WebUI 水平对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | 清理模板样式污染，建立普通内容默认起始对齐、有限语义居中和自动防回归门禁 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
+| [当前活跃规划](drafts/README-zh-CN.md) | 只列仍在准备或实施的方案；实施事实仍以代码与长青文档为准 |
+| [历史规划与实施记录归档](drafts/archive/README-zh-CN.md) | 仅用于追溯设计与验证证据，不是 Agent 默认阅读入口 |
 
 ### 配置、API、数据
 

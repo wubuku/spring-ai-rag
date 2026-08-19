@@ -22,13 +22,12 @@
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
 | Synchronize external documents / content sources | [External Document Sync Client Guide](external-document-sync-client-guide.md) | [REST API contract](rest-api.md#external-documents-idempotent-synchronization), [one-command lifecycle verification](developer-reference.md#document-lifecycle-verification) |
 | Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
-| Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
+| Understand external API-key / OpenAI compatibility security boundaries | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [Configuration reference](configuration.md) |
 | Integrate the OpenAI compatibility preview | [REST API: OpenAI compatibility preview](rest-api.md#openai-chat-completions-compatibility-preview) | [OpenAI compatibility readiness and boundaries](openai-compatibility-readiness.md) |
-| Plan embedding-model / vector migration | [Project context](project-context.md) | [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) |
-| Use JSONB structured-record retrieval | [REST API: JSONB Payload Retrieval](rest-api.md#json-structured-records--jsonb-payload-retrieval) | [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) |
+| Plan embedding-model / vector migration | [Project context](project-context.md) | [Architecture](architecture.md) |
+| Use JSONB structured-record retrieval | [REST API: JSONB Payload Retrieval](rest-api.md#json-structured-records--jsonb-payload-retrieval) | [External Document Sync Client Guide](external-document-sync-client-guide.md) |
 | Run durable embedding jobs / quality regression | [Developer reference](developer-reference.md) | [Testing guide](testing-guide.md) |
-| Govern WebUI horizontal alignment | [WebUI alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | [Implementation progress](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PROGRESS.md) |
-| Add / modify WebUI styles | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) |
+| Govern or modify WebUI horizontal alignment | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Testing guide](testing-guide.md) |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
@@ -67,15 +66,9 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [multi-model-enhancement-plan.md](multi-model-enhancement-plan.md) | Multi-model plan |
 | [multi-model-external-config.md](multi-model-external-config.md) | External `models.json` config |
 | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | Disabled-by-default controlled preview, request-scoped Collections, compatibility subset, and public-service gaps |
-| [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) | Credential, policy, rotation, revocation, audit, quota, and migration prerequisite work (planning review complete; awaiting approval) |
-| [OpenAI Chat Completions compatibility plan](drafts/2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md) | Historical target design; current preview status lives in readiness and REST API references |
-| [Embedding Profile and fixed-dimension vector migration plan](drafts/2026-08-15_EMBEDDING_PROFILE_VECTOR_MIGRATION_PLAN.md) | Implemented: remove the unused `rag_vector_store` path and use immutable model identity, fixed-size columns, Profile-scoped state, and rollback-safe migration |
-| [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | Implemented caller-supplied JSONB plus natural-language descriptions; only descriptions are indexed/embedded, with collection / external-ID idempotency |
-| [Next most valuable features plan](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) / [中文](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) | Implemented request-scoped OpenAI compatibility, durable embedding jobs, JSON containment/tooling, and live retrieval regression gates |
-| [Next high-value features plan (2026-08-18)](drafts/2026-08-18_NEXT_HIGH_VALUE_FEATURES_PLAN.md) | Awaiting review: retrieval diagnostics, ordinary-document metadata filters, embedding operations control plane, managed quality suites, and citation trust |
-| [Document lifecycle and derived-index consistency plan](drafts/2026-08-18_DOCUMENT_LIFECYCLE_AND_INDEX_CONSISTENCY_PLAN.md) | Phase 0 + Batch A implemented and under final acceptance: unified CRUD, automatic index/embedding propagation, source namespaces, and the incremental reference client; later batches remain planned |
-| [WebUI horizontal-alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | Remove template-style pollution and establish start-aligned application content, limited semantic centering, and automated regression checks |
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
+| [Current active plans](drafts/README.md) | Lists only work still being prepared or implemented; code and evergreen docs remain authoritative |
+| [Historical plan and implementation archive](drafts/archive/README.md) | Design and verification provenance only; not a default reading path for Agents |
 
 ### Config, API, data
 

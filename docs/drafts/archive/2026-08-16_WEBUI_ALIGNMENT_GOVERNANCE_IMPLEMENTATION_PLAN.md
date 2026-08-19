@@ -27,13 +27,13 @@
 
 ### 2.1 两套全局样式叠加
 
-[`main.tsx`](../../spring-ai-rag-webui/src/main.tsx) 当前加载：
+[`main.tsx`](../../../spring-ai-rag-webui/src/main.tsx) 当前加载：
 
 ```ts
 import './index.css';
 ```
 
-[`App.tsx`](../../spring-ai-rag-webui/src/App.tsx) 又加载：
+[`App.tsx`](../../../spring-ai-rag-webui/src/App.tsx) 又加载：
 
 ```ts
 import './styles/global.css';

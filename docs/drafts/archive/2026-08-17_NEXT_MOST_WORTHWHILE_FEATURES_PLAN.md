@@ -100,7 +100,7 @@ Not in this batch:
 
 Deferring key hardening does not remove authorization. The OpenAI adapter reuses existing authentication and Collection ACL and is initially for internal or controlled-network use; it does not claim public commercial production readiness. Public exposure can be a separate hardening project.
 
-Relationship to the existing [OpenAI compatibility readiness](../openai-compatibility-readiness.md) document: that live document remains the source of current status and keeps the requirement that API-key hardening precede public or multi-instance production. This plan only defines a disabled-by-default controlled-network MVP. If implementation is approved, the readiness document must distinguish “controlled preview available” from “public production ready”; the existence of a `/v1` endpoint must not be treated as the latter.
+Relationship to the existing [OpenAI compatibility readiness](../../openai-compatibility-readiness.md) document: that live document remains the source of current status and keeps the requirement that API-key hardening precede public or multi-instance production. This plan only defines a disabled-by-default controlled-network MVP. If implementation is approved, the readiness document must distinguish “controlled preview available” from “public production ready”; the existence of a `/v1` endpoint must not be treated as the latter.
 
 ## 3. Current Facts and Gaps
 
@@ -117,10 +117,10 @@ Relationship to the existing [OpenAI compatibility readiness](../openai-compatib
 
 Stable references:
 
-- [Project context](../project-context.md)
-- [Architecture](../architecture.md)
-- [REST API](../rest-api.md)
-- [Developer reference](../developer-reference.md)
+- [Project context](../../project-context.md)
+- [Architecture](../../architecture.md)
+- [REST API](../../rest-api.md)
+- [Developer reference](../../developer-reference.md)
 
 ### 3.2 Collection is already a real retrieval boundary
 
@@ -143,7 +143,7 @@ Current scopes:
 - `documentIds`: intersected with Collection scope;
 - restricted API keys: no scope mode can expand the allow-list.
 
-`SELECTED_COLLECTIONS` currently performs one global top-k over the selected union; it does not guarantee a contribution from every Collection. That is intentional and is not required for this batch. See [Collection retrieval scope semantics](../rest-api.md#collection-retrieval-scope-semantics) and [the EACH_COLLECTION TODO](../TODO.md).
+`SELECTED_COLLECTIONS` currently performs one global top-k over the selected union; it does not guarantee a contribution from every Collection. That is intentional and is not required for this batch. See [Collection retrieval scope semantics](../../rest-api.md#collection-retrieval-scope-semantics) and [the EACH_COLLECTION TODO](../../TODO.md).
 
 ### 3.3 Chat already uses Spring AI orchestration
 
@@ -815,7 +815,7 @@ Suggested scripts:
 ### Phase 0: preflight
 
 1. Record `git status --short`; never stash, hard-reset, or discard another developer's WIP;
-2. reread [AGENTS.md](../../AGENTS.md), the [project-docs Skill](../../.agents/skills/project-docs/SKILL.md),
+2. reread [AGENTS.md](../../../AGENTS.md), the [project-docs Skill](../../../.agents/skills/project-docs/SKILL.md),
    architecture, REST, configuration, and testing documents;
 3. verify the current commit, latest Flyway version, Spring AI dependency, and frontend scripts;
 4. create a dedicated `docs/drafts/*_PROGRESS.md` ledger;
@@ -870,7 +870,7 @@ Documentation and release:
 - synchronized Chinese/English pairs;
 - no edits to executed Flyway migrations;
 - no secrets, payload dumps, or OpenClaw local state in Git;
-- use `scripts/docker-build-local.sh` and the [China network guide](../china-network-guide.md) for mainland-China builds.
+- use `scripts/docker-build-local.sh` and the [China network guide](../../china-network-guide.md) for mainland-China builds.
 
 After the basic gates pass, perform three fixed-scope convergence reviews:
 
@@ -919,13 +919,13 @@ The planning phase is complete only when:
 
 Nearby references:
 
-- [Project context](../project-context.md)
-- [Architecture](../architecture.md)
-- [Collection retrieval scope semantics](../rest-api.md#collection-retrieval-scope-semantics)
-- [OpenAI compatibility readiness](../openai-compatibility-readiness.md)
+- [Project context](../../project-context.md)
+- [Architecture](../../architecture.md)
+- [Collection retrieval scope semantics](../../rest-api.md#collection-retrieval-scope-semantics)
+- [OpenAI compatibility readiness](../../openai-compatibility-readiness.md)
 - [Existing OpenAI compatibility plan](2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)
 - [JSONB implementation plan](2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md)
 - [External document synchronization plan](2026-08-16_EXTERNAL_DOCUMENT_UPSERT_AND_REINDEX_IMPLEMENTATION_PLAN.md)
-- [Testing guide](../testing-guide.md)
-- [Quality defaults](../quality-defaults.md)
-- [Project documentation Skill](../../.agents/skills/project-docs/SKILL.md)
+- [Testing guide](../../testing-guide.md)
+- [Quality defaults](../../quality-defaults.md)
+- [Project documentation Skill](../../../.agents/skills/project-docs/SKILL.md)

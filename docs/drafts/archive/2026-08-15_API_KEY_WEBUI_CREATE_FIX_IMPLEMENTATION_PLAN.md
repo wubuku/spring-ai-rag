@@ -163,9 +163,9 @@ mutation 在通用本地化提示后附加安全的后端错误文本，便于�
 - `docs/project-context*.md`
 - `docs/openai-compatibility-readiness*.md`
 - `docs/developer-reference*.md`
-- `docs/drafts/2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md`
-- `docs/drafts/2026-08-14_DEV_LAUNCHER_IMPLEMENTATION_PLAN.md`
-- `docs/drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md`
+- `docs/drafts/archive/2026-08-14_API_KEY_WEBUI_MVP_PROGRESS.md`
+- `docs/drafts/archive/2026-08-14_DEV_LAUNCHER_IMPLEMENTATION_PLAN.md`
+- `docs/drafts/archive/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md`
 
 文档需要明确：
 

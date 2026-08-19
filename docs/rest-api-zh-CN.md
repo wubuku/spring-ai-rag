@@ -748,12 +748,24 @@ DELETE /api/v1/rag/json-records/by-external-id
 这些端点用于同步由外部系统负责身份和版本的普通文本文档。服务不会主动抓取 URL
 或文件；调用方读取外部来源后，将当前文档表示提交给 RAG 服务。
 
-稳定身份是 `collectionKey + sourceNamespace + externalId`。`sourceNamespace` 默认
-为兼容值 `default`，但新 connector 应显式使用稳定的来源命名空间。它是身份边界而不是
-授权边界；互不信任的 connector 应使用不同 Collection。`externalId` 会去除首尾空白、区分大小写，
-长度最多 255 个字符，并且在来源对象生命周期内必须保持稳定。
+稳定外部地址是 `collectionKey + sourceNamespace + externalId`。普通外部文本文档端点要求
+提供 `collectionKey`，且它必须指向真实存在的活动 Collection。JSON record upsert 仍为
+兼容保留 deprecated `collectionId` 输入，但最终解析到同一个以 key 为准的规范地址。
+`sourceNamespace` 可省略；
+省略或空白会规范化为兼容值 `default`。如果多个 connector 共用一个 Collection，或启用
+来源全量对账，connector 应选择并显式发送稳定的 namespace。它是身份边界而不是授权边界；
+互不信任的 connector 应使用不同 Collection。`externalId` 会去除首尾空白、区分大小写，
+长度最多 255 个字符，并且在来源对象生命周期内必须保持稳定。`collectionKey` 和
+`sourceNamespace` 长度最多 128 个字符；后续迁移不得缩短这些上限。
 `sourceRevision` 是调用方提供的非空 opaque 版本令牌，例如 ETag、上游行版本、
 commit ID 或 canonical payload hash。服务不会按 opaque 版本的大小比较新旧。
+
+外部地址、状态版本和内部 ID 是三个不同概念。调用方后续寻址始终使用三元地址；
+`sourceRevision` 只表示该地址上的完整期望状态；返回的 `documentId` 只用于诊断。当前
+Collection 同时是投放目标和 ACL 边界，因此 `externalId` 不要求全局唯一，同一来源对象也
+可以被显式投放到多个 Collection。
+`sourceNamespace=default` 不代表默认 Collection。`NULL` Collection 归属是本地文档的
+未归属状态，不是外部同步的替代目标。
 
 ### `POST /api/v1/rag/documents/upsert`
 
@@ -783,8 +795,12 @@ JSON 结构化记录 API。新 client 推荐显式发送 `embeddingPolicy=ASYNC`
 
 服务在更新来源文档时保留同一个内部 `documentId`。内容变化会创建版本快照、使旧
 chunk/embedding 立即不再参与检索，并在同一事务中持久化新 generation 的任务。
-`SYNC` 对该任务有界等待，`ASYNC` 立即返回。只有 metadata、来源版本或 Collection
-变化且当前 embedding 已新鲜时，不会调用 embedding provider。
+`SYNC` 对该任务有界等待，`ASYNC` 立即返回。只有 metadata 或来源版本变化且当前
+embedding 已新鲜时，不会调用 embedding provider。
+
+普通 upsert 不能把外部文档原子移动到另一个 Collection。改变 `collectionKey` 会寻址另一
+个三元地址，可能创建第二个文档；旧地址不会被隐式删除。当前兼容做法是先 tombstone 旧
+地址，再在目标地址 upsert，但这不是原子操作，也不会保留同一个内部 ID 和版本历史。
 
 即使文档持久化成功但 embedding 失败，响应仍为 HTTP 200：
 
@@ -877,6 +893,8 @@ DELETE /api/v1/rag/documents/by-external-id
    重放相同请求是安全的。
 6. 每个 connector 使用独立 API Key，并限制到它负责的 Collection；不要把 root key
    分发给外部 connector。
+7. 首次导入前固定 Collection 投放规则；不要通过修改普通 upsert 的 `collectionKey`
+   模拟原子移动。
 
 完整的增量投递、重试、checkpoint、dead-letter 和上线检查见
 [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。可运行参考实现

@@ -100,7 +100,7 @@ server
 
 延后 API Key 加固不等于放开权限。OpenAI 适配层只复用当前认证和 Collection ACL，首版定位为内部或受控网络使用，不宣称公网商业生产就绪。若未来要公网开放，再单独实施 API Key 加固、共享限流和配额。
 
-与现有 [OpenAI 兼容就绪度](../openai-compatibility-readiness-zh-CN.md) 文档的关系：该长青文档继续代表当前事实，并保留“公网/多实例生产前必须完成 API Key 加固”的门槛；本规划只是额外定义一个默认关闭的受控网络 MVP。若未来批准实施，必须在 readiness 文档中明确区分“受控预览可用”和“公网生产就绪”，不能因为 `/v1` 端点存在就宣称后者。
+与现有 [OpenAI 兼容就绪度](../../openai-compatibility-readiness-zh-CN.md) 文档的关系：该长青文档继续代表当前事实，并保留“公网/多实例生产前必须完成 API Key 加固”的门槛；本规划只是额外定义一个默认关闭的受控网络 MVP。若未来批准实施，必须在 readiness 文档中明确区分“受控预览可用”和“公网生产就绪”，不能因为 `/v1` 端点存在就宣称后者。
 
 ## 3. 当前事实和缺口
 
@@ -117,10 +117,10 @@ server
 
 实现入口和稳定上下文：
 
-- [项目上下文](../project-context-zh-CN.md)
-- [架构设计](../architecture-zh-CN.md)
-- [REST API](../rest-api-zh-CN.md)
-- [开发者参考](../developer-reference-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [架构设计](../../architecture-zh-CN.md)
+- [REST API](../../rest-api-zh-CN.md)
+- [开发者参考](../../developer-reference-zh-CN.md)
 
 ### 3.2 Collection 当前已是真正的检索边界
 
@@ -143,7 +143,7 @@ collectionKeys / collectionIds
 - `documentIds`：与 Collection 范围取交集；
 - 受限 API Key：任何 mode 都不能扩大 allow-list。
 
-当前 `SELECTED_COLLECTIONS` 是全局 top-k 的并集检索，不保证每个 Collection 都贡献结果；这是有意边界，不是本批必须补的缺陷。详见 [Collection 检索范围语义](../rest-api-zh-CN.md#collection-检索范围语义) 和 [EACH_COLLECTION TODO](../TODO-zh-CN.md)。
+当前 `SELECTED_COLLECTIONS` 是全局 top-k 的并集检索，不保证每个 Collection 都贡献结果；这是有意边界，不是本批必须补的缺陷。详见 [Collection 检索范围语义](../../rest-api-zh-CN.md#collection-检索范围语义) 和 [EACH_COLLECTION TODO](../../TODO-zh-CN.md)。
 
 ### 3.3 Chat 已使用 Spring AI 内置编排
 
@@ -784,7 +784,7 @@ runner 必须：
 ### Phase 0：实施前置
 
 1. 记录 `git status --short`，不使用 `stash`、`reset --hard` 或回滚其他人的 WIP；
-2. 重新读取 [AGENTS.md](../../AGENTS.md)、[项目文档 Skill](../../.agents/skills/project-docs/SKILL.md)、
+2. 重新读取 [AGENTS.md](../../../AGENTS.md)、[项目文档 Skill](../../../.agents/skills/project-docs/SKILL.md)、
    架构、REST、配置和测试文档；
 3. 核对当前 commit、Flyway 最新版本、Spring AI 依赖和前端脚本；
 4. 创建独立的 `docs/drafts/*_PROGRESS.md` 进度台账；
@@ -839,7 +839,7 @@ runner 必须：
 - 中英文成对更新；
 - 不修改已执行 Flyway；
 - 不提交密钥、payload dump 或 OpenClaw 本地状态；
-- 中国境内构建沿用 `scripts/docker-build-local.sh` 和 [境内网络指南](../china-network-guide-zh-CN.md)。
+- 中国境内构建沿用 `scripts/docker-build-local.sh` 和 [境内网络指南](../../china-network-guide-zh-CN.md)。
 
 基本门禁全部通过后，固定范围执行三轮收敛检查：
 
@@ -890,13 +890,13 @@ runner 必须：
 
 近距离参考：
 
-- [项目上下文](../project-context-zh-CN.md)
-- [架构设计](../architecture-zh-CN.md)
-- [Collection 检索范围语义](../rest-api-zh-CN.md#collection-检索范围语义)
-- [OpenAI 兼容就绪度](../openai-compatibility-readiness-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [架构设计](../../architecture-zh-CN.md)
+- [Collection 检索范围语义](../../rest-api-zh-CN.md#collection-检索范围语义)
+- [OpenAI 兼容就绪度](../../openai-compatibility-readiness-zh-CN.md)
 - [既有 OpenAI 兼容规划](2026-07-21_OPENAI_CHAT_COMPLETIONS_COMPATIBILITY_PLAN.md)
 - [JSONB 实施规划](2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md)
 - [外部文档同步规划](2026-08-16_EXTERNAL_DOCUMENT_UPSERT_AND_REINDEX_IMPLEMENTATION_PLAN.md)
-- [测试指南](../testing-guide-zh-CN.md)
-- [质量默认值](../quality-defaults-zh-CN.md)
-- [项目文档 Skill](../../.agents/skills/project-docs/SKILL.md)
+- [测试指南](../../testing-guide-zh-CN.md)
+- [质量默认值](../../quality-defaults-zh-CN.md)
+- [项目文档 Skill](../../../.agents/skills/project-docs/SKILL.md)

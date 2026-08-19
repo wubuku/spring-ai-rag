@@ -46,31 +46,31 @@ WIP 新增 V30，本任务只接受该基线变化，不修改 V30 业务内容�
 
 ### 2.1 外部请求
 
-- [`ChatRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
+- [`ChatRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ChatRequest.java)
   已有 `collectionKeys`、deprecated `collectionIds` 和 `documentIds`。
-- [`SearchRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java)
+- [`SearchRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/SearchRequest.java)
   有相同三个字段。
 - GET Search 使用重复 query parameter 接收 `collectionKeys` / `collectionIds`。
-- [`JsonRecordSearchRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/JsonRecordSearchRequest.java)
+- [`JsonRecordSearchRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/JsonRecordSearchRequest.java)
   要求显式 Collection 范围，列表上限为 50。
 
 Chat/Search 当前没有 `collectionScopeMode`，省略 Collection 字段时靠 `null` 推导。
 
 ### 2.2 ACL 和 Collection 身份解析
 
-- [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
   对 unrestricted 调用方保留请求范围；对 restricted 调用方把省略范围替换为
   allow-list，并拒绝 allow-list 外的 Collection。
 - restricted 调用方的未知/未授权 key 统一返回 `403`；unrestricted 未知 key 返回
   `404`。
-- [`CollectionIdentityResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
+- [`CollectionIdentityResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionIdentityResolver.java)
   对 unrestricted 多 key 当前逐个调用
   `findByCollectionKeyAndDeletedFalse(...)`。
 - restricted 多 key 会先 `findAllById(allow-list)`，再在内存映射。
 
 ### 2.3 当前范围展开
 
-[`CollectionDocumentResolver`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
+[`CollectionDocumentResolver`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/CollectionDocumentResolver.java)
 执行：
 
 ```text
@@ -84,12 +84,12 @@ Chat、GET Search、POST Search 和 JSON record 均依赖这种展开，只是�
 
 ### 2.4 当前检索 SQL
 
-[`HybridRetrieverService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+[`HybridRetrieverService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
 的 Vector SQL，以及三个
-[`FulltextSearchProvider`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/FulltextSearchProvider.java)
+[`FulltextSearchProvider`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/fulltext/FulltextSearchProvider.java)
 实现，均只接受 `List<Long> documentIds`。
 
-[`EmbeddingProfileSqlScope`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
+[`EmbeddingProfileSqlScope`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
 已经 JOIN：
 
 ```sql
@@ -100,18 +100,18 @@ JOIN rag_documents d ON d.id = e.document_id
 
 ### 2.5 当前 Chat Advisor 传递
 
-[`RagChatService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
+[`RagChatService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagChatService.java)
 有一个私有 `RetrievalScope` record，但只包含展开后的 document IDs、
 `filterRequested` 和 `maxResults`。
 
-[`HybridSearchAdvisor`](../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
+[`HybridSearchAdvisor`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/advisor/HybridSearchAdvisor.java)
 通过 context key 读取 `documentIds`，无法表达
 `ANY_COLLECTION` 或直接 Collection predicate。
 
 ### 2.6 当前 WebUI
 
-- [`Search.tsx`](../../spring-ai-rag-webui/src/pages/Search.tsx) 和
-  [`Chat.tsx`](../../spring-ai-rag-webui/src/pages/Chat.tsx) 都是单选。
+- [`Search.tsx`](../../../spring-ai-rag-webui/src/pages/Search.tsx) 和
+  [`Chat.tsx`](../../../spring-ai-rag-webui/src/pages/Chat.tsx) 都是单选。
 - 两者固定加载 Collection 第 0 页、最多 200 条。
 - 空选项显示“All Collections”，但 unrestricted 时实际包含未归属文档。
 - Collection 列表后端已有 offset/limit 和 name 过滤，但没有同时按 name/key 搜索。
@@ -568,7 +568,7 @@ predicate 顺序固定：
 
 ### 9.2 Vector
 
-为 [`HybridRetrieverService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
+为 [`HybridRetrieverService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/HybridRetrieverService.java)
 新增：
 
 ```java
@@ -1214,7 +1214,7 @@ npx playwright test e2e/search.spec.ts e2e/chat.spec.ts
 ### 16.5 服务启动
 
 优先按
-[`developer-reference-zh-CN.md`](../developer-reference-zh-CN.md)
+[`developer-reference-zh-CN.md`](../../developer-reference-zh-CN.md)
 使用 `postgresql` profile。服务至少完成：
 
 ```text

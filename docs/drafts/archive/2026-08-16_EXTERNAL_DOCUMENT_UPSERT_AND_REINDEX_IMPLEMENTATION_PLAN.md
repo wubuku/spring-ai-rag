@@ -84,7 +84,7 @@
 
 ### 3.1 普通文档路径
 
-[`RagDocumentController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagDocumentController.java)
+[`RagDocumentController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/RagDocumentController.java)
 当前提供普通创建、详情、列表、按内部 ID 硬删除、批量创建、上传和嵌入相关端点。
 普通创建通过全局 `contentHash` 查重：
 
@@ -94,12 +94,12 @@
 - 没有按外部身份查询或删除；
 - 普通创建没有自动写入完整版本历史。
 
-[`BatchDocumentService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/BatchDocumentService.java)
+[`BatchDocumentService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/BatchDocumentService.java)
 也按内容哈希创建或复用文档，不适合作为外部同步入口。
 
 ### 3.2 已有 JSON structured record 参照实现
 
-[`JsonRecordService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/JsonRecordService.java)
+[`JsonRecordService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/JsonRecordService.java)
 已证明以下模式可在本项目中工作：
 
 - `collectionKey + externalId` 解析为内部 Collection 身份；
@@ -112,7 +112,7 @@
 - 批量请求按项隔离失败并保持输入顺序。
 
 V29 迁移
-[`V29__add_jsonb_structured_records.sql`](../../spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql)
+[`V29__add_jsonb_structured_records.sql`](../../../spring-ai-rag-core/src/main/resources/db/migration/V29__add_jsonb_structured_records.sql)
 当前只保证：
 
 ```sql
@@ -124,9 +124,9 @@ WHERE document_type = 'json-record'
 
 ### 3.3 Embedding 原子性与 freshness
 
-[`DocumentEmbedService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentEmbedService.java)
+[`DocumentEmbedService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentEmbedService.java)
 在数据库事务外完成切分和 provider 调用，校验结果数量、顺序、维度和有限数值后，再调用
-[`EmbeddingPersistenceService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/EmbeddingPersistenceService.java)
+[`EmbeddingPersistenceService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/EmbeddingPersistenceService.java)
 提交。
 
 持久化事务会：
@@ -140,7 +140,7 @@ WHERE document_type = 'json-record'
 
 任一向量插入失败会回滚整个替换事务，旧向量不会被部分覆盖。
 
-[`EmbeddingProfileSqlScope`](../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
+[`EmbeddingProfileSqlScope`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/retrieval/EmbeddingProfileSqlScope.java)
 要求：
 
 ```text
@@ -158,7 +158,7 @@ rag_documents.enabled = true
 
 ### 3.4 版本、导入导出和克隆
 
-[`DocumentVersionService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentVersionService.java)
+[`DocumentVersionService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/DocumentVersionService.java)
 支持强制快照，但普通文档创建未统一调用。JSON record 和 clone 的部分路径会写版本。
 
 Collection export 已包含 `externalId`；import 对 JSON record 委托专用 service，对普通
@@ -168,7 +168,7 @@ Collection export 已包含 `externalId`；import 对 JSON record 委托专用 s
 ### 3.5 API Key 与 Collection ACL
 
 认证过滤器允许环境 root、数据库业务 Key 和 legacy 模式访问数据面。Collection ACL
-通过 [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+通过 [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
 将稳定 `collectionKey` 解析为当前 Key 可访问的内部 ID。
 
 本次所有新入口必须通过同一解析器：
@@ -765,7 +765,7 @@ embeddingFresh
 
 ### 9.2 Documents 页面
 
-[`Documents.tsx`](../../spring-ai-rag-webui/src/pages/Documents.tsx) 本次做管理面增强：
+[`Documents.tsx`](../../../spring-ai-rag-webui/src/pages/Documents.tsx) 本次做管理面增强：
 
 - 列表增加紧凑的“来源身份”和“索引状态”列；
 - 来源身份显示 `externalId`，次级文本显示 `sourceRevision`；非 external 文档显示 `—`；

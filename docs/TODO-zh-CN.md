@@ -2,8 +2,35 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-16。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-19。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
+
+## 文档生命周期与派生索引后续项
+
+| 项目 | 优先级 | 当前缺口 |
+|------|--------|----------|
+| 权威来源全量快照对账 | P0 / 下一批 | 增量事件可能丢失；API 和 reference client 不能发现来源已删除但未收到 tombstone 的对象 |
+| 外部文档原子 Collection 迁移 | P1 | 普通 upsert 改 `collectionKey` 会寻址另一身份；当前只能 tombstone + 新建，不能保留内部 ID、版本历史或避免短暂重复/空窗 |
+| 历史版本受控恢复 | P1 | V40/V41 已保存 `FULL` 快照，但 API/WebUI 只能读取和 diff，不能恢复为新 revision |
+| 本地 chunk/full-text 与远程向量解耦 | P1 / 较大 | 全文检索仍依赖 `rag_embeddings` 与 `COMPLETED` Profile；provider 故障会同时中断关键词检索 |
+
+### 当前边界
+
+- 外部同步只支持 webhook/CDC 增量投递。一次批次不完整时不得按 missing 推断删除。
+- 当前外部地址仍是 `collectionKey + sourceNamespace + externalId`。在独立 tenant/
+  connector 授权边界出现前，不把唯一约束降为全局 `sourceNamespace + externalId`；
+  跨 Collection 移动应使用同时校验源/目标 ACL 的显式原子操作。
+- 版本恢复不能直接回退计数器或覆盖历史；未来操作应创建新 revision、新完整快照，并复用
+  现有 mutation impact、持久化 job 和 commit fencing。
+- 只有 `snapshotCompleteness=FULL` 的历史版本才具备完整恢复资格；旧兼容快照只用于审计。
+- 后续本地全文派生必须保持“旧正文立即退出”的一致性，同时允许新正文先进入
+  `KEYWORD_ONLY`，远程 embedding 成功后再进入 `READY`。
+- 所有并发协调继续使用条件 DML/CAS、唯一约束、lease 和有界重试，禁止显式悲观锁。
+
+详细实施范围和批次顺序以
+[当前活跃规划](drafts/README-zh-CN.md) 为准；已发布契约仍以
+[REST API](rest-api-zh-CN.md) 和
+[外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) 为准。
 
 ## `EACH_COLLECTION` 召回覆盖模式
 
@@ -72,7 +99,5 @@ document ID”的主要性能问题；普通的并集检索不需要 `EACH_COLLE
 
 ### 关联文档
 
-- [多 Collection 检索范围调研](drafts/2026-08-15_MULTI_COLLECTION_RETRIEVAL_SCOPE_RESEARCH.md)
-- [多 Collection 检索范围实施规划](drafts/2026-08-16_MULTI_COLLECTION_RETRIEVAL_IMPLEMENTATION_PLAN.md)
 - [项目上下文：Collection 当前语义](project-context-zh-CN.md#collection-当前语义)
 - [REST API：Collection 检索范围语义](rest-api-zh-CN.md#collection-检索范围语义)
