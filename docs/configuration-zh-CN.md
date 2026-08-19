@@ -233,6 +233,11 @@ rag:
     strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
     allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
+    sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
+    version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
+    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
+    sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
+    sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -240,6 +245,11 @@ rag:
 | `rag.document-lifecycle.strict-external-cas` | `true` | 已存在外部身份的新 revision 必须提供 `expectedSourceRevision`；精确重放不受影响 |
 | `rag.document-lifecycle.allow-non-default-namespace` | `true` | 接受显式外部 `sourceNamespace`；关闭时只允许兼容值 `default` |
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | 本地 create/upload `Idempotency-Key` 记录的保留小时数，限制为 1–168 |
+| `rag.document-lifecycle.sync-runs-enabled` | `false` | 开启权威外部快照 Sync Run API；默认关闭，开启前应先完成一次性 PostgreSQL/E2E 验收 |
+| `rag.document-lifecycle.version-restore-enabled` | `false` | 开启本地文档 `FULL` 历史版本恢复 API；外部托管文档仍不可由该入口恢复 |
+| `rag.document-lifecycle.keyword-index-enabled` | `false` | 预留的本地关键词派生开关；当前 keyword/vector 解耦尚未交付，保持关闭 |
+| `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | `TOMBSTONE` 快照的绝对缺失保护阈值；超出且未显式确认时拒绝完成，限制为 1–100000 |
+| `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | `TOMBSTONE` 快照的相对缺失保护阈值（百分比）；限制为 1–100 |
 
 本地文档使用公开 `documentRevision` 做 PATCH/disable/restore/permanent-delete CAS。
 外部文档和 JSON record 使用
@@ -719,7 +729,8 @@ V27/V28 增加必填、全局唯一、不可变的 `rag_collection.collection_ke
 以及 Collection 范围的外部身份唯一约束；V31 使用与 API 一致的 ASCII trim 语义规范化已存
 external ID，并重建局部唯一索引；V32–V39 增加 Chat lease、持久化任务、过滤/诊断/质量
 运营和无悲观锁协调；V40/V41 增加文档业务 revision、完整快照、source namespace、
-generation fencing 与 lifecycle/idempotency contract。
+generation fencing 与 lifecycle/idempotency contract；V42 增加权威外部快照对账 run
+以及 SOURCE/RECONCILIATION 删除标记。
 
 ## Profile 一览
 

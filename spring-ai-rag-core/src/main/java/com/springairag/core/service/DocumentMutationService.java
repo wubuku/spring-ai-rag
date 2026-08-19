@@ -9,11 +9,16 @@ import com.springairag.api.dto.DocumentMutationResponse;
 import com.springairag.api.dto.DocumentRequest;
 import com.springairag.api.dto.DocumentRestoreRequest;
 import com.springairag.api.dto.DocumentUpdateRequest;
+import com.springairag.api.dto.DocumentSyncRunItemRequest;
+import com.springairag.api.dto.DocumentVersionRestoreRequest;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.enums.DocumentDeduplicationScope;
+import com.springairag.api.enums.DocumentSyncDocumentKind;
+import com.springairag.api.enums.DocumentSyncItemStatus;
+import com.springairag.api.enums.DocumentRestoreVisibilityMode;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
@@ -39,6 +44,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.UUID;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -444,6 +450,146 @@ public class DocumentMutationService {
         return finish(prepared);
     }
 
+    /**
+     * Restore a complete local version as a new mutation.
+     *
+     * <p>The historical row is immutable. The current document receives a
+     * new business revision and a new RESTORE snapshot, so embedding jobs
+     * continue to use the normal generation and lease fencing.
+     */
+    public DocumentMutationResponse restoreLocalFromVersion(
+            long documentId,
+            int versionNumber,
+            DocumentVersionRestoreRequest request) {
+        if (!properties.isVersionRestoreEnabled()) {
+            throw new RagException(
+                    ErrorCode.RESTORE_NOT_ALLOWED,
+                    "Version restore is disabled");
+        }
+        Objects.requireNonNull(request, "request");
+        EmbeddingPolicy policy = request.effectiveEmbeddingPolicy();
+        DocumentRestoreVisibilityMode visibilityMode =
+                request.effectiveVisibilityMode();
+        Prepared prepared = requireResult(transactionTemplate.execute(status -> {
+            RagDocument document = requireLocal(documentId);
+            requireRevision(document, request.expectedDocumentRevision());
+            RagDocumentVersion version = versionService.getVersion(
+                            documentId, versionNumber)
+                    .orElseThrow(() -> new RagException(
+                            ErrorCode.VERSION_NOT_RESTORABLE,
+                            "Document version not found"));
+            if (!"FULL".equals(version.getSnapshotCompleteness())) {
+                throw new RagException(
+                        ErrorCode.VERSION_NOT_RESTORABLE,
+                        "Only FULL document snapshots can be restored");
+            }
+            if (version.getContentSnapshot() == null
+                    || version.getContentHash() == null) {
+                throw new RagException(
+                        ErrorCode.VERSION_NOT_RESTORABLE,
+                        "The selected version does not contain a complete content snapshot");
+            }
+
+            Long targetCollectionId = version.getCollectionIdSnapshot();
+            if (targetCollectionId != null) {
+                ApiKeyCollectionAccess.requireCollectionId(
+                        targetCollectionId,
+                        ApiKeyCollectionAccess.currentKey());
+                collectionIdentityResolver.requireActive(
+                        targetCollectionId, null);
+            } else if (ApiKeyCollectionAccess.restrictedCollectionIds(
+                    ApiKeyCollectionAccess.currentKey()).isPresent()
+                    && document.getCollectionId() != null) {
+                throw new RagException(
+                        ErrorCode.RESTORE_NOT_ALLOWED,
+                        "A Collection-restricted key cannot restore an unassigned snapshot");
+            }
+
+            String content = version.getContentSnapshot();
+            String documentType = normalizeDocumentType(
+                    version.getDocumentTypeSnapshot());
+            Map<String, Object> metadata = normalizeMetadata(
+                    version.getMetadataSnapshot());
+            JsonNode payload = version.getJsonbPayloadSnapshot() == null
+                    ? null : version.getJsonbPayloadSnapshot().deepCopy();
+            boolean contentChanged = !Objects.equals(
+                    document.getContent(), content)
+                    || !Objects.equals(
+                            normalizeDocumentKind(document.getDocumentType()),
+                            normalizeDocumentKind(documentType));
+            boolean metadataChanged = !Objects.equals(
+                    document.getTitle(), version.getTitleSnapshot())
+                    || !Objects.equals(document.getSource(), version.getSourceSnapshot())
+                    || !Objects.equals(
+                            document.getDocumentType(), documentType)
+                    || !Objects.equals(
+                            document.getOriginalFilename(),
+                            version.getOriginalFilenameSnapshot())
+                    || !Objects.equals(
+                            normalizeMetadata(document.getMetadata()), metadata)
+                    || !Objects.equals(document.getJsonbPayload(), payload);
+            boolean scopeChanged = !Objects.equals(
+                    document.getCollectionId(), targetCollectionId);
+            boolean visibilityChanged = visibilityMode
+                    == DocumentRestoreVisibilityMode.SNAPSHOT
+                    && !Objects.equals(
+                            document.getEnabled(), version.getEnabledSnapshot());
+
+            document.setTitle(requireText(
+                    version.getTitleSnapshot(), "title", 255));
+            document.setContent(content);
+            document.setSource(normalizeOptional(version.getSourceSnapshot()));
+            document.setDocumentType(documentType);
+            document.setOriginalFilename(normalizeOptional(
+                    version.getOriginalFilenameSnapshot()));
+            document.setMetadata(metadata);
+            document.setJsonbPayload(payload);
+            document.setCollectionId(targetCollectionId);
+            document.setContentHash(version.getContentHash());
+            document.setSize(byteSize(content));
+            if (visibilityMode == DocumentRestoreVisibilityMode.SNAPSHOT) {
+                boolean enabled = Boolean.TRUE.equals(version.getEnabledSnapshot());
+                document.setEnabled(enabled);
+                document.setDisabledAt(enabled
+                        ? null : version.getDisabledAtSnapshot());
+            }
+            if (contentChanged) {
+                document.setProcessingStatus("PENDING");
+                document.setProcessingError(null);
+            }
+            incrementRevision(document);
+            document = documentRepository.saveAndFlush(document);
+            RagDocumentVersion restored = versionService.forceRecordVersion(
+                    document,
+                    "RESTORE",
+                    "Restored local document from version " + versionNumber);
+            EmbeddingDispatchService.Result dispatch;
+            if (!Boolean.TRUE.equals(document.getEnabled())) {
+                dispatch = dispatch(
+                        document, true, EmbeddingPolicy.SKIP,
+                        false, "LOCAL_VERSION_RESTORE");
+            } else if (contentChanged
+                    || !documentEmbedService.hasFreshEmbedding(document)) {
+                dispatch = dispatch(
+                        document, contentChanged, policy,
+                        false, "LOCAL_VERSION_RESTORE");
+            } else {
+                dispatch = null;
+            }
+            return new Prepared(
+                    document.getId(),
+                    "RESTORED_VERSION",
+                    document.getDocumentRevision(),
+                    restored.getVersionNumber(),
+                    contentChanged,
+                    metadataChanged || visibilityChanged,
+                    scopeChanged,
+                    dispatch,
+                    policy);
+        }));
+        return finish(prepared);
+    }
+
     public DeletedLocal hardDeleteLocal(
             long documentId,
             long expectedRevision) {
@@ -561,7 +707,9 @@ public class DocumentMutationService {
                         "JSON_RECORD_UPSERT",
                         originalFilename,
                         enabledOverride,
-                        null)));
+                        null,
+                        null,
+                        false)));
         ExternalFinished finished = finishExternal(prepared);
         return new JsonMutationResult(
                 finished.document(),
@@ -571,6 +719,172 @@ public class DocumentMutationService {
                 prepared.versionNumber(),
                 finished.dispatch(),
                 finished.lifecycle());
+    }
+
+    /**
+     * Apply one item from an authoritative snapshot through the same mutation
+     * path as the ordinary external document APIs.
+     *
+     * <p>The caller owns the sync-run ledger transaction. This method joins
+     * that transaction when one exists, so a document mutation and its
+     * last-seen marker cannot commit independently.
+     */
+    public SyncItemMutation upsertSyncRunItem(
+            Long collectionId,
+            String collectionKey,
+            String namespace,
+            DocumentSyncRunItemRequest request,
+            long snapshotStartSequence) {
+        Objects.requireNonNull(request, "request");
+        return requireResult(transactionTemplate.execute(status ->
+                upsertSyncRunItemInCurrentTransaction(
+                        collectionId,
+                        collectionKey,
+                        namespace,
+                        request,
+                        snapshotStartSequence)));
+    }
+
+    /**
+     * Variant for a caller that already owns the transaction containing the
+     * sync-run ledger row.
+     */
+    SyncItemMutation upsertSyncRunItemInCurrentTransaction(
+            Long collectionId,
+            String collectionKey,
+            String namespace,
+            DocumentSyncRunItemRequest request,
+            long snapshotStartSequence) {
+        Objects.requireNonNull(request, "request");
+            boolean jsonRecord = request.documentKind()
+                    == DocumentSyncDocumentKind.JSON_RECORD;
+            String externalId = requireText(
+                    request.externalId(), "externalId", 255);
+            String sourceRevision = requireText(
+                    request.sourceRevision(), "sourceRevision", 255);
+            RagDocument current = documentRepository
+                    .findByCollectionIdAndSourceNamespaceAndExternalId(
+                            collectionId, namespace, externalId)
+                    .orElse(null);
+            if (current != null
+                    && current.getSourceMutationSequence() != null
+                    && current.getSourceMutationSequence()
+                            > snapshotStartSequence) {
+                return new SyncItemMutation(
+                        DocumentSyncItemStatus.SKIPPED_NEWER_MUTATION,
+                        current.getId(),
+                        current.getSourceRevision(),
+                        "NONE",
+                        null,
+                        null,
+                        null);
+            }
+
+            EmbeddingPolicy policy = request.effectiveEmbeddingPolicy();
+            String title = requireText(request.title(), "title", 255);
+            String content = jsonRecord
+                    ? requireContent(
+                            request.retrievalText(),
+                            "retrievalText",
+                            1_000_000)
+                    : requireContent(
+                            request.content(), "content", 1_000_000);
+            String documentType = jsonRecord
+                    ? RagDocument.JSON_RECORD
+                    : normalizeDocumentType(request.documentType());
+            JsonNode payload = jsonRecord
+                    ? Objects.requireNonNull(
+                            request.jsonbPayload(),
+                            "jsonbPayload must not be null").deepCopy()
+                    : null;
+            if (jsonRecord && payload.isNull()) {
+                throw new IllegalArgumentException(
+                        "jsonbPayload must not be JSON null");
+            }
+            ExternalPrepared prepared = upsertExternalInTransaction(
+                    collectionId,
+                    collectionKey,
+                    namespace,
+                    externalId,
+                    sourceRevision,
+                    current == null
+                            ? null : normalizeOptional(current.getSourceRevision()),
+                    title,
+                    content,
+                    normalizeOptional(request.source()),
+                    documentType,
+                    normalizeMetadata(request.metadata()),
+                    payload,
+                    jsonRecord,
+                    policy,
+                    "SYNC_RUN_ITEM",
+                    null,
+                    null,
+                    null,
+                    snapshotStartSequence,
+                    true);
+            RagDocument document = documentRepository.findById(prepared.documentId())
+                    .orElseThrow(() -> new DocumentNotFoundException(
+                            prepared.documentId()));
+            return new SyncItemMutation(
+                    "UNCHANGED".equals(prepared.action())
+                            ? DocumentSyncItemStatus.UNCHANGED
+                            : DocumentSyncItemStatus.APPLIED,
+                    document.getId(),
+                    document.getSourceRevision(),
+                    prepared.dispatch() == null
+                            ? "NONE" : prepared.dispatch().action().name(),
+                    prepared.dispatch() == null
+                            ? null : prepared.dispatch().error(),
+                    prepared.dispatch() == null
+                            ? null : prepared.dispatch().embeddingJobId(),
+                    null);
+    }
+
+    /**
+     * Mark an external document missing in a completed authoritative snapshot
+     * without changing its source-owned revision.
+     */
+    public boolean reconcileMissingExternal(
+            long documentId,
+            UUID runId,
+            long snapshotStartSequence) {
+        return requireResult(transactionTemplate.execute(status -> {
+            RagDocument document = documentRepository.findById(documentId)
+                    .orElse(null);
+            if (document == null
+                    || document.getExternalId() == null
+                    || document.getSourceRevision() == null
+                    || Boolean.FALSE.equals(document.getEnabled())
+                    || (document.getSourceMutationSequence() != null
+                        && document.getSourceMutationSequence()
+                                > snapshotStartSequence)) {
+                return false;
+            }
+            document.setEnabled(false);
+            document.setDisabledAt(null);
+            document.setSourceDeletedAt(LocalDateTime.now());
+            document.setDeletionOrigin("RECONCILIATION");
+            document.setReconciliationTombstoneRunId(runId);
+            incrementRevision(document);
+            document = documentRepository.saveAndFlush(document);
+            versionService.forceRecordVersion(
+                    document,
+                    "TOMBSTONE",
+                    "Authoritative source snapshot marked document missing");
+            dispatchService.cancelActiveInCurrentTransaction(documentId);
+            return true;
+        }));
+    }
+
+    /**
+     * Allocate a namespace sequence for a snapshot boundary. Conditional DML
+     * is the cross-instance coordination primitive; no row lock is used.
+     */
+    public long allocateSourceSequenceForSnapshot(
+            long collectionId,
+            String namespace) {
+        return allocateSourceSequence(collectionId, namespace);
     }
 
     public ExternalDocumentDeleteResponse tombstoneExternal(
@@ -620,6 +934,8 @@ public class DocumentMutationService {
             document.setSourceRevision(revision);
             document.setSourceMutationSequence(
                     allocateSourceSequence(collection.getId(), namespace));
+            document.setDeletionOrigin("SOURCE");
+            document.setReconciliationTombstoneRunId(null);
             incrementRevision(document);
             document = documentRepository.saveAndFlush(document);
             RagDocumentVersion version = versionService.forceRecordVersion(
@@ -672,7 +988,7 @@ public class DocumentMutationService {
                 collectionId, collectionKey, namespace, externalId,
                 sourceRevision, expectedSourceRevision, title, content,
                 source, documentType, metadata, payload, jsonRecord,
-                policy, origin, null, null, null);
+                policy, origin, null, null, null, null, false);
     }
 
     private ExternalPrepared upsertExternalInTransaction(
@@ -693,7 +1009,13 @@ public class DocumentMutationService {
             String origin,
             String originalFilename,
             Boolean enabledOverride,
-            LocalDateTime sourceDeletedAtOverride) {
+            LocalDateTime sourceDeletedAtOverride,
+            Long snapshotStartSequence,
+            boolean allowReconciliationRecovery) {
+        CollectionIdentityResolver.ActiveCollectionToken collectionToken =
+                snapshotStartSequence == null
+                        ? null
+                        : collectionIdentityResolver.beginActiveWrite(collectionId);
         String contentHash = DigestUtils.sha256(content);
         RagDocument document = documentRepository
                 .findByCollectionIdAndSourceNamespaceAndExternalId(
@@ -726,15 +1048,23 @@ public class DocumentMutationService {
                 if (sameExternalState(
                         document, title, contentHash, source,
                         documentType, metadata, payload)) {
+                    confirmActiveCollectionWrite(collectionToken);
                     return new ExternalPrepared(
                             document.getId(), "UNCHANGED",
                             document.getDocumentRevision(),
-                            latestVersion(document), false, false,
-                            null, policy);
+                        latestVersion(document), false, false,
+                        null, policy);
                 }
-                throw revisionConflict(
-                        jsonRecord,
-                        "The same sourceRevision was used for different managed fields");
+                if (!(allowReconciliationRecovery
+                        && "RECONCILIATION".equals(document.getDeletionOrigin())
+                        && document.getSourceDeletedAt() != null
+                        && sameExternalManagedState(
+                                document, title, contentHash, source,
+                                documentType, metadata, payload))) {
+                    throw revisionConflict(
+                            jsonRecord,
+                            "The same sourceRevision was used for different managed fields");
+                }
             }
             if (jsonRecord
                     && sourceRevision == null
@@ -742,6 +1072,7 @@ public class DocumentMutationService {
                     && sameExternalState(
                             document, title, contentHash, source,
                             documentType, metadata, payload)) {
+                confirmActiveCollectionWrite(collectionToken);
                 return new ExternalPrepared(
                         document.getId(), "UNCHANGED",
                         document.getDocumentRevision(),
@@ -770,6 +1101,9 @@ public class DocumentMutationService {
         document.setExternalId(externalId);
         document.setSourceRevision(sourceRevision);
         document.setSourceDeletedAt(sourceDeletedAtOverride);
+        document.setDeletionOrigin(
+                sourceDeletedAtOverride == null ? null : "SOURCE");
+        document.setReconciliationTombstoneRunId(null);
         document.setDisabledAt(null);
         document.setEnabled(sourceDeletedAtOverride == null
                 && (enabledOverride == null
@@ -799,6 +1133,7 @@ public class DocumentMutationService {
         EmbeddingDispatchService.Result dispatch = needsDerivation
                 ? dispatch(document, true, policy, false, origin)
                 : null;
+        confirmActiveCollectionWrite(collectionToken);
         return new ExternalPrepared(
                 document.getId(),
                 created ? "CREATED" : "UPDATED",
@@ -863,7 +1198,9 @@ public class DocumentMutationService {
                         "COLLECTION_IMPORT",
                         imported.getOriginalFilename(),
                         imported.getEnabled(),
-                        imported.getSourceDeletedAt())));
+                        imported.getSourceDeletedAt(),
+                        null,
+                        false)));
         finishExternal(prepared);
     }
 
@@ -907,6 +1244,13 @@ public class DocumentMutationService {
                 collectionKey,
                 ApiKeyCollectionAccess.currentKey(),
                 collectionIdentityResolver);
+    }
+
+    private void confirmActiveCollectionWrite(
+            CollectionIdentityResolver.ActiveCollectionToken token) {
+        if (token != null) {
+            collectionIdentityResolver.confirmActiveWrite(token);
+        }
     }
 
     private long allocateSourceSequence(
@@ -995,6 +1339,23 @@ public class DocumentMutationService {
         return Boolean.TRUE.equals(document.getEnabled())
                 && document.getSourceDeletedAt() == null
                 && Objects.equals(document.getTitle(), title)
+                && Objects.equals(document.getContentHash(), contentHash)
+                && Objects.equals(document.getSource(), source)
+                && Objects.equals(document.getDocumentType(), documentType)
+                && Objects.equals(
+                        normalizeMetadata(document.getMetadata()), metadata)
+                && Objects.equals(document.getJsonbPayload(), payload);
+    }
+
+    private boolean sameExternalManagedState(
+            RagDocument document,
+            String title,
+            String contentHash,
+            String source,
+            String documentType,
+            Map<String, Object> metadata,
+            JsonNode payload) {
+        return Objects.equals(document.getTitle(), title)
                 && Objects.equals(document.getContentHash(), contentHash)
                 && Objects.equals(document.getSource(), source)
                 && Objects.equals(document.getDocumentType(), documentType)
@@ -1376,6 +1737,16 @@ public class DocumentMutationService {
             int versionNumber,
             EmbeddingDispatchService.Result dispatch,
             DocumentLifecycleResponse lifecycle) {
+    }
+
+    public record SyncItemMutation(
+            DocumentSyncItemStatus status,
+            Long documentId,
+            String sourceRevision,
+            String embeddingAction,
+            String error,
+            UUID embeddingJobId,
+            String errorCode) {
     }
 
     private record Prepared(

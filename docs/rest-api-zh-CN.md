@@ -902,6 +902,95 @@ DELETE /api/v1/rag/documents/by-external-id
 
 ---
 
+## 外部快照同步 Run
+
+权威快照对账默认关闭，通过 `RAG_DOCUMENT_SYNC_RUNS_ENABLED=true` 开启。一个 run 绑定一个
+`collectionKey + sourceNamespace`；lease token 通过 `X-RAG-Sync-Lease` 传入，但数据库只
+保存其 SHA-256 hash。Run item 只保存身份、fingerprint、状态和错误信息，绝不保存正文、
+JSONB payload 或 lease 明文。
+
+### `POST /api/v1/rag/document-sync-runs`
+
+开始一个 run，或者精确重放已有 run：
+
+```json
+{
+  "collectionKey": "customer-42:catalog:v1",
+  "sourceNamespace": "cms-main",
+  "clientRunId": "catalog-cut-2026-08-19T12:00:00Z",
+  "snapshotMode": "ONLINE_CUT",
+  "missingPolicy": "TOMBSTONE",
+  "leaseSeconds": 900
+}
+```
+
+`snapshotMode` 与 `missingPolicy` 必须显式给出。`ONLINE_CUT` 只有在 connector 建立来源
+一致性 cut 后才能使用 `TOMBSTONE`。`OFFLINE_MANIFEST` 只允许 `NONE`；reference client
+对静态 manifest 使用这一安全组合。`EXCLUSIVE_OFFLINE + TOMBSTONE` 是危险的显式选项，
+还必须发送 `"confirmExclusiveOffline": true`；这个字段在其他 mode/policy 组合中都会被
+拒绝。一个 Collection 和 namespace 同时最多一个 active run。同 `clientRunId` 重放必须
+使用相同 lease 和契约；不同 lease 或契约返回 `409`。每个 run mutation 都会重新检查当前
+API Key 的 Collection ACL；lease token 不能绕过后续收紧的 ACL。
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/batch-upsert`
+
+发送最多 100 个有界 item；Collection 和 namespace 继承自 run，item 必须包含稳定的
+`externalId` 和 opaque `sourceRevision`，并使用已有 TEXT 或 JSON_RECORD 表示。精确重放
+幂等；如果 item 在快照边界之后已被更新，返回 `SKIPPED_NEWER_MUTATION`，不会被旧快照覆盖。
+失败 item 可用相同 fingerprint 重试。
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/preview-missing`
+
+返回有界的身份摘要、candidate fingerprint、按文档类型统计的数量，以及被更新 mutation
+保护的对象数量。`complete` 必须携带 preview token；token 绑定当前 candidate fingerprint。
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/complete`
+
+```json
+{
+  "previewToken": "preview 返回的 token",
+  "confirmMissingCount": 1
+}
+```
+
+当 `missingPolicy=TOMBSTONE` 时，preview 之后 candidate 数量必须保持不变。绝对数量/百分比
+删除阈值用于防止不完整 manifest 造成大面积删除；超过阈值时必须显式提交相同的
+`confirmMissingCount`。Reconciliation tombstone 会设置 `enabled=false` 和
+`deletionOrigin=RECONCILIATION`，不会伪造 source revision。后续来源 upsert 或显式来源删除
+仍走正常外部 CAS 路径。
+
+如果当前 run 仍有状态为 `FAILED` 的 item，`missingPolicy=TOMBSTONE` 的 complete 会返回
+`409 SYNC_RUN_INCOMPLETE`，不会执行任何 missing tombstone；client 必须先用相同 fingerprint
+重试失败 item，或 abort 该 run。`missingPolicy=NONE` 的 run 可以在保留失败 item 的情况下
+完成，因为它不会根据 missing 推断删除。
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/abort`
+
+终止 active run。过期 lease 通过条件更新 fencing，不使用悲观数据库锁。
+`GET /{runId}` 和 `GET /` 提供授权后的 run 状态和历史。
+
+## 本地版本恢复
+
+版本恢复默认关闭，通过 `RAG_DOCUMENT_VERSION_RESTORE_ENABLED=true` 开启。它只允许本地文档
+和 `snapshotCompleteness=FULL` 的版本；外部文档仍由来源 connector 管理。
+
+### `POST /api/v1/rag/documents/{documentId}/versions/{versionNumber}/restore`
+
+```json
+{
+  "expectedDocumentRevision": 7,
+  "embeddingPolicy": "ASYNC",
+  "visibilityMode": "KEEP_CURRENT"
+}
+```
+
+请求使用当前 document revision 作为 CAS token。恢复成功后创建新的业务 revision 和新的
+`RESTORE` 版本，不回拨或删除后续历史。`visibilityMode=SNAPSHOT` 同时恢复快照的 enabled
+状态；`KEEP_CURRENT` 保留当前可见性。正文变化的恢复会进入正常的新 generation 派生路径；
+只恢复 metadata 时不会调用 embedding provider。
+
+---
+
 ## Documents — Document Management
 
 ### `POST /api/v1/rag/documents`

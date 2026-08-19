@@ -23,7 +23,7 @@ export function Documents() {
   const keyword = searchParams.get('keyword') ?? '';
   const selectedCollection = searchParams.get('collectionKey') || undefined;
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
-  const [versionsDoc, setVersionsDoc] = useState<{ id: number; title: string } | null>(null);
+  const [versionsDoc, setVersionsDoc] = useState<Document | null>(null);
   const [editDoc, setEditDoc] = useState<Document | null>(null);
   const [editTitle, setEditTitle] = useState('');
   const [editContent, setEditContent] = useState('');
@@ -112,6 +112,28 @@ export function Documents() {
     },
     onError: error => {
       handleMutationError(error, 'documents.restoreError');
+    },
+  });
+
+  const restoreVersionMutation = useMutation({
+    mutationFn: ({ document, versionNumber }: {
+      document: Document;
+      versionNumber: number;
+    }) => documentsApi.restoreVersion(
+      document.id,
+      versionNumber,
+      requireDocumentRevision(document),
+      'ASYNC',
+      'KEEP_CURRENT',
+    ),
+    onSuccess: () => {
+      setVersionsDoc(null);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('versions.restored'), 'success');
+    },
+    onError: error => {
+      queryClient.invalidateQueries({ queryKey: ['document-versions'] });
+      handleMutationError(error, 'versions.restoreError');
     },
   });
 
@@ -401,7 +423,7 @@ export function Documents() {
                         embeddingPending={embedMutation.isPending}
                         mutationPending={mutationPending}
                         onPreview={() => handlePreview(doc)}
-                        onVersions={() => setVersionsDoc({ id: doc.id, title: doc.title })}
+                        onVersions={() => setVersionsDoc(doc)}
                         onEdit={() => handleEdit(doc)}
                         onRetryEmbedding={() => embedMutation.mutate(doc.id)}
                         onDisable={() => {
@@ -576,6 +598,23 @@ export function Documents() {
         <VersionHistoryModal
           documentId={versionsDoc.id}
           documentTitle={versionsDoc.title}
+          documentRevision={versionsDoc.documentRevision}
+          externallyManaged={Boolean(versionsDoc.externalId)}
+          restorePending={restoreVersionMutation.isPending}
+          onRestoreVersion={versionNumber => {
+            const confirmed = window.confirm(
+              t('versions.restoreConfirm', {
+                version: versionNumber,
+                defaultValue: `Restore version ${versionNumber} as a new revision?`,
+              }),
+            );
+            if (confirmed) {
+              restoreVersionMutation.mutate({
+                document: versionsDoc,
+                versionNumber,
+              });
+            }
+          }}
           onClose={() => setVersionsDoc(null)}
         />
       )}

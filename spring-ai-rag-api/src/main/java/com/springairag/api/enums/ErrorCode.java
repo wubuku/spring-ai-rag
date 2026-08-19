@@ -61,6 +61,15 @@ public enum ErrorCode {
     CONCURRENT_EVALUATION_LIMIT(409, "Concurrent Evaluation Limit"),
     EXTERNAL_DOCUMENT_MANAGED(409, "Externally Managed Document"),
     DOCUMENT_DISABLED(409, "Document Disabled"),
+    SYNC_RUN_LEASE_CONFLICT(409, "Sync Run Lease Conflict"),
+    ACTIVE_SYNC_RUN_EXISTS(409, "Active Sync Run Exists"),
+    SYNC_RUN_INVALID_STATE(409, "Invalid Sync Run State"),
+    SYNC_RUN_PREVIEW_CONFLICT(409, "Sync Run Preview Conflict"),
+    SYNC_RUN_DELETE_PROTECTION(409, "Sync Run Delete Protection"),
+    SYNC_RUN_ITEM_CONFLICT(409, "Sync Run Item Conflict"),
+    SYNC_RUN_INCOMPLETE(409, "Sync Run Incomplete"),
+    VERSION_NOT_RESTORABLE(409, "Version Not Restorable"),
+    RESTORE_NOT_ALLOWED(409, "Restore Not Allowed"),
 
     // ==================== 422 Unprocessable Entity ====================
 
@@ -85,6 +94,7 @@ public enum ErrorCode {
     CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
     EMBEDDING_JOBS_DISABLED(503, "Embedding Jobs Disabled"),
     EVALUATION_SUITES_DISABLED(503, "Evaluation Suites Disabled"),
+    SYNC_RUNS_DISABLED(503, "Document Sync Runs Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

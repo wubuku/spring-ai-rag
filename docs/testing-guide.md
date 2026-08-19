@@ -232,7 +232,7 @@ The script serially runs:
 1. the no-pessimistic-lock static gate;
 2. focused local CRUD, external TEXT/JSON, Collection/PDF/batch entry-point,
    and generation-job tests;
-3. V39-to-V41, triple-identity, freshness, generation-fencing, transaction
+3. V39-to-V42, triple-identity, freshness, generation-fencing, transaction
    rollback, and hard-delete cascade acceptance on disposable PostgreSQL, with
    Surefire XML parsing that requires `skipped=0`;
 4. reference-client HTTP retry, CAS, checkpoint resume, and secret-not-at-rest
@@ -240,6 +240,16 @@ The script serially runs:
 5. `mvn clean compile test-compile` and the full backend suite;
 6. WebUI Vitest, production build, alignment, and Documents Mock Playwright;
 7. bilingual project-documentation and `git diff --check` gates.
+
+The focused V42 HTTP contract can also be run independently:
+
+```bash
+./scripts/verify-document-sync-runs.sh
+```
+
+It migrates a disposable database through V42, exercises Sync Run begin,
+batch idempotency, failure retry, preview/complete tombstoning, namespace
+isolation, and the no-pessimistic-lock gate.
 
 PostgreSQL selection is: explicit `DOCUMENT_LIFECYCLE_IT_JDBC_URL`, a
 disposable database created from current-shell/`.env` `POSTGRES_*`, then a
@@ -280,7 +290,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V41, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V42, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -339,7 +349,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V41 from an empty schema, and exercises the vector query with actual
+Flyway V1-V42 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -370,7 +380,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V41 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V42 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -416,7 +426,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V41, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V42, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.

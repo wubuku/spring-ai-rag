@@ -1036,6 +1036,111 @@ runnable reference implementation lives under `examples/external-sync-client/`.
 
 ---
 
+## External Snapshot Synchronization Runs
+
+Authoritative snapshot reconciliation is disabled by default and is enabled
+with `RAG_DOCUMENT_SYNC_RUNS_ENABLED=true`. A run is scoped to one
+`collectionKey + sourceNamespace`; the lease token is supplied in
+`X-RAG-Sync-Lease`, but only its SHA-256 hash is persisted. Run items store
+identity, fingerprint, status, and error information, never document content,
+JSONB payloads, or the clear-text lease.
+
+### `POST /api/v1/rag/document-sync-runs`
+
+Begin or exactly replay a run:
+
+```json
+{
+  "collectionKey": "customer-42:catalog:v1",
+  "sourceNamespace": "cms-main",
+  "clientRunId": "catalog-cut-2026-08-19T12:00:00Z",
+  "snapshotMode": "ONLINE_CUT",
+  "missingPolicy": "TOMBSTONE",
+  "leaseSeconds": 900
+}
+```
+
+`snapshotMode` and `missingPolicy` are explicit. `ONLINE_CUT` can use
+`TOMBSTONE` after the connector establishes a consistent source cut.
+`OFFLINE_MANIFEST` only permits `NONE`; the reference client uses this safe
+combination for static manifests. `EXCLUSIVE_OFFLINE + TOMBSTONE` is a
+dangerous opt-in and additionally requires `"confirmExclusiveOffline": true`;
+the flag is rejected for every other mode/policy combination. At most one
+active run exists for a Collection and namespace. Replaying the same
+`clientRunId` requires the same lease and contract; a different lease or
+contract returns `409`. Every run mutation rechecks the caller's current API
+Key Collection ACL; a lease token does not bypass a later ACL restriction.
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/batch-upsert`
+
+Send at most 100 bounded items using the run's Collection and namespace. Items
+use the existing TEXT or JSON_RECORD representations and must include a stable
+`externalId` and opaque `sourceRevision`. Exact item replay is idempotent.
+An item that was changed after the run's snapshot boundary returns
+`SKIPPED_NEWER_MUTATION` and is not overwritten. Failed items can be retried
+with the same fingerprint.
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/preview-missing`
+
+Returns a bounded identity summary, candidate fingerprint, counts by document
+kind, and the number of newer mutations that were protected. The preview token
+is required by `complete`; it is bound to the current candidate fingerprint.
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/complete`
+
+```json
+{
+  "previewToken": "returned-by-preview",
+  "confirmMissingCount": 1
+}
+```
+
+For `missingPolicy=TOMBSTONE`, the candidate count must remain unchanged after
+preview. A configured absolute/percentage deletion threshold protects against
+an incomplete source manifest; exceeding it requires an explicit matching
+`confirmMissingCount`. Reconciliation tombstones set `enabled=false` and
+`deletionOrigin=RECONCILIATION` without inventing a source revision. A later
+source upsert or explicit source tombstone continues to use the normal external
+CAS path.
+
+If the run still has any item whose current ledger status is `FAILED`,
+completion with `missingPolicy=TOMBSTONE` returns `409 SYNC_RUN_INCOMPLETE`
+and performs no missing tombstone. The client must retry failed items with
+the same fingerprint or abort the run. A `missingPolicy=NONE` run may complete
+with failed items because it never infers deletion from missing identities.
+
+### `POST /api/v1/rag/document-sync-runs/{runId}/abort`
+
+Abort an active run. Expired leases are fenced with conditional updates; no
+pessimistic database lock is used. `GET /{runId}` and `GET /` provide authorized
+status and history.
+
+## Local Version Restore
+
+Version restore is disabled by default and is enabled with
+`RAG_DOCUMENT_VERSION_RESTORE_ENABLED=true`. It is intentionally limited to a
+local document and a `snapshotCompleteness=FULL` version. External documents
+remain owned by their source connector.
+
+### `POST /api/v1/rag/documents/{documentId}/versions/{versionNumber}/restore`
+
+```json
+{
+  "expectedDocumentRevision": 7,
+  "embeddingPolicy": "ASYNC",
+  "visibilityMode": "KEEP_CURRENT"
+}
+```
+
+The request uses the current document revision as a CAS token. A successful
+restore creates a new business revision and a new `RESTORE` version; it does
+not rewind or delete later history. `visibilityMode=SNAPSHOT` also restores
+the snapshot's enabled state, while `KEEP_CURRENT` retains the current
+visibility. A content-changing restore schedules the normal new-generation
+derivation path; a metadata-only restore does not call the embedding provider.
+
+---
+
 ## Documents — Document Management
 
 ### `POST /api/v1/rag/documents`

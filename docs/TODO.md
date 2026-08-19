@@ -9,23 +9,24 @@
 
 | Item | Priority | Current gap |
 |------|----------|-------------|
-| Authoritative source snapshot reconciliation | P0 / next batch | Incremental events can be lost; the API and reference client cannot detect source deletions that had no tombstone event |
+| Authoritative source snapshot reconciliation | Shipped in this batch | V42 API and reference client support bounded authoritative runs, preview fingerprints, deletion protection, and reconciliation tombstones |
 | Atomic Collection relocation for external documents | P1 | Changing `collectionKey` on ordinary upsert addresses another identity; the current tombstone-plus-create flow cannot preserve the internal ID/history or avoid a transient duplicate/gap |
-| Controlled historical-version restore | P1 | V40/V41 store `FULL` snapshots, but the API/WebUI can only read and diff them |
+| Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
 | Decouple local chunks/full text from remote vectors | P1 / larger | Full-text retrieval still depends on `rag_embeddings` and a `COMPLETED` Profile, so provider failures also remove keyword retrieval |
 
 ### Current Boundaries
 
-- External synchronization supports incremental webhook/CDC delivery only. An
-  incomplete batch must never imply deletion of missing objects.
+- External synchronization supports incremental webhook/CDC delivery and
+  authoritative Sync Runs. An incomplete batch must never imply deletion of
+  missing objects; only an explicit safe snapshot mode can enable tombstones.
 - The external address remains
   `collectionKey + sourceNamespace + externalId`. Until the project has an
   independent tenant/connector authorization boundary, do not weaken the
   uniqueness scope to global `sourceNamespace + externalId`; cross-Collection
   movement needs an explicit atomic operation that authorizes both sides.
-- A future version restore must create a new revision and complete snapshot,
-  not rewind counters or overwrite history, and must reuse the current mutation
-  impact, durable-job, and commit-fencing paths.
+- Version restore creates a new revision and complete snapshot, does not rewind
+  counters or overwrite history, and reuses the current mutation impact,
+  durable-job, and commit-fencing paths.
 - Only versions with `snapshotCompleteness=FULL` are eligible for complete
   restoration. Older compatibility snapshots remain audit-only.
 - Future local full-text derivation must continue excluding old content
@@ -34,8 +35,8 @@
 - Concurrency remains based on conditional DML/CAS, unique constraints, leases,
   and bounded retries; explicit pessimistic locking remains forbidden.
 
-See [current active plans](drafts/README.md) for implementation scope and batch
-ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and
+See [current active plans](drafts/README.md) for remaining implementation scope
+and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and
 [External Document Sync Client Guide](external-document-sync-client-guide.md).
 
 ## `EACH_COLLECTION` retrieval-coverage mode

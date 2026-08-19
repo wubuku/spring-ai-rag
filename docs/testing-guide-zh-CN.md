@@ -223,12 +223,21 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 
 1. 禁悲观锁静态门禁；
 2. 本地 CRUD、外部 TEXT/JSON、Collection/PDF/batch 入口和 generation job 聚焦测试；
-3. 一次性 PostgreSQL 上的 V39→V41、三元身份、freshness、generation fencing、事务回滚
+3. 一次性 PostgreSQL 上的 V39→V42、三元身份、freshness、generation fencing、事务回滚
    和硬删除级联验收，并解析 Surefire XML 强制 `skipped=0`；
 4. reference client 的 HTTP 重试、CAS、checkpoint 恢复和密钥不落盘测试；
 5. `mvn clean compile test-compile` 与全量后端测试；
 6. WebUI Vitest、production build、alignment 和 Documents Mock Playwright；
 7. 双语项目文档与 `git diff --check`。
+
+也可以单独运行 V42 Sync Run HTTP 合同验收：
+
+```bash
+./scripts/verify-document-sync-runs.sh
+```
+
+它会把一次性数据库迁移到 V42，并验证 Sync Run begin、批量幂等、失败重试、
+preview/complete tombstone、namespace 隔离和禁悲观锁门禁。
 
 PostgreSQL 选择顺序为：显式 `DOCUMENT_LIFECYCLE_IT_JDBC_URL`、使用当前 shell/`.env`
 的 `POSTGRES_*` 创建一次性数据库、最后使用 Docker CLI 启动 pgvector。调用方 JDBC URL
@@ -266,7 +275,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V41、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V42、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -320,7 +329,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V41，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V42，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -346,7 +355,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V41，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V42，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -390,7 +399,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V41，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V42，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 

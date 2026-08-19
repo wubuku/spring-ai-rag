@@ -29,9 +29,10 @@ Usage: ./scripts/verify-document-lifecycle.sh
 Runs, in order:
   no-pessimistic-lock gate
   focused lifecycle/controller/service tests
-  Flyway V39 -> V41 and lifecycle consistency tests on disposable PostgreSQL
+  Flyway V39 -> V42 and lifecycle consistency tests on disposable PostgreSQL
   reference client HTTP/retry/checkpoint tests
   reference client against the real Spring Boot HTTP and PostgreSQL data path
+  local version restore against the real Spring Boot HTTP and PostgreSQL data path
   mvn clean compile test-compile and full backend tests
   WebUI Vitest, production build, alignment gate and Mock Playwright documents suite
   project documentation gate and git diff --check
@@ -497,6 +498,428 @@ PY
   cleanup_reference_client_e2e
 }
 
+database_sql() {
+  local sql="$1"
+  if [[ -n "$POSTGRES_CONTAINER" ]]; then
+    docker exec "$POSTGRES_CONTAINER" \
+      psql -U "$LIFECYCLE_USERNAME" \
+      -d spring_ai_rag_document_lifecycle_test \
+      -v ON_ERROR_STOP=1 -c "$sql"
+    return
+  fi
+
+  command -v psql >/dev/null || {
+    echo "psql is required to prepare the non-FULL version restore fixture." >&2
+    return 1
+  }
+
+  local pg_url="${LIFECYCLE_JDBC_URL#jdbc:}"
+  local pg_host pg_port pg_database
+  IFS=$'\t' read -r pg_host pg_port pg_database < <(
+    python3 - "$pg_url" <<'PY'
+import sys
+from urllib.parse import urlparse
+
+parsed = urlparse(sys.argv[1])
+database = parsed.path.lstrip("/").split("?", 1)[0]
+print(
+    parsed.hostname or "127.0.0.1",
+    parsed.port or 5432,
+    database,
+    sep="\t",
+)
+PY
+  )
+  PGPASSWORD="$LIFECYCLE_PASSWORD" \
+    psql -h "$pg_host" -p "$pg_port" -U "$LIFECYCLE_USERNAME" \
+      -d "$pg_database" -v ON_ERROR_STOP=1 -c "$sql"
+}
+
+version_restore_real_http_e2e() {
+  local backend_log="$LOG_DIR/version-restore-backend.log"
+  local classpath_file="$LOG_DIR/version-restore-runtime-classpath.txt"
+  local runtime_classpath
+  local collection_key="lifecycle-restore:${RUN_ID}:$$"
+  local external_namespace="restore-external"
+  local external_id="external:restore:1"
+  local local_create_path
+  local local_patch_path
+  local local_restore_path
+  local local_detail_path
+  local version_path
+  local history_path
+  local stale_path
+  local external_create_path
+  local external_restore_path
+  local local_document_id
+  local external_document_id
+  local local_revision
+  local code
+  local health=""
+
+  cleanup_reference_client_e2e
+  BACKEND_PORT="$(find_available_port "$BACKEND_PORT")"
+  REFERENCE_CLIENT_TEMP_DIR="$(
+    mktemp -d "${TMPDIR:-/tmp}/spring-ai-rag-version-restore.XXXXXX"
+  )"
+  chmod 700 "$REFERENCE_CLIENT_TEMP_DIR"
+  local_create_path="$REFERENCE_CLIENT_TEMP_DIR/local-create.json"
+  local_patch_path="$REFERENCE_CLIENT_TEMP_DIR/local-patch.json"
+  local_restore_path="$REFERENCE_CLIENT_TEMP_DIR/local-restore.json"
+  local_detail_path="$REFERENCE_CLIENT_TEMP_DIR/local-detail.json"
+  version_path="$REFERENCE_CLIENT_TEMP_DIR/version.json"
+  history_path="$REFERENCE_CLIENT_TEMP_DIR/history.json"
+  stale_path="$REFERENCE_CLIENT_TEMP_DIR/stale.json"
+  external_create_path="$REFERENCE_CLIENT_TEMP_DIR/external-create.json"
+  external_restore_path="$REFERENCE_CLIENT_TEMP_DIR/external-restore.json"
+
+  mvn -pl spring-ai-rag-core -am -q dependency:build-classpath \
+    "-Dmdep.outputFile=${PWD}/${classpath_file}" \
+    -DincludeScope=runtime
+
+  runtime_classpath="spring-ai-rag-core/target/classes:"
+  runtime_classpath+="spring-ai-rag-api/target/classes:"
+  runtime_classpath+="spring-ai-rag-documents/target/classes:"
+  runtime_classpath+="spring-ai-rag-starter/target/classes:"
+  runtime_classpath+="$(cat "$classpath_file")"
+
+  env \
+    SPRING_PROFILES_ACTIVE=postgresql \
+    SERVER_PORT="$BACKEND_PORT" \
+    SPRING_DATASOURCE_URL="$LIFECYCLE_JDBC_URL" \
+    SPRING_DATASOURCE_USERNAME="$LIFECYCLE_USERNAME" \
+    SPRING_DATASOURCE_PASSWORD="$LIFECYCLE_PASSWORD" \
+    RAG_SECURITY_ENABLED=false \
+    RAG_ROOT_API_KEY= \
+    RAG_DOCUMENT_VERSION_RESTORE_ENABLED=true \
+    RAG_EMBEDDING_JOBS_ENABLED=false \
+    APP_LLM_PROVIDER=openai \
+    SPRING_AI_OPENAI_API_KEY=dummy \
+    SPRING_AI_OPENAI_BASE_URL=http://127.0.0.1:9 \
+    SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=dummy-chat \
+    RAG_EMBEDDING_API_KEY=dummy \
+    RAG_EMBEDDING_BASE_URL=http://127.0.0.1:9 \
+    RAG_EMBEDDING_MODEL=dummy-embedding \
+    RAG_EMBEDDING_DIMENSIONS=1024 \
+    RAG_EMBEDDING_PROFILE_KEY=verification-dummy-embedding-1024-v1 \
+    RAG_EMBEDDING_PROVIDER=verification \
+    RAG_EMBEDDING_MODEL_REVISION=v1 \
+    java -cp "$runtime_classpath" com.springairag.core.SpringAiRagApplication \
+    >"$backend_log" 2>&1 &
+  BACKEND_PID=$!
+
+  local attempt
+  for attempt in $(seq 1 90); do
+    if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
+      echo "Version-restore backend exited before readiness; see ${backend_log}." >&2
+      tail -80 "$backend_log" >&2 || true
+      cleanup_reference_client_e2e
+      return 1
+    fi
+    health="$(
+      curl --fail --silent --show-error --connect-timeout 1 --max-time 2 \
+        "http://127.0.0.1:${BACKEND_PORT}/actuator/health" 2>/dev/null || true
+    )"
+    if [[ "$health" == *'"status":"UP"'* ]]; then
+      break
+    fi
+    if [[ "$attempt" == "90" ]]; then
+      echo "Version-restore backend did not become healthy; last payload: ${health}" >&2
+      tail -80 "$backend_log" >&2 || true
+      cleanup_reference_client_e2e
+      return 1
+    fi
+    sleep 1
+  done
+
+  curl --fail --silent --show-error \
+    -H 'Content-Type: application/json' \
+    -X POST \
+    --data "$(
+      python3 - "$collection_key" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+    "collectionKey": sys.argv[1],
+    "name": "Version restore verification",
+    "dimensions": 1024,
+}))
+PY
+    )" \
+    "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/collections" \
+    >/dev/null
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data "$(
+        python3 - "$collection_key" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+    "title": "Version restore local document",
+    "content": "Original content for restore verification.",
+    "source": "verification",
+    "documentType": "text",
+    "collectionKey": sys.argv[1],
+    "embeddingPolicy": "SKIP",
+    "deduplicationScope": "NONE",
+}))
+PY
+      )" \
+      -o "$local_create_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents"
+  )"
+  [[ "$code" == "200" ]] || {
+    echo "Local restore fixture creation failed with HTTP ${code}." >&2
+    cat "$local_create_path" >&2
+    return 1
+  }
+  read -r local_document_id local_revision < <(
+    python3 - "$local_create_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+if body.get("status") != "CREATED" or body.get("documentRevision") != 1:
+    raise SystemExit(f"unexpected local create response: {body}")
+print(body["id"], body["documentRevision"])
+PY
+  )
+
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}/versions/1" \
+    >"$version_path"
+  python3 - "$version_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["versionNumber"] == 1, body
+assert body["changeType"] == "CREATE", body
+assert body["snapshotCompleteness"] == "FULL", body
+assert body["contentSnapshot"] == "Original content for restore verification.", body
+print("Real HTTP version v1 is a FULL snapshot.")
+PY
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X PATCH \
+      --data "$(
+        python3 - "$local_revision" <<'PY'
+import json
+import sys
+
+print(json.dumps({
+    "expectedDocumentRevision": int(sys.argv[1]),
+    "content": "Updated content before restore.",
+    "embeddingPolicy": "SKIP",
+}))
+PY
+      )" \
+      -o "$local_patch_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}"
+  )"
+  [[ "$code" == "200" ]] || {
+    echo "Local restore fixture update failed with HTTP ${code}." >&2
+    cat "$local_patch_path" >&2
+    return 1
+  }
+  local_revision="$(
+    python3 - "$local_patch_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["action"] == "UPDATED", body
+assert body["documentRevision"] == 2, body
+assert body["versionNumber"] == 2, body
+assert body["contentChanged"] is True, body
+print(body["documentRevision"])
+PY
+  )"
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data '{"expectedDocumentRevision":2,"embeddingPolicy":"SKIP","visibilityMode":"KEEP_CURRENT"}' \
+      -o "$local_restore_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}/versions/1/restore"
+  )"
+  [[ "$code" == "200" ]] || {
+    echo "Local version restore failed with HTTP ${code}." >&2
+    cat "$local_restore_path" >&2
+    return 1
+  }
+  local_revision="$(
+    python3 - "$local_restore_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["action"] == "RESTORED_VERSION", body
+assert body["documentRevision"] == 3, body
+assert body["versionNumber"] == 3, body
+assert body["contentChanged"] is True, body
+print(body["documentRevision"])
+PY
+  )"
+
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}" \
+    >"$local_detail_path"
+  python3 - "$local_detail_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["documentRevision"] == 3, body
+assert body["content"] == "Original content for restore verification.", body
+print("Real HTTP restore created revision 3 with the original content.")
+PY
+
+  curl --fail --silent --show-error \
+    "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}/versions?page=0&size=20" \
+    >"$history_path"
+  python3 - "$history_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["totalVersions"] == 3, body
+latest = next(item for item in body["versions"] if item["versionNumber"] == 3)
+assert latest["changeType"] == "RESTORE", latest
+print("Version history preserves v1/v2 and records RESTORE v3.")
+PY
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data '{"expectedDocumentRevision":2,"embeddingPolicy":"SKIP"}' \
+      -o "$stale_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}/versions/1/restore"
+  )"
+  [[ "$code" == "409" ]] || {
+    echo "Stale restore CAS returned HTTP ${code}, expected 409." >&2
+    cat "$stale_path" >&2
+    return 1
+  }
+  python3 - "$stale_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["error"] == "DOCUMENT_REVISION_CONFLICT", body
+print("Stale version restore is rejected by document-revision CAS.")
+PY
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data "$(
+        python3 - "$collection_key" "$external_namespace" "$external_id" <<'PY'
+import json
+import sys
+
+collection_key, namespace, external_id = sys.argv[1:]
+print(json.dumps({
+    "collectionKey": collection_key,
+    "sourceNamespace": namespace,
+    "externalId": external_id,
+    "sourceRevision": "external-r1",
+    "title": "Externally managed restore fixture",
+    "content": "External content.",
+    "embeddingPolicy": "SKIP",
+}))
+PY
+      )" \
+      -o "$external_create_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/upsert"
+  )"
+  [[ "$code" == "200" ]] || {
+    echo "External restore fixture creation failed with HTTP ${code}." >&2
+    cat "$external_create_path" >&2
+    return 1
+  }
+  read -r external_document_id local_revision < <(
+    python3 - "$external_create_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["action"] == "CREATED", body
+print(body["documentId"], body["documentRevision"])
+PY
+  )
+
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data '{"expectedDocumentRevision":1,"embeddingPolicy":"SKIP"}' \
+      -o "$external_restore_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${external_document_id}/versions/1/restore"
+  )"
+  [[ "$code" == "409" ]] || {
+    echo "External version restore returned HTTP ${code}, expected 409." >&2
+    cat "$external_restore_path" >&2
+    return 1
+  }
+  python3 - "$external_restore_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["error"] == "EXTERNAL_DOCUMENT_MANAGED", body
+print("Externally managed version restore is rejected.")
+PY
+
+  database_sql "
+    UPDATE rag_document_versions
+    SET snapshot_completeness = 'CONTENT_AND_METADATA_ONLY'
+    WHERE document_id = ${local_document_id}
+      AND version_number = 2
+  " >/dev/null
+  code="$(
+    curl --silent --show-error \
+      -H 'Content-Type: application/json' \
+      -X POST \
+      --data '{"expectedDocumentRevision":3,"embeddingPolicy":"SKIP"}' \
+      -o "$stale_path" \
+      -w "%{http_code}" \
+      "http://127.0.0.1:${BACKEND_PORT}/api/v1/rag/documents/${local_document_id}/versions/2/restore"
+  )"
+  [[ "$code" == "409" ]] || {
+    echo "Non-FULL version restore returned HTTP ${code}, expected 409." >&2
+    cat "$stale_path" >&2
+    return 1
+  }
+  python3 - "$stale_path" <<'PY'
+import json
+import sys
+
+body = json.load(open(sys.argv[1], encoding="utf-8"))
+assert body["error"] == "VERSION_NOT_RESTORABLE", body
+print("Non-FULL version restore is rejected.")
+PY
+
+  echo "Real HTTP local version restore acceptance passed."
+  cleanup_reference_client_e2e
+}
+
 backend_compile() {
   mvn clean compile test-compile
 }
@@ -630,9 +1053,10 @@ run_step "Prerequisites" check_prerequisites
 run_step "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_step "Focused document lifecycle tests" focused_backend_tests
 run_step "Disposable PostgreSQL preparation" prepare_postgres
-run_step "V39 to V41 lifecycle PostgreSQL acceptance" postgres_lifecycle_tests
+run_step "V39 to V42 lifecycle PostgreSQL acceptance" postgres_lifecycle_tests
 run_step "External sync reference client tests" reference_client_tests
 run_step "External sync client real Spring Boot HTTP E2E" reference_client_real_http_e2e
+run_step "Local version restore real Spring Boot HTTP E2E" version_restore_real_http_e2e
 run_step "Maven clean compile test-compile" backend_compile
 run_step "Full backend test suite" backend_full_tests
 run_step "WebUI Vitest build and alignment" webui_unit_build_alignment

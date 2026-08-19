@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V41 |
+| Flyway | V1–V42 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -53,6 +53,19 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 
 ```bash
 ./scripts/verify-project-docs.sh
+```
+
+执行文档 CRUD、外部全量同步、版本恢复、一次性 PostgreSQL、reference client 和 WebUI
+验收：
+
+```bash
+./scripts/verify-document-lifecycle.sh
+```
+
+针对 V42 Sync Run、一次性 PostgreSQL 和完整 HTTP 合同的专项验收：
+
+```bash
+./scripts/verify-document-sync-runs.sh
 ```
 
 ## 3. 启动与健康检查

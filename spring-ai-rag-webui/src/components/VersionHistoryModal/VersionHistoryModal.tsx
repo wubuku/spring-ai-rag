@@ -9,6 +9,10 @@ import styles from './VersionHistoryModal.module.css';
 interface VersionHistoryModalProps {
   documentId: number;
   documentTitle: string;
+  documentRevision?: number | null;
+  externallyManaged?: boolean;
+  restorePending?: boolean;
+  onRestoreVersion?: (versionNumber: number) => void;
   onClose: () => void;
 }
 
@@ -26,7 +30,15 @@ function ChangeTypeBadge({ changeType }: { changeType: string }) {
   return <span className={`${styles.changeType} ${cls}`}>{changeType}</span>;
 }
 
-export function VersionHistoryModal({ documentId, documentTitle, onClose }: VersionHistoryModalProps) {
+export function VersionHistoryModal({
+  documentId,
+  documentTitle,
+  documentRevision,
+  externallyManaged = false,
+  restorePending = false,
+  onRestoreVersion,
+  onClose,
+}: VersionHistoryModalProps) {
   const { t } = useTranslation();
   const [tab, setTab] = useState<'list' | 'diff'>('list');
   const [page, setPage] = useState(0);
@@ -164,6 +176,10 @@ export function VersionHistoryModal({ documentId, documentTitle, onClose }: Vers
                       {data.data.versions.map(v => {
                         const isSelectedA = compareA?.id === v.id;
                         const isSelectedB = compareB?.id === v.id;
+                        const canRestore = Boolean(onRestoreVersion)
+                          && !externallyManaged
+                          && v.snapshotCompleteness === 'FULL'
+                          && documentRevision != null;
                         return (
                           <div
                             key={v.id}
@@ -190,6 +206,28 @@ export function VersionHistoryModal({ documentId, documentTitle, onClose }: Vers
                               </div>
                             </div>
                             <span className={styles.versionHash}>{v.contentHash?.slice(0, 8)}…</span>
+                            {onRestoreVersion && (
+                              <button
+                                type="button"
+                                className={styles.restoreBtn}
+                                disabled={!canRestore || restorePending}
+                                title={
+                                  canRestore
+                                    ? t('versions.restoreHint', 'Restore this full snapshot')
+                                    : t('versions.restoreUnavailable', 'Only FULL local snapshots can be restored')
+                                }
+                                onClick={event => {
+                                  event.stopPropagation();
+                                  if (canRestore) {
+                                    onRestoreVersion(v.versionNumber);
+                                  }
+                                }}
+                              >
+                                {restorePending
+                                  ? t('common.loading')
+                                  : t('versions.restore', 'Restore')}
+                              </button>
+                            )}
                           </div>
                         );
                       })}

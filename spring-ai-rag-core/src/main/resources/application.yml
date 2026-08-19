@@ -309,6 +309,11 @@ rag:
     strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
     allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
+    sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
+    version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
+    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
+    sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
+    sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 
   # RAG retrieval configuration
   retrieval:

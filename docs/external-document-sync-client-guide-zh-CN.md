@@ -5,7 +5,7 @@
 本文给出外部系统接入 spring-ai-rag 的推荐方式：外部系统拥有文档主数据，新增、修改和删除
 安全地连带更新 RAG 服务中的分块、全文索引和 embedding。
 
-当前覆盖 webhook/CDC 增量同步。来源权威全量快照对账尚未进入当前 API。
+当前覆盖 webhook/CDC 增量同步，以及来源权威全量快照对账 API。
 
 ## 1. 选择稳定的来源身份
 
@@ -184,7 +184,28 @@ mutation 成功表示来源状态已被接受，不一定表示已可检索。
 
 批量流程优先查询 Collection embedding readiness，不要逐文档高频轮询。
 
-## 7. Reference Client
+## 7. 来源权威全量快照对账
+
+当来源系统可以生成完整且一致的视图时，应使用 Sync Run 协议，不要从一个可能不完整的
+批次推断删除：
+
+1. 调用 `POST /api/v1/rag/document-sync-runs`，发送稳定的 `clientRunId`、显式的
+   `snapshotMode`、`missingPolicy`，以及 opaque 的 `X-RAG-Sync-Lease` header。
+2. 使用有界的 `batch-upsert` 发送 manifest item。item 继承 run 的 Collection 和
+   `sourceNamespace`，必须包含 `externalId` 与 `sourceRevision`。
+3. 调用 `preview-missing`，保存返回的 opaque preview token，再调用 `complete`。
+4. 只有来源能建立一致性 cut 时才使用 `ONLINE_CUT + TOMBSTONE`。静态 manifest 的安全
+   默认是 `OFFLINE_MANIFEST + NONE`。
+5. `EXCLUSIVE_OFFLINE + TOMBSTONE` 必须显式发送
+   `confirmExclusiveOffline=true`，并且 connector 必须保证整个 run 期间来源独占写入。
+   这是有破坏性的显式操作，不能作为默认值。
+
+TOMBSTONE run 在完成前必须用相同 fingerprint 重试失败 item。服务会保护 snapshot 边界
+之后被修改的文档，执行删除阈值保护，并且不会在 run ledger 中存储正文或 JSONB payload。
+每个 run mutation 都会重新检查当前 API Key 的 Collection ACL；lease token 不是绕过 ACL
+的凭据。具体字段、响应和错误码见[REST API 合同](rest-api-zh-CN.md#外部快照同步-run)。
+
+## 8. Reference Client
 
 只依赖 Python 标准库的参考实现位于 `examples/external-sync-client/`，已实现：
 
@@ -210,7 +231,7 @@ python3 examples/external-sync-client/sync_client.py apply-events \
 API Key 只能从环境变量读取，不接受命令行参数，也不会写入 checkpoint。处理开始后应把一个
 JSONL 文件视为不可变；下一批投递使用新的文件和 checkpoint。
 
-## 8. 上线检查清单
+## 9. 上线检查清单
 
 - 使用只允许目标 Collection 的 API Key，不使用 environment root key。
 - 首次导入前先稳定来源 identity 和 revision 规则。

@@ -43,7 +43,10 @@ public record DocumentVersionResponse(
         String contentSnapshot,
 
         @Schema(description = "JSONB payload snapshot (only in single version detail, omitted in list)")
-        JsonNode jsonbPayloadSnapshot
+        JsonNode jsonbPayloadSnapshot,
+
+        @Schema(description = "Snapshot completeness: FULL or CONTENT_AND_METADATA_ONLY")
+        String snapshotCompleteness
 ) {
     public DocumentVersionResponse(
             Long id,
@@ -56,7 +59,7 @@ public record DocumentVersionResponse(
             LocalDateTime createdAt,
             String contentSnapshot) {
         this(id, documentId, versionNumber, contentHash, null, size, changeType,
-                changeDescription, createdAt, contentSnapshot, null);
+                changeDescription, createdAt, contentSnapshot, null, null);
     }
 
     public DocumentVersionResponse(
@@ -71,7 +74,7 @@ public record DocumentVersionResponse(
             String contentSnapshot,
             JsonNode jsonbPayloadSnapshot) {
         this(id, documentId, versionNumber, contentHash, null, size, changeType,
-                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot);
+                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot, null);
     }
 
     @Override
@@ -89,13 +92,15 @@ public record DocumentVersionResponse(
                 && Objects.equals(changeDescription, that.changeDescription)
                 && Objects.equals(createdAt, that.createdAt)
                 && Objects.equals(contentSnapshot, that.contentSnapshot)
-                && Objects.equals(jsonbPayloadSnapshot, that.jsonbPayloadSnapshot);
+                && Objects.equals(jsonbPayloadSnapshot, that.jsonbPayloadSnapshot)
+                && Objects.equals(snapshotCompleteness, that.snapshotCompleteness);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(id, documentId, versionNumber, contentHash, sourceRevisionSnapshot, size, changeType,
-                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot);
+                changeDescription, createdAt, contentSnapshot, jsonbPayloadSnapshot,
+                snapshotCompleteness);
     }
 
     @Override
@@ -112,6 +117,7 @@ public record DocumentVersionResponse(
                 ", createdAt=" + createdAt +
                 ", contentSnapshotLength=" + (contentSnapshot != null ? contentSnapshot.length() : 0) +
                 ", hasJsonbPayloadSnapshot=" + (jsonbPayloadSnapshot != null) +
+                ", snapshotCompleteness='" + snapshotCompleteness + "'" +
                 '}';
     }
 }

@@ -128,6 +128,30 @@ public class RagDocument {
     private Long sourceMutationSequence = 0L;
 
     /**
+     * Last authoritative snapshot run that saw this external identity.
+     */
+    @Column(name = "last_seen_sync_run_id")
+    private java.util.UUID lastSeenSyncRunId;
+
+    /**
+     * Snapshot generation that last saw this external identity.
+     */
+    @Column(name = "last_seen_sync_generation")
+    private Long lastSeenSyncGeneration;
+
+    /**
+     * Server-owned marker for a reconciliation tombstone.
+     */
+    @Column(name = "reconciliation_tombstone_run_id")
+    private java.util.UUID reconciliationTombstoneRunId;
+
+    /**
+     * Origin of the current source tombstone, if any.
+     */
+    @Column(name = "deletion_origin", length = 32)
+    private String deletionOrigin;
+
+    /**
      * Business JSON payload. It is never copied into embedding metadata.
      */
     @JdbcTypeCode(SqlTypes.JSON)
@@ -254,6 +278,29 @@ public class RagDocument {
     public Long getSourceMutationSequence() { return sourceMutationSequence; }
     public void setSourceMutationSequence(Long sourceMutationSequence) {
         this.sourceMutationSequence = sourceMutationSequence;
+    }
+
+    public java.util.UUID getLastSeenSyncRunId() { return lastSeenSyncRunId; }
+    public void setLastSeenSyncRunId(java.util.UUID lastSeenSyncRunId) {
+        this.lastSeenSyncRunId = lastSeenSyncRunId;
+    }
+
+    public Long getLastSeenSyncGeneration() { return lastSeenSyncGeneration; }
+    public void setLastSeenSyncGeneration(Long lastSeenSyncGeneration) {
+        this.lastSeenSyncGeneration = lastSeenSyncGeneration;
+    }
+
+    public java.util.UUID getReconciliationTombstoneRunId() {
+        return reconciliationTombstoneRunId;
+    }
+    public void setReconciliationTombstoneRunId(
+            java.util.UUID reconciliationTombstoneRunId) {
+        this.reconciliationTombstoneRunId = reconciliationTombstoneRunId;
+    }
+
+    public String getDeletionOrigin() { return deletionOrigin; }
+    public void setDeletionOrigin(String deletionOrigin) {
+        this.deletionOrigin = deletionOrigin;
     }
 
     public JsonNode getJsonbPayload() { return jsonbPayload; }

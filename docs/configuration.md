@@ -247,6 +247,11 @@ rag:
     strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
     allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
+    sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
+    version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
+    keyword-index-enabled: ${RAG_DOCUMENT_KEYWORD_INDEX_ENABLED:false}
+    sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
+    sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
 
 | Property | Default | Description |
@@ -254,6 +259,11 @@ rag:
 | `rag.document-lifecycle.strict-external-cas` | `true` | A new revision for an existing external identity requires `expectedSourceRevision`; exact replay remains valid |
 | `rag.document-lifecycle.allow-non-default-namespace` | `true` | Accept explicit external `sourceNamespace`; when disabled only the compatibility value `default` is accepted |
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | Retention for local create/upload `Idempotency-Key` records, clamped to 1–168 hours |
+| `rag.document-lifecycle.sync-runs-enabled` | `false` | Enables the authoritative external snapshot Sync Run API; keep disabled until the disposable PostgreSQL/E2E acceptance passes |
+| `rag.document-lifecycle.version-restore-enabled` | `false` | Enables local `FULL` historical-version restore; externally managed documents remain source-owned |
+| `rag.document-lifecycle.keyword-index-enabled` | `false` | Reserved local keyword-derivation flag; keyword/vector decoupling is not delivered yet, so keep it disabled |
+| `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | Absolute missing-document safety threshold for `TOMBSTONE` runs; completion is rejected above it without explicit confirmation; clamped to 1–100000 |
+| `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | Relative missing-document safety threshold (percent) for `TOMBSTONE` runs; clamped to 1–100 |
 
 Local documents use public `documentRevision` CAS for PATCH, disable, restore,
 and permanent delete. External text and JSON records use
@@ -765,7 +775,8 @@ IDs using the same ASCII trim semantics as the API and rebuilds the partial
 unique index. V32–V39 add Chat leases, durable jobs, filter/diagnostic/quality
 operations, and non-pessimistic coordination. V40/V41 add document business
 revisions, complete snapshots, source namespaces, generation fencing, and the
-lifecycle/idempotency contract.
+lifecycle/idempotency contract. V42 adds authoritative external snapshot
+reconciliation runs and source/reconciliation deletion markers.
 
 ## Profile Overview
 

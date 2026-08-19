@@ -23,6 +23,10 @@ class ApiHandler(BaseHTTPRequestHandler):
     requests: list[dict[str, Any]] = []
     fail_first = False
     conflict = False
+    sync_run_fail_batch_once = False
+    sync_run_failed_item_once = False
+    sync_run_candidate_count = 0
+    sync_run_id = "00000000-0000-0000-0000-000000000001"
 
     def log_message(self, _format: str, *_args: object) -> None:
         return
@@ -40,10 +44,14 @@ class ApiHandler(BaseHTTPRequestHandler):
             "method": self.command,
             "path": self.path,
             "apiKey": self.headers.get("X-API-Key"),
+            "lease": self.headers.get("X-RAG-Sync-Lease"),
             "body": json.loads(body) if body else None,
         }
         type(self).requests.append(record)
 
+        if self.path.startswith("/api/v1/rag/document-sync-runs"):
+            self._handle_sync_run(record)
+            return
         if type(self).conflict:
             self._json(409, {
                 "error": "STRUCTURED_RECORD_CONFLICT",
@@ -55,6 +63,65 @@ class ApiHandler(BaseHTTPRequestHandler):
             return
         action = "DELETED" if self.command == "DELETE" else "UPDATED"
         self._json(200, {"action": action, "embeddingAction": "QUEUED"})
+
+    def _handle_sync_run(self, record: dict[str, Any]) -> None:
+        path = record["path"].split("?", 1)[0]
+        if path == "/api/v1/rag/document-sync-runs":
+            self._json(200, {
+                "runId": type(self).sync_run_id,
+                "status": "ACTIVE",
+            })
+            return
+        if path.endswith("/batch-upsert"):
+            if type(self).sync_run_fail_batch_once:
+                type(self).sync_run_fail_batch_once = False
+                self._json(503, {"detail": "retry batch"})
+                return
+            items = record["body"]["items"]
+            if type(self).sync_run_failed_item_once:
+                type(self).sync_run_failed_item_once = False
+                self._json(200, {
+                    "items": [
+                        {
+                            "externalId": item["externalId"],
+                            "documentKind": item["documentKind"],
+                            "status": "FAILED",
+                            "sourceRevision": item["sourceRevision"],
+                            "errorCode": "BAD_REQUEST",
+                            "error": "fixture failure",
+                        }
+                        for item in items
+                    ],
+                })
+                return
+            self._json(200, {
+                "items": [
+                    {
+                        "externalId": item["externalId"],
+                        "documentKind": item["documentKind"],
+                        "status": "APPLIED",
+                        "documentId": index + 1,
+                        "sourceRevision": item["sourceRevision"],
+                        "embeddingAction": "QUEUED",
+                    }
+                    for index, item in enumerate(items)
+                ],
+            })
+            return
+        if path.endswith("/preview-missing"):
+            self._json(200, {
+                "runId": type(self).sync_run_id,
+                "previewToken": "preview-token",
+                "candidateCount": type(self).sync_run_candidate_count,
+            })
+            return
+        if path.endswith("/complete"):
+            self._json(200, {
+                "runId": type(self).sync_run_id,
+                "status": "COMPLETED",
+            })
+            return
+        self._json(404, {"detail": "unknown sync-run fixture route"})
 
     def _json(self, status_code: int, body: dict[str, Any]) -> None:
         encoded = json.dumps(body).encode("utf-8")
@@ -70,6 +137,9 @@ class ReferenceClientTest(unittest.TestCase):
         ApiHandler.requests = []
         ApiHandler.fail_first = False
         ApiHandler.conflict = False
+        ApiHandler.sync_run_fail_batch_once = False
+        ApiHandler.sync_run_failed_item_once = False
+        ApiHandler.sync_run_candidate_count = 0
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), ApiHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -119,6 +189,71 @@ class ReferenceClientTest(unittest.TestCase):
             encoding="utf-8",
         )
         return path
+
+    def write_manifest(self, items: list[dict[str, Any]]) -> Path:
+        path = self.root / "manifest.jsonl"
+        path.write_text(
+            "".join(
+                json.dumps(item, separators=(",", ":")) + "\n"
+                for item in items
+            ),
+            encoding="utf-8",
+        )
+        return path
+
+    def run_sync_run(
+        self,
+        subcommand: str,
+        checkpoint: Path,
+        *,
+        manifest: Path | None = None,
+        snapshot_mode: str = "OFFLINE_MANIFEST",
+        missing_policy: str = "NONE",
+        auto_confirm: bool = False,
+        confirm_exclusive_offline: bool = False,
+        extra_env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["RAG_API_KEY"] = SECRET
+        env["RAG_SYNC_LEASE_TOKEN"] = "opaque-sync-lease-token"
+        if extra_env:
+            env.update(extra_env)
+        command = [
+            sys.executable,
+            str(CLIENT),
+            "sync-run",
+            subcommand,
+            "--collection-key",
+            "manuals",
+            "--source-namespace",
+            "cms-main",
+            "--client-run-id",
+            "snapshot-2026-08-19",
+            "--snapshot-mode",
+            snapshot_mode,
+            "--missing-policy",
+            missing_policy,
+            "--checkpoint",
+            str(checkpoint),
+            "--base-url",
+            f"http://127.0.0.1:{self.server.server_port}",
+            "--backoff-base",
+            "0",
+        ]
+        if manifest is not None:
+            command.extend(["--manifest", str(manifest)])
+        if auto_confirm:
+            command.append("--auto-confirm-missing")
+        if confirm_exclusive_offline:
+            command.append("--confirm-exclusive-offline")
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=env,
+            timeout=20,
+        )
 
     def test_applies_events_retries_and_resumes_without_persisting_secrets(self) -> None:
         events = self.write_events([
@@ -210,6 +345,199 @@ class ReferenceClientTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual("DRY_RUN_OK", json.loads(result.stdout)["status"])
         self.assertFalse(checkpoint.exists())
+
+    def test_sync_run_offline_manifest_contract_and_completed_resume(self) -> None:
+        manifest = self.write_manifest([
+            {
+                "documentKind": "TEXT",
+                "externalId": "article:1",
+                "sourceRevision": "r1",
+                "title": "Article",
+                "content": "Searchable content",
+                "metadata": {"locale": "zh-CN"},
+            },
+            {
+                "documentKind": "JSON_RECORD",
+                "externalId": "product:1",
+                "sourceRevision": "p1",
+                "title": "Product",
+                "retrievalText": "Red chair",
+                "jsonbPayload": {"sku": "chair-1", "tags": ["red"]},
+            },
+        ])
+        checkpoint = self.root / "sync-run.sqlite3"
+
+        first = self.run_sync_run(
+            "apply",
+            checkpoint,
+            manifest=manifest,
+        )
+
+        self.assertEqual(0, first.returncode, first.stderr)
+        summary = json.loads(first.stdout)
+        self.assertEqual("COMPLETED", summary["status"])
+        self.assertEqual(2, summary["uploadedItems"])
+        self.assertEqual(
+            [
+                "/api/v1/rag/document-sync-runs",
+                "/api/v1/rag/document-sync-runs/"
+                + ApiHandler.sync_run_id
+                + "/batch-upsert",
+                "/api/v1/rag/document-sync-runs/"
+                + ApiHandler.sync_run_id
+                + "/preview-missing",
+                "/api/v1/rag/document-sync-runs/"
+                + ApiHandler.sync_run_id
+                + "/complete",
+            ],
+            [request["path"] for request in ApiHandler.requests],
+        )
+        begin = ApiHandler.requests[0]
+        self.assertEqual(SECRET, begin["apiKey"])
+        self.assertEqual("opaque-sync-lease-token", begin["lease"])
+        self.assertEqual("OFFLINE_MANIFEST", begin["body"]["snapshotMode"])
+        self.assertEqual("NONE", begin["body"]["missingPolicy"])
+        batch = ApiHandler.requests[1]["body"]["items"]
+        self.assertEqual({"sku": "chair-1", "tags": ["red"]}, batch[1]["jsonbPayload"])
+
+        checkpoint_bytes = checkpoint.read_bytes()
+        self.assertNotIn(SECRET.encode("utf-8"), checkpoint_bytes)
+        self.assertNotIn(b"opaque-sync-lease-token", checkpoint_bytes)
+        self.assertNotIn(b"Searchable content", checkpoint_bytes)
+        self.assertNotIn(b"chair-1", checkpoint_bytes)
+
+        request_count = len(ApiHandler.requests)
+        resumed = self.run_sync_run(
+            "apply",
+            checkpoint,
+            manifest=manifest,
+        )
+        self.assertEqual(0, resumed.returncode, resumed.stderr)
+        self.assertTrue(json.loads(resumed.stdout)["resumed"])
+        self.assertEqual(request_count, len(ApiHandler.requests))
+
+    def test_sync_run_online_cut_requires_begin_and_confirms_preview(self) -> None:
+        manifest = self.write_manifest([{
+            "documentKind": "TEXT",
+            "externalId": "article:1",
+            "sourceRevision": "r1",
+            "title": "Article",
+            "content": "Searchable content",
+        }])
+        checkpoint = self.root / "online-cut.sqlite3"
+
+        without_begin = self.run_sync_run(
+            "apply",
+            checkpoint,
+            manifest=manifest,
+            snapshot_mode="ONLINE_CUT",
+            missing_policy="TOMBSTONE",
+        )
+        self.assertEqual(2, without_begin.returncode)
+        self.assertIn("requires 'sync-run begin'", without_begin.stderr)
+        self.assertEqual([], ApiHandler.requests)
+
+        begun = self.run_sync_run(
+            "begin",
+            checkpoint,
+            snapshot_mode="ONLINE_CUT",
+            missing_policy="TOMBSTONE",
+        )
+        self.assertEqual(0, begun.returncode, begun.stderr)
+        ApiHandler.sync_run_candidate_count = 2
+        applied = self.run_sync_run(
+            "apply",
+            checkpoint,
+            manifest=manifest,
+            snapshot_mode="ONLINE_CUT",
+            missing_policy="TOMBSTONE",
+            auto_confirm=True,
+        )
+        self.assertEqual(0, applied.returncode, applied.stderr)
+        complete = ApiHandler.requests[-1]
+        self.assertEqual(2, complete["body"]["confirmMissingCount"])
+
+    def test_sync_run_exclusive_tombstone_requires_explicit_confirmation(self) -> None:
+        checkpoint = self.root / "exclusive.sqlite3"
+
+        rejected = self.run_sync_run(
+            "begin",
+            checkpoint,
+            snapshot_mode="EXCLUSIVE_OFFLINE",
+            missing_policy="TOMBSTONE",
+        )
+        self.assertEqual(2, rejected.returncode)
+        self.assertIn("--confirm-exclusive-offline", rejected.stderr)
+        self.assertEqual([], ApiHandler.requests)
+
+        confirmed = self.run_sync_run(
+            "begin",
+            checkpoint,
+            snapshot_mode="EXCLUSIVE_OFFLINE",
+            missing_policy="TOMBSTONE",
+            confirm_exclusive_offline=True,
+        )
+        self.assertEqual(0, confirmed.returncode, confirmed.stderr)
+        self.assertTrue(
+            ApiHandler.requests[-1]["body"]["confirmExclusiveOffline"]
+        )
+
+    def test_sync_run_batch_retries_and_failed_batch_does_not_advance_checkpoint(self) -> None:
+        manifest = self.write_manifest([{
+            "documentKind": "TEXT",
+            "externalId": "article:1",
+            "sourceRevision": "r1",
+            "title": "Article",
+            "content": "Searchable content",
+        }])
+        checkpoint = self.root / "retry.sqlite3"
+        ApiHandler.sync_run_fail_batch_once = True
+
+        result = self.run_sync_run("apply", checkpoint, manifest=manifest)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertGreaterEqual(
+            json.loads(result.stdout)["httpRetries"],
+            1,
+        )
+
+        failed_checkpoint = self.root / "failed.sqlite3"
+        ApiHandler.sync_run_failed_item_once = True
+        failed = self.run_sync_run(
+            "apply",
+            failed_checkpoint,
+            manifest=manifest,
+        )
+        self.assertEqual(4, failed.returncode)
+        self.assertNotIn("COMPLETED", failed.stderr)
+        records_after_failure = len(ApiHandler.requests)
+        retried = self.run_sync_run(
+            "apply",
+            failed_checkpoint,
+            manifest=manifest,
+        )
+        self.assertEqual(0, retried.returncode, retried.stderr)
+        self.assertGreater(len(ApiHandler.requests), records_after_failure)
+
+    def test_sync_run_rejects_scalar_json_payload(self) -> None:
+        manifest = self.write_manifest([{
+            "documentKind": "JSON_RECORD",
+            "externalId": "product:1",
+            "sourceRevision": "p1",
+            "title": "Product",
+            "retrievalText": "Product",
+            "jsonbPayload": "not-an-object",
+        }])
+        checkpoint = self.root / "invalid.sqlite3"
+
+        result = self.run_sync_run(
+            "apply",
+            checkpoint,
+            manifest=manifest,
+        )
+
+        self.assertEqual(5, result.returncode)
+        self.assertIn("object/array payload", result.stderr)
+        self.assertEqual([], ApiHandler.requests)
 
 
 def upsert_event(

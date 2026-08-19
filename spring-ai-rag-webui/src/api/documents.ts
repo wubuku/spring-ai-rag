@@ -151,6 +151,22 @@ export const documentsApi = {
 
   getVersion: (id: number, versionNumber: number) =>
     apiClient.get<DocumentVersionDetail>(`/documents/${id}/versions/${versionNumber}`),
+
+  restoreVersion: (
+    id: number,
+    versionNumber: number,
+    expectedDocumentRevision: number,
+    embeddingPolicy: 'SYNC' | 'ASYNC' | 'SKIP' = 'ASYNC',
+    visibilityMode: 'KEEP_CURRENT' | 'SNAPSHOT' = 'KEEP_CURRENT',
+  ) =>
+    apiClient.post<DocumentMutationResponse>(
+      `/documents/${id}/versions/${versionNumber}/restore`,
+      {
+        expectedDocumentRevision,
+        embeddingPolicy,
+        visibilityMode,
+      },
+    ),
 };
 
 export interface DocumentVersion {
@@ -162,6 +178,7 @@ export interface DocumentVersion {
   changeType: string;
   changeDescription: string;
   createdAt: string;
+  snapshotCompleteness?: 'FULL' | 'CONTENT_AND_METADATA_ONLY' | string | null;
 }
 
 export interface DocumentVersionDetail extends DocumentVersion {

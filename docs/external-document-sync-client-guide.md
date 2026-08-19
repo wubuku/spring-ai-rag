@@ -6,8 +6,8 @@ This guide defines the recommended integration pattern for systems that own
 documents outside spring-ai-rag and need create/update/delete changes to
 propagate safely into chunks, full-text indexes, and embeddings.
 
-It covers incremental webhook/CDC synchronization. Authoritative full-snapshot
-reconciliation is not part of the current API.
+It covers incremental webhook/CDC synchronization and the authoritative
+full-snapshot reconciliation API.
 
 ## 1. Choose A Stable Source Identity
 
@@ -221,7 +221,35 @@ Use the document lifecycle read model:
 For bulk workflows, prefer Collection embedding readiness over polling every
 document.
 
-## 7. Reference Client
+## 7. Authoritative Snapshot Reconciliation
+
+When the source can produce a complete, consistent view, use the Sync Run
+protocol instead of inferring deletion from an incomplete batch:
+
+1. `POST /api/v1/rag/document-sync-runs` with a stable `clientRunId`, explicit
+   `snapshotMode`, `missingPolicy`, and the opaque
+   `X-RAG-Sync-Lease` header.
+2. Send bounded `batch-upsert` requests. Items inherit the Collection and
+   `sourceNamespace` from the run and must include `externalId` and
+   `sourceRevision`.
+3. Call `preview-missing`, retain its opaque preview token, then call
+   `complete`.
+4. Use `TOMBSTONE` only for a source-consistent `ONLINE_CUT`. The safe static
+   manifest default is `OFFLINE_MANIFEST + NONE`.
+5. `EXCLUSIVE_OFFLINE + TOMBSTONE` requires
+   `confirmExclusiveOffline=true` and means the connector guarantees exclusive
+   source writes for the whole run. Treat it as a deliberate destructive
+   operation, not a default.
+
+Failed items must be retried with the same fingerprint before a tombstone run
+can complete. The service protects documents changed after the snapshot
+boundary, applies deletion thresholds, and never stores bodies or JSONB
+payloads in the run ledger. Every run mutation rechecks the current API-key
+Collection ACL; the lease token is not an ACL bypass. See the [REST API
+contract](rest-api.md#external-snapshot-synchronization-runs) for exact fields,
+responses, and error codes.
+
+## 8. Reference Client
 
 The standard-library-only client is in
 `examples/external-sync-client/`. It implements:
@@ -250,7 +278,7 @@ accepted on the command line and is never stored in the checkpoint. Treat one
 JSONL file as immutable after processing starts; use a new file and checkpoint
 for the next delivery batch.
 
-## 8. Production Checklist
+## 9. Production Checklist
 
 - Use a Collection-restricted API key, never the environment root key.
 - Make source identity and revisions stable before the first import.

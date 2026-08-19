@@ -218,6 +218,28 @@
   flex-shrink: 0;
 }
 
+.restoreBtn {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid var(--color-border, #e5e7eb);
+  border-radius: 6px;
+  background: var(--color-surface, #ffffff);
+  color: var(--color-text, #111827);
+  cursor: pointer;
+  font-size: 0.75rem;
+}
+
+.restoreBtn:hover:not(:disabled) {
+  border-color: var(--color-primary, #3b82f6);
+  color: var(--color-primary, #2563eb);
+}
+
+.restoreBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 /* Compare controls */
 .compareBar {
   display: flex;

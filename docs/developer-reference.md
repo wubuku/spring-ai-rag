@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V41 |
+| Flyway | V1–V42 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -53,6 +53,20 @@ Run the project-documentation boundary, link, bilingual-structure, invariant, co
 
 ```bash
 ./scripts/verify-project-docs.sh
+```
+
+For the document CRUD, external synchronization, version restore, disposable
+PostgreSQL, reference client, and WebUI acceptance flow:
+
+```bash
+./scripts/verify-document-lifecycle.sh
+```
+
+For the focused V42 Sync Run HTTP acceptance against a disposable PostgreSQL
+database:
+
+```bash
+./scripts/verify-document-sync-runs.sh
 ```
 
 ## 3. Start And Health Check

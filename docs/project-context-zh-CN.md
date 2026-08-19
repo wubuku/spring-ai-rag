@@ -240,9 +240,13 @@ upsert 不能原子改变外部文档的 Collection；修改 `collectionKey` 会
 [REST API：外部文档幂等同步](rest-api-zh-CN.md)与
 [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。
 
-当前 reference client 只覆盖 webhook/CDC 增量事件。API 尚不支持声明某个
-`collectionKey + sourceNamespace` 的 manifest 为权威全量快照的 begin/upload/complete
-对账协议，因此 client 只能显式发送 tombstone，不能根据不完整批次推断缺失删除。
+当前 reference client 同时覆盖 webhook/CDC 增量事件和权威全量快照协议。
+Sync Run 绑定一个 `collectionKey + sourceNamespace`，只保存 lease hash 与 item fingerprint，
+支持 `begin`、有界 `batch-upsert`、`preview-missing`、`complete` 和 `abort`。
+`ONLINE_CUT + TOMBSTONE` 是安全的全量删除模式；除非 connector 能建立来源一致性 cut，
+否则 client 使用 `OFFLINE_MANIFEST + NONE`。只有 preview fingerprint 和删除保护确认通过后，
+服务才会对 missing 文档生成 tombstone。begin 之后发生的来源 mutation 由 namespace
+mutation sequence 保护，旧快照不能覆盖新状态。
 
 ### 本地文档生命周期
 
@@ -253,9 +257,10 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 `searchability=READY`。标题、来源、metadata 和 Collection-only 修改立即读取当前主记录，
 不会重嵌入。外部托管文档拒绝本地 CRUD，必须通过来源身份和 tombstone 契约操作。
 
-版本历史 API 当前只支持列表、读取和 diff，不支持把旧快照恢复为新 revision。V40/V41
-之后产生的 `FULL` 快照已保存未来安全恢复所需的正文和受管字段；旧的
-`CONTENT_AND_METADATA_ONLY` 快照不能被当作完整状态恢复。
+版本历史 API 支持列表、读取、diff 和受控恢复。恢复功能需要显式开启，只接受本地文档的
+`FULL` 快照，并创建新的业务 revision 和 `RESTORE` 版本；不会回拨历史，也不会让外部
+connector 修改来源拥有的文档。恢复正文会复用正常的 generation fencing；只恢复 metadata
+时不会调用 embedding provider。
 
 当前全文检索与向量检索共用 `rag_embeddings` chunk，并要求活动 Embedding Profile 状态为
 `COMPLETED`。因此正文变化到新 embedding 完成前，或 provider 失败时，该文档会同时退出
@@ -280,7 +285,7 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V41。
+- Flyway 当前为 V1–V42。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -289,7 +294,8 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
   V36 增加普通文档 metadata containment 索引；V37 扩展 embedding job 运营字段；
   V38 增加受管评估套件；V39 用原子计数器、并发槽位和 CAS 状态替换显式悲观协调；
   V40/V41 增加文档业务 revision、完整快照、来源 namespace、派生 generation 与
-  lifecycle/idempotency schema，并收紧三元身份和活动任务约束。
+  lifecycle/idempotency schema，并收紧三元身份和活动任务约束；V42 增加权威外部快照
+  run、幂等 item ledger 以及 SOURCE/RECONCILIATION 删除标记。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -304,7 +310,7 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 | 区域 | 能力 |
 |------|------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN 对话与结构化 SSE |
-| `/documents` | 本地文档 create/PATCH/disable/restore/permanent-delete、lifecycle 与 embedding |
+| `/documents` | 本地文档 create/PATCH/disable/restore/version-restore/permanent-delete、lifecycle 与 embedding |
 | `/search` | 混合检索 |
 | `/collections` | 知识库 |
 | `/evaluation` | 评估与反馈 |
@@ -312,6 +318,7 @@ provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检�
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档三元身份、revision CAS 与 tombstone 同步 |
+| `/document-sync-runs` | 权威外部快照对账 |
 | `/embedding-jobs` | 默认开启的持久化 embedding/reindex 任务 |
 | `/retrieval-traces` | 当前调用方可见的检索诊断 |
 | `/collections/embedding-readiness` | Collection 嵌入就绪分类 |

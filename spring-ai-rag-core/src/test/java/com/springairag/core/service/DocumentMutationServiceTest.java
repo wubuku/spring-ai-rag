@@ -4,10 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.DocumentDisableRequest;
 import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.dto.DocumentRestoreRequest;
+import com.springairag.api.dto.DocumentSyncRunItemRequest;
 import com.springairag.api.dto.DocumentUpdateRequest;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.enums.EmbeddingAction;
 import com.springairag.api.enums.EmbeddingPolicy;
+import com.springairag.api.enums.DocumentSyncDocumentKind;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
@@ -47,6 +49,7 @@ class DocumentMutationServiceTest {
     private EmbeddingDispatchService dispatchService;
     private DocumentEmbedService documentEmbedService;
     private DocumentLifecycleService lifecycleService;
+    private CollectionIdentityResolver collectionIdentityResolver;
     private JdbcTemplate jdbcTemplate;
     private DocumentMutationService service;
     private RagDocument document;
@@ -59,6 +62,7 @@ class DocumentMutationServiceTest {
         dispatchService = mock(EmbeddingDispatchService.class);
         documentEmbedService = mock(DocumentEmbedService.class);
         lifecycleService = mock(DocumentLifecycleService.class);
+        collectionIdentityResolver = mock(CollectionIdentityResolver.class);
         jdbcTemplate = mock(JdbcTemplate.class);
         PlatformTransactionManager transactionManager =
                 mock(PlatformTransactionManager.class);
@@ -68,7 +72,7 @@ class DocumentMutationServiceTest {
         service = new DocumentMutationService(
                 documentRepository,
                 embeddingRepository,
-                mock(CollectionIdentityResolver.class),
+                collectionIdentityResolver,
                 versionService,
                 dispatchService,
                 documentEmbedService,
@@ -274,6 +278,51 @@ class DocumentMutationServiceTest {
         verify(versionService, never()).forceRecordVersion(any(), any(), any());
         verifyNoInteractions(dispatchService);
         verifyNoInteractions(jdbcTemplate);
+    }
+
+    @Test
+    void syncRunUpsertFencesCollectionLifecycleWithVersionCas()
+            throws Exception {
+        CollectionIdentityResolver.ActiveCollectionToken token =
+                new CollectionIdentityResolver.ActiveCollectionToken(10L, 3L);
+        when(collectionIdentityResolver.beginActiveWrite(10L))
+                .thenReturn(token);
+        when(jdbcTemplate.queryForObject(
+                org.mockito.ArgumentMatchers.contains(
+                        "RETURNING mutation_sequence"),
+                org.mockito.ArgumentMatchers.eq(Long.class),
+                org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.eq("cms-main")))
+                .thenReturn(4L);
+        when(documentRepository.saveAndFlush(any(RagDocument.class)))
+                .thenAnswer(invocation -> {
+                    RagDocument saved = invocation.getArgument(0);
+                    saved.setId(41L);
+                    return saved;
+                });
+
+        DocumentSyncRunItemRequest request = new DocumentSyncRunItemRequest(
+                DocumentSyncDocumentKind.TEXT,
+                "article-1",
+                "r1",
+                "Article",
+                "Searchable body",
+                null,
+                null,
+                "cms",
+                "text",
+                Map.of(),
+                EmbeddingPolicy.SKIP);
+
+        DocumentMutationService.SyncItemMutation result =
+                service.upsertSyncRunItemInCurrentTransaction(
+                        10L, "catalog", "cms-main", request, 4L);
+
+        assertEquals(
+                com.springairag.api.enums.DocumentSyncItemStatus.APPLIED,
+                result.status());
+        verify(collectionIdentityResolver).beginActiveWrite(10L);
+        verify(collectionIdentityResolver).confirmActiveWrite(token);
     }
 
     private static RagDocument localDocument() {

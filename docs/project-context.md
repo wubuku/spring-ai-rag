@@ -298,10 +298,16 @@ best practices, and
 [External Document Synchronization Client Guide](external-document-sync-client-guide.md)
 for the runnable connector algorithm.
 
-The reference client currently covers incremental webhook/CDC events only. The
-API has no begin/upload/complete reconciliation contract declaring a manifest
-authoritative for one `collectionKey + sourceNamespace`. Clients must therefore
-send explicit tombstones and must not infer deletions from an incomplete batch.
+The reference client covers incremental webhook/CDC events and the authoritative
+snapshot protocol. A Sync Run is scoped to one `collectionKey +
+sourceNamespace`, stores only lease hashes and item fingerprints, and supports
+`begin`, bounded `batch-upsert`, `preview-missing`, `complete`, and `abort`.
+`ONLINE_CUT + TOMBSTONE` is the safe full-snapshot deletion mode; the client
+uses `OFFLINE_MANIFEST + NONE` unless it can establish a source consistency cut.
+Missing documents are tombstoned only after the preview fingerprint and
+deletion-protection confirmation pass. A post-begin source mutation is protected
+by the namespace mutation sequence and cannot be overwritten by an older
+snapshot.
 
 ### Local Document Lifecycle
 
@@ -315,10 +321,12 @@ excluded immediately and the document stays unavailable until lifecycle
 read current document values immediately and do not re-embed. Externally
 managed documents reject local CRUD and must use source identity and tombstones.
 
-Version-history APIs currently support list, read, and diff only. They do not
-restore an old snapshot as a new revision. `FULL` snapshots created after
-V40/V41 contain the content and managed fields needed for a safe future
-restore; historical `CONTENT_AND_METADATA_ONLY` rows are not complete state.
+Version-history APIs support list, read, diff, and controlled restore. Restore
+is enabled explicitly, accepts only a local document and a `FULL` snapshot, and
+creates a new business revision plus a new `RESTORE` version. It never rewinds
+history or lets an external connector mutate source-owned documents. The
+restore path reuses normal content-change generation fencing; a metadata-only
+restore does not call the embedding provider.
 
 Full-text providers currently reuse chunks in `rag_embeddings` and require the
 active Embedding Profile state to be `COMPLETED`. Between a content mutation
@@ -346,7 +354,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V41.
+- Flyway is currently V1–V42.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -360,7 +368,8 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   with atomic counters, concurrency slots, and CAS state; V40/V41 add document
   business revisions, complete snapshots, source namespaces, derivation
   generations, lifecycle/idempotency schema, and contracted triple-identity
-  and active-job constraints.
+  and active-job constraints; V42 adds authoritative external snapshot runs,
+  idempotent item ledgers, and source/reconciliation deletion markers.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -376,7 +385,7 @@ The main namespace is `/api/v1/rag/**`:
 | Area | Capability |
 |------|------------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN chat and structured SSE |
-| `/documents` | Local create/PATCH/disable/restore/permanent-delete, lifecycle, and embedding |
+| `/documents` | Local create/PATCH/disable/restore/version-restore/permanent-delete, lifecycle, and embedding |
 | `/search` | Hybrid retrieval |
 | `/collections` | Knowledge collections |
 | `/evaluation` | Evaluation and feedback |
@@ -384,6 +393,7 @@ The main namespace is `/api/v1/rag/**`:
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
 | `/documents/upsert` | External triple identity, revision CAS, and tombstone synchronization |
+| `/document-sync-runs` | Authoritative external snapshot reconciliation |
 | `/embedding-jobs` | Enabled-by-default durable embedding/reindex jobs |
 | `/retrieval-traces` | Caller-visible retrieval diagnostics |
 | `/collections/embedding-readiness` | Collection embedding readiness buckets |

@@ -12,7 +12,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V41
+- [x] Flyway inventory is V1-V42
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -54,6 +54,7 @@ Release date: `2026-07-21`
 ### 2026-08-19 Document Lifecycle Gates
 
 - [x] V40/V41 add business revisions, complete snapshots, source namespaces, and generation fencing
+- [x] V42 adds authoritative external snapshot reconciliation runs and deletion markers
 - [x] Content changes immediately stale old derived results; metadata/payload/Collection-only updates do not re-embed
 - [x] The external reference client and bilingual client best practices are tracked
 - [x] PostgreSQL lifecycle acceptance explicitly requires `skipped=0`

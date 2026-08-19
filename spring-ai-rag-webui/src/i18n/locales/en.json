@@ -308,7 +308,13 @@
     "page": "Page {{page}} of {{total}}",
     "inserted": "inserted",
     "deleted": "deleted",
-    "noDiff": "Select two versions to compare first"
+    "noDiff": "Select two versions to compare first",
+    "restore": "Restore version",
+    "restoreHint": "Restore this full snapshot as a new document version",
+    "restoreUnavailable": "Only full snapshots of local documents can be restored",
+    "restoreConfirm": "Restore v{{version}} as a new document version? Later history will be preserved.",
+    "restored": "Historical version restored; index propagation has started if needed",
+    "restoreError": "Failed to restore historical version"
   },
   "abtest": {
     "title": "A/B Testing",

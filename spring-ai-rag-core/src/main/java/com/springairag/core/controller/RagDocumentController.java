@@ -22,6 +22,7 @@ import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.dto.FileUploadResponse;
 import com.springairag.api.dto.VersionHistoryResponse;
 import com.springairag.api.dto.DocumentVersionResponse;
+import com.springairag.api.dto.DocumentVersionRestoreRequest;
 import com.springairag.api.dto.BatchEmbedProgressEvent;
 import com.springairag.api.dto.EmbedProgressEvent;
 import com.springairag.api.dto.ReembedMissingResponse;
@@ -1292,6 +1293,24 @@ public class RagDocumentController {
         return documentVersionService.getVersion(id, versionNumber)
                 .map(v -> ResponseEntity.ok(DocumentMapper.toVersionResponse(v)))
                 .orElse(ResponseEntity.notFound().build());
+    }
+
+    @Operation(summary = "Restore a local document version",
+            description = "Restores a FULL local snapshot as a new document revision and version.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Version restored"),
+            @ApiResponse(responseCode = "404", description = "Document or version not found"),
+            @ApiResponse(responseCode = "409", description = "Restore or revision conflict")
+    })
+    @PostMapping("/{id}/versions/{versionNumber}/restore")
+    @Timed(value = "rag.documents.version-restore",
+            description = "Restore a local document version")
+    public ResponseEntity<DocumentMutationResponse> restoreVersion(
+            @Parameter(description = "Document ID") @PathVariable Long id,
+            @Parameter(description = "Version number") @PathVariable int versionNumber,
+            @Valid @RequestBody DocumentVersionRestoreRequest request) {
+        return ResponseEntity.ok(requireDocumentMutationService()
+                .restoreLocalFromVersion(id, versionNumber, request));
     }
 
     // ==================== Audit Logging Helpers ====================

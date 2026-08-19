@@ -310,7 +310,13 @@
     "page": "第 {{page}} 页，共 {{total}} 页",
     "inserted": "新增",
     "deleted": "删除",
-    "noDiff": "请先选择两个版本进行对比"
+    "noDiff": "请先选择两个版本进行对比",
+    "restore": "恢复此版本",
+    "restoreHint": "将此完整快照恢复为新的文档版本",
+    "restoreUnavailable": "只有本地文档的完整快照可以恢复",
+    "restoreConfirm": "将 v{{version}} 恢复为新的文档版本？后续历史不会被删除。",
+    "restored": "历史版本已恢复；如有需要，索引联动已启动",
+    "restoreError": "恢复历史版本失败"
   },
   "abtest": {
     "title": "A/B 测试",

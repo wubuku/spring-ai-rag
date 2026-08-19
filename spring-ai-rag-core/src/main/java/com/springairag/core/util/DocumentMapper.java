@@ -147,7 +147,8 @@ public final class DocumentMapper {
                 v.getChangeDescription(),
                 v.getCreatedAt(),
                 includeSnapshots ? v.getContentSnapshot() : null,
-                includeSnapshots ? v.getJsonbPayloadSnapshot() : null
+                includeSnapshots ? v.getJsonbPayloadSnapshot() : null,
+                v.getSnapshotCompleteness()
         );
     }
 
