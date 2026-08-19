@@ -20,7 +20,7 @@
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 理解文件管理、PDF 导入和添加到 RAG | [文件管理与 PDF-to-RAG 流程](file-management-and-pdf-rag-zh-CN.md) | [REST API：PDF 与文件产物](rest-api-zh-CN.md#pdf-与文件产物-api) |
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
-| 同步外部文档 / 内容源 | [REST API：外部文档幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization) | [项目上下文：外部文档同步](project-context-zh-CN.md#external-document-synchronization)、[真实 HTTP 验收](developer-reference-zh-CN.md#external-document-synchronization-http-e2e) |
+| 同步外部文档 / 内容源 | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) | [REST API 契约](rest-api-zh-CN.md#external-documents-idempotent-synchronization)、[一键生命周期验收](developer-reference-zh-CN.md#document-lifecycle-verification) |
 | 查看当前后续改进 / TODO | [TODO-zh-CN.md](TODO-zh-CN.md) | [英文 TODO](TODO.md) |
 | 规划外部 API Key 加固 | [OpenAI 兼容就绪度与代码库上下文](openai-compatibility-readiness-zh-CN.md) | [API Key 加固独立实施规划](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | 接入 OpenAI 兼容预览 | [REST API：OpenAI 兼容预览](rest-api-zh-CN.md#openai-chat-completions-兼容预览) | [OpenAI 兼容就绪度与边界](openai-compatibility-readiness-zh-CN.md) |
@@ -59,6 +59,7 @@
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
 | [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
+| [external-document-sync-client-guide-zh-CN.md](external-document-sync-client-guide-zh-CN.md) | 外部 client 的三元身份、增量 CRUD、重试/checkpoint 与可检索就绪指引 |
 | [TODO-zh-CN.md](TODO-zh-CN.md) / [TODO.md](TODO.md) | 当前未纳入 API 的后续改进与触发条件 |
 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `DomainRagExtension` 扩展开发 |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | 与参考项目对比、Phase 完成状态 |
@@ -72,6 +73,7 @@
 | [JSONB 实施规划与进度](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | 已实施：调用者提供 JSONB 与自然语言描述，只索引/嵌入描述，并按 collection / external ID 幂等管理 |
 | [下一批最高价值功能规划](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) / [English](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) | 已实施：动态 Collection 范围的 OpenAI 兼容协议、持久化嵌入任务、JSON containment/Tool 与真实检索回归门禁 |
 | [下一批高价值功能规划（2026-08-18）](drafts/2026-08-18_NEXT_HIGH_VALUE_FEATURES_PLAN.md) | 等待 review：检索诊断、普通文档 metadata 过滤、嵌入任务运营控制面、受管质量套件与 citation 可信度 |
+| [文档生命周期与派生索引一致性规划](drafts/2026-08-18_DOCUMENT_LIFECYCLE_AND_INDEX_CONSISTENCY_PLAN.md) | Phase 0 + Batch A 已实施并验收中：统一文档 CRUD、索引/嵌入连带更新、外部来源 namespace 与增量 reference client；后续批次仍是规划 |
 | [WebUI 水平对齐治理规划](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | 清理模板样式污染，建立普通内容默认起始对齐、有限语义居中和自动防回归门禁 |
 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) / [English](webui-alignment-guidelines.md) | WebUI 普通内容、合理居中例外、`alignment-policy` 门禁和验证命令 |
 
@@ -123,7 +125,7 @@ OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等本地状�
 | `spring-ai-rag-core/.../chat/`、`.../rag/` | 模式化 Chat 执行、Modular RAG 与 Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` 配置绑定 |
 | `spring-ai-rag-core/src/main/resources/application.yml` | 主配置（端口 8081） |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V39** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V41** |
 | `spring-ai-rag-starter/` | 自动配置 `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | 分块 / 清洗 |
 | `spring-ai-rag-webui/` | React 管理台（独立 npm 工程） |

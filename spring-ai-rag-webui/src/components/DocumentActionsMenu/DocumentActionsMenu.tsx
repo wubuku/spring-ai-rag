@@ -14,11 +14,14 @@ import styles from './DocumentActionsMenu.module.css';
 interface DocumentActionsMenuProps {
   ragDocument: Document;
   embeddingPending: boolean;
-  deletePending: boolean;
+  mutationPending: boolean;
   onPreview: () => void;
   onVersions: () => void;
+  onEdit: () => void;
   onRetryEmbedding: () => void;
-  onDelete: () => void;
+  onDisable: () => void;
+  onRestore: () => void;
+  onPermanentDelete: () => void;
   onViewDirectory: (path: string) => void;
   onViewIndexedFile: (directoryPath: string, filePath: string) => void;
   onOpenOriginalFile: (path: string) => void;
@@ -35,11 +38,14 @@ const MENU_GAP = 6;
 export function DocumentActionsMenu({
   ragDocument,
   embeddingPending,
-  deletePending,
+  mutationPending,
   onPreview,
   onVersions,
+  onEdit,
   onRetryEmbedding,
-  onDelete,
+  onDisable,
+  onRestore,
+  onPermanentDelete,
   onViewDirectory,
   onViewIndexedFile,
   onOpenOriginalFile,
@@ -51,6 +57,7 @@ export function DocumentActionsMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const provenance = derivePdfProvenance(ragDocument.source);
+  const externallyManaged = Boolean(ragDocument.externalId?.trim());
 
   const closeMenu = useCallback(() => {
     setOpen(false);
@@ -164,6 +171,17 @@ export function DocumentActionsMenu({
           >
             {t('versions.button', 'Versions')}
           </button>
+          {!externallyManaged && (
+            <button
+              type="button"
+              role="menuitem"
+              className={styles.menuItem}
+              disabled={mutationPending}
+              onClick={() => runAndClose(onEdit)}
+            >
+              {t('documents.edit')}
+            </button>
+          )}
           {ragDocument.embeddingFresh === false && ragDocument.enabled !== false && (
             <button
               type="button"
@@ -236,15 +254,50 @@ export function DocumentActionsMenu({
           )}
 
           <div className={styles.separator} role="separator" />
-          <button
-            type="button"
-            role="menuitem"
-            className={`${styles.menuItem} ${styles.destructive}`}
-            disabled={deletePending}
-            onClick={() => runAndClose(onDelete)}
-          >
-            {t('documents.delete')}
-          </button>
+          {externallyManaged ? (
+            <div className={styles.managedNotice}>
+              <strong>{t('documents.externallyManaged')}</strong>
+              <span>
+                {t('documents.externalIdentity', {
+                  namespace: ragDocument.sourceNamespace || 'default',
+                  externalId: ragDocument.externalId,
+                })}
+              </span>
+            </div>
+          ) : (
+            <>
+              {ragDocument.enabled === false ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  disabled={mutationPending}
+                  onClick={() => runAndClose(onRestore)}
+                >
+                  {t('documents.restore')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  disabled={mutationPending}
+                  onClick={() => runAndClose(onDisable)}
+                >
+                  {t('documents.disable')}
+                </button>
+              )}
+              <button
+                type="button"
+                role="menuitem"
+                className={`${styles.menuItem} ${styles.destructive}`}
+                disabled={mutationPending}
+                onClick={() => runAndClose(onPermanentDelete)}
+              >
+                {t('documents.permanentDelete')}
+              </button>
+            </>
+          )}
         </div>,
         document.body,
       )}

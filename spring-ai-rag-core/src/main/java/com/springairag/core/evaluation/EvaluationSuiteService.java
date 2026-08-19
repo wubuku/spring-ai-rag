@@ -327,7 +327,10 @@ public class EvaluationSuiteService {
             EvaluationSuiteDefinition.VariantDef variant,
             RagApiKey executionKey) {
         for (EvaluationSuiteDefinition.Identity identity : caseDef.relevant()) {
-            if (!caseExecutor.identityExists(identity.collectionKey(), identity.externalId())) {
+            if (!caseExecutor.identityExists(
+                    identity.collectionKey(),
+                    identity.sourceNamespace(),
+                    identity.externalId())) {
                 return new CaseOutcome("SKIPPED", List.of(), Map.of(), 0, null, "MISSING_FIXTURE");
             }
         }
@@ -346,12 +349,15 @@ public class EvaluationSuiteService {
             Map<String, Long> relevantIndex = new LinkedHashMap<>();
             long next = 1;
             for (EvaluationSuiteDefinition.Identity identity : caseDef.relevant()) {
-                relevantIndex.put(identity.collectionKey() + "\0" + identity.externalId(), next);
+                relevantIndex.put(
+                        EvaluationCaseExecutor.stableIdentity(identity),
+                        next);
                 relevantRanks.add(next);
                 next++;
             }
             for (EvaluationSuiteDefinition.Identity identity : executed.identities()) {
-                Long mapped = relevantIndex.get(identity.collectionKey() + "\0" + identity.externalId());
+                Long mapped = relevantIndex.get(
+                        EvaluationCaseExecutor.stableIdentity(identity));
                 retrievedRanks.add(mapped == null ? next++ : mapped);
             }
             var metrics = metricsService.calculateMetrics(

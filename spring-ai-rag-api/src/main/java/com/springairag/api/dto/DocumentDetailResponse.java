@@ -63,8 +63,27 @@ public record DocumentDetailResponse(
         String sourceRevision,
         LocalDateTime sourceDeletedAt,
         String processingError,
-        boolean embeddingFresh
+        boolean embeddingFresh,
+        String sourceNamespace,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public DocumentDetailResponse(
+            Long id, String title, String source, String documentType,
+            String processingStatus, LocalDateTime createdAt,
+            LocalDateTime updatedAt, Long size, String contentHash,
+            boolean enabled, Long collectionId, String collectionName,
+            long chunkCount, String content, Map<String, Object> metadata,
+            String collectionKey, String externalId, String sourceRevision,
+            LocalDateTime sourceDeletedAt, String processingError,
+            boolean embeddingFresh) {
+        this(id, title, source, documentType, processingStatus, createdAt,
+                updatedAt, size, contentHash, enabled, collectionId,
+                collectionName, chunkCount, content, metadata, collectionKey,
+                externalId, sourceRevision, sourceDeletedAt, processingError,
+                embeddingFresh, null, null, null);
+    }
+
     public DocumentDetailResponse(Long id, String title, String source, String documentType,
                                   String processingStatus, LocalDateTime createdAt,
                                   LocalDateTime updatedAt, Long size, String contentHash,
@@ -72,7 +91,8 @@ public record DocumentDetailResponse(
                                   long chunkCount, String content, Map<String, Object> metadata) {
         this(id, title, source, documentType, processingStatus, createdAt, updatedAt, size,
                 contentHash, enabled, collectionId, collectionName, chunkCount, content,
-                metadata, null, null, null, null, null, false);
+                metadata, null, null, null, null, null, false,
+                null, null, null);
     }
 
     public DocumentDetailResponse(Long id, String title, String source, String documentType,
@@ -83,7 +103,8 @@ public record DocumentDetailResponse(
                                   String collectionKey) {
         this(id, title, source, documentType, processingStatus, createdAt, updatedAt, size,
                 contentHash, enabled, collectionId, collectionName, chunkCount, content,
-                metadata, collectionKey, null, null, null, null, false);
+                metadata, collectionKey, null, null, null, null, false,
+                null, null, null);
     }
 
     @Override
@@ -110,6 +131,9 @@ public record DocumentDetailResponse(
                 && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
                 && Objects.equals(processingError, that.processingError)
                 && embeddingFresh == that.embeddingFresh
+                && Objects.equals(sourceNamespace, that.sourceNamespace)
+                && Objects.equals(documentRevision, that.documentRevision)
+                && Objects.equals(lifecycle, that.lifecycle)
                 && Objects.equals(content, that.content)
                 && Objects.equals(metadata, that.metadata);
     }
@@ -119,7 +143,8 @@ public record DocumentDetailResponse(
         return Objects.hash(id, title, source, documentType, processingStatus, createdAt, updatedAt,
                 size, contentHash, enabled, collectionId, collectionName, chunkCount, content,
                 metadata, collectionKey, externalId, sourceRevision, sourceDeletedAt,
-                processingError, embeddingFresh);
+                processingError, embeddingFresh, sourceNamespace,
+                documentRevision, lifecycle);
     }
 
     @Override
@@ -139,6 +164,8 @@ public record DocumentDetailResponse(
                 ", collectionKey='" + collectionKey + '\'' +
                 ", externalId='" + externalId + '\'' +
                 ", sourceRevision='" + sourceRevision + '\'' +
+                ", sourceNamespace='" + sourceNamespace + '\'' +
+                ", documentRevision=" + documentRevision +
                 ", sourceDeletedAt=" + sourceDeletedAt +
                 ", embeddingFresh=" + embeddingFresh +
                 ", collectionName='" + collectionName + '\'' +

@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://springairag.dev/schemas/external-sync-event.json",
+  "title": "Spring AI RAG external document incremental event",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/upsert"
+    },
+    {
+      "$ref": "#/$defs/tombstone"
+    }
+  ],
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": [
+        "eventId",
+        "operation",
+        "collectionKey",
+        "sourceNamespace",
+        "externalId",
+        "sourceRevision"
+      ],
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "operation": {
+          "enum": ["UPSERT", "TOMBSTONE"]
+        },
+        "collectionKey": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sourceNamespace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "externalId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "expectedSourceRevision": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        }
+      }
+    },
+    "upsert": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/identity"
+        },
+        {
+          "type": "object",
+          "required": ["title", "content"],
+          "properties": {
+            "operation": {
+              "const": "UPSERT"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1000000
+            },
+            "source": {
+              "type": ["string", "null"],
+              "maxLength": 255
+            },
+            "documentType": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 50,
+              "default": "text"
+            },
+            "metadata": {
+              "type": ["object", "null"],
+              "default": {}
+            },
+            "embeddingPolicy": {
+              "enum": ["SYNC", "ASYNC", "SKIP"],
+              "default": "ASYNC"
+            }
+          },
+          "unevaluatedProperties": false
+        }
+      ]
+    },
+    "tombstone": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/identity"
+        },
+        {
+          "type": "object",
+          "required": ["expectedSourceRevision"],
+          "properties": {
+            "operation": {
+              "const": "TOMBSTONE"
+            }
+          },
+          "unevaluatedProperties": false
+        }
+      ]
+    }
+  }
+}

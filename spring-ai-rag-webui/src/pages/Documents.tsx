@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { documentsApi } from '../api/documents';
+import type { Document } from '../api/documents';
 import { collectionsApi } from '../api/collections';
 import { filesApi } from '../api/files';
 import { useFileUpload } from '../hooks/useFileUpload';
@@ -23,6 +24,13 @@ export function Documents() {
   const selectedCollection = searchParams.get('collectionKey') || undefined;
   const [previewDoc, setPreviewDoc] = useState<{ id: number; title: string; content: string } | null>(null);
   const [versionsDoc, setVersionsDoc] = useState<{ id: number; title: string } | null>(null);
+  const [editDoc, setEditDoc] = useState<Document | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editSource, setEditSource] = useState('');
+  const [editCollectionKey, setEditCollectionKey] = useState('');
+  const [editEmbeddingPolicy, setEditEmbeddingPolicy] =
+    useState<'SYNC' | 'ASYNC' | 'SKIP'>('ASYNC');
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -44,14 +52,80 @@ export function Documents() {
     staleTime: 10000,
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => documentsApi.delete(id),
+  const handleMutationError = (error: unknown, fallbackKey: string) => {
+    const status = (error as { response?: { status?: number } })?.response?.status;
+    if (status === 409) {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('documents.revisionConflict'), 'error');
+      return;
+    }
+    showToast(t(fallbackKey), 'error');
+  };
+
+  const updateMutation = useMutation({
+    mutationFn: () => {
+      if (!editDoc?.documentRevision) {
+        throw new Error('Missing document revision');
+      }
+      return documentsApi.update(editDoc.id, {
+        expectedDocumentRevision: editDoc.documentRevision,
+        title: editTitle,
+        content: editContent,
+        source: editSource.trim() || null,
+        collectionKey: editCollectionKey || null,
+        embeddingPolicy: editEmbeddingPolicy,
+      });
+    },
+    onSuccess: () => {
+      setEditDoc(null);
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('documents.updated'), 'success');
+    },
+    onError: error => {
+      handleMutationError(error, 'documents.updateError');
+    },
+  });
+
+  const disableMutation = useMutation({
+    mutationFn: (doc: Document) => documentsApi.disable(
+      doc.id,
+      requireDocumentRevision(doc),
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documents'] });
-      showToast(t('documents.deleted'), 'success');
+      showToast(t('documents.disabled'), 'success');
     },
-    onError: () => {
-      showToast(t('documents.deleteError'), 'error');
+    onError: error => {
+      handleMutationError(error, 'documents.disableError');
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: (doc: Document) => documentsApi.restore(
+      doc.id,
+      requireDocumentRevision(doc),
+      'ASYNC',
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('documents.restored'), 'success');
+    },
+    onError: error => {
+      handleMutationError(error, 'documents.restoreError');
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (doc: Document) => documentsApi.delete(
+      doc.id,
+      requireDocumentRevision(doc),
+    ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      showToast(t('documents.permanentlyDeleted'), 'success');
+    },
+    onError: error => {
+      handleMutationError(error, 'documents.deleteError');
     },
   });
 
@@ -134,6 +208,21 @@ export function Documents() {
     }
   };
 
+  const handleEdit = async (doc: Document) => {
+    try {
+      const response = await documentsApi.get(doc.id);
+      const detail = response.data;
+      setEditDoc(detail);
+      setEditTitle(detail.title);
+      setEditContent(detail.content || '');
+      setEditSource(detail.source || '');
+      setEditCollectionKey(detail.collectionKey || '');
+      setEditEmbeddingPolicy('ASYNC');
+    } catch (err) {
+      handleMutationError(err, 'documents.loadDetailError');
+    }
+  };
+
   const handleViewDirectory = useCallback((path: string) => {
     const params = new URLSearchParams({ path });
     navigate(`/files?${params.toString()}`);
@@ -163,6 +252,10 @@ export function Documents() {
   }, [showToast, t]);
 
   const collections = collectionsData?.data?.collections ?? [];
+  const mutationPending = updateMutation.isPending
+    || disableMutation.isPending
+    || restoreMutation.isPending
+    || deleteMutation.isPending;
 
   return (
     <div>
@@ -253,6 +346,7 @@ export function Documents() {
                   <th>{t('documents.documentId')}</th>
                   <th>{t('documents.title') || 'Title'}</th>
                   <th>Collection</th>
+                  <th>{t('documents.sourceNamespace')}</th>
                   <th>{t('documents.externalId')}</th>
                   <th>{t('documents.sourceRevision')}</th>
                   <th>{t('documents.documentType')}</th>
@@ -272,6 +366,9 @@ export function Documents() {
                       </button>
                     </td>
                     <td>{doc.collectionName ?? '—'}</td>
+                    <td className={styles.revision}>
+                      {doc.sourceNamespace ?? (doc.externalId ? 'default' : '—')}
+                    </td>
                     <td className={styles.externalId} title={doc.externalId ?? undefined}>
                       {doc.externalId ?? '—'}
                     </td>
@@ -281,15 +378,19 @@ export function Documents() {
                     <td>{doc.documentType ?? '—'}</td>
                     <td>
                       <span
-                        className={doc.embeddingFresh ? styles.fresh : styles.stale}
-                        title={doc.processingError ?? undefined}
+                        className={`${styles.lifecycle} ${lifecycleClass(
+                          doc.lifecycle?.searchability,
+                          doc.embeddingFresh,
+                          doc.enabled,
+                        )}`}
+                        title={doc.lifecycle?.lastError ?? doc.processingError ?? undefined}
                       >
-                        {doc.embeddingFresh
-                          ? t('documents.embeddingFresh')
-                          : t('documents.embeddingStale')}
+                        {lifecycleLabel(doc, t)}
                       </span>
-                      {doc.processingError && (
-                        <div className={styles.processingError}>{doc.processingError}</div>
+                      {(doc.lifecycle?.lastError || doc.processingError) && (
+                        <div className={styles.processingError}>
+                          {doc.lifecycle?.lastError || doc.processingError}
+                        </div>
                       )}
                     </td>
                     <td>{new Date(doc.createdAt).toLocaleDateString()}</td>
@@ -298,11 +399,22 @@ export function Documents() {
                       <DocumentActionsMenu
                         ragDocument={doc}
                         embeddingPending={embedMutation.isPending}
-                        deletePending={deleteMutation.isPending}
+                        mutationPending={mutationPending}
                         onPreview={() => handlePreview(doc)}
                         onVersions={() => setVersionsDoc({ id: doc.id, title: doc.title })}
+                        onEdit={() => handleEdit(doc)}
                         onRetryEmbedding={() => embedMutation.mutate(doc.id)}
-                        onDelete={() => deleteMutation.mutate(doc.id)}
+                        onDisable={() => {
+                          if (confirm(t('documents.disableConfirm'))) {
+                            disableMutation.mutate(doc);
+                          }
+                        }}
+                        onRestore={() => restoreMutation.mutate(doc)}
+                        onPermanentDelete={() => {
+                          if (confirm(t('documents.permanentDeleteConfirm'))) {
+                            deleteMutation.mutate(doc);
+                          }
+                        }}
                         onViewDirectory={handleViewDirectory}
                         onViewIndexedFile={handleViewIndexedFile}
                         onOpenOriginalFile={handleOpenOriginalFile}
@@ -362,6 +474,103 @@ export function Documents() {
         </div>
       )}
 
+      {editDoc && (
+        <div className={styles.modalOverlay} onClick={() => setEditDoc(null)}>
+          <form
+            className={styles.editModal}
+            aria-label={t('documents.editDocument')}
+            onClick={event => event.stopPropagation()}
+            onSubmit={event => {
+              event.preventDefault();
+              updateMutation.mutate();
+            }}
+          >
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>{t('documents.editDocument')}</h2>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label={t('common.close')}
+                onClick={() => setEditDoc(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.editFields}>
+              <label>
+                <span>{t('documents.title')}</span>
+                <input
+                  value={editTitle}
+                  maxLength={255}
+                  required
+                  onChange={event => setEditTitle(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('documents.source')}</span>
+                <input
+                  value={editSource}
+                  maxLength={255}
+                  onChange={event => setEditSource(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>{t('documents.collection')}</span>
+                <select
+                  value={editCollectionKey}
+                  onChange={event => setEditCollectionKey(event.target.value)}
+                >
+                  <option value="">{t('documents.unassigned')}</option>
+                  {collections.map((collection: {
+                    id: number;
+                    collectionKey: string;
+                    name: string;
+                  }) => (
+                    <option
+                      key={collection.collectionKey}
+                      value={collection.collectionKey}
+                    >
+                      {collection.name} ({collection.collectionKey})
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                <span>{t('documents.embeddingPolicy')}</span>
+                <select
+                  value={editEmbeddingPolicy}
+                  onChange={event => setEditEmbeddingPolicy(
+                    event.target.value as 'SYNC' | 'ASYNC' | 'SKIP',
+                  )}
+                >
+                  <option value="ASYNC">ASYNC</option>
+                  <option value="SYNC">SYNC</option>
+                  <option value="SKIP">SKIP</option>
+                </select>
+              </label>
+              <label className={styles.contentField}>
+                <span>{t('documents.content')}</span>
+                <textarea
+                  value={editContent}
+                  required
+                  onChange={event => setEditContent(event.target.value)}
+                />
+              </label>
+            </div>
+            <div className={styles.modalActions}>
+              <button type="button" onClick={() => setEditDoc(null)}>
+                {t('common.cancel')}
+              </button>
+              <button type="submit" disabled={updateMutation.isPending}>
+                {updateMutation.isPending
+                  ? t('common.loading')
+                  : t('common.save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
       {/* Version History Modal */}
       {versionsDoc && (
         <VersionHistoryModal
@@ -372,4 +581,33 @@ export function Documents() {
       )}
     </div>
   );
+}
+
+function requireDocumentRevision(document: Document): number {
+  if (!document.documentRevision) {
+    throw new Error('Missing document revision');
+  }
+  return document.documentRevision;
+}
+
+function lifecycleClass(
+  searchability: string | undefined,
+  embeddingFresh: boolean | undefined,
+  enabled: boolean | undefined,
+): string {
+  const value = enabled === false
+    ? 'DISABLED'
+    : searchability || (embeddingFresh ? 'READY' : 'NOT_REQUESTED');
+  return styles[`lifecycle${value}`] || styles.lifecycleNOT_REQUESTED;
+}
+
+function lifecycleLabel(
+  document: Document,
+  translate: (key: string) => string,
+): string {
+  const value = document.enabled === false
+    ? 'DISABLED'
+    : document.lifecycle?.searchability
+      || (document.embeddingFresh ? 'READY' : 'NOT_REQUESTED');
+  return translate(`documents.lifecycle.${value}`);
 }

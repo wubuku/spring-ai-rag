@@ -97,7 +97,7 @@ reassociate an ordinary/PDF document with another Collection without
 re-embedding. The caller must be able to access both the source document and
 target Collection. Externally managed documents with a nonblank `externalId`
 cannot use that route because their stable identity is
-`collectionKey + externalId`.
+`collectionKey + sourceNamespace + externalId`.
 
 ## 4. One-Step And Direct-Document Alternatives
 
@@ -122,9 +122,11 @@ That path creates and embeds logical RAG documents directly. It does not
 create a browsable `fs_files` directory.
 
 For externally managed content that can change over time, prefer
-`POST /api/v1/rag/documents/upsert` with stable `collectionKey + externalId`
-and an opaque `sourceRevision`. See
-[External Documents - Idempotent Synchronization](rest-api.md#external-documents-idempotent-synchronization).
+`POST /api/v1/rag/documents/upsert` with stable
+`collectionKey + sourceNamespace + externalId` and an opaque
+`sourceRevision`. See
+[External Documents - Idempotent Synchronization](rest-api.md#external-documents-idempotent-synchronization)
+and the [External Sync Client Guide](external-document-sync-client-guide.md).
 
 ## 5. Search Result Provenance
 

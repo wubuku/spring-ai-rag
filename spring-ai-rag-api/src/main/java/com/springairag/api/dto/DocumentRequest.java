@@ -3,6 +3,8 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.springairag.api.enums.DocumentDeduplicationScope;
+import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.validation.ValidCollectionKey;
 import java.util.Map;
 import java.util.Objects;
@@ -14,7 +16,7 @@ import java.util.Objects;
 public class DocumentRequest {
 
     @NotBlank(message = "Document title must not be blank")
-    @Size(max = 500, message = "Document title must not exceed 500 characters")
+    @Size(max = 255, message = "Document title must not exceed 255 characters")
     @Schema(description = "Document title", example = "Product Manual", requiredMode = Schema.RequiredMode.REQUIRED)
     private String title;
 
@@ -41,6 +43,13 @@ public class DocumentRequest {
     @ValidCollectionKey
     @Schema(description = "Stable external Collection key (preferred over collectionId)", example = "customer-42:manual:v3")
     private String collectionKey;
+
+    @Schema(description = "Embedding policy for this create request")
+    private EmbeddingPolicy embeddingPolicy = EmbeddingPolicy.SKIP;
+
+    @Schema(description = "Content duplicate-detection compatibility scope")
+    private DocumentDeduplicationScope deduplicationScope =
+            DocumentDeduplicationScope.LEGACY_GLOBAL;
 
     public DocumentRequest() {}
 
@@ -70,6 +79,20 @@ public class DocumentRequest {
     public String getCollectionKey() { return collectionKey; }
     public void setCollectionKey(String collectionKey) { this.collectionKey = collectionKey; }
 
+    public EmbeddingPolicy getEmbeddingPolicy() { return embeddingPolicy; }
+    public void setEmbeddingPolicy(EmbeddingPolicy embeddingPolicy) {
+        this.embeddingPolicy = embeddingPolicy == null
+                ? EmbeddingPolicy.SKIP : embeddingPolicy;
+    }
+
+    public DocumentDeduplicationScope getDeduplicationScope() {
+        return deduplicationScope;
+    }
+    public void setDeduplicationScope(DocumentDeduplicationScope value) {
+        deduplicationScope = value == null
+                ? DocumentDeduplicationScope.LEGACY_GLOBAL : value;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -81,12 +104,15 @@ public class DocumentRequest {
                 Objects.equals(documentType, that.documentType) &&
                 Objects.equals(metadata, that.metadata) &&
                 Objects.equals(collectionId, that.collectionId) &&
-                Objects.equals(collectionKey, that.collectionKey);
+                Objects.equals(collectionKey, that.collectionKey) &&
+                embeddingPolicy == that.embeddingPolicy &&
+                deduplicationScope == that.deduplicationScope;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(title, content, source, documentType, metadata, collectionId, collectionKey);
+        return Objects.hash(title, content, source, documentType, metadata,
+                collectionId, collectionKey, embeddingPolicy, deduplicationScope);
     }
 
     @Override
@@ -100,6 +126,8 @@ public class DocumentRequest {
                 ", metadata=" + metadata +
                 ", collectionId=" + collectionId +
                 ", collectionKey='" + collectionKey + '\'' +
+                ", embeddingPolicy=" + embeddingPolicy +
+                ", deduplicationScope=" + deduplicationScope +
                 '}';
     }
 }

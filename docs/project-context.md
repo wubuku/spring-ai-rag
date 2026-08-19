@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-17.
+> **Last reviewed**: 2026-08-19.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -139,7 +139,7 @@ Current boundaries:
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because unlinking would destroy the stable
-  `collectionKey + externalId` identity. Otherwise it only unlinks legacy
+  `collectionKey + sourceNamespace + externalId` identity. Otherwise it only unlinks legacy
   documents; it does not delete documents or embeddings. Unlinked documents
   may still appear in unscoped full-corpus retrieval. The deleted Collection's
   key cannot be reused.
@@ -210,7 +210,7 @@ local.
 - The production profile recommends query rewrite and local heuristic reranking.
 - Goldenset metrics include Precision@K, MRR, and nDCG.
 - `testdata/regression/retrieval-core-v1.json` uses stable
-  `collectionKey + externalId` identities for live retrieval regression. The
+  `collectionKey + sourceNamespace + externalId` identities for live retrieval regression. The
   runner checks metric floors, the committed baseline, Collection leakage, and
   explicit empty-result behavior.
 
@@ -227,9 +227,10 @@ exposed as `retrievalText`. Only `retrievalText` is hashed, chunked, full-text
 indexed, embedded, and eligible for normal RAG prompt context. The service
 does not derive or verify the description against the JSON.
 
-JSON records expose `collectionKey + externalId` as their stable external
+JSON records expose `collectionKey + sourceNamespace + externalId` as their stable external
 identity and resolve it to the internal
-`(collectionId, documentType=json-record, externalId)` idempotency key.
+`(collectionId, sourceNamespace, documentType=json-record, externalId)`
+idempotency key.
 Deprecated ID input remains compatible, and responses include both identities.
 They do not use global content-hash deduplication, so different payloads may
 share the same description. Payload-only updates create an auditable document
@@ -251,22 +252,38 @@ filter. JSON records use one record-level chunk.
 
 ### External Document Synchronization
 
-Ordinary external documents use the same stable external identity shape:
-`collectionKey + externalId`, with caller-supplied opaque `sourceRevision`.
-`POST /documents/upsert` preserves the internal `documentId`, supports exact
-replay and optional `expectedSourceRevision` CAS, and records version snapshots.
-Content changes invalidate retrieval freshness before synchronous re-embedding;
-embedding failure is persisted against the new content hash and old vectors are
-excluded from retrieval. Source deletion is an enabled=false tombstone that can
-be restored by a distinct subsequent `sourceRevision`; the service does not
-compare revision size or freshness. `POST /documents/batch-upsert`,
+Ordinary external documents use the stable triple
+`collectionKey + sourceNamespace + externalId`, with caller-supplied opaque
+`sourceRevision`. `POST /documents/upsert` preserves the internal `documentId`,
+supports exact replay and strict-by-default `expectedSourceRevision` CAS, and
+records complete snapshots. Content changes invalidate retrieval freshness and
+persist a new-generation embedding job in the same transaction. Metadata,
+payload, and Collection-only changes do not call the embedding provider. Old
+workers must pass generation, hash, chunker-version, Profile, and lease commit
+fences and cannot overwrite newer content. Source deletion is an enabled=false
+tombstone restorable by a distinct subsequent `sourceRevision`.
+`POST /documents/batch-upsert`,
 `GET /documents/by-external-id`, and the corresponding source-delete endpoint
 are available to external connectors. JSON records retain their dedicated
 payload/retrieval-text semantics.
 
 See [REST API — External Documents](rest-api.md) for the complete
 request/response contract, conflict handling, and client synchronization
-best practices.
+best practices, and
+[External Document Synchronization Client Guide](external-document-sync-client-guide.md)
+for the runnable connector algorithm.
+
+### Local Document Lifecycle
+
+Local documents expose `documentRevision` as the business CAS token; JPA
+`rowVersion` remains internal optimistic coordination. PATCH, disable, restore,
+and permanent delete require the expected revision. A content mutation commits
+the business revision, complete snapshot, freshness state, and durable job
+atomically; provider calls happen after the transaction. Old chunks are
+excluded immediately and the document stays unavailable until lifecycle
+`searchability=READY`. Title, source, metadata, and Collection-only changes
+read current document values immediately and do not re-embed. Externally
+managed documents reject local CRUD and must use source identity and tombstones.
 
 ## 5. Multi-Model Runtime
 
@@ -288,7 +305,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V39.
+- Flyway is currently V1–V41.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -299,7 +316,10 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   index; V35 extends retrieval diagnostics; V36 adds ordinary-document metadata
   containment indexes; V37 extends embedding-job operations fields; V38 adds
   managed evaluation suites; V39 replaces explicit pessimistic coordination
-  with atomic counters, concurrency slots, and CAS state.
+  with atomic counters, concurrency slots, and CAS state; V40/V41 add document
+  business revisions, complete snapshots, source namespaces, derivation
+  generations, lifecycle/idempotency schema, and contracted triple-identity
+  and active-job constraints.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -315,15 +335,15 @@ The main namespace is `/api/v1/rag/**`:
 | Area | Capability |
 |------|------------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN chat and structured SSE |
-| `/documents` | Document management and embedding |
+| `/documents` | Local create/PATCH/disable/restore/permanent-delete, lifecycle, and embedding |
 | `/search` | Hybrid retrieval |
 | `/collections` | Knowledge collections |
 | `/evaluation` | Evaluation and feedback |
 | `/api-keys` | API-key management |
 | `/files` | PDF and file import |
 | `/json-records` | JSONB structured-record upsert, search, and detail |
-| `/documents/upsert` | Idempotent ordinary external-document synchronization |
-| `/embedding-jobs` | Disabled-by-default durable embedding/reindex jobs |
+| `/documents/upsert` | External triple identity, revision CAS, and tombstone synchronization |
+| `/embedding-jobs` | Enabled-by-default durable embedding/reindex jobs |
 | `/retrieval-traces` | Caller-visible retrieval diagnostics |
 | `/collections/embedding-readiness` | Collection embedding readiness buckets |
 | `/v1/models`, `/v1/chat/completions` | Disabled-by-default controlled OpenAI compatibility preview |
@@ -413,7 +433,8 @@ Implemented:
 - Mainland-China-friendly Docker build path.
 - One-command release verification.
 - Request-scoped Collection selection in the controlled OpenAI compatibility preview.
-- Disabled-by-default durable embedding jobs.
+- Enabled-by-default durable embedding jobs and the document lifecycle coordinator.
+- Local revision-CAS CRUD, external source triple identity, and a runnable reference client.
 - JSONB containment / Agent tool support and versioned live retrieval regression.
 
 Full gate on 2026-07-21:
@@ -434,8 +455,9 @@ See [P1 / 1.0 readiness progress](drafts/2026-07-21_P1_10_READINESS_PROGRESS.md)
 - The immutable `1.0.0` source/image tag has not been created; the release pipeline owns it.
 - Server-side OpenAI compatibility exists as a disabled-by-default controlled
   preview; it is not public or multi-instance production readiness.
-- The durable embedding worker and JSON Agent tool remain disabled by default;
-  deployments should validate capacity and cost before enabling them.
+- The durable embedding worker is enabled by default; production deployments
+  must monitor capacity and provider cost. The JSON Agent tool remains disabled
+  by default.
 - Concurrency control does not use application-requested pessimistic locks;
   `scripts/verify-no-pessimistic-locks.sh` is the regression gate.
 - OpenClaw `TOOLS.md`, `MEMORY.md`, `memory/`, `HEARTBEAT.md`, and related files are local state outside the project documentation system.

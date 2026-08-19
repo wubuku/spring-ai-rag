@@ -1,6 +1,7 @@
 package com.springairag.core.util;
 
 import com.springairag.api.dto.DocumentDetailResponse;
+import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.api.dto.DocumentVersionResponse;
 import com.springairag.core.entity.RagCollection;
@@ -165,6 +166,17 @@ public final class DocumentMapper {
                                            Map<Long, String> collectionKeyMap,
                                            RagEmbeddingRepository embeddingRepository,
                                            long embeddingProfileId) {
+        return toSummary(
+                doc, collectionNameMap, collectionKeyMap,
+                embeddingRepository, embeddingProfileId, null);
+    }
+
+    public static DocumentSummary toSummary(RagDocument doc,
+                                           Map<Long, String> collectionNameMap,
+                                           Map<Long, String> collectionKeyMap,
+                                           RagEmbeddingRepository embeddingRepository,
+                                           long embeddingProfileId,
+                                           DocumentLifecycleResponse lifecycle) {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
@@ -196,7 +208,10 @@ public final class DocumentMapper {
                 doc.getSourceRevision(),
                 doc.getSourceDeletedAt(),
                 doc.getProcessingError(),
-                chunkCount > 0
+                chunkCount > 0,
+                doc.getSourceNamespace(),
+                doc.getDocumentRevision(),
+                lifecycle
         );
     }
 
@@ -216,6 +231,18 @@ public final class DocumentMapper {
                                                           Map<Long, String> collectionKeyMap,
                                                           RagEmbeddingRepository embeddingRepository,
                                                           long embeddingProfileId) {
+        return toDetailResponse(
+                doc, collectionNameMap, collectionKeyMap,
+                embeddingRepository, embeddingProfileId, null);
+    }
+
+    public static DocumentDetailResponse toDetailResponse(
+                                                          RagDocument doc,
+                                                          Map<Long, String> collectionNameMap,
+                                                          Map<Long, String> collectionKeyMap,
+                                                          RagEmbeddingRepository embeddingRepository,
+                                                          long embeddingProfileId,
+                                                          DocumentLifecycleResponse lifecycle) {
         if (doc == null) {
             throw new IllegalArgumentException("Document must not be null");
         }
@@ -246,7 +273,10 @@ public final class DocumentMapper {
                 doc.getSourceRevision(),
                 doc.getSourceDeletedAt(),
                 doc.getProcessingError(),
-                chunkCount > 0
+                chunkCount > 0,
+                doc.getSourceNamespace(),
+                doc.getDocumentRevision(),
+                lifecycle
         );
     }
 

@@ -5,7 +5,8 @@ package com.springairag.core.config;
  */
 public class RagEmbeddingJobProperties {
 
-    private boolean enabled;
+    private boolean enabled = true;
+    private int syncWaitSeconds = 30;
     private int pollIntervalMs = 1000;
     private int claimBatchSize = 4;
     private int leaseSeconds = 120;
@@ -43,5 +44,9 @@ public class RagEmbeddingJobProperties {
     public int getWorkerConcurrency() { return workerConcurrency; }
     public void setWorkerConcurrency(int value) {
         workerConcurrency = Math.max(1, Math.min(16, value));
+    }
+    public int getSyncWaitSeconds() { return syncWaitSeconds; }
+    public void setSyncWaitSeconds(int value) {
+        syncWaitSeconds = Math.max(1, Math.min(120, value));
     }
 }

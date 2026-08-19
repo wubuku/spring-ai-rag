@@ -176,11 +176,55 @@ export async function mockAllApiCalls(page: Page) {
     });
   });
 
-  // Mock documents list
-  page.route(/\/api\/v1\/rag\/documents.*/, route => {
-    if (route.request().method() === 'POST'
-        && new URL(route.request().url()).pathname.endsWith('/embed')) {
-      route.fulfill({
+  // Mock document lifecycle APIs.
+  page.route(/\/api\/v1\/rag\/documents.*/, async route => {
+    const request = route.request();
+    const method = request.method();
+    const path = new URL(request.url()).pathname;
+    const localDocument = {
+      id: 2,
+      title: 'Local Lifecycle Document',
+      content: 'Original local content',
+      source: 'webui',
+      documentType: 'TEXT',
+      collectionId: 1,
+      collectionKey: 'sample-collection',
+      collectionName: 'Sample Collection',
+      createdAt: '2026-08-19T01:00:00Z',
+      updatedAt: '2026-08-19T01:00:00Z',
+      contentHash: 'local123def456',
+      documentRevision: 4,
+      processingStatus: 'COMPLETED',
+      processingError: null,
+      embeddingFresh: true,
+      enabled: true,
+      lifecycle: {
+        documentState: 'ACTIVE',
+        searchability: 'READY',
+        localIndexStatus: 'READY',
+        embeddingStatus: 'READY',
+        retryable: false,
+      },
+    };
+    const disabledDocument = {
+      ...localDocument,
+      id: 3,
+      title: 'Disabled Lifecycle Document',
+      contentHash: 'disabled123def456',
+      documentRevision: 8,
+      embeddingFresh: false,
+      enabled: false,
+      lifecycle: {
+        documentState: 'DISABLED',
+        searchability: 'DISABLED',
+        localIndexStatus: 'DISABLED',
+        embeddingStatus: 'DISABLED',
+        retryable: false,
+      },
+    };
+
+    if (method === 'POST' && path.endsWith('/embed')) {
+      await route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify({
@@ -192,11 +236,95 @@ export async function mockAllApiCalls(page: Page) {
       });
       return;
     }
-    route.fulfill({
+
+    if (method === 'GET' && path === '/api/v1/rag/documents/2') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(localDocument),
+      });
+      return;
+    }
+
+    if (method === 'PATCH' && path === '/api/v1/rag/documents/2') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 2,
+          action: 'UPDATED',
+          documentRevision: 5,
+          versionNumber: 2,
+          contentChanged: true,
+          metadataChanged: false,
+          scopeChanged: false,
+          embeddingAction: 'QUEUED',
+          lifecycle: {
+            documentState: 'ACTIVE',
+            searchability: 'INDEXING',
+            localIndexStatus: 'INDEXING',
+            embeddingStatus: 'INDEXING',
+            retryable: false,
+          },
+        }),
+      });
+      return;
+    }
+
+    if (method === 'POST' && path === '/api/v1/rag/documents/2/disable') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 2,
+          action: 'DISABLED',
+          documentRevision: 5,
+          lifecycle: disabledDocument.lifecycle,
+        }),
+      });
+      return;
+    }
+
+    if (method === 'POST' && path === '/api/v1/rag/documents/3/restore') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 3,
+          action: 'RESTORED',
+          documentRevision: 9,
+          lifecycle: {
+            documentState: 'ACTIVE',
+            searchability: 'INDEXING',
+            localIndexStatus: 'INDEXING',
+            embeddingStatus: 'INDEXING',
+            retryable: false,
+          },
+        }),
+      });
+      return;
+    }
+
+    if (method === 'DELETE' && path === '/api/v1/rag/documents/2') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 2,
+          deletedEmbeddings: 3,
+          deletedJobs: 1,
+        }),
+      });
+      return;
+    }
+
+    await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
         documents: [
+          localDocument,
+          disabledDocument,
           {
             id: 1,
             title: 'Sample Document',
@@ -205,14 +333,24 @@ export async function mockAllApiCalls(page: Page) {
             createdAt: new Date().toISOString(),
             contentHash: 'abc123def456',
             externalId: 'cms:sample:1',
+            sourceNamespace: 'cms-main',
             sourceRevision: 'etag:sample-1',
+            documentRevision: 3,
             processingStatus: 'COMPLETED',
             processingError: null,
             embeddingFresh: false,
             enabled: true,
+            lifecycle: {
+              documentState: 'ACTIVE',
+              searchability: 'FAILED',
+              localIndexStatus: 'FAILED',
+              embeddingStatus: 'FAILED',
+              lastError: 'provider unavailable',
+              retryable: true,
+            },
           },
         ],
-        total: 1,
+        total: 3,
         page: 0,
         size: 20,
       }),

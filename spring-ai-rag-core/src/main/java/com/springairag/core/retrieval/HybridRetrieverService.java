@@ -11,6 +11,7 @@ import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.QueryLang;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -51,6 +52,7 @@ public class HybridRetrieverService {
     private final RagRetrievalProperties retrieval;
     private final FulltextSearchProviderFactory fulltextProviderFactory;
     private final RetrievalEmptyReasonProbe emptyReasonProbe;
+    private final DocumentDerivationDescriptorProvider descriptorProvider;
     private final int retrievalTimeoutSeconds;
     private final int probeTimeoutMs;
 
@@ -67,6 +69,8 @@ public class HybridRetrieverService {
         this.profileProvider = profileProvider;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
+        this.descriptorProvider =
+                new DocumentDerivationDescriptorProvider(ragProperties);
         this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
         this.taskExecutor = taskExecutor != null ? taskExecutor : Runnable::run;
         this.fulltextProviderFactory = fulltextProviderFactory;
@@ -466,10 +470,14 @@ public class HybridRetrieverService {
         String vectorStr = RetrievalUtils.vectorToString(queryVector);
         String vectorColumn = EmbeddingVectorColumns.columnFor(profile.dimensions());
         String select = "SELECT e.id, e.chunk_text, e." + vectorColumn
-                + "::text AS embedding, e.document_id, e.chunk_index, e.metadata, "
+                + "::text AS embedding, e.document_id, e.chunk_index, "
+                + currentMetadataSql() + ", "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename";
-        String scope = EmbeddingProfileSqlScope.fromAndFreshness(profile.id())
+        String scope = EmbeddingProfileSqlScope.fromAndFreshness(
+                        profile.id(),
+                        descriptorProvider.textDescriptor().chunkerVersion(),
+                        descriptorProvider.jsonRecordDescriptor().chunkerVersion())
                 + "AND e." + vectorColumn + " IS NOT NULL ";
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
@@ -528,6 +536,14 @@ public class HybridRetrieverService {
 
     private static long elapsedMs(long startedAtNanos) {
         return Math.max(0L, (System.nanoTime() - startedAtNanos) / 1_000_000L);
+    }
+
+    private String currentMetadataSql() {
+        return "(COALESCE(e.metadata, '{}'::jsonb) "
+                + "|| COALESCE(d.metadata, '{}'::jsonb) "
+                + "|| jsonb_build_object("
+                + "'title', d.title, 'documentType', d.document_type)) "
+                + "AS metadata";
     }
 
     private static boolean isTimeout(Throwable error) {

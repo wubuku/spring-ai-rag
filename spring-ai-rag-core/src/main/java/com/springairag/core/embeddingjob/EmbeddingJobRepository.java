@@ -24,7 +24,8 @@ public class EmbeddingJobRepository {
             content_hash, document_version, status, attempt_count, max_attempts,
             available_at, lease_owner, lease_expires_at, cancel_requested_at,
             last_error, created_at, started_at, finished_at, updated_at,
-            origin, requested_by_principal_id
+            origin, requested_by_principal_id, request_generation,
+            document_kind, chunker_version
             """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -46,7 +47,8 @@ public class EmbeddingJobRepository {
             int maxAttempts) {
         return createOrCoalesce(
                 requestedBatchId, documentId, profileId, contentHash,
-                documentVersion, force, maxAttempts, null, null);
+                documentVersion, force, maxAttempts, null, null,
+                1L, "TEXT", "legacy-compatible");
     }
 
     @Transactional
@@ -60,15 +62,36 @@ public class EmbeddingJobRepository {
             int maxAttempts,
             String origin,
             String requestedByPrincipalId) {
+        return createOrCoalesce(
+                requestedBatchId, documentId, profileId, contentHash,
+                documentVersion, force, maxAttempts, origin,
+                requestedByPrincipalId, 1L, "TEXT", "legacy-compatible");
+    }
+
+    @Transactional
+    public CreateResult createOrCoalesce(
+            UUID requestedBatchId,
+            long documentId,
+            long profileId,
+            String contentHash,
+            long documentVersion,
+            boolean force,
+            int maxAttempts,
+            String origin,
+            String requestedByPrincipalId,
+            long requestGeneration,
+            String documentKind,
+            String chunkerVersion) {
         UUID id = UUID.randomUUID();
         List<CreateResult> rows = jdbcTemplate.query("""
                 INSERT INTO rag_embedding_jobs (
                     id, batch_id, document_id, embedding_profile_id,
                     force, content_hash, document_version, max_attempts,
-                    origin, requested_by_principal_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    origin, requested_by_principal_id, request_generation,
+                    document_kind, chunker_version
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT (
-                    document_id, embedding_profile_id, content_hash
+                    document_id, embedding_profile_id, request_generation
                 ) WHERE status IN ('QUEUED', 'RUNNING')
                 DO UPDATE SET
                     force = rag_embedding_jobs.force OR EXCLUDED.force,
@@ -87,6 +110,7 @@ public class EmbeddingJobRepository {
                     max_attempts, available_at, lease_owner, lease_expires_at,
                     cancel_requested_at, last_error, created_at, started_at,
                     finished_at, updated_at, origin, requested_by_principal_id,
+                    request_generation, document_kind, chunker_version,
                     (xmax <> 0) AS coalesced
                 """,
                 (rs, rowNum) -> new CreateResult(
@@ -101,7 +125,10 @@ public class EmbeddingJobRepository {
                 documentVersion,
                 maxAttempts,
                 origin,
-                requestedByPrincipalId);
+                requestedByPrincipalId,
+                requestGeneration,
+                documentKind,
+                chunkerVersion);
         if (rows.isEmpty()) {
             throw new IllegalStateException("Failed to create embedding job");
         }
@@ -170,6 +197,7 @@ public class EmbeddingJobRepository {
                         + "job.lease_owner, job.lease_expires_at, job.cancel_requested_at, "
                         + "job.last_error, job.created_at, job.started_at, job.finished_at, "
                         + "job.updated_at, job.origin, job.requested_by_principal_id "
+                        + ", job.request_generation, job.document_kind, job.chunker_version "
                         + "FROM rag_embedding_jobs job "
                         + "JOIN rag_documents d ON d.id = job.document_id "
                         + itemFilter.whereClause());
@@ -209,10 +237,23 @@ public class EmbeddingJobRepository {
     public com.springairag.api.dto.CollectionEmbeddingReadinessResponse readiness(
             long collectionId,
             String collectionKey,
-            com.springairag.core.config.EmbeddingProfile profile) {
+            com.springairag.core.config.EmbeddingProfile profile,
+            String textChunkerVersion,
+            String jsonChunkerVersion) {
         return jdbcTemplate.query("""
                 WITH enabled AS (
-                    SELECT d.id, d.content_hash
+                    SELECT
+                        d.id,
+                        d.content_hash,
+                        CASE
+                            WHEN d.document_type = 'json-record' THEN ?
+                            ELSE ?
+                        END AS chunker_version,
+                        CASE
+                            WHEN d.document_type = 'json-record'
+                                THEN 'JSON_RECORD'
+                            ELSE 'TEXT'
+                        END AS document_kind
                     FROM rag_documents d
                     WHERE d.collection_id = ?
                       AND d.enabled = true
@@ -222,48 +263,37 @@ public class EmbeddingJobRepository {
                         CASE
                             WHEN s.status = 'COMPLETED'
                              AND s.content_hash = e.content_hash
+                             AND s.chunker_version = e.chunker_version
                              AND COALESCE(s.chunk_count, 0) > 0
                                 THEN 'fresh'
-                            WHEN running.id IS NOT NULL THEN 'running'
-                            WHEN queued.id IS NOT NULL THEN 'queued'
+                            WHEN job.status = 'RUNNING'
+                             AND job.cancel_requested_at IS NULL
+                             AND s.content_hash = e.content_hash
+                             AND s.chunker_version = e.chunker_version
+                                THEN 'running'
+                            WHEN job.status = 'QUEUED'
+                             AND job.cancel_requested_at IS NULL
+                             AND s.content_hash = e.content_hash
+                             AND s.chunker_version = e.chunker_version
+                                THEN 'queued'
                             WHEN s.status = 'FAILED'
-                              OR failed.id IS NOT NULL THEN 'failed'
+                             AND s.content_hash = e.content_hash
+                             AND s.chunker_version = e.chunker_version
+                                THEN 'failed'
                             ELSE 'stale'
                         END AS bucket
                     FROM enabled e
                     LEFT JOIN rag_document_embedding_state s
                         ON s.document_id = e.id
                        AND s.embedding_profile_id = ?
-                    LEFT JOIN LATERAL (
-                        SELECT j.id
-                        FROM rag_embedding_jobs j
-                        WHERE j.document_id = e.id
-                          AND j.embedding_profile_id = ?
-                          AND j.content_hash = e.content_hash
-                          AND j.status = 'RUNNING'
-                        ORDER BY j.updated_at DESC
-                        LIMIT 1
-                    ) running ON true
-                    LEFT JOIN LATERAL (
-                        SELECT j.id
-                        FROM rag_embedding_jobs j
-                        WHERE j.document_id = e.id
-                          AND j.embedding_profile_id = ?
-                          AND j.content_hash = e.content_hash
-                          AND j.status = 'QUEUED'
-                        ORDER BY j.updated_at DESC
-                        LIMIT 1
-                    ) queued ON true
-                    LEFT JOIN LATERAL (
-                        SELECT j.id
-                        FROM rag_embedding_jobs j
-                        WHERE j.document_id = e.id
-                          AND j.embedding_profile_id = ?
-                          AND j.content_hash = e.content_hash
-                          AND j.status = 'FAILED'
-                        ORDER BY j.finished_at DESC NULLS LAST
-                        LIMIT 1
-                    ) failed ON true
+                    LEFT JOIN rag_embedding_jobs job
+                        ON job.id = s.active_job_id
+                       AND job.document_id = e.id
+                       AND job.embedding_profile_id = s.embedding_profile_id
+                       AND job.request_generation = s.request_generation
+                       AND job.content_hash = e.content_hash
+                       AND job.document_kind = e.document_kind
+                       AND job.chunker_version = e.chunker_version
                 )
                 SELECT
                     COUNT(*) AS enabled_docs,
@@ -286,10 +316,9 @@ public class EmbeddingJobRepository {
                             rs.getLong("failed_docs"),
                             rs.getLong("stale_docs"));
                 },
+                jsonChunkerVersion,
+                textChunkerVersion,
                 collectionId,
-                profile.id(),
-                profile.id(),
-                profile.id(),
                 profile.id());
     }
 
@@ -317,7 +346,7 @@ public class EmbeddingJobRepository {
             String workerId,
             int limit,
             int leaseSeconds) {
-        jdbcTemplate.update("""
+        List<UUID> cancelled = jdbcTemplate.query("""
                 UPDATE rag_embedding_jobs
                 SET status = 'CANCELLED',
                     finished_at = CURRENT_TIMESTAMP,
@@ -330,8 +359,11 @@ public class EmbeddingJobRepository {
                     status = 'QUEUED'
                     OR lease_expires_at < CURRENT_TIMESTAMP
                   )
-                """);
-        jdbcTemplate.update("""
+                RETURNING id
+                """,
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        cancelled.forEach(this::refreshStateFromJob);
+        List<UUID> failed = jdbcTemplate.query("""
                 UPDATE rag_embedding_jobs
                 SET status = 'FAILED',
                     finished_at = CURRENT_TIMESTAMP,
@@ -343,8 +375,11 @@ public class EmbeddingJobRepository {
                   AND cancel_requested_at IS NULL
                   AND attempt_count >= max_attempts
                   AND lease_expires_at < CURRENT_TIMESTAMP
-                """);
-        return jdbcTemplate.query("""
+                RETURNING id
+                """,
+                (rs, rowNum) -> rs.getObject("id", UUID.class));
+        failed.forEach(this::refreshStateFromJob);
+        List<EmbeddingJob> claimed = jdbcTemplate.query("""
                 WITH candidates AS (
                     SELECT id
                     FROM rag_embedding_jobs
@@ -385,6 +420,37 @@ public class EmbeddingJobRepository {
                 Math.max(1, limit),
                 workerId,
                 Math.max(30, leaseSeconds));
+        claimed.forEach(this::markStateProcessing);
+        return claimed;
+    }
+
+    @Transactional
+    public Optional<EmbeddingJob> claimById(
+            UUID id,
+            String workerId,
+            int leaseSeconds) {
+        List<EmbeddingJob> rows = jdbcTemplate.query("""
+                UPDATE rag_embedding_jobs job
+                SET status = 'RUNNING',
+                    attempt_count = attempt_count + 1,
+                    lease_owner = ?,
+                    lease_expires_at = CURRENT_TIMESTAMP
+                        + (? * INTERVAL '1 second'),
+                    started_at = COALESCE(started_at, CURRENT_TIMESTAMP),
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE job.id = ?
+                  AND job.status = 'QUEUED'
+                  AND job.available_at <= CURRENT_TIMESTAMP
+                  AND job.cancel_requested_at IS NULL
+                  AND job.attempt_count < job.max_attempts
+                RETURNING job.*
+                """,
+                rowMapper,
+                workerId,
+                Math.max(30, leaseSeconds),
+                id);
+        rows.stream().findFirst().ifPresent(this::markStateProcessing);
+        return rows.stream().findFirst();
     }
 
     public boolean isCommitAllowed(
@@ -401,9 +467,22 @@ public class EmbeddingJobRepository {
                   AND job.lease_expires_at >= CURRENT_TIMESTAMP
                   AND job.cancel_requested_at IS NULL
                   AND job.embedding_profile_id = ?
-                  AND doc.version = job.document_version
                   AND doc.content_hash = job.content_hash
                   AND doc.enabled = true
+                  AND EXISTS (
+                      SELECT 1
+                      FROM rag_document_embedding_state state
+                      WHERE state.document_id = job.document_id
+                        AND state.embedding_profile_id = job.embedding_profile_id
+                        AND state.request_generation = job.request_generation
+                        AND state.content_hash = job.content_hash
+                        AND state.chunker_version = job.chunker_version
+                  )
+                  AND job.document_kind = CASE
+                      WHEN doc.document_type = 'json-record'
+                          THEN 'JSON_RECORD'
+                      ELSE 'TEXT'
+                  END
                 """,
                 Long.class,
                 jobId,
@@ -445,9 +524,22 @@ public class EmbeddingJobRepository {
                       SELECT 1
                       FROM rag_documents doc
                       WHERE doc.id = job.document_id
-                        AND doc.version = job.document_version
                         AND doc.content_hash = job.content_hash
                         AND doc.enabled = true
+                        AND job.document_kind = CASE
+                            WHEN doc.document_type = 'json-record'
+                                THEN 'JSON_RECORD'
+                            ELSE 'TEXT'
+                        END
+                        AND EXISTS (
+                            SELECT 1
+                            FROM rag_document_embedding_state state
+                            WHERE state.document_id = job.document_id
+                              AND state.embedding_profile_id = job.embedding_profile_id
+                              AND state.request_generation = job.request_generation
+                              AND state.content_hash = job.content_hash
+                              AND state.chunker_version = job.chunker_version
+                        )
                   )
                 RETURNING job.id
                 """,
@@ -543,6 +635,43 @@ public class EmbeddingJobRepository {
     }
 
     @Transactional
+    public void refreshStateFromJob(UUID jobId) {
+        jdbcTemplate.update("""
+                UPDATE rag_document_embedding_state state
+                SET status = CASE job.status
+                        WHEN 'QUEUED' THEN 'QUEUED'
+                        WHEN 'RUNNING' THEN 'PROCESSING'
+                        WHEN 'FAILED' THEN 'FAILED'
+                        WHEN 'CANCELLED' THEN
+                            CASE WHEN state.status = 'COMPLETED'
+                                THEN 'COMPLETED' ELSE 'CANCELLED' END
+                        WHEN 'STALE' THEN
+                            CASE WHEN state.status = 'COMPLETED'
+                                THEN 'COMPLETED' ELSE 'CANCELLED' END
+                        ELSE state.status
+                    END,
+                    active_job_id = CASE
+                        WHEN job.status IN ('QUEUED', 'RUNNING') THEN job.id
+                        ELSE NULL
+                    END,
+                    processing_error = CASE
+                        WHEN job.status IN ('QUEUED', 'RUNNING', 'SUCCEEDED')
+                            THEN NULL
+                        WHEN job.status IN ('FAILED', 'CANCELLED', 'STALE')
+                            THEN job.last_error
+                        ELSE state.processing_error
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                FROM rag_embedding_jobs job
+                WHERE job.id = ?
+                  AND state.document_id = job.document_id
+                  AND state.embedding_profile_id = job.embedding_profile_id
+                  AND state.request_generation = job.request_generation
+                """,
+                jobId);
+    }
+
+    @Transactional
     public Optional<EmbeddingJob> cancel(UUID id) {
         List<EmbeddingJob> rows = jdbcTemplate.query("""
                 UPDATE rag_embedding_jobs
@@ -567,8 +696,10 @@ public class EmbeddingJobRepository {
                 WHERE id = ?
                   AND status IN ('QUEUED', 'RUNNING')
                 RETURNING *
-                """, rowMapper, id);
-        return rows.stream().findFirst();
+                    """, rowMapper, id);
+        Optional<EmbeddingJob> cancelled = rows.stream().findFirst();
+        cancelled.ifPresent(job -> refreshStateFromJob(job.id()));
+        return cancelled;
     }
 
     @Transactional
@@ -599,7 +730,9 @@ public class EmbeddingJobRepository {
                   )
                 RETURNING job.*
                 """, rowMapper, maxAttempts, id);
-        return rows.stream().findFirst();
+        Optional<EmbeddingJob> retried = rows.stream().findFirst();
+        retried.ifPresent(job -> refreshStateFromJob(job.id()));
+        return retried;
     }
 
     public Optional<EmbeddingJob> findActive(
@@ -618,6 +751,235 @@ public class EmbeddingJobRepository {
                 documentId,
                 profileId,
                 contentHash).stream().findFirst();
+    }
+
+    public Optional<EmbeddingJob> findCurrentActive(
+            long documentId,
+            long profileId,
+            String contentHash,
+            String documentKind,
+            String chunkerVersion) {
+        return jdbcTemplate.query(
+                "SELECT " + prefixedColumns("job")
+                        + " FROM rag_embedding_jobs job "
+                        + "JOIN rag_document_embedding_state state "
+                        + "ON state.document_id = job.document_id "
+                        + "AND state.embedding_profile_id = job.embedding_profile_id "
+                        + "AND state.request_generation = job.request_generation "
+                        + "WHERE job.document_id = ? "
+                        + "AND job.embedding_profile_id = ? "
+                        + "AND job.content_hash = ? "
+                        + "AND job.document_kind = ? "
+                        + "AND job.chunker_version = ? "
+                        + "AND job.status IN ('QUEUED', 'RUNNING') "
+                        + "AND job.cancel_requested_at IS NULL "
+                        + "ORDER BY job.created_at, job.id LIMIT 1",
+                rowMapper,
+                documentId,
+                profileId,
+                contentHash,
+                documentKind,
+                chunkerVersion).stream().findFirst();
+    }
+
+    @Transactional
+    public long allocateGeneration(
+            long documentId,
+            long profileId,
+            String contentHash,
+            String chunkerVersion,
+            boolean preserveCompleted) {
+        Long generation = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count,
+                    request_generation, active_job_id, updated_at
+                ) VALUES (?, ?, ?, ?, 'QUEUED', 0, 1, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET
+                    content_hash = EXCLUDED.content_hash,
+                    chunker_version = EXCLUDED.chunker_version,
+                    status = CASE
+                        WHEN ?
+                         AND rag_document_embedding_state.status = 'COMPLETED'
+                         AND rag_document_embedding_state.content_hash = EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                            THEN 'COMPLETED'
+                        ELSE 'QUEUED'
+                    END,
+                    chunk_count = CASE
+                        WHEN ?
+                         AND rag_document_embedding_state.status = 'COMPLETED'
+                         AND rag_document_embedding_state.content_hash = EXCLUDED.content_hash
+                         AND rag_document_embedding_state.chunker_version =
+                             EXCLUDED.chunker_version
+                            THEN rag_document_embedding_state.chunk_count
+                        ELSE 0
+                    END,
+                    processing_error = NULL,
+                    request_generation =
+                        rag_document_embedding_state.request_generation + 1,
+                    active_job_id = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING request_generation
+                """,
+                Long.class,
+                documentId,
+                profileId,
+                contentHash,
+                chunkerVersion,
+                preserveCompleted,
+                preserveCompleted);
+        return generation == null ? 1L : generation;
+    }
+
+    @Transactional
+    public long markNotRequested(
+            long documentId,
+            long profileId,
+            String contentHash,
+            String chunkerVersion) {
+        Long generation = jdbcTemplate.queryForObject("""
+                INSERT INTO rag_document_embedding_state (
+                    document_id, embedding_profile_id, content_hash,
+                    chunker_version, status, chunk_count,
+                    request_generation, active_job_id, updated_at
+                ) VALUES (?, ?, ?, ?, 'NOT_REQUESTED', 0, 1, NULL, CURRENT_TIMESTAMP)
+                ON CONFLICT (document_id, embedding_profile_id) DO UPDATE SET
+                    content_hash = EXCLUDED.content_hash,
+                    chunker_version = EXCLUDED.chunker_version,
+                    status = 'NOT_REQUESTED',
+                    chunk_count = 0,
+                    processing_error = NULL,
+                    request_generation =
+                        rag_document_embedding_state.request_generation + 1,
+                    active_job_id = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                RETURNING request_generation
+                """,
+                Long.class,
+                documentId,
+                profileId,
+                contentHash,
+                chunkerVersion);
+        cancelSuperseded(documentId, profileId, generation == null ? 1L : generation);
+        return generation == null ? 1L : generation;
+    }
+
+    @Transactional
+    public void activateJob(
+            long documentId,
+            long profileId,
+            long generation,
+            UUID jobId) {
+        jdbcTemplate.update("""
+                UPDATE rag_document_embedding_state
+                SET active_job_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE document_id = ?
+                  AND embedding_profile_id = ?
+                  AND request_generation = ?
+                """,
+                jobId,
+                documentId,
+                profileId,
+                generation);
+    }
+
+    @Transactional
+    public int cancelSuperseded(
+            long documentId,
+            long profileId,
+            long currentGeneration) {
+        return jdbcTemplate.update("""
+                UPDATE rag_embedding_jobs
+                SET status = CASE
+                        WHEN status = 'QUEUED' THEN 'STALE'
+                        ELSE status
+                    END,
+                    cancel_requested_at = CURRENT_TIMESTAMP,
+                    finished_at = CASE
+                        WHEN status = 'QUEUED' THEN CURRENT_TIMESTAMP
+                        ELSE finished_at
+                    END,
+                    lease_owner = CASE
+                        WHEN status = 'QUEUED' THEN NULL
+                        ELSE lease_owner
+                    END,
+                    lease_expires_at = CASE
+                        WHEN status = 'QUEUED' THEN NULL
+                        ELSE lease_expires_at
+                    END,
+                    last_error = 'Superseded by a newer document derivation generation',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE document_id = ?
+                  AND embedding_profile_id = ?
+                  AND request_generation <> ?
+                  AND status IN ('QUEUED', 'RUNNING')
+                """,
+                documentId,
+                profileId,
+                currentGeneration);
+    }
+
+    @Transactional
+    public int cancelActiveForDocument(long documentId) {
+        int updated = jdbcTemplate.update("""
+                UPDATE rag_embedding_jobs
+                SET status = CASE
+                        WHEN status = 'QUEUED' THEN 'CANCELLED'
+                        ELSE status
+                    END,
+                    cancel_requested_at = CURRENT_TIMESTAMP,
+                    finished_at = CASE
+                        WHEN status = 'QUEUED' THEN CURRENT_TIMESTAMP
+                        ELSE finished_at
+                    END,
+                    lease_owner = CASE
+                        WHEN status = 'QUEUED' THEN NULL
+                        ELSE lease_owner
+                    END,
+                    lease_expires_at = CASE
+                        WHEN status = 'QUEUED' THEN NULL
+                        ELSE lease_expires_at
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE document_id = ?
+                  AND status IN ('QUEUED', 'RUNNING')
+                """,
+                documentId);
+        jdbcTemplate.update("""
+                UPDATE rag_document_embedding_state
+                SET status = CASE
+                        WHEN status = 'COMPLETED' THEN status
+                        ELSE 'CANCELLED'
+                    END,
+                    active_job_id = NULL,
+                    processing_error = CASE
+                        WHEN status = 'COMPLETED' THEN processing_error
+                        ELSE 'Document disabled or deleted'
+                    END,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE document_id = ?
+                """,
+                documentId);
+        return updated;
+    }
+
+    public void updateDocumentProcessing(
+            long documentId,
+            String status,
+            String error) {
+        jdbcTemplate.update("""
+                UPDATE rag_documents
+                SET processing_status = ?,
+                    processing_error = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                status,
+                error,
+                documentId);
     }
 
     private int terminalUpdate(
@@ -666,7 +1028,10 @@ public class EmbeddingJobRepository {
                 rs.getObject("finished_at", OffsetDateTime.class),
                 rs.getObject("updated_at", OffsetDateTime.class),
                 columnOrNull(rs, "origin"),
-                columnOrNull(rs, "requested_by_principal_id"));
+                columnOrNull(rs, "requested_by_principal_id"),
+                longColumnOrZero(rs, "request_generation"),
+                columnOrNull(rs, "document_kind"),
+                columnOrNull(rs, "chunker_version"));
     }
 
     private static String columnOrNull(ResultSet rs, String column) {
@@ -675,6 +1040,40 @@ public class EmbeddingJobRepository {
         } catch (SQLException e) {
             return null;
         }
+    }
+
+    private static long longColumnOrZero(ResultSet rs, String column) {
+        try {
+            return rs.getLong(column);
+        } catch (SQLException e) {
+            return 0L;
+        }
+    }
+
+    private void markStateProcessing(EmbeddingJob job) {
+        jdbcTemplate.update("""
+                UPDATE rag_document_embedding_state
+                SET status = CASE
+                        WHEN status = 'COMPLETED' THEN status
+                        ELSE 'PROCESSING'
+                    END,
+                    active_job_id = ?,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE document_id = ?
+                  AND embedding_profile_id = ?
+                  AND request_generation = ?
+                """,
+                job.id(),
+                job.documentId(),
+                job.embeddingProfileId(),
+                job.requestGeneration());
+    }
+
+    private static String prefixedColumns(String alias) {
+        return java.util.Arrays.stream(COLUMNS.split(","))
+                .map(String::trim)
+                .map(column -> alias + "." + column)
+                .collect(java.util.stream.Collectors.joining(", "));
     }
 
     private PageFilter pageFilter(

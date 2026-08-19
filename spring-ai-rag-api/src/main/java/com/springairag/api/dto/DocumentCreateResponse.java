@@ -25,20 +25,65 @@ public record DocumentCreateResponse(
         String contentHash,
 
         @Schema(description = "Existing document ID when duplicate is detected", example = "42")
-        Long existingDocumentId
+        Long existingDocumentId,
+
+        @Schema(description = "Public business revision")
+        Long documentRevision,
+
+        DocumentLifecycleResponse lifecycle
 ) {
+    public DocumentCreateResponse(
+            Long id,
+            String title,
+            String status,
+            String message,
+            String contentHash,
+            Long existingDocumentId) {
+        this(id, title, status, message, contentHash,
+                existingDocumentId, null, null);
+    }
+
     public static DocumentCreateResponse created(Long id, String title, String contentHash) {
         return new DocumentCreateResponse(
                 id, title, "CREATED",
                 "Document created, to generate embedding call POST /api/v1/rag/documents/{id}/embed",
-                contentHash, null);
+                contentHash, null, null, null);
+    }
+
+    public static DocumentCreateResponse created(
+            Long id,
+            String title,
+            String contentHash,
+            long documentRevision,
+            DocumentLifecycleResponse lifecycle) {
+        return new DocumentCreateResponse(
+                id, title, "CREATED", "Document created",
+                contentHash, null, documentRevision, lifecycle);
     }
 
     public static DocumentCreateResponse duplicate(Long existingId, String existingTitle, String existingHash) {
         return new DocumentCreateResponse(
                 existingId, existingTitle, "DUPLICATE",
                 "Content already exists, documentId: " + existingId,
-                existingHash, existingId);
+                existingHash, existingId, null, null);
+    }
+
+    public static DocumentCreateResponse mutation(
+            Long id,
+            String title,
+            String contentHash,
+            DocumentMutationResponse mutation) {
+        String action = mutation.action();
+        Long existingDocumentId = "DUPLICATE".equals(action) ? id : null;
+        String message = switch (action) {
+            case "DUPLICATE" -> "Content already exists, documentId: " + id;
+            case "REPLAYED" -> "Idempotent create replayed";
+            default -> "Document created";
+        };
+        return new DocumentCreateResponse(
+                id, title, action, message, contentHash,
+                existingDocumentId, mutation.documentRevision(),
+                mutation.lifecycle());
     }
 
     @Override
@@ -51,12 +96,15 @@ public record DocumentCreateResponse(
                 Objects.equals(status, that.status) &&
                 Objects.equals(message, that.message) &&
                 Objects.equals(contentHash, that.contentHash) &&
-                Objects.equals(existingDocumentId, that.existingDocumentId);
+                Objects.equals(existingDocumentId, that.existingDocumentId) &&
+                Objects.equals(documentRevision, that.documentRevision) &&
+                Objects.equals(lifecycle, that.lifecycle);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, title, status, message, contentHash, existingDocumentId);
+        return Objects.hash(id, title, status, message, contentHash,
+                existingDocumentId, documentRevision, lifecycle);
     }
 
     @Override
@@ -68,6 +116,8 @@ public record DocumentCreateResponse(
                 ", message='" + message + '\'' +
                 ", contentHash='" + contentHash + '\'' +
                 ", existingDocumentId=" + existingDocumentId +
+                ", documentRevision=" + documentRevision +
+                ", lifecycle=" + lifecycle +
                 '}';
     }
 }

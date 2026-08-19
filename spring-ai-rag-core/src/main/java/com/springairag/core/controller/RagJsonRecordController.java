@@ -7,6 +7,7 @@ import com.springairag.api.dto.JsonRecordSearchRequest;
 import com.springairag.api.dto.JsonRecordSearchResponse;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.dto.JsonRecordUpsertResponse;
+import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.core.service.JsonRecordService;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -17,11 +18,13 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.RequestParam;
 
 /**
  * Dedicated API for JSONB structured records.
@@ -88,5 +91,28 @@ public class RagJsonRecordController {
     public ResponseEntity<JsonRecordDetailResponse> getDetail(
             @PathVariable Long documentId) {
         return ResponseEntity.ok(jsonRecordService.getDetail(documentId));
+    }
+
+    @Operation(summary = "Get a JSON record by external source identity")
+    @GetMapping("/by-external-id")
+    public ResponseEntity<JsonRecordDetailResponse> getByExternalIdentity(
+            @RequestParam String collectionKey,
+            @RequestParam(defaultValue = "default") String sourceNamespace,
+            @RequestParam String externalId) {
+        return ResponseEntity.ok(jsonRecordService.getByExternalIdentity(
+                collectionKey, sourceNamespace, externalId));
+    }
+
+    @Operation(summary = "Tombstone a JSON record by external source identity")
+    @DeleteMapping("/by-external-id")
+    public ResponseEntity<ExternalDocumentDeleteResponse> sourceDelete(
+            @RequestParam String collectionKey,
+            @RequestParam(defaultValue = "default") String sourceNamespace,
+            @RequestParam String externalId,
+            @RequestParam String sourceRevision,
+            @RequestParam(required = false) String expectedSourceRevision) {
+        return ResponseEntity.ok(jsonRecordService.sourceDelete(
+                collectionKey, sourceNamespace, externalId,
+                sourceRevision, expectedSourceRevision));
     }
 }

@@ -641,20 +641,23 @@ PostgreSQL `@>` 下推到全部候选 SQL。非法对象、超限或未知字段
 - `jsonbPayload` 是保存为 PostgreSQL JSONB 的业务 JSON，在通过范围检索后返回。
 
 服务不会自动生成或校验这两个字段之间的对应关系。调用方使用
-`collectionKey + externalId` 作为稳定外部身份；服务会解析为内部
-`(collectionId, documentType=json-record, externalId)` 身份。deprecated 的
+`collectionKey + sourceNamespace + externalId` 作为稳定外部身份；服务会解析为内部
+`(collectionId, sourceNamespace, documentType=json-record, externalId)` 身份。deprecated 的
 `collectionId` 继续兼容。JSON record 不参与普通文档的全局 content-hash 去重，也不存在
 `payloadHash`。
 
 ### `POST /api/v1/rag/json-records/upsert`
 
-创建或更新一条记录。`embed` 默认是 `true`；设为 `false` 时只保存记录，之后再单独执行
-文档嵌入。
+创建或更新一条记录。新外部 client 应显式使用 `embeddingPolicy`；legacy `embed`
+仍兼容映射为 `SYNC`/`SKIP`。
 
 ```json
 {
   "collectionKey": "customer-42:catalog:v1",
+  "sourceNamespace": "catalog-main",
   "externalId": "product:sku-10001",
+  "sourceRevision": "row-version:42",
+  "expectedSourceRevision": "row-version:41",
   "title": "紧凑型无线键盘",
   "retrievalText": "这是一款支持蓝牙与双模 2.4G 连接的紧凑型无线键盘。",
   "jsonbPayload": {
@@ -666,12 +669,13 @@ PostgreSQL `@>` 下推到全部候选 SQL。非法对象、超限或未知字段
   "metadata": {
     "tenant": "demo"
   },
-  "embed": true
+  "embeddingPolicy": "ASYNC"
 }
 ```
 
 仅更新 payload 会创建版本快照，但不会使新鲜 embedding 失效。更新 `retrievalText` 会使
-活动 embedding 失效；当 `embed=true` 时会重新嵌入。
+活动 embedding 失效，并按 `embeddingPolicy` 持久化重嵌入任务。已有 identity 的新
+revision 默认必须提供 `expectedSourceRevision`；精确重放保持幂等。
 
 ### `POST /api/v1/rag/json-records/batch-upsert`
 
@@ -718,6 +722,25 @@ Collection、document 与 API Key 范围由服务端上下文注入，工具不�
 响应也同时返回两种 Collection 身份。Collection export/import、clone 和文档版本响应会
 保留结构化字段及 payload 快照。
 
+### JSON record 外部身份查询与 tombstone
+
+```text
+GET /api/v1/rag/json-records/by-external-id
+  ?collectionKey=customer-42%3Acatalog%3Av1
+  &sourceNamespace=catalog-main
+  &externalId=product%3Asku-10001
+
+DELETE /api/v1/rag/json-records/by-external-id
+  ?collectionKey=customer-42%3Acatalog%3Av1
+  &sourceNamespace=catalog-main
+  &externalId=product%3Asku-10001
+  &sourceRevision=row-version%3A43
+  &expectedSourceRevision=row-version%3A42
+```
+
+删除创建 tombstone，不删除 JSONB 历史或稳定身份。之后使用新的 source revision upsert
+会恢复同一内部文档。
+
 <a id="external-documents-idempotent-synchronization"></a>
 
 ## 外部文档：幂等同步
@@ -725,7 +748,9 @@ Collection、document 与 API Key 范围由服务端上下文注入，工具不�
 这些端点用于同步由外部系统负责身份和版本的普通文本文档。服务不会主动抓取 URL
 或文件；调用方读取外部来源后，将当前文档表示提交给 RAG 服务。
 
-稳定身份是 `collectionKey + externalId`。`externalId` 会去除首尾空白、区分大小写，
+稳定身份是 `collectionKey + sourceNamespace + externalId`。`sourceNamespace` 默认
+为兼容值 `default`，但新 connector 应显式使用稳定的来源命名空间。它是身份边界而不是
+授权边界；互不信任的 connector 应使用不同 Collection。`externalId` 会去除首尾空白、区分大小写，
 长度最多 255 个字符，并且在来源对象生命周期内必须保持稳定。
 `sourceRevision` 是调用方提供的非空 opaque 版本令牌，例如 ETag、上游行版本、
 commit ID 或 canonical payload hash。服务不会按 opaque 版本的大小比较新旧。
@@ -737,6 +762,7 @@ commit ID 或 canonical payload hash。服务不会按 opaque 版本的大小比
 ```json
 {
   "collectionKey": "customer-42:manual:v3",
+  "sourceNamespace": "cms-main",
   "externalId": "cms:article:10001",
   "sourceRevision": "etag:8b4d9f",
   "expectedSourceRevision": "etag:7a3c21",
@@ -747,15 +773,17 @@ commit ID 或 canonical payload hash。服务不会按 opaque 版本的大小比
   "metadata": {
     "locale": "zh-CN"
   },
-  "embed": true
+  "embeddingPolicy": "ASYNC"
 }
 ```
 
 `title` 和 `content` 必填。`documentType` 默认是 `text`；`json-record` 必须使用
-JSON 结构化记录 API。`embed` 默认是 `true`；请求内容最多 1,000,000 个字符。
+JSON 结构化记录 API。新 client 推荐显式发送 `embeddingPolicy=ASYNC`；legacy
+`embed=true/false` 继续映射为 `SYNC/SKIP`。请求内容最多 1,000,000 个字符。
 
 服务在更新来源文档时保留同一个内部 `documentId`。内容变化会创建版本快照、使旧
-embedding 不再参与检索，并同步重建活动 Profile 的 embedding。只有 metadata 或来源版本
+chunk/embedding 立即不再参与检索，并在同一事务中持久化新 generation 的任务。
+`SYNC` 对该任务有界等待，`ASYNC` 立即返回。只有 metadata、来源版本或 Collection
 变化且当前 embedding 已新鲜时，不会调用 embedding provider。
 
 即使文档持久化成功但 embedding 失败，响应仍为 HTTP 200：
@@ -774,6 +802,14 @@ embedding 不再参与检索，并同步重建活动 Profile 的 embedding。只
   "embeddingFresh": true,
   "processingStatus": "COMPLETED",
   "sourceDeletedAt": null,
+  "sourceNamespace": "cms-main",
+  "documentRevision": 4,
+  "embeddingAction": "QUEUED",
+  "embeddingJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
+  "lifecycle": {
+    "documentState": "ACTIVE",
+    "searchability": "INDEXING"
+  },
   "errorCode": null,
   "error": null
 }
@@ -786,10 +822,11 @@ embedding 不再参与检索，并同步重建活动 Profile 的 embedding。只
 embedding 前不可检索；旧向量可能仍然物理保留用于诊断，但 freshness 条件会排除它。
 若文档仍然 stale，使用相同请求重放即可重试 embedding。
 
-`expectedSourceRevision` 是可选的 compare-and-set 前置版本。服务会先判断精确重放，
+生产默认 `strictExternalCas=true`：已有 identity 的新 revision 必须携带
+`expectedSourceRevision`。服务会先判断精确重放，
 所以客户端可以安全重试“请求已成功但响应丢失”的场景。同一 revision 对应不同受管
-字段时返回 `409`；expected revision 与当前版本不匹配时也返回 `409`。不提供该字段时
-由最后完成序列化的写入者覆盖，因此可能乱序投递的 connector 应使用 CAS。
+字段时返回 `409`；expected revision 与当前版本不匹配时也返回 `409`。新 identity 不提供
+expected revision；兼容部署可以关闭严格 CAS，但不推荐 connector 依赖 last-write-wins。
 
 ### `POST /api/v1/rag/documents/batch-upsert`
 
@@ -803,7 +840,7 @@ embedding 前不可检索；旧向量可能仍然物理保留用于诊断，但 
 按外部身份查询当前普通文档，不要求外部系统把内部 ID 作为自己的身份：
 
 ```text
-GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&externalId=cms%3Aarticle%3A10001
+GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&sourceNamespace=cms-main&externalId=cms%3Aarticle%3A10001
 ```
 
 响应沿用普通文档详情结构，并包含 `externalId`、`sourceRevision`、
@@ -817,6 +854,7 @@ GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3
 ```text
 DELETE /api/v1/rag/documents/by-external-id
   ?collectionKey=customer-42%3Amanual%3Av3
+  &sourceNamespace=cms-main
   &externalId=cms%3Aarticle%3A10001
   &sourceRevision=etag%3Adeleted-9
   &expectedSourceRevision=etag%3A8b4d9f
@@ -830,7 +868,7 @@ DELETE /api/v1/rag/documents/by-external-id
 
 ### 推荐同步模式
 
-1. 从来源对象的不可变身份生成稳定 `externalId`。
+1. 为每个 connector 固定 `sourceNamespace`，并从来源对象的不可变身份生成稳定 `externalId`。
 2. 每次 upsert 和删除都携带来源当前的 opaque revision。
 3. 保存响应中的 revision 和内部 ID 仅用于诊断；后续调用继续使用外部身份。
 4. 如果投递可能重复或乱序，使用 `expectedSourceRevision`。遇到 `409` 时重新读取
@@ -839,6 +877,10 @@ DELETE /api/v1/rag/documents/by-external-id
    重放相同请求是安全的。
 6. 每个 connector 使用独立 API Key，并限制到它负责的 Collection；不要把 root key
    分发给外部 connector。
+
+完整的增量投递、重试、checkpoint、dead-letter 和上线检查见
+[外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。可运行参考实现
+位于 `examples/external-sync-client/`。
 
 ---
 
@@ -896,13 +938,49 @@ Paginated document query.
 
 ### `GET /api/v1/rag/documents/{id}`
 
-Get a single document by ID.
+按内部 ID 返回正文、metadata、`documentRevision` 和 lifecycle。`lifecycle.searchability`
+为 `READY`、`INDEXING`、`FAILED`、`NOT_REQUESTED` 或 `DISABLED`；mutation 成功不等于
+已经可检索。
+
+---
+
+### `PATCH /api/v1/rag/documents/{id}`
+
+只用于本地管理文档的 presence-aware merge patch。必须发送
+`expectedDocumentRevision`；可修改 `title`、`content`、`source`、`metadata` 和
+`collectionKey`。未知字段或没有任何可变字段返回 `400`。
+
+```json
+{
+  "expectedDocumentRevision": 3,
+  "content": "更新后的正文",
+  "embeddingPolicy": "ASYNC"
+}
+```
+
+正文变化会在同一事务中增加 revision、记录完整快照、使旧派生结果 stale 并排队新任务。
+只改标题、来源、metadata 或 Collection 不会调用 embedding provider。
+显式 `expectedDocumentRevision` 已过期时返回 `409 DOCUMENT_REVISION_CONFLICT`；两个请求
+同时通过前置校验、但在提交阶段发生乐观锁竞争时返回 `409 CONCURRENT_MODIFICATION`。
+客户端对两者都应重新读取文档及最新 revision 后再决定是否重试，不能自动覆盖。
+
+### `POST /api/v1/rag/documents/{id}/disable`
+
+请求体为 `{"expectedDocumentRevision":4}`。禁用立即使文档退出全部检索并取消活动任务，
+但保留正文、版本和派生数据以便恢复。
+
+### `POST /api/v1/rag/documents/{id}/restore`
+
+请求体包含 `expectedDocumentRevision` 和可选 `embeddingPolicy`。如果当前正文的派生结果
+仍 fresh，恢复后直接 `READY`；否则按策略重建。
 
 ---
 
 ### `DELETE /api/v1/rag/documents/{id}`
 
-Delete a document.
+本地文档永久删除。必须使用 query parameter
+`expectedDocumentRevision`，并级联清理版本、状态和任务。外部托管文档必须通过来源
+tombstone 端点操作，不能使用本地 PATCH/disable/restore/permanent-delete。
 
 ---
 
@@ -920,9 +998,9 @@ Generate embedding vectors for a specified document.
 
 ## Embedding Jobs — 持久化重嵌入任务
 
-设置 `RAG_EMBEDDING_JOBS_ENABLED=true` 后，可使用持久化、可取消和可重试的
-embedding/reindex 任务。默认关闭时，创建和重试返回 `503 EMBEDDING_JOBS_DISABLED`；
-既有同步 embed API 不受影响。
+持久化、可取消和可重试的 embedding/reindex worker 默认开启，因为正文 mutation 的
+`SYNC`/`ASYNC` 都依赖持久化任务。显式关闭后，正文 mutation 无法调度并返回
+`503 EMBEDDING_JOBS_DISABLED`；读请求和不影响派生输入的更新仍可用。
 
 ### `POST /api/v1/rag/embedding-jobs`
 
@@ -1201,7 +1279,7 @@ Paginated collection query.
 
 删除为软删除，并解除普通旧文档关联，但不会删除文档或 embedding。若 Collection 中
 存在非空 `externalId` 的外部托管文档，则返回 `409`，因为解绑会破坏
-`collectionKey + externalId` 稳定身份。删除 Collection 前必须先显式硬删除或迁移这些
+`collectionKey + sourceNamespace + externalId` 稳定身份。删除 Collection 前必须先显式硬删除或迁移这些
 外部托管文档。key 仍保持占用；恢复沿用原 key，且不会自动恢复普通旧文档关联。
 
 ---
@@ -1247,7 +1325,7 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 `rag_documents.collection_id` 是单值外键，因此该操作对已经属于其他 Collection 的普通
 文档表现为重关联/迁移，不需要重新嵌入。调用方必须同时有原文档和目标 Collection 的访问
 权。`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
-`collectionKey + externalId` 同步，不能用兼容关联接口改变身份命名空间。
+`collectionKey + sourceNamespace + externalId` 同步，不能用兼容关联接口改变身份命名空间。
 
 ---
 
@@ -1398,7 +1476,8 @@ Query feedback by type.
 
 设置 `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true` 后可用。关闭时返回
 `503 EVALUATION_SUITES_DISABLED`。suite version 一经创建不可变；相关文档必须使用
-`collectionKey + externalId`，不得使用内部文档 ID 作为长期基准。
+`collectionKey + sourceNamespace + externalId`，不得使用内部文档 ID 作为长期基准。
+省略 `sourceNamespace` 时兼容为 `default`。
 
 | 端点 | 说明 |
 |------|------|

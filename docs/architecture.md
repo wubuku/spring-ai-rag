@@ -292,7 +292,7 @@ Data model and current boundaries:
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because clearing `collection_id` would destroy the
-  stable `collectionKey + externalId` identity. Otherwise it clears
+  stable `collectionKey + sourceNamespace + externalId` identity. Otherwise it clears
   `collection_id` only from legacy documents and does not delete documents or
   `rag_embeddings`, so those documents may still be found by full-corpus
   retrieval.
@@ -394,8 +394,9 @@ The job table never copies document content. Write APIs can choose
 `embeddingPolicy` `SYNC` / `ASYNC` / `SKIP`; omitted values keep
 `embed=true→SYNC` and `embed=false→SKIP`. Explicit embed/re-embed rejects
 `SKIP`. `ASYNC` requires `rag.embedding-jobs.enabled=true` or returns `503`.
-The worker is disabled by default for controlled rollout. The readiness API
-returns exclusive Collection buckets.
+The worker is enabled by default from V41 because content mutations persist a
+durable job for both `SYNC` and `ASYNC`. The readiness API returns exclusive
+Collection buckets.
 
 ### 4.4 JSON Structured-Record Flow
 
@@ -405,8 +406,8 @@ POST /api/v1/rag/json-records/upsert
   v
 JsonRecordService
   | persist jsonbPayload + retrievalText
-  | external identity: collectionKey + externalId
-  | resolver -> internal collectionId + json-record + externalId
+  | external identity: collectionKey + sourceNamespace + externalId
+  | resolver -> internal collectionId + namespace + json-record + externalId
   v
 RagDocument.content = retrievalText
 RagDocument.jsonbPayload = business JSONB
@@ -456,32 +457,43 @@ generic `payload` column.
 POST /api/v1/rag/documents/upsert
   |
   v
-ExternalDocumentService
+ExternalDocumentService / DocumentMutationService
   | resolve writable collection through API-key ACL
-  | unique identity + @Version/CAS + bounded transaction retry
-  | exact-replay decision + version snapshot
+  | triple identity + source/document revision CAS
+  | exact-replay decision + complete snapshot
   v
 rag_documents (same documentId)
-  | content change -> current embedding becomes stale
+  | content change -> new content hash / request generation
+  | commit state + durable job in the same transaction
   v
-DocumentEmbedService (after the persistence transaction)
-  | chunk -> provider -> validate -> atomically replace active Profile rows
+EmbeddingJobWorker / EmbeddingJobExecutor (after commit)
+  | chunk -> provider -> generation/hash/chunker/Profile/lease commit fence
+  | atomically replace active Profile rows
   v
 fresh COMPLETED state, or FAILED state for the current content hash
 ```
 
-Ordinary external documents and JSON records share the Collection-level unique
-identity `(collection_id, external_id)`. The unique index is the final arbiter
-for concurrent first creation; updates to existing rows use optimistic versions,
-with only bounded conflict retries.
+Ordinary external documents and JSON records share the unique triple
+`(collection_id, source_namespace, external_id)`. The unique index is the final
+arbiter for concurrent first creation. Existing rows use source-revision and
+document-revision CAS with only bounded conflict retries.
 `sourceRevision` is opaque; the service only checks equality and an optional
 `expectedSourceRevision` compare-and-set, and does not compare revision size or
-freshness. Source deletion is a tombstone (`enabled=false` plus
+freshness. Production defaults to strict CAS. Source deletion is a tombstone
+(`enabled=false` plus
 `source_deleted_at`), allowing a distinct subsequent `sourceRevision` to
 restore the same internal document. Retrieval requires
 an enabled document and a fresh completed state for the active Embedding
 Profile, so old vectors remain physically available for diagnosis without
 being returned to callers.
+
+Local PATCH, disable, restore, and permanent delete use the public
+`documentRevision`, not the JPA `rowVersion` that embedding-only writes may
+change. Content mutations commit the document row, complete snapshot,
+freshness state, and durable job in one transaction. Metadata, JSONB payload,
+and Collection-only changes allocate no embedding generation.
+`DocumentLifecycleService` normalizes document state, active Profile state, and
+job state into `READY/INDEXING/FAILED/NOT_REQUESTED/DISABLED`.
 
 **Data-access concurrency rule:** production data access must not use explicit
 `SELECT ... FOR UPDATE`, `SKIP LOCKED`, JPA `PESSIMISTIC_*`, or PostgreSQL
@@ -527,7 +539,8 @@ standard SSE mapping without native RAG
 When enabled, Chat writes protocol-level `citationValidation` into metadata.
 It only parses the agreed `[S1]` tokens and is not a coverage score. Managed
 suites (V38) are disabled by default: a version is immutable after creation,
-and relevant documents must use `collectionKey + externalId`. Compare is
+and relevant documents must use
+`collectionKey + sourceNamespace + externalId`. Compare is
 limited to the same version and marks environment drift separately. The suite
 worker reloads the owner's current database API key (`db:{keyId}`) and
 re-authorizes definition Collections before search; a missing, disabled, or
@@ -573,12 +586,12 @@ rag_audit_log           # Audit logs (collection operations)
 | Table | Key Columns | Description |
 |-------|-------------|-------------|
 | `rag_collection` | id, collection_key, name, description, embedding_model | Internal numeric identity plus stable external Collection key |
-| `rag_documents` | title, content, content_hash, collection_id, external_id, source_revision, source_deleted_at, jsonb_payload | Document metadata, source state, and structured-record payload |
-| `rag_document_versions` | document_id, version_number, content_snapshot, source_revision_snapshot, jsonb_payload_snapshot | Document, source revision, and JSONB version audit |
+| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | Document source of truth, business CAS, external identity, and structured payload |
+| `rag_document_versions` | document_id, version_number, complete snapshot fields, snapshot_completeness | Complete audit snapshots for document mutations |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | Immutable vector-space identity |
-| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile-scoped cache and completion state |
+| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile-scoped freshness, active generation, and completion state |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile-scoped text chunks + vectors |
-| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at, origin | V33/V37 durable embedding/reindex state machine |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |

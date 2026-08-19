@@ -1,6 +1,7 @@
 package com.springairag.core.retrieval;
 
 import com.springairag.core.config.EmbeddingProfile;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -26,9 +27,13 @@ public class RetrievalEmptyReasonProbe {
             LoggerFactory.getLogger(RetrievalEmptyReasonProbe.class);
 
     private final JdbcTemplate jdbcTemplate;
+    private final DocumentDerivationDescriptorProvider descriptorProvider;
 
-    public RetrievalEmptyReasonProbe(JdbcTemplate jdbcTemplate) {
+    public RetrievalEmptyReasonProbe(
+            JdbcTemplate jdbcTemplate,
+            DocumentDerivationDescriptorProvider descriptorProvider) {
         this.jdbcTemplate = jdbcTemplate;
+        this.descriptorProvider = descriptorProvider;
     }
 
     public Eligibility count(
@@ -73,6 +78,8 @@ public class RetrievalEmptyReasonProbe {
                 + "COUNT(*) FILTER (WHERE d.enabled = true "
                 + "AND s.status = 'COMPLETED' "
                 + "AND s.content_hash = d.content_hash "
+                + "AND s.chunker_version = CASE "
+                + "WHEN d.document_type = 'json-record' THEN ? ELSE ? END "
                 + "AND COALESCE(s.chunk_count, 0) > 0) AS fresh_docs "
                 + "FROM rag_documents d "
                 + "LEFT JOIN rag_document_embedding_state s "
@@ -80,6 +87,8 @@ public class RetrievalEmptyReasonProbe {
                 + "WHERE 1 = 1 "
                 + fragment.sql();
         List<Object> args = new ArrayList<>();
+        args.add(descriptorProvider.jsonRecordDescriptor().chunkerVersion());
+        args.add(descriptorProvider.textDescriptor().chunkerVersion());
         args.add(profile.id());
         args.addAll(fragment.args());
         return jdbcTemplate.query(sql, rs -> {

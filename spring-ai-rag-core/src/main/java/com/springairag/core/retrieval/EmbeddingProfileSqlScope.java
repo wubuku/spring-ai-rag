@@ -9,6 +9,14 @@ public final class EmbeddingProfileSqlScope {
     }
 
     public static String fromAndFreshness(long profileId) {
+        return fromAndFreshness(
+                profileId, "legacy-compatible", "json-record-v1:single");
+    }
+
+    public static String fromAndFreshness(
+            long profileId,
+            String textChunkerVersion,
+            String jsonChunkerVersion) {
         if (profileId <= 0) {
             throw new IllegalArgumentException("Embedding profile ID must be positive");
         }
@@ -20,6 +28,18 @@ public final class EmbeddingProfileSqlScope {
                 + "WHERE e.embedding_profile_id = " + profileId + " "
                 + "AND s.status = 'COMPLETED' "
                 + "AND s.content_hash = d.content_hash "
+                + "AND s.chunker_version = CASE "
+                + "WHEN d.document_type = 'json-record' THEN "
+                + sqlLiteral(jsonChunkerVersion)
+                + " ELSE " + sqlLiteral(textChunkerVersion) + " END "
                 + "AND d.enabled = true ";
+    }
+
+    private static String sqlLiteral(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "Chunker version must not be blank");
+        }
+        return "'" + value.replace("'", "''") + "'";
     }
 }

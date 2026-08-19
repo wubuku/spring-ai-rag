@@ -27,8 +27,34 @@ public record JsonRecordDetailResponse(
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
         int versionNumber,
-        Map<String, Object> metadata
+        Map<String, Object> metadata,
+        String sourceNamespace,
+        String sourceRevision,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public JsonRecordDetailResponse(
+            Long documentId,
+            Long collectionId,
+            String collectionKey,
+            String externalId,
+            String title,
+            String source,
+            String retrievalText,
+            JsonNode jsonbPayload,
+            String contentHash,
+            String processingStatus,
+            boolean enabled,
+            LocalDateTime createdAt,
+            LocalDateTime updatedAt,
+            int versionNumber,
+            Map<String, Object> metadata) {
+        this(documentId, collectionId, collectionKey, externalId, title,
+                source, retrievalText, jsonbPayload, contentHash,
+                processingStatus, enabled, createdAt, updatedAt,
+                versionNumber, metadata, null, null, null, null);
+    }
+
     public JsonRecordDetailResponse(
             Long documentId,
             Long collectionId,
@@ -46,6 +72,7 @@ public record JsonRecordDetailResponse(
             Map<String, Object> metadata) {
         this(documentId, collectionId, null, externalId, title, source,
                 retrievalText, jsonbPayload, contentHash, processingStatus,
-                enabled, createdAt, updatedAt, versionNumber, metadata);
+                enabled, createdAt, updatedAt, versionNumber, metadata,
+                null, null, null, null);
     }
 }

@@ -20,6 +20,8 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentEmbedService;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -45,18 +47,24 @@ public class EmbeddingJobService {
     private final CollectionRetrievalScopeResolver scopeResolver;
     private final EmbeddingProfileProvider profileProvider;
     private final RagEmbeddingJobProperties properties;
+    private final DocumentDerivationDescriptorProvider descriptorProvider;
+    private final DocumentEmbedService documentEmbedService;
 
     public EmbeddingJobService(
             EmbeddingJobRepository jobRepository,
             RagDocumentRepository documentRepository,
             CollectionRetrievalScopeResolver scopeResolver,
             EmbeddingProfileProvider profileProvider,
-            RagProperties properties) {
+            RagProperties properties,
+            DocumentDerivationDescriptorProvider descriptorProvider,
+            DocumentEmbedService documentEmbedService) {
         this.jobRepository = jobRepository;
         this.documentRepository = documentRepository;
         this.scopeResolver = scopeResolver;
         this.profileProvider = profileProvider;
         this.properties = properties.getEmbeddingJobs();
+        this.descriptorProvider = descriptorProvider;
+        this.documentEmbedService = documentEmbedService;
     }
 
     @Transactional
@@ -81,19 +89,65 @@ public class EmbeddingJobService {
             RagDocument document = documentRepository.findById(documentId)
                     .orElseThrow(() -> new DocumentNotFoundException(documentId));
             requireDocumentUsable(document);
-            EmbeddingJobRepository.CreateResult result =
-                    jobRepository.createOrCoalesce(
-                            requestedBatch,
-                            document.getId(),
-                            profile.id(),
-                            document.getContentHash(),
-                            document.getVersion() != null
-                                    ? document.getVersion()
-                                    : 0L,
-                            request.force(),
-                            maxAttempts,
-                            "API",
-                            ChatPrincipal.fromCurrentRequest().id());
+            DocumentDerivationDescriptorProvider.Descriptor descriptor =
+                    descriptorProvider.describe(document);
+            boolean fresh = documentEmbedService.hasFreshEmbedding(document);
+            var active = jobRepository.findCurrentActive(
+                    document.getId(),
+                    profile.id(),
+                    document.getContentHash(),
+                    descriptor.documentKind(),
+                    descriptor.chunkerVersion());
+            EmbeddingJobRepository.CreateResult result;
+            if (active.isPresent()) {
+                EmbeddingJob current = active.get();
+                result = jobRepository.createOrCoalesce(
+                        requestedBatch,
+                        document.getId(),
+                        profile.id(),
+                        document.getContentHash(),
+                        document.getVersion() != null
+                                ? document.getVersion() : 0L,
+                        request.force(),
+                        maxAttempts,
+                        "API",
+                        ChatPrincipal.fromCurrentRequest().id(),
+                        current.requestGeneration(),
+                        descriptor.documentKind(),
+                        descriptor.chunkerVersion());
+            } else {
+                long generation = jobRepository.allocateGeneration(
+                        document.getId(),
+                        profile.id(),
+                        document.getContentHash(),
+                        descriptor.chunkerVersion(),
+                        fresh);
+                jobRepository.cancelSuperseded(
+                        document.getId(), profile.id(), generation);
+                result = jobRepository.createOrCoalesce(
+                        requestedBatch,
+                        document.getId(),
+                        profile.id(),
+                        document.getContentHash(),
+                        document.getVersion() != null
+                                ? document.getVersion() : 0L,
+                        request.force(),
+                        maxAttempts,
+                        "API",
+                        ChatPrincipal.fromCurrentRequest().id(),
+                        generation,
+                        descriptor.documentKind(),
+                        descriptor.chunkerVersion());
+                jobRepository.activateJob(
+                        document.getId(),
+                        profile.id(),
+                        generation,
+                        result.job().id());
+            }
+            if (!fresh || request.force()) {
+                jobRepository.updateDocumentProcessing(
+                        document.getId(), "PENDING", null);
+            }
             if (result.coalesced()) {
                 coalesced++;
             }
@@ -162,7 +216,12 @@ public class EmbeddingJobService {
             throw new IllegalArgumentException("collectionKey is required");
         }
         EmbeddingProfile profile = profileProvider.getActiveProfile();
-        return jobRepository.readiness(collectionId, collectionKey, profile);
+        return jobRepository.readiness(
+                collectionId,
+                collectionKey,
+                profile,
+                descriptorProvider.textDescriptor().chunkerVersion(),
+                descriptorProvider.jsonRecordDescriptor().chunkerVersion());
     }
 
     private Long resolveListCollectionId(String collectionKey, RagApiKey caller) {

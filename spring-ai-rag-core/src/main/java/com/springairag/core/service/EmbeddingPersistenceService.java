@@ -157,7 +157,8 @@ public class EmbeddingPersistenceService {
                         + "content_hash = EXCLUDED.content_hash, "
                         + "chunker_version = EXCLUDED.chunker_version, "
                         + "status = 'COMPLETED', chunk_count = EXCLUDED.chunk_count, "
-                        + "processing_error = NULL, completed_at = NOW(), updated_at = NOW()",
+                        + "processing_error = NULL, active_job_id = NULL, "
+                        + "completed_at = NOW(), updated_at = NOW()",
                 documentId,
                 profile.id(),
                 expectedContentHash,

@@ -202,15 +202,17 @@ configured confirmation value.
 
 ### Persistent Embedding Jobs
 
-The opt-in job worker provides durable, retryable batch embedding/reindexing.
-It does not replace the existing synchronous embed APIs. When enabled, callers
-create, inspect, cancel, and retry jobs through
+The job worker provides durable, retryable embedding/reindexing. It is enabled
+by default from V41 because both `SYNC` and `ASYNC` document-content mutations
+persist a job in the same transaction; `SYNC` only performs a bounded wait on
+that same job. Operational callers can create, inspect, cancel, and retry jobs through
 `/api/v1/rag/embedding-jobs`.
 
 ```yaml
 rag:
   embedding-jobs:
-    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
+    sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
     poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
@@ -223,10 +225,11 @@ rag:
 
 Workers use PostgreSQL leases and atomic `UPDATE ... RETURNING` statements with
 state and expiry predicates for multi-worker claims. Before committing vectors,
-they recheck the active Profile, lease, cancellation flag, document version,
-and content hash. An active job for the same
-document/Profile/content hash is coalesced; `force` can atomically upgrade that
-active job. An expired lease is reclaimed while retry attempts remain. If the
+they recheck the active Profile, lease, cancellation flag, request generation,
+document kind, chunker version, and content hash. Active work for the same
+generation is coalesced. A content mutation allocates a later generation and
+cancels old work, so an old worker cannot commit into a newer document. An
+expired lease is reclaimed while retry attempts remain. If the
 final allowed attempt expires, the job is atomically marked `FAILED` and its
 lease fields are cleared, so it cannot remain permanently `RUNNING`.
 
@@ -235,6 +238,29 @@ Ingestion and explicit embed endpoints accept optional `embeddingPolicy`:
 boolean; when omitted, `embed=true` stays `SYNC` and `embed=false` stays
 `SKIP`. Explicit embed/re-embed rejects `SKIP`. `ASYNC` requires
 `rag.embedding-jobs.enabled=true` or returns `503 EMBEDDING_JOBS_DISABLED`.
+
+### Document Lifecycle And External Source Synchronization
+
+```yaml
+rag:
+  document-lifecycle:
+    strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
+    allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
+    idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
+```
+
+| Property | Default | Description |
+|----------|---------|-------------|
+| `rag.document-lifecycle.strict-external-cas` | `true` | A new revision for an existing external identity requires `expectedSourceRevision`; exact replay remains valid |
+| `rag.document-lifecycle.allow-non-default-namespace` | `true` | Accept explicit external `sourceNamespace`; when disabled only the compatibility value `default` is accepted |
+| `rag.document-lifecycle.idempotency-ttl-hours` | `24` | Retention for local create/upload `Idempotency-Key` records, clamped to 1–168 hours |
+
+Local documents use public `documentRevision` CAS for PATCH, disable, restore,
+and permanent delete. External text and JSON records use
+`collectionKey + sourceNamespace + externalId` plus an opaque
+`sourceRevision`. Content mutations commit their durable derivation job in the
+same transaction. Metadata, JSONB payload, and Collection-only mutations do
+not request an embedding.
 
 ## Retrieval Configuration
 
@@ -725,7 +751,10 @@ V29 adds JSONB structured-record columns and payload-aware version snapshots.
 V30 adds external-document source revisions, tombstones, version snapshots, and
 a Collection-scoped external identity constraint. V31 normalizes stored external
 IDs using the same ASCII trim semantics as the API and rebuilds the partial
-unique index.
+unique index. V32–V39 add Chat leases, durable jobs, filter/diagnostic/quality
+operations, and non-pessimistic coordination. V40/V41 add document business
+revisions, complete snapshots, source namespaces, generation fencing, and the
+lifecycle/idempotency contract.
 
 ## Profile Overview
 

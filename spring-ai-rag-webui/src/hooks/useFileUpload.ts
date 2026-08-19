@@ -74,10 +74,15 @@ export function useFileUpload(options: UseFileUploadOptions): UseFileUploadRetur
       });
 
       try {
+        const idempotencyKey = globalThis.crypto?.randomUUID?.()
+          ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
         // Make the upload request
         const response = await fetch('/api/v1/rag/documents/upload', {
           method: 'POST',
-          headers: getCredentialHeaders(),
+          headers: {
+            ...getCredentialHeaders(),
+            'Idempotency-Key': idempotencyKey,
+          },
           body: formData,
         });
 

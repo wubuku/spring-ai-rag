@@ -39,6 +39,7 @@ public class FulltextSearchProviderFactory {
     private final JdbcTemplate jdbcTemplate;
     private final String configuredStrategy;
     private final SearchCapabilities capabilities;
+    private final RagProperties ragProperties;
     
     // Cached per-language providers (interface type, supports test injection)
     private volatile FulltextSearchProvider jiebaProvider;
@@ -48,7 +49,7 @@ public class FulltextSearchProviderFactory {
     @Autowired
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, RagProperties ragProperties) {
         this(jdbcTemplate, ragProperties.getRetrieval().getFulltextStrategy(),
-                new SearchCapabilities(jdbcTemplate));
+                new SearchCapabilities(jdbcTemplate), ragProperties);
         log.info("FulltextSearchProviderFactory initialized: strategy={}, capabilities={}",
                 configuredStrategy, capabilities);
     }
@@ -62,6 +63,7 @@ public class FulltextSearchProviderFactory {
         this.configuredStrategy = "none";
         this.capabilities = null;
         this.jdbcTemplate = null;
+        this.ragProperties = new RagProperties();
     }
     
     /**
@@ -69,18 +71,31 @@ public class FulltextSearchProviderFactory {
      */
     public FulltextSearchProviderFactory(JdbcTemplate jdbcTemplate, String configuredStrategy,
                                          SearchCapabilities capabilities) {
+        this(jdbcTemplate, configuredStrategy, capabilities,
+                new RagProperties());
+    }
+
+    private FulltextSearchProviderFactory(
+            JdbcTemplate jdbcTemplate,
+            String configuredStrategy,
+            SearchCapabilities capabilities,
+            RagProperties ragProperties) {
         this.jdbcTemplate = jdbcTemplate;
         this.configuredStrategy = configuredStrategy;
         this.capabilities = capabilities;
+        this.ragProperties = ragProperties;
         
         // Initialize providers for each language
         initProviders();
     }
     
     private void initProviders() {
-        this.jiebaProvider = new PgJiebaFulltextProvider(jdbcTemplate);
-        this.englishProvider = new PgEnglishFtsProvider(jdbcTemplate);
-        this.trgmProvider = new PgTrgmFulltextProvider(jdbcTemplate);
+        this.jiebaProvider = new PgJiebaFulltextProvider(
+                jdbcTemplate, ragProperties);
+        this.englishProvider = new PgEnglishFtsProvider(
+                jdbcTemplate, ragProperties);
+        this.trgmProvider = new PgTrgmFulltextProvider(
+                jdbcTemplate, ragProperties);
         
         log.info("Fulltext search factory initialized with strategy={}, capabilities: {}", 
                 configuredStrategy, capabilities);
@@ -97,6 +112,7 @@ public class FulltextSearchProviderFactory {
         this.jdbcTemplate = jdbcTemplate;
         this.configuredStrategy = configuredStrategy;
         this.capabilities = capabilities;
+        this.ragProperties = new RagProperties();
         this.jiebaProvider = jiebaProvider;
         this.englishProvider = englishProvider;
         this.trgmProvider = trgmProvider;

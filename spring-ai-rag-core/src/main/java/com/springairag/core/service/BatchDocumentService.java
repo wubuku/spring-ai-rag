@@ -49,6 +49,7 @@ public class BatchDocumentService {
     private final DocumentEmbedService documentEmbedService;
     private final TransactionTemplate transactionTemplate;
     private EmbeddingDispatchService dispatchService;
+    private DocumentMutationService documentMutationService;
 
     public BatchDocumentService(RagDocumentRepository documentRepository,
                                  RagEmbeddingRepository embeddingRepository,
@@ -72,6 +73,12 @@ public class BatchDocumentService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDocumentMutationService(
+            DocumentMutationService documentMutationService) {
+        this.documentMutationService = documentMutationService;
     }
 
     /**
@@ -111,6 +118,17 @@ public class BatchDocumentService {
                                                      Long collectionId,
                                                      boolean force,
                                                      EmbeddingPolicy embeddingPolicy) {
+        return batchCreateDocuments(
+                requests, embed, collectionId, force, embeddingPolicy, null);
+    }
+
+    public BatchCreateResponse batchCreateDocuments(
+            List<DocumentRequest> requests,
+            boolean embed,
+            Long collectionId,
+            boolean force,
+            EmbeddingPolicy embeddingPolicy,
+            String idempotencyKeyPrefix) {
         if (requests == null) {
             throw new IllegalArgumentException("requests must not be null");
         }
@@ -126,7 +144,8 @@ public class BatchDocumentService {
 
         for (int i = 0; i < requests.size(); i++) {
             DocumentResult itemResult = createSingleDocumentSafely(
-                    requests.get(i), i, policy, collectionId, force);
+                    requests.get(i), i, policy, collectionId, force,
+                    itemIdempotencyKey(idempotencyKeyPrefix, i));
             results.add(itemResult);
             if (itemResult.error() != null) {
                 failed++;
@@ -146,8 +165,13 @@ public class BatchDocumentService {
             int index,
             EmbeddingPolicy policy,
             Long collectionId,
-            boolean force) {
+            boolean force,
+            String idempotencyKey) {
         try {
+            if (documentMutationService != null) {
+                return createSingleDocumentWithCoordinator(
+                        req, policy, collectionId, force, idempotencyKey);
+            }
             if (policy == EmbeddingPolicy.ASYNC) {
                 if (transactionTemplate == null) {
                     throw new IllegalStateException(
@@ -168,6 +192,36 @@ public class BatchDocumentService {
             log.error("Failed to create document at index {}: {}", index, error);
             return new DocumentResult(null, req.getTitle(), false, error);
         }
+    }
+
+    private DocumentResult createSingleDocumentWithCoordinator(
+            DocumentRequest request,
+            EmbeddingPolicy policy,
+            Long defaultCollectionId,
+            boolean force,
+            String idempotencyKey) {
+        Long collectionId = request.getCollectionId() != null
+                ? request.getCollectionId() : defaultCollectionId;
+        DocumentMutationService.CreatedLocal created =
+                documentMutationService.createLocal(
+                        request,
+                        collectionId,
+                        policy,
+                        force,
+                        "BATCH_CREATE",
+                        idempotencyKey,
+                        null,
+                        null,
+                        null);
+        String action = created.mutation().action();
+        return new DocumentResult(
+                created.document().getId(),
+                created.document().getTitle(),
+                "CREATED".equals(action),
+                null,
+                created.mutation().embeddingAction(),
+                created.mutation().embeddingJobId(),
+                created.mutation().embeddingBatchId());
     }
 
     private DocumentResult createSingleDocument(
@@ -278,11 +332,16 @@ public class BatchDocumentService {
 
         log.info("Batch deleting {} documents", ids.size());
 
+        List<RagDocument> existing = documentRepository.findAllById(ids);
+        boolean hasExternalManaged = existing.stream().anyMatch(document ->
+                document.getExternalId() != null
+                        && !document.getExternalId().isBlank());
+        if (hasExternalManaged) {
+            throw new com.springairag.core.exception.DocumentRevisionConflictException(
+                    "Externally managed documents must be deleted by source identity");
+        }
+
         List<BatchDeleteItem> results = new ArrayList<>(ids.size());
-
-        // Batch delete embedding vectors
-        embeddingRepository.deleteByDocumentIdIn(ids);
-
         for (Long id : ids) {
             results.add(deleteSingleDocument(id));
         }
@@ -296,12 +355,19 @@ public class BatchDocumentService {
     }
 
     private BatchDeleteItem deleteSingleDocument(Long id) {
-        if (documentRepository.existsById(id)) {
-            documentRepository.deleteById(id);
-            return new BatchDeleteItem(id, "DELETED");
-        } else {
+        RagDocument document = documentRepository.findById(id).orElse(null);
+        if (document == null) {
             return new BatchDeleteItem(id, "NOT_FOUND");
         }
+        if (documentMutationService != null) {
+            long revision = document.getDocumentRevision() == null
+                    ? 1L : document.getDocumentRevision();
+            documentMutationService.hardDeleteLocal(id, revision);
+        } else {
+            embeddingRepository.deleteByDocumentId(id);
+            documentRepository.deleteById(id);
+        }
+        return new BatchDeleteItem(id, "DELETED");
     }
 
     /**
@@ -325,5 +391,12 @@ public class BatchDocumentService {
         return masked.length() <= MAX_ERROR_LENGTH
                 ? masked
                 : masked.substring(0, MAX_ERROR_LENGTH);
+    }
+
+    private String itemIdempotencyKey(String prefix, int index) {
+        if (prefix == null || prefix.isBlank()) {
+            return null;
+        }
+        return prefix.trim() + ":" + index;
     }
 }

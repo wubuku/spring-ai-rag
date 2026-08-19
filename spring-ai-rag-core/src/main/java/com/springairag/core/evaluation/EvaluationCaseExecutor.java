@@ -59,13 +59,14 @@ public class EvaluationCaseExecutor {
         String placeholders = String.join(",", ids.stream().map(id -> "?").toList());
         Map<Long, EvaluationSuiteDefinition.Identity> byId = new LinkedHashMap<>();
         jdbcTemplate.query(
-                "SELECT d.id, c.collection_key, d.external_id "
+                "SELECT d.id, c.collection_key, d.source_namespace, d.external_id "
                         + "FROM rag_documents d "
                         + "JOIN rag_collection c ON c.id = d.collection_id "
                         + "WHERE d.id IN (" + placeholders + ")",
                 rs -> {
                     byId.put(rs.getLong("id"), new EvaluationSuiteDefinition.Identity(
                             rs.getString("collection_key"),
+                            rs.getString("source_namespace"),
                             rs.getString("external_id")));
                 },
                 ids.toArray());
@@ -75,7 +76,7 @@ public class EvaluationCaseExecutor {
             EvaluationSuiteDefinition.Identity identity = byId.get(id);
             if (identity != null && identity.externalId() != null
                     && !identity.externalId().isBlank()
-                    && seen.add(identity.collectionKey() + "\0" + identity.externalId())) {
+                    && seen.add(stableIdentity(identity))) {
                 ordered.add(identity);
             }
         }
@@ -83,16 +84,31 @@ public class EvaluationCaseExecutor {
     }
 
     public boolean identityExists(String collectionKey, String externalId) {
+        return identityExists(collectionKey, "default", externalId);
+    }
+
+    public boolean identityExists(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId) {
         Integer count = jdbcTemplate.queryForObject("""
                 SELECT COUNT(*)
                 FROM rag_documents d
                 JOIN rag_collection c ON c.id = d.collection_id
                 WHERE c.collection_key = ?
+                  AND d.source_namespace = ?
                   AND d.external_id = ?
                   AND d.enabled = true
                 """,
-                Integer.class, collectionKey, externalId);
+                Integer.class, collectionKey, sourceNamespace, externalId);
         return count != null && count > 0;
+    }
+
+    static String stableIdentity(
+            EvaluationSuiteDefinition.Identity identity) {
+        return identity.collectionKey() + "\0"
+                + identity.sourceNamespace() + "\0"
+                + identity.externalId();
     }
 
     public Map<String, Object> collectionSnapshot(List<String> collectionKeys) {

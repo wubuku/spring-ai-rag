@@ -17,6 +17,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
 
+import org.springframework.core.annotation.AnnotatedElementUtils;
+import org.springframework.transaction.annotation.Transactional;
+
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
@@ -296,6 +299,21 @@ class PdfToRagServiceTest {
         assertEquals(5, result.chunksCreated());
 
         verify(cb, times(2)).accept(any()); // PREPARING + COMPLETED
+    }
+
+    @Test
+    void importPdfToRagWithEmbedding_doesNotWrapProviderCallInTransaction() throws Exception {
+        assertNull(AnnotatedElementUtils.findMergedAnnotation(
+                PdfToRagService.class, Transactional.class));
+        assertNull(AnnotatedElementUtils.findMergedAnnotation(
+                PdfToRagService.class.getMethod(
+                        "importPdfToRagWithEmbedding",
+                        String.class,
+                        String.class,
+                        Long.class,
+                        boolean.class,
+                        Consumer.class),
+                Transactional.class));
     }
 
     // ==================== triggerEmbedding tests (already-imported PDF) ====================

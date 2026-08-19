@@ -12,9 +12,11 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V39
+- [x] Flyway 迁移范围为 V1-V41
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
+- [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
+- [x] `scripts/verify-document-lifecycle.sh` 固化 CRUD、派生索引、client 与 WebUI 验证
 - [x] OpenAI 兼容 base URL 末尾不带 `/v1`
 - [x] 中英文发布说明已补齐
 
@@ -48,6 +50,13 @@
 - [x] `verify-no-pessimistic-locks.sh` 阻止显式悲观锁、`SKIP LOCKED` 与 advisory lock 回归
 - [x] JSONB 专项脚本覆盖 `payloadContains` 与 V34 GIN planner
 - [x] 真实检索数据集与 baseline 已提交，质量门禁对外部依赖失败返回非零
+
+### 2026-08-19 文档生命周期门禁
+
+- [x] V40/V41 增加业务 revision、完整快照、source namespace 和 generation fencing
+- [x] 正文变化使旧派生结果立即 stale；metadata/payload/Collection-only 更新不重嵌入
+- [x] 外部 reference client 与中英文最佳实践已提交
+- [x] PostgreSQL 生命周期验收显式要求 `skipped=0`
 
 ### 最终证据（2026-07-21）
 

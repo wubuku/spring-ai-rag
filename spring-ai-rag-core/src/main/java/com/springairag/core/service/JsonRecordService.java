@@ -10,6 +10,7 @@ import com.springairag.api.dto.JsonRecordSearchResponse;
 import com.springairag.api.dto.JsonRecordSearchResult;
 import com.springairag.api.dto.JsonRecordUpsertRequest;
 import com.springairag.api.dto.JsonRecordUpsertResponse;
+import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
@@ -74,6 +75,8 @@ public class JsonRecordService {
     private final TransactionTemplate transactionTemplate;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
     private EmbeddingDispatchService dispatchService;
+    private DocumentMutationService mutationService;
+    private DocumentLifecycleService lifecycleService;
 
     @Autowired
     public JsonRecordService(
@@ -128,9 +131,27 @@ public class JsonRecordService {
         this.dispatchService = dispatchService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMutationService(DocumentMutationService mutationService) {
+        this.mutationService = mutationService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setLifecycleService(DocumentLifecycleService lifecycleService) {
+        this.lifecycleService = lifecycleService;
+    }
+
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
         resolveRequestCollection(request);
         validateRequest(request);
+        if (mutationService != null) {
+            return toUpsertResponse(mutationService.upsertJsonRecord(
+                    request,
+                    request.getCollectionId(),
+                    requestCollectionKey(request),
+                    null,
+                    null));
+        }
         EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
                 request.getEmbeddingPolicy(), request.isEmbed());
         EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
@@ -168,23 +189,14 @@ public class JsonRecordService {
 
         for (JsonRecordUpsertRequest request : requests) {
             try {
-                resolveRequestCollection(request);
-                validateRequest(request);
-                EmbeddingPolicy itemPolicy = EmbeddingPolicyResolver.resolve(
-                        request.getEmbeddingPolicy(), request.isEmbed());
-                EmbeddingDispatchService.Result[] queued = new EmbeddingDispatchService.Result[1];
-                PersistedRecord persisted = persist(request, null, null, itemPolicy, queued);
-                EmbeddingOutcome embedding = queued[0] != null
-                        ? outcomeFromDispatch(queued[0])
-                        : embedIfRequested(persisted, itemPolicy == EmbeddingPolicy.SYNC);
-                JsonRecordUpsertResponse response = toUpsertResponse(persisted, embedding);
+                JsonRecordUpsertResponse response = upsert(request);
                 results.add(response);
-                switch (persisted.action()) {
+                switch (response.action()) {
                     case "CREATED" -> created++;
                     case "UPDATED" -> updated++;
                     default -> unchanged++;
                 }
-                if ("FAILED".equals(embedding.status())) {
+                if ("FAILED".equals(response.embeddingStatus())) {
                     embeddingFailed++;
                 }
             } catch (RuntimeException e) {
@@ -462,7 +474,53 @@ public class JsonRecordService {
                 doc.getCreatedAt(),
                 doc.getUpdatedAt(),
                 versionNumber,
-                doc.getMetadata());
+                doc.getMetadata(),
+                doc.getSourceNamespace(),
+                doc.getSourceRevision(),
+                doc.getDocumentRevision(),
+                lifecycleService == null ? null : lifecycleService.read(doc));
+    }
+
+    public JsonRecordDetailResponse getByExternalIdentity(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId) {
+        List<Long> collections = ApiKeyCollectionAccess.resolveCollectionIds(
+                null,
+                List.of(collectionKey),
+                ApiKeyCollectionAccess.currentKey(),
+                collectionIdentityResolver);
+        if (collections.size() != 1) {
+            throw new IllegalArgumentException(
+                    "Exactly one Collection must be provided");
+        }
+        RagDocument document = documentRepository
+                .findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
+                        collections.getFirst(),
+                        normalizeNamespace(sourceNamespace),
+                        RagDocument.JSON_RECORD,
+                        requireExternalId(externalId))
+                .orElseThrow(() -> new DocumentNotFoundException(-1L));
+        return getDetail(document.getId());
+    }
+
+    public ExternalDocumentDeleteResponse sourceDelete(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId,
+            String sourceRevision,
+            String expectedSourceRevision) {
+        if (mutationService == null) {
+            throw new IllegalStateException(
+                    "Document mutation service is not available");
+        }
+        return mutationService.tombstoneExternal(
+                collectionKey,
+                sourceNamespace,
+                externalId,
+                sourceRevision,
+                expectedSourceRevision,
+                true);
     }
 
     private PersistedRecord persist(JsonRecordUpsertRequest request) {
@@ -819,6 +877,45 @@ public class JsonRecordService {
                 embedding.action(),
                 embedding.jobId(),
                 embedding.batchId());
+    }
+
+    private JsonRecordUpsertResponse toUpsertResponse(
+            DocumentMutationService.JsonMutationResult result) {
+        RagDocument document = result.document();
+        EmbeddingDispatchService.Result dispatch = result.dispatch();
+        return new JsonRecordUpsertResponse(
+                document.getId(),
+                document.getCollectionId(),
+                collectionIdentityResolver.mapKeys(
+                        List.of(document.getCollectionId()))
+                        .get(document.getCollectionId()),
+                document.getExternalId(),
+                result.action(),
+                result.contentChanged(),
+                result.payloadChanged(),
+                result.versionNumber(),
+                result.lifecycle().embeddingStatus(),
+                result.lifecycle().activeEmbeddingProfileKey(),
+                dispatch == null ? null : dispatch.error(),
+                dispatch == null ? "NONE" : dispatch.action().name(),
+                dispatch == null ? null : dispatch.embeddingJobId(),
+                dispatch == null ? null : dispatch.embeddingBatchId(),
+                document.getSourceNamespace(),
+                document.getSourceRevision(),
+                document.getDocumentRevision(),
+                result.lifecycle());
+    }
+
+    private String normalizeNamespace(String value) {
+        return value == null || value.isBlank() ? "default" : value.trim();
+    }
+
+    private String requireExternalId(String value) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(
+                    "externalId must not be blank");
+        }
+        return value.trim();
     }
 
     private JsonRecordUpsertResponse failedResponse(

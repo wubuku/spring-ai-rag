@@ -62,6 +62,7 @@ public class ExternalDocumentService {
     private final JdbcTemplate jdbcTemplate;
     private final TransactionTemplate transactionTemplate;
     private EmbeddingDispatchService dispatchService;
+    private DocumentMutationService mutationService;
 
     public ExternalDocumentService(
             RagDocumentRepository documentRepository,
@@ -90,7 +91,15 @@ public class ExternalDocumentService {
         this.dispatchService = dispatchService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setMutationService(DocumentMutationService mutationService) {
+        this.mutationService = mutationService;
+    }
+
     public ExternalDocumentUpsertResponse upsert(ExternalDocumentUpsertRequest request) {
+        if (mutationService != null) {
+            return mutationService.upsertExternal(request);
+        }
         validateRequest(request);
         Long collectionId = resolveWritableCollection(request.getCollectionKey());
         EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
@@ -167,12 +176,21 @@ public class ExternalDocumentService {
 
     public DocumentDetailResponse getByExternalIdentity(
             String collectionKey, String externalId) {
+        return getByExternalIdentity(collectionKey, "default", externalId);
+    }
+
+    public DocumentDetailResponse getByExternalIdentity(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId) {
         String normalizedKey = requireText(collectionKey, "collectionKey", 128);
+        String normalizedNamespace = normalizeNamespace(sourceNamespace);
         String normalizedExternalId = normalizeRequired(externalId, "externalId", 255);
         RagCollection collection = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 normalizedKey, ApiKeyCollectionAccess.currentKey(), collectionIdentityResolver);
         RagDocument document = documentRepository
-                .findByCollectionIdAndExternalId(collection.getId(), normalizedExternalId)
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        collection.getId(), normalizedNamespace, normalizedExternalId)
                 .orElseThrow(() -> new RagException(
                         ErrorCode.DOCUMENT_NOT_FOUND,
                         "Document not found for external identity"));
@@ -188,6 +206,22 @@ public class ExternalDocumentService {
             String externalId,
             String sourceRevision,
             String expectedSourceRevision) {
+        return sourceDelete(
+                collectionKey, "default", externalId,
+                sourceRevision, expectedSourceRevision);
+    }
+
+    public ExternalDocumentDeleteResponse sourceDelete(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId,
+            String sourceRevision,
+            String expectedSourceRevision) {
+        if (mutationService != null) {
+            return mutationService.tombstoneExternal(
+                    collectionKey, sourceNamespace, externalId,
+                    sourceRevision, expectedSourceRevision, false);
+        }
         String normalizedKey = requireText(collectionKey, "collectionKey", 128);
         String normalizedExternalId = normalizeRequired(externalId, "externalId", 255);
         String normalizedRevision = normalizeRequired(sourceRevision, "sourceRevision", 255);
@@ -582,6 +616,16 @@ public class ExternalDocumentService {
         if (normalized.length() > maxLength) {
             throw new IllegalArgumentException(
                     "value must not exceed " + maxLength + " characters");
+        }
+        return normalized;
+    }
+
+    private String normalizeNamespace(String value) {
+        String normalized = value == null || value.isBlank()
+                ? "default" : value.trim();
+        if (normalized.length() > 128) {
+            throw new IllegalArgumentException(
+                    "sourceNamespace must not exceed 128 characters");
         }
         return normalized;
     }

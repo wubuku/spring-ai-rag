@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V39 |
+| Flyway | V1–V41 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -275,6 +275,24 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 `EMBEDDING_JOBS_IT_PASSWORD` 覆盖。验证日志位于
 `.verification/embedding-jobs/<run-id>/`。
 
+<a id="document-lifecycle-verification"></a>
+
+### 文档生命周期一键验证
+
+```bash
+./scripts/verify-document-lifecycle.sh
+```
+
+该命令验证本地文档 create/PATCH/disable/restore/permanent-delete、外部 TEXT/JSON
+`collectionKey + sourceNamespace + externalId`、revision CAS、完整快照、正文变化后的
+generation-aware 重嵌入、非文本更新不重嵌入、WebUI CRUD 和 reference client。
+
+脚本优先从当前 shell 或 `.env` 的 `POSTGRES_*` 创建一次性数据库，避免 Testcontainers
+与新 Docker daemon 的协议协商问题；也可显式提供
+`DOCUMENT_LIFECYCLE_IT_JDBC_URL`、`DOCUMENT_LIFECYCLE_IT_USERNAME` 和
+`DOCUMENT_LIFECYCLE_IT_PASSWORD`。不得指向开发库或生产库。证据保存在
+`.verification/document-data-plane/<run-id>/`。
+
 ### 检索诊断 / metadata 过滤 / 嵌入运营 / 受管质量
 
 ```bash
@@ -367,7 +385,7 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
 
 数据集和提交的 baseline 位于 `testdata/regression/`。runner 使用稳定
-`collectionKey + externalId` 身份创建 fixture，检查 Hit Rate、MRR、Recall@K、nDCG、
+`collectionKey + sourceNamespace(default) + externalId` 身份创建 fixture，检查 Hit Rate、MRR、Recall@K、nDCG、
 minimum、相对 baseline 回退、Collection decoy 泄漏和 JSONB 明确空结果，并把 JSON
 artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`。未显式设置
 `RAG_API_KEY` 时会安全读取 `.env` 的 `RAG_API_KEY` / `RAG_ROOT_API_KEY`，不会输出密钥。

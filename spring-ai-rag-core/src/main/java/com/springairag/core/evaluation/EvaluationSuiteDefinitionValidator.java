@@ -16,7 +16,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 
 /**
- * 校验受管 suite 定义：SELECTED_COLLECTIONS + collectionKey/externalId，并计算 canonical checksum。
+ * 校验受管 suite 定义：SELECTED_COLLECTIONS + 三元外部身份，并计算 canonical checksum。
  */
 @Component
 public class EvaluationSuiteDefinitionValidator {
@@ -113,18 +113,25 @@ public class EvaluationSuiteDefinitionValidator {
                         "case " + id + " relevant identities must be JSON objects");
             }
             String collectionKey = text(item, "collectionKey", true);
+            String sourceNamespace = text(
+                    item, "sourceNamespace", false);
+            if (sourceNamespace == null) {
+                sourceNamespace = "default";
+            }
             String externalId = text(item, "externalId", true);
             if (!uniqueKeys.contains(collectionKey)) {
                 throw new IllegalArgumentException(
                         "case " + id + " relevant collectionKey is outside its scope: "
                                 + collectionKey);
             }
-            String stableIdentity = collectionKey + "\0" + externalId;
+            String stableIdentity = stableIdentity(
+                    collectionKey, sourceNamespace, externalId);
             if (!uniqueRelevant.add(stableIdentity)) {
                 throw new IllegalArgumentException(
                         "case " + id + " has duplicate relevant identity");
             }
-            relevant.add(new EvaluationSuiteDefinition.Identity(collectionKey, externalId));
+            relevant.add(new EvaluationSuiteDefinition.Identity(
+                    collectionKey, sourceNamespace, externalId));
         }
         Double minHitRate = null;
         Double minMrr = null;
@@ -254,5 +261,12 @@ public class EvaluationSuiteDefinitionValidator {
             return null;
         }
         return value.asText();
+    }
+
+    private String stableIdentity(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId) {
+        return collectionKey + "\0" + sourceNamespace + "\0" + externalId;
     }
 }

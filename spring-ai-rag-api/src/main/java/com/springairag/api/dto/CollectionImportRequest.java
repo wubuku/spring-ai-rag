@@ -58,6 +58,7 @@ public class CollectionImportRequest {
         private Map<String, Object> metadata;
         private Long size;
         private String externalId;
+        private String sourceNamespace = "default";
         private String sourceRevision;
         private LocalDateTime sourceDeletedAt;
         private JsonNode jsonbPayload;
@@ -78,6 +79,10 @@ public class CollectionImportRequest {
         public void setSize(Long size) { this.size = size; }
         public String getExternalId() { return externalId; }
         public void setExternalId(String externalId) { this.externalId = externalId; }
+        public String getSourceNamespace() { return sourceNamespace; }
+        public void setSourceNamespace(String sourceNamespace) {
+            this.sourceNamespace = sourceNamespace;
+        }
         public String getSourceRevision() { return sourceRevision; }
         public void setSourceRevision(String sourceRevision) { this.sourceRevision = sourceRevision; }
         public LocalDateTime getSourceDeletedAt() { return sourceDeletedAt; }

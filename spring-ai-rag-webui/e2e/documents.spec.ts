@@ -39,12 +39,82 @@ test.describe('Documents', () => {
     await openProtectedPage(page, '/webui/documents');
 
     await expect(page.getByText('cms:sample:1')).toBeVisible();
+    await expect(page.getByText('cms-main')).toBeVisible();
     await expect(page.getByText('etag:sample-1')).toBeVisible();
     await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
     const retry = page.getByRole('menuitem', { name: 'Retry embedding' });
     await expect(retry).toBeVisible();
     await retry.click();
     await expect(page.getByText('Embedding retry started')).toBeVisible();
+  });
+
+  test('edits a local document with revision CAS and async index propagation', async ({ page }) => {
+    await mockAllApiCalls(page);
+    const patchRequest = page.waitForRequest(request =>
+      request.method() === 'PATCH'
+      && new URL(request.url()).pathname === '/api/v1/rag/documents/2');
+    await openProtectedPage(page, '/webui/documents');
+
+    await page.getByRole('button', {
+      name: /Open actions for.*Local Lifecycle Document/,
+    }).click();
+    await page.getByRole('menuitem', { name: 'Edit document' }).click();
+    const form = page.getByRole('form', { name: 'Edit document' });
+    await expect(form).toBeVisible();
+    await form.getByLabel('Content').fill('Updated local content');
+    await form.getByRole('button', { name: 'Save' }).click();
+
+    const request = await patchRequest;
+    expect(request.postDataJSON()).toEqual(expect.objectContaining({
+      expectedDocumentRevision: 4,
+      content: 'Updated local content',
+      embeddingPolicy: 'ASYNC',
+    }));
+    await expect(page.getByText('Document updated; index propagation has started'))
+      .toBeVisible();
+  });
+
+  test('disables and restores local documents using their current revisions', async ({ page }) => {
+    await mockAllApiCalls(page);
+    page.on('dialog', dialog => dialog.accept());
+    await openProtectedPage(page, '/webui/documents');
+
+    const disableRequest = page.waitForRequest(request =>
+      request.method() === 'POST'
+      && new URL(request.url()).pathname === '/api/v1/rag/documents/2/disable');
+    await page.getByRole('button', {
+      name: /Open actions for.*Local Lifecycle Document/,
+    }).click();
+    await page.getByRole('menuitem', { name: 'Disable' }).click();
+    expect((await disableRequest).postDataJSON()).toEqual({
+      expectedDocumentRevision: 4,
+    });
+    await expect(page.getByText('Document disabled')).toBeVisible();
+
+    const restoreRequest = page.waitForRequest(request =>
+      request.method() === 'POST'
+      && new URL(request.url()).pathname === '/api/v1/rag/documents/3/restore');
+    await page.getByRole('button', {
+      name: /Open actions for.*Disabled Lifecycle Document/,
+    }).click();
+    await page.getByRole('menuitem', { name: 'Restore' }).click();
+    expect((await restoreRequest).postDataJSON()).toEqual({
+      expectedDocumentRevision: 8,
+      embeddingPolicy: 'ASYNC',
+    });
+    await expect(page.getByText(/Document restored/)).toBeVisible();
+  });
+
+  test('keeps external source-managed documents read only in the local lifecycle menu', async ({ page }) => {
+    await mockAllApiCalls(page);
+    await openProtectedPage(page, '/webui/documents');
+
+    await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
+    await expect(page.getByText('Managed by an external source')).toBeVisible();
+    await expect(page.getByText(/cms-main \/ cms:sample:1/)).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Edit document' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Disable' })).toHaveCount(0);
+    await expect(page.getByRole('menuitem', { name: 'Delete permanently' })).toHaveCount(0);
   });
 
   test('opens the indexed PDF artifact from the row action menu', async ({ page }) => {

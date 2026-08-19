@@ -1,6 +1,7 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,6 +10,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessException;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -140,6 +142,27 @@ public class GlobalExceptionHandler {
                                                                   HttpServletRequest request) {
         return buildResponse(HttpStatus.METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED",
                 "HTTP method not supported: " + e.getMethod(), request);
+    }
+
+    // ==================== 409 Conflict ====================
+
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException e,
+            HttpServletRequest request) {
+        ErrorCode code = ErrorCode.CONCURRENT_MODIFICATION;
+        log.warn("Optimistic locking conflict: {}", e.getMessage());
+        ErrorResponse body = ErrorResponse.builder()
+                .error(code.getCode())
+                .status(code.getHttpStatus())
+                .type(code.getProblemTypeUri())
+                .detail("Resource changed concurrently; refresh its revision and retry")
+                .instance(request.getRequestURI())
+                .build();
+        body.setTitle(code.getTitle());
+        return ResponseEntity.status(code.getHttpStatus())
+                .contentType(PROBLEM_JSON)
+                .body(body);
     }
 
     // ==================== 500 Internal Server Error ====================

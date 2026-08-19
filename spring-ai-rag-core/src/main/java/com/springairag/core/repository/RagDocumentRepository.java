@@ -123,6 +123,16 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     Optional<RagDocument> findByCollectionIdAndExternalId(
             Long collectionId, String externalId);
 
+    Optional<RagDocument> findByCollectionIdAndSourceNamespaceAndExternalId(
+            Long collectionId, String sourceNamespace, String externalId);
+
+    Optional<RagDocument>
+            findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
+                    Long collectionId,
+                    String sourceNamespace,
+                    String documentType,
+                    String externalId);
+
     @Query("SELECT d.id FROM RagDocument d " +
            "WHERE d.collectionId IN :collectionIds " +
            "AND d.documentType = :documentType " +
@@ -210,6 +220,44 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
             @Param("collectionIds") List<Long> collectionIds,
             @Param("embeddingProfileId") long embeddingProfileId);
 
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT d.* FROM rag_documents d " +
+                "WHERE NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash " +
+                "AND s.chunker_version = CASE " +
+                "WHEN d.document_type = 'json-record' " +
+                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+        nativeQuery = true)
+    List<RagDocument> findDocumentsWithoutCurrentEmbeddings(
+            @Param("embeddingProfileId") long embeddingProfileId,
+            @Param("textChunkerVersion") String textChunkerVersion,
+            @Param("jsonChunkerVersion") String jsonChunkerVersion);
+
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT d.* FROM rag_documents d " +
+                "WHERE d.collection_id IN (:collectionIds) " +
+                "AND NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash " +
+                "AND s.chunker_version = CASE " +
+                "WHEN d.document_type = 'json-record' " +
+                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+        nativeQuery = true)
+    List<RagDocument> findDocumentsWithoutCurrentEmbeddingsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("embeddingProfileId") long embeddingProfileId,
+            @Param("textChunkerVersion") String textChunkerVersion,
+            @Param("jsonChunkerVersion") String jsonChunkerVersion);
+
     /**
      * Count documents without a fresh COMPLETED state for one Embedding Profile.
      */
@@ -240,4 +288,42 @@ public interface RagDocumentRepository extends JpaRepository<RagDocument, Long> 
     long countDocumentsWithoutEmbeddingsByCollectionIds(
             @Param("collectionIds") List<Long> collectionIds,
             @Param("embeddingProfileId") long embeddingProfileId);
+
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT COUNT(*) FROM rag_documents d " +
+                "WHERE NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash " +
+                "AND s.chunker_version = CASE " +
+                "WHEN d.document_type = 'json-record' " +
+                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+        nativeQuery = true)
+    long countDocumentsWithoutCurrentEmbeddings(
+            @Param("embeddingProfileId") long embeddingProfileId,
+            @Param("textChunkerVersion") String textChunkerVersion,
+            @Param("jsonChunkerVersion") String jsonChunkerVersion);
+
+    @org.springframework.data.jpa.repository.Query(
+        value = "SELECT COUNT(*) FROM rag_documents d " +
+                "WHERE d.collection_id IN (:collectionIds) " +
+                "AND NOT EXISTS (" +
+                "SELECT 1 FROM rag_document_embedding_state s " +
+                "WHERE s.document_id = d.id " +
+                "AND s.embedding_profile_id = :embeddingProfileId " +
+                "AND s.status = 'COMPLETED' " +
+                "AND s.chunk_count > 0 " +
+                "AND s.content_hash = d.content_hash " +
+                "AND s.chunker_version = CASE " +
+                "WHEN d.document_type = 'json-record' " +
+                "THEN :jsonChunkerVersion ELSE :textChunkerVersion END)",
+        nativeQuery = true)
+    long countDocumentsWithoutCurrentEmbeddingsByCollectionIds(
+            @Param("collectionIds") List<Long> collectionIds,
+            @Param("embeddingProfileId") long embeddingProfileId,
+            @Param("textChunkerVersion") String textChunkerVersion,
+            @Param("jsonChunkerVersion") String jsonChunkerVersion);
 }

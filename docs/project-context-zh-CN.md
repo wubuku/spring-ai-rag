@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-17。
+> **最近复核**：2026-08-19。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -118,7 +118,8 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
 - 向量和全文检索会排除 disabled 文档，并要求活动 Embedding Profile 存在新鲜的
   completed 状态。
 - 删除 Collection 会尝试软删除集合；若其中存在 `externalId` 非空的外部托管文档则返回
-  `409`，不会执行删除，因为解除关联会破坏 `collectionKey + externalId` 稳定身份。
+  `409`，不会执行删除，因为解除关联会破坏
+  `collectionKey + sourceNamespace + externalId` 稳定身份。
   没有这类文档时，只解除普通 legacy 文档关联，不会删除文档或 embeddings；解除关联后的文档
   仍可能出现在未限定 Collection 的全库检索中；被删除 Collection 的 key 不可复用。
 - `RetrievalScopeSql` 将 Collection 条件直接下推到 Vector 和所有 Full-text SQL：
@@ -173,7 +174,7 @@ WebUI 使用 React Router `BrowserRouter`，生产 basename 为 `/webui`。能�
 - 生产 profile 推荐启用 query rewrite 和本地 heuristic rerank。
 - Goldenset 使用 Precision@K、MRR 和 nDCG。
 - `testdata/regression/retrieval-core-v1.json` 使用稳定
-  `collectionKey + externalId` 身份固化真实检索回归；runner 同时检查质量下限、提交的
+  `collectionKey + sourceNamespace + externalId` 身份固化真实检索回归；runner 同时检查质量下限、提交的
   baseline、Collection 泄漏和显式空结果。
 
 小型在线 goldenset 的 baseline 与 quality 组合都达到满分；重排增益由确定性 MRR 测试证明，不能把该样本解释为统计显著提升。
@@ -188,8 +189,8 @@ JSON record API 将调用者负责的业务数据保存到
 hash、分块、全文索引、embedding 和普通 RAG Prompt 上下文；服务不会自动生成或校验
 JSON 与描述是否一致。
 
-JSON record 对外使用 `collectionKey + externalId` 作为稳定身份，并解析为内部
-`(collectionId, documentType=json-record, externalId)` 幂等键。deprecated 的 ID 输入
+JSON record 对外使用 `collectionKey + sourceNamespace + externalId` 作为稳定身份，并解析为内部
+`(collectionId, sourceNamespace, documentType=json-record, externalId)` 幂等键。deprecated 的 ID 输入
 继续兼容，响应同时返回两种身份。JSON record 不参与普通文档的全局 content-hash 去重，
 因此不同 payload 可以拥有相同描述。仅更新 payload 会创建可审计版本，但不会使新鲜
 embedding 失效；设计上没有 `payloadHash`。专用搜索 API 在检索排序完成后再批量补充当前
@@ -206,18 +207,30 @@ Collection、SQL 或 JSONPath。
 
 ### 外部文档同步
 
-普通外部文档使用相同的稳定外部身份形式：`collectionKey + externalId`，并由调用方
-提供 opaque 的 `sourceRevision`。`POST /documents/upsert` 保留内部 `documentId`，
-支持精确重放和可选的 `expectedSourceRevision` CAS，并记录版本快照。内容变化会先使
-检索 freshness 失效，再同步重新 embedding；embedding 失败会记录在新内容 hash 上，
-旧向量会被检索 freshness 条件排除。来源删除使用 `enabled=false` tombstone；之后使用与
-tombstone 不同的后续 `sourceRevision` 可以恢复同一个内部文档，服务不比较 revision 的大小
-或新旧。外部 connector 可使用
+普通外部文档使用稳定三元身份：
+`collectionKey + sourceNamespace + externalId`，并由调用方提供 opaque
+`sourceRevision`。`POST /documents/upsert` 保留内部 `documentId`，支持精确重放和默认
+严格的 `expectedSourceRevision` CAS，并记录完整版本快照。内容变化会先使检索 freshness
+失效，再在同一事务中创建新 generation 的持久化 embedding 任务；metadata、payload 或
+Collection-only 变化不调用 embedding provider。旧 worker 必须通过 generation、hash、
+chunker version、Profile 和 lease 提交门，不能覆盖新正文。来源删除使用
+`enabled=false` tombstone；之后使用与 tombstone 不同的后续 `sourceRevision` 可以恢复
+同一个内部文档。外部 connector 可使用
 `POST /documents/batch-upsert`、`GET /documents/by-external-id` 和对应的来源删除端点。
 JSON record 仍保持专用的 payload/retrieval-text 语义。
 
 完整请求/响应契约、冲突处理和客户同步最佳实践见
-[REST API：外部文档幂等同步](rest-api-zh-CN.md)。
+[REST API：外部文档幂等同步](rest-api-zh-CN.md)与
+[外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。
+
+### 本地文档生命周期
+
+本地文档公开 `documentRevision` 作为业务 CAS token；JPA `rowVersion` 仍只用于内部
+乐观并发。`PATCH /documents/{id}`、disable、restore 和永久删除都要求预期 revision。
+正文 mutation 与业务 revision、完整快照、freshness state 和持久化 job 原子提交；
+provider 调用发生在事务之后。正文提交后旧 chunk 立即退出检索，直到 lifecycle
+`searchability=READY`。标题、来源、metadata 和 Collection-only 修改立即读取当前主记录，
+不会重嵌入。外部托管文档拒绝本地 CRUD，必须通过来源身份和 tombstone 契约操作。
 
 ## 5. 多模型
 
@@ -238,14 +251,16 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V39。
+- Flyway 当前为 V1–V41。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
   status 与 session lease；V33 增加持久化 embedding jobs、lease 与活动任务合并索引；
   V34 增加 JSON record payload containment 的 partial GIN 索引；V35 扩展检索诊断；
   V36 增加普通文档 metadata containment 索引；V37 扩展 embedding job 运营字段；
-  V38 增加受管评估套件；V39 用原子计数器、并发槽位和 CAS 状态替换显式悲观协调。
+  V38 增加受管评估套件；V39 用原子计数器、并发槽位和 CAS 状态替换显式悲观协调；
+  V40/V41 增加文档业务 revision、完整快照、来源 namespace、派生 generation 与
+  lifecycle/idempotency schema，并收紧三元身份和活动任务约束。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -260,15 +275,15 @@ JSON record 仍保持专用的 payload/retrieval-text 语义。
 | 区域 | 能力 |
 |------|------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN 对话与结构化 SSE |
-| `/documents` | 文档管理与 embedding |
+| `/documents` | 本地文档 create/PATCH/disable/restore/permanent-delete、lifecycle 与 embedding |
 | `/search` | 混合检索 |
 | `/collections` | 知识库 |
 | `/evaluation` | 评估与反馈 |
 | `/api-keys` | API Key 管理 |
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
-| `/documents/upsert` | 普通外部文档幂等同步 |
-| `/embedding-jobs` | 默认关闭的持久化 embedding/reindex 任务 |
+| `/documents/upsert` | 普通外部文档三元身份、revision CAS 与 tombstone 同步 |
+| `/embedding-jobs` | 默认开启的持久化 embedding/reindex 任务 |
 | `/retrieval-traces` | 当前调用方可见的检索诊断 |
 | `/collections/embedding-readiness` | Collection 嵌入就绪分类 |
 | `/v1/models`, `/v1/chat/completions` | 默认关闭的 OpenAI 兼容受控预览 |
@@ -350,7 +365,8 @@ output 或采样参数。原生 `/api/v1/rag/chat/stream` 仍保留项目专用�
 - 中国境内友好的 Docker 构建路径。
 - 一键发布验证。
 - 请求级 Collection scope 的 OpenAI 兼容受控预览。
-- 默认关闭的持久化 embedding jobs。
+- 默认开启的持久化 embedding jobs 与文档生命周期协调器。
+- 本地文档 revision CAS CRUD、外部来源三元身份和可运行 reference client。
 - JSONB containment / Agent Tool 与版本化真实检索回归门禁。
 
 2026-07-21 完整门禁：
@@ -370,7 +386,8 @@ Real LLM 10/10
 
 - 不可变 `1.0.0` source/image Tag 尚未创建，留给正式发布流水线。
 - OpenAI 服务端兼容已实现为默认关闭的受控预览，不代表公网或多实例生产就绪。
-- 持久化 embedding worker 与 JSON Agent Tool 默认关闭；启用前应按部署验证容量和成本。
+- 持久化 embedding worker 默认开启；生产需监控容量和 provider 成本。JSON Agent Tool
+  仍默认关闭。
 - 并发控制不使用应用显式悲观锁；`scripts/verify-no-pessimistic-locks.sh` 是回归门禁。
 - OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/`、`HEARTBEAT.md` 等是本地状态，不属于项目文档体系。
 - 项目级 Skills 位于 `.agents/skills/`，工作流可以引用本文，但不复制项目事实。

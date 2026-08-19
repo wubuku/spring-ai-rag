@@ -18,6 +18,24 @@ public record ExternalDocumentDeleteResponse(
         boolean enabled,
         LocalDateTime sourceDeletedAt,
         String errorCode,
-        String error
+        String error,
+        String sourceNamespace,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public ExternalDocumentDeleteResponse(
+            Long documentId,
+            String collectionKey,
+            String externalId,
+            String sourceRevision,
+            String action,
+            int versionNumber,
+            boolean enabled,
+            LocalDateTime sourceDeletedAt,
+            String errorCode,
+            String error) {
+        this(documentId, collectionKey, externalId, sourceRevision,
+                action, versionNumber, enabled, sourceDeletedAt,
+                errorCode, error, null, null, null);
+    }
 }

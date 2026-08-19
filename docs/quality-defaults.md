@@ -44,7 +44,7 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 
 - Dataset: `testdata/regression/retrieval-core-v1.json`
 - Baseline: `testdata/regression/retrieval-core-v1-baseline.json`
-- Stable relevant identity: `collectionKey + externalId`
+- Stable relevant identity: `collectionKey + sourceNamespace(default) + externalId`
 - Metrics: Hit Rate, MRR, Recall@K, nDCG
 - Safety assertions: selected Collections do not leak decoys, and an explicit
   empty JSONB case remains empty

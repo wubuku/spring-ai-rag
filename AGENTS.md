@@ -30,7 +30,7 @@
 4. **Embedding Profile 与固定向量列**：当前活动 Profile 为 1024 维，写入 `embedding_1024 VECTOR(1024)`；换模型必须创建新 Profile 并重嵌入，不能只改 dimensions。
 5. **写代码同步写测试**；`mvn test` 不过不算完成。Mock Playwright ≠ 真实 LLM 联调。
 6. **WebUI** 是独立前端：改 `spring-ai-rag-webui/` 后需构建；静态资源路径见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) / [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)。
-7. **Flyway 迁移** 在 `spring-ai-rag-core/src/main/resources/db/migration/`，当前 **V1–V39**；改 schema 必须加迁移，不要只改实体或改写已执行迁移。
+7. **Flyway 迁移** 在 `spring-ai-rag-core/src/main/resources/db/migration/`，当前 **V1–V41**；改 schema 必须加迁移，不要只改实体或改写已执行迁移。
 8. **真实 LLM 联调**用 `scripts/start-real-e2e-server.sh` + `scripts/real-llm-e2e-smoke.sh`（默认 18081，避免与日常 8081 冲突）；细节见 [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md)、[docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md)。
 9. **密钥与隐私**：API Key、Token **不得**写入文档或提交到 git；只放 `.env`（已 gitignore）。
 10. **注释与文档语言**：代码注释、Javadoc、用户可见说明优先**中文**（项目约定）；对外英文文档与中文成对维护时需同步。

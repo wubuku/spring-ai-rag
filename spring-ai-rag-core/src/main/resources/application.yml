@@ -293,8 +293,9 @@ rag:
     migration-confirm: ${RAG_EMBEDDING_MIGRATION_CONFIRM:}
 
   embedding-jobs:
-    # 异步任务面默认关闭；旧同步 embed API 不受影响。
-    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    # 文档正文 mutation 的 SYNC/ASYNC 都依赖持久化任务，默认启用。
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
+    sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
     poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
@@ -303,6 +304,11 @@ rag:
     max-documents-per-batch: 1000
     retry-backoff-seconds: ${RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS:10}
     worker-concurrency: ${RAG_EMBEDDING_JOBS_WORKER_CONCURRENCY:4}
+
+  document-lifecycle:
+    strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
+    allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
+    idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
 
   # RAG retrieval configuration
   retrieval:

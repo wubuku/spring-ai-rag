@@ -66,8 +66,27 @@ public record DocumentSummary(
         String sourceRevision,
         LocalDateTime sourceDeletedAt,
         String processingError,
-        boolean embeddingFresh
+        boolean embeddingFresh,
+        String sourceNamespace,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public DocumentSummary(
+            Long id, String title, String source, String documentType,
+            String processingStatus, LocalDateTime createdAt, Long size,
+            String contentHash, boolean enabled, LocalDateTime updatedAt,
+            Long collectionId, String collectionName, long chunkCount,
+            String contentPreview, String content, Map<String, Object> metadata,
+            String collectionKey, String externalId, String sourceRevision,
+            LocalDateTime sourceDeletedAt, String processingError,
+            boolean embeddingFresh) {
+        this(id, title, source, documentType, processingStatus, createdAt, size,
+                contentHash, enabled, updatedAt, collectionId, collectionName,
+                chunkCount, contentPreview, content, metadata, collectionKey,
+                externalId, sourceRevision, sourceDeletedAt, processingError,
+                embeddingFresh, null, null, null);
+    }
+
     public DocumentSummary(Long id, String title, String source, String documentType,
                            String processingStatus, LocalDateTime createdAt, Long size,
                            String contentHash, boolean enabled, LocalDateTime updatedAt,
@@ -75,7 +94,8 @@ public record DocumentSummary(
                            String contentPreview, String content, Map<String, Object> metadata) {
         this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
                 enabled, updatedAt, collectionId, collectionName, chunkCount, contentPreview,
-                content, metadata, null, null, null, null, null, false);
+                content, metadata, null, null, null, null, null, false,
+                null, null, null);
     }
 
     public DocumentSummary(Long id, String title, String source, String documentType,
@@ -86,7 +106,8 @@ public record DocumentSummary(
                            String collectionKey) {
         this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
                 enabled, updatedAt, collectionId, collectionName, chunkCount, contentPreview,
-                content, metadata, collectionKey, null, null, null, null, false);
+                content, metadata, collectionKey, null, null, null, null, false,
+                null, null, null);
     }
 
     /**
@@ -101,7 +122,7 @@ public record DocumentSummary(
         this(id, title, source, documentType, processingStatus, createdAt, size, contentHash,
                 Boolean.TRUE.equals(enabled), updatedAt, collectionId, collectionName,
                 chunkCount, contentPreview, content, metadata, collectionKey,
-                null, null, null, null, false);
+                null, null, null, null, false, null, null, null);
     }
 
     @Override
@@ -127,6 +148,9 @@ public record DocumentSummary(
                 && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
                 && Objects.equals(processingError, that.processingError)
                 && embeddingFresh == that.embeddingFresh
+                && Objects.equals(sourceNamespace, that.sourceNamespace)
+                && Objects.equals(documentRevision, that.documentRevision)
+                && Objects.equals(lifecycle, that.lifecycle)
                 && Objects.equals(contentPreview, that.contentPreview)
                 && Objects.equals(content, that.content)
                 && Objects.equals(metadata, that.metadata);
@@ -138,7 +162,8 @@ public record DocumentSummary(
                 createdAt, size, contentHash, enabled, updatedAt,
                 collectionId, collectionName, chunkCount, contentPreview, content, metadata,
                 collectionKey, externalId, sourceRevision, sourceDeletedAt,
-                processingError, embeddingFresh);
+                processingError, embeddingFresh, sourceNamespace,
+                documentRevision, lifecycle);
     }
 
     @Override
@@ -151,6 +176,8 @@ public record DocumentSummary(
                 + "', collectionKey='" + collectionKey
                 + "', externalId='" + externalId
                 + "', sourceRevision='" + sourceRevision
+                + "', sourceNamespace='" + sourceNamespace
+                + "', documentRevision=" + documentRevision
                 + "', chunkCount=" + chunkCount + ", contentPreview='" + contentPreview
                 + "', content='" + (content != null && content.length() > 50
                         ? content.substring(0, 50) + "..." : content) + "'"

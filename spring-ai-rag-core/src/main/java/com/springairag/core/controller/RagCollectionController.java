@@ -13,6 +13,7 @@ import com.springairag.api.dto.CollectionUpdateRequest;
 import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.api.dto.DocumentSummary;
+import com.springairag.api.dto.DocumentUpdateRequest;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentRevisionConflictException;
@@ -25,6 +26,7 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.JsonRecordService;
+import com.springairag.core.service.DocumentMutationService;
 import com.springairag.core.util.DigestUtils;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
@@ -67,11 +69,18 @@ public class RagCollectionController {
     private final RagCollectionService collectionService;
     private final CollectionIdentityResolver identityResolver;
     private JsonRecordService jsonRecordService;
+    private DocumentMutationService documentMutationService;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
 
     @Autowired(required = false)
     public void setJsonRecordService(JsonRecordService jsonRecordService) {
         this.jsonRecordService = jsonRecordService;
+    }
+
+    @Autowired(required = false)
+    public void setDocumentMutationService(
+            DocumentMutationService documentMutationService) {
+        this.documentMutationService = documentMutationService;
     }
 
     @Autowired
@@ -521,6 +530,7 @@ public class RagCollectionController {
                 id, currentKey);
 
         Long documentId = request.get("documentId");
+        Long expectedDocumentRevision = request.get("expectedDocumentRevision");
         if (documentId == null) {
             throw new IllegalArgumentException("documentId is required");
         }
@@ -536,8 +546,22 @@ public class RagCollectionController {
                         throw new DocumentRevisionConflictException(
                                 "External-managed documents must be synchronized by external identity");
                     }
-                    doc.setCollectionId(id);
-                    documentRepository.save(doc);
+                    if (documentMutationService != null) {
+                        if (expectedDocumentRevision == null) {
+                            throw new IllegalArgumentException(
+                                    "expectedDocumentRevision is required");
+                        }
+                        DocumentUpdateRequest update =
+                                new DocumentUpdateRequest();
+                        update.setExpectedDocumentRevision(
+                                expectedDocumentRevision);
+                        update.setCollectionKey(
+                                identityResolver.mapKeys(List.of(id)).get(id));
+                        documentMutationService.updateLocal(documentId, update);
+                    } else {
+                        doc.setCollectionId(id);
+                        documentRepository.save(doc);
+                    }
 
                     log.info("Document {} added to collection {}", documentId, id);
                     audit(AuditLogService.AuditAction.UPDATE, AuditLogService.ENTITY_DOCUMENT,
@@ -602,6 +626,7 @@ public class RagCollectionController {
                         doc.getMetadata(),
                         doc.getSize(),
                         doc.getExternalId(),
+                        doc.getSourceNamespace(),
                         doc.getSourceRevision(),
                         doc.getSourceDeletedAt(),
                         doc.getJsonbPayload(),
@@ -648,7 +673,10 @@ public class RagCollectionController {
         RagCollection collection = collectionService.createCollection(
                 buildCollectionRequestFromImport(importRequest));
 
-        int importedDocs = importDocuments(collection.getId(), importRequest.getDocuments());
+        int importedDocs = importDocuments(
+                collection.getId(),
+                collection.getCollectionKey(),
+                importRequest.getDocuments());
 
         log.info("Collection imported: id={}, name={}, documents={}",
                 collection.getId(), name, importedDocs);
@@ -691,17 +719,29 @@ public class RagCollectionController {
     }
 
     private int importDocuments(
-            Long collectionId, List<CollectionImportRequest.ImportedDocument> docList) {
+            Long collectionId,
+            String collectionKey,
+            List<CollectionImportRequest.ImportedDocument> docList) {
         int count = 0;
         if (docList != null) {
             java.util.Set<String> externalIds = new java.util.HashSet<>();
             for (CollectionImportRequest.ImportedDocument docData : docList) {
                 if (docData.getExternalId() != null
                         && !docData.getExternalId().isBlank()
-                        && !externalIds.add(docData.getExternalId().trim())) {
+                        && !externalIds.add(
+                                normalizeImportedNamespace(
+                                        docData.getSourceNamespace())
+                                        + "\u0000"
+                                        + docData.getExternalId().trim())) {
                     throw new IllegalArgumentException(
-                            "Duplicate document externalId in import: "
+                            "Duplicate document external identity in import: "
                                     + docData.getExternalId());
+                }
+                if (documentMutationService != null) {
+                    documentMutationService.importDocument(
+                            collectionId, collectionKey, docData);
+                    count++;
+                    continue;
                 }
                 if (RagDocument.JSON_RECORD.equals(docData.getDocumentType())) {
                     if (docData.getExternalId() == null
@@ -743,6 +783,8 @@ public class RagCollectionController {
         doc.setOriginalFilename(docData.getOriginalFilename());
         doc.setExternalId(normalizeImportedIdentity(
                 docData.getExternalId(), "externalId"));
+        doc.setSourceNamespace(normalizeImportedNamespace(
+                docData.getSourceNamespace()));
         doc.setSourceRevision(normalizeImportedIdentity(
                 docData.getSourceRevision(), "sourceRevision"));
         doc.setSourceDeletedAt(docData.getSourceDeletedAt());
@@ -754,6 +796,11 @@ public class RagCollectionController {
                 : docData.getEnabled());
         doc.setProcessingStatus("PENDING");
         return doc;
+    }
+
+    private String normalizeImportedNamespace(String value) {
+        return value == null || value.isBlank()
+                ? "default" : value.trim();
     }
 
     private String normalizeImportedIdentity(String value, String field) {

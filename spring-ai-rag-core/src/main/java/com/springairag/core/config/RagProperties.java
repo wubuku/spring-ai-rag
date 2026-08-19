@@ -65,6 +65,8 @@ public class RagProperties {
     private final RagRetrievalDiagnosticsProperties retrievalDiagnostics =
             new RagRetrievalDiagnosticsProperties();
     private final RagEvaluationProperties evaluation = new RagEvaluationProperties();
+    private final RagDocumentLifecycleProperties documentLifecycle =
+            new RagDocumentLifecycleProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -160,5 +162,9 @@ public class RagProperties {
 
     public RagEvaluationProperties getEvaluation() {
         return evaluation;
+    }
+
+    public RagDocumentLifecycleProperties getDocumentLifecycle() {
+        return documentLifecycle;
     }
 }

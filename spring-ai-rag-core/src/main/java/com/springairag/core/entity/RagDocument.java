@@ -38,6 +38,18 @@ public class RagDocument {
     private Long version;
 
     /**
+     * Public business revision used by document mutation APIs.
+     */
+    @Column(name = "document_revision", nullable = false)
+    private Long documentRevision = 1L;
+
+    /**
+     * Next complete snapshot number, allocated atomically by SQL.
+     */
+    @Column(name = "next_history_version", nullable = false)
+    private Integer nextHistoryVersion = 1;
+
+    /**
      * Owning collection ID (FK → rag_collection)
      */
     @Column(name = "collection_id")
@@ -86,6 +98,12 @@ public class RagDocument {
     private String externalId;
 
     /**
+     * External connector identity namespace.
+     */
+    @Column(name = "source_namespace", nullable = false, length = 128)
+    private String sourceNamespace = "default";
+
+    /**
      * Opaque caller-supplied source revision for external synchronization.
      */
     @Column(name = "source_revision", length = 255)
@@ -96,6 +114,18 @@ public class RagDocument {
      */
     @Column(name = "source_deleted_at")
     private LocalDateTime sourceDeletedAt;
+
+    /**
+     * Timestamp of a local disable operation.
+     */
+    @Column(name = "disabled_at")
+    private LocalDateTime disabledAt;
+
+    /**
+     * Monotonic mutation sequence inside one external source namespace.
+     */
+    @Column(name = "source_mutation_sequence", nullable = false)
+    private Long sourceMutationSequence = 0L;
 
     /**
      * Business JSON payload. It is never copied into embedding metadata.
@@ -169,6 +199,16 @@ public class RagDocument {
     public Long getVersion() { return version; }
     public void setVersion(Long version) { this.version = version; }
 
+    public Long getDocumentRevision() { return documentRevision; }
+    public void setDocumentRevision(Long documentRevision) {
+        this.documentRevision = documentRevision;
+    }
+
+    public Integer getNextHistoryVersion() { return nextHistoryVersion; }
+    public void setNextHistoryVersion(Integer nextHistoryVersion) {
+        this.nextHistoryVersion = nextHistoryVersion;
+    }
+
     public Long getCollectionId() { return collectionId; }
     public void setCollectionId(Long collectionId) { this.collectionId = collectionId; }
 
@@ -193,12 +233,27 @@ public class RagDocument {
     public String getExternalId() { return externalId; }
     public void setExternalId(String externalId) { this.externalId = externalId; }
 
+    public String getSourceNamespace() { return sourceNamespace; }
+    public void setSourceNamespace(String sourceNamespace) {
+        this.sourceNamespace = sourceNamespace;
+    }
+
     public String getSourceRevision() { return sourceRevision; }
     public void setSourceRevision(String sourceRevision) { this.sourceRevision = sourceRevision; }
 
     public LocalDateTime getSourceDeletedAt() { return sourceDeletedAt; }
     public void setSourceDeletedAt(LocalDateTime sourceDeletedAt) {
         this.sourceDeletedAt = sourceDeletedAt;
+    }
+
+    public LocalDateTime getDisabledAt() { return disabledAt; }
+    public void setDisabledAt(LocalDateTime disabledAt) {
+        this.disabledAt = disabledAt;
+    }
+
+    public Long getSourceMutationSequence() { return sourceMutationSequence; }
+    public void setSourceMutationSequence(Long sourceMutationSequence) {
+        this.sourceMutationSequence = sourceMutationSequence;
     }
 
     public JsonNode getJsonbPayload() { return jsonbPayload; }

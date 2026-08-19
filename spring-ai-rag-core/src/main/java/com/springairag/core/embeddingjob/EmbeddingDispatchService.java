@@ -11,7 +11,10 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.service.DocumentEmbedService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 import java.util.UUID;
@@ -26,16 +29,32 @@ public class EmbeddingDispatchService {
     private final EmbeddingJobRepository jobRepository;
     private final EmbeddingProfileProvider profileProvider;
     private final RagEmbeddingJobProperties jobProperties;
+    private final DocumentDerivationDescriptorProvider descriptorProvider;
+    private final EmbeddingJobExecutor jobExecutor;
+
+    @Autowired
+    public EmbeddingDispatchService(
+            DocumentEmbedService documentEmbedService,
+            EmbeddingJobRepository jobRepository,
+            EmbeddingProfileProvider profileProvider,
+            RagProperties ragProperties,
+            DocumentDerivationDescriptorProvider descriptorProvider,
+            EmbeddingJobExecutor jobExecutor) {
+        this.documentEmbedService = documentEmbedService;
+        this.jobRepository = jobRepository;
+        this.profileProvider = profileProvider;
+        this.jobProperties = ragProperties.getEmbeddingJobs();
+        this.descriptorProvider = descriptorProvider;
+        this.jobExecutor = jobExecutor;
+    }
 
     public EmbeddingDispatchService(
             DocumentEmbedService documentEmbedService,
             EmbeddingJobRepository jobRepository,
             EmbeddingProfileProvider profileProvider,
             RagProperties ragProperties) {
-        this.documentEmbedService = documentEmbedService;
-        this.jobRepository = jobRepository;
-        this.profileProvider = profileProvider;
-        this.jobProperties = ragProperties.getEmbeddingJobs();
+        this(documentEmbedService, jobRepository, profileProvider, ragProperties,
+                null, null);
     }
 
     public Result dispatchAfterCommit(
@@ -45,45 +64,16 @@ public class EmbeddingDispatchService {
             String origin) {
         EmbeddingProfile profile = profileProvider.getActiveProfile();
         if (policy == EmbeddingPolicy.SKIP) {
-            return Result.skipped(profile.profileKey());
+            return markNotRequestedInCurrentTransaction(document);
         }
-        if (policy == EmbeddingPolicy.ASYNC) {
-            throw new IllegalStateException(
-                    "ASYNC jobs must be enqueued in the document transaction");
-        }
-        boolean fresh = documentEmbedService.hasFreshEmbedding(document);
-        if (!contentChanged && fresh) {
-            return new Result(
-                    EmbeddingAction.SYNC_CACHED, "CACHED",
-                    profile.profileKey(), null, null, null);
-        }
-        try {
-            Map<String, Object> embed = documentEmbedService.embedDocument(
-                    document.getId(), false);
-            String status = String.valueOf(embed.getOrDefault("status", "FAILED"));
-            String profileKey = String.valueOf(embed.getOrDefault(
-                    "embeddingProfileKey", profile.profileKey()));
-            if ("CACHED".equals(status)) {
-                return new Result(
-                        EmbeddingAction.SYNC_CACHED, "CACHED",
-                        profileKey, null, null, null);
-            }
-            if ("COMPLETED".equals(status)) {
-                return new Result(
-                        EmbeddingAction.SYNC_COMPLETED, "COMPLETED",
-                        profileKey, null, null, null);
-            }
-            return new Result(
-                    EmbeddingAction.SYNC_COMPLETED, "FAILED",
-                    profileKey, null, null,
-                    embed.get("error") == null ? null : String.valueOf(embed.get("error")));
-        } catch (RuntimeException e) {
-            return new Result(
-                    EmbeddingAction.SYNC_COMPLETED, "FAILED",
-                    profile.profileKey(), null, null, e.getMessage());
-        }
+        Result queued = enqueueInCurrentTransaction(
+                document, contentChanged, false, origin);
+        return policy == EmbeddingPolicy.SYNC
+                ? completeAfterCommit(queued)
+                : queued;
     }
 
+    @Transactional
     public Result enqueueInCurrentTransaction(
             RagDocument document,
             boolean contentChanged,
@@ -95,32 +85,55 @@ public class EmbeddingDispatchService {
                     "Persistent embedding jobs are disabled");
         }
         EmbeddingProfile profile = profileProvider.getActiveProfile();
+        DocumentDerivationDescriptorProvider.Descriptor descriptor =
+                descriptor(document);
+        var active = jobRepository.findCurrentActive(
+                document.getId(),
+                profile.id(),
+                document.getContentHash(),
+                descriptor.documentKind(),
+                descriptor.chunkerVersion());
+        if (active.isPresent()) {
+            EmbeddingJob current = active.get();
+            EmbeddingJobRepository.CreateResult updated =
+                    jobRepository.createOrCoalesce(
+                            current.batchId(),
+                            document.getId(),
+                            profile.id(),
+                            document.getContentHash(),
+                            document.getVersion() != null
+                                    ? document.getVersion() : 0L,
+                            force,
+                            current.maxAttempts(),
+                            origin,
+                            ChatPrincipal.fromCurrentRequest().id(),
+                            current.requestGeneration(),
+                            descriptor.documentKind(),
+                            descriptor.chunkerVersion());
+            if (force) {
+                jobRepository.updateDocumentProcessing(
+                        document.getId(), "PENDING", null);
+            }
+            return new Result(
+                    EmbeddingAction.ASYNC_COALESCED,
+                    updated.job().status().name(),
+                    profile.profileKey(),
+                    updated.job().id(),
+                    updated.job().batchId(),
+                    null);
+        }
         boolean fresh = documentEmbedService.hasFreshEmbedding(document);
         if (!contentChanged && !force && fresh) {
-            var active = jobRepository.findActive(
-                    document.getId(), profile.id(), document.getContentHash());
-            if (active.isPresent()) {
-                EmbeddingJobRepository.CreateResult updated =
-                        jobRepository.createOrCoalesce(
-                                active.get().batchId(),
-                                document.getId(),
-                                profile.id(),
-                                document.getContentHash(),
-                                document.getVersion() != null ? document.getVersion() : 0L,
-                                false,
-                                active.get().maxAttempts(),
-                                origin,
-                                ChatPrincipal.fromCurrentRequest().id());
-                return new Result(
-                        EmbeddingAction.ASYNC_COALESCED,
-                        "QUEUED",
-                        profile.profileKey(),
-                        updated.job().id(),
-                        updated.job().batchId(),
-                        null);
-            }
             return Result.skipped(profile.profileKey());
         }
+        long generation = jobRepository.allocateGeneration(
+                document.getId(),
+                profile.id(),
+                document.getContentHash(),
+                descriptor.chunkerVersion(),
+                force && fresh);
+        jobRepository.cancelSuperseded(
+                document.getId(), profile.id(), generation);
         EmbeddingJobRepository.CreateResult created =
                 jobRepository.createOrCoalesce(
                         UUID.randomUUID(),
@@ -131,7 +144,14 @@ public class EmbeddingDispatchService {
                         force,
                         jobProperties.getDefaultMaxAttempts(),
                         origin,
-                        ChatPrincipal.fromCurrentRequest().id());
+                        ChatPrincipal.fromCurrentRequest().id(),
+                        generation,
+                        descriptor.documentKind(),
+                        descriptor.chunkerVersion());
+        jobRepository.activateJob(
+                document.getId(), profile.id(), generation, created.job().id());
+        jobRepository.updateDocumentProcessing(
+                document.getId(), "PENDING", null);
         return new Result(
                 created.coalesced()
                         ? EmbeddingAction.ASYNC_COALESCED
@@ -141,6 +161,65 @@ public class EmbeddingDispatchService {
                 created.job().id(),
                 created.job().batchId(),
                 null);
+    }
+
+    @Transactional
+    public Result markNotRequestedInCurrentTransaction(RagDocument document) {
+        EmbeddingProfile profile = profileProvider.getActiveProfile();
+        DocumentDerivationDescriptorProvider.Descriptor descriptor =
+                descriptor(document);
+        jobRepository.markNotRequested(
+                document.getId(),
+                profile.id(),
+                document.getContentHash(),
+                descriptor.chunkerVersion());
+        jobRepository.updateDocumentProcessing(
+                document.getId(), "NOT_REQUESTED", null);
+        return Result.skipped(profile.profileKey());
+    }
+
+    @Transactional
+    public int cancelActiveInCurrentTransaction(long documentId) {
+        return jobRepository.cancelActiveForDocument(documentId);
+    }
+
+    public Result completeAfterCommit(Result queued) {
+        if (queued == null || queued.embeddingJobId() == null) {
+            return queued;
+        }
+        if (jobExecutor == null) {
+            return queued;
+        }
+        EmbeddingJob completed = jobExecutor.executeNow(queued.embeddingJobId());
+        return switch (completed.status()) {
+            case SUCCEEDED -> new Result(
+                    EmbeddingAction.SYNC_COMPLETED,
+                    "COMPLETED",
+                    queued.embeddingProfileKey(),
+                    completed.id(),
+                    completed.batchId(),
+                    null);
+            case FAILED, CANCELLED, STALE -> new Result(
+                    EmbeddingAction.SYNC_COMPLETED,
+                    "FAILED",
+                    queued.embeddingProfileKey(),
+                    completed.id(),
+                    completed.batchId(),
+                    completed.lastError());
+            case QUEUED, RUNNING -> queued;
+        };
+    }
+
+    private DocumentDerivationDescriptorProvider.Descriptor descriptor(
+            RagDocument document) {
+        if (descriptorProvider != null) {
+            return descriptorProvider.describe(document);
+        }
+        return RagDocument.JSON_RECORD.equals(document.getDocumentType())
+                ? new DocumentDerivationDescriptorProvider.Descriptor(
+                        "JSON_RECORD", "json-record-v1:single")
+                : new DocumentDerivationDescriptorProvider.Descriptor(
+                        "TEXT", "legacy-compatible");
     }
 
     public record Result(

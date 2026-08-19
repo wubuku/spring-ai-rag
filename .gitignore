@@ -62,3 +62,7 @@ test-results
 
 # Generated verification logs (kept outside Maven target/ so `mvn clean` preserves them)
 .verification/
+
+# Python local/generated state
+__pycache__/
+*.py[cod]

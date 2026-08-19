@@ -1,6 +1,9 @@
 package com.springairag.core.service;
 
 import com.springairag.api.dto.EmbedProgressEvent;
+import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.DocumentMutationResponse;
+import com.springairag.api.enums.DocumentDeduplicationScope;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
@@ -11,7 +14,6 @@ import com.springairag.core.repository.RagDocumentRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -45,6 +47,7 @@ public class PdfToRagService {
     private final RagDocumentRepository documentRepository;
     private final DocumentEmbedService documentEmbedService;
     private EmbeddingDispatchService dispatchService;
+    private DocumentMutationService documentMutationService;
 
     public PdfToRagService(FsFileRepository fsFileRepository,
                            RagDocumentRepository documentRepository,
@@ -57,6 +60,12 @@ public class PdfToRagService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setDocumentMutationService(
+            DocumentMutationService documentMutationService) {
+        this.documentMutationService = documentMutationService;
     }
 
     // ---- Public API ----
@@ -72,12 +81,19 @@ public class PdfToRagService {
      * @param forceReembed      whether to force re-embedding (ignored when embed=false)
      * @return import result containing the created document ID and embedding status
      */
-    @Transactional
     public PdfToRagResult importPdfToRag(String entryMarkdownPath,
                                           String originalFilename,
                                           Long collectionId,
                                           boolean embed,
                                           boolean forceReembed) {
+        if (documentMutationService != null) {
+            return importPdfToRag(
+                    entryMarkdownPath,
+                    originalFilename,
+                    collectionId,
+                    embed ? EmbeddingPolicy.SYNC : EmbeddingPolicy.SKIP,
+                    forceReembed);
+        }
         Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
         log.info("Importing PDF conversion to RAG: entryMarkdownPath={}, originalFilename={}, "
                 + "collectionId={}, embed={}, forceReembed={}",
@@ -94,7 +110,6 @@ public class PdfToRagService {
         return toPdfToRagResult(result, embedResult);
     }
 
-    @Transactional
     public PdfToRagResult importPdfToRag(String entryMarkdownPath,
                                           String originalFilename,
                                           Long collectionId,
@@ -103,6 +118,15 @@ public class PdfToRagService {
         Objects.requireNonNull(entryMarkdownPath, "entryMarkdownPath must not be null");
         if (policy == EmbeddingPolicy.ASYNC) {
             EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
+        }
+        if (documentMutationService != null) {
+            String title = deriveTitle(originalFilename);
+            DocumentBuildResult result = buildDocumentFromMarkdown(
+                    entryMarkdownPath, title, originalFilename, collectionId,
+                    policy, forceReembed);
+            return toPdfToRagResult(result);
+        }
+        if (policy == EmbeddingPolicy.ASYNC) {
             String title = deriveTitle(originalFilename);
             DocumentBuildResult result = buildDocumentFromMarkdown(
                     entryMarkdownPath, title, originalFilename, collectionId);
@@ -130,7 +154,6 @@ public class PdfToRagService {
      * @param progressCallback  SSE progress callback (can be null)
      * @return import result
      */
-    @Transactional
     public PdfToRagResult importPdfToRagWithEmbedding(String entryMarkdownPath,
                                                        String originalFilename,
                                                        Long collectionId,
@@ -193,6 +216,11 @@ public class PdfToRagService {
             EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
             String entryPath = uuid + "/default.md";
             String title = deriveTitleFromMetadata(entryPath, uuid);
+            if (documentMutationService != null) {
+                return toPdfToRagResult(buildDocumentFromMarkdown(
+                        entryPath, title, null, collectionId,
+                        EmbeddingPolicy.ASYNC, forceReembed));
+            }
             DocumentBuildResult result = buildDocumentFromMarkdown(
                     entryPath, title, null, collectionId);
             EmbeddingDispatchService.Result queued =
@@ -252,6 +280,18 @@ public class PdfToRagService {
                                                           String title,
                                                           String originalFilename,
                                                           Long collectionId) {
+        return buildDocumentFromMarkdown(
+                markdownPath, title, originalFilename, collectionId,
+                EmbeddingPolicy.SKIP, false);
+    }
+
+    private DocumentBuildResult buildDocumentFromMarkdown(
+            String markdownPath,
+            String title,
+            String originalFilename,
+            Long collectionId,
+            EmbeddingPolicy policy,
+            boolean forceReembed) {
         FsFile fsFile = fsFileRepository.findById(markdownPath)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Entry Markdown file not found in fs_files: " + markdownPath));
@@ -267,6 +307,36 @@ public class PdfToRagService {
         String source = "pdf-import:" + markdownPath;
 
         var existing = documentRepository.findFirstBySourceOrderByIdAsc(source);
+        if (documentMutationService != null) {
+            DocumentRequest request = new DocumentRequest(title, content);
+            request.setSource(source);
+            request.setDocumentType("markdown");
+            request.setMetadata(Map.of(
+                    "importedFrom", "pdf",
+                    "fsFilesPath", markdownPath,
+                    "uuid", uuid));
+            request.setDeduplicationScope(DocumentDeduplicationScope.NONE);
+            DocumentMutationService.CreatedLocal changed =
+                    documentMutationService.upsertLocalImport(
+                            existing.map(RagDocument::getId).orElse(null),
+                            request,
+                            collectionId,
+                            originalFilename != null
+                                    ? originalFilename : fsFile.getPath(),
+                            null,
+                            null,
+                            policy,
+                            forceReembed,
+                            "PDF_TO_RAG");
+            boolean newlyCreated =
+                    "CREATED".equals(changed.mutation().action());
+            return new DocumentBuildResult(
+                    changed.document(),
+                    newlyCreated,
+                    changed.mutation().scopeChanged(),
+                    uuid,
+                    changed.mutation());
+        }
         if (existing.isPresent()) {
             RagDocument doc = existing.get();
             boolean updated = updateExistingDocument(
@@ -276,7 +346,7 @@ public class PdfToRagService {
                 doc = documentRepository.save(doc);
             }
             log.info("Existing PDF source detected, using document id={}", doc.getId());
-            return new DocumentBuildResult(doc, false, updated, uuid);
+            return new DocumentBuildResult(doc, false, updated, uuid, null);
         }
 
         RagDocument doc = new RagDocument();
@@ -294,7 +364,7 @@ public class PdfToRagService {
                 "uuid", uuid));
         doc = documentRepository.save(doc);
         log.info("RAG document created: id={}", doc.getId());
-        return new DocumentBuildResult(doc, true, false, uuid);
+        return new DocumentBuildResult(doc, true, false, uuid, null);
     }
 
     private boolean updateExistingDocument(
@@ -422,6 +492,24 @@ public class PdfToRagService {
                 embed != null ? embed.chunksCreated() : null);
     }
 
+    private PdfToRagResult toPdfToRagResult(DocumentBuildResult build) {
+        DocumentMutationResponse mutation = build.mutation();
+        if (mutation == null) {
+            return toPdfToRagResult(build, null);
+        }
+        return new PdfToRagResult(
+                build.doc().getId(),
+                build.doc().getTitle(),
+                build.newlyCreated(),
+                mutation.lifecycle() == null
+                        ? null : mutation.lifecycle().embeddingStatus(),
+                mutation.embeddingAction(),
+                null,
+                mutation.embeddingAction(),
+                mutation.embeddingJobId(),
+                mutation.embeddingBatchId());
+    }
+
     // ---- Result types ----
 
     public record PdfToRagResult(
@@ -461,6 +549,7 @@ public class PdfToRagService {
             RagDocument doc,
             boolean newlyCreated,
             boolean collectionUpdated,
-            String uuid
+            String uuid,
+            DocumentMutationResponse mutation
     ) {}
 }

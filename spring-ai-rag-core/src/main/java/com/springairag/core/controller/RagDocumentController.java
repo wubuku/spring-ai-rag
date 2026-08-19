@@ -8,9 +8,13 @@ import com.springairag.api.dto.BatchDocumentRequest;
 import com.springairag.api.dto.BatchEmbedResponse;
 import com.springairag.api.dto.DocumentCreateResponse;
 import com.springairag.api.dto.DocumentDeleteResponse;
+import com.springairag.api.dto.DocumentDisableRequest;
 import com.springairag.api.dto.DocumentDetailResponse;
 import com.springairag.api.dto.DocumentListResponse;
 import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.dto.DocumentRestoreRequest;
+import com.springairag.api.dto.DocumentMutationResponse;
+import com.springairag.api.dto.DocumentUpdateRequest;
 import com.springairag.api.dto.DocumentStatsResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.api.dto.EmbeddingStatusResponse;
@@ -40,12 +44,15 @@ import com.springairag.core.service.AuditLogService;
 import com.springairag.core.service.BatchDocumentService;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
+import com.springairag.core.service.DocumentLifecycleService;
+import com.springairag.core.service.DocumentMutationService;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
+import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.service.ExternalDocumentService;
-import com.springairag.core.util.DigestUtils;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
@@ -107,6 +114,9 @@ public class RagDocumentController {
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
     private ExternalDocumentService externalDocumentService;
     private EmbeddingDispatchService dispatchService;
+    private DocumentMutationService documentMutationService;
+    private DocumentLifecycleService documentLifecycleService;
+    private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -137,6 +147,24 @@ public class RagDocumentController {
     @Autowired(required = false)
     public void setDispatchService(EmbeddingDispatchService dispatchService) {
         this.dispatchService = dispatchService;
+    }
+
+    @Autowired(required = false)
+    public void setDocumentMutationService(
+            DocumentMutationService documentMutationService) {
+        this.documentMutationService = documentMutationService;
+    }
+
+    @Autowired(required = false)
+    public void setDocumentLifecycleService(
+            DocumentLifecycleService documentLifecycleService) {
+        this.documentLifecycleService = documentLifecycleService;
+    }
+
+    @Autowired(required = false)
+    public void setDerivationDescriptorProvider(
+            DocumentDerivationDescriptorProvider derivationDescriptorProvider) {
+        this.derivationDescriptorProvider = derivationDescriptorProvider;
     }
 
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -196,9 +224,12 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.external-get", description = "Get external document")
     public ResponseEntity<DocumentDetailResponse> getExternalDocument(
             @RequestParam @NotBlank @Size(max = 128) String collectionKey,
+            @RequestParam(defaultValue = "default") @Size(max = 128)
+            String sourceNamespace,
             @RequestParam @NotBlank @Size(max = 255) String externalId) {
         return ResponseEntity.ok(requireExternalDocumentService()
-                .getByExternalIdentity(collectionKey, externalId));
+                .getByExternalIdentity(
+                        collectionKey, sourceNamespace, externalId));
     }
 
     @Operation(summary = "Tombstone an externally managed document",
@@ -214,11 +245,14 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.external-delete", description = "Delete external document")
     public ResponseEntity<ExternalDocumentDeleteResponse> deleteExternalDocument(
             @RequestParam @NotBlank @Size(max = 128) String collectionKey,
+            @RequestParam(defaultValue = "default") @Size(max = 128)
+            String sourceNamespace,
             @RequestParam @NotBlank @Size(max = 255) String externalId,
             @RequestParam @NotBlank @Size(max = 255) String sourceRevision,
             @RequestParam(required = false) @Size(max = 255) String expectedSourceRevision) {
         return ResponseEntity.ok(requireExternalDocumentService().sourceDelete(
-                collectionKey, externalId, sourceRevision, expectedSourceRevision));
+                collectionKey, sourceNamespace, externalId,
+                sourceRevision, expectedSourceRevision));
     }
 
     // ==================== CRUD ====================
@@ -230,32 +264,46 @@ public class RagDocumentController {
     })
     @PostMapping
     @Timed(value = "rag.documents.create", description = "Create a new document", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<DocumentCreateResponse> createDocument(@Valid @RequestBody DocumentRequest request) {
+    public ResponseEntity<DocumentCreateResponse> createDocument(
+            @Valid @RequestBody DocumentRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey) {
         log.info("Creating document: title={}", request.getTitle());
         var currentKey = ApiKeyCollectionAccess.currentKey();
         Long collectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(), currentKey);
 
-        String content = request.getContent();
-        String contentHash = DigestUtils.sha256(content);
-
-        // Deduplication check
-        List<RagDocument> existing = documentRepository.findByContentHash(contentHash).stream()
-                .filter(doc -> {
-                    try {
-                        ApiKeyCollectionAccess.requireDocumentAccess(doc, currentKey);
-                        return true;
-                    } catch (SecurityException ignored) {
-                        return false;
-                    }
-                })
-                .toList();
-        if (!existing.isEmpty()) {
-            RagDocument dup = existing.get(0);
-            log.info("Duplicate content detected: existing doc id={}, hash={}", dup.getId(), contentHash);
-            return ResponseEntity.ok(DocumentCreateResponse.duplicate(dup.getId(), dup.getTitle(), dup.getContentHash()));
+        if (documentMutationService != null) {
+            DocumentMutationService.CreatedLocal created =
+                    documentMutationService.createLocal(
+                            request,
+                            collectionId,
+                            request.getEmbeddingPolicy(),
+                            false,
+                            "LOCAL_CREATE",
+                            idempotencyKey,
+                            null,
+                            null,
+                            null);
+            RagDocument doc = created.document();
+            auditCreate(AuditLogService.ENTITY_DOCUMENT,
+                    String.valueOf(doc.getId()),
+                    "Document created: " + doc.getTitle());
+            return ResponseEntity.ok(DocumentCreateResponse.mutation(
+                    doc.getId(),
+                    doc.getTitle(),
+                    doc.getContentHash(),
+                    created.mutation()));
         }
 
+        String content = request.getContent();
+        String contentHash = com.springairag.core.util.DigestUtils.sha256(content);
+        List<RagDocument> existing = documentRepository.findByContentHash(contentHash);
+        if (!existing.isEmpty()) {
+            RagDocument dup = existing.getFirst();
+            return ResponseEntity.ok(DocumentCreateResponse.duplicate(
+                    dup.getId(), dup.getTitle(), dup.getContentHash()));
+        }
         RagDocument doc = new RagDocument();
         doc.setTitle(request.getTitle());
         doc.setContent(content);
@@ -272,6 +320,11 @@ public class RagDocumentController {
                 "Document created: " + doc.getTitle());
 
         return ResponseEntity.ok(DocumentCreateResponse.created(doc.getId(), doc.getTitle(), contentHash));
+    }
+
+    public ResponseEntity<DocumentCreateResponse> createDocument(
+            DocumentRequest request) {
+        return createDocument(request, null);
     }
 
     @Operation(summary = "Get document details", description = "Query document content, metadata, and embedding vector count.")
@@ -301,7 +354,9 @@ public class RagDocumentController {
                             : Map.of();
                     DocumentDetailResponse result = DocumentMapper.toDetailResponse(
                             doc, collectionNameMap, collectionKeyMap, embeddingRepository,
-                            activeEmbeddingProfileId());
+                            activeEmbeddingProfileId(),
+                            documentLifecycleService == null
+                                    ? null : documentLifecycleService.read(doc));
                     return ResponseEntity.ok(result);
                 })
                 .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -314,9 +369,59 @@ public class RagDocumentController {
     })
     @DeleteMapping("/{id}")
     @Timed(value = "rag.documents.delete", description = "Delete a document", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<DocumentDeleteResponse> deleteDocument(@PathVariable Long id) {
+    public ResponseEntity<DocumentDeleteResponse> deleteDocument(
+            @PathVariable Long id,
+            @RequestParam(required = false) Long expectedDocumentRevision) {
         requireDocumentAccess(id);
+        if (documentMutationService != null) {
+            if (expectedDocumentRevision == null) {
+                throw new IllegalArgumentException(
+                        "expectedDocumentRevision is required for permanent deletion");
+            }
+            DocumentMutationService.DeletedLocal deleted =
+                    documentMutationService.hardDeleteLocal(
+                            id, expectedDocumentRevision);
+            return ResponseEntity.ok(new DocumentDeleteResponse(
+                    "Document permanently deleted",
+                    id,
+                    deleted.embeddingsRemoved(),
+                    deleted.documentRevision()));
+        }
         return ResponseEntity.ok(batchDocumentService.deleteDocument(id));
+    }
+
+    public ResponseEntity<DocumentDeleteResponse> deleteDocument(Long id) {
+        return deleteDocument(id, null);
+    }
+
+    @Operation(summary = "Update a locally managed document with CAS")
+    @PatchMapping("/{id}")
+    @Timed(value = "rag.documents.update", description = "Update a local document")
+    public ResponseEntity<DocumentMutationResponse> updateDocument(
+            @PathVariable Long id,
+            @Valid @RequestBody DocumentUpdateRequest request) {
+        return ResponseEntity.ok(requireDocumentMutationService()
+                .updateLocal(id, request));
+    }
+
+    @Operation(summary = "Disable a locally managed document")
+    @PostMapping("/{id}/disable")
+    @Timed(value = "rag.documents.disable", description = "Disable a local document")
+    public ResponseEntity<DocumentMutationResponse> disableDocument(
+            @PathVariable Long id,
+            @Valid @RequestBody DocumentDisableRequest request) {
+        return ResponseEntity.ok(requireDocumentMutationService()
+                .disableLocal(id, request));
+    }
+
+    @Operation(summary = "Restore a disabled locally managed document")
+    @PostMapping("/{id}/restore")
+    @Timed(value = "rag.documents.restore", description = "Restore a local document")
+    public ResponseEntity<DocumentMutationResponse> restoreDocument(
+            @PathVariable Long id,
+            @Valid @RequestBody DocumentRestoreRequest request) {
+        return ResponseEntity.ok(requireDocumentMutationService()
+                .restoreLocal(id, request));
     }
 
     @Operation(summary = "List documents", description = "Paginated document list with filtering by title/type/status and sorting by creation time descending.")
@@ -380,7 +485,9 @@ public class RagDocumentController {
         List<DocumentSummary> docs = pageResult.getContent().stream()
                 .map(doc -> DocumentMapper.toSummary(
                         doc, collectionNameMap, collectionKeyMap, embeddingRepository,
-                        activeEmbeddingProfileId()))
+                        activeEmbeddingProfileId(),
+                        documentLifecycleService == null
+                                ? null : documentLifecycleService.read(doc)))
                 .toList();
 
         return ResponseEntity.ok(new DocumentListResponse(
@@ -447,7 +554,7 @@ public class RagDocumentController {
                         .orElseThrow(() -> new DocumentNotFoundException(id));
                 EmbeddingDispatchService.Result queued =
                         dispatchService.enqueueInCurrentTransaction(
-                                document, true, force, "DOCUMENT_EMBED");
+                                document, false, force, "DOCUMENT_EMBED");
                 result = embedDispatchMap(queued, id);
             } else {
                 result = documentEmbedService.embedDocument(id, force);
@@ -478,11 +585,8 @@ public class RagDocumentController {
         long total = restrictedIds
                 .map(ids -> documentRepository.countByCollectionIdIn(List.copyOf(ids)))
                 .orElseGet(documentRepository::count);
-        long withoutEmbedding = restrictedIds
-                .map(ids -> documentRepository.countDocumentsWithoutEmbeddingsByCollectionIds(
-                        List.copyOf(ids), embeddingProfileId))
-                .orElseGet(() -> documentRepository.countDocumentsWithoutEmbeddings(
-                        embeddingProfileId));
+        long withoutEmbedding = countDocumentsWithoutCurrentEmbedding(
+                restrictedIds, embeddingProfileId);
         long withEmbedding = total - withoutEmbedding;
         return ResponseEntity.ok(new EmbeddingStatusResponse(
                 total, withEmbedding, withoutEmbedding, withoutEmbedding > 0));
@@ -504,12 +608,10 @@ public class RagDocumentController {
             @RequestParam(required = false) EmbeddingPolicy embeddingPolicy) {
         EmbeddingPolicy policy = EmbeddingPolicySupport.requireEmbed(embeddingPolicy, true);
         long embeddingProfileId = activeEmbeddingProfileId();
-        List<RagDocument> missing = ApiKeyCollectionAccess.restrictedCollectionIds(
-                        ApiKeyCollectionAccess.currentKey())
-                .map(ids -> documentRepository.findDocumentsWithoutEmbeddingsByCollectionIds(
-                        List.copyOf(ids), embeddingProfileId))
-                .orElseGet(() -> documentRepository.findDocumentsWithoutEmbeddings(
-                        embeddingProfileId));
+        List<RagDocument> missing = findDocumentsWithoutCurrentEmbedding(
+                ApiKeyCollectionAccess.restrictedCollectionIds(
+                        ApiKeyCollectionAccess.currentKey()),
+                embeddingProfileId);
         if (missing.isEmpty()) {
             return ResponseEntity.ok(new ReembedMissingResponse(0, 0, 0, List.of()));
         }
@@ -553,7 +655,7 @@ public class RagDocumentController {
                 EmbeddingPolicySupport.requireJobsEnabled(dispatchService);
                 EmbeddingDispatchService.Result queued =
                         dispatchService.enqueueInCurrentTransaction(
-                                doc, true, force, "REEMBED_MISSING");
+                                doc, false, force, "REEMBED_MISSING");
                 return new ReembedResultResponse(
                         doc.getId(),
                         doc.getTitle(),
@@ -583,6 +685,58 @@ public class RagDocumentController {
 
     private long activeEmbeddingProfileId() {
         return embeddingProfileProvider.getActiveProfile().id();
+    }
+
+    private long countDocumentsWithoutCurrentEmbedding(
+            java.util.Optional<java.util.Set<Long>> restrictedIds,
+            long embeddingProfileId) {
+        if (derivationDescriptorProvider == null) {
+            return restrictedIds
+                    .map(ids -> documentRepository
+                            .countDocumentsWithoutEmbeddingsByCollectionIds(
+                                    List.copyOf(ids), embeddingProfileId))
+                    .orElseGet(() -> documentRepository
+                            .countDocumentsWithoutEmbeddings(
+                                    embeddingProfileId));
+        }
+        String textVersion = derivationDescriptorProvider
+                .textDescriptor().chunkerVersion();
+        String jsonVersion = derivationDescriptorProvider
+                .jsonRecordDescriptor().chunkerVersion();
+        return restrictedIds
+                .map(ids -> documentRepository
+                        .countDocumentsWithoutCurrentEmbeddingsByCollectionIds(
+                                List.copyOf(ids), embeddingProfileId,
+                                textVersion, jsonVersion))
+                .orElseGet(() -> documentRepository
+                        .countDocumentsWithoutCurrentEmbeddings(
+                                embeddingProfileId, textVersion, jsonVersion));
+    }
+
+    private List<RagDocument> findDocumentsWithoutCurrentEmbedding(
+            java.util.Optional<java.util.Set<Long>> restrictedIds,
+            long embeddingProfileId) {
+        if (derivationDescriptorProvider == null) {
+            return restrictedIds
+                    .map(ids -> documentRepository
+                            .findDocumentsWithoutEmbeddingsByCollectionIds(
+                                    List.copyOf(ids), embeddingProfileId))
+                    .orElseGet(() -> documentRepository
+                            .findDocumentsWithoutEmbeddings(
+                                    embeddingProfileId));
+        }
+        String textVersion = derivationDescriptorProvider
+                .textDescriptor().chunkerVersion();
+        String jsonVersion = derivationDescriptorProvider
+                .jsonRecordDescriptor().chunkerVersion();
+        return restrictedIds
+                .map(ids -> documentRepository
+                        .findDocumentsWithoutCurrentEmbeddingsByCollectionIds(
+                                List.copyOf(ids), embeddingProfileId,
+                                textVersion, jsonVersion))
+                .orElseGet(() -> documentRepository
+                        .findDocumentsWithoutCurrentEmbeddings(
+                                embeddingProfileId, textVersion, jsonVersion));
     }
 
     /**
@@ -647,7 +801,9 @@ public class RagDocumentController {
     @PostMapping("/batch")
     @Timed(value = "rag.documents.batch-create", description = "Batch create documents", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
-            @Valid @RequestBody BatchDocumentRequest request) {
+            @Valid @RequestBody BatchDocumentRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey) {
         Long batchCollectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(),
                 ApiKeyCollectionAccess.currentKey());
@@ -664,7 +820,8 @@ public class RagDocumentController {
                 request.isEmbed(),
                 request.getCollectionId(),
                 request.isForce(),
-                request.getEmbeddingPolicy());
+                request.getEmbeddingPolicy(),
+                idempotencyKey);
 
         auditCreate(AuditLogService.ENTITY_DOCUMENT,
                 "batch",
@@ -675,6 +832,11 @@ public class RagDocumentController {
                         "collectionId", request.getCollectionId() != null ? request.getCollectionId() : ""));
 
         return ResponseEntity.ok(result);
+    }
+
+    public ResponseEntity<BatchCreateResponse> batchCreateDocuments(
+            BatchDocumentRequest request) {
+        return batchCreateDocuments(request, null);
     }
 
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey,
@@ -769,7 +931,7 @@ public class RagDocumentController {
             for (RagDocument document : documents) {
                 EmbeddingDispatchService.Result result =
                         dispatchService.enqueueInCurrentTransaction(
-                                document, true, false, "BATCH_EMBED");
+                                document, false, false, "BATCH_EMBED");
                 items.add(new BatchEmbedResponse.BatchEmbedResultItem(
                         document.getId(),
                         result.embeddingStatus(),
@@ -909,7 +1071,9 @@ public class RagDocumentController {
             @RequestParam(value = "collectionId", required = false) Long collectionId,
             @RequestParam(value = "collectionKey", required = false) String collectionKey,
             @RequestParam(value = "force", defaultValue = "false") boolean force,
-            @RequestParam(value = "embeddingPolicy", required = false) EmbeddingPolicy embeddingPolicy) {
+            @RequestParam(value = "embeddingPolicy", required = false) EmbeddingPolicy embeddingPolicy,
+            @RequestHeader(value = "Idempotency-Key", required = false)
+            String idempotencyKey) {
         collectionId = resolveWritableCollectionId(
                 collectionId, collectionKey, ApiKeyCollectionAccess.currentKey());
 
@@ -925,9 +1089,11 @@ public class RagDocumentController {
         List<FileUploadResponse.FileResult> results = new java.util.ArrayList<>();
         int success = 0, failed = 0;
 
-        for (MultipartFile file : files) {
+        for (int index = 0; index < files.length; index++) {
+            MultipartFile file = files[index];
             FileUploadResponse.FileResult result = processUploadedFile(
-                    file, collectionId, force, embeddingPolicy);
+                    file, collectionId, force, embeddingPolicy,
+                    itemIdempotencyKey(idempotencyKey, index));
             results.add(result);
             if (result.error() == null) {
                 success++;
@@ -949,12 +1115,13 @@ public class RagDocumentController {
 
     public ResponseEntity<FileUploadResponse> uploadAndEmbed(
             MultipartFile[] files, Long collectionId, boolean force) {
-        return uploadAndEmbed(files, collectionId, null, force, null);
+        return uploadAndEmbed(files, collectionId, null, force, null, null);
     }
 
     private FileUploadResponse.FileResult processUploadedFile(
             MultipartFile file, Long collectionId, boolean force,
-            EmbeddingPolicy embeddingPolicy) {
+            EmbeddingPolicy embeddingPolicy,
+            String idempotencyKey) {
         String filename = file.getOriginalFilename();
         if (filename == null || filename.isBlank()) {
             filename = "unnamed";
@@ -974,24 +1141,44 @@ public class RagDocumentController {
             }
 
             DocumentRequest docReq = new DocumentRequest(content.title, content.content);
+            docReq.setSource("upload:" + filename);
             if (collectionId != null) {
                 docReq.setCollectionId(collectionId);
             }
-
+            docReq.setDeduplicationScope(
+                    com.springairag.api.enums.DocumentDeduplicationScope.NONE);
+            EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
+                    embeddingPolicy, true);
+            if (documentMutationService != null) {
+                DocumentMutationService.CreatedLocal created =
+                        documentMutationService.createLocal(
+                                docReq,
+                                collectionId,
+                                policy,
+                                force,
+                                "FILE_UPLOAD",
+                                idempotencyKey,
+                                filename,
+                                null,
+                                null);
+                DocumentMutationResponse mutation = created.mutation();
+                return new FileUploadResponse.FileResult(
+                        filename, created.document().getId(), content.title,
+                        !"SKIPPED".equals(mutation.embeddingAction()),
+                        0, null, mutation.embeddingAction(),
+                        mutation.embeddingJobId());
+            }
             BatchCreateResponse resp = batchDocumentService.batchCreateDocuments(
                     List.of(docReq), true, collectionId, force, embeddingPolicy);
             BatchCreateResponse.DocumentResult r = resp.results().getFirst();
-
-            if (r.documentId() != null) {
-                return new FileUploadResponse.FileResult(
-                        filename, r.documentId(), content.title,
-                        !"SKIPPED".equals(r.embeddingAction()),
-                        0, null, r.embeddingAction(), r.embeddingJobId());
-            } else {
-                return new FileUploadResponse.FileResult(
-                        filename, null, content.title, false, 0,
-                        r.error() != null ? r.error() : "Creation failed");
-            }
+            return r.documentId() != null
+                    ? new FileUploadResponse.FileResult(
+                            filename, r.documentId(), content.title,
+                            !"SKIPPED".equals(r.embeddingAction()),
+                            0, null, r.embeddingAction(), r.embeddingJobId())
+                    : new FileUploadResponse.FileResult(
+                            filename, null, content.title, false, 0,
+                            r.error() != null ? r.error() : "Creation failed");
 
         } catch (Exception e) { // Best-effort: file processing errors return a failure result without throwing
             log.error("Failed to process uploaded file '{}': {}", filename, e.getMessage());
@@ -999,6 +1186,13 @@ public class RagDocumentController {
                     filename, null, null, false, 0,
                     "Processing failed: " + e.getMessage());
         }
+    }
+
+    private String itemIdempotencyKey(String idempotencyKey, int index) {
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            return null;
+        }
+        return idempotencyKey.trim() + ":" + index;
     }
 
     private record FileValidationResult(boolean isText, String extension, String errorMessage) {}
@@ -1155,6 +1349,14 @@ public class RagDocumentController {
             throw new IllegalStateException("External document service is not available");
         }
         return externalDocumentService;
+    }
+
+    private DocumentMutationService requireDocumentMutationService() {
+        if (documentMutationService == null) {
+            throw new IllegalStateException(
+                    "Document mutation service is not available");
+        }
+        return documentMutationService;
     }
 
     // ==================== Date Parsing Helper ====================

@@ -48,6 +48,36 @@ public class RagDocumentVersion {
     @Column(name = "source_revision_snapshot", length = 255)
     private String sourceRevisionSnapshot;
 
+    @Column(name = "title_snapshot", length = 255)
+    private String titleSnapshot;
+
+    @Column(name = "source_snapshot", length = 255)
+    private String sourceSnapshot;
+
+    @Column(name = "document_type_snapshot", length = 50)
+    private String documentTypeSnapshot;
+
+    @Column(name = "original_filename_snapshot", length = 255)
+    private String originalFilenameSnapshot;
+
+    @Column(name = "collection_id_snapshot")
+    private Long collectionIdSnapshot;
+
+    @Column(name = "source_namespace_snapshot", length = 128)
+    private String sourceNamespaceSnapshot;
+
+    @Column(name = "enabled_snapshot")
+    private Boolean enabledSnapshot;
+
+    @Column(name = "disabled_at_snapshot")
+    private LocalDateTime disabledAtSnapshot;
+
+    @Column(name = "source_deleted_at_snapshot")
+    private LocalDateTime sourceDeletedAtSnapshot;
+
+    @Column(name = "snapshot_completeness", nullable = false, length = 40)
+    private String snapshotCompleteness = "CONTENT_AND_METADATA_ONLY";
+
     /**
      * Content snapshot (full text)
      */
@@ -105,6 +135,16 @@ public class RagDocumentVersion {
         version.setDocumentId(doc.getId());
         version.setContentHash(doc.getContentHash());
         version.setSourceRevisionSnapshot(doc.getSourceRevision());
+        version.setTitleSnapshot(doc.getTitle());
+        version.setSourceSnapshot(doc.getSource());
+        version.setDocumentTypeSnapshot(doc.getDocumentType());
+        version.setOriginalFilenameSnapshot(doc.getOriginalFilename());
+        version.setCollectionIdSnapshot(doc.getCollectionId());
+        version.setSourceNamespaceSnapshot(doc.getSourceNamespace());
+        version.setEnabledSnapshot(doc.getEnabled());
+        version.setDisabledAtSnapshot(doc.getDisabledAt());
+        version.setSourceDeletedAtSnapshot(doc.getSourceDeletedAt());
+        version.setSnapshotCompleteness("FULL");
         version.setContentSnapshot(doc.getContent());
         version.setSize(doc.getSize());
         version.setChangeType(changeType);
@@ -132,6 +172,52 @@ public class RagDocumentVersion {
     public String getSourceRevisionSnapshot() { return sourceRevisionSnapshot; }
     public void setSourceRevisionSnapshot(String sourceRevisionSnapshot) {
         this.sourceRevisionSnapshot = sourceRevisionSnapshot;
+    }
+
+    public String getTitleSnapshot() { return titleSnapshot; }
+    public void setTitleSnapshot(String titleSnapshot) { this.titleSnapshot = titleSnapshot; }
+
+    public String getSourceSnapshot() { return sourceSnapshot; }
+    public void setSourceSnapshot(String sourceSnapshot) { this.sourceSnapshot = sourceSnapshot; }
+
+    public String getDocumentTypeSnapshot() { return documentTypeSnapshot; }
+    public void setDocumentTypeSnapshot(String documentTypeSnapshot) {
+        this.documentTypeSnapshot = documentTypeSnapshot;
+    }
+
+    public String getOriginalFilenameSnapshot() { return originalFilenameSnapshot; }
+    public void setOriginalFilenameSnapshot(String originalFilenameSnapshot) {
+        this.originalFilenameSnapshot = originalFilenameSnapshot;
+    }
+
+    public Long getCollectionIdSnapshot() { return collectionIdSnapshot; }
+    public void setCollectionIdSnapshot(Long collectionIdSnapshot) {
+        this.collectionIdSnapshot = collectionIdSnapshot;
+    }
+
+    public String getSourceNamespaceSnapshot() { return sourceNamespaceSnapshot; }
+    public void setSourceNamespaceSnapshot(String sourceNamespaceSnapshot) {
+        this.sourceNamespaceSnapshot = sourceNamespaceSnapshot;
+    }
+
+    public Boolean getEnabledSnapshot() { return enabledSnapshot; }
+    public void setEnabledSnapshot(Boolean enabledSnapshot) {
+        this.enabledSnapshot = enabledSnapshot;
+    }
+
+    public LocalDateTime getDisabledAtSnapshot() { return disabledAtSnapshot; }
+    public void setDisabledAtSnapshot(LocalDateTime disabledAtSnapshot) {
+        this.disabledAtSnapshot = disabledAtSnapshot;
+    }
+
+    public LocalDateTime getSourceDeletedAtSnapshot() { return sourceDeletedAtSnapshot; }
+    public void setSourceDeletedAtSnapshot(LocalDateTime sourceDeletedAtSnapshot) {
+        this.sourceDeletedAtSnapshot = sourceDeletedAtSnapshot;
+    }
+
+    public String getSnapshotCompleteness() { return snapshotCompleteness; }
+    public void setSnapshotCompleteness(String snapshotCompleteness) {
+        this.snapshotCompleteness = snapshotCompleteness;
     }
 
     public String getContentSnapshot() { return contentSnapshot; }

@@ -10,6 +10,7 @@ import jakarta.validation.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -172,6 +173,23 @@ class GlobalExceptionHandlerTest {
         assertEquals(HttpStatus.INTERNAL_SERVER_ERROR, response.getStatusCode());
         assertEquals("DATABASE_ERROR", response.getBody().getError());
         assertEquals("Database operation failed", response.getBody().getMessage());
+    }
+
+    @Test
+    void handleOptimisticLockingFailure_returns409() {
+        ObjectOptimisticLockingFailureException e =
+                new ObjectOptimisticLockingFailureException("RagDocument", 42L);
+
+        ResponseEntity<ErrorResponse> response =
+                handler.handleOptimisticLockingFailure(e, request);
+
+        assertEquals(HttpStatus.CONFLICT, response.getStatusCode());
+        assertEquals("CONCURRENT_MODIFICATION", response.getBody().getError());
+        assertEquals(
+                "Resource changed concurrently; refresh its revision and retry",
+                response.getBody().getMessage());
+        assertEquals("application/problem+json",
+                response.getHeaders().getContentType().toString());
     }
 
     @Test

@@ -7,6 +7,8 @@ import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalResultProvenance;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.RetrievalScopeSql;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.config.RagProperties;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -35,9 +37,18 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
     
     private final JdbcTemplate jdbcTemplate;
     private final boolean available;
+    private final DocumentDerivationDescriptorProvider descriptorProvider;
     
     public PgTrgmFulltextProvider(JdbcTemplate jdbcTemplate) {
+        this(jdbcTemplate, new RagProperties());
+    }
+
+    public PgTrgmFulltextProvider(
+            JdbcTemplate jdbcTemplate,
+            RagProperties ragProperties) {
         this.jdbcTemplate = jdbcTemplate;
+        this.descriptorProvider =
+                new DocumentDerivationDescriptorProvider(ragProperties);
         this.available = detectAvailability();
         if (available) {
             log.info("pg_trgm full-text search provider initialized (trigram similarity)");
@@ -177,11 +188,15 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
             String query, RetrievalScope retrievalScope,
             int limit, long embeddingProfileId,
             RetrievalFilters filters) {
-        String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, e.metadata, "
+        String select = "SELECT e.id, e.chunk_text, e.document_id, e.chunk_index, "
+                + currentMetadataSql() + ", "
                 + "d.title AS document_title, d.source AS document_source, "
                 + "d.original_filename AS original_filename, "
                 + "similarity(e.chunk_text, ?) AS score_trgm";
-        String scope = EmbeddingProfileSqlScope.fromAndFreshness(embeddingProfileId);
+        String scope = EmbeddingProfileSqlScope.fromAndFreshness(
+                embeddingProfileId,
+                descriptorProvider.textDescriptor().chunkerVersion(),
+                descriptorProvider.jsonRecordDescriptor().chunkerVersion());
         RetrievalScopeSql.Fragment fragment =
                 RetrievalScopeSql.build(retrievalScope, filters);
         String sql = select + scope + fragment.sql()
@@ -193,6 +208,14 @@ public class PgTrgmFulltextProvider implements FulltextSearchProvider {
         args.add(query);
         args.add(limit);
         return jdbcTemplate.queryForList(sql, args.toArray());
+    }
+
+    private String currentMetadataSql() {
+        return "(COALESCE(e.metadata, '{}'::jsonb) "
+                + "|| COALESCE(d.metadata, '{}'::jsonb) "
+                + "|| jsonb_build_object("
+                + "'title', d.title, 'documentType', d.document_type)) "
+                + "AS metadata";
     }
     
     private boolean isExcluded(Map<String, Object> row, List<Long> excludeIds) {

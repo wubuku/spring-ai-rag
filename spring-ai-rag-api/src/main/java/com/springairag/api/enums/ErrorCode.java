@@ -28,6 +28,8 @@ public enum ErrorCode {
     MODEL_STREAMING_UNSUPPORTED(400, "Model Streaming Unsupported"),
     CHAT_AGENT_DISABLED(400, "Chat Agent Disabled"),
     DOMAIN_MODE_UNSUPPORTED(400, "Domain Chat Mode Unsupported"),
+    EMPTY_PATCH(400, "Empty Document Patch"),
+    UNKNOWN_DOCUMENT_FIELD(400, "Unknown Document Field"),
 
     // ==================== 401 Unauthorized ====================
 
@@ -53,9 +55,12 @@ public enum ErrorCode {
     DUPLICATE_RESOURCE(409, "Duplicate Resource"),
     STRUCTURED_RECORD_CONFLICT(409, "Structured Record Conflict"),
     DOCUMENT_REVISION_CONFLICT(409, "Document Revision Conflict"),
+    CONCURRENT_MODIFICATION(409, "Concurrent Modification"),
     SESSION_BUSY(409, "Chat Session Busy"),
     CHAT_SESSION_LEASE_LOST(409, "Chat Session Lease Lost"),
     CONCURRENT_EVALUATION_LIMIT(409, "Concurrent Evaluation Limit"),
+    EXTERNAL_DOCUMENT_MANAGED(409, "Externally Managed Document"),
+    DOCUMENT_DISABLED(409, "Document Disabled"),
 
     // ==================== 422 Unprocessable Entity ====================
 

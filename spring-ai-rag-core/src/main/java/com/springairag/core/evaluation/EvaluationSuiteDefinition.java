@@ -21,7 +21,14 @@ public record EvaluationSuiteDefinition(
             Double minMrr) {
     }
 
-    public record Identity(String collectionKey, String externalId) {
+    public record Identity(
+            String collectionKey,
+            String sourceNamespace,
+            String externalId) {
+
+        public Identity(String collectionKey, String externalId) {
+            this(collectionKey, "default", externalId);
+        }
     }
 
     public record VariantDef(

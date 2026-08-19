@@ -473,7 +473,9 @@ class EmbeddingJobsPostgresIntegrationTest {
                 "ready-collection",
                 new EmbeddingProfile(
                         profileId, profileKey, "test", "model", "v1",
-                        1024, "COSINE", "NONE", true));
+                        1024, "COSINE", "NONE", true),
+                "test",
+                "json-record-v1:single");
 
         assertEquals("ready-collection", readiness.collectionKey());
         assertEquals(profileKey, readiness.activeEmbeddingProfileKey());

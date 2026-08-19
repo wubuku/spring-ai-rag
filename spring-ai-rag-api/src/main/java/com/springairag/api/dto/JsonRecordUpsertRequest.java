@@ -33,6 +33,18 @@ public class JsonRecordUpsertRequest {
     @Schema(description = "Caller-supplied stable record identity", requiredMode = Schema.RequiredMode.REQUIRED)
     private String externalId;
 
+    @Size(max = 128)
+    @Schema(description = "External connector identity namespace", defaultValue = "default")
+    private String sourceNamespace = "default";
+
+    @Size(max = 255)
+    @Schema(description = "Opaque source revision token")
+    private String sourceRevision;
+
+    @Size(max = 255)
+    @Schema(description = "Expected current source revision for compare-and-set")
+    private String expectedSourceRevision;
+
     @NotBlank
     @Size(max = 255)
     @Schema(description = "Record title", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -85,6 +97,21 @@ public class JsonRecordUpsertRequest {
 
     public void setExternalId(String externalId) {
         this.externalId = externalId;
+    }
+
+    public String getSourceNamespace() { return sourceNamespace; }
+    public void setSourceNamespace(String sourceNamespace) {
+        this.sourceNamespace = sourceNamespace;
+    }
+
+    public String getSourceRevision() { return sourceRevision; }
+    public void setSourceRevision(String sourceRevision) {
+        this.sourceRevision = sourceRevision;
+    }
+
+    public String getExpectedSourceRevision() { return expectedSourceRevision; }
+    public void setExpectedSourceRevision(String expectedSourceRevision) {
+        this.expectedSourceRevision = expectedSourceRevision;
     }
 
     public String getTitle() {

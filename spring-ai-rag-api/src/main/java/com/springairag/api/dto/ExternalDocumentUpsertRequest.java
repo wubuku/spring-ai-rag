@@ -25,6 +25,10 @@ public class ExternalDocumentUpsertRequest {
     @Schema(description = "Caller-supplied stable document identity", requiredMode = Schema.RequiredMode.REQUIRED)
     private String externalId;
 
+    @Size(max = 128)
+    @Schema(description = "External connector identity namespace", defaultValue = "default")
+    private String sourceNamespace = "default";
+
     @NotBlank
     @Size(max = 255)
     @Schema(description = "Opaque source revision token", requiredMode = Schema.RequiredMode.REQUIRED)
@@ -61,6 +65,11 @@ public class ExternalDocumentUpsertRequest {
 
     public String getExternalId() { return externalId; }
     public void setExternalId(String externalId) { this.externalId = externalId; }
+
+    public String getSourceNamespace() { return sourceNamespace; }
+    public void setSourceNamespace(String sourceNamespace) {
+        this.sourceNamespace = sourceNamespace;
+    }
 
     public String getSourceRevision() { return sourceRevision; }
     public void setSourceRevision(String sourceRevision) { this.sourceRevision = sourceRevision; }

@@ -101,3 +101,18 @@
 .destructive:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-error) 10%, transparent);
 }
+
+.managedNotice {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.5rem 0.65rem;
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.managedNotice strong {
+  color: var(--color-text);
+  font-size: 0.8rem;
+}

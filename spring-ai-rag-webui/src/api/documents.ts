@@ -15,12 +15,51 @@ export interface Document {
   collectionName: string | null;
   chunkCount: number;
   externalId?: string | null;
+  sourceNamespace?: string | null;
   sourceRevision?: string | null;
+  documentRevision?: number | null;
   sourceDeletedAt?: string | null;
   processingStatus?: string | null;
   processingError?: string | null;
   embeddingFresh?: boolean;
   enabled?: boolean;
+  lifecycle?: DocumentLifecycle | null;
+}
+
+export interface DocumentLifecycle {
+  documentState: 'ACTIVE' | 'DISABLED' | 'TOMBSTONED' | string;
+  searchability: 'READY' | 'INDEXING' | 'FAILED' | 'NOT_REQUESTED' | 'DISABLED' | string;
+  localIndexStatus: string;
+  embeddingStatus: string;
+  activeEmbeddingProfileKey?: string | null;
+  activeJobId?: string | null;
+  lastErrorCode?: string | null;
+  lastError?: string | null;
+  retryable: boolean;
+}
+
+export interface DocumentMutationResponse {
+  documentId: number;
+  action: string;
+  documentRevision: number;
+  versionNumber: number;
+  contentChanged: boolean;
+  metadataChanged: boolean;
+  scopeChanged: boolean;
+  embeddingAction: string;
+  embeddingJobId?: string | null;
+  embeddingBatchId?: string | null;
+  lifecycle: DocumentLifecycle;
+}
+
+export interface DocumentUpdate {
+  expectedDocumentRevision: number;
+  title?: string;
+  content?: string;
+  source?: string | null;
+  metadata?: Record<string, unknown> | null;
+  collectionKey?: string | null;
+  embeddingPolicy?: 'SYNC' | 'ASYNC' | 'SKIP';
 }
 
 export interface DocumentListResponse {
@@ -36,7 +75,28 @@ export const documentsApi = {
 
   get: (id: number) => apiClient.get<Document>(`/documents/${id}`),
 
-  delete: (id: number) => apiClient.delete(`/documents/${id}`),
+  update: (id: number, request: DocumentUpdate) =>
+    apiClient.patch<DocumentMutationResponse>(`/documents/${id}`, request),
+
+  disable: (id: number, expectedDocumentRevision: number) =>
+    apiClient.post<DocumentMutationResponse>(`/documents/${id}/disable`, {
+      expectedDocumentRevision,
+    }),
+
+  restore: (
+    id: number,
+    expectedDocumentRevision: number,
+    embeddingPolicy: 'SYNC' | 'ASYNC' | 'SKIP' = 'ASYNC',
+  ) =>
+    apiClient.post<DocumentMutationResponse>(`/documents/${id}/restore`, {
+      expectedDocumentRevision,
+      embeddingPolicy,
+    }),
+
+  delete: (id: number, expectedDocumentRevision: number) =>
+    apiClient.delete(`/documents/${id}`, {
+      params: { expectedDocumentRevision },
+    }),
 
   embed: (id: number, force = false) =>
     apiClient.post(`/documents/${id}/embed`, null, { params: { force } }),

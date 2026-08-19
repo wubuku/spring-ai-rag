@@ -735,21 +735,25 @@ Structured-record endpoints keep two caller-supplied values separate:
   after a successful scoped retrieval.
 
 The service does not generate or validate the relationship between the two
-fields. Callers use `collectionKey + externalId` as the stable external
-identity; the service resolves it to the internal
-`(collectionId, documentType=json-record, externalId)` identity. Deprecated
+fields. Callers use `collectionKey + sourceNamespace + externalId` as the
+stable external identity; the service resolves it to the internal
+`(collectionId, sourceNamespace, documentType=json-record, externalId)`
+identity. Deprecated
 `collectionId` remains compatible. JSON records do not participate in global
 content-hash deduplication, and there is no `payloadHash`.
 
 ### `POST /api/v1/rag/json-records/upsert`
 
-Create or update one record. `embed` defaults to `true`; setting it to
-`false` persists the record and leaves embedding to a later document operation.
+Create or update one record. New external clients should send
+`embeddingPolicy` explicitly. Legacy `embed` still maps to `SYNC`/`SKIP`.
 
 ```json
 {
   "collectionKey": "customer-42:catalog:v1",
+  "sourceNamespace": "catalog-main",
   "externalId": "product:sku-10001",
+  "sourceRevision": "row-version:42",
+  "expectedSourceRevision": "row-version:41",
   "title": "Compact wireless keyboard",
   "retrievalText": "A compact wireless keyboard supports Bluetooth and dual-mode 2.4G connectivity.",
   "jsonbPayload": {
@@ -761,13 +765,15 @@ Create or update one record. `embed` defaults to `true`; setting it to
   "metadata": {
     "tenant": "demo"
   },
-  "embed": true
+  "embeddingPolicy": "ASYNC"
 }
 ```
 
 Payload-only updates create a version snapshot but do not invalidate a fresh
-embedding. `retrievalText` changes invalidate the active embedding and are
-re-embedded when `embed=true`.
+embedding. `retrievalText` changes invalidate the active embedding and persist
+a re-embedding job according to `embeddingPolicy`. A new revision for an
+existing identity requires `expectedSourceRevision` by default; exact replay
+remains idempotent.
 
 ### `POST /api/v1/rag/json-records/batch-upsert`
 
@@ -820,6 +826,26 @@ Returns the current structured record by internal document ID, including
 identities. Collection export/import, clone, and document-version responses
 preserve the structured fields and payload snapshots.
 
+### JSON-record external lookup and tombstone
+
+```text
+GET /api/v1/rag/json-records/by-external-id
+  ?collectionKey=customer-42%3Acatalog%3Av1
+  &sourceNamespace=catalog-main
+  &externalId=product%3Asku-10001
+
+DELETE /api/v1/rag/json-records/by-external-id
+  ?collectionKey=customer-42%3Acatalog%3Av1
+  &sourceNamespace=catalog-main
+  &externalId=product%3Asku-10001
+  &sourceRevision=row-version%3A43
+  &expectedSourceRevision=row-version%3A42
+```
+
+Deletion creates a tombstone without deleting JSONB history or stable
+identity. A later upsert with a new source revision restores the same internal
+document.
+
 <a id="external-documents-idempotent-synchronization"></a>
 
 ## External Documents — Idempotent Synchronization
@@ -828,7 +854,11 @@ These endpoints are for ordinary text documents whose source system owns the
 document identity and revision. They do not fetch URLs or files. The caller
 reads the source, then sends the current representation to the RAG service.
 
-The stable identity is the pair `collectionKey + externalId`. `externalId` is
+The stable identity is
+`collectionKey + sourceNamespace + externalId`. `sourceNamespace` defaults to
+the compatibility value `default`, but new connectors should send a stable
+source namespace explicitly. It is an identity boundary, not an authorization
+boundary; untrusted connectors should use separate Collections. `externalId` is
 trimmed, case-sensitive, limited to 255 characters, and must remain stable for
 the lifetime of the source object. `sourceRevision` is an opaque, non-empty
 caller token, such as an ETag, upstream row version, commit ID, or canonical
@@ -842,6 +872,7 @@ Collection under the current API key's Collection ACL.
 ```json
 {
   "collectionKey": "customer-42:manual:v3",
+  "sourceNamespace": "cms-main",
   "externalId": "cms:article:10001",
   "sourceRevision": "etag:8b4d9f",
   "expectedSourceRevision": "etag:7a3c21",
@@ -852,19 +883,21 @@ Collection under the current API key's Collection ACL.
   "metadata": {
     "locale": "en-US"
   },
-  "embed": true
+  "embeddingPolicy": "ASYNC"
 }
 ```
 
 `title` and `content` are required. `documentType` defaults to `text`;
-`json-record` must use the JSON structured-record API. `embed` defaults to
-`true`. The request content limit is 1,000,000 characters.
+`json-record` must use the JSON structured-record API. New clients should send
+`embeddingPolicy=ASYNC`; legacy `embed=true/false` still maps to `SYNC/SKIP`.
+The request content limit is 1,000,000 characters.
 
 The service keeps the same internal `documentId` when a source document is
-updated. Content changes create a version snapshot, invalidate the old
-embedding for retrieval, and synchronously rebuild the active Profile
-embedding. Metadata-only or source-revision-only changes do not call the
-provider when a fresh embedding already exists.
+updated. Content changes create a version snapshot, immediately exclude old
+chunks/embeddings, and persist a new-generation job in the same transaction.
+`SYNC` performs a bounded wait on that job; `ASYNC` returns immediately.
+Metadata-only, source-revision-only, and Collection-only changes do not call
+the provider when a fresh embedding already exists.
 
 The response is HTTP 200 even when persistence succeeds but embedding fails:
 
@@ -882,6 +915,14 @@ The response is HTTP 200 even when persistence succeeds but embedding fails:
   "embeddingFresh": true,
   "processingStatus": "COMPLETED",
   "sourceDeletedAt": null,
+  "sourceNamespace": "cms-main",
+  "documentRevision": 4,
+  "embeddingAction": "QUEUED",
+  "embeddingJobId": "67b62d78-9358-4fe4-b0f5-1fb8af34e2d5",
+  "lifecycle": {
+    "documentState": "ACTIVE",
+    "searchability": "INDEXING"
+  },
   "errorCode": null,
   "error": null
 }
@@ -896,12 +937,13 @@ is retried; the old vector may remain physically stored for diagnosis but is
 excluded by the freshness predicate. Replaying the same request retries
 embedding when the document is still stale.
 
-`expectedSourceRevision` is an optional compare-and-set guard. Exact replay is
-checked first so a client can safely retry after losing a successful response.
+Production defaults to `strictExternalCas=true`: a new revision for an
+existing identity requires `expectedSourceRevision`. Exact replay is checked
+first so a client can safely retry after losing a successful response.
 The same revision with different managed fields returns `409`. A mismatching
-expected revision also returns `409`. If the guard is omitted, the last
-serialized writer wins, so connectors with out-of-order delivery should use
-the guard.
+expected revision also returns `409`. Omit it for a new identity. Compatibility
+deployments can disable strict CAS, but connectors should not rely on
+last-write-wins delivery.
 
 ### `POST /api/v1/rag/documents/batch-upsert`
 
@@ -917,7 +959,7 @@ Query the current ordinary document without exposing an internal ID as the
 source-system identity:
 
 ```text
-GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&externalId=cms%3Aarticle%3A10001
+GET /api/v1/rag/documents/by-external-id?collectionKey=customer-42%3Amanual%3Av3&sourceNamespace=cms-main&externalId=cms%3Aarticle%3A10001
 ```
 
 The response is the normal document detail shape plus `externalId`,
@@ -932,6 +974,7 @@ Record a source-managed deletion without losing the stable identity:
 ```text
 DELETE /api/v1/rag/documents/by-external-id
   ?collectionKey=customer-42%3Amanual%3Av3
+  &sourceNamespace=cms-main
   &externalId=cms%3Aarticle%3A10001
   &sourceRevision=etag%3Adeleted-9
   &expectedSourceRevision=etag%3A8b4d9f
@@ -947,7 +990,8 @@ different semantics.
 
 ### Recommended synchronization pattern
 
-1. Derive a stable `externalId` from the source object's immutable identity.
+1. Assign a stable `sourceNamespace` per connector and derive `externalId`
+   from the source object's immutable identity.
 2. Send the source's current opaque revision with every upsert and deletion.
 3. Persist the returned revision and internal ID only for diagnostics; use the
    external identity for future calls.
@@ -958,6 +1002,11 @@ different semantics.
    retry condition. Replaying the same request is safe.
 6. Use a separate API key per connector and restrict it to the connector's
    Collections. Do not put the root key in an external connector.
+
+See the
+[External Document Synchronization Client Guide](external-document-sync-client-guide.md)
+for delivery, retry, checkpoint, dead-letter, and production guidance. A
+runnable reference implementation lives under `examples/external-sync-client/`.
 
 ---
 
@@ -1017,13 +1066,58 @@ Paginated document query.
 
 ### `GET /api/v1/rag/documents/{id}`
 
-Get a single document by ID.
+Returns content, metadata, `documentRevision`, and lifecycle by internal ID.
+`lifecycle.searchability` is one of `READY`, `INDEXING`, `FAILED`,
+`NOT_REQUESTED`, or `DISABLED`. A successful mutation is not necessarily
+search-ready.
+
+---
+
+### `PATCH /api/v1/rag/documents/{id}`
+
+Presence-aware merge patch for locally managed documents. It requires
+`expectedDocumentRevision` and may update `title`, `content`, `source`,
+`metadata`, and `collectionKey`. Unknown fields or a request without mutable
+fields return `400`.
+
+```json
+{
+  "expectedDocumentRevision": 3,
+  "content": "Updated document body",
+  "embeddingPolicy": "ASYNC"
+}
+```
+
+A content change increments the revision, records a complete snapshot, stales
+old derived results, and queues the new job in one transaction. Title, source,
+metadata, and Collection-only changes do not call the embedding provider.
+An explicitly stale `expectedDocumentRevision` returns
+`409 DOCUMENT_REVISION_CONFLICT`. If concurrent requests both pass the initial
+check but race at commit, the optimistic-lock loser returns
+`409 CONCURRENT_MODIFICATION`. Clients should re-read the document and latest
+revision before deciding whether to retry either conflict; never overwrite
+automatically.
+
+### `POST /api/v1/rag/documents/{id}/disable`
+
+The body is `{"expectedDocumentRevision":4}`. Disable immediately excludes the
+document from retrieval and cancels active work while retaining content,
+versions, and derived data for restoration.
+
+### `POST /api/v1/rag/documents/{id}/restore`
+
+The body includes `expectedDocumentRevision` and optional `embeddingPolicy`.
+If current derived state is still fresh, restoration is immediately `READY`;
+otherwise it is rebuilt according to the policy.
 
 ---
 
 ### `DELETE /api/v1/rag/documents/{id}`
 
-Delete a document.
+Permanently deletes a locally managed document. The query parameter
+`expectedDocumentRevision` is required, and versions, state, and jobs cascade.
+Externally managed documents must use the source tombstone endpoint; local
+PATCH/disable/restore/permanent-delete operations reject them.
 
 ---
 
@@ -1041,10 +1135,11 @@ Generate embedding vectors for a specified document.
 
 ## Embedding Jobs — Durable Re-Embedding
 
-Set `RAG_EMBEDDING_JOBS_ENABLED=true` to use durable, cancellable, retryable
-embedding/reindex jobs. While disabled, create and retry return
-`503 EMBEDDING_JOBS_DISABLED`; existing synchronous embed APIs remain
-unchanged.
+The durable, cancellable, retryable embedding/reindex worker is enabled by
+default because content mutations use persistent jobs for both `SYNC` and
+`ASYNC`. Explicitly disabling it causes content mutations that need scheduling
+to return `503 EMBEDDING_JOBS_DISABLED`; reads and mutations that do not affect
+derived input remain available.
 
 ### `POST /api/v1/rag/embedding-jobs`
 
@@ -1371,7 +1466,7 @@ supported.
 Delete is a soft delete and unlinks legacy documents without deleting documents
 or embeddings. A Collection containing any document with a nonblank
 `externalId` returns `409`, because unlinking would destroy the
-`collectionKey + externalId` identity. Explicitly hard-delete or migrate those
+`collectionKey + sourceNamespace + externalId` identity. Explicitly hard-delete or migrate those
 external-managed documents before deleting the Collection. The key remains
 reserved. Restore preserves the same key and does not re-link legacy documents
 automatically.
@@ -1422,7 +1517,7 @@ reassociates or moves an ordinary document that already belongs to another
 Collection, without re-embedding it. The caller must be allowed to access both
 the source document and target Collection. Externally managed documents with a
 nonblank `externalId` return `409`; keep synchronizing those documents by their
-stable `collectionKey + externalId` identity instead of moving them through
+stable `collectionKey + sourceNamespace + externalId` identity instead of moving them through
 this compatibility association route.
 
 ---
@@ -1578,8 +1673,10 @@ Query feedback by type.
 
 Available when `RAG_EVALUATION_MANAGED_SUITES_ENABLED=true`. Disabled servers
 return `503 EVALUATION_SUITES_DISABLED`. A suite version is immutable after
-creation. Relevant documents must use `collectionKey + externalId`; internal
-document IDs are not a durable goldenset identity.
+creation. Relevant documents must use
+`collectionKey + sourceNamespace + externalId`; omitted `sourceNamespace`
+defaults to `default`. Internal document IDs are not a durable goldenset
+identity.
 
 | Endpoint | Description |
 |----------|-------------|

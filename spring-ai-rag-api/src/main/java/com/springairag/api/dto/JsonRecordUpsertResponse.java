@@ -24,8 +24,34 @@ public record JsonRecordUpsertResponse(
         String error,
         String embeddingAction,
         UUID embeddingJobId,
-        UUID embeddingBatchId
+        UUID embeddingBatchId,
+        String sourceNamespace,
+        String sourceRevision,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public JsonRecordUpsertResponse(
+            Long documentId,
+            Long collectionId,
+            String collectionKey,
+            String externalId,
+            String action,
+            boolean contentChanged,
+            boolean payloadChanged,
+            int versionNumber,
+            String embeddingStatus,
+            String embeddingProfileKey,
+            String error,
+            String embeddingAction,
+            UUID embeddingJobId,
+            UUID embeddingBatchId) {
+        this(documentId, collectionId, collectionKey, externalId, action,
+                contentChanged, payloadChanged, versionNumber,
+                embeddingStatus, embeddingProfileKey, error,
+                embeddingAction, embeddingJobId, embeddingBatchId,
+                null, null, null, null);
+    }
+
     public JsonRecordUpsertResponse(
             Long documentId,
             Long collectionId,
@@ -40,7 +66,8 @@ public record JsonRecordUpsertResponse(
             String error) {
         this(documentId, collectionId, collectionKey, externalId, action,
                 contentChanged, payloadChanged, versionNumber, embeddingStatus,
-                embeddingProfileKey, error, null, null, null);
+                embeddingProfileKey, error, null, null, null,
+                null, null, null, null);
     }
 
     public JsonRecordUpsertResponse(
@@ -56,6 +83,7 @@ public record JsonRecordUpsertResponse(
             String error) {
         this(documentId, collectionId, null, externalId, action, contentChanged,
                 payloadChanged, versionNumber, embeddingStatus,
-                embeddingProfileKey, error, null, null, null);
+                embeddingProfileKey, error, null, null, null,
+                null, null, null, null);
     }
 }

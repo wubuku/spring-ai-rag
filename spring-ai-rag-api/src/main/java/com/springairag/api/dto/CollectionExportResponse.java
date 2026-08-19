@@ -70,6 +70,9 @@ public record CollectionExportResponse(
             @Schema(description = "Structured-record external identity")
             String externalId,
 
+            @Schema(description = "External connector identity namespace")
+            String sourceNamespace,
+
             @Schema(description = "Opaque source revision for external synchronization")
             String sourceRevision,
 
@@ -93,7 +96,7 @@ public record CollectionExportResponse(
                 Map<String, Object> metadata,
                 Long size) {
             this(title, source, content, documentType, metadata, size,
-                    null, null, null, null, null, true);
+                    null, "default", null, null, null, null, true);
         }
 
         /**
@@ -112,7 +115,8 @@ public record CollectionExportResponse(
                 String originalFilename,
                 Boolean enabled) {
             this(title, source, content, documentType, metadata, size,
-                    externalId, null, null, jsonbPayload, originalFilename, enabled);
+                    externalId, "default", null, null,
+                    jsonbPayload, originalFilename, enabled);
         }
 
         @Override
@@ -127,6 +131,7 @@ public record CollectionExportResponse(
                     && Objects.equals(metadata, that.metadata)
                     && Objects.equals(size, that.size)
                     && Objects.equals(externalId, that.externalId)
+                    && Objects.equals(sourceNamespace, that.sourceNamespace)
                     && Objects.equals(sourceRevision, that.sourceRevision)
                     && Objects.equals(sourceDeletedAt, that.sourceDeletedAt)
                     && Objects.equals(jsonbPayload, that.jsonbPayload)
@@ -137,7 +142,7 @@ public record CollectionExportResponse(
         @Override
         public int hashCode() {
             return Objects.hash(title, source, content, documentType, metadata, size,
-                    externalId, sourceRevision, sourceDeletedAt,
+                    externalId, sourceNamespace, sourceRevision, sourceDeletedAt,
                     jsonbPayload, originalFilename, enabled);
         }
 
@@ -151,6 +156,7 @@ public record CollectionExportResponse(
                     ", metadata=" + metadata +
                     ", size=" + size +
                     ", externalId='" + externalId + "'" +
+                    ", sourceNamespace='" + sourceNamespace + "'" +
                     ", sourceRevision='" + sourceRevision + "'" +
                     ", sourceDeletedAt=" + sourceDeletedAt +
                     ", hasJsonbPayload=" + (jsonbPayload != null) +

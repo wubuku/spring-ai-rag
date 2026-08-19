@@ -272,7 +272,8 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
 - API Key 管理对外使用 `allowedCollectionKeys`；V24 存储和运行时授权仍在
   `rag_api_key.allowed_collection_ids` 中保存内部 ID。
 - 删除 Collection 会尝试软删除集合；若存在 `externalId` 非空的外部托管文档则返回 `409`，
-  不会执行删除，因为清空 `collection_id` 会破坏 `collectionKey + externalId` 稳定身份。
+  不会执行删除，因为清空 `collection_id` 会破坏
+  `collectionKey + sourceNamespace + externalId` 稳定身份。
   没有这类文档时才会批量清空普通 legacy 文档的 `collection_id`，不会删除文档或
   `rag_embeddings`；这些文档之后仍可能被全库检索命中。
 - `rag_collection.embedding_model` 和 `dimensions` 尚未参与运行时模型路由；当前仍使用
@@ -338,7 +339,7 @@ EmbeddingBatchService
 `rag_document_embedding_state`。模型调用在写事务外执行；短事务只替换该 Profile 的向量行。
 批量调用失败或结果不完整时，旧的已完成向量保持可用。
 
-可选的持久化路径由 `rag.embedding-jobs.enabled=true` 开启：
+持久化路径由默认开启的 `rag.embedding-jobs.enabled=true` 提供：
 
 ```text
 POST /api/v1/rag/embedding-jobs
@@ -351,7 +352,7 @@ rag_embedding_jobs（V33/V37）
 EmbeddingJobWorker
   │ 条件 UPDATE ... RETURNING 原子 claim + lease + heartbeat
   │ worker-concurrency 限制
-  │ provider 调用前后检查取消/Profile/version/content hash
+  │ provider 调用前后检查取消/Profile/generation/chunker/content hash
   ▼
 DocumentEmbedService.embedDocumentForJob
   │ commit guard 通过后原子替换活动 Profile 向量
@@ -361,8 +362,9 @@ SUCCEEDED | FAILED | CANCELLED | STALE
 
 任务表不复制文档正文。写入 API 可通过 `embeddingPolicy` 选择 `SYNC` / `ASYNC` /
 `SKIP`；省略时保持 `embed=true→SYNC`、`embed=false→SKIP`。显式 embed/re-embed 拒绝
-`SKIP`。`ASYNC` 要求 `rag.embedding-jobs.enabled=true`，否则 `503`。job worker 默认
-关闭，允许按部署逐步启用。就绪接口按 Collection 返回互斥计数。
+`SKIP`。`ASYNC` 要求 `rag.embedding-jobs.enabled=true`，否则 `503`。V41 起 job worker
+默认开启，因为正文 mutation 的 `SYNC` 与 `ASYNC` 都先持久化任务。就绪接口按
+Collection 返回互斥计数。
 
 ### 4.4 JSON 结构化记录流程
 
@@ -372,8 +374,8 @@ POST /api/v1/rag/json-records/upsert
   ▼
 JsonRecordService
   │ 保存 jsonbPayload + retrievalText
-  │ 外部身份：collectionKey + externalId
-  │ Resolver -> 内部 collectionId + json-record + externalId
+  │ 外部身份：collectionKey + sourceNamespace + externalId
+  │ Resolver -> 内部 collectionId + namespace + json-record + externalId
   ▼
 RagDocument.content = retrievalText
 RagDocument.jsonbPayload = 业务 JSONB
@@ -416,29 +418,38 @@ V34 为 enabled `json-record` 增加 partial GIN `jsonb_path_ops` 索引。
 POST /api/v1/rag/documents/upsert
   │
   ▼
-ExternalDocumentService
+ExternalDocumentService / DocumentMutationService
   │ 通过 API Key ACL 解析可写 Collection
-  │ 唯一身份约束 + @Version/CAS + 有界事务重试
-  │ 精确重放判断 + 版本快照
+  │ 三元身份约束 + source/document revision CAS
+  │ 精确重放判断 + 完整版本快照
   ▼
 rag_documents（保留同一个 documentId）
-  │ 内容变化 -> 当前 embedding 变为 stale
+  │ 内容变化 -> 新 content hash / request generation
+  │ 同事务提交 state + durable job
   ▼
-DocumentEmbedService（持久化事务提交后）
-  │ 分块 -> provider -> 校验 -> 原子替换活动 Profile 向量行
+EmbeddingJobWorker / EmbeddingJobExecutor（事务提交后）
+  │ 分块 -> provider -> generation/hash/chunker/Profile/lease 提交门
+  │ 原子替换活动 Profile 向量行
   ▼
 当前 content hash 的 fresh COMPLETED，或 FAILED 状态
 ```
 
-普通外部文档与 JSON record 共享 Collection 级唯一身份
-`(collection_id, external_id)`。唯一索引是首次并发创建的最终仲裁者，已有行更新使用
-乐观版本；冲突只做有界重试。
+普通外部文档与 JSON record 共享唯一三元身份
+`(collection_id, source_namespace, external_id)`。唯一索引是首次并发创建的最终仲裁者，
+已有行更新使用 source revision/document revision CAS；冲突只做有界重试。
 `sourceRevision` 是 opaque 令牌；版本只做相等判断和可选的
-`expectedSourceRevision` compare-and-set，不按大小判断新旧。来源删除使用 tombstone
+`expectedSourceRevision` compare-and-set，不按大小判断新旧。生产默认严格 CAS。
+来源删除使用 tombstone
 （`enabled=false` 加 `source_deleted_at`）。之后使用与 tombstone 不同的后续
 `sourceRevision` 可以恢复同一个内部文档；服务不比较 revision 的大小或新旧。
 检索要求文档 enabled 且活动 Embedding Profile 存在当前内容的 fresh completed 状态，
 因此旧向量可以物理保留用于诊断，但不会返回给调用方。
+
+本地文档 PATCH、disable、restore 与永久删除使用公开 `documentRevision`，不暴露会被
+embedding-only 写入改变的 JPA `rowVersion`。正文变化会在一个事务中提交主记录、完整快照、
+freshness state 和持久化 job；metadata、JSONB payload 或 Collection-only 变化不创建新
+embedding generation。`DocumentLifecycleService` 把主记录、活动 Profile state 和任务归一
+为 `READY/INDEXING/FAILED/NOT_REQUESTED/DISABLED`。
 
 **数据访问并发规则**：生产数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、
 JPA `PESSIMISTIC_*` 和 PostgreSQL advisory lock。worker 使用带状态、owner、lease 和
@@ -478,7 +489,7 @@ ChatExecutionService
 
 Chat 在启用时把协议级 `citationValidation` 写入 metadata；只解析约定的 `[S1]` token，
 不是覆盖率评分。受管套件（V38）默认关闭：version 一经创建不可变，相关文档必须使用
-`collectionKey + externalId`。compare 只允许同一 version，环境漂移单独标记。suite
+`collectionKey + sourceNamespace + externalId`。compare 只允许同一 version，环境漂移单独标记。suite
 worker 会按 owner 的 `db:{keyId}` 重新加载当前数据库 API Key，并在检索前再次授权
 定义中的 Collection；Key 缺失、停用或 ACL 被收回时 run 以 `FAILED` /
 `AUTHORIZATION_CHANGED` 结束。`local:` / `root:` / `legacy:` principal 与 HTTP
@@ -522,12 +533,12 @@ rag_audit_log           # 审计日志（集合操作）
 | 表 | 关键列 | 说明 |
 |---|--------|------|
 | `rag_collection` | id, collection_key, name, description, embedding_model | 内部数字身份与稳定外部 Collection key |
-| `rag_documents` | title, content, content_hash, collection_id, external_id, source_revision, source_deleted_at, jsonb_payload | 文档元数据、外部来源状态与结构化记录 payload |
-| `rag_document_versions` | document_id, version_number, content_snapshot, source_revision_snapshot, jsonb_payload_snapshot | 文档、外部来源 revision 与 JSONB 版本审计 |
+| `rag_documents` | title, content, content_hash, collection_id, source_namespace, external_id, source_revision, document_revision, source_deleted_at, jsonb_payload | 文档真相源、业务 CAS、外部身份与结构化 payload |
+| `rag_document_versions` | document_id, version_number, 完整快照字段, snapshot_completeness | 文档 mutation 的完整审计快照 |
 | `rag_embedding_profiles` | profile_key, provider, model_name, dimensions, distance_metric | 不可变向量空间身份 |
-| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, status, chunk_count | Profile 级缓存与完成状态 |
+| `rag_document_embedding_state` | document_id, embedding_profile_id, content_hash, chunker_version, request_generation, active_job_id, status, chunk_count | Profile 级 freshness、活动 generation 与完成状态 |
 | `rag_embeddings` | document_id, chunk_index, embedding_profile_id, embedding_1024 VECTOR(1024), content | Profile 级文本块与向量 |
-| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, document_version, status, lease_expires_at, origin | V33/V37 持久化 embedding/reindex 状态机 |
+| `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |

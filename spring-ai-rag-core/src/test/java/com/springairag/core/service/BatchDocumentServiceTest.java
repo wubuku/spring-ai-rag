@@ -257,8 +257,12 @@ class BatchDocumentServiceTest {
     @Test
     @DisplayName("batchDeleteDocuments: deletes multiple documents successfully")
     void batchDeleteDocuments_success() {
-        when(documentRepository.existsById(1L)).thenReturn(true);
-        when(documentRepository.existsById(2L)).thenReturn(true);
+        RagDocument first = createSavedDoc(1L, "first", "hash-1");
+        RagDocument second = createSavedDoc(2L, "second", "hash-2");
+        when(documentRepository.findAllById(List.of(1L, 2L)))
+                .thenReturn(List.of(first, second));
+        when(documentRepository.findById(1L)).thenReturn(java.util.Optional.of(first));
+        when(documentRepository.findById(2L)).thenReturn(java.util.Optional.of(second));
 
         BatchDeleteResponse output = service.batchDeleteDocuments(List.of(1L, 2L));
 
@@ -266,7 +270,8 @@ class BatchDocumentServiceTest {
         assertEquals(2, output.summary().deleted());
         assertEquals(0, output.summary().notFound());
 
-        verify(embeddingRepository).deleteByDocumentIdIn(List.of(1L, 2L));
+        verify(embeddingRepository).deleteByDocumentId(1L);
+        verify(embeddingRepository).deleteByDocumentId(2L);
         verify(documentRepository).deleteById(1L);
         verify(documentRepository).deleteById(2L);
     }
@@ -274,7 +279,8 @@ class BatchDocumentServiceTest {
     @Test
     @DisplayName("batchDeleteDocuments: non-existent IDs counted as notFound")
     void batchDeleteDocuments_notFound() {
-        when(documentRepository.existsById(99L)).thenReturn(false);
+        when(documentRepository.findAllById(List.of(99L))).thenReturn(List.of());
+        when(documentRepository.findById(99L)).thenReturn(java.util.Optional.empty());
 
         BatchDeleteResponse output = service.batchDeleteDocuments(List.of(99L));
 
@@ -287,8 +293,11 @@ class BatchDocumentServiceTest {
     @Test
     @DisplayName("batchDeleteDocuments: mixed results with some deleted and some not found")
     void batchDeleteDocuments_mixed() {
-        when(documentRepository.existsById(1L)).thenReturn(true);
-        when(documentRepository.existsById(2L)).thenReturn(false);
+        RagDocument first = createSavedDoc(1L, "first", "hash-1");
+        when(documentRepository.findAllById(List.of(1L, 2L)))
+                .thenReturn(List.of(first));
+        when(documentRepository.findById(1L)).thenReturn(java.util.Optional.of(first));
+        when(documentRepository.findById(2L)).thenReturn(java.util.Optional.empty());
 
         BatchDeleteResponse output = service.batchDeleteDocuments(List.of(1L, 2L));
 

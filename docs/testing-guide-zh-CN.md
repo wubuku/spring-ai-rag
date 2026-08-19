@@ -211,6 +211,30 @@ Docker 不可用时，可通过 `EXTERNAL_DOCUMENT_IT_JDBC_URL`、
 PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`。该测试会反复
 调用 `Flyway.clean()`，绝不能指向开发库或生产库。
 
+<a id="document-lifecycle-verification"></a>
+
+### 文档 CRUD 与派生索引生命周期门禁
+
+```bash
+./scripts/verify-document-lifecycle.sh
+```
+
+该脚本串行执行：
+
+1. 禁悲观锁静态门禁；
+2. 本地 CRUD、外部 TEXT/JSON、Collection/PDF/batch 入口和 generation job 聚焦测试；
+3. 一次性 PostgreSQL 上的 V39→V41、三元身份、freshness、generation fencing、事务回滚
+   和硬删除级联验收，并解析 Surefire XML 强制 `skipped=0`；
+4. reference client 的 HTTP 重试、CAS、checkpoint 恢复和密钥不落盘测试；
+5. `mvn clean compile test-compile` 与全量后端测试；
+6. WebUI Vitest、production build、alignment 和 Documents Mock Playwright；
+7. 双语项目文档与 `git diff --check`。
+
+PostgreSQL 选择顺序为：显式 `DOCUMENT_LIFECYCLE_IT_JDBC_URL`、使用当前 shell/`.env`
+的 `POSTGRES_*` 创建一次性数据库、最后使用 Docker CLI 启动 pgvector。调用方 JDBC URL
+必须是可清空的一次性数据库。Mock Playwright 只使用 DOM、网络和断言，配置中关闭截图。
+证据写入 `.verification/document-data-plane/<run-id>/summary.md`。
+
 ## 覆盖率
 
 JaCoCo 已集成到所有模块：
@@ -242,7 +266,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V39、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V41、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -296,7 +320,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V39，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V41，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -322,7 +346,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V39，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V41，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -366,7 +390,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V39，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V41，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 
@@ -395,7 +419,8 @@ BASE_URL=http://127.0.0.1:18081 \
 ```
 
 门禁先校验 `testdata/regression/retrieval-core-v1.json` 与提交的 baseline 契约，再调用
-真实 embedding/search API。它按稳定 `collectionKey + externalId` 判断 relevant
+真实 embedding/search API。当前 fixture 使用稳定
+`collectionKey + sourceNamespace(default) + externalId` 判断 relevant
 identity，检查 Hit Rate、MRR、Recall@K、nDCG、每 case minimum、相对 baseline 回退、
 Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库或 embedding 失败必须
 返回非零，不能伪装为质量通过。

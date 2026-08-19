@@ -20,7 +20,7 @@
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Understand Files, PDF import, and Add to RAG | [File management and PDF-to-RAG workflow](file-management-and-pdf-rag.md) | [REST API: PDF and file artifacts](rest-api.md#pdf-and-file-artifact-apis) |
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
-| Synchronize external documents / content sources | [REST API: External Document Synchronization](rest-api.md#external-documents-idempotent-synchronization) | [Project context: External Document Synchronization](project-context.md#external-document-synchronization), [live HTTP acceptance](developer-reference.md#external-document-synchronization-http-e2e) |
+| Synchronize external documents / content sources | [External Document Sync Client Guide](external-document-sync-client-guide.md) | [REST API contract](rest-api.md#external-documents-idempotent-synchronization), [one-command lifecycle verification](developer-reference.md#document-lifecycle-verification) |
 | Review current future work / TODO | [TODO.md](TODO.md) | [Chinese TODO](TODO-zh-CN.md) |
 | Plan external API-key hardening | [OpenAI compatibility readiness and codebase context](openai-compatibility-readiness.md) | [API-key hardening implementation plan](drafts/2026-08-14_API_KEY_HARDENING_IMPLEMENTATION_PLAN.md) |
 | Integrate the OpenAI compatibility preview | [REST API: OpenAI compatibility preview](rest-api.md#openai-chat-completions-compatibility-preview) | [OpenAI compatibility readiness and boundaries](openai-compatibility-readiness.md) |
@@ -59,6 +59,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
 | [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
+| [external-document-sync-client-guide.md](external-document-sync-client-guide.md) | External-client triple identity, incremental CRUD, retry/checkpoint, and search-readiness guidance |
 | [TODO.md](TODO.md) / [TODO-zh-CN.md](TODO-zh-CN.md) | Current follow-up work outside the public API and its revisit criteria |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | Comparison with reference projects; phase status |
@@ -72,6 +73,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [JSONB implementation plan and progress](drafts/2026-08-15_JSONB_PAYLOAD_RETRIEVAL_IMPLEMENTATION_PLAN.md) | Implemented caller-supplied JSONB plus natural-language descriptions; only descriptions are indexed/embedded, with collection / external-ID idempotency |
 | [Next most valuable features plan](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN.md) / [中文](drafts/2026-08-17_NEXT_MOST_WORTHWHILE_FEATURES_PLAN-zh-CN.md) | Implemented request-scoped OpenAI compatibility, durable embedding jobs, JSON containment/tooling, and live retrieval regression gates |
 | [Next high-value features plan (2026-08-18)](drafts/2026-08-18_NEXT_HIGH_VALUE_FEATURES_PLAN.md) | Awaiting review: retrieval diagnostics, ordinary-document metadata filters, embedding operations control plane, managed quality suites, and citation trust |
+| [Document lifecycle and derived-index consistency plan](drafts/2026-08-18_DOCUMENT_LIFECYCLE_AND_INDEX_CONSISTENCY_PLAN.md) | Phase 0 + Batch A implemented and under final acceptance: unified CRUD, automatic index/embedding propagation, source namespaces, and the incremental reference client; later batches remain planned |
 | [WebUI horizontal-alignment governance plan](drafts/2026-08-16_WEBUI_ALIGNMENT_GOVERNANCE_IMPLEMENTATION_PLAN.md) | Remove template-style pollution and establish start-aligned application content, limited semantic centering, and automated regression checks |
 | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) / [中文](webui-alignment-guidelines-zh-CN.md) | WebUI defaults, justified centering exceptions, the `alignment-policy` gate, and verification commands |
 
@@ -123,7 +125,7 @@ OpenClaw local state such as `TOOLS.md`, `MEMORY.md`, `memory/`, and `HEARTBEAT.
 | `spring-ai-rag-core/.../chat/`, `.../rag/` | Mode-aware Chat execution, Modular RAG, and Tool Calling |
 | `spring-ai-rag-core/.../config/RagProperties.java` | `rag.*` binding |
 | `spring-ai-rag-core/src/main/resources/application.yml` | Main config (port 8081) |
-| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V39** |
+| `spring-ai-rag-core/src/main/resources/db/migration/` | Flyway **V1–V41** |
 | `spring-ai-rag-starter/` | Auto-config `GeneralRagAutoConfiguration` |
 | `spring-ai-rag-documents/` | Chunking / cleaning |
 | `spring-ai-rag-webui/` | React admin UI (standalone npm) |

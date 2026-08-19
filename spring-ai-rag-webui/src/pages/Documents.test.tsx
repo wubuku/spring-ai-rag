@@ -39,6 +39,10 @@ vi.mock('../hooks/useFileUpload', () => ({
 vi.mock('../api/documents', () => ({
   documentsApi: {
     list: vi.fn(),
+    get: vi.fn(),
+    update: vi.fn(),
+    disable: vi.fn(),
+    restore: vi.fn(),
     delete: vi.fn(),
     embed: vi.fn(),
   },
@@ -176,13 +180,94 @@ describe('Documents', () => {
 
     expect(screen.getByText('cms:article:1')).toBeInTheDocument();
     expect(screen.getByText('etag:2')).toBeInTheDocument();
-    expect(screen.getByText('documents.embeddingStale')).toBeInTheDocument();
+    expect(screen.getByText('documents.lifecycle.NOT_REQUESTED')).toBeInTheDocument();
     expect(screen.getByText('provider unavailable')).toBeInTheDocument();
     await user.click(screen.getByRole('button', {
       name: 'documents.openActions',
     }));
     expect(screen.getByRole('menuitem', { name: 'documents.retryEmbedding' }))
       .toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'documents.edit' }))
+      .not.toBeInTheDocument();
+    expect(screen.getByText('documents.externallyManaged')).toBeInTheDocument();
+  });
+
+  it('offers local lifecycle mutations for a revisioned document', async () => {
+    const user = userEvent.setup();
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 2,
+            title: 'Local Doc',
+            content: 'Local content',
+            contentHash: 'local123',
+            documentType: 'TEXT',
+            documentRevision: 4,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: true,
+            enabled: true,
+            lifecycle: {
+              documentState: 'ACTIVE',
+              searchability: 'READY',
+              localIndexStatus: 'READY',
+              embeddingStatus: 'READY',
+              retryable: false,
+            },
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    expect(screen.getByText('documents.lifecycle.READY')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', {
+      name: 'documents.openActions',
+    }));
+    expect(screen.getByRole('menuitem', { name: 'documents.edit' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'documents.disable' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'documents.permanentDelete' }))
+      .toBeInTheDocument();
+  });
+
+  it('offers restore instead of edit disable for a disabled local document', async () => {
+    const user = userEvent.setup();
+    mockUseQuery.mockReturnValue({
+      data: {
+        data: {
+          documents: [{
+            id: 3,
+            title: 'Disabled Doc',
+            content: 'Disabled content',
+            contentHash: 'disabled123',
+            documentType: 'TEXT',
+            documentRevision: 5,
+            createdAt: '2024-01-01T00:00:00Z',
+            updatedAt: '2024-01-01T00:00:00Z',
+            embeddingFresh: false,
+            enabled: false,
+          }],
+          total: 1,
+        },
+      },
+      isPending: false,
+      error: null,
+    });
+
+    renderDocuments();
+
+    expect(screen.getByText('documents.lifecycle.DISABLED')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', {
+      name: 'documents.openActions',
+    }));
+    expect(screen.getByRole('menuitem', { name: 'documents.restore' })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'documents.disable' }))
+      .not.toBeInTheDocument();
   });
 
   it('offers PDF source traceability actions only for a safe imported PDF source', async () => {

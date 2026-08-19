@@ -12,6 +12,8 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
+import com.springairag.core.service.DocumentDerivationDescriptorProvider;
+import com.springairag.core.service.DocumentEmbedService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -28,7 +30,10 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class EmbeddingJobServiceTest {
@@ -38,6 +43,8 @@ class EmbeddingJobServiceTest {
     private CollectionRetrievalScopeResolver scopeResolver;
     private EmbeddingProfileProvider profileProvider;
     private RagProperties properties;
+    private DocumentDerivationDescriptorProvider descriptorProvider;
+    private DocumentEmbedService documentEmbedService;
 
     @BeforeEach
     void setUp() {
@@ -46,10 +53,14 @@ class EmbeddingJobServiceTest {
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         properties = new RagProperties();
+        descriptorProvider =
+                new DocumentDerivationDescriptorProvider(properties);
+        documentEmbedService = mock(DocumentEmbedService.class);
     }
 
     @Test
     void disabledFeatureRejectsCreateWithoutPersistingJobs() {
+        properties.getEmbeddingJobs().setEnabled(false);
         EmbeddingJobService service = service();
 
         RagException error = assertThrows(
@@ -69,6 +80,11 @@ class EmbeddingJobServiceTest {
         when(documentRepository.findById(1L)).thenReturn(Optional.of(first));
         when(documentRepository.findById(2L)).thenReturn(Optional.of(second));
         when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(documentEmbedService.hasFreshEmbedding(any(RagDocument.class)))
+                .thenReturn(false);
+        when(jobRepository.allocateGeneration(
+                anyLong(), anyLong(), anyString(), anyString(), anyBoolean()))
+                .thenAnswer(invocation -> invocation.<Long>getArgument(0) + 10L);
         when(jobRepository.createOrCoalesce(
                 any(UUID.class),
                 anyLong(),
@@ -78,12 +94,18 @@ class EmbeddingJobServiceTest {
                 anyBoolean(),
                 anyInt(),
                 any(),
-                any()))
+                any(),
+                anyLong(),
+                anyString(),
+                anyString()))
                 .thenAnswer(invocation -> {
                     long documentId = invocation.getArgument(1);
                     UUID batch = invocation.getArgument(0);
+                    long generation = invocation.getArgument(9);
+                    EmbeddingJob created = job(
+                            documentId, batch, generation);
                     return new EmbeddingJobRepository.CreateResult(
-                            job(documentId, batch),
+                            created,
                             documentId == 2L);
                 });
 
@@ -100,6 +122,66 @@ class EmbeddingJobServiceTest {
         assertEquals(1, response.created());
         assertEquals(1, response.coalesced());
         assertTrue(response.jobs().get(1).coalesced());
+        verify(jobRepository).activateJob(
+                1L, profile().id(), 11L, response.jobs().getFirst().id());
+        verify(jobRepository).createOrCoalesce(
+                any(UUID.class),
+                eq(1L),
+                eq(profile().id()),
+                eq(first.getContentHash()),
+                eq(7L),
+                eq(true),
+                eq(4),
+                eq("API"),
+                any(),
+                eq(11L),
+                eq("TEXT"),
+                eq(descriptorProvider.textDescriptor().chunkerVersion()));
+    }
+
+    @Test
+    void coalescesOnlyWithCurrentGenerationAwareJob() {
+        properties.getEmbeddingJobs().setEnabled(true);
+        RagDocument document = document(1L);
+        EmbeddingJob current = job(1L, UUID.randomUUID(), 8L);
+        when(documentRepository.findById(1L))
+                .thenReturn(Optional.of(document));
+        when(profileProvider.getActiveProfile()).thenReturn(profile());
+        when(documentEmbedService.hasFreshEmbedding(document))
+                .thenReturn(true);
+        when(jobRepository.findCurrentActive(
+                1L,
+                profile().id(),
+                document.getContentHash(),
+                "TEXT",
+                descriptorProvider.textDescriptor().chunkerVersion()))
+                .thenReturn(Optional.of(current));
+        when(jobRepository.createOrCoalesce(
+                any(UUID.class),
+                eq(1L),
+                eq(profile().id()),
+                eq(document.getContentHash()),
+                eq(7L),
+                eq(true),
+                eq(3),
+                eq("API"),
+                any(),
+                eq(8L),
+                eq("TEXT"),
+                eq(descriptorProvider.textDescriptor().chunkerVersion())))
+                .thenReturn(new EmbeddingJobRepository.CreateResult(
+                        current, true));
+
+        EmbeddingJobBatchResponse response = service().create(
+                new EmbeddingJobCreateRequest(
+                        List.of(1L), null, null, null, true, 3));
+
+        assertEquals(0, response.created());
+        assertEquals(1, response.coalesced());
+        verify(jobRepository, never()).allocateGeneration(
+                anyLong(), anyLong(), anyString(), anyString(), anyBoolean());
+        verify(jobRepository).updateDocumentProcessing(
+                1L, "PENDING", null);
     }
 
     @Test
@@ -121,7 +203,7 @@ class EmbeddingJobServiceTest {
     void retryReturnsExistingActiveJobAsCoalesced() {
         properties.getEmbeddingJobs().setEnabled(true);
         UUID failedId = UUID.randomUUID();
-        EmbeddingJob failed = job(1L, UUID.randomUUID());
+        EmbeddingJob failed = job(1L, UUID.randomUUID(), 1L);
         failed = new EmbeddingJob(
                 failedId,
                 failed.batchId(),
@@ -142,7 +224,7 @@ class EmbeddingJobServiceTest {
                 failed.startedAt(),
                 OffsetDateTime.now(),
                 OffsetDateTime.now());
-        EmbeddingJob active = job(1L, UUID.randomUUID());
+        EmbeddingJob active = job(1L, UUID.randomUUID(), 1L);
         when(jobRepository.find(failedId)).thenReturn(Optional.of(failed));
         when(documentRepository.findById(1L))
                 .thenReturn(Optional.of(document(1L)));
@@ -178,7 +260,12 @@ class EmbeddingJobServiceTest {
         CollectionEmbeddingReadinessResponse expected =
                 new CollectionEmbeddingReadinessResponse(
                         "customer-42:manual:v3", "test", 3, 1, 1, 0, 0, 1);
-        when(jobRepository.readiness(5L, "customer-42:manual:v3", profile()))
+        when(jobRepository.readiness(
+                5L,
+                "customer-42:manual:v3",
+                profile(),
+                descriptorProvider.textDescriptor().chunkerVersion(),
+                descriptorProvider.jsonRecordDescriptor().chunkerVersion()))
                 .thenReturn(expected);
 
         assertEquals(expected, service().readiness("customer-42:manual:v3"));
@@ -200,7 +287,9 @@ class EmbeddingJobServiceTest {
                 documentRepository,
                 scopeResolver,
                 profileProvider,
-                properties);
+                properties,
+                descriptorProvider,
+                documentEmbedService);
     }
 
     private RagDocument document(long id) {
@@ -220,7 +309,8 @@ class EmbeddingJobServiceTest {
                 1024, "COSINE", "NONE", true);
     }
 
-    private EmbeddingJob job(long documentId, UUID batchId) {
+    private EmbeddingJob job(
+            long documentId, UUID batchId, long generation) {
         OffsetDateTime now = OffsetDateTime.now();
         return new EmbeddingJob(
                 UUID.randomUUID(),
@@ -241,6 +331,11 @@ class EmbeddingJobServiceTest {
                 now,
                 null,
                 null,
-                now);
+                now,
+                "API",
+                "test",
+                generation,
+                "TEXT",
+                descriptorProvider.textDescriptor().chunkerVersion());
     }
 }

@@ -26,8 +26,36 @@ public record ExternalDocumentUpsertResponse(
         String error,
         String embeddingAction,
         UUID embeddingJobId,
-        UUID embeddingBatchId
+        UUID embeddingBatchId,
+        String sourceNamespace,
+        Long documentRevision,
+        DocumentLifecycleResponse lifecycle
 ) {
+    public ExternalDocumentUpsertResponse(
+            Long documentId,
+            String collectionKey,
+            String externalId,
+            String sourceRevision,
+            String action,
+            boolean contentChanged,
+            int versionNumber,
+            String embeddingStatus,
+            String embeddingProfileKey,
+            boolean embeddingFresh,
+            String processingStatus,
+            LocalDateTime sourceDeletedAt,
+            String errorCode,
+            String error,
+            String embeddingAction,
+            UUID embeddingJobId,
+            UUID embeddingBatchId) {
+        this(documentId, collectionKey, externalId, sourceRevision, action,
+                contentChanged, versionNumber, embeddingStatus,
+                embeddingProfileKey, embeddingFresh, processingStatus,
+                sourceDeletedAt, errorCode, error, embeddingAction,
+                embeddingJobId, embeddingBatchId, null, null, null);
+    }
+
     public ExternalDocumentUpsertResponse(
             Long documentId,
             String collectionKey,
@@ -46,6 +74,6 @@ public record ExternalDocumentUpsertResponse(
         this(documentId, collectionKey, externalId, sourceRevision, action,
                 contentChanged, versionNumber, embeddingStatus, embeddingProfileKey,
                 embeddingFresh, processingStatus, sourceDeletedAt, errorCode, error,
-                null, null, null);
+                null, null, null, null, null, null);
     }
 }

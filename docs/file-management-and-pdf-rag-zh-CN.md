@@ -86,7 +86,7 @@ Collection scope 和 API Key ACL 约束。内容未变化时再次添加可能�
 `POST /api/v1/rag/collections/by-key/documents?collectionKey=...` 把普通/PDF 文档重关联到
 另一个 Collection，不需要重新嵌入。调用方必须同时能访问原文档和目标 Collection。
 `externalId` 非空的外部托管文档不能用该接口迁移，因为它的稳定身份是
-`collectionKey + externalId`。
+`collectionKey + sourceNamespace + externalId`。
 
 ## 4. 一步完成和直接文档上传
 
@@ -109,8 +109,9 @@ POST /api/v1/rag/documents/upload
 这条路径直接创建并嵌入 RAG 逻辑文档，不会创建可在文件管理中浏览的 `fs_files` 目录。
 
 对于会持续更新的外部内容，推荐使用 `POST /api/v1/rag/documents/upsert`，并提供稳定的
-`collectionKey + externalId` 与 opaque `sourceRevision`。详见
-[外部文档：幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization)。
+`collectionKey + sourceNamespace + externalId` 与 opaque `sourceRevision`。详见
+[外部文档：幂等同步](rest-api-zh-CN.md#external-documents-idempotent-synchronization)和
+[外部同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。
 
 ## 5. 检索结果来源追溯
 

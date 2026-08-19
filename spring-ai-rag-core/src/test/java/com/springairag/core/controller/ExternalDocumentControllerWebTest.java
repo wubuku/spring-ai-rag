@@ -192,7 +192,8 @@ class ExternalDocumentControllerWebTest {
     @Test
     void deleteRoutesExpectedRevisionAndTombstoneState() throws Exception {
         when(externalDocumentService.sourceDelete(
-                "customer-42:manual:v1", "doc-1", "rev-4", "rev-3"))
+                "customer-42:manual:v1", "default",
+                "doc-1", "rev-4", "rev-3"))
                 .thenReturn(new ExternalDocumentDeleteResponse(
                         41L,
                         "customer-42:manual:v1",

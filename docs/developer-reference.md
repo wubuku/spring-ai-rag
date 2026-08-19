@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V39 |
+| Flyway | V1–V41 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -286,6 +286,26 @@ database with `EMBEDDING_JOBS_IT_JDBC_URL`, `EMBEDDING_JOBS_IT_USERNAME`, and
 `EMBEDDING_JOBS_IT_PASSWORD`. Evidence is written under
 `.verification/embedding-jobs/<run-id>/`.
 
+<a id="document-lifecycle-verification"></a>
+
+### Document Lifecycle Verification
+
+```bash
+./scripts/verify-document-lifecycle.sh
+```
+
+This verifies local create/PATCH/disable/restore/permanent-delete, external
+TEXT/JSON `collectionKey + sourceNamespace + externalId`, revision CAS,
+complete snapshots, generation-aware re-embedding after content changes,
+no re-embedding for non-text changes, WebUI CRUD, and the reference client.
+
+The script prefers a disposable database created from current-shell or `.env`
+`POSTGRES_*`, avoiding Testcontainers/new-Docker protocol negotiation issues.
+Alternatively provide `DOCUMENT_LIFECYCLE_IT_JDBC_URL`,
+`DOCUMENT_LIFECYCLE_IT_USERNAME`, and `DOCUMENT_LIFECYCLE_IT_PASSWORD`. Never
+point these at development or production. Evidence is stored under
+`.verification/document-data-plane/<run-id>/`.
+
 ### Retrieval diagnostics / metadata filters / embedding operations / managed quality
 
 ```bash
@@ -390,7 +410,8 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
 
 The dataset and committed baseline live under `testdata/regression/`. The
-runner creates fixtures by stable `collectionKey + externalId`, checks Hit
+runner creates fixtures by stable
+`collectionKey + sourceNamespace(default) + externalId`, checks Hit
 Rate, MRR, Recall@K, nDCG, metric floors, baseline regression, Collection-decoy
 leakage, and an explicit-empty JSONB case, then writes JSON artifacts and a
 Markdown summary under `.verification/quality-regression/<run-id>/`. When

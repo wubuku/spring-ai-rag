@@ -2,6 +2,9 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.CollectionCloneResponse;
 import com.springairag.api.dto.CollectionRequest;
+import com.springairag.api.dto.DocumentRequest;
+import com.springairag.api.enums.DocumentDeduplicationScope;
+import com.springairag.api.enums.EmbeddingPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.api.validation.CollectionKeyValidator;
 import com.springairag.core.entity.RagCollection;
@@ -38,6 +41,7 @@ public class RagCollectionService {
     private final CollectionIdentityResolver identityResolver;
     private final AuditLogService auditLogService;  // optional: null when audit log is unavailable
     private DocumentVersionService documentVersionService;  // optional for isolated unit tests
+    private DocumentMutationService documentMutationService;
 
     @Autowired
     public RagCollectionService(RagCollectionRepository collectionRepository,
@@ -53,6 +57,12 @@ public class RagCollectionService {
     @Autowired(required = false)
     public void setDocumentVersionService(DocumentVersionService documentVersionService) {
         this.documentVersionService = documentVersionService;
+    }
+
+    @Autowired(required = false)
+    public void setDocumentMutationService(
+            DocumentMutationService documentMutationService) {
+        this.documentMutationService = documentMutationService;
     }
 
     /**
@@ -121,10 +131,14 @@ public class RagCollectionService {
                                 "Collection contains external-managed documents; "
                                         + "purge them explicitly before deleting the collection");
                     }
-                    // Batch clear collection_id of associated documents (avoid loading one by one)
                     long count = documentRepository.countByCollectionId(id);
                     if (count > 0) {
-                        documentRepository.clearCollectionIdByCollectionId(id);
+                        if (documentMutationService != null) {
+                            count = documentMutationService
+                                    .unlinkLocalDocumentsFromCollection(id);
+                        } else {
+                            documentRepository.clearCollectionIdByCollectionId(id);
+                        }
                         log.info("Unlinked {} documents from collection {}", count, id);
                     }
 
@@ -224,12 +238,18 @@ public class RagCollectionService {
                         throw e;
                     }
 
-                    // Copy all documents (content + metadata only; embeddings require re-embedding)
                     List<RagDocument> sourceDocs = documentRepository.findAllByCollectionId(id);
-                    List<RagDocument> clonedDocs = sourceDocs.stream()
-                            .map(doc -> cloneDocument(doc, saved.getId()))
-                            .toList();
-                    if (!clonedDocs.isEmpty()) {
+                    int clonedCount;
+                    if (documentMutationService != null) {
+                        for (RagDocument sourceDocument : sourceDocs) {
+                            cloneDocumentThroughCoordinator(
+                                    sourceDocument, saved.getId());
+                        }
+                        clonedCount = sourceDocs.size();
+                    } else {
+                        List<RagDocument> clonedDocs = sourceDocs.stream()
+                                .map(doc -> cloneDocument(doc, saved.getId()))
+                                .toList();
                         documentRepository.saveAllAndFlush(clonedDocs);
                         if (documentVersionService != null) {
                             for (int i = 0; i < clonedDocs.size(); i++) {
@@ -241,18 +261,21 @@ public class RagCollectionService {
                                                 + " in collection " + id);
                             }
                         }
+                        clonedCount = clonedDocs.size();
                     }
 
                     log.info("Collection cloned: sourceId={}, newId={}, documents={}",
-                            id, saved.getId(), clonedDocs.size());
+                            id, saved.getId(), clonedCount);
 
                     if (auditLogService != null) {
                         auditLogService.logCreate(AuditLogService.ENTITY_COLLECTION,
                                 String.valueOf(saved.getId()),
-                                "Collection cloned from " + source.getName() + " (ID: " + id + "), documents: " + clonedDocs.size(),
+                                "Collection cloned from " + source.getName()
+                                        + " (ID: " + id + "), documents: "
+                                        + clonedCount,
                                 java.util.Map.of("sourceCollectionId", id,
                                         "sourceCollectionName", source.getName(),
-                                        "documentsCloned", clonedDocs.size()));
+                                        "documentsCloned", clonedCount));
                     }
 
                     return CollectionCloneResponse.of(
@@ -262,8 +285,29 @@ public class RagCollectionService {
                             id,
                             source.getCollectionKey(),
                             source.getName(),
-                            clonedDocs.size());
+                            clonedCount);
                 });
+    }
+
+    private void cloneDocumentThroughCoordinator(
+            RagDocument source,
+            Long newCollectionId) {
+        DocumentRequest request = new DocumentRequest(
+                source.getTitle(), source.getContent());
+        request.setSource(source.getSource());
+        request.setDocumentType(source.getDocumentType());
+        request.setMetadata(source.getMetadata());
+        request.setDeduplicationScope(DocumentDeduplicationScope.NONE);
+        documentMutationService.createLocal(
+                request,
+                newCollectionId,
+                EmbeddingPolicy.ASYNC,
+                false,
+                "COLLECTION_CLONE",
+                null,
+                source.getOriginalFilename(),
+                source.getJsonbPayload(),
+                source.getEnabled());
     }
 
     private RagException duplicateKey(String key) {
@@ -311,9 +355,10 @@ public class RagCollectionService {
         doc.setMetadata(source.getMetadata());
         doc.setSize(source.getSize());
         doc.setContentHash(source.getContentHash());
-        doc.setExternalId(source.getExternalId());
-        doc.setSourceRevision(source.getSourceRevision());
-        doc.setSourceDeletedAt(source.getSourceDeletedAt());
+        doc.setSourceNamespace("default");
+        doc.setExternalId(null);
+        doc.setSourceRevision(null);
+        doc.setSourceDeletedAt(null);
         doc.setJsonbPayload(source.getJsonbPayload() == null
                 ? null : source.getJsonbPayload().deepCopy());
         doc.setOriginalFilename(source.getOriginalFilename());

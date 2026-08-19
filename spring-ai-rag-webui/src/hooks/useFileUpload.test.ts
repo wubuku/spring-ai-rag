@@ -108,7 +108,10 @@ describe('useFileUpload', () => {
       '/api/v1/rag/documents/upload',
       expect.objectContaining({
         method: 'POST',
-        headers: { 'X-API-Key': 'root-secret' },
+        headers: expect.objectContaining({
+          'X-API-Key': 'root-secret',
+          'Idempotency-Key': expect.any(String),
+        }),
       })
     );
   });

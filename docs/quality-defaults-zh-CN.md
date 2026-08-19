@@ -43,7 +43,7 @@ BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 
 - 数据集：`testdata/regression/retrieval-core-v1.json`
 - baseline：`testdata/regression/retrieval-core-v1-baseline.json`
-- 稳定 relevant identity：`collectionKey + externalId`
+- 稳定 relevant identity：`collectionKey + sourceNamespace(default) + externalId`
 - 指标：Hit Rate、MRR、Recall@K、nDCG
 - 安全断言：selected Collection 不泄漏 decoy；明确 JSONB 空结果保持零命中
 

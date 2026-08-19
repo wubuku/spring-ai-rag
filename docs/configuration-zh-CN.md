@@ -194,13 +194,15 @@ rag:
 
 ### 持久化 Embedding Jobs
 
-默认关闭的 job worker 用于持久化、可重试的批量 embedding/reindex。它不会改变既有同步
-embed API；启用后可通过 `/api/v1/rag/embedding-jobs` 创建、查询、取消和重试任务。
+job worker 用于持久化、可重试的 embedding/reindex。V41 起默认开启，因为文档正文
+`SYNC` 与 `ASYNC` mutation 都先在同一事务中持久化任务；`SYNC` 只是对同一个任务做有界
+等待。还可通过 `/api/v1/rag/embedding-jobs` 创建、查询、取消和重试运维任务。
 
 ```yaml
 rag:
   embedding-jobs:
-    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:false}
+    enabled: ${RAG_EMBEDDING_JOBS_ENABLED:true}
+    sync-wait-seconds: ${RAG_EMBEDDING_JOBS_SYNC_WAIT_SECONDS:30}
     poll-interval-ms: ${RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS:1000}
     claim-batch-size: ${RAG_EMBEDDING_JOBS_CLAIM_BATCH_SIZE:4}
     lease-seconds: ${RAG_EMBEDDING_JOBS_LEASE_SECONDS:120}
@@ -212,9 +214,9 @@ rag:
 ```
 
 worker 使用 PostgreSQL lease 与带状态/过期条件的原子 `UPDATE ... RETURNING` 支持多
-worker claim，并在提交向量前校验活动 Profile、任务 lease、取消标记、document version
-与 content hash。相同
-document/Profile/content hash 的活动任务会合并，`force` 可原子升级既有活动任务。
+worker claim，并在提交向量前校验活动 Profile、任务 lease、取消标记、request generation、
+document kind、chunker version 与 content hash。相同 generation 的活动任务会合并；
+正文变更会分配更高 generation 并取消旧任务，旧 worker 不能提交到新正文。
 仍有重试次数时，过期租约会被重新 claim；若最后一次允许的尝试也发生租约过期，任务会
 原子转为 `FAILED` 并清空租约字段，不会永久停留在 `RUNNING`。
 
@@ -222,6 +224,27 @@ document/Profile/content hash 的活动任务会合并，`force` 可原子升级
 提供该字段时它覆盖旧的 `embed` 布尔值；省略时保持 `embed=true→SYNC`、
 `embed=false→SKIP`。显式 embed/re-embed 拒绝 `SKIP`。`ASYNC` 要求
 `rag.embedding-jobs.enabled=true`，否则返回 `503 EMBEDDING_JOBS_DISABLED`。
+
+### 文档生命周期与外部来源同步
+
+```yaml
+rag:
+  document-lifecycle:
+    strict-external-cas: ${RAG_DOCUMENT_STRICT_EXTERNAL_CAS:true}
+    allow-non-default-namespace: ${RAG_DOCUMENT_ALLOW_NON_DEFAULT_NAMESPACE:true}
+    idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
+```
+
+| 属性 | 默认值 | 说明 |
+|------|--------|------|
+| `rag.document-lifecycle.strict-external-cas` | `true` | 已存在外部身份的新 revision 必须提供 `expectedSourceRevision`；精确重放不受影响 |
+| `rag.document-lifecycle.allow-non-default-namespace` | `true` | 接受显式外部 `sourceNamespace`；关闭时只允许兼容值 `default` |
+| `rag.document-lifecycle.idempotency-ttl-hours` | `24` | 本地 create/upload `Idempotency-Key` 记录的保留小时数，限制为 1–168 |
+
+本地文档使用公开 `documentRevision` 做 PATCH/disable/restore/permanent-delete CAS。
+外部文档和 JSON record 使用
+`collectionKey + sourceNamespace + externalId` 身份及 opaque `sourceRevision`。正文 mutation
+与派生任务同事务提交；metadata、JSONB payload 或 Collection-only 变化不请求 embedding。
 
 ## 检索配置
 
@@ -686,7 +709,9 @@ V25/V26 创建 Profile/状态结构，并在 `rag_vector_store` 不存在或为�
 V27/V28 增加必填、全局唯一、不可变的 `rag_collection.collection_key`；V29 增加 JSONB
 结构化记录列和 payload 感知的版本快照；V30 增加外部文档来源版本、tombstone、版本快照
 以及 Collection 范围的外部身份唯一约束；V31 使用与 API 一致的 ASCII trim 语义规范化已存
-external ID，并重建局部唯一索引。
+external ID，并重建局部唯一索引；V32–V39 增加 Chat lease、持久化任务、过滤/诊断/质量
+运营和无悲观锁协调；V40/V41 增加文档业务 revision、完整快照、source namespace、
+generation fencing 与 lifecycle/idempotency contract。
 
 ## Profile 一览
 

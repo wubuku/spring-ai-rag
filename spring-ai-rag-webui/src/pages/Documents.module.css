@@ -284,6 +284,49 @@
   white-space: nowrap;
 }
 
+.lifecycle {
+  display: inline-flex;
+  min-height: 1.5rem;
+  align-items: center;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.lifecycleREADY,
+.lifecycleKEYWORD_ONLY {
+  border-color: #86efac;
+  background: #dcfce7;
+  color: #166534;
+}
+
+.lifecycleINDEXING {
+  border-color: #93c5fd;
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.lifecycleFAILED {
+  border-color: #fca5a5;
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.lifecycleNOT_REQUESTED {
+  border-color: var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+}
+
+.lifecycleDISABLED {
+  border-color: #d1d5db;
+  background: #f3f4f6;
+  color: #4b5563;
+}
+
 .empty {
   /* alignment-policy: allow-center -- table-wide empty state */
   text-align: center;
@@ -359,6 +402,90 @@
   animation: slideIn 0.15s ease-out;
 }
 
+.editModal {
+  width: min(44rem, calc(100vw - 2rem));
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-bg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.editFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  padding: 1.25rem 1.5rem;
+}
+
+.editFields label {
+  display: grid;
+  min-width: 0;
+  gap: 0.4rem;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.editFields input,
+.editFields select,
+.editFields textarea {
+  width: 100%;
+  min-width: 0;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.editFields input:focus,
+.editFields select:focus,
+.editFields textarea:focus {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 32%, transparent);
+  border-color: var(--color-primary);
+}
+
+.contentField {
+  grid-column: 1 / -1;
+}
+
+.contentField textarea {
+  min-height: 16rem;
+  resize: vertical;
+  line-height: 1.55;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.modalActions button {
+  min-height: 2.25rem;
+  padding: 0.45rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.modalActions button[type="submit"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.modalActions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 @keyframes slideIn {
   from { transform: translateY(-20px); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
@@ -411,4 +538,14 @@
   margin: 0;
   max-height: 60vh;
   overflow-y: auto;
+}
+
+@media (max-width: 640px) {
+  .editFields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contentField {
+    grid-column: auto;
+  }
 }

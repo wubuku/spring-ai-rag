@@ -9,6 +9,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.util.List;
 import java.util.Optional;
@@ -33,9 +35,18 @@ public class DocumentVersionService {
     private static final Logger log = LoggerFactory.getLogger(DocumentVersionService.class);
 
     private final RagDocumentVersionRepository versionRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public DocumentVersionService(RagDocumentVersionRepository versionRepository) {
+        this(versionRepository, null);
+    }
+
+    @Autowired
+    public DocumentVersionService(
+            RagDocumentVersionRepository versionRepository,
+            JdbcTemplate jdbcTemplate) {
         this.versionRepository = versionRepository;
+        this.jdbcTemplate = jdbcTemplate;
     }
 
     /**
@@ -62,7 +73,7 @@ public class DocumentVersionService {
         }
 
         // Compute next version number
-        int nextVersion = getNextVersionNumber(doc.getId());
+        int nextVersion = allocateNextVersion(doc.getId());
 
         RagDocumentVersion version = RagDocumentVersion.fromDocument(doc, changeType, description);
         version.setVersionNumber(nextVersion);
@@ -86,7 +97,7 @@ public class DocumentVersionService {
         if (doc == null) {
             throw new IllegalArgumentException("doc must not be null");
         }
-        int nextVersion = getNextVersionNumber(doc.getId());
+        int nextVersion = allocateNextVersion(doc.getId());
 
         RagDocumentVersion version = RagDocumentVersion.fromDocument(doc, changeType, description);
         version.setVersionNumber(nextVersion);
@@ -190,5 +201,24 @@ public class DocumentVersionService {
         return versionRepository.findLatestByDocumentId(documentId)
                 .map(v -> v.getVersionNumber() + 1)
                 .orElse(1);
+    }
+
+    private int allocateNextVersion(Long documentId) {
+        if (jdbcTemplate == null) {
+            return getNextVersionNumber(documentId);
+        }
+        Integer value = jdbcTemplate.queryForObject("""
+                UPDATE rag_documents
+                SET next_history_version = next_history_version + 1
+                WHERE id = ?
+                RETURNING next_history_version - 1
+                """,
+                Integer.class,
+                documentId);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Cannot allocate document version: " + documentId);
+        }
+        return value;
     }
 }
