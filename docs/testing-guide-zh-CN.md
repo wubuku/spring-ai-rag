@@ -11,7 +11,7 @@ Spring AI RAG 项目对测试的态度是"测试是生产代码"——写代码�
 > - 涉及 WebUI 修改时必须跑 Playwright（`scripts/webui-e2e-test.js` / `npm run test:e2e`）  
 > - 重要改进后：重启服务 → 确认 `http://localhost:8081` 可用 → 再跑回归  
 
-总文档导航：[index-zh-CN.md](index-zh-CN.md) · 命令速查：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)
+总文档导航：[index-zh-CN.md](index-zh-CN.md) · 命令速查：[developer-reference-zh-CN.md](developer-reference-zh-CN.md) · 规划到交付：[delivery-workflow-zh-CN.md](delivery-workflow-zh-CN.md)
 
 ## 测试金字塔
 

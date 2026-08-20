@@ -231,6 +231,7 @@ const pairs = [
   ['docs/index.md', 'docs/index-zh-CN.md'],
   ['docs/developer-reference.md', 'docs/developer-reference-zh-CN.md'],
   ['docs/project-context.md', 'docs/project-context-zh-CN.md'],
+  ['docs/delivery-workflow.md', 'docs/delivery-workflow-zh-CN.md'],
   ['docs/openai-compatibility-readiness.md', 'docs/openai-compatibility-readiness-zh-CN.md'],
   ['docs/testing-guide.md', 'docs/testing-guide-zh-CN.md']
 ];

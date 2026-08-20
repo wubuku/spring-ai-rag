@@ -1,6 +1,10 @@
 # 1.0 Release Checklist
 
 > 📖 [English](release-checklist.md) · 📖 [中文](release-checklist-zh-CN.md)
+>
+> Before a feature enters this release checklist, complete its planning, basic
+> integration gates, and convergence reviews under the
+> [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md).
 
 Release candidate: `1.0.0`
 Release date: `2026-07-21`

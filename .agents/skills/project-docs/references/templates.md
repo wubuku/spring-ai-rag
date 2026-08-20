@@ -68,3 +68,24 @@ These are compact skeletons. Keep existing spring-ai-rag documents in place and 
 > Date: YYYY-MM-DD
 > Superseded for navigation by: [new document](relative-path)
 ```
+
+## Active Implementation Plan
+
+Use this only as a compact outline; the required planning and review behavior is
+defined by [`docs/delivery-workflow*`](../../../../docs/delivery-workflow.md).
+
+```markdown
+# Feature Plan
+
+> Status and matching progress ledger.
+
+## Baseline And Problem
+## Goals And Non-Goals
+## Verified Code And Data Facts
+## Decisions, Defaults, And Reversible Boundaries
+## API, Data, Security, And Failure Semantics
+## Implementation Slices
+## Acceptance Matrix
+## Rollout, Rollback, And Observability
+## Plan Review Scope And Definition Of Done
+```

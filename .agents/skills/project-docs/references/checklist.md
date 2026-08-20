@@ -12,12 +12,14 @@
 - [ ] `AGENTS.md` is no more than 120 lines
 - [ ] `CLAUDE.md` is no more than 60 lines
 - [ ] Both link to `docs/index*`, `docs/project-context*`, and `docs/developer-reference*`
+- [ ] `AGENTS.md` and both indexes link to `docs/delivery-workflow*`
 - [ ] `docs/index.md` and `docs/index-zh-CN.md` have matching structure
 - [ ] README documentation sections start from the appropriate `docs/index*`
 
 ## Evergreen Content
 
-- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V41, and release state
+- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V43, and release state
+- [ ] `delivery-workflow*` remains the single evergreen source for planning, progress, acceptance, convergence-review, and Agent Git-delivery standards
 - [ ] `docs/drafts/` contains only active plans plus its README pair
 - [ ] completed/cancelled/superseded plans live under `docs/drafts/archive/`
 - [ ] hubs and evergreen docs do not treat individual archived drafts as current truth
@@ -42,7 +44,7 @@
 - [ ] Real LLM E2E defaults to `18081`
 - [ ] Local profile is `postgresql`
 - [ ] Vector dimension is `1024`
-- [ ] Flyway range is V1–V41
+- [ ] Flyway range is V1–V43
 - [ ] OpenAI / Embedding `base-url` examples do not append `/v1`
 - [ ] Secrets appear only as placeholders
 

@@ -53,7 +53,7 @@ mvn spring-boot:run -pl spring-ai-rag-core -DskipTests
 | 总索引 / 渐进发现 | [docs/index-zh-CN.md](docs/index-zh-CN.md) · [docs/index.md](docs/index.md) |
 | 架构 / Pipeline | [docs/architecture-zh-CN.md](docs/architecture-zh-CN.md) · [docs/architecture.md](docs/architecture.md) |
 | 配置 / API / 排障 | [docs/configuration-zh-CN.md](docs/configuration-zh-CN.md) · [docs/rest-api-zh-CN.md](docs/rest-api-zh-CN.md) · [docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
-| 测试 | [docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [docs/testing-guide.md](docs/testing-guide.md) |
+| 规划 / 测试 / 交付 | [docs/delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md) · [docs/testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) |
 | 命令与模型 | [developer-reference-zh-CN.md](docs/developer-reference-zh-CN.md) |
 | Claude Code + grok | [docs/claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) · `scripts/run-claude-grok.sh`（退出后共享代理仍在运行，用 `--stop-proxy` 停止） |
 | 项目上下文 | [project-context-zh-CN.md](docs/project-context-zh-CN.md) |

@@ -38,6 +38,7 @@
 12. **1.0 发版 / 验产物**：按 [docs/release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) 与 `scripts/verify-release.sh`；检索默认与 goldenset 见 [docs/quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md)。
 13. **WebUI 对齐**：普通页面内容默认 `text-align: start`；上传投放区等明确空间语义才允许居中，新增居中必须通过 `npm run check:alignment`。见 [WebUI 水平对齐指南](docs/webui-alignment-guidelines-zh-CN.md)。
 14. **数据访问并发**：禁止显式悲观锁、`SKIP LOCKED` 和 PostgreSQL advisory lock；使用条件写入/CAS、版本号、唯一约束、lease 与有界重试。运行 `scripts/verify-no-pessimistic-locks.sh`。
+15. **复杂功能交付**：修改代码前完成自包含规划和规划 `3/3`；实现后先过基本集成硬门槛，再做实现 `3/3`。测试证据不能由 review 或用户首次手测替代。见 [规划、实施与验收工作流](docs/delivery-workflow-zh-CN.md)。
 
 更全的陷阱列表：[docs/index-zh-CN.md](docs/index-zh-CN.md) §4、[docs/troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md)。
 
@@ -58,6 +59,7 @@
 | 后续改进 TODO | [TODO-zh-CN.md](docs/TODO-zh-CN.md)（[EN](docs/TODO.md)） |
 | 多模型与外部 `models.json` | [multi-model-external-config-zh-CN.md](docs/multi-model-external-config-zh-CN.md) |
 | 测试 / 质量默认 / 发版 | [testing-guide-zh-CN.md](docs/testing-guide-zh-CN.md) · [quality-defaults-zh-CN.md](docs/quality-defaults-zh-CN.md) · [release-checklist-zh-CN.md](docs/release-checklist-zh-CN.md) |
+| 规划 / 实施 / 验收 / Git 交付 | [delivery-workflow-zh-CN.md](docs/delivery-workflow-zh-CN.md)（[EN](docs/delivery-workflow.md)） |
 | 部署 / 境内网络 / 排障 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) · [china-network-guide-zh-CN.md](docs/china-network-guide-zh-CN.md) · [troubleshooting-zh-CN.md](docs/troubleshooting-zh-CN.md) |
 | Claude Code / grok 代理 | [CLAUDE.md](CLAUDE.md) · [claude-grok-proxy-zh-CN.md](docs/claude-grok-proxy-zh-CN.md) |
 | 文档治理 | [.agents/skills/project-docs/SKILL.md](.agents/skills/project-docs/SKILL.md) |
@@ -73,6 +75,7 @@
 - **先链后写**：能链到 `docs/` 的，不要在 `AGENTS.md` / `CLAUDE.md` 展开长文。
 - **改行为就改文档**：配置 → `configuration*`；API → `rest-api*`；架构 → `architecture*`；命令 → `developer-reference*`。
 - **测试门禁**：功能完成 = 实现 + 测试 +（相关）文档；禁止「只改实现、测试红着交」。  
+- **交付顺序**：规划收敛 → 实施与进度记录 → 基本集成硬门槛 → 限定范围实现收敛 → Git 交付；细节只维护在 `delivery-workflow*`。
 - **不要**把 `HEARTBEAT.md`、`memory/日期.md` 当架构真相来源；以代码与正式 `docs/` 为准。  
 - OpenClaw 的 `TOOLS.md`、`MEMORY.md`、`memory/` 等是本地状态，不属于项目文档体系；项目级 Skills 位于 `.agents/skills/`。
 - 外部参考仓库路径见 [docs/index-zh-CN.md](docs/index-zh-CN.md) §5（本机对照用，非 submodule）。

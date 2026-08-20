@@ -30,6 +30,7 @@
 | 治理或修改 WebUI 水平对齐 | [WebUI 水平对齐指南](webui-alignment-guidelines-zh-CN.md) | [测试指南](testing-guide-zh-CN.md) |
 | 做领域定制 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `demos/demo-domain-extension` |
 | 写测试 / 跑回归 | [testing-guide-zh-CN.md](testing-guide-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) E2E 段 |
+| 规划、实施、验收并交付复杂功能 | [规划、实施与验收工作流](delivery-workflow-zh-CN.md) | [当前活跃规划](drafts/README-zh-CN.md)、[测试指南](testing-guide-zh-CN.md) |
 | 线上部署 | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`、`k8s/` |
 | 出问题排查 | [troubleshooting-zh-CN.md](troubleshooting-zh-CN.md) | 下文「常见陷阱」 |
 | Agent / Claude 协作 | [AGENTS.md](../AGENTS.md) → 本页 | [project-context-zh-CN.md](project-context-zh-CN.md)、[developer-reference-zh-CN.md](developer-reference-zh-CN.md) |
@@ -103,6 +104,7 @@
 | [AGENTS.md](../AGENTS.md) | **短** | Agent 总入口：原则 + 规则 + 文档地图 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 长青 | 面向开发者和 Agent 的稳定项目认知 |
 | [developer-reference-zh-CN.md](developer-reference-zh-CN.md) | 参考 | 构建、运行、模型、E2E 与发布命令 |
+| [delivery-workflow-zh-CN.md](delivery-workflow-zh-CN.md) / [English](delivery-workflow.md) | 长青 | 自包含规划、进度恢复、验收硬门槛、三轮收敛与 Git 交付 |
 | [.agents/skills/project-docs/](../.agents/skills/project-docs/SKILL.md) | Skill | 文档体系工作流 |
 | [.agents/skills/pm-24x7/](../.agents/skills/pm-24x7/SKILL.md) | Skill | 可选的 OpenClaw 7×24 项目经理工作流 |
 

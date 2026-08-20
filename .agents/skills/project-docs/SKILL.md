@@ -33,6 +33,7 @@ metadata:
 | 文档 Hub | `docs/index.md` / `docs/index-zh-CN.md` | 全库导航 |
 | 项目上下文 | `docs/project-context*.md` | 模块、稳定能力、关键边界 |
 | 开发者参考 | `docs/developer-reference*.md` | 构建、启动、DB、模型、E2E 命令 |
+| 交付工作流 | `docs/delivery-workflow*.md` | 规划、进度、验收硬门槛、收敛检查与 Git 交付标准 |
 | Guides / Reference | `docs/architecture*`、`configuration*`、`rest-api*` 等 | 专题事实 |
 | 项目 Skills | `.agents/skills/<name>/SKILL.md` | 可复用工作流，不替代项目文档 |
 
@@ -82,6 +83,7 @@ AGENTS.md / CLAUDE.md
 | 配置项、环境变量 | `docs/configuration*` |
 | HTTP / SSE 契约 | `docs/rest-api*`、`docs/SSE-PROTOCOL.md` |
 | 构建、启动、验证命令 | `docs/developer-reference*`、`docs/testing-guide*` |
+| 规划、实施、验收与 Git 交付标准 | `docs/delivery-workflow*`，命令链接到 `developer-reference*` / `testing-guide*` |
 | 常见故障 | `docs/troubleshooting*` |
 | 境内网络 | `docs/china-network-guide*` |
 | 发布状态和门禁 | `docs/release-checklist*`、相关进度记录 |
@@ -156,6 +158,8 @@ find . -name '*.md' \
 2. 再修 live guides/reference。
 3. 最后处理 active drafts，并把已结束材料移入 archive。
 4. 能链接现有文档时不新建平行正文。
+5. 功能 plan/progress 的内容和收敛流程遵循 `docs/delivery-workflow*`；本 Skill 只维护其
+   文档层级、双语同步和生命周期。
 
 ### 验证
 

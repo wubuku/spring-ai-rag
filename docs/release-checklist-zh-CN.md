@@ -1,6 +1,9 @@
 # 1.0 发布清单
 
 > 📖 [English](release-checklist.md) · 📖 [中文](release-checklist-zh-CN.md)
+>
+> 单项功能在进入本发布清单前，先按[规划、实施与验收工作流](delivery-workflow-zh-CN.md)
+> 完成规划、基本集成门槛和连续收敛检查。
 
 候选版本：`1.0.0`
 发布日期：`2026-07-21`

@@ -11,7 +11,7 @@
 > - After WebUI changes, run Playwright (`scripts/webui-e2e-test.js` / `npm run test:e2e`)  
 > - After meaningful improvements: restart the service → confirm `http://localhost:8081` is up → run regression  
 
-Doc hub: [index.md](index.md) · Commands: [developer-reference.md](developer-reference.md)
+Doc hub: [index.md](index.md) · Commands: [developer-reference.md](developer-reference.md) · Plan-to-delivery workflow: [delivery-workflow.md](delivery-workflow.md)
 
 ## Testing Pyramid
 

@@ -30,6 +30,7 @@
 | Govern or modify WebUI horizontal alignment | [WebUI horizontal-alignment guidelines](webui-alignment-guidelines.md) | [Testing guide](testing-guide.md) |
 | Domain customization | [extension-guide.md](extension-guide.md) | `demos/demo-domain-extension` |
 | Write / run tests | [testing-guide.md](testing-guide.md) | [developer-reference.md](developer-reference.md) E2E section |
+| Plan, implement, accept, and deliver substantial work | [Planning, Implementation, And Acceptance Workflow](delivery-workflow.md) | [Current active plans](drafts/README.md), [Testing guide](testing-guide.md) |
 | Production deploy | [DEPLOYMENT.md](DEPLOYMENT.md) | `docker/`, `k8s/` |
 | Troubleshooting | [troubleshooting.md](troubleshooting.md) | “Common pitfalls” below |
 | Agent / Claude collaboration | [AGENTS.md](../AGENTS.md) → this page | [project-context.md](project-context.md), [developer-reference.md](developer-reference.md) |
@@ -103,6 +104,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [AGENTS.md](../AGENTS.md) | **Short** | Agent hub: principles + rules + map |
 | [project-context.md](project-context.md) | Evergreen | Stable project knowledge for contributors and Agents |
 | [developer-reference.md](developer-reference.md) | Reference | Build, runtime, model, E2E, and release commands |
+| [delivery-workflow.md](delivery-workflow.md) / [中文](delivery-workflow-zh-CN.md) | Evergreen | Self-contained planning, resumable progress, acceptance gates, convergence reviews, and Git delivery |
 | [.agents/skills/project-docs/](../.agents/skills/project-docs/SKILL.md) | Skill | Documentation-system workflow |
 | [.agents/skills/pm-24x7/](../.agents/skills/pm-24x7/SKILL.md) | Skill | Optional always-on OpenClaw project-manager workflow |
 

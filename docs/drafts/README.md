@@ -7,6 +7,10 @@ prepared or implemented**. It is not the long-term home for stable project
 facts; shipped behavior must be extracted into the corresponding bilingual
 evergreen documents.
 
+Read the [Planning, Implementation, And Acceptance Workflow](../delivery-workflow.md)
+before creating or maintaining an active plan/progress ledger. This page defines
+only the draft lifecycle; it does not duplicate plan content or review-loop rules.
+
 ## Rules
 
 1. Use a stable filename for an active plan, such as
