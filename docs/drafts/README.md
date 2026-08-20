@@ -35,8 +35,8 @@ means there is no approved or in-progress active plan.
 
 ## Current Active Plans
 
-- [Next High-Value Features Plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md): reliable
-  delivery for scenemill, the first external Client, including generated-video mutations, controlled retrieval text,
-  and project-scoped semantic video search.
+- [Next High-Value Features Plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md): atomic
+  cross-Collection relocation for external documents, plus Collection
+  derivation-integrity diagnostics and preview-first repair.
 - [Planning Progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md): research,
   review-counter, and resumable context for the active plan.

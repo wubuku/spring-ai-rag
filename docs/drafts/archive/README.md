@@ -43,9 +43,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
-- Unimplemented external-document relocation and derivation-integrity design:
-  `2026-08-21_NEXT_HIGH_VALUE_FEATURES_*` (superseded by the higher-value
-  cross-service material-projection loop)
+- Cross-project integration plan for the first external Client:
+  `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*` (superseded because it
+  exceeded this repository's documentation boundary)
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

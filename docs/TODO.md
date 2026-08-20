@@ -10,8 +10,8 @@
 | Item | Priority | Current gap |
 |------|----------|-------------|
 | Authoritative source snapshot reconciliation | Shipped in this batch | V42 API and reference client support bounded authoritative runs, preview fingerprints, deletion protection, and reconciliation tombstones |
-| Atomic Collection relocation for external documents | P1 | Changing `collectionKey` on ordinary upsert addresses another identity; the current tombstone-plus-create flow cannot preserve the internal ID/history or avoid a transient duplicate/gap |
-| Collection derivation-integrity diagnostics and controlled repair | P1 | Current lifecycle/readiness describes normal freshness, but operators have no physical-row integrity preview, bounded repair, or durable receipt; the detailed historical design is archived |
+| Atomic Collection relocation for external documents | P0 | Changing `collectionKey` on ordinary upsert addresses another identity; the current tombstone-plus-create flow cannot preserve the internal ID/history or avoid a transient duplicate/gap |
+| Collection derivation-integrity diagnostics and controlled repair | P1 | Current lifecycle/readiness describes normal freshness, but operators have no physical-row integrity preview, bounded repair, or durable receipt; the implementable design is in the current active plan |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
 | Decouple local chunks/full text from remote vectors | Shipped in this batch | V43 stores profile-neutral local chunks/state; provider failures leave current content available as `KEYWORD_ONLY` while stale generations remain excluded |
 
@@ -35,9 +35,9 @@
   promotes the lifecycle to `READY`.
 - Concurrency remains based on conditional DML/CAS, unique constraints, leases,
   and bounded retries; explicit pessimistic locking remains forbidden.
-- Atomic relocation and derivation integrity remain implementable backlog, but
-  they no longer outrank the end-to-end gap where scenemill generated-video
-  mutations exist without a consumer. The active plan defines execution order.
+- Atomic relocation and derivation integrity are the current highest-value
+  implementable backlog. The active plan defines their order, atomicity, and
+  cost boundaries.
 
 See [current active plans](drafts/README.md) for remaining implementation scope
 and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and

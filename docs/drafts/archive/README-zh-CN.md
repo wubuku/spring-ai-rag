@@ -31,7 +31,7 @@
 - Chat、WebUI 与后续功能批次：`2026-08-17_*`、`2026-08-18_*`
 - 文档生命周期实施账本：`2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - 本地关键词/向量派生解耦：`2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
-- 未实施的外部文档迁移与派生完整性方案：
-  `2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`（被更高价值的跨服务素材投影闭环替代）
+- 首个外部 Client 的跨项目接入规划：
+  `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*`（因超出当前仓库文档边界而被替代）
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。
