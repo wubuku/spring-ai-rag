@@ -181,6 +181,37 @@ For each source event:
 7. Observe lifecycle/readiness separately when downstream workflows require
    the content to be searchable.
 
+### 4.1 Delivering From An Immutable Outbox
+
+When the source already has an append-only mutation log, keep event facts
+immutable and maintain a separate mutable delivery receipt per downstream
+consumer:
+
+- the event stores source identity, complete desired state, source revision,
+  and stable event/dedup keys;
+- the receipt stores consumer, claim token, lease, attempts, next retry, last
+  error, and the accepted revision;
+- serialize revisions for one source identity while processing different
+  identities with bounded concurrency;
+- after a network timeout, replay the same complete request and
+  `sourceRevision`; do not invent a new revision to guess the outcome;
+- send the previously accepted revision as `expectedSourceRevision` for an
+  update or tombstone;
+- after `409`, read the current external document. Record success only when the
+  remote state is exactly this complete desired state; otherwise fail closed
+  rather than comparing timestamps or revision strings as last-write-wins;
+- a terminal predecessor blocks later events for that identity until explicit
+  repair or replay;
+- Spring events or queue notifications are latency hints only. Scheduled or
+  durable scans recover lost notifications and process crashes;
+- perform remote HTTP outside the source database transaction.
+
+For multiple Collection or tenant targets, resolve the destination and
+credential from a trusted server-side binding. Never let an event payload,
+ordinary client, or database-provided arbitrary URL/secret choose the HTTP
+target. A Collection is the current spring-ai-rag ACL boundary;
+`sourceNamespace` isolates identity, not authorization.
+
 For a single-source Collection, omitting `sourceNamespace` is equivalent to
 sending `default`. For a Collection shared by multiple connectors, always
 choose a stable explicit namespace before the first delivery and keep it

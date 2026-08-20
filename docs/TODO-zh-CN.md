@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-19。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-21。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
 
 ## 文档生命周期与派生索引后续项
@@ -11,6 +11,7 @@
 |------|--------|----------|
 | 权威来源全量快照对账 | 本批已交付 | V42 API 和 reference client 支持有界权威 run、preview fingerprint、删除保护和 reconciliation tombstone |
 | 外部文档原子 Collection 迁移 | P1 | 普通 upsert 改 `collectionKey` 会寻址另一身份；当前只能 tombstone + 新建，不能保留内部 ID、版本历史或避免短暂重复/空窗 |
+| Collection 派生索引完整性诊断与受控修复 | P1 | 当前 lifecycle/readiness 能表达正常 freshness，但没有面向运营者的物理行完整性 preview、有限 repair 与 durable receipt；详细历史设计已归档 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |
 | 本地 chunk/full-text 与远程向量解耦 | 本批已交付 | V43 保存与 Profile 无关的本地 chunk/state；provider 故障时当前正文仍以 `KEYWORD_ONLY` 可用，旧 generation 继续被排除 |
 
@@ -27,6 +28,8 @@
 - V43 本地全文派生保持“旧正文立即退出”，允许新正文先进入
   `KEYWORD_ONLY`，远程 embedding 成功后再将 lifecycle 提升为 `READY`。
 - 所有并发协调继续使用条件 DML/CAS、唯一约束、lease 和有界重试，禁止显式悲观锁。
+- 原子迁移和派生完整性仍是可实施 backlog，但当前不高于 scenemill 生成视频 mutation
+  已存在却无人消费的端到端缺口；实施顺序以活跃规划为准。
 
 剩余实施范围和批次顺序以
 [当前活跃规划](drafts/README-zh-CN.md) 为准；已发布契约仍以

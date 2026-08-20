@@ -150,6 +150,26 @@ chunk 和远程向量分开准备，因此远程向量排队、执行中或失�
    当作 last-write-wins 覆盖。
 7. 下游流程要求可检索时，另外等待 lifecycle/readiness 收敛。
 
+### 4.1 从 immutable outbox 投递
+
+来源系统已经有 append-only mutation log 时，推荐保留事件事实不变，并为每个下游消费者建立
+独立的 mutable delivery receipt：
+
+- 事件表保存 source identity、完整 desired state、source revision 和稳定 event/dedup key；
+- receipt 表保存 consumer、claim token、lease、attempt、next retry、最后错误和已接受 revision；
+- 同一来源 identity 按 revision 串行，不同 identity 可以有界并行；
+- 网络超时后重放同一完整请求和同一 `sourceRevision`，不能生成新 revision 猜测结果；
+- update/tombstone 使用上一条已接受 revision 作为 `expectedSourceRevision`；
+- `409` 先读取当前外部文档。只有远端已是本次完整 desired state 才能补记成功；其他差异必须
+  fail-closed，不能按时间或“更大字符串”做 last-write-wins；
+- 前序 terminal failure 默认阻断同 identity 后序事件，等待显式 repair/replay；
+- Spring Event/队列通知只能用于低延迟唤醒，Scheduled/持久化扫描负责丢通知和崩溃恢复；
+- 远程 HTTP 必须在来源数据库事务之外执行。
+
+如果下游有多个 Collection/租户目标，目标地址和 credential 必须来自服务端可信 binding。
+不要允许 payload、普通客户端或数据库中的任意 URL/secret 决定 HTTP 目标。Collection 是当前
+spring-ai-rag 的 ACL 边界；`sourceNamespace` 只能隔离 identity，不能代替授权。
+
 单来源 Collection 可以省略 `sourceNamespace`，其语义等同于发送 `default`。如果一个
 Collection 由多个 connector 共同写入，必须在第一次投递前选择稳定的显式 namespace，并在
 该 connector 的 identity 生命周期内保持不变。

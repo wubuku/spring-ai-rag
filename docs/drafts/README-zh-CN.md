@@ -29,7 +29,7 @@
 
 ## 当前活跃规划
 
-- [下一批高价值功能实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)：外部文档跨 Collection
-  原子迁移与派生索引完整性运营。
+- [下一批高价值功能实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)：第一个外部 Client scenemill 的生成视频素材
+  mutation 的可靠投递、受控检索文本与项目内视频语义搜索闭环。
 - [规划进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)：当前规划的调研、检查计数与可恢复
   上下文。
