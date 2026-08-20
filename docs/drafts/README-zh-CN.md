@@ -29,4 +29,7 @@
 
 ## 当前活跃规划
 
-暂无。
+- [下一批高价值功能实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)：外部文档跨 Collection
+  原子迁移与派生索引完整性运营。
+- [规划进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)：当前规划的调研、检查计数与可恢复
+  上下文。

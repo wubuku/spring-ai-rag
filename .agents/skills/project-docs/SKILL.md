@@ -1,6 +1,8 @@
 ---
 name: project-docs
-description: Create and maintain the tracked, bilingual, AI-agent-friendly documentation system for spring-ai-rag. Use for documentation initiatives, project onboarding, navigation, evergreen context, command references, and EN/ZH synchronization.
+description: "Create and maintain the tracked, bilingual, AI-agent-friendly documentation system for spring-ai-rag. Use for documentation initiatives, project onboarding, navigation, evergreen context, command references, and EN/ZH synchronization."
+metadata:
+  short-description: "Maintain spring-ai-rag project documentation"
 ---
 
 # Project Documentation System
@@ -145,7 +147,7 @@ find . -name '*.md' \
 - 仓库入口是否只链接 Git 跟踪文件。
 - 服务默认端口是否为 `8081`，`scripts/dev.sh` 后端端口是否为 `18082`，
   真实 LLM 端口是否为 `18081`。
-- Flyway 是否为 V1–V41。
+- Flyway 是否为 V1–V43。
 - OpenAI / Embedding `base-url` 示例是否没有尾部 `/v1`。
 
 ### 计划

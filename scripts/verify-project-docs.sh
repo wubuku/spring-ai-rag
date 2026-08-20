@@ -73,6 +73,27 @@ check_local_state_boundary() {
       echo "Project Skill is unexpectedly ignored: $path" >&2
       return 1
     fi
+    node - "$path" <<'NODE'
+const fs = require('node:fs');
+
+const skillPath = process.argv[2];
+const content = fs.readFileSync(skillPath, 'utf8');
+if (content.charCodeAt(0) === 0xfeff) {
+  throw new Error(`${skillPath}: UTF-8 BOM precedes YAML frontmatter`);
+}
+const match = content.match(/^---\n([\s\S]*?)\n---(?:\n|$)/);
+if (!match) {
+  throw new Error(
+    `${skillPath}: missing YAML frontmatter delimited by exact --- lines`
+  );
+}
+for (const field of ['name', 'description']) {
+  const expression = new RegExp(`^${field}:\\s*.+$`, 'm');
+  if (!expression.test(match[1])) {
+    throw new Error(`${skillPath}: missing frontmatter field ${field}`);
+  }
+}
+NODE
   done
 }
 

@@ -35,4 +35,7 @@ means there is no approved or in-progress active plan.
 
 ## Current Active Plans
 
-None.
+- [Next High-Value Features Plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md): atomic
+  external-document Collection relocation and derivation-integrity operations.
+- [Planning Progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md): research,
+  review-counter, and resumable context for the active plan.
