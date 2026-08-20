@@ -140,6 +140,36 @@ test.describe('Documents', () => {
     await expect(page.getByRole('menuitem', { name: 'Delete permanently' })).toHaveCount(0);
   });
 
+  test('relocates an external document with immutable source revision and idempotency key', async ({ page }) => {
+    await mockAllApiCalls(page);
+    const relocationRequest = page.waitForRequest(request =>
+      request.method() === 'POST'
+      && new URL(request.url()).pathname === '/api/v1/rag/documents/relocate');
+    await openProtectedPage(page, '/webui/documents');
+
+    await page.getByRole('button', { name: /Open actions for.*Sample Document/ }).click();
+    await page.getByRole('menuitem', { name: 'Relocate Collection' }).click();
+    const form = page.getByRole('form', { name: 'Relocate external document' });
+    await expect(form).toBeVisible();
+    await expect(form.getByLabel('Source namespace')).toHaveValue('cms-main');
+    await expect(form.getByLabel('Source namespace')).toHaveAttribute('readonly', '');
+    await expect(form.getByLabel('Source revision')).toHaveValue('etag:sample-1');
+    await expect(form.getByLabel('Source revision')).toHaveAttribute('readonly', '');
+    await form.getByLabel('Target Collection').selectOption('product-manual');
+    await form.getByRole('button', { name: 'Relocate' }).click();
+
+    const request = await relocationRequest;
+    expect(request.headers()['idempotency-key']).toBeTruthy();
+    expect(request.postDataJSON()).toEqual({
+      sourceCollectionKey: 'sample-collection',
+      targetCollectionKey: 'product-manual',
+      sourceNamespace: 'cms-main',
+      externalId: 'cms:sample:1',
+      expectedSourceRevision: 'etag:sample-1',
+    });
+    await expect(page.getByText(/Document relocated to product-manual/)).toBeVisible();
+  });
+
   test('opens the indexed PDF artifact from the row action menu', async ({ page }) => {
     await mockAllApiCalls(page);
     await openProtectedPage(page, '/webui/documents');

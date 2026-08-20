@@ -52,6 +52,21 @@ export interface DocumentMutationResponse {
   lifecycle: DocumentLifecycle;
 }
 
+export interface ExternalDocumentRelocateResponse {
+  documentId: number;
+  sourceCollectionKey: string;
+  targetCollectionKey: string;
+  sourceNamespace: string;
+  externalId: string;
+  sourceRevision: string;
+  action: 'RELOCATED';
+  documentRevision: number;
+  versionNumber: number;
+  contentChanged: false;
+  derivationAction: 'PRESERVED';
+  lifecycle: DocumentLifecycle;
+}
+
 export interface DocumentUpdate {
   expectedDocumentRevision: number;
   title?: string;
@@ -166,6 +181,19 @@ export const documentsApi = {
         embeddingPolicy,
         visibilityMode,
       },
+    ),
+
+  relocate: (request: {
+    sourceCollectionKey: string;
+    targetCollectionKey: string;
+    sourceNamespace: string;
+    externalId: string;
+    expectedSourceRevision: string;
+  }, idempotencyKey: string) =>
+    apiClient.post<ExternalDocumentRelocateResponse>(
+      '/documents/relocate',
+      request,
+      { headers: { 'Idempotency-Key': idempotencyKey } },
     ),
 };
 

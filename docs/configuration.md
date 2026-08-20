@@ -249,6 +249,8 @@ rag:
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
     sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
     version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
+    relocation-enabled: ${RAG_DOCUMENT_RELOCATION_ENABLED:false}
+    derivation-repair-enabled: ${RAG_DOCUMENT_DERIVATION_REPAIR_ENABLED:false}
     sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
     sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
@@ -260,6 +262,8 @@ rag:
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | Retention for local create/upload `Idempotency-Key` records, clamped to 1–168 hours |
 | `rag.document-lifecycle.sync-runs-enabled` | `false` | Enables the authoritative external snapshot Sync Run API; keep disabled until the disposable PostgreSQL/E2E acceptance passes |
 | `rag.document-lifecycle.version-restore-enabled` | `false` | Enables local `FULL` historical-version restore; externally managed documents remain source-owned |
+| `rag.document-lifecycle.relocation-enabled` | `false` | Enables atomic cross-Collection relocation for externally managed documents; run the relocation gate before enabling |
+| `rag.document-lifecycle.derivation-repair-enabled` | `false` | Enables side-effecting derivation repair preview/apply; read-only derivation readiness remains available |
 | `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | Absolute missing-document safety threshold for `TOMBSTONE` runs; completion is rejected above it without explicit confirmation; clamped to 1–100000 |
 | `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | Relative missing-document safety threshold (percent) for `TOMBSTONE` runs; clamped to 1–100 |
 

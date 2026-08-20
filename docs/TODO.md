@@ -10,8 +10,8 @@
 | Item | Priority | Current gap |
 |------|----------|-------------|
 | Authoritative source snapshot reconciliation | Shipped in this batch | V42 API and reference client support bounded authoritative runs, preview fingerprints, deletion protection, and reconciliation tombstones |
-| Atomic Collection relocation for external documents | P0 | Changing `collectionKey` on ordinary upsert addresses another identity; the current tombstone-plus-create flow cannot preserve the internal ID/history or avoid a transient duplicate/gap |
-| Collection derivation-integrity diagnostics and controlled repair | P1 | Current lifecycle/readiness describes normal freshness, but operators have no physical-row integrity preview, bounded repair, or durable receipt; the implementable design is in the current active plan |
+| Atomic Collection relocation for external documents | Shipped in this batch | V44 provides dual ACL, exact idempotent replay, Sync Run fencing, and a permanent retired-address guard; the feature flag defaults off |
+| Collection derivation-integrity diagnostics and controlled repair | Shipped in this batch | V45 provides shared physical freshness, bounded Collection diagnostics, and durable preview/apply/status for at most 100 items; side-effecting repair defaults off |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
 | Decouple local chunks/full text from remote vectors | Shipped in this batch | V43 stores profile-neutral local chunks/state; provider failures leave current content available as `KEYWORD_ONLY` while stale generations remain excluded |
 
@@ -24,7 +24,8 @@
   `collectionKey + sourceNamespace + externalId`. Until the project has an
   independent tenant/connector authorization boundary, do not weaken the
   uniqueness scope to global `sourceNamespace + externalId`; cross-Collection
-  movement needs an explicit atomic operation that authorizes both sides.
+  movement uses explicit relocation with both source and target ACL validation;
+  ordinary upsert must not simulate a move.
 - Version restore creates a new revision and complete snapshot, does not rewind
   counters or overwrite history, and reuses the current mutation impact,
   durable-job, and commit-fencing paths.
@@ -35,9 +36,9 @@
   promotes the lifecycle to `READY`.
 - Concurrency remains based on conditional DML/CAS, unique constraints, leases,
   and bounded retries; explicit pessimistic locking remains forbidden.
-- Atomic relocation and derivation integrity are the current highest-value
-  implementable backlog. The active plan defines their order, atomicity, and
-  cost boundaries.
+- Derivation repair rebuilds or queues derived data only. It does not modify
+  content, is bounded to 100 items, never stores clear tokens, and does not loop
+  over synchronous embedding-provider calls in the HTTP request.
 
 See [current active plans](drafts/README.md) for remaining implementation scope
 and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and

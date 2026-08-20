@@ -29,7 +29,7 @@ Usage: ./scripts/verify-document-lifecycle.sh
 Runs, in order:
   no-pessimistic-lock gate
   focused lifecycle/controller/service tests
-  Flyway V39 -> V42 and lifecycle consistency tests on disposable PostgreSQL
+  Flyway V39 -> V45 and lifecycle consistency tests on disposable PostgreSQL
   reference client HTTP/retry/checkpoint tests
   reference client against the real Spring Boot HTTP and PostgreSQL data path
   local version restore against the real Spring Boot HTTP and PostgreSQL data path
@@ -1053,7 +1053,7 @@ run_step "Prerequisites" check_prerequisites
 run_step "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_step "Focused document lifecycle tests" focused_backend_tests
 run_step "Disposable PostgreSQL preparation" prepare_postgres
-run_step "V39 to V42 lifecycle PostgreSQL acceptance" postgres_lifecycle_tests
+run_step "V39 to V45 lifecycle PostgreSQL acceptance" postgres_lifecycle_tests
 run_step "External sync reference client tests" reference_client_tests
 run_step "External sync client real Spring Boot HTTP E2E" reference_client_real_http_e2e
 run_step "Local version restore real Spring Boot HTTP E2E" version_restore_real_http_e2e

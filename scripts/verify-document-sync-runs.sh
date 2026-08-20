@@ -477,7 +477,7 @@ cat > "$LOG_DIR/summary.md" <<EOF
 - Run: \`$RUN_ID\`
 - Backend port: \`$BACKEND_PORT\`
 - Evidence: \`$LOG_DIR/http-acceptance.json\`
-- Flyway: V1–V43
+- Flyway: V1–V45
 - Result: PASS
 EOF
 echo "Document Sync Run verification passed: $LOG_DIR/summary.md"

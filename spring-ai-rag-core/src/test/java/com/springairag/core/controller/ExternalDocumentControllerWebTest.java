@@ -13,6 +13,9 @@ import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.DocumentEmbedService;
 import com.springairag.core.service.DocumentVersionService;
 import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentRelocationService;
+import com.springairag.api.dto.ExternalDocumentRelocateResponse;
+import com.springairag.api.dto.DocumentLifecycleResponse;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -27,6 +30,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,6 +52,8 @@ class ExternalDocumentControllerWebTest {
 
     @MockBean
     private ExternalDocumentService externalDocumentService;
+    @MockBean
+    private DocumentRelocationService documentRelocationService;
     @MockBean
     private RagDocumentRepository documentRepository;
     @MockBean
@@ -111,6 +117,46 @@ class ExternalDocumentControllerWebTest {
                 .andExpect(jsonPath("$.documentId").value(41))
                 .andExpect(jsonPath("$.action").value("UPDATED"))
                 .andExpect(jsonPath("$.embeddingFresh").value(true));
+    }
+
+    @Test
+    void relocationRequiresIdempotencyHeaderAndRoutesImmutableRevision() throws Exception {
+        when(documentRelocationService.relocate(any(), eq("relocate-key")))
+                .thenReturn(new ExternalDocumentRelocateResponse(
+                        41L, "source", "target", "cms", "doc-1", "rev-2",
+                        "RELOCATED", 3, 4, false, "PRESERVED",
+                        new DocumentLifecycleResponse(
+                                "ACTIVE", "READY", "READY", "READY",
+                                "bge-m3", null, null, null, false)));
+
+        mockMvc.perform(post("/api/v1/rag/documents/relocate")
+                        .header("Idempotency-Key", "relocate-key")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceCollectionKey": "source",
+                                  "targetCollectionKey": "target",
+                                  "sourceNamespace": "cms",
+                                  "externalId": "doc-1",
+                                  "expectedSourceRevision": "rev-2"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentId").value(41))
+                .andExpect(jsonPath("$.derivationAction").value("PRESERVED"));
+
+        mockMvc.perform(post("/api/v1/rag/documents/relocate")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "sourceCollectionKey": "source",
+                                  "targetCollectionKey": "target",
+                                  "sourceNamespace": "cms",
+                                  "externalId": "doc-1",
+                                  "expectedSourceRevision": "rev-2"
+                                }
+                                """))
+                .andExpect(status().isBadRequest());
     }
 
     @Test

@@ -232,7 +232,7 @@ The script serially runs:
 1. the no-pessimistic-lock static gate;
 2. focused local CRUD, external TEXT/JSON, Collection/PDF/batch entry-point,
    and generation-job tests;
-3. V39-to-V43, triple-identity, freshness, local-generation/vector-generation
+3. V39-to-V45, triple-identity, freshness, local-generation/vector-generation
    fencing, transaction
    rollback, and hard-delete cascade acceptance on disposable PostgreSQL, with
    Surefire XML parsing that requires `skipped=0`;
@@ -248,7 +248,7 @@ The focused V42 HTTP contract can also be run independently:
 ./scripts/verify-document-sync-runs.sh
 ```
 
-It migrates a disposable database through V43, exercises Sync Run begin,
+It migrates a disposable database through V45, exercises Sync Run begin,
 batch idempotency, failure retry, preview/complete tombstoning, namespace
 isolation, and the no-pessimistic-lock gate.
 
@@ -274,6 +274,27 @@ pgvector container started directly by the Docker CLI. A caller-provided JDBC
 URL must identify a disposable database. Mock Playwright uses DOM, network, and
 test assertions only; screenshots are disabled. Evidence is written under
 `.verification/document-data-plane/<run-id>/summary.md`.
+
+### Document Relocation And Derivation Integrity Gates
+
+```bash
+./scripts/verify-document-relocation.sh
+./scripts/verify-derivation-integrity.sh
+```
+
+The relocation gate covers V44, dual-Collection ACL, exact idempotent replay,
+active Sync Run fencing, permanent retired-address protection, and the shared
+TEXT/JSON data-plane semantics. The derivation gate covers V45, strict physical
+freshness, paged and aggregate diagnostics, preview tokens/fingerprints,
+short-transaction repair-item leases, and vector repair that queues provider
+work only when still required. Both require `skipped=0` for PostgreSQL tests,
+then run backend compilation, the frontend build, and Mock Playwright based on
+DOM, network, and API assertions; screenshots are not acceptance evidence.
+
+To reuse a disposable database, set `NEXT_HIGH_VALUE_IT_JDBC_URL`,
+`NEXT_HIGH_VALUE_IT_USERNAME`, and `NEXT_HIGH_VALUE_IT_PASSWORD`, together with
+`NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES`. The gate repeatedly calls
+`Flyway.clean()` and must never target development or production.
 
 ## Coverage
 
@@ -307,7 +328,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V43, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V45, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -366,7 +387,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V43 from an empty schema, and exercises the vector query with actual
+Flyway V1-V45 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -397,7 +418,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V43 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V45 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -443,7 +464,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V43, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V45, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.

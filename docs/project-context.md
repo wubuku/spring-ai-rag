@@ -286,12 +286,14 @@ partition, not a retrieval-scope or ACL dimension. Search and Chat currently
 cross namespaces within the effective authorized Collection scope.
 
 The tuple is the current placement address and ACL scope; it does not make
-`externalId` globally unique across the service. Ordinary upsert cannot
-atomically change the Collection of an externally managed document. A changed
-`collectionKey` addresses another placement and does not delete the old one.
-The compatibility flow of tombstoning the old address and upserting the target
-creates a new internal document and version history; an explicit atomic
-relocation preserving `documentId` remains future work.
+`externalId` globally unique across the service. Ordinary upsert does not move
+placement. V44 explicit relocation atomically changes Collection under dual
+Collection ACL, source-revision CAS, Collection lifecycle tokens, and Sync Run
+namespace fencing while preserving `documentId`, history, and derived rows.
+The old address enters a permanent retired-address ledger, so delayed lookup or
+mutation returns a stable 409; reverse relocation resolves the matching marker
+in the same transaction. This write capability defaults off behind a feature
+flag.
 
 See [REST API — External Documents](rest-api.md) for the complete
 request/response contract, conflict handling, and client synchronization
@@ -340,6 +342,16 @@ current. `embeddingFresh` describes only vector freshness and must not be used
 to decide whether keyword retrieval is available. `SKIP` removes current local
 chunks and reports `NOT_REQUESTED`.
 
+V45 adds a shared `DerivationIntegrityRepository`. Per-document lifecycle/cache,
+legacy embedding readiness, and new Collection derivation readiness all verify
+the same physical invariants rather than trusting state and row count. Summary
+classification is aggregated in SQL, while detail and preview results are
+bounded to 100 items. Controlled repair uses token hashes, fingerprints,
+owner/ACL checks, leases, and a durable item ledger; local rebuild and vector-job
+enqueue commit separately, and HTTP never loops over provider calls. Read-only
+diagnostics are available by default; side-effecting repair defaults off behind
+a feature flag.
+
 ## 5. Multi-Model Runtime
 
 - Legacy provider beans remain for default-model compatibility.
@@ -360,7 +372,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V43.
+- Flyway is currently V1–V45.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -377,7 +389,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   and active-job constraints; V42 adds authoritative external snapshot runs,
   idempotent item ledgers, and source/reconciliation deletion markers; V43
   adds profile-neutral local keyword chunks and independent local-index
-  lifecycle state.
+  lifecycle state; V44 adds relocation idempotent responses and the permanent
+  retired-address ledger; V45 adds derivation repair preview/item control-plane
+  tables.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -399,9 +413,9 @@ The main namespace is `/api/v1/rag/**`:
 | Area | Capability |
 |------|------------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN chat and structured SSE |
-| `/documents` | Local create/PATCH/disable/restore/version-restore/permanent-delete, lifecycle, and embedding |
+| `/documents` | Local CRUD/lifecycle/embedding plus external idempotent sync and atomic relocation |
 | `/search` | Hybrid retrieval |
-| `/collections` | Knowledge collections |
+| `/collections` | Knowledge collections, embedding/derivation readiness, and bounded derivation repair control plane |
 | `/evaluation` | Evaluation and feedback |
 | `/api-keys` | API-key management |
 | `/files` | PDF and file import |

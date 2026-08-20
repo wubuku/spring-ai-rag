@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V43 |
+| Flyway | V1–V45 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -331,6 +331,27 @@ Alternatively provide `DOCUMENT_LIFECYCLE_IT_JDBC_URL`,
 `DOCUMENT_LIFECYCLE_IT_USERNAME`, and `DOCUMENT_LIFECYCLE_IT_PASSWORD`. Never
 point these at development or production. Evidence is stored under
 `.verification/document-data-plane/<run-id>/`.
+
+### Document Relocation And Derivation Integrity Verification
+
+```bash
+./scripts/verify-document-relocation.sh
+./scripts/verify-derivation-integrity.sh
+```
+
+Both focused gates run the no-pessimistic-lock check, focused HTTP tests,
+disposable-PostgreSQL integration tests, `mvn clean compile test-compile`,
+WebUI typecheck/Vitest/production build/alignment, no-screenshot Mock
+Playwright, bilingual documentation checks, and the whitespace gate. Evidence
+is written under `.verification/relocation/<run-id>/` and
+`.verification/derivation-integrity/<run-id>/`.
+
+Testcontainers is the default. To use a caller-created disposable database,
+set `NEXT_HIGH_VALUE_IT_JDBC_URL`, `NEXT_HIGH_VALUE_IT_USERNAME`, and
+`NEXT_HIGH_VALUE_IT_PASSWORD`, plus the explicit safety acknowledgement
+`NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES`. The test cleans the database, so these
+variables must never point at development or production. Override the Mock
+Playwright preview's initial port with `NEXT_HIGH_VALUE_PLAYWRIGHT_PORT`.
 
 ### Retrieval diagnostics / metadata filters / embedding operations / managed quality
 

@@ -89,11 +89,20 @@ class OpenApiContractTest {
             "ExternalDocumentUpsertResponse",
             "ExternalDocumentBatchUpsertResponse",
             "ExternalDocumentDeleteResponse",
+            "ExternalDocumentRelocateRequest",
+            "ExternalDocumentRelocateResponse",
             "RetrievalFilterRequest",
             "RetrievalTracePageResponse",
             "RetrievalTraceDetailResponse",
             "EmbeddingJobPageResponse",
             "CollectionEmbeddingReadinessResponse",
+            "DerivationReadinessResponse",
+            "DerivationReadinessPageResponse",
+            "DerivationReadinessDocument",
+            "DerivationRepairPreviewRequest",
+            "DerivationRepairPreviewResponse",
+            "DerivationRepairApplyRequest",
+            "DerivationRepairStatusResponse",
             "EvaluationSuiteCreateRequest",
             "EvaluationSuiteResponse",
             "EvaluationSuiteVersionCreateRequest",
@@ -114,11 +123,16 @@ class OpenApiContractTest {
             "/rag/documents/upsert",
             "/rag/documents/batch-upsert",
             "/rag/documents/by-external-id",
+            "/rag/documents/relocate",
             "/rag/health",
             "/rag/models",
             "/rag/retrieval-traces",
             "/rag/embedding-jobs",
             "/rag/collections/embedding-readiness",
+            "/rag/collections/derivation-readiness",
+            "/rag/collections/derivation-readiness/documents",
+            "/rag/collections/derivation-repairs/preview",
+            "/rag/collections/derivation-repairs/apply",
             "/rag/evaluation/suites",
             "/rag/evaluation/runs",
             "/rag/evaluation/semantic"
@@ -166,6 +180,9 @@ class OpenApiContractTest {
 
     @MockBean
     private JsonRecordService jsonRecordService;
+
+    @MockBean
+    private DocumentRelocationService documentRelocationService;
 
     // Collection
     @MockBean

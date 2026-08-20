@@ -20,6 +20,7 @@ public class DocumentLifecycleService {
     private final JdbcTemplate jdbcTemplate;
     private final EmbeddingProfileProvider profileProvider;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
+    private DerivationIntegrityRepository integrityRepository;
 
     public DocumentLifecycleService(
             JdbcTemplate jdbcTemplate,
@@ -28,6 +29,11 @@ public class DocumentLifecycleService {
         this.jdbcTemplate = jdbcTemplate;
         this.profileProvider = profileProvider;
         this.descriptorProvider = descriptorProvider;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setIntegrityRepository(DerivationIntegrityRepository integrityRepository) {
+        this.integrityRepository = integrityRepository;
     }
 
     public DocumentLifecycleResponse read(RagDocument document) {
@@ -43,6 +49,10 @@ public class DocumentLifecycleService {
                     null,
                     null,
                     false);
+        }
+
+        if (integrityRepository != null) {
+            return fromIntegrity(integrityRepository.inspect(document));
         }
 
         EmbeddingProfile profile = profileProvider.getActiveProfile();
@@ -185,6 +195,31 @@ public class DocumentLifecycleService {
                 errorCode,
                 error,
                 !"READY".equals(searchability));
+    }
+
+    private DocumentLifecycleResponse fromIntegrity(
+            DerivationIntegrityRepository.Snapshot snapshot) {
+        String searchability = switch (snapshot.bucket()) {
+            case "READY" -> "READY";
+            case "KEYWORD_ONLY" -> "KEYWORD_ONLY";
+            case "INDEXING" -> "INDEXING";
+            case "NOT_REQUESTED" -> "NOT_REQUESTED";
+            default -> "FAILED";
+        };
+        String localStatus = snapshot.localFresh() ? "READY"
+                : "NOT_REQUESTED".equals(snapshot.localCondition())
+                    ? "NOT_REQUESTED" : "FAILED";
+        String embeddingStatus = snapshot.vectorFresh() ? "READY"
+                : "INDEXING".equals(snapshot.vectorCondition()) ? "INDEXING"
+                : "NOT_REQUESTED".equals(snapshot.vectorCondition())
+                    ? "NOT_REQUESTED" : "FAILED";
+        String error = snapshot.localError() != null
+                ? snapshot.localError() : snapshot.vectorError();
+        return new DocumentLifecycleResponse(
+                "ACTIVE", searchability, localStatus, embeddingStatus,
+                activeProfileKey(), snapshot.activeJobId(),
+                "READY".equals(searchability) ? null : snapshot.reasonCode(),
+                error, !"READY".equals(searchability));
     }
 
     private DocumentLifecycleResponse notRequested(

@@ -64,22 +64,18 @@ connector must persist and address the source identity above.
 
 ### Collection relocation boundary
 
-The current ordinary upsert locates a document by the target tuple. It
-**cannot** atomically move an existing externally managed document to another
-Collection. Changing only `collectionKey` addresses another placement and may
-create a second document; it is not an ordinary update of the original.
+Ordinary upsert locates by the target tuple and does not express a move. To
+change Collection, enable the server relocation feature flag and call
+`POST /api/v1/rag/documents/relocate`. Generate one random `Idempotency-Key`
+per business relocation, reuse it after timeouts, and send the current
+`expectedSourceRevision`.
 
-Until an explicit relocation API exists, a move requires:
-
-1. tombstoning the old tuple with a new revision;
-2. upserting the complete state at the target tuple;
-3. observing both operations until they converge.
-
-This compatibility flow is not atomic. It creates a new internal `documentId`,
-independent version history, and new derivation work. Systems that cannot
-accept a transient duplicate/gap or must preserve history should keep the
-Collection assignment stable and wait for a controlled atomic relocation
-operation instead of simulating a move with ordinary upsert.
+Relocation changes only the Collection. It preserves the internal `documentId`,
+source revision, version history, and derived rows without re-embedding. The
+caller needs both source and target ACL. After success, the old address
+permanently returns `EXTERNAL_IDENTITY_RELOCATED`; never convert that error into
+a create or simulate the move with tombstone plus target upsert. Namespace or
+external-ID changes remain a separate rekey concern and are not supported here.
 
 ## 2. Incremental CRUD Contract
 
@@ -324,6 +320,8 @@ for the next delivery batch.
 - Make source identity and revisions stable before the first import.
 - Fix the Collection-placement rule before the first import; do not treat a
   changed `collectionKey` as an ordinary update.
+- For a move, persist one business-event `Idempotency-Key` until relocation
+  reaches a definite success or conflict.
 - Use `ASYNC` for normal bulk/CDC delivery.
 - Persist checkpoint and source revision only after HTTP success.
 - Keep request logs free of API keys, full content, and sensitive payloads.

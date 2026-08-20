@@ -68,6 +68,16 @@ public enum ErrorCode {
     SYNC_RUN_DELETE_PROTECTION(409, "Sync Run Delete Protection"),
     SYNC_RUN_ITEM_CONFLICT(409, "Sync Run Item Conflict"),
     SYNC_RUN_INCOMPLETE(409, "Sync Run Incomplete"),
+    DOCUMENT_NOT_EXTERNAL_MANAGED(409, "Document Is Not Externally Managed"),
+    TARGET_EXTERNAL_IDENTITY_EXISTS(409, "Target External Identity Exists"),
+    TARGET_EXTERNAL_IDENTITY_RETIRED(409, "Target External Identity Retired"),
+    LEGACY_EXTERNAL_IDENTITY_REQUIRES_CLAIM(409, "Legacy External Identity Requires Claim"),
+    EXTERNAL_IDENTITY_RELOCATED(409, "External Identity Relocated"),
+    IDEMPOTENCY_KEY_REUSED(409, "Idempotency Key Reused"),
+    IDEMPOTENCY_OPERATION_IN_PROGRESS(409, "Idempotency Operation In Progress"),
+    ACTIVE_SYNC_RUN_CONFLICT(409, "Active Sync Run Conflict"),
+    DERIVATION_REPAIR_CONFLICT(409, "Derivation Repair Conflict"),
+    DERIVATION_REPAIR_EXPIRED(409, "Derivation Repair Expired"),
     VERSION_NOT_RESTORABLE(409, "Version Not Restorable"),
     RESTORE_NOT_ALLOWED(409, "Restore Not Allowed"),
 
@@ -95,6 +105,8 @@ public enum ErrorCode {
     EMBEDDING_JOBS_DISABLED(503, "Embedding Jobs Disabled"),
     EVALUATION_SUITES_DISABLED(503, "Evaluation Suites Disabled"),
     SYNC_RUNS_DISABLED(503, "Document Sync Runs Disabled"),
+    DOCUMENT_RELOCATION_DISABLED(503, "Document Relocation Disabled"),
+    DERIVATION_REPAIR_DISABLED(503, "Derivation Repair Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

@@ -235,6 +235,8 @@ rag:
     idempotency-ttl-hours: ${RAG_DOCUMENT_IDEMPOTENCY_TTL_HOURS:24}
     sync-runs-enabled: ${RAG_DOCUMENT_SYNC_RUNS_ENABLED:false}
     version-restore-enabled: ${RAG_DOCUMENT_VERSION_RESTORE_ENABLED:false}
+    relocation-enabled: ${RAG_DOCUMENT_RELOCATION_ENABLED:false}
+    derivation-repair-enabled: ${RAG_DOCUMENT_DERIVATION_REPAIR_ENABLED:false}
     sync-run-max-missing-absolute: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_ABSOLUTE:1000}
     sync-run-max-missing-percent: ${RAG_DOCUMENT_SYNC_RUN_MAX_MISSING_PERCENT:20}
 ```
@@ -246,6 +248,8 @@ rag:
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | 本地 create/upload `Idempotency-Key` 记录的保留小时数，限制为 1–168 |
 | `rag.document-lifecycle.sync-runs-enabled` | `false` | 开启权威外部快照 Sync Run API；默认关闭，开启前应先完成一次性 PostgreSQL/E2E 验收 |
 | `rag.document-lifecycle.version-restore-enabled` | `false` | 开启本地文档 `FULL` 历史版本恢复 API；外部托管文档仍不可由该入口恢复 |
+| `rag.document-lifecycle.relocation-enabled` | `false` | 开启外部文档跨 Collection 原子迁移；开启前运行 relocation 专项门禁 |
+| `rag.document-lifecycle.derivation-repair-enabled` | `false` | 开启有副作用的派生修复 preview/apply；只读 derivation readiness 不受此开关影响 |
 | `rag.document-lifecycle.sync-run-max-missing-absolute` | `1000` | `TOMBSTONE` 快照的绝对缺失保护阈值；超出且未显式确认时拒绝完成，限制为 1–100000 |
 | `rag.document-lifecycle.sync-run-max-missing-percent` | `20` | `TOMBSTONE` 快照的相对缺失保护阈值（百分比）；限制为 1–100 |
 
