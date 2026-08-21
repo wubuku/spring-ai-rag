@@ -1,12 +1,17 @@
 # Chat 上下文预算、持久记忆与工具治理进度
 
-> **状态**：规划中，尚未开始生产代码实施
+> **状态**：生产代码实施中，当前处于 Phase 0
 >
 > **开始日期**：2026-08-21
 >
 > **规划分支**：`docs/chat-context-tool-orchestration-plan-20260821`
 >
 > **规划基线**：`main` @ `2ea56c9d`
+>
+> **实施分支**：`feat/chat-context-tool-orchestration-20260821`
+>
+> **实施 worktree**：
+> `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-chat-context-tool-orchestration`
 >
 > **实施规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -26,7 +31,7 @@
 | 长青调研落档 | 已完成 | 新增中英文专题并准备加入索引 |
 | 自包含实施规划 | 已完成 | 已通过连续三轮审查 |
 | 规划连续审查 | `3/3` | 最终三轮均未修改规划正文 |
-| 生产代码实施 | 未开始 | 必须从实施时最新本地 main 创建新特性分支 |
+| 生产代码实施 | Phase 0 进行中 | 已从最新本地 `main` 创建独立分支和 worktree |
 
 ## 2. 已冻结的核心方向
 
@@ -257,10 +262,16 @@
 - 处理措施：无；规划正文保持不变。
 - 结果：连续无修改审查达到 `3/3`，规划可进入实施阶段。
 
-## 4. 下一步恢复入口
+## 4. 实施进度
 
-1. 计算并记录规划正文 SHA-256。
-2. 运行 `./scripts/verify-project-docs.sh`、`./scripts/verify-no-pessimistic-locks.sh`
-   与 `git diff --check`。
-3. 提交、合并远端变化并 push 规划分支；确认工作区干净。
-4. 从届时最新本地 `main` 创建新的实现分支和隔离 worktree，开始生产代码实施。
+### 2026-08-21：创建实施分支并带入冻结规划
+
+- 实施分支从本地 `main`、`origin/main` 的共同基线 `2ea56c9d` 创建。
+- 已无损带入规划提交 `ec195188`；规划正文未改写。
+- 下一项工作是记录版本与现有 Chat 门禁基线，然后只处理依赖升级带来的兼容性问题。
+
+## 5. 下一步恢复入口
+
+1. 记录 Java/Maven/npm 版本与 Phase 0 修改前 Chat 门禁基线。
+2. 依规划升级 Boot/Spring AI，并先完成 1.1.8 Memory advisor API 兼容迁移。
+3. 迁移后重跑 characterization 与完整 Chat 门禁，再进入 Phase 1。
