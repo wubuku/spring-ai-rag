@@ -19,6 +19,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -51,6 +52,13 @@ public class GlobalExceptionHandler {
                                                             HttpServletRequest request) {
         return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_PARAMETER",
                 "Missing required parameter: " + e.getParameterName(), request);
+    }
+
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponse> handleMissingHeader(MissingRequestHeaderException e,
+                                                             HttpServletRequest request) {
+        return buildResponse(HttpStatus.BAD_REQUEST, "MISSING_HEADER",
+                "Missing required header: " + e.getHeaderName(), request);
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)

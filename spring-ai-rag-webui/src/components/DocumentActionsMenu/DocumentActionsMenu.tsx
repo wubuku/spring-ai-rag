@@ -22,6 +22,7 @@ interface DocumentActionsMenuProps {
   onDisable: () => void;
   onRestore: () => void;
   onPermanentDelete: () => void;
+  onRelocate: () => void;
   onViewDirectory: (path: string) => void;
   onViewIndexedFile: (directoryPath: string, filePath: string) => void;
   onOpenOriginalFile: (path: string) => void;
@@ -46,6 +47,7 @@ export function DocumentActionsMenu({
   onDisable,
   onRestore,
   onPermanentDelete,
+  onRelocate,
   onViewDirectory,
   onViewIndexedFile,
   onOpenOriginalFile,
@@ -257,15 +259,26 @@ export function DocumentActionsMenu({
 
           <div className={styles.separator} role="separator" />
           {externallyManaged ? (
-            <div className={styles.managedNotice}>
-              <strong>{t('documents.externallyManaged')}</strong>
-              <span>
-                {t('documents.externalIdentity', {
-                  namespace: ragDocument.sourceNamespace || 'default',
-                  externalId: ragDocument.externalId,
-                })}
-              </span>
-            </div>
+            <>
+              <button
+                type="button"
+                role="menuitem"
+                className={styles.menuItem}
+                disabled={mutationPending}
+                onClick={() => runAndClose(onRelocate)}
+              >
+                {t('documents.relocate')}
+              </button>
+              <div className={styles.managedNotice}>
+                <strong>{t('documents.externallyManaged')}</strong>
+                <span>
+                  {t('documents.externalIdentity', {
+                    namespace: ragDocument.sourceNamespace || 'default',
+                    externalId: ragDocument.externalId,
+                  })}
+                </span>
+              </div>
+            </>
           ) : (
             <>
               {ragDocument.enabled === false ? (

@@ -7,6 +7,7 @@ import com.springairag.core.service.DocumentEmbedService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -38,6 +39,7 @@ public class EmbeddingJobWorker {
     private final Semaphore slots;
     private final ExecutorService workers;
 
+    @Autowired
     public EmbeddingJobWorker(
             EmbeddingJobRepository repository,
             EmbeddingJobExecutor executor,

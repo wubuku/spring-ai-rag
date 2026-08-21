@@ -31,6 +31,8 @@ export function Documents() {
   const [editCollectionKey, setEditCollectionKey] = useState('');
   const [editEmbeddingPolicy, setEditEmbeddingPolicy] =
     useState<'SYNC' | 'ASYNC' | 'SKIP'>('ASYNC');
+  const [relocateDoc, setRelocateDoc] = useState<Document | null>(null);
+  const [relocateTarget, setRelocateTarget] = useState('');
   const PAGE_SIZE = 20;
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -163,6 +165,39 @@ export function Documents() {
     },
   });
 
+  const relocateMutation = useMutation({
+    mutationFn: () => {
+      if (!relocateDoc?.collectionKey || !relocateDoc.externalId
+          || !relocateDoc.sourceRevision || !relocateTarget) {
+        throw new Error('Incomplete external relocation request');
+      }
+      return documentsApi.relocate({
+        sourceCollectionKey: relocateDoc.collectionKey,
+        targetCollectionKey: relocateTarget,
+        sourceNamespace: relocateDoc.sourceNamespace || 'default',
+        externalId: relocateDoc.externalId,
+        expectedSourceRevision: relocateDoc.sourceRevision,
+      }, crypto.randomUUID());
+    },
+    onSuccess: response => {
+      setRelocateDoc(null);
+      setRelocateTarget('');
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      queryClient.invalidateQueries({ queryKey: ['embedding-readiness'] });
+      queryClient.invalidateQueries({ queryKey: ['derivation-readiness'] });
+      showToast(t('documents.relocated', {
+        target: response.data.targetCollectionKey,
+      }), 'success');
+    },
+    onError: error => {
+      queryClient.invalidateQueries({ queryKey: ['documents'] });
+      const code = (error as {
+        response?: { data?: { error?: string } };
+      })?.response?.data?.error;
+      showToast(t(`documents.relocationErrors.${code || 'DEFAULT'}`), 'error');
+    },
+  });
+
   const { uploadFiles, isUploading } = useFileUpload({
     onComplete: fileName => {
       showToast(`${fileName} ${t('documents.uploaded')}`, 'success');
@@ -241,6 +276,16 @@ export function Documents() {
       setEditSource(detail.source || '');
       setEditCollectionKey(detail.collectionKey || '');
       setEditEmbeddingPolicy('ASYNC');
+    } catch (err) {
+      handleMutationError(err, 'documents.loadDetailError');
+    }
+  };
+
+  const handleRelocate = async (doc: Document) => {
+    try {
+      const detail = (await documentsApi.get(doc.id)).data;
+      setRelocateDoc(detail);
+      setRelocateTarget('');
     } catch (err) {
       handleMutationError(err, 'documents.loadDetailError');
     }
@@ -441,6 +486,7 @@ export function Documents() {
                             deleteMutation.mutate(doc);
                           }
                         }}
+                        onRelocate={() => handleRelocate(doc)}
                         onViewDirectory={handleViewDirectory}
                         onViewIndexedFile={handleViewIndexedFile}
                         onOpenOriginalFile={handleOpenOriginalFile}
@@ -591,6 +637,80 @@ export function Documents() {
                 {updateMutation.isPending
                   ? t('common.loading')
                   : t('common.save')}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {relocateDoc && (
+        <div className={styles.modalOverlay} onClick={() => setRelocateDoc(null)}>
+          <form
+            className={styles.editModal}
+            aria-label={t('documents.relocateTitle')}
+            onClick={event => event.stopPropagation()}
+            onSubmit={event => {
+              event.preventDefault();
+              relocateMutation.mutate();
+            }}
+          >
+            <div className={styles.modalHeader}>
+              <h2 className={styles.modalTitle}>{t('documents.relocateTitle')}</h2>
+              <button
+                type="button"
+                className={styles.modalClose}
+                aria-label={t('common.close')}
+                onClick={() => setRelocateDoc(null)}
+              >
+                ×
+              </button>
+            </div>
+            <div className={styles.editFields}>
+              <label>
+                <span>{t('documents.collection')}</span>
+                <input value={relocateDoc.collectionKey || ''} readOnly />
+              </label>
+              <label>
+                <span>{t('documents.targetCollection')}</span>
+                <select
+                  value={relocateTarget}
+                  required
+                  onChange={event => setRelocateTarget(event.target.value)}
+                >
+                  <option value="">{t('documents.selectTargetCollection')}</option>
+                  {collections
+                    .filter((collection: { collectionKey: string }) =>
+                      collection.collectionKey !== relocateDoc.collectionKey)
+                    .map((collection: { collectionKey: string; name: string }) => (
+                      <option key={collection.collectionKey} value={collection.collectionKey}>
+                        {collection.name} ({collection.collectionKey})
+                      </option>
+                    ))}
+                </select>
+              </label>
+              <label>
+                <span>{t('documents.sourceNamespace')}</span>
+                <input value={relocateDoc.sourceNamespace || 'default'} readOnly />
+              </label>
+              <label>
+                <span>{t('documents.externalId')}</span>
+                <input value={relocateDoc.externalId || ''} readOnly />
+              </label>
+              <label>
+                <span>{t('documents.sourceRevision')}</span>
+                <input value={relocateDoc.sourceRevision || ''} readOnly />
+              </label>
+            </div>
+            <div className={styles.modalActions}>
+              <button type="button" onClick={() => setRelocateDoc(null)}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={!relocateTarget || relocateMutation.isPending}
+              >
+                {relocateMutation.isPending
+                  ? t('common.loading') : t('documents.relocateConfirm')}
               </button>
             </div>
           </form>

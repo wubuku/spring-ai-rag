@@ -96,6 +96,19 @@
     "revisionConflict": "文档已被其他操作修改。列表已刷新，请确认最新版本后重试。",
     "externallyManaged": "由外部来源管理",
     "externalIdentity": "{{namespace}} / {{externalId}}。请通过外部同步 API 更新或删除。",
+    "relocate": "迁移 Collection",
+    "relocateTitle": "迁移外部文档",
+    "targetCollection": "目标 Collection",
+    "selectTargetCollection": "请选择目标 Collection",
+    "relocateConfirm": "迁移",
+    "relocated": "文档已迁移到 {{target}}，现有派生数据保持不变",
+    "relocationErrors": {
+      "DOCUMENT_REVISION_CONFLICT": "来源版本已变化，请刷新并确认后重试。",
+      "TARGET_EXTERNAL_IDENTITY_EXISTS": "目标 Collection 已存在该外部身份。",
+      "TARGET_EXTERNAL_IDENTITY_RETIRED": "目标地址已退休，不能复用。",
+      "ACTIVE_SYNC_RUN_CONFLICT": "来源同步运行中，请在其完成后重试。",
+      "DEFAULT": "文档迁移失败，列表已刷新。"
+    },
     "lifecycle": {
       "READY": "可检索",
       "INDEXING": "索引中",
@@ -516,6 +529,19 @@
     "retry": "重试",
     "detail": "任务详情",
     "backToDocuments": "返回文档",
-    "openOperations": "打开嵌入运营"
+    "openOperations": "打开嵌入运营",
+    "derivationIntegrity": "派生完整性",
+    "previewRepair": "预览修复",
+    "repairPreview": "修复预览",
+    "repairDocuments": "将处理 {{count}} 个文档",
+    "applyRepair": "应用修复",
+    "repairFailed": "无法创建修复预览",
+    "readyDocuments": "完整可用",
+    "keywordOnlyDocuments": "仅关键词",
+    "indexingDocuments": "收敛中",
+    "localUnavailableDocuments": "本地不可用",
+    "corruptDocuments": "物理损坏",
+    "vectorRepairNeededDocuments": "需修复向量",
+    "reason": "原因"
   }
 }

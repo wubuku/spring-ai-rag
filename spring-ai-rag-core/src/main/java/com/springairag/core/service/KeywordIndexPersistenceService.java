@@ -28,6 +28,7 @@ public class KeywordIndexPersistenceService {
     private final JdbcTemplate jdbcTemplate;
     private final DocumentChunkingService chunkingService;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
+    private DerivationIntegrityRepository integrityRepository;
 
     public KeywordIndexPersistenceService(
             JdbcTemplate jdbcTemplate,
@@ -36,6 +37,11 @@ public class KeywordIndexPersistenceService {
         this.jdbcTemplate = jdbcTemplate;
         this.chunkingService = chunkingService;
         this.descriptorProvider = descriptorProvider;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setIntegrityRepository(DerivationIntegrityRepository integrityRepository) {
+        this.integrityRepository = integrityRepository;
     }
 
     /**
@@ -54,8 +60,7 @@ public class KeywordIndexPersistenceService {
         String contentHash = ensureContentHash(document);
         DocumentChunkingService.PreparedChunks prepared =
                 chunkingService.prepare(document);
-        if (isCurrent(document.getId(), contentHash,
-                prepared.descriptor().chunkerVersion())) {
+        if (hasFreshLocalIndex(document)) {
             return;
         }
 
@@ -171,6 +176,9 @@ public class KeywordIndexPersistenceService {
                 || document.getContentHash() == null
                 || document.getContentHash().isBlank()) {
             return false;
+        }
+        if (integrityRepository != null) {
+            return integrityRepository.inspect(document).localFresh();
         }
         try {
             String chunkerVersion = descriptorProvider.describe(document)

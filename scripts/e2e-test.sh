@@ -139,20 +139,22 @@ assert_status "POST /documents" "200" "$CODE"
 assert_contains "返回文档ID" "$BODY" '"id"'
 assert_contains "返回CREATED状态" "$BODY" '"CREATED"'
 DOC_ID=$(echo "$BODY" | grep -o '"id":[0-9]*' | grep -o '[0-9]*')
-echo "  📄 创建的文档ID: $DOC_ID"
+DOC_REVISION=$(echo "$BODY" | grep -o '"documentRevision":[0-9]*' | grep -o '[0-9]*')
+assert_contains "返回 documentRevision" "$BODY" '"documentRevision"'
+echo "  📄 创建的文档ID: $DOC_ID, revision=$DOC_REVISION"
 
 # 3f. 将文档添加到 Collection
-if [ -n "$DOC_ID" ] && [ -n "$COLLECTION_KEY" ]; then
+if [ -n "$DOC_ID" ] && [ -n "$DOC_REVISION" ] && [ -n "$COLLECTION_KEY" ]; then
     RESP=$(curl -s -w "\n%{http_code}" -X POST "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"documentId\":$DOC_ID}")
+        -d "{\"documentId\":$DOC_ID,\"expectedDocumentRevision\":$DOC_REVISION}")
     CODE=$(echo "$RESP" | tail -1)
     BODY=$(echo "$RESP" | sed '$d')
     assert_status "POST /collections/by-key/documents (关联)" "200" "$CODE"
     assert_contains "返回 documentId" "$BODY" '"documentId"'
     assert_contains "返回 collectionKey" "$BODY" "\"collectionKey\":\"$COLLECTION_KEY\""
 else
-    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 document ID 或 collection key"
+    echo -e "  ${YELLOW}⚠️ SKIP${NC} 无 document ID、revision 或 collection key"
 fi
 echo ""
 

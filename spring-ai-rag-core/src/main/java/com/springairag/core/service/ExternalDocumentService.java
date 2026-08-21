@@ -64,6 +64,7 @@ public class ExternalDocumentService {
     private EmbeddingDispatchService dispatchService;
     private DocumentMutationService mutationService;
     private KeywordIndexPersistenceService keywordIndexPersistenceService;
+    private ExternalAddressRetirementService addressRetirementService;
 
     public ExternalDocumentService(
             RagDocumentRepository documentRepository,
@@ -101,6 +102,12 @@ public class ExternalDocumentService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setMutationService(DocumentMutationService mutationService) {
         this.mutationService = mutationService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAddressRetirementService(
+            ExternalAddressRetirementService addressRetirementService) {
+        this.addressRetirementService = addressRetirementService;
     }
 
     public ExternalDocumentUpsertResponse upsert(ExternalDocumentUpsertRequest request) {
@@ -196,6 +203,10 @@ public class ExternalDocumentService {
         String normalizedExternalId = normalizeRequired(externalId, "externalId", 255);
         RagCollection collection = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 normalizedKey, ApiKeyCollectionAccess.currentKey(), collectionIdentityResolver);
+        if (addressRetirementService != null) {
+            addressRetirementService.requireNotRetired(
+                    collection.getId(), normalizedNamespace, normalizedExternalId);
+        }
         RagDocument document = documentRepository
                 .findByCollectionIdAndSourceNamespaceAndExternalId(
                         collection.getId(), normalizedNamespace, normalizedExternalId)

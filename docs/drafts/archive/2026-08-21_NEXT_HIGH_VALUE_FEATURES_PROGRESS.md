@@ -1,8 +1,8 @@
 # 下一批高价值功能规划进度
 
-> 对应规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 对应规划：[2026-08-21_NEXT_HIGH_VALUE_FEATURES_PLAN.md](2026-08-21_NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
-> 当前阶段只完成规划，不实施业务功能。本文记录调研、规划检查和后续恢复上下文。
+> 当前阶段已进入实施。本文记录调研、规划检查、实施切片、验证证据和后续恢复上下文。
 
 ## 1. 当前目标
 
@@ -52,9 +52,239 @@
 | 自包含规划 | 完成 | API/schema/事务/Sync Run/ACL/WebUI/验收均已给出默认决策 |
 | 规划连续三轮检查 | 完成 | 项目边界校正后连续三轮无修改，计数为 `3/3` |
 | 文档门禁 | 完成 | `verify-project-docs.sh` 10 项通过，129 个文件、878 个相对链接有效 |
-| commit / merge / push | 待执行 | 完成三轮检查与文档门禁后提交、同步并推送 |
+| P0 原子迁移 | 后端完成 | 原子迁移、精确重放、双 scope fencing 与旧地址 guard 已落地 |
+| P1 派生完整性 | 后端完成 | strict freshness、readiness、durable preview/apply/status 已落地 |
+| WebUI / 长青文档 / 一键门禁 | 完成 | WebUI、Mock 验收、双语 API/配置/测试/项目上下文和两个专项脚本已落地 |
+| 实现基本硬门槛 | 完成 | Profile fencing 后专项、3508 全量测试与 V45 独立启动通过 |
+| 实现连续三轮检查 | 完成，`3/3` | 三个限定范围连续只读检查无问题、无实现修改 |
+| commit / merge / push | 进行中 | 归档后提交、同步远端并推送 |
 
-## 4. 规划检查日志
+## 4. 实施恢复点
+
+### 2026-08-21：开始实施
+
+- 基线：`main@07cb2099`，Flyway V1-V43，工作区干净；规划连续检查 `3/3` 已完成。
+- 当前切片：一次性建立 P0/P1 后端 PostgreSQL/HTTP、WebUI Mock 与一键门禁验收骨架；随后
+  实施 P0 V44/API/事务，再实施 P1 V45/共享 freshness/repair。
+- 硬边界：不使用悲观锁；不在 review 阶段零碎扩展验收矩阵；前端不使用截图证据；所有
+  实现修改完成后先通过基本集成硬门槛，再开始实现 `3/3`。
+- 下一恢复入口：规划第 6-8 节和当前代码中的 `DocumentMutationService`、
+  `DocumentSyncRunService`、`CollectionIdentityResolver`、`KeywordIndexPersistenceService`、
+  `EmbeddingDispatchService`、Documents/Embeddings WebUI 与对应集成测试。
+
+### 2026-08-21 03:50 CST：后端垂直切片与真实 PostgreSQL 门禁
+
+- 新增不可变 V44/V45，空库真实执行 45 个 migration 成功。
+- P0 已实现 `POST /documents/relocate`、版本化幂等响应、双 Collection/namespace
+  fencing、永久 retired-address ledger，以及普通/批量/Sync Run 共用 mutation 路径的
+  sequence 后复查；外部 identity lookup 返回稳定 409。
+- P1 已实现共享 strict freshness、Collection summary/details、durable
+  preview/apply/status；local 修复复用正式 chunk service，vector 修复只创建持久化 job。
+- `NextHighValueFeaturesPostgresIntegrationTest` 使用本机一次性 PostgreSQL 数据库运行：
+  `4 tests, 0 failures, 0 errors, 0 skipped`。覆盖迁移、迁移保留派生/精确重放/旧地址阻断、
+  active Sync Run 回滚，以及“向量行数相同但文本不一致”不得命中 cache。
+- 后端 `compile` 与 `test-compile` 当前通过；尚未执行最终 `clean` 硬门槛。
+- 下一步：WebUI API/交互、Mock Playwright、双语长青文档与一键脚本。
+
+### 2026-08-21 04:02 CST：后端预验收集通过
+
+- 修复新控制器测试的版本配置引用，并将缺少必填 `Idempotency-Key` 的对外响应从误报
+  500 收敛为稳定 400。
+- `mvn -pl spring-ai-rag-core -am -DskipTests test-compile` 通过。
+- 真实 PostgreSQL 专项集成测试扩展为 `5 tests, 0 failures, 0 errors, 0 skipped`，新增覆盖
+  preview/apply 持久账本、token 仅保存 hash，以及 vector repair 只排队、不调用 provider。
+- HTTP 切片验收 `ExternalDocumentControllerWebTest,DerivationRepairControllerWebTest` 共
+  `7 tests, 0 failures, 0 errors, 0 skipped`。
+- 下一步：补齐有界完整性查询和旧 readiness 的共享真相源，然后完成 WebUI、脚本和双语
+  长青文档；最终 clean 硬门槛仍在所有实现收束后统一执行。
+
+### 2026-08-21 04:25 CST：实现与长青文档收束，准备进入硬门槛
+
+- WebUI 已完成文档迁移入口、派生完整性 summary/details、preview-first repair 交互、
+  API client、双语文案、Mock 和 Playwright 断言；此前 typecheck、214 个 Vitest、生产
+  构建、alignment 与 14 个核心 Mock Playwright 均通过。
+- `verify-document-relocation.sh` 与 `verify-derivation-integrity.sh` 已固化禁锁、HTTP、
+  PostgreSQL、clean compile/test-compile、前端构建/Mock、文档和空白门禁。
+- 配置、REST API、外部同步客户端、项目上下文、开发/测试参考、发布清单和索引的中英文
+  长青文档已同步到 V44/V45。
+- 硬门槛前完整性核对修复三处同范围缺口：tombstone 不再计为 enabled/repairable；单文档
+  active job 必须严格匹配 document/profile/generation/hash/chunker；JSON 外部身份查询也
+  执行 retired-address guard。对应断言已加入既有 PostgreSQL/Service 验收集。
+- 下一步：先运行聚焦编译与测试确认上述收束修改，再执行两个完整专项门禁和服务启动。
+
+### 2026-08-21 04:36 CST：启动门槛发现装配缺陷，审查计数维持 0/3
+
+- relocation 与 derivation-integrity 首轮完整专项门禁均通过 `8/8`，包括真实 PostgreSQL、
+  clean compile/test-compile、214 个 Vitest、生产构建、alignment、Documents 12/12 与
+  Embeddings 2/2 无截图 Mock Playwright。
+- PostgreSQL profile 启动验证先发现两个新 Service 错误地直接注入嵌套
+  `RagDocumentLifecycleProperties`；已改为按项目惯例注入 `RagProperties` 并读取
+  `documentLifecycle`。
+- 继续启动发现已有 `EmbeddingJobWorker` 多构造器缺少主构造器标注；最小修复为在正式
+  `EmbeddingJobExecutor` 构造器上添加 `@Autowired`，不改变 worker 行为。
+- 修复后服务在端口 18083、独立数据库上成功启动，Flyway 当前版本为 45；
+  `/actuator/health` 返回 `UP` 且 DB 为 `UP`，随后正常停止服务。
+- 因发生实现修改，基本硬门槛和三轮实现检查均重新从头开始；下一步重跑两个专项脚本。
+
+### 2026-08-21 04:42 CST：仓库级回归发现兼容性缺口，审查计数维持 0/3
+
+- relocation 与 derivation-integrity 已在最新注入修复后再次完整通过 `8/8`；真实
+  PostgreSQL 均迁移到 V45 且专项测试无跳过，前端 214 个 Vitest、生产构建、alignment、
+  Documents `12/12` 与 Embeddings `2/2` Mock Playwright 再次通过。
+- 随后的仓库级 `mvn test` 发现 30 个 error，经报告归因后只有两个根因：无 JPA 的
+  OpenAPI 合约上下文未 mock 新增 relocation service，造成 29 个级联上下文错误；legacy
+  JSON exact replay 在确认无变化前错误分配 source mutation sequence，造成 1 个既有幂等
+  契约回归。
+- 处理决策：OpenAPI producer contract 显式 mock relocation service；外部 upsert 先完成
+  retired-address guard 与 exact-replay 判断，仅对真实写入分配 mutation sequence。修复后
+  从专项门禁和仓库级全量测试重新验证，三轮实现检查仍保持 `0/3`。
+
+### 2026-08-21 04:50 CST：基本硬门槛全部通过，开始三轮只读审查
+
+- 修复后 relocation 与 derivation-integrity 专项脚本分别通过 `8/8`；两者均执行真实
+  PostgreSQL V1-V45 迁移与专项测试且无跳过，并重复通过 `mvn clean compile
+  test-compile`、214 个 Vitest、生产构建、alignment、Documents `12/12`、Embeddings
+  `2/2` 无截图 Mock Playwright、文档和空白门禁。
+- 仓库级 `mvn test` 全 Reactor 通过：API 539、documents 74、core 2847、starter 48，合计
+  3508 tests，0 failures、0 errors；core 的 7 个 skip 是未配置通用外部 PostgreSQL 条件的
+  既有测试，两个专项 PostgreSQL 验收集均明确为 0 skip。
+- 当前构件重新安装后以 `postgresql` profile、端口 18083 和独立空数据库启动成功；Flyway
+  schema version 为 45，`/actuator/health` 整体与 DB 均为 `UP`；随后正常停止，端口和两个
+  一次性数据库均已清理。
+- 下一步只进行三轮固定范围只读审查：数据/API/并发；事务/安全/成本；前端/契约/文档/
+  脚本。只处理影响正确性、成本安全、兼容性或数据一致性的本任务缺陷。
+
+### 2026-08-21 04:55 CST：第 2 轮审查发现 repair 收敛缺口，计数重置为 0/3
+
+- 第 1 轮数据/API/并发只读审查无问题，计数曾达到 `1/3`；第 2 轮检查派生修复事务、
+  lease、成本门和 retention 时发现三项同域缺陷。
+- apply 使用 preview token 派生固定 lease owner，且阶段/终态写入不校验当前 lease owner；
+  超时接管后旧执行者仍可能覆盖接管者结果。修复为每次 apply 随机 lease owner，并让 item
+  claim、阶段状态、终态、失败和 preview completion 全部执行 owner+有效期条件写入。
+- repair candidate 会包含无实际动作的 `INDEXING` 和 `KEYWORD_ONLY + vector INDEXING`，
+  可能返回错误的成功结果。修复为共享 `repairable` 判定只允许至少一个正式动作，并让详情
+  与 preview 使用相同语义。
+- V45 已定义 24 小时结果保留期，但没有清理路径。修复为 preview 前执行有界、只删除终态
+  且 `result_expires_at` 已到期的 opportunistic cleanup；补 PostgreSQL 断言。
+- 发生实现修改后，基本硬门槛和三轮审查均从零开始。
+
+### 2026-08-21 05:00 CST：repair 接管边界补充，计数维持 0/3
+
+- 对上一轮 lease/retention 修复做可执行性核对时，补充确认三个同范围边界：旧 preview
+  owner 失去 batch lease 后不得继续认领新 item；local 子动作已提交后的接管者必须接受
+  ledger 中的 post-local version/hash；终态结果的 24 小时保留期必须从实际完成时起算。
+- 处理措施：item claim 同时校验有效 preview lease；local phase 根据已提交子动作选择
+  planned/post-local 快照；所有 COMPLETED/EXPIRED 写入重置 `result_expires_at`。PostgreSQL
+  验收一次性覆盖收敛中候选排除、过期终态清理、过期 lease 接管和完成后保留期。
+- 当前快速 `test-compile` 已通过；发生实现修改后仍须从头执行两个专项脚本、仓库级测试、
+  clean compile/test-compile、前端门禁与服务启动，三轮只读审查尚未重新开始。
+
+### 2026-08-21 05:06 CST：repair 修复专项预验收通过，开始完整硬门槛
+
+- 一次性本地 PostgreSQL 从空库执行 V1-V45，`NextHighValueFeaturesPostgresIntegrationTest`
+  共 `8 tests, 0 failures, 0 errors, 0 skipped`。
+- 新增断言已实际覆盖：收敛中无动作候选不进入 preview、终态过期结果有界清理、过期
+  preview/item lease 接管、完成时重置 24 小时保留期，以及 local 子动作提交后按
+  post-local ledger 继续 vector 子动作。
+- 派生专项脚本选择器已固定包含上述用例。下一步从零执行两个完整专项脚本，再执行仓库级
+  全量测试和独立服务启动；三轮审查计数仍为 `0/3`。
+
+### 2026-08-21 05:09 CST：两个专项硬门槛通过，继续仓库级回归
+
+- relocation 与 derivation-integrity 专项脚本分别通过 `8/8`，均重新执行禁悲观锁、HTTP
+  合约、一次性 PostgreSQL V1-V45、`mvn clean compile test-compile`、WebUI typecheck、
+  214 个 Vitest、生产构建、alignment、无截图 Mock Playwright、文档与 whitespace 门禁。
+- relocation PostgreSQL `3/3`、Documents Playwright `12/12`；derivation PostgreSQL
+  `6/6`、Embeddings Playwright `2/2`，全部 0 failure/error/skip。
+- 下一步执行仓库级 `mvn test` 和独立 PostgreSQL profile 服务启动；通过后才能重新开始
+  固定范围三轮只读审查。
+
+### 2026-08-21 05:12 CST：基本硬门槛全部通过，冻结实现进入三轮审查
+
+- 仓库级 `mvn test` 全 Reactor 通过：API 539、documents 74、core 2847、starter 48，合计
+  3508 tests，0 failures、0 errors；core 的 7 个 skip 是未配置通用外部 PostgreSQL 条件的
+  既有测试，两个专项 PostgreSQL 验收均为 0 skip。
+- 服务以 `postgresql` profile、端口 18083 和独立空数据库启动成功；Flyway schema version
+  为 45，`/actuator/health` 返回 `UP`。验证后服务进程、端口和一次性数据库均已清理。
+- 最新两套专项证据分别位于 `.verification/relocation/20260821-0506-final/summary.md` 与
+  `.verification/derivation-integrity/20260821-0507-final/summary.md`；启动证据位于
+  `.verification/startup/20260821-final/summary.txt`。
+- 从本节点起冻结实现，按数据/API/并发、事务/安全/成本、前端/契约/文档/脚本三个互不
+  重叠范围执行只读审查。若发现本任务正确性缺陷并修改，审查计数重置且全部硬门槛重跑。
+
+### 2026-08-21 05:16 CST：第 1 轮发现 namespace sequence 排序缺口，计数重置为 0/3
+
+- 检查数据、API 与并发边界时确认：普通 external upsert 的 retired-address guard 位于
+  namespace sequence 条件写入之前。若 upsert 先读到 marker 不存在、随后等待 relocation
+  持有的 sequence 行锁，relocation 提交后 upsert 会基于陈旧判断继续在旧地址创建文档。
+- relocation 对目标文档和目标 marker 的判断也位于 sequence 排序点之前；等待并发 mutation
+  后可能得到陈旧结论，最少会把稳定的 409 冲突退化成数据库约束异常。
+- 处理范围一次性限定为：所有真实 external upsert 在取得 sequence 后复查 marker；relocation
+  在取得源/目标 sequence 后读取目标文档与 marker 并决定 reverse；新增 PostgreSQL 并发验收
+  固定“先读、等待、迁移提交、旧地址写入被阻断”的时序。
+- 发生实现与测试修改，三轮审查计数重置为 `0/3`，两个专项脚本、全量 Maven、独立服务启动
+  与全部前端门禁均须从头重跑。
+- 首次重跑还发现脚本在 Testcontainers 不可用时会接受 Surefire 的 `0 tests`；已让脚本解析
+  PostgreSQL 验收 XML，分别强制 relocation `4/4`、derivation `6/6` 且零
+  failure/error/skip。该次假绿运行已主动终止，不计入验收证据。
+
+### 2026-08-21 05:24 CST：并发修复后的基本硬门槛全部通过
+
+- 新增 PostgreSQL 并发验收实际证明：upsert 首次 guard 后等待 relocation 的 namespace
+  sequence，relocation 写 marker 并提交后，upsert 在排序点后的第二次 guard 返回
+  `EXTERNAL_IDENTITY_RELOCATED`，自身 sequence 增量回滚且旧地址没有文档。
+- relocation 专项 `.verification/relocation/20260821-0520-final/summary.md` 通过 `8/8`：HTTP
+  `6/6`、PostgreSQL `4/4`、Documents Mock Playwright `12/12`，且 PostgreSQL XML 强制零
+  failure/error/skip。
+- derivation 专项 `.verification/derivation-integrity/20260821-0521-final/summary.md` 通过
+  `8/8`：HTTP `4/4`、PostgreSQL `6/6`、Embeddings Mock Playwright `2/2`，同样强制零
+  failure/error/skip；两套均通过 clean compile/test-compile、214 Vitest、生产构建、
+  alignment、文档与 whitespace。
+- 仓库级 `mvn test` 再次通过：API 539、documents 74、core 2847、starter 48，合计 3508，
+  0 failures、0 errors；独立 PostgreSQL profile 服务迁移到 V45，健康端点为 `UP`，证据位于
+  `.verification/startup/20260821-0524-final/summary.txt`。所有服务和一次性数据库均已清理。
+- 实现重新冻结；从 `0/3` 开始执行三个既定、互不重叠的只读检查范围。
+
+### 2026-08-21 05:28 CST：第 2 轮发现 active Profile fencing 缺口，计数重置为 0/3
+
+- 第 1 轮数据/API/并发检查无问题，计数曾达到 `1/3`；第 2 轮检查 repair 安全、成本和
+  恢复语义时发现 V45 保存了 `active_embedding_profile_id`，但 apply 未读取或校验该值。
+- preview 的 candidates、fingerprint 和 ledger 还分别调用活动 Profile provider；若 Profile
+  在其间或 preview 后切换，旧 fingerprint 可能对新 Profile 排队，违反“Profile 变化后
+  preview 失效”的规划契约并产生错误的 embedding 成本。
+- 处理范围限定为：preview 一次固定 Profile ID并在持久化前复查；fingerprint 显式使用该
+  ID；apply 读取 ledger Profile，未完成 operation 在开始及 vector 排队事务中要求活动
+  Profile 一致；已完成结果仍可稳定读取；新增 PostgreSQL 用例断言切换后冲突且不排队。
+- 发生实现与测试修改，三轮审查重置为 `0/3`，全部专项、全量 Maven、前端门禁和独立启动
+  再次从头执行。
+
+### 2026-08-21 05:35 CST：Profile fencing 修复后的基本硬门槛全部通过
+
+- Profile 切换 PostgreSQL 用例从空库迁移到 V45 后通过：preview 使用固定 Profile，切换后
+  apply 返回 `DERIVATION_REPAIR_CONFLICT`、operation 保持 `PREVIEWED`、dispatch 零调用。
+- relocation `.verification/relocation/20260821-0530-final/summary.md` 与 derivation
+  `.verification/derivation-integrity/20260821-0532-final/summary.md` 均通过 `8/8`；真实
+  PostgreSQL 分别强制 `4/4`、`7/7` 且零 failure/error/skip，全部前端与文档门禁再次通过。
+- 仓库级 `mvn test` 再次为 3508 tests、0 failures、0 errors；独立 PostgreSQL profile
+  启动迁移到 V45，`/actuator/health=UP`，证据位于
+  `.verification/startup/20260821-0535-final/summary.txt`。服务、端口和临时数据库已清理。
+- 实现再次冻结，三轮只读检查从 `0/3` 重新开始。
+
+### 2026-08-21 05:50 CST：实现连续三轮只读检查达到 3/3
+
+1. 数据、API 与并发：核对 V44 约束、双 ACL、精确幂等重放、Collection CAS、源/目标
+   namespace sequence 顺序点、active Sync Run 冲突和 retired-address 竞态；结合真实
+   PostgreSQL `4/4` 结果，未发现问题。
+2. 事务、安全与成本：核对 V45 token hash、owner/ACL、Profile fencing、父子 lease、
+   崩溃接管、post-local ledger、终态保留与 cleanup；确认 apply 仅重建本地派生并创建
+   持久化向量任务，不直接调用模型。结合真实 PostgreSQL `7/7` 结果，未发现问题。
+3. 前端、契约、脚本与文档：核对 HTTP/OpenAPI、WebUI request/response、Mock 网络与可访问
+   DOM 断言、验收脚本精确测试数防假绿，以及双语长青文档；未使用截图，未发现问题。
+
+三轮之间没有修改任何实现、测试或文档。终止计数达到 `3/3` 后才写入本总结；随后只执行
+文档、锁禁令和 whitespace 无副作用门禁，再进入归档与 Git 交付。
+
+## 5. 规划检查日志
 
 仅记录发现问题并发生修改的轮次；连续无问题轮次在执行总结中记录，不修改本文，以免破坏
 “连续三轮无修改”的终止条件。

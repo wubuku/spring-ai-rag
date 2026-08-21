@@ -798,9 +798,8 @@ chunk/embedding 立即不再参与检索，并在同一事务中持久化新 gen
 `SYNC` 对该任务有界等待，`ASYNC` 立即返回。只有 metadata 或来源版本变化且当前
 embedding 已新鲜时，不会调用 embedding provider。
 
-普通 upsert 不能把外部文档原子移动到另一个 Collection。改变 `collectionKey` 会寻址另一
-个三元地址，可能创建第二个文档；旧地址不会被隐式删除。当前兼容做法是先 tombstone 旧
-地址，再在目标地址 upsert，但这不是原子操作，也不会保留同一个内部 ID 和版本历史。
+普通 upsert 不用于改变 Collection；改变 `collectionKey` 会寻址另一组三元地址。需要保留
+同一个内部 ID、版本历史和派生行时，使用下述显式 relocation API。
 
 即使文档持久化成功但 embedding 失败，响应仍为 HTTP 200：
 
@@ -865,6 +864,34 @@ expected revision；兼容部署可以关闭严格 CAS，但不推荐 connector 
 独立处理并保持输入顺序；某项可能以 `action=PERSISTENCE_FAILED` 表示持久化失败，
 或以 `embeddingStatus=FAILED` 表示文档已持久化但 embedding 失败，不会回滚同一批中
 已经成功的其他项。
+
+### `POST /api/v1/rag/documents/relocate`
+
+该端点默认关闭，通过 `RAG_DOCUMENT_RELOCATION_ENABLED=true` 开启。它只改变外部文档的
+Collection 投放位置，不修改 namespace、external ID、source revision、正文或派生行，也
+不会调用 embedding provider。调用方必须同时拥有源和目标 Collection 权限，并为每个业务
+迁移生成一个 `Idempotency-Key` header；网络重试必须复用同一个 key。
+
+```json
+{
+  "sourceCollectionKey": "customer-42:draft:v1",
+  "targetCollectionKey": "customer-42:published:v1",
+  "sourceNamespace": "cms-main",
+  "externalId": "cms:article:10001",
+  "expectedSourceRevision": "etag:8b4d9f"
+}
+```
+
+成功返回同一个 `documentId`、保留的 `sourceRevision`、新的 document revision、目标
+Collection、`derivationAction=PRESERVED` 和迁移后的真实 lifecycle。相同 principal/key/
+请求会精确重放首次成功响应；同 key 不同请求返回
+`409 IDEMPOTENCY_KEY_REUSED`。源或目标存在活动 Sync Run、revision/CAS 冲突、目标身份已
+存在或已由其他迁移退休时返回稳定 `409`。
+
+提交后旧地址被永久记录为 retired。旧地址的 lookup/upsert/delete/batch/Sync Run item
+返回 `409 EXTERNAL_IDENTITY_RELOCATED`，防止延迟事件重建重复文档；只有同一文档的显式
+反向 relocation 才会原子解除目标旧 marker。响应只在调用方仍具备目标 ACL 时披露目标
+Collection key。
 
 ### `GET /api/v1/rag/documents/by-external-id`
 
@@ -1156,6 +1183,31 @@ Collection scope 最多展开 1000 个 enabled 文档；也可改为
 状态为 `QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELLED`、`STALE`。任务表不复制
 文档正文，只记录 document/Profile/content hash/version、lease、重试和终态信息。
 
+## Collection 派生完整性与受控修复
+
+`GET /api/v1/rag/collections/derivation-readiness?collectionKey=` 返回活动 Profile 下的集合级
+互斥摘要：`READY`、`KEYWORD_ONLY`、`INDEXING`、`NOT_REQUESTED`、
+`LOCAL_UNAVAILABLE` 和 `CORRUPT`。分类会核对当前 local generation 的连续 chunk、hash、
+chunker、文本/位置，以及向量与 local chunk 的一一对应和固定维度；旧
+`embedding-readiness` 也复用相同物理真相源，不再只凭 state 和行数判定 fresh。
+
+`GET /api/v1/rag/collections/derivation-readiness/documents` 接受 `collectionKey`、可选
+`bucket`、`page` 和 `size`。`size` 限制为 1–100；响应不包含正文、metadata、JSON payload、
+chunk 文本或向量，只返回受控状态、计数、最多 500 字符错误和推荐动作。
+
+有副作用的修复默认关闭，通过 `RAG_DOCUMENT_DERIVATION_REPAIR_ENABLED=true` 开启：
+
+| 端点 | 语义 |
+|------|------|
+| `POST /api/v1/rag/collections/derivation-repairs/preview` | 按 bucket/vector condition 生成最多 100 项的稳定计划；明文 token 只在本响应返回，数据库仅保存 hash |
+| `POST /api/v1/rag/collections/derivation-repairs/apply` | 校验 `repairId + Collection + token + fingerprint + owner + ACL` 后执行；local 重建与 vector 排队使用独立短事务 |
+| `GET /api/v1/rag/collections/derivation-repairs/{repairId}` | 中断或重启后读取持久化逐项结果和 embedding job ID；每次重新校验 owner 与 Collection ACL |
+
+preview 默认 15 分钟内开始 apply，单个 operation 最长 1 小时，终态保留 24 小时。apply
+不会同步循环调用 provider；它复用正式 local chunk 路径，并只把需要的 vector 工作持久化
+入队。文档 revision/hash/Collection/可见性在 preview 后变化时该项返回
+`SKIPPED_CHANGED`，不会对新状态执行旧计划。
+
 ---
 
 ---
@@ -1435,7 +1487,8 @@ GET /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%
 
 ```json
 {
-  "documentId": 1
+  "documentId": 1,
+  "expectedDocumentRevision": 3
 }
 ```
 
@@ -1447,7 +1500,8 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 
 `rag_documents.collection_id` 是单值外键，因此该操作对已经属于其他 Collection 的普通
 文档表现为重关联/迁移，不需要重新嵌入。调用方必须同时有原文档和目标 Collection 的访问
-权。`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
+权。`expectedDocumentRevision` 必填且必须等于文档当前公开 revision；过期写入返回 `409`。
+`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
 `collectionKey + sourceNamespace + externalId` 同步，不能用兼容关联接口改变身份命名空间。
 
 ---

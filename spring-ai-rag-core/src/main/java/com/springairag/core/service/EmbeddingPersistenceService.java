@@ -22,9 +22,15 @@ public class EmbeddingPersistenceService {
     private static final int MAX_ERROR_LENGTH = 500;
 
     private final JdbcTemplate jdbcTemplate;
+    private DerivationIntegrityRepository integrityRepository;
 
     public EmbeddingPersistenceService(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setIntegrityRepository(DerivationIntegrityRepository integrityRepository) {
+        this.integrityRepository = integrityRepository;
     }
 
     public CacheState findCacheState(
@@ -32,6 +38,12 @@ public class EmbeddingPersistenceService {
             EmbeddingProfile profile,
             String contentHash,
             String chunkerVersion) {
+        if (integrityRepository != null) {
+            DerivationIntegrityRepository.Snapshot snapshot =
+                    integrityRepository.inspect(documentId);
+            return snapshot.vectorFresh()
+                    ? CacheState.hit(snapshot.vectorExpected()) : CacheState.miss();
+        }
         String column = EmbeddingVectorColumns.columnFor(profile.dimensions());
         List<Map<String, Object>> rows = jdbcTemplate.queryForList(
                 "SELECT status, content_hash, chunker_version, chunk_count "

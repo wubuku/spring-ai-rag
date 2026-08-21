@@ -10,11 +10,13 @@ import com.springairag.api.dto.JsonRecordUpsertResponse;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.JsonbContainmentFilter;
@@ -50,6 +52,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -126,6 +129,26 @@ class JsonRecordServiceTest {
                 objectMapper,
                 jdbcTemplate,
                 transactionManager);
+    }
+
+    @Test
+    void externalIdentityLookupRejectsRetiredAddressBeforeRepositoryLookup() {
+        ExternalAddressRetirementService retirementService =
+                mock(ExternalAddressRetirementService.class);
+        service.setAddressRetirementService(retirementService);
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("records:v1"))).thenReturn(List.of(10L));
+        doThrow(new RagException(ErrorCode.EXTERNAL_IDENTITY_RELOCATED,
+                "retired address"))
+                .when(retirementService).requireNotRetired(10L, "cms", "record-1");
+
+        RagException error = assertThrows(RagException.class, () ->
+                service.getByExternalIdentity("records:v1", "cms", "record-1"));
+
+        assertEquals(ErrorCode.EXTERNAL_IDENTITY_RELOCATED, error.getErrorCodeEnum());
+        verify(documentRepository, never())
+                .findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
+                        any(), any(), any(), any());
     }
 
     @Test

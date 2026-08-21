@@ -94,6 +94,19 @@
     "revisionConflict": "This document changed elsewhere. The list has been refreshed; review the latest revision before retrying.",
     "externallyManaged": "Managed by an external source",
     "externalIdentity": "{{namespace}} / {{externalId}}. Update or delete it through the external synchronization API.",
+    "relocate": "Relocate Collection",
+    "relocateTitle": "Relocate external document",
+    "targetCollection": "Target Collection",
+    "selectTargetCollection": "Select a target Collection",
+    "relocateConfirm": "Relocate",
+    "relocated": "Document relocated to {{target}}; existing derivations were preserved",
+    "relocationErrors": {
+      "DOCUMENT_REVISION_CONFLICT": "The source revision changed. Refresh and review before retrying.",
+      "TARGET_EXTERNAL_IDENTITY_EXISTS": "The target Collection already contains this external identity.",
+      "TARGET_EXTERNAL_IDENTITY_RETIRED": "The target address is retired and cannot be reused.",
+      "ACTIVE_SYNC_RUN_CONFLICT": "A source synchronization run is active. Retry after it completes.",
+      "DEFAULT": "Document relocation failed. The list has been refreshed."
+    },
     "lifecycle": {
       "READY": "Searchable",
       "INDEXING": "Indexing",
@@ -515,5 +528,18 @@
     "retry": "Retry",
     "detail": "Job detail",
     "backToDocuments": "Back to documents"
+    ,"derivationIntegrity": "Derivation integrity",
+    "previewRepair": "Preview repair",
+    "repairPreview": "Repair preview",
+    "repairDocuments": "{{count}} document(s) will be processed",
+    "applyRepair": "Apply repair",
+    "repairFailed": "Unable to create the repair preview",
+    "readyDocuments": "Ready",
+    "keywordOnlyDocuments": "Keyword only",
+    "indexingDocuments": "Converging",
+    "localUnavailableDocuments": "Local unavailable",
+    "corruptDocuments": "Corrupt",
+    "vectorRepairNeededDocuments": "Vector repair needed",
+    "reason": "Reason"
   }
 }

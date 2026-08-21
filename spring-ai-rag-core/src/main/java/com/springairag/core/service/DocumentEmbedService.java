@@ -41,6 +41,7 @@ public class DocumentEmbedService {
     private final EmbeddingProfileProvider profileProvider;
     private DocumentChunkingService chunkingService;
     private KeywordIndexPersistenceService keywordIndexPersistenceService;
+    private DerivationIntegrityRepository integrityRepository;
 
     public DocumentEmbedService(RagDocumentRepository documentRepository,
                                  EmbeddingBatchService embeddingBatchService,
@@ -68,6 +69,11 @@ public class DocumentEmbedService {
         this.keywordIndexPersistenceService = keywordIndexPersistenceService;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    public void setIntegrityRepository(DerivationIntegrityRepository integrityRepository) {
+        this.integrityRepository = integrityRepository;
+    }
+
     /**
      * 为文档生成活动 Profile 的向量。
      */
@@ -93,6 +99,9 @@ public class DocumentEmbedService {
                 || document.getContentHash() == null
                 || document.getContentHash().isBlank()) {
             return false;
+        }
+        if (integrityRepository != null) {
+            return integrityRepository.inspect(document).vectorFresh();
         }
         if (keywordIndexPersistenceService != null
                 && !keywordIndexPersistenceService.hasFreshLocalIndex(document)) {

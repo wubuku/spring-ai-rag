@@ -73,6 +73,7 @@ public class DocumentMutationService {
     private final RagDocumentLifecycleProperties properties;
     private final ObjectMapper objectMapper;
     private KeywordIndexPersistenceService keywordIndexPersistenceService;
+    private ExternalAddressRetirementService addressRetirementService;
 
     public DocumentMutationService(
             RagDocumentRepository documentRepository,
@@ -103,6 +104,12 @@ public class DocumentMutationService {
     void setKeywordIndexPersistenceService(
             KeywordIndexPersistenceService keywordIndexPersistenceService) {
         this.keywordIndexPersistenceService = keywordIndexPersistenceService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAddressRetirementService(
+            ExternalAddressRetirementService addressRetirementService) {
+        this.addressRetirementService = addressRetirementService;
     }
 
     public CreatedLocal createLocal(
@@ -917,6 +924,10 @@ public class DocumentMutationService {
         String revision = requireText(
                 sourceRevision, "sourceRevision", 255);
         ExternalPrepared prepared = requireResult(transactionTemplate.execute(status -> {
+            long mutationSequence = allocateSourceSequence(
+                    collection.getId(), namespace);
+            requireAddressNotRetired(
+                    collection.getId(), namespace, normalizedExternalId);
             RagDocument document = documentRepository
                     .findByCollectionIdAndSourceNamespaceAndExternalId(
                             collection.getId(), namespace, normalizedExternalId)
@@ -946,8 +957,7 @@ public class DocumentMutationService {
             document.setDisabledAt(null);
             document.setSourceDeletedAt(LocalDateTime.now());
             document.setSourceRevision(revision);
-            document.setSourceMutationSequence(
-                    allocateSourceSequence(collection.getId(), namespace));
+            document.setSourceMutationSequence(mutationSequence);
             document.setDeletionOrigin("SOURCE");
             document.setReconciliationTombstoneRunId(null);
             incrementRevision(document);
@@ -1031,6 +1041,7 @@ public class DocumentMutationService {
                 snapshotStartSequence == null
                         ? null
                         : collectionIdentityResolver.beginActiveWrite(collectionId);
+        requireAddressNotRetired(collectionId, namespace, externalId);
         String contentHash = DigestUtils.sha256(content);
         RagDocument document = documentRepository
                 .findByCollectionIdAndSourceNamespaceAndExternalId(
@@ -1098,6 +1109,8 @@ public class DocumentMutationService {
                     jsonRecord, currentRevision, expectedSourceRevision);
         }
 
+        long mutationSequence = allocateSourceSequence(collectionId, namespace);
+        requireAddressNotRetired(collectionId, namespace, externalId);
         boolean created = document.getId() == null;
         boolean contentChanged = created
                 || !Objects.equals(document.getContentHash(), contentHash);
@@ -1126,8 +1139,7 @@ public class DocumentMutationService {
         if (originalFilename != null) {
             document.setOriginalFilename(originalFilename);
         }
-        document.setSourceMutationSequence(
-                allocateSourceSequence(collectionId, namespace));
+        document.setSourceMutationSequence(mutationSequence);
         if (!created) {
             incrementRevision(document);
         }
@@ -1297,6 +1309,16 @@ public class DocumentMutationService {
                     "Cannot allocate source mutation sequence");
         }
         return sequence;
+    }
+
+    private void requireAddressNotRetired(
+            long collectionId,
+            String namespace,
+            String externalId) {
+        if (addressRetirementService != null) {
+            addressRetirementService.requireNotRetired(
+                    collectionId, namespace, externalId);
+        }
     }
 
     private void requireExpectedSourceRevision(

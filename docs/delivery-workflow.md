@@ -144,6 +144,15 @@ smoke tests with credentials from `.env`. If credentials are unavailable,
 report the environment gap explicitly; Mock results cannot stand in for real
 model validation.
 
+When the user permits real LLM testing, first use Mock tests to verify the basic
+flow, branches, and error handling in seconds, then start the real provider for
+the necessary model paths. Watch backend and acceptance-script logs throughout
+real calls; investigate as soon as timeout, authentication, model-name, or
+protocol failures are visible instead of waiting silently. A non-`main`
+worktree/branch uses isolated ports and a disposable test database. Prefer
+`scripts/dev.sh`, which loads `.env`, for joint frontend/backend runs, and never
+write credentials into command records, documentation, or Git.
+
 ## 6. Basic Gates After Implementation
 
 Before any code change enters convergence review, pass all applicable basic
@@ -217,6 +226,37 @@ Agent is explicitly asked to complete commit/push from a shared or designated
 worktree. The worktree should be clean after push. If another process creates
 new WIP afterward, do not chase absolute cleanliness with endless commits;
 report the last pushed commit and the new state.
+
+Substantial features use a dedicated branch based on the latest local `main`;
+an isolated worktree is recommended but does not change branch ownership.
+Fetch regularly and merge the pushed `origin/main` into the feature branch so
+conflicts do not accumulate until delivery. Once implementation is complete,
+if `origin/main` has commits not present in the feature branch, merge
+`origin/main` into the feature branch without rebasing delivered history.
+Record the post-merge feature HEAD, `origin/main`, disposable database, and
+isolated ports as the final verification baseline. Pre-merge test results are
+historical evidence only, not the final conclusion.
+
+The post-merge sequence is fixed:
+
+```text
+record the post-merge verification baseline
+  -> backend PostgreSQL integration matrix and Maven gates
+  -> frontend TypeScript, production build, and core Mock Playwright
+  -> real frontend/backend Playwright on isolated ports and scripts/dev.sh startup
+  -> real LLM smoke when applicable and authorized
+  -> three consecutive bounded, read-only, non-overlapping reviews
+  -> merge the feature branch into main
+  -> push main and verify main, origin/main, and worktree state
+```
+
+Any substantive post-merge fix stays on the feature branch, resets the review
+counter to `0`, and reruns the affected gates. If the fix changes a shared
+contract, runtime topology, or verification baseline, rerun the complete final
+sequence. Merge back to `main` only after the final combination passes. Never
+overwrite, stash, or discard concurrent WIP in a shared `main` worktree; preserve
+it while merging, and report a blocker only when a non-destructive merge is not
+possible.
 
 ## 9. Definition Of Done
 

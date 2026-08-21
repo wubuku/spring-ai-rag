@@ -49,19 +49,14 @@ RAG 服务内部 `documentId` 只用于诊断。connector 必须持久化并使�
 
 ### Collection 迁移边界
 
-当前普通 upsert 按目标三元组定位文档，**不能**把已有外部文档原子移动到另一个
-Collection。只修改请求中的 `collectionKey` 会寻址另一份投放，可能创建第二个文档；
-它不是原文档的普通更新。
+普通 upsert 按目标三元组定位文档，不能表达移动。需要改变 Collection 时，启用服务端
+relocation feature flag，并调用 `POST /api/v1/rag/documents/relocate`。每个业务迁移生成一个
+随机 `Idempotency-Key`，在超时重试时复用；同时发送当前 `expectedSourceRevision`。
 
-在新增显式迁移 API 前，需要移动时只能：
-
-1. 用新 revision tombstone 旧三元地址；
-2. 在目标 Collection 用新地址 upsert 完整状态；
-3. 分别等待两个操作收敛。
-
-该兼容流程不是原子的，会产生新的内部 `documentId`、独立版本历史和新的派生任务。
-对不能接受短暂重复/空窗或必须保留历史的系统，应保持 Collection 归属不变，等待受控的
-原子迁移能力，不要用普通 upsert 模拟移动。
+relocation 只改变 Collection，保留内部 `documentId`、source revision、版本历史和派生行，
+不会重新 embedding。调用方必须同时具备源/目标 ACL。成功后旧地址永久返回
+`EXTERNAL_IDENTITY_RELOCATED`；不要把这个错误转成 create，也不要再使用 tombstone +
+target upsert 模拟移动。namespace/external ID 变更仍属于独立 rekey 能力，本 API 不处理。
 
 ## 2. 增量 CRUD 契约
 
@@ -263,6 +258,7 @@ JSONL 文件视为不可变；下一批投递使用新的文件和 checkpoint。
 - 使用只允许目标 Collection 的 API Key，不使用 environment root key。
 - 首次导入前先稳定来源 identity 和 revision 规则。
 - 首次导入前固定 Collection 投放规则；不要把改 `collectionKey` 当作普通更新。
+- 需要迁移时保存一个业务事件级 `Idempotency-Key`，直到 relocation 明确成功或冲突收敛。
 - 普通批量/CDC 投递默认使用 `ASYNC`。
 - HTTP 成功后才持久化 checkpoint 和已接受 revision。
 - 日志不得记录 API Key、完整正文和敏感 payload。

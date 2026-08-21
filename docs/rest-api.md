@@ -916,12 +916,9 @@ chunks/embeddings, and persist a new-generation job in the same transaction.
 Metadata-only and source-revision-only changes do not call the provider when a
 fresh embedding already exists.
 
-Ordinary upsert cannot atomically relocate an externally managed document to
-another Collection. Changing `collectionKey` addresses another tuple and may
-create a second document; it does not implicitly delete the old address. The
-current compatibility flow is to tombstone the old address and then upsert the
-target address, but that flow is not atomic and does not preserve the internal
-ID or version history.
+Ordinary upsert does not change placement. Changing `collectionKey` addresses
+another tuple. Use the explicit relocation API below when the same internal ID,
+version history, and derived rows must be preserved.
 
 The response is HTTP 200 even when persistence succeeds but embedding fails:
 
@@ -993,6 +990,40 @@ Accepts `{ "items": [ ... ] }` with 1–50 items and a total content limit of
 input order. An item may report `action=PERSISTENCE_FAILED` for a persistence
 failure or `embeddingStatus=FAILED` when persistence succeeded but embedding
 failed; successful items in the same batch are not rolled back.
+
+### `POST /api/v1/rag/documents/relocate`
+
+This endpoint is disabled by default; enable it with
+`RAG_DOCUMENT_RELOCATION_ENABLED=true`. It changes only an externally managed
+document's Collection placement. It does not change the namespace, external ID,
+source revision, content, or derived rows, and it never calls the embedding
+provider. The caller needs access to both Collections and must send one
+`Idempotency-Key` header per business relocation; network retries reuse that key.
+
+```json
+{
+  "sourceCollectionKey": "customer-42:draft:v1",
+  "targetCollectionKey": "customer-42:published:v1",
+  "sourceNamespace": "cms-main",
+  "externalId": "cms:article:10001",
+  "expectedSourceRevision": "etag:8b4d9f"
+}
+```
+
+Success returns the same `documentId`, preserved `sourceRevision`, a new document
+revision, the target Collection, `derivationAction=PRESERVED`, and the actual
+post-relocation lifecycle. The same principal/key/request exactly replays the
+first successful response. Reusing the key for another request returns
+`409 IDEMPOTENCY_KEY_REUSED`. Active source/target Sync Runs, revision/CAS
+conflicts, an existing target identity, and a target retired by another
+relocation return stable `409` errors.
+
+After commit, the old address is permanently retired. Lookup, upsert, delete,
+batch, and Sync Run items at that address return
+`409 EXTERNAL_IDENTITY_RELOCATED`, preventing delayed events from recreating a
+duplicate. Only an explicit reverse relocation of the same document resolves
+the target's old marker atomically. The error reveals the target Collection key
+only when the caller still has target ACL.
 
 ### `GET /api/v1/rag/documents/by-external-id`
 
@@ -1323,6 +1354,38 @@ Statuses are `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`, `CANCELLED`, and
 `STALE`. The job table never copies document content; it stores only
 document/Profile/content hash/version, lease, retry, and terminal-state data.
 
+## Collection Derivation Integrity and Controlled Repair
+
+`GET /api/v1/rag/collections/derivation-readiness?collectionKey=` returns
+exclusive Collection-level buckets for the active Profile: `READY`,
+`KEYWORD_ONLY`, `INDEXING`, `NOT_REQUESTED`, `LOCAL_UNAVAILABLE`, and
+`CORRUPT`. Classification verifies contiguous current-generation local chunks,
+hash/chunker/text/positions, vector-to-local chunk correspondence, and fixed
+vector dimensions. The legacy `embedding-readiness` endpoint uses this same
+physical source of truth instead of trusting state plus row count.
+
+`GET /api/v1/rag/collections/derivation-readiness/documents` accepts
+`collectionKey`, optional `bucket`, `page`, and `size`. Size is bounded to
+1–100. Responses omit content, metadata, JSON payloads, chunk text, and vectors;
+they contain controlled states/counts, an error capped at 500 characters, and
+recommended actions.
+
+Side-effecting repair is disabled by default; enable it with
+`RAG_DOCUMENT_DERIVATION_REPAIR_ENABLED=true`:
+
+| Endpoint | Semantics |
+|----------|-----------|
+| `POST /api/v1/rag/collections/derivation-repairs/preview` | Builds a stable plan of at most 100 items by bucket/vector condition; the clear token appears only in this response and only its hash is stored |
+| `POST /api/v1/rag/collections/derivation-repairs/apply` | Validates repair ID, Collection, token, fingerprint, owner, and ACL; local rebuild and vector enqueue use separate short transactions |
+| `GET /api/v1/rag/collections/derivation-repairs/{repairId}` | Recovers durable item results and embedding job IDs after interruption or restart; owner and Collection ACL are rechecked |
+
+A preview normally must start apply within 15 minutes, an operation is bounded
+to one hour, and terminal results are retained for 24 hours. Apply does not loop
+over synchronous provider calls: it reuses the formal local chunk path and only
+persists required vector jobs. A document whose revision, hash, Collection, or
+visibility changed after preview is reported as `SKIPPED_CHANGED`; the old plan
+is never applied to its new state.
+
 ---
 
 ---
@@ -1651,7 +1714,8 @@ Associate one existing document with:
 
 ```json
 {
-  "documentId": 1
+  "documentId": 1,
+  "expectedDocumentRevision": 3
 }
 ```
 
@@ -1664,7 +1728,9 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 Because `rag_documents.collection_id` is single-valued, this operation
 reassociates or moves an ordinary document that already belongs to another
 Collection, without re-embedding it. The caller must be allowed to access both
-the source document and target Collection. Externally managed documents with a
+the source document and target Collection. `expectedDocumentRevision` is
+required and must match the document's current public revision; stale writers
+receive `409`. Externally managed documents with a
 nonblank `externalId` return `409`; keep synchronizing those documents by their
 stable `collectionKey + sourceNamespace + externalId` identity instead of moving them through
 this compatibility association route.

@@ -175,14 +175,15 @@ curl -s "${API_AUTH_ARGS[@]}" -X POST "$API/documents" \
   -o /tmp/rag-e2e-create.json
 head -c 400 /tmp/rag-e2e-create.json; echo
 DOC_ID=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('id') or '')")
-[[ -n "$DOC_ID" ]] || { bad "create document"; exit 1; }
-export DOC_ID
-ok "document id=$DOC_ID"
+DOC_REVISION=$(python3 -c "import json; print(json.load(open('/tmp/rag-e2e-create.json')).get('documentRevision') or '')")
+[[ -n "$DOC_ID" && -n "$DOC_REVISION" ]] || { bad "create document or documentRevision missing"; exit 1; }
+export DOC_ID DOC_REVISION
+ok "document id=$DOC_ID revision=$DOC_REVISION"
 
 curl -s "${API_AUTH_ARGS[@]}" -X POST \
   "$API/collections/by-key/documents?collectionKey=$COLLECTION_KEY" \
   -H 'Content-Type: application/json' \
-  -d "{\"documentId\":$DOC_ID}" \
+  -d "{\"documentId\":$DOC_ID,\"expectedDocumentRevision\":$DOC_REVISION}" \
   -o /tmp/rag-e2e-associate.json
 python3 - <<'PY'
 import json, os, sys

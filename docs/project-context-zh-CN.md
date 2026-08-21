@@ -232,9 +232,11 @@ JSON record upsert 仍兼容 deprecated 数字输入，但最终解析到同一�
 namespace 检索。
 
 该三元组是当前投放地址和 ACL 作用域，不表示 `externalId` 在全服务全局唯一。普通
-upsert 不能原子改变外部文档的 Collection；修改 `collectionKey` 会寻址另一份投放，旧
-地址不会自动删除。当前 tombstone 旧地址再 upsert 新地址的兼容流程会产生新的内部文档
-和版本历史；保留同一 `documentId` 的显式原子迁移仍是后续能力。
+普通 upsert 不改变外部文档 Collection；修改 `collectionKey` 会寻址另一份投放。V44 的
+显式 relocation 在双 Collection ACL、source revision CAS、Collection 生命周期 token 和
+Sync Run namespace fencing 下原子改变 placement，保留同一 `documentId`、版本历史和派生
+行。旧地址写入永久 retired-address ledger，延迟 lookup/mutation 返回稳定 409；反向迁移
+由同一事务解除对应 marker。该写能力默认由 feature flag 关闭。
 
 完整请求/响应契约、冲突处理和客户同步最佳实践见
 [REST API：外部文档幂等同步](rest-api-zh-CN.md)与
@@ -270,6 +272,13 @@ V43 将本地关键词派生与远程向量解耦。非 `SKIP` 的正文 mutatio
 freshness，不能用来判断关键词检索是否可用。`SKIP` 会删除当前本地 chunk，并报告
 `NOT_REQUESTED`。
 
+V45 增加共享 `DerivationIntegrityRepository`。单文档 lifecycle/cache、旧 embedding
+readiness 和新的 Collection derivation readiness 都核对同一组物理不变量，不再只凭 state
+与行数判断 fresh。集合摘要在 SQL 中聚合，详情和 preview 最多返回 100 项。受控 repair
+使用 token hash、fingerprint、owner/ACL、lease 和逐项持久账本；local rebuild 与 vector
+job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默认开启，有副作用的 repair
+默认由 feature flag 关闭。
+
 ## 5. 多模型
 
 - 旧 provider Bean 路径仍用于兼容默认模型。
@@ -289,7 +298,7 @@ freshness，不能用来判断关键词检索是否可用。`SKIP` 会删除当�
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V43。
+- Flyway 当前为 V1–V45。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -300,7 +309,8 @@ freshness，不能用来判断关键词检索是否可用。`SKIP` 会删除当�
   V40/V41 增加文档业务 revision、完整快照、来源 namespace、派生 generation 与
   lifecycle/idempotency schema，并收紧三元身份和活动任务约束；V42 增加权威外部快照
   run、幂等 item ledger 以及 SOURCE/RECONCILIATION 删除标记；V43 增加与 Profile 无关的
-  本地关键词 chunk 及独立的本地索引生命周期状态。
+  本地关键词 chunk 及独立的本地索引生命周期状态；V44 增加 relocation 幂等响应和永久
+  retired-address ledger；V45 增加派生 repair preview/item 控制面。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -319,9 +329,9 @@ freshness，不能用来判断关键词检索是否可用。`SKIP` 会删除当�
 | 区域 | 能力 |
 |------|------|
 | `/chat`, `/chat/stream` | KNOWLEDGE / AGENT / PLAIN 对话与结构化 SSE |
-| `/documents` | 本地文档 create/PATCH/disable/restore/version-restore/permanent-delete、lifecycle 与 embedding |
+| `/documents` | 本地文档 CRUD/lifecycle/embedding，以及外部文档幂等同步与原子 relocation |
 | `/search` | 混合检索 |
-| `/collections` | 知识库 |
+| `/collections` | 知识库、embedding/derivation readiness 与有界派生 repair 控制面 |
 | `/evaluation` | 评估与反馈 |
 | `/api-keys` | API Key 管理 |
 | `/files` | PDF / 文件导入 |

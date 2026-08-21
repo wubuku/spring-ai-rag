@@ -78,6 +78,7 @@ public class JsonRecordService {
     private DocumentMutationService mutationService;
     private DocumentLifecycleService lifecycleService;
     private KeywordIndexPersistenceService keywordIndexPersistenceService;
+    private ExternalAddressRetirementService addressRetirementService;
 
     @Autowired
     public JsonRecordService(
@@ -146,6 +147,12 @@ public class JsonRecordService {
     void setKeywordIndexPersistenceService(
             KeywordIndexPersistenceService keywordIndexPersistenceService) {
         this.keywordIndexPersistenceService = keywordIndexPersistenceService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setAddressRetirementService(
+            ExternalAddressRetirementService addressRetirementService) {
+        this.addressRetirementService = addressRetirementService;
     }
 
     public JsonRecordUpsertResponse upsert(JsonRecordUpsertRequest request) {
@@ -501,12 +508,19 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "Exactly one Collection must be provided");
         }
+        long collectionId = collections.getFirst();
+        String normalizedNamespace = normalizeNamespace(sourceNamespace);
+        String normalizedExternalId = requireExternalId(externalId);
+        if (addressRetirementService != null) {
+            addressRetirementService.requireNotRetired(
+                    collectionId, normalizedNamespace, normalizedExternalId);
+        }
         RagDocument document = documentRepository
                 .findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
-                        collections.getFirst(),
-                        normalizeNamespace(sourceNamespace),
+                        collectionId,
+                        normalizedNamespace,
                         RagDocument.JSON_RECORD,
-                        requireExternalId(externalId))
+                        normalizedExternalId)
                 .orElseThrow(() -> new DocumentNotFoundException(-1L));
         return getDetail(document.getId());
     }

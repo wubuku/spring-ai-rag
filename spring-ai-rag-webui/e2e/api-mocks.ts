@@ -238,6 +238,51 @@ export async function mockAllApiCalls(page: Page) {
         retryable: true,
       },
     };
+    const externalDocument = {
+      ...localDocument,
+      id: 1,
+      title: 'Sample Document',
+      source: 'pdf-import:sample-pdf/default.md',
+      content: 'External current content',
+      contentHash: 'abc123def456',
+      externalId: 'cms:sample:1',
+      sourceNamespace: 'cms-main',
+      sourceRevision: 'etag:sample-1',
+      documentRevision: 3,
+      collectionKey: 'sample-collection',
+      collectionName: 'Sample Collection',
+      embeddingFresh: false,
+      lifecycle: {
+        documentState: 'ACTIVE',
+        searchability: 'FAILED',
+        localIndexStatus: 'FAILED',
+        embeddingStatus: 'FAILED',
+        lastError: 'provider unavailable',
+        retryable: true,
+      },
+    };
+
+    if (method === 'POST' && path === '/api/v1/rag/documents/relocate') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          documentId: 1,
+          sourceCollectionKey: 'sample-collection',
+          targetCollectionKey: 'product-manual',
+          sourceNamespace: 'cms-main',
+          externalId: 'cms:sample:1',
+          sourceRevision: 'etag:sample-1',
+          action: 'RELOCATED',
+          documentRevision: 4,
+          versionNumber: 3,
+          contentChanged: false,
+          derivationAction: 'PRESERVED',
+          lifecycle: externalDocument.lifecycle,
+        }),
+      });
+      return;
+    }
 
     if (method === 'POST' && path.endsWith('/embed')) {
       await route.fulfill({
@@ -258,6 +303,15 @@ export async function mockAllApiCalls(page: Page) {
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(localDocument),
+      });
+      return;
+    }
+
+    if (method === 'GET' && path === '/api/v1/rag/documents/1') {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(externalDocument),
       });
       return;
     }
@@ -342,30 +396,7 @@ export async function mockAllApiCalls(page: Page) {
           localDocument,
           disabledDocument,
           keywordOnlyDocument,
-          {
-            id: 1,
-            title: 'Sample Document',
-            source: 'pdf-import:sample-pdf/default.md',
-            documentType: 'TEXT',
-            createdAt: new Date().toISOString(),
-            contentHash: 'abc123def456',
-            externalId: 'cms:sample:1',
-            sourceNamespace: 'cms-main',
-            sourceRevision: 'etag:sample-1',
-            documentRevision: 3,
-            processingStatus: 'COMPLETED',
-            processingError: null,
-            embeddingFresh: false,
-            enabled: true,
-            lifecycle: {
-              documentState: 'ACTIVE',
-              searchability: 'FAILED',
-              localIndexStatus: 'FAILED',
-              embeddingStatus: 'FAILED',
-              lastError: 'provider unavailable',
-              retryable: true,
-            },
-          },
+          externalDocument,
         ],
         total: 4,
         page: 0,
@@ -375,7 +406,71 @@ export async function mockAllApiCalls(page: Page) {
   });
 
   // Mock collections list
-  page.route(/\/api\/v1\/rag\/collections.*/, route => {
+  page.route(/\/api\/v1\/rag\/collections.*/, async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith('/derivation-readiness')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          collectionKey: 'sample-collection',
+          activeEmbeddingProfileKey: 'bge-m3-1024',
+          enabledDocuments: 4,
+          readyDocuments: 1,
+          keywordOnlyDocuments: 1,
+          indexingDocuments: 0,
+          localUnavailableDocuments: 1,
+          vectorRepairNeededDocuments: 2,
+          notRequestedDocuments: 0,
+          corruptDocuments: 1,
+          disabledDocuments: 1,
+          scannedAt: '2026-08-21T00:00:00Z',
+        }),
+      });
+      return;
+    }
+    if (path.endsWith('/derivation-repairs/preview')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          repairId: '33333333-3333-3333-3333-333333333333',
+          collectionKey: 'sample-collection',
+          previewFingerprint: 'preview-fingerprint',
+          previewToken: 'opaque-preview-token',
+          expiresAt: '2026-08-21T00:15:00Z',
+          items: [{
+            documentId: 4,
+            action: 'REBUILD_LOCAL_AND_QUEUE_VECTOR',
+            reasonCode: 'LOCAL_PHYSICAL_INTEGRITY_FAILED',
+          }],
+          actionCounts: { REBUILD_LOCAL_AND_QUEUE_VECTOR: 1 },
+          skippedDocuments: 0,
+        }),
+      });
+      return;
+    }
+    if (path.endsWith('/derivation-repairs/apply')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          repairId: '33333333-3333-3333-3333-333333333333',
+          collectionKey: 'sample-collection',
+          status: 'COMPLETED',
+          items: [{
+            documentId: 4,
+            action: 'REBUILD_LOCAL_AND_QUEUE_VECTOR',
+            status: 'SUCCEEDED',
+            localActionStatus: 'SUCCEEDED',
+            vectorActionStatus: 'SUCCEEDED',
+            embeddingJobId: '11111111-1111-1111-1111-111111111111',
+            resultCode: 'QUEUED_VECTOR',
+          }],
+        }),
+      });
+      return;
+    }
     route.fulfill({
       status: 200,
       contentType: 'application/json',

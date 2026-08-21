@@ -32,6 +32,8 @@ import com.springairag.api.dto.ExternalDocumentBatchUpsertResponse;
 import com.springairag.api.dto.ExternalDocumentDeleteResponse;
 import com.springairag.api.dto.ExternalDocumentUpsertRequest;
 import com.springairag.api.dto.ExternalDocumentUpsertResponse;
+import com.springairag.api.dto.ExternalDocumentRelocateRequest;
+import com.springairag.api.dto.ExternalDocumentRelocateResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
@@ -54,6 +56,7 @@ import com.springairag.core.embeddingjob.EmbeddingDispatchService;
 import com.springairag.core.embeddingjob.EmbeddingPolicyResolver;
 import com.springairag.core.embeddingjob.EmbeddingPolicySupport;
 import com.springairag.core.service.ExternalDocumentService;
+import com.springairag.core.service.DocumentRelocationService;
 import com.springairag.core.util.DocumentMapper;
 import com.springairag.core.util.SseEmitters;
 import com.springairag.core.versioning.ApiVersion;
@@ -118,6 +121,7 @@ public class RagDocumentController {
     private DocumentMutationService documentMutationService;
     private DocumentLifecycleService documentLifecycleService;
     private DocumentDerivationDescriptorProvider derivationDescriptorProvider;
+    private DocumentRelocationService documentRelocationService;
 
     @Autowired
     public RagDocumentController(RagDocumentRepository documentRepository,
@@ -168,6 +172,12 @@ public class RagDocumentController {
         this.derivationDescriptorProvider = derivationDescriptorProvider;
     }
 
+    @Autowired(required = false)
+    public void setDocumentRelocationService(
+            DocumentRelocationService documentRelocationService) {
+        this.documentRelocationService = documentRelocationService;
+    }
+
     public RagDocumentController(RagDocumentRepository documentRepository,
                                  RagEmbeddingRepository embeddingRepository,
                                  RagCollectionRepository collectionRepository,
@@ -196,6 +206,21 @@ public class RagDocumentController {
     public ResponseEntity<ExternalDocumentUpsertResponse> upsertExternalDocument(
             @Valid @RequestBody ExternalDocumentUpsertRequest request) {
         return ResponseEntity.ok(requireExternalDocumentService().upsert(request));
+    }
+
+    @Operation(summary = "Relocate an externally managed document",
+            description = "Atomically changes Collection placement while preserving document identity and derivations.")
+    @PostMapping("/relocate")
+    @Timed(value = "rag.documents.external-relocate",
+            description = "Relocate external document")
+    public ResponseEntity<ExternalDocumentRelocateResponse> relocateExternalDocument(
+            @Valid @RequestBody ExternalDocumentRelocateRequest request,
+            @RequestHeader("Idempotency-Key") @NotBlank @Size(max = 255)
+            String idempotencyKey) {
+        if (documentRelocationService == null) {
+            throw new IllegalStateException("Document relocation service is unavailable");
+        }
+        return ResponseEntity.ok(documentRelocationService.relocate(request, idempotencyKey));
     }
 
     @Operation(summary = "Batch upsert externally managed documents",

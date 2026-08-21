@@ -32,6 +32,48 @@ export interface EmbeddingReadiness {
   staleOrMissingDocuments: number;
 }
 
+export interface DerivationReadiness {
+  collectionKey: string;
+  activeEmbeddingProfileKey: string;
+  enabledDocuments: number;
+  readyDocuments: number;
+  keywordOnlyDocuments: number;
+  indexingDocuments: number;
+  localUnavailableDocuments: number;
+  vectorRepairNeededDocuments: number;
+  notRequestedDocuments: number;
+  corruptDocuments: number;
+  disabledDocuments: number;
+  scannedAt: string;
+}
+
+export interface DerivationRepairPreview {
+  repairId: string;
+  collectionKey: string;
+  previewFingerprint: string;
+  previewToken: string;
+  expiresAt: string;
+  items: Array<{ documentId: number; action: string; reasonCode: string }>;
+  actionCounts: Record<string, number>;
+  skippedDocuments: number;
+}
+
+export interface DerivationRepairStatus {
+  repairId: string;
+  collectionKey: string;
+  status: string;
+  items: Array<{
+    documentId: number;
+    action: string;
+    status: string;
+    localActionStatus: string;
+    vectorActionStatus: string;
+    embeddingJobId?: string | null;
+    resultCode?: string | null;
+    error?: string | null;
+  }>;
+}
+
 export const embeddingsApi = {
   listJobs: (params?: {
     page?: number;
@@ -50,5 +92,26 @@ export const embeddingsApi = {
   readiness: (collectionKey: string) =>
     apiClient.get<EmbeddingReadiness>('/collections/embedding-readiness', {
       params: { collectionKey },
+    }),
+
+  derivationReadiness: (collectionKey: string) =>
+    apiClient.get<DerivationReadiness>('/collections/derivation-readiness', {
+      params: { collectionKey },
+    }),
+
+  previewRepair: (collectionKey: string) =>
+    apiClient.post<DerivationRepairPreview>('/collections/derivation-repairs/preview', {
+      collectionKey,
+      buckets: ['CORRUPT', 'LOCAL_UNAVAILABLE'],
+      vectorConditions: ['FAILED', 'STALE'],
+      maxDocuments: 100,
+    }),
+
+  applyRepair: (preview: DerivationRepairPreview) =>
+    apiClient.post<DerivationRepairStatus>('/collections/derivation-repairs/apply', {
+      repairId: preview.repairId,
+      collectionKey: preview.collectionKey,
+      previewToken: preview.previewToken,
+      previewFingerprint: preview.previewFingerprint,
     }),
 };

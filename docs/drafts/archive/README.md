@@ -43,6 +43,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - Local keyword/vector derivation decoupling:
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
+- External-document relocation and derivation-integrity repair:
+  `2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
 - Cross-project integration plan for the first external Client:
   `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*` (superseded because it
   exceeded this repository's documentation boundary)

@@ -1,10 +1,10 @@
 # 下一批高价值功能实施规划
 
-> **状态：规划完成，尚未实施。**
+> **状态：实施与验收完成，已归档。**
 >
 > 本批次聚焦外部文档 CRUD 的两个生产缺口：跨 Collection 原子迁移，以及文档主记录与
 > 本地关键词/远程向量派生之间的完整性诊断和受控修复。实施过程使用
-> [NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> [2026-08-21_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-21_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 > 记录可恢复进度；完成后先把稳定事实同步到双语长青文档，再归档 plan/progress。
 
 ## 1. 执行结论

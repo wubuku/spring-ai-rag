@@ -10,8 +10,8 @@
 | 项目 | 优先级 | 当前缺口 |
 |------|--------|----------|
 | 权威来源全量快照对账 | 本批已交付 | V42 API 和 reference client 支持有界权威 run、preview fingerprint、删除保护和 reconciliation tombstone |
-| 外部文档原子 Collection 迁移 | P0 | 普通 upsert 改 `collectionKey` 会寻址另一身份；当前只能 tombstone + 新建，不能保留内部 ID、版本历史或避免短暂重复/空窗 |
-| Collection 派生索引完整性诊断与受控修复 | P1 | 当前 lifecycle/readiness 能表达正常 freshness，但没有面向运营者的物理行完整性 preview、有限 repair 与 durable receipt；可实施设计见当前活跃规划 |
+| 外部文档原子 Collection 迁移 | 本批已交付 | V44 提供双 ACL、幂等精确重放、Sync Run fencing 和永久 retired-address guard；默认由 feature flag 关闭 |
+| Collection 派生索引完整性诊断与受控修复 | 本批已交付 | V45 提供共享物理 freshness、集合级有界诊断和最多 100 项的 durable preview/apply/status；有副作用的 repair 默认关闭 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |
 | 本地 chunk/full-text 与远程向量解耦 | 本批已交付 | V43 保存与 Profile 无关的本地 chunk/state；provider 故障时当前正文仍以 `KEYWORD_ONLY` 可用，旧 generation 继续被排除 |
 
@@ -21,15 +21,15 @@
   missing 推断删除；只有显式声明的安全快照模式才能启用 tombstone。
 - 当前外部地址仍是 `collectionKey + sourceNamespace + externalId`。在独立 tenant/
   connector 授权边界出现前，不把唯一约束降为全局 `sourceNamespace + externalId`；
-  跨 Collection 移动应使用同时校验源/目标 ACL 的显式原子操作。
+  跨 Collection 移动使用同时校验源/目标 ACL 的显式 relocation，不能用普通 upsert 模拟。
 - 版本恢复不能直接回退计数器或覆盖历史；当前操作会创建新 revision、新完整快照，并复用
   现有 mutation impact、持久化 job 和 commit fencing。
 - 只有 `snapshotCompleteness=FULL` 的历史版本才具备完整恢复资格；旧兼容快照只用于审计。
 - V43 本地全文派生保持“旧正文立即退出”，允许新正文先进入
   `KEYWORD_ONLY`，远程 embedding 成功后再将 lifecycle 提升为 `READY`。
 - 所有并发协调继续使用条件 DML/CAS、唯一约束、lease 和有界重试，禁止显式悲观锁。
-- 原子迁移和派生完整性是当前最高价值的可实施 backlog；实施顺序、原子性和成本边界以
-  活跃规划为准。
+- 派生 repair 只重建/排队派生，不改正文；批次最多 100 项，明文 token 不落库，且不会
+  在 HTTP 请求中同步循环调用 embedding provider。
 
 剩余实施范围和批次顺序以
 [当前活跃规划](drafts/README-zh-CN.md) 为准；已发布契约仍以

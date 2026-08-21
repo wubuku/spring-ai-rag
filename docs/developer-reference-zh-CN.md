@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V43 |
+| Flyway | V1–V45 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -317,6 +317,25 @@ generation-aware 重嵌入、非文本更新不重嵌入、WebUI CRUD 和 refere
 `DOCUMENT_LIFECYCLE_IT_JDBC_URL`、`DOCUMENT_LIFECYCLE_IT_USERNAME` 和
 `DOCUMENT_LIFECYCLE_IT_PASSWORD`。不得指向开发库或生产库。证据保存在
 `.verification/document-data-plane/<run-id>/`。
+
+### 文档迁移与派生完整性一键验证
+
+```bash
+./scripts/verify-document-relocation.sh
+./scripts/verify-derivation-integrity.sh
+```
+
+两个专项门禁都执行禁悲观锁检查、聚焦 HTTP 测试、一次性 PostgreSQL 集成测试、
+`mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建/alignment、无截图 Mock
+Playwright、双语文档门禁和空白检查。证据分别写入
+`.verification/relocation/<run-id>/` 与
+`.verification/derivation-integrity/<run-id>/`。
+
+默认使用 Testcontainers；也可通过 `NEXT_HIGH_VALUE_IT_JDBC_URL`、
+`NEXT_HIGH_VALUE_IT_USERNAME`、`NEXT_HIGH_VALUE_IT_PASSWORD` 指向调用方创建的专用
+一次性数据库，并必须显式设置 `NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES`。该测试会清空
+数据库，绝不能指向开发库或生产库。可用 `NEXT_HIGH_VALUE_PLAYWRIGHT_PORT` 指定 Mock
+Playwright 的 Vite preview 起始端口。
 
 ### 检索诊断 / metadata 过滤 / 嵌入运营 / 受管质量
 

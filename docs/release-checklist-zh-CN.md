@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V43
+- [x] Flyway 迁移范围为 V1-V45
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -62,6 +62,13 @@
 - [x] 正文变化使旧派生结果立即 stale；metadata/payload/Collection-only 更新不重嵌入
 - [x] 外部 reference client 与中英文最佳实践已提交
 - [x] PostgreSQL 生命周期验收显式要求 `skipped=0`
+
+### 2026-08-21 迁移与派生完整性门禁
+
+- [x] V44 提供跨 Collection 原子迁移、双 Collection ACL、精确幂等重放和永久旧地址保护
+- [x] V45 提供统一的严格派生 freshness、分页/聚合诊断和 preview-first 受控修复账本
+- [x] `verify-document-relocation.sh` 与 `verify-derivation-integrity.sh` 固化后端、数据库、
+  前端 Mock 和文档门禁，PostgreSQL 验收显式要求 `skipped=0`
 
 ### 最终证据（2026-07-21）
 

@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router-dom';
 import { embeddingsApi } from '../api/embeddings';
+import type { DerivationRepairPreview } from '../api/embeddings';
 import styles from './Evaluation.module.css';
 
 export function Embeddings() {
@@ -12,6 +14,8 @@ export function Embeddings() {
   const collectionKey = searchParams.get('collectionKey') ?? '';
   const batchId = searchParams.get('batchId') ?? '';
   const selectedId = searchParams.get('jobId') ?? '';
+  const [repairPreview, setRepairPreview] =
+    useState<DerivationRepairPreview | null>(null);
 
   const jobsQ = useQuery({
     queryKey: ['embedding-jobs', status, collectionKey, batchId],
@@ -31,6 +35,12 @@ export function Embeddings() {
     enabled: collectionKey.length > 0,
   });
 
+  const derivationQ = useQuery({
+    queryKey: ['derivation-readiness', collectionKey],
+    queryFn: async () => (await embeddingsApi.derivationReadiness(collectionKey)).data,
+    enabled: collectionKey.length > 0,
+  });
+
   const detailQ = useQuery({
     queryKey: ['embedding-job', selectedId],
     queryFn: async () => (await embeddingsApi.getJob(selectedId)).data,
@@ -44,6 +54,18 @@ export function Embeddings() {
   const retryM = useMutation({
     mutationFn: (id: string) => embeddingsApi.retryJob(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['embedding-jobs'] }),
+  });
+  const previewRepairM = useMutation({
+    mutationFn: () => embeddingsApi.previewRepair(collectionKey),
+    onSuccess: response => setRepairPreview(response.data),
+  });
+  const applyRepairM = useMutation({
+    mutationFn: (preview: DerivationRepairPreview) => embeddingsApi.applyRepair(preview),
+    onSuccess: () => {
+      setRepairPreview(null);
+      qc.invalidateQueries({ queryKey: ['derivation-readiness', collectionKey] });
+      qc.invalidateQueries({ queryKey: ['embedding-jobs'] });
+    },
   });
 
   const setFilter = (key: string, value: string) => {
@@ -104,6 +126,86 @@ export function Embeddings() {
             ))}
           </div>
         </section>
+      )}
+
+      {derivationQ.data && (
+        <section className={styles.section} aria-label={t('embeddings.derivationIntegrity')}>
+          <div className={styles.sectionHeader}>
+            <h2>{t('embeddings.derivationIntegrity')}</h2>
+            <button
+              type="button"
+              className={styles.primaryBtn}
+              disabled={previewRepairM.isPending}
+              onClick={() => previewRepairM.mutate()}
+            >
+              {t('embeddings.previewRepair')}
+            </button>
+          </div>
+          <div className={styles.cards}>
+            {[
+              ['readyDocuments', derivationQ.data.readyDocuments],
+              ['keywordOnlyDocuments', derivationQ.data.keywordOnlyDocuments],
+              ['indexingDocuments', derivationQ.data.indexingDocuments],
+              ['localUnavailableDocuments', derivationQ.data.localUnavailableDocuments],
+              ['corruptDocuments', derivationQ.data.corruptDocuments],
+              ['vectorRepairNeededDocuments', derivationQ.data.vectorRepairNeededDocuments],
+            ].map(([label, value]) => (
+              <div key={String(label)} className={styles.card}>
+                <div className={styles.cardLabel}>{t(`embeddings.${label}`)}</div>
+                <div className={styles.cardValue}>{String(value)}</div>
+              </div>
+            ))}
+          </div>
+          {previewRepairM.isError && (
+            <div className={styles.error} role="alert">
+              {t('embeddings.repairFailed')}
+            </div>
+          )}
+        </section>
+      )}
+
+      {repairPreview && (
+        <div role="dialog" aria-modal="true" aria-label={t('embeddings.repairPreview')}>
+          <section className={styles.section}>
+            <h2>{t('embeddings.repairPreview')}</h2>
+            <p className={styles.muted}>
+              {t('embeddings.repairDocuments', { count: repairPreview.items.length })}
+            </p>
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th>{t('embeddings.documentId')}</th>
+                    <th>{t('embeddings.actions')}</th>
+                    <th>{t('embeddings.reason')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {repairPreview.items.map(item => (
+                    <tr key={item.documentId}>
+                      <td>{item.documentId}</td>
+                      <td>{item.action}</td>
+                      <td>{item.reasonCode}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className={styles.actionsRow}>
+              <button type="button" onClick={() => setRepairPreview(null)}>
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                className={styles.primaryBtn}
+                disabled={applyRepairM.isPending}
+                onClick={() => applyRepairM.mutate(repairPreview)}
+              >
+                {t('embeddings.applyRepair')}
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       <section className={styles.section} aria-label={t('embeddings.jobs')}>
