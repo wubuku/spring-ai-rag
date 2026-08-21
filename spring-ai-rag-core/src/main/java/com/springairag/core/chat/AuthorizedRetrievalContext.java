@@ -13,7 +13,8 @@ public record AuthorizedRetrievalContext(
         String sessionId,
         ChatPrincipal principal,
         int maxToolResultCharacters,
-        RetrievalFilters filters) {
+        RetrievalFilters filters,
+        ChatExecutionBudget executionBudget) {
 
     public AuthorizedRetrievalContext {
         scope = scope != null ? scope : RetrievalScope.unscoped();
@@ -45,5 +46,21 @@ public record AuthorizedRetrievalContext(
             int maxToolResultCharacters) {
         this(scope, options, trace, sessionId, principal, maxToolResultCharacters,
                 RetrievalFilters.none());
+    }
+
+    public AuthorizedRetrievalContext(
+            RetrievalScope scope,
+            RetrievalOptions options,
+            RetrievalTraceCollector trace,
+            String sessionId,
+            ChatPrincipal principal,
+            int maxToolResultCharacters,
+            RetrievalFilters filters) {
+        this(scope, options, trace, sessionId, principal, maxToolResultCharacters,
+                filters, null);
+    }
+
+    public ChatExecutionBudget executionBudget() {
+        return executionBudget;
     }
 }

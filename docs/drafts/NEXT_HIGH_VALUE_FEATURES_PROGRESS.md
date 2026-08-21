@@ -311,6 +311,23 @@
   `ChatExecutionServiceTest`、`ModeAwareChatClientFactoryTest`、
   `ChatMemoryMultiTurnTest`：31 项全部通过。
 
+### 2026-08-21：Phase 1 预算内核与 Tool Provider 初版
+
+- 新增 typed errors：`CHAT_BUDGET_EXHAUSTED`、`CHAT_CONTEXT_BUDGET_EXCEEDED`。
+- `RagChatProperties` 增加逻辑请求执行预算、Agent 工具总量和上下文预算配置；
+  `ChatExecutionBudget` 统一保存 candidate/model/tool 计数、工具结果累计量和 deadline。
+- 新增 `BudgetedChatModel`，对非流式 call 和流式 subscription 计数；服务端 Chat 请求
+  创建单一 budget，并将预算快照写入成功响应 metadata。
+- 新增 `BudgetedToolCallingManager`，在委托 Spring AI 标准工具执行前对完整 tool batch
+  做 round/total/per-name/字符预留，异常时保留调用计数并释放未使用预留。
+- 新增公共 `RagChatToolProvider`、`RagChatToolPolicy`、
+  `RagChatToolRequestContext` 和稳定 context key；新增 core 注册表，启动期校验工具
+  definition、schema、metadata、重复名和 policy，内置检索工具纳入注册表。
+- Agent 生产路径已支持从注册表选择工具，并把服务端 principal/session/deadline 与预算
+  放入 Spring AI ToolContext；单元测试构造路径继续保持兼容。
+- 后端 `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`：通过。
+- 预算、Chat service、factory 相关测试：21 项全部通过。
+
 ## 5. 下一步恢复入口
 
 1. 记录 Java/Maven/npm 版本与当前 Phase 0 基线。

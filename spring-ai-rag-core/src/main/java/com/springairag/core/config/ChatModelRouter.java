@@ -222,7 +222,9 @@ public class ChatModelRouter {
                     model,
                     item != null
                             ? item.normalizedCapabilities()
-                            : MultiModelProperties.ModelCapabilities.defaults());
+                            : MultiModelProperties.ModelCapabilities.defaults(),
+                    item != null ? item.contextWindow() : null,
+                    item != null ? item.maxTokens() : null);
         }
         String provider = legacyProviderFor(model);
         String ref = provider != null ? provider : modelRef.trim();
@@ -244,7 +246,9 @@ public class ChatModelRouter {
                     return new ChatModelCandidate(
                             descriptor.ref(),
                             model,
-                            descriptor.capabilities());
+                            descriptor.capabilities(),
+                            descriptor.contextWindow(),
+                            descriptor.maxTokens());
                 }
             }
         }
@@ -397,7 +401,16 @@ public class ChatModelRouter {
     public record ChatModelCandidate(
             String ref,
             ChatModel model,
-            MultiModelProperties.ModelCapabilities capabilities) {
+            MultiModelProperties.ModelCapabilities capabilities,
+            Integer contextWindow,
+            Integer maxTokens) {
+
+        public ChatModelCandidate(
+                String ref,
+                ChatModel model,
+                MultiModelProperties.ModelCapabilities capabilities) {
+            this(ref, model, capabilities, null, null);
+        }
 
         public ChatModelCandidate {
             capabilities = capabilities != null

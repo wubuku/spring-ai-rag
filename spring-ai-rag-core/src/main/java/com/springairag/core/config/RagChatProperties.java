@@ -13,6 +13,8 @@ public class RagChatProperties {
     private KnowledgeProperties knowledge = new KnowledgeProperties();
     private AgentProperties agent = new AgentProperties();
     private HistoryProperties history = new HistoryProperties();
+    private ExecutionProperties execution = new ExecutionProperties();
+    private ContextProperties context = new ContextProperties();
 
     public String getDefaultMode() {
         return defaultMode;
@@ -44,6 +46,24 @@ public class RagChatProperties {
 
     public void setHistory(HistoryProperties history) {
         this.history = history != null ? history : new HistoryProperties();
+    }
+
+    public ExecutionProperties getExecution() {
+        return execution;
+    }
+
+    public void setExecution(ExecutionProperties execution) {
+        this.execution = execution != null
+                ? execution
+                : new ExecutionProperties();
+    }
+
+    public ContextProperties getContext() {
+        return context;
+    }
+
+    public void setContext(ContextProperties context) {
+        this.context = context != null ? context : new ContextProperties();
     }
 
     public static class KnowledgeProperties {
@@ -101,6 +121,11 @@ public class RagChatProperties {
         private int maxResultsPerCall = 10;
         private int maxUniqueSources = 20;
         private int maxToolResultCharacters = 24_000;
+        private int maxToolCalls = 6;
+        private int maxToolCallsPerName = 3;
+        private int maxToolResultCharactersTotal = 48_000;
+        private int toolExecutorThreads = 8;
+        private int toolExecutorQueueCapacity = 32;
 
         public boolean isEnabled() {
             return enabled;
@@ -149,6 +174,46 @@ public class RagChatProperties {
         public void setMaxToolResultCharacters(int maxToolResultCharacters) {
             this.maxToolResultCharacters = maxToolResultCharacters;
         }
+
+        public int getMaxToolCalls() {
+            return maxToolCalls;
+        }
+
+        public void setMaxToolCalls(int maxToolCalls) {
+            this.maxToolCalls = maxToolCalls;
+        }
+
+        public int getMaxToolCallsPerName() {
+            return maxToolCallsPerName;
+        }
+
+        public void setMaxToolCallsPerName(int maxToolCallsPerName) {
+            this.maxToolCallsPerName = maxToolCallsPerName;
+        }
+
+        public int getMaxToolResultCharactersTotal() {
+            return maxToolResultCharactersTotal;
+        }
+
+        public void setMaxToolResultCharactersTotal(int maxToolResultCharactersTotal) {
+            this.maxToolResultCharactersTotal = maxToolResultCharactersTotal;
+        }
+
+        public int getToolExecutorThreads() {
+            return toolExecutorThreads;
+        }
+
+        public void setToolExecutorThreads(int toolExecutorThreads) {
+            this.toolExecutorThreads = toolExecutorThreads;
+        }
+
+        public int getToolExecutorQueueCapacity() {
+            return toolExecutorQueueCapacity;
+        }
+
+        public void setToolExecutorQueueCapacity(int toolExecutorQueueCapacity) {
+            this.toolExecutorQueueCapacity = toolExecutorQueueCapacity;
+        }
     }
 
     public static class HistoryProperties {
@@ -169,6 +234,120 @@ public class RagChatProperties {
 
         public void setLeaseRenewIntervalSeconds(int leaseRenewIntervalSeconds) {
             this.leaseRenewIntervalSeconds = Math.max(1, leaseRenewIntervalSeconds);
+        }
+    }
+
+    public static class ExecutionProperties {
+        private int maxCandidateAttempts = 3;
+        private int maxModelCalls = 8;
+
+        public int getMaxCandidateAttempts() {
+            return maxCandidateAttempts;
+        }
+
+        public void setMaxCandidateAttempts(int maxCandidateAttempts) {
+            this.maxCandidateAttempts = maxCandidateAttempts;
+        }
+
+        public int getMaxModelCalls() {
+            return maxModelCalls;
+        }
+
+        public void setMaxModelCalls(int maxModelCalls) {
+            this.maxModelCalls = maxModelCalls;
+        }
+    }
+
+    public static class ContextProperties {
+        private boolean adaptivePlanningEnabled = true;
+        private int fallbackContextWindow = 32_768;
+        private int outputReserveTokens = 4_096;
+        private int safetyMarginTokens = 1_024;
+        private int maxHistoryTokens = 12_000;
+        private int minimumRecentTurns = 2;
+        private int maxSummaryTokens = 2_048;
+        private int minimumModeEvidenceTokens = 4_096;
+        private int maxRagContextTokens = 16_000;
+        private int maxToolSchemaTokens = 4_096;
+
+        public boolean isAdaptivePlanningEnabled() {
+            return adaptivePlanningEnabled;
+        }
+
+        public void setAdaptivePlanningEnabled(boolean adaptivePlanningEnabled) {
+            this.adaptivePlanningEnabled = adaptivePlanningEnabled;
+        }
+
+        public int getFallbackContextWindow() {
+            return fallbackContextWindow;
+        }
+
+        public void setFallbackContextWindow(int fallbackContextWindow) {
+            this.fallbackContextWindow = fallbackContextWindow;
+        }
+
+        public int getOutputReserveTokens() {
+            return outputReserveTokens;
+        }
+
+        public void setOutputReserveTokens(int outputReserveTokens) {
+            this.outputReserveTokens = outputReserveTokens;
+        }
+
+        public int getSafetyMarginTokens() {
+            return safetyMarginTokens;
+        }
+
+        public void setSafetyMarginTokens(int safetyMarginTokens) {
+            this.safetyMarginTokens = safetyMarginTokens;
+        }
+
+        public int getMaxHistoryTokens() {
+            return maxHistoryTokens;
+        }
+
+        public void setMaxHistoryTokens(int maxHistoryTokens) {
+            this.maxHistoryTokens = maxHistoryTokens;
+        }
+
+        public int getMinimumRecentTurns() {
+            return minimumRecentTurns;
+        }
+
+        public void setMinimumRecentTurns(int minimumRecentTurns) {
+            this.minimumRecentTurns = minimumRecentTurns;
+        }
+
+        public int getMaxSummaryTokens() {
+            return maxSummaryTokens;
+        }
+
+        public void setMaxSummaryTokens(int maxSummaryTokens) {
+            this.maxSummaryTokens = maxSummaryTokens;
+        }
+
+        public int getMinimumModeEvidenceTokens() {
+            return minimumModeEvidenceTokens;
+        }
+
+        public void setMinimumModeEvidenceTokens(int minimumModeEvidenceTokens) {
+            this.minimumModeEvidenceTokens = minimumModeEvidenceTokens;
+        }
+
+        public int getMaxRagContextTokens() {
+            return maxRagContextTokens;
+        }
+
+        public void setMaxRagContextTokens(int maxRagContextTokens) {
+            this.maxRagContextTokens = maxRagContextTokens;
+        }
+
+        public int getMaxToolSchemaTokens() {
+            return maxToolSchemaTokens;
+        }
+
+        public void setMaxToolSchemaTokens(int maxToolSchemaTokens) {
+            this.maxToolSchemaTokens = maxToolSchemaTokens;
         }
     }
 }

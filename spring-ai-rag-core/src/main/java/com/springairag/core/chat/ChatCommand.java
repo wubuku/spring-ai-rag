@@ -26,7 +26,8 @@ public record ChatCommand(
         List<ChatInputMessage> inputMessages,
         List<String> modelCandidates,
         RetrievalTraceSession retrievalTraceSession,
-        RetrievalFilters retrievalFilters) {
+        RetrievalFilters retrievalFilters,
+        ChatExecutionBudget executionBudget) {
 
     public ChatCommand {
         message = message != null ? message : "";
@@ -66,7 +67,7 @@ public record ChatCommand(
             Map<String, Object> clientMetadata) {
         this(message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
-                List.of(), List.of(), null, null);
+                List.of(), List.of(), null, null, null);
     }
 
     public ChatCommand(
@@ -85,21 +86,31 @@ public record ChatCommand(
             List<String> modelCandidates) {
         this(message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
-                inputMessages, modelCandidates, null, null);
+                inputMessages, modelCandidates, null, null, null);
     }
 
     public ChatCommand withTraceSession(RetrievalTraceSession session) {
         return new ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
-                inputMessages, modelCandidates, session, retrievalFilters);
+                inputMessages, modelCandidates, session, retrievalFilters,
+                executionBudget);
+    }
+
+    public ChatCommand withExecutionBudget(ChatExecutionBudget budget) {
+        return new ChatCommand(
+                message, sessionId, principal, memoryConversationId, mode, memoryMode,
+                modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
+                inputMessages, modelCandidates, retrievalTraceSession, retrievalFilters,
+                budget);
     }
 
     public ChatCommand withFilters(RetrievalFilters filters) {
         return new ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,
                 modelRef, domainId, retrievalScope, retrievalOptions, clientMetadata,
-                inputMessages, modelCandidates, retrievalTraceSession, filters);
+                inputMessages, modelCandidates, retrievalTraceSession, filters,
+                executionBudget);
     }
 
     public static ChatCommand of(
@@ -126,6 +137,7 @@ public record ChatCommand(
                 metadata,
                 List.of(),
                 List.of(),
+                null,
                 null,
                 null);
     }

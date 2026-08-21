@@ -10,7 +10,9 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.config.RagChatProperties;
 import com.springairag.api.dto.CitationValidation;
+import com.springairag.api.service.RagChatToolContextKeys;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.evaluation.CitationValidator;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
@@ -77,6 +79,7 @@ public class ChatExecutionService {
     private final RagMetricsService metricsService;
     private final RetryTemplate retryTemplate;
     private final ChatSessionCoordinator sessionCoordinator;
+    private final RagChatToolRegistry toolRegistry;
     private RetrievalDiagnosticsService diagnosticsService;
     private CitationValidator citationValidator;
 
@@ -96,7 +99,32 @@ public class ChatExecutionService {
             RetryTemplate retryTemplate) {
         this(modelRouter, clientFactory, knowledgeSearchTool, historyRepository,
                 null, domainExtensions, promptCustomizers, documentMapper,
-                objectMapper, ragProperties, metricsService, retryTemplate, null);
+                objectMapper, ragProperties, metricsService, retryTemplate, null,
+                null);
+    }
+
+    public ChatExecutionService(
+            ChatModelRouter modelRouter,
+            ModeAwareChatClientFactory clientFactory,
+            KnowledgeSearchTool knowledgeSearchTool,
+            RagChatHistoryRepository historyRepository,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            JsonRecordSearchTool jsonRecordSearchTool,
+            DomainExtensionRegistry domainExtensions,
+            PromptCustomizerChain promptCustomizers,
+            RetrievalDocumentMapper documentMapper,
+            ObjectMapper objectMapper,
+            RagProperties ragProperties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RagMetricsService metricsService,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RetryTemplate retryTemplate,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ChatSessionCoordinator sessionCoordinator) {
+        this(modelRouter, clientFactory, knowledgeSearchTool, historyRepository,
+                jsonRecordSearchTool, domainExtensions, promptCustomizers,
+                documentMapper, objectMapper, ragProperties, metricsService,
+                retryTemplate, sessionCoordinator, null);
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -117,7 +145,9 @@ public class ChatExecutionService {
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RetryTemplate retryTemplate,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
-            ChatSessionCoordinator sessionCoordinator) {
+            ChatSessionCoordinator sessionCoordinator,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            RagChatToolRegistry toolRegistry) {
         this.modelRouter = modelRouter;
         this.clientFactory = clientFactory;
         this.knowledgeSearchTool = knowledgeSearchTool;
@@ -131,6 +161,7 @@ public class ChatExecutionService {
         this.metricsService = metricsService;
         this.retryTemplate = retryTemplate;
         this.sessionCoordinator = sessionCoordinator;
+        this.toolRegistry = toolRegistry;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -145,6 +176,8 @@ public class ChatExecutionService {
 
     public ChatExecutionResult execute(ChatCommand command) {
         validateMode(command);
+        command = command.withExecutionBudget(newBudget(command, false));
+        final ChatCommand request = command;
         ChatSessionCoordinator.LeaseHandle lease =
                 sessionCoordinator != null
                         ? sessionCoordinator.acquire(command, false)
@@ -157,6 +190,11 @@ public class ChatExecutionService {
 
             for (int index = 0; index < candidates.size(); index++) {
                 ChatModelRouter.ChatModelCandidate candidate = candidates.get(index);
+                if (!command.executionBudget().tryReserveCandidateAttempt()) {
+                    throw new RagException(
+                            ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                            "Chat candidate-attempt budget exhausted");
+                }
                 long startedAt = System.currentTimeMillis();
                 ModeAwareChatClientFactory.Attempt attempt = null;
                 try {
@@ -164,7 +202,7 @@ public class ChatExecutionService {
                             clientFactory.create(command, candidate, baseline);
                     attempt = created;
                     Supplier<ChatClientResponse> invocation =
-                            () -> invoke(created, command);
+                            () -> invoke(created, request);
                     Supplier<ChatClientResponse> retried = () ->
                             retryTemplate != null
                                     ? retryTemplate.execute(
@@ -242,25 +280,27 @@ public class ChatExecutionService {
      */
     public Flux<ChatEvent> stream(ChatCommand command) {
         validateMode(command);
+        ChatCommand request = command.withExecutionBudget(
+                newBudget(command, true));
         return Flux.defer(() -> {
             ChatSessionCoordinator.LeaseHandle lease =
                     sessionCoordinator != null
-                            ? sessionCoordinator.acquire(command, true)
+                            ? sessionCoordinator.acquire(request, true)
                             : null;
             try {
-                List<Message> baseline = loadBaseline(command);
+                List<Message> baseline = loadBaseline(request);
                 List<ChatModelRouter.ChatModelCandidate> candidates =
-                        eligibleCandidates(command, true);
+                        eligibleCandidates(request, true);
                 return streamCandidates(
-                        command, baseline, candidates, 0, lease)
+                        request, baseline, candidates, 0, lease)
                         .doFinally(signal -> {
-                            persistDiagnostics(command);
+                            persistDiagnostics(request);
                             if (sessionCoordinator != null) {
                                 sessionCoordinator.release(lease);
                             }
                         });
             } catch (RuntimeException e) {
-                persistDiagnostics(command);
+                persistDiagnostics(request);
                 if (sessionCoordinator != null) {
                     sessionCoordinator.release(lease);
                 }
@@ -304,6 +344,11 @@ public class ChatExecutionService {
             List<Message> baseline,
             ChatModelRouter.ChatModelCandidate candidate,
             ChatSessionCoordinator.LeaseHandle lease) {
+        if (!command.executionBudget().tryReserveCandidateAttempt()) {
+            return Flux.error(new RagException(
+                    ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                    "Chat candidate-attempt budget exhausted"));
+        }
         ModeAwareChatClientFactory.Attempt attempt =
                 clientFactory.create(command, candidate, baseline);
         AtomicReference<ChatClientResponse> aggregated =
@@ -445,7 +490,8 @@ public class ChatExecutionService {
                 attempt.retrievalContext()));
         applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
-            applyAgentTools(spec, attempt.retrievalContext());
+            applyAgentTools(
+                    spec, command, attempt.candidate(), attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
@@ -464,7 +510,8 @@ public class ChatExecutionService {
                 attempt.retrievalContext()));
         applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
-            applyAgentTools(spec, attempt.retrievalContext());
+            applyAgentTools(
+                    spec, command, attempt.candidate(), attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
@@ -493,8 +540,13 @@ public class ChatExecutionService {
 
     private void applyAgentTools(
             ChatClient.ChatClientRequestSpec spec,
+            ChatCommand command,
+            ChatModelRouter.ChatModelCandidate candidate,
             AuthorizedRetrievalContext retrievalContext) {
-        if (jsonRecordSearchTool != null
+        if (toolRegistry != null) {
+            spec.toolCallbacks(toolRegistry.callbacks(
+                    command.mode(), command.domainId()));
+        } else if (jsonRecordSearchTool != null
                 && jsonRecordSearchTool.isEnabled()) {
             spec.toolCallbacks(
                     knowledgeSearchTool,
@@ -502,9 +554,19 @@ public class ChatExecutionService {
         } else {
             spec.toolCallbacks(knowledgeSearchTool);
         }
-        spec.toolContext(Map.of(
-                KnowledgeSearchTool.CONTEXT_KEY,
-                retrievalContext));
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put(KnowledgeSearchTool.CONTEXT_KEY, retrievalContext);
+        if (retrievalContext.executionBudget() != null) {
+            context.put(
+                    ChatExecutionBudget.CONTEXT_KEY,
+                    retrievalContext.executionBudget());
+        }
+        if (toolRegistry != null) {
+            context.put(RagChatToolContextKeys.REQUEST,
+                    toolRegistry.requestContext(command, candidate)
+                            .get(RagChatToolContextKeys.REQUEST));
+        }
+        spec.toolContext(Map.copyOf(context));
     }
 
     private ChatExecutionResult toResult(
@@ -612,6 +674,10 @@ public class ChatExecutionService {
         putIfNotNull(metadata, "finishReason", result.finishReason());
         metadata.put("usage", result.usage());
         metadata.put("stepMetrics", result.stepMetrics());
+        if (command.executionBudget() != null) {
+            metadata.put("executionBudget",
+                    command.executionBudget().snapshot());
+        }
         return new ChatExecutionResult(
                 result.answer(),
                 result.sessionId(),
@@ -624,6 +690,25 @@ public class ChatExecutionService {
                 result.finishReason(),
                 result.stepMetrics(),
                 metadata);
+    }
+
+    private ChatExecutionBudget newBudget(
+            ChatCommand command,
+            boolean streaming) {
+        RagChatProperties.AgentProperties agent = ragProperties.getChat().getAgent();
+        RagChatProperties.ExecutionProperties execution =
+                ragProperties.getChat().getExecution();
+        int timeoutMs = streaming
+                ? ragProperties.getTimeout().getChatStreamMs()
+                : ragProperties.getTimeout().getChatAskMs();
+        return new ChatExecutionBudget(
+                java.time.Instant.now().plusMillis(Math.max(1_000, timeoutMs)),
+                execution.getMaxCandidateAttempts(),
+                execution.getMaxModelCalls(),
+                agent.getMaxToolRounds(),
+                agent.getMaxToolCalls(),
+                agent.getMaxToolCallsPerName(),
+                agent.getMaxToolResultCharactersTotal());
     }
 
     private void putIfNotNull(

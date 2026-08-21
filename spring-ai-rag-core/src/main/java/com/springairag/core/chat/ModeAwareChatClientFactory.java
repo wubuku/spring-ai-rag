@@ -99,8 +99,9 @@ public class ModeAwareChatClientFactory {
                 ? List.copyOf(customAdvisorProviders)
                 : List.of();
         this.toolCallingManager = toolCallingManager != null
-                ? toolCallingManager
-                : ToolCallingManager.builder().build();
+                ? new BudgetedToolCallingManager(toolCallingManager)
+                : new BudgetedToolCallingManager(
+                        ToolCallingManager.builder().build());
     }
 
     public Attempt create(
@@ -108,6 +109,11 @@ public class ModeAwareChatClientFactory {
             ChatModelRouter.ChatModelCandidate candidate,
             List<Message> baselineMessages) {
         RagChatProperties.AgentProperties agent = ragProperties.getChat().getAgent();
+        ChatExecutionBudget budget = command.executionBudget();
+        org.springframework.ai.chat.model.ChatModel executionModel =
+                budget != null
+                        ? new BudgetedChatModel(candidate.model(), budget)
+                        : candidate.model();
         RetrievalOptions options = command.mode() == ChatMode.AGENT
                 ? capAgentOptions(command.retrievalOptions(), agent)
                 : command.retrievalOptions();
@@ -130,7 +136,8 @@ public class ModeAwareChatClientFactory {
                         command.sessionId(),
                         command.principal(),
                         agent.getMaxToolResultCharacters(),
-                        command.retrievalFilters());
+                        command.retrievalFilters(),
+                        budget);
 
         List<Advisor> advisors = new ArrayList<>();
         advisors.addAll(customAdvisors(
@@ -149,7 +156,7 @@ public class ModeAwareChatClientFactory {
         }
 
         if (command.mode() == ChatMode.KNOWLEDGE) {
-            advisors.add(buildKnowledgeAdvisor(candidate));
+            advisors.add(buildKnowledgeAdvisor(candidate, budget));
         } else if (command.mode() == ChatMode.AGENT) {
             ensureToolOptions(candidate);
             advisors.add(new BudgetedToolCallAdvisor(
@@ -161,7 +168,7 @@ public class ModeAwareChatClientFactory {
                 AdvisorScope.MODEL_CALL,
                 MODEL_CALL_ADVISOR_ORDER));
 
-        ChatClient.Builder builder = ChatClient.builder(candidate.model())
+        ChatClient.Builder builder = ChatClient.builder(executionModel)
                 .defaultAdvisors(advisors);
         ChatOptions defaultOptions = candidate.model().getDefaultOptions();
         if (defaultOptions != null) {
@@ -175,18 +182,19 @@ public class ModeAwareChatClientFactory {
     }
 
     private RetrievalAugmentationAdvisor buildKnowledgeAdvisor(
-            ChatModelRouter.ChatModelCandidate candidate) {
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget) {
         RetrievalAugmentationAdvisor.Builder builder =
                 RetrievalAugmentationAdvisor.builder()
                         .documentRetriever(documentRetriever)
                         .documentPostProcessors(rerankPostProcessor)
                         .queryAugmenter(queryAugmenter)
                         .order(MODE_ORDER);
-        QueryTransformer transformer = buildQueryTransformer(candidate);
+        QueryTransformer transformer = buildQueryTransformer(candidate, budget);
         if (transformer != null) {
             builder.queryTransformers(transformer);
         }
-        MultiQueryExpander expander = buildQueryExpander(candidate);
+        MultiQueryExpander expander = buildQueryExpander(candidate, budget);
         if (expander != null) {
             builder.queryExpander(expander);
         }
@@ -194,13 +202,17 @@ public class ModeAwareChatClientFactory {
     }
 
     private QueryTransformer buildQueryTransformer(
-            ChatModelRouter.ChatModelCandidate candidate) {
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget) {
         RagChatProperties.KnowledgeProperties knowledge =
                 ragProperties.getChat().getKnowledge();
         if (!"spring-ai".equalsIgnoreCase(knowledge.getQueryTransformer())) {
             return null;
         }
-        ChatClient.Builder rawBuilder = ChatClient.builder(candidate.model());
+        ChatClient.Builder rawBuilder = ChatClient.builder(
+                budget != null
+                        ? new BudgetedChatModel(candidate.model(), budget)
+                        : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
             rawBuilder.defaultOptions(options.copy());
@@ -216,13 +228,17 @@ public class ModeAwareChatClientFactory {
     }
 
     private MultiQueryExpander buildQueryExpander(
-            ChatModelRouter.ChatModelCandidate candidate) {
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget) {
         RagChatProperties.KnowledgeProperties knowledge =
                 ragProperties.getChat().getKnowledge();
         if (!"spring-ai".equalsIgnoreCase(knowledge.getQueryTransformer())) {
             return null;
         }
-        ChatClient.Builder rawBuilder = ChatClient.builder(candidate.model());
+        ChatClient.Builder rawBuilder = ChatClient.builder(
+                budget != null
+                        ? new BudgetedChatModel(candidate.model(), budget)
+                        : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
             rawBuilder.defaultOptions(options.copy());

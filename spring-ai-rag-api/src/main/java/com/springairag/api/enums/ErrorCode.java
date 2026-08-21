@@ -84,6 +84,8 @@ public enum ErrorCode {
     // ==================== 422 Unprocessable Entity ====================
 
     UNPROCESSABLE_ENTITY(422, "Unprocessable Entity"),
+    CHAT_BUDGET_EXHAUSTED(422, "Chat Execution Budget Exhausted"),
+    CHAT_CONTEXT_BUDGET_EXCEEDED(422, "Chat Context Budget Exceeded"),
 
     // ==================== 429 Too Many Requests ====================
 
