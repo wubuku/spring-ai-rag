@@ -125,6 +125,9 @@ RagChatController
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
 KNOWLEDGE 与 AGENT 工具共享。
 
+会话窗口、查询压缩与长期摘要的区别，以及工具循环预算和非文档工具扩展边界，见
+[Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md)。
+
 旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍可作为组件级/
 兼容 API 使用，但不是生产 mode-aware Chat 的执行链。
 
