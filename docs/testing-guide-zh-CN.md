@@ -82,6 +82,12 @@ BASE_URL=http://127.0.0.1:18081 \
 
 Docker 默认先用中国境内镜像并自动回退官方源；详见 [中国境内开发网络避坑指南](china-network-guide-zh-CN.md)。外部服务失败必须保留为失败或明确跳过，不能伪造发布通过。
 
+用户允许真实 LLM 验收时，先完成相关 Mock 单元/集成测试和 Mock Playwright，再运行真实
+smoke；不要用高延迟真实调用代替基本执行路径覆盖。运行期间另开日志观察窗口或周期性读取服务
+日志，尽早识别认证、模型名、限流、超时和响应协议错误。非 `main` worktree 使用与其他开发栈
+隔离的 `BACKEND_PORT`、`FRONTEND_PORT` 和可处置测试数据库；联合启动优先使用会加载 `.env`
+的 `scripts/dev.sh`。
+
 ## 测试分类
 
 ### 单元测试（JUnit 5 + Mockito）

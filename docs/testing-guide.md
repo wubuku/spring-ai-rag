@@ -82,6 +82,14 @@ BASE_URL=http://127.0.0.1:18081 \
 
 Docker uses a mainland-China mirror first and falls back to official sources. See the [mainland China network guide](china-network-guide.md). External-service failures must remain failed or explicitly skipped; they must not be reported as a release pass.
 
+When the user permits real LLM acceptance, first pass the related Mock unit and
+integration tests plus Mock Playwright, then run the real smoke. Do not use
+high-latency real calls as a substitute for basic path coverage. Watch or poll
+service logs during the run so authentication, model-name, rate-limit, timeout,
+and response-protocol errors are detected early. A non-`main` worktree uses
+isolated `BACKEND_PORT` and `FRONTEND_PORT` values plus a disposable test
+database; prefer `scripts/dev.sh`, which loads `.env`, for the joint stack.
+
 ## Test Categories
 
 ### Unit Tests (JUnit 5 + Mockito)
