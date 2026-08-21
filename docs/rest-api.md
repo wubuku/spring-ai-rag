@@ -1714,7 +1714,8 @@ Associate one existing document with:
 
 ```json
 {
-  "documentId": 1
+  "documentId": 1,
+  "expectedDocumentRevision": 3
 }
 ```
 
@@ -1727,7 +1728,9 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 Because `rag_documents.collection_id` is single-valued, this operation
 reassociates or moves an ordinary document that already belongs to another
 Collection, without re-embedding it. The caller must be allowed to access both
-the source document and target Collection. Externally managed documents with a
+the source document and target Collection. `expectedDocumentRevision` is
+required and must match the document's current public revision; stale writers
+receive `409`. Externally managed documents with a
 nonblank `externalId` return `409`; keep synchronizing those documents by their
 stable `collectionKey + sourceNamespace + externalId` identity instead of moving them through
 this compatibility association route.

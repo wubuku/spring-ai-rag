@@ -1487,7 +1487,8 @@ GET /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual%
 
 ```json
 {
-  "documentId": 1
+  "documentId": 1,
+  "expectedDocumentRevision": 3
 }
 ```
 
@@ -1499,7 +1500,8 @@ POST /api/v1/rag/collections/by-key/documents?collectionKey=customer-42%3Amanual
 
 `rag_documents.collection_id` 是单值外键，因此该操作对已经属于其他 Collection 的普通
 文档表现为重关联/迁移，不需要重新嵌入。调用方必须同时有原文档和目标 Collection 的访问
-权。`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
+权。`expectedDocumentRevision` 必填且必须等于文档当前公开 revision；过期写入返回 `409`。
+`externalId` 非空的外部托管文档会返回 `409`；此类文档必须继续通过稳定的
 `collectionKey + sourceNamespace + externalId` 同步，不能用兼容关联接口改变身份命名空间。
 
 ---
