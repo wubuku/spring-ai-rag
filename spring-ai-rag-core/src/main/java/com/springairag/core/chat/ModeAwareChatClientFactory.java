@@ -144,7 +144,6 @@ public class ModeAwareChatClientFactory {
                     command.memoryConversationId(),
                     baselineMessages);
             advisors.add(MessageChatMemoryAdvisor.builder(memory)
-                    .conversationId(command.memoryConversationId())
                     .order(MEMORY_ORDER)
                     .build());
         }

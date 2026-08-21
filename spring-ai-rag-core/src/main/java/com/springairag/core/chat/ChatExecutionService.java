@@ -35,6 +35,7 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.metadata.Usage;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
@@ -442,6 +443,7 @@ public class ChatExecutionService {
         spec.advisors(advisor -> advisor.param(
                 ProjectDocumentRetriever.CONTEXT_KEY,
                 attempt.retrievalContext()));
+        applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
             applyAgentTools(spec, attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
@@ -460,6 +462,7 @@ public class ChatExecutionService {
         spec.advisors(advisor -> advisor.param(
                 ProjectDocumentRetriever.CONTEXT_KEY,
                 attempt.retrievalContext()));
+        applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
             applyAgentTools(spec, attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
@@ -475,6 +478,17 @@ public class ChatExecutionService {
             throw new IllegalStateException("LLM returned no usable chat response");
         }
         return response;
+    }
+
+    private void applyMemoryConversation(
+            ChatClient.ChatClientRequestSpec spec,
+            ChatCommand command) {
+        if (command.memoryMode() != MemoryMode.SERVER) {
+            return;
+        }
+        spec.advisors(advisor -> advisor.param(
+                ChatMemory.CONVERSATION_ID,
+                command.memoryConversationId()));
     }
 
     private void applyAgentTools(

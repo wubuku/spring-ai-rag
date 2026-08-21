@@ -297,6 +297,20 @@
   `e2e/chat.spec.ts` 与 `e2e/streaming-upload.spec.ts`：11 项全部通过。
 - 本次补测只验证 Mock 前端行为；没有把它当作真实后端或真实 LLM 联调证据。
 
+### 2026-08-21：Phase 0 依赖与 Memory advisor 兼容改造
+
+- 根工程与四个独立 demo 一起升级到 Spring Boot `3.5.16`、Spring AI `1.1.8`。
+- 适配 Spring AI `1.1.8` 移除的
+  `MessageChatMemoryAdvisor.Builder.conversationId(...)` API：
+  conversation ID 改为在每次非流式/流式 Chat 请求的 advisor 参数中显式注入
+  `ChatMemory.CONVERSATION_ID`。
+- 保留服务端派生的 principal/session 命名空间，不接受客户端提供的 Memory key。
+- 新增服务层 characterization 测试，直接捕获 advisor 参数验证 `SERVER` Memory 的隔离 key。
+- `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`：通过。
+- 相关测试
+  `ChatExecutionServiceTest`、`ModeAwareChatClientFactoryTest`、
+  `ChatMemoryMultiTurnTest`：31 项全部通过。
+
 ## 5. 下一步恢复入口
 
 1. 记录 Java/Maven/npm 版本与当前 Phase 0 基线。

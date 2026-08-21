@@ -21,6 +21,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -33,6 +34,7 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -52,6 +54,7 @@ import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -221,6 +224,39 @@ class ChatExecutionServiceTest {
                 messages.getValue().getLast().getText());
         verify(historyRepository, never()).findBySessionId(
                 anyString(), any(Integer.class));
+    }
+
+    @Test
+    void serverMemoryConversationIdIsInjectedIntoEveryAdvisorRequest() {
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        ClientFixture client = clientFixture("answer", Map.of());
+        Map<String, Object> advisorParams = new HashMap<>();
+        when(client.spec().advisors(any(Consumer.class))).thenAnswer(invocation -> {
+            Consumer<ChatClient.AdvisorSpec> consumer = invocation.getArgument(0);
+            ChatClient.AdvisorSpec advisorSpec = mock(ChatClient.AdvisorSpec.class);
+            doAnswer(paramInvocation -> {
+                advisorParams.put(
+                        paramInvocation.getArgument(0),
+                        paramInvocation.getArgument(1));
+                return advisorSpec;
+            }).when(advisorSpec).param(anyString(), any());
+            consumer.accept(advisorSpec);
+            return client.spec();
+        });
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, null));
+
+        ChatCommand command = command(ChatMode.PLAIN, null);
+        service.execute(command);
+
+        assertEquals(
+                command.memoryConversationId(),
+                advisorParams.get(ChatMemory.CONVERSATION_ID));
     }
 
     @Test
