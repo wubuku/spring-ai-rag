@@ -270,6 +270,22 @@
 - 已无损带入规划提交 `ec195188`；规划正文未改写。
 - 下一项工作是记录版本与现有 Chat 门禁基线，然后只处理依赖升级带来的兼容性问题。
 
+### 2026-08-21：Phase 0 修改前基线
+
+- `./scripts/verify-chat-capability.sh` 已执行，基线日志目录为
+  `.verification/chat-capability/20260822-014601/`。
+- focused Chat 后端测试：`202` 项通过。
+- `mvn clean compile test-compile`：通过。
+- 完整 Maven 测试：`2847` 项通过、`7` 项既有跳过。
+- 独立后端启动 smoke：通过，PostgreSQL/pgvector/Actuator readiness 均为 `UP`。
+- PostgreSQL Chat 集成门禁：发现基线测试
+  `fullMigrationThroughV39PreservesChatContractsAndRejectsInvalidNewRows` 仍期待版本
+  `39`，而当前仓库迁移已到 `V45`；这是基线测试陈旧，不是本轮实现引入的失败，后续
+  V46 集成矩阵会一并改为验证 V1–V46。
+- WebUI Vitest、生产构建和 Mock Playwright 未执行成功：该 worktree 尚未安装
+  `spring-ai-rag-webui/node_modules`，因此 `vitest`、`tsc` 和 Vite preview 不可用；
+  后续先安装锁定依赖，再重新取得前端基线。
+
 ## 5. 下一步恢复入口
 
 1. 记录 Java/Maven/npm 版本与 Phase 0 修改前 Chat 门禁基线。
