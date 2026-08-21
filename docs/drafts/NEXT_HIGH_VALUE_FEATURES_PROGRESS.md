@@ -286,8 +286,19 @@
   `spring-ai-rag-webui/node_modules`，因此 `vitest`、`tsc` 和 Vite preview 不可用；
   后续先安装锁定依赖，再重新取得前端基线。
 
+### 2026-08-21：Phase 0 前端基线补测
+
+- 在 `spring-ai-rag-webui/` 执行 `npm ci`，按 `package-lock.json` 安装 351 个依赖包。
+- `npm run typecheck`：通过。
+- `npm run build`：通过，Vite production bundle 正常生成。
+- `npm run test:run`：29 个测试文件、214 个测试全部通过。
+- 使用隔离 Vite preview 端口 `4198`，以
+  `BASE_URL=http://127.0.0.1:4198` 执行
+  `e2e/chat.spec.ts` 与 `e2e/streaming-upload.spec.ts`：11 项全部通过。
+- 本次补测只验证 Mock 前端行为；没有把它当作真实后端或真实 LLM 联调证据。
+
 ## 5. 下一步恢复入口
 
-1. 记录 Java/Maven/npm 版本与 Phase 0 修改前 Chat 门禁基线。
+1. 记录 Java/Maven/npm 版本与当前 Phase 0 基线。
 2. 依规划升级 Boot/Spring AI，并先完成 1.1.8 Memory advisor API 兼容迁移。
 3. 迁移后重跑 characterization 与完整 Chat 门禁，再进入 Phase 1。
