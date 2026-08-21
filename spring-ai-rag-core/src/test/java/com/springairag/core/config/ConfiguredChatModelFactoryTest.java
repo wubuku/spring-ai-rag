@@ -88,6 +88,44 @@ class ConfiguredChatModelFactoryTest {
     }
 
     @Test
+    void nonPositiveContextWindow_isNotAvailable() {
+        MultiModelProperties properties = properties(
+                "openrouter",
+                provider("https://openrouter.ai/api", "test-key",
+                        "openai-chat", true,
+                        new MultiModelProperties.ModelItem(
+                                "model-a", "model-a", "chat", false,
+                                List.of("text"), null, 0, 1024, null)));
+        ConfiguredChatModelFactory factory =
+                new ConfiguredChatModelFactory(properties, new MockEnvironment());
+
+        assertNull(factory.resolve("openrouter/model-a"));
+        assertEquals("invalid model contextWindow",
+                factory.getUnavailableReason("openrouter/model-a"));
+        assertFalse(factory.listChatModels().getFirst().available());
+    }
+
+    @Test
+    void missingContextLimit_isAvailableButMarkedEstimated() {
+        MultiModelProperties properties = properties(
+                "openrouter",
+                provider("https://openrouter.ai/api", "test-key",
+                        "openai-chat", true,
+                        new MultiModelProperties.ModelItem(
+                                "model-a", "model-a", "chat", false,
+                                List.of("text"), null, null, 1024, null)));
+        ConfiguredChatModelFactory factory =
+                new ConfiguredChatModelFactory(properties, new MockEnvironment());
+
+        ConfiguredChatModelFactory.ModelDescriptor descriptor =
+                factory.listChatModels().getFirst();
+        assertTrue(descriptor.available());
+        assertTrue(descriptor.estimatedModelLimits());
+        assertTrue(Boolean.TRUE.equals(
+                descriptor.toMap().get("estimatedModelLimits")));
+    }
+
+    @Test
     void trailingV1_isRemovedFromCompatibleBaseUrl() {
         assertEquals("https://openrouter.ai/api",
                 ConfiguredChatModelFactory.normalizeBaseUrl(

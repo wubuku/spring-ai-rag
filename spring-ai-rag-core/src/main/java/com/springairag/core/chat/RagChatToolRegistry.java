@@ -25,12 +25,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Immutable startup-validated registry for server-owned AGENT tools.
@@ -110,6 +108,15 @@ public final class RagChatToolRegistry {
             context.put(ChatExecutionBudget.CONTEXT_KEY,
                     command.executionBudget());
         }
+        Map<String, Integer> limits = tools.stream()
+                .filter(tool -> supports(tool.provider(), command.mode(),
+                        command.domainId()))
+                .collect(java.util.stream.Collectors.toUnmodifiableMap(
+                        tool -> tool.callback().getToolDefinition().name(),
+                        tool -> tool.policy().maxResultCharacters()));
+        context.put(
+                ChatExecutionBudget.TOOL_RESULT_CHARACTER_LIMITS_CONTEXT_KEY,
+                limits);
         return Map.copyOf(context);
     }
 
@@ -161,12 +168,13 @@ public final class RagChatToolRegistry {
                             "Null policy for chat tool: " + name);
                 }
                 if (policy == null) {
-                    policy = RagChatToolPolicy.defaults();
+                    policy = defaultPolicy();
                 }
                 validatePolicy(name, policy);
                 result.add(new RegisteredTool(
                         provider,
-                        new PolicyToolCallback(callback, policy, executor)));
+                        new PolicyToolCallback(callback, policy, executor),
+                        policy));
             }
             for (String key : policies.keySet()) {
                 if (key == null || key.isBlank()
@@ -177,6 +185,15 @@ public final class RagChatToolRegistry {
             }
         }
         return List.copyOf(result);
+    }
+
+    private RagChatToolPolicy defaultPolicy() {
+        RagChatProperties.AgentProperties agent = properties.getAgent();
+        return new RagChatToolPolicy(
+                RagChatToolPolicy.Effect.READ_ONLY,
+                Math.min(3, agent.getMaxToolCallsPerName()),
+                Math.min(24_000, agent.getMaxToolResultCharacters()),
+                Duration.ofSeconds(30));
     }
 
     private void validatePolicy(String name, RagChatToolPolicy policy) {
@@ -243,7 +260,8 @@ public final class RagChatToolRegistry {
 
     private record RegisteredTool(
             RagChatToolProvider provider,
-            ToolCallback callback) {
+            ToolCallback callback,
+            RagChatToolPolicy policy) {
     }
 
     private static final class BuiltinProvider implements RagChatToolProvider {
@@ -270,8 +288,6 @@ public final class RagChatToolRegistry {
         private final ToolCallback delegate;
         private final RagChatToolPolicy policy;
         private final ThreadPoolExecutor executor;
-        private final Map<ChatExecutionBudget, AtomicInteger> calls =
-                new ConcurrentHashMap<>();
 
         private PolicyToolCallback(
                 ToolCallback delegate,
@@ -312,9 +328,10 @@ public final class RagChatToolRegistry {
                             instanceof ChatExecutionBudget found
                             ? found
                             : null;
-            if (budget != null && calls
-                    .computeIfAbsent(budget, ignored -> new AtomicInteger())
-                    .incrementAndGet() > policy.maxCallsPerRequest()) {
+            if (budget != null
+                    && !budget.tryReservePolicyToolCall(
+                            delegate.getToolDefinition().name(),
+                            policy.maxCallsPerRequest())) {
                 return "{\"error\":\"tool_call_policy_exhausted\"}";
             }
             Future<String> future;
@@ -325,9 +342,21 @@ public final class RagChatToolRegistry {
                 return "{\"error\":\"tool_executor_saturated\"}";
             }
             try {
-                String value = future.get(
-                        Math.max(1, policy.timeout().toMillis()),
-                        TimeUnit.MILLISECONDS);
+                long timeoutMillis = Math.max(1, policy.timeout().toMillis());
+                Object requestValue = toolContext.getContext().get(
+                        RagChatToolContextKeys.REQUEST);
+                if (requestValue instanceof RagChatToolRequestContext request
+                        && request.deadline() != null) {
+                    long remaining = Duration.between(
+                            java.time.Instant.now(),
+                            request.deadline()).toMillis();
+                    if (remaining <= 0) {
+                        future.cancel(true);
+                        return "{\"error\":\"tool_timeout\"}";
+                    }
+                    timeoutMillis = Math.min(timeoutMillis, remaining);
+                }
+                String value = future.get(timeoutMillis, TimeUnit.MILLISECONDS);
                 if (value == null || value.length() <= policy.maxResultCharacters()) {
                     return value == null ? "" : value;
                 }

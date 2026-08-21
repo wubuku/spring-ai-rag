@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * 逻辑 Chat 请求共享的有界执行预算。
@@ -22,6 +23,8 @@ public final class ChatExecutionBudget {
 
     public static final String CONTEXT_KEY =
             "com.springairag.core.chat.execution-budget";
+    public static final String TOOL_RESULT_CHARACTER_LIMITS_CONTEXT_KEY =
+            "com.springairag.core.chat.tool-result-character-limits";
 
     private final Instant deadline;
     private final int maxCandidateAttempts;
@@ -34,10 +37,15 @@ public final class ChatExecutionBudget {
     private final AtomicInteger modelCalls = new AtomicInteger();
     private final AtomicInteger toolRounds = new AtomicInteger();
     private final AtomicInteger totalToolCalls = new AtomicInteger();
+    private final AtomicInteger summaryCalls = new AtomicInteger();
     private final AtomicLong toolResultCharacters = new AtomicLong();
     private final AtomicLong toolResultTokens = new AtomicLong();
     private final Map<String, AtomicInteger> toolCallsByName =
             new ConcurrentHashMap<>();
+    private final Map<String, AtomicInteger> policyToolCallsByName =
+            new ConcurrentHashMap<>();
+    private final AtomicReference<Map<String, Object>> contextPlan =
+            new AtomicReference<>(Map.of());
     private int reservedToolResultCharacters;
 
     public ChatExecutionBudget(
@@ -73,12 +81,29 @@ public final class ChatExecutionBudget {
         }
     }
 
+    public void recordSummaryCall() {
+        summaryCalls.incrementAndGet();
+    }
+
     /**
      * Atomically reserves one tool round and every call in the batch.
      */
     public synchronized void reserveToolBatch(
             List<String> toolNames,
             int maxResultCharactersPerCall) {
+        reserveToolBatch(toolNames, Map.of(), maxResultCharactersPerCall);
+    }
+
+    /**
+     * Atomically reserves one batch using the strictest available per-tool
+     * output reservation. Unknown tools use the supplied fallback cap.
+     *
+     * @return the exact character reservation that must later be settled
+     */
+    public synchronized int reserveToolBatch(
+            List<String> toolNames,
+            Map<String, Integer> resultCharacterLimits,
+            int fallbackMaxResultCharactersPerCall) {
         ensureDeadline();
         List<String> names = toolNames == null ? List.of() : toolNames;
         if (names.isEmpty() || names.size() > maxToolCalls) {
@@ -102,8 +127,22 @@ public final class ChatExecutionBudget {
             }
             additions.put(name, next);
         }
-        int reservation = Math.multiplyExact(
-                names.size(), Math.max(1, maxResultCharactersPerCall));
+        long reservationLong = 0;
+        for (String rawName : names) {
+            String name = rawName == null || rawName.isBlank()
+                    ? "<unknown>"
+                    : rawName;
+            int limit = resultCharacterLimits != null
+                    ? resultCharacterLimits.getOrDefault(
+                            name, fallbackMaxResultCharactersPerCall)
+                    : fallbackMaxResultCharactersPerCall;
+            reservationLong = Math.addExact(
+                    reservationLong, Math.max(1, limit));
+        }
+        if (reservationLong > Integer.MAX_VALUE) {
+            throw exhausted("tool result character reservation overflow");
+        }
+        int reservation = (int) reservationLong;
         if (toolResultCharacters.get()
                         + reservedToolResultCharacters
                         + reservation
@@ -117,6 +156,37 @@ public final class ChatExecutionBudget {
                         .computeIfAbsent(name, ignored -> new AtomicInteger())
                         .addAndGet(count));
         reservedToolResultCharacters += reservation;
+        return reservation;
+    }
+
+    /**
+     * Applies a stricter provider policy without retaining completed request
+     * budgets in a singleton registry.
+     */
+    public boolean tryReservePolicyToolCall(String toolName, int maximum) {
+        if (toolName == null || toolName.isBlank() || maximum < 1) {
+            return false;
+        }
+        ensureDeadline();
+        AtomicInteger counter = policyToolCallsByName
+                .computeIfAbsent(toolName, ignored -> new AtomicInteger());
+        while (true) {
+            int current = counter.get();
+            if (current >= maximum) {
+                return false;
+            }
+            if (counter.compareAndSet(current, current + 1)) {
+                return true;
+            }
+        }
+    }
+
+    public void recordContextPlan(Map<String, Object> plan) {
+        contextPlan.set(plan == null ? Map.of() : Map.copyOf(plan));
+    }
+
+    public Map<String, Object> contextPlan() {
+        return contextPlan.get();
     }
 
     /**
@@ -154,12 +224,20 @@ public final class ChatExecutionBudget {
         return modelCalls.get();
     }
 
+    public boolean hasModelCallCapacity() {
+        return !isExpired() && modelCalls.get() < maxModelCalls;
+    }
+
     public int toolRounds() {
         return toolRounds.get();
     }
 
     public int totalToolCalls() {
         return totalToolCalls.get();
+    }
+
+    public int summaryCalls() {
+        return summaryCalls.get();
     }
 
     public long toolResultCharacters() {
@@ -178,14 +256,17 @@ public final class ChatExecutionBudget {
     }
 
     public Map<String, Object> snapshot() {
-        return Map.of(
-                "candidateAttempts", candidateAttempts(),
-                "modelCalls", modelCalls(),
-                "toolRounds", toolRounds(),
-                "toolCalls", totalToolCalls(),
-                "toolCallsByName", toolCallsByName(),
-                "toolResultCharacters", toolResultCharacters(),
-                "toolResultTokens", toolResultTokens());
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("candidateAttempts", candidateAttempts());
+        result.put("modelCalls", modelCalls());
+        result.put("toolRounds", toolRounds());
+        result.put("toolCalls", totalToolCalls());
+        result.put("summaryCalls", summaryCalls());
+        result.put("toolCallsByName", toolCallsByName());
+        result.put("toolResultCharacters", toolResultCharacters());
+        result.put("toolResultTokens", toolResultTokens());
+        result.put("contextBudget", contextPlan());
+        return Map.copyOf(result);
     }
 
     private void ensureDeadline() {

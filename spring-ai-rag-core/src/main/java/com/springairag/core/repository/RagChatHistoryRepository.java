@@ -148,11 +148,41 @@ public class RagChatHistoryRepository {
             int limit) {
         Objects.requireNonNull(principal, "principal must not be null");
         Objects.requireNonNull(sessionId, "sessionId must not be null");
-        List<RagChatHistory> all = jpaRepository.findOwnedBySessionAsc(
-                principal.id(), sessionId);
         int safeLimit = Math.min(Math.max(limit, 1), 500);
-        int from = Math.max(0, all.size() - safeLimit);
-        return all.subList(from, all.size()).stream()
+        List<RagChatHistory> newestFirst =
+                jpaRepository.findOwnedBySessionNewestFirst(
+                        principal.id(),
+                        sessionId,
+                        PageRequest.of(0, safeLimit));
+        List<RagChatHistory> chronological = new java.util.ArrayList<>(
+                newestFirst);
+        java.util.Collections.reverse(chronological);
+        return chronological.stream()
+                .map(this::toDto)
+                .toList();
+    }
+
+    /**
+     * Bounded oldest-first source rows for durable conversation compaction.
+     */
+    public List<ChatHistoryResponse> findOwnedAfterHistoryId(
+            ChatPrincipal principal,
+            String sessionId,
+            long afterHistoryId,
+            int limit) {
+        Objects.requireNonNull(principal, "principal must not be null");
+        Objects.requireNonNull(sessionId, "sessionId must not be null");
+        if (afterHistoryId < 0) {
+            throw new IllegalArgumentException(
+                    "afterHistoryId must not be negative");
+        }
+        int safeLimit = Math.min(Math.max(limit, 1), 500);
+        return jpaRepository.findOwnedAfterHistoryId(
+                        principal.id(),
+                        sessionId,
+                        afterHistoryId,
+                        PageRequest.of(0, safeLimit))
+                .stream()
                 .map(this::toDto)
                 .toList();
     }

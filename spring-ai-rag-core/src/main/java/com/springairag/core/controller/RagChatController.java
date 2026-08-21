@@ -274,9 +274,21 @@ public class RagChatController {
 
         try {
             Disposable disposable = ragChatService.chatEvents(request, scope, session)
-                    .subscribe(
-                            event -> sendChatEvent(
-                                    emitter, event, traceId, sessionId),
+                    .subscribe(event -> {
+                        if (terminal.get()) {
+                            return;
+                        }
+                        sendChatEvent(emitter, event, traceId, sessionId);
+                        if (event instanceof ChatEvent.Completed) {
+                            if (terminal.compareAndSet(false, true)) {
+                                heartbeat.stop();
+                                emitter.complete();
+                            }
+                        } else if (event instanceof ChatEvent.Failed) {
+                            terminal.compareAndSet(false, true);
+                            heartbeat.stop();
+                        }
+                    },
                             error -> {
                                 if (terminal.compareAndSet(false, true)) {
                                     heartbeat.stop();
@@ -348,6 +360,7 @@ public class RagChatController {
             payload.put("usage", completed.usage());
             payload.put("finishReason", completed.finishReason());
             payload.put("stepMetrics", completed.stepMetrics());
+            payload.put("metadata", completed.metadata());
             payload.put("status", "complete");
             if (completed.metadata() != null
                     && completed.metadata().get("retrievalTraceId") != null) {

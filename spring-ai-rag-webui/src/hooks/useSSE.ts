@@ -28,6 +28,7 @@ export interface ChatDoneEvent {
   mode?: ChatMode;
   usage?: Record<string, unknown>;
   finishReason?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ChatErrorEvent {

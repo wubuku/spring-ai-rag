@@ -394,6 +394,32 @@ rag:
       max-results-per-call: 10
       max-unique-sources: 20
       max-tool-result-characters: 24000
+      max-tool-calls: 6
+      max-tool-calls-per-name: 3
+      max-tool-result-characters-total: 48000
+      tool-executor-threads: 8
+      tool-executor-queue-capacity: 32
+    execution:
+      max-candidate-attempts: 3
+      max-model-calls: 8
+    context:
+      adaptive-planning-enabled: true
+      fallback-context-window: 32768
+      output-reserve-tokens: 4096
+      safety-margin-tokens: 1024
+      max-history-tokens: 12000
+      minimum-recent-turns: 2
+      max-summary-tokens: 2048
+      minimum-mode-evidence-tokens: 4096
+      max-rag-context-tokens: 16000
+      max-tool-schema-tokens: 4096
+      compaction-enabled: ${RAG_CHAT_COMPACTION_ENABLED:false}
+      compaction-trigger-tokens: ${RAG_CHAT_COMPACTION_TRIGGER_TOKENS:12000}
+      compaction-max-source-tokens: ${RAG_CHAT_COMPACTION_MAX_SOURCE_TOKENS:16000}
+      compaction-max-output-tokens: ${RAG_CHAT_COMPACTION_MAX_OUTPUT_TOKENS:1536}
+      compaction-max-turns-per-call: ${RAG_CHAT_COMPACTION_MAX_TURNS_PER_CALL:50}
+      compaction-timeout-ms: ${RAG_CHAT_COMPACTION_TIMEOUT_MS:30000}
+      compaction-model: ${RAG_CHAT_COMPACTION_MODEL:}
     history:
       lease-ttl-seconds: 30
       lease-renew-interval-seconds: 10

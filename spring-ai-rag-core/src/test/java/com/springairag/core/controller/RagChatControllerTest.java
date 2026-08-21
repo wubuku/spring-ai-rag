@@ -23,10 +23,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter.SseEventBuilder;
 
 import reactor.core.publisher.Flux;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -491,6 +493,58 @@ class RagChatControllerTest {
         assertEquals("doc-chat-1", response.getBody().getSources().get(0).getDocumentId());
     }
 
+    @Test
+    void completedSseEventCarriesExecutionContextAndSummaryMetadata()
+            throws Exception {
+        RecordingEmitter emitter = new RecordingEmitter();
+        Map<String, Object> metadata = Map.of(
+                "execution", Map.of("modelCalls", 2),
+                "context", Map.of("summaryUsed", true),
+                "summary", Map.of("updated", true));
+
+        sendChatEvent(emitter, new ChatEvent.Completed(
+                "trace-1",
+                "session-1",
+                "requested/model",
+                "resolved/model",
+                ChatMode.AGENT,
+                Map.of("promptTokens", 12),
+                "STOP",
+                List.of(),
+                metadata));
+
+        Map<?, ?> payload = emitter.payloads.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .findFirst()
+                .orElseThrow();
+        assertEquals("complete", payload.get("status"));
+        assertEquals(metadata, payload.get("metadata"));
+        assertTrue(emitter.eventNames.contains("done"));
+    }
+
+    @Test
+    void failedSseEventCarriesTypedErrorWithoutDoneEvent()
+            throws Exception {
+        RecordingEmitter emitter = new RecordingEmitter();
+
+        sendChatEvent(emitter, new ChatEvent.Failed(
+                "trace-2",
+                "session-2",
+                ErrorCode.CHAT_BUDGET_EXHAUSTED.name(),
+                "model call budget exhausted"));
+
+        Map<?, ?> payload = emitter.payloads.stream()
+                .filter(Map.class::isInstance)
+                .map(Map.class::cast)
+                .findFirst()
+                .orElseThrow();
+        Map<?, ?> error = (Map<?, ?>) payload.get("error");
+        assertEquals(ErrorCode.CHAT_BUDGET_EXHAUSTED.name(), error.get("code"));
+        assertFalse(emitter.eventNames.contains("done"));
+        assertTrue(emitter.eventNames.contains("error"));
+    }
+
     // ==================== exportHistory ====================
 
     @Test
@@ -623,5 +677,38 @@ class RagChatControllerTest {
                 ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE,
                 keyId);
         return request;
+    }
+
+    private void sendChatEvent(
+            SseEmitter emitter,
+            ChatEvent event) throws Exception {
+        Method method = RagChatController.class.getDeclaredMethod(
+                "sendChatEvent",
+                SseEmitter.class,
+                ChatEvent.class,
+                String.class,
+                String.class);
+        method.setAccessible(true);
+        method.invoke(controller, emitter, event, "fallback-trace", "fallback-session");
+    }
+
+    private static final class RecordingEmitter extends SseEmitter {
+        private final List<Object> payloads = new java.util.ArrayList<>();
+        private final List<String> eventNames = new java.util.ArrayList<>();
+
+        @Override
+        public void send(SseEventBuilder builder) throws IOException {
+            for (var data : builder.build()) {
+                if (data.getData() instanceof String text) {
+                    for (String line : text.split("\\R")) {
+                        if (line.startsWith("event:")) {
+                            eventNames.add(line.substring("event:".length()).trim());
+                        }
+                    }
+                } else {
+                    payloads.add(data.getData());
+                }
+            }
+        }
     }
 }

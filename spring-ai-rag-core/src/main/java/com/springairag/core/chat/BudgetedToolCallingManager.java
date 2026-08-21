@@ -11,7 +11,11 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Adds request-level tool batch reservation around Spring AI's standard manager.
@@ -19,9 +23,18 @@ import java.util.List;
 public final class BudgetedToolCallingManager implements ToolCallingManager {
 
     private final ToolCallingManager delegate;
+    private final int fallbackMaxResultCharacters;
 
     public BudgetedToolCallingManager(ToolCallingManager delegate) {
+        this(delegate, 24_000);
+    }
+
+    public BudgetedToolCallingManager(
+            ToolCallingManager delegate,
+            int fallbackMaxResultCharacters) {
         this.delegate = delegate;
+        this.fallbackMaxResultCharacters = Math.max(
+                1, fallbackMaxResultCharacters);
     }
 
     @Override
@@ -47,35 +60,37 @@ public final class BudgetedToolCallingManager implements ToolCallingManager {
         if (budget == null) {
             return delegate.executeToolCalls(prompt, response);
         }
-        int maxResultCharacters = 24_000;
-        Object retrieval = toolContext(prompt)
-                .get(com.springairag.core.rag.KnowledgeSearchTool.CONTEXT_KEY);
-        if (retrieval instanceof AuthorizedRetrievalContext context) {
-            maxResultCharacters = context.maxToolResultCharacters();
+        Map<String, Integer> resultCharacterLimits = Map.of();
+        Object configuredLimits = toolContext(prompt).get(
+                ChatExecutionBudget.TOOL_RESULT_CHARACTER_LIMITS_CONTEXT_KEY);
+        if (configuredLimits instanceof Map<?, ?> rawLimits) {
+            Map<String, Integer> parsedLimits = new java.util.LinkedHashMap<>();
+            rawLimits.forEach((key, value) -> {
+                if (key instanceof String name && value instanceof Number number) {
+                    parsedLimits.put(name, number.intValue());
+                }
+            });
+            resultCharacterLimits = Map.copyOf(parsedLimits);
         }
-        int reserved = Math.multiplyExact(calls.size(), maxResultCharacters);
-        budget.reserveToolBatch(
+        int reserved = budget.reserveToolBatch(
                 calls.stream().map(AssistantMessage.ToolCall::name).toList(),
-                maxResultCharacters);
+                resultCharacterLimits,
+                fallbackMaxResultCharacters);
         try {
             ToolExecutionResult result = delegate.executeToolCalls(prompt, response);
-            int actualCharacters = 0;
-            int actualTokens = 0;
-            for (Message message : result.conversationHistory()) {
-                if (message instanceof ToolResponseMessage toolResponse) {
-                    for (ToolResponseMessage.ToolResponse item
-                            : toolResponse.getResponses()) {
-                        String value = item.responseData() != null
-                                ? item.responseData()
-                                : "";
-                        actualCharacters += value.length();
-                        actualTokens += estimateTokens(value);
-                    }
-                }
-            }
+            Set<String> currentCallIds = calls.stream()
+                    .map(AssistantMessage.ToolCall::id)
+                    .filter(java.util.Objects::nonNull)
+                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
+            int tokenBudget = toolResultTokenBudget(budget);
+            SanitizedResult sanitized = sanitize(
+                    result,
+                    currentCallIds,
+                    resultCharacterLimits,
+                    tokenBudget);
             budget.settleToolResults(
-                    actualCharacters, actualTokens, reserved);
-            return result;
+                    sanitized.characters(), sanitized.tokens(), reserved);
+            return sanitized.result();
         } catch (RuntimeException e) {
             budget.releaseToolReservation(reserved);
             throw e;
@@ -96,10 +111,79 @@ public final class BudgetedToolCallingManager implements ToolCallingManager {
         return java.util.Map.of();
     }
 
+    private int toolResultTokenBudget(ChatExecutionBudget budget) {
+        Object value = budget.contextPlan().get("toolResultTokens");
+        if (value instanceof Number number && number.intValue() > 0) {
+            return number.intValue();
+        }
+        return Integer.MAX_VALUE;
+    }
+
+    private SanitizedResult sanitize(
+            ToolExecutionResult result,
+            Set<String> currentCallIds,
+            Map<String, Integer> resultCharacterLimits,
+            int tokenBudget) {
+        if (result == null || result.conversationHistory() == null) {
+            return new SanitizedResult(result, 0, 0);
+        }
+        int characters = 0;
+        int tokens = 0;
+        List<Message> messages = new ArrayList<>();
+        for (Message message : result.conversationHistory()) {
+            if (!(message instanceof ToolResponseMessage toolResponse)) {
+                messages.add(message);
+                continue;
+            }
+            List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
+            for (ToolResponseMessage.ToolResponse item
+                    : toolResponse.getResponses()) {
+                if (item == null || item.id() == null
+                        || !currentCallIds.contains(item.id())) {
+                    responses.add(item);
+                    continue;
+                }
+                String value = item.responseData() == null
+                        ? ""
+                        : item.responseData();
+                int limit = resultCharacterLimits.getOrDefault(
+                        item.name(), fallbackMaxResultCharacters);
+                int itemTokens = estimateTokens(value);
+                boolean tooLarge = value.length() > limit
+                        || tokens + itemTokens > tokenBudget;
+                String normalized = tooLarge
+                        ? "{\"error\":\"tool_result_too_large\"}"
+                        : value;
+                int normalizedTokens = estimateTokens(normalized);
+                responses.add(new ToolResponseMessage.ToolResponse(
+                        item.id(), item.name(), normalized));
+                characters += normalized.length();
+                tokens += normalizedTokens;
+            }
+            messages.add(ToolResponseMessage.builder()
+                    .responses(responses)
+                    .metadata(toolResponse.getMetadata())
+                    .build());
+        }
+        return new SanitizedResult(
+                ToolExecutionResult.builder()
+                        .conversationHistory(messages)
+                        .returnDirect(result.returnDirect())
+                        .build(),
+                characters,
+                tokens);
+    }
+
     private int estimateTokens(String value) {
         if (value == null || value.isEmpty()) {
             return 0;
         }
         return Math.max(1, (value.codePointCount(0, value.length()) + 1) / 2);
+    }
+
+    private record SanitizedResult(
+            ToolExecutionResult result,
+            int characters,
+            int tokens) {
     }
 }

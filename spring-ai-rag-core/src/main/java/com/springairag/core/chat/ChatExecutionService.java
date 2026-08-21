@@ -12,7 +12,6 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.api.dto.CitationValidation;
-import com.springairag.api.service.RagChatToolContextKeys;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.evaluation.CitationValidator;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
@@ -40,6 +39,7 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Service;
@@ -80,6 +80,8 @@ public class ChatExecutionService {
     private final RetryTemplate retryTemplate;
     private final ChatSessionCoordinator sessionCoordinator;
     private final RagChatToolRegistry toolRegistry;
+    private final ConversationPromptPlanner promptPlanner;
+    private ConversationSummaryService summaryService;
     private RetrievalDiagnosticsService diagnosticsService;
     private CitationValidator citationValidator;
 
@@ -144,7 +146,6 @@ public class ChatExecutionService {
             RagMetricsService metricsService,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RetryTemplate retryTemplate,
-            @org.springframework.beans.factory.annotation.Autowired(required = false)
             ChatSessionCoordinator sessionCoordinator,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             RagChatToolRegistry toolRegistry) {
@@ -162,6 +163,9 @@ public class ChatExecutionService {
         this.retryTemplate = retryTemplate;
         this.sessionCoordinator = sessionCoordinator;
         this.toolRegistry = toolRegistry;
+        this.promptPlanner = new ConversationPromptPlanner(
+                ragProperties.getChat(),
+                new JTokkitPromptTokenEstimator());
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -174,6 +178,11 @@ public class ChatExecutionService {
         this.citationValidator = citationValidator;
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSummaryService(ConversationSummaryService summaryService) {
+        this.summaryService = summaryService;
+    }
+
     public ChatExecutionResult execute(ChatCommand command) {
         validateMode(command);
         command = command.withExecutionBudget(newBudget(command, false));
@@ -184,25 +193,48 @@ public class ChatExecutionService {
                         : null;
         try {
             List<Message> baseline = loadBaseline(command);
+            String selectedSummary = summaryText(command);
             List<ChatModelRouter.ChatModelCandidate> candidates =
                     eligibleCandidates(command, false);
             RuntimeException lastFailure = null;
 
             for (int index = 0; index < candidates.size(); index++) {
-                ChatModelRouter.ChatModelCandidate candidate = candidates.get(index);
-                if (!command.executionBudget().tryReserveCandidateAttempt()) {
-                    throw new RagException(
-                            ErrorCode.CHAT_BUDGET_EXHAUSTED,
-                            "Chat candidate-attempt budget exhausted");
-                }
+                final ChatModelRouter.ChatModelCandidate candidate =
+                        candidates.get(index);
                 long startedAt = System.currentTimeMillis();
-                ModeAwareChatClientFactory.Attempt attempt = null;
+                AtomicReference<ModeAwareChatClientFactory.Attempt> successfulAttempt =
+                        new AtomicReference<>();
                 try {
-                    ModeAwareChatClientFactory.Attempt created =
-                            clientFactory.create(command, candidate, baseline);
-                    attempt = created;
-                    Supplier<ChatClientResponse> invocation =
-                            () -> invoke(created, request);
+                    Supplier<ChatClientResponse> invocation = () -> {
+                        if (!request.executionBudget()
+                                .tryReserveCandidateAttempt()) {
+                            throw new RagException(
+                                    ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                                    "Chat candidate-attempt budget exhausted");
+                        }
+                        ConversationPromptPlan promptPlan = promptPlanner.plan(
+                                candidate,
+                                request,
+                                mandatoryPromptText(request),
+                                baseline,
+                                selectedSummary,
+                                toolCallbacks(request));
+                        request.executionBudget().recordContextPlan(
+                                promptPlan.snapshot());
+                        ModeAwareChatClientFactory.Attempt created =
+                                clientFactory.create(
+                                        request,
+                                        candidate,
+                                        plannedMessages(promptPlan));
+                        try {
+                            ChatClientResponse response = invoke(created, request);
+                            successfulAttempt.set(created);
+                            return response;
+                        } catch (RuntimeException e) {
+                            markAttempt(request, created, false);
+                            throw e;
+                        }
+                    };
                     Supplier<ChatClientResponse> retried = () ->
                             retryTemplate != null
                                     ? retryTemplate.execute(
@@ -212,6 +244,12 @@ public class ChatExecutionService {
                             ? sessionCoordinator.invokeWithinDeadline(
                                     lease, retried)
                             : retried.get();
+                    ModeAwareChatClientFactory.Attempt attempt =
+                            successfulAttempt.get();
+                    if (attempt == null) {
+                        throw new IllegalStateException(
+                                "Chat retry completed without a successful attempt");
+                    }
                     ChatExecutionResult result =
                             toResult(command, attempt, response);
                     ChatExecutionResult committedResult =
@@ -231,6 +269,12 @@ public class ChatExecutionService {
                     } else {
                         persist(command, committedResult);
                     }
+                    ConversationSummaryService.CompactionResult compaction =
+                            compactSummary(
+                                    command, candidate, attempt, baseline,
+                                    committedResult.answer());
+                    committedResult = withSummaryMetadata(
+                            committedResult, compaction);
                     if (metricsService != null) {
                         metricsService.recordSuccess(
                                 System.currentTimeMillis() - startedAt,
@@ -243,10 +287,10 @@ public class ChatExecutionService {
                     }
                     return committedResult;
                 } catch (RagException e) {
-                    markAttempt(command, attempt, false);
+                    markAttempt(command, successfulAttempt.get(), false);
                     throw e;
                 } catch (RuntimeException e) {
-                    markAttempt(command, attempt, false);
+                    markAttempt(command, successfulAttempt.get(), false);
                     lastFailure = e;
                     if (metricsService != null) {
                         metricsService.recordFailure(
@@ -289,10 +333,11 @@ public class ChatExecutionService {
                             : null;
             try {
                 List<Message> baseline = loadBaseline(request);
+                String selectedSummary = summaryText(request);
                 List<ChatModelRouter.ChatModelCandidate> candidates =
                         eligibleCandidates(request, true);
                 return streamCandidates(
-                        request, baseline, candidates, 0, lease)
+                        request, baseline, selectedSummary, candidates, 0, lease)
                         .doFinally(signal -> {
                             persistDiagnostics(request);
                             if (sessionCoordinator != null) {
@@ -312,12 +357,13 @@ public class ChatExecutionService {
     private Flux<ChatEvent> streamCandidates(
             ChatCommand command,
             List<Message> baseline,
+            String selectedSummary,
             List<ChatModelRouter.ChatModelCandidate> candidates,
             int index,
             ChatSessionCoordinator.LeaseHandle lease) {
         ChatModelRouter.ChatModelCandidate candidate = candidates.get(index);
             Flux<ChatEvent> attempt = Flux.defer(() ->
-                streamCandidate(command, baseline, candidate, lease));
+                streamCandidate(command, baseline, selectedSummary, candidate, lease));
         return attempt.switchOnFirst((signal, flux) -> {
             boolean hasEvent = signal.hasValue();
             if (!hasEvent && signal.isOnError()
@@ -328,12 +374,13 @@ public class ChatExecutionService {
                                 ? signal.getThrowable().getMessage()
                                 : "unknown error");
                 return streamCandidates(
-                        command, baseline, candidates, index + 1, lease);
+                        command, baseline, selectedSummary,
+                        candidates, index + 1, lease);
             }
             if (!hasEvent && signal.isOnComplete()
                     && index + 1 < candidates.size()) {
                 return streamCandidates(
-                        command, baseline, candidates, index + 1, lease);
+                        command, baseline, selectedSummary, candidates, index + 1, lease);
             }
             return flux;
         });
@@ -342,6 +389,7 @@ public class ChatExecutionService {
     private Flux<ChatEvent> streamCandidate(
             ChatCommand command,
             List<Message> baseline,
+            String selectedSummary,
             ChatModelRouter.ChatModelCandidate candidate,
             ChatSessionCoordinator.LeaseHandle lease) {
         if (!command.executionBudget().tryReserveCandidateAttempt()) {
@@ -350,7 +398,11 @@ public class ChatExecutionService {
                     "Chat candidate-attempt budget exhausted"));
         }
         ModeAwareChatClientFactory.Attempt attempt =
-                clientFactory.create(command, candidate, baseline);
+                clientFactory.create(
+                        command,
+                        candidate,
+                        plannedBaseline(
+                                command, candidate, baseline, selectedSummary));
         AtomicReference<ChatClientResponse> aggregated =
                 new AtomicReference<>();
         AtomicReference<ChatClientResponse> lastResponse =
@@ -425,6 +477,11 @@ public class ChatExecutionService {
         } else {
             persist(command, result);
         }
+        result = withSummaryMetadata(
+                result,
+                compactSummary(
+                        command, attempt.candidate(), attempt, List.of(),
+                        result.answer()));
         List<ChatEvent> events = new ArrayList<>(
                 attempt.retrievalContext().trace().drainToolEvents());
         events.add(new ChatEvent.SourcesAvailable(
@@ -490,12 +547,12 @@ public class ChatExecutionService {
                 attempt.retrievalContext()));
         applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
-            applyAgentTools(
-                    spec, command, attempt.candidate(), attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
             }
+            applyAgentTools(
+                    spec, command, attempt.candidate(), attempt.retrievalContext());
         }
         return spec.stream().chatClientResponse();
     }
@@ -510,12 +567,12 @@ public class ChatExecutionService {
                 attempt.retrievalContext()));
         applyMemoryConversation(spec, command);
         if (command.mode() == ChatMode.AGENT) {
-            applyAgentTools(
-                    spec, command, attempt.candidate(), attempt.retrievalContext());
             if (attempt.candidate().model().getDefaultOptions()
                     instanceof ToolCallingChatOptions options) {
                 spec.options(options.copy());
             }
+            applyAgentTools(
+                    spec, command, attempt.candidate(), attempt.retrievalContext());
         }
         ChatClientResponse response = spec.call().chatClientResponse();
         if (response == null
@@ -562,11 +619,111 @@ public class ChatExecutionService {
                     retrievalContext.executionBudget());
         }
         if (toolRegistry != null) {
-            context.put(RagChatToolContextKeys.REQUEST,
-                    toolRegistry.requestContext(command, candidate)
-                            .get(RagChatToolContextKeys.REQUEST));
+            context.putAll(toolRegistry.requestContext(command, candidate));
         }
         spec.toolContext(Map.copyOf(context));
+    }
+
+    private List<Message> plannedBaseline(
+            ChatCommand command,
+            ChatModelRouter.ChatModelCandidate candidate,
+            List<Message> baseline,
+            String selectedSummary) {
+        ConversationPromptPlan plan = promptPlanner.plan(
+                candidate,
+                command,
+                mandatoryPromptText(command),
+                baseline,
+                selectedSummary,
+                toolCallbacks(command));
+        if (command.executionBudget() != null) {
+            command.executionBudget().recordContextPlan(plan.snapshot());
+        }
+        return plannedMessages(plan);
+    }
+
+    private List<Message> plannedMessages(ConversationPromptPlan plan) {
+        List<Message> messages = new ArrayList<>();
+        if (plan.selectedSummary() != null
+                && !plan.selectedSummary().isBlank()) {
+            messages.add(new AssistantMessage(plan.selectedSummary()));
+        }
+        messages.addAll(plan.selectedRecentMessages());
+        return List.copyOf(messages);
+    }
+
+    private String summaryText(ChatCommand command) {
+        if (summaryService == null
+                || command.memoryMode() == MemoryMode.STATELESS) {
+            return "";
+        }
+        return summaryService.promptText(
+                summaryService.load(
+                        command.principal(), command.sessionId()));
+    }
+
+    private ConversationSummaryService.CompactionResult compactSummary(
+            ChatCommand command,
+            ChatModelRouter.ChatModelCandidate candidate,
+            ModeAwareChatClientFactory.Attempt attempt,
+            List<Message> baseline,
+            String answer) {
+        if (summaryService == null) {
+            return ConversationSummaryService.CompactionResult.skipped(
+                    "summary_service_unavailable");
+        }
+        List<Message> messages = attempt.memory() != null
+                ? attempt.memory().get(command.memoryConversationId())
+                : new ArrayList<>(baseline);
+        if (attempt.memory() == null) {
+            messages.add(new UserMessage(command.message()));
+            messages.add(new AssistantMessage(answer == null ? "" : answer));
+        }
+        return summaryService.compactIfNeeded(command, candidate, messages);
+    }
+
+    private ChatExecutionResult withSummaryMetadata(
+            ChatExecutionResult result,
+            ConversationSummaryService.CompactionResult compaction) {
+        if (compaction == null || (!compaction.attempted()
+                && !compaction.degraded())) {
+            return result;
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>(result.metadata());
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("attempted", compaction.attempted());
+        summary.put("updated", compaction.updated());
+        summary.put("degraded", compaction.degraded());
+        summary.put("reason", compaction.reason() == null
+                ? "" : compaction.reason());
+        summary.put("version", compaction.snapshot() == null
+                ? 0 : compaction.snapshot().version());
+        if (compaction.snapshot() != null
+                && compaction.snapshot().summarizedThroughHistoryId() > 0) {
+            summary.put("summarizedThroughHistoryId",
+                    compaction.snapshot().summarizedThroughHistoryId());
+            summary.put("estimatedTokens",
+                    compaction.snapshot().estimatedTokens());
+        }
+        metadata.put("summary", Map.copyOf(summary));
+        return new ChatExecutionResult(
+                result.answer(), result.sessionId(), result.traceId(),
+                result.requestedModel(), result.resolvedModel(), result.mode(),
+                result.sources(), result.usage(), result.finishReason(),
+                result.stepMetrics(), metadata);
+    }
+
+    private List<ToolCallback> toolCallbacks(ChatCommand command) {
+        if (command.mode() != ChatMode.AGENT) {
+            return List.of();
+        }
+        if (toolRegistry != null) {
+            return toolRegistry.callbacks(command.mode(), command.domainId());
+        }
+        if (jsonRecordSearchTool != null && jsonRecordSearchTool.isEnabled()) {
+            return List.of(knowledgeSearchTool, jsonRecordSearchTool);
+        }
+        return List.of(knowledgeSearchTool);
     }
 
     private ChatExecutionResult toResult(
@@ -906,6 +1063,34 @@ public class ChatExecutionService {
                     command.clientMetadata());
         }
         return prompt;
+    }
+
+    private String mandatoryPromptText(ChatCommand command) {
+        String systemPrompt = buildSystemPrompt(command);
+        StringBuilder result = new StringBuilder(
+                systemPrompt == null ? "" : systemPrompt);
+        if (command.inputMessages().isEmpty()) {
+            result.append("\n").append(customizeUserMessage(command));
+            return result.toString();
+        }
+        int latestUserIndex = -1;
+        for (int index = 0; index < command.inputMessages().size(); index++) {
+            if (command.inputMessages().get(index).role()
+                    == ChatInputMessage.Role.USER) {
+                latestUserIndex = index;
+            }
+        }
+        for (int index = 0; index < command.inputMessages().size(); index++) {
+            ChatInputMessage input = command.inputMessages().get(index);
+            String content = index == latestUserIndex
+                    ? customizeUserMessage(command)
+                    : input.content();
+            result.append("\n[")
+                    .append(input.role().name())
+                    .append("]\n")
+                    .append(content == null ? "" : content);
+        }
+        return result.toString();
     }
 
     private String customizeUserMessage(ChatCommand command) {

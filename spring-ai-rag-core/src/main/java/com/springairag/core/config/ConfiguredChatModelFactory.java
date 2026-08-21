@@ -85,7 +85,14 @@ public class ConfiguredChatModelFactory {
                         model.reasoning(),
                         model.contextWindow(),
                         model.maxTokens(),
+                        model.contextWindow() == null || model.maxTokens() == null,
                         model.normalizedCapabilities()));
+                if (reason == null
+                        && (model.contextWindow() == null
+                        || model.maxTokens() == null)) {
+                    log.warn("Chat model {} is missing context limits; using conservative "
+                            + "fallback estimates", selection.ref());
+                }
             }
         }
         return List.copyOf(result);
@@ -229,6 +236,14 @@ public class ConfiguredChatModelFactory {
         if (!isSupportedApiType(provider.apiType())) {
             return "unsupported apiType: " + provider.apiType();
         }
+        if (selection.model().contextWindow() != null
+                && selection.model().contextWindow() <= 0) {
+            return "invalid model contextWindow";
+        }
+        if (selection.model().maxTokens() != null
+                && selection.model().maxTokens() <= 0) {
+            return "invalid model maxTokens";
+        }
         if (resolveApiKey(provider.apiKey()).isBlank()) {
             return "provider API key is not configured";
         }
@@ -302,6 +317,7 @@ public class ConfiguredChatModelFactory {
             boolean reasoning,
             Integer contextWindow,
             Integer maxTokens,
+            boolean estimatedModelLimits,
             MultiModelProperties.ModelCapabilities capabilities
     ) {
         public Map<String, Object> toMap() {
@@ -323,6 +339,7 @@ public class ConfiguredChatModelFactory {
             if (maxTokens != null) {
                 result.put("maxTokens", maxTokens);
             }
+            result.put("estimatedModelLimits", estimatedModelLimits);
             result.put("capabilities",
                     capabilities != null
                             ? capabilities.normalized()

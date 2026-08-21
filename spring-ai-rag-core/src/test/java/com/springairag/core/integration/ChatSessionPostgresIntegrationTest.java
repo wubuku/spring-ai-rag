@@ -13,6 +13,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryJpaRepository;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.repository.RagChatMemorySummaryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -62,6 +63,7 @@ class ChatSessionPostgresIntegrationTest {
     private static LocalContainerEntityManagerFactoryBean entityManagerFactoryBean;
     private static JpaTransactionManager transactionManager;
     private static RagChatHistoryRepository historyRepository;
+    private static RagChatMemorySummaryRepository summaryRepository;
     private static JdbcChatMemoryRepository memoryRepository;
     private static ChatSessionCoordinator coordinator;
 
@@ -128,8 +130,8 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
-    void fullMigrationThroughV39PreservesChatContractsAndRejectsInvalidNewRows() {
-        assertEquals("39", jdbcTemplate.queryForObject(
+    void fullMigrationThroughV46PreservesChatContractsAndRejectsInvalidNewRows() {
+        assertEquals("46", jdbcTemplate.queryForObject(
                 "SELECT version FROM flyway_schema_history "
                         + "WHERE success = true ORDER BY installed_rank DESC LIMIT 1",
                 String.class));
@@ -140,6 +142,10 @@ class ChatSessionPostgresIntegrationTest {
         assertEquals(1L, jdbcTemplate.queryForObject(
                 "SELECT COUNT(*) FROM pg_indexes "
                         + "WHERE indexname = 'idx_rag_chat_session_lease_expires'",
+                Long.class));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM information_schema.tables "
+                        + "WHERE table_name = 'rag_chat_memory_summary'",
                 Long.class));
 
         assertThrows(RuntimeException.class, () -> jdbcTemplate.update(
@@ -155,6 +161,82 @@ class ChatSessionPostgresIntegrationTest {
                         + "(owner_principal_id, session_id, owner_token, acquired_at, expires_at) "
                         + "VALUES ('db:key-a', 'valid-session', ?, now(), now())",
                 UUID.randomUUID().toString()));
+    }
+
+    @Test
+    void memorySummaryIsOwnerScopedAndCasCursorOnlyMovesForward() {
+        ChatPrincipal ownerA = principal("summary-a");
+        ChatPrincipal ownerB = principal("summary-b");
+
+        assertTrue(summaryRepository.saveCas(
+                ownerA, "summary-session", 0, 10,
+                "summary-a-v1", 11, "test/model"));
+        assertFalse(summaryRepository.saveCas(
+                ownerA, "summary-session", 0, 11,
+                "stale-insert", 12, "test/model"));
+        assertFalse(summaryRepository.saveCas(
+                ownerA, "summary-session", 1, 10,
+                "stale-cursor", 12, "test/model"));
+        assertTrue(summaryRepository.saveCas(
+                ownerA, "summary-session", 1, 11,
+                "summary-a-v2", 11, "test/model"));
+
+        assertTrue(summaryRepository.saveCas(
+                ownerB, "summary-session", 0, 7,
+                "summary-b-v1", 11, "test/model"));
+        assertEquals("summary-a-v2", summaryRepository.find(
+                ownerA, "summary-session").orElseThrow().text());
+        assertEquals(11L, summaryRepository.find(
+                ownerA, "summary-session").orElseThrow()
+                .summarizedThroughHistoryId());
+        assertEquals("summary-b-v1", summaryRepository.find(
+                ownerB, "summary-session").orElseThrow().text());
+    }
+
+    @Test
+    void memorySummaryConstraintsRejectInvalidRows() {
+        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                INSERT INTO rag_chat_memory_summary (
+                    owner_principal_id, session_id, summary_text,
+                    summarized_through_history_id, estimated_tokens
+                ) VALUES ('db:constraint', 'bad/session', 'summary', 1, 1)
+                """));
+        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                INSERT INTO rag_chat_memory_summary (
+                    owner_principal_id, session_id, summary_text,
+                    summarized_through_history_id, estimated_tokens
+                ) VALUES ('db:constraint', 'valid-session', 'summary', 0, 1)
+                """));
+        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                INSERT INTO rag_chat_memory_summary (
+                    owner_principal_id, session_id, summary_text,
+                    summarized_through_history_id, estimated_tokens
+                ) VALUES ('db:constraint', 'valid-session', '', 1, 1)
+                """));
+        assertThrows(RuntimeException.class, () -> jdbcTemplate.update("""
+                INSERT INTO rag_chat_memory_summary (
+                    owner_principal_id, session_id, summary_text,
+                    summarized_through_history_id, estimated_tokens
+                ) VALUES ('db:constraint', 'valid-session', 'summary', 1, -1)
+                """));
+    }
+
+    @Test
+    void summaryDeleteIsOwnerScoped() {
+        ChatPrincipal ownerA = principal("delete-a");
+        ChatPrincipal ownerB = principal("delete-b");
+        assertTrue(summaryRepository.saveCas(
+                ownerA, "delete-session", 0, 1,
+                "owner-a-summary", 5, "test/model"));
+        assertTrue(summaryRepository.saveCas(
+                ownerB, "delete-session", 0, 1,
+                "owner-b-summary", 5, "test/model"));
+
+        assertEquals(1, summaryRepository.delete(ownerA, "delete-session"));
+
+        assertTrue(summaryRepository.find(ownerA, "delete-session").isEmpty());
+        assertEquals("owner-b-summary", summaryRepository.find(
+                ownerB, "delete-session").orElseThrow().text());
     }
 
     @Test
@@ -426,6 +508,7 @@ class ChatSessionPostgresIntegrationTest {
                 jpaRepository,
                 jdbcTemplate,
                 new ObjectMapper().findAndRegisterModules());
+        summaryRepository = new RagChatMemorySummaryRepository(jdbcTemplate);
         memoryRepository = JdbcChatMemoryRepository.builder()
                 .jdbcTemplate(jdbcTemplate)
                 .dialect(new PostgresChatMemoryRepositoryDialect())

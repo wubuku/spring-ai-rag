@@ -74,4 +74,26 @@ class ChatExecutionBudgetTest {
         assertEquals(ErrorCode.CHAT_BUDGET_EXHAUSTED, error.getErrorCodeEnum());
         assertTrue(budget.snapshot().containsKey("modelCalls"));
     }
+
+    @Test
+    void toolResultReservationUsesPerToolLimitsAndReleasesUnusedCapacity() {
+        ChatExecutionBudget budget = new ChatExecutionBudget(
+                Instant.now().plusSeconds(30),
+                2,
+                4,
+                3,
+                4,
+                2,
+                3_000);
+
+        int reserved = budget.reserveToolBatch(
+                List.of("small", "large"),
+                java.util.Map.of("small", 500, "large", 1_000),
+                2_000);
+        assertEquals(1_500, reserved);
+        budget.settleToolResults(200, 150, reserved);
+
+        assertEquals(200, budget.toolResultCharacters());
+        assertEquals(150, budget.toolResultTokens());
+    }
 }

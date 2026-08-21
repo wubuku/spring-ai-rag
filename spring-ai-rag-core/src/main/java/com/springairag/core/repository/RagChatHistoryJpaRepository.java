@@ -43,6 +43,30 @@ public interface RagChatHistoryJpaRepository extends JpaRepository<RagChatHistor
             @Param("ownerPrincipalId") String ownerPrincipalId,
             @Param("sessionId") String sessionId);
 
+    @Query("""
+            SELECT h FROM RagChatHistory h
+            WHERE h.ownerPrincipalId = :ownerPrincipalId
+              AND h.sessionId = :sessionId
+            ORDER BY h.createdAt DESC, h.id DESC
+            """)
+    List<RagChatHistory> findOwnedBySessionNewestFirst(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId,
+            org.springframework.data.domain.Pageable pageable);
+
+    @Query("""
+            SELECT h FROM RagChatHistory h
+            WHERE h.ownerPrincipalId = :ownerPrincipalId
+              AND h.sessionId = :sessionId
+              AND h.id > :afterHistoryId
+            ORDER BY h.id ASC
+            """)
+    List<RagChatHistory> findOwnedAfterHistoryId(
+            @Param("ownerPrincipalId") String ownerPrincipalId,
+            @Param("sessionId") String sessionId,
+            @Param("afterHistoryId") long afterHistoryId,
+            org.springframework.data.domain.Pageable pageable);
+
     /**
      * Query all history by session ID (no pagination, descending by time).
      */

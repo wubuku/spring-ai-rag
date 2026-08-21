@@ -9,7 +9,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -35,10 +34,6 @@ import java.util.function.Supplier;
  * 跨实例会话 single-flight、绝对截止时间和 token-fenced 持久化协调器。
  */
 @Component
-@ConditionalOnBean({
-        JdbcChatMemoryRepository.class,
-        PlatformTransactionManager.class
-})
 public class ChatSessionCoordinator {
 
     private static final String ACQUIRE_SQL = """
@@ -86,6 +81,7 @@ public class ChatSessionCoordinator {
     private final RagProperties properties;
     private final ScheduledExecutorService renewExecutor;
     private final ExecutorService invocationExecutor;
+    private ConversationSummaryService summaryService;
 
     public ChatSessionCoordinator(
             JdbcTemplate jdbcTemplate,
@@ -111,6 +107,11 @@ public class ChatSessionCoordinator {
             thread.setDaemon(true);
             return thread;
         });
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setSummaryService(ConversationSummaryService summaryService) {
+        this.summaryService = summaryService;
     }
 
     public LeaseHandle acquire(ChatCommand command, boolean streaming) {
@@ -262,6 +263,9 @@ public class ChatSessionCoordinator {
                     throw new RagException(
                             ErrorCode.SESSION_NOT_FOUND,
                             "Chat session was not found");
+                }
+                if (summaryService != null) {
+                    summaryService.clear(principal, validSession);
                 }
                 sharedMemory.clear(memoryId);
                 return count;

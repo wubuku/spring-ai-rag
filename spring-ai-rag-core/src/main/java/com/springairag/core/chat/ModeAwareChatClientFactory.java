@@ -10,6 +10,7 @@ import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.HistoryAwareQueryTransformer;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
+import com.springairag.core.rag.PromptBudgetDocumentPostProcessor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -81,6 +82,7 @@ public class ModeAwareChatClientFactory {
     private final RagProperties ragProperties;
     private final List<RagAdvisorProvider> customAdvisorProviders;
     private final ToolCallingManager toolCallingManager;
+    private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
 
     public ModeAwareChatClientFactory(
             ProjectDocumentRetriever documentRetriever,
@@ -99,9 +101,18 @@ public class ModeAwareChatClientFactory {
                 ? List.copyOf(customAdvisorProviders)
                 : List.of();
         this.toolCallingManager = toolCallingManager != null
-                ? new BudgetedToolCallingManager(toolCallingManager)
+                ? new BudgetedToolCallingManager(
+                        toolCallingManager,
+                        ragProperties.getChat().getAgent()
+                                .getMaxToolResultCharacters())
                 : new BudgetedToolCallingManager(
-                        ToolCallingManager.builder().build());
+                        ToolCallingManager.builder().build(),
+                        ragProperties.getChat().getAgent()
+                                .getMaxToolResultCharacters());
+        this.promptBudgetDocumentPostProcessor =
+                new PromptBudgetDocumentPostProcessor(
+                        new JTokkitPromptTokenEstimator(),
+                        ragProperties.getChat());
     }
 
     public Attempt create(
@@ -112,7 +123,7 @@ public class ModeAwareChatClientFactory {
         ChatExecutionBudget budget = command.executionBudget();
         org.springframework.ai.chat.model.ChatModel executionModel =
                 budget != null
-                        ? new BudgetedChatModel(candidate.model(), budget)
+                        ? budgetedModel(candidate, budget)
                         : candidate.model();
         RetrievalOptions options = command.mode() == ChatMode.AGENT
                 ? capAgentOptions(command.retrievalOptions(), agent)
@@ -186,8 +197,10 @@ public class ModeAwareChatClientFactory {
             ChatExecutionBudget budget) {
         RetrievalAugmentationAdvisor.Builder builder =
                 RetrievalAugmentationAdvisor.builder()
-                        .documentRetriever(documentRetriever)
-                        .documentPostProcessors(rerankPostProcessor)
+                .documentRetriever(documentRetriever)
+                        .documentPostProcessors(
+                                rerankPostProcessor,
+                                promptBudgetDocumentPostProcessor)
                         .queryAugmenter(queryAugmenter)
                         .order(MODE_ORDER);
         QueryTransformer transformer = buildQueryTransformer(candidate, budget);
@@ -211,7 +224,7 @@ public class ModeAwareChatClientFactory {
         }
         ChatClient.Builder rawBuilder = ChatClient.builder(
                 budget != null
-                        ? new BudgetedChatModel(candidate.model(), budget)
+                        ? budgetedModel(candidate, budget)
                         : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
@@ -237,7 +250,7 @@ public class ModeAwareChatClientFactory {
         }
         ChatClient.Builder rawBuilder = ChatClient.builder(
                 budget != null
-                        ? new BudgetedChatModel(candidate.model(), budget)
+                        ? budgetedModel(candidate, budget)
                         : candidate.model());
         ChatOptions options = candidate.model().getDefaultOptions();
         if (options != null) {
@@ -341,6 +354,28 @@ public class ModeAwareChatClientFactory {
                             + "' declares tool calling but its Spring AI adapter "
                             + "does not expose ToolCallingChatOptions");
         }
+    }
+
+    private BudgetedChatModel budgetedModel(
+            ChatModelRouter.ChatModelCandidate candidate,
+            ChatExecutionBudget budget) {
+        RagChatProperties.ContextProperties context =
+                ragProperties.getChat().getContext();
+        int contextWindow = candidate.contextWindow() != null
+                ? candidate.contextWindow()
+                : context.getFallbackContextWindow();
+        int outputReserve = candidate.maxTokens() != null
+                ? Math.min(context.getOutputReserveTokens(),
+                        Math.max(1, candidate.maxTokens()))
+                : context.getOutputReserveTokens();
+        return new BudgetedChatModel(
+                candidate.model(),
+                budget,
+                contextWindow,
+                outputReserve,
+                context.getSafetyMarginTokens(),
+                context.getMaxToolSchemaTokens(),
+                new JTokkitPromptTokenEstimator());
     }
 
     public record Attempt(

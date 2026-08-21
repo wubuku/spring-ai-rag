@@ -91,7 +91,7 @@ describe('useChatSSE', () => {
       'event: tool_start\r\ndata: {"tool":"searchKnowledge","toolCallId":"call-1","query":"style"}\r\n\r\n',
       'event: tool_result\r\ndata: {"tool":"searchKnowledge","toolCallId":"call-1","resultCount":2,"elapsedMs":9}\r\n\r\n',
       'event: sources\r\ndata: {"sessionId":"session-1","sources":[{"citationId":"S1","documentId":"doc-1","title":"Guide","chunkText":"Evidence"}]}\r\n\r\n',
-      'event: done\r\ndata: {"sessionId":"session-1","status":"complete"}',
+      'event: done\r\ndata: {"sessionId":"session-1","status":"complete","metadata":{"context":{"summaryUsed":true}}}',
     ]);
     const onChunk = vi.fn();
     const onToolStart = vi.fn();
@@ -132,6 +132,7 @@ describe('useChatSSE', () => {
     expect(onDone).toHaveBeenCalledWith({
       sessionId: 'session-1',
       status: 'complete',
+      metadata: { context: { summaryUsed: true } },
     });
   });
 

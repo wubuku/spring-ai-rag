@@ -224,7 +224,10 @@ public class ChatModelRouter {
                             ? item.normalizedCapabilities()
                             : MultiModelProperties.ModelCapabilities.defaults(),
                     item != null ? item.contextWindow() : null,
-                    item != null ? item.maxTokens() : null);
+                    item != null ? item.maxTokens() : null,
+                    item == null
+                            || item.contextWindow() == null
+                            || item.maxTokens() == null);
         }
         String provider = legacyProviderFor(model);
         String ref = provider != null ? provider : modelRef.trim();
@@ -248,7 +251,8 @@ public class ChatModelRouter {
                             model,
                             descriptor.capabilities(),
                             descriptor.contextWindow(),
-                            descriptor.maxTokens());
+                            descriptor.maxTokens(),
+                            descriptor.estimatedModelLimits());
                 }
             }
         }
@@ -403,13 +407,24 @@ public class ChatModelRouter {
             ChatModel model,
             MultiModelProperties.ModelCapabilities capabilities,
             Integer contextWindow,
-            Integer maxTokens) {
+            Integer maxTokens,
+            boolean estimatedModelLimits) {
 
         public ChatModelCandidate(
                 String ref,
                 ChatModel model,
                 MultiModelProperties.ModelCapabilities capabilities) {
-            this(ref, model, capabilities, null, null);
+            this(ref, model, capabilities, null, null, true);
+        }
+
+        public ChatModelCandidate(
+                String ref,
+                ChatModel model,
+                MultiModelProperties.ModelCapabilities capabilities,
+                Integer contextWindow,
+                Integer maxTokens) {
+            this(ref, model, capabilities, contextWindow, maxTokens,
+                    contextWindow == null || maxTokens == null);
         }
 
         public ChatModelCandidate {

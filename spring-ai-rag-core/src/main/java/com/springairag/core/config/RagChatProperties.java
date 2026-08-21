@@ -66,6 +66,108 @@ public class RagChatProperties {
         this.context = context != null ? context : new ContextProperties();
     }
 
+    /**
+     * Validates cross-field chat limits after Spring Boot has bound all values.
+     */
+    public void validate() {
+        requirePositive("rag.chat.execution.max-candidate-attempts",
+                execution.getMaxCandidateAttempts());
+        requirePositive("rag.chat.execution.max-model-calls",
+                execution.getMaxModelCalls());
+
+        AgentProperties a = agent;
+        requirePositive("rag.chat.agent.max-tool-rounds", a.getMaxToolRounds());
+        requirePositive("rag.chat.agent.max-retrieval-calls",
+                a.getMaxRetrievalCalls());
+        requirePositive("rag.chat.agent.max-results-per-call",
+                a.getMaxResultsPerCall());
+        requirePositive("rag.chat.agent.max-unique-sources",
+                a.getMaxUniqueSources());
+        requirePositive("rag.chat.agent.max-tool-result-characters",
+                a.getMaxToolResultCharacters());
+        requirePositive("rag.chat.agent.max-tool-calls", a.getMaxToolCalls());
+        requirePositive("rag.chat.agent.max-tool-calls-per-name",
+                a.getMaxToolCallsPerName());
+        requirePositive("rag.chat.agent.max-tool-result-characters-total",
+                a.getMaxToolResultCharactersTotal());
+        requirePositive("rag.chat.agent.tool-executor-threads",
+                a.getToolExecutorThreads());
+        requirePositive("rag.chat.agent.tool-executor-queue-capacity",
+                a.getToolExecutorQueueCapacity());
+        if (a.getMaxToolCallsPerName() > a.getMaxToolCalls()) {
+            throw invalid("rag.chat.agent.max-tool-calls-per-name must not exceed "
+                    + "rag.chat.agent.max-tool-calls");
+        }
+        if (a.getMaxToolResultCharacters()
+                > a.getMaxToolResultCharactersTotal()) {
+            throw invalid("rag.chat.agent.max-tool-result-characters must not exceed "
+                    + "rag.chat.agent.max-tool-result-characters-total");
+        }
+
+        ContextProperties c = context;
+        requirePositive("rag.chat.context.fallback-context-window",
+                c.getFallbackContextWindow());
+        requirePositive("rag.chat.context.output-reserve-tokens",
+                c.getOutputReserveTokens());
+        requirePositive("rag.chat.context.safety-margin-tokens",
+                c.getSafetyMarginTokens());
+        requirePositive("rag.chat.context.max-history-tokens",
+                c.getMaxHistoryTokens());
+        requirePositive("rag.chat.context.minimum-recent-turns",
+                c.getMinimumRecentTurns());
+        requirePositive("rag.chat.context.max-summary-tokens",
+                c.getMaxSummaryTokens());
+        requirePositive("rag.chat.context.minimum-mode-evidence-tokens",
+                c.getMinimumModeEvidenceTokens());
+        requirePositive("rag.chat.context.max-rag-context-tokens",
+                c.getMaxRagContextTokens());
+        requirePositive("rag.chat.context.max-tool-schema-tokens",
+                c.getMaxToolSchemaTokens());
+        requirePositive("rag.chat.context.compaction-trigger-tokens",
+                c.getCompactionTriggerTokens());
+        requirePositive("rag.chat.context.compaction-max-source-tokens",
+                c.getCompactionMaxSourceTokens());
+        requirePositive("rag.chat.context.compaction-max-output-tokens",
+                c.getCompactionMaxOutputTokens());
+        requirePositive("rag.chat.context.compaction-max-turns-per-call",
+                c.getCompactionMaxTurnsPerCall());
+        requirePositive("rag.chat.context.compaction-timeout-ms",
+                c.getCompactionTimeoutMs());
+        if (c.getOutputReserveTokens() + c.getSafetyMarginTokens()
+                >= c.getFallbackContextWindow()) {
+            throw invalid("rag.chat.context.output-reserve-tokens + "
+                    + "safety-margin-tokens must be less than "
+                    + "fallback-context-window");
+        }
+        if (c.getMaxSummaryTokens() > c.getMaxHistoryTokens()) {
+            throw invalid("rag.chat.context.max-summary-tokens must not exceed "
+                    + "max-history-tokens");
+        }
+        if (c.getMinimumModeEvidenceTokens() > c.getMaxRagContextTokens()) {
+            throw invalid("rag.chat.context.minimum-mode-evidence-tokens must not exceed "
+                    + "max-rag-context-tokens");
+        }
+        if (c.getCompactionMaxOutputTokens() > c.getMaxSummaryTokens()) {
+            throw invalid("rag.chat.context.compaction-max-output-tokens must not exceed "
+                    + "max-summary-tokens");
+        }
+        if (c.getCompactionMaxOutputTokens()
+                >= c.getCompactionMaxSourceTokens()) {
+            throw invalid("rag.chat.context.compaction-max-output-tokens must be less than "
+                    + "compaction-max-source-tokens");
+        }
+    }
+
+    private static void requirePositive(String key, int value) {
+        if (value <= 0) {
+            throw invalid(key + " must be greater than zero");
+        }
+    }
+
+    private static IllegalStateException invalid(String message) {
+        return new IllegalStateException("Invalid chat configuration: " + message);
+    }
+
     public static class KnowledgeProperties {
         private String queryTransformer = "none";
         private int queryTransformTimeoutSeconds = 30;
@@ -269,6 +371,13 @@ public class RagChatProperties {
         private int minimumModeEvidenceTokens = 4_096;
         private int maxRagContextTokens = 16_000;
         private int maxToolSchemaTokens = 4_096;
+        private boolean compactionEnabled = false;
+        private int compactionTriggerTokens = 12_000;
+        private int compactionMaxSourceTokens = 16_000;
+        private int compactionMaxOutputTokens = 1_536;
+        private int compactionMaxTurnsPerCall = 50;
+        private int compactionTimeoutMs = 30_000;
+        private String compactionModel;
 
         public boolean isAdaptivePlanningEnabled() {
             return adaptivePlanningEnabled;
@@ -348,6 +457,62 @@ public class RagChatProperties {
 
         public void setMaxToolSchemaTokens(int maxToolSchemaTokens) {
             this.maxToolSchemaTokens = maxToolSchemaTokens;
+        }
+
+        public boolean isCompactionEnabled() {
+            return compactionEnabled;
+        }
+
+        public void setCompactionEnabled(boolean compactionEnabled) {
+            this.compactionEnabled = compactionEnabled;
+        }
+
+        public int getCompactionTriggerTokens() {
+            return compactionTriggerTokens;
+        }
+
+        public void setCompactionTriggerTokens(int compactionTriggerTokens) {
+            this.compactionTriggerTokens = compactionTriggerTokens;
+        }
+
+        public int getCompactionMaxSourceTokens() {
+            return compactionMaxSourceTokens;
+        }
+
+        public void setCompactionMaxSourceTokens(int compactionMaxSourceTokens) {
+            this.compactionMaxSourceTokens = compactionMaxSourceTokens;
+        }
+
+        public int getCompactionMaxOutputTokens() {
+            return compactionMaxOutputTokens;
+        }
+
+        public void setCompactionMaxOutputTokens(int compactionMaxOutputTokens) {
+            this.compactionMaxOutputTokens = compactionMaxOutputTokens;
+        }
+
+        public int getCompactionMaxTurnsPerCall() {
+            return compactionMaxTurnsPerCall;
+        }
+
+        public void setCompactionMaxTurnsPerCall(int compactionMaxTurnsPerCall) {
+            this.compactionMaxTurnsPerCall = compactionMaxTurnsPerCall;
+        }
+
+        public int getCompactionTimeoutMs() {
+            return compactionTimeoutMs;
+        }
+
+        public void setCompactionTimeoutMs(int compactionTimeoutMs) {
+            this.compactionTimeoutMs = compactionTimeoutMs;
+        }
+
+        public String getCompactionModel() {
+            return compactionModel;
+        }
+
+        public void setCompactionModel(String compactionModel) {
+            this.compactionModel = compactionModel;
         }
     }
 }

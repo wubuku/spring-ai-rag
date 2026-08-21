@@ -1,6 +1,6 @@
 # Chat 上下文预算、持久记忆与工具治理进度
 
-> **状态**：生产代码实施中，当前处于 Phase 0
+> **状态**：生产代码实施中，当前处于 Phase 5
 >
 > **开始日期**：2026-08-21
 >
@@ -31,7 +31,7 @@
 | 长青调研落档 | 已完成 | 新增中英文专题并准备加入索引 |
 | 自包含实施规划 | 已完成 | 已通过连续三轮审查 |
 | 规划连续审查 | `3/3` | 最终三轮均未修改规划正文 |
-| 生产代码实施 | Phase 0 进行中 | 已从最新本地 `main` 创建独立分支和 worktree |
+| 生产代码实施 | Phase 5 进行中 | 预算、上下文规划、Tool Provider、SQL 示例和 V46/摘要初版已实现，正在补齐专项集成、协议、前端和真实 LLM 验收 |
 
 ## 2. 已冻结的核心方向
 
@@ -46,6 +46,56 @@
 - token budget 默认开启；持久摘要默认关闭、显式启用。
 - 摘要不是引用证据，失败时确定性截断并继续主 Chat。
 - V46 使用 CAS，不增加悲观锁。
+
+## 2.1 当前实施切片：上下文预算与配置校验
+
+已完成但尚未提交：
+
+- `ConversationPromptPlanner` 现在按完整 user/assistant turn 选择最近历史，避免把一个
+  turn 拆开或改变消息顺序；
+- summary 受 `max-summary-tokens` 限制，KNOWLEDGE 的 RAG 预算会在历史/summary 选择后
+  使用剩余窗口扩展到配置上限；
+- `adaptive-planning-enabled=false` 时保留旧 baseline 消息行为，但不关闭
+  `BudgetedChatModel` 的模型调用预算和后续硬门槛；
+- planner 的 mandatory token 估算包含 server prompt、当前用户输入和完整 transport
+  input messages；
+- RAG document postprocessor 在 adaptive planner 关闭时保持原始文档列表；
+- 增加 `RagChatProperties.validate()` 与启动期 validator，覆盖工具调用、结果字符、执行器、
+  context window、history/summary/evidence 的正数和交叉约束；
+- 新增 planner、RAG token cap、配置校验专项测试，并补充 per-tool 结果预留结算测试。
+
+### 2026-08-21：摘要游标、V46 CAS 与 SQL demo 收敛
+
+- SQL demo 已改为显式 `PreparedStatement` 绑定，固定 SQL 仍包含服务端 owner 条件、查询超时
+  和行数上限；H2 测试使用唯一数据库名并在每个用例后 shutdown，结果时间规范化为
+  ISO-8601 字符串，避免测试污染和平台相关 epoch 序列化。
+- `RagChatHistoryRepository` 增加 owner/session 有界 newest-first baseline 与
+  `id > cursor` oldest-first compaction source 查询，避免摘要和上下文恢复把整个会话加载到
+  Java 内存。
+- V46 与摘要 repository 对齐规划：`summary_text`、`summarized_through_history_id`、
+  `estimated_tokens`、`version`、`created_at/updated_at`；更新要求 version CAS 且 cursor
+  严格前进。
+- `ConversationSummaryService` 只压缩游标之后的 COMPLETE turns，排除最近
+  `minimum-recent-turns`，摘要模型使用共享 model-call budget、candidate context gate、
+  request deadline 和 daemon executor；失败、超时、输出超限、模型预算耗尽均降级而不影响
+  已提交主 Chat。
+- 新增摘要专项测试，覆盖 cursor 推进、最近 turn 保护、provider failure、超时、输出超限和
+  summary model-call budget；测试尚待本轮编译运行确认。
+
+本切片待验证：
+
+- `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`
+- planner、postprocessor、budget、既有 Chat 专项测试
+
+### 2026-08-21：恢复后专项基线与默认策略修复
+
+- `RagChatToolRegistryTest` 3 项通过，包含 provider 包装 callback、领域过滤和 `returnDirect`
+  启动校验；core reactor test 结果为 `BUILD SUCCESS`。
+- 修复未声明 tool policy 时固定默认值超过全局收紧配置的问题：默认 policy 现在继承全局
+  `max-tool-calls-per-name` 与 `max-tool-result-characters` 的较小值，不会因合理收紧配置
+  阻止注册表启动。
+- 新增收紧全局限制下省略 policy 的回归测试；后续仍需补齐 batch 预算真实结算与 token
+  hard gate，不能把本次注册表测试视为整个 Phase 1 完成。
 
 ## 3. 规划审查日志
 
@@ -328,8 +378,251 @@
 - 后端 `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`：通过。
 - 预算、Chat service、factory 相关测试：21 项全部通过。
 
+### 2026-08-21：恢复实施上下文并确认当前交付边界
+
+- 已核对实施 worktree
+  `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-chat-context-tool-orchestration`
+  当前工作区干净，分支 `feat/chat-context-tool-orchestration-20260821` 基于
+  `main@2ea56c9d`，没有需要迁移或丢弃的未提交修改。
+- 当前 HEAD 为 `e5c6078b`；该提交已完成 Phase 0 依赖兼容迁移及 Phase 1 的预算/工具注册表
+  初版，但尚未达到规划中的完整功能完成定义。
+- 后续实现必须先对现有初版执行代码级门槛和固定范围缺陷审计；确认后继续完成
+  `BudgetedToolCallingManager` 的完整测试、token-aware context、V46/摘要、SQL demo、
+  协议/前端/真实运行时验收，不把既有 21 项局部测试视为整项完成证据。
+- 当前恢复入口：先运行 core focused compile/test，随后按规划中的 Phase 1→Phase 6 顺序推进；
+  任一实质修复都要重新执行受影响门槛并将实现审查计数重置为 `0`。
+
+### 2026-08-21：初版代码审计发现的阻断问题
+
+- 初版 core 编译通过，但审计确认不能直接进入后续 Phase：
+  - 非流式 `RetryTemplate` 在 attempt 外创建并重复调用同一个 `ChatClient`，失败调用可能把
+    用户消息、工具对话或检索局部状态带入成功 retry；
+  - `RagChatToolRegistry.PolicyToolCallback` 以 `Map<ChatExecutionBudget, ...>` 保存每个
+    请求计数，长时间运行会保留已完成请求的 budget，形成无界生命周期泄漏；
+  - AGENT 请求先写入 tool callbacks/context，再复制默认 `ToolCallingChatOptions`，存在覆盖
+    server-owned tool context 的兼容风险；
+  - 工具 callback timeout 只使用 policy timeout，没有与逻辑请求 deadline 取最小值；
+  - 工具 batch 预算仍使用硬编码字符上限，未按注册 policy 预留，也没有 token-aware 结果
+    降级和完整 batch/真实 tool-call-id 验收。
+- 处理策略已冻结：先完成预算内核、retry attempt 生命周期和 registry 执行器的正确性修复，
+  再开始 token-aware context、摘要和 V46；本阶段不改变三种 Chat 模式或客户端契约。
+- 当前实现审查计数重置为 `0`；修复后必须重新通过 core focused tests 和
+  `mvn clean compile test-compile`，再进入下一阶段。
+
+### 2026-08-21：预算内核第一轮修复验证
+
+- retry attempt 改为在每次应用层 retry callback 内重新创建，所有 retry/fallback 继续共享同一
+  `ChatExecutionBudget`，成功提交只读取成功 attempt 的 request-local Memory。
+- 工具结果字符预留改为支持按工具 policy 计算；policy 调用计数移入 request-local budget，
+  注册表不再持有已完成请求的 budget 引用。
+- AGENT 默认 `ToolCallingChatOptions` 先复制，再追加 server-owned callbacks/context；
+  工具执行等待时间与 request deadline 取最小值。
+- 重新执行 `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`：通过。
+- 这些修复属于实现修改，后续实现审查计数仍为 `0`，必须在所有功能完成后重新进行连续
+  `3/3` 检查。
+
+### 2026-08-21：继续实施前的状态核对
+
+- 当前 worktree 为
+  `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-chat-context-tool-orchestration`，
+  分支为 `feat/chat-context-tool-orchestration-20260821`，基线仍为
+  `main@2ea56c9d`。
+- 工作区存在本轮未提交的生产代码、测试、V46 migration、SQL demo 和本进度文档修改；
+  未使用 `stash`、强制回退或覆盖操作，所有现有修改继续保留。
+- 已确认两个本轮先修复的实现缺口：摘要源没有落实
+  `compaction-max-source-tokens` 的 token 上限；配置校验没有要求
+  `compaction-max-output-tokens < compaction-max-source-tokens`。
+- V46 PostgreSQL 迁移已存在，Chat 会话集成测试已改为期待 V46；尚待补齐 summary
+  owner/session 隔离、CAS、游标单调性、非法数据约束和 clear 删除的端到端断言。
+
+### 2026-08-21：摘要源上限与 V46 集成矩阵
+
+- `ConversationSummaryService` 现在按完整历史 turn 逐条构造 compaction source，并对包含
+  旧摘要边界文本的完整 source 执行 `compaction-max-source-tokens` 硬上限；超限 turn 不会
+  被部分发送，也不会推进摘要游标。
+- 启动期配置校验新增
+  `compaction-max-output-tokens < compaction-max-source-tokens` 约束。
+- `ConversationSummaryServiceTest` 新增 source token cap/cursor 不越界回归测试；
+  `RagChatPropertiesValidationTest` 新增不可能 compaction 配置回归测试；两组共 12 项
+  focused 测试通过。
+- `ChatSessionPostgresIntegrationTest` 新增 V46 summary 的 owner/session 隔离、CAS、
+  cursor 单调前进、约束拒绝和 owner-scoped delete 测试；待用真实 PostgreSQL 执行。
+
+### 2026-08-21：V46 PostgreSQL 端到端门槛通过
+
+- 使用本地 Testcontainers Docker 环境和 `pgvector/pgvector:pg16`，从空库执行 Flyway
+  V1–V46；`ChatSessionPostgresIntegrationTest` 的 12 项测试全部通过。
+- 真实验证了 V46 summary 表迁移、owner/session 隔离、insert/update CAS、旧 version/
+  非前进 cursor 拒绝、数据库约束以及 owner-scoped delete。
+- 因本机 Docker registry 对 `testcontainers/ryuk:0.11.0` 的证书错误，测试使用
+  `TESTCONTAINERS_RYUK_DISABLED=true`；PostgreSQL 测试容器正常启动并在测试完成后退出。
+
+### 2026-08-21：SSE 协议测试夹具修复
+
+- `RagChatControllerTest` 的新增 SSE metadata/error 测试首次运行时发现测试夹具错误地把
+  Spring `SseEventBuilder` 合并的 `event:` 与 `data:` 文本块整体当作事件名。
+- 仅修正测试夹具为按行提取事件名，未修改生产 SSE 发送逻辑。
+- `RagChatControllerTest` 与 `GlobalExceptionHandlerTest`：60 项全部通过。
+
+### 2026-08-21：前端构建与核心 Mock Playwright 门槛通过
+
+- `spring-ai-rag-webui`: `npm run build` 通过，包含 TypeScript 增量编译与 Vite 生产构建。
+- 使用隔离 Vite 端口 `4198`，运行 `e2e/chat.spec.ts` 与
+  `e2e/streaming-upload.spec.ts`，11 项全部通过。
+- 验证范围包括 Chat 三种模式请求体、Agent 工具事件/来源 DOM、SSE、会话恢复、移动端
+  横向溢出、文档上传入口；前端验收仅使用 DOM、网络请求和自动化断言。
+
+### 2026-08-21：真实服务首次启动缺陷与修复
+
+- 使用主工作区 `.env` 的真实 OpenAI-compatible Chat 配置
+  `grok-4.5`、SiliconFlow BGE-M3 Embedding 和 PostgreSQL，在隔离端口 `18081` 启动。
+- 首次启动发现 `RagChatToolRegistry` 直接依赖的 `RagChatProperties` 没有独立 Spring bean；
+  新增 `RagChatPropertiesConfig`，暴露统一 `RagProperties.getChat()` 的同一实例，避免重复
+  配置绑定。
+- 第二次启动继续暴露 `RagChatMemorySummaryRepository` 为 `final`，而 Spring 事务切面需要
+  CGLIB 子类；移除该类的 `final` 修饰，保留 repository API 和 CAS SQL 不变。
+- 两项修复后的配置/摘要/工具 focused tests：21 项通过；真实服务需重新启动确认。
+
 ## 5. 下一步恢复入口
 
-1. 记录 Java/Maven/npm 版本与当前 Phase 0 基线。
-2. 依规划升级 Boot/Spring AI，并先完成 1.1.8 Memory advisor API 兼容迁移。
-3. 迁移后重跑 characterization 与完整 Chat 门禁，再进入 Phase 1。
+1. 运行 core focused compile/test，确认当前初版的实际可编译和测试状态。
+2. 对预算、工具 registry、Chat retry/fallback 和接口兼容性执行固定范围代码审计，修复实质
+   缺陷并补齐一次性验收测试。
+3. 依规划完成 token-aware context、V46/摘要、SQL demo、协议/脚本/文档和真实运行时门禁。
+
+## 6. 2026-08-21：真实服务前的 focused 测试收尾
+
+- 修复后的配置、工具注册表、提示规划器、摘要服务和 PostgreSQL 会话集成矩阵已完成一次
+  focused 执行：`33` 项测试全部通过，Maven 构建成功。
+- 本次 PostgreSQL 集成测试使用 Testcontainers 从空库执行 Flyway V1–V46，确认当前
+  worktree 的 V46 迁移和 Chat 会话摘要持久化行为可启动、可迁移、可验证。
+- 下一步是使用主工作区 `.env` 中的真实 OpenAI-compatible Chat/Embedding 配置，在隔离
+  端口 `18081` 启动服务并执行真实 LLM smoke/e2e；密钥不复制、不打印、不写入仓库。
+
+## 7. 2026-08-21：真实 LLM 基础 E2E smoke 通过
+
+- 使用隔离端口 `18081`、主工作区 `.env` 的真实配置完成仓库自带
+  `scripts/real-llm-e2e-smoke.sh`。
+- 真实验证链路全部通过：健康检查、SiliconFlow BGE-M3 embedding API、Chat API 探针、
+  隔离 collection/document、真实 embedding、向量/混合检索、非流式 Chat、SSE 流式 Chat。
+- 本次结果为 `PASS=10 FAIL=0`；非流式和流式答案都包含本次隔离文档生成的验证码，脚本
+  退出清理了测试 collection/document。
+- 该 smoke 覆盖通用 RAG 主路径；本轮新增的 `KNOWLEDGE / AGENT / PLAIN` 模式、工具
+  调用预算、会话记忆与摘要压缩仍需单独做真实运行时验证。
+
+## 8. 2026-08-21：真实 PLAIN 会话记忆通过
+
+- 使用真实 Chat 模型、独立 session 连续执行两次 `mode=PLAIN` 请求，并查询该 session
+  历史。
+- 第二轮回答准确返回第一轮写入的 marker，响应 `mode=PLAIN` 且 `sources=[]`；历史接口
+  返回至少两条业务消息。
+- 临时命令首次漏带 root API key 得到 `401`，随后按正式 smoke 的认证方式重试通过；
+  未修改服务配置或测试代码。
+
+## 9. 2026-08-21：真实 AGENT Tool Calling 与 SSE 通过
+
+- 在隔离端口运行时显式声明真实 `grok-4.5` 的 legacy `openai` Tool Calling 能力，
+  以保持生产 YAML 的保守默认不变；未修改仓库配置。
+- 真实 `mode=AGENT` 非流式请求通过：模型调用 `searchKnowledge` 获取隔离文档后返回
+  验证码；持久化 metadata 证明 `toolCalls=1`、`toolRounds=1`、`modelCalls=2`、
+  `toolCallsByName.searchKnowledge=1`，并返回 1 个来源。
+- 真实 `mode=AGENT` SSE 通过：事件包含 `tool_start`、`tool_result`、多段 `content`、
+  `sources`、`done`；`done.metadata.executionBudget` 与非流式结果一致，答案包含隔离
+  文档验证码。
+- 首次 SSE 断言失败源于临时验收脚本错误读取内容字段；读取实际协议后按
+  `choices[].delta.content` 修正断言并重跑通过，未发现生产实现缺陷。
+
+## 10. 2026-08-21：真实摘要验证发现生产 Bean 注册缺陷
+
+- 使用真实 Chat 连续执行多轮 `PLAIN` 会话时，所有请求都能回答，但 V46 摘要 metadata
+  始终没有出现。
+- 通过只读 PostgreSQL 查询确认这些业务历史行的 `owner_principal_id` 为 `NULL`；
+  生产执行路径没有进入 `ChatSessionCoordinator.commit(...)`，而是回退到非 owner-scoped
+  的兼容持久化路径，因此摘要服务的 owner/session 查询找不到历史。
+- 根因定位为 `ChatSessionCoordinator` 自身使用 `@ConditionalOnBean` 组件条件，依赖的
+  `JdbcChatMemoryRepository`/事务 bean 在组件扫描条件评估时尚未可见。该问题影响 owner
+  隔离、协调提交、摘要压缩和清理语义，属于必须修复的生产正确性问题。
+- 本次摘要请求使用了正确的 `RAG_CHAT_COMPACTION_*` 变量；此前错误的临时变量命名只导致
+  一次“未启用摘要”的测试，不作为生产缺陷。
+
+## 11. 2026-08-21：协调器注册修复
+
+- 移除 `ChatSessionCoordinator` 的组件级 `@ConditionalOnBean`，避免依赖 bean 定义时序
+  导致生产 bean 缺失；生产 `ChatExecutionService` 注入协调器改为必需依赖，避免再次静默
+  回退到旧的无 owner 持久化路径。
+- 新增 `ChatSessionCoordinatorBeanRegistrationTest`，用最小 Spring 上下文验证组件扫描后
+  协调器可被注册；该测试通过。
+- 这是本轮实质实现修复，后续必须用新编译产物重新启动服务并重新执行真实 owner/history/
+  summary 验收；此前真实 AGENT/PLAIN/smoke 结果不作为修复后的最终结论。
+
+## 12. 2026-08-21：修复后真实 owner/history/summary 验收通过
+
+- 使用修复后的编译产物和真实 Chat 模型重新执行多轮 `PLAIN` 会话，响应在第 3–5 轮
+  报告 summary `updated=true`，版本从 `1` 递增到 `3`，cursor 从 history `105` 前进到
+  `107`。
+- PostgreSQL 只读查询确认该 session 的 5 条业务 history 全部为 `COMPLETE`，且
+  `owner_principal_id=root:environment-root`；V46 summary 行同 owner/session，最终为
+  `version=3`、`summarized_through_history_id=107`、`estimated_tokens=94`。
+- cursor 停在 `107`，保留最新两条 history（108/109）未压缩，符合最近 turn 保护策略。
+- 中间一次终端断言错误地读取了 API 未公开的 owner 字段，并期待摘要 metadata 回写历史
+  行；改用数据库只读查询后验证通过，未发现生产实现问题。
+
+## 13. 2026-08-21：修复后真实 PLAIN 与协议边界回归通过
+
+- 使用修复后的服务、真实 `grok-4.5` 和隔离 session 连续执行两轮 `mode=PLAIN`：
+  第二轮准确返回第一轮写入的唯一 marker；两轮响应都报告 `sources=[]`、
+  `metadata.retrievalExecuted=false`，历史接口返回至少两条记录。
+- 发送 `mode=PLAIN` 且显式设置 `maxResults` 的请求在未触发 LLM 前返回 HTTP `400`，
+  错误明确为 `RETRIEVAL_OPTIONS_NOT_ALLOWED`；证明 PLAIN 不会因客户端误传检索参数而
+  偷偷执行 RAG。
+
+## 14. 2026-08-21：修复后真实 AGENT 非流式与 SSE 回归通过
+
+- 创建并嵌入隔离文档后，真实 `mode=AGENT` 非流式请求要求使用
+  `searchKnowledge` 返回唯一 marker。答案包含 marker，来源仅指向隔离文档；
+  `metadata.executionBudget` 证明 `toolCalls=1`、`toolRounds=1`、`modelCalls=2`，
+  `toolCallsByName.searchKnowledge=1`。
+- 同一场景重新执行真实 SSE：事件依次包含 `tool_start`、`tool_result`、多个
+  `content`、`sources` 和 `done`；`done.metadata.executionBudget` 仍报告至少一次
+  工具调用和两次模型调用，答案内容包含唯一 marker。
+- 首次 SSE 自动化断言误将 `event:` 解析为必须带一个空格的 `event: `，未指向生产
+  协议缺陷；按实际 SSE 行格式修正验收解析后重跑通过。临时 collection/document 已由
+  `trap` 清理。
+
+## 15. 2026-08-21：真实 context budget 保护路径通过
+
+- 临时以隔离服务进程覆盖
+  `RAG_CHAT_CONTEXT_FALLBACK_CONTEXT_WINDOW=120`、较小 output reserve/safety margin，
+  发送 10,000 字符的 `mode=PLAIN` 请求。
+- 请求返回 HTTP `422`，错误为 `CHAT_CONTEXT_BUDGET_EXCEEDED`；服务在规划 prompt
+  阶段拒绝请求，没有产生模型调用。随后已停止临时进程并恢复正常真实 LLM 服务。
+
+## 16. 2026-08-21：真实测试数据清理完成
+
+- 通过带 `expectedDocumentRevision=2` 的硬删除接口清理本轮文档 `173–179`；本轮
+  collection `66–72` 已由服务清理为 deleted 状态。
+- 在一次 PostgreSQL 事务中精确删除本轮 12 个测试 session 的业务 history、summary、
+  retrieval logs、lease 和对应 Spring AI memory。前后计数为：
+  `history 25→0`、`summary 1→0`、`retrieval 26→0`、`lease 0→0`。
+- 只读复核确认当前测试文档、测试 history 和测试 summary 均为 `0`；未使用广泛
+  `LIKE` 删除，避免影响其他历史数据。
+
+## 17. 2026-08-21：进入全量硬门槛验收
+
+- 当前真实 LLM 服务已停止，隔离端口 `18081` 已释放。
+- 特性分支仍保留全部未提交实现、测试、V46 migration、SQL demo 和进度账本修改；
+  未使用 `stash`、强制回退或覆盖操作。
+- 下一步按固定顺序执行：后端 `mvn clean compile test-compile` 与 SQL demo，
+  前端 typecheck/build/核心 Mock Playwright；之后先合并最新 `origin/main`，再按合并后
+  基线重新执行完整验收。
+
+## 18. 2026-08-21：合并前基本集成硬门槛通过
+
+- 后端 `mvn clean compile test-compile` 通过；API、documents、core、starter 全部成功
+  编译，core 测试源码成功编译。
+- reactor 安装 `mvn clean install -DskipTests` 通过；新增
+  `demos/demo-tool-calling-sql` 测试 2/2 通过。
+- 前端 `npm run typecheck`、`npm run build` 均通过。
+- 核心 Mock Playwright 使用隔离 Vite 端口 `4198` 执行
+  `e2e/chat.spec.ts` 与 `e2e/streaming-upload.spec.ts`，11/11 通过；端口原有服务已
+  核验为当前 worktree 的 Vite 服务并复用，未终止其他项目进程。
