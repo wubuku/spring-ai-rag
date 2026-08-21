@@ -16,6 +16,7 @@
 | New to the project | [README.md](../README.md) | [getting-started.md](getting-started.md) |
 | Run the service locally | [getting-started.md](getting-started.md) | [developer-reference.md](developer-reference.md), `.env.example` |
 | Change core architecture / pipeline | [architecture.md](architecture.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
+| Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
 | Understand Files, PDF import, and Add to RAG | [File management and PDF-to-RAG workflow](file-management-and-pdf-rag.md) | [REST API: PDF and file artifacts](rest-api.md#pdf-and-file-artifact-apis) |
@@ -56,6 +57,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | Doc | Description |
 |-----|-------------|
 | [architecture.md](architecture.md) | Modules, runtime model routing, three Chat modes, dual memory, domain extension |
+| [chat-memory-rag-tool-calling.md](chat-memory-rag-tool-calling.md) / [中文](chat-memory-rag-tool-calling-zh-CN.md) | Current Spring AI Chat Memory, Modular RAG, and Tool Calling boundaries, gaps, and direction |
 | [project-context.md](project-context.md) | Stable modules, runtime behavior, security boundaries, and 1.0 baseline |
 | [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |

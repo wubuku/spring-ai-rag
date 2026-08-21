@@ -127,6 +127,10 @@ RRF fusion, reranking, Embedding Profile filtering, Collection/API-key ACL,
 document type, and document ID scope therefore remain shared by direct Search,
 KNOWLEDGE, and the AGENT tool.
 
+For the distinction between message windows, query compression, and durable
+summaries, plus tool-loop budgets and non-document tool extension boundaries,
+see [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md).
+
 The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor` remain
 component-level/compatibility APIs, but they are not the production
 mode-aware Chat pipeline.

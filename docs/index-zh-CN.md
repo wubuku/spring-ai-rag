@@ -16,6 +16,7 @@
 | 第一次了解项目 | [README-zh-CN.md](../README-zh-CN.md) | [getting-started-zh-CN.md](getting-started-zh-CN.md) |
 | 本地跑通服务 | [getting-started-zh-CN.md](getting-started-zh-CN.md) | [developer-reference-zh-CN.md](developer-reference-zh-CN.md)、`.env.example` |
 | 改核心架构 / Pipeline | [architecture-zh-CN.md](architecture-zh-CN.md) | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) |
+| 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
 | 理解文件管理、PDF 导入和添加到 RAG | [文件管理与 PDF-to-RAG 流程](file-management-and-pdf-rag-zh-CN.md) | [REST API：PDF 与文件产物](rest-api-zh-CN.md#pdf-与文件产物-api) |
@@ -56,6 +57,7 @@
 | 文档 | 说明 |
 |------|------|
 | [architecture-zh-CN.md](architecture-zh-CN.md) | 模块、运行时模型路由、三种 Chat 模式、双表记忆、领域扩展 |
+| [chat-memory-rag-tool-calling-zh-CN.md](chat-memory-rag-tool-calling-zh-CN.md) / [English](chat-memory-rag-tool-calling.md) | Spring AI Chat Memory、Modular RAG、Tool Calling 的当前边界、缺口与演进方向 |
 | [project-context-zh-CN.md](project-context-zh-CN.md) | 稳定模块、运行行为、安全边界与 1.0 基线 |
 | [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
