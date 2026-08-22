@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V45
+- [x] Flyway inventory is V1-V46
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered

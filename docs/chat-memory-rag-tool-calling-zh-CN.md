@@ -17,28 +17,27 @@
 5. 如何扩展非 embedding 检索工具，例如直接查询关系型数据？
 
 结论是：项目已经实质接入 Spring AI 的 `ChatClient`、Advisor、Chat Memory、Modular
-RAG、Tool Calling 和 `ToolContext`，不是自建一套与框架平行的 Chat 循环；但仍缺少
-token-aware prompt 预算、持久摘要记忆、逻辑请求级工具/模型预算，以及面向外部扩展的
-服务端工具 Provider SPI。因此当前状态应描述为“Spring AI 编排基础已充分复用，生产级
-上下文和工具治理仍需补齐”。
+RAG、Tool Calling 和 `ToolContext`，不是自建一套与框架平行的 Chat 循环；同时已经补齐
+token-aware prompt 规划、逻辑请求级模型/工具预算、带 CAS 的持久摘要、协调式 TTL 清理，
+以及服务端拥有的 Tool Provider SPI。当前边界是：Spring AI 提供编排原语，项目负责授权、
+上下文打包、持久化和有界执行策略。
 
 ## 2. 当前版本与生产执行入口
 
-调研基线为：
+当前实现基线为：
 
-- Spring Boot `3.5.3`
-- Spring AI `1.1.4`
+- Spring Boot `3.5.16`
+- Spring AI `1.1.8`
 - Java `21`
 - 生产 Chat 主链：
   `RagChatController -> ChatCommandMapper -> ChatExecutionService ->
   ModeAwareChatClientFactory`
 
-Spring AI `1.1.8` 是继续留在 Boot 3.5 / Spring AI 1.1 维护线时可采用的后续补丁版本；
-其发布基线已更新到 Boot `3.5.15`，而截至 2026-08-21，Boot 3.5 维护线已有 `3.5.16`。
-因此依赖升级应把 Boot 补丁版本与 Spring AI 一起验证，不应把 Spring AI `1.1.8` 直接叠加
-在旧 Boot `3.5.3` 上后假定组合已受支持。升级也不能被误当成上下文预算或工具治理已经自动
-解决；Spring AI 1.1.8 的 `ToolCallAdvisor` 仍持续递归到模型停止请求工具，没有稳定的内置
-总调用次数预算。
+`1.1.8` 的 API 变化已经显式适配：生产代码不再在
+`MessageChatMemoryAdvisor.Builder` 上绑定 conversation ID，而是在每次请求的 advisor
+context 中传入服务端派生的 `ChatMemory.CONVERSATION_ID`，从而保留非流式和流式请求的
+principal/session 隔离。Spring AI 的 `ToolCallAdvisor` 仍会持续循环直到模型停止请求工具，
+因此项目通过自有的逻辑请求预算包装模型与工具执行。
 
 独立依赖探针还确认了一个必须显式处理的 1.1.8 API 变化：
 `MessageChatMemoryAdvisor.Builder.conversationId(...)` 已不存在。生产
@@ -139,28 +138,28 @@ AGENT     -> 模型按需调用 searchKnowledge
 6. 最终成功 turn 的业务历史与 JDBC Memory 在同一事务提交。
 
 这一设计优于让每个 fallback attempt 直接写共享 Memory，因为失败候选不会污染后续对话。
-但当前非流式 `RetryTemplate` 在同一个 request-local attempt 上重复调用。Spring AI
-`MessageChatMemoryAdvisor.before()` 会在委托模型前先把当前用户消息加入局部 Memory；
-如果第一次调用随后失败，下一次 retry 会继承该局部状态并再次加入用户消息，最终成功提交时
-可能把失败尝试留下的重复上下文带入 JDBC Memory。它不是“失败 turn 直接持久化”，但仍是
-需要修复的 retry 隔离缺口。正确方向是：每次应用层 retry 都从同一 committed baseline 创建
-新的 request-local ChatClient/Memory，失败 attempt 整体丢弃，而模型、工具和检索消耗继续
-计入同一个逻辑请求预算。
+应用层 retry 和 fallback candidate 都从同一个 committed baseline 创建新的 request-local
+ChatClient、Memory、advisor、检索和工具状态。失败 attempt 的局部状态整体丢弃；模型、工具
+和检索已发生的消耗仍计入共享的逻辑请求预算。这样可以避免失败的 advisor 调用把重复 user
+message 带入成功 attempt 的 JDBC Memory。
 
 ### 5.1 当前窗口的真实语义
 
-`rag.memory.max-messages=20` 是消息数量限制，不是 token 限制。Spring AI
-`MessageWindowChatMemory` 超出上限时淘汰旧的非 System Message；它不会：
+Spring AI `MessageWindowChatMemory` 仍负责 request-local 的近期消息窗口，但生产 Chat 现在
+会在模型调用前由项目 planner 进行输入规划。planner 在模型元数据有效时使用 context window，
+预留 output 和 safety token，并约束 history、summary、RAG evidence 与 tool schema。关闭
+adaptive packing 时仍保留旧 baseline 消息行为，但模型调用 prompt hard gate 和执行预算仍
+生效。底层 Spring AI window 本身仍不会：
 
 - 根据模型 `contextWindow` 计算可用 prompt；
 - 为输出 token、RAG 证据或工具 schema 预留空间；
 - 对淘汰历史生成摘要；
 - 区分一条极长消息和一条极短消息的成本。
 
-项目配置已经保存每个模型的 `context-window` 和 `max-tokens`，但生产 Chat 尚未用这些值
-完成候选模型级 prompt 打包，外部 `models.json` 也尚未拒绝显式的零值或负值。后续实现应
-区分“缺失”和“非法”：缺失时使用带诊断的保守 fallback，显式非正值则使该 candidate
-不可用，不能把非法窗口解释为无限或零成本输出。
+项目配置保存每个模型的 `context-window` 和 `max-tokens`。缺失值使用带诊断的保守
+fallback；显式非正值使 candidate 不可用。非法限制不会被解释为无限窗口或零成本输出。
+空间不足时按固定顺序裁剪低优先级 evidence/tool output、减少较旧历史但保留最少近期 turns、
+保留 summary；mandatory input 仍超限时返回 typed context budget error。
 
 ### 5.2 TTL 清理与活跃 Chat 的并发边界
 
@@ -169,13 +168,13 @@ TTL 如果只删除旧 history，再异步清理其他状态，会留下两类�
 过期的消息；或者一个 Chat 请求先读取旧 baseline，TTL 随后删除数据，而该请求最后又把旧
 baseline 写回。
 
-因此后续 TTL 实现必须先有界发现候选 session，再复用
-`rag_chat_session_lease` 申请独立的维护 token。发现有效 Chat lease 时应跳过，不等待、不
-抢占；获得维护 lease 后，在短事务中以 token fencing 消费 lease，并同时删除本批过期的
-owned history、对应 summary 和按同一 principal/session 规则派生的 JDBC Memory。成功提交
-时维护 lease 消失，事务回滚时四者一起回滚。活跃 Chat 的最终提交同样必须先通过自己的
-token fencing，因此不能在 TTL 后重新提交清理前读取的旧 baseline。该协议只使用条件写入、
-lease 和有界批次，不引入 `FOR UPDATE`、`SKIP LOCKED` 或 advisory lock。
+当前 TTL 清理已经按有界批次发现候选 session，再复用
+`rag_chat_session_lease` 申请独立 maintenance token。发现有效 Chat lease 时立即跳过，不
+等待、不抢占；获得 maintenance lease 后，在短事务中以 token fencing 消费，并删除同一
+principal/session 下的过期 history、summary 和 JDBC Memory。提交时 maintenance lease 消失，
+回滚时相关状态保持一致。活跃 Chat 的最终提交同样必须经过自己的 token fencing，不能在 TTL
+之后回写清理前读到的旧 baseline。该协议只使用条件写入、lease 和有界批次，不引入
+`FOR UPDATE`、`SKIP LOCKED` 或 advisory lock。
 
 ## 6. “上下文压缩”需要区分两件事
 
@@ -188,12 +187,15 @@ lease 和有界批次，不引入 `FOR UPDATE`、`SKIP LOCKED` 或 advisory lock
 检索 query：BGE-M3 embedding 维度
 ```
 
-这是**检索查询压缩**，不是**会话上下文压缩**：
+这是**检索查询压缩**，不是**会话上下文压缩**。项目现在另外提供可选的、项目自有的持久
+摘要压缩路径，但两者仍然分工明确：
 
-- 它不会把旧对话总结后写入长期 Memory；
-- 不会减少最终 Chat prompt 中的历史 token；
-- 不会建立“摘要 + 最近原始 turns”的分层记忆；
-- 只在 `KNOWLEDGE` 的检索前阶段生效。
+- `CompressionQueryTransformer` 不会把旧对话总结后写入持久记忆、减少最终 Chat prompt
+  中的历史 token，或建立摘要层级。
+- `ConversationSummaryService` 只压缩受保护近期 turns 之前的 COMPLETE turns，保存前进式
+  history cursor，并通过 V46 的 optimistic version CAS 更新摘要行。
+- 摘要默认关闭，受共享 model-call budget 和 deadline 约束；超时、provider 失败、输出超限
+  或 CAS 冲突时降级，不阻断主 Chat。摘要是会话记忆，不是 citation evidence。
 
 主 `application.yml` 默认 `query-transformer: none`，而 `postgresql` 和 `prod` profile
 启用 `spring-ai`。因此判断运行行为时必须同时看活动 profile，不能只看主配置。
@@ -210,32 +212,36 @@ Spring AI `ToolCallAdvisor` 负责 call 和 stream 的标准工具循环：
   -> 直到模型不再请求工具
 ```
 
-项目通过 `BudgetedToolCallAdvisor` 和 `RetrievalTraceCollector` 增加了：
+项目通过 `BudgetedChatModel`、`BudgetedToolCallingManager`、`ChatExecutionBudget`、
+`RagChatToolRegistry` 和 `RetrievalTraceCollector` 增加了逻辑请求级与工具 policy 限制：
 
-- 每 attempt 最大工具轮数：`3`
-- 每 attempt 最大未缓存检索次数：`3`
-- 单次检索结果上限：`10`
-- 累计唯一来源上限：`20`
-- 单次工具序列化输出上限：`24,000` 字符
-- 逻辑请求 deadline：非流式 `120s`，流式 `180s`
+- 最大工具轮数默认 `3`；
+- 最大未缓存检索次数默认 `3`；
+- 单次检索结果默认最多 `10`；
+- 累计唯一 source 默认最多 `20`；
+- 单次工具结果默认最多 `24,000` 字符；
+- 总工具调用默认最多 `6`，单工具名默认最多 `3`；
+- 工具结果累计字符默认最多 `48,000`；
+- 逻辑请求 deadline 默认非流式 `120s`、流式 `180s`。
 
-这些控制已经可以阻止最直接的无限工具轮询，但还不是完整预算：
+共享预算跨 candidate、retry/fallback、model call、tool round、tool call、每工具名调用数、
+累计 tool-result 字符、检索 trace 和摘要压缩。`BudgetedToolCallingManager` 在执行前预留
+完整 tool-call batch，并按真实 `ToolExecutionResult` 结算；policy wrapper 另行限制单工具
+超时、执行器饱和、只读效果和结果大小。超出预算时返回有界工具错误或 typed Chat error，
+不会继续无界工作。
 
-1. 一轮模型响应可以包含多个并行 tool call，轮数不等于总调用数。
-2. 结果字符上限按单次调用计算，不是逻辑请求的累计上限。
-3. retry 和 fallback 可以创建新的 attempt 预算。
-4. 没有按工具名称的调用次数、SQL 时间、行数或成本预算。
-5. 没有统一统计 query transform、query expansion、summary 和主回答的模型调用数。
-6. 当前没有直接断言“第 4 轮在工具执行前被拒绝”的专项测试。
-7. 工具事件在 callback 内暂时无法取得真实 `toolCallId`，目前记录为 `null`。
-
-此外，默认内置模型全部声明 `tool-calling: false`。这表示代码具备 AGENT 路径，但默认模型
-矩阵不会选择它；只有外部 `models.json` 显式声明并经过真实 provider 验证的模型才应开启。
+默认模型仍可能声明不支持 Tool Calling；只有明确声明
+`capabilities.toolCalling=true` 且经过 provider 验证的模型才应进入 WebUI 或 API 的
+`AGENT` 路径。
 
 ## 8. 外部 Function Call 与 SQL 检索
 
-当前 `ChatExecutionService` 硬编码注册两个服务端工具，没有公共 Tool Provider SPI。
-OpenAI 兼容端点也明确拒绝客户端提交：
+core registry 负责内置 `searchKnowledge` 和可选 `searchJsonRecords`，同时发现额外的
+服务端 `RagChatToolProvider` Bean。Provider 声明支持的 mode/domain、callback 定义和可选
+收紧 policy；启动期校验会拒绝重复名、非法 schema/metadata、`returnDirect=true` 和未知
+policy key。Registry 通过 Spring AI `ToolContext` 注入 principal/session/deadline 和 budget。
+
+OpenAI 兼容端点仍明确拒绝客户端提交：
 
 - `tools`
 - `tool_choice`
@@ -276,14 +282,15 @@ queryAssetStatus(assetIds)
 - 工具调用、参数摘要、耗时、行数和预算结果可审计；
 - 数据结果不是文档来源时，不伪装成 RAG 文档 citation。
 
-通用框架应提供工具扩展 SPI 和安全上下文，不应在 core 内预置一个可查询任意业务库的通用
-SQL Agent。
+通用框架提供工具扩展 SPI 和安全上下文，但不在 core 内预置可查询任意业务库的通用 SQL
+Agent。SQL demo 使用固定 PostgreSQL `SELECT`、命名参数、服务端 principal 过滤、20 行
+上限、受 policy 限制的 statement timeout 和序列化结果上限，落实了推荐形状。
 
-## 9. 推荐目标架构
+## 9. 当前架构与剩余工作
 
 ### 9.1 Token-aware Prompt Budget
 
-为每个逻辑请求建立候选模型级预算，使用模型 `contextWindow` 和 `maxTokens`，为以下部分
+当前实现为每个逻辑请求建立候选模型级预算，使用模型 `contextWindow` 和 `maxTokens`，为以下部分
 分别计量和预留：
 
 1. system/domain instruction；
@@ -317,7 +324,8 @@ chat summary table     -> 旧历史的持久摘要和压缩游标
 ```
 
 摘要只表示会话记忆，不是外部事实证据。`KNOWLEDGE` 回答仍必须以检索来源 grounding；
-摘要中出现的事实不能自动变成 citation。
+摘要中出现的事实不能自动变成 citation。V46 schema 和 CAS 服务已经实现该路径；摘要压缩
+默认关闭。
 
 压缩失败时应保留成功主路径：按 token 预算确定性截断旧历史，记录 degraded 状态，不删除
 原始业务历史。摘要生成不得在持有数据库事务时调用模型。
@@ -339,9 +347,9 @@ chat summary table     -> 旧历史的持久摘要和压缩游标
 模型一次返回多个工具调用时，应在执行任何工具前原子预留整批预算；无法完整预留则整批拒绝，
 避免只执行半批产生不可解释状态。
 
-共享预算不等于共享可变 attempt 状态。candidate fallback 或同模型 retry 必须分别创建新的
+共享预算不等于共享可变 attempt 状态。candidate fallback 或同模型 retry 分别创建新的
 request-local Memory、advisor chain 和工具对话历史；失败 attempt 的局部消息不能进入后续
-attempt，但它已经发生的模型、工具和检索成本不能退回。
+attempt，但已经发生的模型、工具和检索成本不能退回。
 
 ### 9.4 服务端 Tool Provider SPI
 
@@ -356,18 +364,16 @@ attempt，但它已经发生的模型、工具和检索成本不能退回。
 - 保留 Collection/ACL 等服务端授权范围；
 - 为外部模块提供编译稳定的扩展面。
 
-内置 `searchKnowledge` 和 `searchJsonRecords` 也应迁移到同一注册表，避免“内置工具”和
-“外部工具”形成两套安全机制。
+内置 `searchKnowledge` 和 `searchJsonRecords` 已迁移到同一注册表，内外部工具共享同一安全
+边界。
 
-## 10. 推荐实施顺序
+## 10. 后续工作
 
-1. 一起升级并验证 Spring Boot `3.5.16` 与 Spring AI `1.1.8`，固定现有行为。
-2. 先实现逻辑请求级模型/工具预算和专项 call/stream 测试。
-3. 增加 Tool Provider SPI，迁移两个内置工具。
-4. 增加参数化只读 SQL 扩展示例，不提供任意 SQL。
-5. 接入模型元数据和 token-aware prompt 打包。
-6. 增加持久摘要 schema、压缩服务、CAS 和 TTL/clear 语义。
-7. 补齐 metadata、指标、验证脚本、真实 Tool Calling 和真实摘要冒烟。
+1. 依赖继续演进时，保持 Boot/Spring AI 兼容矩阵和 provider 能力声明同步。
+2. 增加预算耗尽、工具 policy、摘要降级和 provider 成本/延迟的生产观测。
+3. 在不开放客户端 tools 透传的前提下，扩充外部 Provider 示例和真实 Tool Calling 覆盖。
+4. 只有在延迟、质量和保留策略证据充分后，才评估是否把持久摘要改为默认开启。
+5. 修改 Chat、Memory、检索或工具公共契约时，继续执行 PostgreSQL 和隔离真实 LLM 回归。
 
 当前活跃实施方案见
 [下一轮高价值功能规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。

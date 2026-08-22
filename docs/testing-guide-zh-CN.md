@@ -314,7 +314,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V45、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V46、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -368,7 +368,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V45，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V46，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -394,7 +394,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V45，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V46，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -438,7 +438,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V45，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V46，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 
@@ -488,9 +488,11 @@ Chat 实现被明确验证为三种模式：
 ```
 
 该脚本会执行 Chat 执行链、Tool Calling、Memory/历史、结构化 SSE、
-Controller/集成和导出测试；V32 PostgreSQL lease/原子性测试；`mvn clean
+Controller/集成和导出测试；V32 会话 lease/原子性、V46 摘要 CAS 以及
+`NextHighValueFeaturesPostgresIntegrationTest` PostgreSQL 矩阵；`mvn clean
 compile test-compile`；完整 `mvn test`；安装当前 reactor 产物并测试独立的
-`demos/demo-domain-extension` 消费者；使用临时 PostgreSQL 和 dummy 模型端点执行
+`demos/demo-domain-extension` 与 `demos/demo-tool-calling-sql` 消费者；使用临时
+PostgreSQL 和 dummy 模型端点执行
 Spring Boot 启动/健康烟测；WebUI Vitest、TypeScript、生产构建；Chat 核心 Mock
 Playwright；project-docs 和空白检查。日志及 Markdown 结果写入
 `.verification/chat-capability/<run-id>/summary.md`。
@@ -537,13 +539,16 @@ Docker API 和 Ryuk 的排障经验见 [china-network-guide-zh-CN.md](china-netw
 真实 Provider 验证必须显式开启：
 
 ```bash
-RAG_API_KEY="$RAG_ROOT_API_KEY" \
 ./scripts/verify-chat-capability.sh --with-real-llm
 ```
 
-脚本会从 `.env` 读取真实模型配置；如果服务启用了 `RAG_ROOT_API_KEY`，会使用
-`X-API-Key` 访问数据面。未传该选项时，真实 LLM 门禁会明确记录为 `SKIP`；本地测试
-和 Mock Playwright 不代表真实模型或真实 Tool Calling endpoint 已验证。
+脚本会从 `.env` 或调用环境读取真实模型配置，并要求真实 WebUI 路径提供
+`RAG_ROOT_API_KEY`。它会创建一次性 PostgreSQL 数据库，在隔离端口启动
+`scripts/dev.sh`（默认后端 `18083`、WebUI `15175`），执行真实 WebUI
+`chat-real.spec.ts` 和 provider smoke，最后清理服务、临时环境文件和数据库。
+需要时可用 `CHAT_REAL_BACKEND_PORT`、`CHAT_REAL_FRONTEND_PORT` 覆盖端口。未传该选项时，
+真实 LLM 门禁会明确记录为 `SKIP`；本地测试和 Mock Playwright 不代表真实模型或真实
+Tool Calling endpoint 已验证。
 
 ## 编写新测试的规则
 

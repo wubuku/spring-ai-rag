@@ -1,6 +1,6 @@
 # Chat 上下文预算、持久记忆与工具治理进度
 
-> **状态**：生产代码实施中，当前处于 Phase 5
+> **状态**：生产代码与验收门禁已完成，当前处于合并前实现审查
 >
 > **开始日期**：2026-08-21
 >
@@ -31,7 +31,7 @@
 | 长青调研落档 | 已完成 | 新增中英文专题并准备加入索引 |
 | 自包含实施规划 | 已完成 | 已通过连续三轮审查 |
 | 规划连续审查 | `3/3` | 最终三轮均未修改规划正文 |
-| 生产代码实施 | Phase 5 进行中 | 预算、上下文规划、Tool Provider、SQL 示例和 V46/摘要初版已实现，正在补齐专项集成、协议、前端和真实 LLM 验收 |
+| 生产代码实施 | 已完成 | 预算、上下文规划、Tool Provider、SQL 示例、V46/摘要、协议、前端和验收脚本均已实现 |
 
 ## 2. 已冻结的核心方向
 
@@ -483,12 +483,40 @@
   CGLIB 子类；移除该类的 `final` 修饰，保留 repository API 和 CAS SQL 不变。
 - 两项修复后的配置/摘要/工具 focused tests：21 项通过；真实服务需重新启动确认。
 
-## 5. 下一步恢复入口
+## 5. 早期恢复入口（已完成）
 
 1. 运行 core focused compile/test，确认当前初版的实际可编译和测试状态。
 2. 对预算、工具 registry、Chat retry/fallback 和接口兼容性执行固定范围代码审计，修复实质
    缺陷并补齐一次性验收测试。
 3. 依规划完成 token-aware context、V46/摘要、SQL demo、协议/脚本/文档和真实运行时门禁。
+
+## 17. 2026-08-22：实现门禁与真实 LLM 验收完成
+
+- 修复后重新执行完整 `verify-chat-capability.sh --with-real-llm`，证据目录为
+  `.verification/chat-capability/20260822-sql-demo-gate-real/`。
+- 结果为 `18 passed, 0 failed, 0 skipped`：包含 Chat focused 测试、PostgreSQL
+  Chat/高价值特性矩阵、`mvn clean compile test-compile`、全量 Maven 测试、当前
+  reactor 安装、领域扩展示例、只读 SQL 工具 demo PostgreSQL 测试、隔离后端启动、
+  WebUI Vitest/TypeScript/生产构建、核心 Mock Playwright、锁检查、项目文档门禁和
+  whitespace 检查。
+- SQL demo 独立 PostgreSQL 测试为 `4/4`，验证 principal owner 隔离、参数绑定、行数上限
+  和只读查询；此前发现的验收脚本遗漏已修复并纳入门禁。
+- 真实运行时通过：真实 WebUI Playwright `1/1`，真实 embedding、隔离文档检索、真实
+  Chat ask、真实 SSE stream/provider smoke `10/10`。真实测试使用一次性数据库和隔离端口，
+  验收结束后已清理。
+- 当前实现审查计数重置为 `0/3`；下一步只做限定范围、只读交叉审查，发现会影响正确性、
+  成本安全、兼容性或数据一致性的缺陷才修改。
+
+## 5.1 2026-08-21：流式检索诊断 attempt 生命周期修复
+
+- 实现审查发现流式 Chat 成功或失败后没有调用 `markAttemptFinished`，导致启用检索诊断
+  时，已结束的 SSE attempt 可能在持久化 metadata 中保持 `RUNNING`。
+- `ChatExecutionService.streamCandidate` 现在以 request-local 原子状态确保成功、失败和
+  取消分别只标记一次；非流式路径和 fallback 语义保持不变。
+- 新增 `ChatExecutionServiceTest` 回归断言，验证 diagnostics 持久化前流式成功 attempt
+  为 `SUCCEEDED`。
+- 修复后 `ChatExecutionServiceTest` 通过 `14/14`，`mvn clean compile test-compile`
+  通过；实现审查计数重置为 `0/3`，必须以完整硬门槛重新取得最终证据。
 
 ## 6. 2026-08-21：真实服务前的 focused 测试收尾
 
@@ -626,3 +654,439 @@
 - 核心 Mock Playwright 使用隔离 Vite 端口 `4198` 执行
   `e2e/chat.spec.ts` 与 `e2e/streaming-upload.spec.ts`，11/11 通过；端口原有服务已
   核验为当前 worktree 的 Vite 服务并复用，未终止其他项目进程。
+
+## 19. 2026-08-21：合并最新 origin/main 后的验证基线
+
+- 已执行 `git fetch origin main`，`origin/main` 当前为 `2ea56c9d`。
+- 特性分支在提交 `d2bdb51c` 上执行 `git merge --no-edit origin/main`，结果为
+  `Already up to date`，无冲突、无额外主分支改动。
+- 因合并后基线与合并前内容一致，仍按合并后流程重新执行全部验收，不把合并前结果直接
+  作为最终证据。
+
+### 合并后 PostgreSQL 集成矩阵
+
+- 使用 `TESTCONTAINERS_API_VERSION=1.40`、`TESTCONTAINERS_RYUK_DISABLED=true` 和
+  `-Dapi.version=1.40` 重新执行 Chat 与本轮高价值特性 PostgreSQL 集成测试。
+- `ChatSessionPostgresIntegrationTest`：12/12 通过。
+- `NextHighValueFeaturesPostgresIntegrationTest`：10/10 通过。
+- 合计 22/22 通过，失败/错误/跳过均为 0；两套临时 PostgreSQL/pgvector 容器均从空库
+  成功执行 Flyway V1–V46，测试结束后已销毁。
+
+## 20. 2026-08-21：真实全栈浏览器验收通过
+
+- 使用修复后的真实 WebUI spec、隔离前端端口 `15173`、后端端口 `18082` 和真实
+  OpenAI-compatible Chat/Embedding 配置执行：
+  `BASE_URL=http://127.0.0.1:15173 RAG_ROOT_API_KEY=<temporary-key>
+  npx playwright test e2e/chat-real.spec.ts`。
+- `chat-real.spec.ts`：`1/1` 通过；Playwright 只使用 DOM 可见性、可访问状态、网络请求/
+  响应、URL 和 JSON 断言，未使用截图。
+- 验收覆盖真实浏览器代理下的 AGENT SSE、tool activity、answer、source、执行预算 metadata、
+  history API，以及全页刷新后异步跳转 `/unlock`、重新解锁并恢复原 session URL。
+- 本次测试数据已由 `finally` 清理；后端真实请求和清理日志已核对。下一步把该 spec 接入
+  `verify-chat-capability.sh --with-real-llm`，并切换脚本到可处置隔离数据库。
+
+## 21. 2026-08-21：修复全量测试与 V46 文档门禁阻断
+
+- 根因确认：`ChatSessionCoordinator` 是生产路径的必需 Bean；`OpenApiContractTest` 为隔离
+  数据库自动配置排除了 `JdbcChatMemoryRepositoryAutoConfiguration`，但没有提供
+  `JdbcChatMemoryRepository` 测试替身，导致全量 Maven 测试的 29 个 OpenAPI context error。
+- 已在 `OpenApiContractTest` 增加 `JdbcChatMemoryRepository` `@MockBean`。没有恢复生产代码中
+  会使真实服务缺少协调器的条件 Bean 逻辑。
+- 已将当前事实入口和项目文档门禁从 V45 同步到 V46：`AGENTS.md`、双语 developer
+  reference、双语 index、双语 project context、`DEPLOYMENT.md`、双语 release checklist
+  以及双语 testing guide、`scripts/verify-project-docs.sh`。双语 project context
+  补充了 V46 摘要表的 owner/session 隔离、前进游标和 version CAS 语义；历史归档和
+  规划基线未改写。
+- 本次属于影响测试可启动性与文档一致性的实质修复，实现收敛计数重置为 `0/3`。
+- 下一步：先运行 OpenAPI focused test 和文档门禁，随后重跑后端/前端/真实隔离全栈硬门槛；
+  所有硬门槛通过后重新开始三轮限定范围实现审查。
+
+## 22. 2026-08-21：修复后完整真实 LLM 隔离门禁通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，在本 worktree 创建一次性 PostgreSQL
+  数据库，并以隔离端口后端 `18083`、前端 `15175` 启动真实全栈；没有复制、打印或提交
+  API key。
+- 修复后的完整门禁结果为 `17 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260822-real-final/`。其中本地硬门槛重新覆盖：
+  focused backend、两套 PostgreSQL 集成矩阵、`mvn clean compile test-compile`、全量
+  Maven（`2880` tests，失败 `0`，错误 `0`，跳过 `7`）、domain extension demo、
+  隔离启动 smoke、WebUI Vitest（`214/214`）、TypeScript、生产构建、Mock Playwright
+  （`11/11`）、无显式悲观锁、文档门禁和 Git whitespace。
+- 真实 WebUI Playwright `chat-real.spec.ts`：`1/1` 通过。仅使用 DOM 可见性、可访问
+  状态、网络请求/响应、URL 和 JSON 断言，验证真实代理下的 AGENT SSE、工具活动、答案、
+  来源、执行预算 metadata、history API，以及刷新后解锁并恢复 session URL。
+- 真实 provider smoke：`PASS=10 FAIL=0`。验证了健康检查、真实 BGE-M3 embedding、
+  隔离 collection/document、真实 embedding、向量/混合检索、非流式 Chat 和 SSE 流式
+  Chat；非流式与流式回答均包含隔离文档验证码，测试数据和一次性数据库已清理。
+- 本门禁之后进入固定范围的实现审查，审查计数从 `0/3` 开始；审查期间只有发现影响
+  正确性、成本安全、兼容性或数据一致性的实质问题才修改代码并重置计数。
+
+## 23. 第三轮审查发现与修复
+
+- 发现 `chat_postgres_tests` 串行执行 Chat 会话集成和下一轮高价值特性集成时，
+  前一个命令失败可能被后一个命令的成功返回码覆盖，造成 PostgreSQL 门禁误报通过；
+  现改为分别保存两个返回码，任一失败都使该门禁失败。
+- 发现脚本步骤名和文档仍只写 V32，无法准确表达当前同时覆盖 V46 摘要 CAS
+  及 `NextHighValueFeaturesPostgresIntegrationTest`；已统一为 Chat 与高价值
+  PostgreSQL 集成矩阵，并同步双语开发参考、测试指南。
+- 发现 Chat 专项真实 LLM 示例把 `RAG_API_KEY` 当作验证脚本的 root key 输入，
+  但隔离 WebUI 流程实际要求 `RAG_ROOT_API_KEY`；已改为由 `.env`/调用环境提供
+  `RAG_ROOT_API_KEY`，并补充隔离数据库、端口和清理行为说明。
+- 发现中断 trap 清理资源后未明确退出，可能继续执行后续门禁；已改为清理后以
+  `130` 退出。
+- 本轮属于脚本正确性与验收证据准确性修复，实现收敛计数重置为 `0/3`。修复后必须
+  重新执行 PostgreSQL 集成矩阵、Maven 编译/测试、前端门槛和真实 LLM 隔离门禁，
+  再重新开始三轮限定范围审查。
+
+## 24. 2026-08-21：TTL 夹具与预算边界修复
+
+- `ChatSessionPostgresIntegrationTest` 的过期租约夹具改为合法的短租约自然过期流程，
+  保持 V32 `expires_at > acquired_at` 约束，不再通过非法数据库更新制造过期状态；
+  ChatSession PostgreSQL 集成测试现为 `14/14` 通过。
+- 发现并修复最终 Chat/SSE 响应的 `executionBudget` 快照可能漏记摘要模型调用的问题：
+  摘要在主 turn 持久化后执行，返回结果现在会在摘要完成后刷新预算快照；新增测试证明
+  `summaryCalls` 会进入最终 metadata。
+- 发现并修复 provider 返回缺失/异常 tool call ID 时可绕过工具结果大小限制的问题；
+  `BudgetedToolCallingManager` 现在对返回的所有当前工具响应统一执行字符和 token 限制；
+  新增缺失 ID 回归测试。
+- 修复后专项 Chat/工具测试为 `16/16` 通过。由于生产代码和测试均有实质变更，后续
+  仍须从 `0/3` 重新完成基本集成硬门槛和三轮限定范围实现审查。
+
+## 25. 第 1 轮实现审查发现 baseline 顺序缺陷
+
+- 发现 `RagChatHistoryRepository.findOwnedBaseline` 已将数据库 newest-first 结果转换为
+  chronological 顺序，但 `ChatExecutionService.loadBaseline` 的协调器路径仍再次反转；
+  这会使启用 owner/session lease 的生产 Chat 请求把最新 turn 放在最前面，token-aware
+  planner 在窗口不足时可能优先保留旧上下文。
+- 修复方式：保留 repository 的 chronological 契约，仅对兼容的 legacy
+  `findBySessionId` 结果执行反转；新增 ChatExecutionService 回归测试，直接断言协调器路径
+  传给 request-local attempt 的 baseline 顺序。
+- 这是影响上下文正确性的实质修复；审查计数重置为 `0/3`，修复后必须重新通过基本集成
+  硬门槛，再重新开始三轮限定范围审查。
+
+## 26. 修正 baseline 回归测试夹具并修复 planner 重复历史
+
+- 基线顺序修复后的首次完整门禁发现，新增
+  `coordinatedBaselineRemainsChronological` 测试没有为 mock 的
+  `ChatSessionCoordinator.invokeWithinDeadline` 配置 supplier 执行行为，导致测试把
+  Mockito 默认的 `null` 当作 Chat 响应并报告“没有成功尝试”。已在测试夹具中补上
+  supplier 执行行为。
+- 夹具恢复后，专项测试进一步暴露出一个真实生产缺陷：
+  `ConversationPromptPlanner.selectAdditionalTurns` 在近期窗口已经覆盖全部历史 turn
+  时，把负数起点通过 `Math.max(0, ...)` 夹成 `0`，重复加入最老的一轮历史。已改为在
+  没有未选中 turn 时直接返回空选择；该修复避免重复 prompt、无效 token 消耗和错误的
+  上下文预算统计。
+- 这是影响上下文正确性和成本的实质生产修复；基本门槛与实现审查计数保持 `0/3`，
+  必须在修复后重新通过完整硬门槛。
+
+## 27. planner 修复后的基本硬门槛通过
+
+- 使用独立验证批次 `20260821-planner-fix` 重新执行基本门禁。
+- Chat 专项测试、ChatSession PostgreSQL 集成、下一轮高价值 PostgreSQL 集成分别通过；
+  PostgreSQL 集成矩阵合计 `24/24`。
+- `mvn clean compile test-compile` 通过；全量 Maven 通过，核心 reactor 报告
+  `2884` 项测试，失败 `0`、错误 `0`、跳过 `7`。
+- 后端启动 smoke、domain extension demo、WebUI Vitest `214/214`、TypeScript、
+  生产构建、Mock Playwright `11/11`、无显式悲观锁、文档门禁和 Git whitespace 均通过。
+- 基本门禁结果为 `16 passed, 0 failed, 1 skipped`；唯一跳过项是未带
+  `--with-real-llm` 时的真实 LLM 隔离 WebUI/provider 验收。由于本轮修复触及生产
+  prompt planner，下一步先重新执行真实 LLM 验收，再开始 `0/3` 的限定范围实现审查。
+
+## 28. planner 修复后的真实 LLM 隔离验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，不复制、打印或提交 API key；使用
+  隔离后端端口 `18083`、前端端口 `15175` 和一次性 PostgreSQL 数据库执行
+  `20260821-real-planner-fix`。
+- 真实 WebUI Playwright `chat-real.spec.ts`：`1/1` 通过。只使用 DOM 可见性、可访问
+  状态、网络请求/响应、URL 和 JSON 断言，验证了真实代理下的 AGENT SSE、工具活动、
+  答案、来源、执行预算 metadata、history API，以及刷新后解锁并恢复 session URL。
+- 真实 provider smoke：`PASS=10 FAIL=0`。验证健康检查、BGE-M3 embedding、隔离
+  collection/document、真实 embedding、向量检索、非流式 Chat 和 SSE 流式 Chat；
+  非流式与流式回答均包含隔离文档验证码，测试数据和一次性数据库已清理。
+- 本阶段的基本门禁与真实验收证据均通过，进入限定范围实现审查；审查计数从 `0/3`
+  开始。后续只检查会影响正确性、成本安全、兼容性或数据一致性的缺陷；任何实质
+  修改都必须重置计数并重新通过受影响门槛。
+
+## 29. 2026-08-21：实现第 1 轮发现摘要 Memory 回写与窗口截断问题
+
+- 检查范围：`ConversationSummaryService`、`ChatExecutionService`、
+  `ModeAwareChatClientFactory`、Spring AI `MessageWindowChatMemory` 实际实现，以及
+  request-local Memory 的提交路径。
+- 发现问题：
+  - token planner 生成的合成摘要会进入 request-local Memory，而成功提交时原样读取
+    整个 Memory，可能把摘要写入长期 `spring_ai_chat_memory`，造成后续摘要重复注入；
+  - request-local Memory 仍使用固定 `rag.memory.max-messages`，可能再次裁掉 planner
+    已经按 token 预算选出的历史。
+- 处理措施：
+  - 为合成摘要消息增加内部 properties 标记；它仍参与当前 prompt 和
+    `CompressionQueryTransformer` 的历史，但提交共享 JDBC Memory 前会被过滤；
+  - request-local Memory 容量按已选 prompt 消息和当前输入消息数动态设置，至少保留完整
+    baseline、当前 user/assistant turn，不改变共享 JDBC Memory 的既有消息窗口；
+  - 新增服务层回归测试，直接断言协调器收到的持久 Memory 不含合成摘要。
+- 验证结果：
+- `mvn -pl spring-ai-rag-core -am -DskipTests compile test-compile`：通过；
+- Chat/Factory/Summary 专项：`27/27` 通过；
+- 本轮实现审查因实质修复重置为 `0/3`；基本集成硬门槛与真实 LLM 最终证据需在
+  本修复完成后重新取得。
+
+## 30. 2026-08-21：摘要 Memory 修复专项验证通过
+
+- 修复后的 Chat、Factory、Summary 专项测试已完成：`28/28` 通过，失败 `0`、错误
+  `0`、跳过 `0`。
+- 专项结果确认：合成摘要仍可参与当前请求的 prompt 与压缩流程，但不会被成功路径
+  回写到共享 JDBC Memory；planner 已选出的历史消息不会被固定的请求级消息窗口再次
+  截断。
+- 由于这是修复后的局部验证，尚不能替代完整基本集成门槛；下一步按固定顺序重新执行
+  PostgreSQL 集成矩阵、Maven 编译/测试、后端启动、WebUI 门槛及真实 LLM 隔离验收。
+- 实现审查计数仍为 `0/3`。
+
+## 31. 2026-08-21：摘要 Memory 修复后的完整基本门槛通过
+
+- 一键门禁批次 `20260822-summary-memory-fix` 已完成，结果为 `16 passed, 0 failed,
+  1 skipped`；唯一跳过项是显式要求 `--with-real-llm` 才执行的真实 LLM 隔离验收。
+- 后端 focused Chat 测试通过 `210/210`；ChatSession PostgreSQL 集成
+  `14/14`、下一轮高价值 PostgreSQL 集成 `10/10`，矩阵合计 `24/24`。
+- `mvn clean compile test-compile` 通过；全量 Maven 通过，core 报告
+  `2886` 项测试，失败 `0`、错误 `0`、跳过 `7`；当前 reactor 安装和 domain extension
+  demo 测试也通过。
+- 后端隔离启动 smoke 通过，readiness/liveness、PostgreSQL、pgvector 和 V1–V46
+  迁移均可用；WebUI Vitest `214/214`、TypeScript、生产构建和无截图 Mock
+  Playwright `11/11` 通过。
+- 文档门禁 `10/10`、无显式悲观/ advisory lock、Git whitespace 均通过。
+- 由于本轮只验证了修复后的实现，没有改变实现审查计数；仍为 `0/3`。下一步使用本轮
+  最新编译产物执行真实 provider smoke 和真实 WebUI Playwright。
+
+## 32. 2026-08-21：摘要 Memory 修复后的真实 LLM 隔离验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，不复制、打印或提交 API key；使用隔离
+  后端端口 `18084`、前端端口 `15176` 和一次性 PostgreSQL 数据库执行
+  `20260821-summary-memory-real-main-env`。
+- 真实 WebUI Playwright `chat-real.spec.ts`：`1/1` 通过。测试只使用 DOM 可见性、可访问
+  状态、网络请求/响应、URL 和 JSON 断言，未使用截图；验证了真实代理下的 AGENT SSE、
+  工具活动、答案、来源、执行预算 metadata、history API，以及刷新后解锁并恢复
+  session URL。
+- 真实 provider smoke：`PASS=10 FAIL=0`。验证健康检查、BGE-M3 embedding、隔离
+  collection/document、真实 embedding、向量/混合检索、非流式 Chat 和 SSE 流式 Chat；
+  非流式与流式回答均包含隔离文档验证码，测试数据和一次性数据库已清理。
+- 本次完整批次最终为 `17 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260821-summary-memory-real-main-env/`。至此摘要
+  Memory 修复后的真实 LLM 证据已补齐，进入 `0/3` 的限定范围实现审查。
+
+## 33. 第 2 轮审查发现并修复跨轮 ToolResponse 重复清理
+
+- 检查范围：Spring AI 1.1.8 `ToolExecutionResult`/`DefaultToolCallingManager` 契约、
+  `BudgetedToolCallingManager`、`ChatExecutionBudget`、`RagChatToolRegistry`、
+  `KnowledgeSearchTool` 以及 Agent 工具预算测试。
+- 发现问题：Spring AI 的工具执行结果包含完整 conversation history。原实现清理并计费
+  history 中的全部 `ToolResponseMessage`，因此后续工具轮会重复计算上一轮结果，并可能
+  在本轮 token 预算不足时把旧检索/SQL 结果改写为 `tool_result_too_large`，使模型丢失
+  已获得的证据。
+- 处理措施：保留完整历史消息，仅对结果末尾代表当前工具批次的
+  `ToolResponseMessage` 执行字符/token 限制和预算结算；新增跨轮回归测试，证明旧结果
+  保持原文而当前超限结果被替换为受控错误。
+- 这是影响 Agent 多轮正确性和预算统计的实质修复；实现审查计数重置为 `0/3`。修复后
+  必须重新通过基本集成硬门槛和真实 LLM 隔离验收，再重新开始三轮限定范围审查。
+
+## 34. ToolResponse 修复后的基本硬门槛通过
+
+- 使用验证批次 `20260821-tool-history-fix` 完成基本门禁，结果为
+  `16 passed, 0 failed, 1 skipped`；唯一跳过项是显式要求 `--with-real-llm` 的真实
+  LLM 隔离 WebUI/provider 验收。
+- Chat focused backend `210/210`；ChatSession 与下一轮高价值 PostgreSQL 集成矩阵
+  `24/24`；`mvn clean compile test-compile`、全量 Maven（core `2887` 项测试，失败
+  `0`、错误 `0`、跳过 `7`）、当前 reactor 安装、domain extension demo `19/19`、
+  隔离启动 smoke 均通过。
+- WebUI Vitest `214/214`、TypeScript、生产构建、无截图 Mock Playwright `11/11`、
+  无显式悲观/advisory lock、文档门禁 `10/10` 和 Git whitespace 均通过。
+- 修复后的真实 LLM 验收尚未执行；实现审查计数仍为 `0/3`。
+
+## 35. ToolResponse 修复后的真实 LLM 隔离验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，不复制、打印或提交 API key；使用隔离
+  后端端口 `18085`、前端端口 `15177` 和一次性 PostgreSQL 数据库执行
+  `20260821-tool-history-real` 批次。
+- 真实 WebUI Playwright `chat-real.spec.ts`：`1/1` 通过。测试仅使用 DOM 可见性、
+  可访问状态、网络请求/响应、URL 和 JSON 断言，未使用截图；验证真实 WebUI 代理下的
+  AGENT SSE、工具活动、答案、来源、执行预算 metadata、history API，以及刷新后解锁
+  并恢复 session URL。
+- 真实 provider smoke：`PASS=10 FAIL=0`。验证健康检查、BGE-M3 embedding、隔离
+  collection/document、真实 embedding、向量检索、非流式 Chat 和 SSE 流式 Chat；
+  非流式与流式回答均包含隔离文档验证码，测试数据和一次性数据库已清理。
+- 本次完整批次最终为 `17 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260821-tool-history-real/`。ToolResponse 修复后的真实
+  LLM 证据已补齐；实现审查计数仍从 `0/3` 开始，下一步执行限定范围实现审查。
+
+## 36. TTL Memory 修复后的真实 LLM 隔离验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，不复制、打印或提交 API key；使用隔离
+  后端端口 `18086`、前端端口 `15178` 和一次性 PostgreSQL 数据库执行
+  `20260821-ttl-memory-real` 批次。
+- 真实 WebUI Playwright `chat-real.spec.ts`：`1/1` 通过。测试仅使用 DOM 可见性、
+  可访问状态、网络请求/响应、URL 和 JSON 断言，未使用截图；验证真实 WebUI 代理下的
+  AGENT SSE、工具活动、答案、来源、执行预算 metadata、history API，以及刷新后解锁
+  并恢复 session URL。
+- 真实 provider smoke：`PASS=10 FAIL=0`。验证健康检查、BGE-M3 embedding、隔离
+  collection/document、真实 embedding、向量检索、非流式 Chat 和 SSE 流式 Chat；
+  非流式与流式回答均包含隔离文档验证码，测试数据和一次性数据库已清理。
+- 本次完整批次最终为 `17 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260821-ttl-memory-real/`。TTL 清理修复后的真实
+  LLM 证据已补齐；实现审查计数仍从 `0/3` 开始，下一步执行限定范围实现审查。
+
+## 37. 第 2 轮审查发现 SQL demo 未完全落实规划契约
+
+- 检查范围：`demos/demo-tool-calling-sql` 的工具 schema、JDBC 实现、provider policy、
+  README、测试夹具，以及规划 §6.3 对消费者 SQL 示例的固定要求。
+- 发现问题：当前示例使用 `JdbcTemplate + PreparedStatement` 和 `status/query` 订单
+  参数，行数上限为 `10`，测试使用 H2；规划要求示例使用
+  `NamedParameterJdbcTemplate`、`sku/warehouseCode` 参数、`1..20` 上限，并以真实
+  PostgreSQL 验证 owner 隔离、参数绑定、行数上限和只读 SQL。这使示例没有完整证明
+  规划冻结的安全边界。
+- 处理措施：将示例收敛为固定的 `demo_inventory` 查询，使用命名参数和服务端
+  `owner_principal_id` 条件；将行数上限、provider policy、测试依赖和 README 同步到
+  规划契约，并补充真实 PostgreSQL 集成测试。
+- 结果：该问题属于影响安全边界和验收证据的实质实现偏差，实现审查计数重置为 `0/3`；
+  修复后必须重新通过后端/SQL demo 基本门槛、真实 LLM 隔离门禁，再重新开始三轮实现审查。
+
+## 38. SQL demo 修复与真实 PostgreSQL 验证
+
+- 示例已收敛为 `ReadOnlyInventoryLookupTool` / `lookupInventory`：固定
+  `demo_inventory` SELECT，使用 `NamedParameterJdbcTemplate` 的命名参数绑定，
+  server-owned `principal.id` owner 条件，`sku`/`warehouseCode` 过滤，`1..20` 行上限，
+  provider policy 对齐的 2 秒 statement timeout 和 8,000 字符结果上限。
+- 测试从 H2 改为真实 PostgreSQL/pgvector Testcontainers，覆盖 owner 隔离、参数注入、
+  20 行上限、任意 SQL 参数拒绝和只读结果不变。
+- 首次 PostgreSQL 运行发现可选 `NULL` 参数缺少显式 `VARCHAR` 类型，修复后
+  `ReadOnlyInventoryLookupToolTest` `4/4` 通过，失败/错误/跳过均为 `0`。
+- 这是修复后的局部证据；实现审查计数仍为 `0/3`，下一步重新执行完整基本集成硬门槛。
+
+## 39. SQL demo 修复后的完整门槛与真实 LLM 重跑准备
+
+- 验证批次 `20260822-sql-demo-fix-real` 已完成基础步骤：Chat focused backend
+  `210/210`、Chat PostgreSQL 集成 `15/15`、下一轮高价值 PostgreSQL 集成 `10/10`、
+  `mvn clean compile test-compile`、全量 Maven、当前 reactor 安装、
+  domain extension demo `19/19`、隔离后端启动、WebUI Vitest `214/214`、
+  TypeScript、生产构建、Mock Playwright `11/11`、无显式锁检查、文档门禁
+  `10/10` 和 Git whitespace 均通过。
+- 该批次唯一失败项是最后的真实 LLM 隔离 WebUI/provider E2E：隔离 worktree 没有
+  `.env`，脚本默认的 `CHAT_REAL_ENV_FILE` 因此找不到环境文件；这不是接口或实现
+  失败，也没有执行任何真实 LLM 调用。
+- 主工作区 `/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env` 已存在。下一步
+  通过 `CHAT_REAL_ENV_FILE` 显式引用该文件重跑真实验收，绝不复制、读取、打印或提交
+  其中的密钥；真实验收仍使用隔离端口和一次性测试数据。
+- 在真实验收完整通过前，实现审查计数保持 `0/3`，不得进入三轮收敛审查或 Git 交付。
+
+## 40. SQL demo 修复后的真实 LLM 验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，通过
+  `CHAT_REAL_ENV_FILE=/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env` 加载；
+  没有复制、打印或提交其中的密钥。
+- 验证批次 `20260822-sql-demo-fix-real-main-env` 的基础门槛全部通过：
+  Chat focused backend `210/210`、Chat PostgreSQL 集成 `15/15`、下一轮高价值
+  PostgreSQL 集成 `10/10`、`mvn clean compile test-compile`、全量 Maven
+  `2887` 项核心测试（失败 `0`、错误 `0`、跳过 `7`）、当前 reactor 安装、
+  domain extension demo `19/19`、隔离后端启动、WebUI Vitest `214/214`、
+  TypeScript、生产构建、无截图 Mock Playwright `11/11`、无显式锁检查、文档门禁
+  `10/10` 和 Git whitespace 均通过。
+- 真实 LLM 隔离验收通过：真实 WebUI Playwright `1/1`；真实 provider smoke
+  `PASS=10 FAIL=0`，覆盖健康检查、BGE-M3 embedding、隔离 collection/document、
+  真实 embedding、向量检索、非流式 Chat 和 SSE 流式 Chat；一次性测试数据库已由
+  脚本清理。
+- 本次批次最终为 `17 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260822-sql-demo-fix-real-main-env/`。
+  基础集成硬门槛完成，实现审查计数现在从 `0/3` 开始进入限定范围三轮审查。
+
+## 41. 第 3 轮实现审查发现长青文档状态滞后
+
+- 检查范围：SSE/API/WebUI/真实 E2E、验证脚本，以及
+  `docs/chat-memory-rag-tool-calling*.md` 与当前实现的能力边界。
+- 发现问题：长青调研仍把 token-aware prompt、持久摘要、逻辑请求级预算和
+  `RagChatToolProvider` SPI 描述为“缺失”，并声称没有 per-tool/SQL 预算；这与当前
+  已实现的预算、V46 summary/CAS、协调式 TTL、内置/外部工具注册表和 SQL demo 不一致。
+- 处理措施：同步更新中英文长青文档的当前版本、重试隔离、prompt planner、summary/TTL、
+  预算、Tool Provider、SQL demo 和后续工作边界；保留历史审查记录，不改写历史结论。
+- 结果：该问题影响后续接入者对安全与能力契约的理解；实现审查计数重置为 `0/3`。
+  文档修改后需重新通过基本集成硬门槛、真实 LLM 隔离验收，再重新开始三轮实现审查。
+
+## 42. 第 1 轮实现审查发现 STATELESS 请求可能触发摘要压缩
+
+- 检查范围：`ChatExecutionService` 的摘要调用路径、
+  `ConversationSummaryService.compactIfNeeded`、`MemoryMode` 语义及摘要回归测试。
+- 发现问题：`STATELESS` 请求跳过了摘要加载，但成功提交后仍会调用摘要压缩服务；压缩服务没有
+  检查记忆模式，因此可能读取该 session 的持久历史并写入长期摘要，使无状态请求改变
+  server-owned memory。
+- 处理措施：在摘要压缩服务入口明确跳过 `STATELESS` 请求，并增加回归测试，证明不会读取历史、
+  调用摘要模型或写入摘要 CAS。
+- 结果：这是影响记忆隔离契约的数据一致性问题，实现审查计数重置为 `0/3`；修复后需要
+  重新通过基本集成硬门槛和真实 LLM 隔离验收，再重新开始三轮限定范围审查。
+
+## 43. STATELESS 摘要隔离修复后的基本硬门槛通过
+
+- 新增 `ConversationSummaryServiceTest.statelessRequestsNeverReadOrWriteDurableSummary`，
+  摘要服务测试 `7/7` 通过。
+- 验证批次 `20260822-stateless-fix-basic` 通过 Chat focused backend、Chat/下一轮高价值
+  PostgreSQL 集成矩阵、`mvn clean compile test-compile`、全量 Maven、当前 reactor 安装、
+  domain extension demo、SQL tool demo、隔离后端启动、WebUI Vitest、TypeScript、生产
+  构建、无截图 Mock Playwright `11/11`、无显式悲观/advisory lock、文档门禁和 Git
+  whitespace；结果 `17 passed, 0 failed, 1 skipped`。
+- 唯一跳过项是未传入 `--with-real-llm` 的真实 LLM 隔离 WebUI/provider 验收。实现审查
+  计数仍为 `0/3`；下一步使用主工作区 `.env` 完成真实 LLM 重验。
+
+## 44. STATELESS 摘要隔离修复后的真实 LLM 验收通过
+
+- 使用主工作区 `.env` 作为真实 provider 配置源，通过
+  `CHAT_REAL_ENV_FILE` 显式引用；未复制、打印或提交其中的密钥。
+- 验证批次 `20260822-stateless-fix-real-main-env` 的基础门槛全部通过，包含 Chat focused
+  backend、两组 PostgreSQL 集成、`mvn clean compile test-compile`、全量 Maven、当前
+  reactor 安装、domain extension/SQL demo、隔离启动、WebUI Vitest/TypeScript/生产构建、
+  无截图 Mock Playwright `11/11`、锁检查、文档门禁和 whitespace。
+- 真实 WebUI Playwright `1/1` 通过；真实 provider smoke `PASS=10 FAIL=0`，覆盖健康检查、
+  BGE-M3 embedding、隔离 collection/document、真实 embedding、向量检索、非流式 Chat 和
+  SSE 流式 Chat；ask/stream 均返回隔离文档验证码，一次性数据库和服务已清理。
+- 本次完整批次结果为 `18 passed, 0 failed, 0 skipped`，证据目录为
+  `.verification/chat-capability/20260822-stateless-fix-real-main-env/`。硬门槛重新通过，
+  实现审查计数从 `0/3` 开始。
+
+## 45. 实现三轮限定范围审查完成
+
+- 第 1、2、3 轮均在基本集成硬门槛和真实 LLM 隔离验收通过后执行，审查范围固定为：
+  后端上下文规划/持久摘要/记忆隔离/工具预算，API/SSE/WebUI 事件契约，以及 SQL demo、
+  验收脚本和相关文档索引。
+- 三轮均未发现影响正确性、成本安全、兼容性或数据一致性的实质问题，也未修改代码；
+  连续无修改计数达到 `3/3`。
+- 下一步按交付流程获取最新 `origin/main`，将其合并到本特性分支；合并后不沿用本节之前
+  的验收证据，必须重新执行完整后端、前端、真实 LLM 和端到端门槛。
+
+## 46. 合并最新 origin/main 后建立重新验收基线
+
+- 已执行 `git fetch origin`；最新 `origin/main` 为 `2ea56c9d2868614567446ee09198c1bcb5b144e8`。
+- 当前特性分支 `HEAD` 为 `d2bdb51c65118aa86aca238ed91ae68af5d9ac4f`，已包含该
+  `origin/main`；执行 `git merge --no-edit origin/main` 返回 `Already up to date`，
+  无冲突、无合并提交，现有工作区修改全部保留。
+- 从本节开始，之前的验收证据不作为最终结论；按固定顺序重新执行 PostgreSQL 集成矩阵
+  与 Maven 门槛、前端 tsc/build/Mock Playwright、隔离端口真实全栈 Playwright 与真实
+  provider smoke，并在 Git 交付后于最终 `main` 再完整复验。
+
+## 47. 合并后完整验收通过
+
+- 验证批次为 `20260822-post-main-acceptance`，证据目录为
+  `.verification/chat-capability/20260822-post-main-acceptance/`；该批次基于已确认包含
+  最新 `origin/main` 的特性分支重新执行，未沿用合并前结论。
+- 后端 Chat focused、Chat/高价值 PostgreSQL 集成矩阵、`mvn clean compile test-compile`、
+  全量 Maven、当前 reactor 安装、domain extension demo、SQL tool demo、隔离后端启动、
+  WebUI Vitest `214/214`、TypeScript、生产构建、无截图 Mock Playwright `11/11`、显式锁
+  检查、文档门禁和 whitespace 全部通过。
+- 真实隔离验收通过：真实 WebUI Playwright `1/1`；真实 provider smoke `PASS=10 FAIL=0`，
+  覆盖真实 BGE-M3 embedding、隔离文档创建/嵌入/检索、非流式 Chat、SSE 流式 Chat，
+  ask/stream 均返回隔离文档验证码；一次性数据库、服务和临时环境已清理。
+- 本批次最终为 `18 passed, 0 failed, 0 skipped`。下一步执行合并后代码的三轮限定范围
+  收敛审查；若无实质问题，再提交并推送特性分支。
+
+## 48. 合并后代码三轮收敛审查完成
+
+- 在合并后完整验收通过的基础上，连续完成三轮固定范围只读审查，范围覆盖：
+  运行时记忆/摘要/TTL/lease 安全边界，API/SSE/WebUI/历史契约，Tool Provider 与
+  预算限制，SQL demo 的参数化 owner 隔离，以及验收脚本清理、文档索引和 V46 事实入口。
+- 三轮均未发现影响正确性、成本安全、兼容性或数据一致性的实质问题，期间未修改代码；
+  合并后连续无修改计数达到 `3/3`。
+- 特性分支已满足提交与推送前条件；下一步提交工作区全部修改并推送特性分支，然后在
+  `main` worktree 合并该分支。

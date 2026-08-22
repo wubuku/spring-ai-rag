@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V45 |
+| Flyway | V1–V46 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -252,8 +252,10 @@ Run the Chat redesign gate serially because it includes Maven clean output:
 
 The script verifies `KNOWLEDGE`, `AGENT`, and `PLAIN` mode execution, Spring AI
 Tool Calling boundaries, principal-scoped memory/history, V32 session leases,
-structured SSE, WebUI mode/capability/source rendering, and Chat export
-snapshots. It records every step under
+V46 durable summary CAS, bounded execution metadata, structured SSE, WebUI
+mode/capability/source rendering, and Chat export snapshots. It also runs the
+`NextHighValueFeaturesPostgresIntegrationTest` matrix and the independent
+domain-extension and read-only SQL tool demo tests, then records every step under
 `.verification/chat-capability/<run-id>/summary.md`.
 
 PostgreSQL/Testcontainers defaults:
@@ -284,7 +286,13 @@ correctness evidence. Real provider calls are opt-in:
 ./scripts/verify-chat-capability.sh --with-real-llm
 ```
 
-Without that option the real LLM step is recorded as `SKIP`.
+With `--with-real-llm`, the gate creates a disposable PostgreSQL database,
+starts an isolated `scripts/dev.sh` stack (backend `18083`, WebUI `15175` by
+default), runs the real WebUI `chat-real.spec.ts` and provider smoke, then
+cleans up the stack, overlay environment, and database. The `.env` or caller
+environment must provide `RAG_ROOT_API_KEY`; override the ports with
+`CHAT_REAL_BACKEND_PORT` and `CHAT_REAL_FRONTEND_PORT` when needed. Without
+that option the real LLM step is recorded as `SKIP`.
 
 ### OpenAI Compatibility Verification
 

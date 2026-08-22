@@ -37,6 +37,14 @@ import java.util.concurrent.TimeoutException;
 @Service
 public final class ConversationSummaryService {
 
+    /**
+     * Internal marker for the synthetic summary message used only while
+     * constructing one request prompt. It must never be written back to the
+     * durable Spring AI conversation memory.
+     */
+    public static final String SYNTHETIC_SUMMARY_MESSAGE_METADATA_KEY =
+            "rag.chat.synthetic-summary";
+
     private static final Logger log =
             LoggerFactory.getLogger(ConversationSummaryService.class);
     private static final String SUMMARY_PREFIX = """
@@ -105,6 +113,9 @@ public final class ConversationSummaryService {
             ChatModelRouter.ChatModelCandidate currentCandidate,
             List<Message> committedMessages) {
         RagChatProperties.ContextProperties context = properties.getContext();
+        if (command.memoryMode() == MemoryMode.STATELESS) {
+            return CompactionResult.skipped("compaction_stateless");
+        }
         if (!context.isCompactionEnabled()) {
             return CompactionResult.skipped("compaction_disabled");
         }

@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V45 |
+| Flyway | V1–V46 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -245,8 +245,10 @@ LLM 验证。
 ```
 
 脚本会验证 `KNOWLEDGE`、`AGENT`、`PLAIN` 三种模式，Spring AI Tool Calling 边界，
-principal 隔离的 Memory/历史，V32 会话 lease，结构化 SSE，WebUI 模式/能力/来源展示，
-以及 Chat 导出来源快照。每一步都会记录到
+principal 隔离的 Memory/历史，V32 会话 lease、V46 持久化摘要 CAS、有界执行 metadata、
+结构化 SSE，WebUI 模式/能力/来源展示，以及 Chat 导出来源快照；同时执行
+`NextHighValueFeaturesPostgresIntegrationTest` 矩阵和独立的领域扩展、只读 SQL
+工具 demo 测试。每一步都会记录到
 `.verification/chat-capability/<run-id>/summary.md`。
 
 PostgreSQL/Testcontainers 默认配置：
@@ -274,7 +276,12 @@ CHAT_PLAYWRIGHT_PORT=4199 ./scripts/verify-chat-capability.sh
 ./scripts/verify-chat-capability.sh --with-real-llm
 ```
 
-未开启时，真实 LLM 步骤会明确记录为 `SKIP`。
+启用后，脚本会创建一次性 PostgreSQL 数据库，在隔离端口启动
+`scripts/dev.sh`（默认后端 `18083`、WebUI `15175`），执行真实 WebUI
+`chat-real.spec.ts` 和 provider smoke，最后清理服务、临时环境文件和数据库。
+`.env` 或调用环境必须提供 `RAG_ROOT_API_KEY`；需要时可用
+`CHAT_REAL_BACKEND_PORT`、`CHAT_REAL_FRONTEND_PORT` 覆盖端口。未开启时，
+真实 LLM 步骤会明确记录为 `SKIP`。
 
 ### OpenAI 兼容一键验证
 

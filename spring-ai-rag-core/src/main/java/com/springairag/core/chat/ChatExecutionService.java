@@ -32,6 +32,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.AbstractMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -55,6 +56,7 @@ import java.util.List;
 import java.util.Map;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 /**
@@ -257,8 +259,9 @@ public class ChatExecutionService {
                     if (sessionCoordinator != null) {
                         List<Message> committedMessages =
                                 attempt.memory() != null
-                                        ? attempt.memory().get(
-                                                command.memoryConversationId())
+                                        ? committedMemoryMessages(
+                                                attempt.memory().get(
+                                                        command.memoryConversationId()))
                                         : List.of();
                         sessionCoordinator.commit(
                                 lease,
@@ -275,6 +278,8 @@ public class ChatExecutionService {
                                     committedResult.answer());
                     committedResult = withSummaryMetadata(
                             committedResult, compaction);
+                    committedResult = withExecutionBudgetMetadata(
+                            committedResult, command.executionBudget());
                     if (metricsService != null) {
                         metricsService.recordSuccess(
                                 System.currentTimeMillis() - startedAt,
@@ -407,6 +412,7 @@ public class ChatExecutionService {
                 new AtomicReference<>();
         AtomicReference<ChatClientResponse> lastResponse =
                 new AtomicReference<>();
+        AtomicBoolean attemptFinished = new AtomicBoolean();
         Flux<ChatClientResponse> streamResponses = invokeStream(attempt, command);
         if (lease != null) {
             Duration remaining = Duration.between(
@@ -446,7 +452,20 @@ public class ChatExecutionService {
                             error -> sink.tryEmitError(error),
                             () -> sink.tryEmitComplete());
             return sink.asFlux()
-                    .doOnCancel(subscription::dispose);
+                    .doOnCancel(() -> {
+                        subscription.dispose();
+                        if (attemptFinished.compareAndSet(false, true)) {
+                            markAttempt(command, attempt, false);
+                        }
+                    });
+        }).doOnComplete(() -> {
+            if (attemptFinished.compareAndSet(false, true)) {
+                markAttempt(command, attempt, true);
+            }
+        }).doOnError(error -> {
+            if (attemptFinished.compareAndSet(false, true)) {
+                markAttempt(command, attempt, false);
+            }
         });
     }
 
@@ -466,7 +485,8 @@ public class ChatExecutionService {
                 withPersistenceMetadata(command, toResult(command, attempt, response));
         if (sessionCoordinator != null) {
             List<Message> committedMessages = attempt.memory() != null
-                    ? attempt.memory().get(command.memoryConversationId())
+                    ? committedMemoryMessages(
+                            attempt.memory().get(command.memoryConversationId()))
                     : List.of();
             sessionCoordinator.commit(
                     lease,
@@ -482,6 +502,7 @@ public class ChatExecutionService {
                 compactSummary(
                         command, attempt.candidate(), attempt, List.of(),
                         result.answer()));
+        result = withExecutionBudgetMetadata(result, command.executionBudget());
         List<ChatEvent> events = new ArrayList<>(
                 attempt.retrievalContext().trace().drainToolEvents());
         events.add(new ChatEvent.SourcesAvailable(
@@ -646,10 +667,29 @@ public class ChatExecutionService {
         List<Message> messages = new ArrayList<>();
         if (plan.selectedSummary() != null
                 && !plan.selectedSummary().isBlank()) {
-            messages.add(new AssistantMessage(plan.selectedSummary()));
+            messages.add(AssistantMessage.builder()
+                    .content(plan.selectedSummary())
+                    .properties(Map.of(
+                            ConversationSummaryService
+                                    .SYNTHETIC_SUMMARY_MESSAGE_METADATA_KEY,
+                            true))
+                    .build());
         }
         messages.addAll(plan.selectedRecentMessages());
         return List.copyOf(messages);
+    }
+
+    private List<Message> committedMemoryMessages(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return List.of();
+        }
+        return messages.stream()
+                .filter(message -> !(message instanceof AbstractMessage abstractMessage)
+                        || !Boolean.TRUE.equals(
+                                abstractMessage.getMetadata().get(
+                                        ConversationSummaryService
+                                                .SYNTHETIC_SUMMARY_MESSAGE_METADATA_KEY)))
+                .toList();
     }
 
     private String summaryText(ChatCommand command) {
@@ -706,6 +746,21 @@ public class ChatExecutionService {
                     compaction.snapshot().estimatedTokens());
         }
         metadata.put("summary", Map.copyOf(summary));
+        return new ChatExecutionResult(
+                result.answer(), result.sessionId(), result.traceId(),
+                result.requestedModel(), result.resolvedModel(), result.mode(),
+                result.sources(), result.usage(), result.finishReason(),
+                result.stepMetrics(), metadata);
+    }
+
+    private ChatExecutionResult withExecutionBudgetMetadata(
+            ChatExecutionResult result,
+            ChatExecutionBudget budget) {
+        if (budget == null) {
+            return result;
+        }
+        Map<String, Object> metadata = new LinkedHashMap<>(result.metadata());
+        metadata.put("executionBudget", budget.snapshot());
         return new ChatExecutionResult(
                 result.answer(), result.sessionId(), result.traceId(),
                 result.requestedModel(), result.resolvedModel(), result.mode(),
@@ -907,16 +962,18 @@ public class ChatExecutionService {
             return List.of();
         }
         int limit = Math.max(1, ragProperties.getMemory().getMaxMessages());
-        List<ChatHistoryResponse> history = sessionCoordinator != null
-                ? historyRepository.findOwnedBaseline(
-                        command.principal(),
-                        command.sessionId(),
-                        limit)
-                : historyRepository.findBySessionId(
-                        command.sessionId(),
-                        limit);
-        List<ChatHistoryResponse> chronological = new ArrayList<>(history);
-        Collections.reverse(chronological);
+        List<ChatHistoryResponse> chronological;
+        if (sessionCoordinator != null) {
+            chronological = historyRepository.findOwnedBaseline(
+                    command.principal(),
+                    command.sessionId(),
+                    limit);
+        } else {
+            chronological = new ArrayList<>(historyRepository.findBySessionId(
+                    command.sessionId(),
+                    limit));
+            Collections.reverse(chronological);
+        }
         List<Message> messages = new ArrayList<>();
         for (ChatHistoryResponse item : chronological) {
             if (item.userMessage() != null && !item.userMessage().isBlank()) {

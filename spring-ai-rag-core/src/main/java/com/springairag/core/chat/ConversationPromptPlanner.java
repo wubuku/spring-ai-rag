@@ -190,9 +190,12 @@ public final class ConversationPromptPlanner {
         if (turns.isEmpty() || available <= 0 || maxHistory <= 0) {
             return new Selection(List.of(), 0, 0);
         }
+        int start = turns.size() - selectedTurnCount - 1;
+        if (start < 0) {
+            return new Selection(List.of(), 0, 0);
+        }
         int tokens = 0;
         List<Message> messages = new ArrayList<>();
-        int start = Math.max(0, turns.size() - selectedTurnCount - 1);
         for (int index = start; index >= 0; index--) {
             List<Message> turn = turns.get(index);
             int turnTokens = estimate(turn);

@@ -20,6 +20,9 @@ RUN_ID="${CHAT_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 LOG_DIR="${CHAT_VERIFY_LOG_DIR:-.verification/chat-capability/${RUN_ID}}"
 PLAYWRIGHT_PORT="${CHAT_PLAYWRIGHT_PORT:-4198}"
 STARTUP_PORT="${CHAT_STARTUP_PORT:-4210}"
+REAL_BACKEND_PORT="${CHAT_REAL_BACKEND_PORT:-18083}"
+REAL_FRONTEND_PORT="${CHAT_REAL_FRONTEND_PORT:-15175}"
+REAL_ENV_FILE="${CHAT_REAL_ENV_FILE:-${DEV_ENV_FILE:-.env}}"
 TESTCONTAINERS_API_VERSION="${TESTCONTAINERS_API_VERSION:-1.40}"
 TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
 TESTCONTAINERS_PG_IMAGE="${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}"
@@ -36,7 +39,7 @@ Runs:
   Chat mode/tool/memory/history/SSE/export focused tests
   PostgreSQL V32 session/lease/atomicity integration tests
   mvn clean compile test-compile and full mvn test
-  Current reactor install and the independent domain-extension demo tests
+  Current reactor install and independent domain-extension/SQL demo tests
   Isolated PostgreSQL + dummy-model Spring Boot startup smoke
   WebUI Vitest, TypeScript, production build, and Mock Playwright
   project documentation and whitespace gates
@@ -45,7 +48,7 @@ Options:
       --skip-postgres    Explicitly skip the PostgreSQL/Testcontainers gate
       --skip-startup     Explicitly skip the isolated backend startup gate
       --skip-playwright  Explicitly skip the Mock Playwright gate
-      --with-real-llm    Append the real provider smoke from .env
+      --with-real-llm    Run isolated real WebUI and provider acceptance
   -h, --help             Show this help
 
 Environment:
@@ -53,6 +56,9 @@ Environment:
   CHAT_VERIFY_RUN_ID           Stable run identifier
   CHAT_PLAYWRIGHT_PORT         Strict Vite preview port (default: 4198)
   CHAT_STARTUP_PORT            Strict backend smoke port (default: 4210)
+  CHAT_REAL_BACKEND_PORT       Isolated real Chat backend port (default: 18083)
+  CHAT_REAL_FRONTEND_PORT      Isolated real WebUI port (default: 15175)
+  CHAT_REAL_ENV_FILE           Environment file for real provider/dev stack
   TESTCONTAINERS_API_VERSION   Docker API version (default: 1.40)
   TESTCONTAINERS_RYUK_DISABLED Disable Ryuk when local registry access blocks it
   TESTCONTAINERS_PG_IMAGE      PostgreSQL/pgvector image
@@ -103,6 +109,11 @@ STEP_INDEX=0
 PREVIEW_PID=""
 STARTUP_PID=""
 STARTUP_CONTAINER_ID=""
+REAL_DEV_PID=""
+REAL_ENV_OVERLAY=""
+REAL_DATABASE=""
+REAL_STACK_READY=0
+REAL_ROOT_API_KEY="${RAG_ROOT_API_KEY:-}"
 
 slugify() {
   printf '%s' "$1" \
@@ -174,6 +185,9 @@ chat_focused_tests() {
 }
 
 chat_postgres_tests() {
+  local chat_rc=0
+  local next_high_value_rc=0
+
   DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
     TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
     mvn -pl spring-ai-rag-core -am \
@@ -182,7 +196,22 @@ chat_postgres_tests() {
       "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
       -Dtest=ChatSessionPostgresIntegrationTest \
       -Dsurefire.failIfNoSpecifiedTests=false \
-      test
+      test || chat_rc=$?
+
+  DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
+    TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
+    mvn -pl spring-ai-rag-core -am \
+      "-Dapi.version=${TESTCONTAINERS_API_VERSION}" \
+      -Dnext-high-value.it.enabled=true \
+      "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
+      -Dtest=NextHighValueFeaturesPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false \
+      test || next_high_value_rc=$?
+
+  if [[ "$chat_rc" -ne 0 || "$next_high_value_rc" -ne 0 ]]; then
+    echo "PostgreSQL integration matrix failed (chat=${chat_rc}, next-high-value=${next_high_value_rc})." >&2
+    return 1
+  fi
 }
 
 maven_compile() {
@@ -199,6 +228,15 @@ maven_install_current_reactor() {
 
 domain_extension_demo_tests() {
   mvn -f demos/demo-domain-extension/pom.xml test
+}
+
+sql_tool_demo_tests() {
+  DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
+    TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
+    mvn -f demos/demo-tool-calling-sql/pom.xml \
+      "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
+      -Dsurefire.failIfNoSpecifiedTests=false \
+      test
 }
 
 cleanup_startup_smoke() {
@@ -320,6 +358,193 @@ backend_startup_smoke() {
   return 1
 }
 
+load_real_environment() {
+  [[ -f "$REAL_ENV_FILE" ]] || {
+    echo "Real LLM environment file does not exist: ${REAL_ENV_FILE}" >&2
+    return 1
+  }
+  bash -n "$REAL_ENV_FILE"
+
+  local caller_root_key="$REAL_ROOT_API_KEY"
+  set +u
+  set -a
+  # shellcheck disable=SC1090
+  source "$REAL_ENV_FILE"
+  set +a
+  set -u
+  REAL_ROOT_API_KEY="${caller_root_key:-${RAG_ROOT_API_KEY:-}}"
+  [[ -n "$REAL_ROOT_API_KEY" ]] || {
+    echo "RAG_ROOT_API_KEY is required for real WebUI acceptance." >&2
+    return 1
+  }
+}
+
+prepare_real_database() {
+  command -v createdb >/dev/null || {
+    echo "createdb is required for the isolated real Chat database." >&2
+    return 1
+  }
+  command -v dropdb >/dev/null || {
+    echo "dropdb is required for the isolated real Chat database." >&2
+    return 1
+  }
+  command -v psql >/dev/null || {
+    echo "psql is required for the isolated real Chat database." >&2
+    return 1
+  }
+
+  local host="${POSTGRES_HOST:-127.0.0.1}"
+  local port="${POSTGRES_PORT:-5432}"
+  local username="${POSTGRES_USER:-postgres}"
+  local password="${POSTGRES_PASSWORD:-}"
+  local admin_database="${POSTGRES_ADMIN_DATABASE:-postgres}"
+  local safe_run_id
+  safe_run_id="$(printf '%s' "$RUN_ID" | tr -cd 'a-zA-Z0-9_' | tr '[:upper:]' '[:lower:]')"
+  REAL_DATABASE="spring_ai_rag_chat_real_${safe_run_id}_$$"
+
+  PGPASSWORD="$password" \
+    psql -h "$host" -p "$port" -U "$username" -d "$admin_database" \
+      -v ON_ERROR_STOP=1 -Atqc 'SELECT 1' >/dev/null
+  PGPASSWORD="$password" \
+    createdb -h "$host" -p "$port" -U "$username" "$REAL_DATABASE"
+  echo "Created disposable real Chat database: ${REAL_DATABASE}"
+}
+
+create_real_environment_overlay() {
+  local host="${POSTGRES_HOST:-127.0.0.1}"
+  local port="${POSTGRES_PORT:-5432}"
+  local username="${POSTGRES_USER:-postgres}"
+  local password="${POSTGRES_PASSWORD:-}"
+  local jdbc_url="jdbc:postgresql://${host}:${port}/${REAL_DATABASE}"
+
+  REAL_ENV_OVERLAY="$(mktemp "${TMPDIR:-/tmp}/spring-ai-rag-chat-real-env.XXXXXX")"
+  chmod 600 "$REAL_ENV_OVERLAY"
+  {
+    printf 'source %q\n' "$REAL_ENV_FILE"
+    printf 'POSTGRES_HOST=%q\n' "$host"
+    printf 'POSTGRES_PORT=%q\n' "$port"
+    printf 'POSTGRES_DATABASE=%q\n' "$REAL_DATABASE"
+    printf 'POSTGRES_USER=%q\n' "$username"
+    printf 'POSTGRES_PASSWORD=%q\n' "$password"
+    printf 'SPRING_DATASOURCE_URL=%q\n' "$jdbc_url"
+    printf 'SPRING_DATASOURCE_USERNAME=%q\n' "$username"
+    printf 'SPRING_DATASOURCE_PASSWORD=%q\n' "$password"
+    printf 'SPRING_FLYWAY_URL=%q\n' "$jdbc_url"
+    printf 'SPRING_FLYWAY_USER=%q\n' "$username"
+    printf 'SPRING_FLYWAY_PASSWORD=%q\n' "$password"
+    printf 'RAG_ROOT_API_KEY=%q\n' "$REAL_ROOT_API_KEY"
+    printf 'APP_MODELS_LEGACY_CAPABILITIES_OPENAI_TOOL_CALLING=true\n'
+  } >"$REAL_ENV_OVERLAY"
+}
+
+cleanup_real_stack() {
+  if [[ -n "$REAL_DEV_PID" ]] && kill -0 "$REAL_DEV_PID" >/dev/null 2>&1; then
+    kill "$REAL_DEV_PID" >/dev/null 2>&1 || true
+    wait "$REAL_DEV_PID" >/dev/null 2>&1 || true
+  fi
+  REAL_DEV_PID=""
+  if [[ -n "$REAL_ENV_OVERLAY" ]]; then
+    DEV_ENV_FILE="$REAL_ENV_OVERLAY" \
+      RAG_DEV_OPEN_BROWSER=false \
+      ./scripts/dev.sh --stop >/dev/null 2>&1 || true
+  fi
+  REAL_STACK_READY=0
+}
+
+cleanup_real_database() {
+  if [[ -n "$REAL_DATABASE" ]]; then
+    PGPASSWORD="${POSTGRES_PASSWORD:-}" \
+      dropdb \
+        -h "${POSTGRES_HOST:-127.0.0.1}" \
+        -p "${POSTGRES_PORT:-5432}" \
+        -U "${POSTGRES_USER:-postgres}" \
+        --if-exists \
+        "$REAL_DATABASE" >/dev/null 2>&1 || true
+    REAL_DATABASE=""
+  fi
+  if [[ -n "$REAL_ENV_OVERLAY" ]]; then
+    rm -f "$REAL_ENV_OVERLAY"
+    REAL_ENV_OVERLAY=""
+  fi
+}
+
+start_real_stack() {
+  load_real_environment || return 1
+  prepare_real_database || return 1
+  create_real_environment_overlay || {
+    cleanup_real_database
+    return 1
+  }
+
+  local real_log="$LOG_DIR/real-dev.log"
+  (
+    BACKEND_PORT="$REAL_BACKEND_PORT" \
+      FRONTEND_PORT="$REAL_FRONTEND_PORT" \
+      DEV_ENV_FILE="$REAL_ENV_OVERLAY" \
+      RAG_ROOT_API_KEY="$REAL_ROOT_API_KEY" \
+      RAG_DEV_OPEN_BROWSER=false \
+      ./scripts/dev.sh
+  ) >"$real_log" 2>&1 &
+  REAL_DEV_PID=$!
+
+  local attempt
+  for attempt in $(seq 1 180); do
+    if curl --fail --silent --show-error --connect-timeout 1 --max-time 2 \
+      "http://127.0.0.1:${REAL_FRONTEND_PORT}/webui/unlock" >/dev/null 2>&1; then
+      REAL_STACK_READY=1
+      echo "Real dev stack ready: backend=${REAL_BACKEND_PORT}, frontend=${REAL_FRONTEND_PORT}"
+      return 0
+    fi
+    if ! kill -0 "$REAL_DEV_PID" >/dev/null 2>&1 \
+      && ! lsof -nP -iTCP:"$REAL_BACKEND_PORT" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "Real dev stack exited before readiness; see ${real_log}" >&2
+      tail -100 "$real_log" >&2 || true
+      cleanup_real_stack
+      cleanup_real_database
+      return 1
+    fi
+    if [[ "$attempt" == "180" ]]; then
+      echo "Real dev stack did not become ready; see ${real_log}" >&2
+      tail -100 "$real_log" >&2 || true
+      cleanup_real_stack
+      cleanup_real_database
+      return 1
+    fi
+    sleep 1
+  done
+}
+
+real_browser_and_provider_e2e() {
+  start_real_stack || return 1
+
+  local browser_rc=0
+  local provider_rc=0
+  (
+    cd spring-ai-rag-webui
+    BASE_URL="http://127.0.0.1:${REAL_FRONTEND_PORT}" \
+      RAG_ROOT_API_KEY="$REAL_ROOT_API_KEY" \
+      npx playwright test e2e/chat-real.spec.ts
+  ) || browser_rc=$?
+  if [[ "$browser_rc" -eq 0 ]]; then
+    echo "Real WebUI Playwright: PASS"
+  else
+    echo "Real WebUI Playwright: FAIL (exit ${browser_rc})" >&2
+  fi
+
+  BASE_URL="http://127.0.0.1:${REAL_BACKEND_PORT}" \
+    RAG_ROOT_API_KEY="$REAL_ROOT_API_KEY" \
+    ./scripts/real-llm-e2e-smoke.sh || provider_rc=$?
+  if [[ "$provider_rc" -eq 0 ]]; then
+    echo "Real provider smoke: PASS"
+  else
+    echo "Real provider smoke: FAIL (exit ${provider_rc})" >&2
+  fi
+
+  cleanup_real_stack
+  cleanup_real_database
+  [[ "$browser_rc" -eq 0 && "$provider_rc" -eq 0 ]]
+}
+
 webui_unit() {
   (
     cd spring-ai-rag-webui
@@ -387,6 +612,8 @@ cleanup() {
     kill "$PREVIEW_PID" >/dev/null 2>&1 || true
     wait "$PREVIEW_PID" >/dev/null 2>&1 || true
   fi
+  cleanup_real_stack
+  cleanup_real_database
   cleanup_startup_smoke
   write_summary
 }
@@ -425,7 +652,13 @@ write_summary() {
   } > "$LOG_DIR/summary.md"
 }
 
-trap cleanup EXIT INT TERM
+cleanup_on_signal() {
+  cleanup
+  exit 130
+}
+
+trap cleanup EXIT
+trap cleanup_on_signal INT TERM
 
 run_step "Prerequisites" require_commands
 run_step "Chat focused backend tests" chat_focused_tests
@@ -433,20 +666,21 @@ run_step "Chat focused backend tests" chat_focused_tests
 if [[ "$RUN_POSTGRES" == "1" ]]; then
   if docker_environment >/dev/null 2>&1; then
     run_step "Docker environment" docker_environment
-    run_step "Chat PostgreSQL V32 integration tests" chat_postgres_tests
+    run_step "Chat and high-value PostgreSQL integration tests" chat_postgres_tests
   else
     skip_step "Docker environment" "Docker daemon unavailable or Docker API negotiation failed"
-    skip_step "Chat PostgreSQL V32 integration tests" "Docker prerequisite unavailable"
+    skip_step "Chat and high-value PostgreSQL integration tests" "Docker prerequisite unavailable"
   fi
 else
   skip_step "Docker environment" "--skip-postgres"
-  skip_step "Chat PostgreSQL V32 integration tests" "--skip-postgres"
+  skip_step "Chat and high-value PostgreSQL integration tests" "--skip-postgres"
 fi
 
 run_step "Maven clean compile test-compile" maven_compile
 run_step "Full Maven test" maven_all_tests
 run_step "Install current reactor artifacts" maven_install_current_reactor
 run_step "Domain extension demo tests" domain_extension_demo_tests
+run_step "Read-only SQL tool demo tests" sql_tool_demo_tests
 
 if [[ "$RUN_STARTUP" == "1" ]]; then
   if docker_environment >/dev/null 2>&1; then
@@ -468,13 +702,14 @@ else
   skip_step "Chat core Mock Playwright" "--skip-playwright"
 fi
 
+run_step "No explicit pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
 run_step "Project documentation gates" ./scripts/verify-project-docs.sh
 run_step "Git whitespace check" git diff --check
 
 if [[ "$RUN_REAL_LLM" == "1" ]]; then
-  run_step "Real LLM smoke" real_llm_smoke
+  run_step "Real LLM isolated WebUI and provider E2E" real_browser_and_provider_e2e
 else
-  skip_step "Real LLM smoke" "not requested; use --with-real-llm"
+  skip_step "Real LLM isolated WebUI and provider E2E" "not requested; use --with-real-llm"
 fi
 
 echo

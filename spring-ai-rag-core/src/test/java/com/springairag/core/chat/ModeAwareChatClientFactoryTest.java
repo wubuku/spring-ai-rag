@@ -213,6 +213,38 @@ class ModeAwareChatClientFactoryTest {
     }
 
     @Test
+    void requestLocalMemoryRetainsAllPlannerSelectedMessages() {
+        ChatModel model = model("plain answer");
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = new ChatCommand(
+                "当前问题",
+                "session-memory-window",
+                principal,
+                principal.memoryConversationId("session-memory-window"),
+                ChatMode.PLAIN,
+                MemoryMode.SERVER,
+                null,
+                null,
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                Map.of());
+        List<org.springframework.ai.chat.messages.Message> baseline =
+                new java.util.ArrayList<>();
+        for (int index = 0; index < 15; index++) {
+            baseline.add(new UserMessage("question-" + index));
+            baseline.add(new AssistantMessage("answer-" + index));
+        }
+
+        ModeAwareChatClientFactory.Attempt attempt = factory.create(
+                command,
+                candidate("plain", model),
+                baseline);
+
+        assertEquals(30, attempt.memory().get(
+                command.memoryConversationId()).size());
+    }
+
+    @Test
     void advisorScopesUseStableBandsAndModelCallRunsInsideToolLoop() {
         AtomicInteger attemptBefore = new AtomicInteger();
         AtomicInteger attemptAfter = new AtomicInteger();

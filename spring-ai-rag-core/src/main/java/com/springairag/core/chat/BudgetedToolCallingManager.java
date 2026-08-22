@@ -15,7 +15,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * Adds request-level tool batch reservation around Spring AI's standard manager.
@@ -78,14 +77,9 @@ public final class BudgetedToolCallingManager implements ToolCallingManager {
                 fallbackMaxResultCharacters);
         try {
             ToolExecutionResult result = delegate.executeToolCalls(prompt, response);
-            Set<String> currentCallIds = calls.stream()
-                    .map(AssistantMessage.ToolCall::id)
-                    .filter(java.util.Objects::nonNull)
-                    .collect(java.util.stream.Collectors.toUnmodifiableSet());
             int tokenBudget = toolResultTokenBudget(budget);
             SanitizedResult sanitized = sanitize(
                     result,
-                    currentCallIds,
                     resultCharacterLimits,
                     tokenBudget);
             budget.settleToolResults(
@@ -121,7 +115,6 @@ public final class BudgetedToolCallingManager implements ToolCallingManager {
 
     private SanitizedResult sanitize(
             ToolExecutionResult result,
-            Set<String> currentCallIds,
             Map<String, Integer> resultCharacterLimits,
             int tokenBudget) {
         if (result == null || result.conversationHistory() == null) {
@@ -130,16 +123,25 @@ public final class BudgetedToolCallingManager implements ToolCallingManager {
         int characters = 0;
         int tokens = 0;
         List<Message> messages = new ArrayList<>();
-        for (Message message : result.conversationHistory()) {
-            if (!(message instanceof ToolResponseMessage toolResponse)) {
+        List<Message> history = result.conversationHistory();
+        int currentToolResponseIndex = -1;
+        for (int index = history.size() - 1; index >= 0; index--) {
+            if (history.get(index) instanceof ToolResponseMessage) {
+                currentToolResponseIndex = index;
+                break;
+            }
+        }
+        for (int index = 0; index < history.size(); index++) {
+            Message message = history.get(index);
+            if (index != currentToolResponseIndex
+                    || !(message instanceof ToolResponseMessage toolResponse)) {
                 messages.add(message);
                 continue;
             }
             List<ToolResponseMessage.ToolResponse> responses = new ArrayList<>();
             for (ToolResponseMessage.ToolResponse item
                     : toolResponse.getResponses()) {
-                if (item == null || item.id() == null
-                        || !currentCallIds.contains(item.id())) {
+                if (item == null) {
                     responses.add(item);
                     continue;
                 }

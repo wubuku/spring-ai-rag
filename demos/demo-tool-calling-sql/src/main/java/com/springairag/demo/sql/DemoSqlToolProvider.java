@@ -15,9 +15,9 @@ import java.util.Map;
 @Component
 public final class DemoSqlToolProvider implements RagChatToolProvider {
 
-    private final ReadOnlyOrderLookupTool tool;
+    private final ReadOnlyInventoryLookupTool tool;
 
-    public DemoSqlToolProvider(ReadOnlyOrderLookupTool tool) {
+    public DemoSqlToolProvider(ReadOnlyInventoryLookupTool tool) {
         this.tool = tool;
     }
 
@@ -34,7 +34,7 @@ public final class DemoSqlToolProvider implements RagChatToolProvider {
     @Override
     public Map<String, RagChatToolPolicy> getToolPolicies() {
         return Map.of(
-                ReadOnlyOrderLookupTool.NAME,
+                ReadOnlyInventoryLookupTool.NAME,
                 new RagChatToolPolicy(
                         RagChatToolPolicy.Effect.READ_ONLY,
                         2,

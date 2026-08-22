@@ -198,6 +198,29 @@ class ConversationSummaryServiceTest {
     }
 
     @Test
+    void statelessRequestsNeverReadOrWriteDurableSummary() {
+        seedSource();
+        ChatExecutionBudget budget = budget();
+
+        ConversationSummaryService.CompactionResult result =
+                service.compactIfNeeded(
+                        command(budget, MemoryMode.STATELESS),
+                        candidate,
+                        List.of());
+
+        assertFalse(result.attempted());
+        assertFalse(result.updated());
+        assertEquals("compaction_stateless", result.reason());
+        verify(historyRepository, never()).findOwnedBaseline(
+                any(), any(), anyInt());
+        verify(historyRepository, never()).findOwnedAfterHistoryId(
+                any(), any(), anyLong(), anyInt());
+        verify(model, never()).call(any(Prompt.class));
+        verify(summaryRepository, never()).saveCas(
+                any(), any(), anyLong(), anyLong(), any(), anyInt(), any());
+    }
+
+    @Test
     void sourceRowsStopAtTokenBudgetWithoutAdvancingPastUnsummarizedRows() {
         RagChatProperties.ContextProperties context =
                 ragProperties.getChat().getContext();
@@ -251,13 +274,19 @@ class ConversationSummaryServiceTest {
     }
 
     private ChatCommand command(ChatExecutionBudget budget) {
+        return command(budget, MemoryMode.SERVER);
+    }
+
+    private ChatCommand command(
+            ChatExecutionBudget budget,
+            MemoryMode memoryMode) {
         return new ChatCommand(
                 "current question",
                 "session-1",
                 principal,
                 principal.memoryConversationId("session-1"),
                 ChatMode.PLAIN,
-                MemoryMode.SERVER,
+                memoryMode,
                 "test/model",
                 null,
                 com.springairag.core.retrieval.RetrievalScope.unscoped(),

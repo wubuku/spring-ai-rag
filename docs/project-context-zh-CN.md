@@ -298,7 +298,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V45。
+- Flyway 当前为 V1–V46。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -310,7 +310,9 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   lifecycle/idempotency schema，并收紧三元身份和活动任务约束；V42 增加权威外部快照
   run、幂等 item ledger 以及 SOURCE/RECONCILIATION 删除标记；V43 增加与 Profile 无关的
   本地关键词 chunk 及独立的本地索引生命周期状态；V44 增加 relocation 幂等响应和永久
-  retired-address ledger；V45 增加派生 repair preview/item 控制面。
+  retired-address ledger；V45 增加派生 repair preview/item 控制面；V46 增加按
+  owner/session 隔离的 `rag_chat_memory_summary` 表，以前进式历史游标和乐观
+  version CAS 支持有界会话摘要。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML

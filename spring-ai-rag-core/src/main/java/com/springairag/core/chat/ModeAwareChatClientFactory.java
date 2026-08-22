@@ -160,7 +160,8 @@ public class ModeAwareChatClientFactory {
         if (command.memoryMode() == MemoryMode.SERVER) {
             memory = buildRequestLocalMemory(
                     command.memoryConversationId(),
-                    baselineMessages);
+                    baselineMessages,
+                    command.inputMessages().size());
             advisors.add(MessageChatMemoryAdvisor.builder(memory)
                     .order(MEMORY_ORDER)
                     .build());
@@ -321,10 +322,17 @@ public class ModeAwareChatClientFactory {
 
     private ChatMemory buildRequestLocalMemory(
             String conversationId,
-            List<Message> baselineMessages) {
+            List<Message> baselineMessages,
+            int inputMessageCount) {
+        int selectedMessageCount = baselineMessages != null
+                ? baselineMessages.size()
+                : 0;
+        int currentTurnCapacity = Math.max(2, inputMessageCount + 1);
         ChatMemory memory = MessageWindowChatMemory.builder()
                 .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                .maxMessages(Math.max(2, ragProperties.getMemory().getMaxMessages()))
+                .maxMessages(Math.max(
+                        2,
+                        selectedMessageCount + currentTurnCapacity))
                 .build();
         if (baselineMessages != null && !baselineMessages.isEmpty()) {
             memory.add(conversationId, baselineMessages);

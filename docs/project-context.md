@@ -372,7 +372,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V45.
+- Flyway is currently V1–V46.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -391,7 +391,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   adds profile-neutral local keyword chunks and independent local-index
   lifecycle state; V44 adds relocation idempotent responses and the permanent
   retired-address ledger; V45 adds derivation repair preview/item control-plane
-  tables.
+  tables; V46 adds the owner/session-scoped `rag_chat_memory_summary` table with
+  a forward-only history cursor and optimistic version CAS for bounded
+  conversation summaries.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,

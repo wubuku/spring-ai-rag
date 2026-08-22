@@ -17,34 +17,33 @@ This research answers:
 4. How are infinite tool loops prevented, and are the current budgets complete?
 5. How should non-embedding tools, such as relational-data lookup, be added?
 
-The project already makes substantive use of Spring AI `ChatClient`, Advisors,
-Chat Memory, Modular RAG, Tool Calling, and `ToolContext`. It does not maintain a
-parallel hand-written Chat loop. However, token-aware prompt budgeting, durable
-summary memory, logical-request-level model/tool budgets, and a public
-server-owned tool-provider SPI are still missing. The accurate status is:
-Spring AI orchestration is reused well, while production context and tool
-governance still need strengthening.
+The project makes substantive use of Spring AI `ChatClient`, Advisors, Chat
+Memory, Modular RAG, Tool Calling, and `ToolContext`. It does not maintain a
+parallel hand-written Chat loop. The implementation now adds token-aware prompt
+planning, logical-request-level model/tool budgets, durable summary storage
+with CAS, coordinated TTL cleanup, and a public server-owned tool-provider SPI.
+The accurate status is that Spring AI supplies the orchestration primitives while
+the project owns authorization, context packing, persistence, and bounded
+execution policy.
 
 ## 2. Version And Production Entry Point
 
-The research baseline is:
+The current implementation baseline is:
 
-- Spring Boot `3.5.3`
-- Spring AI `1.1.4`
+- Spring Boot `3.5.16`
+- Spring AI `1.1.8`
 - Java `21`
 - production chain:
   `RagChatController -> ChatCommandMapper -> ChatExecutionService ->
   ModeAwareChatClientFactory`
 
-Spring AI `1.1.8` is the later patch to use when remaining on the Boot 3.5 /
-Spring AI 1.1 maintenance line. Its release baseline moved to Boot `3.5.15`,
-while Boot `3.5.16` is available on that maintenance line as of 2026-08-21.
-The dependency slice should therefore validate a Boot patch upgrade together
-with Spring AI instead of layering Spring AI `1.1.8` onto Boot `3.5.3` and
-assuming that combination is supported. This still does not deliver context
-budgets or tool governance automatically. The 1.1.8 `ToolCallAdvisor` recurses
-until the model stops requesting tools and has no stable built-in total-call
-budget.
+The `1.1.8` API migration is handled explicitly: production no longer binds a
+conversation ID on `MessageChatMemoryAdvisor.Builder`; it passes the
+server-derived `ChatMemory.CONVERSATION_ID` through each request's advisor
+context. This preserves principal/session isolation for both non-streaming and
+streaming requests. Spring AI's `ToolCallAdvisor` still loops until the model
+stops requesting tools, so the project wraps model and tool execution with its
+own logical-request budget.
 
 An isolated dependency probe also confirmed an API migration that must be
 handled explicitly in 1.1.8:
@@ -150,36 +149,35 @@ For each production request:
 6. commit the successful business turn and JDBC Memory atomically.
 
 This is safer than allowing each fallback attempt to mutate shared Chat Memory.
-There is still a retry-isolation gap. The non-streaming `RetryTemplate` invokes
-the same request-local attempt repeatedly. Spring AI
-`MessageChatMemoryAdvisor.before()` adds the current user message to local
-Memory before delegating to the model. If that invocation then fails, the next
-retry inherits the local mutation and adds the user message again. A later
-successful commit can therefore carry duplicate context left by the failed
-invocation into JDBC Memory. This is not a failed turn being committed
-directly, but it still violates attempt isolation. Each application-level retry
-should create a new request-local ChatClient and Memory from the same committed
-baseline, discard failed attempt state, and keep all model, tool, and retrieval
-cost charged to the shared logical-request budget.
+Application-level retries and fallback candidates create fresh request-local
+ChatClient, Memory, advisor, retrieval, and tool state from the same committed
+baseline. Failed attempt state is discarded; model, tool, and retrieval costs
+remain charged to the shared logical-request budget. This prevents a failed
+advisor invocation from adding a duplicate user message to the successful
+attempt's durable JDBC Memory.
 
 ### 5.1 Actual Window Semantics
 
-`rag.memory.max-messages=20` is a message-count limit, not a token limit.
-Spring AI `MessageWindowChatMemory` evicts older non-system messages when the
-count is exceeded. It does not:
+Spring AI `MessageWindowChatMemory` remains the request-local recent-message
+store, but production Chat now plans its input before the model call. The
+project-owned planner uses model context metadata when valid, reserves output
+and safety tokens, and bounds history, summary, RAG evidence, and tool schemas.
+When adaptive packing is disabled, the legacy baseline message behavior remains
+available, while the model-call prompt hard gate and execution budget remain
+active. The underlying Spring AI window still does not:
 
 - budget against the selected model's `contextWindow`;
 - reserve output, RAG evidence, or tool-schema tokens;
 - summarize evicted history;
 - distinguish one very long message from one short message.
 
-Model configuration already includes `context-window` and `max-tokens`, but
-production Chat does not yet use them for candidate-specific prompt packing,
-and external `models.json` entries do not reject explicit zero or negative
-values. The implementation should distinguish missing metadata from invalid
-metadata: missing values use a conservative fallback with diagnostics, while
-an explicitly non-positive value makes that candidate unavailable. Invalid
-limits must never be interpreted as unlimited context or zero-cost output.
+Model configuration includes `context-window` and `max-tokens`. Missing limits
+use a conservative fallback with diagnostics; explicitly non-positive limits
+make that candidate unavailable. Invalid limits are never interpreted as
+unlimited context or zero-cost output. Prompt planning degrades in a fixed
+order: trim lower-priority evidence/tool output, reduce older history while
+preserving minimum recent turns, retain the summary, then return a typed context
+budget error if mandatory input still cannot fit.
 
 ### 5.2 TTL And The Active-Chat Concurrency Boundary
 
@@ -189,14 +187,14 @@ without coordinating the other two, the model Memory can retain expired data.
 More seriously, a Chat request can read an old baseline, TTL can delete it,
 and that request can later write the old baseline back.
 
-The future TTL implementation must therefore discover candidate sessions in
-bounded batches and acquire a separate maintenance token through
+The implemented TTL cleanup discovers candidate sessions in
+bounded batches and acquires a separate maintenance token through
 `rag_chat_session_lease`. A valid Chat lease is skipped immediately; cleanup
 does not wait for or preempt it. After acquiring the maintenance lease, a short
-transaction must consume it with token fencing and delete the batch of owned
-expired history, the corresponding summary, and the JDBC Memory derived from
-the same principal/session rule. On commit the maintenance lease disappears;
-on rollback all four pieces of state roll back together. A Chat commit must
+transaction consumes it with token fencing and deletes the owned expired
+history, summary, and JDBC Memory derived from the same principal/session rule.
+On commit the maintenance lease disappears; on rollback the related state
+remains consistent. A Chat commit must
 also pass its own token fence, so an active request cannot re-submit a baseline
 read before TTL. This protocol uses conditional writes, leases, and bounded
 batches; it does not introduce `FOR UPDATE`, `SKIP LOCKED`, or advisory locks.
@@ -213,12 +211,19 @@ Retrieval query: BGE-M3 embedding dimension
 ```
 
 This is **retrieval-query compression**, not **conversation-context
-compaction**. It does not:
+compaction**. The project now also has an optional, project-owned durable
+summary compaction path. The two mechanisms remain separate:
 
-- summarize old turns into durable memory;
-- reduce the final Chat prompt's history tokens;
-- establish a summary-plus-recent-turns memory hierarchy;
-- run outside the `KNOWLEDGE` pre-retrieval path.
+- `CompressionQueryTransformer` does not summarize old turns into durable
+  memory, reduce the final Chat prompt's history tokens, or establish the
+  summary hierarchy.
+- `ConversationSummaryService` compacts only committed COMPLETE turns before
+  the protected recent-turn window, stores a forward-only history cursor, and
+  updates the V46 summary row with optimistic version CAS.
+- Summary generation is disabled by default, bounded by the shared model-call
+  budget and deadline, and degrades to the main Chat path on timeout, provider
+  failure, output overflow, or CAS conflict. A summary is memory, not citation
+  evidence.
 
 The base `application.yml` uses `query-transformer: none`, while the
 `postgresql` and `prod` profiles enable `spring-ai`. Runtime conclusions must
@@ -236,36 +241,43 @@ model returns tool calls
   -> repeat until no tool calls remain
 ```
 
-The project adds these attempt-level limits through
-`BudgetedToolCallAdvisor` and `RetrievalTraceCollector`:
+The project adds these logical-request and tool-policy limits through
+`BudgetedChatModel`, `BudgetedToolCallingManager`, `ChatExecutionBudget`,
+`RagChatToolRegistry`, and `RetrievalTraceCollector`:
 
-- maximum tool rounds: `3`
-- maximum uncached retrievals: `3`
-- maximum results per retrieval: `10`
-- maximum unique sources: `20`
-- maximum serialized output per tool call: `24,000` characters
-- logical request deadline: `120s` non-streaming, `180s` streaming
+- maximum tool rounds: `3` by default;
+- maximum uncached retrievals: `3` by default;
+- maximum results per retrieval: `10` by default;
+- maximum unique sources: `20` by default;
+- maximum serialized output per tool call: `24,000` characters by default;
+- maximum total tool calls: `6` by default;
+- maximum calls per tool name: `3` by default;
+- maximum total tool-result characters: `48,000` by default;
+- logical request deadline: `120s` non-streaming, `180s` streaming.
 
-These controls stop the most direct infinite loop, but they are not a complete
-budget:
+The shared budget spans candidate attempts, retries/fallbacks, model calls,
+tool rounds, tool calls, per-name calls, cumulative tool-result characters,
+retrieval trace, and summary compaction. `BudgetedToolCallingManager` reserves
+an entire tool-call batch before execution and settles the actual
+`ToolExecutionResult`; policy wrappers additionally enforce per-tool timeout,
+executor saturation, read-only policy, and result limits. Exceeding a budget
+returns a bounded tool error or a typed Chat error before unbounded work.
 
-1. One model response can contain multiple parallel tool calls.
-2. The character cap is per call, not cumulative across the logical request.
-3. Retry and fallback attempts can receive fresh attempt budgets.
-4. There are no per-tool call, SQL time/row, or cost budgets.
-5. Query transform, query expansion, summary, and answer model calls are not
-   counted in one place.
-6. No focused test directly proves that round four is rejected before execution.
-7. Tool callbacks currently record `toolCallId=null`.
-
-All built-in model declarations currently use `tool-calling: false`. The AGENT
-path exists in code, but only an external `models.json` entry that explicitly
-enables a provider-verified model should make it eligible.
+Built-in model declarations may still disable Tool Calling. An external model
+must explicitly advertise `capabilities.toolCalling=true` and pass provider
+verification before the WebUI or API uses `AGENT`.
 
 ## 8. External Function Calls And SQL Retrieval
 
-`ChatExecutionService` currently hard-codes two server-owned tools and there is
-no public provider SPI. The OpenAI compatibility endpoint also rejects
+The core registry owns built-in `searchKnowledge` and optional
+`searchJsonRecords` tools and discovers additional server-owned
+`RagChatToolProvider` beans. Providers declare supported modes/domains, callback
+definitions, and optional restrictive policies; startup validation rejects
+duplicate names, invalid schemas/metadata, `returnDirect=true`, and unknown
+policy keys. The registry injects principal/session/deadline and budget through
+Spring AI `ToolContext`.
+
+The OpenAI compatibility endpoint still rejects
 client-supplied `tools`, `tool_choice`, `functions`, `function_call`, and
 tool/function messages.
 
@@ -305,14 +317,18 @@ Rules:
 - audit tool, argument summary, duration, row count, and budget outcome;
 - do not misrepresent relational results as document citations.
 
-The generic framework should provide the extension SPI and safe context. It
-should not ship a core tool that can query arbitrary business databases.
+The generic framework provides the extension SPI and safe context, but does not
+ship a core tool that can query arbitrary business databases. The SQL demo
+implements the recommended shape with fixed PostgreSQL `SELECT`, named
+parameters, server-owned principal filtering, a 20-row cap, a policy-bounded
+statement timeout, and a serialized result cap.
 
-## 9. Recommended Target Architecture
+## 9. Current Architecture And Remaining Work
 
 ### 9.1 Token-Aware Prompt Budget
 
-Create a candidate-specific budget from `contextWindow` and `maxTokens`, then
+The implemented candidate-specific budget uses `contextWindow` and `maxTokens`,
+then
 measure or reserve:
 
 1. system/domain instructions;
@@ -324,7 +340,7 @@ measure or reserve:
 7. conversation summary;
 8. recent raw turns.
 
-When space is insufficient, degrade deterministically:
+When space is insufficient, the implementation degrades deterministically:
 
 ```text
 trim lower-priority RAG/tool results
@@ -347,7 +363,8 @@ chat summary table     -> durable old-history summary and compaction cursor
 
 The summary is conversation memory, not external evidence. `KNOWLEDGE` answers
 must remain grounded in retrieved sources. Summary facts do not automatically
-become citations.
+become citations. The V46 schema and CAS-backed service implement this path;
+compaction is opt-in.
 
 If compaction fails, deterministic token-based truncation should preserve the
 main path and record degraded status without deleting raw history. Model calls
@@ -370,11 +387,10 @@ One budget must be shared across candidates, retries, and the tool loop:
 When a model emits multiple tool calls, reserve the complete batch atomically
 before executing any callback. Reject the whole batch if it cannot fit.
 
-A shared budget must not imply shared mutable attempt state. Candidate fallback
-and same-model retry should each receive a fresh request-local Memory, advisor
-chain, and tool conversation. Failed local messages must not enter the next
-attempt, while already-consumed model, tool, and retrieval budget remains
-spent.
+A shared budget does not imply shared mutable attempt state. Candidate fallback
+and same-model retry receive fresh request-local Memory, advisor chain, and tool
+conversation. Failed local messages do not enter the next attempt, while
+already-consumed model, tool, and retrieval budget remains spent.
 
 ### 9.4 Server-Owned Tool Provider SPI
 
@@ -389,20 +405,21 @@ Spring Bean providers should declare tools, while a registry handles:
 - server-owned Collection/ACL scope;
 - a stable extension surface for external modules.
 
-The built-in search tools should migrate to the same registry so built-in and
-external tools do not have different safety mechanisms.
+The built-in search tools now use the same registry and policy wrapper as
+external tools, so built-in and external tools share the safety boundary.
 
-## 10. Recommended Implementation Order
+## 10. Follow-Up Work
 
-1. Upgrade and verify Spring Boot `3.5.16` and Spring AI `1.1.8` together;
-   characterize existing behavior.
-2. Implement logical-request-level model/tool budgets and focused call/stream tests.
-3. Add a Tool Provider SPI and migrate both built-in tools.
-4. Add a parameterized read-only SQL extension example, never arbitrary SQL.
-5. Use model metadata for token-aware prompt packing.
-6. Add durable summary schema, compaction service, CAS, TTL, and clear behavior.
-7. Complete metadata, metrics, verification scripts, real Tool Calling, and
-   real compaction smoke tests.
+1. Keep the Boot/Spring AI compatibility matrix and provider capability
+   declarations current as dependencies evolve.
+2. Add production observability for budget exhaustion, tool policy outcomes,
+   summary degradation, and per-provider cost/latency.
+3. Expand external-provider examples and real Tool Calling coverage without
+   allowing client-defined tool passthrough.
+4. Decide whether durable compaction should be enabled by default only after
+   production latency, quality, and retention evidence supports it.
+5. Continue PostgreSQL and isolated real-LLM regression coverage when changing
+   shared Chat, Memory, retrieval, or tool contracts.
 
 See the [active next-high-value implementation plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md).
 

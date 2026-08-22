@@ -15,6 +15,7 @@ import com.springairag.core.repository.RagChatHistoryJpaRepository;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import com.springairag.core.repository.RagChatMemorySummaryRepository;
 import com.springairag.core.retrieval.RetrievalScope;
+import com.springairag.core.service.ChatHistoryCleanupService;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.hibernate.jpa.HibernatePersistenceProvider;
@@ -44,6 +45,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -66,6 +68,7 @@ class ChatSessionPostgresIntegrationTest {
     private static RagChatMemorySummaryRepository summaryRepository;
     private static JdbcChatMemoryRepository memoryRepository;
     private static ChatSessionCoordinator coordinator;
+    private static ChatHistoryCleanupService cleanupService;
 
     @BeforeAll
     static void startDatabase() {
@@ -384,6 +387,97 @@ class ChatSessionPostgresIntegrationTest {
     }
 
     @Test
+    void ttlCleanupSkipsActiveSessionThenAtomicallyClearsOwnedStores() {
+        ChatCommand command = command(principal("key-a"), "ttl-cleanup");
+        seedExpiredHistory(command, "old question", "old answer");
+        assertTrue(summaryRepository.saveCas(
+                command.principal(), command.sessionId(), 0, 1,
+                "old summary", 2, "test/model"));
+        seedMemory(command, "old memory");
+
+        ChatSessionCoordinator.LeaseHandle active =
+                coordinator.acquire(command, false);
+        assertEquals(0, cleanupService.cleanupOlderThan(
+                LocalDateTime.now().minusDays(1)));
+        assertEquals(1L, historyCount(command));
+        assertTrue(summaryRepository.find(
+                command.principal(), command.sessionId()).isPresent());
+        assertEquals(1L, memoryCount(command));
+        coordinator.release(active);
+
+        assertEquals(1, cleanupService.cleanupOlderThan(
+                LocalDateTime.now().minusDays(1)));
+        assertEquals(0L, historyCount(command));
+        assertTrue(summaryRepository.find(
+                command.principal(), command.sessionId()).isEmpty());
+        assertEquals(0L, memoryCount(command));
+        assertEquals(0L, leaseCount(command));
+    }
+
+    @Test
+    void ttlMaintenanceFencingRejectsLateCommitFromExpiredChatLease() {
+        ChatCommand command = command(principal("key-a"), "ttl-fencing");
+        seedExpiredHistory(command, "old question", "old answer");
+        seedMemory(command, "old memory");
+        ChatSessionCoordinator.LeaseHandle active =
+                coordinator.acquire(command, false);
+
+        jdbcTemplate.update(
+                "UPDATE rag_chat_session_lease SET acquired_at = now() - interval '3 seconds', "
+                        + "expires_at = now() + interval '100 milliseconds' "
+                        + "WHERE owner_principal_id = ? AND session_id = ?",
+                command.principal().id(), command.sessionId());
+        waitForExpiredLease(command);
+
+        assertEquals(1, cleanupService.cleanupOlderThan(
+                LocalDateTime.now().minusDays(1)));
+
+        RagException lost = assertThrows(
+                RagException.class,
+                () -> coordinator.commit(
+                        active,
+                        command,
+                        result(command),
+                        messages(),
+                        "[]"));
+        assertEquals(ErrorCode.CHAT_SESSION_LEASE_LOST.name(),
+                lost.getErrorCode());
+        assertEquals(0L, historyCount(command));
+        assertEquals(0L, memoryCount(command));
+        assertEquals(0L, leaseCount(command));
+        coordinator.release(active);
+    }
+
+    @Test
+    void ttlCleanupPreservesMemoryWhenRecentHistoryRemains() {
+        ChatCommand command = command(principal("key-a"), "ttl-recent-history");
+        seedExpiredHistory(command, "old question", "old answer");
+        seedRecentHistory(command, "recent question", "recent answer");
+        seedMemory(command, "recent memory");
+        assertTrue(summaryRepository.saveCas(
+                command.principal(), command.sessionId(), 0, 1,
+                "summary covering old history", 4, "test/model"));
+
+        assertEquals(1, cleanupService.cleanupOlderThan(
+                LocalDateTime.now().minusDays(1)));
+
+        assertEquals(1L, historyCount(command));
+        assertEquals("recent question", jdbcTemplate.queryForObject(
+                "SELECT user_message FROM rag_chat_history "
+                        + "WHERE owner_principal_id = ? AND session_id = ?",
+                String.class,
+                command.principal().id(), command.sessionId()));
+        assertTrue(summaryRepository.find(
+                command.principal(), command.sessionId()).isEmpty());
+        assertEquals(1L, memoryCount(command));
+        assertEquals("recent memory", jdbcTemplate.queryForObject(
+                "SELECT content FROM spring_ai_chat_memory "
+                        + "WHERE conversation_id = ?",
+                String.class, command.memoryConversationId()));
+        assertEquals(0L, leaseCount(command));
+    }
+
+    @Test
     void successfulCommitPersistsHistoryAndMemoryThenReleasesLease() {
         ChatCommand command = command(principal("key-a"), "commit-success");
         ChatSessionCoordinator.LeaseHandle handle =
@@ -524,6 +618,13 @@ class ChatSessionPostgresIntegrationTest {
                 memoryRepository,
                 transactionManager,
                 properties);
+        cleanupService = new ChatHistoryCleanupService(
+                historyRepository,
+                properties.getMemory(),
+                jdbcTemplate,
+                summaryRepository,
+                transactionManager,
+                properties);
     }
 
     private static ChatCommand command(
@@ -577,6 +678,58 @@ class ChatSessionPostgresIntegrationTest {
                         + "VALUES (?, ?, 'USER', now())",
                 command.memoryConversationId(),
                 content);
+    }
+
+    private static void seedExpiredHistory(
+            ChatCommand command,
+            String userMessage,
+            String aiResponse) {
+        jdbcTemplate.update(
+                "INSERT INTO rag_chat_history "
+                        + "(session_id, owner_principal_id, user_message, ai_response, "
+                        + "turn_status, created_at) "
+                        + "VALUES (?, ?, ?, ?, 'COMPLETE', now() - interval '2 days')",
+                command.sessionId(),
+                command.principal().id(),
+                userMessage,
+                aiResponse);
+    }
+
+    private static void seedRecentHistory(
+            ChatCommand command,
+            String userMessage,
+            String aiResponse) {
+        jdbcTemplate.update(
+                "INSERT INTO rag_chat_history "
+                        + "(session_id, owner_principal_id, user_message, ai_response, "
+                        + "turn_status, created_at) "
+                        + "VALUES (?, ?, ?, ?, 'COMPLETE', now() - interval '1 hour')",
+                command.sessionId(),
+                command.principal().id(),
+                userMessage,
+                aiResponse);
+    }
+
+    private static void waitForExpiredLease(ChatCommand command) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (System.nanoTime() < deadline) {
+            if (Boolean.TRUE.equals(jdbcTemplate.queryForObject(
+                    "SELECT expires_at < clock_timestamp() "
+                            + "FROM rag_chat_session_lease "
+                            + "WHERE owner_principal_id = ? AND session_id = ?",
+                    Boolean.class,
+                    command.principal().id(),
+                    command.sessionId()))) {
+                return;
+            }
+            try {
+                Thread.sleep(25);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new AssertionError("Interrupted while waiting for lease expiry", e);
+            }
+        }
+        throw new AssertionError("Chat lease did not expire within the test deadline");
     }
 
     private static long historyCount(ChatCommand command) {

@@ -2,12 +2,15 @@ package com.springairag.core.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ChatSource;
+import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
+import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
@@ -22,6 +25,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
+import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.metadata.ChatResponseMetadata;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -37,6 +42,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.LocalDateTime;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
@@ -47,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -331,6 +338,179 @@ class ChatExecutionServiceTest {
     }
 
     @Test
+    void coordinatedBaselineRemainsChronological() {
+        ChatSessionCoordinator coordinator = mock(ChatSessionCoordinator.class);
+        ChatSessionCoordinator.LeaseHandle lease =
+                mock(ChatSessionCoordinator.LeaseHandle.class);
+        when(coordinator.acquire(any(), anyBoolean())).thenReturn(lease);
+        when(coordinator.invokeWithinDeadline(same(lease), any()))
+                .thenAnswer(invocation ->
+                        ((java.util.function.Supplier<?>) invocation.getArgument(1)).get());
+        when(historyRepository.findOwnedBaseline(
+                any(), eq("session-1"), any(Integer.class)))
+                .thenReturn(List.of(
+                        history("old question", "old answer", 1L),
+                        history("new question", "new answer", 2L)));
+
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        ClientFixture client = clientFixture("当前回答", Map.of());
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        ArgumentCaptor<List<Message>> baseline =
+                ArgumentCaptor.forClass(List.class);
+        when(clientFactory.create(any(), same(candidate), baseline.capture()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, null));
+
+        ChatExecutionService coordinatedService = new ChatExecutionService(
+                modelRouter,
+                clientFactory,
+                knowledgeSearchTool,
+                historyRepository,
+                null,
+                domainExtensions,
+                promptCustomizers,
+                documentMapper,
+                new ObjectMapper(),
+                new RagProperties(),
+                null,
+                null,
+                coordinator,
+                null);
+
+        coordinatedService.execute(command(ChatMode.PLAIN, null));
+
+        assertEquals(List.of("old question", "old answer", "new question", "new answer"),
+                baseline.getValue().stream().map(Message::getText).toList());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void finalExecutionBudgetIncludesSummaryModelCall() {
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        ClientFixture client = clientFixture("直接回答", Map.of());
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, null));
+
+        ConversationSummaryService summaryService =
+                mock(ConversationSummaryService.class);
+        when(summaryService.compactIfNeeded(any(), same(candidate), anyList()))
+                .thenAnswer(invocation -> {
+                    ChatCommand request = invocation.getArgument(0);
+                    request.executionBudget().recordSummaryCall();
+                    return ConversationSummaryService.CompactionResult.updated(
+                            new ConversationSummaryService.SummarySnapshot(
+                                    1, 1, "summary", 1, candidate.ref()));
+                });
+        service.setSummaryService(summaryService);
+
+        ChatExecutionResult result = service.execute(
+                command(ChatMode.PLAIN, null));
+
+        Map<String, Object> executionBudget =
+                (Map<String, Object>) result.metadata().get("executionBudget");
+        assertEquals(1, executionBudget.get("summaryCalls"));
+        Map<String, Object> summary =
+                (Map<String, Object>) result.metadata().get("summary");
+        assertEquals(true, summary.get("updated"));
+    }
+
+    @Test
+    void syntheticSummaryIsUsedForPromptButNeverCommittedToDurableMemory() {
+        ChatSessionCoordinator coordinator = mock(ChatSessionCoordinator.class);
+        ChatSessionCoordinator.LeaseHandle lease =
+                mock(ChatSessionCoordinator.LeaseHandle.class);
+        when(coordinator.acquire(any(), anyBoolean())).thenReturn(lease);
+        when(coordinator.invokeWithinDeadline(same(lease), any()))
+                .thenAnswer(invocation ->
+                        ((java.util.function.Supplier<?>) invocation.getArgument(1))
+                                .get());
+
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        AuthorizedRetrievalContext context = context();
+        ClientFixture client = clientFixture("当前回答", Map.of());
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = new ChatCommand(
+                "当前问题",
+                "summary-memory-session",
+                principal,
+                principal.memoryConversationId("summary-memory-session"),
+                ChatMode.PLAIN,
+                MemoryMode.SERVER,
+                null,
+                null,
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                Map.of());
+        ChatMemory memory = MessageWindowChatMemory.builder()
+                .chatMemoryRepository(new InMemoryChatMemoryRepository())
+                .maxMessages(20)
+                .build();
+        memory.add(
+                command.memoryConversationId(),
+                List.of(
+                        AssistantMessage.builder()
+                                .content("old durable summary")
+                                .properties(Map.of(
+                                        ConversationSummaryService
+                                                .SYNTHETIC_SUMMARY_MESSAGE_METADATA_KEY,
+                                        true))
+                                .build(),
+                        new org.springframework.ai.chat.messages.UserMessage(
+                                "old question"),
+                        new AssistantMessage("old answer"),
+                        new org.springframework.ai.chat.messages.UserMessage(
+                                "当前问题"),
+                        new AssistantMessage("当前回答")));
+        ModeAwareChatClientFactory.Attempt attempt =
+                new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, memory);
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(attempt);
+
+        ChatExecutionService coordinatedService = new ChatExecutionService(
+                modelRouter,
+                clientFactory,
+                knowledgeSearchTool,
+                historyRepository,
+                null,
+                domainExtensions,
+                promptCustomizers,
+                documentMapper,
+                new ObjectMapper(),
+                new RagProperties(),
+                null,
+                null,
+                coordinator,
+                null);
+
+        coordinatedService.execute(command);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<Message>> committed =
+                ArgumentCaptor.forClass(List.class);
+        verify(coordinator).commit(
+                same(lease),
+                any(ChatCommand.class),
+                any(ChatExecutionResult.class),
+                committed.capture(),
+                isNull());
+        assertEquals(
+                List.of("old question", "old answer", "当前问题", "当前回答"),
+                committed.getValue().stream().map(Message::getText).toList());
+    }
+
+    @Test
     void explicitAgentModelWithoutToolCapabilityFailsWithoutFallback() {
         ChatModelRouter.ChatModelCandidate unsupported =
                 candidate("requested", true, false, false);
@@ -429,6 +609,46 @@ class ChatExecutionServiceTest {
                         && "fallback".equals(completed.resolvedModel())));
         verify(clientFactory).create(any(), same(primary), anyList());
         verify(clientFactory).create(any(), same(fallback), anyList());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void completedStreamingAttemptIsMarkedTerminalBeforeDiagnosticsPersist() {
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("stream-model", true, false, false);
+        RetrievalTraceSession traceSession = new RetrievalTraceSession(
+                ChatPrincipal.local(), "CHAT", "session-1");
+        String attemptKey = "stream-attempt";
+        AuthorizedRetrievalContext context = new AuthorizedRetrievalContext(
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.25, true, true, 0.55, 0.45),
+                traceSession.newAttemptCollector(attemptKey, 3, 3, 20),
+                "session-1",
+                ChatPrincipal.local());
+        StreamClientFixture client = streamClientFixture(
+                Flux.just(streamResponse("answer", Map.of())));
+        RetrievalDiagnosticsService diagnosticsService =
+                mock(RetrievalDiagnosticsService.class);
+        service.setDiagnosticsService(diagnosticsService);
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(candidate));
+        when(clientFactory.create(any(), same(candidate), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        client.client(), candidate, context, null));
+
+        service.stream(command(ChatMode.PLAIN, null)
+                .withTraceSession(traceSession))
+                .collectList()
+                .block();
+
+        ArgumentCaptor<RetrievalTraceSession> persisted =
+                ArgumentCaptor.forClass(RetrievalTraceSession.class);
+        verify(diagnosticsService).persist(persisted.capture());
+        List<Map<String, Object>> attempts =
+                (List<Map<String, Object>>) persisted.getValue()
+                        .toMetadata(false)
+                        .get("attempts");
+        assertEquals("SUCCEEDED", attempts.getFirst().get("status"));
     }
 
     @Test
@@ -543,6 +763,20 @@ class ChatExecutionServiceTest {
         result.setChunkText(title + " content");
         result.setScore(0.8);
         return result;
+    }
+
+    private ChatHistoryResponse history(
+            String userMessage,
+            String aiResponse,
+            long id) {
+        return new ChatHistoryResponse(
+                id,
+                "session-1",
+                userMessage,
+                aiResponse,
+                null,
+                Map.of(),
+                LocalDateTime.now());
     }
 
     private ChatModelRouter.ChatModelCandidate candidate(

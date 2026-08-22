@@ -336,7 +336,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V45, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V46, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -395,7 +395,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V45 from an empty schema, and exercises the vector query with actual
+Flyway V1-V46 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -426,7 +426,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V45 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V46 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -472,7 +472,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V45, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V46, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
@@ -527,10 +527,11 @@ Run the repeatable local gate:
 ```
 
 It runs the Chat execution, Tool Calling, memory/history, structured SSE,
-controller/integration, and export tests; the V32 PostgreSQL lease/atomicity
-test; `mvn clean compile test-compile`; full `mvn test`; installation of the
+controller/integration, and export tests; the V32 session lease/atomicity and
+V46 summary-CAS PostgreSQL matrix, including
+`NextHighValueFeaturesPostgresIntegrationTest`; `mvn clean compile test-compile`; full `mvn test`; installation of the
 current reactor artifacts followed by the independent
-`demos/demo-domain-extension` consumer tests; a Spring Boot startup/health
+`demos/demo-domain-extension` and `demos/demo-tool-calling-sql` consumer tests; a Spring Boot startup/health
 smoke with temporary PostgreSQL and dummy model endpoints; WebUI Vitest,
 TypeScript, production build; Chat core Mock Playwright; project-docs; and
 whitespace checks. Logs and a Markdown result are written to
@@ -586,14 +587,18 @@ unavailable and retain the resulting `SKIP` record.
 Real provider verification is optional and explicit:
 
 ```bash
-RAG_API_KEY="$RAG_ROOT_API_KEY" \
 ./scripts/verify-chat-capability.sh --with-real-llm
 ```
 
-The script loads real model configuration from `.env`; when
-`RAG_ROOT_API_KEY` is configured, it uses `X-API-Key` for data-plane calls.
-Without this option, the real LLM gate is recorded as `SKIP`; local tests and
-Mock Playwright never imply a real model/tool-capable endpoint was validated.
+The script loads real model configuration from `.env` or the caller environment,
+requires `RAG_ROOT_API_KEY` for the real WebUI path, creates a disposable
+PostgreSQL database, starts an isolated `scripts/dev.sh` stack on backend
+`18083` and WebUI `15175` by default, runs the real WebUI
+`chat-real.spec.ts` and provider smoke, and cleans up the stack, overlay
+environment, and database. Override the ports with
+`CHAT_REAL_BACKEND_PORT` and `CHAT_REAL_FRONTEND_PORT` when needed. Without
+this option, the real LLM gate is recorded as `SKIP`; local tests and Mock
+Playwright never imply a real model/tool-capable endpoint was validated.
 
 ## Rules for Writing New Tests
 
