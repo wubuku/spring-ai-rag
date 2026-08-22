@@ -105,9 +105,9 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
     });
     await streamResponsePromise;
 
-    await expect(
-      page.getByLabel(/Retrieval activity|检索活动/),
-    ).toBeVisible({ timeout: REQUEST_TIMEOUT });
+    // Keyed SSE completes the durable operation before projecting the bounded
+    // snapshot. The stable acceptance evidence is the answer, sources, and
+    // persisted execution budget; replay does not promise old tool activity.
     await expect(page.getByText(probe.token, { exact: false }).last()).toBeVisible({
       timeout: REQUEST_TIMEOUT,
     });

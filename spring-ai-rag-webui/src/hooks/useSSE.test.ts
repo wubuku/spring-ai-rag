@@ -4,6 +4,7 @@ import { useChatSSE } from './useSSE';
 import { clearCredential, setCredential } from '../auth/credentialStore';
 
 describe('useChatSSE', () => {
+  const TEST_TURN_ID = '11111111-1111-4111-8111-111111111111';
   let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
@@ -29,10 +30,11 @@ describe('useChatSSE', () => {
 
   const setupStream = (chunks: string[]) => {
     let index = 0;
+    const normalizedChunks = chunks.map(chunk => addTurnId(chunk));
     const stream = new ReadableStream({
       pull(controller) {
-        if (index < chunks.length) {
-          controller.enqueue(new TextEncoder().encode(chunks[index++]));
+        if (index < normalizedChunks.length) {
+          controller.enqueue(new TextEncoder().encode(normalizedChunks[index++]));
         } else {
           controller.close();
         }
@@ -41,8 +43,31 @@ describe('useChatSSE', () => {
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
+      headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
       body: stream,
     });
+  };
+
+  const addTurnId = (chunk: string) => {
+    let doneEvent = false;
+    return chunk.split(/\r?\n/).map(line => {
+      if (line.startsWith('event:')) {
+        doneEvent = line.slice('event:'.length).trim() === 'done';
+      }
+      if (doneEvent && line.startsWith('data:')) {
+        try {
+          const payload = JSON.parse(line.slice('data:'.length).trim());
+          if (payload?.status === 'complete' && !payload.turnId) {
+            payload.turnId = TEST_TURN_ID;
+            return `data: ${JSON.stringify(payload)}`;
+          }
+        } catch {
+          // Multiline/non-JSON data is handled by the parser tests as-is.
+        }
+      }
+      if (line === '') doneEvent = false;
+      return line;
+    }).join('\n');
   };
 
   it('initializes with isConnected false', () => {
@@ -65,7 +90,7 @@ describe('useChatSSE', () => {
     });
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/rag/chat/stream', expect.objectContaining({
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({ message: 'Hello', collectionIds: [1], sessionId: 'conv-1' }),
     }));
   });
@@ -82,6 +107,7 @@ describe('useChatSSE', () => {
     expect(onDone).toHaveBeenCalledWith({
       sessionId: 'c1',
       status: 'complete',
+      turnId: TEST_TURN_ID,
     });
   });
 
@@ -132,6 +158,7 @@ describe('useChatSSE', () => {
     expect(onDone).toHaveBeenCalledWith({
       sessionId: 'session-1',
       status: 'complete',
+      turnId: TEST_TURN_ID,
       metadata: { context: { summaryUsed: true } },
     });
   });
@@ -154,6 +181,7 @@ describe('useChatSSE', () => {
     expect(onDone).toHaveBeenCalledWith({
       sessionId: 'session-1',
       status: 'complete',
+      turnId: TEST_TURN_ID,
     });
     expect(onError).not.toHaveBeenCalled();
   });
@@ -287,6 +315,77 @@ describe('useChatSSE', () => {
     );
   });
 
+  it('reuses one idempotency key and turn identity across a bounded retry', async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 409,
+      headers: new Headers({ 'Retry-After': '0' }),
+    });
+    setupMockStream();
+    const onRetry = vi.fn();
+    const onTurnClaimed = vi.fn();
+    const { result } = renderHook(() => useChatSSE({
+      onRetry,
+      onTurnClaimed,
+    }));
+
+    await act(async () => {
+      result.current.send({ message: 'Retry this turn' });
+    });
+
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+    const firstRequest = mockFetch.mock.calls[0][1];
+    const secondRequest = mockFetch.mock.calls[1][1];
+    expect(firstRequest.headers['Idempotency-Key']).toBeTruthy();
+    expect(secondRequest.headers['Idempotency-Key'])
+      .toBe(firstRequest.headers['Idempotency-Key']);
+    expect(secondRequest.body).toBe(firstRequest.body);
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(onTurnClaimed).toHaveBeenCalledWith(TEST_TURN_ID);
+  });
+
+  it('exposes the final HTTP status after a bounded idempotency conflict', async () => {
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: new Headers({ 'Retry-After': '0' }),
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send({ message: 'Conflict this turn' });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(
+      'HTTP 409',
+      expect.objectContaining({ message: 'HTTP 409', status: 409 }),
+    ));
+    expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a keyed stream without an immediate valid turn header', async () => {
+    const onError = vi.fn();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers: new Headers(),
+      body: new ReadableStream(),
+    });
+    const { result } = renderHook(() => useChatSSE({ onError }));
+
+    await act(async () => {
+      result.current.send({ message: 'Missing turn identity' });
+    });
+
+    await waitFor(() => expect(onError).toHaveBeenCalledWith(
+      'Chat response did not provide a valid turn ID',
+      expect.objectContaining({
+        message: 'Chat response did not provide a valid turn ID',
+      }),
+    ));
+  });
+
   it('sends the in-memory credential in a header and never in the URL', async () => {
     setupMockStream();
     setCredential('root-secret');
@@ -299,10 +398,10 @@ describe('useChatSSE', () => {
     expect(mockFetch).toHaveBeenCalledWith(
       '/api/v1/rag/chat/stream',
       expect.objectContaining({
-        headers: {
+        headers: expect.objectContaining({
           'Content-Type': 'application/json',
           'X-API-Key': 'root-secret',
-        },
+        }),
       })
     );
     expect(mockFetch.mock.calls[0][0]).not.toContain('root-secret');
@@ -312,6 +411,7 @@ describe('useChatSSE', () => {
     const cancel = vi.fn();
     mockFetch.mockResolvedValue({
       ok: true,
+      headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
       body: {
         getReader: () => ({
           read: () => new Promise(() => {}),
@@ -337,6 +437,7 @@ describe('useChatSSE', () => {
     let cancelCalled = false;
     mockFetch.mockResolvedValue({
       ok: true,
+      headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
       body: {
         getReader: () => ({
           read: () => new Promise(() => {}),
@@ -372,6 +473,7 @@ describe('useChatSSE', () => {
     mockFetch
       .mockResolvedValueOnce({
         ok: true,
+        headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
         body: {
           getReader: () => ({
             read: () => new Promise(() => {}), // never resolves, simulating pending stream
@@ -382,6 +484,7 @@ describe('useChatSSE', () => {
       })
       .mockResolvedValueOnce({
         ok: true,
+        headers: new Headers({ 'X-RAG-Turn-Id': TEST_TURN_ID }),
         body: {
           getReader: () => ({
             read: () => new Promise(() => {}),

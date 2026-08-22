@@ -25,6 +25,7 @@ public class ChatResponse {
     private List<ChatSource> sources;
 
     private String sessionId;
+    private String turnId;
     private ChatMode mode;
     private String requestedModel;
     private String resolvedModel;
@@ -57,6 +58,9 @@ public class ChatResponse {
     public String getSessionId() { return sessionId; }
     public void setSessionId(String sessionId) { this.sessionId = sessionId; }
 
+    public String getTurnId() { return turnId; }
+    public void setTurnId(String turnId) { this.turnId = turnId; }
+
     public ChatMode getMode() { return mode; }
     public void setMode(ChatMode mode) { this.mode = mode; }
 
@@ -87,6 +91,7 @@ public class ChatResponse {
                 && Objects.equals(traceId, that.traceId)
                 && Objects.equals(sources, that.sources)
                 && Objects.equals(sessionId, that.sessionId)
+                && Objects.equals(turnId, that.turnId)
                 && mode == that.mode
                 && Objects.equals(requestedModel, that.requestedModel)
                 && Objects.equals(resolvedModel, that.resolvedModel)
@@ -98,7 +103,7 @@ public class ChatResponse {
 
     @Override
     public int hashCode() {
-        return Objects.hash(answer, traceId, sources, sessionId, mode, requestedModel,
+        return Objects.hash(answer, traceId, sources, sessionId, turnId, mode, requestedModel,
                 resolvedModel, usage, finishReason, metadata, stepMetrics);
     }
 
@@ -119,6 +124,7 @@ public class ChatResponse {
         public ChatResponseBuilder traceId(String traceId) { response.setTraceId(traceId); return this; }
         public ChatResponseBuilder sources(List<? extends ChatSource> sources) { response.setSources(sources); return this; }
         public ChatResponseBuilder sessionId(String sessionId) { response.setSessionId(sessionId); return this; }
+        public ChatResponseBuilder turnId(String turnId) { response.setTurnId(turnId); return this; }
         public ChatResponseBuilder mode(ChatMode mode) { response.setMode(mode); return this; }
         public ChatResponseBuilder requestedModel(String value) { response.setRequestedModel(value); return this; }
         public ChatResponseBuilder resolvedModel(String value) { response.setResolvedModel(value); return this; }

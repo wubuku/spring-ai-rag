@@ -187,6 +187,7 @@ chat_focused_tests() {
 chat_postgres_tests() {
   local chat_rc=0
   local next_high_value_rc=0
+  local idempotency_rc=0
 
   DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
     TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
@@ -208,8 +209,19 @@ chat_postgres_tests() {
       -Dsurefire.failIfNoSpecifiedTests=false \
       test || next_high_value_rc=$?
 
-  if [[ "$chat_rc" -ne 0 || "$next_high_value_rc" -ne 0 ]]; then
-    echo "PostgreSQL integration matrix failed (chat=${chat_rc}, next-high-value=${next_high_value_rc})." >&2
+  DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
+    TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
+    mvn -pl spring-ai-rag-core -am \
+      "-Dapi.version=${TESTCONTAINERS_API_VERSION}" \
+      -Dchat.idempotency.it.enabled=true \
+      "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
+      -Dtest=ChatTurnOperationPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false \
+      test || idempotency_rc=$?
+
+  if [[ "$chat_rc" -ne 0 || "$next_high_value_rc" -ne 0
+        || "$idempotency_rc" -ne 0 ]]; then
+    echo "PostgreSQL integration matrix failed (chat=${chat_rc}, next-high-value=${next_high_value_rc}, idempotency=${idempotency_rc})." >&2
     return 1
   fi
 }
@@ -532,8 +544,9 @@ real_browser_and_provider_e2e() {
   fi
 
   BASE_URL="http://127.0.0.1:${REAL_BACKEND_PORT}" \
+    REAL_LLM_ENV_FILE="$REAL_ENV_OVERLAY" \
     RAG_ROOT_API_KEY="$REAL_ROOT_API_KEY" \
-    ./scripts/real-llm-e2e-smoke.sh || provider_rc=$?
+    ./scripts/real-llm-chat-idempotency-smoke.sh || provider_rc=$?
   if [[ "$provider_rc" -eq 0 ]]; then
     echo "Real provider smoke: PASS"
   else

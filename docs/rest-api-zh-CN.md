@@ -449,6 +449,53 @@ curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -d '{"message":"什么是 RAG？","sessionId":"s1","mode":"KNOWLEDGE","model":"openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
+### Chat turn 持久化幂等
+
+`POST /api/v1/rag/chat/ask`、`POST /api/v1/rag/chat` 和
+`POST /api/v1/rag/chat/stream` 都接受一个可选的 `Idempotency-Key` header。
+该值按 principal 隔离，服务端只保存 SHA-256 hash。带 key 的请求成功后，会在
+`X-RAG-Turn-Id` response header 返回 opaque UUID `turnId`；JSON 响应的
+`ChatResponse.turnId` 与 `metadata.turnId` 也保持一致。
+
+第一次成功请求会在同一个 PostgreSQL 事务内持久化与 provider 无关的业务响应、
+history 行和 server Memory 更新。相同 key、相同 canonical request 的重试会重放
+不可变响应，不会再次调用 provider，也不会新增 history 行。第一次响应的
+`X-RAG-Idempotent-Replay` 为 `false`，重放时为 `true`。原生 SSE 的 `done` 事件也会
+包含相同的 `turnId` 和 `idempotentReplay`；重放只发送完整 answer/source/done 快照，
+不重复原始 tool event 的时间节奏。
+
+同一个 key 对应不同请求时返回 `409 IDEMPOTENCY_KEY_REUSED`。已有请求持有 operation
+lease 时返回 `409 IDEMPOTENCY_OPERATION_IN_PROGRESS`，并带有有界的 `Retry-After`
+header。非法或重复的 `Idempotency-Key` header 返回 `400 IDEMPOTENCY_KEY_INVALID`。
+如果 durable 协调不可用或已关闭，带 key 的请求会 fail closed，返回
+`503 IDEMPOTENCY_DISABLED`，不会退回非幂等执行路径。终态 operation 被有界 retention
+cleanup 删除后，原 key 才允许重新使用。
+
+### `GET /api/v1/rag/chat/turns/{turnId}`
+
+查询 opaque Chat turn 在当前 principal 下的状态；该接口不接受幂等 key 或 key hash。
+
+```json
+{
+  "turnId": "opaque-uuid",
+  "sessionId": "session-001",
+  "status": "SUCCEEDED",
+  "transport": "NATIVE_SSE",
+  "createdAt": "2026-08-22T15:00:00Z",
+  "updatedAt": "2026-08-22T15:00:01Z",
+  "completedAt": "2026-08-22T15:00:01Z",
+  "replayAvailable": true,
+  "response": {
+    "answer": "..."
+  }
+}
+```
+
+默认 `includeResponse=false` 只返回状态和经过当前授权复核的
+`replayAvailable`，不返回响应快照。`includeResponse=true` 仅在当前 principal 仍有权
+读取所有引用来源时返回快照，否则返回 `403`。未知、过期或其他 principal 的 turn ID
+返回 `404 CHAT_TURN_NOT_FOUND`。
+
 ---
 
 ### `GET /api/v1/rag/chat/history/{sessionId}`

@@ -219,7 +219,8 @@ summary compaction path. The two mechanisms remain separate:
   summary hierarchy.
 - `ConversationSummaryService` compacts only committed COMPLETE turns before
   the protected recent-turn window, stores a forward-only history cursor, and
-  updates the V46 summary row with optimistic version CAS.
+  updates the V46 summary row with optimistic version CAS. Keyed requests
+  additionally persist their V47 durable turn operation and replay snapshot.
 - Summary generation is disabled by default, bounded by the shared model-call
   budget and deadline, and degrades to the main Chat path on timeout, provider
   failure, output overflow, or CAS conflict. A summary is memory, not citation
@@ -364,6 +365,7 @@ chat summary table     -> durable old-history summary and compaction cursor
 The summary is conversation memory, not external evidence. `KNOWLEDGE` answers
 must remain grounded in retrieved sources. Summary facts do not automatically
 become citations. The V46 schema and CAS-backed service implement this path;
+V47 adds the durable keyed-turn operation and replay boundary;
 compaction is opt-in.
 
 If compaction fails, deterministic token-based truncation should preserve the

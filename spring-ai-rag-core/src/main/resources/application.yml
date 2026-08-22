@@ -423,6 +423,16 @@ rag:
     history:
       lease-ttl-seconds: 30
       lease-renew-interval-seconds: 10
+    idempotency:
+      enabled: ${RAG_CHAT_IDEMPOTENCY_ENABLED:true}
+      retention-hours: ${RAG_CHAT_IDEMPOTENCY_RETENTION_HOURS:24}
+      response-snapshot-max-bytes: ${RAG_CHAT_IDEMPOTENCY_RESPONSE_SNAPSHOT_MAX_BYTES:524288}
+      execution-snapshot-max-bytes: ${RAG_CHAT_IDEMPOTENCY_EXECUTION_SNAPSHOT_MAX_BYTES:65536}
+      max-attempts: ${RAG_CHAT_IDEMPOTENCY_MAX_ATTEMPTS:3}
+      lease-grace-ms: ${RAG_CHAT_IDEMPOTENCY_LEASE_GRACE_MS:10000}
+      cleanup-batch-size: ${RAG_CHAT_IDEMPOTENCY_CLEANUP_BATCH_SIZE:500}
+      cleanup-interval-ms: ${RAG_CHAT_IDEMPOTENCY_CLEANUP_INTERVAL_MS:600000}
+      cleanup-initial-delay-ms: ${RAG_CHAT_IDEMPOTENCY_CLEANUP_INITIAL_DELAY_MS:60000}
 
   # Chat memory configuration
   memory:

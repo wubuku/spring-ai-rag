@@ -415,6 +415,61 @@ curl -N -X POST http://localhost:8081/api/v1/rag/chat/stream \
   -d '{"message":"What is RAG?","sessionId":"s1","mode":"KNOWLEDGE","model":"openrouter/xiaomi/mimo-v2-pro"}'
 ```
 
+### Durable Chat turn idempotency
+
+`POST /api/v1/rag/chat/ask`, `POST /api/v1/rag/chat`, and
+`POST /api/v1/rag/chat/stream` accept one optional `Idempotency-Key` header.
+The value is principal-scoped and is stored only as a SHA-256 hash. A keyed
+request receives an opaque UUID `turnId` in the `X-RAG-Turn-Id` response
+header; successful JSON responses also include the same value in
+`ChatResponse.turnId` and `metadata.turnId`.
+
+The first successful request persists the provider-independent business
+response, history row, and server Memory update in one PostgreSQL transaction.
+Repeating the same key with the same canonical request replays the immutable
+response without invoking the provider or adding another history row. The
+`X-RAG-Idempotent-Replay` header is `false` on the first response and `true` on
+replay. Native SSE adds the same `turnId` and `idempotentReplay` fields to its
+`done` event; a replay emits the complete answer/sources/done snapshot and does
+not reproduce the original tool-event timing.
+
+The same key with a different request returns `409 IDEMPOTENCY_KEY_REUSED`.
+When another request currently owns the operation lease, the endpoint returns
+`409 IDEMPOTENCY_OPERATION_IN_PROGRESS` with a bounded `Retry-After` header.
+Malformed or repeated `Idempotency-Key` headers return
+`400 IDEMPOTENCY_KEY_INVALID`. If durable coordination is unavailable or
+disabled, a keyed request fails closed with `503 IDEMPOTENCY_DISABLED` rather
+than falling back to a non-idempotent execution path. A key can be reused
+after its terminal operation has been removed by the bounded retention
+cleanup.
+
+### `GET /api/v1/rag/chat/turns/{turnId}`
+
+Returns the current principal-scoped status of an opaque Chat turn. It never
+accepts an idempotency key or key hash.
+
+```json
+{
+  "turnId": "opaque-uuid",
+  "sessionId": "session-001",
+  "status": "SUCCEEDED",
+  "transport": "NATIVE_SSE",
+  "createdAt": "2026-08-22T15:00:00Z",
+  "updatedAt": "2026-08-22T15:00:01Z",
+  "completedAt": "2026-08-22T15:00:01Z",
+  "replayAvailable": true,
+  "response": {
+    "answer": "..."
+  }
+}
+```
+
+`includeResponse=false` (the default) returns status and a current
+authorization-aware `replayAvailable` value without returning the response
+snapshot. `includeResponse=true` returns the snapshot only when the current
+principal can still read every cited source; otherwise it returns `403`.
+Unknown, expired, or cross-principal turn IDs return `404 CHAT_TURN_NOT_FOUND`.
+
 ---
 
 ### `GET /api/v1/rag/chat/history/{sessionId}`

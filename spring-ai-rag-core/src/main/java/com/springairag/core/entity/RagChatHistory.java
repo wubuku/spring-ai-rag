@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * RAG chat history entity.
@@ -72,6 +73,9 @@ public class RagChatHistory {
     @Column(name = "turn_status", nullable = false, length = 20)
     private String turnStatus = "COMPLETE";
 
+    @Column(name = "turn_id")
+    private UUID turnId;
+
     /**
      * Chat metadata (JSONB format).
      */
@@ -118,6 +122,9 @@ public class RagChatHistory {
 
     public String getTurnStatus() { return turnStatus; }
     public void setTurnStatus(String turnStatus) { this.turnStatus = turnStatus; }
+
+    public UUID getTurnId() { return turnId; }
+    public void setTurnId(UUID turnId) { this.turnId = turnId; }
 
     public Map<String, Object> getMetadata() { return metadata; }
     public void setMetadata(Map<String, Object> metadata) { this.metadata = metadata; }

@@ -461,7 +461,11 @@ public class RagChatService {
         throw new IllegalStateException("No chat model available to handle request");
     }
 
-    private void assertCircuitBreakerAllowsCall() {
+    /**
+     * Applies the provider execution gate without affecting operation replay.
+     * Durable Chat adapters call this only after an operation claim exists.
+     */
+    public void assertCircuitBreakerAllowsCall() {
         if (circuitBreaker != null && !circuitBreaker.allowCall()) {
             log.warn("LLM circuit breaker is OPEN, rejecting request");
             throw new LlmCircuitOpenException();

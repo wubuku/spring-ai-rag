@@ -336,7 +336,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V46, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V47, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -395,7 +395,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V46 from an empty schema, and exercises the vector query with actual
+Flyway V1-V47 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -426,7 +426,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V46 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V47 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -472,7 +472,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V46, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V47, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
@@ -527,8 +527,8 @@ Run the repeatable local gate:
 ```
 
 It runs the Chat execution, Tool Calling, memory/history, structured SSE,
-controller/integration, and export tests; the V32 session lease/atomicity and
-V46 summary-CAS PostgreSQL matrix, including
+controller/integration, and export tests; the V32 session lease/atomicity,
+V46 summary-CAS, and V47 durable Chat-turn PostgreSQL matrix, including
 `NextHighValueFeaturesPostgresIntegrationTest`; `mvn clean compile test-compile`; full `mvn test`; installation of the
 current reactor artifacts followed by the independent
 `demos/demo-domain-extension` and `demos/demo-tool-calling-sql` consumer tests; a Spring Boot startup/health
@@ -544,8 +544,10 @@ gate installs the current workspace artifacts before testing that consumer.
 The browser gate uses DOM visibility, request/response assertions, URL
 assertions, and test assertions. Screenshots are not used as correctness
 evidence. The browser suite covers mode/model requests, AGENT tool lifecycle,
-sources, history source restoration, selected Collections, and mobile
-overflow.
+sources, history source restoration, selected Collections, mobile overflow,
+`Idempotency-Key` reuse across one retry, response-header/done turn identity,
+partial-SSE replay without duplicate assistant bubbles, 409 input retention,
+and stop without a retry request.
 
 The PostgreSQL gate is attempted by default. If Docker is unavailable or the
 daemon rejects the negotiated API version, the script records both Docker and
@@ -589,6 +591,22 @@ Real provider verification is optional and explicit:
 ```bash
 ./scripts/verify-chat-capability.sh --with-real-llm
 ```
+
+A narrower real-provider smoke is also available for this Chat-turn idempotency
+delivery. It fixes the request to `PLAIN`, so Chat idempotency can be verified
+without an Embedding key:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+REAL_LLM_ENV_FILE=.env \
+./scripts/real-llm-chat-idempotency-smoke.sh
+```
+
+Run it against an isolated PostgreSQL-profile server. It verifies native JSON/SSE
+first requests, complete same-key replay, key conflict, `GET` turn status, and
+that the provider counter increases only once across each first/replay pair. It
+does not replace the real Embedding-backed retrieval smoke, and Mock Playwright
+or code review is not evidence of real-provider correctness.
 
 The script loads real model configuration from `.env` or the caller environment,
 requires `RAG_ROOT_API_KEY` for the real WebUI path, creates a disposable

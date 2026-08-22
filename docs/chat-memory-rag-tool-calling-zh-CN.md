@@ -193,7 +193,8 @@ principal/session 下的过期 history、summary 和 JDBC Memory。提交时 mai
 - `CompressionQueryTransformer` 不会把旧对话总结后写入持久记忆、减少最终 Chat prompt
   中的历史 token，或建立摘要层级。
 - `ConversationSummaryService` 只压缩受保护近期 turns 之前的 COMPLETE turns，保存前进式
-  history cursor，并通过 V46 的 optimistic version CAS 更新摘要行。
+  history cursor，并通过 V46 的 optimistic version CAS 更新摘要行。带 key 的请求还会
+  持久化 V47 durable turn operation 和 replay 快照。
 - 摘要默认关闭，受共享 model-call budget 和 deadline 约束；超时、provider 失败、输出超限
   或 CAS 冲突时降级，不阻断主 Chat。摘要是会话记忆，不是 citation evidence。
 
@@ -324,7 +325,8 @@ chat summary table     -> 旧历史的持久摘要和压缩游标
 ```
 
 摘要只表示会话记忆，不是外部事实证据。`KNOWLEDGE` 回答仍必须以检索来源 grounding；
-摘要中出现的事实不能自动变成 citation。V46 schema 和 CAS 服务已经实现该路径；摘要压缩
+摘要中出现的事实不能自动变成 citation。V46 schema 和 CAS 服务已经实现该路径；V47
+增加 durable keyed-turn operation 和 replay 边界；摘要压缩
 默认关闭。
 
 压缩失败时应保留成功主路径：按 token 预算确定性截断旧历史，记录 degraded 状态，不删除

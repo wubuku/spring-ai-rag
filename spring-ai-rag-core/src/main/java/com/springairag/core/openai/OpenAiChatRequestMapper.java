@@ -1,12 +1,17 @@
 package com.springairag.core.openai;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.chat.ChatCommand;
 import com.springairag.core.chat.ChatInputMessage;
 import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.MemoryMode;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.config.RagProperties;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -16,6 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -39,6 +45,7 @@ public class OpenAiChatRequestMapper {
     private final OpenAiRequestRetrievalScopeAdapter scopeAdapter;
     private final RagProperties properties;
     private final RetrievalFilterValidator filterValidator = new RetrievalFilterValidator();
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OpenAiChatRequestMapper(
             OpenAiModelAliasRegistry aliasRegistry,
@@ -52,8 +59,214 @@ public class OpenAiChatRequestMapper {
     public MappedRequest map(
             OpenAiChatCompletionRequest request,
             HttpServletRequest httpRequest) {
+        return map(request, httpRequest, null);
+    }
+
+    public MappedRequest map(
+            OpenAiChatCompletionRequest request,
+            HttpServletRequest httpRequest,
+            String sessionIdOverride) {
+        Declaration declaration = validateDeclaration(
+                request, headerValues(httpRequest));
+        OpenAiChatCompletionRequest.RagOptions rag = request.getRag();
+        OpenAiModelAliasRegistry.ResolvedAlias alias = aliasRegistry.resolve(
+                request.getModel(),
+                rag != null ? rag.getMode() : null,
+                rag != null ? rag.getMemory() : null);
+        if (alias.mode() == ChatMode.PLAIN && !declaration.filters().isEmpty()) {
+            throw OpenAiProtocolException.invalid(
+                    "rag.filters is not allowed when mode is PLAIN",
+                    "rag.filters",
+                    "unsupported_parameter");
+        }
+        RetrievalScope scope = scopeAdapter.resolve(rag, httpRequest);
+
+        ChatPrincipal principal = ChatPrincipal.from(httpRequest);
+        String sessionId = sessionIdOverride != null
+                ? sessionIdOverride
+                : "oai-" + UUID.randomUUID().toString().replace("-", "");
+        RetrievalOptions retrievalOptions = RetrievalOptions.from(
+                properties.getRetrieval(),
+                null,
+                false,
+                0,
+                false,
+                false,
+                false,
+                false);
+        ChatCommand command = new ChatCommand(
+                declaration.latestUser(),
+                sessionId,
+                principal,
+                principal.memoryConversationId(sessionId),
+                alias.mode(),
+                alias.memory(),
+                alias.candidates().isEmpty()
+                        ? null
+                        : alias.candidates().getFirst(),
+                null,
+                scope,
+                retrievalOptions,
+                Map.of(),
+                declaration.inputMessages(),
+                alias.candidates())
+                .withFilters(declaration.filters());
+        return new MappedRequest(
+                alias.alias(),
+                Boolean.TRUE.equals(request.getStream()),
+                command);
+    }
+
+    /**
+     * Validates only request syntax and fields whose meaning does not depend on
+     * the current alias registry or Collection ACL. This is safe to run before
+     * durable operation lookup.
+     */
+    public Declaration validateDeclaration(
+            OpenAiChatCompletionRequest request) {
+        return validateDeclaration(request, List.of());
+    }
+
+    public Declaration validateDeclaration(
+            OpenAiChatCompletionRequest request,
+            List<String> collectionHeaderValues) {
         validateRequest(request);
         OpenAiChatCompletionRequest.RagOptions rag = request.getRag();
+        validateRagShape(rag);
+        RetrievalFilters filters = resolveFilters(rag);
+        ChatMode declaredMode = rag != null && rag.getMode() != null
+                ? rag.getMode()
+                : ChatMode.KNOWLEDGE;
+        if (declaredMode == ChatMode.PLAIN) {
+            if (rag != null && rag.getScope() != null) {
+                throw OpenAiProtocolException.invalid(
+                        "rag.scope is not allowed when mode is PLAIN",
+                        "rag.scope",
+                        "unsupported_parameter");
+            }
+            if (rag != null && rag.getDocumentIds() != null) {
+                throw OpenAiProtocolException.invalid(
+                        "rag.document_ids is not allowed when mode is PLAIN",
+                        "rag.document_ids",
+                        "unsupported_parameter");
+            }
+            if (collectionHeaderValues != null
+                    && !collectionHeaderValues.isEmpty()) {
+                throw OpenAiProtocolException.invalid(
+                        "X-RAG-Collection-Key is not allowed when mode is PLAIN",
+                        OpenAiRequestRetrievalScopeAdapter.COLLECTION_KEY_HEADER,
+                        "unsupported_parameter");
+            }
+        }
+        if (rag != null && rag.getMode() == ChatMode.PLAIN
+                && !filters.isEmpty()) {
+            throw OpenAiProtocolException.invalid(
+                    "rag.filters is not allowed when mode is PLAIN",
+                    "rag.filters",
+                    "unsupported_parameter");
+        }
+        if (rag != null && rag.getMemory() != null
+                && !rag.getMemory().isBlank()) {
+            try {
+                com.springairag.core.chat.MemoryMode.valueOf(
+                        rag.getMemory().trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                throw OpenAiProtocolException.invalid(
+                        "rag.memory must be STATELESS or SERVER",
+                        "rag.memory",
+                        "invalid_value");
+            }
+        }
+        List<ChatInputMessage> inputMessages = parseMessages(
+                request.getMessages());
+        String latestUser = inputMessages.stream()
+                .filter(message -> message.role() == ChatInputMessage.Role.USER)
+                .reduce((left, right) -> right)
+                .orElseThrow()
+                .content();
+        return new Declaration(latestUser, inputMessages, filters);
+    }
+
+    private List<String> headerValues(HttpServletRequest request) {
+        if (request == null
+                || request.getHeaders(
+                        OpenAiRequestRetrievalScopeAdapter.COLLECTION_KEY_HEADER)
+                        == null) {
+            return List.of();
+        }
+        return Collections.list(request.getHeaders(
+                OpenAiRequestRetrievalScopeAdapter.COLLECTION_KEY_HEADER));
+    }
+
+    /**
+     * Rebuilds an execution command from the first claim's immutable snapshot.
+     * No alias registry, domain registry or current Collection resolver is
+     * consulted here.
+     */
+    public MappedRequest mapFromExecutionSnapshot(
+            OpenAiChatCompletionRequest request,
+            HttpServletRequest httpRequest,
+            String sessionId,
+            String executionSnapshot) {
+        Declaration declaration = validateDeclaration(
+                request, headerValues(httpRequest));
+        try {
+            JsonNode snapshot = objectMapper.readTree(executionSnapshot);
+            if (snapshot == null
+                    || snapshot.path("executionSnapshotVersion").asInt() != 1) {
+                throw invalidSnapshot();
+            }
+            ChatMode mode = ChatMode.valueOf(
+                    snapshot.path("mode").asText());
+            MemoryMode memory = MemoryMode.valueOf(
+                    snapshot.path("memoryMode").asText());
+            String declaredModel = snapshot.path(
+                    "declaredModelIdentifier").asText(null);
+            if (declaredModel == null || declaredModel.isBlank()) {
+                throw invalidSnapshot();
+            }
+            List<String> candidates = textList(
+                    snapshot.path("resolvedCandidates"));
+            String modelRef = candidates.isEmpty()
+                    ? null
+                    : candidates.getFirst();
+            RetrievalOptions options = retrievalOptions(
+                    snapshot.path("retrievalOptions"));
+            RetrievalScope scope = retrievalScope(
+                    snapshot.path("effectiveScope"));
+            String domainId = snapshot.path("domainId").asText(null);
+            if (domainId != null && domainId.isBlank()) {
+                domainId = null;
+            }
+            ChatPrincipal principal = ChatPrincipal.from(httpRequest);
+            ChatCommand command = new ChatCommand(
+                    declaration.latestUser(),
+                    sessionId,
+                    principal,
+                    principal.memoryConversationId(sessionId),
+                    mode,
+                    memory,
+                    modelRef,
+                    domainId,
+                    scope,
+                    options,
+                    Map.of(),
+                    declaration.inputMessages(),
+                    candidates)
+                    .withFilters(declaration.filters());
+            return new MappedRequest(
+                    declaredModel,
+                    Boolean.TRUE.equals(request.getStream()),
+                    command);
+        } catch (RagException e) {
+            throw e;
+        } catch (Exception e) {
+            throw invalidSnapshot();
+        }
+    }
+
+    private void validateRagShape(
+            OpenAiChatCompletionRequest.RagOptions rag) {
         if (rag != null && !rag.getAdditionalProperties().isEmpty()) {
             throw OpenAiProtocolException.invalid(
                     "Unsupported rag fields: "
@@ -70,62 +283,92 @@ public class OpenAiChatRequestMapper {
                     "rag.filters",
                     "unsupported_parameter");
         }
-        RetrievalFilters filters = resolveFilters(rag);
-        OpenAiModelAliasRegistry.ResolvedAlias alias = aliasRegistry.resolve(
-                request.getModel(),
-                rag != null ? rag.getMode() : null,
-                rag != null ? rag.getMemory() : null);
-        if (alias.mode() == ChatMode.PLAIN && !filters.isEmpty()) {
+        if (rag != null && rag.getScope() != null
+                && !rag.getScope().getAdditionalProperties().isEmpty()) {
             throw OpenAiProtocolException.invalid(
-                    "rag.filters is not allowed when mode is PLAIN",
-                    "rag.filters",
+                    "Unsupported rag.scope fields: "
+                            + rag.getScope().getAdditionalProperties().keySet(),
+                    "rag.scope",
                     "unsupported_parameter");
         }
-        RetrievalScope scope = scopeAdapter.resolve(rag, httpRequest);
-        List<ChatInputMessage> inputMessages = parseMessages(
-                request.getMessages());
-        String latestUser = inputMessages.stream()
-                .filter(message -> message.role() == ChatInputMessage.Role.USER)
-                .reduce((left, right) -> right)
-                .orElseThrow()
-                .content();
+    }
 
-        ChatPrincipal principal = ChatPrincipal.from(httpRequest);
-        String sessionId = "oai-" + UUID.randomUUID()
-                .toString().replace("-", "");
-        RetrievalOptions retrievalOptions = RetrievalOptions.from(
-                properties.getRetrieval(),
-                null,
-                false,
-                0,
-                false,
-                false,
-                false,
-                false);
-        Map<String, Object> metadata = new LinkedHashMap<>();
-        metadata.put("transport", "openai-chat-completions");
-        metadata.put("openaiModelAlias", alias.alias());
-        ChatCommand command = new ChatCommand(
-                latestUser,
-                sessionId,
-                principal,
-                principal.memoryConversationId(sessionId),
-                alias.mode(),
-                alias.memory(),
-                alias.candidates().isEmpty()
-                        ? null
-                        : alias.candidates().getFirst(),
-                null,
-                scope,
-                retrievalOptions,
-                metadata,
-                inputMessages,
-                alias.candidates())
-                .withFilters(filters);
-        return new MappedRequest(
-                alias.alias(),
-                Boolean.TRUE.equals(request.getStream()),
-                command);
+    private RetrievalOptions retrievalOptions(JsonNode node) {
+        if (node == null || !node.isObject()
+                || !node.has("maxResults")
+                || !node.has("minScore")
+                || !node.has("useHybridSearch")
+                || !node.has("useRerank")
+                || !node.has("vectorWeight")
+                || !node.has("fulltextWeight")) {
+            throw invalidSnapshot();
+        }
+        return new RetrievalOptions(
+                node.path("maxResults").asInt(),
+                node.path("minScore").asDouble(),
+                node.path("useHybridSearch").asBoolean(),
+                node.path("useRerank").asBoolean(),
+                node.path("vectorWeight").asDouble(),
+                node.path("fulltextWeight").asDouble());
+    }
+
+    private RetrievalScope retrievalScope(JsonNode node) {
+        if (node == null || !node.isObject()) {
+            throw invalidSnapshot();
+        }
+        try {
+            RetrievalScope.CollectionFilter filter =
+                    RetrievalScope.CollectionFilter.valueOf(
+                            node.path("collectionFilter").asText());
+            List<Long> collectionIds = longList(node.path("collectionIds"));
+            List<Long> documentIds = longList(node.path("documentIds"));
+            String documentType = node.path("documentType").asText(null);
+            if (documentType != null && documentType.isBlank()) {
+                documentType = null;
+            }
+            return new RetrievalScope(
+                    filter,
+                    collectionIds,
+                    documentIds,
+                    documentType,
+                    node.path("matchNone").asBoolean());
+        } catch (IllegalArgumentException e) {
+            throw invalidSnapshot();
+        }
+    }
+
+    private List<Long> longList(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            throw invalidSnapshot();
+        }
+        List<Long> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (!item.isIntegralNumber() || item.longValue() <= 0) {
+                throw invalidSnapshot();
+            }
+            values.add(item.longValue());
+        }
+        return values;
+    }
+
+    private List<String> textList(JsonNode node) {
+        if (node == null || !node.isArray()) {
+            throw invalidSnapshot();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (!item.isTextual() || item.asText().isBlank()) {
+                throw invalidSnapshot();
+            }
+            values.add(item.asText());
+        }
+        return List.copyOf(values);
+    }
+
+    private RagException invalidSnapshot() {
+        return new RagException(
+                ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                "Chat execution snapshot is invalid");
     }
 
     private RetrievalFilters resolveFilters(OpenAiChatCompletionRequest.RagOptions rag) {
@@ -304,5 +547,11 @@ public class OpenAiChatRequestMapper {
             String modelAlias,
             boolean stream,
             ChatCommand command) {
+    }
+
+    public record Declaration(
+            String latestUser,
+            List<ChatInputMessage> inputMessages,
+            RetrievalFilters filters) {
     }
 }

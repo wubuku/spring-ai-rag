@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V46 |
+| Flyway | V1–V47 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -242,6 +242,20 @@ stream. When `RAG_ROOT_API_KEY` is configured, pass it through `RAG_API_KEY` (or
 equivalent `X-API-Key` header); the script also loads the root key from `.env`. Mock
 Playwright is not a substitute for real-LLM validation.
 
+This Chat-turn idempotency delivery has a separate PLAIN smoke that does not require an
+Embedding provider:
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+./scripts/real-llm-chat-idempotency-smoke.sh
+```
+
+The script forces the OpenAI-compatible Chat provider and verifies native JSON/SSE first
+requests, same-key replay, key conflict, turn status lookup, and the before/after
+`/actuator/metrics/rag.chat.provider.calls` counter to prove replay did not invoke the
+provider again. Start the server with an isolated PostgreSQL database and dedicated ports;
+never put API keys in shell history or documentation.
+
 ### Chat Capability Verification
 
 Run the Chat redesign gate serially because it includes Maven clean output:
@@ -252,7 +266,7 @@ Run the Chat redesign gate serially because it includes Maven clean output:
 
 The script verifies `KNOWLEDGE`, `AGENT`, and `PLAIN` mode execution, Spring AI
 Tool Calling boundaries, principal-scoped memory/history, V32 session leases,
-V46 durable summary CAS, bounded execution metadata, structured SSE, WebUI
+V46 durable summary CAS, V47 durable Chat-turn idempotency/replay, bounded execution metadata, structured SSE, WebUI
 mode/capability/source rendering, and Chat export snapshots. It also runs the
 `NextHighValueFeaturesPostgresIntegrationTest` matrix and the independent
 domain-extension and read-only SQL tool demo tests, then records every step under

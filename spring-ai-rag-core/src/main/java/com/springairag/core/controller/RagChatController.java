@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ChatHistoryResponse;
 import com.springairag.api.dto.ChatRequest;
 import com.springairag.api.dto.ChatResponse;
+import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.dto.ClearHistoryResponse;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.core.config.RagChatService;
@@ -15,6 +16,13 @@ import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.chat.ChatEvent;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.ChatSessionCoordinator;
+import com.springairag.core.chat.ChatCommand;
+import com.springairag.core.chat.ChatCommandMapper;
+import com.springairag.core.chat.ChatExecutionService;
+import com.springairag.core.chat.ChatRequestFingerprint;
+import com.springairag.core.chat.ChatTurnOperation;
+import com.springairag.core.chat.ChatTurnOperationService;
+import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalTraceHeaders;
@@ -52,6 +60,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import jakarta.servlet.http.HttpServletResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.core.filter.RequestTraceFilter;
 
 import org.slf4j.MDC;
@@ -63,6 +72,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collections;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.Executors;
@@ -92,6 +103,10 @@ public class RagChatController {
     private final CollectionRetrievalScopeResolver retrievalScopeResolver;
     private ChatSessionCoordinator sessionCoordinator;
     private RetrievalDiagnosticsService diagnosticsService;
+    private ChatTurnOperationService turnOperationService;
+    private ChatCommandMapper chatCommandMapper;
+    private ChatExecutionService chatExecutionService;
+    private ObjectMapper objectMapper = new ObjectMapper();
 
     @Autowired
     public RagChatController(RagChatService ragChatService,
@@ -119,6 +134,26 @@ public class RagChatController {
         this.diagnosticsService = diagnosticsService;
     }
 
+    @Autowired(required = false)
+    void configureTurnOperationService(ChatTurnOperationService service) {
+        this.turnOperationService = service;
+    }
+
+    @Autowired(required = false)
+    void configureModeAwareExecution(
+            ChatCommandMapper commandMapper,
+            ChatExecutionService executionService) {
+        this.chatCommandMapper = commandMapper;
+        this.chatExecutionService = executionService;
+    }
+
+    @Autowired(required = false)
+    void configureObjectMapper(ObjectMapper objectMapper) {
+        if (objectMapper != null) {
+            this.objectMapper = objectMapper;
+        }
+    }
+
     public RagChatController(RagChatService ragChatService,
                              RagChatHistoryRepository historyRepository,
                              ChatExportService chatExportService,
@@ -142,9 +177,46 @@ public class RagChatController {
     @Timed(value = "rag.chat.ask", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> ask(@Valid @RequestBody ChatRequest request,
                                             HttpServletRequest httpRequest) {
-        // First message in a session has null sessionId; auto-generate
+        ChatTurnOperationService.Prepared prepared =
+                prepareTurn(request, httpRequest);
+        ChatTurnOperationService.Claim claim =
+                turnOperationService != null
+                        ? turnOperationService.inspectExisting(prepared)
+                        : null;
+        if (claim != null && claim.replay()) {
+            return idempotentResponse(
+                    turnOperationService.replay(claim), claim, null);
+        }
+        if (claim == null && prepared != null && prepared.keyed()) {
+            ChatCommandMapper mapper = requireIdempotentMapper();
+            ChatCommand command = prepared.operation() != null
+                    && prepared.operation().executionSnapshot() != null
+                    ? mapper.mapFromExecutionSnapshot(
+                            request,
+                            ChatPrincipal.from(httpRequest),
+                            prepared.operation().sessionId(),
+                            prepared.operation().executionSnapshot())
+                    : mapper.map(
+                            request,
+                            resolveScope(request, httpRequest),
+                            ChatPrincipal.from(httpRequest));
+            RetrievalScope scope = command.retrievalScope();
+            claim = turnOperationService.claim(
+                    prepared, command,
+                    ChatTurnOperation.Transport.NATIVE_JSON,
+                    false);
+            if (claim.replay()) {
+                return idempotentResponse(
+                        turnOperationService.replay(claim), claim, null);
+            }
+            command = turnOperationService.commandForClaim(command, claim);
+            scope = command.retrievalScope();
+            request.setSessionId(claim.operation().sessionId());
+            return executeKeyedJson(
+                    request, httpRequest, scope, claim, command);
+        }
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
-            request.setSessionId(java.util.UUID.randomUUID().toString());
+            request.setSessionId(UUID.randomUUID().toString());
         }
         RetrievalScope scope = resolveScope(request, httpRequest);
         log.info("RAG ask: sessionId={}, domain={}, collectionIds={}, message={}",
@@ -174,8 +246,46 @@ public class RagChatController {
     @Timed(value = "rag.chat.non-stream", description = "RAG non-streaming chat", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<ChatResponse> chat(@Valid @RequestBody ChatRequest request,
                                              HttpServletRequest httpRequest) {
+        ChatTurnOperationService.Prepared prepared =
+                prepareTurn(request, httpRequest);
+        ChatTurnOperationService.Claim claim =
+                turnOperationService != null
+                        ? turnOperationService.inspectExisting(prepared)
+                        : null;
+        if (claim != null && claim.replay()) {
+            return idempotentResponse(
+                    turnOperationService.replay(claim), claim, null);
+        }
+        if (claim == null && prepared != null && prepared.keyed()) {
+            ChatCommandMapper mapper = requireIdempotentMapper();
+            ChatCommand command = prepared.operation() != null
+                    && prepared.operation().executionSnapshot() != null
+                    ? mapper.mapFromExecutionSnapshot(
+                            request,
+                            ChatPrincipal.from(httpRequest),
+                            prepared.operation().sessionId(),
+                            prepared.operation().executionSnapshot())
+                    : mapper.map(
+                            request,
+                            resolveScope(request, httpRequest),
+                            ChatPrincipal.from(httpRequest));
+            RetrievalScope scope = command.retrievalScope();
+            claim = turnOperationService.claim(
+                    prepared, command,
+                    ChatTurnOperation.Transport.NATIVE_JSON,
+                    false);
+            if (claim.replay()) {
+                return idempotentResponse(
+                        turnOperationService.replay(claim), claim, null);
+            }
+            command = turnOperationService.commandForClaim(command, claim);
+            scope = command.retrievalScope();
+            request.setSessionId(claim.operation().sessionId());
+            return executeKeyedJson(
+                    request, httpRequest, scope, claim, command);
+        }
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
-            request.setSessionId(java.util.UUID.randomUUID().toString());
+            request.setSessionId(UUID.randomUUID().toString());
         }
         RetrievalScope scope = resolveScope(request, httpRequest);
         log.info("RAG chat: sessionId={}, domain={}, message={}",
@@ -236,6 +346,55 @@ public class RagChatController {
     public SseEmitter stream(@Valid @RequestBody ChatRequest request,
                                HttpServletRequest httpRequest,
                                HttpServletResponse httpResponse) {
+        ChatTurnOperationService.Prepared prepared =
+                prepareTurn(request, httpRequest);
+        ChatTurnOperationService.Claim existing =
+                turnOperationService != null
+                        ? turnOperationService.inspectExisting(prepared)
+                        : null;
+        if (existing != null && existing.replay()) {
+            return replayNativeSse(
+                    turnOperationService.replay(existing),
+                    existing,
+                    httpResponse);
+        }
+        if (prepared != null && prepared.keyed()) {
+            ChatCommandMapper mapper = requireIdempotentMapper();
+            ChatCommand command = prepared.operation() != null
+                    && prepared.operation().executionSnapshot() != null
+                    ? mapper.mapFromExecutionSnapshot(
+                            request,
+                            ChatPrincipal.from(httpRequest),
+                            prepared.operation().sessionId(),
+                            prepared.operation().executionSnapshot())
+                    : mapper.map(
+                            request,
+                            resolveScope(request, httpRequest),
+                            ChatPrincipal.from(httpRequest));
+            RetrievalScope keyedScope = command.retrievalScope();
+            ChatTurnOperationService.Claim claim =
+                    turnOperationService.claim(
+                            prepared,
+                            command,
+                            ChatTurnOperation.Transport.NATIVE_SSE,
+                            true);
+            if (claim.replay()) {
+                return replayNativeSse(
+                        turnOperationService.replay(claim),
+                        claim,
+                        httpResponse);
+            }
+            command = turnOperationService.commandForClaim(command, claim);
+            keyedScope = command.retrievalScope();
+            request.setSessionId(claim.operation().sessionId());
+            return executeKeyedSse(
+                    request,
+                    httpRequest,
+                    keyedScope,
+                    claim,
+                    command,
+                    httpResponse);
+        }
         // First message in a session has null sessionId; auto-generate
         if (request.getSessionId() == null || request.getSessionId().isBlank()) {
             request.setSessionId(java.util.UUID.randomUUID().toString());
@@ -313,6 +472,120 @@ public class RagChatController {
             }
         }
 
+        return emitter;
+    }
+
+    private SseEmitter executeKeyedSse(
+            ChatRequest request,
+            HttpServletRequest httpRequest,
+            RetrievalScope scope,
+            ChatTurnOperationService.Claim claim,
+            ChatCommand operationCommand,
+            HttpServletResponse httpResponse) {
+        RetrievalTraceSession session = beginChatTrace(
+                request, scope, httpRequest);
+        try {
+            ChatCommand command = operationCommand;
+            if (session != null) {
+                command = command.withTraceSession(session);
+            }
+            ragChatService.assertCircuitBreakerAllowsCall();
+            ChatExecutionService.PreparedExecution prepared =
+                    requireIdempotentExecution().prepareForOperation(
+                            command,
+                            claim.sessionLease(),
+                            true);
+            ChatResponse response = turnOperationService.completePrepared(
+                    claim, prepared);
+            requireIdempotentExecution().finalizePreparedOperation(prepared);
+            return nativeSnapshotEmitter(
+                    response,
+                    claim,
+                    false,
+                    httpResponse,
+                    session);
+        } catch (RuntimeException error) {
+            turnOperationService.fail(claim, error);
+            throw error;
+        } finally {
+            if (sessionCoordinator != null && claim != null) {
+                sessionCoordinator.release(claim.sessionLease());
+            }
+        }
+    }
+
+    private SseEmitter replayNativeSse(
+            ChatResponse response,
+            ChatTurnOperationService.Claim claim,
+            HttpServletResponse httpResponse) {
+        return nativeSnapshotEmitter(
+                response, claim, true, httpResponse, null);
+    }
+
+    private SseEmitter nativeSnapshotEmitter(
+            ChatResponse response,
+            ChatTurnOperationService.Claim claim,
+            boolean replay,
+            HttpServletResponse httpResponse,
+            RetrievalTraceSession traceSession) {
+        if (httpResponse != null && claim != null && claim.keyed()) {
+            httpResponse.setHeader(
+                    "X-RAG-Turn-Id",
+                    claim.operation().turnId().toString());
+            httpResponse.setHeader(
+                    "X-RAG-Idempotent-Replay",
+                    Boolean.toString(replay));
+        }
+        if (httpResponse != null && traceSession != null) {
+            httpResponse.setHeader(
+                    RetrievalTraceHeaders.TRACE_ID,
+                    traceSession.traceId().toString());
+        }
+        SseEmitter emitter = SseEmitters.create();
+        try {
+            if (response.getAnswer() != null
+                    && !response.getAnswer().isEmpty()) {
+                SseEmitters.sendProgress(
+                        emitter,
+                        "content",
+                        Map.of(
+                                "choices",
+                                List.of(Map.of(
+                                        "delta",
+                                        Map.of("content", response.getAnswer())))),
+                        "chat content");
+            }
+            if (response.getSources() != null
+                    && !response.getSources().isEmpty()) {
+                SseEmitters.sendProgress(
+                        emitter,
+                        "sources",
+                        Map.of(
+                                "sessionId", response.getSessionId(),
+                                "sources", response.getSources()),
+                        "chat sources");
+            }
+            Map<String, Object> done = new LinkedHashMap<>();
+            putIfPresent(done, "traceId", response.getTraceId());
+            putIfPresent(done, "sessionId", response.getSessionId());
+            putIfPresent(done, "requestedModel", response.getRequestedModel());
+            putIfPresent(done, "resolvedModel", response.getResolvedModel());
+            putIfPresent(done, "mode", response.getMode());
+            putIfPresent(done, "usage", response.getUsage());
+            putIfPresent(done, "finishReason", response.getFinishReason());
+            putIfPresent(done, "stepMetrics", response.getStepMetrics());
+            putIfPresent(done, "metadata", response.getMetadata());
+            putIfPresent(done, "turnId",
+                    claim != null && claim.keyed()
+                            ? claim.operation().turnId().toString()
+                            : response.getTurnId());
+            done.put("idempotentReplay", replay);
+            done.put("status", "complete");
+            SseEmitters.sendProgress(emitter, "done", done, "chat done");
+            emitter.complete();
+        } catch (RuntimeException error) {
+            emitter.completeWithError(error);
+        }
         return emitter;
     }
 
@@ -630,6 +903,121 @@ public class RagChatController {
         return ResponseEntity.ok()
                 .header(RetrievalTraceHeaders.TRACE_ID, session.traceId().toString())
                 .body(response);
+    }
+
+    private ResponseEntity<ChatResponse> executeKeyedJson(
+            ChatRequest request,
+            HttpServletRequest httpRequest,
+            RetrievalScope scope,
+            ChatTurnOperationService.Claim claim,
+            ChatCommand operationCommand) {
+        RetrievalTraceSession session = beginChatTrace(request, scope, httpRequest);
+        try {
+            ChatCommand command = operationCommand;
+            if (session != null) {
+                command = command.withTraceSession(session);
+            }
+            ragChatService.assertCircuitBreakerAllowsCall();
+            ChatExecutionService.PreparedExecution prepared =
+                    requireIdempotentExecution().prepareForOperation(
+                            command,
+                            claim.sessionLease(),
+                            false);
+            ChatResponse response = turnOperationService.completePrepared(
+                    claim, prepared);
+            requireIdempotentExecution().finalizePreparedOperation(prepared);
+            return idempotentResponse(response, claim, session);
+        } catch (RuntimeException error) {
+            turnOperationService.fail(claim, error);
+            throw error;
+        } finally {
+            if (sessionCoordinator != null && claim != null) {
+                sessionCoordinator.release(claim.sessionLease());
+            }
+        }
+    }
+
+    private ChatTurnOperationService.Prepared prepareTurn(
+            ChatRequest request,
+            HttpServletRequest httpRequest) {
+        if (turnOperationService == null) {
+            return null;
+        }
+        List<String> idempotencyKeys = httpRequest == null
+                ? List.of()
+                : Collections.list(httpRequest.getHeaders("Idempotency-Key"));
+        if (IdempotencyKeyValidator.normalize(idempotencyKeys) == null) {
+            return turnOperationService.prepare(
+                    ChatPrincipal.from(httpRequest),
+                    idempotencyKeys,
+                    null);
+        }
+        return turnOperationService.prepare(
+                ChatPrincipal.from(httpRequest),
+                idempotencyKeys,
+                ChatRequestFingerprint.nativeRequest(request, objectMapper));
+    }
+
+    private ChatTurnOperationService.Claim claimExisting(
+            ChatTurnOperationService.Prepared prepared,
+            ChatTurnOperation.Transport transport,
+            ChatRequest request) {
+        if (prepared == null || !prepared.keyed()
+                || prepared.operation() == null) {
+            return null;
+        }
+        return turnOperationService.claim(
+                prepared, request.getSessionId(), transport);
+    }
+
+    private ChatCommandMapper requireIdempotentMapper() {
+        if (chatCommandMapper == null) {
+            throw new RagException(
+                    ErrorCode.IDEMPOTENCY_DISABLED,
+                    "Mode-aware Chat execution is not configured");
+        }
+        return chatCommandMapper;
+    }
+
+    private ChatExecutionService requireIdempotentExecution() {
+        if (chatExecutionService == null) {
+            throw new RagException(
+                    ErrorCode.IDEMPOTENCY_DISABLED,
+                    "Mode-aware Chat execution is not configured");
+        }
+        return chatExecutionService;
+    }
+
+    private ResponseEntity<ChatResponse> idempotentResponse(
+            ChatResponse response,
+            ChatTurnOperationService.Claim claim,
+            RetrievalTraceSession traceSession) {
+        ResponseEntity.BodyBuilder builder = ResponseEntity.ok();
+        if (claim != null && claim.keyed()) {
+            builder.header("X-RAG-Turn-Id",
+                    claim.operation().turnId().toString());
+            builder.header("X-RAG-Idempotent-Replay",
+                    Boolean.toString(claim.replay()));
+        }
+        if (traceSession != null) {
+            builder.header(RetrievalTraceHeaders.TRACE_ID,
+                    traceSession.traceId().toString());
+        }
+        return builder.body(response);
+    }
+
+    @GetMapping("/turns/{turnId}")
+    public ResponseEntity<ChatTurnStatusResponse> getTurnStatus(
+            @PathVariable UUID turnId,
+            @RequestParam(defaultValue = "false") boolean includeResponse,
+            HttpServletRequest httpRequest) {
+        if (turnOperationService == null) {
+            throw new com.springairag.core.exception.RagException(
+                    ErrorCode.IDEMPOTENCY_DISABLED,
+                    "Chat idempotency is not configured");
+        }
+        return ResponseEntity.ok(turnOperationService.status(
+                ChatPrincipal.from(httpRequest), turnId, includeResponse));
     }
 
     SseEmitter stream(ChatRequest request) {

@@ -103,6 +103,20 @@ class ChatExecutionServiceTest {
     }
 
     @Test
+    void resolvesCapabilityFilteredCandidateRefsForDurableSnapshot() {
+        ChatModelRouter.ChatModelCandidate primary =
+                candidate("provider/primary", true, false, false);
+        ChatModelRouter.ChatModelCandidate fallback =
+                candidate("provider/fallback", true, false, false);
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(primary, fallback));
+
+        assertEquals(
+                List.of("provider/primary", "provider/fallback"),
+                service.resolveCandidateRefs(command(ChatMode.PLAIN, null), false));
+    }
+
+    @Test
     void knowledgeModeUsesAdvisorDocumentContextAndPersistsSources() {
         ChatModelRouter.ChatModelCandidate candidate =
                 candidate("knowledge-model", true, false, false);
@@ -420,6 +434,31 @@ class ChatExecutionServiceTest {
         Map<String, Object> summary =
                 (Map<String, Object>) result.metadata().get("summary");
         assertEquals(true, summary.get("updated"));
+    }
+
+    @Test
+    void keyedOperationFinalizationKeepsPostCommitSummaryCompaction() {
+        ChatModelRouter.ChatModelCandidate candidate =
+                candidate("plain-model", true, false, false);
+        ConversationSummaryService summaryService =
+                mock(ConversationSummaryService.class);
+        service.setSummaryService(summaryService);
+        ChatCommand command = command(ChatMode.PLAIN, null);
+        ChatExecutionService.PreparedExecution prepared =
+                new ChatExecutionService.PreparedExecution(
+                        command,
+                        null,
+                        List.of(),
+                        null,
+                        null,
+                        candidate);
+
+        service.finalizePreparedOperation(prepared);
+
+        verify(summaryService).compactIfNeeded(
+                same(command),
+                same(candidate),
+                eq(List.of()));
     }
 
     @Test

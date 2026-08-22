@@ -105,6 +105,47 @@ public record ChatCommand(
                 budget);
     }
 
+    public ChatCommand withSessionId(String value) {
+        String validSession = SessionIdValidator.resolve(value);
+        return new ChatCommand(
+                message,
+                validSession,
+                principal,
+                principal.memoryConversationId(validSession),
+                mode,
+                memoryMode,
+                modelRef,
+                domainId,
+                retrievalScope,
+                retrievalOptions,
+                clientMetadata,
+                inputMessages,
+                modelCandidates,
+                retrievalTraceSession,
+                retrievalFilters,
+                executionBudget);
+    }
+
+    public ChatCommand withModelCandidates(List<String> candidates) {
+        return new ChatCommand(
+                message,
+                sessionId,
+                principal,
+                memoryConversationId,
+                mode,
+                memoryMode,
+                modelRef,
+                domainId,
+                retrievalScope,
+                retrievalOptions,
+                clientMetadata,
+                inputMessages,
+                candidates,
+                retrievalTraceSession,
+                retrievalFilters,
+                executionBudget);
+    }
+
     public ChatCommand withFilters(RetrievalFilters filters) {
         return new ChatCommand(
                 message, sessionId, principal, memoryConversationId, mode, memoryMode,

@@ -86,6 +86,7 @@ public class ChatExecutionService {
     private ConversationSummaryService summaryService;
     private RetrievalDiagnosticsService diagnosticsService;
     private CitationValidator citationValidator;
+    private ChatObservabilityService chatObservability;
 
     public ChatExecutionService(
             ChatModelRouter modelRouter,
@@ -178,6 +179,11 @@ public class ChatExecutionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setCitationValidator(CitationValidator citationValidator) {
         this.citationValidator = citationValidator;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setChatObservability(ChatObservabilityService chatObservability) {
+        this.chatObservability = chatObservability;
     }
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -318,6 +324,186 @@ public class ChatExecutionService {
                 sessionCoordinator.release(lease);
             }
         }
+    }
+
+    /**
+     * Executes the model/tool portion of a durable operation without committing
+     * history, shared memory, or a terminal operation state.
+     *
+     * <p>The caller owns the supplied session lease and must pass the returned
+     * messages/result to the coordinated commit boundary. This method exists so
+     * an idempotent turn cannot first commit business state and only afterwards
+     * attempt to persist its replay snapshot.</p>
+     */
+    public PreparedExecution prepareForOperation(
+            ChatCommand command,
+            ChatSessionCoordinator.LeaseHandle lease,
+            boolean streaming) {
+        validateMode(command);
+        ChatCommand request = command.withExecutionBudget(
+                newBudget(command, streaming));
+        List<Message> baseline = loadBaseline(request);
+        String selectedSummary = summaryText(request);
+        List<ChatModelRouter.ChatModelCandidate> candidates =
+                eligibleCandidates(request, streaming);
+        RuntimeException lastFailure = null;
+
+        for (int index = 0; index < candidates.size(); index++) {
+            ChatModelRouter.ChatModelCandidate candidate = candidates.get(index);
+            long startedAt = System.currentTimeMillis();
+            AtomicReference<ModeAwareChatClientFactory.Attempt> successfulAttempt =
+                    new AtomicReference<>();
+            try {
+                Supplier<ChatClientResponse> invocation = () -> {
+                    if (!request.executionBudget()
+                            .tryReserveCandidateAttempt()) {
+                        throw new RagException(
+                                ErrorCode.CHAT_BUDGET_EXHAUSTED,
+                                "Chat candidate-attempt budget exhausted");
+                    }
+                    ConversationPromptPlan promptPlan = promptPlanner.plan(
+                            candidate,
+                            request,
+                            mandatoryPromptText(request),
+                            baseline,
+                            selectedSummary,
+                            toolCallbacks(request));
+                    request.executionBudget().recordContextPlan(
+                            promptPlan.snapshot());
+                    ModeAwareChatClientFactory.Attempt created =
+                            clientFactory.create(
+                                    request,
+                                    candidate,
+                                    plannedMessages(promptPlan));
+                    try {
+                        ChatClientResponse response = invoke(created, request);
+                        successfulAttempt.set(created);
+                        return response;
+                    } catch (RuntimeException error) {
+                        markAttempt(request, created, false);
+                        throw error;
+                    }
+                };
+                Supplier<ChatClientResponse> retried = () ->
+                        retryTemplate != null
+                                ? retryTemplate.execute(
+                                        context -> invocation.get())
+                                : invocation.get();
+                ChatClientResponse response =
+                        sessionCoordinator != null && lease != null
+                                ? sessionCoordinator.invokeWithinDeadline(
+                                        lease, retried)
+                                : retried.get();
+                ModeAwareChatClientFactory.Attempt attempt =
+                        successfulAttempt.get();
+                if (attempt == null) {
+                    throw new IllegalStateException(
+                            "Chat retry completed without a successful attempt");
+                }
+                ChatExecutionResult result = withExecutionBudgetMetadata(
+                        withPersistenceMetadata(
+                                request,
+                                toResult(request, attempt, response)),
+                        request.executionBudget());
+                List<Message> committedMessages = attempt.memory() != null
+                        ? committedMemoryMessages(
+                                attempt.memory().get(
+                                        request.memoryConversationId()))
+                        : List.of();
+                markAttempt(request, attempt, true);
+                if (metricsService != null) {
+                    metricsService.recordSuccess(
+                            System.currentTimeMillis() - startedAt,
+                            tokenCount(result.usage()));
+                }
+                return new PreparedExecution(
+                        request,
+                        result,
+                        committedMessages,
+                        serializeDocumentIds(result.sources()),
+                        attempt,
+                        candidate);
+            } catch (RagException error) {
+                markAttempt(request, successfulAttempt.get(), false);
+                throw error;
+            } catch (RuntimeException error) {
+                markAttempt(request, successfulAttempt.get(), false);
+                lastFailure = error;
+                if (metricsService != null) {
+                    metricsService.recordFailure(
+                            System.currentTimeMillis() - startedAt);
+                }
+                log.warn("Durable Chat candidate {}/{} failed ({}): {}",
+                        index + 1,
+                        candidates.size(),
+                        candidate.ref(),
+                        error.getMessage());
+            }
+        }
+        if (lastFailure != null) {
+            throw lastFailure;
+        }
+        throw new RagException(
+                ErrorCode.LLM_UNAVAILABLE,
+                "No eligible chat model is available");
+    }
+
+    /**
+     * Resolves the exact, capability-filtered candidate reference chain used
+     * by a first durable operation claim. Provider model instances are not
+     * part of the persisted snapshot.
+     */
+    public List<String> resolveCandidateRefs(
+            ChatCommand command,
+            boolean streaming) {
+        validateMode(command);
+        return eligibleCandidates(command, streaming).stream()
+                .map(ChatModelRouter.ChatModelCandidate::ref)
+                .toList();
+    }
+
+    /**
+     * Persists diagnostics after a durable operation has reached its terminal
+     * state. The response snapshot itself only contains the stable retrieval
+     * trace reference created for the operation.
+     */
+    public void persistOperationDiagnostics(ChatCommand command) {
+        persistDiagnostics(command);
+    }
+
+    /**
+     * Completes the non-transactional side effects of a keyed turn after its
+     * operation/history/Memory transaction has committed.
+     *
+     * <p>Conversation summary compaction is deliberately outside the frozen
+     * response snapshot. It must still run for keyed requests so adding an
+     * idempotency key does not disable the existing long-session behavior.</p>
+     */
+    public void finalizePreparedOperation(PreparedExecution prepared) {
+        if (prepared == null) {
+            return;
+        }
+        if (summaryService != null) {
+            try {
+                summaryService.compactIfNeeded(
+                        prepared.command(),
+                        prepared.candidate(),
+                        prepared.committedMessages());
+            } catch (RuntimeException error) {
+                log.warn("Keyed Chat summary compaction failed for session {}: {}",
+                        prepared.command().sessionId(), error.getMessage());
+            }
+        }
+        persistDiagnostics(prepared.command());
+    }
+
+    public record PreparedExecution(
+            ChatCommand command,
+            ChatExecutionResult result,
+            List<Message> committedMessages,
+            String relatedDocumentIds,
+            ModeAwareChatClientFactory.Attempt attempt,
+            ChatModelRouter.ChatModelCandidate candidate) {
     }
 
     /**
@@ -561,6 +747,9 @@ public class ChatExecutionService {
     private Flux<ChatClientResponse> invokeStream(
             ModeAwareChatClientFactory.Attempt attempt,
             ChatCommand command) {
+        if (chatObservability != null) {
+            chatObservability.providerCall();
+        }
         ChatClient.ChatClientRequestSpec spec = attempt.client().prompt();
         applyInputMessages(spec, command);
         spec.advisors(advisor -> advisor.param(
@@ -581,6 +770,9 @@ public class ChatExecutionService {
     private ChatClientResponse invoke(
             ModeAwareChatClientFactory.Attempt attempt,
             ChatCommand command) {
+        if (chatObservability != null) {
+            chatObservability.providerCall();
+        }
         ChatClient.ChatClientRequestSpec spec = attempt.client().prompt();
         applyInputMessages(spec, command);
         spec.advisors(advisor -> advisor.param(

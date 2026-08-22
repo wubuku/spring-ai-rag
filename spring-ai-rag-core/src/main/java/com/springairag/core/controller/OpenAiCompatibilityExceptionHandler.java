@@ -2,6 +2,7 @@ package com.springairag.core.controller;
 
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.openai.OpenAiProtocolException;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -43,8 +44,12 @@ public class OpenAiCompatibilityExceptionHandler {
     @ExceptionHandler(RagException.class)
     public ResponseEntity<OpenAiErrorResponse> handleRag(RagException error) {
         int status = error.getErrorCodeEnum().getHttpStatus();
-        return ResponseEntity.status(status)
-                .body(OpenAiErrorResponse.of(
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(status);
+        if (error instanceof ChatTurnInProgressException inProgress) {
+            builder.header("Retry-After",
+                    Integer.toString(inProgress.retryAfterSeconds()));
+        }
+        return builder.body(OpenAiErrorResponse.of(
                         error.getMessage(),
                         status >= 500
                                 ? "server_error"

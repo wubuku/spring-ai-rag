@@ -1,5 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { mockAllApiCalls, openProtectedPage } from './api-mocks';
+import {
+  MOCK_CHAT_TURN_ID,
+  mockAllApiCalls,
+  openProtectedPage,
+} from './api-mocks';
+
+const AGENT_TURN_ID = '33333333-3333-4333-8333-333333333333';
+const PLAIN_TURN_ID = '44444444-4444-4444-8444-444444444444';
 
 test.describe('Chat', () => {
   test.beforeEach(async ({ page }) => {
@@ -24,7 +31,8 @@ test.describe('Chat', () => {
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: 'event: done\ndata: {"status":"complete"}\n\n',
+        headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+        body: `event: done\ndata: {"status":"complete","turnId":"${MOCK_CHAT_TURN_ID}"}\n\n`,
       });
     });
 
@@ -52,6 +60,7 @@ test.describe('Chat', () => {
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
+        headers: { 'X-RAG-Turn-Id': AGENT_TURN_ID },
         body: [
           'event: tool_start',
           'data: {"tool":"searchKnowledge","query":"风格基调"}',
@@ -66,7 +75,7 @@ test.describe('Chat', () => {
           'data: {"sessionId":"agent-session-1","sources":[{"citationId":"S1","documentId":7,"title":"品牌风格指南","collectionKey":"product-manual","documentType":"TEXT"}]}',
           '',
           'event: done',
-          'data: {"sessionId":"agent-session-1","status":"complete","mode":"AGENT","resolvedModel":"minimax/MiniMax-M2.7"}',
+          `data: {"sessionId":"agent-session-1","status":"complete","turnId":"${AGENT_TURN_ID}","mode":"AGENT","resolvedModel":"minimax/MiniMax-M2.7"}`,
           '',
         ].join('\n'),
       });
@@ -96,7 +105,8 @@ test.describe('Chat', () => {
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: 'event: done\ndata: {"status":"complete"}\n\n',
+        headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+        body: `event: done\ndata: {"status":"complete","turnId":"${MOCK_CHAT_TURN_ID}"}\n\n`,
       });
     });
 
@@ -118,7 +128,8 @@ test.describe('Chat', () => {
       await route.fulfill({
         status: 200,
         contentType: 'text/event-stream',
-        body: 'event: done\ndata: {"status":"complete","mode":"PLAIN"}\n\n',
+        headers: { 'X-RAG-Turn-Id': PLAIN_TURN_ID },
+        body: `event: done\ndata: {"status":"complete","turnId":"${PLAIN_TURN_ID}","mode":"PLAIN"}\n\n`,
       });
     });
 
@@ -182,5 +193,96 @@ test.describe('Chat', () => {
     await expect(page.getByText('Persist this question')).toBeVisible();
     await expect(page.getByText('Persisted answer')).toBeVisible();
     await expect(page.getByText('Persisted source')).toBeVisible();
+  });
+
+  test('reuses the same key across a bounded conflict and keeps the prompt', async ({ page }) => {
+    const requests: Array<{ key?: string; body: string | null }> = [];
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requests.push({
+        key: route.request().headers()['idempotency-key'],
+        body: route.request().postData(),
+      });
+      await route.fulfill({
+        status: 409,
+        headers: { 'Retry-After': '0' },
+        contentType: 'application/problem+json',
+        body: JSON.stringify({
+          code: 'IDEMPOTENCY_OPERATION_IN_PROGRESS',
+          message: 'Chat turn is still running',
+        }),
+      });
+    });
+
+    await page.locator('textarea').fill('Keep this prompt');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+    await expect(page.locator('textarea')).toHaveValue('Keep this prompt');
+    await expect(page.getByText('Error: HTTP 409')).toBeVisible();
+    await expect.poll(() => requests.length).toBe(2);
+    expect(requests[0].key).toBeTruthy();
+    expect(requests[1].key).toBe(requests[0].key);
+    expect(requests[1].body).toBe(requests[0].body);
+  });
+
+  test('replays a partial SSE attempt without duplicating the assistant bubble', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requestCount += 1;
+      if (requestCount === 1) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+          body: `event: content\ndata: {"content":"partial"}\n\n`,
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+        body: [
+          'event: content',
+          'data: {"content":"final answer"}',
+          '',
+          'event: done',
+          `data: {"status":"complete","turnId":"${MOCK_CHAT_TURN_ID}","sessionId":"replay-session"}`,
+          '',
+        ].join('\n'),
+      });
+    });
+
+    await page.locator('textarea').fill('Replay this turn');
+    await page.getByRole('button', { name: 'Send' }).click();
+
+    await expect(page.getByText('final answer')).toBeVisible();
+    await expect(page.getByText('final answer')).toHaveCount(1);
+    await expect.poll(() => requestCount).toBe(2);
+  });
+
+  test('stop aborts local delivery without opening a retry request', async ({ page }) => {
+    let requestCount = 0;
+    await page.route('/api/v1/rag/chat/stream', async route => {
+      requestCount += 1;
+      await new Promise(resolve => setTimeout(resolve, 1_000));
+      if (!route.request().isNavigationRequest()) {
+        await route.fulfill({
+          status: 200,
+          contentType: 'text/event-stream',
+          headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
+          body: `event: done\ndata: {"status":"complete","turnId":"${MOCK_CHAT_TURN_ID}"}\n\n`,
+        }).catch(() => undefined);
+      }
+    });
+
+    await page.locator('textarea').fill('Stop this turn');
+    await page.getByRole('button', { name: 'Send' }).click();
+    await expect(page.getByRole('button', { name: 'Stop generation' })).toBeVisible();
+    await page.getByRole('button', { name: 'Stop generation' }).click();
+
+    await expect(page.getByRole('button', { name: 'Send' })).toBeVisible();
+    await expect.poll(() => requestCount).toBe(1);
+    await expect(page.locator('textarea')).toHaveValue('Stop this turn');
   });
 });

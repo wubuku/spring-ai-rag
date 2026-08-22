@@ -279,8 +279,8 @@ check_project_invariants() {
       | tail -1
   )"
 
-  [[ "$latest_migration" == "46" ]] || {
-    echo "Expected latest Flyway migration V46, found V${latest_migration:-unknown}." >&2
+  [[ "$latest_migration" == "47" ]] || {
+    echo "Expected latest Flyway migration V47, found V${latest_migration:-unknown}." >&2
     return 1
   }
 
@@ -289,7 +289,7 @@ check_project_invariants() {
   rg -q '18081' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q 'postgresql' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
   rg -q '1024' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
-  rg -q 'V1.?V46' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
+  rg -q 'V1.?V47' AGENTS.md docs/developer-reference.md docs/developer-reference-zh-CN.md
 
   if rg -n -i 'base-url:[[:space:]]*https?://[^[:space:]`]+/v1([/[:space:]`]|$)' \
       AGENTS.md CLAUDE.md README.md README-zh-CN.md docs \
@@ -311,6 +311,7 @@ check_scripts_and_commands() {
       scripts/verify-release.sh \
       scripts/verify-project-docs.sh \
       scripts/verify-chat-capability.sh \
+      scripts/real-llm-chat-idempotency-smoke.sh \
       scripts/jsonb-records-e2e.sh \
       scripts/verify-jsonb-records.sh \
       scripts/run-retrieval-goldenset.sh \

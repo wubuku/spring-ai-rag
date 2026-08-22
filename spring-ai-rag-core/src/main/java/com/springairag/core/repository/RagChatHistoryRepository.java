@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.UUID;
 
 
 /**
@@ -89,6 +90,29 @@ public class RagChatHistoryRepository {
         Objects.requireNonNull(sessionId, "sessionId must not be null");
         Objects.requireNonNull(userMessage, "userMessage must not be null");
         RagChatHistory entity = new RagChatHistory();
+        entity.setOwnerPrincipalId(principal.id());
+        entity.setSessionId(sessionId);
+        entity.setUserMessage(userMessage);
+        entity.setAiResponse(aiResponse);
+        entity.setRelatedDocumentIds(relatedDocumentIds);
+        entity.setSources(sources);
+        entity.setTurnStatus(turnStatus != null ? turnStatus : "COMPLETE");
+        entity.setMetadata(metadata);
+        return jpaRepository.saveAndFlush(entity);
+    }
+
+    public RagChatHistory saveDurable(
+            ChatPrincipal principal,
+            String sessionId,
+            String userMessage,
+            String aiResponse,
+            String relatedDocumentIds,
+            List<ChatSource> sources,
+            String turnStatus,
+            Map<String, Object> metadata,
+            UUID turnId) {
+        RagChatHistory entity = new RagChatHistory();
+        entity.setTurnId(turnId);
         entity.setOwnerPrincipalId(principal.id());
         entity.setSessionId(sessionId);
         entity.setUserMessage(userMessage);

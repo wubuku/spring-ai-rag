@@ -3,6 +3,7 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
@@ -168,9 +169,9 @@ public class GlobalExceptionHandler {
                 .instance(request.getRequestURI())
                 .build();
         body.setTitle(code.getTitle());
-        return ResponseEntity.status(code.getHttpStatus())
-                .contentType(PROBLEM_JSON)
-                .body(body);
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(code.getHttpStatus())
+                .contentType(PROBLEM_JSON);
+        return builder.body(body);
     }
 
     // ==================== 500 Internal Server Error ====================
@@ -197,9 +198,14 @@ public class GlobalExceptionHandler {
                 .build();
         // Set human-readable title without triggering the builder's title() side effect
         body.setTitle(code.getTitle());
-        return ResponseEntity.status(code.getHttpStatus())
+        ResponseEntity.BodyBuilder builder = ResponseEntity.status(code.getHttpStatus())
                 .contentType(PROBLEM_JSON)
-                .body(body);
+                ;
+        if (e instanceof ChatTurnInProgressException inProgress) {
+            builder.header(HttpHeaders.RETRY_AFTER,
+                    Integer.toString(inProgress.retryAfterSeconds()));
+        }
+        return builder.body(body);
     }
 
     @ExceptionHandler(Exception.class)

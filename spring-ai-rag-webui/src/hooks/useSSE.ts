@@ -22,6 +22,8 @@ export interface ChatToolResultEvent {
 export interface ChatDoneEvent {
   traceId?: string;
   status: 'complete';
+  turnId?: string;
+  idempotentReplay?: boolean;
   sessionId?: string;
   requestedModel?: string;
   resolvedModel?: string;
@@ -36,6 +38,7 @@ export interface ChatErrorEvent {
   code?: string;
   traceId?: string;
   sessionId?: string;
+  status?: number;
 }
 
 export interface UseChatSSEOptions {
@@ -43,6 +46,8 @@ export interface UseChatSSEOptions {
   onSources?: (sources: ChatSource[], sessionId?: string) => void;
   onToolStart?: (event: ChatToolStartEvent) => void;
   onToolResult?: (event: ChatToolResultEvent) => void;
+  onTurnClaimed?: (turnId: string) => void;
+  onRetry?: () => void;
   onError?: (error: string, event?: ChatErrorEvent) => void;
   onDone?: (event: ChatDoneEvent) => void;
 }
@@ -95,6 +100,8 @@ type ParsedSseEvent = {
  * a turn complete twice.
  */
 export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
+  const MAX_ATTEMPTS = 2;
+  const MAX_RETRY_WAIT_MS = 60_000;
   const [isConnected, setIsConnected] = useState(false);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -105,6 +112,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   const onSourcesRef = useRef(options.onSources);
   const onToolStartRef = useRef(options.onToolStart);
   const onToolResultRef = useRef(options.onToolResult);
+  const onTurnClaimedRef = useRef(options.onTurnClaimed);
+  const onRetryRef = useRef(options.onRetry);
   const onErrorRef = useRef(options.onError);
   const onDoneRef = useRef(options.onDone);
 
@@ -112,6 +121,8 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   onSourcesRef.current = options.onSources;
   onToolStartRef.current = options.onToolStart;
   onToolResultRef.current = options.onToolResult;
+  onTurnClaimedRef.current = options.onTurnClaimed;
+  onRetryRef.current = options.onRetry;
   onErrorRef.current = options.onError;
   onDoneRef.current = options.onDone;
 
@@ -168,52 +179,158 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         useHybridSearch: sendOptions.useHybridSearch,
         useRerank: sendOptions.useRerank,
       });
+      const idempotencyKey = crypto.randomUUID();
+      let claimedTurnId: string | undefined;
+      let retryAfterDeadline = Date.now() + MAX_RETRY_WAIT_MS;
+      let terminalEvent = false;
+      let completed = false;
+      let lastError: unknown = new Error('Chat connection failed');
 
       try {
-        const response = await fetch('/api/v1/rag/chat/stream', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...getCredentialHeaders(),
-          },
-          body: JSON.stringify(body),
-          signal: controller.signal,
-        });
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-        if (!response.body) {
-          throw new Error('Chat stream response has no body');
-        }
-
-        const reader = response.body.getReader();
-        readerRef.current = reader;
-        const decoder = new TextDecoder();
-        let buffer = '';
-
-        while (generation === generationRef.current) {
-          const { done, value } = await reader.read();
-          if (done) {
-            buffer += decoder.decode();
-            const tail = parseSseBlock(buffer);
-            if (tail) {
-              handleEvent(tail);
+        for (let attempt = 0;
+          attempt < MAX_ATTEMPTS
+          && generation === generationRef.current
+          && !terminalRef.current;
+          attempt += 1) {
+          const attemptController = new AbortController();
+          abortControllerRef.current = attemptController;
+          try {
+            const response = await fetch('/api/v1/rag/chat/stream', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Idempotency-Key': idempotencyKey,
+                ...getCredentialHeaders(),
+              },
+              body: JSON.stringify(body),
+              signal: attemptController.signal,
+            });
+            if (!response.ok) {
+              const retryAfter = retryAfterMs(response);
+              throw new RetryableChatError(
+                `HTTP ${response.status}`,
+                response.status === 409 || response.status === 429,
+                retryAfter,
+                response.status,
+              );
             }
+            if (!response.body) {
+              throw new RetryableChatError(
+                'Chat stream response has no body', true, 0);
+            }
+
+            const responseTurnId = asUuid(response.headers?.get('X-RAG-Turn-Id'));
+            if (!responseTurnId) {
+              throw new RetryableChatError(
+                'Chat response did not provide a valid turn ID',
+                false,
+                0,
+              );
+            }
+            if (claimedTurnId && claimedTurnId !== responseTurnId) {
+              throw new RetryableChatError(
+                'Chat turn identity changed during retry',
+                false,
+                0,
+              );
+            }
+            if (!claimedTurnId) {
+              claimedTurnId = responseTurnId;
+              onTurnClaimedRef.current?.(responseTurnId);
+            }
+            const reader = response.body.getReader();
+            readerRef.current = reader;
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let doneEvent = false;
+
+            while (generation === generationRef.current
+              && !terminalRef.current) {
+              const { done, value } = await reader.read();
+              if (done) {
+                buffer += decoder.decode();
+                const tail = parseSseBlock(buffer);
+                if (tail) {
+                  handleEvent(tail, responseTurnId);
+                  doneEvent = tail.type === 'done';
+                }
+                break;
+              }
+              buffer += decoder.decode(value, { stream: true });
+              const parsed = drainSseBlocks(buffer);
+              buffer = parsed.rest;
+              parsed.events.forEach(event => {
+                if (event.type === 'done') doneEvent = true;
+                handleEvent(event, responseTurnId);
+              });
+            }
+            if (terminalEvent) {
+              completed = true;
+              break;
+            }
+            if (generation !== generationRef.current || terminalRef.current) {
+              break;
+            }
+            if (!doneEvent) {
+              const tail = parseSseBlock(buffer);
+              if (tail) {
+                handleEvent(tail, responseTurnId);
+                doneEvent = tail.type === 'done';
+              }
+            }
+            if (!doneEvent) {
+              throw new RetryableChatError(
+                'Chat stream ended before the done event', true, 0);
+            }
+            completed = true;
             break;
+          } catch (error) {
+            lastError = error;
+            if (attemptController.signal.aborted
+              || generation !== generationRef.current
+              || terminalRef.current) {
+              break;
+            }
+            const retryable = error instanceof RetryableChatError
+              ? error.retryable
+              : true;
+            if (!retryable || attempt + 1 >= MAX_ATTEMPTS) {
+              break;
+            }
+            onRetryRef.current?.();
+            const waitMs = error instanceof RetryableChatError
+              ? error.retryAfterMs
+              : 0;
+            if (waitMs > 0) {
+              const bounded = Math.min(
+                waitMs,
+                Math.max(0, retryAfterDeadline - Date.now()));
+              if (bounded <= 0) break;
+              await sleep(bounded);
+            }
+          } finally {
+            readerRef.current = null;
+            if (abortControllerRef.current === attemptController) {
+              abortControllerRef.current = null;
+            }
           }
-          buffer += decoder.decode(value, { stream: true });
-          const parsed = drainSseBlocks(buffer);
-          buffer = parsed.rest;
-          parsed.events.forEach(handleEvent);
         }
-      } catch (error) {
-        if (!controller.signal.aborted && generation === generationRef.current) {
+        if (!completed
+          && !terminalEvent
+          && generation === generationRef.current
+          && !terminalRef.current) {
           const event: ChatErrorEvent = {
-            message: error instanceof Error ? error.message : 'Connection error',
+            message: lastError instanceof Error
+              ? lastError.message
+              : 'Connection error',
+            status: lastError instanceof RetryableChatError
+              ? lastError.status
+              : undefined,
           };
           onErrorRef.current?.(event.message, event);
         }
       } finally {
+        retryAfterDeadline = 0;
         if (generation === generationRef.current) {
           setIsConnected(false);
           readerRef.current = null;
@@ -221,7 +338,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         }
       }
 
-      function handleEvent(event: ParsedSseEvent) {
+      function handleEvent(event: ParsedSseEvent, responseTurnId?: string) {
         if (generation !== generationRef.current || terminalRef.current) {
           return;
         }
@@ -253,6 +370,11 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         if (event.type === 'done') {
           const done = asDone(payload);
           if (done && done.status === 'complete') {
+            if (!responseTurnId || !done.turnId
+              || responseTurnId !== done.turnId) {
+              throw new RetryableChatError(
+                'Chat turn identity changed during replay', false, 0);
+            }
             terminalRef.current = true;
             onDoneRef.current?.(done);
           }
@@ -260,6 +382,7 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
         }
         if (event.type === 'error') {
           const failure = asError(payload);
+          terminalEvent = true;
           terminalRef.current = true;
           onErrorRef.current?.(failure.message, failure);
         }
@@ -269,6 +392,46 @@ export function useChatSSE(options: UseChatSSEOptions): UseChatSSEReturn {
   );
 
   return { isConnected, send, close, stop: close };
+}
+
+class RetryableChatError extends Error {
+  readonly retryable: boolean;
+  readonly retryAfterMs: number;
+  readonly status?: number;
+
+  constructor(
+    message: string,
+    retryable: boolean,
+    retryAfterMs: number,
+    status?: number,
+  ) {
+    super(message);
+    this.retryable = retryable;
+    this.retryAfterMs = retryAfterMs;
+    this.status = status;
+  }
+}
+
+function retryAfterMs(response: Response): number {
+  const value = response.headers?.get('Retry-After');
+  if (!value) return 0;
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0
+    ? Math.ceil(seconds * 1_000)
+    : 0;
+}
+
+function asUuid(value: string | null | undefined): string | undefined {
+  if (!value) return undefined;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
+    ? value
+    : undefined;
+}
+
+function sleep(durationMs: number): Promise<void> {
+  return new Promise(resolve => {
+    window.setTimeout(resolve, durationMs);
+  });
 }
 
 function normalizeArray<T>(value: T[] | T | undefined): T[] | undefined {

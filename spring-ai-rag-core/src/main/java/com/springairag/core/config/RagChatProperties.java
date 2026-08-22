@@ -15,6 +15,7 @@ public class RagChatProperties {
     private HistoryProperties history = new HistoryProperties();
     private ExecutionProperties execution = new ExecutionProperties();
     private ContextProperties context = new ContextProperties();
+    private IdempotencyProperties idempotency = new IdempotencyProperties();
 
     public String getDefaultMode() {
         return defaultMode;
@@ -64,6 +65,16 @@ public class RagChatProperties {
 
     public void setContext(ContextProperties context) {
         this.context = context != null ? context : new ContextProperties();
+    }
+
+    public IdempotencyProperties getIdempotency() {
+        return idempotency;
+    }
+
+    public void setIdempotency(IdempotencyProperties idempotency) {
+        this.idempotency = idempotency != null
+                ? idempotency
+                : new IdempotencyProperties();
     }
 
     /**
@@ -155,6 +166,36 @@ public class RagChatProperties {
                 >= c.getCompactionMaxSourceTokens()) {
             throw invalid("rag.chat.context.compaction-max-output-tokens must be less than "
                     + "compaction-max-source-tokens");
+        }
+
+        IdempotencyProperties i = idempotency;
+        requirePositive("rag.chat.idempotency.retention-hours",
+                i.getRetentionHours());
+        requirePositive("rag.chat.idempotency.response-snapshot-max-bytes",
+                i.getResponseSnapshotMaxBytes());
+        requirePositive("rag.chat.idempotency.execution-snapshot-max-bytes",
+                i.getExecutionSnapshotMaxBytes());
+        requirePositive("rag.chat.idempotency.max-attempts", i.getMaxAttempts());
+        requirePositive("rag.chat.idempotency.lease-grace-ms",
+                i.getLeaseGraceMs());
+        requirePositive("rag.chat.idempotency.cleanup-batch-size",
+                i.getCleanupBatchSize());
+        requirePositive("rag.chat.idempotency.cleanup-interval-ms",
+                i.getCleanupIntervalMs());
+        requirePositive("rag.chat.idempotency.cleanup-initial-delay-ms",
+                i.getCleanupInitialDelayMs());
+        if (i.getRetentionHours() > 168
+                || i.getResponseSnapshotMaxBytes() < 65_536
+                || i.getResponseSnapshotMaxBytes() > 2_097_152
+                || i.getExecutionSnapshotMaxBytes() < 16_384
+                || i.getExecutionSnapshotMaxBytes() > 262_144
+                || i.getMaxAttempts() > 8
+                || i.getLeaseGraceMs() > 60_000
+                || i.getCleanupBatchSize() > 5_000
+                || i.getCleanupIntervalMs() < 10_000
+                || i.getCleanupIntervalMs() > 86_400_000
+                || i.getCleanupInitialDelayMs() > 86_400_000) {
+            throw invalid("rag.chat.idempotency values are outside their supported range");
         }
     }
 
@@ -513,6 +554,43 @@ public class RagChatProperties {
 
         public void setCompactionModel(String compactionModel) {
             this.compactionModel = compactionModel;
+        }
+    }
+
+    public static class IdempotencyProperties {
+        private boolean enabled = true;
+        private int retentionHours = 24;
+        private int responseSnapshotMaxBytes = 524_288;
+        private int executionSnapshotMaxBytes = 65_536;
+        private int maxAttempts = 3;
+        private int leaseGraceMs = 10_000;
+        private int cleanupBatchSize = 500;
+        private int cleanupIntervalMs = 600_000;
+        private int cleanupInitialDelayMs = 60_000;
+
+        public boolean isEnabled() { return enabled; }
+        public void setEnabled(boolean enabled) { this.enabled = enabled; }
+        public int getRetentionHours() { return retentionHours; }
+        public void setRetentionHours(int value) { this.retentionHours = value; }
+        public int getResponseSnapshotMaxBytes() { return responseSnapshotMaxBytes; }
+        public void setResponseSnapshotMaxBytes(int value) {
+            this.responseSnapshotMaxBytes = value;
+        }
+        public int getExecutionSnapshotMaxBytes() { return executionSnapshotMaxBytes; }
+        public void setExecutionSnapshotMaxBytes(int value) {
+            this.executionSnapshotMaxBytes = value;
+        }
+        public int getMaxAttempts() { return maxAttempts; }
+        public void setMaxAttempts(int value) { this.maxAttempts = value; }
+        public int getLeaseGraceMs() { return leaseGraceMs; }
+        public void setLeaseGraceMs(int value) { this.leaseGraceMs = value; }
+        public int getCleanupBatchSize() { return cleanupBatchSize; }
+        public void setCleanupBatchSize(int value) { this.cleanupBatchSize = value; }
+        public int getCleanupIntervalMs() { return cleanupIntervalMs; }
+        public void setCleanupIntervalMs(int value) { this.cleanupIntervalMs = value; }
+        public int getCleanupInitialDelayMs() { return cleanupInitialDelayMs; }
+        public void setCleanupInitialDelayMs(int value) {
+            this.cleanupInitialDelayMs = value;
         }
     }
 }

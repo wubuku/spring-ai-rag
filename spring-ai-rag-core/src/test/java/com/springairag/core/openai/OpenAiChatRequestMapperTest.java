@@ -18,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class OpenAiChatRequestMapperTest {
@@ -119,5 +120,120 @@ class OpenAiChatRequestMapperTest {
 
         assertEquals("temperature", error.getParam());
         assertEquals("unsupported_parameter", error.getCode());
+    }
+
+    @Test
+    void restoresExecutionFromSnapshotWithoutAliasOrScopeResolution()
+            throws Exception {
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "messages": [{"role": "user", "content": "hello"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiChatRequestMapper.MappedRequest mapped =
+                mapper.mapFromExecutionSnapshot(
+                        request,
+                        new MockHttpServletRequest(),
+                        "session-restore",
+                        """
+                        {
+                          "executionSnapshotVersion": 1,
+                          "mode": "KNOWLEDGE",
+                          "memoryMode": "STATELESS",
+                          "declaredModelIdentifier": "rag-default",
+                          "resolvedCandidates": ["provider/model-a", "provider/model-b"],
+                          "domainId": "domain-from-first-claim",
+                          "retrievalOptions": {
+                            "maxResults": 7,
+                            "minScore": 0.4,
+                            "useHybridSearch": true,
+                            "useRerank": false,
+                            "vectorWeight": 0.6,
+                            "fulltextWeight": 0.4
+                          },
+                          "effectiveScope": {
+                            "collectionFilter": "SELECTED",
+                            "collectionIds": [9],
+                            "documentIds": [20],
+                            "documentType": "",
+                            "matchNone": false
+                          }
+                        }
+                        """);
+
+        assertEquals("rag-default", mapped.modelAlias());
+        assertEquals("session-restore", mapped.command().sessionId());
+        assertEquals(List.of("provider/model-a", "provider/model-b"),
+                mapped.command().modelCandidates());
+        assertEquals("provider/model-a", mapped.command().modelRef());
+        assertEquals(7, mapped.command().retrievalOptions().maxResults());
+        assertEquals(List.of(9L), mapped.command().retrievalScope().collectionIds());
+        assertEquals(List.of(20L), mapped.command().retrievalScope().documentIds());
+        verifyNoInteractions(scopeAdapter);
+    }
+
+    @Test
+    void validatesMemoryDeclarationWithoutResolvingAlias() throws Exception {
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "removed-alias",
+                  "rag": {"memory": "unknown"},
+                  "messages": [{"role": "user", "content": "hello"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiProtocolException error = assertThrows(
+                OpenAiProtocolException.class,
+                () -> mapper.validateDeclaration(request));
+
+        assertEquals("rag.memory", error.getParam());
+        assertEquals("invalid_value", error.getCode());
+        verifyNoInteractions(scopeAdapter);
+    }
+
+    @Test
+    void rejectsPlainRetrievalScopeDeclarations() throws Exception {
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "rag": {
+                    "mode": "PLAIN",
+                    "scope": {"mode": "SELECTED_COLLECTIONS"},
+                    "document_ids": [42]
+                  },
+                  "messages": [{"role": "user", "content": "hello"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiProtocolException error = assertThrows(
+                OpenAiProtocolException.class,
+                () -> mapper.validateDeclaration(request));
+
+        assertEquals("rag.scope", error.getParam());
+        assertEquals("unsupported_parameter", error.getCode());
+        verifyNoInteractions(scopeAdapter);
+    }
+
+    @Test
+    void rejectsPlainCollectionHeader() throws Exception {
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "rag": {"mode": "PLAIN"},
+                  "messages": [{"role": "user", "content": "hello"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        OpenAiProtocolException error = assertThrows(
+                OpenAiProtocolException.class,
+                () -> mapper.validateDeclaration(request, List.of("support")));
+
+        assertEquals(
+                OpenAiRequestRetrievalScopeAdapter.COLLECTION_KEY_HEADER,
+                error.getParam());
+        assertEquals("unsupported_parameter", error.getCode());
+        verifyNoInteractions(scopeAdapter);
     }
 }

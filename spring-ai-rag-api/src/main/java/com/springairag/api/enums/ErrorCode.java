@@ -24,6 +24,9 @@ public enum ErrorCode {
     TYPE_MISMATCH(400, "Type Mismatch"),
     UNKNOWN_DOMAIN(400, "Unknown Domain"),
     RETRIEVAL_OPTIONS_NOT_ALLOWED(400, "Retrieval Options Not Allowed"),
+    IDEMPOTENCY_KEY_INVALID(400, "Invalid Idempotency Key"),
+    IDEMPOTENCY_REQUEST_TOO_LARGE(400, "Idempotency Request Too Large"),
+    IDEMPOTENCY_REQUEST_METADATA_INVALID(400, "Invalid Idempotency Request Metadata"),
     MODEL_CAPABILITY_UNSUPPORTED(400, "Model Capability Unsupported"),
     MODEL_STREAMING_UNSUPPORTED(400, "Model Streaming Unsupported"),
     CHAT_AGENT_DISABLED(400, "Chat Agent Disabled"),
@@ -45,6 +48,7 @@ public enum ErrorCode {
     DOCUMENT_NOT_FOUND(404, "Document Not Found"),
     COLLECTION_NOT_FOUND(404, "Collection Not Found"),
     SESSION_NOT_FOUND(404, "Chat Session Not Found"),
+    CHAT_TURN_NOT_FOUND(404, "Chat Turn Not Found"),
 
     // ==================== 405 Method Not Allowed ====================
 
@@ -104,6 +108,11 @@ public enum ErrorCode {
     LLM_CIRCUIT_OPEN(503, "LLM Circuit Breaker Open"),
     LLM_UNAVAILABLE(503, "LLM Service Unavailable"),
     CHAT_HISTORY_PERSIST_FAILED(503, "Chat History Persistence Failed"),
+    IDEMPOTENCY_DISABLED(503, "Chat Idempotency Disabled"),
+    IDEMPOTENCY_RESPONSE_TOO_LARGE(503, "Idempotency Response Too Large"),
+    IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID(503, "Invalid Idempotency Execution Snapshot"),
+    IDEMPOTENCY_AUTHORIZATION_SNAPSHOT_INVALID(503, "Invalid Idempotency Authorization Snapshot"),
+    IDEMPOTENCY_ATTEMPTS_EXHAUSTED(503, "Idempotency Attempts Exhausted"),
     EMBEDDING_JOBS_DISABLED(503, "Embedding Jobs Disabled"),
     EVALUATION_SUITES_DISABLED(503, "Evaluation Suites Disabled"),
     SYNC_RUNS_DISABLED(503, "Document Sync Runs Disabled"),

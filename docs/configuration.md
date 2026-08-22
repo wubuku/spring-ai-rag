@@ -470,6 +470,16 @@ rag:
     history:
       lease-ttl-seconds: 30
       lease-renew-interval-seconds: 10
+    idempotency:
+      enabled: true
+      retention-hours: 24
+      response-snapshot-max-bytes: 524288
+      execution-snapshot-max-bytes: 65536
+      max-attempts: 3
+      lease-grace-ms: 10000
+      cleanup-batch-size: 500
+      cleanup-interval-ms: 600000
+      cleanup-initial-delay-ms: 60000
 ```
 
 | Property | Default | Description |
@@ -488,6 +498,15 @@ rag:
 | `rag.chat.agent.max-tool-result-characters` | `24000` | Maximum serialized tool-result characters; results/snippets are safely truncated as valid JSON |
 | `rag.chat.history.lease-ttl-seconds` | `30` | Database lease TTL for one principal/session request |
 | `rag.chat.history.lease-renew-interval-seconds` | `10` | Lease renewal interval |
+| `rag.chat.idempotency.enabled` | `true` | Durable keyed Chat operation and replay switch; keyed requests return `IDEMPOTENCY_DISABLED` when off |
+| `rag.chat.idempotency.retention-hours` | `24` | Retention for terminal operations and stale orphan cleanup; range 1–168 |
+| `rag.chat.idempotency.response-snapshot-max-bytes` | `524288` | UTF-8 response snapshot limit; range 65536–2097152 |
+| `rag.chat.idempotency.execution-snapshot-max-bytes` | `65536` | UTF-8 immutable execution snapshot limit; range 16384–262144 |
+| `rag.chat.idempotency.max-attempts` | `3` | Maximum total durable execution attempts, including stale reclaim; range 1–8 |
+| `rag.chat.idempotency.lease-grace-ms` | `10000` | Operation lease grace added to the Chat deadline; range 1000–60000 |
+| `rag.chat.idempotency.cleanup-batch-size` | `500` | Maximum terminal/stale orphan rows deleted per maintenance batch; range 1–5000 |
+| `rag.chat.idempotency.cleanup-interval-ms` | `600000` | Cleanup fixed-delay interval; range 10000–86400000 |
+| `rag.chat.idempotency.cleanup-initial-delay-ms` | `60000` | Initial cleanup delay after startup; range 1–86400000 |
 
 Mode behavior:
 
@@ -540,8 +559,12 @@ System maintains dual tables:
   cleanup
 
 Completed turns update both stores atomically under a
-`rag_chat_session_lease`. History, export, clear, and Memory baselines are
-scoped to the authenticated principal.
+`rag_chat_session_lease`. Keyed turns additionally write V47's
+`rag_chat_turn_operations` row in the same transaction, persist an immutable
+transport-neutral response snapshot, and bind the business history row to the
+opaque `turn_id`. History, export, clear, and Memory baselines are scoped to
+the authenticated principal. `GET /api/v1/rag/chat/turns/{turnId}` exposes
+status without exposing the idempotency key or its hash.
 
 ## Async Thread Pool Configuration
 

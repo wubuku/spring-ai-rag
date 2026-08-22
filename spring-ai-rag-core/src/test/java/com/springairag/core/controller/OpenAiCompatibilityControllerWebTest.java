@@ -3,6 +3,10 @@ package com.springairag.core.controller;
 import com.springairag.core.chat.ChatExecutionResult;
 import com.springairag.core.chat.ChatExecutionService;
 import com.springairag.core.chat.ChatEvent;
+import com.springairag.core.chat.ChatCommand;
+import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.ChatTurnOperation;
+import com.springairag.core.chat.ChatTurnOperationService;
 import com.springairag.core.openai.OpenAiChatRequestMapper;
 import com.springairag.core.openai.OpenAiModelAliasRegistry;
 import com.springairag.core.openai.OpenAiProtocolException;
@@ -17,10 +21,17 @@ import org.springframework.test.web.servlet.MvcResult;
 import reactor.core.publisher.Flux;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
@@ -52,6 +63,9 @@ class OpenAiCompatibilityControllerWebTest {
 
     @MockBean
     private ChatExecutionService executionService;
+
+    @MockBean
+    private ChatTurnOperationService turnOperationService;
 
     @Test
     void modelsExposeAliasesWithoutCollectionMetadata() throws Exception {
@@ -130,6 +144,9 @@ class OpenAiCompatibilityControllerWebTest {
                 .andExpect(jsonPath("$.choices[0].finish_reason")
                         .value("stop"))
                 .andExpect(jsonPath("$.usage.total_tokens").value(5));
+
+        verify(turnOperationService).prepare(
+                eq(ChatPrincipal.local()), any(), isNull());
     }
 
     @Test
@@ -152,6 +169,97 @@ class OpenAiCompatibilityControllerWebTest {
                         .value("invalid_request_error"))
                 .andExpect(jsonPath("$.error.code")
                         .value("model_not_found"));
+    }
+
+    @Test
+    void keyedReplayValidatesOpenAiRequestBeforeLookingUpExistingOperation()
+            throws Exception {
+        ChatCommand command =
+                ChatCommand.of(
+                        "hello",
+                        "session",
+                        com.springairag.api.enums.ChatMode.PLAIN,
+                        null,
+                        com.springairag.core.retrieval.RetrievalScope.unscoped(),
+                        new com.springairag.core.chat.RetrievalOptions(
+                                5, 0.3, true, true, 0.5, 0.5),
+                        Map.of());
+        when(requestMapper.map(any(), any())).thenReturn(
+                new OpenAiChatRequestMapper.MappedRequest(
+                        "rag-default", false, command));
+
+        UUID turnId = UUID.randomUUID();
+        ChatTurnOperation operation = new ChatTurnOperation(
+                1L,
+                "local:auth-disabled",
+                "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                1,
+                "session",
+                turnId,
+                ChatTurnOperation.Transport.OPENAI_JSON,
+                ChatTurnOperation.Status.SUCCEEDED,
+                null,
+                null,
+                1,
+                1L,
+                1,
+                "{\"executionSnapshotVersion\":1}",
+                "{\"answer\":\"stable\"}",
+                null,
+                null,
+                "{\"authorizationSnapshotVersion\":1,\"scopeMode\":\"NOT_APPLICABLE\"}",
+                Instant.now(),
+                Instant.now(),
+                Instant.now());
+        ChatTurnOperationService.Prepared prepared =
+                new ChatTurnOperationService.Prepared(
+                        ChatPrincipal.local(),
+                        operation.idempotencyKeySha256(),
+                        operation.requestFingerprintSha256(),
+                        new com.fasterxml.jackson.databind.ObjectMapper()
+                                .createObjectNode(),
+                        operation,
+                        true);
+        ChatTurnOperationService.Claim replayClaim =
+                new ChatTurnOperationService.Claim(operation, true);
+        when(turnOperationService.prepare(
+                eq(ChatPrincipal.local()), any(), any()))
+                .thenReturn(prepared);
+        when(turnOperationService.inspectExisting(prepared))
+                .thenReturn(replayClaim);
+        when(turnOperationService.replay(replayClaim))
+                .thenReturn(com.springairag.api.dto.ChatResponse.builder()
+                        .answer("stable")
+                        .build());
+
+        MvcResult started = mockMvc.perform(post("/v1/chat/completions")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("Idempotency-Key", "replay-key")
+                        .content("""
+                                {
+                                  "model": "rag-default",
+                                  "temperature": 0.7,
+                                  "messages": [
+                                    {"role": "user", "content": "hello"}
+                                  ]
+                                }
+                                """))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+
+        mockMvc.perform(asyncDispatch(started))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.choices[0].message.content")
+                        .value("stable"));
+
+        org.mockito.InOrder order = inOrder(
+                requestMapper, turnOperationService);
+        order
+                .verify(requestMapper).validateDeclaration(any(), any());
+        order
+                .verify(turnOperationService).inspectExisting(prepared);
+        verify(requestMapper, never()).map(any(), any());
     }
 
     @Test

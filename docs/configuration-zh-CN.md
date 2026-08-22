@@ -443,6 +443,16 @@ rag:
     history:
       lease-ttl-seconds: 30
       lease-renew-interval-seconds: 10
+    idempotency:
+      enabled: true
+      retention-hours: 24
+      response-snapshot-max-bytes: 524288
+      execution-snapshot-max-bytes: 65536
+      max-attempts: 3
+      lease-grace-ms: 10000
+      cleanup-batch-size: 500
+      cleanup-interval-ms: 600000
+      cleanup-initial-delay-ms: 60000
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -461,6 +471,15 @@ rag:
 | `rag.chat.agent.max-tool-result-characters` | `24000` | 工具结果序列化字符上限；会以合法 JSON 安全减少结果/截断 snippet |
 | `rag.chat.history.lease-ttl-seconds` | `30` | 单个 principal/session 请求的数据库 lease TTL |
 | `rag.chat.history.lease-renew-interval-seconds` | `10` | lease 续租间隔 |
+| `rag.chat.idempotency.enabled` | `true` | keyed Chat operation 与重放总开关；关闭时带 key 请求返回 `IDEMPOTENCY_DISABLED` |
+| `rag.chat.idempotency.retention-hours` | `24` | 终态 operation 与 stale orphan 的保留时间；范围 1–168 |
+| `rag.chat.idempotency.response-snapshot-max-bytes` | `524288` | UTF-8 响应快照上限；范围 65536–2097152 |
+| `rag.chat.idempotency.execution-snapshot-max-bytes` | `65536` | UTF-8 不可变执行快照上限；范围 16384–262144 |
+| `rag.chat.idempotency.max-attempts` | `3` | durable execution 总尝试上限，含 stale 接管；范围 1–8 |
+| `rag.chat.idempotency.lease-grace-ms` | `10000` | 加在 Chat deadline 上的 operation lease 宽限；范围 1000–60000 |
+| `rag.chat.idempotency.cleanup-batch-size` | `500` | 每次维护最多清理的终态/stale orphan 行数；范围 1–5000 |
+| `rag.chat.idempotency.cleanup-interval-ms` | `600000` | cleanup 固定延迟间隔；范围 10000–86400000 |
+| `rag.chat.idempotency.cleanup-initial-delay-ms` | `60000` | 服务启动后的首次 cleanup 延迟；范围 1–86400000 |
 
 模式语义：
 
@@ -506,8 +525,11 @@ rag:
 - `rag_chat_history`：按 principal 归属的业务历史，保存完整 `user_message`、
   `ai_response`、来源快照、mode/model 元数据，并按 TTL 清理
 
-完成 turn 会在 `rag_chat_session_lease` 保护下原子更新两类存储。历史、导出、清空与
-Memory baseline 均按认证 principal 隔离。
+完成 turn 会在 `rag_chat_session_lease` 保护下原子更新两类存储。带 key 的 turn
+还会在同一事务写入 V47 的 `rag_chat_turn_operations`，保存不可变的
+transport-neutral 响应快照，并把业务 history 行绑定到 opaque `turn_id`。历史、导出、
+清空与 Memory baseline 均按认证 principal 隔离。`GET /api/v1/rag/chat/turns/{turnId}`
+提供状态查询，但不会暴露幂等 key 或其 hash。
 
 ## 异步线程池配置
 

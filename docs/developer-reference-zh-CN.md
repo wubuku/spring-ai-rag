@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V46 |
+| Flyway | V1–V47 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -236,6 +236,18 @@ RAG_API_KEY="$RAG_ROOT_API_KEY" \
 数据面请求；脚本也会自动从 `.env` 读取 root key。Mock Playwright 不能替代真实
 LLM 验证。
 
+本轮 Chat turn 幂等性验收使用独立的 PLAIN smoke，不要求 Embedding provider：
+
+```bash
+BASE_URL=http://127.0.0.1:18081 \
+./scripts/real-llm-chat-idempotency-smoke.sh
+```
+
+该脚本强制使用 OpenAI-compatible Chat provider，验证原生 JSON/SSE 首次请求、相同
+key 重放、key 冲突、turn 状态查询，并通过
+`/actuator/metrics/rag.chat.provider.calls` 的前后计数证明重放没有再次调用 provider。
+服务启动时仍应使用隔离 PostgreSQL 和独占端口；不要把 API key 写入命令行历史或文档。
+
 ### Chat 对话能力一键验证
 
 该门禁包含 Maven clean 输出，必须串行执行：
@@ -245,7 +257,7 @@ LLM 验证。
 ```
 
 脚本会验证 `KNOWLEDGE`、`AGENT`、`PLAIN` 三种模式，Spring AI Tool Calling 边界，
-principal 隔离的 Memory/历史，V32 会话 lease、V46 持久化摘要 CAS、有界执行 metadata、
+principal 隔离的 Memory/历史，V32 会话 lease、V46 持久化摘要 CAS、V47 Chat turn 幂等重放、有界执行 metadata、
 结构化 SSE，WebUI 模式/能力/来源展示，以及 Chat 导出来源快照；同时执行
 `NextHighValueFeaturesPostgresIntegrationTest` 矩阵和独立的领域扩展、只读 SQL
 工具 demo 测试。每一步都会记录到

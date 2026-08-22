@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V46
+- [x] Flyway 迁移范围为 V1-V47
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -69,6 +69,14 @@
 - [x] V45 提供统一的严格派生 freshness、分页/聚合诊断和 preview-first 受控修复账本
 - [x] `verify-document-relocation.sh` 与 `verify-derivation-integrity.sh` 固化后端、数据库、
   前端 Mock 和文档门禁，PostgreSQL 验收显式要求 `skipped=0`
+
+### 2026-08-22 Chat Turn 可靠性门禁
+
+- [x] V47 提供按 principal 隔离的 Chat turn 幂等、不可变重放快照、有界 lease/接管、
+  状态查询和 history turn identity。
+- [x] 原生 JSON/SSE 与 OpenAI 兼容 JSON/SSE 共用持久化 operation 边界；keyed replay
+  不会再次调用 provider。
+- [x] Chat 能力门禁已记录 V47 PostgreSQL 矩阵以及 Mock Playwright 的重试、重放和 stop 证据。
 
 ### 最终证据（2026-07-21）
 

@@ -3,6 +3,7 @@ package com.springairag.core.chat;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.repository.ChatTurnOperationRepository;
 import com.springairag.core.repository.RagChatHistoryRepository;
 import jakarta.annotation.PreDestroy;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -81,6 +82,7 @@ public class ChatSessionCoordinator {
     private final RagProperties properties;
     private final ScheduledExecutorService renewExecutor;
     private final ExecutorService invocationExecutor;
+    private ChatTurnOperationRepository operationRepository;
     private ConversationSummaryService summaryService;
 
     public ChatSessionCoordinator(
@@ -112,6 +114,11 @@ public class ChatSessionCoordinator {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setSummaryService(ConversationSummaryService summaryService) {
         this.summaryService = summaryService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setOperationRepository(ChatTurnOperationRepository operationRepository) {
+        this.operationRepository = operationRepository;
     }
 
     public LeaseHandle acquire(ChatCommand command, boolean streaming) {
@@ -216,6 +223,144 @@ public class ChatSessionCoordinator {
             throw new RagException(
                     ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
                     "Failed to commit chat history and memory",
+                    e);
+        }
+    }
+
+    /**
+     * Commits a keyed turn and its durable operation in one database
+     * transaction. The operation CAS is deliberately the first write; a later
+     * history or memory failure rolls the operation and lease back together.
+     */
+    public void commitOperation(
+            LeaseHandle handle,
+            ChatTurnOperation operation,
+            ChatCommand command,
+            ChatExecutionResult result,
+            List<Message> committedMessages,
+            String relatedDocumentIds,
+            String executionSnapshot,
+            String responsePayload,
+            String authorizationSnapshot) {
+        if (operationRepository == null) {
+            throw new RagException(
+                    ErrorCode.IDEMPOTENCY_DISABLED,
+                    "Chat idempotency repository is not configured");
+        }
+        beginCommit(handle);
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                if (!operationRepository.completeSuccess(
+                        operation,
+                        executionSnapshot,
+                        responsePayload,
+                        authorizationSnapshot)) {
+                    throw new RagException(
+                            ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                            "Chat operation lease was lost before completion");
+                }
+                if (!handle.stateless) {
+                    consumeLease(handle);
+                }
+                historyRepository.saveDurable(
+                        command.principal(),
+                        command.sessionId(),
+                        command.message(),
+                        result.answer(),
+                        relatedDocumentIds,
+                        result.sources(),
+                        "COMPLETE",
+                        result.metadata(),
+                        operation.turnId());
+                if (command.memoryMode() == MemoryMode.SERVER) {
+                    sharedMemory.clear(command.memoryConversationId());
+                    if (committedMessages != null && !committedMessages.isEmpty()) {
+                        sharedMemory.add(
+                                command.memoryConversationId(),
+                                committedMessages);
+                    }
+                }
+            });
+            handle.state.set(State.TERMINAL);
+        } catch (RagException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RagException(
+                    ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                    "Failed to commit keyed chat operation and memory",
+                    e);
+        }
+    }
+
+    /**
+     * Persists a stable execution failure while fencing the current operation
+     * token. No business history or shared memory is written.
+     */
+    public void failOperation(
+            LeaseHandle handle,
+            ChatTurnOperation operation,
+            String errorCode,
+            String errorPayload) {
+        if (operationRepository == null) {
+            return;
+        }
+        beginCommit(handle);
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                if (!operationRepository.completeFailure(
+                        operation, errorCode, errorPayload)) {
+                    throw new RagException(
+                            ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                            "Chat operation lease was lost before failure completion");
+                }
+                if (!handle.stateless) {
+                    consumeLease(handle);
+                }
+            });
+            handle.state.set(State.TERMINAL);
+        } catch (RagException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RagException(
+                    ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                    "Failed to persist keyed chat failure",
+                    e);
+        }
+    }
+
+    /**
+     * Fences a stale operation after its reclaim budget is exhausted. The
+     * operation lease is already expired, so this path must use the dedicated
+     * expired-operation CAS rather than the active-worker failure CAS.
+     */
+    public void failExpiredOperation(
+            LeaseHandle handle,
+            ChatTurnOperation operation,
+            String errorCode,
+            String errorPayload) {
+        if (operationRepository == null) {
+            return;
+        }
+        beginCommit(handle);
+        try {
+            transactionTemplate.executeWithoutResult(status -> {
+                if (!operationRepository.exhaustAttempts(
+                        operation, errorCode, errorPayload)) {
+                    throw new RagException(
+                            ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                            "Chat operation reclaim state changed concurrently");
+                }
+                if (!handle.stateless) {
+                    consumeLease(handle);
+                }
+            });
+            handle.state.set(State.TERMINAL);
+        } catch (RagException e) {
+            throw e;
+        } catch (RuntimeException e) {
+            throw new RagException(
+                    ErrorCode.CHAT_HISTORY_PERSIST_FAILED,
+                    "Failed to persist exhausted keyed chat operation",
                     e);
         }
     }

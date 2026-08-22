@@ -53,6 +53,8 @@ export function Chat() {
   const [showExportMenu, setShowExportMenu] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const activeTurnIdRef = useRef<string | undefined>(undefined);
+  const lastSentMessageRef = useRef<string | undefined>(undefined);
   const skipHistoryLoadForSessionRef = useRef<string | undefined>(undefined);
   const { addSession } = useChatSessions();
   const addSessionRef = useRef(addSession);
@@ -140,7 +142,23 @@ export function Chat() {
         });
       });
     },
-    onError: error => {
+    onTurnClaimed: (turnId: string) => {
+      activeTurnIdRef.current = turnId;
+    },
+    onRetry: () => {
+      setMessages(prev => prev.map(msg =>
+        msg.isStreaming
+          ? { ...msg, content: '', sources: undefined, toolActivity: undefined }
+          : msg));
+    },
+    onError: (error, event) => {
+      // A bounded idempotency conflict is safe to retry manually. Keep the
+      // original prompt visible so the user does not have to reconstruct it.
+      if (event?.status === 409 && lastSentMessageRef.current) {
+        setInput(lastSentMessageRef.current);
+      } else {
+        lastSentMessageRef.current = undefined;
+      }
       setMessages(prev => {
         const lastMsg = prev[prev.length - 1];
         if (lastMsg?.isStreaming) {
@@ -160,6 +178,8 @@ export function Chat() {
         skipHistoryLoadForSessionRef.current = event.sessionId;
         navigate(`/chat/${encodeURIComponent(event.sessionId)}`, { replace: true });
       }
+      activeTurnIdRef.current = undefined;
+      lastSentMessageRef.current = undefined;
     },
   });
 
@@ -232,6 +252,7 @@ export function Chat() {
     }
     const userMsg = input.trim();
     setInput('');
+    lastSentMessageRef.current = userMsg;
     const newId = crypto.randomUUID();
     setMessages(prev => [
       ...prev,
@@ -252,6 +273,9 @@ export function Chat() {
 
   const handleStop = () => {
     stop();
+    if (lastSentMessageRef.current) {
+      setInput(lastSentMessageRef.current);
+    }
     setMessages(prev =>
       prev.map(msg =>
         msg.isStreaming

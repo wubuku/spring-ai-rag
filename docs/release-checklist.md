@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V46
+- [x] Flyway inventory is V1-V47
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -73,6 +73,15 @@ Release date: `2026-07-21`
 - [x] `verify-document-relocation.sh` and `verify-derivation-integrity.sh`
   capture backend, database, frontend Mock, and documentation gates, with
   PostgreSQL acceptance explicitly requiring `skipped=0`
+
+### 2026-08-22 Chat Turn Reliability Gates
+
+- [x] V47 provides principal-scoped Chat turn idempotency, immutable replay
+  snapshots, bounded leases/reclaim, status lookup, and history turn identity.
+- [x] Chat JSON/SSE and OpenAI-compatible JSON/SSE share the durable operation
+  boundary; keyed replay does not invoke the provider again.
+- [x] The Chat capability gate records the V47 PostgreSQL matrix and Mock
+  Playwright retry/replay/stop evidence.
 
 ### Final Evidence (2026-07-21)
 

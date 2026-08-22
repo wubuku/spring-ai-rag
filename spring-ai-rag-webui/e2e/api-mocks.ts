@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 
 export const MOCK_ROOT_API_KEY = 'root_test_0123456789_abcdefghijklmnopqrstuvwxyz';
 export const MOCK_BUSINESS_API_KEY = 'rag_sk_business_test_0123456789abcdefghijklmnopqrstuvwxyz';
+export const MOCK_CHAT_TURN_ID = '22222222-2222-4222-8222-222222222222';
 
 export async function openProtectedPage(page: Page, path: string) {
   await page.goto(path, { waitUntil: 'networkidle' });
@@ -701,6 +702,7 @@ export async function mockAllApiCalls(page: Page) {
     route.fulfill({
       status: 200,
       contentType: 'text/event-stream',
+      headers: { 'X-RAG-Turn-Id': MOCK_CHAT_TURN_ID },
       body: [
         'event: tool_start',
         'data: {"tool":"searchKnowledge","toolCallId":"mock-tool-call-1","query":"What is RAG?"}',
@@ -715,7 +717,7 @@ export async function mockAllApiCalls(page: Page) {
         'data: {"sessionId":"mock-session-123","sources":[{"citationId":"S1","documentId":1,"title":"RAG Guide","collectionKey":"sample-collection","documentType":"TEXT"}]}',
         '',
         'event: done',
-        'data: {"sessionId":"mock-session-123","status":"complete","mode":"KNOWLEDGE","resolvedModel":"minimax/MiniMax-M2.7"}',
+        `data: {"sessionId":"mock-session-123","status":"complete","turnId":"${MOCK_CHAT_TURN_ID}","mode":"KNOWLEDGE","resolvedModel":"minimax/MiniMax-M2.7"}`,
         '',
       ].join('\n'),
     });

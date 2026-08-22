@@ -1,6 +1,6 @@
 # Chat turn 幂等、可靠重放与低基数观测实施规划
 
-> **状态**：规划候选，尚未开始生产代码实施
+> **状态**：实施中
 >
 > **规划日期**：2026-08-22
 >
@@ -9,10 +9,9 @@
 >
 > **规划分支**：`docs/next-high-value-features-plan-20260822`
 >
-> **当前 worktree**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
+> **当前 worktree**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-chat-turn-idempotency`
 >
-> **实施分支要求**：实施前必须从届时最新本地 `main` 创建新的专用特性分支和隔离
-> worktree；不得把本规划分支直接变成生产代码分支。
+> **实施分支**：`feat/chat-turn-idempotency-20260822`
 >
 > **配套进度**：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
