@@ -1,10 +1,12 @@
 # Chat turn 幂等、可靠重放与低基数观测进度
 
-> **状态**：实现与验收完成，待合并交付
+> **状态**：已合并到 main，合并后最终验收完成，待推送与清理
 >
-> **当前分支**：`feat/chat-turn-idempotency-20260822`
+> **当前分支**：`main`
 >
-> **当前 worktree**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-chat-turn-idempotency`
+> **当前 worktree**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
+>
+> **交付 HEAD**：`bf3951b7`
 >
 > **规划基线**：`main` / `origin/main` @ `e48fb192`
 >
@@ -25,7 +27,7 @@
 | 生产代码实施 | 已完成 | native/OpenAI JSON/SSE 幂等、重放、状态查询、恢复、低基数观测与 WebUI 重试已完成 |
 | 合并后完整验收 | 已完成 | 最新 main 基线下 18 项门槛全部通过，包含 PostgreSQL、Maven、WebUI Mock、隔离端口启动和真实 LLM |
 | 实现收敛审查 | 已完成 | 连续三轮限定范围只读审查无实质问题，计数 `3/3` |
-| Git 交付 | 进行中 | 下一步推送特性分支，并在干净 main worktree 合并、推送和清理 |
+| Git 交付 | 进行中 | 特性已合并到 main；最终验收通过，下一步推送 main、停止残留服务并移除已确认干净的特性 worktree |
 
 ## 2. 规划审查账本
 
@@ -772,3 +774,35 @@ recovery 的执行一致性，因此将实现收敛计数保持为 `0/3`；修�
 - 下一步是执行 `git fetch` 后推送特性分支，再在
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery` 的干净
   `main` worktree 中合并并推送；合并后的 `main` 将作为最终交付基线。
+
+### 合并到 main 后的最终验收与真实 LLM 复验
+
+- 特性分支已在 main worktree 快进合并，交付 HEAD 为 `bf3951b7`；当前 `main`
+  相对 `origin/main` 仅包含本轮待推送的 6 个提交，未发现其他远端 main 变化。
+- 使用
+  `CHAT_REAL_ENV_FILE=/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env
+  CHAT_VERIFY_RUN_ID=20260822-main-final-full-gate
+  ./scripts/verify-chat-capability.sh --with-real-llm` 重新执行合并后的完整门禁。
+- 汇总为 **18 passed / 0 failed / 0 skipped**。后端 focused tests、
+  PostgreSQL/Testcontainers 集成矩阵、`mvn clean compile test-compile`、全量 Maven、
+  reactor artifacts 安装、两个 demo、隔离后端启动 smoke、文档门禁和无显式悲观锁检查
+  全部通过。
+- 前端 Vitest 为 `29` 个文件 / `217` 项，TypeScript、production build、核心 Mock
+  Playwright `14/14` 全部通过；前端证据只使用 DOM、可访问状态、网络请求/响应、
+  接口 JSON 和自动化断言。
+- 真实 LLM 使用主工作区 `.env` 中的 OpenAI-compatible provider 与 `grok-4.5`。
+  真实 WebUI Playwright 验证 Agent SSE、来源展示和 history recovery；provider smoke
+  验证 native JSON/SSE 首次、重放、同 key 冲突和状态查询。provider counter 证明 JSON
+  与 SSE replay 均未重复调用 provider。
+- 最终汇总：
+  `.verification/chat-capability/20260822-main-final-full-gate/summary.md`；
+  真实 LLM 证据目录由本次运行输出的 `.verification/real-chat/` 子目录记录。
+
+### 当前交付收尾
+
+- [x] 特性分支已合并到 `main`
+- [x] 合并后完整验收与真实 LLM 复验通过
+- [ ] 将 `main` 推送到 `origin/main`
+- [ ] 停止本轮测试残留服务并确认端口清理
+- [ ] 确认特性 worktree 干净后安全移除（保留远端特性分支）
+- [ ] 完成最终 `git status`、worktree 和远端分支核对
