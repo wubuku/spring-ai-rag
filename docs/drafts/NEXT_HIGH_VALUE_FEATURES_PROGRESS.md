@@ -1,6 +1,6 @@
 # Chat turn 幂等、可靠重放与低基数观测进度
 
-> **状态**：实施中
+> **状态**：实现与验收完成，待合并交付
 >
 > **当前分支**：`feat/chat-turn-idempotency-20260822`
 >
@@ -23,6 +23,9 @@
 | 规划连续审查 | 已完成 | `3/3`；当前实现收敛审查计数见最新实施记录 |
 | 长青文档同步 | 已完成 | 已同步当前“无 request-level 幂等/重放”的边界与后续入口 |
 | 生产代码实施 | 已完成 | native/OpenAI JSON/SSE 幂等、重放、状态查询、恢复、低基数观测与 WebUI 重试已完成 |
+| 合并后完整验收 | 已完成 | 最新 main 基线下 18 项门槛全部通过，包含 PostgreSQL、Maven、WebUI Mock、隔离端口启动和真实 LLM |
+| 实现收敛审查 | 已完成 | 连续三轮限定范围只读审查无实质问题，计数 `3/3` |
+| Git 交付 | 进行中 | 下一步推送特性分支，并在干净 main worktree 合并、推送和清理 |
 
 ## 2. 规划审查账本
 
@@ -756,3 +759,16 @@ recovery 的执行一致性，因此将实现收敛计数保持为 `0/3`；修�
   未发现需要修改的问题。
 - `git diff --check` 通过。实现收敛审查连续三轮无修改，计数达到 `3/3`；本轮审查
   结果不替代已完成的后端、前端和真实 LLM 自动化验收证据。
+
+### 2026-08-22 最终交付前状态
+
+- 本轮实现、合并后完整基本门槛、真实 LLM 验收和连续三轮实现收敛审查均已完成。
+- 当前特性分支仍为 `feat/chat-turn-idempotency-20260822`，HEAD 为
+  `922c8fa1`；`origin/main` 为 `e48fb192`，已确认特性分支包含该基线且无待合并的
+  main 提交。
+- 最新完整证据目录为：
+  `.verification/chat-capability/20260822-post-lease-fix-full-gate/` 和
+  `.verification/real-chat/20260823-040853-6639/`。
+- 下一步是执行 `git fetch` 后推送特性分支，再在
+  `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery` 的干净
+  `main` worktree 中合并并推送；合并后的 `main` 将作为最终交付基线。
