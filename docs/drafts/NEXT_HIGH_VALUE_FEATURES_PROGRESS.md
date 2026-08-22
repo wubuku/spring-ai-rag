@@ -166,6 +166,13 @@
 - 下一步：提交当前全部规划文档修改；fetch 并 merge 最新 `origin/main`，合并后重跑
   文档门禁，再 push 规划分支并确认工作区干净。
 
+### 2026-08-22 19:10 CST 合并基线
+
+- `git fetch origin --prune`：完成。
+- `origin/main`：`e48fb192`；当前规划分支已包含该提交。
+- `git merge --no-edit origin/main`：`Already up to date`，无冲突、无新增工作区修改。
+- 合并后仍保持规划阶段；未创建实施 worktree，未修改生产代码。
+
 ## 5. 已作废的早期门禁记录
 
 ### 2026-08-22 16:39 CST
