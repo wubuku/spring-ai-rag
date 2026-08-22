@@ -280,6 +280,19 @@ and multi-instance production boundaries.
 
 ## Chat — RAG Q&A
 
+### Chat turn reliability boundary (not implemented)
+
+The current `/chat`, `/chat/ask`, `/chat/stream`, and OpenAI compatibility
+endpoints do not provide a request-level `Idempotency-Key`, completed-response
+replay, or turn-status lookup. The session lease coordinates concurrent work
+for one principal/session; after an HTTP timeout or SSE disconnect, a client
+must not assume that retrying cannot invoke the model again.
+
+The next candidate design uses an optional `Idempotency-Key` and a separate
+durable operation table. This is not yet a public API contract; see the
+[Chat turn idempotency plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md) before
+implementation.
+
 ### `POST /api/v1/rag/chat/ask`
 
 Non-streaming Chat, returning one complete answer. The same endpoint supports

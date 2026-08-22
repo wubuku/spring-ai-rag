@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **Purpose**: Give contributors and Agents stable, code-backed project context.
-> **Last reviewed**: 2026-08-19.
+> **Last reviewed**: 2026-08-22.
 > This document records current facts. Target designs and unimplemented capabilities must be labeled as plans.
 
 Documentation hub: [index.md](index.md). Commands: [developer-reference.md](developer-reference.md).
@@ -97,6 +97,11 @@ Key rules:
 - Client cancellation disposes the model subscription and does not persist an
   incomplete turn. Streaming fallback is permitted only before the first
   client-visible event.
+- The current session lease provides single-flight for one principal/session; it
+  is not request-level idempotency. Chat does not yet provide an optional
+  `Idempotency-Key`, a durable in-progress turn, completed-response replay, or
+  turn-status lookup. See the candidate
+  [Chat turn idempotency plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md).
 - Citation scores are ranking signals, not calibrated probabilities.
 
 ### Current Collection Semantics

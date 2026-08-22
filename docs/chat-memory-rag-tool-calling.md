@@ -325,6 +325,21 @@ statement timeout, and a serialized result cap.
 
 ## 9. Current Architecture And Remaining Work
 
+### 9.0 Chat Turn Reliability Boundary
+
+The current session lease coordinates concurrent Memory commits for one
+principal/session; it does not solve duplicate logical turns after an HTTP
+timeout, an SSE disconnect, or a client retry. `rag_chat_history` stores only
+completed `COMPLETE/CANCELLED` business records. There is currently no
+request-level `Idempotency-Key`, durable `IN_PROGRESS` operation, completed
+response snapshot replay, or opaque turn-status API.
+
+The next candidate plan would add a separate operation table with a
+principal-plus-key-hash uniqueness boundary, canonical request fingerprint,
+CAS/lease ownership, and versioned response snapshots. It would not change the
+existing history turn-status semantics or promise token-level SSE recovery. See
+[Chat turn idempotency, reliable replay, and low-cardinality observability](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md).
+
 ### 9.1 Token-Aware Prompt Budget
 
 The implemented candidate-specific budget uses `contextWindow` and `maxTokens`,

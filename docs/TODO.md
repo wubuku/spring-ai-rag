@@ -40,6 +40,23 @@
   content, is bounded to 100 items, never stores clear tokens, and does not loop
   over synchronous embedding-provider calls in the HTTP request.
 
+## Chat Turn Idempotency And Reliable Replay
+
+| Item | Priority | Status |
+|------|----------|--------|
+| Request-level idempotency, completed-response replay, turn lookup, and low-cardinality observability | P0/P1 | Planned, not implemented |
+
+The current Chat session lease coordinates concurrent work for one
+principal/session. After an HTTP timeout or SSE disconnect, the client cannot
+tell from the current protocol whether the server already completed the LLM
+call. There is no durable `IN_PROGRESS` operation or completed-response replay.
+The next plan recommends an optional `Idempotency-Key`, principal-scoped
+fingerprints, CAS/lease ownership, and a separate operation table. It preserves
+the `COMPLETE/CANCELLED` history semantics and does not implement token-level
+SSE resumption.
+
+See the [current active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md).
+
 See [current active plans](drafts/README.md) for remaining implementation scope
 and batch ordering. Shipped contracts remain in the [REST API reference](rest-api.md) and
 [External Document Sync Client Guide](external-document-sync-client-guide.md).

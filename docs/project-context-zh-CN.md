@@ -3,7 +3,7 @@
 > [English](project-context.md) | [中文](project-context-zh-CN.md)
 
 > **用途**：为开发者和 Agent 提供稳定、代码支撑的项目认知。
-> **最近复核**：2026-08-19。
+> **最近复核**：2026-08-22。
 > 本文记录当前事实；目标设计和未实施能力必须明确标注为规划。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。命令参考：[developer-reference-zh-CN.md](developer-reference-zh-CN.md)。
@@ -86,6 +86,10 @@ RagChatController
   `done` 与 `error` 是互斥终态。
 - 客户端取消会 dispose 模型订阅，不持久化未完成 turn；流式 fallback 只允许发生在
   第一个客户端可见事件之前。
+- 当前 session lease 只保证同一 principal/session 的 single-flight，不等同于请求级幂等。
+  Chat 尚未提供可选 `Idempotency-Key`、durable in-progress turn、完成结果 replay 或
+  turn 状态查询；下一轮候选规划见
+  [Chat turn 幂等规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。
 - 引用 score 是排序信号，不是经过校准的概率。
 
 ### Collection 当前语义

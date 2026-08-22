@@ -322,6 +322,17 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 
 ## Chat — RAG 问答
 
+### Chat turn 可靠性边界（当前未实施）
+
+当前 `/chat`、`/chat/ask`、`/chat/stream` 和 OpenAI 兼容入口没有请求级
+`Idempotency-Key`、完成结果重放或 turn 状态查询。session lease 只用于同一
+principal/session 的并发协调；HTTP 超时或 SSE 断线后，客户端不应假定重复请求一定
+不会再次调用模型。
+
+下一轮候选设计将使用可选 `Idempotency-Key` 和独立 durable operation 表。该设计尚未
+成为本 API 契约；实施前请以
+[Chat turn 幂等规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)为准。
+
 ### `POST /api/v1/rag/chat/ask`
 
 非流式 Chat，返回完整答案。同一端点支持三种显式执行模式：

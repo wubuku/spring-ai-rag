@@ -38,7 +38,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - JSONB, external-document synchronization, and file traceability:
   `2026-08-15_JSONB_*`, `2026-08-16_EXTERNAL_DOCUMENT_*`,
   `2026-08-16_FILE_RAG_*`
-- Chat, WebUI, and later feature batches: `2026-08-17_*`, `2026-08-18_*`
+- Chat, WebUI, and later feature batches: `2026-08-17_*`,
+  `2026-08-18_*`, `2026-08-22_NEXT_HIGH_VALUE_FEATURES_*`
 - Document-lifecycle implementation ledger:
   `2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - Local keyword/vector derivation decoupling:

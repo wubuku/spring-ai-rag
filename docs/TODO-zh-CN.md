@@ -31,6 +31,20 @@
 - 派生 repair 只重建/排队派生，不改正文；批次最多 100 项，明文 token 不落库，且不会
   在 HTTP 请求中同步循环调用 embedding provider。
 
+## Chat turn 幂等与可靠重放
+
+| 项目 | 优先级 | 状态 |
+|------|--------|------|
+| 请求级幂等、完成结果重放、turn 状态查询和低基数观测 | P0/P1 | 规划中，尚未实施 |
+
+当前 Chat session lease 只处理同一 principal/session 的并发协调。HTTP 超时或 SSE 断线
+后，客户端无法仅凭当前协议判断服务端是否已完成 LLM 调用；当前也没有 durable
+`IN_PROGRESS` operation 和完成快照重放。下一轮规划推荐使用可选 `Idempotency-Key`、
+principal-scoped fingerprint、CAS/lease 和独立 operation 表；不改变
+`rag_chat_history` 的 `COMPLETE/CANCELLED` 语义，也不实现 token 级 SSE 续传。
+
+详见[当前活跃规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。
+
 剩余实施范围和批次顺序以
 [当前活跃规划](drafts/README-zh-CN.md) 为准；已发布契约仍以
 [REST API](rest-api-zh-CN.md) 和

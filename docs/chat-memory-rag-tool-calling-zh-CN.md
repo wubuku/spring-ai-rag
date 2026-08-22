@@ -288,6 +288,18 @@ Agent。SQL demo 使用固定 PostgreSQL `SELECT`、命名参数、服务端 pri
 
 ## 9. 当前架构与剩余工作
 
+### 9.0 Chat turn 可靠性边界
+
+当前的 session lease 解决的是同一 principal/session 的并发 Memory 提交，不解决网络
+超时、SSE 断线或客户端重试造成的重复逻辑 turn。`rag_chat_history` 只保存已完成
+`COMPLETE/CANCELLED` 业务记录；当前没有 request-level `Idempotency-Key`、durable
+`IN_PROGRESS` operation、完成响应快照 replay 或 opaque turn status API。
+
+下一轮候选规划将新增独立 operation 表，使用 principal + key hash 唯一约束、canonical
+request fingerprint、CAS/lease 和版本化快照；它不会改变现有 history turn status，也
+不会承诺 token 级 SSE 恢复。规划与范围见
+[Chat turn 幂等、可靠重放与低基数观测](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。
+
 ### 9.1 Token-aware Prompt Budget
 
 当前实现为每个逻辑请求建立候选模型级预算，使用模型 `contextWindow` 和 `maxTokens`，为以下部分

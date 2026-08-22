@@ -33,5 +33,5 @@
 
 ## 当前活跃规划
 
-- [Chat 上下文预算、持久记忆与工具治理实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Chat turn 幂等、可靠重放与低基数观测实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [配套进度与恢复账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)

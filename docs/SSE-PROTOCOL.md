@@ -166,6 +166,11 @@ tool_start -> tool_result -> content* -> sources -> done
   `content`、工具事件或其他业务事件，后续失败不会切换模型拼接另一条流。
 - `rag.timeout.chat-stream-ms` 控制服务端流式 deadline。
 
+当前协议没有 `Idempotency-Key`、完成结果 replay 或 `Last-Event-ID` 半流恢复。下一轮
+候选设计会在成功 turn 提交后允许发送完整 answer/sources/done 快照重放，但不会承诺
+token 级续传；在该设计实施前，客户端断线后的重试仍可能重新执行模型调用。详见
+[Chat turn 幂等规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。
+
 ## 5. Heartbeat
 
 `rag.sse.heartbeat-interval-seconds` 默认 `30`。启用时服务端发送 SSE comment：
