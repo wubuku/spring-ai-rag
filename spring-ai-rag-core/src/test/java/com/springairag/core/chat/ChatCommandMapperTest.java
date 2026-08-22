@@ -113,4 +113,45 @@ class ChatCommandMapperTest {
                 ErrorCode.RETRIEVAL_OPTIONS_NOT_ALLOWED,
                 error.getErrorCodeEnum());
     }
+
+    @Test
+    void rejectsExecutionSnapshotWithEmptyCandidateChain() {
+        ChatRequest request = new ChatRequest("恢复", "session-restore");
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        request,
+                        ChatPrincipal.local(),
+                        "session-restore",
+                        """
+                        {
+                          "executionSnapshotVersion": 1,
+                          "mode": "PLAIN",
+                          "memoryMode": "SERVER",
+                          "declaredModelIdentifier": "DEFAULT",
+                          "resolvedCandidates": [],
+                          "domainId": null,
+                          "retrievalOptions": {
+                            "maxResults": 5,
+                            "minScore": 0.0,
+                            "useHybridSearch": false,
+                            "useRerank": false,
+                            "vectorWeight": 0.0,
+                            "fulltextWeight": 0.0
+                          },
+                          "effectiveScope": {
+                            "collectionFilter": "NONE",
+                            "collectionIds": [],
+                            "documentIds": [],
+                            "documentType": "",
+                            "matchNone": true
+                          }
+                        }
+                        """));
+
+        assertEquals(
+                ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
+    }
 }

@@ -5,6 +5,7 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ChatTurnStatusResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.ChatTurnOperationRepository;
@@ -39,6 +40,7 @@ public class ChatTurnOperationService {
     private final ChatTurnOperationRepository repository;
     private final ObjectMapper objectMapper;
     private final RagChatProperties properties;
+    private final RagProperties ragProperties;
     private final ChatAuthorizationService authorizationService;
     private final ChatObservabilityService observability;
     private final ChatExecutionService executionService;
@@ -54,12 +56,14 @@ public class ChatTurnOperationService {
             ChatTurnOperationRepository repository,
             ObjectMapper objectMapper,
             RagChatProperties properties,
+            RagProperties ragProperties,
             ChatAuthorizationService authorizationService,
             ChatObservabilityService observability,
             ChatExecutionService executionService) {
         this.repository = repository;
         this.objectMapper = objectMapper;
         this.properties = properties;
+        this.ragProperties = ragProperties;
         this.authorizationService = authorizationService;
         this.observability = observability;
         this.executionService = executionService;
@@ -137,7 +141,7 @@ public class ChatTurnOperationService {
             ChatTurnOperation reclaimed = repository.reclaim(
                     current,
                     token,
-                    leaseMs(),
+                    leaseMs(transport),
                     properties.getIdempotency().getMaxAttempts());
             if (reclaimed != null) {
                 Claim claim = new Claim(reclaimed, false);
@@ -165,7 +169,7 @@ public class ChatTurnOperationService {
                 turnId,
                 transport,
                 token,
-                leaseMs(),
+                leaseMs(transport),
                 "{\"authorizationSnapshotVersion\":1,\"scopeMode\":\"NOT_APPLICABLE\","
                         + "\"callerAccessMode\":\"NOT_APPLICABLE\","
                         + "\"effectiveSelectedCollectionIds\":[],"
@@ -210,6 +214,7 @@ public class ChatTurnOperationService {
         }
         if (current.leaseExpiresAt() != null
                 && current.leaseExpiresAt().isAfter(Instant.now())) {
+            observability.inProgress();
             throw inProgress(current);
         }
         return null;
@@ -278,7 +283,7 @@ public class ChatTurnOperationService {
             ChatTurnOperation reclaimed = repository.reclaim(
                     current,
                     token,
-                    leaseMs(),
+                    leaseMs(transport),
                     reclaimedExecutionSnapshot,
                     properties.getIdempotency().getMaxAttempts());
             if (reclaimed != null) {
@@ -352,7 +357,7 @@ public class ChatTurnOperationService {
                     turnId,
                     transport,
                     token,
-                    leaseMs(),
+                    leaseMs(transport),
                     executionSnapshot(
                             effectiveCommand,
                             declaredModelIdentifier(prepared),
@@ -892,7 +897,7 @@ public class ChatTurnOperationService {
                         "Chat execution snapshot is invalid");
             }
             var candidates = snapshot.path("resolvedCandidates");
-            if (!candidates.isArray()) {
+            if (!candidates.isArray() || candidates.isEmpty()) {
                 throw new RagException(
                         ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
                         "Chat execution candidate chain is missing");
@@ -1076,14 +1081,17 @@ public class ChatTurnOperationService {
             if (claim.renewal() != null) {
                 return;
             }
-            long period = Math.max(1_000L, leaseMs() / 3L);
+            long period = Math.max(
+                    1_000L,
+                    leaseMs(claim.operation().transport()) / 3L);
             claim.setRenewal(renewalExecutor.scheduleAtFixedRate(() -> {
                 synchronized (claim.monitor()) {
                     if (claim.renewalStopped()) {
                         return;
                     }
                     ChatTurnOperation renewed = repository.renew(
-                            claim.operation(), leaseMs());
+                            claim.operation(),
+                            leaseMs(claim.operation().transport()));
                     if (renewed == null) {
                         claim.markRenewalLost();
                     } else {
@@ -1103,9 +1111,17 @@ public class ChatTurnOperationService {
         }
     }
 
-    private int leaseMs() {
-        return Math.max(30_000,
-                properties.getIdempotency().getLeaseGraceMs() + 120_000);
+    private int leaseMs(ChatTurnOperation.Transport transport) {
+        boolean streaming = transport == ChatTurnOperation.Transport.NATIVE_SSE
+                || transport == ChatTurnOperation.Transport.OPENAI_SSE;
+        int endpointDeadline = streaming
+                ? ragProperties.getTimeout().getChatStreamMs()
+                : ragProperties.getTimeout().getChatAskMs();
+        long requested = (long) Math.max(1_000, endpointDeadline)
+                + properties.getIdempotency().getLeaseGraceMs();
+        return (int) Math.min(
+                Integer.MAX_VALUE,
+                Math.max(30_000L, requested));
     }
 
     @PreDestroy

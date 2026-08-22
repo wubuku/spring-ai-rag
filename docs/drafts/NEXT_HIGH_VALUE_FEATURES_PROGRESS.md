@@ -618,3 +618,141 @@ recovery 的执行一致性，因此将实现收敛计数保持为 `0/3`；修�
   返回 `Already up to date`，没有新增 main 修改、冲突或需要重新解决的文件。
 - 因为交付门禁要求以合并后的代码重新取得证据，之前的完整门槛结果只作为合并前
   记录保留；下面的验证将从当前 HEAD 重新执行，不沿用旧结论。
+
+### 2026-08-22 合并后完整验收与真实 LLM 复验
+
+- 运行：
+  `CHAT_REAL_ENV_FILE=/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env
+  CHAT_VERIFY_RUN_ID=20260822-post-merge-full-gate-0420
+  ./scripts/verify-chat-capability.sh --with-real-llm`。
+- 合并后脚本最终汇总为 **18 passed / 0 failed / 0 skipped**。本任务相关的
+  `ChatTurnOperationPostgresIntegrationTest` 为 `7/7`，高价值 PostgreSQL 集成为
+  `10/10`；V47 在 disposable PostgreSQL 中从空库迁移成功。
+- 后端门槛：Chat focused `212` 项通过，`mvn clean compile test-compile` 通过，
+  全量 Maven API `539`、Documents `74`、Core `2906`（既有条件跳过 `7`）、
+  Starter `48` 全部通过，当前 reactor artifacts 安装、两个 demo、隔离后端启动
+  smoke 均通过。
+- 前端门槛：Vitest `29` 个文件 / `217` 项、TypeScript、production build、核心
+  Mock Playwright `14/14`、项目文档门禁和无显式悲观锁检查全部通过。前端结论只使用
+  DOM、网络请求/响应、接口 JSON 和自动化断言，没有使用截图。
+- 真实 LLM：显式使用主工作区 `.env` 的 OpenAI-compatible provider 与
+  `grok-4.5`；真实 WebUI Playwright 的 Agent SSE、来源展示、history 恢复通过。
+  provider smoke 的 native JSON 首次/重放、key conflict、native SSE 首次/重放和
+  两个 status 查询全部通过；provider counter 只在两次首次请求上各增加一次，
+  JSON/SSE replay 均未再次调用 provider。证据目录：
+  `.verification/real-chat/20260823-032746-75307`；完整汇总：
+  `.verification/chat-capability/20260822-post-merge-full-gate-0420/summary.md`。
+- 合并后基本集成硬门槛通过；实现收敛审查从 `0/3` 开始，三轮审查期间如发生实质
+  修复，必须重新执行受影响门槛并将计数重置为 `0`。
+
+### 2026-08-22 实现收敛第 1 轮补充审查发现与修复
+
+- 发现活跃 durable operation 的重复请求虽然会返回 `IN_PROGRESS`，但没有计入
+  `inProgress` 观测指标；已在 `ChatTurnOperationService.inspectExisting(...)` 的
+  活跃 operation 分支补记该指标。
+- 发现 execution snapshot 允许 `resolvedCandidates` 为空。首次 claim 后若在
+  OpenAI/native 执行路径中发生异常并留下租约，恢复请求可能退回当前 registry 的候选
+  链，破坏首次执行语义；已让 snapshot 创建和 snapshot 恢复共同拒绝空候选链。
+- 新增/更新 `ChatTurnOperationServiceTest`、`ChatCommandMapperTest` 和
+  `OpenAiChatRequestMapperTest`，覆盖活跃 operation 观测计数及空候选链的拒绝与恢复
+  边界。
+- focused 验证命令：
+  `mvn -pl spring-ai-rag-core -am
+  -Dtest=ChatTurnOperationServiceTest,ChatCommandMapperTest,OpenAiChatRequestMapperTest
+  -Dsurefire.failIfNoSpecifiedTests=false test`。
+  结果为 **22 passed / 0 failed / 0 skipped**，Maven reactor `BUILD SUCCESS`。
+- 以上是影响恢复正确性和可观测性的实质修复；实现收敛审查计数重置为 `0/3`。
+  下一步必须重新执行完整基本集成硬门槛（含真实 LLM），不得沿用修复前的最终结论。
+
+### 2026-08-22 修复后完整基本集成硬门槛与真实 LLM 复跑
+
+- 使用
+  `CHAT_REAL_ENV_FILE=/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env
+  CHAT_VERIFY_RUN_ID=20260822-post-fix3-full-gate
+  ./scripts/verify-chat-capability.sh --with-real-llm` 重新执行全部硬门槛，结果为
+  **18 passed / 0 failed / 0 skipped**；完整汇总：
+  `.verification/chat-capability/20260822-post-fix3-full-gate/summary.md`。
+- 后端：Chat focused tests 为 `213` 项且全部通过；V47 Chat turn PostgreSQL 集成为
+  `7/7`；高价值 PostgreSQL 集成矩阵全部通过；`mvn clean compile test-compile`
+  和全量 Maven 均为 `BUILD SUCCESS`。全量 Maven 结果为 API `539`、
+  Documents `74`、Core `2910`（既有条件跳过 `7`）、Starter `48`，失败数为 `0`；
+  当前 reactor artifacts、domain extension demo、read-only SQL tool demo 和隔离端口
+  后端启动 smoke 全部通过。
+- 前端：Vitest `29` 个文件 / `217` 项、TypeScript、production build、核心 Mock
+  Playwright `14/14` 全部通过。前端验收证据只使用 DOM、可访问状态、网络请求/响应、
+  接口 JSON 和自动化断言，没有使用截图。
+- 真实 LLM：使用主工作区 `.env` 中的 OpenAI-compatible provider 和 `grok-4.5`；
+  真实 WebUI Playwright 的 Agent SSE、来源展示和 history recovery 通过。provider
+  smoke 的 native JSON 首次/replay、同 key 冲突、native SSE 首次/replay 和两个
+  status 查询全部通过；provider counter 只在两次首次请求上各增加一次，JSON/SSE
+  replay 均未再次调用 provider。证据目录（目录名由运行环境自动生成的时间戳决定）：
+  `.verification/real-chat/20260823-034813-88554`。
+- 最近两项修复后的基本集成硬门槛已重新通过；实现收敛审查从 `0/3` 开始，下一步
+  执行固定范围的连续三轮只读实现审查。
+
+### 2026-08-22 实现收敛第 1 轮发现租约边界问题
+
+- 对照 `RagProperties` 与 `application.yml` 的 endpoint deadline 后发现，
+  `ChatTurnOperationService.leaseMs()` 固定使用 `leaseGraceMs + 120000`，而默认
+  stream deadline 为 `180000`；因此 native/OpenAI keyed SSE 的初始 operation lease
+  可能早于本次请求 deadline。后台 renewal 通常会掩盖该问题，但在调度抖动或数据库
+  短暂异常时可能把仍在允许执行窗口内的 operation 暴露给 stale reclaim。
+- 该问题影响 durable operation 的恢复正确性和成本安全边界，计入实质审查问题；
+  当前实现收敛计数重置为 `0/3`。修复方案是按 operation transport 选择 ask/stream
+  deadline，初始 lease 至少覆盖 `endpoint deadline + lease-grace-ms`，并让 renewal
+  使用相同的 transport-specific TTL；补充 native JSON/SSE 的租约 TTL 回归断言。
+
+### 2026-08-22 租约边界修复与 focused 验证
+
+- `ChatTurnOperationService` 现在注入 `RagProperties`，按 operation transport 选择
+  `chat-ask-ms` 或 `chat-stream-ms`，使首次 claim、stale reclaim 和 renewal 都使用
+  `endpoint deadline + lease-grace-ms` 的 operation TTL；默认值分别为 `130000ms` 和
+  `190000ms`。
+- 新增/更新 `ChatTurnOperationServiceTest` 的 JSON/SSE 租约断言；首次测试桩暴露了
+  `repository.insert` matcher 参数数量错误和首次 `find` 顺序错误，均已立即修正。
+- 重新执行：
+  `mvn -pl spring-ai-rag-core -am
+  -Dtest=ChatTurnOperationServiceTest,ChatCommandMapperTest,OpenAiChatRequestMapperTest
+  -Dsurefire.failIfNoSpecifiedTests=false test`。
+  结果为 **23 passed / 0 failed / 0 skipped**，Maven reactor `BUILD SUCCESS`。
+- 本轮属于实质生产修复，实施收敛计数仍为 `0/3`；下一步必须重新执行完整基本集成
+  硬门槛（包括真实 LLM），再重新开始三轮限定范围审查。
+
+### 租约边界修复后的完整基本集成硬门槛与真实 LLM 复验
+
+- 使用
+  `CHAT_REAL_ENV_FILE=/Users/yangjiefeng/Documents/wubuku/spring-ai-rag/.env
+  CHAT_VERIFY_RUN_ID=20260822-post-lease-fix-full-gate
+  ./scripts/verify-chat-capability.sh --with-real-llm` 重新执行租约修复后的全部硬门槛，
+  结果为 **18 passed / 0 failed / 0 skipped**。完整汇总：
+  `.verification/chat-capability/20260822-post-lease-fix-full-gate/summary.md`。
+- 后端：Chat focused tests 为 `213` 项且全部通过；Chat turn PostgreSQL 集成为
+  `7/7`，高价值 PostgreSQL 集成矩阵全部通过；V47 在 disposable PostgreSQL 中从
+  空库迁移成功；`mvn clean compile test-compile` 和全量 Maven 均为
+  `BUILD SUCCESS`。全量 Maven 结果为 API `539`、Documents `74`、Core `2911`
+ （既有条件跳过 `7`）、Starter `48`，失败数为 `0`；当前 reactor artifacts、
+  domain extension demo、read-only SQL tool demo 和隔离端口后端启动 smoke 全部通过。
+- 前端：Vitest `29` 个文件 / `217` 项、TypeScript、production build、核心 Mock
+  Playwright `14/14` 全部通过。前端验收证据只使用 DOM、可访问状态、网络请求/响应、
+  接口 JSON 和自动化断言，没有使用截图。
+- 真实 LLM：使用主工作区 `.env` 中的 OpenAI-compatible provider 和 `grok-4.5`；
+  真实 WebUI Playwright 的 Agent SSE、来源展示和 history recovery 通过。provider
+  smoke 的 native JSON 首次/replay、同 key 冲突、native SSE 首次/replay 和两个
+  status 查询全部通过；provider counter 只在两次首次请求上各增加一次，JSON/SSE
+  replay 均未再次调用 provider。证据目录：
+  `.verification/real-chat/20260823-040853-6639/`。
+- 租约修复后的基本集成硬门槛已重新通过；实现收敛审查仍为 `0/3`，接下来只进行
+  固定范围的连续三轮只读审查。若发现影响正确性、并发、安全、成本或数据一致性的
+  实质问题，必须修复、重跑受影响门槛并将计数重置为 `0`。
+
+### 2026-08-22 实现收敛三轮审查完成
+
+- 第 2 轮限定范围只读审查覆盖请求指纹与 OpenAI 声明校验、异常映射和
+  `Retry-After`、native/OpenAI SSE 生命周期与取消、`prepareForOperation`、durable
+  history/Memory 提交边界；未发现影响正确性、成本安全、兼容性或数据一致性的实质问题。
+- 第 3 轮限定范围只读审查覆盖 operation/session lease 的 token 与 row-version
+  fencing、claim/reclaim/cleanup CAS、V47 约束、ACL authorization snapshot fail-closed
+  校验、跨 transport replay 投影，以及 Spring AI 工具调用共享的模型/工具/截止时间预算；
+  未发现需要修改的问题。
+- `git diff --check` 通过。实现收敛审查连续三轮无修改，计数达到 `3/3`；本轮审查
+  结果不替代已完成的后端、前端和真实 LLM 自动化验收证据。

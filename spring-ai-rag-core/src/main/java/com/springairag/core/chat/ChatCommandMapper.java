@@ -213,7 +213,7 @@ public class ChatCommandMapper {
     }
 
     private List<String> textList(JsonNode node) {
-        if (node == null || !node.isArray()) {
+        if (node == null || !node.isArray() || node.isEmpty()) {
             throw invalidSnapshot();
         }
         List<String> values = new ArrayList<>();

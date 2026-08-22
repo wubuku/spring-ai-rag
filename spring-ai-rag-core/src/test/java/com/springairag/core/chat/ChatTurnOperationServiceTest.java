@@ -6,6 +6,7 @@ import com.springairag.api.enums.ChatMode;
 import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagChatProperties;
+import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.ChatTurnOperationRepository;
@@ -52,6 +53,7 @@ class ChatTurnOperationServiceTest {
                 repository,
                 new ObjectMapper(),
                 new RagChatProperties(),
+                new RagProperties(),
                 authorizationService,
                 observability,
                 executionService);
@@ -70,6 +72,55 @@ class ChatTurnOperationServiceTest {
 
         org.junit.jupiter.api.Assertions.assertFalse(prepared.keyed());
         assertEquals(null, prepared.fingerprintHash());
+    }
+
+    @Test
+    void inspectExistingCountsInProgressOperation() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatTurnOperationService.Prepared prepared = prepared(principal);
+        ChatTurnOperation operation = operation(
+                principal.id(),
+                prepared.keyHash(),
+                prepared.fingerprintHash(),
+                "session-1",
+                ChatTurnOperation.Status.IN_PROGRESS,
+                UUID.randomUUID(),
+                Instant.now().plusSeconds(30),
+                "{\"executionSnapshotVersion\":1,\"resolvedCandidates\":[\"provider/model\"]}");
+
+        ChatTurnInProgressException error = assertThrows(
+                ChatTurnInProgressException.class,
+                () -> service.inspectExisting(prepared.withOperation(operation)));
+
+        assertEquals(
+                ErrorCode.IDEMPOTENCY_OPERATION_IN_PROGRESS,
+                error.getErrorCodeEnum());
+        verify(observability).inProgress();
+    }
+
+    @Test
+    void commandForClaimRejectsEmptyImmutableCandidateSnapshot() {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = command(principal);
+        ChatTurnOperation operation = operation(
+                principal.id(),
+                "key-hash",
+                "fingerprint-hash",
+                command.sessionId(),
+                ChatTurnOperation.Status.IN_PROGRESS,
+                UUID.randomUUID(),
+                Instant.now().plusSeconds(60),
+                "{\"executionSnapshotVersion\":1,\"resolvedCandidates\":[]}");
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.commandForClaim(
+                        command,
+                        new ChatTurnOperationService.Claim(operation, false)));
+
+        assertEquals(
+                ErrorCode.IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
     }
 
     @Test
@@ -148,6 +199,7 @@ class ChatTurnOperationServiceTest {
                 false);
 
         ArgumentCaptor<String> snapshot = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Integer> lease = ArgumentCaptor.forClass(Integer.class);
         verify(repository).insert(
                 eq(principal.id()),
                 eq(prepared.keyHash()),
@@ -156,14 +208,65 @@ class ChatTurnOperationServiceTest {
                 any(),
                 eq(ChatTurnOperation.Transport.NATIVE_JSON),
                 any(),
-                any(Integer.class),
+                lease.capture(),
                 snapshot.capture(),
                 any());
+        assertEquals(130_000, lease.getValue());
         JsonNode resolved = new ObjectMapper().readTree(snapshot.getValue())
                 .path("resolvedCandidates");
         assertEquals(
                 List.of("provider/primary", "provider/fallback"),
                 new ObjectMapper().convertValue(resolved, List.class));
+    }
+
+    @Test
+    void streamingClaimUsesStreamingDeadlineForInitialOperationLease()
+            throws Exception {
+        ChatPrincipal principal = ChatPrincipal.local();
+        ChatCommand command = command(principal);
+        ChatTurnOperationService.Prepared prepared = prepared(principal);
+        when(executionService.resolveCandidateRefs(command, true))
+                .thenReturn(List.of("provider/primary"));
+        when(authorizationService.initialSnapshot(any()))
+                .thenReturn("{}");
+        when(sessionCoordinator.acquire(command, true))
+                .thenReturn(ChatSessionCoordinator.LeaseHandle.stateless(
+                        Instant.now().plusSeconds(300)));
+        when(repository.insert(
+                any(), any(), any(), any(), any(), any(), any(), anyInt(),
+                any(), any()))
+                .thenReturn(true);
+        when(repository.find(principal.id(), prepared.keyHash()))
+                .thenReturn(null, operation(
+                        principal.id(),
+                        prepared.keyHash(),
+                        prepared.fingerprintHash(),
+                        command.sessionId(),
+                        ChatTurnOperation.Status.IN_PROGRESS,
+                        UUID.randomUUID(),
+                        Instant.now().plusSeconds(300),
+                        "{\"executionSnapshotVersion\":1,"
+                                + "\"resolvedCandidates\":[\"provider/primary\"]}"));
+
+        service.claim(
+                prepared,
+                command,
+                ChatTurnOperation.Transport.NATIVE_SSE,
+                true);
+
+        ArgumentCaptor<Integer> lease = ArgumentCaptor.forClass(Integer.class);
+        verify(repository).insert(
+                eq(principal.id()),
+                eq(prepared.keyHash()),
+                eq(prepared.fingerprintHash()),
+                eq(command.sessionId()),
+                any(),
+                eq(ChatTurnOperation.Transport.NATIVE_SSE),
+                any(),
+                lease.capture(),
+                any(),
+                any());
+        assertEquals(190_000, lease.getValue());
     }
 
     @Test

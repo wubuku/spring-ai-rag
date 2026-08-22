@@ -7,6 +7,7 @@ import com.springairag.core.chat.ChatInputMessage;
 import com.springairag.core.chat.MemoryMode;
 import com.springairag.core.config.RagOpenAiCompatibilityProperties;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -172,6 +173,53 @@ class OpenAiChatRequestMapperTest {
         assertEquals(List.of(9L), mapped.command().retrievalScope().collectionIds());
         assertEquals(List.of(20L), mapped.command().retrievalScope().documentIds());
         verifyNoInteractions(scopeAdapter);
+    }
+
+    @Test
+    void rejectsExecutionSnapshotWithEmptyCandidateChain() throws Exception {
+        OpenAiChatCompletionRequest request = objectMapper.readValue("""
+                {
+                  "model": "rag-default",
+                  "messages": [{"role": "user", "content": "hello"}]
+                }
+                """, OpenAiChatCompletionRequest.class);
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> mapper.mapFromExecutionSnapshot(
+                        request,
+                        new MockHttpServletRequest(),
+                        "session-restore",
+                        """
+                        {
+                          "executionSnapshotVersion": 1,
+                          "mode": "PLAIN",
+                          "memoryMode": "SERVER",
+                          "declaredModelIdentifier": "rag-default",
+                          "resolvedCandidates": [],
+                          "domainId": null,
+                          "retrievalOptions": {
+                            "maxResults": 5,
+                            "minScore": 0.0,
+                            "useHybridSearch": false,
+                            "useRerank": false,
+                            "vectorWeight": 0.0,
+                            "fulltextWeight": 0.0
+                          },
+                          "effectiveScope": {
+                            "collectionFilter": "NONE",
+                            "collectionIds": [],
+                            "documentIds": [],
+                            "documentType": "",
+                            "matchNone": true
+                          }
+                        }
+                        """));
+
+        assertEquals(
+                com.springairag.api.enums.ErrorCode
+                        .IDEMPOTENCY_EXECUTION_SNAPSHOT_INVALID,
+                error.getErrorCodeEnum());
     }
 
     @Test
