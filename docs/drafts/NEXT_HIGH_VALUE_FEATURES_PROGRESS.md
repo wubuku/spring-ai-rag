@@ -6,7 +6,7 @@
 >
 > **当前 worktree**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
 >
-> **交付 HEAD**：`bf3951b7`
+> **交付 HEAD**：`be6ff659`
 >
 > **规划基线**：`main` / `origin/main` @ `e48fb192`
 >
