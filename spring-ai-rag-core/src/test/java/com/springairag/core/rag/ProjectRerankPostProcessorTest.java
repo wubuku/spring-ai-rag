@@ -20,6 +20,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -100,6 +101,98 @@ class ProjectRerankPostProcessorTest {
         assertNotNull(latest.rerankStage());
         assertEquals(1, latest.effectiveQueries().size());
         assertEquals(5, latest.effectiveQueries().getFirst().charCount());
+    }
+
+    @Test
+    void successfulRerankTruncatesOversizedProviderOutputBeforeCitations() {
+        ReRankingService rerankingService = mock(ReRankingService.class);
+        RetrievalResult first = result("41", 0.9);
+        RetrievalResult second = result("42", 0.8);
+        RetrievalResult third = result("43", 0.7);
+        when(rerankingService.rerank(
+                eq("query"), anyList(), eq(2)))
+                .thenReturn(List.of(third, second, first));
+        RetrievalTraceSession session = new RetrievalTraceSession(
+                ChatPrincipal.local(), "chat", "session-success");
+        RetrievalTraceCollector trace = session.newAttemptCollector(
+                "attempt-1", 3, 3, 2);
+        trace.recordCandidateOutcome(RetrievalOutcome.ofResults(
+                List.of(first, second, third)));
+        RetrievalDocumentMapper mapper = new RetrievalDocumentMapper();
+        ProjectRerankPostProcessor processor =
+                new ProjectRerankPostProcessor(rerankingService, mapper);
+
+        List<Document> output = processor.process(
+                query(trace, 2),
+                List.of(
+                        mapper.toDocument(first),
+                        mapper.toDocument(second),
+                        mapper.toDocument(third)));
+
+        assertEquals(
+                List.of("43", "42"),
+                output.stream()
+                        .map(document -> document.getMetadata().get("documentId"))
+                        .toList());
+        assertEquals("S1", trace.citationId(third));
+        assertEquals("S2", trace.citationId(second));
+        assertNull(trace.citationId(first));
+        assertEquals(2, session.latestOutcome().rerankStage().resultCount());
+        assertEquals(1, session.retrievals().size());
+    }
+
+    @Test
+    void rerankFailureFallsBackToBoundedCandidateOrder() {
+        ReRankingService rerankingService = mock(ReRankingService.class);
+        RetrievalResult first = result("41", 0.9);
+        RetrievalResult second = result("42", 0.8);
+        RetrievalResult third = result("43", 0.7);
+        when(rerankingService.rerank(
+                eq("query"), anyList(), eq(2)))
+                .thenThrow(new IllegalStateException("rerank unavailable"));
+        RetrievalTraceSession session = new RetrievalTraceSession(
+                ChatPrincipal.local(), "chat", "session-failure");
+        RetrievalTraceCollector trace = session.newAttemptCollector(
+                "attempt-1", 3, 3, 2);
+        trace.recordCandidateOutcome(RetrievalOutcome.ofResults(
+                List.of(first, second, third)));
+        RetrievalDocumentMapper mapper = new RetrievalDocumentMapper();
+        ProjectRerankPostProcessor processor =
+                new ProjectRerankPostProcessor(rerankingService, mapper);
+
+        List<Document> output = processor.process(
+                query(trace, 2),
+                List.of(
+                        mapper.toDocument(first),
+                        mapper.toDocument(second),
+                        mapper.toDocument(third)));
+
+        assertEquals(
+                List.of("41", "42"),
+                output.stream()
+                        .map(document -> document.getMetadata().get("documentId"))
+                        .toList());
+        assertEquals(RetrievalBranchStage.ERROR,
+                session.latestOutcome().rerankStage().status());
+        assertEquals(2, session.latestOutcome().rerankStage().resultCount());
+        assertEquals("S1", trace.citationId(first));
+        assertEquals("S2", trace.citationId(second));
+        assertNull(trace.citationId(third));
+    }
+
+    private Query query(RetrievalTraceCollector trace, int maxResults) {
+        AuthorizedRetrievalContext context = new AuthorizedRetrievalContext(
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(maxResults, 0.0, true, true, 0.5, 0.5),
+                trace,
+                "session-rerank",
+                ChatPrincipal.local(),
+                10_000,
+                RetrievalFilters.none());
+        return new Query(
+                "query",
+                List.of(),
+                Map.of(ProjectDocumentRetriever.CONTEXT_KEY, context));
     }
 
     private RetrievalResult result(String documentId, double score) {

@@ -45,6 +45,7 @@ rag:
     provider: ${RAG_RERANK_PROVIDER:heuristic}
     diversity-weight: 0.2
     top-n: 5
+    candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
     fallback-to-heuristic: true
   retrieval:
     default-limit: 10

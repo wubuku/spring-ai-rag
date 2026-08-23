@@ -298,6 +298,9 @@ public class RagSearchController {
                 }
             } catch (RuntimeException e) {
                 if (outcome != null) {
+                    List<RetrievalResult> fallbackResults =
+                            ReRankingService.limitResults(
+                                    outcome.results(), config.getMaxResults());
                     outcome = outcome.withRerank(
                             new RetrievalBranchStage(
                                     RetrievalBranchStage.RERANK,
@@ -305,9 +308,9 @@ public class RagSearchController {
                                     RetrievalBranchStage.ERROR,
                                     (System.nanoTime() - startedAt) / 1_000_000L,
                                     outcome.results().size(),
-                                    outcome.results().size(),
+                                    fallbackResults.size(),
                                     e.getClass().getSimpleName()),
-                            outcome.results(),
+                            fallbackResults,
                             true);
                     results = outcome.results();
                 } else {

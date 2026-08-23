@@ -7,6 +7,7 @@ import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.EmbeddingVectorColumns;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagRetrievalProperties;
+import com.springairag.core.config.RagRerankProperties;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.NoOpFulltextSearchProvider;
@@ -50,6 +51,7 @@ public class HybridRetrieverService {
     private final JdbcTemplate jdbcTemplate;
     private final Executor taskExecutor;
     private final RagRetrievalProperties retrieval;
+    private final RagRerankProperties rerank;
     private final FulltextSearchProviderFactory fulltextProviderFactory;
     private final RetrievalEmptyReasonProbe emptyReasonProbe;
     private final DocumentDerivationDescriptorProvider descriptorProvider;
@@ -69,6 +71,7 @@ public class HybridRetrieverService {
         this.profileProvider = profileProvider;
         this.jdbcTemplate = jdbcTemplate;
         this.retrieval = ragProperties.getRetrieval();
+        this.rerank = ragProperties.getRerank();
         this.descriptorProvider =
                 new DocumentDerivationDescriptorProvider(ragProperties);
         this.retrievalTimeoutSeconds = ragProperties.getAsync().getRetrievalTimeoutSeconds();
@@ -150,7 +153,10 @@ public class HybridRetrieverService {
                                          List<Long> excludeIds, int limit) {
         return searchInScope(query, RetrievalScope.forDocumentIds(documentIds),
                 excludeIds, limit,
-                RetrievalConfig.builder().maxResults(limit).build());
+                RetrievalConfig.builder()
+                        .maxResults(limit)
+                        .useRerank(false)
+                        .build());
     }
 
     /**
@@ -167,7 +173,10 @@ public class HybridRetrieverService {
             String query, RetrievalScope scope,
             List<Long> excludeIds, int limit) {
         return searchInScope(query, scope, excludeIds, limit,
-                RetrievalConfig.builder().maxResults(limit).build());
+                RetrievalConfig.builder()
+                        .maxResults(limit)
+                        .useRerank(false)
+                        .build());
     }
 
     /**
@@ -237,6 +246,7 @@ public class HybridRetrieverService {
         FulltextSearchProvider fulltextProvider = selectFulltextProvider(query);
         int effectiveLimit = (config != null && config.getMaxResults() > 0)
                 ? config.getMaxResults() : limit;
+        int retrievalLimit = candidateRetrievalLimit(config, effectiveLimit);
         float vWeight = (config != null) ? (float) config.getVectorWeight() : retrieval.getVectorWeight();
         float fWeight = (config != null) ? (float) config.getFulltextWeight() : retrieval.getFulltextWeight();
         double minScore = config != null ? config.getMinScore() : retrieval.getMinScore();
@@ -247,7 +257,7 @@ public class HybridRetrieverService {
         if (!isFulltextAvailable(config, fulltextProvider)) {
             BranchExecution vector = CompletableFuture
                     .supplyAsync(() -> runVector(
-                            query, scope, excludeIds, effectiveLimit, profile,
+                            query, scope, excludeIds, retrievalLimit, profile,
                             minScore, effectiveFilters), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
@@ -268,7 +278,7 @@ public class HybridRetrieverService {
         } else {
             CompletableFuture<BranchExecution> vectorFuture = CompletableFuture
                     .supplyAsync(() -> runVector(
-                            query, scope, excludeIds, effectiveLimit * 2, profile,
+                            query, scope, excludeIds, retrievalLimit * 2, profile,
                             minScore, effectiveFilters), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
@@ -279,9 +289,9 @@ public class HybridRetrieverService {
                                     error,
                                     "Vector search"));
             CompletableFuture<BranchExecution> fulltextFuture = CompletableFuture
-                    .supplyAsync(() -> runFulltext(
+                            .supplyAsync(() -> runFulltext(
                             fulltextProvider, query, scope, excludeIds,
-                            effectiveLimit * 2, minScore, profile, effectiveFilters), taskExecutor)
+                            retrievalLimit * 2, minScore, profile, effectiveFilters), taskExecutor)
                     .orTimeout(retrievalTimeoutSeconds, TimeUnit.SECONDS)
                     .handle((value, error) -> error == null
                             ? value
@@ -296,7 +306,7 @@ public class HybridRetrieverService {
             fulltextStage = fulltext.stage();
             long fusionStarted = System.nanoTime();
             fused = RetrievalUtils.fuseResults(
-                    vector.results(), fulltext.results(), effectiveLimit, vWeight, fWeight);
+                    vector.results(), fulltext.results(), retrievalLimit, vWeight, fWeight);
             fusionStage = new RetrievalBranchStage(
                     RetrievalBranchStage.FUSION,
                     "weighted-rrf",
@@ -341,6 +351,23 @@ public class HybridRetrieverService {
                 resolved.emptyReasonCode(),
                 elapsedMs(startedAt),
                 rawCandidates);
+    }
+
+    private int candidateRetrievalLimit(RetrievalConfig config, int requestedLimit) {
+        if (requestedLimit < 1
+                || requestedLimit > 100
+                || config == null
+                || !config.isUseRerank()
+                || !rerank.isEnabled()) {
+            return requestedLimit;
+        }
+        String provider = rerank.getProvider() == null
+                ? ""
+                : rerank.getProvider().trim().toLowerCase();
+        if (provider.equals("none") || provider.equals("noop") || provider.equals("off")) {
+            return requestedLimit;
+        }
+        return Math.max(requestedLimit, rerank.getCandidateLimit());
     }
 
     private BranchExecution runVector(

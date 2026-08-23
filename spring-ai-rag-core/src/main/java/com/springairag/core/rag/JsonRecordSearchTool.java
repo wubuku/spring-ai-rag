@@ -124,7 +124,7 @@ public class JsonRecordSearchTool implements ToolCallback {
                             config);
             JsonRecordSearchResponse response = detailed.response();
             List<RetrievalResult> traceResults = detailed.traceResults();
-            trace.recordOutcome(detailed.outcome());
+            trace.recordOutcome(detailed.outcome(), limit);
 
             List<Map<String, Object>> records = new ArrayList<>();
             List<RetrievalResult> exposed = new ArrayList<>();

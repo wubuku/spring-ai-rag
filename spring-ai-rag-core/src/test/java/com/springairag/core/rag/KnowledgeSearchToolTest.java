@@ -8,6 +8,7 @@ import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.chat.RetrievalOptions;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalOutcome;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
@@ -36,15 +40,20 @@ class KnowledgeSearchToolTest {
 
     private ObjectMapper objectMapper;
     private HybridRetrieverService hybridRetriever;
+    private ReRankingService rerankingService;
     private KnowledgeSearchTool tool;
 
     @BeforeEach
     void setUp() {
         objectMapper = new ObjectMapper();
         hybridRetriever = mock(HybridRetrieverService.class);
+        rerankingService = mock(ReRankingService.class);
+        when(rerankingService.rerank(anyString(), anyList(), anyInt()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
         tool = new KnowledgeSearchTool(
                 objectMapper,
                 hybridRetriever,
+                rerankingService,
                 new RetrievalDocumentMapper());
     }
 
@@ -276,6 +285,98 @@ class KnowledgeSearchToolTest {
         JsonNode json = objectMapper.readTree(output);
         assertTrue(json.path("truncated").asBoolean());
         assertTrue(json.path("query").asText().length() < query.length());
+    }
+
+    @Test
+    void rerankUsesToolLimitAndCandidateDoesNotConsumeCitationBudget()
+            throws Exception {
+        RetrievalOptions options =
+                new RetrievalOptions(3, 0.25, true, true, 0.55, 0.45);
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(3, 3, 1);
+        AuthorizedRetrievalContext authorized =
+                new AuthorizedRetrievalContext(
+                        RetrievalScope.unscoped(),
+                        options,
+                        trace,
+                        "session-rerank",
+                        ChatPrincipal.local());
+        RetrievalResult first = result("11", "First candidate");
+        RetrievalResult selected = result("12", "Selected candidate");
+        RetrievalOutcome outcome = RetrievalOutcome.ofResults(
+                List.of(first, selected));
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), any(), any(), eq(1), any(), any()))
+                .thenReturn(outcome);
+        when(rerankingService.rerank(
+                eq("query"), eq(List.of(first, selected)), eq(1)))
+                .thenReturn(List.of(selected));
+
+        String output = tool.call(
+                "{\"query\":\"query\",\"maxResults\":1}",
+                new ToolContext(Map.of(
+                        KnowledgeSearchTool.CONTEXT_KEY,
+                        authorized)));
+
+        JsonNode json = objectMapper.readTree(output);
+        assertEquals(1, json.path("resultCount").asInt());
+        assertEquals("12", json.path("sources").get(0)
+                .path("documentId").asText());
+        assertEquals("S1", json.path("sources").get(0)
+                .path("citationId").asText());
+        assertEquals(List.of("12"), trace.sources().stream()
+                .map(RetrievalResult::getDocumentId)
+                .toList());
+        verify(hybridRetriever).searchInScopeDetailed(
+                eq("query"), any(), any(), eq(1), any(), any());
+        verify(rerankingService).rerank(
+                eq("query"), eq(List.of(first, selected)), eq(1));
+    }
+
+    @Test
+    void smallerToolRequestUsesCoverageAwareCacheAndLargerRequestRetrievesAgain()
+            throws Exception {
+        RetrievalOptions options =
+                new RetrievalOptions(5, 0.25, true, false, 0.55, 0.45);
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(3, 3, 10);
+        AuthorizedRetrievalContext authorized =
+                new AuthorizedRetrievalContext(
+                        RetrievalScope.unscoped(),
+                        options,
+                        trace,
+                        "session-cache-coverage",
+                        ChatPrincipal.local());
+        RetrievalResult first = result("11", "First");
+        RetrievalResult second = result("12", "Second");
+        RetrievalResult third = result("13", "Third");
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), any(), any(), eq(2), any(), any()))
+                .thenReturn(RetrievalOutcome.ofResults(List.of(first, second)));
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), any(), any(), eq(4), any(), any()))
+                .thenReturn(RetrievalOutcome.ofResults(
+                        List.of(first, second, third)));
+        ToolContext toolContext = new ToolContext(Map.of(
+                KnowledgeSearchTool.CONTEXT_KEY,
+                authorized));
+
+        String firstOutput = tool.call(
+                "{\"query\":\"query\",\"maxResults\":2}", toolContext);
+        String smallerOutput = tool.call(
+                "{\"query\":\"query\",\"maxResults\":1}", toolContext);
+        String largerOutput = tool.call(
+                "{\"query\":\"query\",\"maxResults\":4}", toolContext);
+
+        assertEquals(2, objectMapper.readTree(firstOutput)
+                .path("resultCount").asInt());
+        assertEquals(1, objectMapper.readTree(smallerOutput)
+                .path("resultCount").asInt());
+        assertEquals(3, objectMapper.readTree(largerOutput)
+                .path("resultCount").asInt());
+        verify(hybridRetriever, times(1)).searchInScopeDetailed(
+                eq("query"), any(), any(), eq(2), any(), any());
+        verify(hybridRetriever, times(1)).searchInScopeDetailed(
+                eq("query"), any(), any(), eq(4), any(), any());
+        assertEquals(2, trace.retrievalCalls());
     }
 
     private RetrievalResult result(String documentId, String title) {

@@ -22,6 +22,23 @@ class RagRerankPropertiesTest {
     }
 
     @Test
+    void defaults_candidateLimitIs20() {
+        RagRerankProperties props = new RagRerankProperties();
+        assertEquals(20, props.getCandidateLimit());
+    }
+
+    @Test
+    void candidateLimit_isClampedToOperationalBounds() {
+        RagRerankProperties props = new RagRerankProperties();
+
+        props.setCandidateLimit(0);
+        assertEquals(1, props.getCandidateLimit());
+
+        props.setCandidateLimit(101);
+        assertEquals(100, props.getCandidateLimit());
+    }
+
+    @Test
     void setters_updateAllValues() {
         RagRerankProperties props = new RagRerankProperties();
 

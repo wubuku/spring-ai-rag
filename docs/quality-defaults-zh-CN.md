@@ -11,6 +11,7 @@
 | `rag.circuit-breaker.enabled` | `true` | LLM 不可用时快速失败 |
 | `rag.rerank.enabled` | `true`（heuristic） | 本地质量增强，无额外重排 API 成本 |
 | `rag.rerank.provider` | `heuristic` | 可改为 `http`，接入 cross-encoder |
+| `rag.rerank.candidate-limit` | `20` | rerank 前的有界候选池；最终返回数量仍由请求 `maxResults` 决定 |
 | `rag.query-rewrite.enabled` | `true` | 提升召回 |
 | 检索权重 | vector 0.55 / fulltext 0.45 | 略偏向向量，可通过 goldenset 调优 |
 
@@ -61,6 +62,24 @@ BASE_URL=http://127.0.0.1:8081 API_KEY=rag_sk_... \
 
 请求级 `useRerank` 只能关闭已启用的全局重排；当
 `rag.rerank.enabled=false` 时，不能通过单次请求启用重排。
+
+### 候选池与最终结果数量
+
+启用有效 rerank 的受管请求先使用
+`max(requestedMaxResults, rag.rerank.candidate-limit)` 召回候选，再由 reranker 选择
+最终的 `requestedMaxResults`。候选池默认是 `20`，配置绑定限制为 `1..100`；它不是
+新的请求参数，也不会改变 Search/Chat/Agent 工具的最终数量契约。旧版 GET Search
+明确关闭 rerank，因此继续使用原有查询上限。
+
+候选池扩大后应同时观察：
+
+- MRR、nDCG、Recall@K 是否改善，而不是只看返回条数；
+- Search 和 Chat 的 p95 检索延迟；
+- HTTP provider 的请求体大小与超时/降级次数；
+- Agent 工具、citation 和 Evaluation 是否仍不超过请求的 `maxResults`。
+
+质量或延迟回归时，先将 `RAG_RERANK_CANDIDATE_LIMIT` 调回 `1`，或暂时关闭全局
+rerank，再重新运行 goldenset 和版本化质量回归。
 
 ### 可选 HTTP 重排
 

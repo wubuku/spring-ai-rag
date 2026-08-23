@@ -26,7 +26,7 @@ public class RetrievalTraceCollector {
     private final Map<String, RetrievalResult> sources = new LinkedHashMap<>();
     private final Map<String, Integer> sourcePositions = new LinkedHashMap<>();
     private final Set<String> exposedSourceKeys = new LinkedHashSet<>();
-    private final Map<String, List<RetrievalResult>> queryResults = new ConcurrentHashMap<>();
+    private final Map<String, CachedResults> queryResults = new ConcurrentHashMap<>();
     private final ConcurrentLinkedQueue<ChatEvent> toolEvents =
             new ConcurrentLinkedQueue<>();
     private final AtomicInteger retrievalCalls = new AtomicInteger();
@@ -98,11 +98,39 @@ public class RetrievalTraceCollector {
     }
 
     public void recordOutcome(RetrievalOutcome outcome) {
+        recordOutcome(outcome, outcome != null ? outcome.results().size() : 0);
+    }
+
+    public void recordOutcome(RetrievalOutcome outcome, int coverageLimit) {
+        recordOutcome(
+                outcome != null ? outcome.originalQuery() : null,
+                outcome,
+                coverageLimit);
+    }
+
+    public void recordOutcome(
+            String query,
+            RetrievalOutcome outcome,
+            int coverageLimit) {
         if (outcome == null) {
             return;
         }
         latestOutcome.set(outcome);
-        record(outcome.originalQuery(), outcome.results());
+        record(query, outcome.results(), coverageLimit);
+        if (parentSession != null) {
+            parentSession.recordRetrieval(attemptKey, outcome);
+        }
+    }
+
+    /**
+     * Records an intermediate retrieval outcome without consuming citation/source budget.
+     * A subsequent rerank result replaces this outcome in the parent trace.
+     */
+    public void recordCandidateOutcome(RetrievalOutcome outcome) {
+        if (outcome == null) {
+            return;
+        }
+        latestOutcome.set(outcome);
         if (parentSession != null) {
             parentSession.recordRetrieval(attemptKey, outcome);
         }
@@ -112,13 +140,25 @@ public class RetrievalTraceCollector {
             RetrievalBranchStage stage,
             List<RetrievalResult> results,
             boolean degraded) {
+        recordRerank(stage, results, degraded, null, 0);
+    }
+
+    public void recordRerank(
+            RetrievalBranchStage stage,
+            List<RetrievalResult> results,
+            boolean degraded,
+            String query,
+            int coverageLimit) {
         RetrievalOutcome previous = latestOutcome.get();
         RetrievalOutcome replacement = (previous != null
                 ? previous
                 : RetrievalOutcome.ofResults(results))
                 .withRerank(stage, results, degraded);
         latestOutcome.set(replacement);
-        record(replacement.originalQuery(), replacement.results());
+        String effectiveQuery = query != null && !query.isBlank()
+                ? query
+                : replacement.originalQuery();
+        record(effectiveQuery, replacement.results(), coverageLimit);
         if (parentSession != null) {
             parentSession.replaceRetrieval(
                     attemptKey, previous, replacement);
@@ -142,11 +182,22 @@ public class RetrievalTraceCollector {
     }
 
     public synchronized void record(String query, List<RetrievalResult> results) {
+        record(query, results, results != null ? results.size() : 0);
+    }
+
+    public synchronized void record(
+            String query,
+            List<RetrievalResult> results,
+            int coverageLimit) {
         if (results == null) {
             return;
         }
         if (query != null && !query.isBlank()) {
-            queryResults.put(normalizeQuery(query), List.copyOf(results));
+            queryResults.put(
+                    normalizeQuery(query),
+                    new CachedResults(
+                            List.copyOf(results),
+                            Math.max(0, coverageLimit)));
         }
         for (RetrievalResult result : results) {
             String key = sourceKey(result);
@@ -166,11 +217,35 @@ public class RetrievalTraceCollector {
     }
 
     public List<RetrievalResult> cachedResults(String query) {
+        CachedResults cached = cachedEntry(query);
+        return cached != null ? cached.results() : null;
+    }
+
+    /**
+     * Returns a final-result cache entry only when it covers the requested limit.
+     * Smaller requests are truncated locally; larger requests must retrieve again.
+     */
+    public List<RetrievalResult> cachedResults(String query, int requestedLimit) {
+        CachedResults cached = cachedEntry(query);
+        if (cached == null || cached.coverageLimit() < requestedLimit) {
+            return null;
+        }
+        int limit = Math.max(0, requestedLimit);
+        return cached.results().size() <= limit
+                ? cached.results()
+                : List.copyOf(cached.results().subList(0, limit));
+    }
+
+    public int cachedCoverageLimit(String query) {
+        CachedResults cached = cachedEntry(query);
+        return cached != null ? cached.coverageLimit() : 0;
+    }
+
+    private CachedResults cachedEntry(String query) {
         if (query == null || query.isBlank()) {
             return null;
         }
-        List<RetrievalResult> cached = queryResults.get(normalizeQuery(query));
-        return cached != null ? List.copyOf(cached) : null;
+        return queryResults.get(normalizeQuery(query));
     }
 
     public synchronized List<RetrievalResult> sources() {
@@ -262,5 +337,10 @@ public class RetrievalTraceCollector {
 
     private String sourceKey(RetrievalResult result) {
         return result.getDocumentId() + ":" + result.getChunkIndex();
+    }
+
+    private record CachedResults(
+            List<RetrievalResult> results,
+            int coverageLimit) {
     }
 }

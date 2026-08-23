@@ -18,6 +18,14 @@ public class RagRerankProperties {
     /** Max results after rerank (also used as top_n for HTTP providers). */
     private int topN = 5;
 
+    /**
+     * Maximum number of candidates retrieved before reranking.
+     *
+     * <p>The value is bounded so a configuration mistake cannot create an
+     * unbounded database query or rerank request.</p>
+     */
+    private int candidateLimit = 20;
+
     private String baseUrl = "https://api.siliconflow.cn";
 
     private String apiKey = "";
@@ -61,6 +69,14 @@ public class RagRerankProperties {
 
     public void setTopN(int topN) {
         this.topN = topN;
+    }
+
+    public int getCandidateLimit() {
+        return candidateLimit;
+    }
+
+    public void setCandidateLimit(int candidateLimit) {
+        this.candidateLimit = Math.min(100, Math.max(1, candidateLimit));
     }
 
     public String getBaseUrl() {

@@ -1,5 +1,6 @@
 package com.springairag.core.advisor;
 
+import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -112,6 +113,10 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
         int limit = extractMaxResults(request);
         boolean filterRequested = Boolean.TRUE.equals(request.context().get(FILTER_REQUESTED_KEY))
                 || (documentIds != null && documentIds.isEmpty());
+        RetrievalConfig retrievalConfig = RetrievalConfig.builder()
+                .maxResults(limit)
+                .useRerank(false)
+                .build();
 
         // Isolation: explicit filter with zero matching docs must not fall through to global search
         List<RetrievalResult> results;
@@ -121,12 +126,13 @@ public class HybridSearchAdvisor extends AbstractRagAdvisor {
             results = List.of();
         } else if (retrievalScope != null) {
             results = hybridRetriever.searchInScope(
-                    query, retrievalScope, null, limit);
+                    query, retrievalScope, null, limit, retrievalConfig);
         } else if (filterRequested && (documentIds == null || documentIds.isEmpty())) {
             log.info("[HybridSearchAdvisor] collection/document filter resolved to zero docs — returning empty results");
             results = List.of();
         } else {
-            results = hybridRetriever.search(query, documentIds, null, limit);
+            results = hybridRetriever.search(
+                    query, documentIds, null, limit, retrievalConfig);
         }
         long elapsedMs = System.currentTimeMillis() - startMs;
 

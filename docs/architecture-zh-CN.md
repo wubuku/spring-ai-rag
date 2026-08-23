@@ -108,11 +108,13 @@ RagChatController
        -> KNOWLEDGE:
             RetrievalAugmentationAdvisor
               -> ProjectDocumentRetriever
+              -> 有界候选池 -> 加权 RRF
               -> ProjectRerankPostProcessor
               -> CitationQueryAugmenter
        -> AGENT:
             BudgetedToolCallAdvisor
               -> KnowledgeSearchTool
+              -> 有界候选池 -> rerank -> 最终 top N
               -> 服务端 ToolContext
        -> PLAIN:
             仅 ChatClient
@@ -121,7 +123,7 @@ RagChatController
 ```
 
 `ProjectDocumentRetriever` 将项目更强的检索栈适配到 Spring AI Modular RAG
-契约。向量检索、中英文全文检索、RRF 融合、rerank、Embedding Profile 过滤、
+契约。向量检索、中英文全文检索、RRF 融合、有界 rerank 候选池、rerank、Embedding Profile 过滤、
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
 KNOWLEDGE 与 AGENT 工具共享。
 
@@ -602,6 +604,7 @@ rag:
     enabled: true
     provider: heuristic
     top-n: 5                      # 调用方未提供 maxResults 时的最终 fallback
+    candidate-limit: 20           # rerank 前候选池上限，绑定范围 1..100
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100

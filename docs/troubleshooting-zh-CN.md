@@ -171,7 +171,13 @@ rag:
   rerank:
     enabled: true
     top-n: 5  # 调用方未提供 maxResults 时的最终 fallback 数量
+    candidate-limit: 20  # rerank 前候选池上限，范围 1..100
 ```
+
+`candidate-limit` 只扩大 rerank 前的内部候选池，不扩大最终响应。启用有效 rerank
+时，候选池为 `max(request.maxResults, candidate-limit)`；Search、Chat、Agent 工具和
+Evaluation 最终仍不超过请求的 `maxResults`。如质量没有改善或延迟升高，先将
+`RAG_RERANK_CANDIDATE_LIMIT` 调为 `1`，再运行 goldenset 比较 MRR/nDCG 和 p95 延迟。
 
 ---
 
@@ -416,6 +422,17 @@ SELECT * FROM pg_indexes WHERE indexdef LIKE '%hnsw%' OR indexdef LIKE '%ivfflat
 ```
 
 **优化**：
+
+如果启用了 rerank，先检查候选池是否明显大于请求数量：
+
+```bash
+rg -n "candidate-limit|RAG_RERANK_CANDIDATE_LIMIT" \
+  spring-ai-rag-core/src/main/resources/application*.yml
+```
+
+`candidate-limit` 越大，向量/全文 SQL 的候选数和 HTTP rerank 请求体越大。先恢复为
+`1` 作为回退，再用 goldenset 验证是否值得提高；不要通过放大请求 `maxResults` 来替代
+服务端候选池配置。
 
 ```sql
 -- 如果没有向量索引，创建 HNSW 索引

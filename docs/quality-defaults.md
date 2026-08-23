@@ -11,6 +11,7 @@
 | `rag.circuit-breaker.enabled` | `true` | Fail fast when LLM is down |
 | `rag.rerank.enabled` | `true` (heuristic) | Local quality boost; no external rerank fee |
 | `rag.rerank.provider` | `heuristic` | Override with `http` + SiliconFlow/Cohere for cross-encoder |
+| `rag.rerank.candidate-limit` | `20` | Bounded pre-rerank candidate pool; final output remains governed by request `maxResults` |
 | `rag.query-rewrite.enabled` | `true` | Better recall |
 | retrieval weights | vector 0.55 / fulltext 0.45 | Slight vector bias; tune with goldenset |
 
@@ -67,6 +68,27 @@ BASE_URL=http://127.0.0.1:8081 API_KEY=rag_sk_... \
 
 The request-level `useRerank` switch only disables an enabled global reranker;
 it cannot enable reranking when `rag.rerank.enabled=false`.
+
+### Candidate Pool And Final Result Count
+
+Effective reranking first retrieves
+`max(requestedMaxResults, rag.rerank.candidate-limit)` candidates, then the reranker
+selects the final `requestedMaxResults`. The default candidate limit is `20` and
+configuration binding bounds it to `1..100`. It is not a new request parameter and
+does not change the final count contract of Search, Chat, the Agent tool, or
+Evaluation. Legacy GET Search explicitly disables reranking and keeps its existing
+retrieval limit.
+
+After increasing the candidate pool, observe all of the following:
+
+- MRR, nDCG, and Recall@K, rather than result count alone;
+- p95 retrieval latency for Search and Chat;
+- HTTP provider request size and timeout/degraded rates;
+- final `maxResults` bounds for Agent output, citations, and Evaluation.
+
+For a quality or latency regression, first set `RAG_RERANK_CANDIDATE_LIMIT` back to
+`1`, or temporarily disable global reranking, then rerun the goldenset and the
+versioned quality regression.
 
 ### HTTP rerank (optional)
 

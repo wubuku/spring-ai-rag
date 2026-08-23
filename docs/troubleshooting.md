@@ -232,7 +232,14 @@ rag:
   rerank:
     enabled: true
     top-n: 5  # Final fallback when callers omit maxResults
+    candidate-limit: 20  # Pre-rerank candidate-pool limit, bounded to 1..100
 ```
+
+`candidate-limit` only expands the internal pre-rerank candidate pool. With effective
+reranking, the pool is `max(request.maxResults, candidate-limit)`; final Search, Chat,
+Agent-tool, and Evaluation responses remain bounded by request `maxResults`. If quality
+does not improve or latency rises, first set `RAG_RERANK_CANDIDATE_LIMIT` to `1`, then
+compare MRR/nDCG and p95 latency with the goldenset.
 
 ---
 
@@ -484,6 +491,19 @@ SELECT * FROM pg_indexes WHERE indexdef LIKE '%hnsw%' OR indexdef LIKE '%ivfflat
 ```
 
 **Optimization**:
+
+When reranking is enabled, first check whether the candidate pool is much larger than
+the requested result count:
+
+```bash
+rg -n "candidate-limit|RAG_RERANK_CANDIDATE_LIMIT" \
+  spring-ai-rag-core/src/main/resources/application*.yml
+```
+
+A larger `candidate-limit` increases vector/full-text SQL candidates and HTTP rerank
+request size. Set it to `1` as a rollback, then use the goldenset to justify raising
+it; do not replace the server-side candidate setting by increasing request
+`maxResults`.
 
 ```sql
 -- If no vector index exists, create HNSW index

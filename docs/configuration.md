@@ -401,13 +401,33 @@ tool queries through Spring AI Tool Calling.
 rag:
   rerank:
     enabled: false
+    provider: heuristic
     diversity-weight: 0.2
+    top-n: 5
+    candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
 ```
 
 | Property | Default | Description |
 |----------|---------|-------------|
 | `rag.rerank.enabled` | `false` | Enable reranking |
+| `rag.rerank.provider` | `heuristic` | Rerank provider; `none`, `noop`, and `off` disable candidate-pool expansion |
 | `rag.rerank.diversity-weight` | `0.2` | Result diversity weight (prevents similar results stacking) |
+| `rag.rerank.top-n` | `5` | Final result fallback when callers omit a positive `maxResults` |
+| `rag.rerank.candidate-limit` | `20` | Internal pre-rerank candidate-pool limit when effective reranking is enabled; bounded to `1..100` |
+
+When the request sets `useRerank=true`, global reranking is enabled, and the provider is
+not a no-op, retrieval uses `max(requestedMaxResults, candidate-limit)` for the
+pre-rerank candidate pool. `maxResults` remains the final caller-visible bound for
+Search, Chat, the Agent tool, JSON records, and Evaluation. Hybrid retrieval continues
+to query each vector and full-text channel at `2x` the candidate-pool limit before
+weighted RRF fusion. Disabling reranking, selecting a no-op provider, or using the
+legacy GET Search path (which explicitly sets `useRerank=false`) keeps the original
+retrieval limit.
+
+`candidate-limit` is server-side configuration only. The recommended environment
+variable is `RAG_RERANK_CANDIDATE_LIMIT`. Increasing it can improve rerank recall,
+but increases database candidates, HTTP rerank request size, and latency. Compare
+MRR/nDCG and latency with the retrieval goldenset before raising it.
 
 ## Document Chunking Configuration
 

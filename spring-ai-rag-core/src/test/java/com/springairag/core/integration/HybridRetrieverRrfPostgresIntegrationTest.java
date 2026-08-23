@@ -166,6 +166,74 @@ class HybridRetrieverRrfPostgresIntegrationTest {
         assertEquals(100.0, results.get(0).getFulltextScore(), 1e-6);
     }
 
+    @Test
+    void realVectorSqlExpandsOnlyForEffectiveRerank() {
+        EmbeddingProfile profile = insertProfile();
+        long firstDocument = insertDocument(
+                "candidate-first", "candidate pool content", "d".repeat(64));
+        long secondDocument = insertDocument(
+                "candidate-second", "candidate pool content", "e".repeat(64));
+        long thirdDocument = insertDocument(
+                "candidate-third", "candidate pool content", "f".repeat(64));
+
+        insertVector(profile.id(), firstDocument, 0, 1.0f);
+        insertVector(profile.id(), secondDocument, 0, 0.95f);
+        insertVector(profile.id(), thirdDocument, 0, 0.9f);
+        insertEmbeddingState(profile.id(), firstDocument, "d".repeat(64));
+        insertEmbeddingState(profile.id(), secondDocument, "e".repeat(64));
+        insertEmbeddingState(profile.id(), thirdDocument, "f".repeat(64));
+
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed("candidate query"))
+                .thenReturn(vector(1024, 1.0f));
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        properties.getRerank().setEnabled(true);
+        properties.getRerank().setProvider("heuristic");
+        properties.getRerank().setCandidateLimit(3);
+        HybridRetrieverService service = new HybridRetrieverService(
+                embeddingModel, () -> profile, jdbc, properties, null, Runnable::run);
+
+        List<RetrievalResult> rerankCandidates = service.searchInScopeDetailed(
+                "candidate query",
+                RetrievalScope.unscoped(),
+                null,
+                1,
+                RetrievalConfig.builder()
+                        .maxResults(1)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(true)
+                        .build(),
+                RetrievalFilters.none()).results();
+        List<RetrievalResult> directResults = service.searchInScopeDetailed(
+                "candidate query",
+                RetrievalScope.unscoped(),
+                null,
+                1,
+                RetrievalConfig.builder()
+                        .maxResults(1)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(false)
+                        .build(),
+                RetrievalFilters.none()).results();
+
+        assertEquals(
+                List.of(
+                        String.valueOf(firstDocument),
+                        String.valueOf(secondDocument),
+                        String.valueOf(thirdDocument)),
+                rerankCandidates.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(
+                List.of(String.valueOf(firstDocument)),
+                directResults.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+    }
+
     private FulltextSearchProvider controlledProvider(List<RetrievalResult> results) {
         return new FulltextSearchProvider() {
             @Override

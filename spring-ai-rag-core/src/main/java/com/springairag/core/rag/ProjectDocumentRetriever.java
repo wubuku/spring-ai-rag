@@ -52,7 +52,11 @@ public class ProjectDocumentRetriever implements DocumentRetriever {
             trace.recordOutcome(outcome);
             return List.of();
         }
-        trace.recordOutcome(outcome);
+        if (context.options().useRerank()) {
+            trace.recordCandidateOutcome(outcome);
+        } else {
+            trace.recordOutcome(outcome, context.options().maxResults());
+        }
         return outcome.results().stream().map(mapper::toDocument).toList();
     }
 

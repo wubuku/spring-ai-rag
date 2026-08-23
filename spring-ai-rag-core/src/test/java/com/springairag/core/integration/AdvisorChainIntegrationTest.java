@@ -1,5 +1,6 @@
 package com.springairag.core.integration;
 
+import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.advisor.AdvisorMetrics;
 import com.springairag.core.advisor.HybridSearchAdvisor;
@@ -161,7 +162,12 @@ class AdvisorChainIntegrationTest {
                 createResult("doc-1", "Sensitive skin should use gentle cleanser", 0.92),
                 createResult("doc-2", "Skincare ingredient selection guide", 0.85)
         );
-        when(hybridRetrieverService.search(eq("sensitive skin what to do"), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(
+                eq("sensitive skin what to do"),
+                isNull(),
+                isNull(),
+                eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         ChatClientRequest request = buildRequest("sensitive skin what to do");
@@ -185,7 +191,8 @@ class AdvisorChainIntegrationTest {
         ChatClientRequest result = hybridSearchAdvisor.before(request, advisorChain);
 
         assertNull(result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY));
-        verify(hybridRetrieverService, never()).search(anyString(), any(), any(), anyInt());
+        verify(hybridRetrieverService, never()).search(
+                anyString(), any(), any(), anyInt(), any(RetrievalConfig.class));
     }
 
     @Test
@@ -195,7 +202,8 @@ class AdvisorChainIntegrationTest {
         ChatClientRequest result = hybridSearchAdvisor.before(request, advisorChain);
 
         assertNull(result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY));
-        verify(hybridRetrieverService, never()).search(anyString(), any(), any(), anyInt());
+        verify(hybridRetrieverService, never()).search(
+                anyString(), any(), any(), anyInt(), any(RetrievalConfig.class));
     }
 
     @Test
@@ -313,7 +321,12 @@ class AdvisorChainIntegrationTest {
                 createResult("doc-2", "Allergic skin care plan", 0.87),
                 createResult("doc-3", "Skin barrier repair methods", 0.81)
         );
-        when(hybridRetrieverService.search(eq("sensitive skin what to do"), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(
+                eq("sensitive skin what to do"),
+                isNull(),
+                isNull(),
+                eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(searchResults);
 
         // Step 3: Rerank returns reranked results
@@ -376,7 +389,12 @@ class AdvisorChainIntegrationTest {
     @DisplayName("End-to-end: preserves existing user message, appends context")
     void fullChain_preservesExistingSystemMessage() {
         when(queryRewritingService.rewriteQuery("test")).thenReturn(List.of("test"));
-        when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(
+                anyString(),
+                isNull(),
+                isNull(),
+                eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(List.of(createResult("doc-1", "test document", 0.9)));
         when(rerankingService.rerank(anyString(), anyList(), eq(5)))
                 .thenReturn(List.of(createResult("doc-1", "test document", 0.95)));
@@ -398,7 +416,12 @@ class AdvisorChainIntegrationTest {
     @DisplayName("End-to-end: context propagates from request to response")
     void fullChain_contextPropagatesToResponse() {
         when(queryRewritingService.rewriteQuery("test")).thenReturn(List.of("test"));
-        when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(
+                anyString(),
+                isNull(),
+                isNull(),
+                eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(List.of(createResult("doc-1", "test content", 0.9)));
         when(rerankingService.rerank(anyString(), anyList(), eq(5)))
                 .thenReturn(List.of(createResult("doc-1", "test content", 0.95)));
@@ -456,7 +479,12 @@ class AdvisorChainIntegrationTest {
     @Test
     @DisplayName("End-to-end: HybridSearch exception should propagate")
     void fullChain_hybridSearchThrows_propagatesException() {
-        when(hybridRetrieverService.search(anyString(), isNull(), isNull(), eq(10)))
+        when(hybridRetrieverService.search(
+                anyString(),
+                isNull(),
+                isNull(),
+                eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenThrow(new RuntimeException("Database connection failed"));
 
         ChatClientRequest request = buildRequest("test query");

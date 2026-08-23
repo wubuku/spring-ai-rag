@@ -1,5 +1,6 @@
 package com.springairag.core.advisor;
 
+import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.RetrievalScope;
@@ -37,7 +38,9 @@ class HybridSearchAdvisorTest {
                 createResult("doc-1", "Spring Boot 是一个框架", 0.9),
                 createResult("doc-2", "Spring AI 支持 RAG", 0.8)
         );
-        when(hybridRetriever.search(eq("什么是 Spring Boot"), isNull(), isNull(), eq(10)))
+        when(hybridRetriever.search(
+                eq("什么是 Spring Boot"), isNull(), isNull(), eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         // Build request
@@ -61,7 +64,8 @@ class HybridSearchAdvisorTest {
         List<RetrievalResult> mockResults =
                 List.of(createResult("doc-1", "风格基调内容", 0.9));
         when(hybridRetriever.search(
-                eq("风格基调"), isNull(), isNull(), eq(10)))
+                eq("风格基调"), isNull(), isNull(), eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         ChatClientRequest request = ChatClientRequest.builder()
@@ -75,7 +79,8 @@ class HybridSearchAdvisorTest {
         ChatClientRequest result = advisor.before(request, null);
 
         verify(hybridRetriever).search(
-                eq("风格基调"), isNull(), isNull(), eq(10));
+                eq("风格基调"), isNull(), isNull(), eq(10),
+                argThat(config -> !config.isUseRerank()));
         assertEquals(1, ((List<?>) result.context()
                 .get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY)).size());
     }
@@ -86,7 +91,9 @@ class HybridSearchAdvisorTest {
                 createResult("doc-1", "Spring Boot 是一个框架", 0.9),
                 createResult("doc-2", "Spring AI 支持 RAG", 0.8)
         );
-        when(hybridRetriever.search(eq("什么是 Spring Boot"), isNull(), isNull(), eq(10)))
+        when(hybridRetriever.search(
+                eq("什么是 Spring Boot"), isNull(), isNull(), eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         Prompt prompt = new Prompt(new UserMessage("什么是 Spring Boot"));
@@ -137,7 +144,9 @@ class HybridSearchAdvisorTest {
 
     @Test
     void before_emptyRetrievalResults_stillStoresInContext() {
-        when(hybridRetriever.search(anyString(), isNull(), isNull(), eq(10)))
+        when(hybridRetriever.search(
+                anyString(), isNull(), isNull(), eq(10),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(Collections.emptyList());
 
         Prompt prompt = new Prompt(new UserMessage("不存在的查询"));
@@ -173,7 +182,9 @@ class HybridSearchAdvisorTest {
     @Test
     void before_withDocumentIds_passesFilterToRetriever() {
         List<RetrievalResult> mockResults = List.of(createResult("doc-1", "scoped", 0.9));
-        when(hybridRetriever.search(eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5)))
+        when(hybridRetriever.search(
+                eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         Prompt prompt = new Prompt(new UserMessage("scoped query"));
@@ -187,7 +198,9 @@ class HybridSearchAdvisorTest {
 
         ChatClientRequest result = advisor.before(request, null);
 
-        verify(hybridRetriever).search(eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5));
+        verify(hybridRetriever).search(
+                eq("scoped query"), eq(List.of(1L, 2L)), isNull(), eq(5),
+                argThat(config -> !config.isUseRerank()));
         Object contextResults = result.context().get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY);
         assertEquals(1, ((List<?>) contextResults).size());
     }
@@ -199,7 +212,8 @@ class HybridSearchAdvisorTest {
         List<RetrievalResult> mockResults =
                 List.of(createResult("10", "scoped", 0.9));
         when(hybridRetriever.searchInScope(
-                eq("scoped query"), same(scope), isNull(), eq(6)))
+                eq("scoped query"), same(scope), isNull(), eq(6),
+                argThat(config -> !config.isUseRerank())))
                 .thenReturn(mockResults);
 
         ChatClientRequest request = ChatClientRequest.builder()
@@ -212,9 +226,10 @@ class HybridSearchAdvisorTest {
         ChatClientRequest result = advisor.before(request, null);
 
         verify(hybridRetriever).searchInScope(
-                eq("scoped query"), same(scope), isNull(), eq(6));
+                eq("scoped query"), same(scope), isNull(), eq(6),
+                argThat(config -> !config.isUseRerank()));
         verify(hybridRetriever, never()).search(
-                anyString(), any(), any(), anyInt());
+                anyString(), any(), any(), anyInt(), any(RetrievalConfig.class));
         assertEquals(1, ((List<?>) result.context()
                 .get(HybridSearchAdvisor.RETRIEVAL_RESULTS_KEY)).size());
     }

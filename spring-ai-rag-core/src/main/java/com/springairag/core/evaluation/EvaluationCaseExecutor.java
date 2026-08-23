@@ -4,8 +4,11 @@ import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalOutcome;
+import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -22,13 +25,23 @@ import java.util.Map;
 public class EvaluationCaseExecutor {
 
     private final HybridRetrieverService retrieverService;
+    private final ReRankingService rerankingService;
     private final JdbcTemplate jdbcTemplate;
+
+    @Autowired
+    public EvaluationCaseExecutor(
+            HybridRetrieverService retrieverService,
+            ReRankingService rerankingService,
+            JdbcTemplate jdbcTemplate) {
+        this.retrieverService = retrieverService;
+        this.rerankingService = rerankingService;
+        this.jdbcTemplate = jdbcTemplate;
+    }
 
     public EvaluationCaseExecutor(
             HybridRetrieverService retrieverService,
             JdbcTemplate jdbcTemplate) {
-        this.retrieverService = retrieverService;
-        this.jdbcTemplate = jdbcTemplate;
+        this(retrieverService, null, jdbcTemplate);
     }
 
     public Executed search(
@@ -38,6 +51,26 @@ public class EvaluationCaseExecutor {
             RetrievalFilters filters) {
         RetrievalOutcome outcome = retrieverService.searchInScopeDetailed(
                 query, scope, List.of(), config.getMaxResults(), config, filters);
+        if (config.isUseRerank() && !outcome.results().isEmpty()) {
+            if (rerankingService == null) {
+                throw new IllegalStateException("ReRankingService is required for rerank evaluation");
+            }
+            long startedAt = System.nanoTime();
+            List<RetrievalResult> beforeRerank = outcome.results();
+            List<RetrievalResult> ranked = rerankingService.rerank(
+                    query, beforeRerank, config.getMaxResults());
+            outcome = outcome.withRerank(
+                    new RetrievalBranchStage(
+                            RetrievalBranchStage.RERANK,
+                            "rerank",
+                            RetrievalBranchStage.SUCCESS,
+                            (System.nanoTime() - startedAt) / 1_000_000L,
+                            beforeRerank.size(),
+                            ranked.size(),
+                            null),
+                    ranked,
+                    false);
+        }
         List<EvaluationSuiteDefinition.Identity> identities = lookup(
                 outcome.results());
         return new Executed(identities, outcome.traceId(), outcome.elapsedMs());

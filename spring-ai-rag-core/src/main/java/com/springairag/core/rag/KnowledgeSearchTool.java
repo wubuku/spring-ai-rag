@@ -7,6 +7,8 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.chat.AuthorizedRetrievalContext;
 import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
+import com.springairag.core.retrieval.RetrievalBranchStage;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -41,13 +43,16 @@ public class KnowledgeSearchTool implements ToolCallback {
 
     private final ObjectMapper objectMapper;
     private final HybridRetrieverService hybridRetriever;
+    private final ReRankingService rerankingService;
     private final RetrievalDocumentMapper mapper;
 
     public KnowledgeSearchTool(ObjectMapper objectMapper,
                                HybridRetrieverService hybridRetriever,
+                               ReRankingService rerankingService,
                                RetrievalDocumentMapper mapper) {
         this.objectMapper = objectMapper;
         this.hybridRetriever = hybridRetriever;
+        this.rerankingService = rerankingService;
         this.mapper = mapper;
     }
 
@@ -83,28 +88,63 @@ public class KnowledgeSearchTool implements ToolCallback {
         boolean budgetExhausted = false;
         String error = null;
         try {
-            results = trace.cachedResults(query);
+            int requested = integerValue(
+                    arguments.get("maxResults"),
+                    context.options().maxResults());
+            int limit = Math.min(
+                    Math.max(requested, 1),
+                    context.options().maxResults());
+            results = trace.cachedResults(query, limit);
             if (results == null) {
                 if (!trace.tryBeginRetrieval(query)) {
                     budgetExhausted = true;
                     error = "retrieval budget exhausted";
                 } else {
-                    int requested = integerValue(
-                            arguments.get("maxResults"),
-                            context.options().maxResults());
-                    int limit = Math.min(
-                            Math.max(requested, 1),
-                            context.options().maxResults());
+                    var config = context.options().toConfig();
+                    config.setMaxResults(limit);
                     var outcome = hybridRetriever.searchInScopeDetailed(
                             query,
                             context.scope(),
                             null,
                             limit,
-                            context.options().toConfig(),
+                            config,
                             context.filters());
                     results = outcome.results();
-                    trace.record(query, results);
-                    trace.recordOutcome(outcome);
+                    if (results.isEmpty()) {
+                        trace.recordOutcome(query, outcome, limit);
+                    } else if (context.options().useRerank()) {
+                        trace.recordCandidateOutcome(outcome);
+                        long rerankStartedAt = System.nanoTime();
+                        boolean degraded = false;
+                        String errorCode = null;
+                        List<RetrievalResult> reranked;
+                        try {
+                            reranked = rerankingService.rerank(query, results, limit);
+                        } catch (RuntimeException e) {
+                            reranked = ReRankingService.limitResults(results, limit);
+                            degraded = true;
+                            errorCode = e.getClass().getSimpleName();
+                        }
+                        reranked = ReRankingService.limitResults(reranked, limit);
+                        trace.recordRerank(
+                                new RetrievalBranchStage(
+                                        RetrievalBranchStage.RERANK,
+                                        "rerank",
+                                        degraded
+                                                ? RetrievalBranchStage.ERROR
+                                                : RetrievalBranchStage.SUCCESS,
+                                        (System.nanoTime() - rerankStartedAt) / 1_000_000L,
+                                        results.size(),
+                                        reranked.size(),
+                                        errorCode),
+                                reranked,
+                                degraded,
+                                query,
+                                limit);
+                        results = reranked;
+                    } else {
+                        trace.recordOutcome(query, outcome, limit);
+                    }
                 }
             }
             List<RetrievalResult> citableResults = results.stream()

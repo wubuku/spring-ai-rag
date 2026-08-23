@@ -339,10 +339,11 @@ public class JsonRecordService {
                 ranked = reRankingService.rerank(
                         query, beforeRerank, limit);
             } catch (RuntimeException e) {
-                ranked = beforeRerank;
+                ranked = ReRankingService.limitResults(beforeRerank, limit);
                 degraded = true;
                 errorCode = e.getClass().getSimpleName();
             }
+            ranked = ReRankingService.limitResults(ranked, limit);
             outcome = outcome.withRerank(
                     new RetrievalBranchStage(
                             RetrievalBranchStage.RERANK,

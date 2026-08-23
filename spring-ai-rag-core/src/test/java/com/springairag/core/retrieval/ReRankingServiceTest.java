@@ -3,6 +3,7 @@ package com.springairag.core.retrieval;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagRerankProperties;
+import com.springairag.core.retrieval.rerank.RerankProvider;
 import com.springairag.core.retrieval.rerank.RerankProviderFactory;
 import org.junit.jupiter.api.Test;
 
@@ -94,6 +95,69 @@ class ReRankingServiceTest {
 
         List<RetrievalResult> reranked = enabledService.rerank("query", results, 3);
         assertTrue(reranked.size() <= 3, "应不超过 maxResults");
+    }
+
+    @Test
+    void rerank_truncatesProviderOutputToRequestedLimit() {
+        RagRerankProperties config = new RagRerankProperties();
+        config.setEnabled(true);
+        List<RetrievalResult> results = List.of(
+                createResult("doc-1", "one", 0.9),
+                createResult("doc-2", "two", 0.8),
+                createResult("doc-3", "three", 0.7));
+        RerankProvider provider = new RerankProvider() {
+            @Override
+            public String getName() {
+                return "oversized-test";
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<RetrievalResult> rerank(
+                    String query, List<RetrievalResult> input, int maxResults) {
+                return results;
+            }
+        };
+
+        ReRankingService service = new ReRankingService(config, provider);
+
+        assertEquals(2, service.rerank("query", results, 2).size());
+    }
+
+    @Test
+    void rerank_rejectsNullProviderOutput() {
+        RagRerankProperties config = new RagRerankProperties();
+        config.setEnabled(true);
+        RerankProvider provider = new RerankProvider() {
+            @Override
+            public String getName() {
+                return "null-test";
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<RetrievalResult> rerank(
+                    String query, List<RetrievalResult> input, int maxResults) {
+                return null;
+            }
+        };
+
+        ReRankingService service = new ReRankingService(config, provider);
+
+        assertThrows(
+                IllegalStateException.class,
+                () -> service.rerank(
+                        "query",
+                        List.of(createResult("doc", "text", 0.5)),
+                        1));
     }
 
     @Test

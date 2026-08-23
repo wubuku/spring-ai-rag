@@ -109,11 +109,13 @@ RagChatController
        -> KNOWLEDGE:
             RetrievalAugmentationAdvisor
               -> ProjectDocumentRetriever
+              -> bounded candidate pool -> weighted RRF
               -> ProjectRerankPostProcessor
               -> CitationQueryAugmenter
        -> AGENT:
             BudgetedToolCallAdvisor
               -> KnowledgeSearchTool
+              -> bounded candidate pool -> rerank -> final top N
               -> server-owned ToolContext
        -> PLAIN:
             ChatClient only
@@ -123,7 +125,8 @@ RagChatController
 
 `ProjectDocumentRetriever` adapts the project's stronger retrieval stack to
 Spring AI's Modular RAG contract. Vector search, Chinese/English full text,
-RRF fusion, reranking, Embedding Profile filtering, Collection/API-key ACL,
+RRF fusion, a bounded rerank candidate pool, reranking, Embedding Profile filtering,
+Collection/API-key ACL,
 document type, and document ID scope therefore remain shared by direct Search,
 KNOWLEDGE, and the AGENT tool.
 
@@ -660,6 +663,7 @@ rag:
     enabled: true
     provider: heuristic
     top-n: 5                      # Final fallback when callers omit maxResults
+    candidate-limit: 20           # Pre-rerank candidate-pool limit, bounded to 1..100
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100

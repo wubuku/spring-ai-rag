@@ -11,6 +11,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -55,9 +56,30 @@ public class ReRankingService {
         int limit = maxResults > 0 ? maxResults
                 : (config.getTopN() > 0 ? config.getTopN() : results.size());
         List<RetrievalResult> out = provider.rerank(query, results, limit);
+        if (out == null) {
+            throw new IllegalStateException(
+                    "Rerank provider '" + provider.getName() + "' returned null");
+        }
+        if (out.size() > limit) {
+            log.warn("Rerank provider {} returned {} results for limit {}; truncating",
+                    provider.getName(), out.size(), limit);
+            out = limitResults(out, limit);
+        }
         log.debug("Reranked {} → {} results (provider={}, enabled={})",
-                results.size(), out != null ? out.size() : 0, provider.getName(), config.isEnabled());
+                results.size(), out.size(), provider.getName(), config.isEnabled());
         return out;
+    }
+
+    /**
+     * Applies the final caller-visible result bound to provider or fallback output.
+     */
+    public static List<RetrievalResult> limitResults(
+            List<RetrievalResult> results,
+            int maxResults) {
+        if (results == null || maxResults <= 0 || results.size() <= maxResults) {
+            return results;
+        }
+        return new ArrayList<>(results.subList(0, maxResults));
     }
 
     // --- package-private helpers retained for ReRankingServiceTest ---

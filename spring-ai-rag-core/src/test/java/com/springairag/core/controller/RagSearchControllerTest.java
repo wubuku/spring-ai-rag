@@ -174,6 +174,39 @@ class RagSearchControllerTest {
     }
 
     @Test
+    @DisplayName("POST search rerank failure still enforces final maxResults")
+    void productionSearch_rerankFailure_truncatesCandidatePool() {
+        RetrievalScope scope = RetrievalScope.unscoped();
+        when(scopeResolver.resolve(
+                isNull(), isNull(), isNull(), isNull(), isNull(), isNull()))
+                .thenReturn(scope);
+        List<RetrievalResult> candidates = List.of(
+                createResult("doc1", "first", 0.9),
+                createResult("doc2", "second", 0.8),
+                createResult("doc3", "third", 0.7));
+        when(hybridRetriever.searchInScopeDetailed(
+                eq("query"), same(scope), isNull(), eq(2),
+                any(RetrievalConfig.class), any()))
+                .thenReturn(RetrievalOutcome.ofResults(candidates));
+        when(reRankingService.rerank(eq("query"), eq(candidates), eq(2)))
+                .thenThrow(new IllegalStateException("rerank unavailable"));
+
+        SearchRequest request = new SearchRequest("query");
+        request.setConfig(RetrievalConfig.builder()
+                .maxResults(2)
+                .useRerank(true)
+                .build());
+
+        ResponseEntity<List<RetrievalResult>> response =
+                productionController.searchWithConfig(request, null);
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals(List.of("doc1", "doc2"), response.getBody().stream()
+                .map(RetrievalResult::getDocumentId)
+                .toList());
+    }
+
+    @Test
     @DisplayName("GET search multiple results order is correct")
     void search_multipleResults_orderCorrect() {
         List<RetrievalResult> results = List.of(

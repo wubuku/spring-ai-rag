@@ -46,10 +46,13 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
             reranked = rerankingService.rerank(
                     effectiveQuery, results, context.options().maxResults());
         } catch (RuntimeException e) {
-            reranked = results;
+            reranked = ReRankingService.limitResults(
+                    results, context.options().maxResults());
             degraded = true;
             errorCode = e.getClass().getSimpleName();
         }
+        reranked = ReRankingService.limitResults(
+                reranked, context.options().maxResults());
         context.trace().recordRerank(
                 new RetrievalBranchStage(
                         RetrievalBranchStage.RERANK,
@@ -60,7 +63,9 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
                         reranked.size(),
                         errorCode),
                 reranked,
-                degraded);
+                degraded,
+                effectiveQuery,
+                context.options().maxResults());
         return reranked.stream().map(mapper::toDocument).toList();
     }
 
