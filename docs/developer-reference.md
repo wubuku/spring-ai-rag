@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V47 |
+| Flyway | V1–V48 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -266,7 +266,7 @@ Run the Chat redesign gate serially because it includes Maven clean output:
 
 The script verifies `KNOWLEDGE`, `AGENT`, and `PLAIN` mode execution, Spring AI
 Tool Calling boundaries, principal-scoped memory/history, V32 session leases,
-V46 durable summary CAS, V47 durable Chat-turn idempotency/replay, bounded execution metadata, structured SSE, WebUI
+V46 durable summary CAS, V47 durable Chat-turn idempotency/replay, V48 stable managed principals and shared quota, bounded execution metadata, structured SSE, WebUI
 mode/capability/source rendering, and Chat export snapshots. It also runs the
 `NextHighValueFeaturesPostgresIntegrationTest` matrix and the independent
 domain-extension and read-only SQL tool demo tests, then records every step under
@@ -374,6 +374,20 @@ set `NEXT_HIGH_VALUE_IT_JDBC_URL`, `NEXT_HIGH_VALUE_IT_USERNAME`, and
 `NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES`. The test cleans the database, so these
 variables must never point at development or production. Override the Mock
 Playwright preview's initial port with `NEXT_HIGH_VALUE_PLAYWRIGHT_PORT`.
+
+### Managed API Principal Verification
+
+```bash
+MANAGED_API_REAL_ENV_FILE=.env \
+./scripts/verify-managed-api-principals.sh --with-real-llm
+```
+
+After the Mock and build gates pass, this command uses two backends (default
+`18181` and `18182`), one Vite frontend (default `15181`), and disposable
+PostgreSQL for real full-stack plus bounded real-LLM acceptance. Override port
+conflicts with `MANAGED_API_BACKEND_A_PORT`, `MANAGED_API_BACKEND_B_PORT`, and
+`MANAGED_API_FRONTEND_PORT`. Evidence is written under
+`.verification/managed-api-principals/<run-id>/`.
 
 ### Retrieval diagnostics / metadata filters / embedding operations / managed quality
 

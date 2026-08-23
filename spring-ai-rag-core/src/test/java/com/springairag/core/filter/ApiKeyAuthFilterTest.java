@@ -1,7 +1,8 @@
 package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.ApiKeyRole;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -74,9 +75,8 @@ class ApiKeyAuthFilterTest {
     @Test
     void enabledAuth_blankStaticKey_validDbKey_passes() throws ServletException, IOException {
         ApiKeyManagementService apiKeyService = mock(ApiKeyManagementService.class);
-        RagApiKey entity = new RagApiKey();
-        entity.setKeyId("kid-1");
-        when(apiKeyService.validateKeyEntity("rag_sk_dbkey")).thenReturn(entity);
+        when(apiKeyService.authenticate("rag_sk_dbkey"))
+                .thenReturn(principal("principal-1", "kid-1"));
 
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true, apiKeyService);
         request.setRequestURI("/api/v1/rag/documents");
@@ -85,13 +85,16 @@ class ApiKeyAuthFilterTest {
         filter.doFilterInternal(request, response, filterChain);
 
         verify(filterChain).doFilter(request, response);
-        assertEquals("kid-1", request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE));
+        assertEquals("principal-1",
+                request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE));
+        assertEquals("kid-1", request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_CREDENTIAL_ID_ATTRIBUTE));
     }
 
     @Test
     void enabledAuth_blankStaticKey_invalidDbKey_returns401() throws ServletException, IOException {
         ApiKeyManagementService apiKeyService = mock(ApiKeyManagementService.class);
-        when(apiKeyService.validateKeyEntity("bad")).thenReturn(null);
+        when(apiKeyService.authenticate("bad")).thenReturn(null);
 
         ApiKeyAuthFilter filter = new ApiKeyAuthFilter("", true, apiKeyService);
         request.setRequestURI("/api/v1/rag/documents");
@@ -273,9 +276,8 @@ class ApiKeyAuthFilterTest {
     void rootMode_databaseBusinessKeyPassesWithoutRootMarker()
             throws ServletException, IOException {
         ApiKeyManagementService service = mock(ApiKeyManagementService.class);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_business");
-        when(service.validateKeyEntity("rag_sk_business")).thenReturn(key);
+        when(service.authenticate("rag_sk_business")).thenReturn(
+                principal("rag_k_business", "rag_k_business_v1"));
         ApiKeyAuthFilter filter = rootFilter("", false, service);
         request.setRequestURI("/api/v1/rag/search");
         request.addHeader("X-API-Key", "rag_sk_business");
@@ -343,7 +345,7 @@ class ApiKeyAuthFilterTest {
     void rootMode_databaseFailureReturns503WithoutStaticFallback()
             throws ServletException, IOException {
         ApiKeyManagementService service = mock(ApiKeyManagementService.class);
-        when(service.validateKeyEntity("rag_sk_candidate"))
+        when(service.authenticate("rag_sk_candidate"))
                 .thenThrow(new DataAccessResourceFailureException("db unavailable"));
         ApiKeyAuthFilter filter = rootFilter("rag_sk_candidate", false, service);
         request.setRequestURI("/api/v1/rag/search");
@@ -377,5 +379,19 @@ class ApiKeyAuthFilterTest {
                 enabled,
                 service,
                 new EnvironmentRootCredentialResolver(ROOT_KEY));
+    }
+
+    private AuthenticatedApiPrincipal principal(
+            String principalId, String credentialId) {
+        return new AuthenticatedApiPrincipal(
+                principalId,
+                credentialId,
+                1,
+                ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
+                ApiKeyRole.NORMAL,
+                null,
+                null,
+                1L,
+                null);
     }
 }

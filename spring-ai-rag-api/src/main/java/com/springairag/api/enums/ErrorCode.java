@@ -84,6 +84,10 @@ public enum ErrorCode {
     DERIVATION_REPAIR_EXPIRED(409, "Derivation Repair Expired"),
     VERSION_NOT_RESTORABLE(409, "Version Not Restorable"),
     RESTORE_NOT_ALLOWED(409, "Restore Not Allowed"),
+    CREDENTIAL_NOT_CURRENT(409, "Credential Is Not Current"),
+    PRINCIPAL_NOT_ACTIVE(409, "API Principal Is Not Active"),
+    POLICY_VERSION_CONFLICT(409, "API Principal Policy Version Conflict"),
+    LAST_ADMIN_REQUIRED(409, "Last Administrator Is Required"),
 
     // ==================== 422 Unprocessable Entity ====================
 
@@ -118,6 +122,7 @@ public enum ErrorCode {
     SYNC_RUNS_DISABLED(503, "Document Sync Runs Disabled"),
     DOCUMENT_RELOCATION_DISABLED(503, "Document Relocation Disabled"),
     DERIVATION_REPAIR_DISABLED(503, "Derivation Repair Disabled"),
+    RATE_LIMIT_STORE_UNAVAILABLE(503, "Rate Limit Store Unavailable"),
 
     // ==================== 504 Gateway Timeout ====================
 

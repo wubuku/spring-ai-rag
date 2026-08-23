@@ -8,7 +8,7 @@ import com.springairag.core.controller.ApiKeyController;
 import com.springairag.core.controller.ApiKeyIdentityController;
 import com.springairag.core.controller.GlobalExceptionHandler;
 import com.springairag.core.entity.ApiKeyRole;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.service.ApiKeyManagementService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -136,12 +136,19 @@ class ApiKeyRootModeWebIntegrationTest {
 
     @Test
     void businessKeyCanUseDataPlaneButCannotManageKeys() throws Exception {
-        RagApiKey businessKey = new RagApiKey();
-        businessKey.setKeyId("rag_k_business");
-        businessKey.setRole(ApiKeyRole.NORMAL);
-        businessKey.setEnabled(true);
-        when(apiKeyManagementService.validateKeyEntity("rag_sk_business"))
-                .thenReturn(businessKey);
+        AuthenticatedApiPrincipal businessPrincipal =
+                new AuthenticatedApiPrincipal(
+                        "rag_p_business",
+                        "rag_k_business",
+                        1,
+                        "DATABASE_API_KEY",
+                        ApiKeyRole.NORMAL,
+                        null,
+                        null,
+                        1,
+                        null);
+        when(apiKeyManagementService.authenticate("rag_sk_business"))
+                .thenReturn(businessPrincipal);
 
         mockMvc.perform(get("/api/v1/rag/auth/me")
                         .header("X-API-Key", "rag_sk_business"))

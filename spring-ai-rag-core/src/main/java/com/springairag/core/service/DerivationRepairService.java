@@ -12,7 +12,7 @@ import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.embeddingjob.EmbeddingDispatchService;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
@@ -251,7 +251,7 @@ public class DerivationRepairService {
         RagCollection collection = collectionResolver.requireIncludingDeleted(
                 preview.collectionId(), null);
         ApiKeyCollectionAccess.requireCollectionId(
-                preview.collectionId(), ApiKeyCollectionAccess.currentKey());
+                preview.collectionId(), ApiKeyCollectionAccess.currentPolicy());
         List<DerivationRepairStatusResponse.Item> items = jdbcTemplate.query(
                 """
                 SELECT document_id, action, status, local_action_status,
@@ -538,7 +538,7 @@ public class DerivationRepairService {
     }
 
     private void requireCollectionAccess(long collectionId, String collectionKey) {
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         RagCollection collection = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 collectionKey, caller, collectionResolver);
         if (!Objects.equals(collection.getId(), collectionId)) {

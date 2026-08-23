@@ -336,7 +336,7 @@ mvn jacoco:report-aggregate
 
 Unit tests use mocks or H2-compatible paths. The Embedding Profile migration has
 an explicit PostgreSQL integration test because it requires pgvector and validates
-Flyway V1-V47, fixed vector columns, Profile-specific indexes, atomic replacement,
+Flyway V1-V48, fixed vector columns, Profile-specific indexes, atomic replacement,
 Legacy adoption, retrieval freshness, and Spring Data repository queries.
 
 Start a PostgreSQL 16 + pgvector database, then run:
@@ -395,7 +395,7 @@ inputs.
 The scope implementation has DTO, resolver, ACL, SQL-fragment, vector/full-text
 provider, Chat/Search/JSON, MockMvc, OpenAPI, WebUI, and PostgreSQL coverage.
 The real PostgreSQL/Testcontainers test starts `pgvector/pgvector:pg16`, runs
-Flyway V1-V47 from an empty schema, and exercises the vector query with actual
+Flyway V1-V48 from an empty schema, and exercises the vector query with actual
 PostgreSQL `bigint[]` bindings:
 
 ```bash
@@ -426,7 +426,7 @@ object request. Run `npm run test:run`, `npx tsc -b --pretty false`,
 
 The JSONB implementation has both mocked HTTP/service coverage and a real
 PostgreSQL/Testcontainers test. The latter starts `pgvector/pgvector:pg16`,
-executes Flyway V1-V47 from an empty database, and verifies JSONB round-trip,
+executes Flyway V1-V48 from an empty database, and verifies JSONB round-trip,
 nested `payloadContains`, V34 GIN planner use, payload-only versioning,
 identical descriptions with distinct records, and cascade cleanup:
 
@@ -472,7 +472,7 @@ checks, writing evidence under
 ```
 
 The script serially runs service/worker/controller focused tests, starts
-isolated PostgreSQL, migrates an empty database through V1–V47, verifies V33
+isolated PostgreSQL, migrates an empty database through V1–V48, verifies V33
 active-job coalescing, atomic force upgrades, and concurrent-worker atomic
 conditional claims, then runs `test-compile`, shell syntax, and whitespace
 checks. Set `EMBEDDING_JOBS_IT_JDBC_URL` to reuse an existing isolated database.
@@ -510,6 +510,46 @@ relevance. It checks Hit Rate, MRR, Recall@K, nDCG, per-case
 minimums, baseline regression, Collection-decoy leakage, and an explicit-empty
 JSONB result. Provider, database, or embedding failures return nonzero and are
 never reported as quality passes.
+
+### Managed API Principal PostgreSQL Matrix
+
+Run the V48 migration, credential lifecycle, policy concurrency, last-ADMIN,
+last-used, shared-quota, and bounded-cleanup matrix against real PostgreSQL:
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dmanaged-api-principal.it.enabled=true \
+  -Dtest=ManagedApiPrincipalPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+All tests must execute with `skipped=0`. Disabling Ryuk is only a local Docker
+compatibility workaround; the test still stops its PostgreSQL container.
+Release acceptance also starts two isolated backend instances on one database
+to prove next-request revocation and a single shared request quota.
+
+Use the unified script for the complete release gate:
+
+```bash
+./scripts/verify-managed-api-principals.sh
+
+# Explicitly exercise the real provider after every Mock gate passes
+MANAGED_API_REAL_ENV_FILE=.env \
+./scripts/verify-managed-api-principals.sh --with-real-llm
+```
+
+The script serially runs the PostgreSQL migration/concurrency matrix,
+`mvn clean compile test-compile`, the full Maven suite, WebUI Vitest/TypeScript/
+production build/alignment, core Mock Playwright, and lock/documentation gates.
+It then starts two real backends sharing a disposable PostgreSQL database plus
+one Vite frontend to verify global quota, policy CAS, cross-instance rotation
+and revocation, quota-store failure closure, and no-screenshot real Playwright.
+Real-LLM mode also covers native JSON/SSE and OpenAI-compatible JSON/SSE, using
+the provider counter to prove that idempotent replay does not call the model
+again and that total provider calls remain bounded. Evidence is written to
+`.verification/managed-api-principals/<run-id>/summary.md`; sensitive responses
+remain only in the gitignored, permission-restricted `private/` directory.
 
 ### Chat Capability Redesign Acceptance Gate
 

@@ -17,7 +17,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -65,37 +64,6 @@ class GeneralRagAutoConfigurationBeanTest {
             RagMetricsService service = config.ragMetricsService(registry);
             assertNotNull(service);
             assertInstanceOf(RagMetricsService.class, service);
-        }
-    }
-
-    @Nested
-    @DisplayName("rateLimitFilterRegistration()")
-    class RateLimitFilterRegistrationTest {
-
-        @Test
-        @DisplayName("returns FilterRegistrationBean<RateLimitFilter>")
-        void returnsFilterRegistration() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
-            assertNotNull(registration);
-            assertInstanceOf(FilterRegistrationBean.class, registration);
-        }
-
-        @Test
-        @DisplayName("URL pattern includes /api/*")
-        void urlPatternIncludesApi() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
-            assertTrue(registration.getUrlPatterns().contains("/api/*"));
-            assertTrue(registration.getUrlPatterns().contains("/v1/*"));
-        }
-
-        @Test
-        @DisplayName("Order is 0 (rate limiting before auth)")
-        void orderIs0() {
-            RagProperties properties = new RagProperties();
-            FilterRegistrationBean<?> registration = config.rateLimitFilterRegistration(properties);
-            assertEquals(0, registration.getOrder());
         }
     }
 

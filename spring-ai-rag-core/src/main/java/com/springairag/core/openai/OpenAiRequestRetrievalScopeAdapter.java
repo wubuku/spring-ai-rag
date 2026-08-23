@@ -3,7 +3,7 @@ package com.springairag.core.openai;
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.openai.OpenAiChatCompletionRequest;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
@@ -85,7 +85,7 @@ public class OpenAiRequestRetrievalScopeAdapter {
             keys = headerKeys;
         }
 
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey(request);
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy(request);
         try {
             return resolver.resolve(
                     mode,

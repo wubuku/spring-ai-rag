@@ -605,9 +605,11 @@ rag:
 `rag.security.api-key` 和数据库 ADMIN/NORMAL 语义继续生效，query credential 仍兼容。
 
 数据库业务 Key 通过 `POST /api/v1/rag/api-keys` 的 `allowedCollectionKeys` 定义外部
-范围；deprecated 的 `allowedCollectionIds` 继续兼容。Controller 会把 key 解析为内部
-ID，Flyway V24 的存储仍为 `rag_api_key.allowed_collection_ids`；空值表示全库权限。
-显式空 key 列表会被拒绝，不会静默变成全库权限。详见
+范围；deprecated 的 `allowedCollectionIds` 继续兼容。V48 将 stable
+`rag_api_principal` policy 与版本化 `rag_api_key` credential 分离，因此轮换会保留
+`db:{principalId}` owner、role、Collection ACL、expiry、policy version 与 quota。
+每次请求都联查权威 credential/principal；仅近似审计字段 `last_used_at` 的写入在五分钟内
+抑制。legacy `api_key` 列为迁移兼容继续存在，但被约束为只能是 `NULL`。详见
 [rest-api-zh-CN.md](rest-api-zh-CN.md)。
 
 ## API 限流配置
@@ -616,6 +618,7 @@ ID，Flyway V24 的存储仍为 `rag_api_key.allowed_collection_ids`；空值表
 rag:
   rate-limit:
     enabled: true
+    backend: local
     requests-per-minute: 60
     strategy: ip
     key-limits:
@@ -625,14 +628,33 @@ rag:
 
 | 属性 | 默认值 | 说明 |
 |------|--------|------|
-| `rag.rate-limit.enabled` | `true` | 启用 API 限流 |
+| `rag.rate-limit.enabled` | `false` | 启用 API 限流 |
+| `rag.rate-limit.backend` | `local` | `local` 进程内计数或共享 `postgresql` UTC 固定分钟 bucket |
 | `rag.rate-limit.requests-per-minute` | `60` | 默认每分钟最大请求数 |
-| `rag.rate-limit.strategy` | `ip` | 限流策略：`ip`（按 IP）/ `api-key`（按 API Key，无 Key 回退 IP） |
-| `rag.rate-limit.key-limits` | `{}` | 按 API Key 分级限额（key → requests-per-minute） |
+| `rag.rate-limit.strategy` | `ip` | local 可选 `ip`、`api-key`、`user`；PostgreSQL 必须为 `principal` |
+| `rag.rate-limit.key-limits` | `{}` | 仅 local 使用的分级限额；PostgreSQL 模式必须为空 |
+| `rag.rate-limit.bucket-retention-minutes` | `1440` | PostgreSQL bucket 保留时间 |
+| `rag.rate-limit.cleanup-interval-seconds` | `300` | best-effort 清理间隔 |
+| `rag.rate-limit.cleanup-batch-size` | `10000` | 单轮清理最多删除的行数 |
 
 **限流策略选择：**
 - `ip`：按客户端 IP 独立计数，适合无认证场景
 - `api-key`：按 API Key 限流（无 Key 回退 IP），适合多租户场景；`key-limits` 中未配置的 Key 使用默认 `requests-per-minute`
+
+多实例受管调用方应使用：
+
+```yaml
+rag:
+  rate-limit:
+    enabled: true
+    backend: postgresql
+    strategy: principal
+    requests-per-minute: 60
+```
+
+PostgreSQL backend 只使用认证后的 stable principal。principal policy 中可选的
+`requestsPerMinute` 覆盖全局默认值；credential 轮换不会重置用量。store 故障时 fail
+closed 返回 `503`，不会自动降级到 local。
 
 超限返回 `429 Too Many Requests`，响应头包含 `Retry-After`、`X-RateLimit-Limit`、`X-RateLimit-Remaining`。
 

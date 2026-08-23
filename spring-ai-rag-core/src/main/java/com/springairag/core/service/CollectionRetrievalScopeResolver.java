@@ -2,7 +2,7 @@ package com.springairag.core.service;
 
 import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.api.validation.CollectionKeyValidator;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.security.ApiKeyCollectionAccess;
@@ -34,7 +34,7 @@ public class CollectionRetrievalScopeResolver {
             List<String> requestedKeys,
             List<Long> documentIds,
             String documentType,
-            RagApiKey caller) {
+            ApiAccessPolicy caller) {
         boolean idsPresent = requestedIds != null;
         boolean keysPresent = requestedKeys != null;
         List<Long> ids = validateIds(
@@ -75,7 +75,7 @@ public class CollectionRetrievalScopeResolver {
     }
 
     private RetrievalScope callerVisible(
-            List<Long> documentIds, String documentType, RagApiKey caller) {
+            List<Long> documentIds, String documentType, ApiAccessPolicy caller) {
         if (ApiKeyCollectionAccess.isUnrestricted(caller)) {
             return RetrievalScope.unscoped(documentIds, documentType);
         }
@@ -84,7 +84,7 @@ public class CollectionRetrievalScopeResolver {
     }
 
     private RetrievalScope anyCollection(
-            List<Long> documentIds, String documentType, RagApiKey caller) {
+            List<Long> documentIds, String documentType, ApiAccessPolicy caller) {
         if (ApiKeyCollectionAccess.isUnrestricted(caller)) {
             return RetrievalScope.anyAssigned(documentIds, documentType);
         }
@@ -95,7 +95,7 @@ public class CollectionRetrievalScopeResolver {
     private List<Long> resolveSelected(
             List<Long> requestedIds,
             List<String> requestedKeys,
-            RagApiKey caller) {
+            ApiAccessPolicy caller) {
         List<Long> resolvedIds = requestedIds == null
                 ? null
                 : authorizeIds(requestedIds, caller);
@@ -111,7 +111,7 @@ public class CollectionRetrievalScopeResolver {
         return resolvedIds != null ? resolvedIds : resolvedKeys;
     }
 
-    private List<Long> authorizeIds(List<Long> requestedIds, RagApiKey caller) {
+    private List<Long> authorizeIds(List<Long> requestedIds, ApiAccessPolicy caller) {
         if (ApiKeyCollectionAccess.isUnrestricted(caller)) {
             return requestedIds;
         }
@@ -125,7 +125,7 @@ public class CollectionRetrievalScopeResolver {
         return requestedIds;
     }
 
-    private List<Long> resolveKeys(List<String> keys, RagApiKey caller) {
+    private List<Long> resolveKeys(List<String> keys, ApiAccessPolicy caller) {
         try {
             if (ApiKeyCollectionAccess.isUnrestricted(caller)) {
                 return identityResolver.resolveActiveIds(null, keys);
@@ -142,7 +142,7 @@ public class CollectionRetrievalScopeResolver {
         }
     }
 
-    private List<Long> allowedIds(RagApiKey caller) {
+    private List<Long> allowedIds(ApiAccessPolicy caller) {
         return List.copyOf(ApiKeyCollectionAccess.restrictedCollectionIds(caller)
                 .orElseThrow());
     }

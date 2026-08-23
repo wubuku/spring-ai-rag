@@ -27,7 +27,7 @@ import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.retrieval.RetrievalTraceHeaders;
 import com.springairag.core.chat.SessionIdValidator;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagChatHistoryRepository;
@@ -849,7 +849,7 @@ public class RagChatController {
         if (request.getMode() == ChatMode.PLAIN) {
             return RetrievalScope.unscoped();
         }
-        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
         if (retrievalScopeResolver != null) {
             return retrievalScopeResolver.resolve(
                     request.getCollectionScopeMode(),

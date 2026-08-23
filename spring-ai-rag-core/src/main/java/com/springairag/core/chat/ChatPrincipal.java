@@ -1,7 +1,8 @@
 package com.springairag.core.chat;
 
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.context.request.RequestContextHolder;
 import org.springframework.web.context.request.ServletRequestAttributes;
@@ -39,7 +40,8 @@ public record ChatPrincipal(String id, String type, boolean admin) {
         }
         Object id = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
         Object type = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
-        Object entity = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
+        Object authenticated = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
         String principalType = type != null ? String.valueOf(type) : null;
 
         if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(principalType)) {
@@ -47,9 +49,8 @@ public record ChatPrincipal(String id, String type, boolean admin) {
         }
         if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(principalType)) {
             String keyId = id != null ? String.valueOf(id) : "unknown";
-            boolean admin = entity instanceof RagApiKey key
-                    && key.getRole() != null
-                    && key.getRole().name().equals("ADMIN");
+            boolean admin = authenticated instanceof AuthenticatedApiPrincipal principal
+                    && principal.getRole() == ApiKeyRole.ADMIN;
             return new ChatPrincipal("db:" + keyId, principalType, admin);
         }
         if (ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC.equals(principalType)) {

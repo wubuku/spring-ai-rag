@@ -3,12 +3,16 @@ package com.springairag.core.filter;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.core.ratelimit.PostgresRateLimitStore;
+import com.springairag.core.ratelimit.RateLimitObservability;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,18 +22,18 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.springairag.core.filter.ApiKeyAuthFilter;
-
 /**
- * API rate limiting filter based on sliding window counter.
+ * API 限流过滤器：兼容本地固定窗口，并支持 PostgreSQL 共享固定 UTC 分钟窗口。
  *
- * <p>Supports three rate limiting strategies:
+ * <p>Local backend supports three rate limiting strategies:
  * <ul>
  *   <li>{@code ip} — Rate limit by client IP address (default)</li>
  *   <li>{@code api-key} — Rate limit by X-API-Key header; falls back to IP if not provided</li>
  *   <li>{@code user} — Rate limit by authenticated user (prefers {@code authenticatedApiKey} request attribute
  *       set by {@link ApiKeyAuthFilter}; falls back to IP if not authenticated)</li>
  * </ul>
+ * PostgreSQL backend requires {@code principal} and uses only the authenticated
+ * stable database principal established by {@link ApiKeyAuthFilter}.
  *
  * <p>When {@code strategy=api-key} and {@code keyLimits} is configured,
  * each API key gets its own limit; unconfigured keys use the default limit.
@@ -48,7 +52,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
  * <p>Rate limit response:
  * <ul>
  *   <li>HTTP 429 Too Many Requests</li>
- *   <li>Retry-After: 60 response header</li>
+ *   <li>Retry-After response header calculated from the active window</li>
  *   <li>JSON {@link ErrorResponse} body</li>
  * </ul>
  */
@@ -75,6 +79,9 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private final int requestsPerMinute;
     private final String strategy;
     private final Map<String, Integer> keyLimits;
+    private final String backend;
+    private final PostgresRateLimitStore postgresStore;
+    private final RateLimitObservability observability;
 
     /** Identifier to window state mapping */
     private final ConcurrentHashMap<String, WindowState> windows = new ConcurrentHashMap<>();
@@ -96,10 +103,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
      */
     public RateLimitFilter(boolean enabled, int requestsPerMinute,
                            String strategy, Map<String, Integer> keyLimits) {
+        this(enabled, requestsPerMinute, strategy, keyLimits, "local", null);
+    }
+
+    public RateLimitFilter(boolean enabled, int requestsPerMinute,
+                           String strategy, Map<String, Integer> keyLimits,
+                           String backend, PostgresRateLimitStore postgresStore) {
+        this(enabled, requestsPerMinute, strategy, keyLimits, backend,
+                postgresStore, RateLimitObservability.noop());
+    }
+
+    public RateLimitFilter(boolean enabled, int requestsPerMinute,
+                           String strategy, Map<String, Integer> keyLimits,
+                           String backend, PostgresRateLimitStore postgresStore,
+                           RateLimitObservability observability) {
         this.enabled = enabled;
         this.requestsPerMinute = requestsPerMinute;
         this.strategy = strategy == null ? "ip" : strategy;
         this.keyLimits = keyLimits == null ? Map.of() : Map.copyOf(keyLimits);
+        this.backend = backend == null ? "local" : backend;
+        this.postgresStore = postgresStore;
+        this.observability = observability == null
+                ? RateLimitObservability.noop()
+                : observability;
     }
 
     @Override
@@ -117,6 +143,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
             return;
         }
 
+        if ("postgresql".equals(backend)) {
+            applyPostgresLimit(request, response, filterChain, path);
+            return;
+        }
+
         // Resolve client identifier by strategy
         ClientId clientId = resolveClientId(request);
         request.setAttribute(CLIENT_ID_ATTRIBUTE, clientId.identifier);
@@ -127,18 +158,77 @@ public class RateLimitFilter extends OncePerRequestFilter {
         int currentCount = state.incrementAndGet();
         int remaining = limit - currentCount;
 
-        // Set rate limit response headers
         response.setHeader(RATE_LIMIT_LIMIT_HEADER, String.valueOf(limit));
         response.setHeader(RATE_LIMIT_REMAINING_HEADER, String.valueOf(Math.max(0, remaining)));
 
         if (currentCount > limit) {
-            writeRateLimitResponse(response, path, clientId, currentCount, limit);
+            observability.recordDecision(backend, "rejected", clientId.type);
+            writeRateLimitResponse(response, path, clientId.type, limit, 60);
             return;
         }
 
-        log.debug("Rate limit count: {} {} id={} {}/{}", request.getMethod(), path,
-                clientId.identifier, currentCount, limit);
+        observability.recordDecision(backend, "allowed", clientId.type);
+        log.debug("Local rate-limit decision: result=allowed strategy={}", clientId.type);
         filterChain.doFilter(request, response);
+    }
+
+    private void applyPostgresLimit(
+            HttpServletRequest request,
+            HttpServletResponse response,
+            FilterChain filterChain,
+            String path) throws IOException, ServletException {
+        Object principalAttr = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
+        if (!(principalAttr instanceof String principalId) || principalId.isBlank()
+                || postgresStore == null) {
+            observability.recordDecision("postgresql", "error", "UNKNOWN");
+            writeStoreUnavailable(response, path);
+            return;
+        }
+        request.setAttribute(CLIENT_ID_ATTRIBUTE, principalId);
+        int limit = requestsPerMinute;
+        Object snapshot = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
+        if (snapshot instanceof AuthenticatedApiPrincipal principal
+                && principal.getRequestsPerMinute() != null) {
+            limit = principal.getRequestsPerMinute();
+        }
+        try {
+            PostgresRateLimitStore.Decision decision =
+                    postgresStore.consume(principalId, limit);
+            int remaining = Math.max(0, limit - decision.requestCount());
+            response.setHeader(RATE_LIMIT_LIMIT_HEADER, String.valueOf(limit));
+            response.setHeader(RATE_LIMIT_REMAINING_HEADER, String.valueOf(remaining));
+            if (!decision.allowed()) {
+                observability.recordDecision(
+                        "postgresql", "rejected", fixedPrincipalType(request));
+                writeRateLimitResponse(
+                        response, path, "principal", limit,
+                        decision.retryAfterSeconds());
+                return;
+            }
+            observability.recordDecision(
+                    "postgresql", "allowed", fixedPrincipalType(request));
+            log.debug("PostgreSQL rate-limit decision: result=allowed principalType={}",
+                    fixedPrincipalType(request));
+            filterChain.doFilter(request, response);
+        } catch (DataAccessException | IllegalStateException e) {
+            observability.recordDecision(
+                    "postgresql", "error", fixedPrincipalType(request));
+            log.error("PostgreSQL rate-limit decision failed: result=error principalType={}",
+                    fixedPrincipalType(request));
+            writeStoreUnavailable(response, path);
+        }
+    }
+
+    private String fixedPrincipalType(HttpServletRequest request) {
+        Object type = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
+        if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)
+                || ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(type)
+                || ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC.equals(type)) {
+            return String.valueOf(type);
+        }
+        return "UNKNOWN";
     }
 
     /**
@@ -184,13 +274,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     }
 
     private void writeRateLimitResponse(HttpServletResponse response, String path,
-                                        ClientId clientId, int currentCount,
-                                        int limit) throws IOException {
-        log.warn("Rate limit triggered: {}={} path={} count={}/{}",
-                clientId.type, clientId.identifier, path, currentCount, limit);
+                                        String strategyType, int limit,
+                                        int retryAfter) throws IOException {
+        log.warn("Rate-limit decision: result=rejected backend={} strategy={}",
+                backend, strategyType);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        response.setHeader(RETRY_AFTER_HEADER, "60");
+        response.setHeader(RETRY_AFTER_HEADER, String.valueOf(retryAfter));
         if (path != null && path.startsWith("/v1/")) {
             response.getWriter().write(objectMapper.writeValueAsString(
                     OpenAiErrorResponse.of(
@@ -207,6 +297,29 @@ public class RateLimitFilter extends OncePerRequestFilter {
                 .path(path)
                 .build();
         response.getWriter().write(objectMapper.writeValueAsString(errorResponse));
+    }
+
+    private void writeStoreUnavailable(
+            HttpServletResponse response,
+            String path) throws IOException {
+        response.setStatus(HttpStatus.SERVICE_UNAVAILABLE.value());
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        if (path != null && path.startsWith("/v1/")) {
+            response.getWriter().write(objectMapper.writeValueAsString(
+                    OpenAiErrorResponse.of(
+                            "Rate limit service is unavailable.",
+                            "server_error",
+                            null,
+                            "rate_limit_store_unavailable")));
+            return;
+        }
+        response.getWriter().write(objectMapper.writeValueAsString(
+                ErrorResponse.builder()
+                        .error("RATE_LIMIT_STORE_UNAVAILABLE")
+                        .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                        .message("Rate limit service is unavailable.")
+                        .path(path)
+                        .build()));
     }
 
     /**

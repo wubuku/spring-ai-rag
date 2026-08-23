@@ -314,7 +314,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V47、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V48、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -368,7 +368,7 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V47，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V48，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -394,7 +394,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V47，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V48，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -438,7 +438,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V47，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V48，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 
@@ -472,6 +472,42 @@ BASE_URL=http://127.0.0.1:18081 \
 identity，检查 Hit Rate、MRR、Recall@K、nDCG、每 case minimum、相对 baseline 回退、
 Collection decoy 泄漏和 JSONB 明确空结果。外部 provider、数据库或 embedding 失败必须
 返回非零，不能伪装为质量通过。
+
+### 受管 API Principal PostgreSQL 矩阵
+
+在真实 PostgreSQL 上执行 V48 迁移、credential lifecycle、policy concurrency、
+last-ADMIN、last-used、共享 quota 与有界清理矩阵：
+
+```bash
+TESTCONTAINERS_RYUK_DISABLED=true \
+mvn -pl spring-ai-rag-core -am \
+  -Dmanaged-api-principal.it.enabled=true \
+  -Dtest=ManagedApiPrincipalPostgresIntegrationTest \
+  -Dsurefire.failIfNoSpecifiedTests=false test
+```
+
+所有测试必须实际执行且 `skipped=0`。禁用 Ryuk 只是本地 Docker 兼容 workaround，测试
+仍会停止自己创建的 PostgreSQL container。发布验收还需让两个隔离端口 backend 共用一个
+数据库，证明吊销在下一次请求生效，并且请求 quota 全局只计一份。
+
+完整发布门槛使用统一脚本：
+
+```bash
+./scripts/verify-managed-api-principals.sh
+
+# Mock 门槛全部通过后，显式执行真实 provider 验收
+MANAGED_API_REAL_ENV_FILE=.env \
+./scripts/verify-managed-api-principals.sh --with-real-llm
+```
+
+脚本串行执行 PostgreSQL 迁移/并发矩阵、`mvn clean compile test-compile`、Maven 全量测试、
+WebUI Vitest/TypeScript/生产构建/alignment、核心 Mock Playwright、禁锁与文档门禁；随后
+启动两个共享一次性 PostgreSQL 的真实后端和一个 Vite 前端，验证全局 quota、policy CAS、
+跨实例轮换/撤销、quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还覆盖 native
+JSON/SSE 与 OpenAI-compatible JSON/SSE，并用 provider counter 证明幂等重放不产生重复模型
+调用且总调用数有界。证据写入
+`.verification/managed-api-principals/<run-id>/summary.md`，敏感响应只保存在 gitignored、
+权限受限的 `private/` 子目录。
 
 ### Chat 对话能力重构验收门禁
 

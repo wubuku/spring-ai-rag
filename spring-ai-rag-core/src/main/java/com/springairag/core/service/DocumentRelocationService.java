@@ -9,7 +9,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.entity.RagDocumentVersion;
@@ -80,7 +80,7 @@ public class DocumentRelocationService {
             return readResponseEnvelope(reservation.replayPayload());
         }
 
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         RagCollection source = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 normalized.sourceCollectionKey(), caller, collectionResolver);
         RagCollection target = ApiKeyCollectionAccess.requireActiveCollectionByKey(
@@ -335,7 +335,7 @@ public class DocumentRelocationService {
         if (first == null || second == null) {
             throw new IllegalStateException("Relocation replay is missing authorization scope");
         }
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         ApiKeyCollectionAccess.requireCollectionId(first, caller);
         ApiKeyCollectionAccess.requireCollectionId(second, caller);
     }

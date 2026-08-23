@@ -153,11 +153,16 @@ per-Collection quota/coverage (`EACH_COLLECTION`) is not supported.
 
 ### Rate Limiting
 
-When `rag.rate-limit.enabled` is true, all API requests are subject to a sliding-window rate limit.
+`rag.rate-limit.backend=local` retains the process-local fixed-minute window and
+the `ip`, `api-key`, or `user` strategy. It is suitable for one instance only.
 
-Two strategies are supported (`rag.rate-limit.strategy`):
-- `ip`: Rate limit by client IP address
-- `api-key`: Rate limit by API Key (falls back to IP if no key is provided); tiered limits use `rag.rate-limit.key-limits`
+`backend=postgresql` requires `strategy=principal`. It counts an authenticated
+stable database principal in a PostgreSQL UTC-minute bucket shared by all
+instances. A principal-level `requestsPerMinute` policy overrides the global
+default, and credential rotation does not reset the bucket. This backend never
+uses a raw credential or IP fallback. A quota-store failure returns `503`
+(`RATE_LIMIT_STORE_UNAVAILABLE`, or the OpenAI error envelope under `/v1`) and
+does not silently fall back to local counters.
 
 **Rate limit response headers (on normal requests):**
 
@@ -170,7 +175,7 @@ Two strategies are supported (`rag.rate-limit.strategy`):
 
 ```
 HTTP/1.1 429 Too Many Requests
-Retry-After: 60
+Retry-After: 17
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
 ```
@@ -594,12 +599,16 @@ root credential, legacy ADMIN/NORMAL management semantics remain.
 
 ### `GET /api/v1/rag/api-keys`
 
-List business-key metadata. Raw secrets and hashes are never returned.
+List credential history for compatibility and audit. Raw secrets and hashes are
+never returned. New management UIs should use the principal endpoint below.
 
 **Response 200**:
 ```json
 [{
   "keyId": "rag_k_abc123",
+  "principalId": "rag_p_service",
+  "credentialVersion": 2,
+  "currentCredential": true,
   "name": "Production Server",
   "role": "NORMAL",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
@@ -607,6 +616,27 @@ List business-key metadata. Raw secrets and hashes are never returned.
   "enabled": true,
   "createdAt": "2026-08-14T00:00:00",
   "lastUsedAt": null,
+  "expiresAt": "2026-10-01T00:00:00"
+}]
+```
+
+### `GET /api/v1/rag/api-keys/principals`
+
+List one row per stable caller. The response contains current credential
+metadata but no raw secret, hash, or complete credential history:
+
+```json
+[{
+  "principalId": "rag_p_service",
+  "name": "Production Server",
+  "role": "NORMAL",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120,
+  "policyVersion": 3,
+  "status": "ACTIVE",
+  "currentCredentialId": "rag_k_abc123",
+  "currentCredentialVersion": 2,
+  "lastUsedAt": "2026-08-23T12:00:00",
   "expiresAt": "2026-10-01T00:00:00"
 }]
 ```
@@ -622,7 +652,8 @@ collections. `allowedCollectionIds` is deprecated.
 {
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
-  "allowedCollectionKeys": ["customer-42:manual:v3"]
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120
 }
 ```
 
@@ -632,24 +663,49 @@ The raw secret appears only in the `201 Created` response, which includes
 ```json
 {
   "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "policyVersion": 1,
   "rawKey": "rag_sk_...",
   "name": "My API Key",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
-  "expiresAt": "2026-10-01T00:00:00"
+  "expiresAt": "2026-10-01T00:00:00",
+  "requestsPerMinute": 120
+}
+```
+
+### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
+
+Atomically update name, expiry, Collection ACL, and optional principal quota.
+`expectedPolicyVersion` is required; a stale value returns
+`409 POLICY_VERSION_CONFLICT`. Omit `allowedCollectionKeys` for unrestricted
+Collection access and omit `requestsPerMinute` to use the global quota.
+
+```json
+{
+  "expectedPolicyVersion": 1,
+  "name": "My API Key",
+  "expiresAt": "2027-10-01T00:00:00",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 240
 }
 ```
 
 ### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
-Disable the old key and create a same-name replacement with the same Collection
-scope. The new raw secret appears only in this `201 Created` response.
-Root-mode rotation preserves an existing future expiry. A legacy key without
-an expiry receives a one-year expiry; expired or disabled keys are rejected.
+Disable the current credential and create the next credential version for the
+same stable principal. Owner, role, policy version, ACL, expiry, and quota stay
+unchanged. A stale credential ID returns `409 CREDENTIAL_NOT_CURRENT`; the new
+raw secret appears only in this `201 Created` response.
 
 ### `DELETE /api/v1/rag/api-keys/{keyId}`
 
-Immediately disable a business key. Success returns `204 No Content`.
+Revoke the principal family through its current credential ID. Repeating DELETE
+for that last version is idempotent; a stale older credential returns
+`409 CREDENTIAL_NOT_CURRENT`. Legacy mode prevents concurrent operations from
+revoking the last ADMIN (`409 LAST_ADMIN_REQUIRED`); environment root mode may
+explicitly revoke it. Success returns `204 No Content`.
 
 The management console is available at `/webui/unlock`. It keeps the root
 credential only in page memory and requires it again after refresh or sign-out.

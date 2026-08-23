@@ -202,7 +202,7 @@ public class ExternalDocumentService {
         String normalizedNamespace = normalizeNamespace(sourceNamespace);
         String normalizedExternalId = normalizeRequired(externalId, "externalId", 255);
         RagCollection collection = ApiKeyCollectionAccess.requireActiveCollectionByKey(
-                normalizedKey, ApiKeyCollectionAccess.currentKey(), collectionIdentityResolver);
+                normalizedKey, ApiKeyCollectionAccess.currentPolicy(), collectionIdentityResolver);
         if (addressRetirementService != null) {
             addressRetirementService.requireNotRetired(
                     collection.getId(), normalizedNamespace, normalizedExternalId);
@@ -531,10 +531,10 @@ public class ExternalDocumentService {
     private Long resolveWritableCollection(String collectionKey) {
         RagCollection collection = ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 collectionKey,
-                ApiKeyCollectionAccess.currentKey(),
+                ApiKeyCollectionAccess.currentPolicy(),
                 collectionIdentityResolver);
         return ApiKeyCollectionAccess.resolveWritableCollectionId(
-                collection.getId(), ApiKeyCollectionAccess.currentKey());
+                collection.getId(), ApiKeyCollectionAccess.currentPolicy());
     }
 
     private String collectionKeyFor(Long collectionId) {

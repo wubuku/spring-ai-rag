@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 import {
   apiKeysApi,
   type ApiKeyCreatedResponse,
-  type ApiKeyResponse,
   type ApiKeyCreateRequest,
+  type ApiPrincipalPolicyUpdateRequest,
+  type ApiPrincipalResponse,
 } from '../api/apikeys';
 import { collectionsApi } from '../api/collections';
 import { useToast } from '../components/Toast';
@@ -62,10 +63,11 @@ export function ApiKeys() {
 function KeyList() {
   const { t } = useTranslation();
   const [showCreate, setShowCreate] = useState(false);
-  const [showRotate, setShowRotate] = useState<string | null>(null);
+  const [showRotate, setShowRotate] = useState<ApiPrincipalResponse | null>(null);
+  const [showEdit, setShowEdit] = useState<ApiPrincipalResponse | null>(null);
   const { data, isPending, isError } = useQuery({
-    queryKey: ['apikeys'],
-    queryFn: () => apiKeysApi.listKeys(),
+    queryKey: ['api-principals'],
+    queryFn: () => apiKeysApi.listPrincipals(),
   });
 
   return (
@@ -91,20 +93,22 @@ function KeyList() {
         <div className={styles.table}>
           <div className={styles.tableHead}>
             <span>{t('apiKeys.name')}</span>
-            <span>{t('apiKeys.keyId')}</span>
+            <span>{t('apiKeys.principalId')}</span>
+            <span>{t('apiKeys.credential')}</span>
             <span>{t('apiKeys.profile')}</span>
             <span>{t('apiKeys.collectionAccess')}</span>
-            <span>{t('apiKeys.created')}</span>
+            <span>{t('apiKeys.quota')}</span>
             <span>{t('apiKeys.lastUsed')}</span>
             <span>{t('apiKeys.status')}</span>
             <span>{t('apiKeys.expires')}</span>
             <span>{t('common.actions')}</span>
           </div>
-          {data.data.map(key => (
-            <KeyRow
-              key={key.keyId}
-              keyItem={key}
-              onRotate={() => setShowRotate(key.keyId)}
+          {data.data.map(principal => (
+            <PrincipalRow
+              key={principal.principalId}
+              principal={principal}
+              onEdit={() => setShowEdit(principal)}
+              onRotate={() => setShowRotate(principal)}
             />
           ))}
         </div>
@@ -115,23 +119,37 @@ function KeyList() {
       )}
       {showRotate && (
         <RotateKeyModal
-          keyId={showRotate}
+          principal={showRotate}
           onClose={() => setShowRotate(null)}
+        />
+      )}
+      {showEdit && (
+        <EditPolicyModal
+          principal={showEdit}
+          onClose={() => setShowEdit(null)}
         />
       )}
     </div>
   );
 }
 
-function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () => void }) {
+function PrincipalRow({
+  principal,
+  onEdit,
+  onRotate,
+}: {
+  principal: ApiPrincipalResponse;
+  onEdit: () => void;
+  onRotate: () => void;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
 
   const revokeMutation = useMutation({
-    mutationFn: () => apiKeysApi.revokeKey(keyItem.keyId),
+    mutationFn: () => apiKeysApi.revokeKey(principal.currentCredentialId!),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['apikeys'] });
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
       showToast(t('apiKeys.revoked'), 'success');
     },
     onError: () => {
@@ -139,7 +157,7 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
     },
   });
 
-  const statusBadge = getStatusBadge(keyItem, t);
+  const statusBadge = getStatusBadge(principal.status, t);
 
   const formatDate = (dateStr?: string) => {
     if (!dateStr) return '—';
@@ -152,34 +170,50 @@ function KeyRow({ keyItem, onRotate }: { keyItem: ApiKeyResponse; onRotate: () =
 
   return (
     <div className={styles.tableRow}>
-      <span className={styles.name}>{keyItem.name}</span>
-      <span className={styles.keyId} title={keyItem.keyId}>{keyItem.keyId}</span>
-      <span>{getRoleBadge(keyItem.role, t)}</span>
+      <span className={styles.name}>{principal.name}</span>
+      <span className={styles.keyId} title={principal.principalId}>{principal.principalId}</span>
+      <span className={styles.credential}>
+        {principal.currentCredentialId ? (
+          <>
+            <code title={principal.currentCredentialId}>{principal.currentCredentialId}</code>
+            <small>v{principal.currentCredentialVersion}</small>
+          </>
+        ) : '—'}
+      </span>
+      <span>{getRoleBadge(principal.role, t)}</span>
       <span className={styles.scope}>
-        {keyItem.allowedCollectionKeys?.length
-          ? keyItem.allowedCollectionKeys.join(', ')
-          : keyItem.allowedCollectionIds?.length
-            ? keyItem.allowedCollectionIds.map(id => `#${id}`).join(', ')
+        {principal.allowedCollectionKeys?.length
+          ? principal.allowedCollectionKeys.join(', ')
           : t('apiKeys.allCollections')}
       </span>
-      <span className={styles.date}>{formatDate(keyItem.createdAt)}</span>
-      <span className={styles.date}>{formatDate(keyItem.lastUsedAt)}</span>
+      <span>{principal.requestsPerMinute ?? t('apiKeys.defaultQuota')}</span>
+      <span className={styles.date}>{formatDate(principal.lastUsedAt)}</span>
       <span>{statusBadge}</span>
-      <span className={styles.date}>{formatDate(keyItem.expiresAt)}</span>
-      <span>
+      <span className={styles.date}>{formatDate(principal.expiresAt)}</span>
+      <span className={styles.rowActions}>
+        <button
+          className={styles.btnLink}
+          onClick={onEdit}
+          disabled={principal.status !== 'ACTIVE'}
+        >
+          {t('apiKeys.editPolicy')}
+        </button>
         <button
           className={styles.btnLink}
           onClick={onRotate}
-          disabled={!keyItem.enabled}
+          disabled={principal.status !== 'ACTIVE' || !principal.currentCredentialId}
           title={t('apiKeys.rotateTooltip')}
         >
           {t('apiKeys.rotate')}
         </button>
-        <span style={{ margin: '0 0.25rem', color: 'var(--color-border)' }}>·</span>
         <button
           className={styles.btnLink}
           onClick={() => revokeMutation.mutate()}
-          disabled={revokeMutation.isPending}
+          disabled={
+            revokeMutation.isPending
+            || principal.status !== 'ACTIVE'
+            || !principal.currentCredentialId
+          }
           style={{ color: '#ef4444' }}
         >
           {t('apiKeys.revoke')}
@@ -199,15 +233,12 @@ function getRoleBadge(role: string | undefined, t: (key: string) => string) {
   return <span className={`${styles.badge} ${styles.badgeNormal}`}>—</span>;
 }
 
-function getStatusBadge(key: ApiKeyResponse, t: (key: string) => string) {
-  if (!key.enabled) {
+function getStatusBadge(status: ApiPrincipalResponse['status'], t: (key: string) => string) {
+  if (status === 'REVOKED') {
     return <span className={`${styles.badge} ${styles.badgeDisabled}`}>{t('apiKeys.revoked')}</span>;
   }
-  if (key.expiresAt) {
-    const expired = new Date(key.expiresAt) < new Date();
-    if (expired) {
-      return <span className={`${styles.badge} ${styles.badgeExpired}`}>{t('apiKeys.expired')}</span>;
-    }
+  if (status === 'EXPIRED') {
+    return <span className={`${styles.badge} ${styles.badgeExpired}`}>{t('apiKeys.expired')}</span>;
   }
   return <span className={`${styles.badge} ${styles.badgeActive}`}>{t('apiKeys.active')}</span>;
 }
@@ -232,7 +263,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
     mutationFn: (data: ApiKeyCreateRequest) => apiKeysApi.createKey(data),
     onSuccess: (response) => {
       setCreatedKey(response.data);
-      queryClient.invalidateQueries({ queryKey: ['apikeys'] });
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
     },
     onError: (error) => {
       showToast(formatMutationError(t('apiKeys.createError'), error), 'error');
@@ -242,6 +273,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const expiresAtValue = new FormData(e.currentTarget).get('expiresAt');
+    const quotaValue = new FormData(e.currentTarget).get('requestsPerMinute');
     if (!name.trim()
         || typeof expiresAtValue !== 'string'
         || !expiresAtValue) {
@@ -255,6 +287,9 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
     };
     if (restrictCollections) {
       data.allowedCollectionKeys = selectedCollectionKeys;
+    }
+    if (typeof quotaValue === 'string' && quotaValue.trim()) {
+      data.requestsPerMinute = Number(quotaValue);
     }
     createMutation.mutate(data);
   };
@@ -318,6 +353,21 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 {t('apiKeys.fullRag')}
               </span>
               <div className={styles.hint}>{t('apiKeys.fullRagHint')}</div>
+            </div>
+            <div className={styles.formGroup}>
+              <label className={styles.label} htmlFor="create-key-quota">
+                {t('apiKeys.quota')}
+              </label>
+              <input
+                id="create-key-quota"
+                type="number"
+                name="requestsPerMinute"
+                className={styles.input}
+                min="1"
+                max="1000000"
+                placeholder={t('apiKeys.quotaPlaceholder')}
+              />
+              <div className={styles.hint}>{t('apiKeys.quotaHint')}</div>
             </div>
             <fieldset className={styles.scopeFieldset}>
               <legend className={styles.label}>{t('apiKeys.collectionAccess')}</legend>
@@ -409,10 +459,12 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
               <div className={styles.scope}>
                 {createdKey.allowedCollectionKeys?.length
                   ? createdKey.allowedCollectionKeys.join(', ')
-                  : createdKey.allowedCollectionIds?.length
-                    ? createdKey.allowedCollectionIds.map(id => `#${id}`).join(', ')
                   : t('apiKeys.allCollections')}
               </div>
+              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                {t('apiKeys.quota')}
+              </div>
+              <div>{createdKey.requestsPerMinute ?? t('apiKeys.defaultQuota')}</div>
               <div className={styles.warning}>{createdKey.warning}</div>
             </div>
             <div className={styles.modalActions}>
@@ -427,19 +479,215 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ==================== Edit Principal Policy Modal ====================
+
+function EditPolicyModal({
+  principal,
+  onClose,
+}: {
+  principal: ApiPrincipalResponse;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [name, setName] = useState(principal.name);
+  const [expiryDefaults] = useState(createExpiryDefaults);
+  const [expiresAt, setExpiresAt] = useState(principal.expiresAt?.slice(0, 16) ?? '');
+  const [restrictCollections, setRestrictCollections] = useState(
+    Boolean(principal.allowedCollectionKeys?.length),
+  );
+  const [selectedCollectionKeys, setSelectedCollectionKeys] = useState<string[]>(
+    principal.allowedCollectionKeys ?? [],
+  );
+  const [requestsPerMinute, setRequestsPerMinute] = useState(
+    principal.requestsPerMinute?.toString() ?? '',
+  );
+  const queryClient = useQueryClient();
+  const { showToast } = useToast();
+  const collectionsQuery = useQuery({
+    queryKey: ['collections', 'api-key-scope'],
+    queryFn: () => collectionsApi.list({ page: 0, size: 200 }),
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: (data: ApiPrincipalPolicyUpdateRequest) =>
+      apiKeysApi.updatePolicy(principal.principalId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
+      showToast(t('apiKeys.policyUpdated'), 'success');
+      onClose();
+    },
+    onError: (error) => {
+      showToast(formatMutationError(t('apiKeys.policyUpdateError'), error), 'error');
+    },
+  });
+
+  const toggleCollection = (collectionKey: string) => {
+    setSelectedCollectionKeys(current =>
+      current.includes(collectionKey)
+        ? current.filter(key => key !== collectionKey)
+        : [...current, collectionKey],
+    );
+  };
+
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!name.trim() || !expiresAt
+        || (restrictCollections && selectedCollectionKeys.length === 0)) {
+      return;
+    }
+    const policy: ApiPrincipalPolicyUpdateRequest = {
+      expectedPolicyVersion: principal.policyVersion,
+      name: name.trim(),
+      expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt,
+    };
+    if (restrictCollections) {
+      policy.allowedCollectionKeys = selectedCollectionKeys;
+    }
+    if (requestsPerMinute.trim()) {
+      policy.requestsPerMinute = Number(requestsPerMinute);
+    }
+    updateMutation.mutate(policy);
+  };
+
+  return (
+    <div className={styles.modal} onClick={(event) => event.target === event.currentTarget && onClose()}>
+      <div className={styles.modalContent}>
+        <div className={styles.modalHeader}>
+          <h2 className={styles.modalTitle}>{t('apiKeys.editPolicy')}</h2>
+          <button className={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="policy-name">{t('apiKeys.name')} *</label>
+            <input
+              id="policy-name"
+              className={styles.input}
+              value={name}
+              onChange={event => setName(event.target.value)}
+              required
+              maxLength={255}
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="policy-expiry">
+              {t('apiKeys.expiresAt')} {t('common.required')}
+            </label>
+            <input
+              id="policy-expiry"
+              type="datetime-local"
+              className={styles.input}
+              value={expiresAt}
+              min={expiryDefaults.minimum}
+              onChange={event => setExpiresAt(event.target.value)}
+              required
+            />
+          </div>
+          <div className={styles.formGroup}>
+            <label className={styles.label} htmlFor="policy-quota">{t('apiKeys.quota')}</label>
+            <input
+              id="policy-quota"
+              type="number"
+              className={styles.input}
+              min="1"
+              max="1000000"
+              value={requestsPerMinute}
+              onChange={event => setRequestsPerMinute(event.target.value)}
+              placeholder={t('apiKeys.quotaPlaceholder')}
+            />
+            <div className={styles.hint}>{t('apiKeys.quotaHint')}</div>
+          </div>
+          <fieldset className={styles.scopeFieldset}>
+            <legend className={styles.label}>{t('apiKeys.collectionAccess')}</legend>
+            <label className={styles.scopeOption}>
+              <input
+                type="radio"
+                name="policyCollectionScope"
+                checked={!restrictCollections}
+                onChange={() => setRestrictCollections(false)}
+              />
+              <span>
+                <strong>{t('apiKeys.allCollections')}</strong>
+                <small>{t('apiKeys.allCollectionsHint')}</small>
+              </span>
+            </label>
+            <label className={styles.scopeOption}>
+              <input
+                type="radio"
+                name="policyCollectionScope"
+                checked={restrictCollections}
+                onChange={() => setRestrictCollections(true)}
+              />
+              <span>
+                <strong>{t('apiKeys.selectedCollections')}</strong>
+                <small>{t('apiKeys.selectedCollectionsHint')}</small>
+              </span>
+            </label>
+            {restrictCollections && (
+              <div className={styles.collectionSelector}>
+                {collectionsQuery.isPending ? (
+                  <div className={styles.hint}>{t('common.loading')}</div>
+                ) : collectionsQuery.isError ? (
+                  <div className={styles.scopeError}>{t('apiKeys.collectionsLoadError')}</div>
+                ) : !collectionsQuery.data?.data?.collections?.length ? (
+                  <div className={styles.hint}>{t('collections.noCollections')}</div>
+                ) : (
+                  collectionsQuery.data.data.collections.map(collection => (
+                    <label className={styles.collectionOption} key={collection.collectionKey}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCollectionKeys.includes(collection.collectionKey)}
+                        onChange={() => toggleCollection(collection.collectionKey)}
+                      />
+                      <span>{collection.name}</span>
+                      <code>{collection.collectionKey}</code>
+                    </label>
+                  ))
+                )}
+              </div>
+            )}
+          </fieldset>
+          <div className={styles.modalActions}>
+            <button type="button" className={styles.btnSecondary} onClick={onClose}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="submit"
+              className={styles.btnPrimary}
+              disabled={
+                updateMutation.isPending
+                || !name.trim()
+                || !expiresAt
+                || (restrictCollections && selectedCollectionKeys.length === 0)
+              }
+            >
+              {updateMutation.isPending ? t('common.loading') : t('common.save')}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ==================== Rotate Key Modal ====================
 
-function RotateKeyModal({ keyId, onClose }: { keyId: string; onClose: () => void }) {
+function RotateKeyModal({
+  principal,
+  onClose,
+}: {
+  principal: ApiPrincipalResponse;
+  onClose: () => void;
+}) {
   const { t } = useTranslation();
-  const [rotatedKey, setRotatedKey] = useState<{ keyId: string; rawKey: string; name: string; expiresAt?: string; warning: string } | null>(null);
+  const [rotatedKey, setRotatedKey] = useState<ApiKeyCreatedResponse | null>(null);
   const { showToast } = useToast();
   const queryClient = useQueryClient();
 
   const rotateMutation = useMutation({
-    mutationFn: () => apiKeysApi.rotateKey(keyId),
+    mutationFn: () => apiKeysApi.rotateKey(principal.currentCredentialId!),
     onSuccess: (response) => {
       setRotatedKey(response.data);
-      queryClient.invalidateQueries({ queryKey: ['apikeys'] });
+      queryClient.invalidateQueries({ queryKey: ['api-principals'] });
     },
     onError: () => {
       showToast(t('apiKeys.rotateError'), 'error');
@@ -471,8 +719,10 @@ function RotateKeyModal({ keyId, onClose }: { keyId: string; onClose: () => void
               {t('apiKeys.rotateInfo')}
             </div>
             <div className={styles.formGroup}>
-              <label className={styles.label}>{t('apiKeys.keyId')}</label>
-              <div className={styles.mono} style={{ fontSize: '0.8rem' }}>{keyId}</div>
+              <label className={styles.label}>{t('apiKeys.credential')}</label>
+              <div className={styles.mono} style={{ fontSize: '0.8rem' }}>
+                {principal.currentCredentialId} (v{principal.currentCredentialVersion})
+              </div>
             </div>
             <div className={styles.modalActions}>
               <button type="button" className={styles.btnSecondary} onClick={handleClose}>

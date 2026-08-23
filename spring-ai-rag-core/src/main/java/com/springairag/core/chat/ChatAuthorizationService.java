@@ -8,12 +8,12 @@ import com.springairag.api.dto.ChatResponse;
 import com.springairag.api.dto.ChatSource;
 import com.springairag.api.enums.ChatMode;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagDocumentRepository;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.service.ApiKeyManagementService;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -39,15 +39,15 @@ public class ChatAuthorizationService {
 
     private final ObjectMapper objectMapper;
     private final RagDocumentRepository documentRepository;
-    private final RagApiKeyRepository apiKeyRepository;
+    private final ApiKeyManagementService apiKeyManagementService;
 
     public ChatAuthorizationService(
             ObjectMapper objectMapper,
             RagDocumentRepository documentRepository,
-            RagApiKeyRepository apiKeyRepository) {
+            ApiKeyManagementService apiKeyManagementService) {
         this.objectMapper = objectMapper;
         this.documentRepository = documentRepository;
-        this.apiKeyRepository = apiKeyRepository;
+        this.apiKeyManagementService = apiKeyManagementService;
     }
 
     /**
@@ -76,7 +76,7 @@ public class ChatAuthorizationService {
                     case SELECTED -> "SELECTED_COLLECTIONS";
                     case NONE -> "CALLER_VISIBLE";
                 };
-                RagApiKey key = ApiKeyCollectionAccess.currentKey();
+                ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy();
                 boolean unrestricted = ApiKeyCollectionAccess.isUnrestricted(key);
                 snapshot.put("scopeMode", scopeMode);
                 snapshot.put(
@@ -137,7 +137,7 @@ public class ChatAuthorizationService {
                 return;
             }
 
-            RagApiKey currentKey = currentKey(principal);
+            ApiAccessPolicy currentKey = currentKey(principal);
             boolean currentUnrestricted =
                     ApiKeyCollectionAccess.isUnrestricted(currentKey);
             String firstAccess = validated.callerAccessMode();
@@ -248,19 +248,23 @@ public class ChatAuthorizationService {
         return value.asText();
     }
 
-    private RagApiKey currentKey(ChatPrincipal principal) {
+    private ApiAccessPolicy currentKey(ChatPrincipal principal) {
         if (principal == null || !principal.id().startsWith("db:")) {
             return null;
         }
-        String keyId = principal.id().substring("db:".length());
-        return apiKeyRepository.findByKeyId(keyId).orElse(null);
+        String principalId = principal.id().substring("db:".length());
+        ApiAccessPolicy policy = apiKeyManagementService.findActivePrincipal(principalId);
+        if (policy == null) {
+            throw forbidden("Chat owner principal is no longer active");
+        }
+        return policy;
     }
 
     private void verifySources(
             List<SourceEvidence> sources,
             String scopeMode,
             List<Long> selected,
-            RagApiKey currentKey,
+            ApiAccessPolicy currentKey,
             boolean unrestricted,
             boolean unassignedAllowed) {
         List<Long> currentAllow = currentAllowList(currentKey);
@@ -382,7 +386,7 @@ public class ChatAuthorizationService {
         }
     }
 
-    private List<Long> currentAllowList(RagApiKey key) {
+    private List<Long> currentAllowList(ApiAccessPolicy key) {
         return key == null || ApiKeyCollectionAccess.isUnrestricted(key)
                 ? List.of()
                 : sortedLongs(new ArrayList<>(

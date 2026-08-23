@@ -3,10 +3,11 @@ package com.springairag.core.controller;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.entity.ApiKeyRole;
-import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.ApiKeyManagementService;
@@ -125,6 +126,57 @@ public class ApiKeyController {
         return ResponseEntity.ok(apiKeyService.listKeys());
     }
 
+    @GetMapping("/principals")
+    public ResponseEntity<?> listPrincipals(HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (!rootCredentialResolver.isConfigured()
+                && getCallerRole(request) != ApiKeyRole.ADMIN) {
+            return ResponseEntity.status(403)
+                    .body(forbidden("Only ADMIN keys can list API principals"));
+        }
+        return ResponseEntity.ok(apiKeyService.listPrincipals());
+    }
+
+    @PutMapping("/principals/{principalId}/policy")
+    public ResponseEntity<?> updatePolicy(
+            @PathVariable String principalId,
+            @Valid @RequestBody ApiPrincipalPolicyUpdateRequest policy,
+            HttpServletRequest request) {
+        ResponseEntity<ErrorResponse> denied = requireEnvironmentRoot(request);
+        if (denied != null) {
+            return denied;
+        }
+        if (!rootCredentialResolver.isConfigured()
+                && getCallerRole(request) != ApiKeyRole.ADMIN) {
+            return ResponseEntity.status(403)
+                    .body(forbidden("Only ADMIN keys can update API principal policy"));
+        }
+        List<String> requestedKeys = policy.getAllowedCollectionKeys();
+        if (requestedKeys != null && requestedKeys.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "allowedCollectionKeys must be null or contain at least one key");
+        }
+        List<Long> allowedIds = null;
+        if (requestedKeys != null) {
+            if (collectionIdentityResolver == null) {
+                throw new IllegalStateException("Collection key resolver is unavailable");
+            }
+            allowedIds = ApiKeyCollectionAccess.resolveDelegatedAllowedKeys(
+                    requestedKeys, getCaller(request), collectionIdentityResolver);
+        }
+        var response = apiKeyService.updatePolicy(
+                principalId,
+                policy,
+                allowedIds,
+                rootCredentialResolver.isConfigured());
+        return response == null
+                ? ResponseEntity.notFound().build()
+                : ResponseEntity.ok(response);
+    }
+
     @Operation(summary = "Revoke an API key",
                description = "Immediately disables the specified API key. ADMIN only.")
     @ApiResponses({
@@ -146,7 +198,9 @@ public class ApiKeyController {
             return ResponseEntity.status(403)
                     .body(forbidden("Only ADMIN keys can revoke API keys"));
         }
-        boolean found = apiKeyService.revokeKey(keyId);
+        boolean found = rootCredentialResolver.isConfigured()
+                ? apiKeyService.revokeManagedKey(keyId)
+                : apiKeyService.revokeKey(keyId);
         if (!found) {
             return ResponseEntity.notFound().build();
         }
@@ -167,10 +221,10 @@ public class ApiKeyController {
         if (denied != null) {
             return denied;
         }
-        RagApiKey caller = getCaller(request);
+        ApiAccessPolicy caller = getCaller(request);
         if (caller != null
                 && caller.getRole() != ApiKeyRole.ADMIN
-                && !keyId.equals(caller.getKeyId())) {
+                && !keyId.equals(caller.getCredentialId())) {
             return ResponseEntity.status(403)
                     .body(forbidden(
                             "NORMAL keys can only rotate themselves"));
@@ -189,27 +243,17 @@ public class ApiKeyController {
     /**
      * Determine the role of the authenticated caller.
      *
-     * <p>First checks {@link ApiKeyAuthFilter#AUTHENTICATED_API_KEY_ENTITY} (the full
-     * RagApiKey entity set by the filter after DB validation). Falls back to a DB
-     * lookup using the String keyId stored in {@link ApiKeyAuthFilter#AUTHENTICATED_KEY_ATTRIBUTE}.
-     *
-     * <p>Legacy static API keys (configured in application.yml) have no associated entity,
-     * so they are treated as NORMAL.
+     * Legacy static API keys have no database policy and are treated as NORMAL.
      */
     private ApiKeyRole getCallerRole(HttpServletRequest request) {
-        RagApiKey caller = getCaller(request);
+        ApiAccessPolicy caller = getCaller(request);
         return caller != null && caller.getRole() != null
                 ? caller.getRole()
                 : ApiKeyRole.NORMAL;
     }
 
-    private RagApiKey getCaller(HttpServletRequest request) {
-        if (request == null) {
-            return null;
-        }
-        Object entityAttr = request.getAttribute(
-                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
-        return entityAttr instanceof RagApiKey caller ? caller : null;
+    private ApiAccessPolicy getCaller(HttpServletRequest request) {
+        return ApiKeyCollectionAccess.currentPolicy(request);
     }
 
     private ResponseEntity<ErrorResponse> requireEnvironmentRoot(

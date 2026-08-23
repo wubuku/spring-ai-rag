@@ -14,6 +14,9 @@ public class ApiKeyIdentityResponse {
     private String principalId;
     private boolean rootMode;
     private List<String> capabilities;
+    private String credentialId;
+    private Integer credentialVersion;
+    private Long policyVersion;
 
     public ApiKeyIdentityResponse() {
     }
@@ -57,4 +60,11 @@ public class ApiKeyIdentityResponse {
     public void setCapabilities(List<String> capabilities) {
         this.capabilities = capabilities;
     }
+
+    public String getCredentialId() { return credentialId; }
+    public void setCredentialId(String credentialId) { this.credentialId = credentialId; }
+    public Integer getCredentialVersion() { return credentialVersion; }
+    public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
+    public Long getPolicyVersion() { return policyVersion; }
+    public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
 }

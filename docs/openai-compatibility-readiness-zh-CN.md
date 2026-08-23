@@ -4,7 +4,7 @@
 
 > **用途**：记录 OpenAI Chat Completions 服务端兼容层的当前实现、受控预览边界和
 > 公网/多实例生产仍需完成的安全工作。
-> **代码基线**：`main`，包含 2026-08-22 Chat turn 可靠性交付。
+> **代码基线**：`main`，包含 Chat turn 可靠性与 V48 受管 principal 加固。
 > **最近复核**：2026-08-23
 > **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
 
@@ -21,11 +21,11 @@
 > 把带检索策略、知识范围、领域 Prompt 和模型路由的完整 RAG deployment
 > 暴露为标准 `model`，使 OpenAI SDK、Agent 框架、IDE 和网关可以按模型服务接入。
 
-协议兼容和公网生产就绪是两件事。当前系统已经完成“root API Key 解锁 WebUI +
-业务 API Key 分发”的独立 RAG 服务 MVP，并增加默认关闭的 `/v1` 兼容适配层。它适合
-可信网络中的受控预览和 SDK 集成测试，但仍不足以支撑公网、多实例 production-ready
-调用。**API Key family、即时多实例吊销、共享 quota 和完整 fail-closed 策略仍是公开
-启用前置条件。**
+协议兼容和公网生产就绪是两件事。当前系统已经完成独立 RAG 服务 MVP、V48 stable
+managed principal 与默认关闭的 `/v1` 兼容适配层。stable owner、versioned credential、
+即时跨实例吊销、PostgreSQL 共享请求 quota 和 quota store fail-closed 已经落地。兼容层
+仍是受控预览而非全面公网生产声明，因为 legacy 兼容、身份 federation、operator recovery、
+部署控制与 token/cost 治理仍是独立问题。
 
 兼容层本身不是 Agent/subagent 编排器。它提供稳定的“RAG-as-a-model”边界；编排由
 调用方或后续独立模块承担。
@@ -40,7 +40,7 @@
 | `spring-ai-rag-core` | RAG 实现和可运行应用 | 承载共享执行层、兼容 Controller、model alias registry 和错误映射 |
 | `spring-ai-rag-starter` | 自动配置 | standalone/starter 拓扑都注册 `/v1` 所需鉴权、限流和观测组件 |
 | `spring-ai-rag-documents` | 文档处理 | 不应依赖 OpenAI 协议 |
-| `spring-ai-rag-webui` | React 管理台 | MVP 已提供 root-key unlock；不要求改用兼容接口，公网管理面仍需单独加固 |
+| `spring-ai-rag-webui` | React 管理台 | root unlock 按 stable principal 管理 policy CAS、quota、当前 credential 轮换/吊销和 shown-once secret |
 
 项目存在两种运行拓扑：
 
@@ -100,10 +100,17 @@
 - root 模式支持 `Authorization: Bearer` 和 `X-API-Key` Header，拒绝 query credential；
   未配置 root 时保留 legacy static/query 兼容行为。
 - WebUI credential 只保存在页面内存，旧 localStorage 凭据会在升级时清理。
+- V48 将 stable principal policy 与 versioned credential hash 分离；rotation 保留
+  `db:{principalId}` owner 与 policy。
+- 每次认证都执行权威 credential/principal 联查；吊销在其他实例的下一次认证立即生效。
+- PostgreSQL UTC 固定分钟 backend 按 stable principal 共享请求 quota，且故障 fail
+  closed，不使用 raw key 或 IP fallback。
+- legacy 明文列被约束为只能是 `NULL`；legacy ADMIN 吊销有事务化 last-ADMIN guard。
 
 相关实现：
 
 - [RagApiKey](../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java)
+- [RagApiPrincipal](../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
 - [ApiKeyManagementService](../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
 - [ApiKeyController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)
 - [ApiKeyAuthFilter](../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
@@ -111,27 +118,19 @@
 
 ---
 
-## 6. 外部生产调用的关键缺口
+## 6. 外部生产调用的剩余边界
 
 | 缺口 | 当前代码事实 | 直接影响 |
 |------|--------------|----------|
-| 明文 secret schema | V23 和 `RagApiKey` 仍保留 `api_key` 字段及索引；service 当前虽未写入，schema 仍允许持久化 | 无法证明 secret 只出现一次且永不落库 |
 | 创建和委派 | root MVP 已关闭 NORMAL 自助管理；legacy 模式仍保留历史创建/委派语义 | 完整 hardening 仍需收紧 legacy 兼容和 policy 委派边界 |
-| 轮换身份 | rotate 禁用旧 key 后创建新的独立 key；Chat、评估、诊断和 durable operation 使用 `db:{keyId}` owner | role、owner、policy 和 quota 无稳定承载对象，轮换会切断 owner namespace |
-| ADMIN 保护 | 没有事务化的最后一个 ADMIN 保护 | 并发操作可能使系统失去管理凭据 |
-| Bootstrap | root MVP 模式已禁用空表 ADMIN/raw secret bootstrap；未配置 root 的 legacy 模式仍保留历史行为 | 完整 hardening 仍需统一 bootstrap/recovery 语义 |
-| 吊销一致性 | 认证有 30 秒进程内正向缓存 | 多实例吊销不能立即、全局生效 |
-| 使用时间写入 | 每次认证同步更新 `last_used_at` | 高频调用产生数据库写放大 |
-| 限流 | MVP 已在认证后优先使用当前 credential 的公开 key ID，但仍是本进程内计数；多实例 shared quota 未实现 | 多副本配额被放大，轮换还会改变 limiter ID，尚不能提供全局 quota 语义 |
-| raw key 进入限流 | root/已认证路径不直接使用 raw secret；legacy/未认证 fallback 仍可能使用 raw header | 完整 hardening 仍需让受管 stable principal 成为唯一共享 limiter identifier |
+| Bootstrap 与 recovery | root 模式禁用空表 ADMIN/raw secret bootstrap；legacy 模式无可用 ADMIN 时只记录低基数错误 | operator 仍需明确的 environment root provision/recovery 流程 |
 | URL 和凭据格式 | `/v1/*` 已接入 Bearer/Header 认证；root 模式拒绝 query credential，并使用 OpenAI 错误信封 | 公网启用仍应关闭 legacy query/static 兼容并明确只允许受管 principal |
-| 故障语义 | 数据库 key 验证与 static fallback 并存 | 凭据存储故障时必须避免错误降级为绕过路径 |
+| 身份 federation | managed principal 是服务签发 secret，不是 OAuth/OIDC 身份 | 公网多租户可能需要本 credential family 之外的 issuer、audience、tenant 与 revocation 契约 |
+| 成本治理 | 共享 quota 按 UTC 固定分钟统计请求数 | token、provider cost、日预算和 billing ledger 仍是独立能力 |
+| 运营 | 代码层共享 quota 与即时吊销已经实现 | TLS、网络隔离、数据库容量、告警、备份恢复和轮换 runbook 仍属部署职责 |
 
-这些问题不是协议细节，而是外部服务是否“基本可用”的前提。下一批已选择把稳定
-family/principal、可轮换 version、显式 policy、共享 quota、迁移和 fail-closed 故障语义
-作为一个批次规划，见
-[当前活跃规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。该规划尚未实施，本文仍按当前
-代码记录缺口。
+这些是 service readiness 问题，不是协议细节。V48 的历史设计理由在本轮交付完成前仍可
+从活跃规划追溯；当前事实以 live API 和配置参考为准。
 
 ---
 
@@ -145,9 +144,10 @@ family/principal、可轮换 version、显式 policy、共享 quota、迁移和 
 5. model alias 不包含固定 Collection；有效范围由请求 scope 与 API Key ACL 解析，
    未授权范围 fail closed。
 6. root 模式下 `/v1` 只接受 Bearer / `X-API-Key`，拒绝 query-string secret。
-7. 当前限流使用认证后的 credential key ID，但它不跨轮换稳定，且计数仍属单进程；公网
-   多实例前必须升级到 stable principal 的共享 quota，并确保轮换不重置配额。
-8. 凭据存储不可用时返回 `503`；公网启用前还需移除 legacy static fallback 等降级歧义。
+7. PostgreSQL 限流按认证后的 stable principal 跨实例共享，rotation 不重置；local backend
+   继续作为显式单实例兼容选项。
+8. credential 与 PostgreSQL quota store 故障均 fail closed；公网启用仍应移除 legacy
+   static/query 兼容。
 9. 保持 `/api/v1/rag/**` 现有契约，兼容能力关闭后旧 API 仍独立工作。
 10. core standalone 和 starter consumer 两种拓扑都必须有认证、授权、限流和观测测试。
 

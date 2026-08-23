@@ -26,7 +26,8 @@ class RagApiKeyTest {
         assertEquals(Boolean.TRUE, key.getEnabled());
         // role defaults to NORMAL (field initializer)
         assertEquals(ApiKeyRole.NORMAL, key.getRole());
-        assertNull(key.getApiKey());
+        assertNull(key.getPrincipalId());
+        assertNull(key.getCredentialVersion());
     }
 
     @Test
@@ -45,7 +46,9 @@ class RagApiKeyTest {
         key.setExpiresAt(expires);
         key.setEnabled(true);
         key.setRole(ApiKeyRole.ADMIN);
-        key.setApiKey("sk-test-secret-value");
+        key.setPrincipalId("rag_k_principal");
+        key.setCredentialVersion(2);
+        key.setRevokedAt(now);
 
         assertEquals(1L, key.getId());
         assertEquals("rag_k_test123", key.getKeyId());
@@ -56,7 +59,10 @@ class RagApiKeyTest {
         assertEquals(expires, key.getExpiresAt());
         assertEquals(true, key.getEnabled());
         assertEquals(ApiKeyRole.ADMIN, key.getRole());
-        assertEquals("sk-test-secret-value", key.getApiKey());
+        assertEquals("rag_k_principal", key.getPrincipalId());
+        assertEquals("rag_k_test123", key.getCredentialId());
+        assertEquals(2, key.getCredentialVersion());
+        assertEquals(now, key.getRevokedAt());
     }
 
     @Test

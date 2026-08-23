@@ -32,10 +32,11 @@ vi.mock('../components/Toast', () => ({
 // Mock apiKeys
 vi.mock('../api/apikeys', () => ({
   apiKeysApi: {
-    listKeys: vi.fn(),
+    listPrincipals: vi.fn(),
     createKey: vi.fn(),
     revokeKey: vi.fn(),
     rotateKey: vi.fn(),
+    updatePolicy: vi.fn(),
   },
 }));
 
@@ -45,34 +46,46 @@ vi.mock('../api/collections', () => ({
   },
 }));
 
-const mockKeys = [
+const mockPrincipals = [
   {
-    keyId: 'rag_k_abc123',
+    principalId: 'rag_p_abc123',
     name: 'Production Server',
     createdAt: '2026-04-12T03:00:00',
+    updatedAt: '2026-04-12T03:00:00',
     lastUsedAt: '2026-04-12T10:00:00',
     expiresAt: '2027-01-01T00:00:00',
-    enabled: true,
+    status: 'ACTIVE',
     role: 'ADMIN',
+    policyVersion: 2,
+    currentCredentialId: 'rag_k_abc123_v2',
+    currentCredentialVersion: 2,
+    requestsPerMinute: 120,
   },
   {
-    keyId: 'rag_k_def456',
+    principalId: 'rag_p_def456',
     name: 'Test Key',
     createdAt: '2026-04-10T00:00:00',
-    lastUsedAt: undefined,
-    expiresAt: undefined,
-    enabled: true,
-    role: 'NORMAL',
-    allowedCollectionIds: [10, 20],
-  },
-  {
-    keyId: 'rag_k_key_scope',
-    name: 'Key Scoped',
-    createdAt: '2026-04-11T00:00:00',
+    updatedAt: '2026-04-10T00:00:00',
     lastUsedAt: undefined,
     expiresAt: '2027-01-01T00:00:00',
-    enabled: true,
+    status: 'ACTIVE',
     role: 'NORMAL',
+    policyVersion: 1,
+    currentCredentialId: 'rag_k_def456',
+    currentCredentialVersion: 1,
+  },
+  {
+    principalId: 'rag_p_key_scope',
+    name: 'Key Scoped',
+    createdAt: '2026-04-11T00:00:00',
+    updatedAt: '2026-04-11T00:00:00',
+    lastUsedAt: undefined,
+    expiresAt: '2027-01-01T00:00:00',
+    status: 'ACTIVE',
+    role: 'NORMAL',
+    policyVersion: 3,
+    currentCredentialId: 'rag_k_key_scope_v3',
+    currentCredentialVersion: 3,
     allowedCollectionKeys: ['customer:manual'],
   },
 ];
@@ -111,20 +124,22 @@ describe('ApiKeys', () => {
     });
   });
 
-  it('renders key list when keys exist', async () => {
-    mockUseQuery.mockReturnValue({ data: { data: mockKeys }, isPending: false });
+  it('renders one row per principal with current credential metadata', async () => {
+    mockUseQuery.mockReturnValue({ data: { data: mockPrincipals }, isPending: false });
     render(<BrowserRouter><ApiKeys /></BrowserRouter>);
     await waitFor(() => {
       expect(screen.getByText('Production Server')).toBeInTheDocument();
       expect(screen.getByText('Test Key')).toBeInTheDocument();
-      expect(screen.getByText('apiKeys.allCollections')).toBeInTheDocument();
-      expect(screen.getByText('#10, #20')).toBeInTheDocument();
+      expect(screen.getAllByText('apiKeys.allCollections')).toHaveLength(2);
       expect(screen.getByText('customer:manual')).toBeInTheDocument();
+      expect(screen.getByText('rag_k_abc123_v2')).toBeInTheDocument();
+      expect(screen.getByText('v2')).toBeInTheDocument();
+      expect(screen.getByText('120')).toBeInTheDocument();
     });
   });
 
   it('shows Create Key button in toolbar when keys exist', async () => {
-    mockUseQuery.mockReturnValue({ data: { data: mockKeys }, isPending: false });
+    mockUseQuery.mockReturnValue({ data: { data: mockPrincipals }, isPending: false });
     render(<BrowserRouter><ApiKeys /></BrowserRouter>);
     await waitFor(() => {
       expect(screen.getByText('Production Server')).toBeInTheDocument();
@@ -147,8 +162,8 @@ describe('ApiKeys', () => {
 
   it('submits selected collection keys when creating a restricted key', async () => {
     mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
-      if (options.queryKey[0] === 'apikeys') {
-        return { data: { data: mockKeys }, isPending: false, isError: false };
+      if (options.queryKey[0] === 'api-principals') {
+        return { data: { data: mockPrincipals }, isPending: false, isError: false };
       }
       return {
         data: {
@@ -182,16 +197,50 @@ describe('ApiKeys', () => {
     });
     fireEvent.click(screen.getByText('apiKeys.selectedCollections'));
     fireEvent.click(screen.getByRole('checkbox'));
+    fireEvent.change(document.querySelector('#create-key-quota')!, {
+      target: { value: '75' },
+    });
     fireEvent.click(screen.getByRole('button', { name: 'apiKeys.create' }));
 
     expect(mockMutateFn).toHaveBeenCalledWith(expect.objectContaining({
       name: 'Scoped Key',
       allowedCollectionKeys: ['customer:manual'],
+      requestsPerMinute: 75,
       expiresAt: expect.stringMatching(/T\d{2}:\d{2}:00$/),
     }));
     expect(mockMutateFn).not.toHaveBeenCalledWith(expect.objectContaining({
       allowedCollectionIds: expect.anything(),
     }));
+  });
+
+  it('submits policy CAS updates for the stable principal', () => {
+    mockUseQuery.mockImplementation((options: { queryKey: unknown[] }) => {
+      if (options.queryKey[0] === 'api-principals') {
+        return { data: { data: mockPrincipals }, isPending: false, isError: false };
+      }
+      return {
+        data: { data: { collections: [] } },
+        isPending: false,
+        isError: false,
+      };
+    });
+
+    render(<BrowserRouter><ApiKeys /></BrowserRouter>);
+    fireEvent.click(screen.getAllByRole('button', { name: 'apiKeys.editPolicy' })[0]);
+    fireEvent.change(document.querySelector('#policy-name')!, {
+      target: { value: 'Production Agent' },
+    });
+    fireEvent.change(document.querySelector('#policy-quota')!, {
+      target: { value: '240' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+
+    expect(mockMutateFn).toHaveBeenCalledWith({
+      expectedPolicyVersion: 2,
+      name: 'Production Agent',
+      expiresAt: '2027-01-01T00:00:00',
+      requestsPerMinute: 240,
+    });
   });
 
   it('requires a future expiration without a maximum', () => {

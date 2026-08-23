@@ -3,6 +3,8 @@ package com.springairag.core.controller;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
+import com.springairag.core.entity.ApiKeyRole;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -70,12 +72,21 @@ class ApiKeyIdentityControllerTest {
                             request.setAttribute(
                                     ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE,
                                     "rag_k_business");
+                            request.setAttribute(
+                                    ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
+                                    new AuthenticatedApiPrincipal(
+                                            "rag_k_business", "rag_k_v3", 3,
+                                            ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY,
+                                            ApiKeyRole.NORMAL, null, null, 6L, 120));
                             return request;
                         }))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.capabilities.length()").value(2))
                 .andExpect(jsonPath("$.capabilities[0]").value("RAG_READ"))
-                .andExpect(jsonPath("$.capabilities[1]").value("RAG_WRITE"));
+                .andExpect(jsonPath("$.capabilities[1]").value("RAG_WRITE"))
+                .andExpect(jsonPath("$.credentialId").value("rag_k_v3"))
+                .andExpect(jsonPath("$.credentialVersion").value(3))
+                .andExpect(jsonPath("$.policyVersion").value(6));
     }
 
     @Test

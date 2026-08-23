@@ -2,22 +2,25 @@ package com.springairag.core.service;
 
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
-import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.dto.ApiPrincipalPolicyUpdateRequest;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.RagApiPrincipal;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagApiKeyRepository;
-import org.junit.jupiter.api.AfterEach;
+import com.springairag.core.repository.RagApiPrincipalRepository;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import com.github.benmanes.caffeine.cache.Cache;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 import java.time.LocalDateTime;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -27,689 +30,204 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class ApiKeyManagementServiceTest {
 
-    @Mock
-    private RagApiKeyRepository apiKeyRepository;
-
-    @Mock
-    private CollectionIdentityResolver collectionIdentityResolver;
+    @Mock RagApiKeyRepository credentialRepository;
+    @Mock RagApiPrincipalRepository principalRepository;
+    @Mock CollectionIdentityResolver collectionIdentityResolver;
+    @Mock JdbcTemplate jdbcTemplate;
 
     private ApiKeyManagementService service;
 
     @BeforeEach
     void setUp() {
         service = new ApiKeyManagementService(
-                apiKeyRepository, collectionIdentityResolver);
-        // Clear static validation cache between tests to avoid cross-test pollution
-        ApiKeyManagementServiceTest.clearValidationCache();
-    }
-
-    @AfterEach
-    void tearDown() {
-        ApiKeyManagementServiceTest.clearValidationCache();
-    }
-
-    // Visible for test cleanup — clears the static VALIDATED_KEY_CACHE
-    static void clearValidationCache() {
-        try {
-            var field = ApiKeyManagementService.class.getDeclaredField("VALIDATED_KEY_CACHE");
-            field.setAccessible(true);
-            ((com.github.benmanes.caffeine.cache.Cache<?, ?>) field.get(null)).invalidateAll();
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+                credentialRepository,
+                principalRepository,
+                collectionIdentityResolver,
+                jdbcTemplate);
     }
 
     @Test
-    void generateKey_createsAndSavesKey() {
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Test Key", null);
-
-        ApiKeyCreatedResponse response = service.generateKey(request);
-
-        assertNotNull(response);
-        assertNotNull(response.getKeyId());
-        assertTrue(response.getKeyId().startsWith("rag_k_"));
-        assertNotNull(response.getRawKey());
-        assertTrue(response.getRawKey().startsWith("rag_sk_"));
-        assertEquals("Test Key", response.getName());
-        assertNull(response.getExpiresAt());
-        assertNotNull(response.getWarning());
-
-        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
-        verify(apiKeyRepository).save(captor.capture());
-        RagApiKey saved = captor.getValue();
-        assertEquals("Test Key", saved.getName());
-        assertTrue(saved.getEnabled());
-        assertNotNull(saved.getKeyHash());
-        assertNotNull(saved.getKeyId());
-    }
-
-    @Test
-    void generateKey_withExpiration_setsExpiresAt() {
-        LocalDateTime expires = LocalDateTime.of(2027, 1, 1, 0, 0);
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Expiring Key", expires);
-
-        ApiKeyCreatedResponse response = service.generateKey(request);
-
-        assertEquals(expires, response.getExpiresAt());
-        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
-        verify(apiKeyRepository).save(captor.capture());
-        assertEquals(expires, captor.getValue().getExpiresAt());
-    }
-
-    @Test
-    void generateKey_withAllowedCollections_persistsAndReturnsAcl() {
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Scoped Key", null);
+    void createBuildsStablePrincipalAndVersionOneCredential() {
+        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
+                "Indexer", LocalDateTime.now().plusDays(30));
         request.setAllowedCollectionIds(List.of(7L, 3L, 7L));
-        Map<Long, String> keys = new LinkedHashMap<>();
-        keys.put(3L, "customer:faq");
-        keys.put(7L, "customer:manual");
-        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
-                .thenReturn(keys);
+        request.setRequestsPerMinute(120);
 
-        ApiKeyCreatedResponse response = service.generateKey(request);
+        ApiKeyCreatedResponse created = service.generateManagedKey(request);
 
-        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
-        verify(apiKeyRepository).save(captor.capture());
-        assertEquals("3,7", captor.getValue().getAllowedCollectionIds());
-        assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
-        assertEquals(List.of("customer:faq", "customer:manual"),
-                response.getAllowedCollectionKeys());
+        assertEquals(created.getKeyId(), created.getPrincipalId());
+        assertEquals(1, created.getCredentialVersion());
+        assertEquals(1L, created.getPolicyVersion());
+        assertEquals(120, created.getRequestsPerMinute());
+        assertTrue(created.getRawKey().startsWith("rag_sk_"));
+        assertFalse(created.toString().contains(created.getRawKey()));
+
+        ArgumentCaptor<RagApiPrincipal> principal =
+                ArgumentCaptor.forClass(RagApiPrincipal.class);
+        verify(principalRepository).save(principal.capture());
+        assertEquals("3,7", principal.getValue().getAllowedCollectionIds());
+        assertEquals(2, principal.getValue().getNextCredentialVersion());
+
+        ArgumentCaptor<RagApiKey> credential =
+                ArgumentCaptor.forClass(RagApiKey.class);
+        verify(credentialRepository).save(credential.capture());
+        assertEquals(principal.getValue().getPrincipalId(),
+                credential.getValue().getPrincipalId());
+        assertEquals(1, credential.getValue().getCredentialVersion());
     }
 
     @Test
-    void revokeKey_existingKey_disablesAndReturnsTrue() {
-        when(apiKeyRepository.disableByKeyId("rag_k_abc")).thenReturn(1);
+    void authenticateQueriesAuthorityEveryTimeButThrottlesAuditTouch() {
+        RagApiKeyRepository.AuthenticationProjection projection =
+                mock(RagApiKeyRepository.AuthenticationProjection.class);
+        when(projection.getPrincipalId()).thenReturn("rag_k_principal");
+        when(projection.getCredentialId()).thenReturn("rag_k_v2");
+        when(projection.getCredentialVersion()).thenReturn(2);
+        when(projection.getRole()).thenReturn(ApiKeyRole.NORMAL);
+        when(projection.getPolicyVersion()).thenReturn(4L);
+        when(projection.getRequestsPerMinute()).thenReturn(80);
+        when(credentialRepository.authenticate(anyString(), any(LocalDateTime.class)))
+                .thenReturn(Optional.of(projection));
 
-        boolean result = service.revokeKey("rag_k_abc");
+        AuthenticatedApiPrincipal first = service.authenticate("rag_sk_secret");
+        AuthenticatedApiPrincipal second = service.authenticate("rag_sk_secret");
 
-        assertTrue(result);
-        verify(apiKeyRepository).disableByKeyId("rag_k_abc");
+        assertEquals("rag_k_principal", first.getPrincipalId());
+        assertEquals("rag_k_v2", first.getCredentialId());
+        assertEquals(2, first.getCredentialVersion());
+        assertEquals(4L, first.getPolicyVersion());
+        assertEquals(first, second);
+        verify(credentialRepository, times(2))
+                .authenticate(anyString(), any(LocalDateTime.class));
+        verify(principalRepository, times(1)).touchLastUsedIfOlder(
+                eq("rag_k_principal"), any(LocalDateTime.class), any(LocalDateTime.class));
     }
 
     @Test
-    void revokeKey_nonExistentKey_returnsFalse() {
-        when(apiKeyRepository.disableByKeyId("rag_k_unknown")).thenReturn(0);
+    void rotatePreservesPrincipalAndPolicyAndAdvancesCredentialVersion() {
+        RagApiPrincipal principal = principal("rag_k_principal");
+        RagApiKey current = credential("rag_k_v1", principal.getPrincipalId(), 1, true);
+        when(credentialRepository.findByKeyId("rag_k_v1"))
+                .thenReturn(Optional.of(current));
+        when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
+                .thenReturn(1);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
+        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+                principal.getPrincipalId())).thenReturn(Optional.of(current));
+        when(credentialRepository.disableByKeyId(eq("rag_k_v1"), any(LocalDateTime.class)))
+                .thenReturn(1);
 
-        boolean result = service.revokeKey("rag_k_unknown");
+        ApiKeyCreatedResponse rotated = service.rotateManagedKey("rag_k_v1");
 
-        assertFalse(result);
+        assertEquals(principal.getPrincipalId(), rotated.getPrincipalId());
+        assertEquals(2, rotated.getCredentialVersion());
+        assertEquals(3L, rotated.getPolicyVersion());
+        assertEquals(3, principal.getNextCredentialVersion());
+        ArgumentCaptor<RagApiKey> replacement =
+                ArgumentCaptor.forClass(RagApiKey.class);
+        verify(credentialRepository).save(replacement.capture());
+        assertEquals(principal.getPrincipalId(), replacement.getValue().getPrincipalId());
+        assertEquals(2, replacement.getValue().getCredentialVersion());
     }
 
     @Test
-    void revokeKey_nullKeyId_throws() {
-        assertThrows(NullPointerException.class, () -> service.revokeKey(null));
+    void rotateRejectsStaleCredential() {
+        RagApiPrincipal principal = principal("rag_k_principal");
+        RagApiKey stale = credential("rag_k_v1", principal.getPrincipalId(), 1, false);
+        RagApiKey current = credential("rag_k_v2", principal.getPrincipalId(), 2, true);
+        principal.setNextCredentialVersion(3);
+        when(credentialRepository.findByKeyId(stale.getKeyId()))
+                .thenReturn(Optional.of(stale));
+        when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
+                .thenReturn(1);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
+        when(credentialRepository.findFirstByPrincipalIdAndEnabledTrue(
+                principal.getPrincipalId())).thenReturn(Optional.of(current));
+
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.rotateKey(stale.getKeyId()));
+        assertEquals(ErrorCode.CREDENTIAL_NOT_CURRENT, error.getErrorCodeEnum());
     }
 
     @Test
-    void rotateKey_existingKey_disablesOldAndCreatesNew() {
-        RagApiKey existing = new RagApiKey();
-        existing.setKeyId("rag_k_old");
-        existing.setName("My Key");
-        existing.setKeyHash("oldhash");
-        existing.setEnabled(true);
-        existing.setAllowedCollectionIds("3,7");
-        when(apiKeyRepository.findByKeyId("rag_k_old")).thenReturn(Optional.of(existing));
-        when(apiKeyRepository.disableByKeyId("rag_k_old")).thenReturn(1);
-        Map<Long, String> keys = new LinkedHashMap<>();
-        keys.put(3L, "customer:faq");
-        keys.put(7L, "customer:manual");
-        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
-                .thenReturn(keys);
+    void repeatedDeleteOfLatestCredentialIsIdempotent() {
+        RagApiPrincipal principal = principal("rag_k_principal");
+        principal.setNextCredentialVersion(3);
+        principal.setRevokedAt(LocalDateTime.now());
+        RagApiKey latest = credential("rag_k_v2", principal.getPrincipalId(), 2, false);
+        when(credentialRepository.findByKeyId(latest.getKeyId()))
+                .thenReturn(Optional.of(latest));
+        when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
+                .thenReturn(1);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
 
-        ApiKeyCreatedResponse response = service.rotateKey("rag_k_old");
-
-        assertNotNull(response);
-        assertEquals("My Key", response.getName());
-        assertEquals(List.of(3L, 7L), response.getAllowedCollectionIds());
-        assertEquals(List.of("customer:faq", "customer:manual"),
-                response.getAllowedCollectionKeys());
-        verify(apiKeyRepository).disableByKeyId("rag_k_old");
-        // disableByKeyId is @Modifying (no save), only generateKey calls save() once
-        verify(apiKeyRepository, times(1)).save(any(RagApiKey.class));
+        assertTrue(service.revokeManagedKey(latest.getKeyId()));
+        verify(credentialRepository, never())
+                .disableByKeyId(anyString(), any(LocalDateTime.class));
     }
 
     @Test
-    void rotateKey_nonExistentKey_returnsNull() {
-        when(apiKeyRepository.findByKeyId("rag_k_unknown")).thenReturn(Optional.empty());
+    void policyUpdateRejectsStaleVersion() {
+        RagApiPrincipal principal = principal("rag_k_principal");
+        when(principalRepository.acquireManagementWrite(principal.getPrincipalId()))
+                .thenReturn(1);
+        when(principalRepository.findByPrincipalId(principal.getPrincipalId()))
+                .thenReturn(Optional.of(principal));
+        ApiPrincipalPolicyUpdateRequest request = new ApiPrincipalPolicyUpdateRequest();
+        request.setExpectedPolicyVersion(2L);
+        request.setName("Updated");
+        request.setExpiresAt(LocalDateTime.now().plusDays(10));
 
-        ApiKeyCreatedResponse result = service.rotateKey("rag_k_unknown");
-
-        assertNull(result);
+        RagException error = assertThrows(
+                RagException.class,
+                () -> service.updatePolicy(
+                        principal.getPrincipalId(), request, null, true));
+        assertEquals(ErrorCode.POLICY_VERSION_CONFLICT, error.getErrorCodeEnum());
     }
 
     @Test
-    void rotateKey_nullKeyId_throws() {
-        assertThrows(NullPointerException.class, () -> service.rotateKey(null));
+    void nonManagedCredentialPrefixesNeverReachDatabase() {
+        assertNull(service.authenticate("legacy-static"));
+        assertNull(service.authenticate(null));
+        verifyNoInteractions(credentialRepository);
     }
 
     @Test
-    void listKeys_returnsAllKeyMetadata() {
-        RagApiKey key1 = new RagApiKey();
-        key1.setKeyId("rag_k_1");
-        key1.setName("Key 1");
-        key1.setEnabled(true);
-        key1.setCreatedAt(LocalDateTime.of(2026, 1, 1, 0, 0));
-
-        RagApiKey key2 = new RagApiKey();
-        key2.setKeyId("rag_k_2");
-        key2.setName("Key 2");
-        key2.setEnabled(false);
-        key2.setCreatedAt(LocalDateTime.of(2026, 2, 1, 0, 0));
-        key2.setLastUsedAt(LocalDateTime.of(2026, 3, 1, 0, 0));
-        key2.setAllowedCollectionIds("3,7");
-
-        when(apiKeyRepository.findAll()).thenReturn(List.of(key1, key2));
-        Map<Long, String> keys = new LinkedHashMap<>();
-        keys.put(3L, "customer:faq");
-        keys.put(7L, "customer:manual");
-        when(collectionIdentityResolver.mapKeys(List.of(3L, 7L)))
-                .thenReturn(keys);
-
-        List<ApiKeyResponse> result = service.listKeys();
-
-        assertEquals(2, result.size());
-        assertEquals("rag_k_1", result.get(0).getKeyId());
-        assertEquals("Key 1", result.get(0).getName());
-        assertEquals(true, result.get(0).getEnabled());
-        assertEquals("rag_k_2", result.get(1).getKeyId());
-        assertEquals(false, result.get(1).getEnabled());
-        assertEquals(List.of("customer:faq", "customer:manual"),
-                result.get(1).getAllowedCollectionKeys());
+    void generatedIdentifiersHaveExpectedEntropyEncoding() {
+        String raw = service.generateRawKey();
+        String id = service.generateKeyId();
+        assertTrue(raw.matches("rag_sk_[0-9a-f]{64}"));
+        assertTrue(id.matches("rag_k_[0-9a-f]{32}"));
     }
 
-    @Test
-    void listKeys_empty_returnsEmptyList() {
-        when(apiKeyRepository.findAll()).thenReturn(List.of());
-
-        List<ApiKeyResponse> result = service.listKeys();
-
-        assertTrue(result.isEmpty());
+    private RagApiPrincipal principal(String id) {
+        RagApiPrincipal principal = new RagApiPrincipal();
+        principal.setPrincipalId(id);
+        principal.setName("Indexer");
+        principal.setRole(ApiKeyRole.NORMAL);
+        principal.setAllowedCollectionIds("3,7");
+        principal.setExpiresAt(LocalDateTime.now().plusDays(30));
+        principal.setRequestsPerMinute(120);
+        principal.setPolicyVersion(3L);
+        principal.setNextCredentialVersion(2);
+        principal.setCreatedAt(LocalDateTime.now().minusDays(1));
+        principal.setUpdatedAt(LocalDateTime.now().minusDays(1));
+        return principal;
     }
 
-    @Test
-    void validateKeyEntity_validKey_returnsKeyAndUpdatesLastUsed() {
-        String rawKey = "rag_sk_testkey123";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_abc");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        key.setExpiresAt(null);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey result = service.validateKeyEntity(rawKey);
-
-        assertNotNull(result);
-        assertEquals("rag_k_abc", result.getKeyId());
-        verify(apiKeyRepository).updateLastUsed(eq("rag_k_abc"), any(LocalDateTime.class));
-    }
-
-    @Test
-    void validateKeyEntity_expiredKey_returnsNull() {
-        String rawKey = "rag_sk_expired";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_expired");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        key.setExpiresAt(LocalDateTime.of(2020, 1, 1, 0, 0)); // expired
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey result = service.validateKeyEntity(rawKey);
-
-        assertNull(result);
-    }
-
-    @Test
-    void validateKeyEntity_disabledKey_returnsNull() {
-        String rawKey = "rag_sk_disabled";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_disabled");
-        key.setKeyHash(hash);
-        key.setEnabled(false);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey result = service.validateKeyEntity(rawKey);
-
-        assertNull(result);
-    }
-
-    @Test
-    void validateKeyEntity_invalidKey_returnsNull() {
-        String hash = sha256("rag_sk_notexist");
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty());
-
-        RagApiKey result = service.validateKeyEntity("rag_sk_notexist");
-
-        assertNull(result);
-    }
-
-    @Test
-    void validateKeyEntity_nullRawKey_returnsNull() {
-        RagApiKey result = service.validateKeyEntity(null);
-        assertNull(result);
-    }
-
-    @Test
-    void validateKeyEntity_blankRawKey_returnsNull() {
-        RagApiKey result = service.validateKeyEntity("   ");
-        assertNull(result);
-    }
-
-    // ==================== validateKey tests ====================
-
-    @Test
-    void validateKey_validKey_returnsKeyId() {
-        String rawKey = "rag_sk_validkey";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_valid");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        key.setExpiresAt(null);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        String result = service.validateKey(rawKey);
-
-        assertNotNull(result);
-        assertEquals("rag_k_valid", result);
-        verify(apiKeyRepository).updateLastUsed(eq("rag_k_valid"), any(LocalDateTime.class));
-    }
-
-    @Test
-    void validateKey_nonPrefixKey_returnsNull() {
-        // Keys without rag_sk_ prefix are legacy/plain-text keys handled by the filter
-        assertNull(service.validateKey("some-plain-key"));
-        assertNull(service.validateKey("sk_another"));
-        verifyNoInteractions(apiKeyRepository);
-    }
-
-    @Test
-    void validateKey_disabledKey_returnsNull() {
-        String rawKey = "rag_sk_disabled2";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_disabled2");
-        key.setKeyHash(hash);
-        key.setEnabled(false);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        String result = service.validateKey(rawKey);
-
-        assertNull(result);
-        // lastUsed should NOT be updated for disabled keys
-        verify(apiKeyRepository, never()).updateLastUsed(anyString(), any(LocalDateTime.class));
-    }
-
-    @Test
-    void validateKey_expiredKey_returnsNull() {
-        String rawKey = "rag_sk_expired2";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_expired2");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        key.setExpiresAt(LocalDateTime.of(2020, 1, 1, 0, 0));
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        String result = service.validateKey(rawKey);
-
-        assertNull(result);
-        verify(apiKeyRepository, never()).updateLastUsed(anyString(), any(LocalDateTime.class));
-    }
-
-    @Test
-    void validateKey_notFound_returnsNull() {
-        String hash = sha256("rag_sk_unknown");
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty());
-
-        String result = service.validateKey("rag_sk_unknown");
-
-        assertNull(result);
-    }
-
-    @Test
-    void validateKey_nullKey_returnsNull() {
-        assertNull(service.validateKey(null));
-    }
-
-    @Test
-    void validateKey_blankKey_returnsNull() {
-        assertNull(service.validateKey("   "));
-    }
-
-    @Test
-    void validateKeyEntity_cacheHit_skipsDbLookup() {
-        // First call: populates cache
-        String rawKey = "rag_sk_cachekey";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_cache");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        key.setExpiresAt(null);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey first = service.validateKeyEntity(rawKey);
-        assertNotNull(first);
-        assertEquals("rag_k_cache", first.getKeyId());
-
-        // Second call: should hit cache, not call DB
-        RagApiKey second = service.validateKeyEntity(rawKey);
-        assertNotNull(second);
-        assertEquals("rag_k_cache", second.getKeyId());
-
-        // DB should only be called once (cache hit on second call)
-        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
-        // But lastUsed is updated on each call
-        verify(apiKeyRepository, times(2)).updateLastUsed(eq("rag_k_cache"), any(LocalDateTime.class));
-    }
-
-    @Test
-    void validateKeyEntity_cacheMiss_queriesDb() {
-        String rawKey = "rag_sk_miss";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_miss");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey result = service.validateKeyEntity(rawKey);
-
-        assertNotNull(result);
-        assertEquals("rag_k_miss", result.getKeyId());
-        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
-    }
-
-    @Test
-    void revokeKey_invalidatesValidationCache() {
-        // Pre-populate cache with a key
-        String rawKey = "rag_sk_willrevoke";
-        String hash = sha256(rawKey);
-        RagApiKey key = new RagApiKey();
-        key.setKeyId("rag_k_revoke");
-        key.setKeyHash(hash);
-        key.setEnabled(true);
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(key));
-
-        RagApiKey first = service.validateKeyEntity(rawKey);
-        assertNotNull(first);
-        assertEquals("rag_k_revoke", first.getKeyId());
-        verify(apiKeyRepository, times(1)).findByKeyHash(hash);
-
-        // Revoke: should invalidate cache, and key is now disabled in DB
-        when(apiKeyRepository.disableByKeyId("rag_k_revoke")).thenReturn(1);
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.empty()); // key no longer valid
-        boolean result = service.revokeKey("rag_k_revoke");
-        assertTrue(result);
-
-        // Next validateKeyEntity call should query DB (cache was cleared) and return null
-        RagApiKey afterRevoke = service.validateKeyEntity(rawKey);
-        assertNull(afterRevoke);
-        verify(apiKeyRepository, times(2)).findByKeyHash(hash);
-    }
-
-    @Test
-    void validateKeyEntity_nonRagSkPrefix_returnsNullWithoutCacheLookup() {
-        // Non rag_sk_ prefix keys skip validation entirely (legacy path)
-        service.validateKeyEntity("some-legacy-key");
-        verifyNoInteractions(apiKeyRepository);
-    }
-
-    private String sha256(String input) {
-        try {
-            java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
-            byte[] hash = digest.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            return java.util.HexFormat.of().formatHex(hash);
-        } catch (java.security.NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    // ==================== T13: Encryption / security boundary tests ====================
-
-    @Test
-    void sha256_producesConsistentHash() {
-        String hash1 = sha256("test_api_key_123");
-        String hash2 = sha256("test_api_key_123");
-        assertEquals(hash1, hash2);
-        assertEquals(64, hash1.length());
-        assertTrue(hash1.matches("[0-9a-f]{64}"));
-    }
-
-    @Test
-    void sha256_differentInputs_differentHashes() {
-        assertNotEquals(sha256("key_a"), sha256("key_b"));
-    }
-
-    @Test
-    void generateRawKey_hasCorrectPrefix() {
-        assertTrue(service.generateRawKey().startsWith("rag_sk_"));
-    }
-
-    @Test
-    void generateRawKey_suffixContains256Bits() {
-        String rawKey = service.generateRawKey();
-        String randomPart = rawKey.substring("rag_sk_".length());
-        assertEquals(64, randomPart.length());
-        assertTrue(randomPart.matches("[0-9a-f]{64}"));
-    }
-
-    @Test
-    void generateKeyId_startsWithRagKPrefix() {
-        assertTrue(service.generateKeyId().startsWith("rag_k_"));
-    }
-
-    @Test
-    void generateKeyId_contains128BitsAfterPrefix() {
-        String keyId = service.generateKeyId();
-        assertEquals(32, keyId.substring("rag_k_".length()).length());
-    }
-
-    @Test
-    void isExpired_nullExpiresAt_isNotExpired() throws Exception {
-        RagApiKey key = new RagApiKey();
-        key.setExpiresAt(null);
-        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
-        method.setAccessible(true);
-        assertFalse((Boolean) method.invoke(service, key));
-    }
-
-    @Test
-    void isExpired_futureDate_isNotExpired() throws Exception {
-        RagApiKey key = new RagApiKey();
-        key.setExpiresAt(LocalDateTime.now().plusDays(30));
-        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
-        method.setAccessible(true);
-        assertFalse((Boolean) method.invoke(service, key));
-    }
-
-    @Test
-    void isExpired_pastDate_isExpired() throws Exception {
-        RagApiKey key = new RagApiKey();
-        key.setExpiresAt(LocalDateTime.now().minusDays(1));
-        var method = ApiKeyManagementService.class.getDeclaredMethod("isExpired", RagApiKey.class);
-        method.setAccessible(true);
-        assertTrue((Boolean) method.invoke(service, key));
-    }
-
-    @Test
-    void validateKeyEntity_expiredKey_notCached() {
-        String rawKey = "rag_sk_expired_test_key_0000000000000";
-        String hash = sha256(rawKey);
-        RagApiKey expiredKey = new RagApiKey();
-        expiredKey.setKeyId("rag_k_expired00001");
-        expiredKey.setKeyHash(hash);
-        expiredKey.setName("expired-test");
-        expiredKey.setEnabled(true);
-        expiredKey.setExpiresAt(LocalDateTime.now().minusDays(1));
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(expiredKey));
-
-        assertNull(service.validateKeyEntity(rawKey));
-        assertNull(getValidationCache().getIfPresent(hash));
-    }
-
-    @Test
-    void validateKeyEntity_disabledKey_notCached() {
-        String rawKey = "rag_sk_disabled_test_key_00000000000";
-        String hash = sha256(rawKey);
-        RagApiKey disabledKey = new RagApiKey();
-        disabledKey.setKeyId("rag_k_disabled001");
-        disabledKey.setKeyHash(hash);
-        disabledKey.setName("disabled-test");
-        disabledKey.setEnabled(false);
-        disabledKey.setExpiresAt(null);
-        when(apiKeyRepository.findByKeyHash(hash)).thenReturn(Optional.of(disabledKey));
-
-        assertNull(service.validateKeyEntity(rawKey));
-        assertNull(getValidationCache().getIfPresent(hash));
-    }
-
-    @Test
-    void generateManagedKey_requiresExpiry() {
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Managed", null);
-
-        IllegalArgumentException error = assertThrows(
-                IllegalArgumentException.class,
-                () -> service.generateManagedKey(request));
-
-        assertTrue(error.getMessage().contains("required"));
-        verify(apiKeyRepository, never()).save(any());
-    }
-
-    @Test
-    void generateManagedKey_rejectsExpiredValue() {
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
-                "Managed", LocalDateTime.now().minusMinutes(1));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> service.generateManagedKey(request));
-        verify(apiKeyRepository, never()).save(any());
-    }
-
-    @Test
-    void generateManagedKey_acceptsExpiryBeyondNinetyDays() {
-        LocalDateTime expiry = LocalDateTime.now().plusDays(365);
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest(
-                "Managed", expiry);
-
-        ApiKeyCreatedResponse response = service.generateManagedKey(request);
-
-        assertEquals(expiry, response.getExpiresAt());
-        verify(apiKeyRepository).save(argThat(
-                key -> expiry.equals(key.getExpiresAt())));
-    }
-
-    @Test
-    void generateManagedKey_createsNormalFullRagKey() {
-        LocalDateTime expiry = LocalDateTime.now().plusDays(30);
-        ApiKeyCreateRequest request = new ApiKeyCreateRequest("Managed", expiry);
-
-        ApiKeyCreatedResponse response = service.generateManagedKey(request);
-
-        assertEquals(expiry, response.getExpiresAt());
-        ArgumentCaptor<RagApiKey> captor = ArgumentCaptor.forClass(RagApiKey.class);
-        verify(apiKeyRepository).save(captor.capture());
-        assertEquals(com.springairag.core.entity.ApiKeyRole.NORMAL,
-                captor.getValue().getRole());
-    }
-
-    @Test
-    void rotateManagedKey_assignsDefaultExpiryToPermanentLegacyKey() {
-        LocalDateTime before = LocalDateTime.now().plusDays(364);
-        RagApiKey existing = activeKey("rag_k_permanent", null);
-        when(apiKeyRepository.findByKeyId("rag_k_permanent"))
-                .thenReturn(Optional.of(existing));
-
-        ApiKeyCreatedResponse response =
-                service.rotateManagedKey("rag_k_permanent");
-
-        assertNotNull(response);
-        assertTrue(response.getExpiresAt().isAfter(before));
-        assertTrue(response.getExpiresAt()
-                .isBefore(LocalDateTime.now().plusDays(366)));
-        verify(apiKeyRepository).disableByKeyId("rag_k_permanent");
-    }
-
-    @Test
-    void rotateManagedKey_preservesShorterExistingExpiry() {
-        LocalDateTime expiry = LocalDateTime.now().plusDays(30);
-        RagApiKey existing = activeKey("rag_k_short", expiry);
-        when(apiKeyRepository.findByKeyId("rag_k_short"))
-                .thenReturn(Optional.of(existing));
-
-        ApiKeyCreatedResponse response = service.rotateManagedKey("rag_k_short");
-
-        assertEquals(expiry, response.getExpiresAt());
-    }
-
-    @Test
-    void rotateManagedKey_preservesLongExistingExpiry() {
-        LocalDateTime expiry = LocalDateTime.now().plusDays(730);
-        RagApiKey existing = activeKey("rag_k_long", expiry);
-        when(apiKeyRepository.findByKeyId("rag_k_long"))
-                .thenReturn(Optional.of(existing));
-
-        ApiKeyCreatedResponse response = service.rotateManagedKey("rag_k_long");
-
-        assertEquals(expiry, response.getExpiresAt());
-    }
-
-    @Test
-    void rotateManagedKey_rejectsExpiredKeyWithoutDisablingIt() {
-        RagApiKey existing = activeKey(
-                "rag_k_expired_managed", LocalDateTime.now().minusMinutes(1));
-        when(apiKeyRepository.findByKeyId("rag_k_expired_managed"))
-                .thenReturn(Optional.of(existing));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> service.rotateManagedKey("rag_k_expired_managed"));
-
-        verify(apiKeyRepository, never()).disableByKeyId(anyString());
-        verify(apiKeyRepository, never()).save(any());
-    }
-
-    @Test
-    void rotateManagedKey_rejectsDisabledKey() {
-        RagApiKey existing = activeKey(
-                "rag_k_disabled_managed", LocalDateTime.now().plusDays(30));
-        existing.setEnabled(false);
-        when(apiKeyRepository.findByKeyId("rag_k_disabled_managed"))
-                .thenReturn(Optional.of(existing));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> service.rotateManagedKey("rag_k_disabled_managed"));
-        verify(apiKeyRepository, never()).disableByKeyId(anyString());
-    }
-
-    private RagApiKey activeKey(String keyId, LocalDateTime expiresAt) {
-        RagApiKey key = new RagApiKey();
-        key.setKeyId(keyId);
-        key.setName("Managed Key");
-        key.setEnabled(true);
-        key.setExpiresAt(expiresAt);
-        return key;
-    }
-
-    // Helper to access static VALIDATED_KEY_CACHE via reflection
-    @SuppressWarnings("unchecked")
-    private Cache<String, RagApiKey> getValidationCache() {
-        try {
-            var field = ApiKeyManagementService.class.getDeclaredField("VALIDATED_KEY_CACHE");
-            field.setAccessible(true);
-            return (Cache<String, RagApiKey>) field.get(null);
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
+    private RagApiKey credential(
+            String id, String principalId, int version, boolean enabled) {
+        RagApiKey credential = new RagApiKey();
+        credential.setKeyId(id);
+        credential.setPrincipalId(principalId);
+        credential.setCredentialVersion(version);
+        credential.setEnabled(enabled);
+        credential.setRole(ApiKeyRole.NORMAL);
+        credential.setName("Indexer");
+        return credential;
     }
 }

@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V47 |
+| Flyway | V1–V48 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -257,7 +257,7 @@ key 重放、key 冲突、turn 状态查询，并通过
 ```
 
 脚本会验证 `KNOWLEDGE`、`AGENT`、`PLAIN` 三种模式，Spring AI Tool Calling 边界，
-principal 隔离的 Memory/历史，V32 会话 lease、V46 持久化摘要 CAS、V47 Chat turn 幂等重放、有界执行 metadata、
+principal 隔离的 Memory/历史，V32 会话 lease、V46 持久化摘要 CAS、V47 Chat turn 幂等重放、V48 stable managed principal 与共享 quota、有界执行 metadata、
 结构化 SSE，WebUI 模式/能力/来源展示，以及 Chat 导出来源快照；同时执行
 `NextHighValueFeaturesPostgresIntegrationTest` 矩阵和独立的领域扩展、只读 SQL
 工具 demo 测试。每一步都会记录到
@@ -355,6 +355,19 @@ Playwright、双语文档门禁和空白检查。证据分别写入
 一次性数据库，并必须显式设置 `NEXT_HIGH_VALUE_IT_CLEAN_CONFIRM=YES`。该测试会清空
 数据库，绝不能指向开发库或生产库。可用 `NEXT_HIGH_VALUE_PLAYWRIGHT_PORT` 指定 Mock
 Playwright 的 Vite preview 起始端口。
+
+### 受管 API Principal 一键验证
+
+```bash
+MANAGED_API_REAL_ENV_FILE=.env \
+./scripts/verify-managed-api-principals.sh --with-real-llm
+```
+
+该门槛在 Mock 与构建检查通过后，使用两个后端（默认 `18181`、`18182`）、一个 Vite
+前端（默认 `15181`）和一次性 PostgreSQL 执行真实全栈及有界真实 LLM 验收。端口冲突时可
+分别覆盖 `MANAGED_API_BACKEND_A_PORT`、`MANAGED_API_BACKEND_B_PORT` 和
+`MANAGED_API_FRONTEND_PORT`；证据位于
+`.verification/managed-api-principals/<run-id>/`。
 
 ### 检索诊断 / metadata 过滤 / 嵌入运营 / 受管质量
 

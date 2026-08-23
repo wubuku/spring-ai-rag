@@ -7,11 +7,12 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagApiKeyRepository;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.retrieval.RetrievalFilterValidator;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
+import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.RetrievalEvaluationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,7 +38,7 @@ class EvaluationSuiteServiceOwnerAclTest {
     private final ObjectMapper mapper = new ObjectMapper();
     private EvaluationSuiteRepository repository;
     private CollectionRetrievalScopeResolver scopeResolver;
-    private RagApiKeyRepository apiKeyRepository;
+    private ApiKeyManagementService apiKeyManagementService;
     private EvaluationCaseExecutor caseExecutor;
     private EmbeddingProfileProvider profileProvider;
     private RagProperties properties;
@@ -47,7 +48,7 @@ class EvaluationSuiteServiceOwnerAclTest {
     void setUp() {
         repository = mock(EvaluationSuiteRepository.class);
         scopeResolver = mock(CollectionRetrievalScopeResolver.class);
-        apiKeyRepository = mock(RagApiKeyRepository.class);
+        apiKeyManagementService = mock(ApiKeyManagementService.class);
         caseExecutor = mock(EvaluationCaseExecutor.class);
         profileProvider = mock(EmbeddingProfileProvider.class);
         properties = new RagProperties();
@@ -63,7 +64,7 @@ class EvaluationSuiteServiceOwnerAclTest {
                 profileProvider,
                 mapper,
                 properties,
-                apiKeyRepository);
+                apiKeyManagementService);
     }
 
     @Test
@@ -71,14 +72,14 @@ class EvaluationSuiteServiceOwnerAclTest {
         assertNull(service.resolveExecutionKey("local:auth-disabled"));
         assertNull(service.resolveExecutionKey("root:environment-root"));
         assertNull(service.resolveExecutionKey("legacy:static"));
-        verify(apiKeyRepository, never()).findByKeyId(any());
+        verify(apiKeyManagementService, never()).findActivePrincipal(any());
     }
 
     @Test
     void missingOwnerKeyFailsTheRunWithoutSearching() {
         UUID runId = UUID.randomUUID();
         String workerId = "worker-a";
-        when(apiKeyRepository.findByKeyId("rag_k_gone")).thenReturn(Optional.empty());
+        when(apiKeyManagementService.findActivePrincipal("rag_k_gone")).thenReturn(null);
 
         service.executeRun(
                 run(runId, UUID.randomUUID(), "db:rag_k_gone"), workerId);
@@ -98,12 +99,11 @@ class EvaluationSuiteServiceOwnerAclTest {
         UUID runId = UUID.randomUUID();
         UUID versionId = UUID.randomUUID();
         String workerId = "worker-a";
-        RagApiKey ownerKey = new RagApiKey();
-        ownerKey.setKeyId("rag_k_owner");
-        ownerKey.setEnabled(true);
-        ownerKey.setAllowedCollectionIds("999");
-        when(apiKeyRepository.findByKeyId("rag_k_owner"))
-                .thenReturn(Optional.of(ownerKey));
+        AuthenticatedApiPrincipal ownerKey = new AuthenticatedApiPrincipal(
+                "rag_k_owner", "rag_k_v2", 2, "DATABASE_API_KEY",
+                ApiKeyRole.NORMAL, "999", null, 1L, null);
+        when(apiKeyManagementService.findActivePrincipal("rag_k_owner"))
+                .thenReturn(ownerKey);
         when(repository.findVersionById(versionId)).thenReturn(Optional.of(
                 new EvaluationSuiteRepository.VersionRow(
                         versionId,
@@ -126,11 +126,8 @@ class EvaluationSuiteServiceOwnerAclTest {
 
     @Test
     void disabledOwnerKeyFailsClosed() {
-        RagApiKey disabled = new RagApiKey();
-        disabled.setKeyId("rag_k_disabled");
-        disabled.setEnabled(false);
-        when(apiKeyRepository.findByKeyId("rag_k_disabled"))
-                .thenReturn(Optional.of(disabled));
+        when(apiKeyManagementService.findActivePrincipal("rag_k_disabled"))
+                .thenReturn(null);
 
         assertThrows(SecurityException.class,
                 () -> service.resolveExecutionKey("db:rag_k_disabled"));

@@ -295,7 +295,7 @@ public class RagDocumentController {
             @RequestHeader(value = "Idempotency-Key", required = false)
             String idempotencyKey) {
         log.info("Creating document: title={}", request.getTitle());
-        var currentKey = ApiKeyCollectionAccess.currentKey();
+        var currentKey = ApiKeyCollectionAccess.currentPolicy();
         Long collectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(), currentKey);
 
@@ -366,7 +366,7 @@ public class RagDocumentController {
         return documentRepository.findById(id)
             .map(doc -> {
                     ApiKeyCollectionAccess.requireDocumentAccess(
-                            doc, ApiKeyCollectionAccess.currentKey());
+                            doc, ApiKeyCollectionAccess.currentPolicy());
                     Long collectionId = doc.getCollectionId();
                     Map<Long, String> collectionNameMap = collectionId != null
                             ? collectionRepository.findById(collectionId)
@@ -478,7 +478,7 @@ public class RagDocumentController {
         LocalDateTime createdAfterDt = parseDateParam(createdAfter);
         LocalDateTime createdBeforeDt = parseDateParam(createdBefore);
 
-        var currentKey = ApiKeyCollectionAccess.currentKey();
+        var currentKey = ApiKeyCollectionAccess.currentPolicy();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(currentKey);
         collectionId = resolveOptionalCollectionId(collectionId, collectionKey, currentKey);
         final Long resolvedCollectionId = collectionId;
@@ -537,7 +537,7 @@ public class RagDocumentController {
     @Timed(value = "rag.documents.stats", description = "Get document statistics by processing status", percentiles = {0.5, 0.95, 0.99})
     public ResponseEntity<DocumentStatsResponse> getDocumentStats() {
         List<Object[]> statusCounts = ApiKeyCollectionAccess.restrictedCollectionIds(
-                        ApiKeyCollectionAccess.currentKey())
+                        ApiKeyCollectionAccess.currentPolicy())
                 .map(ids -> documentRepository.countByProcessingStatusAndCollectionIds(
                         List.copyOf(ids)))
                 .orElseGet(documentRepository::countByProcessingStatus);
@@ -607,7 +607,7 @@ public class RagDocumentController {
     public ResponseEntity<EmbeddingStatusResponse> embeddingStatus() {
         long embeddingProfileId = activeEmbeddingProfileId();
         var restrictedIds = ApiKeyCollectionAccess.restrictedCollectionIds(
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         long total = restrictedIds
                 .map(ids -> documentRepository.countByCollectionIdIn(List.copyOf(ids)))
                 .orElseGet(documentRepository::count);
@@ -636,7 +636,7 @@ public class RagDocumentController {
         long embeddingProfileId = activeEmbeddingProfileId();
         List<RagDocument> missing = findDocumentsWithoutCurrentEmbedding(
                 ApiKeyCollectionAccess.restrictedCollectionIds(
-                        ApiKeyCollectionAccess.currentKey()),
+                        ApiKeyCollectionAccess.currentPolicy()),
                 embeddingProfileId);
         if (missing.isEmpty()) {
             return ResponseEntity.ok(new ReembedMissingResponse(0, 0, 0, List.of()));
@@ -832,9 +832,9 @@ public class RagDocumentController {
             String idempotencyKey) {
         Long batchCollectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(),
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         normalizeDocumentCollectionScopes(request.getDocuments(), batchCollectionId,
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         request.setCollectionId(batchCollectionId);
         request.setCollectionKey(null);
         log.info("Batch create: docs={}, embed={}, collectionId={}, force={}",
@@ -866,7 +866,7 @@ public class RagDocumentController {
     }
 
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey,
-                                             com.springairag.core.entity.RagApiKey currentKey) {
+                                             com.springairag.core.security.ApiAccessPolicy currentKey) {
         Long resolved;
         if (collectionKey != null) {
             List<Long> resolvedIds = ApiKeyCollectionAccess.resolveCollectionIds(
@@ -882,7 +882,7 @@ public class RagDocumentController {
     }
 
     private Long resolveOptionalCollectionId(Long collectionId, String collectionKey,
-                                             com.springairag.core.entity.RagApiKey currentKey) {
+                                             com.springairag.core.security.ApiAccessPolicy currentKey) {
         if (collectionId == null && collectionKey == null) {
             return null;
         }
@@ -891,7 +891,7 @@ public class RagDocumentController {
 
     private void normalizeDocumentCollectionScopes(List<DocumentRequest> requests,
                                                    Long defaultCollectionId,
-                                                   com.springairag.core.entity.RagApiKey currentKey) {
+                                                   com.springairag.core.security.ApiAccessPolicy currentKey) {
         if (requests == null) {
             return;
         }
@@ -1059,9 +1059,9 @@ public class RagDocumentController {
             @Valid @RequestBody BatchCreateAndEmbedRequest request) {
         Long batchCollectionId = resolveWritableCollectionId(
                 request.getCollectionId(), request.getCollectionKey(),
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         normalizeDocumentCollectionScopes(request.getDocuments(), batchCollectionId,
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         request.setCollectionId(batchCollectionId);
         request.setCollectionKey(null);
         log.info("Batch create and embed (deprecated): collectionId={}, docs={}, force={}",
@@ -1101,7 +1101,7 @@ public class RagDocumentController {
             @RequestHeader(value = "Idempotency-Key", required = false)
             String idempotencyKey) {
         collectionId = resolveWritableCollectionId(
-                collectionId, collectionKey, ApiKeyCollectionAccess.currentKey());
+                collectionId, collectionKey, ApiKeyCollectionAccess.currentPolicy());
 
         log.info("File upload request: {} files, collectionId={}, policy={}",
                 files.length, collectionId, embeddingPolicy);
@@ -1357,12 +1357,12 @@ public class RagDocumentController {
     private void requireDocumentAccess(Long id) {
         documentRepository.findById(id).ifPresent(doc ->
                 ApiKeyCollectionAccess.requireDocumentAccess(
-                        doc, ApiKeyCollectionAccess.currentKey()));
+                        doc, ApiKeyCollectionAccess.currentPolicy()));
     }
 
     private void requireDocumentAccess(List<Long> ids) {
         if (ApiKeyCollectionAccess.isUnrestricted(
-                ApiKeyCollectionAccess.currentKey())) {
+                ApiKeyCollectionAccess.currentPolicy())) {
             return;
         }
         Map<Long, RagDocument> documents = documentRepository.findAllById(ids).stream()
@@ -1371,7 +1371,7 @@ public class RagDocumentController {
             RagDocument document = documents.get(id);
             if (document != null) {
                 ApiKeyCollectionAccess.requireDocumentAccess(
-                        document, ApiKeyCollectionAccess.currentKey());
+                        document, ApiKeyCollectionAccess.currentPolicy());
             }
         }
     }

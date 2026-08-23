@@ -12,7 +12,7 @@ import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEmbeddingJobProperties;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentNotFoundException;
 import com.springairag.core.exception.RagException;
@@ -181,7 +181,7 @@ public class EmbeddingJobService {
             String collectionKey,
             int page,
             int size) {
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         Long collectionId = resolveListCollectionId(collectionKey, caller);
         java.util.List<Long> allowed = ApiKeyCollectionAccess
                 .restrictedCollectionIds(caller)
@@ -210,7 +210,7 @@ public class EmbeddingJobService {
     }
 
     public CollectionEmbeddingReadinessResponse readiness(String collectionKey) {
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         Long collectionId = resolveListCollectionId(collectionKey, caller);
         if (collectionId == null) {
             throw new IllegalArgumentException("collectionKey is required");
@@ -224,7 +224,7 @@ public class EmbeddingJobService {
                 descriptorProvider.jsonRecordDescriptor().chunkerVersion());
     }
 
-    private Long resolveListCollectionId(String collectionKey, RagApiKey caller) {
+    private Long resolveListCollectionId(String collectionKey, ApiAccessPolicy caller) {
         if (collectionKey == null || collectionKey.isBlank()) {
             return null;
         }
@@ -290,7 +290,7 @@ public class EmbeddingJobService {
         }
         if (idsPresent) {
             List<Long> ids = normalizeDocumentIds(request.documentIds());
-            RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+            ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
             for (Long id : ids) {
                 RagDocument document = documentRepository.findById(id)
                         .orElseThrow(() -> new DocumentNotFoundException(id));
@@ -305,7 +305,7 @@ public class EmbeddingJobService {
                 request.collectionKeys(),
                 null,
                 null,
-                ApiKeyCollectionAccess.currentKey());
+                ApiKeyCollectionAccess.currentPolicy());
         int fetchLimit = properties.getMaxDocumentsPerBatch() + 1;
         List<Long> ids;
         if (scope.matchNone()) {
@@ -370,11 +370,11 @@ public class EmbeddingJobService {
         RagDocument document = documentRepository.findById(job.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(job.documentId()));
         ApiKeyCollectionAccess.requireDocumentAccess(
-                document, ApiKeyCollectionAccess.currentKey());
+                document, ApiKeyCollectionAccess.currentPolicy());
         return job;
     }
 
-    private boolean isVisible(long documentId, RagApiKey caller) {
+    private boolean isVisible(long documentId, ApiAccessPolicy caller) {
         return documentRepository.findById(documentId)
                 .map(document -> {
                     try {

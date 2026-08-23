@@ -1,7 +1,6 @@
 package com.springairag.core.security;
 
 import com.springairag.core.entity.ApiKeyRole;
-import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.filter.ApiKeyAuthFilter;
@@ -33,20 +32,35 @@ public final class ApiKeyCollectionAccess {
 
     private ApiKeyCollectionAccess() {}
 
-    public static RagApiKey currentKey() {
+    public static ApiAccessPolicy currentPolicy() {
         if (RequestContextHolder.getRequestAttributes()
                 instanceof ServletRequestAttributes attributes) {
-            return currentKey(attributes.getRequest());
+            return currentPolicy(attributes.getRequest());
         }
         return null;
     }
 
-    public static RagApiKey currentKey(HttpServletRequest request) {
+    public static ApiAccessPolicy currentPolicy(HttpServletRequest request) {
         if (request == null) {
             return null;
         }
-        Object entity = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
-        return entity instanceof RagApiKey k ? k : null;
+        Object policy = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
+        if (policy instanceof ApiAccessPolicy accessPolicy) {
+            return accessPolicy;
+        }
+        Object legacy = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY);
+        return legacy instanceof ApiAccessPolicy accessPolicy ? accessPolicy : null;
+    }
+
+    /** @deprecated 使用不可变 {@link #currentPolicy()}。 */
+    @Deprecated
+    public static ApiAccessPolicy currentKey() { return currentPolicy(); }
+
+    /** @deprecated 使用不可变 {@link #currentPolicy(HttpServletRequest)}。 */
+    @Deprecated
+    public static ApiAccessPolicy currentKey(HttpServletRequest request) {
+        return currentPolicy(request);
     }
 
     public static List<Long> parseAllowedIds(String raw) {
@@ -94,7 +108,7 @@ public final class ApiKeyCollectionAccess {
                 .orElse(null);
     }
 
-    public static boolean isUnrestricted(RagApiKey key) {
+    public static boolean isUnrestricted(ApiAccessPolicy key) {
         if (key == null) {
             return true;
         }
@@ -105,7 +119,7 @@ public final class ApiKeyCollectionAccess {
                 || key.getAllowedCollectionIds().isBlank();
     }
 
-    public static Optional<Set<Long>> restrictedCollectionIds(RagApiKey key) {
+    public static Optional<Set<Long>> restrictedCollectionIds(ApiAccessPolicy key) {
         if (isUnrestricted(key)) {
             return Optional.empty();
         }
@@ -121,7 +135,7 @@ public final class ApiKeyCollectionAccess {
      * @return effective collection IDs (null = no filter / all collections)
      * @throws SecurityException if requested IDs are outside the allow-list
      */
-    public static List<Long> resolveCollectionIds(List<Long> requested, RagApiKey key) {
+    public static List<Long> resolveCollectionIds(List<Long> requested, ApiAccessPolicy key) {
         if (isUnrestricted(key)) {
             if (requested != null && requested.isEmpty()) {
                 throw new IllegalArgumentException("Collection scope must not be empty");
@@ -162,7 +176,7 @@ public final class ApiKeyCollectionAccess {
     public static List<Long> resolveCollectionIds(
             List<Long> requestedIds,
             List<String> requestedKeys,
-            RagApiKey key,
+            ApiAccessPolicy key,
             CollectionIdentityResolver resolver) {
         if (requestedKeys == null) {
             return resolveCollectionIds(requestedIds, key);
@@ -199,7 +213,7 @@ public final class ApiKeyCollectionAccess {
 
     public static List<Long> resolveDelegatedAllowedKeys(
             List<String> requestedKeys,
-            RagApiKey caller,
+            ApiAccessPolicy caller,
             CollectionIdentityResolver resolver) {
         if (requestedKeys == null) {
             return null;
@@ -224,7 +238,7 @@ public final class ApiKeyCollectionAccess {
      */
     public static RagCollection requireActiveCollectionByKey(
             String requestedKey,
-            RagApiKey caller,
+            ApiAccessPolicy caller,
             CollectionIdentityResolver resolver) {
         if (isUnrestricted(caller)) {
             return resolver.requireActive(null, requestedKey);
@@ -243,7 +257,7 @@ public final class ApiKeyCollectionAccess {
      */
     public static RagCollection requireIncludingDeletedCollectionByKey(
             String requestedKey,
-            RagApiKey caller,
+            ApiAccessPolicy caller,
             CollectionIdentityResolver resolver) {
         if (isUnrestricted(caller)) {
             return resolver.requireIncludingDeleted(null, requestedKey);
@@ -257,7 +271,7 @@ public final class ApiKeyCollectionAccess {
         }
     }
 
-    public static void requireCollectionId(Long collectionId, RagApiKey key) {
+    public static void requireCollectionId(Long collectionId, ApiAccessPolicy key) {
         if (isUnrestricted(key)) {
             return;
         }
@@ -269,7 +283,7 @@ public final class ApiKeyCollectionAccess {
     }
 
     public static Long resolveWritableCollectionId(
-            Long requestedCollectionId, RagApiKey key) {
+            Long requestedCollectionId, ApiAccessPolicy key) {
         if (isUnrestricted(key)) {
             return requestedCollectionId;
         }
@@ -285,14 +299,14 @@ public final class ApiKeyCollectionAccess {
                 "A collectionId is required for API keys restricted to multiple collections");
     }
 
-    public static void requireDocumentAccess(RagDocument document, RagApiKey key) {
+    public static void requireDocumentAccess(RagDocument document, ApiAccessPolicy key) {
         if (document == null || isUnrestricted(key)) {
             return;
         }
         requireCollectionId(document.getCollectionId(), key);
     }
 
-    public static void requireCollectionCreationAllowed(RagApiKey key) {
+    public static void requireCollectionCreationAllowed(ApiAccessPolicy key) {
         if (!isUnrestricted(key)) {
             throw new SecurityException(
                     "Restricted API keys cannot create, import, or clone collections");
@@ -300,7 +314,7 @@ public final class ApiKeyCollectionAccess {
     }
 
     public static List<Long> resolveDelegatedAllowedIds(
-            List<Long> requested, RagApiKey caller) {
+            List<Long> requested, ApiAccessPolicy caller) {
         if (isUnrestricted(caller)) {
             return requested == null || requested.isEmpty()
                     ? null

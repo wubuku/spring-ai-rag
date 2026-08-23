@@ -138,11 +138,15 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
 
 #### `GET /api/v1/rag/api-keys`
 
-列出全部业务 Key。响应不会包含原始密钥或 hash：
+兼容性与审计用途的 credential history。响应不会包含原始密钥或 hash；新管理界面应使用
+下方 principal 端点：
 
 ```json
 [{
   "keyId": "rag_k_abc123",
+  "principalId": "rag_p_service",
+  "credentialVersion": 2,
+  "currentCredential": true,
   "name": "Production Server",
   "role": "NORMAL",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
@@ -150,6 +154,27 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
   "enabled": true,
   "createdAt": "2026-08-14T00:00:00",
   "lastUsedAt": null,
+  "expiresAt": "2026-10-01T00:00:00"
+}]
+```
+
+#### `GET /api/v1/rag/api-keys/principals`
+
+按稳定调用主体返回，每个 principal 一行。响应只带当前 credential 元数据，不返回 raw
+secret、hash 或完整 history：
+
+```json
+[{
+  "principalId": "rag_p_service",
+  "name": "Production Server",
+  "role": "NORMAL",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120,
+  "policyVersion": 3,
+  "status": "ACTIVE",
+  "currentCredentialId": "rag_k_abc123",
+  "currentCredentialVersion": 2,
+  "lastUsedAt": "2026-08-23T12:00:00",
   "expiresAt": "2026-10-01T00:00:00"
 }]
 ```
@@ -164,7 +189,8 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
 {
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
-  "allowedCollectionKeys": ["customer-42:manual:v3"]
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 120
 }
 ```
 
@@ -174,23 +200,47 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
 ```json
 {
   "keyId": "rag_k_xyz789",
+  "principalId": "rag_k_xyz789",
+  "credentialVersion": 1,
+  "policyVersion": 1,
   "rawKey": "rag_sk_...",
   "name": "My API Key",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
-  "expiresAt": "2026-10-01T00:00:00"
+  "expiresAt": "2026-10-01T00:00:00",
+  "requestsPerMinute": 120
+}
+```
+
+#### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
+
+原子更新 name、expiry、Collection ACL 与可选 principal quota。
+`expectedPolicyVersion` 必填，版本过期返回 `409 POLICY_VERSION_CONFLICT`。
+省略 `allowedCollectionKeys` 表示不限制 Collection；省略 `requestsPerMinute` 表示使用
+全局配额。
+
+```json
+{
+  "expectedPolicyVersion": 1,
+  "name": "My API Key",
+  "expiresAt": "2027-10-01T00:00:00",
+  "allowedCollectionKeys": ["customer-42:manual:v3"],
+  "requestsPerMinute": 240
 }
 ```
 
 #### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
-禁用旧 Key并生成同名新 Key，Collection 范围保持不变，raw secret 仅在本次
-`201 Created` 响应中返回。root 模式轮换会保留现有的未来过期时间；legacy 永不过期
-Key 会获得一年后的过期时间；已过期或已禁用 Key不能轮换。
+禁用当前 credential，并为同一 stable principal 创建下一个 credential version。
+owner、role、policy version、ACL、expiry 与 quota 均保持不变。使用旧 credential ID
+返回 `409 CREDENTIAL_NOT_CURRENT`；raw secret 仅在本次 `201 Created` 响应中返回。
 
 #### `DELETE /api/v1/rag/api-keys/{keyId}`
 
-立即禁用指定业务 Key，成功返回 `204 No Content`。
+通过当前 credential ID 吊销整个 principal family。对最后一个版本重复 DELETE 幂等；
+旧版本返回 `409 CREDENTIAL_NOT_CURRENT`。legacy 模式通过事务 guard 防止并发吊销最后一个
+ADMIN（`409 LAST_ADMIN_REQUIRED`）；environment root 模式可显式吊销。成功返回
+`204 No Content`。
 
 WebUI 管理台入口为 `/webui/unlock`。root credential 只保存在页面内存，刷新或退出后
 需要重新输入；外部调用方不需要 WebUI，只需持有分发的业务 Key：
@@ -202,11 +252,15 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 
 ### API 限流
 
-启用 `rag.rate-limit.enabled` 后，所有 API 请求受滑动窗口限流约束。
+`rag.rate-limit.backend=local` 保留进程内固定分钟窗口，可使用 `ip`、`api-key` 或
+`user` 策略，只适合单实例。
 
-支持两种策略（`rag.rate-limit.strategy`）：
-- `ip`：按客户端 IP 限流
-- `api-key`：按 API Key 限流；未提供 Key 时回退到 IP，分级限额使用 `rag.rate-limit.key-limits`
+`backend=postgresql` 必须配合 `strategy=principal`，按认证后的 stable database principal
+在 PostgreSQL UTC 分钟 bucket 中计数，所有实例共享。principal 的
+`requestsPerMinute` 可覆盖全局默认值，轮换 credential 不重置 bucket。该 backend
+不读取 raw credential，也不回退 IP；quota store 故障时返回 `503`
+（native 为 `RATE_LIMIT_STORE_UNAVAILABLE`，`/v1` 为 OpenAI error envelope），不会静默
+降级到本地计数。
 
 **正常响应中的限流 Header：**
 
@@ -219,7 +273,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 
 ```
 HTTP/1.1 429 Too Many Requests
-Retry-After: 60
+Retry-After: 17
 X-RateLimit-Limit: 100
 X-RateLimit-Remaining: 0
 ```

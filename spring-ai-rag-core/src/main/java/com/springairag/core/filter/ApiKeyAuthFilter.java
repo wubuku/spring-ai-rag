@@ -2,7 +2,7 @@ package com.springairag.core.filter;
 
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.api.openai.OpenAiErrorResponse;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,14 +47,19 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
     private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    /** Request attribute: API key identity after successful auth (used by downstream like RateLimitFilter) */
+    /** Request attribute: stable principal identity after successful auth. */
     public static final String AUTHENTICATED_KEY_ATTRIBUTE = "authenticatedApiKey";
 
+    public static final String AUTHENTICATED_CREDENTIAL_ID_ATTRIBUTE =
+            "authenticatedApiCredentialId";
+
+    public static final String AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE =
+            "authenticatedApiPrincipal";
+
     /**
-     * Request attribute: the full authenticated RagApiKey entity.
-     * Use this to access the caller's role without an extra DB lookup.
-     * (RateLimitFilter depends on AUTHENTICATED_KEY_ATTRIBUTE remaining a String keyId.)
+     * 旧扩展兼容名称。生产过滤链不再设置 JPA entity。
      */
+    @Deprecated
     public static final String AUTHENTICATED_API_KEY_ENTITY = "authenticatedApiKeyEntity";
     public static final String AUTHENTICATED_PRINCIPAL_TYPE = "authenticatedPrincipalType";
     public static final String ROOT_AUTHENTICATED_ATTRIBUTE = "environmentRootAuthenticated";
@@ -152,20 +157,26 @@ public class ApiKeyAuthFilter extends OncePerRequestFilter {
 
         // 数据库 Key 在 root 模式和 legacy auth 模式下都可访问数据面。
         if (apiKeyService != null) {
-            RagApiKey validatedKey;
+            AuthenticatedApiPrincipal validatedPrincipal;
             try {
-                validatedKey = apiKeyService.validateKeyEntity(requestApiKey);
+                validatedPrincipal = apiKeyService.authenticate(requestApiKey);
             } catch (DataAccessException e) {
                 log.error("API credential store unavailable: {} {}",
                         request.getMethod(), path);
                 sendServiceUnavailable(response, path);
                 return;
             }
-            if (validatedKey != null) {
-                log.debug("API Key validated (database): keyId={}, {} {}",
-                        validatedKey.getKeyId(), request.getMethod(), path);
-                request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE, validatedKey.getKeyId());
-                request.setAttribute(AUTHENTICATED_API_KEY_ENTITY, validatedKey);
+            if (validatedPrincipal != null) {
+                log.debug("API credential validated (database): principalId={}, version={}, {} {}",
+                        validatedPrincipal.getPrincipalId(),
+                        validatedPrincipal.getCredentialVersion(),
+                        request.getMethod(), path);
+                request.setAttribute(AUTHENTICATED_KEY_ATTRIBUTE,
+                        validatedPrincipal.getPrincipalId());
+                request.setAttribute(AUTHENTICATED_CREDENTIAL_ID_ATTRIBUTE,
+                        validatedPrincipal.getCredentialId());
+                request.setAttribute(AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE,
+                        validatedPrincipal);
                 request.setAttribute(AUTHENTICATED_PRINCIPAL_TYPE,
                         PRINCIPAL_DATABASE_API_KEY);
                 filterChain.doFilter(request, response);

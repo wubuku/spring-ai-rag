@@ -5,11 +5,9 @@ import com.springairag.core.config.ApiSloConfig;
 import com.springairag.core.config.ApiSloProperties;
 import com.springairag.core.config.RagAlertProperties;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.config.RagRateLimitProperties;
 import com.springairag.core.config.RagTracingProperties;
 import com.springairag.core.config.RagWebSecurityConfiguration;
 import com.springairag.core.extension.DefaultDomainRagExtension;
-import com.springairag.core.filter.RateLimitFilter;
 import com.springairag.core.filter.RequestTraceFilter;
 import com.springairag.core.metrics.CacheMetricsService;
 import com.springairag.core.metrics.ComponentHealthService;
@@ -21,7 +19,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -68,24 +65,6 @@ public class GeneralRagAutoConfiguration {
     @ConditionalOnMissingBean(RagMetricsService.class)
     public RagMetricsService ragMetricsService(MeterRegistry meterRegistry) {
         return new RagMetricsService(meterRegistry);
-    }
-
-    /**
-     * API rate limit filter
-     */
-    @Bean
-    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(
-            @Autowired(required = false) RagProperties properties) {
-        RagRateLimitProperties rateLimit =
-                properties != null ? properties.getRateLimit()
-                        : new RagRateLimitProperties();
-        RateLimitFilter filter = new RateLimitFilter(
-                rateLimit.isEnabled(), rateLimit.getRequestsPerMinute(),
-                rateLimit.getStrategy(), rateLimit.getKeyLimits());
-        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(filter);
-        registration.addUrlPatterns("/api/*", "/v1/*");
-        registration.setOrder(0);
-        return registration;
     }
 
     /**

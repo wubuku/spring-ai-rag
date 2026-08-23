@@ -41,6 +41,12 @@ public class ApiKeyResponse {
             example = "[\"customer-42:manual:v3\"]")
     private List<String> allowedCollectionKeys;
 
+    private String principalId;
+    private Integer credentialVersion;
+    private Boolean currentCredential;
+    private Long policyVersion;
+    private Integer requestsPerMinute;
+
     public ApiKeyResponse() {
     }
 
@@ -85,6 +91,17 @@ public class ApiKeyResponse {
         this.allowedCollectionKeys = allowedCollectionKeys;
     }
 
+    public String getPrincipalId() { return principalId; }
+    public void setPrincipalId(String principalId) { this.principalId = principalId; }
+    public Integer getCredentialVersion() { return credentialVersion; }
+    public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
+    public Boolean getCurrentCredential() { return currentCredential; }
+    public void setCurrentCredential(Boolean currentCredential) { this.currentCredential = currentCredential; }
+    public Long getPolicyVersion() { return policyVersion; }
+    public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
+    public Integer getRequestsPerMinute() { return requestsPerMinute; }
+    public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -98,13 +115,20 @@ public class ApiKeyResponse {
                 Objects.equals(enabled, that.enabled) &&
                 Objects.equals(role, that.role) &&
                 Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
-                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys) &&
+                Objects.equals(principalId, that.principalId) &&
+                Objects.equals(credentialVersion, that.credentialVersion) &&
+                Objects.equals(currentCredential, that.currentCredential) &&
+                Objects.equals(policyVersion, that.policyVersion) &&
+                Objects.equals(requestsPerMinute, that.requestsPerMinute);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(keyId, name, createdAt, lastUsedAt, expiresAt,
-                enabled, role, allowedCollectionIds, allowedCollectionKeys);
+                enabled, role, allowedCollectionIds, allowedCollectionKeys,
+                principalId, credentialVersion, currentCredential, policyVersion,
+                requestsPerMinute);
     }
 
     @Override
@@ -119,6 +143,11 @@ public class ApiKeyResponse {
                 ", role='" + role + '\'' +
                 ", allowedCollectionIds=" + allowedCollectionIds +
                 ", allowedCollectionKeys=" + allowedCollectionKeys +
+                ", principalId='" + principalId + '\'' +
+                ", credentialVersion=" + credentialVersion +
+                ", currentCredential=" + currentCredential +
+                ", policyVersion=" + policyVersion +
+                ", requestsPerMinute=" + requestsPerMinute +
                 '}';
     }
 }

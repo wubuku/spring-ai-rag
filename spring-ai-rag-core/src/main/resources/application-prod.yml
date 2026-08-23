@@ -29,6 +29,12 @@ rag:
   rate-limit:
     # Optional: enable under load; default off to avoid surprising first deploy
     enabled: ${RAG_RATE_LIMIT_ENABLED:false}
+    backend: ${RAG_RATE_LIMIT_BACKEND:local}
+    strategy: ${RAG_RATE_LIMIT_STRATEGY:ip}
+    requests-per-minute: ${RAG_RATE_LIMIT_REQUESTS_PER_MINUTE:60}
+    bucket-retention-minutes: ${RAG_RATE_LIMIT_BUCKET_RETENTION_MINUTES:1440}
+    cleanup-interval-seconds: ${RAG_RATE_LIMIT_CLEANUP_INTERVAL_SECONDS:300}
+    cleanup-batch-size: ${RAG_RATE_LIMIT_CLEANUP_BATCH_SIZE:10000}
 
   # Quality defaults for production (measurable via /api/v1/rag/evaluation/* + goldenset script)
   query-rewrite:

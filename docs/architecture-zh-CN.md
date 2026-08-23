@@ -272,8 +272,9 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
   `documentIds` 的检索中。数据库外键和检索 SQL 继续使用数字 ID。
 - Collection 创建、导入和克隆必须由调用方提供 key。by-key CRUD、恢复、文档关联和导出
   使用 query parameter，不使用 path segment，因为合法 key 可以包含 URL 保留标点。
-- API Key 管理对外使用 `allowedCollectionKeys`；V24 存储和运行时授权仍在
-  `rag_api_key.allowed_collection_ids` 中保存内部 ID。
+- API Key 管理对外使用 `allowedCollectionKeys`；V48 在
+  `rag_api_principal.allowed_collection_ids` 保存权威内部 ID ACL。活动 credential 保留
+  兼容 snapshot，请求授权使用 indexed join 加载的不可变 principal policy。
 - 删除 Collection 会尝试软删除集合；若存在 `externalId` 非空的外部托管文档则返回 `409`，
   不会执行删除，因为清空 `collection_id` 会破坏
   `collectionKey + sourceNamespace + externalId` 稳定身份。
@@ -495,8 +496,9 @@ ChatExecutionService
 Chat 在启用时把协议级 `citationValidation` 写入 metadata；只解析约定的 `[S1]` token，
 不是覆盖率评分。受管套件（V38）默认关闭：version 一经创建不可变，相关文档必须使用
 `collectionKey + sourceNamespace + externalId`。compare 只允许同一 version，环境漂移单独标记。suite
-worker 会按 owner 的 `db:{keyId}` 重新加载当前数据库 API Key，并在检索前再次授权
-定义中的 Collection；Key 缺失、停用或 ACL 被收回时 run 以 `FAILED` /
+worker 会按 owner 的 `db:{principalId}` 重新加载当前数据库 principal 及当前
+credential/policy，并在检索前再次授权定义中的 Collection；principal 缺失、吊销、过期
+或 ACL 被收回时 run 以 `FAILED` /
 `AUTHORIZATION_CHANGED` 结束。`local:` / `root:` / `legacy:` principal 与 HTTP
 关闭鉴权时一样视为 unrestricted。可选 `POST /evaluation/semantic` 按 Spring AI
 1.1.4 反射适配（`FactCheckingEvaluator.builder`、
@@ -548,6 +550,9 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | generation-aware 持久化 embedding/reindex 状态机 |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | 与 Profile 无关的本地关键词 chunk |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | 当前本地关键词 generation 与 freshness |
+| `rag_api_principal` | principal_id, role, allowed_collection_ids, policy_version, requests_per_minute | stable 调用方 owner 与权威 policy（V48） |
+| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | 版本化 credential；每个 principal 最多一个 active version |
+| `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |

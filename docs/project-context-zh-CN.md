@@ -298,7 +298,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V47。
+- Flyway 当前为 V1–V48。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -314,7 +314,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   owner/session 隔离的 `rag_chat_memory_summary` 表，以前进式历史游标和乐观
   version CAS 支持有界会话摘要；V47 增加按 principal 隔离的 durable Chat turn
   operation、不可变 replay 快照、有界 lease/接管状态，以及供 operation status 与
-  业务 history 共用的 opaque turn identity。
+  业务 history 共用的 opaque turn identity；V48 增加 stable API principal、版本化
+  credential、明文 secret 禁写约束、共享 quota bucket 与 legacy ADMIN guard。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -367,22 +368,26 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 
 未配置 root 时保留 legacy ADMIN/NORMAL/static-key 行为。
 
-数据库 API Key 共同支持：
+数据库受管调用方由 stable `rag_api_principal` 和版本化 `rag_api_key` credential 组成：
 
-- hash 查询。
-- `ADMIN` / `NORMAL` 角色。
-- 过期、吊销、轮换和 `last_used_at`。
-- `allowedCollectionKeys`（推荐对外字段）；deprecated 的 `allowedCollectionIds` 继续兼容。
-  V24 的存储和运行时授权仍使用 `rag_api_key.allowed_collection_ids` 中的内部 ID。
-- Chat、Search、Collection、Document、PDF-to-RAG 数据面 ACL。
+- principal 持有 `ADMIN` / `NORMAL`、Collection ACL、expiry、policy version 与可选 quota；
+  credential 只持有 hash、version 和启停状态。
+- V48 对既有 Key确定性回填 `principalId=旧 keyId`，历史 `db:{keyId}` owner 因而保持
+  可读；之后的 rotation 只替换 credential，稳定 owner 不变。
+- 每次认证都执行 credential/principal 权威联查并把不可变 policy snapshot 放入 request；
+  吊销提交后其他实例的下一次认证立即拒绝。`last_used_at` 是五分钟粒度的近似审计字段。
+- schema 清空 legacy 明文列、移除索引并约束 `api_key IS NULL`；raw secret 只在创建或轮换
+  响应中出现一次。
+- 管理写入按 principal row 串行化，rotation 版本单调，policy 使用 CAS，legacy 模式由
+  singleton guard 防止并发吊销最后一个 ADMIN。
+- `backend=postgresql` 时，按 stable principal 使用共享 UTC 固定分钟 quota；rotation
+  不重置用量，存储故障 fail closed 返回 `503`。
+- Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
+  snapshot 或按 stable owner 重载当前 policy。
 
-该 MVP 只承诺单实例、TLS、受控管理网络，还不是完整的多租户外部凭据系统：
-
-- schema 仍保留明文列。
-- NORMAL key 委派边界需要收紧。
-- rotation 缺少稳定 principal / family。
-- 缺少事务化最后一个 ADMIN 保护。
-- 多实例吊销、共享限流和写放大尚未解决。
+这完成了受管 API principal 的多实例基础加固，但不是完整的租户身份平台：OAuth/OIDC、
+租户层级、token/cost billing、管理面 recovery 和关闭全部 legacy static/query 兼容仍不在
+本轮范围。公网启用还需要部署级 TLS、网络隔离、密钥轮换流程和容量观测。
 
 这些边界及公开启用前置条件见
 [openai-compatibility-readiness-zh-CN.md](openai-compatibility-readiness-zh-CN.md)。
@@ -406,8 +411,8 @@ RAG mode、memory 和后端候选链，不保存固定 Collection；请求通过
 output 或采样参数。原生 `/api/v1/rag/chat/stream` 仍保留项目专用工具、来源和终态事件；
 两种 SSE 协议不能混用。
 
-受控预览可用于可信网络集成，但这不等于公网、多实例 production-ready。API Key family、
-共享 quota、即时多实例吊销等加固仍按 readiness 文档保留为后续边界。
+受控预览可用于可信网络集成。stable principal、共享 quota 与即时多实例吊销已经落地，
+但这本身不等于公网 production-ready；剩余运营与 legacy 边界仍见 readiness 文档。
 
 当前状态与边界见 [OpenAI 兼容就绪度](openai-compatibility-readiness-zh-CN.md)。
 

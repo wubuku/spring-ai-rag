@@ -1,7 +1,7 @@
 package com.springairag.core.service;
 
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -40,7 +40,7 @@ public class ExternalAddressRetirementService {
         }
         Map<String, Object> marker = rows.getFirst();
         Long targetId = ((Number) marker.get("target_collection_id")).longValue();
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         String suffix = "";
         try {
             ApiKeyCollectionAccess.requireCollectionId(targetId, caller);

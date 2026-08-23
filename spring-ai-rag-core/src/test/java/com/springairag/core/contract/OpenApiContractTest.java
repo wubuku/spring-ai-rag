@@ -222,6 +222,9 @@ class OpenApiContractTest {
     private com.springairag.core.repository.RagApiKeyRepository ragApiKeyRepository;
 
     @MockBean
+    private com.springairag.core.repository.RagApiPrincipalRepository ragApiPrincipalRepository;
+
+    @MockBean
     private com.springairag.core.service.ApiKeyManagementService apiKeyManagementService;
 
     // Health

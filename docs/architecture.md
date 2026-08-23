@@ -290,9 +290,10 @@ Data model and current boundaries:
 - Collection create/import/clone require a caller-supplied key. By-key CRUD,
   restore, document association, and export use query parameters rather than
   path segments because valid keys may contain URL-reserved punctuation.
-- API-key management exposes `allowedCollectionKeys`; V24 storage and runtime
-  authorization continue to use internal IDs in
-  `rag_api_key.allowed_collection_ids`.
+- API-key management exposes `allowedCollectionKeys`; V48 stores the
+  authoritative internal-ID ACL on `rag_api_principal.allowed_collection_ids`.
+  The active credential carries a compatibility snapshot, while request-time
+  authorization uses an immutable principal policy loaded by an indexed join.
 - Deleting a Collection attempts a soft delete. If it contains any externally managed
   document with a nonblank `externalId`, the service returns `409` and does not
   delete the Collection, because clearing `collection_id` would destroy the
@@ -548,9 +549,10 @@ suites (V38) are disabled by default: a version is immutable after creation,
 and relevant documents must use
 `collectionKey + sourceNamespace + externalId`. Compare is
 limited to the same version and marks environment drift separately. The suite
-worker reloads the owner's current database API key (`db:{keyId}`) and
-re-authorizes definition Collections before search; a missing, disabled, or
-ACL-revoked key finishes the run as `FAILED` / `AUTHORIZATION_CHANGED`.
+worker reloads the owner's current database principal (`db:{principalId}`) and
+its current credential/policy before search; a missing, revoked, expired, or
+ACL-restricted principal finishes the run as `FAILED` /
+`AUTHORIZATION_CHANGED`.
 `local:` / `root:` / `legacy:` principals stay unrestricted, matching HTTP
 auth-disabled behavior. Optional `POST /evaluation/semantic` adapts Spring AI
 1.1.4 evaluators by reflection (`FactCheckingEvaluator.builder`,
@@ -602,6 +604,9 @@ rag_audit_log           # Audit logs (collection operations)
 | `rag_embedding_jobs` | document_id, embedding_profile_id, content_hash, request_generation, document_kind, chunker_version, status, lease_expires_at, origin | Generation-aware durable embedding/reindex state machine |
 | `rag_document_chunks` | document_id, local_index_generation, content_hash, chunker_version, chunk_text, chunk_index | Profile-neutral local keyword chunks |
 | `rag_document_local_index_state` | document_id, local_index_status, local_index_generation, content_hash, chunker_version, chunk_count | Current local keyword generation and freshness |
+| `rag_api_principal` | principal_id, role, allowed_collection_ids, policy_version, requests_per_minute | Stable caller owner and authoritative policy (V48) |
+| `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | Versioned credential with at most one active version per principal |
+| `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | Shared fixed UTC-minute quota bucket |
 | `rag_chat_history` | session_id, user_message, ai_response | Business audit |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | Retrieval diagnostics (V35) |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | Managed quality suites (V38) |

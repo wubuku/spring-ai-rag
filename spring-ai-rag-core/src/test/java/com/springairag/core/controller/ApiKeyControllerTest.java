@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.dto.ApiKeyCreateRequest;
 import com.springairag.api.dto.ApiKeyCreatedResponse;
 import com.springairag.api.dto.ApiKeyResponse;
+import com.springairag.api.dto.ApiPrincipalResponse;
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.exception.RagException;
@@ -442,6 +443,97 @@ class ApiKeyControllerTest {
         mockMvc.perform(get("/api/v1/rag/api-keys").with(rootCaller()))
                 .andExpect(status().isOk())
                 .andExpect(content().json("[]"));
+    }
+
+    @Test
+    void rootMode_listsStablePrincipals() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        ApiPrincipalResponse principal = new ApiPrincipalResponse();
+        principal.setPrincipalId("rag_k_principal");
+        principal.setCurrentCredentialId("rag_k_v2");
+        principal.setCurrentCredentialVersion(2);
+        principal.setPolicyVersion(4L);
+        principal.setStatus("ACTIVE");
+        when(apiKeyService.listPrincipals()).thenReturn(List.of(principal));
+
+        mockMvc.perform(get("/api/v1/rag/api-keys/principals")
+                        .with(rootCaller()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].principalId").value("rag_k_principal"))
+                .andExpect(jsonPath("$[0].currentCredentialId").value("rag_k_v2"))
+                .andExpect(jsonPath("$[0].currentCredentialVersion").value(2))
+                .andExpect(jsonPath("$[0].policyVersion").value(4));
+    }
+
+    @Test
+    void rootMode_policyPutResolvesCollectionKeysAndUsesCasRequest() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("docs:public"))).thenReturn(List.of(7L));
+        ApiPrincipalResponse updated = new ApiPrincipalResponse();
+        updated.setPrincipalId("rag_k_principal");
+        updated.setName("Indexer v2");
+        updated.setPolicyVersion(5L);
+        updated.setAllowedCollectionKeys(List.of("docs:public"));
+        updated.setRequestsPerMinute(80);
+        when(apiKeyService.updatePolicy(
+                eq("rag_k_principal"), any(), eq(List.of(7L)), eq(true)))
+                .thenReturn(updated);
+
+        mockMvc.perform(put("/api/v1/rag/api-keys/principals/rag_k_principal/policy")
+                        .with(rootCaller())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expectedPolicyVersion":4,
+                                  "name":"Indexer v2",
+                                  "expiresAt":"2027-01-01T00:00:00",
+                                  "allowedCollectionKeys":["docs:public"],
+                                  "requestsPerMinute":80
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.policyVersion").value(5))
+                .andExpect(jsonPath("$.requestsPerMinute").value(80));
+
+        verify(apiKeyService).updatePolicy(
+                eq("rag_k_principal"),
+                argThat(request -> request.getExpectedPolicyVersion() == 4L),
+                eq(List.of(7L)),
+                eq(true));
+    }
+
+    @Test
+    void policyPutRejectsExplicitEmptyCollectionScope() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+
+        mockMvc.perform(put("/api/v1/rag/api-keys/principals/rag_k_principal/policy")
+                        .with(rootCaller())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "expectedPolicyVersion":1,
+                                  "name":"Indexer",
+                                  "expiresAt":"2027-01-01T00:00:00",
+                                  "allowedCollectionKeys":[]
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("BAD_REQUEST"));
+        verify(apiKeyService, never()).updatePolicy(anyString(), any(), any(), anyBoolean());
+    }
+
+    @Test
+    void rootMode_revokeUsesManagedFamilyRules() throws Exception {
+        when(rootCredentialResolver.isConfigured()).thenReturn(true);
+        when(apiKeyService.revokeManagedKey("rag_k_v2")).thenReturn(true);
+
+        mockMvc.perform(delete("/api/v1/rag/api-keys/rag_k_v2")
+                        .with(rootCaller()))
+                .andExpect(status().isNoContent());
+
+        verify(apiKeyService).revokeManagedKey("rag_k_v2");
+        verify(apiKeyService, never()).revokeKey(anyString());
     }
 
     @Test

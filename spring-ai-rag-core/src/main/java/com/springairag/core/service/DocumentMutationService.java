@@ -514,11 +514,11 @@ public class DocumentMutationService {
             if (targetCollectionId != null) {
                 ApiKeyCollectionAccess.requireCollectionId(
                         targetCollectionId,
-                        ApiKeyCollectionAccess.currentKey());
+                        ApiKeyCollectionAccess.currentPolicy());
                 collectionIdentityResolver.requireActive(
                         targetCollectionId, null);
             } else if (ApiKeyCollectionAccess.restrictedCollectionIds(
-                    ApiKeyCollectionAccess.currentKey()).isPresent()
+                    ApiKeyCollectionAccess.currentPolicy()).isPresent()
                     && document.getCollectionId() != null) {
                 throw new RagException(
                         ErrorCode.RESTORE_NOT_ALLOWED,
@@ -1270,7 +1270,7 @@ public class DocumentMutationService {
     private RagCollection resolveExternalCollection(String collectionKey) {
         return ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 collectionKey,
-                ApiKeyCollectionAccess.currentKey(),
+                ApiKeyCollectionAccess.currentPolicy(),
                 collectionIdentityResolver);
     }
 
@@ -1442,7 +1442,7 @@ public class DocumentMutationService {
                     try {
                         ApiKeyCollectionAccess.requireDocumentAccess(
                                 document,
-                                ApiKeyCollectionAccess.currentKey());
+                                ApiKeyCollectionAccess.currentPolicy());
                         return true;
                     } catch (SecurityException ignored) {
                         return false;
@@ -1632,7 +1632,7 @@ public class DocumentMutationService {
         RagDocument document = documentRepository.findById(documentId)
                 .orElseThrow(() -> new DocumentNotFoundException(documentId));
         ApiKeyCollectionAccess.requireDocumentAccess(
-                document, ApiKeyCollectionAccess.currentKey());
+                document, ApiKeyCollectionAccess.currentPolicy());
         if (document.getExternalId() != null
                 && !document.getExternalId().isBlank()) {
             throw new RagException(
@@ -1647,7 +1647,7 @@ public class DocumentMutationService {
             String collectionKey) {
         if (collectionKey == null) {
             if (ApiKeyCollectionAccess.restrictedCollectionIds(
-                    ApiKeyCollectionAccess.currentKey()).isPresent()) {
+                    ApiKeyCollectionAccess.currentPolicy()).isPresent()) {
                 throw new SecurityException(
                         "A Collection-restricted key cannot unassign a document");
             }
@@ -1658,12 +1658,12 @@ public class DocumentMutationService {
         RagCollection collection =
                 ApiKeyCollectionAccess.requireActiveCollectionByKey(
                         normalized,
-                        ApiKeyCollectionAccess.currentKey(),
+                        ApiKeyCollectionAccess.currentPolicy(),
                         collectionIdentityResolver);
         if (document.getCollectionId() != null) {
             ApiKeyCollectionAccess.requireCollectionId(
                     document.getCollectionId(),
-                    ApiKeyCollectionAccess.currentKey());
+                    ApiKeyCollectionAccess.currentPolicy());
         }
         return collection.getId();
     }

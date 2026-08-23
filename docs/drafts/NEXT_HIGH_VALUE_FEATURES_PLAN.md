@@ -5,7 +5,7 @@
 > **规划日期**：2026-08-23
 >
 > **代码基线**：`main` / `origin/main` @ `05a21706`，Spring Boot `3.5.16`，
-> Spring AI `1.1.8`，Java `21`，Flyway V1–V47
+> 规划基线：Spring AI `1.1.8`、Java `21`、Flyway V1–V47；本轮交付目标为 Flyway V48
 >
 > **规划工作区**：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
 >

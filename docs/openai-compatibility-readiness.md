@@ -5,7 +5,7 @@
 > **Purpose**: Record the current server-side OpenAI Chat Completions
 > implementation, controlled-preview boundary, and remaining public /
 > multi-instance production security work.
-> **Code baseline**: `main`, including the 2026-08-22 Chat-turn reliability delivery.
+> **Code baseline**: `main`, including Chat-turn reliability and V48 managed-principal hardening.
 > **Last verified**: 2026-08-23
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
@@ -27,11 +27,13 @@ Exposing this project through an OpenAI Chat Completions interface has clear val
 > frameworks, IDEs, and gateways can consume.
 
 Protocol compatibility and public production readiness are different concerns.
-The project has implemented the standalone-service API-key MVP and a
-disabled-by-default `/v1` adapter. It is suitable for controlled trusted-network
-preview and SDK integration tests, but not public, multi-instance production.
-**API-key families, immediate cross-instance revocation, shared quotas, and a
-complete fail-closed policy remain prerequisites for public enablement.**
+The project has implemented the standalone-service API-key MVP, V48 stable
+managed principals, and a disabled-by-default `/v1` adapter. Stable ownership,
+versioned credentials, immediate cross-instance revocation, PostgreSQL shared
+request quotas, and fail-closed quota-store behavior are now present. The
+adapter remains a controlled preview rather than a blanket public-production
+claim because legacy compatibility, identity federation, operator recovery,
+deployment controls, and token/cost governance remain separate concerns.
 
 The adapter is not an agent/subagent orchestrator. It provides a stable
 "RAG-as-a-model" boundary; orchestration belongs to the caller or a later independent
@@ -47,7 +49,7 @@ module.
 | `spring-ai-rag-core` | RAG implementation and runnable app | Owns the shared execution layer, compatibility controller, model-alias registry, and error mapping |
 | `spring-ai-rag-starter` | Auto-configuration | Registers authentication, rate limiting, and observability for `/v1` in both topologies |
 | `spring-ai-rag-documents` | Document processing | Must remain independent of the OpenAI protocol |
-| `spring-ai-rag-webui` | React admin UI | The MVP now provides root-key unlock; it need not switch APIs, while public management still requires hardening |
+| `spring-ai-rag-webui` | React admin UI | Root unlock manages one row per stable principal, including policy CAS, quota, current credential rotation/revocation, and shown-once secrets |
 
 There are two runtime topologies:
 
@@ -113,10 +115,19 @@ The current implementation provides an accepted standalone-service MVP:
   credentials; legacy static/query compatibility remains when root mode is disabled.
 - The WebUI keeps credentials in page memory and clears legacy localStorage credentials
   during upgrade.
+- V48 separates stable principal policy from versioned credential hashes;
+  rotation preserves `db:{principalId}` ownership and policy.
+- Authentication performs an authoritative credential/principal join on every
+  request; revocation is visible to every instance on its next authentication.
+- A PostgreSQL fixed UTC-minute backend shares request quota by stable principal
+  and fails closed without raw-key or IP fallback.
+- The legacy plaintext column is constrained to `NULL`, and legacy ADMIN
+  revocation has a transactional last-ADMIN guard.
 
 Relevant code:
 
 - [RagApiKey](../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiKey.java)
+- [RagApiPrincipal](../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
 - [ApiKeyManagementService](../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
 - [ApiKeyController](../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)
 - [ApiKeyAuthFilter](../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
@@ -124,27 +135,20 @@ Relevant code:
 
 ---
 
-## 6. Critical Gaps for External Production Callers
+## 6. Remaining Boundaries for External Production Callers
 
 | Gap | Current code fact | Direct impact |
 |-----|-------------------|---------------|
-| Plaintext secret schema | V23 and `RagApiKey` retain an `api_key` column and index; the current service does not write it, but the schema permits storage | The system cannot prove that a secret is returned once and never persisted |
 | Creation and delegation | Root MVP disables NORMAL self-service management; legacy mode retains historical creation/delegation semantics | Full hardening must close the legacy compatibility and policy-delegation gaps |
-| Rotation identity | Rotation disables one key and creates an independent key; Chat, evaluation, diagnostics, and durable operations use a `db:{keyId}` owner | No stable object carries role, owner, policy, or quota, so rotation breaks the owner namespace |
-| ADMIN protection | There is no transactional last-ADMIN guard | Concurrent operations can remove the final management credential |
-| Bootstrap | Root MVP disables empty-table ADMIN/raw-secret bootstrap; legacy mode without root retains historical behavior | Full hardening still needs one unified bootstrap/recovery contract |
-| Revocation consistency | Authentication has a 30-second in-process positive cache | Revocation is not immediately consistent across instances |
-| Last-used writes | Every authentication synchronously updates `last_used_at` | High request rates create database write amplification |
-| Rate limiting | The MVP prefers the current credential's public key ID after authentication, but counters remain in-process and shared quotas are absent | Replicas multiply quotas and rotation changes the limiter ID, so global quota semantics are not available |
-| Raw key as limiter ID | Root/authenticated paths do not directly use the raw secret; legacy or unauthenticated fallback can still use the raw header | Full hardening must make a managed stable principal the only shared limiter identifier |
+| Bootstrap and recovery | Root mode disables empty-table ADMIN/raw-secret bootstrap; legacy mode records a low-cardinality error when no usable ADMIN exists | Operators still need an explicit environment-root provisioning and recovery procedure |
 | URL and credential format | `/v1/*` uses Bearer/header authentication; root mode rejects query credentials and emits OpenAI error envelopes | Public enablement should remove legacy query/static compatibility and require managed principals |
-| Failure semantics | Database validation and static fallback coexist | Credential-store failures must not downgrade into an authorization bypass |
+| Identity federation | Managed principals are service-issued secrets, not OAuth/OIDC identities | Public multi-tenant deployments may need issuer, audience, tenant, and revocation contracts outside this credential family |
+| Cost governance | Shared quotas count requests in fixed UTC-minute windows | Token, provider-cost, daily budget, and billing-ledger controls remain independent capabilities |
+| Operations | Code-level shared quotas and revocation are implemented | TLS, network isolation, database capacity, alerting, backup/restore, and rotation runbooks remain deployment responsibilities |
 
-These are service-readiness requirements, not protocol details. The next batch
-has selected stable families/principals, rotatable versions, explicit policy,
-shared quotas, migration, and fail-closed failure semantics as one plan; see the
-[current active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md). That plan is not
-implemented yet, so this document continues to describe the gaps in current code.
+These are service-readiness requirements, not protocol details. Historical V48
+design rationale remains in the active delivery plan while the batch is being
+completed; live API and configuration facts are maintained in the references.
 
 ---
 
@@ -159,11 +163,11 @@ implemented yet, so this document continues to describe the gaps in current code
 5. A model alias contains no fixed Collection. Effective scope comes from the
    request and API-key ACL and rejects unauthorized expansion.
 6. In root mode, `/v1` accepts Bearer / `X-API-Key` and rejects query-string secrets.
-7. Current limiting uses the authenticated credential key ID, which is not
-   stable across rotation, and remains process-local. Public multi-instance use
-   requires a stable-principal shared quota that rotation cannot reset.
-8. Credential-store failure returns `503`. Public enablement must also remove
-   downgrade ambiguity from legacy static fallbacks.
+7. PostgreSQL limiting uses the authenticated stable principal and is shared
+   across instances; rotation does not reset it. The local backend remains an
+   explicit single-instance compatibility option.
+8. Credential and PostgreSQL quota-store failures fail closed. Public
+   enablement should still remove legacy static/query compatibility.
 9. Existing `/api/v1/rag/**` contracts remain independent and continue to work when
    compatibility is disabled.
 10. Authentication, authorization, rate limiting, and observability are tested in both

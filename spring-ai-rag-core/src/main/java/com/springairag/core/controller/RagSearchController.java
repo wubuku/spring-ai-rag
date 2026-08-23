@@ -9,7 +9,7 @@ import com.springairag.api.enums.CollectionScopeMode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.diagnostics.RetrievalDiagnosticsService;
 import com.springairag.core.diagnostics.RetrievalTraceSession;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalBranchStage;
@@ -159,7 +159,7 @@ public class RagSearchController {
                 .fulltextWeight(fulltextWeight)
                 .build();
 
-        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
         List<RetrievalResult> results;
         RetrievalOutcome outcome = null;
         RetrievalScope scope = null;
@@ -228,7 +228,7 @@ public class RagSearchController {
             @Valid @RequestBody SearchRequest request,
             HttpServletRequest httpRequest) {
 
-        RagApiKey key = ApiKeyCollectionAccess.currentKey(httpRequest);
+        ApiAccessPolicy key = ApiKeyCollectionAccess.currentPolicy(httpRequest);
         log.info("Direct search with config: query={}, scopeMode={}, collectionCount={}, documentCount={}",
                 request.getQuery(), request.getCollectionScopeMode(),
                 request.getCollectionIds() == null && request.getCollectionKeys() == null

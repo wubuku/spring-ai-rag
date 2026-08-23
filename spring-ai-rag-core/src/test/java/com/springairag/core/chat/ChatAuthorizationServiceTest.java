@@ -2,12 +2,11 @@ package com.springairag.core.chat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.springairag.api.enums.ErrorCode;
-import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.ChatTurnOperationRepository;
+import com.springairag.core.service.ApiKeyManagementService;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -21,11 +20,11 @@ class ChatAuthorizationServiceTest {
 
     private final RagDocumentRepository documentRepository =
             mock(RagDocumentRepository.class);
-    private final RagApiKeyRepository apiKeyRepository =
-            mock(RagApiKeyRepository.class);
+    private final ApiKeyManagementService apiKeyManagementService =
+            mock(ApiKeyManagementService.class);
     private final ChatAuthorizationService service =
             new ChatAuthorizationService(
-                    new ObjectMapper(), documentRepository, apiKeyRepository);
+                    new ObjectMapper(), documentRepository, apiKeyManagementService);
 
     @Test
     void unknownScopeModeFailsClosed() {

@@ -4,6 +4,7 @@ import com.springairag.api.dto.ApiKeyIdentityResponse;
 import com.springairag.api.dto.ErrorResponse;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
+import com.springairag.core.security.AuthenticatedApiPrincipal;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.CacheControl;
 import org.springframework.http.HttpStatus;
@@ -57,6 +58,13 @@ public class ApiKeyIdentityController {
                 id,
                 rootCredentialResolver.isConfigured(),
                 environmentRoot ? ROOT_CAPABILITIES : DATA_PLANE_CAPABILITIES);
+        Object authenticated = request.getAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
+        if (authenticated instanceof AuthenticatedApiPrincipal principal) {
+            response.setCredentialId(principal.getCredentialId());
+            response.setCredentialVersion(principal.getCredentialVersion());
+            response.setPolicyVersion(principal.getPolicyVersion());
+        }
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
                 .body(response);

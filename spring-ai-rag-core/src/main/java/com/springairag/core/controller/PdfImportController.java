@@ -339,7 +339,7 @@ public class PdfImportController {
     }
 
     private Long resolveWritableCollectionId(Long collectionId, String collectionKey) {
-        var currentKey = ApiKeyCollectionAccess.currentKey();
+        var currentKey = ApiKeyCollectionAccess.currentPolicy();
         Long resolved;
         if (collectionKey != null) {
             List<Long> resolvedIds = ApiKeyCollectionAccess.resolveCollectionIds(

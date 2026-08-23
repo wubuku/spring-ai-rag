@@ -36,6 +36,11 @@ public class ApiKeyCreatedResponse {
             example = "[\"customer-42:manual:v3\"]")
     private List<String> allowedCollectionKeys;
 
+    private String principalId;
+    private Integer credentialVersion;
+    private Long policyVersion;
+    private Integer requestsPerMinute;
+
     public ApiKeyCreatedResponse() {
     }
 
@@ -80,6 +85,15 @@ public class ApiKeyCreatedResponse {
         this.allowedCollectionKeys = allowedCollectionKeys;
     }
 
+    public String getPrincipalId() { return principalId; }
+    public void setPrincipalId(String principalId) { this.principalId = principalId; }
+    public Integer getCredentialVersion() { return credentialVersion; }
+    public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
+    public Long getPolicyVersion() { return policyVersion; }
+    public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
+    public Integer getRequestsPerMinute() { return requestsPerMinute; }
+    public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -91,13 +105,18 @@ public class ApiKeyCreatedResponse {
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(warning, that.warning) &&
                 Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
-                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys) &&
+                Objects.equals(principalId, that.principalId) &&
+                Objects.equals(credentialVersion, that.credentialVersion) &&
+                Objects.equals(policyVersion, that.policyVersion) &&
+                Objects.equals(requestsPerMinute, that.requestsPerMinute);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(keyId, rawKey, name, expiresAt, warning,
-                allowedCollectionIds, allowedCollectionKeys);
+                allowedCollectionIds, allowedCollectionKeys, principalId,
+                credentialVersion, policyVersion, requestsPerMinute);
     }
 
     @Override
@@ -108,6 +127,10 @@ public class ApiKeyCreatedResponse {
                 ", expiresAt=" + expiresAt +
                 ", allowedCollectionIds=" + allowedCollectionIds +
                 ", allowedCollectionKeys=" + allowedCollectionKeys +
+                ", principalId='" + principalId + '\'' +
+                ", credentialVersion=" + credentialVersion +
+                ", policyVersion=" + policyVersion +
+                ", requestsPerMinute=" + requestsPerMinute +
                 ", warning='" + warning + '\'' +
                 // rawKey intentionally excluded from toString (security)
                 '}';

@@ -244,12 +244,12 @@ public class JsonRecordService {
                     request.getCollectionKeys(),
                     null,
                     RagDocument.JSON_RECORD,
-                    ApiKeyCollectionAccess.currentKey());
+                    ApiKeyCollectionAccess.currentPolicy());
         } else {
             List<Long> collectionIds = ApiKeyCollectionAccess.resolveCollectionIds(
                     request.getCollectionIds(),
                     request.getCollectionKeys(),
-                    ApiKeyCollectionAccess.currentKey(),
+                    ApiKeyCollectionAccess.currentPolicy(),
                     collectionIdentityResolver);
             retrievalScope = RetrievalScope.selectedCollections(
                     collectionIds, null, RagDocument.JSON_RECORD);
@@ -468,7 +468,7 @@ public class JsonRecordService {
             throw new DocumentNotFoundException(documentId);
         }
         ApiKeyCollectionAccess.requireDocumentAccess(
-                doc, ApiKeyCollectionAccess.currentKey());
+                doc, ApiKeyCollectionAccess.currentPolicy());
         int versionNumber = documentVersionService.getLatestVersion(documentId)
                 .map(RagDocumentVersion::getVersionNumber)
                 .orElse(0);
@@ -502,7 +502,7 @@ public class JsonRecordService {
         List<Long> collections = ApiKeyCollectionAccess.resolveCollectionIds(
                 null,
                 List.of(collectionKey),
-                ApiKeyCollectionAccess.currentKey(),
+                ApiKeyCollectionAccess.currentPolicy(),
                 collectionIdentityResolver);
         if (collections.size() != 1) {
             throw new IllegalArgumentException(
@@ -573,7 +573,7 @@ public class JsonRecordService {
         }
         validateRequest(request);
         ApiKeyCollectionAccess.requireCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+                collectionId, ApiKeyCollectionAccess.currentPolicy());
 
         PersistedRecord persisted = persist(
                 request, imported.getOriginalFilename(), imported.getEnabled(),
@@ -875,7 +875,7 @@ public class JsonRecordService {
         List<Long> resolved = ApiKeyCollectionAccess.resolveCollectionIds(
                 collectionId == null ? null : List.of(collectionId),
                 collectionKey == null ? null : List.of(collectionKey),
-                ApiKeyCollectionAccess.currentKey(),
+                ApiKeyCollectionAccess.currentPolicy(),
                 collectionIdentityResolver);
         if (resolved == null || resolved.size() != 1) {
             throw new IllegalArgumentException(

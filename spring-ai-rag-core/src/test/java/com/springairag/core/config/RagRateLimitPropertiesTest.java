@@ -31,6 +31,38 @@ class RagRateLimitPropertiesTest {
     }
 
     @Test
+    void defaults_backendIsLocal() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        assertEquals("local", props.getBackend());
+        props.validateTopology();
+    }
+
+    @Test
+    void postgresqlRequiresPrincipalStrategyAndNoKeyLimits() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBackend("postgresql");
+        assertThrows(IllegalStateException.class, props::validateTopology);
+
+        props.setStrategy("principal");
+        props.setKeyLimits(Map.of("credential", 5));
+        assertThrows(IllegalStateException.class, props::validateTopology);
+
+        props.setKeyLimits(Map.of());
+        assertDoesNotThrow(props::validateTopology);
+    }
+
+    @Test
+    void invalidBackendAndCleanupBoundsFailStartupValidation() {
+        RagRateLimitProperties props = new RagRateLimitProperties();
+        props.setBackend("redis");
+        assertThrows(IllegalStateException.class, props::validateTopology);
+
+        props.setBackend("local");
+        props.setCleanupBatchSize(0);
+        assertThrows(IllegalStateException.class, props::validateTopology);
+    }
+
+    @Test
     void defaults_keyLimitsIsEmptyMap() {
         RagRateLimitProperties props = new RagRateLimitProperties();
         assertNotNull(props.getKeyLimits());

@@ -3,6 +3,7 @@ package com.springairag.api.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Size;
 import com.springairag.api.validation.ValidCollectionKey;
 
@@ -35,6 +36,12 @@ public class ApiKeyCreateRequest {
     @Size(max = 100, message = "At most 100 collection keys may be assigned to one API key")
     private List<@ValidCollectionKey String> allowedCollectionKeys;
 
+    @Schema(description = "Optional per-principal requests-per-minute quota. Null uses the global default.",
+            example = "120", minimum = "1", maximum = "1000000")
+    @Positive(message = "requestsPerMinute must be positive")
+    @Max(value = 1_000_000, message = "requestsPerMinute must be at most 1000000")
+    private Integer requestsPerMinute;
+
     public ApiKeyCreateRequest() {
     }
 
@@ -59,6 +66,11 @@ public class ApiKeyCreateRequest {
         this.allowedCollectionKeys = allowedCollectionKeys;
     }
 
+    public Integer getRequestsPerMinute() { return requestsPerMinute; }
+    public void setRequestsPerMinute(Integer requestsPerMinute) {
+        this.requestsPerMinute = requestsPerMinute;
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -67,12 +79,14 @@ public class ApiKeyCreateRequest {
         return Objects.equals(name, that.name) &&
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
-                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys);
+                Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys) &&
+                Objects.equals(requestsPerMinute, that.requestsPerMinute);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, expiresAt, allowedCollectionIds, allowedCollectionKeys);
+        return Objects.hash(name, expiresAt, allowedCollectionIds, allowedCollectionKeys,
+                requestsPerMinute);
     }
 
     @Override
@@ -82,6 +96,7 @@ public class ApiKeyCreateRequest {
                 ", expiresAt=" + expiresAt +
                 ", allowedCollectionIds=" + allowedCollectionIds +
                 ", allowedCollectionKeys=" + allowedCollectionKeys +
+                ", requestsPerMinute=" + requestsPerMinute +
                 '}';
     }
 }

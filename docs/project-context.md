@@ -372,7 +372,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V47.
+- Flyway is currently V1–V48.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -395,7 +395,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   a forward-only history cursor and optimistic version CAS for bounded
   conversation summaries; V47 adds principal-scoped durable Chat turn
   operations, immutable replay snapshots, bounded lease/reclaim state, and
-  opaque turn identity shared by operation status and business history.
+  opaque turn identity shared by operation status and business history; V48
+  adds stable API principals, versioned credentials, a plaintext-secret guard,
+  shared quota buckets, and the legacy ADMIN guard.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -452,24 +454,33 @@ Standalone-service MVP mode is enabled explicitly by `RAG_ROOT_API_KEY`:
 
 Without a root credential, legacy ADMIN/NORMAL/static-key behavior remains.
 
-Database API keys support:
+Managed database callers consist of a stable `rag_api_principal` and versioned
+`rag_api_key` credentials:
 
-- Hash lookup.
-- `ADMIN` / `NORMAL` roles.
-- Expiration, revocation, rotation, and `last_used_at`.
-- `allowedCollectionKeys` is the preferred external field; deprecated
-  `allowedCollectionIds` remains compatible. V24 storage and runtime
-  authorization still use internal IDs in `rag_api_key.allowed_collection_ids`.
-- Data-plane ACLs for Chat, Search, Collections, Documents, and PDF-to-RAG.
+- The principal owns role, Collection ACL, expiry, policy version, and an
+  optional quota; a credential owns only its hash, version, and active state.
+- V48 deterministically backfills existing keys with `principalId=old keyId`,
+  preserving historical `db:{keyId}` owners. Later rotations replace only the
+  credential and retain the stable owner.
+- Every authentication performs an authoritative credential/principal join and
+  places an immutable policy snapshot in the request. Other instances reject a
+  revoked credential on their next request. `last_used_at` is approximate and
+  written at most once per five-minute process-local suppression window.
+- The schema clears the legacy plaintext column, drops its index, and enforces
+  `api_key IS NULL`; a raw secret appears only in create/rotate responses.
+- Principal-row serialization, monotonic credential versions, policy CAS, and
+  a singleton legacy-ADMIN guard protect management concurrency.
+- With `backend=postgresql`, all instances share a stable-principal UTC
+  fixed-minute quota. Rotation does not reset usage, and store failure fails
+  closed with `503`.
+- Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background
+  workers all use the immutable ACL snapshot or reload policy by stable owner.
 
-This MVP is limited to a single instance, TLS, and a trusted management
-network. It is not yet a complete multi-tenant external credential system:
-
-- The schema retains a plaintext column.
-- NORMAL-key delegation needs stronger boundaries.
-- Rotation lacks a stable principal or family.
-- There is no transactional last-ADMIN guard.
-- Multi-instance revocation, shared limiting, and write amplification remain unresolved.
+This completes the managed-principal multi-instance foundation, not a complete
+tenant identity platform. OAuth/OIDC, tenant hierarchy, token/cost billing,
+management recovery, and removal of all legacy static/query compatibility are
+outside this batch. Public deployment still requires TLS, network controls,
+credential operations, capacity planning, and monitoring.
 
 See [openai-compatibility-readiness.md](openai-compatibility-readiness.md) for
 these boundaries and the prerequisites for public enablement.
@@ -496,10 +507,10 @@ does not support tools, structured output, or sampling parameters. Native
 `/api/v1/rag/chat/stream` retains project-specific tool, source, and terminal
 events; the two SSE protocols are not interchangeable.
 
-The controlled preview is suitable for trusted-network integration, but it is
-not public, multi-instance production readiness. API-key families, shared
-quotas, and immediate cross-instance revocation remain explicit future
-boundaries.
+The controlled preview is suitable for trusted-network integration. Stable
+principals, shared quotas, and immediate multi-instance revocation are now
+implemented, but that alone is not public production readiness. Remaining
+operational and legacy boundaries are maintained in the readiness reference.
 
 See [OpenAI compatibility readiness](openai-compatibility-readiness.md) for the
 current status and boundaries.

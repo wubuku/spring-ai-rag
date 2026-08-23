@@ -5,14 +5,18 @@ import {
   mockAllApiCalls,
 } from './api-mocks';
 
-interface MockKey {
-  keyId: string;
+interface MockPrincipal {
+  principalId: string;
   name: string;
   role: 'NORMAL';
+  policyVersion: number;
+  status: 'ACTIVE' | 'REVOKED';
   createdAt: string;
+  updatedAt: string;
   expiresAt: string;
-  enabled: boolean;
-  allowedCollectionIds?: number[];
+  currentCredentialId?: string;
+  currentCredentialVersion?: number;
+  requestsPerMinute?: number;
   allowedCollectionKeys?: string[];
 }
 
@@ -22,13 +26,14 @@ test('root unlock manages shown-once business keys without browser persistence',
   const consoleMessages: string[] = [];
   const requestUrls: string[] = [];
   const managementCredentials: Array<string | undefined> = [];
-  const keys: MockKey[] = [];
+  const principals: MockPrincipal[] = [];
   const createRequests: Array<{
     name: string;
     expiresAt: string;
-    allowedCollectionIds?: number[];
     allowedCollectionKeys?: string[];
+    requestsPerMinute?: number;
   }> = [];
+  const policyUpdates: Array<Record<string, unknown>> = [];
 
   page.on('console', message => consoleMessages.push(message.text()));
   page.on('request', request => requestUrls.push(request.url()));
@@ -53,52 +58,80 @@ test('root unlock manages shown-once business keys without browser persistence',
 
     const url = new URL(request.url());
     const method = request.method();
-    if (method === 'GET') {
-      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(keys) });
+    if (method === 'GET' && url.pathname.endsWith('/principals')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(principals),
+      });
       return;
     }
 
     if (method === 'POST' && url.pathname.endsWith('/rotate')) {
       const oldKeyId = url.pathname.split('/').at(-2)!;
-      const oldKey = keys.find(key => key.keyId === oldKeyId);
-      if (oldKey) oldKey.enabled = false;
-      keys.push({
-        keyId: 'rag_k_rotated',
-        name: oldKey?.name ?? 'Service Key',
-        role: 'NORMAL',
-        createdAt: '2026-08-14T12:10:00',
-        expiresAt: oldKey?.expiresAt ?? '2026-11-12T12:00:00',
-        enabled: true,
-      });
+      const principal = principals.find(item => item.currentCredentialId === oldKeyId);
+      if (principal) {
+        principal.currentCredentialId = 'rag_k_rotated';
+        principal.currentCredentialVersion = (principal.currentCredentialVersion ?? 1) + 1;
+        principal.updatedAt = '2026-08-14T12:10:00';
+      }
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
         body: JSON.stringify({
           keyId: 'rag_k_rotated',
+          principalId: principal?.principalId ?? 'rag_p_created',
+          credentialVersion: principal?.currentCredentialVersion ?? 2,
+          policyVersion: principal?.policyVersion ?? 1,
           rawKey: rotatedRawKey,
-          name: oldKey?.name ?? 'Service Key',
-          expiresAt: oldKey?.expiresAt ?? '2026-11-12T12:00:00',
+          name: principal?.name ?? 'Service Key',
+          expiresAt: principal?.expiresAt ?? '2026-11-12T12:00:00',
+          requestsPerMinute: principal?.requestsPerMinute,
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });
       return;
     }
 
-    if (method === 'POST') {
+    if (method === 'PUT' && url.pathname.endsWith('/policy')) {
+      const principalId = url.pathname.split('/').at(-2)!;
+      const body = request.postDataJSON() as Record<string, unknown>;
+      policyUpdates.push(body);
+      const principal = principals.find(item => item.principalId === principalId)!;
+      principal.name = body.name as string;
+      principal.expiresAt = body.expiresAt as string;
+      principal.allowedCollectionKeys = body.allowedCollectionKeys as string[] | undefined;
+      principal.requestsPerMinute = body.requestsPerMinute as number | undefined;
+      principal.policyVersion += 1;
+      principal.updatedAt = '2026-08-14T12:20:00';
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(principal),
+      });
+      return;
+    }
+
+    if (method === 'POST' && url.pathname.endsWith('/api-keys')) {
       const body = request.postDataJSON() as {
         name: string;
         expiresAt: string;
-        allowedCollectionIds?: number[];
         allowedCollectionKeys?: string[];
+        requestsPerMinute?: number;
       };
       createRequests.push(body);
-      keys.push({
-        keyId: 'rag_k_created',
+      principals.push({
+        principalId: 'rag_p_created',
         name: body.name,
         role: 'NORMAL',
+        policyVersion: 1,
+        status: 'ACTIVE',
         createdAt: '2026-08-14T12:00:00',
+        updatedAt: '2026-08-14T12:00:00',
         expiresAt: body.expiresAt,
-        enabled: true,
+        currentCredentialId: 'rag_k_created',
+        currentCredentialVersion: 1,
+        requestsPerMinute: body.requestsPerMinute,
         allowedCollectionKeys: body.allowedCollectionKeys,
       });
       await route.fulfill({
@@ -106,10 +139,14 @@ test('root unlock manages shown-once business keys without browser persistence',
         contentType: 'application/json',
         body: JSON.stringify({
           keyId: 'rag_k_created',
+          principalId: 'rag_p_created',
+          credentialVersion: 1,
+          policyVersion: 1,
           rawKey: createdRawKey,
           name: body.name,
           expiresAt: body.expiresAt,
           allowedCollectionKeys: body.allowedCollectionKeys,
+          requestsPerMinute: body.requestsPerMinute,
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });
@@ -118,8 +155,12 @@ test('root unlock manages shown-once business keys without browser persistence',
 
     if (method === 'DELETE') {
       const keyId = url.pathname.split('/').at(-1)!;
-      const key = keys.find(candidate => candidate.keyId === keyId);
-      if (key) key.enabled = false;
+      const principal = principals.find(candidate => candidate.currentCredentialId === keyId);
+      if (principal) {
+        principal.status = 'REVOKED';
+        principal.currentCredentialId = undefined;
+        principal.currentCredentialVersion = undefined;
+      }
       await route.fulfill({ status: 204, body: '' });
       return;
     }
@@ -162,11 +203,13 @@ test('root unlock manages shown-once business keys without browser persistence',
   await expect(expiry).toHaveValue(longExpiry);
   await page.getByText('Selected collections', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Sample Collection/ }).check();
+  await page.locator('#create-key-quota').fill('75');
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   await expect(page.getByText(createdRawKey)).toBeVisible();
-  expect(keys[0]?.expiresAt).toBe(`${longExpiry}:00`);
-  expect(keys[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
+  expect(principals[0]?.expiresAt).toBe(`${longExpiry}:00`);
+  expect(principals[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
+  expect(principals[0]?.requestsPerMinute).toBe(75);
   expect(createRequests).toHaveLength(1);
   expect(createRequests[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
   expect(createRequests[0]).not.toHaveProperty('allowedCollectionIds');
@@ -175,16 +218,34 @@ test('root unlock manages shown-once business keys without browser persistence',
   ).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(createdRawKey)).toHaveCount(0);
+  await expect(page.getByText('rag_p_created')).toBeVisible();
   await expect(page.getByText('rag_k_created')).toBeVisible();
 
-  const createdRow = page.getByText('rag_k_created').locator('..');
-  await createdRow.getByRole('button', { name: 'Rotate' }).click();
+  const principalRow = page.getByText('rag_p_created').locator('..');
+  await principalRow.getByRole('button', { name: 'Edit' }).click();
+  await page.locator('#policy-name').fill('Indexer Agent');
+  await page.locator('#policy-quota').fill('120');
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page.getByText('Indexer Agent')).toBeVisible();
+  expect(policyUpdates).toEqual([
+    expect.objectContaining({
+      expectedPolicyVersion: 1,
+      name: 'Indexer Agent',
+      requestsPerMinute: 120,
+      allowedCollectionKeys: ['sample-collection'],
+    }),
+  ]);
+
+  const editedRow = page.getByText('rag_p_created').locator('..');
+  await editedRow.getByRole('button', { name: 'Rotate' }).click();
   await page.getByRole('button', { name: 'Rotate Key' }).click();
   await expect(page.getByText(rotatedRawKey)).toBeVisible();
   await page.getByRole('button', { name: 'Close' }).click();
   await expect(page.getByText(rotatedRawKey)).toHaveCount(0);
 
-  const rotatedRow = page.getByText('rag_k_rotated').locator('..');
+  const rotatedRow = page.getByText('rag_p_created').locator('..');
+  await expect(rotatedRow.getByText('rag_k_rotated')).toBeVisible();
+  await expect(rotatedRow.getByText('v2')).toBeVisible();
   await rotatedRow.getByRole('button', { name: 'Revoke' }).click();
   await expect(rotatedRow.getByText('Revoked')).toBeVisible();
 

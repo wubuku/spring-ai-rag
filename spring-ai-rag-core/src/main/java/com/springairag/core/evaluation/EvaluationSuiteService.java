@@ -17,10 +17,10 @@ import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagEvaluationProperties;
 import com.springairag.core.config.RagProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.exception.RagException;
-import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionRetrievalScopeResolver;
 import com.springairag.core.service.RetrievalEvaluationService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -52,7 +52,7 @@ public class EvaluationSuiteService {
     private final EmbeddingProfileProvider profileProvider;
     private final ObjectMapper objectMapper;
     private final RagEvaluationProperties properties;
-    private final RagApiKeyRepository apiKeyRepository;
+    private final ApiKeyManagementService apiKeyManagementService;
 
     public EvaluationSuiteService(
             EvaluationSuiteRepository repository,
@@ -63,7 +63,7 @@ public class EvaluationSuiteService {
             EmbeddingProfileProvider profileProvider,
             ObjectMapper objectMapper,
             RagProperties ragProperties,
-            @Autowired(required = false) RagApiKeyRepository apiKeyRepository) {
+            @Autowired(required = false) ApiKeyManagementService apiKeyManagementService) {
         this.repository = repository;
         this.validator = validator;
         this.scopeResolver = scopeResolver;
@@ -72,7 +72,7 @@ public class EvaluationSuiteService {
         this.profileProvider = profileProvider;
         this.objectMapper = objectMapper;
         this.properties = ragProperties.getEvaluation();
-        this.apiKeyRepository = apiKeyRepository;
+        this.apiKeyManagementService = apiKeyManagementService;
     }
 
     public void requireEnabled() {
@@ -208,7 +208,7 @@ public class EvaluationSuiteService {
 
     public void executeRun(EvaluationSuiteRepository.RunRow run, String workerId) {
         UUID runId = run.id();
-        final RagApiKey executionKey;
+        final ApiAccessPolicy executionKey;
         try {
             executionKey = resolveExecutionKey(run.ownerPrincipalId());
         } catch (SecurityException e) {
@@ -278,7 +278,7 @@ public class EvaluationSuiteService {
 
     private List<CompletedCase> executeCases(
             List<PendingCase> pendingCases,
-            RagApiKey executionKey) {
+            ApiAccessPolicy executionKey) {
         if (pendingCases.isEmpty()) {
             return List.of();
         }
@@ -325,7 +325,7 @@ public class EvaluationSuiteService {
     private CaseOutcome executeCase(
             EvaluationSuiteDefinition.CaseDef caseDef,
             EvaluationSuiteDefinition.VariantDef variant,
-            RagApiKey executionKey) {
+            ApiAccessPolicy executionKey) {
         for (EvaluationSuiteDefinition.Identity identity : caseDef.relevant()) {
             if (!caseExecutor.identityExists(
                     identity.collectionKey(),
@@ -386,7 +386,7 @@ public class EvaluationSuiteService {
     }
 
     private void authorizeDefinition(
-            EvaluationSuiteDefinition definition, RagApiKey executionKey) {
+            EvaluationSuiteDefinition definition, ApiAccessPolicy executionKey) {
         for (String key : allCollectionKeys(definition)) {
             scopeResolver.resolve(
                     CollectionScopeMode.SELECTED_COLLECTIONS,
@@ -398,7 +398,7 @@ public class EvaluationSuiteService {
         }
     }
 
-    private RagApiKey currentExecutionKey() {
+    private ApiAccessPolicy currentExecutionKey() {
         return resolveExecutionKey(ChatPrincipal.fromCurrentRequest().id());
     }
 
@@ -407,23 +407,20 @@ public class EvaluationSuiteService {
      * {@code db:{keyId}} 按当前数据库 Key 的 ACL 重新授权；缺失或停用则失败关闭。
      * {@code local:}/{@code root:}/{@code legacy:} 与 HTTP 无实体 Key 行为一致。
      */
-    RagApiKey resolveExecutionKey(String ownerPrincipalId) {
+    ApiAccessPolicy resolveExecutionKey(String ownerPrincipalId) {
         if (ownerPrincipalId != null && ownerPrincipalId.startsWith("db:")) {
-            String keyId = ownerPrincipalId.substring(3).trim();
-            if (keyId.isEmpty() || apiKeyRepository == null) {
+            String principalId = ownerPrincipalId.substring(3).trim();
+            if (principalId.isEmpty() || apiKeyManagementService == null) {
                 throw new SecurityException("Owner API key is no longer authorized");
             }
-            RagApiKey ownerKey = apiKeyRepository.findByKeyId(keyId).orElse(null);
-            if (ownerKey == null || !ownerKey.isEnabled()) {
-                throw new SecurityException("Owner API key is no longer authorized");
-            }
-            if (ownerKey.getExpiresAt() != null
-                    && ownerKey.getExpiresAt().isBefore(java.time.LocalDateTime.now())) {
+            ApiAccessPolicy ownerKey = apiKeyManagementService
+                    .findActivePrincipal(principalId);
+            if (ownerKey == null) {
                 throw new SecurityException("Owner API key is no longer authorized");
             }
             return ownerKey;
         }
-        return ApiKeyCollectionAccess.currentKey();
+        return ApiKeyCollectionAccess.currentPolicy();
     }
 
     private List<String> allCollectionKeys(EvaluationSuiteDefinition definition) {

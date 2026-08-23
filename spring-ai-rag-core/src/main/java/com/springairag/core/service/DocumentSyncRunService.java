@@ -974,7 +974,7 @@ public class DocumentSyncRunService {
     private RagCollection requireWritableCollection(String collectionKey) {
         return ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 collectionKey,
-                ApiKeyCollectionAccess.currentKey(),
+                ApiKeyCollectionAccess.currentPolicy(),
                 collectionIdentityResolver);
     }
 
@@ -985,7 +985,7 @@ public class DocumentSyncRunService {
 
     private void requireCollectionAccess(long collectionId) {
         ApiKeyCollectionAccess.requireCollectionId(
-                collectionId, ApiKeyCollectionAccess.currentKey());
+                collectionId, ApiKeyCollectionAccess.currentPolicy());
     }
 
     private String collectionKey(long collectionId) {

@@ -8,7 +8,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.chat.ChatPrincipal;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.config.RagRetrievalDiagnosticsProperties;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagRetrievalLog;
 import com.springairag.core.exception.RagException;
@@ -181,7 +181,7 @@ public class RetrievalDiagnosticsService {
                 .filter(item -> owner.equals(item.getOwnerPrincipalId()))
                 .orElseThrow(() -> new RagException(
                         ErrorCode.NOT_FOUND, "Retrieval trace not found"));
-        return toDetail(logEntry, ApiKeyCollectionAccess.currentKey());
+        return toDetail(logEntry, ApiKeyCollectionAccess.currentPolicy());
     }
 
     @Transactional
@@ -218,7 +218,7 @@ public class RetrievalDiagnosticsService {
                 citationStatus);
     }
 
-    private RetrievalTraceDetailResponse toDetail(RagRetrievalLog logEntry, RagApiKey caller) {
+    private RetrievalTraceDetailResponse toDetail(RagRetrievalLog logEntry, ApiAccessPolicy caller) {
         Map<String, Object> metadata = visibleMetadata(logEntry.getMetadata(), caller);
         Map<String, Object> scores = positionalOnly(logEntry.getResultScores());
         return new RetrievalTraceDetailResponse(
@@ -237,7 +237,7 @@ public class RetrievalDiagnosticsService {
     @SuppressWarnings("unchecked")
     private Map<String, Object> visibleMetadata(
             Map<String, Object> metadata,
-            RagApiKey caller) {
+            ApiAccessPolicy caller) {
         if (metadata == null || metadata.isEmpty()) {
             return Map.of();
         }
@@ -254,7 +254,7 @@ public class RetrievalDiagnosticsService {
         return copy;
     }
 
-    private List<String> visibleCollectionKeys(List<?> keys, RagApiKey caller) {
+    private List<String> visibleCollectionKeys(List<?> keys, ApiAccessPolicy caller) {
         List<String> requested = new ArrayList<>();
         for (Object key : keys) {
             if (key != null && !String.valueOf(key).isBlank()) {

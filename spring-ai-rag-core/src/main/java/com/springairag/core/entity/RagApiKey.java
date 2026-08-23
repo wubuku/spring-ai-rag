@@ -1,5 +1,7 @@
 package com.springairag.core.entity;
 
+import com.springairag.core.security.ApiAccessPolicy;
+
 import jakarta.persistence.*;
 import org.hibernate.annotations.CreationTimestamp;
 
@@ -17,7 +19,7 @@ import java.time.LocalDateTime;
     @Index(name = "idx_rag_api_key_enabled", columnList = "enabled"),
     @Index(name = "idx_rag_api_key_hash", columnList = "key_hash", unique = true)
 })
-public class RagApiKey {
+public class RagApiKey implements ApiAccessPolicy {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -48,6 +50,15 @@ public class RagApiKey {
 
     @Column(nullable = false)
     private Boolean enabled = true;
+
+    @Column(name = "principal_id", nullable = false, length = 64)
+    private String principalId;
+
+    @Column(name = "credential_version", nullable = false)
+    private Integer credentialVersion;
+
+    @Column(name = "revoked_at")
+    private LocalDateTime revokedAt;
 
     /**
      * Role for permission layering (ADMIN or NORMAL).
@@ -91,26 +102,23 @@ public class RagApiKey {
     public boolean isEnabled() { return Boolean.TRUE.equals(enabled); }
 
     /**
-     * The raw API key value.
-     *
-     * <p>Stored so it can be returned exactly once at creation time.
-     * After that, only the hash is used for validation.
-     */
-    @Column(name = "api_key", length = 128)
-    private String apiKey;
-
-    /**
      * Comma-separated collection IDs this key may access.
      * Null or blank means unrestricted (all collections).
      */
     @Column(name = "allowed_collection_ids", length = 2048)
     private String allowedCollectionIds;
 
-    public String getApiKey() { return apiKey; }
-    public void setApiKey(String apiKey) { this.apiKey = apiKey; }
-
     public String getAllowedCollectionIds() { return allowedCollectionIds; }
     public void setAllowedCollectionIds(String allowedCollectionIds) {
         this.allowedCollectionIds = allowedCollectionIds;
     }
+
+    public String getPrincipalId() { return principalId; }
+    public void setPrincipalId(String principalId) { this.principalId = principalId; }
+    @Override
+    public String getCredentialId() { return keyId; }
+    public Integer getCredentialVersion() { return credentialVersion; }
+    public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
+    public LocalDateTime getRevokedAt() { return revokedAt; }
+    public void setRevokedAt(LocalDateTime revokedAt) { this.revokedAt = revokedAt; }
 }

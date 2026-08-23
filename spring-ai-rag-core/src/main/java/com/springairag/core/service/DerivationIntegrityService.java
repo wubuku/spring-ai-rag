@@ -4,7 +4,7 @@ import com.springairag.api.dto.DerivationReadinessPageResponse;
 import com.springairag.api.dto.DerivationReadinessResponse;
 import com.springairag.api.dto.CollectionEmbeddingReadinessResponse;
 import com.springairag.core.config.EmbeddingProfileProvider;
-import com.springairag.core.entity.RagApiKey;
+import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import org.springframework.stereotype.Service;
@@ -68,7 +68,7 @@ public class DerivationIntegrityService {
     }
 
     RagCollection requireCollection(String collectionKey) {
-        RagApiKey caller = ApiKeyCollectionAccess.currentKey();
+        ApiAccessPolicy caller = ApiKeyCollectionAccess.currentPolicy();
         return ApiKeyCollectionAccess.requireActiveCollectionByKey(
                 collectionKey, caller, collectionResolver);
     }

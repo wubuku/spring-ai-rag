@@ -647,11 +647,14 @@ compatibility.
 
 Database business keys define their external scope with
 `allowedCollectionKeys` through `POST /api/v1/rag/api-keys`; deprecated
-`allowedCollectionIds` remains compatible. The controller resolves keys to
-internal IDs, and Flyway V24 storage remains
-`rag_api_key.allowed_collection_ids`; null/blank means unrestricted. An
-explicit empty key list is rejected instead of silently granting unrestricted
-access. See [rest-api.md](rest-api.md).
+`allowedCollectionIds` remains compatible. V48 separates the stable
+`rag_api_principal` policy from versioned `rag_api_key` credentials. Rotation
+therefore preserves the `db:{principalId}` owner, role, Collection ACL, expiry,
+policy version, and quota. Authentication queries the authoritative credential
+and principal on every request; only the approximate `last_used_at` write is
+suppressed for five minutes. The legacy `api_key` column is retained for
+migration compatibility but constrained to `NULL`. See
+[rest-api.md](rest-api.md).
 
 ## API Rate Limiting Configuration
 
@@ -659,6 +662,7 @@ access. See [rest-api.md](rest-api.md).
 rag:
   rate-limit:
     enabled: true
+    backend: local
     requests-per-minute: 60
     strategy: ip
     key-limits:
@@ -668,14 +672,34 @@ rag:
 
 | Property | Default | Description |
 |----------|---------|-------------|
-| `rag.rate-limit.enabled` | `true` | Enable API rate limiting |
+| `rag.rate-limit.enabled` | `false` | Enable API rate limiting |
+| `rag.rate-limit.backend` | `local` | `local` process counter or shared `postgresql` fixed UTC-minute buckets |
 | `rag.rate-limit.requests-per-minute` | `60` | Default max requests per minute |
-| `rag.rate-limit.strategy` | `ip` | Rate limit strategy: `ip` (by IP) / `api-key` (by API Key, falls back to IP if no key) |
-| `rag.rate-limit.key-limits` | `{}` | Per-API-Key tiered limits (key → requests-per-minute) |
+| `rag.rate-limit.strategy` | `ip` | Local: `ip`, `api-key`, or `user`; PostgreSQL requires `principal` |
+| `rag.rate-limit.key-limits` | `{}` | Local-only per-identifier limits; must be empty for PostgreSQL |
+| `rag.rate-limit.bucket-retention-minutes` | `1440` | PostgreSQL bucket retention horizon |
+| `rag.rate-limit.cleanup-interval-seconds` | `300` | Best-effort cleanup interval |
+| `rag.rate-limit.cleanup-batch-size` | `10000` | Maximum rows removed by one cleanup pass |
 
 **Rate limit strategy selection:**
 - `ip`: Count per client IP independently, suitable for unauthenticated scenarios
 - `api-key`: Rate limit by API Key (falls back to IP if no key), suitable for multi-tenant; unconfigured keys use default `requests-per-minute`
+
+For multi-instance managed callers, use:
+
+```yaml
+rag:
+  rate-limit:
+    enabled: true
+    backend: postgresql
+    strategy: principal
+    requests-per-minute: 60
+```
+
+The PostgreSQL backend uses the authenticated stable principal only. The
+optional principal policy `requestsPerMinute` overrides the global default.
+Credential rotation does not reset usage. Store failures fail closed with
+`503`; there is no automatic local fallback.
 
 Returns `429 Too Many Requests` when exceeded, with `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining` response headers.
 
