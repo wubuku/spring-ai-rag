@@ -35,8 +35,8 @@
 | WebUI | 已完成 | 每 principal 一行、policy CAS、quota、当前凭据 rotate/revoke 与 shown-once secret 已完成；页面 Vitest 13/13、TypeScript、production build、alignment、核心 Mock Playwright 通过 |
 | 基本集成硬门槛 | 已完成 | 统一门槛 `20260823-premerge-hard-gate-rerun` 13/13：PostgreSQL 40/40、Maven 全量、WebUI Vitest 218/218、TypeScript/build/alignment、核心 Mock Playwright、project-docs 10/10 均通过 |
 | 真实全栈与 LLM | 已完成 | 同一统一门槛中，双实例共享 DB、真实 frontend/backend Playwright、真实 `grok-4.5` 五路径有界调用全部通过 |
-| 实现连续审查 | 未开始 | 硬门槛全部通过后执行限定范围连续 `3/3` |
-| 最终 Git 交付 | 未开始 | merge 最新 origin/main、完整复验、feature push、合入/push main、移除 worktree |
+| 实现连续审查 | 进行中 | 合并后完整硬门槛已通过，按数据一致性、认证/API、运维兼容性三个互不重叠范围开始只读审查，当前 `0/3` |
+| 最终 Git 交付 | 进行中 | feature `8bfdad2c` 已推送；`origin/main@c62d50fe` 为当前基线且显式 merge 已确认 up-to-date，正在执行合并后完整复验 |
 
 ## 2. 已确认事实
 
@@ -108,7 +108,7 @@ OAuth 或新的身份体系。
 | 核心 Mock Playwright（无截图） | 通过 | `api-key-mvp.spec.ts` 1/1；DOM、管理请求、credential version、secret 无持久化断言通过 |
 | 真实 frontend/backend Playwright（无截图） | 通过 | 双 backend + Vite + 真实 PostgreSQL；DOM、网络/响应、identity、secret 不进入 URL/console/storage 断言 1/1 |
 | 真实 LLM native JSON/SSE、OpenAI JSON/SSE、rotation/revoke | 通过 | `20260823-real-llm-probe-5`：native JSON 首次/跨实例 replay、轮换后 history 与 JSON、native SSE、OpenAI JSON/SSE；A/B counter 汇总恰好 `+5`，replay `+0`，最终跨实例 revoke 为 401 |
-| merge 后完整复验 | 待执行 | 待 merge 最新 origin/main 后创建新 run ID |
+| merge 后完整复验 | 通过 | `20260823-post-origin-main-final` 13/13；PostgreSQL/Maven/前端/真实双实例/真实 WebUI/真实 LLM 全部门槛在 `origin/main@c62d50fe` 基线上重新执行并通过 |
 | 实现连续三轮审查 | `0/3` | 基本集成硬门槛通过前不开始 |
 
 ## 6. 实施问题与修复记录
