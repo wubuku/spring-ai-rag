@@ -634,7 +634,12 @@ PostgreSQL full-text search reads the current generation from
 - Search configuration: `jiebacfg` (based on jieba tokenizer)
 - Supports Chinese tokenization + ranking (`ts_rank`)
 - `rag_embeddings` remains the vector source of truth; HybridRetrieverService
-  fuses vector and full-text results via RRF (Reciprocal Rank Fusion)
+  fuses vector and full-text results via scaled weighted RRF (Reciprocal Rank
+  Fusion). With fixed `K=60`, provider scores determine rank within each
+  channel, channel contributions are weighted and summed for overlapping
+  candidates, and final-score ties use deterministic document identity order.
+  Raw vector and full-text scores remain diagnostic fields and are not compared
+  across provider scales.
 
 ---
 

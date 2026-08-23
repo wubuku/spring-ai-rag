@@ -293,7 +293,9 @@ rag:
 | `rag.retrieval.default-limit` | `10` | 默认返回结果数 |
 | `rag.retrieval.min-score` | `0.3` | 模糊全文提供者（如 `pg_trgm`）的最低相似度；`pg_jieba` / English FTS 以 `@@` 判定词法命中，再用 `ts_rank` 排序 |
 
-> 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`，系统会自动归一化。
+> 💡 `vector-weight + fulltext-weight` 建议和为 `1.0`；服务会分别校验两个权重必须是
+> 有限的 `0.0..1.0` 数值，但不会自动归一化权重之和。这样可以让缩放后的加权 RRF
+> 分数保持易于理解的量级。
 
 **全文检索策略（`fulltext-strategy`）：**
 

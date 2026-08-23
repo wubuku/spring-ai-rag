@@ -2,6 +2,7 @@ package com.springairag.core.retrieval;
 
 import com.springairag.api.dto.RetrievalResult;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,18 @@ import java.util.Map;
  * <p>Extracted from HybridRetrieverService for independent testing and reuse.
  */
 public final class RetrievalUtils {
+
+    private static final int RRF_K = 60;
+    private static final double RRF_SCALE = RRF_K + 1.0;
+    private static final Comparator<RetrievalResult> CHANNEL_ORDER =
+            RetrievalUtils::compareChannelResults;
+    private static final Comparator<MergedEntry> FUSED_ORDER =
+            (left, right) -> {
+                int byScore = Double.compare(right.fusedScore, left.fusedScore);
+                return byScore != 0
+                        ? byScore
+                        : compareIdentity(left.original, right.original);
+            };
 
     private RetrievalUtils() {
     }
@@ -134,79 +147,110 @@ public final class RetrievalUtils {
     }
 
     /**
-     * Fuses vector and fulltext retrieval results using normalized score fusion.
+     * Fuses vector and fulltext retrieval results using scaled weighted RRF.
      *
-     * <p>Normalizes both result sets to [0,1] range, applies weights, merges overlapping
-     * entries (same document+chunk), and returns results sorted by fused score descending.
+     * <p>Provider scores only establish each channel's rank. The final score is:
+     * {@code (K + 1) * weight / (K + rank)}, summed when a candidate appears in both
+     * channels. The scale keeps the top-rank contribution close to the configured weight.
      *
      * @param vectorResults   vector retrieval results (may be null or empty)
      * @param fulltextResults fulltext retrieval results (may be null or empty)
-     * @param limit          maximum number of results to return
-     * @param vectorWeight   weight for vector scores (0.0–1.0)
-     * @param fulltextWeight weight for fulltext scores (0.0–1.0)
+     * @param limit           maximum number of results to return
+     * @param vectorWeight    weight for vector scores (finite, 0.0–1.0)
+     * @param fulltextWeight  weight for fulltext scores (finite, 0.0–1.0)
      * @return fused and sorted results
+     * @throws IllegalArgumentException if either weight is non-finite or outside 0.0–1.0
      */
     public static List<RetrievalResult> fuseResults(
             List<RetrievalResult> vectorResults,
             List<RetrievalResult> fulltextResults,
             int limit, float vectorWeight, float fulltextWeight) {
 
+        validateWeight("vectorWeight", vectorWeight);
+        validateWeight("fulltextWeight", fulltextWeight);
+        if (limit <= 0) {
+            return List.of();
+        }
         if (vectorResults == null) vectorResults = List.of();
         if (fulltextResults == null) fulltextResults = List.of();
 
-        Map<String, MergedEntry> merged = buildMergedEntries(
-                vectorResults, fulltextResults, vectorWeight, fulltextWeight);
+        Map<String, MergedEntry> merged = new LinkedHashMap<>();
+        mergeChannel(merged, vectorResults, vectorWeight, true);
+        mergeChannel(merged, fulltextResults, fulltextWeight, false);
 
         return merged.values().stream()
-                .sorted((a, b) -> Float.compare(b.fusedScore, a.fusedScore))
+                .sorted(FUSED_ORDER)
                 .limit(limit)
                 .map(RetrievalUtils::toRetrievalResult)
                 .toList();
     }
 
-    private static Map<String, MergedEntry> buildMergedEntries(
-            List<RetrievalResult> vectorResults, List<RetrievalResult> fulltextResults,
-            float vectorWeight, float fulltextWeight) {
-        float maxVector = maxScore(vectorResults);
-        float maxFulltext = maxScore(fulltextResults);
-        Map<String, MergedEntry> merged = new LinkedHashMap<>();
-
-        for (RetrievalResult r : vectorResults) {
-            String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            // Guard against division by zero (maxVector == 0 means all scores are 0)
-            float normalized = (Float.isNaN(maxVector) || maxVector == 0f) ? 0f : (float) (r.getScore() / maxVector) * vectorWeight;
-            // Math.max with NaN returns NaN, so use a helper that treats NaN as -inf
-            MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = maxWithNaN(entry.fusedScore, normalized);
-            entry.vectorScore = maxWithNaN(entry.vectorScore, (float) r.getScore());
+    private static void mergeChannel(
+            Map<String, MergedEntry> merged,
+            List<RetrievalResult> results,
+            float weight,
+            boolean vectorChannel) {
+        List<RetrievalResult> ranked = results.stream()
+                .filter(result -> result != null)
+                .sorted(CHANNEL_ORDER)
+                .toList();
+        for (int index = 0; index < ranked.size(); index++) {
+            RetrievalResult result = ranked.get(index);
+            String key = identityKey(result);
+            MergedEntry entry = merged.computeIfAbsent(
+                    key, ignored -> new MergedEntry(result));
+            if (vectorChannel) {
+                if (entry.vectorSeen) {
+                    continue;
+                }
+                entry.vectorSeen = true;
+                entry.vectorScore = result.getScore();
+            } else {
+                if (entry.fulltextSeen) {
+                    continue;
+                }
+                entry.fulltextSeen = true;
+                entry.fulltextScore = result.getScore();
+            }
+            int rank = index + 1;
+            entry.fusedScore += RRF_SCALE * weight / (RRF_K + rank);
         }
-
-        for (RetrievalResult r : fulltextResults) {
-            String key = r.getDocumentId() + ":" + r.getChunkIndex();
-            // Guard against division by zero (maxFulltext == 0 means all scores are 0)
-            float normalized = (Float.isNaN(maxFulltext) || maxFulltext == 0f) ? 0f : (float) ((r.getScore() / maxFulltext) * fulltextWeight);
-            MergedEntry entry = merged.computeIfAbsent(key, k -> new MergedEntry(r));
-            entry.fusedScore = maxWithNaN(entry.fusedScore, normalized);
-            entry.fulltextScore = maxWithNaN(entry.fulltextScore, (float) r.getScore());
-        }
-        return merged;
     }
 
-    /**
-     * Like Math.max but treats NaN as negative infinity.
-     * Math.max(Float.NaN, x) returns NaN, which is not the max semantics we want.
-     */
-    private static float maxWithNaN(float a, float b) {
-        if (Float.isNaN(a)) return b;
-        if (Float.isNaN(b)) return a;
-        return Math.max(a, b);
+    private static void validateWeight(String name, float weight) {
+        if (!Float.isFinite(weight) || weight < 0.0f || weight > 1.0f) {
+            throw new IllegalArgumentException(
+                    name + " must be finite and between 0.0 and 1.0, got " + weight);
+        }
     }
 
-    private static float maxScore(List<RetrievalResult> results) {
-        if (results.isEmpty()) return 1f;
-        double max = results.stream().mapToDouble(RetrievalResult::getScore).max().orElse(1f);
-        // Math.max(NaN, x) returns NaN, so replace NaN with 0
-        return (float) (Double.isNaN(max) ? 0f : max);
+    private static int compareChannelResults(
+            RetrievalResult left, RetrievalResult right) {
+        boolean leftFinite = Double.isFinite(left.getScore());
+        boolean rightFinite = Double.isFinite(right.getScore());
+        if (leftFinite != rightFinite) {
+            return leftFinite ? -1 : 1;
+        }
+        if (leftFinite) {
+            int byScore = Double.compare(right.getScore(), left.getScore());
+            if (byScore != 0) {
+                return byScore;
+            }
+        }
+        return compareIdentity(left, right);
+    }
+
+    private static int compareIdentity(
+            RetrievalResult left, RetrievalResult right) {
+        int byDocument = Comparator.nullsFirst(String::compareTo)
+                .compare(left.getDocumentId(), right.getDocumentId());
+        return byDocument != 0
+                ? byDocument
+                : Integer.compare(left.getChunkIndex(), right.getChunkIndex());
+    }
+
+    private static String identityKey(RetrievalResult result) {
+        return result.getDocumentId() + ":" + result.getChunkIndex();
     }
 
     /**
@@ -242,15 +286,17 @@ public final class RetrievalUtils {
 
     private static class MergedEntry {
         final RetrievalResult original;
-        float fusedScore;
-        float vectorScore;
-        float fulltextScore;
+        double fusedScore;
+        double vectorScore;
+        double fulltextScore;
+        boolean vectorSeen;
+        boolean fulltextSeen;
 
         MergedEntry(RetrievalResult r) {
             this.original = r;
-            this.fusedScore = 0f;
-            this.vectorScore = 0f;
-            this.fulltextScore = 0f;
+            this.fusedScore = 0.0;
+            this.vectorScore = 0.0;
+            this.fulltextScore = 0.0;
         }
     }
 }

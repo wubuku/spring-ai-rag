@@ -238,6 +238,28 @@ class RagSearchControllerTest {
     }
 
     @Test
+    @DisplayName("Non-finite vectorWeight returns 400")
+    void search_nonFiniteVectorWeight_returns400() {
+        ResponseEntity<?> response = controller.search(
+                "query", 10, true, Double.NaN, 0.5);
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("vectorWeight"));
+    }
+
+    @Test
+    @DisplayName("Non-finite fulltextWeight returns 400")
+    void search_nonFiniteFulltextWeight_returns400() {
+        ResponseEntity<?> response = controller.search(
+                "query", 10, true, 0.5, Double.POSITIVE_INFINITY);
+        assertEquals(400, response.getStatusCode().value());
+        ErrorResponse body = (ErrorResponse) response.getBody();
+        assertNotNull(body);
+        assertTrue(body.getDetail().contains("fulltextWeight"));
+    }
+
+    @Test
     @DisplayName("Boundary values 0.0 and 1.0 are valid")
     void search_weightBoundaryValues_valid() {
         when(hybridRetriever.search(anyString(), isNull(), isNull(), anyInt(), any(RetrievalConfig.class)))

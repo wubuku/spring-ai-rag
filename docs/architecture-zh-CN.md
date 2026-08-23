@@ -578,8 +578,10 @@ PostgreSQL 全文检索从当前 generation 的
 - pg_jieba 使用可选的 `to_tsvector('jiebacfg', chunk_text)` 表达式索引
 - 搜索配置：`jiebacfg`（基于 jieba 分词器）
 - 支持中文 tokenization + ranking (`ts_rank`)
-- `rag_embeddings` 仍是向量真相源；HybridRetrieverService 通过 RRF
-  （Reciprocal Rank Fusion）融合向量和全文结果
+- `rag_embeddings` 仍是向量真相源；HybridRetrieverService 通过缩放加权 RRF
+  （Reciprocal Rank Fusion）融合向量和全文结果。固定 `K=60`，提供方原始分数只用于
+  确定各自通道内的名次；不同通道的加权贡献会在候选重叠时相加，最终分数相同则按稳定的
+  文档 identity 顺序排序。向量和全文原始分数继续作为诊断字段保留，不跨提供方尺度直接比较。
 
 ---
 

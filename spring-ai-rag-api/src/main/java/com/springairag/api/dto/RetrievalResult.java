@@ -17,7 +17,7 @@ public class RetrievalResult {
     @Schema(description = "Matched text snippet")
     private String chunkText;
 
-    @Schema(description = "Fused ranking score for ordering results within the same query/config; not a calibrated probability or percentage",
+    @Schema(description = "Scaled weighted RRF ranking score in hybrid mode (K=60); provider raw scores determine channel rank only, and overlapping candidates sum channel contributions. Not a calibrated probability or percentage",
             example = "0.85")
     private double score;
 

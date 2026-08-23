@@ -763,9 +763,14 @@ curl "http://localhost:8081/api/v1/rag/search?query=Spring%20AI" \
 
 Score semantics:
 
-- `score` is the fused ranking signal used to order results within the same
-  query and retrieval configuration. It is not a calibrated probability or
-  relevance percentage, and it may exceed `1.0` for some ranking providers.
+- In hybrid mode, `score` is the scaled weighted Reciprocal Rank Fusion (RRF)
+  signal used to order results within the same query and retrieval
+  configuration. With `K=60`, each channel contributes
+  `(K+1) * weight / (K+rank)` and a candidate found by both channels receives
+  both contributions. Provider-specific raw scores determine rank only; they
+  are not compared across channels. It is not a calibrated probability or
+  relevance percentage, and it can exceed `1.0` when the configured weights
+  sum above `1.0`.
 - `vectorScore` is the raw vector cosine-similarity score. In a fused result,
   `0` means that the result did not receive a vector contribution.
 - `fulltextScore` is the raw provider-specific full-text score. In a fused
@@ -773,6 +778,8 @@ Score semantics:
 - Compare result order first. Raw component scores are useful for diagnosing
   whether a result was found through semantic vector retrieval, keyword
   retrieval, or both; they are not directly interchangeable.
+- Ties in the final fused score use deterministic `documentId`, then
+  `chunkIndex` ordering.
 
 Provenance fields:
 

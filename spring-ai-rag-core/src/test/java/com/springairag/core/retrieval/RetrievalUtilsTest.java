@@ -327,6 +327,133 @@ class RetrievalUtilsTest {
     }
 
     @Test
+    void fuseResults_usesRankInsteadOfCrossChannelRawScoreScale() {
+        List<RetrievalResult> first = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-a", "vector-a", 0, 0.9),
+                        RetrievalUtils.createResult("doc-b", "vector-b", 0, 0.8)),
+                List.of(
+                        RetrievalUtils.createResult("doc-b", "fulltext-b", 0, 0.7),
+                        RetrievalUtils.createResult("doc-c", "fulltext-c", 0, 0.6)),
+                10, 0.5f, 0.5f);
+        List<RetrievalResult> second = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-a", "vector-a", 0, 0.9),
+                        RetrievalUtils.createResult("doc-b", "vector-b", 0, 0.1)),
+                List.of(
+                        RetrievalUtils.createResult("doc-b", "fulltext-b", 0, 700.0),
+                        RetrievalUtils.createResult("doc-c", "fulltext-c", 0, 1.0)),
+                10, 0.5f, 0.5f);
+
+        assertEquals(
+                first.stream().map(RetrievalResult::getDocumentId).toList(),
+                second.stream().map(RetrievalResult::getDocumentId).toList());
+        assertEquals(
+                first.stream().map(RetrievalResult::getScore).toList(),
+                second.stream().map(RetrievalResult::getScore).toList());
+        assertEquals(List.of("doc-b", "doc-a", "doc-c"),
+                first.stream().map(RetrievalResult::getDocumentId).toList());
+    }
+
+    @Test
+    void fuseResults_overlappingCandidate_sumsBothRankContributions() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-a", "a", 0, 0.9),
+                        RetrievalUtils.createResult("doc-b", "b", 0, 0.8)),
+                List.of(RetrievalUtils.createResult("doc-b", "b", 0, 100.0)),
+                10, 0.5f, 0.5f);
+
+        assertEquals("doc-b", fused.get(0).getDocumentId());
+        assertEquals(
+                0.5 + (61.0 * 0.5 / 62.0),
+                fused.get(0).getScore(),
+                1e-9);
+        assertEquals(0.5, fused.get(1).getScore(), 1e-9);
+        assertEquals(0.8, fused.get(0).getVectorScore(), 1e-9);
+        assertEquals(100.0, fused.get(0).getFulltextScore(), 1e-9);
+    }
+
+    @Test
+    void fuseResults_duplicateIdentityUsesFirstRankButConsumesDuplicatePosition() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-a", "first", 0, 0.9),
+                        RetrievalUtils.createResult("doc-a", "duplicate", 0, 0.8),
+                        RetrievalUtils.createResult("doc-b", "second", 0, 0.7)),
+                List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(List.of("doc-a", "doc-b"),
+                fused.stream().map(RetrievalResult::getDocumentId).toList());
+        assertEquals(0.5, fused.get(0).getScore(), 1e-9);
+        assertEquals(61.0 * 0.5 / 63.0, fused.get(1).getScore(), 1e-9);
+        assertEquals("first", fused.get(0).getChunkText());
+    }
+
+    @Test
+    void fuseResults_sameScoreUsesStableDocumentAndChunkOrder() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-b", "b", 1, 0.5),
+                        RetrievalUtils.createResult("doc-a", "a", 2, 0.5),
+                        RetrievalUtils.createResult("doc-a", "a0", 0, 0.5)),
+                List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(
+                List.of("doc-a:0", "doc-a:2", "doc-b:1"),
+                fused.stream()
+                        .map(r -> r.getDocumentId() + ":" + r.getChunkIndex())
+                .toList());
+    }
+
+    @Test
+    void fuseResults_sameFinalScoreAcrossChannelsUsesStableIdentityOrder() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(RetrievalUtils.createResult("doc-b", "vector", 0, 0.9)),
+                List.of(RetrievalUtils.createResult("doc-a", "fulltext", 0, 900.0)),
+                10, 0.5f, 0.5f);
+
+        assertEquals(
+                List.of("doc-a", "doc-b"),
+                fused.stream().map(RetrievalResult::getDocumentId).toList());
+        assertEquals(0.5, fused.get(0).getScore(), 1e-9);
+        assertEquals(0.5, fused.get(1).getScore(), 1e-9);
+    }
+
+    @Test
+    void fuseResults_nonFiniteProviderScoresRemainDeterministicAndDoNotPolluteRrf() {
+        List<RetrievalResult> fused = RetrievalUtils.fuseResults(
+                List.of(
+                        RetrievalUtils.createResult("doc-b", "nan", 0, Double.NaN),
+                        RetrievalUtils.createResult("doc-c", "finite", 0, 0.5),
+                        RetrievalUtils.createResult("doc-a", "infinite", 0, Double.POSITIVE_INFINITY)),
+                List.of(), 10, 0.5f, 0.5f);
+
+        assertEquals(List.of("doc-c", "doc-a", "doc-b"),
+                fused.stream().map(RetrievalResult::getDocumentId).toList());
+        assertTrue(fused.stream().allMatch(result -> Double.isFinite(result.getScore())));
+    }
+
+    @Test
+    void fuseResults_invalidWeightsAreRejected() {
+        assertThrows(IllegalArgumentException.class, () -> RetrievalUtils.fuseResults(
+                List.of(RetrievalUtils.createResult("doc", "text", 0, 1.0)),
+                List.of(), 10, Float.NaN, 0.5f));
+        assertThrows(IllegalArgumentException.class, () -> RetrievalUtils.fuseResults(
+                List.of(), List.of(), 10, 0.5f, 1.1f));
+    }
+
+    @Test
+    void fuseResults_nonPositiveLimit_returnsEmpty() {
+        RetrievalResult result = RetrievalUtils.createResult("doc", "text", 0, 1.0);
+
+        assertTrue(RetrievalUtils.fuseResults(
+                List.of(result), List.of(), 0, 0.5f, 0.5f).isEmpty());
+        assertTrue(RetrievalUtils.fuseResults(
+                List.of(result), List.of(), -1, 0.5f, 0.5f).isEmpty());
+    }
+
+    @Test
     void fuseResults_bothNull_returnsEmpty() {
         List<RetrievalResult> fused = RetrievalUtils.fuseResults(null, null, 10, 0.5f, 0.5f);
         assertTrue(fused.isEmpty());
@@ -367,11 +494,10 @@ class RetrievalUtilsTest {
         assertEquals(0.75, r.getScore(), 1e-9);
     }
 
-    // ========== Edge Cases: All-Zero and NaN Scores ==========
+    // ========== Edge Cases: All-Zero and Non-Finite Scores ==========
 
     @Test
-    void fuseResults_allZeroVectorScores_noNaN() {
-        // Bug fix: when all vector scores are 0, division by zero produced NaN
+    void fuseResults_allZeroVectorScores_useRankBasedFiniteScores() {
         RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "zero vec", 0, 0.0);
         RetrievalResult v2 = RetrievalUtils.createResult("doc-2", "also zero", 0, 0.0);
 
@@ -379,22 +505,19 @@ class RetrievalUtilsTest {
                 List.of(v1, v2), List.of(), 10, 0.5f, 0.5f);
 
         assertEquals(2, fused.size());
-        for (RetrievalResult r : fused) {
-            assertFalse(Double.isNaN(r.getScore()), "Score should not be NaN when all inputs are 0");
-            assertEquals(0.0, r.getScore(), 0.0, "Score should be 0.0 when all inputs are 0");
-        }
+        assertEquals(0.5, fused.get(0).getScore(), 1e-9);
+        assertEquals(61.0 * 0.5 / 62.0, fused.get(1).getScore(), 1e-9);
     }
 
     @Test
-    void fuseResults_allZeroFulltextScores_noNaN() {
+    void fuseResults_allZeroFulltextScores_useRankBasedFiniteScore() {
         RetrievalResult f1 = RetrievalUtils.createResult("doc-1", "zero ft", 0, 0.0);
 
         List<RetrievalResult> fused = RetrievalUtils.fuseResults(
                 List.of(), List.of(f1), 10, 0.5f, 0.5f);
 
         assertEquals(1, fused.size());
-        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN");
-        assertEquals(0.0, fused.get(0).getScore(), 0.0, "Score should be 0.0");
+        assertEquals(0.5, fused.get(0).getScore(), 1e-9);
     }
 
     @Test
@@ -405,7 +528,8 @@ class RetrievalUtilsTest {
                 List.of(), List.of(f1), 10, 0.5f, 0.5f);
 
         assertEquals(1, fused.size());
-        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN with empty vector list");
+        assertTrue(Double.isFinite(fused.get(0).getScore()),
+                "Score should be finite with empty vector list");
     }
 
     @Test
@@ -416,12 +540,13 @@ class RetrievalUtilsTest {
                 List.of(v1), List.of(), 10, 0.5f, 0.5f);
 
         assertEquals(1, fused.size());
-        assertFalse(Double.isNaN(fused.get(0).getScore()), "Score should not be NaN with empty fulltext list");
+        assertTrue(Double.isFinite(fused.get(0).getScore()),
+                "Score should be finite with empty fulltext list");
     }
 
     @Test
     void fuseResults_mixedZeroAndValidScores_noNaN() {
-        // Some valid scores mixed with zeros should work fine
+        // RRF ranks candidates even when one provider score is zero.
         RetrievalResult v1 = RetrievalUtils.createResult("doc-1", "valid", 0, 0.8);
         RetrievalResult v2 = RetrievalUtils.createResult("doc-2", "zero", 0, 0.0);
 
@@ -429,8 +554,8 @@ class RetrievalUtilsTest {
                 List.of(v1, v2), List.of(), 10, 0.5f, 0.5f);
 
         assertEquals(2, fused.size());
-        for (RetrievalResult r : fused) {
-            assertFalse(Double.isNaN(r.getScore()), "Score should not be NaN: " + r.getDocumentId());
-        }
+        assertTrue(fused.stream().allMatch(result -> Double.isFinite(result.getScore())));
+        assertEquals(0.5, fused.get(0).getScore(), 1e-9);
+        assertEquals(61.0 * 0.5 / 62.0, fused.get(1).getScore(), 1e-9);
     }
 }

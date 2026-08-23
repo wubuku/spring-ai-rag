@@ -138,11 +138,13 @@ public class RagSearchController {
             return ResponseEntity.badRequest().body(
                     ErrorResponse.builder().detail("Query must not be blank").build());
         }
-        if (vectorWeight < 0.0 || vectorWeight > 1.0) {
+        if (!Double.isFinite(vectorWeight)
+                || vectorWeight < 0.0 || vectorWeight > 1.0) {
             return ResponseEntity.badRequest().body(
                     ErrorResponse.builder().detail("vectorWeight must be between 0.0 and 1.0, got " + vectorWeight).build());
         }
-        if (fulltextWeight < 0.0 || fulltextWeight > 1.0) {
+        if (!Double.isFinite(fulltextWeight)
+                || fulltextWeight < 0.0 || fulltextWeight > 1.0) {
             return ResponseEntity.badRequest().body(
                     ErrorResponse.builder().detail("fulltextWeight must be between 0.0 and 1.0, got " + fulltextWeight).build());
         }

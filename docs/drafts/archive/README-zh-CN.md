@@ -34,5 +34,7 @@
 - 外部文档迁移与派生完整性修复：`2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
 - 首个外部 Client 的跨项目接入规划：
   `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*`（因超出当前仓库文档边界而被替代）
+- 稳定受管 API Principal 与共享配额：`2026-08-23_MANAGED_API_PRINCIPAL_HARDENING_*`
+- 已被替代的 Token 用量账本规划：`2026-08-23_TOKEN_USAGE_LEDGER_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

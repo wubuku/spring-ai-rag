@@ -21,7 +21,9 @@ public record RetrievalOptions(
         if (minScore < 0 || minScore > 1) {
             throw new IllegalArgumentException("minScore must be between 0 and 1");
         }
-        if (vectorWeight < 0 || vectorWeight > 1
+        if (!Double.isFinite(vectorWeight)
+                || vectorWeight < 0 || vectorWeight > 1
+                || !Double.isFinite(fulltextWeight)
                 || fulltextWeight < 0 || fulltextWeight > 1) {
             throw new IllegalArgumentException("retrieval weights must be between 0 and 1");
         }

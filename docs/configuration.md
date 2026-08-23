@@ -314,7 +314,10 @@ rag:
 | `rag.retrieval.default-limit` | `10` | Default number of results to return |
 | `rag.retrieval.min-score` | `0.3` | Minimum similarity for fuzzy full-text providers such as `pg_trgm`; `pg_jieba` and English FTS use `@@` for lexical matching and `ts_rank` for ordering |
 
-> 💡 `vector-weight + fulltext-weight` is recommended to sum to `1.0`; the system auto-normalizes.
+> 💡 `vector-weight + fulltext-weight` is recommended to sum to `1.0`.
+> The service validates each weight independently as a finite value in
+> `0.0..1.0`; it does not normalize their sum. The recommendation keeps the
+> scaled weighted-RRF score in an easy-to-read range.
 
 **Full-text search strategy (`fulltext-strategy`):**
 

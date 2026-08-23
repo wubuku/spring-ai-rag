@@ -39,5 +39,5 @@ means there is no approved or in-progress active plan.
 
 ## Current Active Plans
 
-- [Chat context budget, durable memory, and tool-governance implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Weighted RRF retrieval-fusion implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [Progress and recovery ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
