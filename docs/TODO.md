@@ -2,8 +2,32 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> Last reviewed: 2026-08-21. This file records follow-up work outside the
+> Last reviewed: 2026-08-23. This file records follow-up work outside the
 > current code and public API; it does not describe shipped capabilities.
+
+## Managed API Principals And Multi-Instance Hardening
+
+| Item | Priority | Current status |
+|---|---|---|
+| Stable principals and versioned credential families | Next planned batch / not implemented | Rotation still creates an independent `keyId`; the `db:{keyId}` owner used by Chat, evaluation, diagnostics, and durable operations changes with it |
+| Immediate cross-instance revocation and low-write last-used auditing | Next planned batch / not implemented | Authentication still has a 30-second JVM positive cache and synchronously updates `last_used_at` after every success |
+| PostgreSQL shared principal quota | Next planned batch / not implemented | Rate limiting is process-local, so replicas multiply the quota and rotation has no stable limiter family |
+| Schema-level plaintext-secret prohibition | Next planned batch / not implemented | The V23 `api_key` column and index remain; the current service does not write the column, but the schema still permits a non-null value |
+
+These are four symptoms of one identity lifecycle and should ship as one
+independently verifiable batch rather than as separate patches. The recommended
+direction separates long-lived ownership/policy from rotatable credentials:
+existing keys are deterministically backfilled with `principalId=old keyId` to
+preserve historical owners; authentication carries an immutable
+principal/policy snapshot; every instance consults PostgreSQL on the first
+authentication after a revocation; and shared quotas count by stable principal.
+The target design, compatibility boundary, and one-pass acceptance matrix are
+in the [current active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md). None of
+these items is a shipped API until implementation and acceptance finish.
+
+This batch does not add OAuth/OIDC, tenant hierarchies, Redis, token/cost
+billing, per-Collection embedding-profile routing, or `EACH_COLLECTION`, and it
+does not guess family relationships among historical rotation rows.
 
 ## Document Lifecycle And Derived-Index Follow-Ups
 

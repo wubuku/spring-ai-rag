@@ -4,8 +4,8 @@
 
 > **用途**：记录 OpenAI Chat Completions 服务端兼容层的当前实现、受控预览边界和
 > 公网/多实例生产仍需完成的安全工作。
-> **代码基线**：`main`，包含 2026-08-17 受控兼容预览实现。
-> **最近复核**：2026-08-17
+> **代码基线**：`main`，包含 2026-08-22 Chat turn 可靠性交付。
+> **最近复核**：2026-08-23
 > **状态**：`/v1/models` 与 `/v1/chat/completions` 已实现但默认关闭；本文不宣称公网生产就绪。
 
 文档总入口：[index-zh-CN.md](index-zh-CN.md)。当前可调用契约和配置以
@@ -117,19 +117,21 @@
 |------|--------------|----------|
 | 明文 secret schema | V23 和 `RagApiKey` 仍保留 `api_key` 字段及索引；service 当前虽未写入，schema 仍允许持久化 | 无法证明 secret 只出现一次且永不落库 |
 | 创建和委派 | root MVP 已关闭 NORMAL 自助管理；legacy 模式仍保留历史创建/委派语义 | 完整 hardening 仍需收紧 legacy 兼容和 policy 委派边界 |
-| 轮换身份 | rotate 禁用旧 key 后创建新的独立 key | role、owner、policy 和 quota 无稳定承载对象 |
+| 轮换身份 | rotate 禁用旧 key 后创建新的独立 key；Chat、评估、诊断和 durable operation 使用 `db:{keyId}` owner | role、owner、policy 和 quota 无稳定承载对象，轮换会切断 owner namespace |
 | ADMIN 保护 | 没有事务化的最后一个 ADMIN 保护 | 并发操作可能使系统失去管理凭据 |
 | Bootstrap | root MVP 模式已禁用空表 ADMIN/raw secret bootstrap；未配置 root 的 legacy 模式仍保留历史行为 | 完整 hardening 仍需统一 bootstrap/recovery 语义 |
 | 吊销一致性 | 认证有 30 秒进程内正向缓存 | 多实例吊销不能立即、全局生效 |
 | 使用时间写入 | 每次认证同步更新 `last_used_at` | 高频调用产生数据库写放大 |
-| 限流 | MVP 已在认证后优先使用稳定 key ID，但仍是本进程内计数；多实例 shared quota 未实现 | 多副本配额被放大，尚不能提供全局 quota 语义 |
-| raw key 进入限流 | root/已认证路径使用稳定 principal ID；legacy/未认证 fallback 仍可能使用 raw header | 完整 hardening 仍需彻底移除 raw secret 作为 limiter identifier |
+| 限流 | MVP 已在认证后优先使用当前 credential 的公开 key ID，但仍是本进程内计数；多实例 shared quota 未实现 | 多副本配额被放大，轮换还会改变 limiter ID，尚不能提供全局 quota 语义 |
+| raw key 进入限流 | root/已认证路径不直接使用 raw secret；legacy/未认证 fallback 仍可能使用 raw header | 完整 hardening 仍需让受管 stable principal 成为唯一共享 limiter identifier |
 | URL 和凭据格式 | `/v1/*` 已接入 Bearer/Header 认证；root 模式拒绝 query credential，并使用 OpenAI 错误信封 | 公网启用仍应关闭 legacy query/static 兼容并明确只允许受管 principal |
 | 故障语义 | 数据库 key 验证与 static fallback 并存 | 凭据存储故障时必须避免错误降级为绕过路径 |
 
-这些问题不是协议细节，而是外部服务是否“基本可用”的前提。后续若重启公开服务加固，
-必须同时设计稳定 family/principal、可轮换 version、显式 policy、共享 quota、迁移和
-fail-closed 故障语义，并保持本文记录的兼容边界。
+这些问题不是协议细节，而是外部服务是否“基本可用”的前提。下一批已选择把稳定
+family/principal、可轮换 version、显式 policy、共享 quota、迁移和 fail-closed 故障语义
+作为一个批次规划，见
+[当前活跃规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。该规划尚未实施，本文仍按当前
+代码记录缺口。
 
 ---
 
@@ -143,8 +145,8 @@ fail-closed 故障语义，并保持本文记录的兼容边界。
 5. model alias 不包含固定 Collection；有效范围由请求 scope 与 API Key ACL 解析，
    未授权范围 fail closed。
 6. root 模式下 `/v1` 只接受 Bearer / `X-API-Key`，拒绝 query-string secret。
-7. 当前限流使用认证后的稳定 principal ID，但仍是单进程计数；公网多实例前必须升级
-   到共享 quota，并确保轮换不重置配额。
+7. 当前限流使用认证后的 credential key ID，但它不跨轮换稳定，且计数仍属单进程；公网
+   多实例前必须升级到 stable principal 的共享 quota，并确保轮换不重置配额。
 8. 凭据存储不可用时返回 `503`；公网启用前还需移除 legacy static fallback 等降级歧义。
 9. 保持 `/api/v1/rag/**` 现有契约，兼容能力关闭后旧 API 仍独立工作。
 10. core standalone 和 starter consumer 两种拓扑都必须有认证、授权、限流和观测测试。

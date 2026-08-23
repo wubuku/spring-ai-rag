@@ -2,8 +2,28 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-21。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-23。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
+
+## 受管 API Principal 与多实例生产加固
+
+| 项目 | 优先级 | 当前状态 |
+|---|---|---|
+| 稳定 principal 与版本化 credential family | 下一批规划 / 尚未实施 | rotation 仍创建新的独立 `keyId`；Chat、评估、诊断和 durable operation 的 `db:{keyId}` owner 会随之改变 |
+| 即时跨实例吊销与低写放大使用时间 | 下一批规划 / 尚未实施 | 认证仍有 30 秒 JVM 正向缓存，且每次成功认证同步更新 `last_used_at` |
+| PostgreSQL 共享 principal quota | 下一批规划 / 尚未实施 | 当前限流为进程内计数，多副本会放大 quota，rotation 也没有稳定 limiter family |
+| 明文 secret schema 禁写 | 下一批规划 / 尚未实施 | V23 `api_key` 列和索引仍存在；当前 service 不写该列，但 schema 仍允许非空值 |
+
+上述四项是同一 identity lifecycle 的不同表现，应作为一个可独立验收的批次实施，而不是
+分别打补丁。推荐方向是把长期 owner/policy 与可轮换 credential 分离：既有 Key 以
+`principalId=旧 keyId` 确定性回填，从而保留历史 owner；认证使用不可变 principal/policy
+snapshot；吊销后各实例下一次认证都以 PostgreSQL 为准；共享 quota 以 stable principal
+计数。目标设计、兼容边界和一次性验收矩阵见
+[当前活跃规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。这些能力在规划实施和验收完成前
+不属于已发布 API。
+
+本批不顺带引入 OAuth/OIDC、租户层级、Redis、token/cost billing、多 embedding profile
+路由或 `EACH_COLLECTION`，也不自动合并无法可靠证明 family 关系的历史 rotation rows。
 
 ## 文档生命周期与派生索引后续项
 

@@ -5,8 +5,8 @@
 > **Purpose**: Record the current server-side OpenAI Chat Completions
 > implementation, controlled-preview boundary, and remaining public /
 > multi-instance production security work.
-> **Code baseline**: `main`, including the 2026-08-17 controlled compatibility preview.
-> **Last verified**: 2026-08-17
+> **Code baseline**: `main`, including the 2026-08-22 Chat-turn reliability delivery.
+> **Last verified**: 2026-08-23
 > **Status**: `/v1/models` and `/v1/chat/completions` are implemented but
 > disabled by default. This document does not claim public production readiness.
 
@@ -130,20 +130,21 @@ Relevant code:
 |-----|-------------------|---------------|
 | Plaintext secret schema | V23 and `RagApiKey` retain an `api_key` column and index; the current service does not write it, but the schema permits storage | The system cannot prove that a secret is returned once and never persisted |
 | Creation and delegation | Root MVP disables NORMAL self-service management; legacy mode retains historical creation/delegation semantics | Full hardening must close the legacy compatibility and policy-delegation gaps |
-| Rotation identity | Rotation disables one key and creates an independent key | No stable object carries role, owner, policy, or quota |
+| Rotation identity | Rotation disables one key and creates an independent key; Chat, evaluation, diagnostics, and durable operations use a `db:{keyId}` owner | No stable object carries role, owner, policy, or quota, so rotation breaks the owner namespace |
 | ADMIN protection | There is no transactional last-ADMIN guard | Concurrent operations can remove the final management credential |
 | Bootstrap | Root MVP disables empty-table ADMIN/raw-secret bootstrap; legacy mode without root retains historical behavior | Full hardening still needs one unified bootstrap/recovery contract |
 | Revocation consistency | Authentication has a 30-second in-process positive cache | Revocation is not immediately consistent across instances |
 | Last-used writes | Every authentication synchronously updates `last_used_at` | High request rates create database write amplification |
-| Rate limiting | The MVP prefers a stable key ID after authentication, but counters remain in-process and shared quotas are absent | Replicas multiply quotas, so global quota semantics are not available |
-| Raw key as limiter ID | Root/authenticated paths use a stable principal ID; legacy or unauthenticated fallback can still use the raw header | Full hardening must remove raw secrets as limiter identifiers entirely |
+| Rate limiting | The MVP prefers the current credential's public key ID after authentication, but counters remain in-process and shared quotas are absent | Replicas multiply quotas and rotation changes the limiter ID, so global quota semantics are not available |
+| Raw key as limiter ID | Root/authenticated paths do not directly use the raw secret; legacy or unauthenticated fallback can still use the raw header | Full hardening must make a managed stable principal the only shared limiter identifier |
 | URL and credential format | `/v1/*` uses Bearer/header authentication; root mode rejects query credentials and emits OpenAI error envelopes | Public enablement should remove legacy query/static compatibility and require managed principals |
 | Failure semantics | Database validation and static fallback coexist | Credential-store failures must not downgrade into an authorization bypass |
 
-These are service-readiness requirements, not protocol details. If public-service
-hardening resumes, it must jointly design stable families/principals, rotatable
-versions, explicit policy, shared quotas, migration, and fail-closed failure
-semantics while preserving the compatibility boundaries recorded here.
+These are service-readiness requirements, not protocol details. The next batch
+has selected stable families/principals, rotatable versions, explicit policy,
+shared quotas, migration, and fail-closed failure semantics as one plan; see the
+[current active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md). That plan is not
+implemented yet, so this document continues to describe the gaps in current code.
 
 ---
 
@@ -158,9 +159,9 @@ semantics while preserving the compatibility boundaries recorded here.
 5. A model alias contains no fixed Collection. Effective scope comes from the
    request and API-key ACL and rejects unauthorized expansion.
 6. In root mode, `/v1` accepts Bearer / `X-API-Key` and rejects query-string secrets.
-7. Current limiting uses the authenticated stable principal ID but remains
-   process-local. Public multi-instance use requires a shared quota that
-   rotation cannot reset.
+7. Current limiting uses the authenticated credential key ID, which is not
+   stable across rotation, and remains process-local. Public multi-instance use
+   requires a stable-principal shared quota that rotation cannot reset.
 8. Credential-store failure returns `503`. Public enablement must also remove
    downgrade ambiguity from legacy static fallbacks.
 9. Existing `/api/v1/rag/**` contracts remain independent and continue to work when
