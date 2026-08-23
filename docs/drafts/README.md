@@ -39,5 +39,5 @@ means there is no approved or in-progress active plan.
 
 ## Current Active Plans
 
-- [Weighted RRF retrieval-fusion implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Bounded rerank candidate-pool implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [Progress and recovery ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)

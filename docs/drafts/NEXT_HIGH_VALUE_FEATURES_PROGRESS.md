@@ -1,6 +1,6 @@
-# 加权 RRF 检索融合进度
+# 有界的独立 rerank 候选池进度
 
-> **状态**：交付准备完成；生产实现、聚焦测试、PostgreSQL 集成、Maven、WebUI、隔离端口真实全栈验收和实现连续三轮收敛审查均已通过，待提交并合并到 `main`
+> **状态**：规划编写中，生产实现尚未开始
 >
 > **开始日期**：2026-08-23
 >
@@ -8,192 +8,153 @@
 >
 > **当前 worktree**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> **代码基线**：`main` / `origin/main` @ `7dc7ab9d`
+> **代码基线**：本地 `main` / `origin/main` @ `802cd991`
 >
 > **实施规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 
-本文件是跨会话恢复账本。每次取得关键进展时，先更新本文件，再进入下一阶段；它不替代
-代码、迁移或双语长青文档。
+本文件是跨会话恢复账本，不替代代码、迁移或双语长青文档。每次取得关键进展时，先更新
+本文件，再进入下一阶段。规划完成后本文件记录规划审查结果；实施开始后继续记录代码切片、
+验证证据、审查计数和恢复入口。
 
 ## 1. 当前阶段
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
-| 最新 main 与候选功能探索 | 已完成 | 已确认当前真实高价值缺口是融合实现与 RRF 文档不一致 |
-| 上一轮账本规划归档 | 已完成 | 已归档为 `2026-08-23_TOKEN_USAGE_LEDGER_*` |
-| 新规划编写 | 已完成 | 已冻结加权 RRF、分数尺度、稳定排序和范围 |
-| 规划连续审查 | `3/3` | 2026-08-23 完成连续三轮无实质问题审查 |
-| 生产代码实施 | 已完成 | `RetrievalUtils` 已切换到缩放加权 RRF，HTTP 权重有限值校验已补齐 |
-| 聚焦单元测试 | 已完成 | `RetrievalUtilsTest` 与 `RagSearchControllerTest` 共 83 项通过 |
-| PostgreSQL 集成测试 | 已完成 | `TESTCONTAINERS_RYUK_DISABLED=true DOCKER_API_VERSION=1.40` 下真实 pgvector PostgreSQL、Flyway V1–V48 与真实服务链路通过 1/1 |
-| 前端类型/单元/构建 | 已完成 | `tsc`、Vitest 218/218、Vite production build 通过 |
-| 基本集成硬门槛 | 已完成 | 串行 `mvn clean compile test-compile`、PostgreSQL 集成 1/1、WebUI `tsc`/Vitest/build、核心 Mock Playwright 14/14 均通过 |
+| 代码、长青文档和上一轮归档探索 | 已完成 | 已核对当前加权 RRF 基线、rerank provider、所有检索调用链和文档生命周期 |
+| 上一轮 plan/progress 归档 | 已完成 | 已归档为 `2026-08-23_WEIGHTED_RRF_RETRIEVAL_*`，并修正归档后的相对链接 |
+| 新规划编写 | 已完成 | 已冻结有界 candidate pool、最终数量语义和 Agent/Evaluation 漏接修复边界 |
+| 规划连续审查 | `3/3` | 已完成三轮固定范围、只读复核；期间未再修改规划正文。最终规划 SHA-256 记录于本文件 §6 |
+| 文档门禁、commit、push | 进行中 | 规划 `3/3` 已达成，正在执行最终文档门禁、全量变更核对、commit、fetch/merge 检查和 push |
+| 生产代码实施 | 未开始 | 规划交付后等待下一阶段指示 |
 
-## 2. 已冻结决策
+## 2. 已冻结的关键决策
 
-- 固定 `RRF_K=60`，不新增配置项。
-- 使用 `(RRF_K + 1)` 缩放加权 RRF，保持融合 `score` 的可读量级。
-- rank 使用每个 provider 返回列表的 1-based 顺序；跨通道同一 identity 累加贡献。
-- 保留 `vectorScore`、`fulltextScore` 和 provenance 原始字段。
-- 对融合分数相同的结果按 `documentId`、`chunkIndex` 稳定排序。
-- 只修改检索融合、相关测试、双语语义文档和权重配置说明；不用 migration、WebUI、
-  权限或用量账本。
+- 本轮只有一个功能主题：有界的独立 rerank 候选池。
+- `candidateLimit = max(requestedMaxResults, configuredCandidateLimit)`。
+- 配置默认 `20`，setter/绑定边界为 `1..100`；推荐环境变量为
+  `RAG_RERANK_CANDIDATE_LIMIT`。
+- 只有请求启用 rerank、全局启用 rerank 且 provider 不是 `none`/`noop`/`off` 时扩大；
+  纯向量/全文不可用时只扩大仍可用的向量分支，不额外强行启用全文。
+- hybrid 分支延续现有每通道 `fusionLimit * 2` 召回比例，RRF 融合输出最多 `fusionLimit`。
+- `maxResults` 仍是最终 Search/Chat/tool/record/evaluation 对外数量，不是候选池数量。
+- `KnowledgeSearchTool` 和 `EvaluationCaseExecutor` 需要接入现有 `ReRankingService`，避免
+  只扩大候选而不完成最终 rerank。
+- 不改数据库、公开请求字段、权限、用量账本、WebUI 业务流程和新的 rerank provider。
+- 旧版 GET Search 继续支持 `limit=1..1000`，因其显式 `useRerank=false`，不扩大候选池；
+  candidate-limit 的 `1..100` 上界只适用于启用 rerank 的受管 `RetrievalConfig` 调用链。
+- 旧 `HybridSearchAdvisor` 继续只负责检索，必须显式传入 `useRerank=false`；后续
+  `RerankAdvisor` 的独立最终 `maxResults`、advisor 顺序和成本边界保持不变。
 
-## 3. 规划审查记录
+## 3. 已核对的调用链与风险
 
-规划审查计数因连续检查发现归档迁移后的长青文档相对链接错误，以及第 2 轮发现权重上界和
-非有限 provider 分数的契约表述不够精确，均已修正文档并重置为 `0/3`。本次复核又发现
-兼容性小节残留旧的 `0..1` 上界表述，也已同步修正并重置为 `0/3`。每轮检查固定范围见
-[规划文档 §7](NEXT_HIGH_VALUE_FEATURES_PLAN.md#7-规划审查与实现收敛)。无问题轮次只在达到
-`3/3` 后一次性写入最终记录，避免在连续无修改证据期间改写规划正文。
+1. `ProjectDocumentRetriever` → `ProjectRerankPostProcessor` 已有 rerank，候选池扩大后
+   只需确认输入/输出数量。
+2. `KnowledgeSearchTool` 当前直接把 `HybridRetrieverService` 结果做 tool JSON，缺少
+   `ReRankingService`；这是本轮必须修复的 Chat `AGENT` 风险。
+3. `RagSearchController` POST、`JsonRecordService` 已有 rerank；GET 明确关闭 rerank，
+   不应触发候选池。
+4. `EvaluationCaseExecutor` 当前只执行检索，虽然 variant schema 支持 `rerank`，因此
+   本轮必须明确其最终评估语义，不能让 candidate pool 伪装成最终结果。
+5. 旧 `HybridSearchAdvisor` 后接 `RerankAdvisor`，两者的检索 limit/最终 limit 分离；本轮
+   通过显式 `useRerank=false` 防止共享检索器误扩大候选池，不修改 advisor 顺序。
+6. `HttpRerankProvider` 会把全部候选放入 `documents`，`top_n` 保持最终数量；候选上限
+   是本轮的成本边界。
 
-本次修正明确：两个权重独立限制在 `0..1`、不强制归一化，缩放后融合分数上界为权重之和；
-provider 非有限原始分数按有限值优先、稳定 tie-break 排序，且不得污染融合分数。另将
-配置双语文档中“系统自动归一化”的错误表述纳入本轮同步修正，改为“建议总和为 `1.0`，
-服务不会自动归一化”。
+## 4. 规划审查记录
 
-第 3 轮检查又发现验收矩阵没有把合并后隔离端口的 `scripts/dev.sh` 与真实前后端
-Playwright 写成可执行步骤，且相关 Maven 测试命令未使用 `-am`；规划已补充隔离端口
-联调和 `-am -Dsurefire.failIfNoSpecifiedTests=false`，审查计数重置为 `0/3`。
+规划审查曾因以下实质缺口多次重置；最终已连续完成 `3/3` 轮无修改复核：
 
-随后第 3 轮复核发现 HTTP GET 权重校验允许 `NaN`/无穷值绕过比较，可能破坏“融合分数
-必须有限”的算法边界。规划已补充有限权重契约、Controller 文件范围和回归测试要求，
-审查计数保持重置为 `0/3`，后续必须重新完成连续三轮规划检查。
+- 实现后的双语 `configuration`、`quality-defaults`、`troubleshooting` 和 `architecture`
+  文件范围不完整；
+- `KnowledgeSearchTool` 的 tool-level `limit` 没有写入传给 service 的 effective config，
+  可能被会话级 `maxResults` 覆盖。
+- `ReRankingService` 没有统一防御性截断 provider 的超量返回，无法仅靠 provider 契约证明
+  所有调用方最终不超过 `maxResults`。
+- Chat `maxUniqueSources` 默认小于 candidate pool 上限，中间候选若先写入 trace 可能使
+  rerank 选中的后段结果没有 citation；已补充候选阶段不占 budget、最终结果优先于本次
+  未登记候选、既有 source 不驱逐且 citation ID 稳定的规则。
+- `KnowledgeSearchTool` 的 query cache 没有记录可覆盖的最终数量，大小请求可能互相泄漏
+  或被较小缓存永久限制；已补充按请求数量复用/截断/重新检索规则。
+- `ReRankingService` 对 provider `null` 结果没有统一错误语义；已补充显式失败与调用链降级
+  断言。
+- 规划的非目标曾笼统写成“不实现缓存”，与必须修复的既有 attempt-local query cache 边界
+  冲突；已改为禁止新增跨请求/持久化缓存，仅允许修复既有缓存的数量覆盖语义。
+- 当前 trace 的 `recordOutcome` 会立即占用 source/citation 预算；已补充候选阶段记录入口
+  与最终结果记录入口，并将 `ProjectDocumentRetriever`/Agent tool 的调用顺序纳入实施范围。
+- 仅修改 `RetrievalTraceCollector` 不足以落地候选/最终记录时序；已将
+  `ProjectDocumentRetriever`、`ProjectRerankPostProcessor` 及其测试列入范围。
+- Tool cache 不能用缓存结果条数推断覆盖范围；已要求缓存保存 `requestedLimit` coverage
+  并据此决定命中、截断或重新检索。
+- 旧版 GET Search 的 `limit=1000` 与本轮 candidate-limit `1..100` 的范围边界未在规划中
+  明确；已补充兼容说明，避免实施时错误收窄既有 GET 契约。
+- 旧 Advisor 链未在规划中明确 `HybridSearchAdvisor` 的 config 标记；已补充显式
+  `useRerank=false`、生产文件范围和 AdvisorChainIntegrationTest 覆盖，避免把检索 limit
+  错当成 rerank 最终 limit。
+- 原先没有说明候选阶段 outcome 是否会与最终 outcome 在父 trace 中重复计数；已冻结为同一
+  attempt 内由最终 outcome 替换候选阶段记录。
+- 原先把 HTTP provider 内部 fallback 与调用链外层 degraded/error 诊断混为一谈；已明确
+  provider 内部超时/空响应/非法 index 继续 heuristic fallback，只有异常或 null 冒泡到
+  `ReRankingService`/调用链时才记录外层 degraded/error。
+- 隔离 runtime 验收命令原先只激活 `postgresql`，会保留全局 rerank 关闭的基础配置，无法
+  证明 candidate pool；已改为 `postgresql,prod`，同时保留 PostgreSQL 数据源与生产质量
+  默认 rerank。
 
-重新进行的第 2 轮检查又发现底层工具对绕过 HTTP 的非法权重缺少明确处理方式。规划已
-冻结为 `IllegalArgumentException` 拒绝非有限或越界权重，并将该行为纳入单元测试；规划
-审查计数再次重置为 `0/3`。
+最终三轮无修改复核摘要：
 
-2026-08-23 规划最终检查结果：连续三轮检查均未发现新的正确性、兼容性、验证可信度或交付
-风险问题，期间未修改规划正文；随后仅按工作流更新状态并记录校验值。最终规划 SHA-256：
-`5984b9e4a26d11852a21f83ffe5ae6bc0c9321854ed5f0ed2f6f80f834e2902c`。
-三轮范围依次为：目标闭环与非目标；算法/调用链/兼容性与测试可行性；文件范围、验收顺序、
-隔离运行、回滚和 Git 交付。`./scripts/verify-project-docs.sh` 与 `git diff --check` 均通过。
+1. 需求闭环与自包含性：核对目标、非目标、默认决策、source/citation/cache 语义、恢复入口；
+   未发现问题。
+2. 代码与契约可行性：交叉核对检索服务、配置绑定、provider fallback、Agent/Evaluation、
+   GET/旧 Advisor、scope/filter、并发/超时和成本边界；未发现问题。
+3. 实施与验证可交付性：核对文件范围、测试矩阵、PostgreSQL、前端 DOM/网络验收、隔离
+   `scripts/dev.sh`、回滚和 Git 交付顺序；未发现问题。
 
-## 4. 实施进度
+三轮复核均未修改 `NEXT_HIGH_VALUE_FEATURES_PLAN.md`；规划检查计数达到 `3/3`。
 
-规划通过后已完成以下实施切片：
+固定检查范围见
+[规划文档 §7](NEXT_HIGH_VALUE_FEATURES_PLAN.md#7-规划检查与实现收敛)：
 
-1. 记录规划正文 SHA-256、`git diff --check` 和当前 Git 状态；
-2. 已补齐 RRF 单元、Controller 边界和服务链路集成测试；
-3. 已实现 `RetrievalUtils` 的 weighted/scaled RRF 和稳定排序；
-4. 已更新 REST/架构/配置双语分数与权重语义；
-5. 已完成后端、PostgreSQL、Maven、WebUI、核心 Mock Playwright 和文档门禁；
-6. 规划状态文字已与实际实现同步；实现连续三轮收敛审查从 `0/3` 重新开始；
-7. 审查完成后跟进 `origin/main`，按合并后基线复验，合入 `main` 并 push。
+1. 需求闭环、自包含性、非目标和默认决策；
+2. 代码调用链、配置/数据/API/并发/失败语义和兼容性；
+3. 文件范围、验收矩阵、隔离运行、回滚和 Git 交付。
 
-## 5. 已完成验证
+发现实质问题时必须修改规划并将计数重置为 `0`；无问题轮次不改 plan/progress 正文，
+避免破坏连续三轮无修改证据。达到 `3/3` 后才记录最终规划检查摘要和 SHA-256。
 
-- 规划前置文档门禁：`./scripts/verify-project-docs.sh` 通过。
-- 规划 SHA-256：`5984b9e4a26d11852a21f83ffe5ae6bc0c9321854ed5f0ed2f6f80f834e2902c`。
-- 测试先行基线：旧融合实现按预期被 RRF、稳定排序、非法权重和非正 limit 用例捕获。
-- 生产实现后的聚焦测试：`mvn -pl spring-ai-rag-core -am -Dsurefire.failIfNoSpecifiedTests=false -Dtest=RetrievalUtilsTest,RagSearchControllerTest test`，83 项通过；随后测试证据修复后再次通过 83 项。
-- PostgreSQL 集成测试首次尝试未形成业务结论：Testcontainers 在拉取 `testcontainers/ryuk:0.11.0`
-  时因 Docker Hub TLS 代理证书错误失败；不将该次中断运行记为通过或失败的业务测试。
-- PostgreSQL 集成测试复验通过：`TESTCONTAINERS_RYUK_DISABLED=true DOCKER_API_VERSION=1.40`
-  配合 `-Dapi.version=1.40 -Dhybrid-rrf.it.enabled=true`，`HybridRetrieverRrfPostgresIntegrationTest`
-  通过 1/1；真实容器为 `pgvector/pgvector:pg16`，Flyway 空库迁移成功到 V48。
-- WebUI 基本验证通过：`npx tsc -b --pretty false`、`npm run test:run`（29 files / 218 tests）、
-  `npm run build`。
-- 测试证据修复后串行 `mvn clean compile test-compile` 通过；此前并发 Maven 争用
-  `target` 的失败不作为代码失败结论。
-- 测试证据修复后 PostgreSQL 集成复验通过：`HybridRetrieverRrfPostgresIntegrationTest`
-  1/1，Testcontainers `pgvector/pgvector:pg16`，Flyway V1–V48。
-- 测试证据修复后核心 Mock Playwright 复验通过：`e2e/search.spec.ts` 与
-  `e2e/navigation.spec.ts` 共 14/14；只使用 DOM、请求/响应和自动化断言。此前一次
-  `vite preview` 未监听端口导致的 14 项连接拒绝仅记录为环境启动失败，不作为业务测试
-  结论；修正就绪探测与退出码处理后复验通过。
+## 5. 实施恢复入口
 
-当前恢复入口：上一处权重边界修复后的聚焦回归已通过；现在重新执行完整基本门槛。
-基本门槛完成后，从 `0/3` 开始实现连续三轮收敛审查，再同步 `origin/main` 并执行合并后验收。
-实现审查当前计数：`0/3`。
+规划交付后，下一位 Agent 应按以下顺序恢复：
 
-## 5. 实现审查记录
+1. 先读取本文件、规划 §3/§4/§5，并核对 `git status`、当前 HEAD 和 `origin/main`；
+2. 在 `RagRerankPropertiesTest`、检索服务候选池测试、`HybridSearchAdvisorTest`、
+   `KnowledgeSearchToolTest`、`EvaluationCaseExecutorTest` 和 `ReRankingServiceTest` 中
+   一次性补齐验收断言；
+3. 修改共享检索 limit，先固定旧 Advisor 的 `useRerank=false`，再接入两条漏接 rerank 链路；
+4. 先运行聚焦后端和 PostgreSQL 集成，再执行 `mvn clean compile test-compile`；
+5. 执行 WebUI tsc/Vitest/build/核心 Mock Playwright，再按需要启动隔离全栈；
+6. 基本门槛全部通过后从实现审查 `0/3` 开始，严格按规划 §7.2 收敛；
+7. 若 `origin/main` 有新提交，先 merge 到特性分支，按合并后固定顺序完整复验，再合并
+   `main` 并 push。
 
-基本集成硬门槛通过后，按规划固定的三轮范围执行。任何实质修复都将计数重置为 `0/3`，
-并重跑受影响的验证。
+## 6. 验证证据记录
 
-第二轮审查已检查 `HybridRetrieverService` 的调用兼容性、候选召回量级、REST/Chat 配置
-入口、rerank 输入和正式文档契约。生产实现未发现实质正确性或兼容性问题；但发现原有
-“provider 原始分数尺度不影响排序”单测每个通道只有一个候选，旧的最大值归一化实现也能
-通过，验收证据不足。该测试需要改为保持通道名次不变、只改变分数间距，并确认 RRF 排序
-与分数保持不变；测试修复后实现审查计数重置为 `0/3`，必须重新通过基本门槛并开始三轮
-连续无问题检查。
+当前尚未运行生产代码测试；本阶段适用证据：
 
-基本集成硬门槛已重新通过，审查计数为 `0/3`。第一次 Playwright 启动因 `mvn clean`
-删除了临时 `target` 日志目录而未执行测试；创建目录后复跑通过，不属于产品或测试失败。
-
-实现第一轮审查发现 `docs/hybrid-search-enhancement-plan.md` 仍保留“权重隐式、未来再增加
-显式权重”和未加权 RRF 公式的旧设计表述，与当前生产实现及配置文档冲突。该文档需要
-同步为固定 `K=60` 的缩放加权 RRF 语义；修正文档后实现审查计数重置为 `0/3`，已重新通过
-文档门禁，下面重新执行基本门槛后开始三轮连续无问题检查。
-
-第 3 轮审查发现 Chat/OpenAI 快照使用的 `RetrievalOptions` 仅通过 `<`/`>` 判断权重范围，
-`NaN` 和无穷值可能绕过校验；同时 `RetrievalResult` 的 OpenAPI 描述没有明确混合模式下
-的缩放加权 RRF 语义。两处均属于本轮权重契约的兼容性/可观测性缺口，已纳入修复范围；
-修复后实现审查计数重置为 `0/3`，必须重新通过受影响基本门槛并重新完成连续三轮检查。
-
-已完成该修复：`RetrievalOptions` 现在拒绝非有限权重，`RetrievalResult.score` 的 OpenAPI
-说明已同步 weighted/scaled RRF 语义，并新增 `RetrievalOptionsTest`。受影响聚焦回归
-`125/125` 通过；接下来重新执行 PostgreSQL 集成、完整 Maven 编译和前端基本门槛，然后
-从 `0/3` 开始实现收敛审查。
-
-## 6. 修复后硬门槛执行记录
-
-| 检查项 | 状态 | 证据 |
+| 验证项 | 状态 | 证据 |
 |---|---|---|
-| 受影响聚焦回归 | 已完成 | `125/125`，见上文 |
-| 完整 Maven 编译 | 已完成 | `mvn clean compile test-compile`，Reactor 全部 SUCCESS |
-| PostgreSQL/pgvector 集成 | 已完成 | `HybridRetrieverRrfPostgresIntegrationTest` `1/1`，Flyway V1–V48 |
-| WebUI 类型、单元、生产构建 | 已完成 | `tsc`、Vitest `29/218`、Vite build |
-| 核心 Mock Playwright | 已完成 | `search.spec.ts`、`navigation.spec.ts` `14/14` |
-| 文档与并发锁门禁 | 已完成 | 两项脚本均通过 |
+| 规划前代码/文档探索 | 已完成 | `HybridRetrieverService`、rerank provider、Agent/Evaluation/Search/JSON 调用链已核对 |
+| 归档迁移链接修复 | 已完成 | 归档 plan/progress 的近距离链接已改为 archive 相对路径/同目录文件 |
+| 规划三轮检查 | 已完成 | 固定范围连续 `3/3` 无修改；最终一轮完成后未再改 plan |
+| `./scripts/verify-project-docs.sh` | 已通过 | 三轮收敛后重复执行，10 项检查通过 |
+| `git diff --check` | 已通过 | 三轮收敛后重复执行，无 whitespace 错误 |
 
-基本门槛完成后，实现连续三轮收敛审查从 `0/3` 开始。审查只处理本任务内会影响正确性、
-检索质量、响应性能、兼容性、验证可信度或交付安全的问题；任何生产代码或测试实质修复
-都会将计数重置为 `0/3`，并重新执行受影响门槛。当前实现审查已连续 `3/3` 无实质问题。
+最终规划 SHA-256：
 
-## 7. 实现收敛审查记录
+```text
+79b892d095bbcd0e93bb0ce4b1f86d10cbdfa6ddb1fd90ae4e56e9b2538cc8ed
+```
 
-1. 第 1 轮：核对 RRF 公式、权重与 provider 分数边界、重复 identity、稳定排序、双通道
-   累加及结果字段保留；未发现实质问题。
-2. 第 2 轮：核对 `HybridRetrieverService` 候选召回量级、融合调用、REST/Chat 配置入口、
-   降级路径和 rerank 交互；未发现实质问题。
-3. 第 3 轮：核对测试覆盖、真实 PostgreSQL 证据、双语文档、启动/回滚边界和 Git 交付
-   路径；未发现实质问题。
+## 7. 实施审查记录
 
-三轮均为只读检查，期间未修改生产代码或测试；实现收敛计数达到 `3/3`。接下来先 fetch
-并检查 `origin/main`，如有新提交则 merge 到特性分支，再按合并后基线重新验收。
-
-## 8. 合并前最终基线
-
-- `git fetch origin` 已完成。
-- 当前特性分支 HEAD：`7dc7ab9d9d689ba89ac936e42383ab99b1aaebeb`。
-- `origin/main`：`7dc7ab9d9d689ba89ac936e42383ab99b1aaebeb`。
-- `git rev-list --left-right --count HEAD...origin/main`：`0 0`，无需 merge。
-- 当前实现未修改数据库 schema，不需要新增 Flyway migration 或回滚迁移。
-- 下一步按交付工作流重新执行后端 PostgreSQL/Maven、前端 Mock 和隔离端口真实全栈验证。
-
-## 9. 合并后最终验收记录
-
-| 检查项 | 状态 | 证据 |
-|---|---|---|
-| 合并后 Maven 编译 | 已完成 | `mvn clean compile test-compile`，Reactor 全部 SUCCESS |
-| 合并后文档与锁门禁 | 已完成 | `verify-project-docs.sh`、`verify-no-pessimistic-locks.sh` |
-| 合并后 WebUI 类型、单元、生产构建 | 已完成 | `tsc`、Vitest `29/218`、Vite build |
-| 合并后 PostgreSQL/pgvector 集成 | 已完成 | `HybridRetrieverRrfPostgresIntegrationTest` `1/1`，Flyway V1–V48 |
-| 合并后核心 Mock Playwright | 已完成 | `search.spec.ts`、`navigation.spec.ts` `14/14` |
-| 合并后隔离端口真实全栈启动 | 已完成 | `scripts/dev.sh`，后端 `18083`、前端 `15175`，健康/HMR/代理校验通过 |
-| 合并后隔离端口真实全栈 Playwright | 已完成 | 同一 shell 生命周期内 `14/14`；首次单独命令的连接拒绝确认为会话回收后台子进程，非产品失败 |
-
-合并后固定验收序列已完成。隔离栈使用 `postgresql` profile、后端 `18083`、前端 `15175`；
-`scripts/dev.sh` 的健康检查、Vite HMR、代理身份校验和真实全栈 Playwright 均通过，结束后
-已执行 `./scripts/dev.sh --stop` 并确认由本 worktree 启动的端口已释放。未执行真实 Chat LLM
-调用：本轮只改检索融合和检索入口边界，没有修改 Chat provider 或生成路径。
-
-## 10. 交付前状态
-
-- 规划审查：`3/3`。
-- 实现审查：`3/3`。
-- 合并后固定验收序列：已完成。
-- 下一步：重新检查完整工作区 diff，提交全部修改，push 特性分支，合并到 `main` 并 push。
+生产实现尚未开始。实施完成并通过基本集成硬门槛后，按规划固定范围执行三轮只读审查；
+任何影响正确性、检索质量、响应成本、兼容性或验证可信度的实质修复都会把计数重置为
+`0/3`，并重新运行受影响门槛。

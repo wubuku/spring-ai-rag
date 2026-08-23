@@ -594,16 +594,19 @@ PostgreSQL 全文检索从当前 generation 的
 ```yaml
 rag:
   retrieval:
-    top-k: 10                    # 返回结果数
-    min-score: 0.5               # 最低相似度
-    hybrid-alpha: 0.7            # 向量/全文权重
-    rerank-top-k: 5              # 重排后保留数
+    default-limit: 10            # 返回结果数
+    min-score: 0.3               # 最低相似度
+    vector-weight: 0.5           # 向量/RRF 通道权重
+    fulltext-weight: 0.5         # 全文/RRF 通道权重
+  rerank:
+    enabled: true
+    provider: heuristic
+    top-n: 5                      # 调用方未提供 maxResults 时的最终 fallback
   chunk:
-    max-size: 500                # 最大块大小（字符）
-    overlap: 50                  # 重叠大小
+    default-chunk-size: 1000
+    default-chunk-overlap: 100
   memory:
     max-messages: 20             # 对话记忆窗口
-    window-size: 10              # 历史消息数
 ```
 
 ### 6.2 多环境配置

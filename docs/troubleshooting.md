@@ -231,7 +231,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltex
 rag:
   rerank:
     enabled: true
-    top-k: 20  # Results to keep before reranking
+    top-n: 5  # Final fallback when callers omit maxResults
 ```
 
 ---

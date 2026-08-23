@@ -33,5 +33,5 @@
 
 ## 当前活跃规划
 
-- [加权 RRF 检索融合实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [有界 rerank 候选池实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 - [配套进度与恢复账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)

@@ -652,16 +652,19 @@ PostgreSQL full-text search reads the current generation from
 ```yaml
 rag:
   retrieval:
-    top-k: 10                    # Number of results to return
-    min-score: 0.5               # Minimum similarity score
-    hybrid-alpha: 0.7            # Vector/full-text weight
-    rerank-top-k: 5              # Results to keep after reranking
+    default-limit: 10            # Number of results to return
+    min-score: 0.3               # Minimum similarity score
+    vector-weight: 0.5           # Vector/RRF channel weight
+    fulltext-weight: 0.5         # Full-text/RRF channel weight
+  rerank:
+    enabled: true
+    provider: heuristic
+    top-n: 5                      # Final fallback when callers omit maxResults
   chunk:
-    max-size: 500                # Maximum chunk size (characters)
-    overlap: 50                  # Overlap size
+    default-chunk-size: 1000
+    default-chunk-overlap: 100
   memory:
     max-messages: 20             # Conversation memory window
-    window-size: 10              # Number of historical messages
 ```
 
 ### 6.2 Multi-Environment Configuration

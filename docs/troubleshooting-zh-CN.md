@@ -170,7 +170,7 @@ curl "http://localhost:8081/api/v1/rag/search?query=xxx&vectorWeight=0.7&fulltex
 rag:
   rerank:
     enabled: true
-    top-k: 20  # 重排前保留的结果数
+    top-n: 5  # 调用方未提供 maxResults 时的最终 fallback 数量
 ```
 
 ---
