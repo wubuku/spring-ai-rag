@@ -423,7 +423,9 @@ external tools, so built-in and external tools share the safety boundary.
 5. Continue PostgreSQL and isolated real-LLM regression coverage when changing
    shared Chat, Memory, retrieval, or tool contracts.
 
-See the [active next-high-value implementation plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md).
+For the shipped retrieval and rerank behavior, see the
+[architecture](architecture.md#32-mode-aware-chat-pipeline) and
+[quality defaults](quality-defaults.md).
 
 ## 11. References
 

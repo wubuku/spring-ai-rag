@@ -51,6 +51,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Managed API principal hardening and the superseded token-usage ledger:
   `2026-08-23_MANAGED_API_PRINCIPAL_HARDENING_*`,
   `2026-08-23_TOKEN_USAGE_LEDGER_*`
+- Weighted RRF retrieval fusion and bounded rerank candidate pools:
+  `2026-08-23_WEIGHTED_RRF_RETRIEVAL_*`,
+  `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

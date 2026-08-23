@@ -10,12 +10,12 @@
 >
 > **worktree**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> **配套进度**：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> **配套进度**：[2026-08-23_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-23_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 >
-> **近距离上下文**：[项目上下文](../project-context-zh-CN.md)、
-> [架构说明](../architecture-zh-CN.md)、[REST API](../rest-api-zh-CN.md)、
-> [检索质量默认值](../quality-defaults-zh-CN.md)、[测试指南](../testing-guide-zh-CN.md)、
-> [交付工作流](../delivery-workflow-zh-CN.md)
+> **近距离上下文**：[项目上下文](../../project-context-zh-CN.md)、
+> [架构说明](../../architecture-zh-CN.md)、[REST API](../../rest-api-zh-CN.md)、
+> [检索质量默认值](../../quality-defaults-zh-CN.md)、[测试指南](../../testing-guide-zh-CN.md)、
+> [交付工作流](../../delivery-workflow-zh-CN.md)
 
 本文是下一轮功能的自包含实施入口。它建立在上一轮加权 RRF 已合入当前基线的事实之上，
 目标是用一个边界清晰、可快速交付的检索质量切片改善 rerank 的输入召回，同时保持响应
@@ -105,7 +105,7 @@ advisor 不扩大候选池，后续 `RerankAdvisor` 仍使用自己的最终数�
 - 规划开始前工作区只有上一轮 plan/progress 的归档重命名；本轮归档链接修复和新规划、
   进度文档属于当前任务修改，不能覆盖或丢弃其他协作者的变化。
 - 上一轮 `weighted/scaled RRF` 的实现、分数语义和稳定排序已经在当前代码与
-  [架构文档](../architecture-zh-CN.md)中作为事实维护；上一轮 plan/progress 已移至
+  [架构文档](../../architecture-zh-CN.md)中作为事实维护；上一轮 plan/progress 已移至
   `docs/drafts/archive/`，不作为本轮实施入口。
 
 ### 3.2 检索服务的真实行为

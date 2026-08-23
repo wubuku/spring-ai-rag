@@ -1,6 +1,6 @@
 # 有界的独立 rerank 候选池进度
 
-> **状态**：生产实现与自动化验收进行中
+> **状态**：实施与最终验收已完成，待 Git 交付
 >
 > **开始日期**：2026-08-23
 >
@@ -10,7 +10,7 @@
 >
 > **代码基线**：本地 `main` / `origin/main` @ `802cd991`
 >
-> **实施规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> **实施规划**：[2026-08-23_NEXT_HIGH_VALUE_FEATURES_PLAN.md](2026-08-23_NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 
 本文件是跨会话恢复账本，不替代代码、迁移或双语长青文档。每次取得关键进展时，先更新
 本文件，再进入下一阶段。规划完成后本文件记录规划审查结果；实施开始后继续记录代码切片、
@@ -25,7 +25,7 @@
 | 新规划编写 | 已完成 | 已冻结有界 candidate pool、最终数量语义和 Agent/Evaluation 漏接修复边界 |
 | 规划连续审查 | `3/3` | 已完成三轮固定范围、只读复核；期间未再修改规划正文。最终规划 SHA-256 记录于本文件 §6 |
 | 文档门禁、commit、push | 已完成 | 规划 `3/3`、文档门禁 `10/10`、commit `8a16a177` 和特性分支 push 已完成 |
-| 生产代码实施 | 已完成，待合并后复验 | 配置、候选池、最终数量保护、Agent/Evaluation rerank 和 trace/cache 语义已实现；预合并硬门槛与连续 `3/3` 审查已完成 |
+| 生产代码实施 | 已完成 | 配置、候选池、最终数量保护、Agent/Evaluation rerank 和 trace/cache 语义已实现；上游同步后的后端、前端、真实全栈门槛与最终连续 `3/3` 审查均已通过 |
 
 ## 2. 已冻结的关键决策
 
@@ -111,7 +111,7 @@
 三轮复核均未修改 `NEXT_HIGH_VALUE_FEATURES_PLAN.md`；规划检查计数达到 `3/3`。
 
 固定检查范围见
-[规划文档 §7](NEXT_HIGH_VALUE_FEATURES_PLAN.md#7-规划检查与实现收敛)：
+[规划文档 §7](2026-08-23_NEXT_HIGH_VALUE_FEATURES_PLAN.md#7-规划检查与实现收敛)：
 
 1. 需求闭环、自包含性、非目标和默认决策；
 2. 代码调用链、配置/数据/API/并发/失败语义和兼容性；
@@ -193,7 +193,7 @@
 任何影响正确性、检索质量、响应成本、兼容性或验证可信度的实质修复都会把计数重置为
 `0/3`，并重新运行受影响门槛。
 
-### 7.1 2026-08-24 基本集成复验
+### 7.1 2026-08-23 基本集成复验
 
 - 文档门禁：`./scripts/verify-project-docs.sh`，`10/10` 通过。
 - 并发规则与 whitespace：`verify-no-pessimistic-locks.sh`、`git diff --check` 通过。
@@ -341,9 +341,58 @@
 `origin/main` merge 到特性分支；合并前的验收只保留为历史证据，最终结论必须来自合并后的
 固定顺序完整复验和新一轮连续三轮审查。
 
+### 7.10 上游同步后的最终验证基线
+
+- 当前实现提交：`3d864f0e`（`feat: add bounded rerank candidate pool`）。
+- 执行 `git fetch origin --prune` 后，`origin/main` 与本地 `main` 均为 `802cd991`。
+- `origin/main` 已是当前特性分支祖先，远端 main 没有新增提交，因此无需创建无内容的
+  merge commit。
+- 最终复验基线固定为特性 HEAD `3d864f0e` + `origin/main` `802cd991`；从该基线重新执行
+  PostgreSQL/Maven、WebUI、隔离真实全栈和连续三轮只读审查，不沿用提交前结果。
+
+### 7.11 上游同步后的固定顺序完整复验
+
+2026-08-23 完成以下复验；所有结论均来自 §7.10 固定基线：
+
+- PostgreSQL/pgvector：Testcontainers PostgreSQL 16.12、Flyway V1–V48，相关矩阵
+  `2/2` 通过。
+- Maven 门槛：`mvn clean compile test-compile` 五模块全部 `BUILD SUCCESS`；本轮聚焦
+  后端矩阵 `143/143` 通过。
+- WebUI：`npm run typecheck`、Vitest `29 files / 218 tests`、`npm run build` 全部
+  通过；核心 Mock Playwright Search/Navigation `14/14` 通过。
+- 隔离真实全栈：使用 `18083/15175` 和 `postgresql,prod` 启动 `scripts/dev.sh`；
+  readiness 为 `UP`，WebUI 静态入口、Vite proxy、root identity 和 capability 均通过。
+- 真实 embedding + PostgreSQL goldenset 使用 `--skip-create` 只读执行，`5/5` 用例通过；
+  baseline/quality 的 MRR 与 nDCG 均为 `1.0000`，没有创建、删除或更新文档。
+- 真实无 Mock Playwright：从 `/webui/search` 重定向到 unlock，内存凭据调用
+  `/api/v1/rag/auth/me` 返回 `200` 和 `ENVIRONMENT_ROOT`；随后 WebUI 发起未拦截的
+  `GET /api/v1/rag/search`，响应 `200`，请求上限为 `10`、JSON 返回 `1` 条且包含
+  `GOLDENSET_DOC_RERANK`。DOM 可见标题和结果计数与 JSON 一致，浏览器 console/page
+  error 为 `0`；全程未使用截图。
+- 真实 Chat LLM 不适用本轮最终门槛：本轮没有修改 Chat provider、prompt、SSE 或答案
+  生成逻辑；真实 embedding 检索和 WebUI Search 已覆盖本轮运行时行为。
+
+隔离服务已停止，`./scripts/dev.sh --status` 确认后端和前端均为 `stopped`；
+`18083/15175` 已释放。
+
+### 7.12 上游同步后的最终连续三轮实现审查
+
+§7.11 的完整复验通过且隔离服务停止后，按规划 §7.2 的固定范围完成三轮只读审查。
+三轮期间没有修改生产实现、测试或双语长青文档：
+
+1. 候选池计算、配置边界、rerank 启用条件、向量/全文 SQL limit、scope/filter、timeout、
+   provider fallback 和请求成本：未发现问题。
+2. Search/Chat/Agent/JSON/Evaluation 最终数量、旧 Advisor 兼容、trace/citation、
+   coverage-aware cache 和失败语义：未发现问题。
+3. PostgreSQL/Maven/WebUI/真实运行证据、双语文档、回滚边界和 Git 交付准备：
+   未发现问题。
+
+最终实现审查计数达到连续 `3/3`。本轮功能已满足规划完成定义，可以归档 plan/progress，
+提交并推送特性分支，再合并到 `main`。
+
 ## 8. 恢复账本：隔离验收数据清理事故
 
-2026-08-24 隔离全栈验收的临时数据清理过程中，曾使用未按 TSV 行边界读取的 shell
+2026-08-23 隔离全栈验收的临时数据清理过程中，曾使用未按 TSV 行边界读取的 shell
 循环处理删除参数，误把本地 PostgreSQL 中 `document_id=1`、预期 revision 为 `1` 的
 文档删除请求发送到了后端。该请求返回 HTTP `200`；随后对目标 goldenset 文档的删除因
 revision 参数不匹配返回 `409`，没有继续确认删除成功。

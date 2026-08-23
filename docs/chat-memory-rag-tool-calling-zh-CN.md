@@ -377,8 +377,9 @@ attempt，但已经发生的模型、工具和检索成本不能退回。
 4. 只有在延迟、质量和保留策略证据充分后，才评估是否把持久摘要改为默认开启。
 5. 修改 Chat、Memory、检索或工具公共契约时，继续执行 PostgreSQL 和隔离真实 LLM 回归。
 
-当前活跃实施方案见
-[下一轮高价值功能规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md)。
+已交付的检索与 rerank 行为见
+[架构说明](architecture-zh-CN.md#32-模式化-chat-pipeline)和
+[质量默认值](quality-defaults-zh-CN.md)。
 
 ## 11. 参考
 

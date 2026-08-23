@@ -34,10 +34,5 @@ When information conflicts, use:
 3. Current active plans in this directory.
 4. Historical plans and implementation ledgers under `archive/`.
 
-Active plans are listed here and in `docs/index*`. An otherwise empty directory
-means there is no approved or in-progress active plan.
-
-## Current Active Plans
-
-- [Bounded rerank candidate-pool implementation plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [Progress and recovery ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+Active plans are listed here and in `docs/index*`. There is currently no
+approved or in-progress active plan.
