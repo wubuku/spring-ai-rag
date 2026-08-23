@@ -28,4 +28,9 @@
 3. 本目录中的当前活跃规划。
 4. `archive/` 中的历史规划和实施账本。
 
-当前活跃规划会在本页和 `docs/index*` 中列出。目前没有已批准或正在实施的活跃规划。
+当前活跃规划会在本页和 `docs/index*` 中列出。
+
+## 当前活跃规划
+
+- [rerank 后文档级证据去冗余实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [配套进度与恢复账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)

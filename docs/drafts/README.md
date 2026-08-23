@@ -34,5 +34,9 @@ When information conflicts, use:
 3. Current active plans in this directory.
 4. Historical plans and implementation ledgers under `archive/`.
 
-Active plans are listed here and in `docs/index*`. There is currently no
-approved or in-progress active plan.
+Active plans are listed here and in `docs/index*`.
+
+## Current Active Plans
+
+- [Document-level evidence deduplication after reranking](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Progress and recovery ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
