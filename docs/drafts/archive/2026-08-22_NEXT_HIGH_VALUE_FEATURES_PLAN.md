@@ -13,19 +13,19 @@
 >
 > **实施分支**：`feat/chat-turn-idempotency-20260822`
 >
-> **配套进度**：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> **配套进度**：[2026-08-22_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-22_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 本规划是下一轮实施的单一恢复入口。它冻结本轮要解决的问题、推荐默认、数据与 HTTP
 契约、文件顺序、验收矩阵和明确非目标。实现者不应因为会话中断而重新猜测核心设计。
 
 近距离上下文：
 
-- [Chat 记忆、RAG 与工具调用调研](../chat-memory-rag-tool-calling-zh-CN.md)
-- [项目上下文](../project-context-zh-CN.md)
-- [REST API 参考](../rest-api-zh-CN.md)
-- [SSE 协议](../SSE-PROTOCOL.md)
-- [测试指南](../testing-guide-zh-CN.md)
-- [规划、实施与验收工作流](../delivery-workflow-zh-CN.md)
+- [Chat 记忆、RAG 与工具调用调研](../../chat-memory-rag-tool-calling-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [REST API 参考](../../rest-api-zh-CN.md)
+- [SSE 协议](../../SSE-PROTOCOL.md)
+- [测试指南](../../testing-guide-zh-CN.md)
+- [规划、实施与验收工作流](../../delivery-workflow-zh-CN.md)
 
 ## 1. 执行摘要
 
