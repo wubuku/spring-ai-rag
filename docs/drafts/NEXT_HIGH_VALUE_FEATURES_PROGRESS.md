@@ -35,8 +35,8 @@
 | WebUI | 已完成 | 每 principal 一行、policy CAS、quota、当前凭据 rotate/revoke 与 shown-once secret 已完成；页面 Vitest 13/13、TypeScript、production build、alignment、核心 Mock Playwright 通过 |
 | 基本集成硬门槛 | 已完成 | 统一门槛 `20260823-premerge-hard-gate-rerun` 13/13：PostgreSQL 40/40、Maven 全量、WebUI Vitest 218/218、TypeScript/build/alignment、核心 Mock Playwright、project-docs 10/10 均通过 |
 | 真实全栈与 LLM | 已完成 | 同一统一门槛中，双实例共享 DB、真实 frontend/backend Playwright、真实 `grok-4.5` 五路径有界调用全部通过 |
-| 实现连续审查 | 进行中 | feature 精确树已按数据一致性、认证/API、运维兼容性三个互不重叠范围连续 `3/3` 无修改；`main` 最终树完成状态收尾后再执行最终 `3/3` |
-| 最终 Git 交付 | 进行中 | feature 最终状态 `648a8ff6` 已推送并快进合入本地 `main`；`main@648a8ff6` 完整门槛 13/13 与隔离 `dev.sh` 启动验收均通过，待最终审查、commit 与 push |
+| 实现连续审查 | 已完成 | feature 与合入后的 `main` 精确树均完成连续 `3/3` 限定范围无修改审查；最终进度提交后再执行一次连续 `3/3` 只读确认 |
+| 最终 Git 交付 | 已完成 | feature 已推送并快进合入 `main`；完整门槛 13/13、隔离 `dev.sh`、最终审查均通过，已将 `main@d4195a48` 推送到 `origin/main` |
 
 ## 2. 已确认事实
 
