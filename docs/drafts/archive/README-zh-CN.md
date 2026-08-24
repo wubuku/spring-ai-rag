@@ -40,5 +40,8 @@
   `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
 - KNOWLEDGE 多查询扩展预算与有界 fan-out：
   `2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_*`
+- KNOWLEDGE 多查询证据合并与 heuristic CJK 词法重排：
+  `2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_*`、
+  `2026-08-24_HEURISTIC_CJK_RERANK_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

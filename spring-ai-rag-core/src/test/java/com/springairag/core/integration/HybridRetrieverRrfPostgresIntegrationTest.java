@@ -326,6 +326,93 @@ class HybridRetrieverRrfPostgresIntegrationTest {
     }
 
     @Test
+    void realVectorCandidatesUseAuthoritativeTitleForHeuristicRerank() {
+        EmbeddingProfile profile = insertProfile();
+        long distractorDocument = insertDocument(
+                "Account approval handbook",
+                "shared neutral maintenance evidence",
+                "m".repeat(64));
+        long relevantDocument = insertDocument(
+                "ZX-9042 液压校准规范",
+                "shared neutral maintenance evidence",
+                "n".repeat(64));
+
+        insertVector(
+                profile.id(),
+                distractorDocument,
+                0,
+                1.0f,
+                "shared neutral maintenance evidence");
+        insertVector(
+                profile.id(),
+                relevantDocument,
+                0,
+                0.99f,
+                "shared neutral maintenance evidence");
+        insertEmbeddingState(
+                profile.id(), distractorDocument, "m".repeat(64));
+        insertEmbeddingState(
+                profile.id(), relevantDocument, "n".repeat(64));
+
+        String query = "ZX-9042 液压校准";
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(query)).thenReturn(vector(1024, 1.0f));
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        properties.getRerank().setEnabled(true);
+        properties.getRerank().setProvider("heuristic");
+        properties.getRerank().setDiversityWeight(0.2f);
+        properties.getRerank().setCandidateLimit(2);
+        HybridRetrieverService retriever = new HybridRetrieverService(
+                embeddingModel,
+                () -> profile,
+                jdbc,
+                properties,
+                null,
+                Runnable::run);
+
+        List<RetrievalResult> candidates = retriever.searchInScopeDetailed(
+                query,
+                RetrievalScope.unscoped(),
+                null,
+                1,
+                RetrievalConfig.builder()
+                        .maxResults(1)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(true)
+                        .build(),
+                RetrievalFilters.none()).results();
+
+        assertEquals(
+                List.of(
+                        String.valueOf(distractorDocument),
+                        String.valueOf(relevantDocument)),
+                candidates.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(
+                List.of(
+                        "Account approval handbook",
+                        "ZX-9042 液压校准规范"),
+                candidates.stream().map(RetrievalResult::getTitle).toList());
+
+        ReRankingService reranking = new ReRankingService(
+                properties,
+                new RerankProviderFactory(properties));
+        List<RetrievalResult> reranked =
+                reranking.rerank(query, candidates, 1);
+
+        assertEquals(1, reranked.size());
+        assertEquals(
+                String.valueOf(relevantDocument),
+                reranked.getFirst().getDocumentId());
+        assertEquals(
+                "ZX-9042 液压校准规范",
+                reranked.getFirst().getTitle());
+    }
+
+    @Test
     void boundedKnowledgeExpansionExecutesOnlyUniqueQueriesThroughPostgresRetriever() {
         EmbeddingProfile profile = insertProfile();
         long documentId = insertDocument(

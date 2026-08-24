@@ -702,6 +702,18 @@ receive no diversity reward merely because they lack lexical information.
 Successful HTTP rerank responses are unchanged, while HTTP fallback reuses
 the same heuristic behavior.
 
+Heuristic relevance reads both chunk content and the authoritative document
+title:
+`effectiveRelevance = max(contentRelevance, 0.9 * titleRelevance)`.
+The title is normalized once with `Locale.ROOT` and never enters the chunk
+feature set or diversity calculation. A title match can therefore correct
+ordering when the chunk does not repeat a product ID, term, or topic name,
+without adding duplicate relevance or changing inter-document similarity.
+Null or blank titles preserve the previous scoring path exactly. Successful
+HTTP-provider requests still send chunk content only; title relevance applies
+only when HTTP falls back to heuristic. This adds no SQL, embedding, HTTP, or
+Chat-model call.
+
 The selector operates on at most `candidate-limit` results and adds no SQL,
 embedding, rerank-provider, or Chat-model calls. A value of `0` disables this
 selection and restores provider top-N behavior.

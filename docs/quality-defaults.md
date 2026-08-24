@@ -125,6 +125,15 @@ information-free diversity reward. Successful HTTP rerank responses are
 unchanged; missing credentials, timeouts, or invalid responses that fall back
 to heuristic use the same CJK behavior.
 
+Content and title relevance are calculated separately, with
+`max(contentRelevance, 0.9 * titleRelevance)` used as the effective relevance.
+The authoritative document title is normalized once and does not create
+diversity features. Product IDs, terms, or topic names that appear only in the
+title can therefore promote a candidate without double-counting a title and
+content match. Null or blank titles preserve the previous score and ordering
+path. Successful HTTP-provider requests still send chunk content only; title
+awareness is reused only by heuristic fallback.
+
 This is a lightweight lexical improvement, not dictionary segmentation,
 semantic reranking, or simplified/traditional/synonym normalization. Continue
 comparing Chinese and English goldensets for MRR/nDCG/Recall@K and Search/Chat

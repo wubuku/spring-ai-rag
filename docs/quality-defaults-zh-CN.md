@@ -106,6 +106,12 @@ CJK query 不必整句原样出现在 chunk 中，词序变化或局部短语重
 会被视为 similarity `1`，null/blank chunk 不会获得无信息 diversity 奖励。HTTP rerank
 成功响应不变；缺少凭据、超时或非法响应而降级 heuristic 时会使用同一 CJK 规则。
 
+正文和标题分别计算 relevance，最终使用
+`max(contentRelevance, 0.9 * titleRelevance)`。权威文档标题只规范化一次，不生成
+diversity 特征；这使产品 ID、术语或主题名只出现在标题时仍能提升候选，同时避免标题与
+正文重复命中被相加放大。null/blank 标题保持原评分和排序路径。HTTP provider 成功路径
+仍只发送 chunk 正文，不把标题加入外部请求；fallback 才复用标题感知 heuristic。
+
 该策略是轻量词面增强，不是词典分词、语义 reranker 或繁简/同义词归一化。质量评估仍应
 比较中英文 goldenset 的 MRR/nDCG/Recall@K 和 Search/Chat p95；需要更高排序上限时使用
 HTTP cross-encoder provider。

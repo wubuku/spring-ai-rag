@@ -631,6 +631,14 @@ bigram，单字符片段保留单字符，混合片段中的 Latin/数字 run �
 获得 diversity 奖励。HTTP rerank 成功路径不受影响；HTTP 降级到 heuristic 时复用同一
 行为。
 
+heuristic relevance 同时读取候选的正文和权威文档标题：
+`effectiveRelevance = max(contentRelevance, 0.9 * titleRelevance)`。标题只做一次
+`Locale.ROOT` 规范化，不进入 chunk 特征集合或 diversity；因此标题命中可以纠正文档
+正文片段未重复产品 ID、术语或主题名时的排序，而不会叠加放大正文命中或改变文档间相似度。
+null/blank 标题精确保留原有评分路径。HTTP provider 成功请求仍只发送 chunk 正文，不发送
+标题；只有 HTTP 降级到 heuristic 时使用标题相关性。该行为不增加 SQL、embedding、HTTP
+或 Chat 模型调用。
+
 选择器最多处理 `candidate-limit` 项，不增加 SQL、embedding、rerank provider 或 Chat
 模型调用。配置为 `0` 时关闭该选择，恢复 provider top-N 行为。
 
