@@ -27,9 +27,9 @@
 | 规划连续检查 | `3/3` | 修复归档链接和无效脚本范围后，连续三轮无修改检查通过 |
 | 一次性测试 | 已完成 | provider/facade/fallback/PostgreSQL 测试已一次性落下；旧实现快速基线 49 项中 10 项按预期失败 |
 | 生产实现 | 已完成 | 单文件实现 CJK bigram、混合 token、512 上限、预计算和 index-aware diversity |
-| 基本硬门槛 | 已完成 | 专项完整门禁 `22/22`、全量 Maven `3608` 项、真实栈与真实 LLM 均通过 |
-| 实现连续检查 | `3/3` | 三轮限定范围只读审查连续无问题、无生产代码或测试改动 |
-| Git 与 main 交付 | 进行中 | 待本地提交、merge 最新 origin/main、复验、推送并合入 main |
+| 基本硬门槛 | 已完成 | 指标语义与有界重试修复后的专项完整门禁重新 `22/22`；全量 Maven `3608` 项通过 |
+| 实现连续检查 | `3/3` | 指标语义与有界重试修复后，三轮限定范围只读审查连续无问题、无实现改动 |
+| Git 与 main 交付 | 进行中 | 特性分支修复已通过完整门禁、全量 Maven 与实现 `3/3`，待提交、推送并重新合入 main 复验 |
 
 ## 2. 已冻结决策
 
@@ -164,3 +164,91 @@
 
 实现文件 SHA-256：
 `9bcfa69257e4d4321e3cceeccebbb7704056bc82161a0a9d31fd274875aecfa0`。
+
+### 2026-08-24 合并后验收阻断与处理决策
+
+- 特性提交 `ff281d92` 已推送，随后合入本地 `main@17a68027`；合并后专项门禁执行
+  `22` 个阶段，`21` PASS、`1` FAIL。
+- 唯一失败发生在真实 cap=`0` / cap=`2` 运行时对比。失败 Chat trace 的 HTTP 响应有
+  `5` 个最终 sources，`rag_retrieval_logs.result_count` 为 `8`；请求、真实 LLM、
+  Search、PostgreSQL、WebUI 和 KNOWLEDGE 验收均成功。
+- 代码交叉验证确认：Search 的 `result_count` 对应最终 HTTP results；KNOWLEDGE Chat
+  的 `result_count` 来自 `RetrievalTraceSession.latestOutcome()`，而 HTTP sources 来自
+  Spring AI advisor 的最终 `DOCUMENT_CONTEXT`。多查询 join、rerank 和 prompt budget
+  后两者允许不同，指标工具把它们强制相等属于验收工具缺陷，不是 CJK rerank 缺陷。
+- 最小修复边界：把数据库字段在验收产物中明确命名为 latest retrieval outcome count；
+  Search 保留严格相等断言，Chat 记录是否相等但不把不同阶段的数量误判为失败；自测必须
+  同时证明 Search mismatch 会失败、Chat mismatch 会被保留为可解释观测。
+- 该修改会重置实现审查计数为 `0/3`。修复后先重跑指标自测和专项门禁，再从最新本地
+  main 完整执行合并后验收、全量 Maven 与三轮限定范围只读审查。
+
+### 2026-08-24 runtime 指标语义修复快速验证
+
+- 指标采集 SQL 已把字段明确命名为 `latestRetrievalResultCount`；Search mismatch 继续
+  立即失败，Chat 产物新增 `finalResultCountMatchesLatestRetrieval` 记录阶段关系。
+- metrics self-test 已覆盖 Search 相等、Search 不等失败、Chat 不等保留三种情况并通过；
+  Python 编译、runner `bash -n`、`git diff --check` 和项目文档门禁 `10/10` 通过。
+- 使用合并后失败的真实 trace 产物回放成功：HTTP final `resultCount=5`、数据库 latest
+  retrieval `resultCount=8` 被准确保留为 `false`，不再误报流程失败。
+- 下一步进入特性分支完整专项门禁；任何新失败按实际证据处理，不能沿用本次快速验证替代
+  完整验收。
+
+### 2026-08-24 特性分支完整门禁首次重跑
+
+- 完整专项门禁再次得到 `21` PASS、`1` FAIL、`0` skipped；原 result-count 语义失败
+  已消失，证明第一处修复有效。
+- 新的唯一失败是 cap=`2` 真实对比第 4 个 Chat 样本收到服务明确返回的
+  `CHAT_TIMEOUT` / HTTP `504`。同轮真实 provider baseline `9/9`、前三个对比样本和最后
+  KNOWLEDGE 验收均成功，后端日志显示请求正常进入查询扩展与检索后受远端 Chat 时延影响。
+- 运行时对比目标是采集固定数量的成功观测，不应把一次明确可重试的上游 `429/502/503/504`
+  当作本地检索正确性失败；但也不能无限重试、扩大生产 timeout 或吞掉永久错误。
+- 处理决策：只在指标采集器中为 Chat warm/sample 增加默认最多 `2` 次的有界尝试，只重试
+  `429/502/503/504`，输出每次重试日志；Search、非重试状态、无效 JSON/契约失败仍立即
+  失败。runner 暴露正整数环境变量并由 self-test 锁定状态分类。
+- 该实质修改再次把实现审查计数保持在 `0/3`；修复后重新从专项完整门禁开始，不沿用本次
+  `21/22` 结果。
+
+### 2026-08-24 Chat 采样有界重试快速验证
+
+- metrics self-test 已用无网络 fake collector 证明：首个 `504` 后只重试一次并成功返回，
+  `400` 首次即失败；同时保留 result-count 阶段语义测试。
+- Python 编译、runner `bash -n`、`git diff --check` 和项目文档门禁 `10/10` 再次通过。
+- `.dev` 后端与前端均已停止，未遗留验收服务。下一步使用新 run ID 与隔离端口重新执行
+  全部 `22` 个阶段。
+
+### 2026-08-24 指标语义与 Chat 有界重试修复后的完整门禁
+
+- 新证据目录：
+  `.verification/heuristic-cjk-rerank/20260824-semantic-retry-feature/`。
+- 完整专项门禁重新执行 `22` 个阶段，结果为 `22` PASS、`0` FAIL、`0` skipped；
+  focused 后端调用链 `163/163`、PostgreSQL/pgvector `5/5`、WebUI Vitest
+  `218/218`、核心 Mock Playwright `24/24`、真实 Search DOM Playwright `1/1`
+  全部通过。
+- `mvn clean compile test-compile`、WebUI TypeScript、生产构建、对齐策略、禁悲观锁、
+  文档门禁 `10/10`、retrieval response contract 和 metrics self-test 全部通过。
+- 隔离端口为后端 `18089`、WebUI `15181`、Mock `4201`；真实 LLM provider baseline
+  `PASS=9 FAIL=0`，检索 goldenset 与版本化质量回归均通过。
+- cap=`0` 与 cap=`2` 各采集 Search `20` 次、Chat `5` 次成功观测。Search rerank p95
+  均为 `1ms`；Chat rerank p95 均为 `4ms`。cap=`2` 保持最少 `4` 个唯一文档，未增加
+  HTTP payload；真实端到端 Chat 时延仍主要由远端模型波动决定。
+- 最终 KNOWLEDGE 请求返回 `463` 个字符、`5` 个 sources、`4` 个唯一文档和 `5` 个
+  citations。上游 Chat 在该请求中两次返回 HTTP/2 `RST_STREAM`，Spring AI 内部有界
+  重试后成功；未出现最终 `504`，也未触发采样器的 HTTP 状态重试。
+- 验收服务已由 runner 停止。修复后的全量 `mvn test` 共执行 `3608` tests，
+  `0` failures、`0` errors、`7` skipped，Reactor `BUILD SUCCESS`；本任务要求的真实
+  PostgreSQL 集成另行 `5/5` 且无跳过。
+- 基本集成硬门槛已满足，下一步按固定范围重新完成连续三轮只读实现审查。
+
+### 2026-08-24 指标工具修复后的实现连续检查
+
+硬门槛通过后重新执行三轮互不重叠的限定范围只读审查。三轮之间没有修改生产代码、
+测试、runner 或长青文档；达到 `3/3` 后才一次性记录本节。
+
+| 轮次 | 时间 | 固定范围 | 发现问题 | 处理措施 | 结果 |
+|---:|---|---|---|---|---|
+| 1/3 | 2026-08-24 15:12 CST | metrics HTTP 状态分类、重试边界、异常传播、Search/Chat 数量语义、trace 关联和 JSON 兼容性 | 无 | 无修改 | 连续计数 `1/3` |
+| 2/3 | 2026-08-24 15:12 CST | runner 参数校验、只读 SQL、trace 轮询、cap 重启、失败传播、隔离数据库与 EXIT 清理 | 无 | 无修改 | 连续计数 `2/3` |
+| 3/3 | 2026-08-24 15:13 CST | 双语长青文档、进度账本、CLI 可发现性、字段命名、文档门禁和 Git 边界 | 无 | 无修改；文档门禁 `10/10`、metrics self-test 与 whitespace 通过 | 连续计数 `3/3` |
+
+下一步提交并推送特性分支修复，再合入本地 main；main 必须从头执行完整 `22` 步门禁、
+全量 Maven 和三轮合并后只读审查，不能沿用特性分支结果。

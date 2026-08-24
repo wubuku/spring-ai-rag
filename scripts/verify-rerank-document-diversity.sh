@@ -15,6 +15,7 @@ TESTCONTAINERS_API_VERSION="${TESTCONTAINERS_API_VERSION:-1.40}"
 TESTCONTAINERS_RYUK_DISABLED="${TESTCONTAINERS_RYUK_DISABLED:-true}"
 SEARCH_SAMPLE_COUNT="${RERANK_DIVERSITY_SEARCH_SAMPLES:-20}"
 CHAT_SAMPLE_COUNT="${RERANK_DIVERSITY_CHAT_SAMPLES:-5}"
+CHAT_MAX_ATTEMPTS="${RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS:-2}"
 METRICS_SCRIPT="./scripts/rerank-document-diversity-metrics.py"
 
 PASS_COUNT=0
@@ -108,6 +109,10 @@ require_commands() {
   }
   [[ "$CHAT_SAMPLE_COUNT" =~ ^[1-9][0-9]*$ ]] || {
     echo "RERANK_DIVERSITY_CHAT_SAMPLES must be positive." >&2
+    return 1
+  }
+  [[ "$CHAT_MAX_ATTEMPTS" =~ ^[1-9][0-9]*$ ]] || {
+    echo "RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS must be positive." >&2
     return 1
   }
   bash -n "$ENV_FILE"
@@ -627,6 +632,7 @@ collect_runtime_variant() {
     --preferred-max-chunks "$preferred_max_chunks" \
     --search-samples "$SEARCH_SAMPLE_COUNT" \
     --chat-samples "$CHAT_SAMPLE_COUNT" \
+    --chat-max-attempts "$CHAT_MAX_ATTEMPTS" \
     --output "$raw_file" || return 1
 
   trace_ids="$(
@@ -640,7 +646,7 @@ collect_runtime_variant() {
           'operation', operation,
           'retrievalLatencyMs', total_time_ms,
           'rerankStageLatencyMs', rerank_time_ms,
-          'persistedResultCount', result_count
+          'latestRetrievalResultCount', result_count
         )
         ORDER BY created_at
       ),

@@ -645,6 +645,19 @@ HTTP latency/payload, and final unique-document count. Latency and payload do
 not use pass/fail thresholds; deterministic correctness remains the
 PostgreSQL integration matrix's responsibility.
 
+The correlated database `result_count` is the latest retrieval-outcome count.
+For Search it must equal the final HTTP result count. For KNOWLEDGE Chat, final
+HTTP sources are read from the advisor's post-processed document context, so
+query joining, reranking, or prompt budgeting may make that count differ from
+the latest retrieval outcome; the runtime artifact records the relationship
+without treating two pipeline stages as one contract.
+
+Runtime Chat sampling allows at most two attempts by default for explicit
+transient HTTP `429/502/503/504` responses. Each retry is logged; Search,
+non-retryable HTTP responses, malformed payloads, and exhausted attempts still
+fail the gate. Override the positive attempt bound only with
+`RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS`.
+
 The same gate's `HeuristicRerankProviderTest`, `ReRankingServiceTest`, and
 `HttpRerankProviderTest` cover no-whitespace CJK partial matching, mixed
 languages, English compatibility, blank/long inputs, identical chunks,
