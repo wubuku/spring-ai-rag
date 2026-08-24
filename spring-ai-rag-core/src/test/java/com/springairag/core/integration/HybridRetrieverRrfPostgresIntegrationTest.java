@@ -20,6 +20,7 @@ import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.QueryLang;
 import com.springairag.core.retrieval.fulltext.SearchCapabilities;
 import com.springairag.core.retrieval.rerank.RerankProvider;
+import com.springairag.core.retrieval.rerank.RerankProviderFactory;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -243,6 +244,85 @@ class HybridRetrieverRrfPostgresIntegrationTest {
                 directResults.stream()
                         .map(RetrievalResult::getDocumentId)
                         .toList());
+    }
+
+    @Test
+    void realVectorCandidatesUseCjkAwareHeuristicRerank() {
+        EmbeddingProfile profile = insertProfile();
+        long distractorDocument = insertDocument(
+                "cjk-distractor",
+                "账户权限审批流程和用量账本统计",
+                "k".repeat(64));
+        long relevantDocument = insertDocument(
+                "cjk-relevant",
+                "检索质量需要结合中文分词进行优化",
+                "l".repeat(64));
+
+        insertVector(
+                profile.id(),
+                distractorDocument,
+                0,
+                1.0f,
+                "账户权限审批流程和用量账本统计");
+        insertVector(
+                profile.id(),
+                relevantDocument,
+                0,
+                0.99f,
+                "检索质量需要结合中文分词进行优化");
+        insertEmbeddingState(
+                profile.id(), distractorDocument, "k".repeat(64));
+        insertEmbeddingState(
+                profile.id(), relevantDocument, "l".repeat(64));
+
+        String query = "中文检索质量优化";
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(query)).thenReturn(vector(1024, 1.0f));
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        properties.getRerank().setEnabled(true);
+        properties.getRerank().setProvider("heuristic");
+        properties.getRerank().setDiversityWeight(0.2f);
+        properties.getRerank().setCandidateLimit(2);
+        HybridRetrieverService retriever = new HybridRetrieverService(
+                embeddingModel,
+                () -> profile,
+                jdbc,
+                properties,
+                null,
+                Runnable::run);
+
+        List<RetrievalResult> candidates = retriever.searchInScopeDetailed(
+                query,
+                RetrievalScope.unscoped(),
+                null,
+                1,
+                RetrievalConfig.builder()
+                        .maxResults(1)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(true)
+                        .build(),
+                RetrievalFilters.none()).results();
+
+        assertEquals(
+                List.of(
+                        String.valueOf(distractorDocument),
+                        String.valueOf(relevantDocument)),
+                candidates.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+
+        ReRankingService reranking = new ReRankingService(
+                properties,
+                new RerankProviderFactory(properties));
+        List<RetrievalResult> reranked =
+                reranking.rerank(query, candidates, 1);
+
+        assertEquals(1, reranked.size());
+        assertEquals(
+                String.valueOf(relevantDocument),
+                reranked.getFirst().getDocumentId());
     }
 
     @Test
@@ -538,14 +618,29 @@ class HybridRetrieverRrfPostgresIntegrationTest {
 
     private void insertVector(
             long profileId, long documentId, int chunkIndex, float firstValue) {
+        insertVector(
+                profileId,
+                documentId,
+                chunkIndex,
+                firstValue,
+                "shared rrf content");
+    }
+
+    private void insertVector(
+            long profileId,
+            long documentId,
+            int chunkIndex,
+            float firstValue,
+            String chunkText) {
         jdbc.update(
                 """
                 INSERT INTO rag_embeddings (
                     document_id, chunk_text, chunk_index, embedding,
                     embedding_1024, embedding_profile_id
-                ) VALUES (?, 'shared rrf content', ?, ?::vector, ?::vector, ?)
+                ) VALUES (?, ?, ?, ?::vector, ?::vector, ?)
                 """,
                 documentId,
+                chunkText,
                 chunkIndex,
                 vectorText(vector(1024, firstValue)),
                 vectorText(vector(1024, firstValue)),

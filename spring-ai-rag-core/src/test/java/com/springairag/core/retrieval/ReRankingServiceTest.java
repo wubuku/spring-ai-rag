@@ -306,6 +306,30 @@ class ReRankingServiceTest {
         assertEquals("doc-relevant", quality.getFirst().getDocumentId());
     }
 
+    @Test
+    void rerank_improvesReciprocalRankForCjkRelevantDocument() {
+        ReRankingService enabledService = createService(true, 0.2f);
+        RetrievalResult distractor = createResult(
+                "doc-distractor",
+                "账户权限审批流程和用量账本统计",
+                1.0);
+        RetrievalResult relevant = createResult(
+                "doc-relevant",
+                "检索质量需要结合中文分词进行优化",
+                0.99);
+        List<RetrievalResult> baseline = List.of(distractor, relevant);
+
+        List<RetrievalResult> quality = enabledService.rerank(
+                "中文检索质量优化",
+                baseline,
+                2);
+
+        assertTrue(
+                reciprocalRank(quality, "doc-relevant")
+                        > reciprocalRank(baseline, "doc-relevant"));
+        assertEquals("doc-relevant", quality.getFirst().getDocumentId());
+    }
+
     private double reciprocalRank(List<RetrievalResult> results, String relevantId) {
         for (int i = 0; i < results.size(); i++) {
             if (relevantId.equals(results.get(i).getDocumentId())) {

@@ -10,7 +10,7 @@
 >
 > 代码基线：`7c7d846b`（`origin/main`）
 >
-> 实施规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 实施规划：[2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_PLAN.md](2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_PLAN.md)
 
 本文是跨会话恢复账本，不替代代码、测试或双语长青文档。每次取得关键进展时，先更新
 本文，再进入下一阶段。只记录不含密钥的状态、决策、证据路径和恢复入口。
@@ -115,7 +115,7 @@ startup/real Chat、文档门禁、lock gate、三轮实现检查和 Git 状态�
 
 ## 6. 下一恢复入口
 
-1. 读取本文和 `NEXT_HIGH_VALUE_FEATURES_PLAN.md`；
+1. 读取本文和 `2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_PLAN.md`；
 2. 确认 `git status --short --branch` 仍为当前分支且无意外修改；
 3. 规划检查已达到 `3/3`，按 plan Slice B/C 一次性实现生产代码与测试；
 4. 每完成一个实施切片，先更新本文，再执行下一切片；

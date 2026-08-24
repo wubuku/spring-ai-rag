@@ -622,6 +622,15 @@ provider 继续决定 score 和排名。文档选择器只从 provider 排名中
 文档不足以填满最终数量时，第二遍按 provider 原顺序恢复被跳过的 chunk，因此该偏好不会
 减少调用方可获得的已排名结果数量。
 
+内置 heuristic provider 的词法 relevance/diversity 对无 CJK 的空白 token 保持既有
+语义；HAN、HIRAGANA、KATAKANA、HANGUL 和 BOPOMOFO 连续片段使用相邻 code-point
+bigram，单字符片段保留单字符，混合片段中的 Latin/数字 run 独立参与匹配。每个 query
+或 chunk 最多提取 512 个特征，并在一次 rerank 内预计算后复用；因此不会随正文长度产生
+无界 token 集合，也不会为每个候选对重复拆词。diversity 按候选位置排除 self，另一条
+完全相同的非空 chunk 会得到 similarity `1`，而 null/blank chunk 不会因缺少词法信息
+获得 diversity 奖励。HTTP rerank 成功路径不受影响；HTTP 降级到 heuristic 时复用同一
+行为。
+
 选择器最多处理 `candidate-limit` 项，不增加 SQL、embedding、rerank provider 或 Chat
 模型调用。配置为 `0` 时关闭该选择，恢复 provider top-N 行为。
 

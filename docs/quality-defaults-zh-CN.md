@@ -94,6 +94,22 @@ join 只对已经检索出的有界候选执行本地处理，不增加数据库
 重复数和按分数替换数；端到端质量与延迟结论仍需结合 retrieval goldenset、版本化回归、
 Chat source/citation 检查和 p95 观测。
 
+### heuristic 的 CJK 词法默认
+
+生产默认 heuristic reranker 对普通无 CJK 文本继续按空白 token 计算 relevance 和
+Jaccard diversity。对中文、日文、韩文和注音连续片段，它使用相邻 Unicode code-point
+bigram；单字符片段保留单字符，混合文本中的 Latin/数字 run 仍可匹配。这样，无空格
+CJK query 不必整句原样出现在 chunk 中，词序变化或局部短语重叠也能贡献确定性的词面分。
+
+每个 query/chunk 最多提取 512 个特征，并在一次 rerank 中预计算后复用。这个内部上限
+不是请求参数，不增加数据库、embedding、HTTP 或 Chat 模型调用。完全相同的另一 chunk
+会被视为 similarity `1`，null/blank chunk 不会获得无信息 diversity 奖励。HTTP rerank
+成功响应不变；缺少凭据、超时或非法响应而降级 heuristic 时会使用同一 CJK 规则。
+
+该策略是轻量词面增强，不是词典分词、语义 reranker 或繁简/同义词归一化。质量评估仍应
+比较中英文 goldenset 的 MRR/nDCG/Recall@K 和 Search/Chat p95；需要更高排序上限时使用
+HTTP cross-encoder provider。
+
 ### rerank 后的文档覆盖
 
 生产默认值会在第一遍选择时，对同一个精确文档身份优先最多保留两个 chunk。`2` 是保守

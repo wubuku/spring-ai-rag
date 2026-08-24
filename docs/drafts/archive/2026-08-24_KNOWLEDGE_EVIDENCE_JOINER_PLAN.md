@@ -10,12 +10,12 @@
 >
 > worktree：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> 配套进度：[2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_PROGRESS.md](2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_PROGRESS.md)
 >
-> 近距离上下文：[项目上下文](../project-context-zh-CN.md)、
-> [架构说明](../architecture-zh-CN.md)、[配置参考](../configuration-zh-CN.md)、
-> [Chat、RAG 与工具调用](../chat-memory-rag-tool-calling-zh-CN.md)、
-> [测试指南](../testing-guide-zh-CN.md)、[交付工作流](../delivery-workflow-zh-CN.md)
+> 近距离上下文：[项目上下文](../../project-context-zh-CN.md)、
+> [架构说明](../../architecture-zh-CN.md)、[配置参考](../../configuration-zh-CN.md)、
+> [Chat、RAG 与工具调用](../../chat-memory-rag-tool-calling-zh-CN.md)、
+> [测试指南](../../testing-guide-zh-CN.md)、[交付工作流](../../delivery-workflow-zh-CN.md)
 
 本文是本轮实施的自包含入口。它只规划一个小范围、可独立交付的 KNOWLEDGE 检索质量
 改进，不引入外部客户项目背景，不把权限、用量账本或 Collection 覆盖模式带入本轮。
@@ -98,7 +98,7 @@ KNOWLEDGE 模式当前使用 Spring AI `RetrievalAugmentationAdvisor`。查询�
   query 顺序等待异步检索完成，再收集到普通 `HashMap`，所以完成顺序不是问题，但 Map
   遍历顺序不能用作稳定 tie-break。
 
-稳定事实和现有调用链见[架构说明](../architecture-zh-CN.md)与[Chat、RAG 与工具调用](../chat-memory-rag-tool-calling-zh-CN.md)；
+稳定事实和现有调用链见[架构说明](../../architecture-zh-CN.md)与[Chat、RAG 与工具调用](../../chat-memory-rag-tool-calling-zh-CN.md)；
 本文不复制这些文档的完整内容。
 
 ### 2.2 候选项比较
