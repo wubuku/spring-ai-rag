@@ -127,6 +127,13 @@ RagChatController
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
 KNOWLEDGE 与 AGENT 工具共享。
 
+在 `KNOWLEDGE` 的 `spring-ai` 查询策略中，`BoundedMultiQueryExpander` 位于
+Spring AI advisor 的扩展与检索之间。它按服务端 `max-retrieval-queries` 限制原始 query
+和变体的总 fan-out，按精确文本去重并沿用每个 `Query` 的 history/context；trace 同时记录
+计划 query 数、预算是否收敛、去重数和 degraded 状态。这个摘要不写入 query 文本。
+KNOWLEDGE 的 query budget 与 AGENT 的 tool retrieval budget 分开，避免调高 Agent 工具
+上限隐式放大固定 RAG 的数据库和 embedding 调用。
+
 会话窗口、查询压缩与长期摘要的区别，以及工具循环预算和非文档工具扩展边界，见
 [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md)。
 

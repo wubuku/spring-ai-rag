@@ -7,6 +7,7 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
+import com.springairag.core.rag.BoundedMultiQueryExpander;
 import com.springairag.core.rag.HistoryAwareQueryTransformer;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
@@ -26,6 +27,7 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.preretrieval.query.expansion.MultiQueryExpander;
+import org.springframework.ai.rag.preretrieval.query.expansion.QueryExpander;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
 import org.springframework.ai.chat.prompt.PromptTemplate;
@@ -120,6 +122,8 @@ public class ModeAwareChatClientFactory {
             ChatModelRouter.ChatModelCandidate candidate,
             List<Message> baselineMessages) {
         RagChatProperties.AgentProperties agent = ragProperties.getChat().getAgent();
+        RagChatProperties.KnowledgeProperties knowledge =
+                ragProperties.getChat().getKnowledge();
         ChatExecutionBudget budget = command.executionBudget();
         org.springframework.ai.chat.model.ChatModel executionModel =
                 budget != null
@@ -132,13 +136,28 @@ public class ModeAwareChatClientFactory {
         RetrievalTraceCollector trace = command.retrievalTraceSession() != null
                 ? command.retrievalTraceSession().newAttemptCollector(
                         attemptKey,
-                        agent.getMaxRetrievalCalls(),
+                        command.mode() == ChatMode.KNOWLEDGE
+                                ? knowledge.getMaxRetrievalQueries()
+                                : agent.getMaxRetrievalCalls(),
                         agent.getMaxToolRounds(),
                         agent.getMaxUniqueSources())
                 : new RetrievalTraceCollector(
-                        agent.getMaxRetrievalCalls(),
+                        command.mode() == ChatMode.KNOWLEDGE
+                                ? knowledge.getMaxRetrievalQueries()
+                                : agent.getMaxRetrievalCalls(),
                         agent.getMaxToolRounds(),
                         agent.getMaxUniqueSources());
+        if (command.mode() == ChatMode.KNOWLEDGE
+                && "spring-ai".equalsIgnoreCase(
+                        knowledge.getQueryTransformer())) {
+            trace.configureQueryExpansion(
+                    knowledge.getQueryExpanderVariants(),
+                    knowledge.getEffectiveQueryExpanderVariants(),
+                    knowledge.isQueryExpanderIncludeOriginal(),
+                    knowledge.getMaxRetrievalQueries(),
+                    knowledge.getPlannedRetrievalQueries(),
+                    knowledge.isQueryExpansionBudgetLimited());
+        }
         AuthorizedRetrievalContext retrievalContext =
                 new AuthorizedRetrievalContext(
                         command.retrievalScope(),
@@ -208,7 +227,7 @@ public class ModeAwareChatClientFactory {
         if (transformer != null) {
             builder.queryTransformers(transformer);
         }
-        MultiQueryExpander expander = buildQueryExpander(candidate, budget);
+        QueryExpander expander = buildQueryExpander(candidate, budget);
         if (expander != null) {
             builder.queryExpander(expander);
         }
@@ -241,12 +260,16 @@ public class ModeAwareChatClientFactory {
                         Math.max(1, knowledge.getQueryTransformTimeoutSeconds())));
     }
 
-    private MultiQueryExpander buildQueryExpander(
+    private QueryExpander buildQueryExpander(
             ChatModelRouter.ChatModelCandidate candidate,
             ChatExecutionBudget budget) {
         RagChatProperties.KnowledgeProperties knowledge =
                 ragProperties.getChat().getKnowledge();
         if (!"spring-ai".equalsIgnoreCase(knowledge.getQueryTransformer())) {
+            return null;
+        }
+        int effectiveVariants = knowledge.getEffectiveQueryExpanderVariants();
+        if (effectiveVariants <= 0) {
             return null;
         }
         ChatClient.Builder rawBuilder = ChatClient.builder(
@@ -257,12 +280,16 @@ public class ModeAwareChatClientFactory {
         if (options != null) {
             rawBuilder.defaultOptions(options.copy());
         }
-        return MultiQueryExpander.builder()
+        MultiQueryExpander delegate = MultiQueryExpander.builder()
                 .chatClientBuilder(rawBuilder)
                 .promptTemplate(EXACT_SEARCH_QUERY_PROMPT_TEMPLATE)
                 .includeOriginal(knowledge.isQueryExpanderIncludeOriginal())
-                .numberOfQueries(knowledge.getQueryExpanderVariants())
+                .numberOfQueries(effectiveVariants)
                 .build();
+        return new BoundedMultiQueryExpander(
+                delegate,
+                knowledge.getPlannedRetrievalQueries(),
+                knowledge.isQueryExpanderIncludeOriginal());
     }
 
     private List<Advisor> customAdvisors(

@@ -100,6 +100,13 @@ history-aware query transformation
 
 这条路径适合“必须查知识库”的请求，因为检索一定执行，延迟、来源和失败语义更可预测。
 
+多查询扩展是有界的：`rag.chat.knowledge.max-retrieval-queries` 默认限制每个 attempt
+最多计划三条检索 query（原始 query 加两个变体）。`BoundedMultiQueryExpander` 会在
+`RetrievalAugmentationAdvisor` 并行检索前删除空白和精确重复变体，并保留授权
+`Query.context`；当 `include-original=true` 且上限为 `1` 时直接使用转换后的 query，
+不调用扩展模型。`metadata.retrieval.queryExpansion` 和 retrieval trace 只输出有界摘要。
+该预算只属于 KNOWLEDGE，不能改变 AGENT 的工具调用预算。
+
 ### 4.2 AGENT：Spring AI Tool Calling
 
 `AGENT` 通过 Spring AI `ToolCallAdvisor` 把模型 tool call 交给服务端工具。当前工具为：

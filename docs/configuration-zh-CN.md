@@ -459,6 +459,7 @@ rag:
       query-transform-timeout-seconds: 30
       query-expander-variants: 2
       query-expander-include-original: true
+      max-retrieval-queries: 3
       allow-empty-context: false
     agent:
       enabled: true
@@ -489,6 +490,7 @@ rag:
 | `rag.chat.knowledge.query-transform-timeout-seconds` | `30` | Spring AI 历史压缩调用超时；可用 `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` 覆盖 |
 | `rag.chat.knowledge.query-expander-variants` | `2` | 启用 `spring-ai` 策略时由 LLM 生成的检索变体数量；可用 `RAG_CHAT_QUERY_EXPANDER_VARIANTS` 覆盖 |
 | `rag.chat.knowledge.query-expander-include-original` | `true` | 是否保留原始请求作为额外检索查询；可用 `RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL` 覆盖 |
+| `rag.chat.knowledge.max-retrieval-queries` | `3` | 每个 `KNOWLEDGE` attempt 最多计划的检索 query 数，范围 `1..5`；可用 `RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES` 覆盖 |
 | `rag.chat.knowledge.allow-empty-context` | `false` | false 时，零召回会向模型注入明确的“无证据”指令 |
 | `rag.chat.agent.enabled` | `true` | 是否启用 `AGENT` 模式 |
 | `rag.chat.agent.max-tool-rounds` | `3` | 单次 attempt 的 Spring AI 工具调用轮数上限 |
@@ -514,9 +516,19 @@ rag:
 - 正常的 `postgresql`、`local`、`prod` profile 使用 Spring AI 内置的
   `CompressionQueryTransformer` 处理带历史的追问，并使用内置
   `MultiQueryExpander` 生成检索查询。默认保留原始请求，再生成两个额外变体；
-  项目提供的提示词要求保留产品名、引号短语、标识符和其他特殊词，并至少生成一个
-  精确词检索变体。Spring AI 内置的 `ConcatenationDocumentJoiner` 负责合并和去重结果。
-  这样即使语义改写产生了近义描述，也不会丢失 `破皮沙发` 这样的精确词。
+  项目提供的 `BoundedMultiQueryExpander` 会在 advisor 执行前按
+  `max-retrieval-queries` 收敛 fan-out，trim 空白项并按精确文本去重，同时保留
+  Spring AI `Query` 的 history/context。项目提供的提示词要求保留产品名、引号短语、
+  标识符和其他特殊词，并至少生成一个精确词检索变体。Spring AI 内置的
+  `ConcatenationDocumentJoiner` 负责合并和去重结果。这样即使语义改写产生了近义描述，
+  也不会丢失 `破皮沙发` 这样的精确词；当配置的变体数超过预算时，也不会先为无效
+  fan-out 生成多余的扩展请求。
+- `query-expander-variants` 表示请求 LLM 生成的变体数，`max-retrieval-queries` 表示
+  原始 query 与有效变体合计的上限。`include-original=true,max-retrieval-queries=1`
+  时不调用多查询扩展模型，直接检索一次原始/转换后 query。KNOWLEDGE 使用该独立预算；
+  `AGENT` 仍使用 `rag.chat.agent.max-retrieval-calls`。响应的
+  `metadata.retrieval.queryExpansion` 与持久化 retrieval trace 的 attempt metadata
+  只记录有界整数/布尔摘要，不记录扩展 query 文本。
 - `AGENT` 使用 Spring AI Tool Calling；模型必须声明
   `capabilities.toolCalling=true`，Collection/document/credential 范围仍由服务端持有。
 - `PLAIN` 不检索，并拒绝检索专用的请求覆盖项。

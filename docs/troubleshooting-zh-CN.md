@@ -219,7 +219,10 @@ RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=0  # 恢复 provider top N
    必须重启服务。否则 `metadata.retrieval.effectiveQuery` 仍可能显示完整命令句。
 5. Spring AI 多查询扩展会额外调用一次 Chat 模型。默认
    `query-expander-include-original=true`，会把原始请求保留在检索集合中，同时用生成的
-   变体提高语义召回。`30s` 超时用于历史压缩；如果模型或网络更慢，可谨慎设置
+   变体提高语义召回。`rag.chat.knowledge.max-retrieval-queries` 默认把原始 query
+   和变体总数限制为 `3`；把 `query-expander-variants` 调大不会突破这个上限，重复或
+   空白变体会在检索前被丢弃。`include-original=true,max-retrieval-queries=1` 不调用
+   扩展模型。`30s` 超时用于历史压缩；如果模型或网络更慢，可谨慎设置
    `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` 提高上限，并检查后端日志中的 transformer
    回退警告。
 
@@ -241,7 +244,10 @@ curl -sS -H "X-API-Key: $RAG_ROOT_API_KEY" \
 ```
 
 启用 Spring AI 多查询策略后，`metadata.retrieval.effectiveQuery` 可能对应某一个扩展查询。
-应同时检查响应 sources 和后端日志，确认原始精确词与语义变体都参与了检索。打开 Pipeline
+应同时检查 `metadata.retrieval.queryExpansion` 的
+`plannedQueries`、`effectiveVariants`、`budgetLimited`、`duplicateVariantsRemoved`
+和可选的 `degraded` 字段；该摘要不包含 query 文本。再检查响应 sources 和后端日志，
+确认原始精确词与语义变体都参与了检索。打开 Pipeline
 INFO 日志后，应看到原始问题与扩展检索词：
 
 ```text

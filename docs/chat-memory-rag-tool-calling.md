@@ -111,6 +111,16 @@ retriever. The production path retains:
 This path is appropriate when retrieval must happen, because latency, source,
 and failure semantics are more predictable.
 
+Multi-query expansion is bounded. `rag.chat.knowledge.max-retrieval-queries`
+defaults to three planned retrieval queries per attempt: the original query plus
+two variants. `BoundedMultiQueryExpander` removes blank and exact duplicate
+variants before `RetrievalAugmentationAdvisor` starts parallel retrieval and
+preserves the authorized `Query.context`. With
+`include-original=true` and a cap of `1`, the transformed query is retrieved
+directly without an expansion-model call. `metadata.retrieval.queryExpansion`
+and retrieval-trace metadata contain only bounded summaries. This budget belongs
+to KNOWLEDGE and does not change the Agent tool budget.
+
 ### 4.2 AGENT: Spring AI Tool Calling
 
 `AGENT` uses Spring AI `ToolCallAdvisor` and server-owned tools:

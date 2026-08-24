@@ -38,5 +38,7 @@
 - 已被替代的 Token 用量账本规划：`2026-08-23_TOKEN_USAGE_LEDGER_*`
 - 加权 RRF 检索融合与有界 rerank 候选池：`2026-08-23_WEIGHTED_RRF_RETRIEVAL_*`、
   `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
+- KNOWLEDGE 多查询扩展预算与有界 fan-out：
+  `2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

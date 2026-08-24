@@ -1,16 +1,16 @@
 # KNOWLEDGE 多查询扩展预算感知进度
 
-> **状态**：规划编写完成，规划检查进行中；尚未开始生产代码实施
+> **状态**：规划检查与生产代码实施已完成，待 Git 交付与归档
 >
 > **开始日期**：2026-08-24
 >
-> **当前分支**：`docs/next-high-value-features-plan-20260824`
+> **当前分支**：`feat/knowledge-query-expansion-budget-20260824`
 >
 > **当前 worktree**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
 > **代码基线**：本地 `main` / `origin/main` @ `b8b61853`
 >
-> **规划文档**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> **规划文档**：[2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PLAN.md](2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PLAN.md)
 
 本文是跨会话恢复账本，不替代代码、测试或双语长青文档。每次取得关键进展时，先更新
 本文，再执行下一阶段。规划完成并开始实施后，继续在本文记录切片、验证证据和收敛计数；
@@ -25,11 +25,12 @@
 | 候选比较与本轮范围冻结 | 已完成 | 推荐只处理 KNOWLEDGE 多查询扩展的独立检索预算、预执行裁剪、精确去重和低基数诊断 |
 | 活动规划编写 | 已完成 | `NEXT_HIGH_VALUE_FEATURES_PLAN.md` 已创建；规划 SHA-256 待三轮检查完成后冻结 |
 | 规划连续检查 | `3/3` | 2026-08-24 已完成三轮固定范围只读检查；期间未修改规划正文 |
-| 规划门禁、commit、push | 进行中 | 文档/差异门禁已通过；待完成 commit、fetch/merge 与 push |
-| 生产代码实施 | 未开始 | 规划提交不包含生产代码 |
-| 实现基本集成硬门槛 | 未开始 | 仅在后续进入实施阶段后执行 |
-| 实现连续检查 | `0/3` | 仅在基本集成硬门槛全部通过后开始 |
-| 特性分支合并 main | 未开始 | 仅适用于后续代码实施交付 |
+| 规划门禁、commit、push | 已完成 | 规划提交 `7b2f24ed` 已推送；实施从该提交切出专用分支 |
+| 生产代码实施 | 已完成 | 配置、bounded expander、预算隔离、trace、测试、脚本和双语长青文档均已完成 |
+| 实现基本集成硬门槛 | 已完成 | 聚焦后端、PostgreSQL、Maven、服务启动、WebUI、Mock Playwright、文档和空白门禁全部通过 |
+| 真实 LLM 隔离验收 | 已完成 | `20260824-real-bounded-expansion`：18 passed / 0 failed / 0 skipped；真实 WebUI/provider E2E 与 provider smoke 均通过 |
+| 实现连续检查 | `3/3` | 三轮固定范围只读检查连续无实质问题且未修改实现代码 |
+| 特性分支合并 main | 未开始 | 先提交并推送特性分支，再同步 `origin/main`、合并复验并合入 `main` |
 
 ## 2. 已冻结的关键决策
 
@@ -87,7 +88,7 @@
 规划检查达到 `3/3` 后：
 
 1. 运行 `./scripts/verify-project-docs.sh`、`git diff --check`，记录结果和 plan SHA-256；
-2. 本地 commit，`git fetch origin` 后按规则 merge 上游，再 push 规划分支；
+2. 规划分支已完成提交并推送；实施分支从该规划提交继续，生产代码不回写规划分支；
 3. 进入实施时先重新检查 `git status`、`origin/main` 和当前分支；
 4. 按 plan §5 的 Slice A -> B -> C -> D 推进，每个关键切片前先更新本文；
 5. 代码改动后先跑 plan §6 的基本集成硬门槛，再开始实现 `3/3`；
@@ -102,10 +103,64 @@
 - 真实 provider 使用哪一个已存在模型：实施时读取 `.env` 的可用配置，不把模型名或 key
   写入规划、日志摘要或 Git；这不阻断接口、预算和 Mock 验收设计。
 
-## 7. 规划阶段验证证据
+## 7. 实施进度
+
+### 2026-08-24 进行中
+
+- 已从已推送的规划提交 `7b2f24ed` 切出
+  `feat/knowledge-query-expansion-budget-20260824`。
+- 切分支前工作区干净；未使用 `stash` 或破坏性回退。
+- 下一切片：增加 KNOWLEDGE 独立的 `max-retrieval-queries` 配置和预算计算，
+  然后实现 bounded expander 与 trace 摘要。
+- 已完成 Slice A-C：配置绑定/预算公式、`BoundedMultiQueryExpander`、KNOWLEDGE 与
+  AGENT budget 隔离、响应 trace 与持久化 attempt metadata 摘要。
+- focused 后端测试首次发现测试导入问题和边界断言问题，均已修复；当前 focused
+  测试通过 `20/20`。随后补充空 delegate 输出的 `degraded=true` 语义，需重跑 focused。
+- 已完成后端基本硬门槛：`mvn clean compile test-compile` 于
+  2026-08-24 12:03 +0800 通过，Reactor 全部模块成功。
+- Chat capability 基本验收脚本已完成：`2026-08-24 12:17 +0800`，
+  `17 passed / 0 failed / 1 skipped`。通过项包括后端聚焦测试、PostgreSQL 集成、
+  `mvn clean compile test-compile`、全量 Maven 测试、演示模块、隔离后端启动、
+  WebUI Vitest/TypeScript/生产构建、核心 Mock Playwright、禁悲观锁、项目文档和
+  `git diff --check`；唯一跳过项是默认关闭的真实 LLM 隔离 WebUI/provider E2E。
+- 全量 Maven 证据：API、Documents、Core、Starter 均 `BUILD SUCCESS`；Core 全量测试
+  `2934` 项通过、`7` 项跳过、无失败；全量 Reactor 测试于
+  `2026-08-24 12:15 +0800` 完成。
+- 真实 LLM 隔离验收已完成：运行
+  `CHAT_VERIFY_RUN_ID=20260824-real-bounded-expansion ./scripts/verify-chat-capability.sh --with-real-llm`，
+  使用隔离后端端口 `18083`、前端端口 `15175`，真实 WebUI/provider E2E 与 provider
+  smoke 均通过；整套结果为 `18 passed / 0 failed / 0 skipped`。
+- 实现连续检查已完成 `3/3`：第 1 轮检查配置预算公式、factory 裁剪和 expander
+  边界；第 2 轮检查 trace 并发、授权 context、AGENT 隔离、失败回退和 metadata 泄漏；
+  第 3 轮检查测试证据、启动脚本、双语长青文档、回滚和 Git 交付边界。三轮均未发现
+  影响正确性、成本安全、兼容性或数据一致性的实质问题，期间未修改实现代码。
+- 当前下一步：提交并推送特性分支；同步 `origin/main` 后按固定顺序完整复验，再合入
+  `main` 并推送，最后归档本轮 plan/progress。
+
+## 8. 规划阶段验证证据
 
 - 文档门禁：`./scripts/verify-project-docs.sh`，2026-08-24 11:36 +0800，10 项全部通过。
 - 空白检查：`git diff --check`，2026-08-24 11:36 +0800，通过。
 - 规划 SHA-256（冻结于三轮检查后）：
   `NEXT_HIGH_VALUE_FEATURES_PLAN.md` =
   `4f4af0e98eea975d60213ba9b8f3246c226d108004bd3289433f417bb5d5917c`。
+- Maven 编译门槛：`mvn clean compile test-compile`，2026-08-24 12:03 +0800，
+  Reactor 全部模块 `SUCCESS`。
+- WebUI 基础门槛：2026-08-24 12:06 +0800，`npm run typecheck`、`npm run test:run`
+  （29 个文件、218 个测试）和 `npm run build` 全部通过。
+- 核心 Mock Playwright：2026-08-24 12:07 +0800，`e2e/chat.spec.ts` 与
+  `e2e/streaming-upload.spec.ts` 共 14/14 通过；使用 DOM、网络 Mock 和自动化断言，
+  未使用截图作为验收证据。
+- 后端聚焦测试：2026-08-24 12:07 +0800，`mvn -pl spring-ai-rag-core -am` 聚焦矩阵
+  共 231/231 通过。
+- PostgreSQL 集成矩阵：2026-08-24 12:09 +0800，`NextHighValueFeaturesPostgresIntegrationTest`
+  10/10、`HybridRetrieverRrfPostgresIntegrationTest` 4/4 通过；Testcontainers
+  使用 `pgvector/pgvector:pg16`，空库 Flyway 迁移到 V48。
+- Chat capability 全量脚本：2026-08-24 12:17 +0800，
+  `CHAT_VERIFY_RUN_ID=20260824-verify-bounded-expansion ./scripts/verify-chat-capability.sh`，
+  17 项通过、0 项失败、1 项跳过；完整证据见
+  `.verification/chat-capability/20260824-verify-bounded-expansion/summary.md`。
+- Chat capability 全量真实验收：2026-08-24 12:26 +0800，
+  `CHAT_VERIFY_RUN_ID=20260824-real-bounded-expansion ./scripts/verify-chat-capability.sh --with-real-llm`，
+  18 项通过、0 项失败、0 项跳过；完整证据见
+  `.verification/chat-capability/20260824-real-bounded-expansion/summary.md`。

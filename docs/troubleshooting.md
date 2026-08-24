@@ -288,8 +288,13 @@ nothing relevant.
    show the entire command sentence.
 5. Spring AI multi-query expansion makes an additional Chat-model call. The
    default `query-expander-include-original=true` keeps the original request in
-   the retrieval set while generated variants improve semantic recall. The
-   `30s` timeout applies to history compression; if the model or network is
+   the retrieval set while generated variants improve semantic recall.
+   `rag.chat.knowledge.max-retrieval-queries` bounds the original plus variants
+   to three planned retrieval queries by default; increasing
+   `query-expander-variants` cannot exceed that cap, and blank or exact duplicate
+   variants are removed before retrieval. With
+   `include-original=true,max-retrieval-queries=1`, no expansion-model call is
+   made. The `30s` timeout applies to history compression; if the model or network is
    slower, raise `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` deliberately and
    check the transformer fallback warning in the backend log.
 
@@ -311,8 +316,11 @@ curl -sS -H "X-API-Key: $RAG_ROOT_API_KEY" \
 ```
 
 With the Spring AI multi-query strategy enabled, `metadata.retrieval.effectiveQuery`
-may reflect one of the expanded queries. Check the response sources and backend
-logs for the original exact term as well as the semantic variants. With Pipeline
+may reflect one of the expanded queries. Also inspect
+`metadata.retrieval.queryExpansion` fields `plannedQueries`,
+`effectiveVariants`, `budgetLimited`, `duplicateVariantsRemoved`, and optional
+`degraded`; this bounded summary contains no query text. Check the response
+sources and backend logs for the original exact term as well as the semantic variants. With Pipeline
 INFO logging, the original and expanded retrieval queries should appear:
 
 ```text

@@ -1,6 +1,6 @@
 # KNOWLEDGE 多查询扩展的预算感知与有界 fan-out 规划
 
-> **状态**：规划草案，尚未开始生产代码实施
+> **状态**：规划与实施已完成，待 Git 交付后归档
 >
 > **规划日期**：2026-08-24
 >
@@ -10,13 +10,13 @@
 >
 > **worktree**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> **配套进度**：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> **配套进度**：[2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md](2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md)
 >
-> **近距离上下文**：[项目上下文](../project-context-zh-CN.md)、
-> [架构说明](../architecture-zh-CN.md)、[配置参考](../configuration-zh-CN.md)、
-> [Chat 记忆、RAG 与工具调用](../chat-memory-rag-tool-calling-zh-CN.md)、
-> [质量默认值](../quality-defaults-zh-CN.md)、[测试指南](../testing-guide-zh-CN.md)、
-> [交付工作流](../delivery-workflow-zh-CN.md)
+> **近距离上下文**：[项目上下文](../../project-context-zh-CN.md)、
+> [架构说明](../../architecture-zh-CN.md)、[配置参考](../../configuration-zh-CN.md)、
+> [Chat 记忆、RAG 与工具调用](../../chat-memory-rag-tool-calling-zh-CN.md)、
+> [质量默认值](../../quality-defaults-zh-CN.md)、[测试指南](../../testing-guide-zh-CN.md)、
+> [交付工作流](../../delivery-workflow-zh-CN.md)
 
 本文是下一轮小范围功能的自包含实施入口。上一轮 rerank 后文档级证据去冗余已经合入
 `main`，其规划和进度已归档到
@@ -100,8 +100,8 @@ metadata。AGENT 的工具调用预算、Search API、Evaluation API、权限边
    post processor 和 citation augmenter。
 2. 只有 `query-transformer` 为 `spring-ai` 时才创建 query transformer 和 expander；
    `none` 不做多查询扩展。当前生产 profile 的具体配置见
-   [configuration](../configuration-zh-CN.md) 和
-   [Chat 链路说明](../chat-memory-rag-tool-calling-zh-CN.md)。
+   [configuration](../../configuration-zh-CN.md) 和
+   [Chat 链路说明](../../chat-memory-rag-tool-calling-zh-CN.md)。
 3. Spring AI `MultiQueryExpander` 的 `numberOfQueries` 表示模型必须返回的变体行数；
    `includeOriginal=true` 会在变体列表前插入原始查询；模型返回空值或行数不匹配时会
    回退为输入查询。
@@ -583,7 +583,7 @@ progress 记录时间、范围、问题、措施和结果。措辞、格式、�
 中断后按以下顺序恢复：
 
 1. 读取本文第 4、5、6、8、9 节和
-   [NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)；
+   [2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md](2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md)；
 2. 检查当前分支、worktree、`origin/main` 和工作区状态；
 3. 如果规划检查不是 `3/3`，继续固定范围审查，不改动无关文档；
 4. 如果已经 `3/3`，从 Slice A 开始，完成每个 Slice 后先写 progress；

@@ -592,6 +592,30 @@ sources, history source restoration, selected Collections, mobile overflow,
 partial-SSE replay without duplicate assistant bubbles, 409 input retention,
 and stop without a retry request.
 
+The `KNOWLEDGE` query-expansion gate also covers
+`BoundedMultiQueryExpander` and the real PostgreSQL retrieval path. Focused tests
+assert the default three-query plan, no expansion-model call when
+`max-retrieval-queries=1`, pre-execution bounding, blank/exact-duplicate
+removal, preservation of authorized query context/history, separate KNOWLEDGE
+and AGENT budgets, and one shared bounded summary in response and persisted
+attempt metadata. The PostgreSQL matrix's
+`HybridRetrieverRrfPostgresIntegrationTest` executes expanded queries through
+the real `ProjectDocumentRetriever` and `HybridRetrieverService` and verifies
+that a duplicate variant does not cause a second embedding/SQL retrieval.
+Run:
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+The browser phase still uses only DOM, accessibility state, network
+request/response, and JSON assertions; screenshots are not correctness
+evidence. `metadata.retrieval.queryExpansion` must not contain original query
+text, model output, or exception stacks. If Docker or PostgreSQL is unavailable,
+retain the `SKIP` evidence; focused Mock tests do not prove the database path.
+
 For rerank document-level evidence diversification, run:
 
 ```bash

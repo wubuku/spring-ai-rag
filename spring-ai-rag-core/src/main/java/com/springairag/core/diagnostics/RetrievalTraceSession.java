@@ -179,6 +179,18 @@ public final class RetrievalTraceSession {
         }
     }
 
+    public void recordQueryExpansion(
+            String attemptKey,
+            Map<String, Object> summary) {
+        if (summary == null) {
+            return;
+        }
+        AttemptRecord attempt = findAttempt(attemptKey);
+        if (attempt != null) {
+            attempt.queryExpansion = Map.copyOf(summary);
+        }
+    }
+
     public void setCitationValidation(Map<String, Object> validation) {
         citationValidation.set(validation == null ? null : Map.copyOf(validation));
     }
@@ -272,6 +284,7 @@ public final class RetrievalTraceSession {
         private volatile String modelRef;
         private volatile boolean budgetExhausted;
         private volatile int lastBudgetQueryChars;
+        private volatile Map<String, Object> queryExpansion;
         private final List<RetrievalOutcome> retrievals = new CopyOnWriteArrayList<>();
         private final List<Map<String, Object>> toolCalls = new CopyOnWriteArrayList<>();
 
@@ -300,6 +313,9 @@ public final class RetrievalTraceSession {
             }
             map.put("retrievals", retrievalMaps);
             map.put("toolCalls", List.copyOf(toolCalls));
+            if (queryExpansion != null) {
+                map.put("queryExpansion", queryExpansion);
+            }
             if (budgetExhausted) {
                 map.put("budgetExhausted", true);
                 map.put("lastBudgetQueryChars", lastBudgetQueryChars);

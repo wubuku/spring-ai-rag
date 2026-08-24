@@ -188,6 +188,89 @@ class ModeAwareChatClientFactoryTest {
         assertTrue(retrievedQueries.contains("破皮沙发"));
         assertTrue(retrievedQueries.contains("皮沙发破损"));
         assertEquals(2, modelCalls.get());
+        assertEquals(
+                Map.of(
+                        "enabled", true,
+                        "configuredVariants", 2,
+                        "effectiveVariants", 2,
+                        "includeOriginal", true,
+                        "maxRetrievalQueries", 3,
+                        "plannedQueries", 3,
+                        "budgetLimited", false,
+                        "duplicateVariantsRemoved", 0),
+                attempt.retrievalContext().trace().queryExpansion());
+    }
+
+    @Test
+    void knowledgeBudgetOneSkipsExpansionModelAndRetrievesOriginalOnce() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setQueryTransformer("spring-ai");
+        properties.getChat().getKnowledge().setMaxRetrievalQueries(1);
+        ChatModel model = model("answer");
+        ProjectDocumentRetriever retriever = mock(ProjectDocumentRetriever.class);
+        when(retriever.retrieve(any(Query.class))).thenReturn(List.of());
+        ModeAwareChatClientFactory configuredFactory =
+                new ModeAwareChatClientFactory(
+                        retriever,
+                        rerankPostProcessor,
+                        new CitationQueryAugmenter(properties),
+                        properties,
+                        List.of(),
+                        mock(ToolCallingManager.class));
+
+        ChatCommand command = command(ChatMode.KNOWLEDGE);
+        ModeAwareChatClientFactory.Attempt attempt = configuredFactory.create(
+                command, candidate("knowledge", model), List.of());
+        attempt.client().prompt()
+                .user(command.message())
+                .advisors(advisor -> advisor.param(
+                        ProjectDocumentRetriever.CONTEXT_KEY,
+                        attempt.retrievalContext()))
+                .call()
+                .chatClientResponse();
+
+        verify(retriever).retrieve(any(Query.class));
+        verify(model).call(any(Prompt.class));
+        assertEquals(0, attempt.retrievalContext().trace()
+                .queryExpansion().get("effectiveVariants"));
+    }
+
+    @Test
+    void knowledgeAndAgentUseIndependentRetrievalBudgets() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setMaxRetrievalQueries(1);
+        properties.getChat().getAgent().setMaxRetrievalCalls(2);
+        ModeAwareChatClientFactory configuredFactory =
+                new ModeAwareChatClientFactory(
+                        documentRetriever,
+                        rerankPostProcessor,
+                        new CitationQueryAugmenter(properties),
+                        properties,
+                        List.of(),
+                        mock(ToolCallingManager.class));
+
+        ModeAwareChatClientFactory.Attempt knowledge = configuredFactory.create(
+                command(ChatMode.KNOWLEDGE),
+                candidate("knowledge", model("answer")),
+                List.of());
+        ChatModel agentModel = model("answer");
+        when(agentModel.getDefaultOptions()).thenReturn(
+                ToolCallingChatOptions.builder().model("agent-model").build());
+        ModeAwareChatClientFactory.Attempt agent = configuredFactory.create(
+                command(ChatMode.AGENT),
+                new ChatModelRouter.ChatModelCandidate(
+                        "agent",
+                        agentModel,
+                        new MultiModelProperties.ModelCapabilities(true, true)),
+                List.of());
+
+        assertTrue(knowledge.retrievalContext().trace().tryBeginRetrieval("one"));
+        assertTrue(!knowledge.retrievalContext().trace().tryBeginRetrieval("two"));
+        assertTrue(agent.retrievalContext().trace().tryBeginRetrieval("one"));
+        assertTrue(agent.retrievalContext().trace().tryBeginRetrieval("two"));
+        assertEquals(
+                null,
+                agent.retrievalContext().trace().queryExpansion());
     }
 
     @Test
