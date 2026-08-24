@@ -56,9 +56,11 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
 - KNOWLEDGE multi-query expansion budget and bounded fan-out:
   `2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_*`
-- KNOWLEDGE multi-query evidence joining and heuristic CJK lexical reranking:
+- KNOWLEDGE multi-query evidence joining, heuristic CJK lexical reranking, and
+  title-aware relevance:
   `2026-08-24_KNOWLEDGE_EVIDENCE_JOINER_*`,
-  `2026-08-24_HEURISTIC_CJK_RERANK_*`
+  `2026-08-24_HEURISTIC_CJK_RERANK_*`,
+  `2026-08-24_TITLE_AWARE_HEURISTIC_RERANK_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

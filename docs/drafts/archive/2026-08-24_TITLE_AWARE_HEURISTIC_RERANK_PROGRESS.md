@@ -1,6 +1,6 @@
 # heuristic rerank 的标题感知相关性实施进度
 
-> 状态：规划连续检查 `3/3` 完成，待一次性测试与实施
+> 状态：已实施、验收、推送并合入 `main@6a1bbe8e`，历史归档
 >
 > 开始日期：2026-08-24
 >
@@ -10,7 +10,7 @@
 >
 > 代码基线：`6d3c1d17`（本地 `main` / `origin/main`）
 >
-> 实施规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 实施规划：[2026-08-24_TITLE_AWARE_HEURISTIC_RERANK_PLAN.md](2026-08-24_TITLE_AWARE_HEURISTIC_RERANK_PLAN.md)
 
 本文是跨会话恢复账本。每次取得关键进展时先更新本文，再进入下一阶段；不记录密钥、完整
 业务正文、真实模型输出或其他本地敏感状态。
@@ -30,7 +30,7 @@
 | 长青文档 | 已完成 | architecture / quality-defaults / testing-guide 中英文已同步并通过项目文档门禁 `10/10` |
 | 基本硬门槛 | 已完成 | 专项 runner `22/22` 零失败零跳过；全量 Maven `3615` 项、零失败零错误 |
 | 实现连续检查 | `3/3` | 基本硬门槛后完成三轮互不重叠、固定范围、只读检查，期间无修改 |
-| Git 与 main 交付 | 未开始 | 特性分支 push、必要时 merge `origin/main` 复验、合回并推送 main |
+| Git 与 main 交付 | 已完成 | 特性提交 `42c679b3` 已推送；远端 main 未偏离基线；合并提交 `6a1bbe8e` 已推送且本地/远端一致 |
 
 ## 2. 已冻结决策
 
@@ -196,5 +196,15 @@ API key。
 生产实现 SHA-256：
 `b72b1f21195e6ce759dcea8595ec7c6361f8cf970c5fbd85cc9e96170fbe2e2e`。
 
-实现检查完成后未修改生产代码或测试；下一步提交并推送特性分支，检查 `origin/main` 是否
-变化，再按交付工作流处理 main 合并。
+实现检查完成后未修改生产代码或测试。
+
+### 2026-08-24 Git 与 main 交付
+
+- 最终文档门禁 `10/10` 和 `git diff --check` 通过。
+- 特性分支提交为 `42c679b3`，已推送
+  `origin/feat/title-aware-heuristic-rerank-20260824`。
+- push 前刷新远端后确认 `origin/main` 仍为基线 `6d3c1d17`，因此没有新的组合需要复验。
+- 特性分支以非快进合并提交 `6a1bbe8e` 合入 `main` 并推送；本地 `main` 与
+  `origin/main` 一致。
+- 已落地的稳定行为进入 `architecture*`、`quality-defaults*` 和 `testing-guide*`；
+  本 plan/progress 仅保留为历史追溯。
