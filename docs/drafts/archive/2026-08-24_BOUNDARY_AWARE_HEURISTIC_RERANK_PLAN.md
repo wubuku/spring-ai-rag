@@ -1,6 +1,6 @@
 # heuristic rerank 的 Latin/数字词边界感知实施规划
 
-> 状态：规划连续检查 `3/3` 完成，待一次性测试与实施
+> 状态：已实施、验收并合入 `main@51e2d00c`，历史归档
 >
 > 规划日期：2026-08-24
 >
@@ -10,13 +10,13 @@
 >
 > worktree：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> 配套进度：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> 配套进度：[2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_PROGRESS.md](2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_PROGRESS.md)
 >
-> 近距离上下文：[项目上下文](../project-context-zh-CN.md)、
-> [架构说明](../architecture-zh-CN.md)、
-> [生产质量默认值](../quality-defaults-zh-CN.md)、
-> [测试指南](../testing-guide-zh-CN.md)和
-> [交付工作流](../delivery-workflow-zh-CN.md)
+> 近距离上下文：[项目上下文](../../project-context-zh-CN.md)、
+> [架构说明](../../architecture-zh-CN.md)、
+> [生产质量默认值](../../quality-defaults-zh-CN.md)、
+> [测试指南](../../testing-guide-zh-CN.md)和
+> [交付工作流](../../delivery-workflow-zh-CN.md)
 
 本文是本轮小范围实施的自包含入口。上一轮标题感知 heuristic rerank 已经合入并推送
 `main@6a1bbe8e`，归档收尾为 `main@cb222c21`；历史 plan/progress 位于

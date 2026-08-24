@@ -38,10 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The active [Latin/digit boundary-aware heuristic-rerank plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-is tracked by its accompanying
-[progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md). These working
-documents are intentionally maintained in Chinese only.
+There is currently no active plan/progress pair. A new planning round will be
+listed here when it starts; until then, use the code, migrations, and bilingual
+evergreen documentation as the source of truth.
 
 Completed plan/progress records remain available in the
 [historical archive](archive/README.md).

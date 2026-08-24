@@ -1,6 +1,6 @@
 # heuristic rerank 的 Latin/数字词边界感知实施进度
 
-> 状态：基本验收硬门槛与实现连续检查 `3/3` 已完成，正在 Git 交付
+> 状态：已实施、验收、推送并合入 `main@51e2d00c`，历史归档
 >
 > 开始日期：2026-08-24
 >
@@ -10,7 +10,7 @@
 >
 > 代码基线：`cb222c21`（本地 `main` / `origin/main`）
 >
-> 实施规划：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> 实施规划：[2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_PLAN.md](2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_PLAN.md)
 
 本文是跨会话恢复账本。每次取得关键进展时先更新本文，再进入下一阶段；不记录密钥、完整
 业务正文、真实模型输出或其他本地敏感状态。
@@ -30,7 +30,7 @@
 | 长青文档 | 已完成 | architecture / quality-defaults / testing-guide 中英文已同步边界感知行为与测试矩阵 |
 | 基本硬门槛 | 已完成 | 专项 runner `22/22` 全通过且零 skip；独立全量 `mvn test` 构建成功，共 `3622` 项测试通过、`7` 项按环境条件跳过 |
 | 实现连续检查 | `3/3` | 连续三轮固定范围只读检查无修改通过 |
-| Git 与 main 交付 | 进行中 | 特性分支 push、必要时 merge origin/main 复验、合回 main、归档 |
+| Git 与 main 交付 | 已完成 | 特性提交 `72d8d13d` 已推送；远端 main 未变化，合并提交为 `51e2d00c`；本文件与规划随后归档 |
 
 ## 2. 已冻结决策
 
@@ -253,4 +253,4 @@ PostgreSQL 类已在真实 PostgreSQL 16 + pgvector 中单独以 `7/7`、零跳�
 6. 只修改 `HeuristicRerankProvider` 完成边界 occurrence；
 7. 每个关键切片完成后先更新本文；
 8. 基本硬门槛和实现连续检查 `3/3` 已完成；
-9. 继续完成特性分支提交/push、合回 `main`、归档和下一轮规划。
+9. Git 交付与归档已完成；后续工作以新的活动规划为准。
