@@ -33,6 +33,8 @@ public class RetrievalTraceCollector {
     private final AtomicInteger toolRounds = new AtomicInteger();
     private final AtomicReference<RetrievalOutcome> latestOutcome =
             new AtomicReference<>();
+    private final AtomicReference<Map<String, Object>> queryExpansion =
+            new AtomicReference<>();
     private final int maxRetrievalCalls;
     private final int maxToolRounds;
     private final int maxUniqueSources;
@@ -95,6 +97,52 @@ public class RetrievalTraceCollector {
 
     public boolean lastBudgetExhausted() {
         return lastBudgetExhausted;
+    }
+
+    public void configureQueryExpansion(
+            int configuredVariants,
+            int effectiveVariants,
+            boolean includeOriginal,
+            int maxRetrievalQueries,
+            int plannedQueries,
+            boolean budgetLimited) {
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("enabled", true);
+        summary.put("configuredVariants", configuredVariants);
+        summary.put("effectiveVariants", effectiveVariants);
+        summary.put("includeOriginal", includeOriginal);
+        summary.put("maxRetrievalQueries", maxRetrievalQueries);
+        summary.put("plannedQueries", plannedQueries);
+        summary.put("budgetLimited", budgetLimited);
+        summary.put("duplicateVariantsRemoved", 0);
+        queryExpansion.set(Map.copyOf(summary));
+        if (parentSession != null) {
+            parentSession.recordQueryExpansion(attemptKey, queryExpansion.get());
+        }
+    }
+
+    public void recordQueryExpansionOutcome(
+            int duplicateVariantsRemoved,
+            boolean degraded) {
+        Map<String, Object> current = queryExpansion.get();
+        if (current == null) {
+            return;
+        }
+        Map<String, Object> summary = new LinkedHashMap<>(current);
+        summary.put(
+                "duplicateVariantsRemoved",
+                Math.max(0, duplicateVariantsRemoved));
+        if (degraded) {
+            summary.put("degraded", true);
+        }
+        queryExpansion.set(Map.copyOf(summary));
+        if (parentSession != null) {
+            parentSession.recordQueryExpansion(attemptKey, queryExpansion.get());
+        }
+    }
+
+    public Map<String, Object> queryExpansion() {
+        return queryExpansion.get();
     }
 
     public void recordOutcome(RetrievalOutcome outcome) {
@@ -332,6 +380,9 @@ public class RetrievalTraceCollector {
         result.put("retrievalCalls", retrievalCalls());
         result.put("toolRounds", toolRounds());
         result.put("sourceCount", sources.size());
+        if (queryExpansion.get() != null) {
+            result.put("queryExpansion", queryExpansion.get());
+        }
         return result;
     }
 

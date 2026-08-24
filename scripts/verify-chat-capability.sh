@@ -179,7 +179,7 @@ docker_environment() {
 
 chat_focused_tests() {
   mvn -pl spring-ai-rag-core -am \
-    -Dtest='ChatCommandMapperTest,ChatExecutionServiceTest,ModeAwareChatClientFactoryTest,KnowledgeSearchToolTest,RagChatServiceTest,RagChatHistoryRepositoryTest,RagChatControllerTest,SseStreamE2ETest,ChatExportServiceTest,RagControllerIntegrationTest' \
+    -Dtest='ChatCommandMapperTest,ChatExecutionServiceTest,ModeAwareChatClientFactoryTest,BoundedMultiQueryExpanderTest,RagChatPropertiesValidationTest,RetrievalTraceCollectorTest,KnowledgeSearchToolTest,RagChatServiceTest,RagChatHistoryRepositoryTest,RagChatControllerTest,SseStreamE2ETest,ChatExportServiceTest,RagControllerIntegrationTest' \
     -Dsurefire.failIfNoSpecifiedTests=false \
     test
 }
@@ -188,6 +188,7 @@ chat_postgres_tests() {
   local chat_rc=0
   local next_high_value_rc=0
   local idempotency_rc=0
+  local bounded_expansion_rc=0
 
   DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
     TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
@@ -219,9 +220,19 @@ chat_postgres_tests() {
       -Dsurefire.failIfNoSpecifiedTests=false \
       test || idempotency_rc=$?
 
+  DOCKER_API_VERSION="${DOCKER_API_VERSION:-${TESTCONTAINERS_API_VERSION}}" \
+    TESTCONTAINERS_RYUK_DISABLED="$TESTCONTAINERS_RYUK_DISABLED" \
+    mvn -pl spring-ai-rag-core -am \
+      "-Dapi.version=${TESTCONTAINERS_API_VERSION}" \
+      -Dhybrid-rrf.it.enabled=true \
+      "-Dtestcontainers.pg.image=${TESTCONTAINERS_PG_IMAGE}" \
+      -Dtest=HybridRetrieverRrfPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false \
+      test || bounded_expansion_rc=$?
+
   if [[ "$chat_rc" -ne 0 || "$next_high_value_rc" -ne 0
-        || "$idempotency_rc" -ne 0 ]]; then
-    echo "PostgreSQL integration matrix failed (chat=${chat_rc}, next-high-value=${next_high_value_rc}, idempotency=${idempotency_rc})." >&2
+        || "$idempotency_rc" -ne 0 || "$bounded_expansion_rc" -ne 0 ]]; then
+    echo "PostgreSQL integration matrix failed (chat=${chat_rc}, next-high-value=${next_high_value_rc}, idempotency=${idempotency_rc}, bounded-expansion=${bounded_expansion_rc})." >&2
     return 1
   fi
 }

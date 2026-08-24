@@ -214,6 +214,7 @@ public class RagChatProperties {
         private int queryTransformTimeoutSeconds = 30;
         private int queryExpanderVariants = 2;
         private boolean queryExpanderIncludeOriginal = true;
+        private int maxRetrievalQueries = 3;
         private boolean allowEmptyContext = false;
 
         public String getQueryTransformer() {
@@ -246,6 +247,30 @@ public class RagChatProperties {
 
         public void setQueryExpanderIncludeOriginal(boolean queryExpanderIncludeOriginal) {
             this.queryExpanderIncludeOriginal = queryExpanderIncludeOriginal;
+        }
+
+        public int getMaxRetrievalQueries() {
+            return maxRetrievalQueries;
+        }
+
+        public void setMaxRetrievalQueries(int maxRetrievalQueries) {
+            this.maxRetrievalQueries = Math.max(1, Math.min(5, maxRetrievalQueries));
+        }
+
+        public int getEffectiveQueryExpanderVariants() {
+            int reservedOriginal = queryExpanderIncludeOriginal ? 1 : 0;
+            return Math.min(
+                    queryExpanderVariants,
+                    Math.max(0, maxRetrievalQueries - reservedOriginal));
+        }
+
+        public int getPlannedRetrievalQueries() {
+            return getEffectiveQueryExpanderVariants()
+                    + (queryExpanderIncludeOriginal ? 1 : 0);
+        }
+
+        public boolean isQueryExpansionBudgetLimited() {
+            return getEffectiveQueryExpanderVariants() < queryExpanderVariants;
         }
 
         public boolean isAllowEmptyContext() {

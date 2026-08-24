@@ -2,8 +2,15 @@ package com.springairag.core.integration;
 
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
+import com.springairag.core.chat.AuthorizedRetrievalContext;
+import com.springairag.core.chat.ChatPrincipal;
+import com.springairag.core.chat.RetrievalOptions;
+import com.springairag.core.chat.RetrievalTraceCollector;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.RagProperties;
+import com.springairag.core.rag.BoundedMultiQueryExpander;
+import com.springairag.core.rag.ProjectDocumentRetriever;
+import com.springairag.core.rag.RetrievalDocumentMapper;
 import com.springairag.core.retrieval.HybridRetrieverService;
 import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalFilters;
@@ -20,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.rag.Query;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
@@ -28,6 +36,7 @@ import org.testcontainers.utility.DockerImageName;
 import javax.sql.DataSource;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -234,6 +243,70 @@ class HybridRetrieverRrfPostgresIntegrationTest {
                 directResults.stream()
                         .map(RetrievalResult::getDocumentId)
                         .toList());
+    }
+
+    @Test
+    void boundedKnowledgeExpansionExecutesOnlyUniqueQueriesThroughPostgresRetriever() {
+        EmbeddingProfile profile = insertProfile();
+        long documentId = insertDocument(
+                "bounded-expansion",
+                "bounded expansion content",
+                "j".repeat(64));
+        insertVector(profile.id(), documentId, 0, 1.0f);
+        insertEmbeddingState(profile.id(), documentId, "j".repeat(64));
+
+        AtomicInteger embeddingCalls = new AtomicInteger();
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(anyString())).thenAnswer(invocation -> {
+            embeddingCalls.incrementAndGet();
+            return vector(1024, 1.0f);
+        });
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        HybridRetrieverService service = new HybridRetrieverService(
+                embeddingModel,
+                () -> profile,
+                jdbc,
+                properties,
+                null,
+                Runnable::run);
+        ProjectDocumentRetriever retriever = new ProjectDocumentRetriever(
+                service,
+                new RetrievalDocumentMapper());
+
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(3, 3, 10);
+        AuthorizedRetrievalContext context = new AuthorizedRetrievalContext(
+                RetrievalScope.unscoped(),
+                new RetrievalOptions(5, 0.0, false, false, 0.5, 0.5),
+                trace,
+                "bounded-postgres",
+                ChatPrincipal.local());
+        Query input = Query.builder()
+                .text("original query")
+                .context(Map.of(ProjectDocumentRetriever.CONTEXT_KEY, context))
+                .build();
+        trace.configureQueryExpansion(5, 2, true, 3, 3, true);
+        BoundedMultiQueryExpander expander = new BoundedMultiQueryExpander(
+                query -> List.of(
+                        Query.builder().text("original query").build(),
+                        Query.builder().text("variant one").build(),
+                        Query.builder().text("variant one").build(),
+                        Query.builder().text("variant two").build()),
+                3,
+                true);
+
+        List<Query> expanded = expander.expand(input);
+        List<List<org.springframework.ai.document.Document>> retrieved =
+                expanded.stream().map(retriever::retrieve).toList();
+
+        assertEquals(
+                List.of("original query", "variant one", "variant two"),
+                expanded.stream().map(Query::text).toList());
+        assertEquals(3, embeddingCalls.get());
+        assertEquals(3, trace.retrievalCalls());
+        assertTrue(retrieved.stream().allMatch(results -> !results.isEmpty()));
+        assertEquals(1, trace.queryExpansion().get("duplicateVariantsRemoved"));
+        assertEquals(3, trace.summary().get("retrievalCalls"));
     }
 
     @Test

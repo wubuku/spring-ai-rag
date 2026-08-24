@@ -7,9 +7,11 @@ import com.springairag.core.retrieval.RetrievalOutcome;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RetrievalTraceCollectorTest {
 
@@ -61,6 +63,27 @@ class RetrievalTraceCollectorTest {
         assertEquals(2, trace.cachedResults("query", 4).size());
         assertNull(trace.cachedResults("query", 5));
         assertEquals(4, trace.cachedCoverageLimit("query"));
+    }
+
+    @Test
+    void queryExpansionSummaryIsSharedWithPersistedAttemptMetadata() {
+        RetrievalTraceSession session = new RetrievalTraceSession(
+                ChatPrincipal.local(), "chat", "session-expansion");
+        RetrievalTraceCollector trace = session.newAttemptCollector(
+                "attempt-1", 3, 3, 10);
+        trace.configureQueryExpansion(5, 2, true, 3, 3, true);
+        trace.recordQueryExpansionOutcome(1, false);
+
+        assertEquals(
+                trace.queryExpansion(),
+                trace.summary().get("queryExpansion"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> attempts =
+                (List<Map<String, Object>>) session.toMetadata(false).get("attempts");
+        assertEquals(
+                trace.queryExpansion(),
+                attempts.getFirst().get("queryExpansion"));
+        assertTrue(!attempts.getFirst().toString().contains("原始问题"));
     }
 
     private RetrievalResult result(String id) {

@@ -494,6 +494,7 @@ rag:
       query-transform-timeout-seconds: 30
       query-expander-variants: 2
       query-expander-include-original: true
+      max-retrieval-queries: 3
       allow-empty-context: false
     agent:
       enabled: true
@@ -524,6 +525,7 @@ rag:
 | `rag.chat.knowledge.query-transform-timeout-seconds` | `30` | Timeout for the Spring AI history compression call; override with `RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS` |
 | `rag.chat.knowledge.query-expander-variants` | `2` | Number of LLM-generated search variants when the `spring-ai` strategy is enabled; override with `RAG_CHAT_QUERY_EXPANDER_VARIANTS` |
 | `rag.chat.knowledge.query-expander-include-original` | `true` | Keep the original request as an additional retrieval query; override with `RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL` |
+| `rag.chat.knowledge.max-retrieval-queries` | `3` | Maximum planned retrieval queries per `KNOWLEDGE` attempt, bounded to `1..5`; override with `RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES` |
 | `rag.chat.knowledge.allow-empty-context` | `false` | When false, an empty retrieval result produces an explicit no-evidence instruction |
 | `rag.chat.agent.enabled` | `true` | Enable `AGENT` mode |
 | `rag.chat.agent.max-tool-rounds` | `3` | Maximum Spring AI tool-call rounds per attempt |
@@ -549,13 +551,25 @@ Mode behavior:
   retriever and optional reranker.
 - In the normal `postgresql`, `local`, and `prod` profiles, the project uses
   Spring AI's built-in `CompressionQueryTransformer` for follow-up history and
-  built-in `MultiQueryExpander` for the retrieval query. The expander keeps the
-  original request and generates two additional variants by default. Its
-  project-supplied prompt requires exact lexical variants to preserve product
-  names, quoted phrases, identifiers, and other unusual terms. Spring AI's
-  built-in `ConcatenationDocumentJoiner` merges and de-duplicates all results.
-  This prevents a semantic rewrite from discarding an exact term such as
-  `破皮沙发`.
+  built-in `MultiQueryExpander` for the retrieval query. The project-owned
+  `BoundedMultiQueryExpander` bounds fan-out before the advisor starts retrieval,
+  trims blank variants, removes exact duplicate text, and preserves each Spring AI
+  `Query` history/context. The expander keeps the original request and generates
+  two additional variants by default. Its project-supplied prompt requires exact
+  lexical variants to preserve product names, quoted phrases, identifiers, and
+  other unusual terms. Spring AI's built-in `ConcatenationDocumentJoiner` merges
+  and de-duplicates all results. This prevents a semantic rewrite from discarding
+  an exact term such as `破皮沙发` and prevents an over-configured variant count
+  from creating retrieval work beyond the server budget.
+- `query-expander-variants` is the requested number of LLM-generated variants;
+  `max-retrieval-queries` is the total cap for the original query plus effective
+  variants. With `query-expander-include-original=true` and
+  `max-retrieval-queries=1`, no multi-query expansion model call is made and the
+  original/transformed query is retrieved once. `KNOWLEDGE` uses this independent
+  budget; `AGENT` continues to use `rag.chat.agent.max-retrieval-calls`. The
+  response `metadata.retrieval.queryExpansion` and persisted retrieval-trace
+  attempt metadata contain only bounded integer/boolean summaries, never expanded
+  query text.
 - `AGENT` uses Spring AI Tool Calling. A model must declare
   `capabilities.toolCalling=true`; Collection/document/credential scope remains
   server-owned.

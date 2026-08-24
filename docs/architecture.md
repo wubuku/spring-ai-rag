@@ -130,6 +130,16 @@ Collection/API-key ACL,
 document type, and document ID scope therefore remain shared by direct Search,
 KNOWLEDGE, and the AGENT tool.
 
+For the `spring-ai` `KNOWLEDGE` query strategy, the project-owned
+`BoundedMultiQueryExpander` sits between Spring AI query expansion and retrieval.
+It bounds the total original-plus-variant fan-out with the server-side
+`max-retrieval-queries` setting, removes exact duplicate text, and preserves each
+`Query` history/context. The trace records planned query count, whether the
+budget limited the configured variants, duplicate count, and degraded fallback
+without storing query text. The KNOWLEDGE query budget is separate from the AGENT
+tool-retrieval budget, so raising an Agent tool limit cannot silently multiply
+fixed RAG database or embedding calls.
+
 For the distinction between message windows, query compression, and durable
 summaries, plus tool-loop budgets and non-document tool extension boundaries,
 see [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md).

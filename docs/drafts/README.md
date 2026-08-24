@@ -38,5 +38,10 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There are no active plans. Completed plan/progress records remain available in
-the [historical archive](archive/README.md).
+There are currently no plans being prepared or implemented. The recently
+completed KNOWLEDGE multi-query expansion budget and bounded fan-out plan is
+available in the [historical archive](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PLAN.md)
+with its [progress ledger](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md).
+
+Completed plan/progress records remain available in the
+[historical archive](archive/README.md).

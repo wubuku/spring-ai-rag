@@ -54,6 +54,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Weighted RRF retrieval fusion and bounded rerank candidate pools:
   `2026-08-23_WEIGHTED_RRF_RETRIEVAL_*`,
   `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
+- KNOWLEDGE multi-query expansion budget and bounded fan-out:
+  `2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

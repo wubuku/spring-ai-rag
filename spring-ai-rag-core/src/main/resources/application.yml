@@ -388,6 +388,7 @@ rag:
       query-transform-timeout-seconds: ${RAG_CHAT_QUERY_TRANSFORM_TIMEOUT_SECONDS:30}
       query-expander-variants: ${RAG_CHAT_QUERY_EXPANDER_VARIANTS:2}
       query-expander-include-original: ${RAG_CHAT_QUERY_EXPANDER_INCLUDE_ORIGINAL:true}
+      max-retrieval-queries: ${RAG_CHAT_KNOWLEDGE_MAX_RETRIEVAL_QUERIES:3}
       allow-empty-context: false
     agent:
       enabled: true

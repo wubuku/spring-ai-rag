@@ -547,6 +547,24 @@ Collection、移动端横向溢出、一次 retry 内复用 `Idempotency-Key`、
 turn identity、部分 SSE replay 不重复 assistant bubble、409 输入保留以及 stop 不触发
 retry。
 
+本轮 `KNOWLEDGE` 查询扩展的门禁还必须覆盖 `BoundedMultiQueryExpander` 和真实
+PostgreSQL 检索链路。focused 测试断言默认三路、`max-retrieval-queries=1` 不调用扩展
+模型、超配置变体在执行前收敛、空白/精确重复去重、授权 context/history 保留、KNOWLEDGE
+与 AGENT budget 隔离，以及响应 metadata 与持久化 attempt metadata 使用同一有界摘要。
+PostgreSQL 矩阵中的 `HybridRetrieverRrfPostgresIntegrationTest` 会通过真实
+`ProjectDocumentRetriever` 和 `HybridRetrieverService` 执行扩展后的 query，并验证重复
+变体不会产生第二次 embedding/SQL 检索。运行：
+
+```bash
+TESTCONTAINERS_API_VERSION=1.40 \
+TESTCONTAINERS_RYUK_DISABLED=true \
+./scripts/verify-chat-capability.sh
+```
+
+该脚本的浏览器阶段仍只使用 DOM、可访问状态、网络请求/响应和 JSON 断言，不使用截图；
+`metadata.retrieval.queryExpansion` 不应出现原始 query、模型输出或异常堆栈。若 PostgreSQL
+或 Docker 不可用，必须保留 `SKIP` 证据，不能把 focused Mock 测试当作真实数据库通过。
+
 PostgreSQL 门禁默认执行。如果 Docker 不可用，或 daemon 拒绝当前协商的 API 版本，脚本会
 把 Docker 和 PostgreSQL 门禁都记录为 `SKIP`；`PASS_WITH_SKIPS` 不等于完整发布门禁。本项目
 曾遇到 Testcontainers 协商 Docker API `1.32`，而本机 daemon 要求最低 `1.40`。可使用：

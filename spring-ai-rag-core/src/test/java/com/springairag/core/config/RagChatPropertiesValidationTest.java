@@ -3,6 +3,7 @@ package com.springairag.core.config;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class RagChatPropertiesValidationTest {
@@ -10,6 +11,44 @@ class RagChatPropertiesValidationTest {
     @Test
     void defaultsAreValid() {
         assertDoesNotThrow(() -> new RagChatProperties().validate());
+    }
+
+    @Test
+    void knowledgeQueryBudgetKeepsDefaultAndClampsEffectiveVariants() {
+        RagChatProperties.KnowledgeProperties knowledge =
+                new RagChatProperties().getKnowledge();
+
+        assertEquals(2, knowledge.getQueryExpanderVariants());
+        assertEquals(3, knowledge.getMaxRetrievalQueries());
+        assertEquals(2, knowledge.getEffectiveQueryExpanderVariants());
+        assertEquals(3, knowledge.getPlannedRetrievalQueries());
+
+        knowledge.setQueryExpanderVariants(5);
+        assertEquals(5, knowledge.getQueryExpanderVariants());
+        assertEquals(2, knowledge.getEffectiveQueryExpanderVariants());
+        assertEquals(3, knowledge.getPlannedRetrievalQueries());
+        assertEquals(true, knowledge.isQueryExpansionBudgetLimited());
+
+        knowledge.setMaxRetrievalQueries(99);
+        assertEquals(5, knowledge.getMaxRetrievalQueries());
+        assertEquals(4, knowledge.getEffectiveQueryExpanderVariants());
+        assertEquals(5, knowledge.getPlannedRetrievalQueries());
+    }
+
+    @Test
+    void knowledgeQueryBudgetOneReservesTheOriginalQuery() {
+        RagChatProperties.KnowledgeProperties knowledge =
+                new RagChatProperties().getKnowledge();
+        knowledge.setQueryExpanderVariants(5);
+        knowledge.setMaxRetrievalQueries(1);
+
+        assertEquals(0, knowledge.getEffectiveQueryExpanderVariants());
+        assertEquals(1, knowledge.getPlannedRetrievalQueries());
+        assertEquals(true, knowledge.isQueryExpansionBudgetLimited());
+
+        knowledge.setQueryExpanderIncludeOriginal(false);
+        assertEquals(1, knowledge.getEffectiveQueryExpanderVariants());
+        assertEquals(1, knowledge.getPlannedRetrievalQueries());
     }
 
     @Test
