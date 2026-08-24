@@ -5,8 +5,10 @@ import com.springairag.core.config.RagRerankProperties;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HeuristicRerankProviderTest {
@@ -18,8 +20,13 @@ class HeuristicRerankProviderTest {
     void rerank_preservesProvenanceFields() {
         RetrievalResult source = new RetrievalResult();
         source.setDocumentId("1");
+        source.setTitle("ZX-9042 液压校准规范");
         source.setChunkText("matching content");
         source.setScore(0.8);
+        source.setVectorScore(0.7);
+        source.setFulltextScore(0.6);
+        source.setChunkIndex(3);
+        source.setMetadata(Map.of("section", "calibration"));
         source.setSource("pdf-import:uuid/default.md");
         source.setOriginalFilename("manual.pdf");
         source.setFileDirectoryPath("uuid/");
@@ -31,6 +38,11 @@ class HeuristicRerankProviderTest {
                 .rerank("matching", List.of(source), 1)
                 .get(0);
 
+        assertEquals(source.getTitle(), result.getTitle());
+        assertEquals(source.getVectorScore(), result.getVectorScore());
+        assertEquals(source.getFulltextScore(), result.getFulltextScore());
+        assertEquals(source.getChunkIndex(), result.getChunkIndex());
+        assertSame(source.getMetadata(), result.getMetadata());
         assertEquals(source.getSource(), result.getSource());
         assertEquals(source.getOriginalFilename(), result.getOriginalFilename());
         assertEquals(source.getFileDirectoryPath(), result.getFileDirectoryPath());
@@ -130,6 +142,102 @@ class HeuristicRerankProviderTest {
     }
 
     @Test
+    void rerank_promotesTitleOnlyMatchesAcrossEnglishCjkAndMixedIds() {
+        assertTitleOnlyCandidatePromoted(
+                "Spring AI",
+                "Spring AI");
+        assertTitleOnlyCandidatePromoted(
+                "液压校准规范",
+                "液压校准规范");
+        assertTitleOnlyCandidatePromoted(
+                "ZX-9042 液压校准",
+                "ZX-9042 液压校准");
+    }
+
+    @Test
+    void rerank_blankTitlePreservesPreviousScoresAndOrderExactly() {
+        List<RetrievalResult> withoutTitles = List.of(
+                result("first", "Spring AI overview", 0.8),
+                result("second", "unrelated content", 0.7));
+        List<RetrievalResult> blankTitles = List.of(
+                titledResult("first", null, "Spring AI overview", 0.8),
+                titledResult("second", "   ", "unrelated content", 0.7));
+
+        List<RetrievalResult> expected =
+                provider.rerank("Spring AI", withoutTitles, 2);
+        List<RetrievalResult> actual =
+                provider.rerank("Spring AI", blankTitles, 2);
+
+        assertEquals(
+                expected.stream().map(RetrievalResult::getDocumentId).toList(),
+                actual.stream().map(RetrievalResult::getDocumentId).toList());
+        for (int index = 0; index < expected.size(); index++) {
+            assertEquals(
+                    expected.get(index).getScore(),
+                    actual.get(index).getScore());
+        }
+    }
+
+    @Test
+    void rerank_titleCannotReduceStrongChunkRelevance() {
+        RetrievalResult withoutTitle =
+                result("without-title", "Spring AI reference", 0.5);
+        RetrievalResult matchingTitle = titledResult(
+                "matching-title",
+                "Spring AI",
+                "Spring AI reference",
+                0.5);
+
+        double baseline = provider.rerank(
+                "Spring AI", List.of(withoutTitle), 1).getFirst().getScore();
+        double withTitle = provider.rerank(
+                "Spring AI", List.of(matchingTitle), 1).getFirst().getScore();
+
+        assertEquals(baseline, withTitle);
+    }
+
+    @Test
+    void rerank_titleDoesNotChangeChunkDiversity() {
+        RagRerankProperties properties = new RagRerankProperties();
+        properties.setDiversityWeight(1.0f);
+        HeuristicRerankProvider diversityProvider =
+                new HeuristicRerankProvider(properties);
+
+        List<RetrievalResult> reranked = diversityProvider.rerank(
+                "unmatched",
+                List.of(
+                        titledResult(
+                                "first",
+                                "Alpha operations",
+                                "完全相同的重复证据",
+                                0.9),
+                        titledResult(
+                                "second",
+                                "Beta reference",
+                                "完全相同的重复证据",
+                                0.8)),
+                2);
+
+        assertEquals(0f, reranked.get(0).getScore(), 1e-6);
+        assertEquals(0f, reranked.get(1).getScore(), 1e-6);
+    }
+
+    @Test
+    void rerank_longInternalTitleRemainsFiniteAndTitleAware() {
+        RetrievalResult candidate = titledResult(
+                "long-title",
+                "prefix " + "long ".repeat(2_000) + "target",
+                "unrelated chunk",
+                0.0);
+
+        double score = provider.rerank(
+                "target", List.of(candidate), 1).getFirst().getScore();
+
+        assertTrue(Double.isFinite(score));
+        assertEquals(0.19, score, 1e-6);
+    }
+
+    @Test
     void rerank_penalizesASeparateCandidateWithIdenticalChunkText() {
         RagRerankProperties properties = new RagRerankProperties();
         properties.setDiversityWeight(1.0f);
@@ -185,5 +293,38 @@ class HeuristicRerankProviderTest {
         result.setChunkText(chunkText);
         result.setScore(score);
         return result;
+    }
+
+    private static RetrievalResult titledResult(
+            String documentId,
+            String title,
+            String chunkText,
+            double score) {
+        RetrievalResult result = result(documentId, chunkText, score);
+        result.setTitle(title);
+        return result;
+    }
+
+    private void assertTitleOnlyCandidatePromoted(
+            String query,
+            String relevantTitle) {
+        RetrievalResult distractor = titledResult(
+                "distractor",
+                "Unrelated operations handbook",
+                "shared neutral evidence",
+                1.0);
+        RetrievalResult relevant = titledResult(
+                "relevant",
+                relevantTitle,
+                "shared neutral evidence",
+                0.99);
+
+        List<RetrievalResult> reranked = provider.rerank(
+                query,
+                List.of(distractor, relevant),
+                2);
+
+        assertEquals("relevant", reranked.getFirst().getDocumentId());
+        assertEquals(0.882, reranked.getFirst().getScore(), 1e-6);
     }
 }

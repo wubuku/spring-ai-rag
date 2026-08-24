@@ -330,6 +330,32 @@ class ReRankingServiceTest {
         assertEquals("doc-relevant", quality.getFirst().getDocumentId());
     }
 
+    @Test
+    void rerank_improvesReciprocalRankForTitleOnlyRelevantDocument() {
+        ReRankingService enabledService = createService(true, 0.2f);
+        RetrievalResult distractor = createResult(
+                "doc-distractor",
+                "shared neutral maintenance evidence",
+                1.0);
+        distractor.setTitle("Account approval handbook");
+        RetrievalResult relevant = createResult(
+                "doc-relevant",
+                "shared neutral maintenance evidence",
+                0.99);
+        relevant.setTitle("ZX-9042 液压校准规范");
+        List<RetrievalResult> baseline = List.of(distractor, relevant);
+
+        List<RetrievalResult> quality = enabledService.rerank(
+                "ZX-9042 液压校准",
+                baseline,
+                2);
+
+        assertTrue(
+                reciprocalRank(quality, "doc-relevant")
+                        > reciprocalRank(baseline, "doc-relevant"));
+        assertEquals("doc-relevant", quality.getFirst().getDocumentId());
+    }
+
     private double reciprocalRank(List<RetrievalResult> results, String relevantId) {
         for (int i = 0; i < results.size(); i++) {
             if (relevantId.equals(results.get(i).getDocumentId())) {

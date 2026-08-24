@@ -40,6 +40,7 @@ class HttpRerankProviderTest {
                 result("b", "second", 0.2),
                 result("c", "third", 0.3)
         );
+        original.get(2).setTitle("Third document");
         original.get(2).setSource("pdf-import:uuid-c/default.md");
         original.get(2).setOriginalFilename("third.pdf");
         original.get(2).setFileDirectoryPath("uuid-c/");
@@ -56,6 +57,7 @@ class HttpRerankProviderTest {
         assertEquals(2, out.size());
         assertEquals("c", out.get(0).getDocumentId());
         assertEquals(0.99, out.get(0).getScore(), 1e-6);
+        assertEquals(original.get(2).getTitle(), out.get(0).getTitle());
         assertEquals(original.get(2).getSource(), out.get(0).getSource());
         assertEquals(original.get(2).getOriginalFilename(),
                 out.get(0).getOriginalFilename());
@@ -78,6 +80,9 @@ class HttpRerankProviderTest {
                 result("a", "first", 0.1),
                 result("b", "second", 0.2),
                 result("c", "third", 0.3));
+        original.get(0).setTitle("First title");
+        original.get(1).setTitle("Second title");
+        original.get(2).setTitle("Third title");
 
         server.expect(once(), requestTo("https://rerank.example/v1/rerank"))
                 .andExpect(method(HttpMethod.POST))
@@ -88,7 +93,7 @@ class HttpRerankProviderTest {
                           "documents": ["first", "second", "third"],
                           "top_n": 3
                         }
-                        """))
+                        """, true))
                 .andRespond(withSuccess(
                         """
                         {"results":[
@@ -108,6 +113,7 @@ class HttpRerankProviderTest {
         assertEquals(List.of(0.99, 0.88, 0.77), output.stream()
                 .map(RetrievalResult::getScore)
                 .toList());
+        assertEquals("Second title", output.getFirst().getTitle());
         server.verify();
     }
 
@@ -150,6 +156,31 @@ class HttpRerankProviderTest {
         List<RetrievalResult> output = provider.rerank(
                 "中文检索质量优化",
                 original,
+                2);
+
+        assertEquals("relevant", output.getFirst().getDocumentId());
+    }
+
+    @Test
+    void unavailableProviderUsesTitleAwareHeuristicFallback() {
+        RagRerankProperties props = new RagRerankProperties();
+        props.setApiKey("");
+        props.setDiversityWeight(0.2f);
+        HttpRerankProvider provider = new HttpRerankProvider(props);
+        RetrievalResult distractor = result(
+                "distractor",
+                "shared neutral maintenance evidence",
+                1.0);
+        distractor.setTitle("Account approval handbook");
+        RetrievalResult relevant = result(
+                "relevant",
+                "shared neutral maintenance evidence",
+                0.99);
+        relevant.setTitle("ZX-9042 液压校准规范");
+
+        List<RetrievalResult> output = provider.rerank(
+                "ZX-9042 液压校准",
+                List.of(distractor, relevant),
                 2);
 
         assertEquals("relevant", output.getFirst().getDocumentId());

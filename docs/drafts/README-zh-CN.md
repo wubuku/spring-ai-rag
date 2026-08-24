@@ -32,8 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有正在准备或实施的活跃规划。最近完成的 KNOWLEDGE 多查询扩展预算与有界
-fan-out 规划及进度，见[历史归档](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PLAN.md)
-和[配套进度](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md)。
+当前正在实施 [heuristic rerank 的标题感知相关性规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)，
+[配套进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)记录恢复入口、检查计数和验收证据。
 
 已完成的 plan/progress 可从[历史归档](archive/README-zh-CN.md)追溯。

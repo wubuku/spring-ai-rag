@@ -38,10 +38,11 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There are currently no plans being prepared or implemented. The recently
-completed KNOWLEDGE multi-query expansion budget and bounded fan-out plan is
-available in the [historical archive](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PLAN.md)
-with its [progress ledger](archive/2026-08-24_KNOWLEDGE_QUERY_EXPANSION_BUDGET_PROGRESS.md).
+The active [title-aware heuristic-rerank plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+is implemented from the accompanying
+[progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md), which records recovery
+context, review counters, and acceptance evidence. The plan and ledger are
+intentionally maintained in Chinese as single-language working documents.
 
 Completed plan/progress records remain available in the
 [historical archive](archive/README.md).

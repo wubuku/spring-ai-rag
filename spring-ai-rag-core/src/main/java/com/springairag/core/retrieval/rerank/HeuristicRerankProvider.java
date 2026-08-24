@@ -18,6 +18,7 @@ import java.util.Set;
 public class HeuristicRerankProvider implements RerankProvider {
 
     private static final int MAX_LEXICAL_FEATURES = 512;
+    private static final float TITLE_RELEVANCE_WEIGHT = 0.9f;
     private static final LexicalFeatures EMPTY_FEATURES =
             new LexicalFeatures("", List.of(), Set.of());
 
@@ -48,17 +49,25 @@ public class HeuristicRerankProvider implements RerankProvider {
         int limit = rankingDepth > 0 ? rankingDepth : results.size();
         float diversityWeight = config.getDiversityWeight();
         LexicalFeatures queryFeatures = extractFeatures(query);
-        List<LexicalFeatures> resultFeatures = results.stream()
-                .map(result -> extractFeatures(result.getChunkText()))
+        List<CandidateFeatures> resultFeatures = results.stream()
+                .map(result -> new CandidateFeatures(
+                        extractFeatures(result.getChunkText()),
+                        normalizeOptional(result.getTitle())))
                 .toList();
         List<RetrievalResult> reranked = new ArrayList<>(results.size());
 
         for (int index = 0; index < results.size(); index++) {
             RetrievalResult result = results.get(index);
-            LexicalFeatures features = resultFeatures.get(index);
-            float relevance = calculateRelevanceScore(
+            CandidateFeatures features = resultFeatures.get(index);
+            float contentRelevance = calculateRelevanceScore(
                     queryFeatures.orderedTerms(),
-                    features.normalizedText());
+                    features.chunkFeatures().normalizedText());
+            float titleRelevance = calculateRelevanceScore(
+                    queryFeatures.orderedTerms(),
+                    features.normalizedTitle());
+            float relevance = Math.max(
+                    contentRelevance,
+                    titleRelevance * TITLE_RELEVANCE_WEIGHT);
             float diversity = calculateDiversityScore(index, resultFeatures);
             float rawScore = (float) result.getScore();
             float safeScore = Float.isNaN(rawScore) ? 0f : rawScore;
@@ -143,9 +152,11 @@ public class HeuristicRerankProvider implements RerankProvider {
 
     private float calculateDiversityScore(
             int targetIndex,
-            List<LexicalFeatures> allFeatures) {
+            List<CandidateFeatures> allFeatures) {
         Set<String> targetTerms =
-                allFeatures.get(targetIndex).similarityTerms();
+                allFeatures.get(targetIndex)
+                        .chunkFeatures()
+                        .similarityTerms();
         if (targetTerms.isEmpty()) {
             return 0f;
         }
@@ -159,7 +170,9 @@ public class HeuristicRerankProvider implements RerankProvider {
             }
             float similarity = calculateTextSimilarity(
                     targetTerms,
-                    allFeatures.get(index).similarityTerms());
+                    allFeatures.get(index)
+                            .chunkFeatures()
+                            .similarityTerms());
             maxSimilarity = Math.max(maxSimilarity, similarity);
         }
         return 1.0f - maxSimilarity;
@@ -314,6 +327,14 @@ public class HeuristicRerankProvider implements RerankProvider {
     private static String normalize(String value) {
         return value.toLowerCase(Locale.ROOT);
     }
+
+    private static String normalizeOptional(String value) {
+        return value == null || value.isBlank() ? "" : normalize(value);
+    }
+
+    private record CandidateFeatures(
+            LexicalFeatures chunkFeatures,
+            String normalizedTitle) {}
 
     private record LexicalFeatures(
             String normalizedText,
