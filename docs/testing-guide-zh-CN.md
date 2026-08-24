@@ -555,6 +555,13 @@ PostgreSQL 矩阵中的 `HybridRetrieverRrfPostgresIntegrationTest` 会通过真
 `ProjectDocumentRetriever` 和 `HybridRetrieverService` 执行扩展后的 query，并验证重复
 变体不会产生第二次 embedding/SQL 检索。运行：
 
+同一 focused 门禁还包含 `ProjectDocumentJoinerTest`、
+`ModeAwareChatClientFactoryTest`、`RetrievalTraceCollectorTest` 和
+`ChatExecutionServiceTest`。这些测试共同验证不依赖 Map 遍历的规范排序、最高有限
+score 保留、匿名和非有限 score 边界、rerank 前去重、四整数
+`metadata.retrieval.documentJoin` 契约、持久化 attempt 一致性，以及 AGENT 不出现该
+字段。诊断 payload 不使用 query 文本、Document ID、正文或 metadata 值。
+
 ```bash
 TESTCONTAINERS_API_VERSION=1.40 \
 TESTCONTAINERS_RYUK_DISABLED=true \

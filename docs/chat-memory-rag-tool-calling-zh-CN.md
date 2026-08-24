@@ -83,6 +83,7 @@ history-aware query transformation
   -> optional multi-query expansion
   -> ProjectDocumentRetriever
   -> project hybrid vector/full-text retrieval
+  -> ProjectDocumentJoiner
   -> project rerank
   -> CitationQueryAugmenter
   -> ChatModel
@@ -106,6 +107,17 @@ history-aware query transformation
 `Query.context`；当 `include-original=true` 且上限为 `1` 时直接使用转换后的 query，
 不调用扩展模型。`metadata.retrieval.queryExpansion` 和 retrieval trace 只输出有界摘要。
 该预算只属于 KNOWLEDGE，不能改变 AGENT 的工具调用预算。
+
+随后 `ProjectDocumentJoiner` 会在 rerank 前按稳定 chunk ID
+（`documentId:chunkIndex`）合并各 query 的检索列表。重复 chunk 保留最高有限 score
+对应的完整 `Document` 对象；同分时使用规范 query/list 顺序，无有效 identity 的对象
+保持独立。最终输出优先有限 score，并用稳定 identity 处理同分。该步骤减少重复的
+rerank 和 prompt 处理，不增加数据库、embedding、rerank provider 或 Chat 模型调用。
+
+`metadata.retrieval.documentJoin` 只包含 `inputDocuments`、
+`uniqueDocuments`、`duplicateDocumentsRemoved` 和 `scoreReplacements` 四个整数；
+持久化 retrieval attempt 保存同一摘要。AGENT、PLAIN、直接 Search、Evaluation 和旧
+Advisor 不使用该 joiner。
 
 ### 4.2 AGENT：Spring AI Tool Calling
 

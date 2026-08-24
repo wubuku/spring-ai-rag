@@ -33,6 +33,7 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
   };
   let probe: ProbeData | undefined;
   let sessionId: string | undefined;
+  let knowledgeSessionId: string | undefined;
 
   const apiJson = async (
     method: 'GET' | 'POST' | 'DELETE',
@@ -169,7 +170,72 @@ test('uses the real WebUI proxy for bounded Agent SSE and history recovery', asy
     await expect(page.getByText(probe.token, { exact: false }).last()).toBeVisible({
       timeout: REQUEST_TIMEOUT,
     });
+
+    const knowledgeMessage =
+      `Return the release verification code from the selected collection and cite the source. ` +
+      `The code is ${probe.token}.`;
+    const knowledgeResponse = await apiJson('POST', '/chat', {
+      message: knowledgeMessage,
+      mode: 'KNOWLEDGE',
+      model: agentModel.ref,
+      collectionScopeMode: 'SELECTED_COLLECTIONS',
+      collectionKeys: [probe.collectionKey],
+      maxResults: 5,
+      useHybridSearch: true,
+      useRerank: true,
+    });
+    knowledgeSessionId = knowledgeResponse.sessionId;
+    expect(knowledgeSessionId).toBeTruthy();
+    expect(knowledgeResponse.answer).toContain(probe.token);
+    expect(knowledgeResponse.sources).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          documentId: String(probe.documentId),
+        }),
+      ]),
+    );
+    expect(knowledgeResponse.metadata?.retrievalExecuted).toBe(true);
+
+    const documentJoin = knowledgeResponse.metadata?.retrieval?.documentJoin;
+    expect(documentJoin).toBeTruthy();
+    expect(Object.keys(documentJoin).sort()).toEqual([
+      'duplicateDocumentsRemoved',
+      'inputDocuments',
+      'scoreReplacements',
+      'uniqueDocuments',
+    ]);
+    for (const value of Object.values(documentJoin)) {
+      expect(Number.isInteger(value)).toBe(true);
+      expect(value).toBeGreaterThanOrEqual(0);
+    }
+    expect(documentJoin.inputDocuments).toBeGreaterThanOrEqual(
+      documentJoin.uniqueDocuments,
+    );
+    expect(documentJoin.duplicateDocumentsRemoved).toBe(
+      documentJoin.inputDocuments - documentJoin.uniqueDocuments,
+    );
+    expect(documentJoin.scoreReplacements).toBeLessThanOrEqual(
+      documentJoin.duplicateDocumentsRemoved,
+    );
+
+    const serializedJoin = JSON.stringify(documentJoin);
+    expect(serializedJoin).not.toContain('documentId');
+    expect(serializedJoin).not.toContain(probe.token);
+    expect(serializedJoin).not.toContain(probe.collectionKey);
+    expect(serializedJoin).not.toContain(probe.documentTitle);
+
+    const citationStatus =
+      knowledgeResponse.metadata?.citationValidation?.status;
+    if (citationStatus) {
+      expect(citationStatus).not.toBe('INVALID_CITATION');
+    }
   } finally {
+    if (knowledgeSessionId) {
+      await apiJson(
+        'DELETE',
+        `/chat/history/${encodeURIComponent(knowledgeSessionId)}`,
+      ).catch(() => {});
+    }
     if (sessionId) {
       await apiJson('DELETE', `/chat/history/${encodeURIComponent(sessionId)}`).catch(() => {});
     }

@@ -82,6 +82,18 @@ BASE_URL=http://127.0.0.1:8081 API_KEY=rag_sk_... \
 质量或延迟回归时，先将 `RAG_RERANK_CANDIDATE_LIMIT` 调回 `1`，或暂时关闭全局
 rerank，再重新运行 goldenset 和版本化质量回归。
 
+### KNOWLEDGE 多查询证据合并
+
+KNOWLEDGE 使用多条检索 query 时，项目会在 rerank 前合并重复的
+`documentId:chunkIndex` 候选，并保留最高有限 score 对应的完整对象。这是内部默认
+行为，不是可调请求参数或应用配置。它避免较低分候选因 Spring AI Map 遍历顺序被保留，
+也避免同一 chunk 重复进入 rerank 和 prompt budget。
+
+join 只对已经检索出的有界候选执行本地处理，不增加数据库、embedding、rerank provider
+或 Chat 模型调用。可通过 `metadata.retrieval.documentJoin` 比较输入数、唯一数、删除
+重复数和按分数替换数；端到端质量与延迟结论仍需结合 retrieval goldenset、版本化回归、
+Chat source/citation 检查和 p95 观测。
+
 ### rerank 后的文档覆盖
 
 生产默认值会在第一遍选择时，对同一个精确文档身份优先最多保留两个 chunk。`2` 是保守

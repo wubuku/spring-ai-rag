@@ -35,6 +35,8 @@ public class RetrievalTraceCollector {
             new AtomicReference<>();
     private final AtomicReference<Map<String, Object>> queryExpansion =
             new AtomicReference<>();
+    private final AtomicReference<Map<String, Object>> documentJoin =
+            new AtomicReference<>();
     private final int maxRetrievalCalls;
     private final int maxToolRounds;
     private final int maxUniqueSources;
@@ -143,6 +145,40 @@ public class RetrievalTraceCollector {
 
     public Map<String, Object> queryExpansion() {
         return queryExpansion.get();
+    }
+
+    public void recordDocumentJoin(
+            int inputDocuments,
+            int uniqueDocuments,
+            int scoreReplacements) {
+        if (inputDocuments < 0
+                || uniqueDocuments < 0
+                || uniqueDocuments > inputDocuments) {
+            throw new IllegalArgumentException(
+                    "document join counts must satisfy 0 <= unique <= input");
+        }
+        int duplicateDocumentsRemoved = inputDocuments - uniqueDocuments;
+        if (scoreReplacements < 0
+                || scoreReplacements > duplicateDocumentsRemoved) {
+            throw new IllegalArgumentException(
+                    "score replacements must be between 0 and duplicates");
+        }
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("inputDocuments", inputDocuments);
+        summary.put("uniqueDocuments", uniqueDocuments);
+        summary.put(
+                "duplicateDocumentsRemoved",
+                duplicateDocumentsRemoved);
+        summary.put("scoreReplacements", scoreReplacements);
+        Map<String, Object> copy = Map.copyOf(summary);
+        documentJoin.set(copy);
+        if (parentSession != null) {
+            parentSession.recordDocumentJoin(attemptKey, copy);
+        }
+    }
+
+    public Map<String, Object> documentJoin() {
+        return documentJoin.get();
     }
 
     public void recordOutcome(RetrievalOutcome outcome) {
@@ -382,6 +418,9 @@ public class RetrievalTraceCollector {
         result.put("sourceCount", sources.size());
         if (queryExpansion.get() != null) {
             result.put("queryExpansion", queryExpansion.get());
+        }
+        if (documentJoin.get() != null) {
+            result.put("documentJoin", documentJoin.get());
         }
         return result;
     }

@@ -117,6 +117,7 @@ class ChatExecutionServiceTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void knowledgeModeUsesAdvisorDocumentContextAndPersistsSources() {
         ChatModelRouter.ChatModelCandidate candidate =
                 candidate("knowledge-model", true, false, false);
@@ -146,6 +147,7 @@ class ChatExecutionServiceTest {
                 .thenReturn(new ModeAwareChatClientFactory.Attempt(
                         client.client(), candidate, context, null));
         assertTrue(context.trace().tryBeginRetrieval("风格基调"));
+        context.trace().recordDocumentJoin(3, 2, 1);
 
         ChatExecutionResult result = service.execute(
                 command(ChatMode.KNOWLEDGE, null));
@@ -155,6 +157,15 @@ class ChatExecutionServiceTest {
         assertEquals(1, result.sources().size());
         assertEquals("S1", result.sources().getFirst().getCitationId());
         assertEquals(true, result.metadata().get("retrievalExecuted"));
+        Map<String, Object> retrieval =
+                (Map<String, Object>) result.metadata().get("retrieval");
+        assertEquals(
+                Map.of(
+                        "inputDocuments", 3,
+                        "uniqueDocuments", 2,
+                        "duplicateDocumentsRemoved", 1,
+                        "scoreReplacements", 1),
+                retrieval.get("documentJoin"));
         verify(historyRepository).save(
                 eq("session-1"),
                 eq("问题"),
@@ -189,6 +200,7 @@ class ChatExecutionServiceTest {
         assertSame(context, toolContext.getValue().get(
                 KnowledgeSearchTool.CONTEXT_KEY));
         assertEquals(0, context.trace().retrievalCalls());
+        assertEquals(null, context.trace().documentJoin());
         assertEquals(false, result.metadata().get("retrievalExecuted"));
     }
 

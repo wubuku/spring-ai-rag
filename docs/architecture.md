@@ -110,6 +110,7 @@ RagChatController
             RetrievalAugmentationAdvisor
               -> ProjectDocumentRetriever
               -> bounded candidate pool -> weighted RRF
+              -> ProjectDocumentJoiner
               -> ProjectRerankPostProcessor
               -> CitationQueryAugmenter
        -> AGENT:
@@ -139,6 +140,20 @@ budget limited the configured variants, duplicate count, and degraded fallback
 without storing query text. The KNOWLEDGE query budget is separate from the AGENT
 tool-retrieval budget, so raising an Agent tool limit cannot silently multiply
 fixed RAG database or embedding calls.
+
+After all KNOWLEDGE queries finish retrieval, `ProjectDocumentJoiner` combines
+their `Document` lists before reranking. The stable identity is
+`documentId:chunkIndex`; repeated identities keep the candidate with the
+highest finite score, while missing identities remain independent. Output is
+ordered by finite score and stable identity, so Spring AI's internal `HashMap`
+iteration does not decide equal-score ordering. The join is bounded local work
+and adds no SQL, embedding, rerank-provider, or Chat-model calls.
+
+The Chat response exposes four integer diagnostics under
+`metadata.retrieval.documentJoin`: input documents, unique documents, removed
+duplicates, and score-driven replacements. The same low-cardinality summary is
+stored on the corresponding retrieval-trace attempt. Query text, document IDs,
+content, metadata values, and model output are not included in that summary.
 
 For the distinction between message windows, query compression, and durable
 summaries, plus tool-loop budgets and non-document tool extension boundaries,

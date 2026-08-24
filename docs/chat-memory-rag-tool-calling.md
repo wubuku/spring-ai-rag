@@ -92,6 +92,7 @@ history-aware query transformation
   -> optional multi-query expansion
   -> ProjectDocumentRetriever
   -> project hybrid vector/full-text retrieval
+  -> ProjectDocumentJoiner
   -> project rerank
   -> CitationQueryAugmenter
   -> ChatModel
@@ -120,6 +121,19 @@ preserves the authorized `Query.context`. With
 directly without an expansion-model call. `metadata.retrieval.queryExpansion`
 and retrieval-trace metadata contain only bounded summaries. This budget belongs
 to KNOWLEDGE and does not change the Agent tool budget.
+
+`ProjectDocumentJoiner` then merges the retrieved lists by stable chunk ID
+(`documentId:chunkIndex`) before reranking. Repeated chunks retain the complete
+`Document` object with the highest finite score; equal scores use a canonical
+query/list order, and documents without a usable identity remain separate.
+The final join order prefers finite scores and uses stable identity tie-breaks.
+This removes duplicate rerank/prompt work without adding a database, embedding,
+rerank-provider, or Chat-model call.
+
+`metadata.retrieval.documentJoin` contains only `inputDocuments`,
+`uniqueDocuments`, `duplicateDocumentsRemoved`, and `scoreReplacements`, all
+integers. The persisted retrieval attempt stores the same summary. AGENT,
+PLAIN, direct Search, Evaluation, and legacy advisors do not use this joiner.
 
 ### 4.2 AGENT: Spring AI Tool Calling
 

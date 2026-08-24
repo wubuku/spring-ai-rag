@@ -470,7 +470,18 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
   ],
   "metadata": {
     "sessionId": "session-001",
-    "retrievalExecuted": true
+    "retrievalExecuted": true,
+    "retrieval": {
+      "retrievalCalls": 3,
+      "toolRounds": 0,
+      "sourceCount": 1,
+      "documentJoin": {
+        "inputDocuments": 9,
+        "uniqueDocuments": 6,
+        "duplicateDocumentsRemoved": 3,
+        "scoreReplacements": 2
+      }
+    }
   },
   "stepMetrics": []
 }
@@ -480,6 +491,11 @@ body 与 Header 同时出现时必须表示相同的 Collection key 集合。省
 `metadata.retrievalExecuted` 依据实际检索尝试生成：`PLAIN` 始终为 `false`，
 完成 `KNOWLEDGE` pipeline 后始终为 `true`；`AGENT` 若模型未调用
 `searchKnowledge`，则可以为 `false`。
+
+对 `KNOWLEDGE`，`metadata.retrieval.documentJoin` 是 rerank 前项目 join 步骤的
+additive、低基数摘要，四个字段均为非负整数。它不包含 query 文本、Document ID、
+文档正文、metadata 值或模型输出。AGENT、PLAIN、直接 Search、Evaluation 和旧
+Advisor 执行不会出现该字段。
 
 ---
 

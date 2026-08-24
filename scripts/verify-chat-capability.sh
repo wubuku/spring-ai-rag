@@ -179,7 +179,7 @@ docker_environment() {
 
 chat_focused_tests() {
   mvn -pl spring-ai-rag-core -am \
-    -Dtest='ChatCommandMapperTest,ChatExecutionServiceTest,ModeAwareChatClientFactoryTest,BoundedMultiQueryExpanderTest,RagChatPropertiesValidationTest,RetrievalTraceCollectorTest,KnowledgeSearchToolTest,RagChatServiceTest,RagChatHistoryRepositoryTest,RagChatControllerTest,SseStreamE2ETest,ChatExportServiceTest,RagControllerIntegrationTest' \
+    -Dtest='ChatCommandMapperTest,ChatExecutionServiceTest,ModeAwareChatClientFactoryTest,ProjectDocumentJoinerTest,BoundedMultiQueryExpanderTest,RagChatPropertiesValidationTest,RetrievalTraceCollectorTest,KnowledgeSearchToolTest,RagChatServiceTest,RagChatHistoryRepositoryTest,RagChatControllerTest,SseStreamE2ETest,ChatExportServiceTest,RagControllerIntegrationTest' \
     -Dsurefire.failIfNoSpecifiedTests=false \
     test
 }

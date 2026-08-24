@@ -91,6 +91,22 @@ For a quality or latency regression, first set `RAG_RERANK_CANDIDATE_LIMIT` back
 `1`, or temporarily disable global reranking, then rerun the goldenset and the
 versioned quality regression.
 
+### KNOWLEDGE Multi-Query Evidence Join
+
+When KNOWLEDGE uses multiple retrieval queries, the project merges repeated
+`documentId:chunkIndex` candidates before reranking and keeps the complete
+candidate with the highest finite score. This is an internal default rather
+than a tunable request or application setting. It prevents a lower-scored
+occurrence from winning because of Spring AI Map iteration and avoids sending
+the same chunk through rerank and prompt budgeting more than once.
+
+The join is bounded local work over the already retrieved candidates and adds
+no database, embedding, rerank-provider, or Chat-model calls. Use
+`metadata.retrieval.documentJoin` to compare input, unique, removed-duplicate,
+and score-replacement counts. Continue using the retrieval goldenset,
+versioned regression, Chat source/citation checks, and p95 observation for
+end-to-end quality and latency conclusions.
+
 ### Document Coverage After Rerank
 
 The production default prefers at most two chunks from the same exact document

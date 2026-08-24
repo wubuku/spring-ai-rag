@@ -11,6 +11,7 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class RetrievalTraceCollectorTest {
@@ -84,6 +85,45 @@ class RetrievalTraceCollectorTest {
                 trace.queryExpansion(),
                 attempts.getFirst().get("queryExpansion"));
         assertTrue(!attempts.getFirst().toString().contains("原始问题"));
+    }
+
+    @Test
+    void documentJoinSummaryIsSharedWithPersistedAttemptMetadata() {
+        RetrievalTraceSession session = new RetrievalTraceSession(
+                ChatPrincipal.local(), "chat", "session-document-join");
+        RetrievalTraceCollector trace = session.newAttemptCollector(
+                "attempt-1", 3, 3, 10);
+        Map<String, Object> summary = Map.of(
+                "inputDocuments", 9,
+                "uniqueDocuments", 6,
+                "duplicateDocumentsRemoved", 3,
+                "scoreReplacements", 2);
+
+        trace.recordDocumentJoin(9, 6, 2);
+
+        assertEquals(summary, trace.documentJoin());
+        assertEquals(
+                summary,
+                trace.summary().get("documentJoin"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> attempts =
+                (List<Map<String, Object>>) session.toMetadata(false).get("attempts");
+        assertEquals(
+                summary,
+                attempts.getFirst().get("documentJoin"));
+        assertTrue(!attempts.getFirst().toString().contains("document-123"));
+    }
+
+    @Test
+    void documentJoinRejectsInconsistentCounts() {
+        RetrievalTraceCollector trace = new RetrievalTraceCollector();
+
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> trace.recordDocumentJoin(2, 3, 0));
+        assertThrows(
+                IllegalArgumentException.class,
+                () -> trace.recordDocumentJoin(2, 1, 2));
     }
 
     private RetrievalResult result(String id) {

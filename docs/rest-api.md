@@ -384,7 +384,18 @@ mode.
   ],
   "metadata": {
     "sessionId": "session-001",
-    "retrievalExecuted": true
+    "retrievalExecuted": true,
+    "retrieval": {
+      "retrievalCalls": 3,
+      "toolRounds": 0,
+      "sourceCount": 1,
+      "documentJoin": {
+        "inputDocuments": 9,
+        "uniqueDocuments": 6,
+        "duplicateDocumentsRemoved": 3,
+        "scoreReplacements": 2
+      }
+    }
   },
   "stepMetrics": []
 }
@@ -396,6 +407,12 @@ probabilities or percentages. `PLAIN` returns an empty source list.
 always `false` for `PLAIN`, always `true` for a completed `KNOWLEDGE` pipeline,
 and may be `false` for `AGENT` when the model answers without calling
 `searchKnowledge`.
+
+For `KNOWLEDGE`, `metadata.retrieval.documentJoin` is an additive,
+low-cardinality summary of the project join step before reranking. Its four
+fields are nonnegative integers. It does not contain query text, document IDs,
+document content, metadata values, or model output. The field is absent from
+AGENT, PLAIN, direct Search, Evaluation, and legacy-advisor execution.
 
 ---
 

@@ -109,6 +109,7 @@ RagChatController
             RetrievalAugmentationAdvisor
               -> ProjectDocumentRetriever
               -> 有界候选池 -> 加权 RRF
+              -> ProjectDocumentJoiner
               -> ProjectRerankPostProcessor
               -> CitationQueryAugmenter
        -> AGENT:
@@ -133,6 +134,16 @@ Spring AI advisor 的扩展与检索之间。它按服务端 `max-retrieval-quer
 计划 query 数、预算是否收敛、去重数和 degraded 状态。这个摘要不写入 query 文本。
 KNOWLEDGE 的 query budget 与 AGENT 的 tool retrieval budget 分开，避免调高 Agent 工具
 上限隐式放大固定 RAG 的数据库和 embedding 调用。
+
+全部 KNOWLEDGE query 完成检索后，`ProjectDocumentJoiner` 会在 rerank 前合并各自的
+`Document` 列表。稳定 identity 为 `documentId:chunkIndex`；同一 identity 重复出现时
+保留最高有限 score 的候选，无 identity 的对象保持独立。输出按有限 score 和稳定
+identity 排序，避免 Spring AI 内部 `HashMap` 遍历顺序决定同分结果。该步骤只执行有界
+本地处理，不增加 SQL、embedding、rerank provider 或 Chat 模型调用。
+
+Chat 响应会在 `metadata.retrieval.documentJoin` 输出四个整数：输入文档数、唯一文档数、
+删除重复数和按更高 score 替换次数；同一低基数摘要也会写入对应 retrieval trace
+attempt。该摘要不包含 query 文本、Document ID、正文、metadata 值或模型输出。
 
 会话窗口、查询压缩与长期摘要的区别，以及工具循环预算和非文档工具扩展边界，见
 [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md)。

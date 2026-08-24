@@ -9,6 +9,7 @@ import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
 import com.springairag.core.rag.BoundedMultiQueryExpander;
 import com.springairag.core.rag.HistoryAwareQueryTransformer;
+import com.springairag.core.rag.ProjectDocumentJoiner;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
 import com.springairag.core.rag.PromptBudgetDocumentPostProcessor;
@@ -85,6 +86,8 @@ public class ModeAwareChatClientFactory {
     private final List<RagAdvisorProvider> customAdvisorProviders;
     private final ToolCallingManager toolCallingManager;
     private final PromptBudgetDocumentPostProcessor promptBudgetDocumentPostProcessor;
+    private final ProjectDocumentJoiner documentJoiner =
+            new ProjectDocumentJoiner();
 
     public ModeAwareChatClientFactory(
             ProjectDocumentRetriever documentRetriever,
@@ -218,6 +221,7 @@ public class ModeAwareChatClientFactory {
         RetrievalAugmentationAdvisor.Builder builder =
                 RetrievalAugmentationAdvisor.builder()
                 .documentRetriever(documentRetriever)
+                        .documentJoiner(documentJoiner)
                         .documentPostProcessors(
                                 rerankPostProcessor,
                                 promptBudgetDocumentPostProcessor)

@@ -36,6 +36,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -128,19 +129,36 @@ class ModeAwareChatClientFactoryTest {
         });
 
         ProjectDocumentRetriever retriever = mock(ProjectDocumentRetriever.class);
-        Document document = Document.builder()
-                .id("153:0")
-                .text("旧机器和破皮沙发沉在仓库阴影里。")
-                .metadata(Map.of(
-                        "documentId", "153",
-                        "chunkIndex", 0,
-                        "title", "仓库分镜"))
-                .build();
-        when(retriever.retrieve(any(Query.class))).thenReturn(List.of(document));
+        when(retriever.retrieve(any(Query.class))).thenAnswer(invocation -> {
+            Query query = invocation.getArgument(0);
+            double score = switch (query.text()) {
+                case "找到和 “破皮沙发” 有关的内容" -> 0.5;
+                case "皮沙发破损" -> 0.7;
+                case "破皮沙发" -> 0.91;
+                default -> throw new AssertionError(
+                        "unexpected retrieval query: " + query.text());
+            };
+            return List.of(Document.builder()
+                    .id("153:0")
+                    .text("旧机器和破皮沙发沉在仓库阴影里。")
+                    .metadata(Map.of(
+                            "documentId", "153",
+                            "chunkIndex", 0,
+                            "title", "仓库分镜",
+                            "score", score))
+                    .score(score)
+                    .build());
+        });
         ProjectRerankPostProcessor postProcessor = mock(
                 ProjectRerankPostProcessor.class);
+        AtomicReference<List<Document>> joinedDocuments =
+                new AtomicReference<>();
         when(postProcessor.process(any(Query.class), anyList()))
-                .thenAnswer(invocation -> invocation.getArgument(1));
+                .thenAnswer(invocation -> {
+                    List<Document> documents = invocation.getArgument(1);
+                    joinedDocuments.set(List.copyOf(documents));
+                    return documents;
+                });
 
         ModeAwareChatClientFactory configuredFactory =
                 new ModeAwareChatClientFactory(
@@ -188,6 +206,12 @@ class ModeAwareChatClientFactoryTest {
         assertTrue(retrievedQueries.contains("破皮沙发"));
         assertTrue(retrievedQueries.contains("皮沙发破损"));
         assertEquals(2, modelCalls.get());
+        assertEquals(1, joinedDocuments.get().size());
+        assertEquals(0.91, joinedDocuments.get().getFirst().getScore());
+        assertEquals(
+                0.91,
+                joinedDocuments.get().getFirst()
+                        .getMetadata().get("score"));
         assertEquals(
                 Map.of(
                         "enabled", true,
@@ -199,6 +223,13 @@ class ModeAwareChatClientFactoryTest {
                         "budgetLimited", false,
                         "duplicateVariantsRemoved", 0),
                 attempt.retrievalContext().trace().queryExpansion());
+        assertEquals(
+                Map.of(
+                        "inputDocuments", 3,
+                        "uniqueDocuments", 1,
+                        "duplicateDocumentsRemoved", 2,
+                        "scoreReplacements", 2),
+                attempt.retrievalContext().trace().documentJoin());
     }
 
     @Test

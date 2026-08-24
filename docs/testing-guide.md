@@ -602,6 +602,15 @@ attempt metadata. The PostgreSQL matrix's
 `HybridRetrieverRrfPostgresIntegrationTest` executes expanded queries through
 the real `ProjectDocumentRetriever` and `HybridRetrieverService` and verifies
 that a duplicate variant does not cause a second embedding/SQL retrieval.
+
+The same focused gate includes `ProjectDocumentJoinerTest`,
+`ModeAwareChatClientFactoryTest`, `RetrievalTraceCollectorTest`, and
+`ChatExecutionServiceTest`. Together they verify canonical Map-independent
+ordering, highest-finite-score retention, anonymous and non-finite score
+boundaries, removal before rerank, the four-integer
+`metadata.retrieval.documentJoin` contract, persisted-attempt parity, and
+absence from AGENT. No test uses query text, document IDs, content, or metadata
+values as diagnostic payload.
 Run:
 
 ```bash
