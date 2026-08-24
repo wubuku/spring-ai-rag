@@ -660,10 +660,14 @@ retrieval outcome 不同。运行时产物会记录两者是否一致，但不�
 `HttpRerankProviderTest` 还覆盖无空格 CJK 局部匹配、混合语言、英文兼容、blank/长输入、
 完全重复 chunk、默认权重排序、title-only 英文/CJK/混合 ID、blank title 精确兼容、
 title/diversity 隔离、字段复制，以及 HTTP 成功请求不含 title、fallback 使用标题感知
-heuristic。`HybridRetrieverRrfPostgresIntegrationTest` 使用真实 PostgreSQL/pgvector
-先生成“原始向量略高但正文词法无关”的第一候选，再分别证明 CJK chunk relevance 和
-来自 `rag_documents.title` 的权威标题可以通过真实 factory 与 `ReRankingService`
-纠正排序；该整类测试必须 `failures=0`、`errors=0`、`skipped=0`。
+heuristic；它们还覆盖拒绝更长标识符内嵌的 Latin/数字 term、外层标点、CJK/非 CJK
+边界 transition、带符号技术词，以及先出现非法内嵌 occurrence、后出现合法 occurrence。
+`HybridRetrieverRrfPostgresIntegrationTest` 使用真实 PostgreSQL/pgvector 先生成“原始
+向量略高但正文词法无关”的第一候选，再分别证明 CJK chunk relevance 和来自
+`rag_documents.title` 的权威标题可以通过真实 factory 与 `ReRankingService` 纠正排序；
+它还证明 `storage` / `OpenAI` / `19042` 等 title 内嵌 substring 不会压过完整的
+`RAG` / `AI` / `9042` title term。该整类测试必须 `failures=0`、`errors=0`、
+`skipped=0`。
 
 ## 编写新测试的规则
 

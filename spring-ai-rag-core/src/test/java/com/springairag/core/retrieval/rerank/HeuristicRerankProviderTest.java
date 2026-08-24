@@ -89,6 +89,90 @@ class HeuristicRerankProviderTest {
     }
 
     @Test
+    void relevanceScore_rejectsEmbeddedLatinAndNumericMatches() {
+        assertEquals(
+                0f,
+                provider.calculateRelevanceScore(
+                        "rag ai 9042",
+                        "storage chair 19042"),
+                1e-6);
+        assertEquals(
+                0f,
+                provider.calculateRelevanceScore(
+                        "ai",
+                        "OpenAI reference"),
+                1e-6);
+    }
+
+    @Test
+    void relevanceScore_acceptsOuterPunctuationAndSeparatedIdentifiers() {
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "RAG?",
+                        "RAG-based retrieval"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "\"AI\"",
+                        "AI systems"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "(ZX-9042)",
+                        "ZX-9042 reference"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "SpringAI",
+                        "中文SpringAI检索"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "9042",
+                        "型号9042说明"),
+                1e-6);
+    }
+
+    @Test
+    void relevanceScore_preservesSymbolBearingTechnicalTerms() {
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "C++",
+                        "C++ reference"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "C#",
+                        "C# reference"),
+                1e-6);
+        assertEquals(
+                1f,
+                provider.calculateRelevanceScore(
+                        "api/v1",
+                        "api/v1 reference"),
+                1e-6);
+    }
+
+    @Test
+    void relevanceScore_usesLaterBoundaryMatchAfterEmbeddedOccurrence() {
+        String text = "storage " + "filler ".repeat(10) + "rag";
+
+        assertEquals(
+                0.5f,
+                provider.calculateRelevanceScore(
+                        "rag missing",
+                        text),
+                1e-6);
+    }
+
+    @Test
     void relevanceScore_blankInputReturnsZeroAndPunctuationStaysFinite() {
         assertEquals(0f, provider.calculateRelevanceScore("", "text"));
         assertEquals(0f, provider.calculateRelevanceScore("   ", "text"));
@@ -152,6 +236,28 @@ class HeuristicRerankProviderTest {
         assertTitleOnlyCandidatePromoted(
                 "ZX-9042 液压校准",
                 "ZX-9042 液压校准");
+    }
+
+    @Test
+    void rerank_rejectsBoundaryFalsePositiveTitle() {
+        RetrievalResult distractor = titledResult(
+                "distractor",
+                "Storage Chair 19042",
+                "shared neutral evidence",
+                1.0);
+        RetrievalResult relevant = titledResult(
+                "relevant",
+                "RAG AI ZX-9042",
+                "shared neutral evidence",
+                0.99);
+
+        List<RetrievalResult> reranked = provider.rerank(
+                "RAG AI 9042",
+                List.of(distractor, relevant),
+                2);
+
+        assertEquals("relevant", reranked.getFirst().getDocumentId());
+        assertTrue(reranked.getFirst().getScore() > reranked.getLast().getScore());
     }
 
     @Test

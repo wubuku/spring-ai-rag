@@ -32,7 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有活动 plan/progress。新一轮规划建立后会在这里列出；在此之前以代码、迁移和双语
-长青文档为准。
+当前正在准备 [heuristic rerank 的 Latin/数字词边界感知规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)，
+[配套进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)记录恢复入口、检查计数和验收证据。
 
 已完成的 plan/progress 可从[历史归档](archive/README-zh-CN.md)追溯。

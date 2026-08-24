@@ -134,6 +134,17 @@ content match. Null or blank titles preserve the previous score and ordering
 path. Successful HTTP-provider requests still send chunk content only; title
 awareness is reused only by heuristic fallback.
 
+For relevance, ordinary non-CJK terms that start and end with a Unicode letter
+or digit require complete alphanumeric boundaries. Adjacent non-CJK letters or
+digits block a match, while punctuation, separators, text edges, and CJK script
+transitions are valid boundaries. Explicit outer sentence/wrapper punctuation
+is ignored, but technical identifier characters `+`, `#`, `-`, `_`, `/`, and
+`\` are preserved. CJK features and symbol-ending terms retain substring
+matching. This removes deterministic false positives such as `rag` in
+`storage`, `ai` in `OpenAI`, and `9042` in `19042` without breaking mixed
+`中文SpringAI检索`, `型号9042说明`, `C++`, `C#`, or `api/v1` queries. Query
+relevance terms are prepared once per rerank and reused for content and title.
+
 This is a lightweight lexical improvement, not dictionary segmentation,
 semantic reranking, or simplified/traditional/synonym normalization. Continue
 comparing Chinese and English goldensets for MRR/nDCG/Recall@K and Search/Chat

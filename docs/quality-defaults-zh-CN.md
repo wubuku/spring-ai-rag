@@ -112,6 +112,14 @@ diversity 特征；这使产品 ID、术语或主题名只出现在标题时仍�
 正文重复命中被相加放大。null/blank 标题保持原评分和排序路径。HTTP provider 成功路径
 仍只发送 chunk 正文，不把标题加入外部请求；fallback 才复用标题感知 heuristic。
 
+relevance 对不含 CJK、且首尾为 Unicode 字母或数字的普通 term 要求完整字母数字边界。
+相邻的非 CJK 字母或数字会阻断匹配，标点、分隔符、文本边缘和 CJK script transition
+则是合法边界。明确的外层句末/包裹标点会被忽略，但技术标识符字符 `+`、`#`、`-`、`_`、
+`/` 和 `\` 会保留；CJK 特征和以符号结尾的 term 继续使用 substring。这样可消除 `rag`
+在 `storage`、`ai` 在 `OpenAI`、`9042` 在 `19042` 中的确定性假命中，同时不破坏
+`中文SpringAI检索`、`型号9042说明`、`C++`、`C#` 或 `api/v1` 查询。query relevance
+term 在每次 rerank 中只准备一次，并由正文和标题复用。
+
 该策略是轻量词面增强，不是词典分词、语义 reranker 或繁简/同义词归一化。质量评估仍应
 比较中英文 goldenset 的 MRR/nDCG/Recall@K 和 Search/Chat p95；需要更高排序上限时使用
 HTTP cross-encoder provider。

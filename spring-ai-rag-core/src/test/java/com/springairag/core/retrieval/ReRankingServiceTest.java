@@ -61,6 +61,24 @@ class ReRankingServiceTest {
     }
 
     @Test
+    void rerank_enabled_rejectsBoundaryFalsePositiveTitle() {
+        ReRankingService enabledService = createService(true, 0.2f);
+        RetrievalResult distractor =
+                createResult("distractor", "shared neutral evidence", 1.0);
+        distractor.setTitle("Storage Chair 19042");
+        RetrievalResult relevant =
+                createResult("relevant", "shared neutral evidence", 0.99);
+        relevant.setTitle("RAG AI ZX-9042");
+
+        List<RetrievalResult> reranked = enabledService.rerank(
+                "RAG AI 9042",
+                List.of(distractor, relevant),
+                2);
+
+        assertEquals("relevant", reranked.getFirst().getDocumentId());
+    }
+
+    @Test
     void rerank_nullResults_returnsNull() {
         ReRankingService enabledService = createService(true, 0.2f);
         assertNull(enabledService.rerank("query", null, 5));
