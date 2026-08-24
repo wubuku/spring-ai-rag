@@ -32,5 +32,8 @@
 
 ## 当前活跃规划
 
-当前没有活跃规划。已完成的 plan/progress 可从
-[历史归档](archive/README-zh-CN.md) 追溯。
+- KNOWLEDGE 多查询扩展预算与有界 fan-out：
+  [规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md) 和
+  [进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)。
+
+已完成的 plan/progress 可从[历史归档](archive/README-zh-CN.md)追溯。

@@ -38,5 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There are no active plans. Completed plan/progress records remain available in
-the [historical archive](archive/README.md).
+- KNOWLEDGE multi-query expansion budget and bounded fan-out:
+  [plan](NEXT_HIGH_VALUE_FEATURES_PLAN.md) and
+  [progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md).
+
+Completed plan/progress records remain available in the
+[historical archive](archive/README.md).
