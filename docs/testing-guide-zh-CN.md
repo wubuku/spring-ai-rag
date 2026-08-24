@@ -646,6 +646,13 @@ JSON 验证多样化契约，用实际 GET Search 页面验证 DOM、认证和�
 Search/Chat retrieval p95、rerank stage p95、HTTP latency/payload 和最终 unique document
 count；延迟与 payload 不设通过阈值，确定性正确性继续由 PostgreSQL 集成矩阵承担。
 
+同一门禁的 `HeuristicRerankProviderTest`、`ReRankingServiceTest` 和
+`HttpRerankProviderTest` 还覆盖无空格 CJK 局部匹配、混合语言、英文兼容、blank/长输入、
+完全重复 chunk、默认权重排序和 HTTP fallback。`HybridRetrieverRrfPostgresIntegrationTest`
+使用真实 PostgreSQL/pgvector 先生成“原始向量略高但词法无关”的第一候选，再证明真实
+factory 和 `ReRankingService` 会把 CJK 相关候选提升到第一；该整类测试必须
+`failures=0`、`errors=0`、`skipped=0`。
+
 ## 编写新测试的规则
 
 1. **先写测试再写实现**（TDD 友好）

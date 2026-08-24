@@ -107,6 +107,30 @@ and score-replacement counts. Continue using the retrieval goldenset,
 versioned regression, Chat source/citation checks, and p95 observation for
 end-to-end quality and latency conclusions.
 
+### Heuristic CJK Lexical Defaults
+
+The production-default heuristic reranker keeps whitespace-token relevance
+and Jaccard diversity for ordinary non-CJK text. Contiguous Chinese,
+Japanese, Korean, and Bopomofo runs use adjacent Unicode code-point bigrams;
+one-character runs keep that character, and Latin/digit runs in mixed text
+remain matchable. A no-whitespace CJK query therefore does not need to appear
+verbatim as one full sentence before reordered or partial phrase overlap can
+contribute a deterministic lexical score.
+
+Each query or chunk contributes at most 512 features, precomputed and reused
+within one rerank. This internal bound is not a request parameter and adds no
+database, embedding, HTTP, or Chat-model call. Another chunk with identical
+nonblank text has similarity `1`, while null or blank chunks receive no
+information-free diversity reward. Successful HTTP rerank responses are
+unchanged; missing credentials, timeouts, or invalid responses that fall back
+to heuristic use the same CJK behavior.
+
+This is a lightweight lexical improvement, not dictionary segmentation,
+semantic reranking, or simplified/traditional/synonym normalization. Continue
+comparing Chinese and English goldensets for MRR/nDCG/Recall@K and Search/Chat
+p95. Use an HTTP cross-encoder provider when a higher ranking ceiling is
+required.
+
 ### Document Coverage After Rerank
 
 The production default prefers at most two chunks from the same exact document

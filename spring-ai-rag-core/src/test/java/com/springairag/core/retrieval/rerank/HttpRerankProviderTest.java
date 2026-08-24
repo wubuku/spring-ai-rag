@@ -131,6 +131,30 @@ class HttpRerankProviderTest {
                 .toList());
     }
 
+    @Test
+    void unavailableProviderUsesCjkAwareHeuristicFallback() {
+        RagRerankProperties props = new RagRerankProperties();
+        props.setApiKey("");
+        props.setDiversityWeight(0.2f);
+        HttpRerankProvider provider = new HttpRerankProvider(props);
+        List<RetrievalResult> original = List.of(
+                result(
+                        "distractor",
+                        "账户权限审批流程和用量账本统计",
+                        1.0),
+                result(
+                        "relevant",
+                        "检索质量需要结合中文分词进行优化",
+                        0.99));
+
+        List<RetrievalResult> output = provider.rerank(
+                "中文检索质量优化",
+                original,
+                2);
+
+        assertEquals("relevant", output.getFirst().getDocumentId());
+    }
+
     private static RetrievalResult result(String id, String text, double score) {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId(id);

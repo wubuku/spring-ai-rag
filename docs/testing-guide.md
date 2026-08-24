@@ -645,6 +645,16 @@ HTTP latency/payload, and final unique-document count. Latency and payload do
 not use pass/fail thresholds; deterministic correctness remains the
 PostgreSQL integration matrix's responsibility.
 
+The same gate's `HeuristicRerankProviderTest`, `ReRankingServiceTest`, and
+`HttpRerankProviderTest` cover no-whitespace CJK partial matching, mixed
+languages, English compatibility, blank/long inputs, identical chunks,
+default-weight ordering, and HTTP fallback. The
+`HybridRetrieverRrfPostgresIntegrationTest` uses real PostgreSQL/pgvector to
+put a lexically unrelated candidate with a slightly higher vector score first,
+then proves that the real factory and `ReRankingService` promote the
+CJK-relevant candidate. The full class must finish with `failures=0`,
+`errors=0`, and `skipped=0`.
+
 The PostgreSQL gate is attempted by default. If Docker is unavailable or the
 daemon rejects the negotiated API version, the script records both Docker and
 PostgreSQL gates as `SKIP`; `PASS_WITH_SKIPS` is not a complete release gate.

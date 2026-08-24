@@ -690,6 +690,18 @@ remain independent. A second pass restores skipped chunks in provider order
 when distinct documents cannot fill the final limit, so the preference does
 not reduce the number of ranked results available to the caller.
 
+The built-in heuristic provider preserves the existing whitespace-token
+semantics for non-CJK text. Contiguous HAN, HIRAGANA, KATAKANA, HANGUL, and
+BOPOMOFO runs use adjacent code-point bigrams; a one-character run keeps that
+character, and Latin/digit runs inside mixed text remain separate features.
+Each query or chunk contributes at most 512 features, which are precomputed
+once per rerank and reused instead of being tokenized for every candidate
+pair. Diversity excludes only the candidate's own list position, so another
+nonblank chunk with identical text has similarity `1`; null or blank chunks
+receive no diversity reward merely because they lack lexical information.
+Successful HTTP rerank responses are unchanged, while HTTP fallback reuses
+the same heuristic behavior.
+
 The selector operates on at most `candidate-limit` results and adds no SQL,
 embedding, rerank-provider, or Chat-model calls. A value of `0` disables this
 selection and restores provider top-N behavior.
