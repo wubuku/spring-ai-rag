@@ -379,6 +379,7 @@ rag:
     diversity-weight: 0.2
     top-n: 5
     candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
+    preferred-max-chunks-per-document: ${RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT:2}
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -388,6 +389,7 @@ rag:
 | `rag.rerank.diversity-weight` | `0.2` | 结果多样性权重（避免相似结果堆叠） |
 | `rag.rerank.top-n` | `5` | 调用方未提供正数 `maxResults` 时的最终结果数 fallback |
 | `rag.rerank.candidate-limit` | `20` | 启用有效 rerank 时的内部候选池上限，绑定值限制为 `1..100` |
+| `rag.rerank.preferred-max-chunks-per-document` | `2` | 第一遍按精确非空文档 ID 优先保留的 chunk 数，范围 `0..100`；`0` 关闭文档多样化 |
 
 当请求的 `useRerank=true`、全局重排已启用且 provider 不是 no-op 时，检索服务使用
 `max(requestedMaxResults, candidate-limit)` 作为 rerank 前的候选池；`maxResults` 仍是
@@ -398,6 +400,13 @@ no-op provider 或旧版 GET Search（该入口明确 `useRerank=false`）时，
 `candidate-limit` 只可通过服务端配置调整，推荐环境变量
 `RAG_RERANK_CANDIDATE_LIMIT`。提高它可能改善 rerank 召回质量，但会增加数据库候选数、
 HTTP rerank 请求体和响应延迟；先使用检索 goldenset 比较 MRR/nDCG 与延迟，再逐步调整。
+
+候选池大于最终结果数时，有效 reranker 会先对有界候选池完整排序，再执行最终选择。
+选择器第一遍按精确、非空 `documentId` 优先最多保留
+`preferred-max-chunks-per-document` 项；如果不同文档不足以填满请求数量，再按 provider
+原排名回填被跳过的 chunk。因此该值是软性的第一遍上限：它提高证据覆盖，但不会在
+provider 已返回结果的基础上减少数量。null 或 blank 文档 ID 按独立结果处理。设置
+`RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=0` 可恢复原来的 provider top-N 选择。
 
 ## 文档分块配置
 

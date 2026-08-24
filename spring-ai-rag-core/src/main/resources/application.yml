@@ -356,6 +356,7 @@ rag:
     diversity-weight: 0.2
     top-n: 5
     candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
+    preferred-max-chunks-per-document: ${RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT:2}
     # HTTP provider (SiliconFlow-compatible /v1/rerank). api-key falls back to rag.embedding.api-key
     base-url: ${RERANK_BASE_URL:https://api.siliconflow.cn}
     api-key: ${RERANK_API_KEY:}

@@ -32,5 +32,5 @@
 
 ## 当前活跃规划
 
-- [rerank 后文档级证据去冗余实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [配套进度与恢复账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+当前没有活跃规划。已完成的 plan/progress 可从
+[历史归档](archive/README-zh-CN.md) 追溯。

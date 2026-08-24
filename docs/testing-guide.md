@@ -70,6 +70,9 @@ BASE_URL=http://127.0.0.1:8081 \
 BASE_URL=http://127.0.0.1:18081 \
   ./scripts/verify-release.sh --with-quality-regression
 
+# Check current and compatible successful embedding statuses without a server
+./scripts/run-retrieval-regression.sh --self-test
+
 # The real-LLM server normally runs on 18081 via start-real-e2e-server.sh
 ./scripts/verify-release.sh --with-real-llm
 
@@ -588,6 +591,26 @@ sources, history source restoration, selected Collections, mobile overflow,
 `Idempotency-Key` reuse across one retry, response-header/done turn identity,
 partial-SSE replay without duplicate assistant bubbles, 409 input retention,
 and stop without a retry request.
+
+For rerank document-level evidence diversification, run:
+
+```bash
+./scripts/verify-rerank-document-diversity.sh
+```
+
+The focused gate first proves the two-pass selector with unit tests and a real
+PostgreSQL/pgvector fixture. Its real browser phase uses POST Search JSON for
+the diversity contract and the actual GET Search page for DOM/auth/proxy
+compatibility. It asserts visible DOM, request/response data, JSON, and
+database-backed behavior only; screenshots are disabled. After the real LLM
+baseline passes, the gate also compares cap=`0` and cap=`2` against the same
+disposable database and fixed fixture. Each variant is warmed up, then collects
+20 Search and 5 Chat requests by default and correlates trace IDs through
+read-only `rag_retrieval_logs` queries. `runtime-comparison.json` and
+`runtime-comparison.md` record Search/Chat retrieval p95, rerank-stage p95,
+HTTP latency/payload, and final unique-document count. Latency and payload do
+not use pass/fail thresholds; deterministic correctness remains the
+PostgreSQL integration matrix's responsibility.
 
 The PostgreSQL gate is attempted by default. If Docker is unavailable or the
 daemon rejects the negotiated API version, the script records both Docker and

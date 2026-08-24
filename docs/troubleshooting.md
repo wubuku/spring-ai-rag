@@ -233,6 +233,7 @@ rag:
     enabled: true
     top-n: 5  # Final fallback when callers omit maxResults
     candidate-limit: 20  # Pre-rerank candidate-pool limit, bounded to 1..100
+    preferred-max-chunks-per-document: 2
 ```
 
 `candidate-limit` only expands the internal pre-rerank candidate pool. With effective
@@ -240,6 +241,29 @@ reranking, the pool is `max(request.maxResults, candidate-limit)`; final Search,
 Agent-tool, and Evaluation responses remain bounded by request `maxResults`. If quality
 does not improve or latency rises, first set `RAG_RERANK_CANDIDATE_LIMIT` to `1`, then
 compare MRR/nDCG and p95 latency with the goldenset.
+
+---
+
+### Too Many Final Chunks Come From One Document
+
+**Symptom**: Search or Chat returns several adjacent chunks from one long
+document while other relevant documents are missing.
+
+Check that effective reranking is enabled and that the candidate pool is larger
+than the requested result count. Then tune:
+
+```bash
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=1  # maximize document coverage
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=2  # production default
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=3  # retain more continuity
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=0  # restore provider top N
+```
+
+The value is a first-pass preference, not an absolute cap. When the provider
+returns too few distinct documents, skipped chunks are backfilled in provider
+order. If changing the value has no effect, verify that `useRerank=true`,
+`rag.rerank.enabled=true`, the provider is not `none`/`noop`/`off`, and
+`candidate-limit > maxResults`.
 
 ---
 

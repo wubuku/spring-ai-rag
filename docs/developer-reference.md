@@ -492,6 +492,26 @@ Versioned live retrieval regression:
 BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
 
+Rerank document-diversity acceptance, including focused backend tests,
+PostgreSQL/pgvector, WebUI gates, isolated `dev.sh`, real Search/Playwright,
+goldenset, versioned regression, and real LLM checks:
+
+```bash
+./scripts/verify-rerank-document-diversity.sh
+```
+
+The runner refuses to replace an existing `.dev` stack, defaults to isolated
+ports `18083`/`15175`, creates a disposable PostgreSQL database (local first,
+Docker fallback), keeps the generated root key in the shell only, and writes
+evidence under `.verification/rerank-document-diversity/`. After the real
+provider baseline passes, it restarts the service with cap=`0` and cap=`2`
+against the same database and fixture, collecting 20 Search and 5 Chat samples
+per variant by default. It correlates trace IDs through read-only
+`rag_retrieval_logs` queries and writes retrieval/rerank p95, HTTP response
+payload, and final document-coverage observations to `runtime-comparison.json`
+and `runtime-comparison.md`. Wall-clock and payload values are evidence, not
+unstable threshold gates.
+
 The dataset and committed baseline live under `testdata/regression/`. The
 runner creates fixtures by stable
 `collectionKey + sourceNamespace(default) + externalId`, checks Hit
@@ -500,6 +520,9 @@ leakage, and an explicit-empty JSONB case, then writes JSON artifacts and a
 Markdown summary under `.verification/quality-regression/<run-id>/`. When
 `RAG_API_KEY` is not set explicitly, it safely reads `RAG_API_KEY` /
 `RAG_ROOT_API_KEY` from `.env` without printing the credential.
+Run `./scripts/run-retrieval-regression.sh --self-test` without a service to
+check recognition of the current `READY` and compatible `COMPLETED/CACHED`
+successful embedding statuses.
 
 One-command release verification:
 

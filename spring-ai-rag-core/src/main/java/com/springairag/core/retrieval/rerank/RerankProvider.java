@@ -14,10 +14,13 @@ public interface RerankProvider {
     boolean isAvailable();
 
     /**
-     * @param query      user query
-     * @param results    candidate hits
-     * @param maxResults limit after rerank
+     * @param query        user query
+     * @param results      candidate hits
+     * @param rankingDepth maximum provider-ranked results to return
      * @return reranked list (must not be null; may return input unchanged)
      */
-    List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults);
+    List<RetrievalResult> rerank(
+            String query,
+            List<RetrievalResult> results,
+            int rankingDepth);
 }

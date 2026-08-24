@@ -460,11 +460,28 @@ BASE_URL=http://127.0.0.1:8081 ./scripts/run-retrieval-goldenset.sh
 BASE_URL=http://127.0.0.1:18081 ./scripts/verify-quality-regression.sh
 ```
 
+rerank 文档多样化专项验收会聚合后端测试、PostgreSQL/pgvector、WebUI 门禁、隔离
+`dev.sh`、真实 Search/Playwright、goldenset、版本化回归和真实 LLM：
+
+```bash
+./scripts/verify-rerank-document-diversity.sh
+```
+
+runner 会拒绝覆盖已有 `.dev` 栈，默认使用隔离端口 `18083`/`15175`，创建一次性
+PostgreSQL 数据库（优先本机，失败时回退 Docker），生成的 root key 只保存在 shell，
+证据写入 `.verification/rerank-document-diversity/`。真实 provider baseline 通过后，
+runner 会在同一测试库和夹具上依次用 cap=`0`、cap=`2` 重启服务，默认各采集 20 个 Search
+和 5 个 Chat 固定样本。它通过 trace ID 只读关联 `rag_retrieval_logs`，把 retrieval/rerank
+p95、HTTP 响应 payload 和最终文档覆盖写入 `runtime-comparison.json` /
+`runtime-comparison.md`；这些墙钟与 payload 数据是观测证据，不是易波动的阈值门禁。
+
 数据集和提交的 baseline 位于 `testdata/regression/`。runner 使用稳定
 `collectionKey + sourceNamespace(default) + externalId` 身份创建 fixture，检查 Hit Rate、MRR、Recall@K、nDCG、
 minimum、相对 baseline 回退、Collection decoy 泄漏和 JSONB 明确空结果，并把 JSON
 artifact 与 Markdown 汇总写入 `.verification/quality-regression/<run-id>/`。未显式设置
 `RAG_API_KEY` 时会安全读取 `.env` 的 `RAG_API_KEY` / `RAG_ROOT_API_KEY`，不会输出密钥。
+可用 `./scripts/run-retrieval-regression.sh --self-test` 在不启动服务时检查 runner 对当前
+`READY` 及兼容 `COMPLETED/CACHED` embedding 成功态的判定。
 
 发布级一键验证：
 

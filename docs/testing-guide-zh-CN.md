@@ -70,6 +70,9 @@ BASE_URL=http://127.0.0.1:8081 \
 BASE_URL=http://127.0.0.1:18081 \
   ./scripts/verify-release.sh --with-quality-regression
 
+# 无需启动服务，检查回归 runner 对当前及兼容 embedding 成功态的判定
+./scripts/run-retrieval-regression.sh --self-test
+
 # 真实 LLM 服务通常由 scripts/start-real-e2e-server.sh 启动在 18081
 ./scripts/verify-release.sh --with-real-llm
 
@@ -602,6 +605,21 @@ Playwright 或代码 review 代替真实 provider 证据。
 需要时可用 `CHAT_REAL_BACKEND_PORT`、`CHAT_REAL_FRONTEND_PORT` 覆盖端口。未传该选项时，
 真实 LLM 门禁会明确记录为 `SKIP`；本地测试和 Mock Playwright 不代表真实模型或真实
 Tool Calling endpoint 已验证。
+
+rerank 文档级证据多样化使用独立门禁：
+
+```bash
+./scripts/verify-rerank-document-diversity.sh
+```
+
+该门禁先通过单元测试和真实 PostgreSQL/pgvector 夹具证明两阶段选择器，再用 POST Search
+JSON 验证多样化契约，用实际 GET Search 页面验证 DOM、认证和代理兼容。前端证据只使用
+可见 DOM、请求/响应、JSON 和数据库支持的行为断言，不使用截图。真实 LLM baseline
+通过后，它还会在同一可处置数据库与固定夹具上比较 cap=`0` 和 cap=`2`：每个变体默认先
+预热，再采集 20 个 Search、5 个 Chat 请求，通过 trace ID 只读关联
+`rag_retrieval_logs`。`runtime-comparison.json` / `runtime-comparison.md` 记录
+Search/Chat retrieval p95、rerank stage p95、HTTP latency/payload 和最终 unique document
+count；延迟与 payload 不设通过阈值，确定性正确性继续由 PostgreSQL 集成矩阵承担。
 
 ## 编写新测试的规则
 

@@ -172,12 +172,34 @@ rag:
     enabled: true
     top-n: 5  # 调用方未提供 maxResults 时的最终 fallback 数量
     candidate-limit: 20  # rerank 前候选池上限，范围 1..100
+    preferred-max-chunks-per-document: 2
 ```
 
 `candidate-limit` 只扩大 rerank 前的内部候选池，不扩大最终响应。启用有效 rerank
 时，候选池为 `max(request.maxResults, candidate-limit)`；Search、Chat、Agent 工具和
 Evaluation 最终仍不超过请求的 `maxResults`。如质量没有改善或延迟升高，先将
 `RAG_RERANK_CANDIDATE_LIMIT` 调为 `1`，再运行 goldenset 比较 MRR/nDCG 和 p95 延迟。
+
+---
+
+### 最终结果过多来自同一文档
+
+**症状**：Search 或 Chat 连续返回一个长文档的多个相邻 chunk，其他相关文档没有进入
+最终证据。
+
+先确认有效 rerank 已启用，并且候选池大于请求结果数，然后调整：
+
+```bash
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=1  # 最大化文档覆盖
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=2  # 生产默认
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=3  # 保留更多连续信息
+RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=0  # 恢复 provider top N
+```
+
+该值是第一遍偏好，不是绝对上限。provider 返回的不同文档不足时，会按 provider 原顺序
+回填被跳过的 chunk。调整后没有变化时，检查 `useRerank=true`、
+`rag.rerank.enabled=true`、provider 不是 `none`/`noop`/`off`，并确认
+`candidate-limit > maxResults`。
 
 ---
 

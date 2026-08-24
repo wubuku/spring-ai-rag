@@ -38,5 +38,5 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Document-level evidence deduplication after reranking](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
-- [Progress and recovery ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+There are no active plans. Completed plan/progress records remain available in
+the [historical archive](archive/README.md).

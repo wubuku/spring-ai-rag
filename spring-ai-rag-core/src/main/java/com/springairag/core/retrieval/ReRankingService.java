@@ -13,6 +13,8 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Result re-ranking facade.
@@ -25,6 +27,8 @@ import java.util.List;
 public class ReRankingService {
 
     private static final Logger log = LoggerFactory.getLogger(ReRankingService.class);
+    private static final Set<String> NO_OP_PROVIDER_NAMES =
+            Set.of("none", "noop", "off");
 
     private final RagRerankProperties config;
     private final RerankProvider provider;
@@ -53,21 +57,62 @@ public class ReRankingService {
         if (!config.isEnabled() || results == null || results.isEmpty()) {
             return results;
         }
-        int limit = maxResults > 0 ? maxResults
+        int finalLimit = maxResults > 0 ? maxResults
                 : (config.getTopN() > 0 ? config.getTopN() : results.size());
-        List<RetrievalResult> out = provider.rerank(query, results, limit);
+        boolean selectorActive = isDocumentDiversificationActive(
+                results.size(), finalLimit);
+        List<RetrievalResult> providerCandidates = results;
+        int rankingDepth = finalLimit;
+        if (selectorActive) {
+            int providerCandidateCount = Math.min(
+                    results.size(), config.getCandidateLimit());
+            if (providerCandidateCount < results.size()) {
+                providerCandidates = new ArrayList<>(
+                        results.subList(0, providerCandidateCount));
+            }
+            rankingDepth = providerCandidateCount;
+        }
+
+        List<RetrievalResult> out =
+                provider.rerank(query, providerCandidates, rankingDepth);
         if (out == null) {
             throw new IllegalStateException(
                     "Rerank provider '" + provider.getName() + "' returned null");
         }
-        if (out.size() > limit) {
-            log.warn("Rerank provider {} returned {} results for limit {}; truncating",
-                    provider.getName(), out.size(), limit);
-            out = limitResults(out, limit);
+        if (out.size() > rankingDepth) {
+            log.warn("Rerank provider {} returned {} results for ranking depth {}; truncating",
+                    provider.getName(), out.size(), rankingDepth);
+            out = limitResults(out, rankingDepth);
+        }
+        if (selectorActive) {
+            out = RerankResultSelector.select(
+                    out,
+                    finalLimit,
+                    config.getPreferredMaxChunksPerDocument());
+        } else if (out.size() > finalLimit) {
+            out = limitResults(out, finalLimit);
         }
         log.debug("Reranked {} → {} results (provider={}, enabled={})",
                 results.size(), out.size(), provider.getName(), config.isEnabled());
         return out;
+    }
+
+    private boolean isDocumentDiversificationActive(
+            int candidateCount,
+            int finalLimit) {
+        int preferredMax = config.getPreferredMaxChunksPerDocument();
+        if (finalLimit <= 0
+                || preferredMax <= 0
+                || preferredMax >= finalLimit
+                || config.getCandidateLimit() <= finalLimit
+                || candidateCount <= finalLimit) {
+            return false;
+        }
+        String providerName = provider.getName();
+        String normalized = providerName == null
+                ? ""
+                : providerName.trim().toLowerCase(Locale.ROOT);
+        return !NO_OP_PROVIDER_NAMES.contains(normalized);
     }
 
     /**

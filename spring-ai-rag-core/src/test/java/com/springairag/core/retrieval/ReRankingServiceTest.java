@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.BiFunction;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -158,6 +159,125 @@ class ReRankingServiceTest {
                         "query",
                         List.of(createResult("doc", "text", 0.5)),
                         1));
+    }
+
+    @Test
+    void rerank_usesBoundedProviderDepthAndDiversifiesByActualProviderName() {
+        RagRerankProperties config = enabledConfig(4, 1);
+        RecordingProvider provider = new RecordingProvider("http");
+        List<RetrievalResult> results = List.of(
+                createResult("A", "a0", 0.99),
+                createResult("A", "a1", 0.98),
+                createResult("B", "b0", 0.97),
+                createResult("C", "c0", 0.96),
+                createResult("D", "d0", 0.95));
+        ReRankingService reranking = new ReRankingService(config, provider);
+
+        List<RetrievalResult> output = reranking.rerank("query", results, 3);
+
+        assertEquals(4, provider.lastInput.size());
+        assertEquals(4, provider.lastRankingDepth);
+        assertEquals(List.of("A", "B", "C"), documentIds(output));
+        assertSame(results.get(0), output.get(0));
+        assertSame(results.get(2), output.get(1));
+        assertSame(results.get(3), output.get(2));
+    }
+
+    @Test
+    void rerank_capsAbnormallyLargeDirectInputAtCandidateLimit() {
+        RagRerankProperties config = enabledConfig(100, 1);
+        RecordingProvider provider = new RecordingProvider("heuristic");
+        List<RetrievalResult> results = new ArrayList<>();
+        for (int index = 0; index < 120; index++) {
+            results.add(createResult(
+                    "doc-" + index,
+                    "content-" + index,
+                    1.0 - index / 1000.0));
+        }
+
+        List<RetrievalResult> output =
+                new ReRankingService(config, provider).rerank("query", results, 3);
+
+        assertEquals(100, provider.lastInput.size());
+        assertEquals(100, provider.lastRankingDepth);
+        assertEquals(3, output.size());
+    }
+
+    @Test
+    void rerank_doesNotExpandProviderWhenSelectorIsInactive() {
+        List<RetrievalResult> results = List.of(
+                createResult("A", "a0", 0.99),
+                createResult("A", "a1", 0.98),
+                createResult("A", "a2", 0.97),
+                createResult("B", "b0", 0.96),
+                createResult("C", "c0", 0.95));
+
+        RagRerankProperties disabledByZero = enabledConfig(5, 0);
+        RecordingProvider zeroProvider = new RecordingProvider("heuristic");
+        List<RetrievalResult> zeroOutput =
+                new ReRankingService(disabledByZero, zeroProvider)
+                        .rerank("query", results, 3);
+        assertProviderCall(zeroProvider, 5, 3);
+        assertEquals(List.of("A", "A", "A"), documentIds(zeroOutput));
+
+        RagRerankProperties disabledByFinalLimit = enabledConfig(5, 3);
+        RecordingProvider finalLimitProvider = new RecordingProvider("heuristic");
+        new ReRankingService(disabledByFinalLimit, finalLimitProvider)
+                .rerank("query", results, 3);
+        assertProviderCall(finalLimitProvider, 5, 3);
+
+        RagRerankProperties disabledByCandidateLimit = enabledConfig(3, 1);
+        RecordingProvider candidateLimitProvider =
+                new RecordingProvider("heuristic");
+        new ReRankingService(disabledByCandidateLimit, candidateLimitProvider)
+                .rerank("query", results, 3);
+        assertProviderCall(candidateLimitProvider, 5, 3);
+
+        RagRerankProperties disabledByProvider = enabledConfig(5, 1);
+        RecordingProvider noOpProvider = new RecordingProvider(" NoOp ");
+        new ReRankingService(disabledByProvider, noOpProvider)
+                .rerank("query", results, 3);
+        assertProviderCall(noOpProvider, 5, 3);
+    }
+
+    @Test
+    void rerank_doesNotInventResultsWhenProviderReturnsFewerItems() {
+        RagRerankProperties config = enabledConfig(5, 1);
+        RecordingProvider provider = new RecordingProvider(
+                "heuristic",
+                (input, depth) -> input.subList(0, 2));
+        List<RetrievalResult> results = List.of(
+                createResult("A", "a0", 0.99),
+                createResult("A", "a1", 0.98),
+                createResult("B", "b0", 0.97),
+                createResult("C", "c0", 0.96),
+                createResult("D", "d0", 0.95));
+
+        List<RetrievalResult> output =
+                new ReRankingService(config, provider).rerank("query", results, 3);
+
+        assertEquals(2, output.size());
+        assertEquals(List.of("A", "A"), documentIds(output));
+    }
+
+    @Test
+    void rerank_truncatesProviderOutputToRankingDepthBeforeSelection() {
+        RagRerankProperties config = enabledConfig(4, 1);
+        List<RetrievalResult> results = List.of(
+                createResult("A", "a0", 0.99),
+                createResult("A", "a1", 0.98),
+                createResult("B", "b0", 0.97),
+                createResult("C", "c0", 0.96),
+                createResult("D", "d0", 0.95));
+        RecordingProvider provider = new RecordingProvider(
+                "heuristic",
+                (input, depth) -> results);
+
+        List<RetrievalResult> output =
+                new ReRankingService(config, provider).rerank("query", results, 3);
+
+        assertProviderCall(provider, 4, 4);
+        assertEquals(List.of("A", "B", "C"), documentIds(output));
     }
 
     @Test
@@ -322,5 +442,72 @@ class ReRankingServiceTest {
         r.setVectorScore(score);
         r.setFulltextScore(score);
         return r;
+    }
+
+    private static RagRerankProperties enabledConfig(
+            int candidateLimit,
+            int preferredMaxChunksPerDocument) {
+        RagRerankProperties config = new RagRerankProperties();
+        config.setEnabled(true);
+        config.setCandidateLimit(candidateLimit);
+        config.setPreferredMaxChunksPerDocument(
+                preferredMaxChunksPerDocument);
+        return config;
+    }
+
+    private static List<String> documentIds(List<RetrievalResult> results) {
+        return results.stream().map(RetrievalResult::getDocumentId).toList();
+    }
+
+    private static void assertProviderCall(
+            RecordingProvider provider,
+            int inputSize,
+            int rankingDepth) {
+        assertEquals(inputSize, provider.lastInput.size());
+        assertEquals(rankingDepth, provider.lastRankingDepth);
+    }
+
+    private static final class RecordingProvider implements RerankProvider {
+
+        private final String name;
+        private final BiFunction<List<RetrievalResult>, Integer,
+                List<RetrievalResult>> behavior;
+        private List<RetrievalResult> lastInput;
+        private int lastRankingDepth;
+
+        private RecordingProvider(String name) {
+            this(
+                    name,
+                    (input, depth) -> input.subList(
+                            0, Math.min(input.size(), depth)));
+        }
+
+        private RecordingProvider(
+                String name,
+                BiFunction<List<RetrievalResult>, Integer,
+                        List<RetrievalResult>> behavior) {
+            this.name = name;
+            this.behavior = behavior;
+        }
+
+        @Override
+        public String getName() {
+            return name;
+        }
+
+        @Override
+        public boolean isAvailable() {
+            return true;
+        }
+
+        @Override
+        public List<RetrievalResult> rerank(
+                String query,
+                List<RetrievalResult> input,
+                int rankingDepth) {
+            this.lastInput = input;
+            this.lastRankingDepth = rankingDepth;
+            return behavior.apply(input, rankingDepth);
+        }
     }
 }

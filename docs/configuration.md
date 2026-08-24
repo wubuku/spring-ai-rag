@@ -405,6 +405,7 @@ rag:
     diversity-weight: 0.2
     top-n: 5
     candidate-limit: ${RAG_RERANK_CANDIDATE_LIMIT:20}
+    preferred-max-chunks-per-document: ${RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT:2}
 ```
 
 | Property | Default | Description |
@@ -414,6 +415,7 @@ rag:
 | `rag.rerank.diversity-weight` | `0.2` | Result diversity weight (prevents similar results stacking) |
 | `rag.rerank.top-n` | `5` | Final result fallback when callers omit a positive `maxResults` |
 | `rag.rerank.candidate-limit` | `20` | Internal pre-rerank candidate-pool limit when effective reranking is enabled; bounded to `1..100` |
+| `rag.rerank.preferred-max-chunks-per-document` | `2` | First-pass preferred chunk cap per exact nonblank document ID; bounded to `0..100`, where `0` disables document diversification |
 
 When the request sets `useRerank=true`, global reranking is enabled, and the provider is
 not a no-op, retrieval uses `max(requestedMaxResults, candidate-limit)` for the
@@ -428,6 +430,16 @@ retrieval limit.
 variable is `RAG_RERANK_CANDIDATE_LIMIT`. Increasing it can improve rerank recall,
 but increases database candidates, HTTP rerank request size, and latency. Compare
 MRR/nDCG and latency with the retrieval goldenset before raising it.
+
+When the candidate pool is larger than the final result limit, an effective
+reranker ranks the bounded pool before final selection. The selector first prefers
+at most `preferred-max-chunks-per-document` results for each exact, nonblank
+`documentId`, then backfills skipped provider-ranked chunks when distinct documents
+cannot fill the requested count. The setting is therefore a soft first-pass cap:
+it improves evidence coverage without reducing provider output. Null or blank
+document IDs are treated as independent results. Set
+`RAG_RERANK_PREFERRED_MAX_CHUNKS_PER_DOCUMENT=0` to restore the previous provider
+top-N selection.
 
 ## Document Chunking Configuration
 

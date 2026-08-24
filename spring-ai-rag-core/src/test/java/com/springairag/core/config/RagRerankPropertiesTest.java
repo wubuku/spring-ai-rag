@@ -28,6 +28,12 @@ class RagRerankPropertiesTest {
     }
 
     @Test
+    void defaults_preferredMaxChunksPerDocumentIs2() {
+        RagRerankProperties props = new RagRerankProperties();
+        assertEquals(2, props.getPreferredMaxChunksPerDocument());
+    }
+
+    @Test
     void candidateLimit_isClampedToOperationalBounds() {
         RagRerankProperties props = new RagRerankProperties();
 
@@ -36,6 +42,26 @@ class RagRerankPropertiesTest {
 
         props.setCandidateLimit(101);
         assertEquals(100, props.getCandidateLimit());
+    }
+
+    @Test
+    void preferredMaxChunksPerDocument_isClampedToOperationalBounds() {
+        RagRerankProperties props = new RagRerankProperties();
+
+        props.setPreferredMaxChunksPerDocument(-1);
+        assertEquals(0, props.getPreferredMaxChunksPerDocument());
+
+        props.setPreferredMaxChunksPerDocument(0);
+        assertEquals(0, props.getPreferredMaxChunksPerDocument());
+
+        props.setPreferredMaxChunksPerDocument(1);
+        assertEquals(1, props.getPreferredMaxChunksPerDocument());
+
+        props.setPreferredMaxChunksPerDocument(100);
+        assertEquals(100, props.getPreferredMaxChunksPerDocument());
+
+        props.setPreferredMaxChunksPerDocument(101);
+        assertEquals(100, props.getPreferredMaxChunksPerDocument());
     }
 
     @Test

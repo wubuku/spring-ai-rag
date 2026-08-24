@@ -12,6 +12,7 @@
 | `rag.rerank.enabled` | `true` (heuristic) | Local quality boost; no external rerank fee |
 | `rag.rerank.provider` | `heuristic` | Override with `http` + SiliconFlow/Cohere for cross-encoder |
 | `rag.rerank.candidate-limit` | `20` | Bounded pre-rerank candidate pool; final output remains governed by request `maxResults` |
+| `rag.rerank.preferred-max-chunks-per-document` | `2` | Prefer broader document evidence while retaining up to two complementary chunks before backfill |
 | `rag.query-rewrite.enabled` | `true` | Better recall |
 | retrieval weights | vector 0.55 / fulltext 0.45 | Slight vector bias; tune with goldenset |
 
@@ -89,6 +90,22 @@ After increasing the candidate pool, observe all of the following:
 For a quality or latency regression, first set `RAG_RERANK_CANDIDATE_LIMIT` back to
 `1`, or temporarily disable global reranking, then rerun the goldenset and the
 versioned quality regression.
+
+### Document Coverage After Rerank
+
+The production default prefers at most two chunks from the same exact document
+identity during the first selection pass. Two is a conservative balance: it
+reduces adjacent duplicate evidence while retaining room for complementary
+sections from one long document. If the ranked pool lacks enough alternatives,
+the selector backfills skipped chunks in provider order, so this is not an
+absolute per-document result cap.
+
+Use `1` when document coverage matters more than continuity, and `3` or higher
+when questions regularly require several sections from one document. Use `0`
+to restore provider top-N behavior. After changing the value, compare unique
+document count, MRR/nDCG/Recall@K, Search and Chat p95 latency, and final citation
+quality. The selector itself is bounded local O(n) work and does not add model
+or database calls.
 
 ### HTTP rerank (optional)
 

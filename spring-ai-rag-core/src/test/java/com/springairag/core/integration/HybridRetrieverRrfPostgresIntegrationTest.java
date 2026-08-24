@@ -5,12 +5,14 @@ import com.springairag.api.dto.RetrievalResult;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.retrieval.HybridRetrieverService;
+import com.springairag.core.retrieval.ReRankingService;
 import com.springairag.core.retrieval.RetrievalFilters;
 import com.springairag.core.retrieval.RetrievalScope;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProvider;
 import com.springairag.core.retrieval.fulltext.FulltextSearchProviderFactory;
 import com.springairag.core.retrieval.fulltext.QueryLang;
 import com.springairag.core.retrieval.fulltext.SearchCapabilities;
+import com.springairag.core.retrieval.rerank.RerankProvider;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -234,6 +236,170 @@ class HybridRetrieverRrfPostgresIntegrationTest {
                         .toList());
     }
 
+    @Test
+    void realVectorCandidatesSupportDocumentDiversificationAndRollback() {
+        EmbeddingProfile profile = insertProfile();
+        long repeatedDocument = insertDocument(
+                "repeated-document",
+                "repeated document content",
+                "g".repeat(64));
+        long alternateDocument = insertDocument(
+                "alternate-document",
+                "alternate document content",
+                "h".repeat(64));
+        long thirdDocument = insertDocument(
+                "third-document",
+                "third document content",
+                "i".repeat(64));
+
+        insertVector(profile.id(), repeatedDocument, 0, 1.0f);
+        insertVector(profile.id(), repeatedDocument, 1, 0.99f);
+        insertVector(profile.id(), repeatedDocument, 2, 0.98f);
+        insertVector(profile.id(), repeatedDocument, 3, 0.97f);
+        insertVector(profile.id(), alternateDocument, 0, 0.96f);
+        insertVector(profile.id(), thirdDocument, 0, 0.95f);
+        insertEmbeddingState(
+                profile.id(), repeatedDocument, "g".repeat(64), 4);
+        insertEmbeddingState(
+                profile.id(), alternateDocument, "h".repeat(64), 1);
+        insertEmbeddingState(
+                profile.id(), thirdDocument, "i".repeat(64), 1);
+
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed("document diversity query"))
+                .thenReturn(vector(1024, 1.0f));
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        properties.getRerank().setEnabled(true);
+        properties.getRerank().setProvider("heuristic");
+        properties.getRerank().setCandidateLimit(6);
+        properties.getRerank().setPreferredMaxChunksPerDocument(1);
+        HybridRetrieverService retriever = new HybridRetrieverService(
+                embeddingModel, () -> profile, jdbc, properties, null, Runnable::run);
+
+        List<RetrievalResult> candidates = retriever.searchInScopeDetailed(
+                "document diversity query",
+                RetrievalScope.unscoped(),
+                null,
+                3,
+                RetrievalConfig.builder()
+                        .maxResults(3)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(true)
+                        .build(),
+                RetrievalFilters.none()).results();
+
+        assertEquals(
+                List.of(
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(alternateDocument),
+                        String.valueOf(thirdDocument)),
+                candidates.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(
+                List.of(0, 1, 2, 3, 0, 0),
+                candidates.stream()
+                        .map(RetrievalResult::getChunkIndex)
+                        .toList());
+
+        RerankProvider provider = orderedProvider();
+        ReRankingService reranking =
+                new ReRankingService(properties.getRerank(), provider);
+        List<RetrievalResult> diversified =
+                reranking.rerank("document diversity query", candidates, 3);
+        assertEquals(
+                List.of(
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(alternateDocument),
+                        String.valueOf(thirdDocument)),
+                diversified.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(List.of(0, 0, 0), diversified.stream()
+                .map(RetrievalResult::getChunkIndex)
+                .toList());
+
+        properties.getRerank().setPreferredMaxChunksPerDocument(0);
+        List<RetrievalResult> restored =
+                reranking.rerank("document diversity query", candidates, 3);
+        assertEquals(
+                List.of(
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument)),
+                restored.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+
+        properties.getRerank().setPreferredMaxChunksPerDocument(2);
+        RerankProvider insufficientCoverageProvider = new RerankProvider() {
+            @Override
+            public String getName() {
+                return "controlled";
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<RetrievalResult> rerank(
+                    String query,
+                    List<RetrievalResult> results,
+                    int rankingDepth) {
+                return results.subList(0, Math.min(5, results.size()));
+            }
+        };
+        List<RetrievalResult> backfilled =
+                new ReRankingService(
+                        properties.getRerank(), insufficientCoverageProvider)
+                        .rerank("document diversity query", candidates, 4);
+        assertEquals(4, backfilled.size());
+        assertEquals(
+                List.of(
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(repeatedDocument),
+                        String.valueOf(alternateDocument)),
+                backfilled.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(
+                List.of(0, 1, 2, 0),
+                backfilled.stream()
+                        .map(RetrievalResult::getChunkIndex)
+                        .toList());
+    }
+
+    private RerankProvider orderedProvider() {
+        return new RerankProvider() {
+            @Override
+            public String getName() {
+                return "controlled";
+            }
+
+            @Override
+            public boolean isAvailable() {
+                return true;
+            }
+
+            @Override
+            public List<RetrievalResult> rerank(
+                    String query,
+                    List<RetrievalResult> results,
+                    int rankingDepth) {
+                return results.subList(
+                        0, Math.min(rankingDepth, results.size()));
+            }
+        };
+    }
+
     private FulltextSearchProvider controlledProvider(List<RetrievalResult> results) {
         return new FulltextSearchProvider() {
             @Override
@@ -315,17 +481,26 @@ class HybridRetrieverRrfPostgresIntegrationTest {
 
     private void insertEmbeddingState(
             long profileId, long documentId, String contentHash) {
+        insertEmbeddingState(profileId, documentId, contentHash, 1);
+    }
+
+    private void insertEmbeddingState(
+            long profileId,
+            long documentId,
+            String contentHash,
+            int chunkCount) {
         jdbc.update(
                 """
                 INSERT INTO rag_document_embedding_state (
                     document_id, embedding_profile_id, content_hash,
                     chunker_version, status, chunk_count, request_generation
                 ) VALUES (?, ?, ?, 'hierarchical-v2:1000:100:100',
-                    'COMPLETED', 1, 1)
+                    'COMPLETED', ?, 1)
                 """,
                 documentId,
                 profileId,
-                contentHash);
+                contentHash,
+                chunkCount);
     }
 
     private static DataSource dataSource(

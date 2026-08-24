@@ -11,6 +11,7 @@ RUN_ID="${RETRIEVAL_REGRESSION_RUN_ID:-$(date +%Y%m%d-%H%M%S)}"
 OUTPUT_DIR="${RETRIEVAL_REGRESSION_OUTPUT_DIR:-.verification/retrieval-regression/${RUN_ID}}"
 API_KEY="${RAG_API_KEY:-${RAG_ROOT_API_KEY:-}}"
 SKIP_FIXTURES=0
+SELF_TEST=0
 
 if [[ -z "$API_KEY" && -f .env ]]; then
   API_KEY="$(python3 - .env <<'PY'
@@ -40,6 +41,7 @@ Usage: ./scripts/run-retrieval-regression.sh [options]
 Options:
       --skip-fixtures   Reuse existing dataset Collections and records
       --baseline FILE   Compare aggregate metrics with a committed baseline
+      --self-test       Validate local response-contract helpers without HTTP
   -h, --help            Show help
 
 Environment:
@@ -64,6 +66,10 @@ while [[ $# -gt 0 ]]; do
       }
       BASELINE_FILE="$2"
       shift 2
+      ;;
+    --self-test)
+      SELF_TEST=1
+      shift
       ;;
     -h|--help)
       usage
@@ -99,6 +105,7 @@ python3 - \
   "$OUTPUT_DIR" \
   "$API_KEY" \
   "$SKIP_FIXTURES" \
+  "$SELF_TEST" \
   "$(git rev-parse HEAD)" <<'PY'
 import datetime
 import json
@@ -110,9 +117,19 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-base_url, dataset_path, baseline_path, output_dir, api_key, skip_fixtures, commit = sys.argv[1:]
+(
+    base_url,
+    dataset_path,
+    baseline_path,
+    output_dir,
+    api_key,
+    skip_fixtures,
+    self_test,
+    commit,
+) = sys.argv[1:]
 base_url = base_url.rstrip("/")
 skip_fixtures = skip_fixtures == "1"
+self_test = self_test == "1"
 output = pathlib.Path(output_dir)
 dataset = json.loads(pathlib.Path(dataset_path).read_text(encoding="utf-8"))
 baseline = (
@@ -174,6 +191,27 @@ def check_minimum(case_id, metrics, minimum):
     return failures
 
 
+def embedding_is_ready(response):
+    return response.get("embeddingStatus") in {"READY", "COMPLETED", "CACHED"}
+
+
+if self_test:
+    failures = []
+    for status in ("READY", "COMPLETED", "CACHED"):
+        if not embedding_is_ready({"embeddingStatus": status}):
+            failures.append(f"expected successful embedding status: {status}")
+    for status in (None, "INDEXING", "NOT_REQUESTED", "FAILED", "STALE"):
+        if embedding_is_ready({"embeddingStatus": status}):
+            failures.append(f"expected unsuccessful embedding status: {status}")
+    if failures:
+        raise RuntimeError(
+            "Retrieval regression response-contract self-test failed: "
+            + "; ".join(failures)
+        )
+    print("Retrieval regression response-contract self-test passed.")
+    raise SystemExit(0)
+
+
 status, health, _ = request("GET", "/actuator/health", timeout=10)
 if status != 200 or not isinstance(health, dict):
     raise RuntimeError("Backend health endpoint did not return JSON")
@@ -222,9 +260,9 @@ if not skip_fixtures:
             },
         )
         embedding_status = response.get("embeddingStatus")
-        if embedding_status not in {"COMPLETED", "CACHED"}:
+        if not embedding_is_ready(response):
             raise RuntimeError(
-                f"Fixture {identity(record)} embedding failed: "
+                f"Fixture {identity(record)} embedding is not ready: "
                 f"status={embedding_status} error={response.get('error')}"
             )
         document_ids[identity(record)] = int(response["documentId"])

@@ -12,6 +12,7 @@
 | `rag.rerank.enabled` | `true`（heuristic） | 本地质量增强，无额外重排 API 成本 |
 | `rag.rerank.provider` | `heuristic` | 可改为 `http`，接入 cross-encoder |
 | `rag.rerank.candidate-limit` | `20` | rerank 前的有界候选池；最终返回数量仍由请求 `maxResults` 决定 |
+| `rag.rerank.preferred-max-chunks-per-document` | `2` | 回填前优先扩大文档覆盖，同时允许同一文档保留两个互补 chunk |
 | `rag.query-rewrite.enabled` | `true` | 提升召回 |
 | 检索权重 | vector 0.55 / fulltext 0.45 | 略偏向向量，可通过 goldenset 调优 |
 
@@ -80,6 +81,18 @@ BASE_URL=http://127.0.0.1:8081 API_KEY=rag_sk_... \
 
 质量或延迟回归时，先将 `RAG_RERANK_CANDIDATE_LIMIT` 调回 `1`，或暂时关闭全局
 rerank，再重新运行 goldenset 和版本化质量回归。
+
+### rerank 后的文档覆盖
+
+生产默认值会在第一遍选择时，对同一个精确文档身份优先最多保留两个 chunk。`2` 是保守
+平衡：减少相邻重复证据，同时允许一个长文档提供两个互补段落。如果排名池中缺少足够的
+替代文档，选择器会按 provider 原顺序回填跳过的 chunk，所以它不是最终结果的绝对
+每文档上限。
+
+更看重文档覆盖时使用 `1`；问题经常需要同一文档多个章节时使用 `3` 或更高；设置为
+`0` 可恢复 provider top-N 行为。调整后应比较 unique document count、
+MRR/nDCG/Recall@K、Search/Chat p95 延迟和最终 citation 质量。选择器只执行有界的本地
+O(n) 工作，不增加模型或数据库调用。
 
 ### 可选 HTTP 重排
 

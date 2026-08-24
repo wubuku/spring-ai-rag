@@ -63,16 +63,21 @@ public class HttpRerankProvider implements RerankProvider {
     }
 
     @Override
-    public List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults) {
+    public List<RetrievalResult> rerank(
+            String query,
+            List<RetrievalResult> results,
+            int rankingDepth) {
         if (results == null || results.isEmpty()) {
             return results;
         }
         if (!isAvailable()) {
             log.warn("HttpRerankProvider not available (missing api-key/base-url); using heuristic fallback");
-            return fallback(query, results, maxResults);
+            return fallback(query, results, rankingDepth);
         }
 
-        int topN = maxResults > 0 ? maxResults : (config.getTopN() > 0 ? config.getTopN() : results.size());
+        int topN = rankingDepth > 0
+                ? rankingDepth
+                : (config.getTopN() > 0 ? config.getTopN() : results.size());
         try {
             List<String> documents = results.stream()
                     .map(r -> r.getChunkText() != null ? r.getChunkText() : "")
@@ -99,15 +104,20 @@ public class HttpRerankProvider implements RerankProvider {
             return mapResponse(responseBody, results, topN);
         } catch (Exception e) {
             log.warn("HTTP rerank failed: {} — falling back", e.getMessage());
-            return fallback(query, results, maxResults);
+            return fallback(query, results, rankingDepth);
         }
     }
 
-    private List<RetrievalResult> fallback(String query, List<RetrievalResult> results, int maxResults) {
+    private List<RetrievalResult> fallback(
+            String query,
+            List<RetrievalResult> results,
+            int rankingDepth) {
         if (config.isFallbackToHeuristic()) {
-            return heuristicFallback.rerank(query, results, maxResults);
+            return heuristicFallback.rerank(query, results, rankingDepth);
         }
-        int limit = maxResults > 0 ? Math.min(maxResults, results.size()) : results.size();
+        int limit = rankingDepth > 0
+                ? Math.min(rankingDepth, results.size())
+                : results.size();
         return results.subList(0, limit);
     }
 

@@ -33,11 +33,14 @@ public class HeuristicRerankProvider implements RerankProvider {
     }
 
     @Override
-    public List<RetrievalResult> rerank(String query, List<RetrievalResult> results, int maxResults) {
+    public List<RetrievalResult> rerank(
+            String query,
+            List<RetrievalResult> results,
+            int rankingDepth) {
         if (results == null || results.isEmpty()) {
             return results;
         }
-        int limit = maxResults > 0 ? maxResults : results.size();
+        int limit = rankingDepth > 0 ? rankingDepth : results.size();
         float diversityWeight = config.getDiversityWeight();
 
         return results.stream()

@@ -15,7 +15,7 @@ public class RagRerankProperties {
 
     private float diversityWeight = 0.2f;
 
-    /** Max results after rerank (also used as top_n for HTTP providers). */
+    /** Final result fallback when callers do not provide a positive limit. */
     private int topN = 5;
 
     /**
@@ -25,6 +25,14 @@ public class RagRerankProperties {
      * unbounded database query or rerank request.</p>
      */
     private int candidateLimit = 20;
+
+    /**
+     * Preferred first-pass chunk count per nonblank document identity.
+     *
+     * <p>Zero disables document diversification. The selector backfills skipped
+     * chunks when distinct documents cannot fill the final result limit.</p>
+     */
+    private int preferredMaxChunksPerDocument = 2;
 
     private String baseUrl = "https://api.siliconflow.cn";
 
@@ -77,6 +85,16 @@ public class RagRerankProperties {
 
     public void setCandidateLimit(int candidateLimit) {
         this.candidateLimit = Math.min(100, Math.max(1, candidateLimit));
+    }
+
+    public int getPreferredMaxChunksPerDocument() {
+        return preferredMaxChunksPerDocument;
+    }
+
+    public void setPreferredMaxChunksPerDocument(
+            int preferredMaxChunksPerDocument) {
+        this.preferredMaxChunksPerDocument =
+                Math.min(100, Math.max(0, preferredMaxChunksPerDocument));
     }
 
     public String getBaseUrl() {

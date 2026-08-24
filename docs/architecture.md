@@ -644,6 +644,31 @@ PostgreSQL full-text search reads the current generation from
   Raw vector and full-text scores remain diagnostic fields and are not compared
   across provider scales.
 
+### 5.4 Bounded Rerank And Document Coverage
+
+Effective reranking uses one shared sequence for Search POST, `KNOWLEDGE`,
+the Agent search tool, JSON records, Evaluation, and the legacy advisor:
+
+```text
+bounded retrieval candidates
+  -> provider ranking over the bounded pool
+  -> first-pass document coverage preference
+  -> provider-order backfill when coverage is insufficient
+  -> final caller-visible top N
+```
+
+The provider remains authoritative for score and order. The document selector
+only chooses a subsequence of provider-ranked results and reuses the same
+`RetrievalResult` objects. For each exact nonblank `documentId`, the first pass
+prefers at most `preferred-max-chunks-per-document` chunks; null or blank IDs
+remain independent. A second pass restores skipped chunks in provider order
+when distinct documents cannot fill the final limit, so the preference does
+not reduce the number of ranked results available to the caller.
+
+The selector operates on at most `candidate-limit` results and adds no SQL,
+embedding, rerank-provider, or Chat-model calls. A value of `0` disables this
+selection and restores provider top-N behavior.
+
 ---
 
 ## 6. Configuration System
@@ -664,6 +689,7 @@ rag:
     provider: heuristic
     top-n: 5                      # Final fallback when callers omit maxResults
     candidate-limit: 20           # Pre-rerank candidate-pool limit, bounded to 1..100
+    preferred-max-chunks-per-document: 2  # First-pass document coverage preference
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100

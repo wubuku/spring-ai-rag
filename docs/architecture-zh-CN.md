@@ -585,6 +585,28 @@ PostgreSQL 全文检索从当前 generation 的
   确定各自通道内的名次；不同通道的加权贡献会在候选重叠时相加，最终分数相同则按稳定的
   文档 identity 顺序排序。向量和全文原始分数继续作为诊断字段保留，不跨提供方尺度直接比较。
 
+### 5.4 有界 rerank 与文档覆盖
+
+Search POST、`KNOWLEDGE`、Agent 检索工具、JSON record、Evaluation 和旧 Advisor
+共享同一条有效 rerank 顺序：
+
+```text
+有界检索候选
+  -> provider 对有界候选池排序
+  -> 第一遍优先文档覆盖
+  -> 覆盖不足时按 provider 顺序回填
+  -> 调用方可见的最终 top N
+```
+
+provider 继续决定 score 和排名。文档选择器只从 provider 排名中选择一个子序列，并复用
+原 `RetrievalResult` 对象。第一遍对每个精确、非空 `documentId` 优先最多保留
+`preferred-max-chunks-per-document` 个 chunk；null 或 blank ID 仍视为独立结果。不同
+文档不足以填满最终数量时，第二遍按 provider 原顺序恢复被跳过的 chunk，因此该偏好不会
+减少调用方可获得的已排名结果数量。
+
+选择器最多处理 `candidate-limit` 项，不增加 SQL、embedding、rerank provider 或 Chat
+模型调用。配置为 `0` 时关闭该选择，恢复 provider top-N 行为。
+
 ---
 
 ## 6. 配置体系
@@ -605,6 +627,7 @@ rag:
     provider: heuristic
     top-n: 5                      # 调用方未提供 maxResults 时的最终 fallback
     candidate-limit: 20           # rerank 前候选池上限，绑定范围 1..100
+    preferred-max-chunks-per-document: 2  # 第一遍文档覆盖偏好
   chunk:
     default-chunk-size: 1000
     default-chunk-overlap: 100

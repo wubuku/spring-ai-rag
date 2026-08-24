@@ -15,17 +15,38 @@ class RerankProviderFactoryTest {
     }
 
     @Test
-    void create_none() {
-        RagProperties props = new RagProperties();
-        props.getRerank().setProvider("none");
-        assertEquals("none", new RerankProviderFactory(props).create().getName());
+    void create_noneAliases() {
+        for (String alias : new String[]{"none", "noop", "off"}) {
+            RagProperties props = new RagProperties();
+            props.getRerank().setProvider(alias);
+            assertEquals(
+                    "none",
+                    new RerankProviderFactory(props).create().getName(),
+                    alias);
+        }
     }
 
     @Test
-    void create_http() {
+    void create_httpAliases() {
+        for (String alias : new String[]{
+                "http", "api", "siliconflow", "remote"}) {
+            RagProperties props = new RagProperties();
+            props.getRerank().setProvider(alias);
+            props.getRerank().setApiKey("sk");
+            assertEquals(
+                    "http",
+                    new RerankProviderFactory(props).create().getName(),
+                    alias);
+        }
+    }
+
+    @Test
+    void create_unknownProviderFallsBackToHeuristic() {
         RagProperties props = new RagProperties();
-        props.getRerank().setProvider("http");
-        props.getRerank().setApiKey("sk");
-        assertEquals("http", new RerankProviderFactory(props).create().getName());
+        props.getRerank().setProvider("future-provider");
+
+        assertEquals(
+                "heuristic",
+                new RerankProviderFactory(props).create().getName());
     }
 }

@@ -10,12 +10,12 @@
 >
 > **worktree**：`/Users/yangjiefeng/Documents/wubuku/spring-ai-rag`
 >
-> **配套进度**：[NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+> **配套进度**：[2026-08-24_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md](2026-08-24_NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 >
-> **近距离上下文**：[项目上下文](../project-context-zh-CN.md)、
-> [架构说明](../architecture-zh-CN.md)、[配置参考](../configuration-zh-CN.md)、
-> [质量默认值](../quality-defaults-zh-CN.md)、[测试指南](../testing-guide-zh-CN.md)、
-> [交付工作流](../delivery-workflow-zh-CN.md)
+> **近距离上下文**：[项目上下文](../../project-context-zh-CN.md)、
+> [架构说明](../../architecture-zh-CN.md)、[配置参考](../../configuration-zh-CN.md)、
+> [质量默认值](../../quality-defaults-zh-CN.md)、[测试指南](../../testing-guide-zh-CN.md)、
+> [交付工作流](../../delivery-workflow-zh-CN.md)
 
 本文是下一轮小范围功能的自包含实施入口。上一轮“有界 rerank 候选池”已经合入
 `main`，其规划和进度已归档为
