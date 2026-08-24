@@ -413,6 +413,93 @@ class HybridRetrieverRrfPostgresIntegrationTest {
     }
 
     @Test
+    void realVectorCandidatesRejectEmbeddedLatinAndNumericTitleMatches() {
+        EmbeddingProfile profile = insertProfile();
+        long distractorDocument = insertDocument(
+                "Storage Chair 19042",
+                "shared neutral evidence",
+                "o".repeat(64));
+        long relevantDocument = insertDocument(
+                "RAG AI ZX-9042",
+                "shared neutral evidence",
+                "p".repeat(64));
+
+        insertVector(
+                profile.id(),
+                distractorDocument,
+                0,
+                1.0f,
+                "shared neutral evidence");
+        insertVector(
+                profile.id(),
+                relevantDocument,
+                0,
+                0.99f,
+                "shared neutral evidence");
+        insertEmbeddingState(
+                profile.id(), distractorDocument, "o".repeat(64));
+        insertEmbeddingState(
+                profile.id(), relevantDocument, "p".repeat(64));
+
+        String query = "RAG AI 9042";
+        EmbeddingModel embeddingModel = mock(EmbeddingModel.class);
+        when(embeddingModel.embed(query)).thenReturn(vector(1024, 1.0f));
+        RagProperties properties = new RagProperties();
+        properties.getRetrieval().setFulltextEnabled(false);
+        properties.getRerank().setEnabled(true);
+        properties.getRerank().setProvider("heuristic");
+        properties.getRerank().setDiversityWeight(0.2f);
+        properties.getRerank().setCandidateLimit(2);
+        HybridRetrieverService retriever = new HybridRetrieverService(
+                embeddingModel,
+                () -> profile,
+                jdbc,
+                properties,
+                null,
+                Runnable::run);
+
+        List<RetrievalResult> candidates = retriever.searchInScopeDetailed(
+                query,
+                RetrievalScope.unscoped(),
+                null,
+                1,
+                RetrievalConfig.builder()
+                        .maxResults(1)
+                        .minScore(0.0)
+                        .useHybridSearch(false)
+                        .useRerank(true)
+                        .build(),
+                RetrievalFilters.none()).results();
+
+        assertEquals(
+                List.of(
+                        String.valueOf(distractorDocument),
+                        String.valueOf(relevantDocument)),
+                candidates.stream()
+                        .map(RetrievalResult::getDocumentId)
+                        .toList());
+        assertEquals(
+                List.of(
+                        "Storage Chair 19042",
+                        "RAG AI ZX-9042"),
+                candidates.stream().map(RetrievalResult::getTitle).toList());
+
+        ReRankingService reranking = new ReRankingService(
+                properties,
+                new RerankProviderFactory(properties));
+        List<RetrievalResult> reranked =
+                reranking.rerank(query, candidates, 1);
+
+        assertEquals(1, reranked.size());
+        assertEquals(
+                String.valueOf(relevantDocument),
+                reranked.getFirst().getDocumentId());
+        assertEquals(
+                "RAG AI ZX-9042",
+                reranked.getFirst().getTitle());
+    }
+
+    @Test
     void boundedKnowledgeExpansionExecutesOnlyUniqueQueriesThroughPostgresRetriever() {
         EmbeddingProfile profile = insertProfile();
         long documentId = insertDocument(

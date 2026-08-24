@@ -49,6 +49,8 @@ public class HeuristicRerankProvider implements RerankProvider {
         int limit = rankingDepth > 0 ? rankingDepth : results.size();
         float diversityWeight = config.getDiversityWeight();
         LexicalFeatures queryFeatures = extractFeatures(query);
+        List<RelevanceTerm> relevanceTerms =
+                prepareRelevanceTerms(queryFeatures.orderedTerms());
         List<CandidateFeatures> resultFeatures = results.stream()
                 .map(result -> new CandidateFeatures(
                         extractFeatures(result.getChunkText()),
@@ -60,10 +62,10 @@ public class HeuristicRerankProvider implements RerankProvider {
             RetrievalResult result = results.get(index);
             CandidateFeatures features = resultFeatures.get(index);
             float contentRelevance = calculateRelevanceScore(
-                    queryFeatures.orderedTerms(),
+                    relevanceTerms,
                     features.chunkFeatures().normalizedText());
             float titleRelevance = calculateRelevanceScore(
-                    queryFeatures.orderedTerms(),
+                    relevanceTerms,
                     features.normalizedTitle());
             float relevance = Math.max(
                     contentRelevance,
@@ -101,20 +103,20 @@ public class HeuristicRerankProvider implements RerankProvider {
         LexicalFeatures queryFeatures = extractFeatures(query);
         String normalizedText = normalize(text);
         return calculateRelevanceScore(
-                queryFeatures.orderedTerms(),
+                prepareRelevanceTerms(queryFeatures.orderedTerms()),
                 normalizedText);
     }
 
     private float calculateRelevanceScore(
-            List<String> queryTerms,
+            List<RelevanceTerm> queryTerms,
             String normalizedText) {
         if (queryTerms.isEmpty() || normalizedText.isBlank()) {
             return 0f;
         }
         int matchCount = 0;
         int positionScore = 0;
-        for (String term : queryTerms) {
-            int position = normalizedText.indexOf(term);
+        for (RelevanceTerm term : queryTerms) {
+            int position = findMatchPosition(normalizedText, term);
             if (position >= 0) {
                 matchCount++;
                 if (position < 50) {
@@ -125,6 +127,94 @@ public class HeuristicRerankProvider implements RerankProvider {
         float termMatchScore = (float) matchCount / queryTerms.size();
         float positionBonus = Math.min(positionScore / 10f, 0.3f);
         return Math.min(termMatchScore + positionBonus, 1.0f);
+    }
+
+    private static List<RelevanceTerm> prepareRelevanceTerms(
+            List<String> queryTerms) {
+        if (queryTerms.isEmpty()) {
+            return List.of();
+        }
+        List<RelevanceTerm> relevanceTerms =
+                new ArrayList<>(queryTerms.size());
+        for (String queryTerm : queryTerms) {
+            String value = stripOuterSentencePunctuation(queryTerm);
+            int firstCodePoint = value.codePointAt(0);
+            int lastCodePoint = value.codePointBefore(value.length());
+            boolean boundaryAware = !containsCjk(value)
+                    && Character.isLetterOrDigit(firstCodePoint)
+                    && Character.isLetterOrDigit(lastCodePoint);
+            relevanceTerms.add(new RelevanceTerm(value, boundaryAware));
+        }
+        return List.copyOf(relevanceTerms);
+    }
+
+    private static String stripOuterSentencePunctuation(String term) {
+        int start = 0;
+        int end = term.length();
+        while (start < end) {
+            int codePoint = term.codePointAt(start);
+            if (!isOuterSentencePunctuation(codePoint)) {
+                break;
+            }
+            start += Character.charCount(codePoint);
+        }
+        while (start < end) {
+            int codePoint = term.codePointBefore(end);
+            if (!isOuterSentencePunctuation(codePoint)) {
+                break;
+            }
+            end -= Character.charCount(codePoint);
+        }
+        return start == end ? term : term.substring(start, end);
+    }
+
+    private static boolean isOuterSentencePunctuation(int codePoint) {
+        return switch (codePoint) {
+            case '.', ',', '!', '?', ';', ':', '\'', '"',
+                    '(', ')', '[', ']', '{', '}',
+                    '，', '。', '！', '？', '；', '：',
+                    '“', '”', '‘', '’', '（', '）',
+                    '【', '】', '〔', '〕', '《', '》',
+                    '〈', '〉', '「', '」', '『', '』' -> true;
+            default -> false;
+        };
+    }
+
+    private static int findMatchPosition(
+            String normalizedText,
+            RelevanceTerm term) {
+        int searchFrom = 0;
+        while (searchFrom < normalizedText.length()) {
+            int position = normalizedText.indexOf(term.value(), searchFrom);
+            if (position < 0) {
+                return -1;
+            }
+            if (!term.boundaryAware()
+                    || hasCompleteAlphanumericBoundaries(
+                            normalizedText,
+                            position,
+                            position + term.value().length())) {
+                return position;
+            }
+            searchFrom = position
+                    + Character.charCount(normalizedText.codePointAt(position));
+        }
+        return -1;
+    }
+
+    private static boolean hasCompleteAlphanumericBoundaries(
+            String text,
+            int start,
+            int end) {
+        boolean leftBoundary = start == 0
+                || !isBlockingAlphanumeric(text.codePointBefore(start));
+        boolean rightBoundary = end == text.length()
+                || !isBlockingAlphanumeric(text.codePointAt(end));
+        return leftBoundary && rightBoundary;
+    }
+
+    private static boolean isBlockingAlphanumeric(int codePoint) {
+        return Character.isLetterOrDigit(codePoint) && !isCjk(codePoint);
     }
 
     public float calculateDiversityScore(String text, List<RetrievalResult> allResults) {
@@ -335,6 +425,8 @@ public class HeuristicRerankProvider implements RerankProvider {
     private record CandidateFeatures(
             LexicalFeatures chunkFeatures,
             String normalizedTitle) {}
+
+    private record RelevanceTerm(String value, boolean boundaryAware) {}
 
     private record LexicalFeatures(
             String normalizedText,

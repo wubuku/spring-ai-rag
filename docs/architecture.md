@@ -714,6 +714,19 @@ HTTP-provider requests still send chunk content only; title relevance applies
 only when HTTP falls back to heuristic. This adds no SQL, embedding, HTTP, or
 Chat-model call.
 
+Before content and title relevance are calculated, the query's ordered lexical
+features are prepared once and reused for every candidate. Ordinary terms that
+contain no CJK code point and start and end with a Unicode letter or digit use
+complete alphanumeric boundaries: adjacent non-CJK letters or digits block an
+occurrence, while punctuation, separators, text edges, and CJK/non-CJK script
+transitions are boundaries. Explicit outer sentence/wrapper punctuation is
+removed from query terms, but `+`, `#`, `-`, `_`, `/`, and `\` remain part of
+technical identifiers. CJK features and symbol-ending terms such as `C++` and
+`C#` keep substring matching. This prevents terms such as `rag`, `ai`, and
+`9042` from matching inside `storage`, `OpenAI`, or `19042`, while preserving
+`RAG?` -> `RAG-based`, `SpringAI` -> `中文SpringAI检索`, and
+`9042` -> `型号9042说明`.
+
 The selector operates on at most `candidate-limit` results and adds no SQL,
 embedding, rerank-provider, or Chat-model calls. A value of `0` disables this
 selection and restores provider top-N behavior.

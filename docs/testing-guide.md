@@ -663,13 +663,18 @@ The same gate's `HeuristicRerankProviderTest`, `ReRankingServiceTest`, and
 languages, English compatibility, blank/long inputs, identical chunks,
 default-weight ordering, title-only English/CJK/mixed IDs, exact blank-title
 compatibility, title/diversity isolation, field copying, successful HTTP
-requests without titles, and title-aware heuristic fallback. The
+requests without titles, title-aware heuristic fallback, rejection of Latin
+and numeric terms embedded in longer identifiers, outer punctuation,
+CJK/non-CJK boundary transitions, symbol-bearing technical terms, and a later
+legal occurrence after an earlier embedded occurrence. The
 `HybridRetrieverRrfPostgresIntegrationTest` uses real PostgreSQL/pgvector to
 put a candidate with a slightly higher vector score and unrelated content
 first, then separately proves that CJK chunk relevance and an authoritative
 `rag_documents.title` can correct ordering through the real factory and
-`ReRankingService`. The full class must finish with `failures=0`, `errors=0`,
-and `skipped=0`.
+`ReRankingService`. It also proves that embedded title substrings such as
+`storage`/`OpenAI`/`19042` do not outrank complete `RAG`/`AI`/`9042` title
+terms. The full class must finish with `failures=0`, `errors=0`, and
+`skipped=0`.
 
 The PostgreSQL gate is attempted by default. If Docker is unavailable or the
 daemon rejects the negotiated API version, the script records both Docker and

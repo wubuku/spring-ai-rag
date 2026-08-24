@@ -639,6 +639,15 @@ null/blank 标题精确保留原有评分路径。HTTP provider 成功请求仍�
 标题；只有 HTTP 降级到 heuristic 时使用标题相关性。该行为不增加 SQL、embedding、HTTP
 或 Chat 模型调用。
 
+正文和标题计算 relevance 前，query 的有序词法特征只准备一次，并供全部候选复用。对于
+不含 CJK code point、且首尾为 Unicode 字母或数字的普通 term，匹配使用完整字母数字
+边界：相邻的非 CJK 字母或数字会阻断 occurrence，标点、分隔符、文本边缘和 CJK/非 CJK
+script transition 都视为边界。query term 外层明确的句末/包裹标点会被移除，但 `+`、
+`#`、`-`、`_`、`/` 和 `\` 仍属于技术标识符。CJK 特征以及 `C++`、`C#` 等以符号结尾
+的 term 继续使用 substring。这样 `rag`、`ai`、`9042` 不会误命中 `storage`、`OpenAI`
+或 `19042`，同时保留 `RAG?` -> `RAG-based`、`SpringAI` -> `中文SpringAI检索` 和
+`9042` -> `型号9042说明`。
+
 选择器最多处理 `candidate-limit` 项，不增加 SQL、embedding、rerank provider 或 Chat
 模型调用。配置为 `0` 时关闭该选择，恢复 provider top-N 行为。
 

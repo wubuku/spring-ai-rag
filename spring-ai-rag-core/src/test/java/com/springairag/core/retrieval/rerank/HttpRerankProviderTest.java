@@ -186,6 +186,31 @@ class HttpRerankProviderTest {
         assertEquals("relevant", output.getFirst().getDocumentId());
     }
 
+    @Test
+    void unavailableProviderUsesBoundaryAwareHeuristicFallback() {
+        RagRerankProperties props = new RagRerankProperties();
+        props.setApiKey("");
+        props.setDiversityWeight(0.2f);
+        HttpRerankProvider provider = new HttpRerankProvider(props);
+        RetrievalResult distractor = result(
+                "distractor",
+                "shared neutral evidence",
+                1.0);
+        distractor.setTitle("Storage Chair 19042");
+        RetrievalResult relevant = result(
+                "relevant",
+                "shared neutral evidence",
+                0.99);
+        relevant.setTitle("RAG AI ZX-9042");
+
+        List<RetrievalResult> output = provider.rerank(
+                "RAG AI 9042",
+                List.of(distractor, relevant),
+                2);
+
+        assertEquals("relevant", output.getFirst().getDocumentId());
+    }
+
     private static RetrievalResult result(String id, String text, double score) {
         RetrievalResult r = new RetrievalResult();
         r.setDocumentId(id);
