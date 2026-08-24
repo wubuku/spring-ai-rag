@@ -512,6 +512,15 @@ payload, and final document-coverage observations to `runtime-comparison.json`
 and `runtime-comparison.md`. Wall-clock and payload values are evidence, not
 unstable threshold gates.
 
+The correlated database result count is the latest retrieval-outcome count.
+Search requires it to match the final HTTP count. KNOWLEDGE Chat records the
+relationship separately because its HTTP sources are produced after advisor
+query joining, reranking, and prompt-budget processing.
+
+Chat samples retry explicit transient HTTP `429/502/503/504` responses within
+the positive `RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS` bound (default `2`). All
+retries are logged; Search and non-retryable failures remain fail-fast.
+
 The dataset and committed baseline live under `testdata/regression/`. The
 runner creates fixtures by stable
 `collectionKey + sourceNamespace(default) + externalId`, checks Hit

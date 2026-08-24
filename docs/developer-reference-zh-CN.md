@@ -475,6 +475,14 @@ runner 会在同一测试库和夹具上依次用 cap=`0`、cap=`2` 重启服务
 p95、HTTP 响应 payload 和最终文档覆盖写入 `runtime-comparison.json` /
 `runtime-comparison.md`；这些墙钟与 payload 数据是观测证据，不是易波动的阈值门禁。
 
+关联到的数据库结果数表示 latest retrieval outcome 数量。Search 要求它与最终 HTTP
+结果数相等；KNOWLEDGE Chat 的 HTTP sources 经过 advisor 的 query join、rerank 和
+prompt budget 后处理，因此运行时产物单独记录两者关系，不强制把不同阶段的数量视为相同。
+
+Chat 样本只对明确的瞬时 HTTP `429/502/503/504` 做有界重试，正整数上限由
+`RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS` 控制（默认 `2`）。每次重试都会输出日志；Search
+和不可重试失败仍立即失败。
+
 数据集和提交的 baseline 位于 `testdata/regression/`。runner 使用稳定
 `collectionKey + sourceNamespace(default) + externalId` 身份创建 fixture，检查 Hit Rate、MRR、Recall@K、nDCG、
 minimum、相对 baseline 回退、Collection decoy 泄漏和 JSONB 明确空结果，并把 JSON

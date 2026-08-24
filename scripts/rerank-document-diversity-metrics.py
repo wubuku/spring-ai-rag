@@ -13,6 +13,17 @@ import urllib.request
 import uuid
 
 
+RETRYABLE_CHAT_HTTP_STATUSES = frozenset({429, 502, 503, 504})
+
+
+class HttpRequestError(RuntimeError):
+    def __init__(self, path, status, body):
+        super().__init__(
+            f"POST {path} failed with HTTP {status}: {body[:1000]}"
+        )
+        self.status = status
+
+
 def read_json(path):
     return json.loads(pathlib.Path(path).read_text(encoding="utf-8"))
 
@@ -49,9 +60,7 @@ def request_json(base_url, api_key, path, body, timeout):
             return response.headers, raw, payload, elapsed_ms
     except urllib.error.HTTPError as error:
         raw = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(
-            f"POST {path} failed with HTTP {error.code}: {raw[:1000]}"
-        ) from error
+        raise HttpRequestError(path, error.code, raw) from error
 
 
 def validated_trace_id(value):
@@ -164,6 +173,36 @@ def collect_chat(base_url, api_key, fixture, timeout):
     }
 
 
+def collect_chat_with_retries(
+        base_url,
+        api_key,
+        fixture,
+        timeout,
+        max_attempts,
+        collect_fn=None,
+        sleep_fn=None):
+    collect_fn = collect_fn or collect_chat
+    sleep_fn = sleep_fn or time.sleep
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return collect_fn(base_url, api_key, fixture, timeout)
+        except HttpRequestError as error:
+            if (
+                error.status not in RETRYABLE_CHAT_HTTP_STATUSES
+                or attempt >= max_attempts
+            ):
+                raise
+            delay_seconds = min(2 ** (attempt - 1), 5)
+            print(
+                f"Chat received retryable HTTP {error.status}; "
+                f"retrying attempt {attempt + 1}/{max_attempts} "
+                f"after {delay_seconds}s",
+                flush=True,
+            )
+            sleep_fn(delay_seconds)
+    raise RuntimeError("Chat retry loop ended without a result")
+
+
 def command_collect(args):
     fixture = read_json(args.fixture)
     samples = []
@@ -184,10 +223,20 @@ def command_collect(args):
         )
 
     print(f"Warming Chat for {args.label}", flush=True)
-    collect_chat(args.base_url, args.api_key, fixture, args.timeout)
+    collect_chat_with_retries(
+        args.base_url,
+        args.api_key,
+        fixture,
+        args.timeout,
+        args.chat_max_attempts,
+    )
     for index in range(args.chat_samples):
-        sample = collect_chat(
-            args.base_url, args.api_key, fixture, args.timeout
+        sample = collect_chat_with_retries(
+            args.base_url,
+            args.api_key,
+            fixture,
+            args.timeout,
+            args.chat_max_attempts,
         )
         samples.append(sample)
         print(
@@ -226,6 +275,18 @@ def command_trace_sql(args):
     print(",".join(f"'{trace_id}'::uuid" for trace_id in trace_ids))
 
 
+def correlate_result_count(sample, latest_retrieval_result_count):
+    matches = latest_retrieval_result_count == sample["resultCount"]
+    sample["latestRetrievalResultCount"] = latest_retrieval_result_count
+    sample["finalResultCountMatchesLatestRetrieval"] = matches
+    if sample["endpoint"] == "Search" and not matches:
+        raise RuntimeError(
+            f"Trace {sample['traceId']} Search result-count mismatch: "
+            f"http={sample['resultCount']} "
+            f"latestRetrieval={latest_retrieval_result_count}"
+        )
+
+
 def command_enrich(args):
     payload = read_json(args.samples)
     rows = read_json(args.database_metrics)
@@ -255,7 +316,6 @@ def command_enrich(args):
         for source_key, target_key in (
             ("retrievalLatencyMs", "retrievalLatencyMs"),
             ("rerankStageLatencyMs", "rerankStageLatencyMs"),
-            ("persistedResultCount", "persistedResultCount"),
         ):
             value = row.get(source_key)
             if value is None or not isinstance(value, (int, float)) or value < 0:
@@ -263,12 +323,19 @@ def command_enrich(args):
                     f"Trace {trace_id} has invalid {source_key}: {value}"
                 )
             sample[target_key] = value
-        if sample["persistedResultCount"] != sample["resultCount"]:
+        latest_retrieval_result_count = row.get(
+            "latestRetrievalResultCount"
+        )
+        if (
+            latest_retrieval_result_count is None
+            or not isinstance(latest_retrieval_result_count, (int, float))
+            or latest_retrieval_result_count < 0
+        ):
             raise RuntimeError(
-                f"Trace {trace_id} result-count mismatch: "
-                f"http={sample['resultCount']} "
-                f"database={sample['persistedResultCount']}"
+                f"Trace {trace_id} has invalid latestRetrievalResultCount: "
+                f"{latest_retrieval_result_count}"
             )
+        correlate_result_count(sample, latest_retrieval_result_count)
     if missing:
         raise RuntimeError(
             "Retrieval diagnostics rows are missing for traces: "
@@ -279,6 +346,15 @@ def command_enrich(args):
         "table": "rag_retrieval_logs",
         "access": "read-only",
         "matchedTraceCount": len(payload.get("samples", [])),
+        "resultCountSemantics": {
+            "Search": (
+                "latest retrieval outcome count; must equal final HTTP results"
+            ),
+            "Chat": (
+                "latest retrieval outcome count; final HTTP sources may differ "
+                "after query join, rerank, and prompt-budget processing"
+            ),
+        },
     }
     write_json(args.output, payload)
 
@@ -369,6 +445,11 @@ def markdown_table(summary):
         (
             "- Evidence: fixed HTTP samples plus read-only "
             "`rag_retrieval_logs` trace correlation"
+        ),
+        (
+            "- Database result counts describe the latest retrieval outcome; "
+            "Chat final-source counts remain HTTP observations after advisor "
+            "post-processing."
         ),
         "- Latency and payload values are observations, not pass/fail thresholds.",
         "",
@@ -488,6 +569,79 @@ def command_self_test(_args):
     if delta["Search"]["httpResponsePayloadBytes"]["mean"] != 0:
         failures.append("zero comparison delta")
 
+    search = {
+        "endpoint": "Search",
+        "traceId": str(uuid.uuid4()),
+        "resultCount": 5,
+    }
+    correlate_result_count(search, 5)
+    if not search["finalResultCountMatchesLatestRetrieval"]:
+        failures.append("Search matching result-count correlation")
+    try:
+        correlate_result_count(
+            {
+                "endpoint": "Search",
+                "traceId": str(uuid.uuid4()),
+                "resultCount": 5,
+            },
+            8,
+        )
+        failures.append("Search mismatching result-count rejection")
+    except RuntimeError:
+        pass
+    chat = {
+        "endpoint": "Chat",
+        "traceId": str(uuid.uuid4()),
+        "resultCount": 5,
+    }
+    correlate_result_count(chat, 8)
+    if chat["finalResultCountMatchesLatestRetrieval"]:
+        failures.append("Chat stage-separated result-count correlation")
+    if 504 not in RETRYABLE_CHAT_HTTP_STATUSES:
+        failures.append("Chat 504 retry classification")
+    if 400 in RETRYABLE_CHAT_HTTP_STATUSES:
+        failures.append("Chat 400 non-retry classification")
+    retry_attempts = []
+
+    def transient_chat(*_unused):
+        retry_attempts.append(len(retry_attempts) + 1)
+        if len(retry_attempts) == 1:
+            raise HttpRequestError("/chat", 504, "timeout")
+        return {"ok": True}
+
+    retried = collect_chat_with_retries(
+        "http://example.invalid",
+        "key",
+        {},
+        1,
+        2,
+        collect_fn=transient_chat,
+        sleep_fn=lambda _seconds: None,
+    )
+    if retried != {"ok": True} or retry_attempts != [1, 2]:
+        failures.append("Chat transient bounded retry")
+
+    permanent_attempts = []
+
+    def permanent_chat(*_unused):
+        permanent_attempts.append(len(permanent_attempts) + 1)
+        raise HttpRequestError("/chat", 400, "bad request")
+
+    try:
+        collect_chat_with_retries(
+            "http://example.invalid",
+            "key",
+            {},
+            1,
+            2,
+            collect_fn=permanent_chat,
+            sleep_fn=lambda _seconds: None,
+        )
+        failures.append("Chat permanent fail-fast")
+    except HttpRequestError:
+        if permanent_attempts != [1]:
+            failures.append("Chat permanent retry count")
+
     if failures:
         print(
             "Rerank diversity metrics self-test failed: "
@@ -511,6 +665,7 @@ def build_parser():
     collect.add_argument("--preferred-max-chunks", type=int, required=True)
     collect.add_argument("--search-samples", type=int, default=20)
     collect.add_argument("--chat-samples", type=int, default=5)
+    collect.add_argument("--chat-max-attempts", type=int, default=2)
     collect.add_argument("--timeout", type=int, default=240)
     collect.add_argument("--output", required=True)
     collect.set_defaults(handler=command_collect)
@@ -543,6 +698,8 @@ def main():
         raise RuntimeError("--search-samples must be positive")
     if getattr(args, "chat_samples", 1) < 1:
         raise RuntimeError("--chat-samples must be positive")
+    if getattr(args, "chat_max_attempts", 1) < 1:
+        raise RuntimeError("--chat-max-attempts must be positive")
     result = args.handler(args)
     return int(result or 0)
 

@@ -646,6 +646,16 @@ JSON 验证多样化契约，用实际 GET Search 页面验证 DOM、认证和�
 Search/Chat retrieval p95、rerank stage p95、HTTP latency/payload 和最终 unique document
 count；延迟与 payload 不设通过阈值，确定性正确性继续由 PostgreSQL 集成矩阵承担。
 
+只读关联得到的数据库 `result_count` 表示 latest retrieval outcome 数量。Search 必须与
+最终 HTTP result count 相等；KNOWLEDGE Chat 的最终 HTTP sources 来自 advisor
+后处理后的 document context，query join、rerank 或 prompt budget 都可能使它与 latest
+retrieval outcome 不同。运行时产物会记录两者是否一致，但不会把两个不同流水线阶段误当成
+同一个契约。
+
+运行时 Chat 采样对明确的瞬时 HTTP `429/502/503/504` 默认最多尝试两次，并输出每次重试
+日志；Search、不可重试 HTTP、无效 payload 和尝试耗尽仍使门禁失败。只有需要调整这个正整数
+上限时才使用 `RERANK_DIVERSITY_CHAT_MAX_ATTEMPTS`。
+
 同一门禁的 `HeuristicRerankProviderTest`、`ReRankingServiceTest` 和
 `HttpRerankProviderTest` 还覆盖无空格 CJK 局部匹配、混合语言、英文兼容、blank/长输入、
 完全重复 chunk、默认权重排序和 HTTP fallback。`HybridRetrieverRrfPostgresIntegrationTest`
