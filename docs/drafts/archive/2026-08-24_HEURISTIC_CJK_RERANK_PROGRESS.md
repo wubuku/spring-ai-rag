@@ -29,7 +29,7 @@
 | 生产实现 | 已完成 | 单文件实现 CJK bigram、混合 token、512 上限、预计算和 index-aware diversity |
 | 基本硬门槛 | 已完成 | 指标语义与有界重试修复后的专项完整门禁重新 `22/22`；全量 Maven `3608` 项通过 |
 | 实现连续检查 | `3/3` | 指标语义与有界重试修复后，三轮限定范围只读审查连续无问题、无实现改动 |
-| Git 与 main 交付 | 进行中 | 特性分支修复已通过完整门禁、全量 Maven 与实现 `3/3`，待提交、推送并重新合入 main 复验 |
+| Git 与 main 交付 | 进行中 | 修复提交 `702ce0d3` 已推送并合入本地 `main@20bb24c5`；合并后完整门禁、全量 Maven 与连续三轮限定范围只读审查均已通过，待提交账本并推送 main |
 
 ## 2. 已冻结决策
 
@@ -252,3 +252,53 @@
 
 下一步提交并推送特性分支修复，再合入本地 main；main 必须从头执行完整 `22` 步门禁、
 全量 Maven 和三轮合并后只读审查，不能沿用特性分支结果。
+
+### 2026-08-24 main 合并后验证基线
+
+- 特性修复提交：`702ce0d3 test: harden rerank runtime verification`，已推送远端分支。
+- 本地 main 合并提交：`20bb24c5 merge: harden rerank runtime verification`。
+- 合并时远端基线：`origin/main@5dac7af5`；本地 main 包含先前 CJK 实现 merge 和本次
+  验收工具修复 merge。
+- 合并无冲突；不得沿用特性分支验收作为 main 最终结论。
+- main 完整复验 run ID：
+  `20260824-semantic-retry-main`；隔离后端/WebUI/Mock 端口分别为
+  `18090` / `15182` / `4202`。
+- 固定顺序：完整 `22` 步门禁 → 全量 `mvn test` → 连续三轮合并后限定范围只读审查
+  → 提交进度账本 → fetch/merge 远端 main → push main。
+
+### 2026-08-24 main 合并后完整门禁
+
+- 证据目录：
+  `.verification/heuristic-cjk-rerank/20260824-semantic-retry-main/`。
+- main 从头执行完整 `22` 步门禁，结果 `22` PASS、`0` FAIL、`0` skipped；
+  focused 后端 `163/163`、PostgreSQL/pgvector `5/5`、WebUI Vitest `218/218`、
+  核心 Mock Playwright `24/24`、真实 Search DOM Playwright `1/1` 全部通过。
+- `mvn clean compile test-compile`、WebUI TypeScript、生产构建、对齐策略、禁悲观锁、
+  文档门禁 `10/10`、retrieval contract 与 metrics self-test 全部通过。
+- 真实 LLM provider baseline `PASS=9 FAIL=0`；goldenset 与版本化质量回归全部满分通过。
+- cap=`0` / cap=`2` 各完成 Search `20` 次、Chat `5` 次成功观测，均保持至少 `4` 个唯一
+  文档；Search rerank p95 均为 `1ms`，Chat rerank p95 从 `4ms` 到 `3ms`。
+- 最终 KNOWLEDGE 返回 `673` 个字符、`5` 个 sources、`4` 个唯一文档和 `5` 个
+  citations；本轮未出现最终 HTTP 5xx，也未触发采样器的 HTTP 状态重试。
+- runner 已停止隔离服务并清理测试数据库。
+- main 全量 `mvn test` 共执行 `3608` tests，`0` failures、`0` errors、
+  `7` skipped，五个 Reactor 模块均为 `SUCCESS`，总耗时 `02:09 min`。这些跳过项为
+  全库既有条件性测试；本任务要求的 PostgreSQL/pgvector 集成已在完整门禁中单独
+  `5/5` 通过且无跳过。
+- 下一步按固定范围完成连续三轮 main 合并后只读审查；任何实质修复都将计数重置为
+  `0/3` 并重跑受影响门槛。
+
+### 2026-08-24 main 合并后连续检查
+
+完整门禁和全量 Maven 通过后，按预先冻结的三个互不重叠范围完成只读审查。三轮之间
+没有修改生产代码、测试、runner 或长青文档；达到 `3/3` 后才一次性记录本节。
+
+| 轮次 | 时间 | 固定范围 | 发现问题 | 处理措施 | 结果 |
+|---:|---|---|---|---|---|
+| 1/3 | 2026-08-24 15:31 CST | metrics HTTP 状态分类、Chat 有界重试、Search/Chat 数量语义、trace 关联、异常传播和 JSON 兼容性 | 无 | 无修改 | 连续计数 `1/3` |
+| 2/3 | 2026-08-24 15:32 CST | runner 参数校验、只读 SQL、trace 轮询、cap 重启、失败传播、隔离数据库和端口清理 | 无 | 无修改；确认 `18090/15182/4202` 无监听，临时数据库不存在 | 连续计数 `2/3` |
+| 3/3 | 2026-08-24 15:33 CST | 双语长青文档、进度账本、CLI 可发现性、验收产物统计、Git 祖先关系和工作树边界 | 无 | 无修改；文档门禁 `10/10`、`git diff --check` 通过 | 连续计数 `3/3` |
+
+main 合并后验收与审查已经收敛。下一步提交本进度账本，fetch 并在必要时合并最新
+`origin/main`；若发生真实远端合并则按交付规则重新执行受影响的完整门槛，否则直接推送
+本地 main。
