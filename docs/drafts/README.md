@@ -38,9 +38,10 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There is currently no active plan/progress pair. A new planning round will be
-listed here when it starts; until then, use the code, migrations, and bilingual
-evergreen documentation as the source of truth.
+The active [Chat resource knowledge, runtime Skill, and memory evolution
+plan](CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_PLAN.md) is now being implemented.
+Production code changes will happen in a dedicated feature worktree, with the
+matching progress ledger maintained according to the plan.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

@@ -32,7 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有活动 plan/progress。新一轮规划建立后会在这里列出；在此之前以代码、迁移和双语
-长青文档为准。
+当前正在实施[Chat 资源知识、运行时 Skill 与记忆演进规划](CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_PLAN.md)。
+生产代码将在专用特性 worktree 中修改，并按规划要求维护配套 progress 恢复账本。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
