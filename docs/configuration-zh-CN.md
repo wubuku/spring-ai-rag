@@ -481,6 +481,33 @@ rag:
       cleanup-batch-size: 500
       cleanup-interval-ms: 600000
       cleanup-initial-delay-ms: 60000
+    static-knowledge:
+      enabled: false
+      locations: []
+      file-extensions: [md, markdown, txt]
+      max-files-per-root: 200
+      max-file-bytes: 262144
+      max-total-bytes: 10485760
+      chunk-max-characters: 4000
+      chunk-overlap-characters: 200
+      retrieval-max-results: 5
+      retrieval-max-result-characters: 24000
+      fail-fast: true
+      visibility: GLOBAL
+    skills:
+      enabled: false
+      locations: []
+      max-skills: 50
+      max-skill-body-bytes: 131072
+      max-reference-bytes: 262144
+      max-catalog-characters: 24000
+      max-loads-per-request: 4
+      max-reference-reads-per-request: 8
+      fail-fast: true
+    http-tools:
+      enabled: false
+      max-total-response-bytes: 262144
+      endpoints: []
 ```
 
 | 属性 | 默认值 | 说明 |
@@ -509,6 +536,30 @@ rag:
 | `rag.chat.idempotency.cleanup-batch-size` | `500` | 每次维护最多清理的终态/stale orphan 行数；范围 1–5000 |
 | `rag.chat.idempotency.cleanup-interval-ms` | `600000` | cleanup 固定延迟间隔；范围 10000–86400000 |
 | `rag.chat.idempotency.cleanup-initial-delay-ms` | `60000` | 服务启动后的首次 cleanup 延迟；范围 1–86400000 |
+| `rag.chat.static-knowledge.enabled` | `false` | 启用启动期构建的非 embedding 静态知识快照 |
+| `rag.chat.static-knowledge.locations` | `[]` | `classpath:`、`classpath*:`、`file:` 或受限 `jar:file:...!/prefix/` 资源目录 |
+| `rag.chat.static-knowledge.file-extensions` | `[md, markdown, txt]` | 允许读取的 UTF-8 文件扩展名 |
+| `rag.chat.static-knowledge.max-files-per-root` | `200` | 单个配置根的文件数上限 |
+| `rag.chat.static-knowledge.max-file-bytes` | `262144` | 单文件字节上限 |
+| `rag.chat.static-knowledge.max-total-bytes` | `10485760` | 所有静态知识根累计字节上限 |
+| `rag.chat.static-knowledge.chunk-max-characters` | `4000` | 按 Markdown 标题和段落切分时的目标 chunk 字符上限 |
+| `rag.chat.static-knowledge.chunk-overlap-characters` | `200` | 相邻 chunk 的字符重叠；必须小于 chunk 上限 |
+| `rag.chat.static-knowledge.retrieval-max-results` | `5` | 单次静态词法检索结果上限 |
+| `rag.chat.static-knowledge.retrieval-max-result-characters` | `24000` | 单次静态检索返回文本总字符上限 |
+| `rag.chat.static-knowledge.fail-fast` | `true` | 加载失败时阻止启动；false 时整个静态快照降级且不发布部分结果 |
+| `rag.chat.static-knowledge.visibility` | `GLOBAL` | 当前唯一支持的可见性；内容对所有已授权 Chat principal 相同 |
+| `rag.chat.skills.enabled` | `false` | 启用 AGENT Runtime Skill catalog 和加载工具 |
+| `rag.chat.skills.locations` | `[]` | 包含 `<skill-name>/SKILL.md` 的 classpath/filesystem/JAR 资源根 |
+| `rag.chat.skills.max-skills` | `50` | Skill 数量上限 |
+| `rag.chat.skills.max-skill-body-bytes` | `131072` | 单个 `SKILL.md` 正文字节上限 |
+| `rag.chat.skills.max-reference-bytes` | `262144` | 单个 `references/` 文件及单次 reference 读取上限 |
+| `rag.chat.skills.max-catalog-characters` | `24000` | Level 1 catalog 和单次 `loadSkill` 输出字符上限 |
+| `rag.chat.skills.max-loads-per-request` | `4` | 单请求最多加载的 Skill 数 |
+| `rag.chat.skills.max-reference-reads-per-request` | `8` | 单请求最多读取的 Skill reference 数 |
+| `rag.chat.skills.fail-fast` | `true` | Skill 加载失败时阻止启动；false 时 catalog 降级且不注册 Skill 工具 |
+| `rag.chat.http-tools.enabled` | `false` | 启用服务端配置、Skill gated 的只读 HTTPS 工具 |
+| `rag.chat.http-tools.max-total-response-bytes` | `262144` | 单个逻辑请求累计 HTTP 响应字节预算 |
+| `rag.chat.http-tools.endpoints` | `[]` | 固定 endpoint 列表；模型不能提供 URL、method、header 或 credential |
 
 模式语义：
 
@@ -519,8 +570,8 @@ rag:
   项目提供的 `BoundedMultiQueryExpander` 会在 advisor 执行前按
   `max-retrieval-queries` 收敛 fan-out，trim 空白项并按精确文本去重，同时保留
   Spring AI `Query` 的 history/context。项目提供的提示词要求保留产品名、引号短语、
-  标识符和其他特殊词，并至少生成一个精确词检索变体。Spring AI 内置的
-  `ConcatenationDocumentJoiner` 负责合并和去重结果。这样即使语义改写产生了近义描述，
+  标识符和其他特殊词，并至少生成一个精确词检索变体。项目的
+  `ProjectDocumentJoiner` 在 rerank 前按稳定 chunk identity 合并结果。这样即使语义改写产生了近义描述，
   也不会丢失 `破皮沙发` 这样的精确词；当配置的变体数超过预算时，也不会先为无效
   fan-out 生成多余的扩展请求。
 - `query-expander-variants` 表示请求 LLM 生成的变体数，`max-retrieval-queries` 表示
@@ -533,6 +584,98 @@ rag:
   `capabilities.toolCalling=true`，Collection/document/credential 范围仍由服务端持有。
 - `PLAIN` 不检索，并拒绝检索专用的请求覆盖项。
 - 客户端取消的 partial turn 不会持久化。
+
+### 非 embedding 静态知识
+
+静态知识在启动时从配置根读取并构建不可变、有界词法快照；不调用 embedding，不写入
+`rag_documents`/`rag_embeddings`。`KNOWLEDGE` 会把它和项目文档检索结果组合，
+`AGENT` 会在快照健康时注册 `searchStaticKnowledge`，`PLAIN` 不读取。静态来源使用
+`STATIC_KNOWLEDGE` 类型并跳过外部 reranker。资源变更需要重启服务才能生效。
+
+```yaml
+rag:
+  chat:
+    static-knowledge:
+      enabled: true
+      locations:
+        - classpath*:knowledge/company-terms/
+        - file:/opt/spring-ai-rag/knowledge/
+```
+
+`classpath:` 读取当前匹配根，`classpath*:` 搜索所有 classpath/JAR 匹配根；显式 JAR
+目录可使用 `jar:file:/opt/lib/policies.jar!/knowledge/`。filesystem 路径必须写为
+`file:` URI。当前 `GLOBAL` 可见性不适合保存 tenant/private 内容；这类内容仍应进入带
+ACL 的项目文档库。
+
+### Runtime Skill 与 allowlisted HTTP 工具
+
+Runtime Skill 仅用于 `AGENT`。启动时只把名称、描述和 capability 的有界 catalog 加入
+system prompt；模型必须先调用 `loadSkill` 才能取得 Skill 正文，之后才能调用
+`readSkillReference` 或依赖该 Skill 的 HTTP 工具。加载状态和读取预算均为 request-local。
+
+```text
+skills/
+  weather/
+    SKILL.md
+    references/
+      response-schema.md
+```
+
+`SKILL.md` 使用 YAML frontmatter：
+
+```markdown
+---
+name: weather
+description: Query the configured weather service
+version: "1.0"
+capabilities:
+  - weather.read
+---
+
+Load this Skill, then call the weather endpoint with a city name.
+```
+
+HTTP endpoint 由服务端固定配置，且 Skill 必须声明匹配 capability：
+
+```yaml
+rag:
+  chat:
+    skills:
+      enabled: true
+      locations:
+        - classpath*:skills/
+    http-tools:
+      enabled: true
+      max-total-response-bytes: 262144
+      endpoints:
+        - tool-name: getWeather
+          skill-name: weather
+          capability: weather.read
+          base-url: https://weather.example.com
+          path: /v1/current
+          method: GET
+          query-parameters:
+            - name: city
+              required: true
+              max-length: 128
+          response-content-types: [application/json]
+          max-calls-per-request: 2
+          timeout-ms: 5000
+          max-response-bytes: 65536
+          max-result-characters: 24000
+          max-json-depth: 12
+          max-json-nodes: 1000
+          max-json-array-items: 100
+          credential-env: WEATHER_API_TOKEN
+          credential-header: Authorization
+```
+
+endpoint 仅允许 HTTPS `GET`/`HEAD`，禁止 redirect、私网/loopback/link-local/metadata
+地址、任意 header 和模型指定 URL；固定 `path` 不允许百分号编码。DNS 解析得到的全部
+地址先通过公网校验，再由 transport 钉扎到实际连接，TLS 仍按配置 hostname 校验。
+凭据只从 `credential-env` 指定的进程环境变量读取。每个 endpoint 还受单请求调用数、
+timeout、响应字节、JSON 深度/节点/数组项和工具结果字符上限约束；逻辑请求的累计响应
+字节容量在下载前预留，避免并发或重复调用先读取、后超预算。
 
 ## 对话记忆配置
 
@@ -560,9 +703,10 @@ rag:
 | `rag.memory.cleanup-cron` | `0 0 3 * * *` | 历史清理 cron 表达式（每日凌晨3点） |
 
 系统维护双表：
-- `spring_ai_chat_memory`：Spring AI 自动管理，给 LLM 上下文用
+- `spring_ai_chat_memory`：Spring AI JDBC 存储，项目只提交可恢复的 user/plain assistant
+  消息，给 LLM 的近期上下文用
 - `rag_chat_history`：按 principal 归属的业务历史，保存完整 `user_message`、
-  `ai_response`、来源快照、mode/model 元数据，并按 TTL 清理
+  `ai_response`、来源快照、mode/model 元数据和有界 `toolTranscript`，并按 TTL 清理
 
 完成 turn 会在 `rag_chat_session_lease` 保护下原子更新两类存储。带 key 的 turn
 还会在同一事务写入 V47 的 `rag_chat_turn_operations`，保存不可变的

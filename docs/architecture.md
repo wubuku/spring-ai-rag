@@ -108,7 +108,9 @@ RagChatController
        -> request-local MessageChatMemoryAdvisor
        -> KNOWLEDGE:
             RetrievalAugmentationAdvisor
-              -> ProjectDocumentRetriever
+              -> CompositeChatDocumentRetriever
+                   -> ProjectDocumentRetriever
+                   -> optional StaticKnowledgeDocumentRetriever
               -> bounded candidate pool -> weighted RRF
               -> ProjectDocumentJoiner
               -> ProjectRerankPostProcessor
@@ -116,12 +118,13 @@ RagChatController
        -> AGENT:
             BudgetedToolCallAdvisor
               -> KnowledgeSearchTool
+              -> optional searchStaticKnowledge / Runtime Skill / allowlisted HTTP tools
               -> bounded candidate pool -> rerank -> final top N
               -> server-owned ToolContext
        -> PLAIN:
             ChatClient only
   -> ChatSessionCoordinator
-       -> atomic history + source snapshot + JDBC Memory commit
+       -> atomic history + source snapshot + JDBC-compatible Memory projection
 ```
 
 `ProjectDocumentRetriever` adapts the project's stronger retrieval stack to
@@ -130,6 +133,15 @@ RRF fusion, a bounded rerank candidate pool, reranking, Embedding Profile filter
 Collection/API-key ACL,
 document type, and document ID scope therefore remain shared by direct Search,
 KNOWLEDGE, and the AGENT tool.
+
+When static knowledge is enabled, `CompositeChatDocumentRetriever` also
+combines the startup-built `StaticKnowledgeDocumentRetriever`. That branch
+performs bounded lexical retrieval only, calls no embedding model, writes no
+database row, uses `STATIC_KNOWLEDGE` sources, and bypasses the external
+reranker. Runtime Skills expose only bounded catalog/load/reference data in
+AGENT. Configured HTTP tools additionally require a Skill/capability loaded in
+the current request and remain constrained by HTTPS allowlists, SSRF defense,
+and the shared tool budget.
 
 For the `spring-ai` `KNOWLEDGE` query strategy, the project-owned
 `BoundedMultiQueryExpander` sits between Spring AI query expansion and retrieval.
@@ -167,13 +179,14 @@ mode-aware Chat pipeline.
 
 | Table | Purpose | Managed by |
 |-------|---------|------------|
-| `spring_ai_chat_memory` | LLM context window | Spring AI auto-management |
+| `spring_ai_chat_memory` | Recent, recoverable LLM context window | Spring AI JDBC plus project projection |
 | `rag_chat_history` | Principal-owned business history, sources, and audit | Application transaction |
 
 ```
 Committed turn
   -> rag_chat_history (owner, user/assistant, sources, mode/model/status)
-  -> spring_ai_chat_memory (bounded model context)
+  -> spring_ai_chat_memory (recoverable user/plain-assistant messages only)
+  -> rag_chat_history.metadata.toolTranscript (bounded, completely paired tool exchanges)
   -> one transaction guarded by rag_chat_session_lease
 ```
 
@@ -815,8 +828,10 @@ rag:
 
 **Chosen**: `spring_ai_chat_memory` + `rag_chat_history` coexistence
 **Rationale**:
-- Spring AI auto-managed table keeps only the last N entries for LLM context
-- Business audit table retains complete history, supports queries and analysis
+- JDBC Memory keeps only the last N recoverable user/plain-assistant messages
+  for LLM context
+- The business audit table retains complete history, sources, and a bounded
+  tool-exchange projection for querying, summarization, and analytics
 - Two tables with separated responsibilities, no interference
 
 ### Why Separate Embedding Model from Chat Model Configuration?

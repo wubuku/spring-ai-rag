@@ -14,6 +14,7 @@ import com.springairag.core.diagnostics.RetrievalTraceSession;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
+import com.springairag.core.http.HttpToolExecutionState;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.RetrievalDocumentMapper;
@@ -600,6 +601,73 @@ class ChatExecutionServiceTest {
         assertEquals("supported", result.resolvedModel());
         verify(clientFactory, never()).create(any(), same(unsupported), anyList());
         verify(clientFactory).create(any(), same(supported), anyList());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void agentFallbackSharesTheLogicalRequestHttpByteBudget() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getHttpTools().setEnabled(true);
+        properties.getChat().getHttpTools().setMaxTotalResponseBytes(100);
+        ChatExecutionService httpService = new ChatExecutionService(
+                modelRouter,
+                clientFactory,
+                knowledgeSearchTool,
+                historyRepository,
+                domainExtensions,
+                promptCustomizers,
+                documentMapper,
+                new ObjectMapper(),
+                properties,
+                null,
+                null);
+        ChatModelRouter.ChatModelCandidate primary =
+                candidate("primary", true, true, true);
+        ChatModelRouter.ChatModelCandidate fallback =
+                candidate("fallback", true, true, true);
+        ClientFixture failed = clientFixture("unused", Map.of());
+        ClientFixture succeeded = clientFixture("fallback answer", Map.of());
+        AtomicReference<Map<String, Object>> primaryToolContext =
+                new AtomicReference<>();
+        AtomicReference<Map<String, Object>> fallbackToolContext =
+                new AtomicReference<>();
+        when(failed.spec().toolContext(any())).thenAnswer(invocation -> {
+            primaryToolContext.set(invocation.getArgument(0));
+            return failed.spec();
+        });
+        when(failed.spec().call().chatClientResponse()).thenAnswer(invocation -> {
+            HttpToolExecutionState state = (HttpToolExecutionState)
+                    primaryToolContext.get().get(
+                            HttpToolExecutionState.CONTEXT_KEY);
+            HttpToolExecutionState.ResponseReservation reservation =
+                    state.reserveUpTo(80);
+            state.commit(reservation, 60);
+            throw new IllegalStateException("primary unavailable");
+        });
+        when(succeeded.spec().toolContext(any())).thenAnswer(invocation -> {
+            fallbackToolContext.set(invocation.getArgument(0));
+            return succeeded.spec();
+        });
+        when(modelRouter.orderedCandidateDescriptors(isNull()))
+                .thenReturn(List.of(primary, fallback));
+        when(clientFactory.create(any(), same(primary), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        failed.client(), primary, context(), null));
+        when(clientFactory.create(any(), same(fallback), anyList()))
+                .thenReturn(new ModeAwareChatClientFactory.Attempt(
+                        succeeded.client(), fallback, context(), null));
+
+        ChatExecutionResult result = httpService.execute(
+                command(ChatMode.AGENT, null));
+
+        HttpToolExecutionState primaryState = (HttpToolExecutionState)
+                primaryToolContext.get().get(HttpToolExecutionState.CONTEXT_KEY);
+        HttpToolExecutionState fallbackState = (HttpToolExecutionState)
+                fallbackToolContext.get().get(HttpToolExecutionState.CONTEXT_KEY);
+        assertEquals("fallback", result.resolvedModel());
+        assertSame(primaryState, fallbackState);
+        assertEquals(60, fallbackState.responseBytes());
+        assertEquals(40, fallbackState.remainingBytes());
     }
 
     @Test

@@ -151,6 +151,7 @@ class ConversationSummaryServiceTest {
     @Test
     void outputOverLimitDegradesWithoutPersistingTruncatedText() {
         seedSource();
+        ragProperties.getChat().getContext().setCompactionTimeoutMs(2_000);
         when(model.call(any(Prompt.class)))
                 .thenReturn(response("x".repeat(2_000)));
 

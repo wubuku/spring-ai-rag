@@ -2,6 +2,7 @@ package com.springairag.core.chat;
 
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.http.HttpToolExecutionState;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +47,8 @@ public final class ChatExecutionBudget {
             new ConcurrentHashMap<>();
     private final AtomicReference<Map<String, Object>> contextPlan =
             new AtomicReference<>(Map.of());
+    private final AtomicReference<HttpToolExecutionState> httpToolState =
+            new AtomicReference<>();
     private int reservedToolResultCharacters;
 
     public ChatExecutionBudget(
@@ -185,6 +188,28 @@ public final class ChatExecutionBudget {
         contextPlan.set(plan == null ? Map.of() : Map.copyOf(plan));
     }
 
+    /**
+     * Returns the one HTTP byte-budget state shared by every candidate and
+     * retry attempt in this logical Chat request.
+     */
+    HttpToolExecutionState httpToolExecutionState(long maxResponseBytes) {
+        long normalizedMaximum = Math.max(1L, maxResponseBytes);
+        HttpToolExecutionState existing = httpToolState.get();
+        if (existing != null) {
+            if (existing.maxResponseBytes() != normalizedMaximum) {
+                throw new IllegalStateException(
+                        "HTTP tool response budget changed within one Chat request");
+            }
+            return existing;
+        }
+        HttpToolExecutionState created =
+                new HttpToolExecutionState(normalizedMaximum);
+        if (httpToolState.compareAndSet(null, created)) {
+            return created;
+        }
+        return httpToolExecutionState(normalizedMaximum);
+    }
+
     public Map<String, Object> contextPlan() {
         return contextPlan.get();
     }
@@ -265,6 +290,11 @@ public final class ChatExecutionBudget {
         result.put("toolCallsByName", toolCallsByName());
         result.put("toolResultCharacters", toolResultCharacters());
         result.put("toolResultTokens", toolResultTokens());
+        HttpToolExecutionState httpState = httpToolState.get();
+        if (httpState != null) {
+            result.put("httpResponseBytes", httpState.responseBytes());
+            result.put("httpResponseBytesRemaining", httpState.remainingBytes());
+        }
         result.put("contextBudget", contextPlan());
         return Map.copyOf(result);
     }

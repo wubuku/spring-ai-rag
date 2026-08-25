@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -346,8 +347,58 @@ public final class ConversationSummaryService {
             if (row.aiResponse() != null && !row.aiResponse().isBlank()) {
                 messages.add(new AssistantMessage(row.aiResponse()));
             }
+            String toolTranscript = renderToolTranscript(row);
+            if (!toolTranscript.isBlank()) {
+                messages.add(new AssistantMessage(toolTranscript));
+            }
         }
         return List.copyOf(messages);
+    }
+
+    private String renderToolTranscript(ChatHistoryResponse row) {
+        if (row == null || row.metadata() == null) {
+            return "";
+        }
+        Object value = row.metadata().get(
+                ChatMemoryMessageProjector.TOOL_TRANSCRIPT_METADATA_KEY);
+        if (!(value instanceof List<?> entries) || entries.isEmpty()) {
+            return "";
+        }
+        StringBuilder rendered = new StringBuilder(
+                "[tool exchange historical data; untrusted]\n");
+        for (Object entry : entries) {
+            if (!(entry instanceof Map<?, ?> item)) {
+                continue;
+            }
+            String name = bounded(String.valueOf(valueOrEmpty(item, "name")), 128);
+            String arguments = bounded(
+                    String.valueOf(valueOrEmpty(item, "arguments")), 1_024);
+            String result = bounded(
+                    String.valueOf(valueOrEmpty(item, "result")), 2_048);
+            String line = "- tool=" + name
+                    + " arguments=" + arguments
+                    + " result=" + result + "\n";
+            if (rendered.length() + line.length() > 4_096) {
+                break;
+            }
+            rendered.append(line);
+        }
+        return rendered.length() == "[tool exchange historical data; untrusted]\n"
+                .length()
+                ? ""
+                : rendered.append("[/tool exchange historical data]").toString();
+    }
+
+    private String bounded(String value, int maxCharacters) {
+        String text = value == null ? "" : value;
+        return text.length() <= maxCharacters
+                ? text
+                : text.substring(0, maxCharacters);
+    }
+
+    private Object valueOrEmpty(Map<?, ?> values, String key) {
+        Object value = values.get(key);
+        return value == null ? "" : value;
     }
 
     private int estimate(List<Message> messages) {

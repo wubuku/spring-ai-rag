@@ -13,6 +13,7 @@ import com.springairag.core.rag.ProjectDocumentJoiner;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
 import com.springairag.core.rag.PromptBudgetDocumentPostProcessor;
+import com.springairag.core.rag.CompositeChatDocumentRetriever;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
@@ -80,6 +81,7 @@ public class ModeAwareChatClientFactory {
     private static final int CUSTOM_ADVISOR_BAND_SIZE = 100;
 
     private final ProjectDocumentRetriever documentRetriever;
+    private final CompositeChatDocumentRetriever compositeDocumentRetriever;
     private final ProjectRerankPostProcessor rerankPostProcessor;
     private final CitationQueryAugmenter queryAugmenter;
     private final RagProperties ragProperties;
@@ -98,7 +100,30 @@ public class ModeAwareChatClientFactory {
             List<RagAdvisorProvider> customAdvisorProviders,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             ToolCallingManager toolCallingManager) {
+        this(
+                documentRetriever,
+                null,
+                rerankPostProcessor,
+                queryAugmenter,
+                ragProperties,
+                customAdvisorProviders,
+                toolCallingManager);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public ModeAwareChatClientFactory(
+            ProjectDocumentRetriever documentRetriever,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            CompositeChatDocumentRetriever compositeDocumentRetriever,
+            ProjectRerankPostProcessor rerankPostProcessor,
+            CitationQueryAugmenter queryAugmenter,
+            RagProperties ragProperties,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            List<RagAdvisorProvider> customAdvisorProviders,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            ToolCallingManager toolCallingManager) {
         this.documentRetriever = documentRetriever;
+        this.compositeDocumentRetriever = compositeDocumentRetriever;
         this.rerankPostProcessor = rerankPostProcessor;
         this.queryAugmenter = queryAugmenter;
         this.ragProperties = ragProperties;
@@ -219,8 +244,10 @@ public class ModeAwareChatClientFactory {
             ChatModelRouter.ChatModelCandidate candidate,
             ChatExecutionBudget budget) {
         RetrievalAugmentationAdvisor.Builder builder =
-                RetrievalAugmentationAdvisor.builder()
-                .documentRetriever(documentRetriever)
+            RetrievalAugmentationAdvisor.builder()
+                .documentRetriever(compositeDocumentRetriever != null
+                        ? compositeDocumentRetriever
+                        : documentRetriever)
                         .documentJoiner(documentJoiner)
                         .documentPostProcessors(
                                 rerankPostProcessor,

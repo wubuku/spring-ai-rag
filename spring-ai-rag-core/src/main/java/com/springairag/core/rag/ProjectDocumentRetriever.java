@@ -37,7 +37,10 @@ public class ProjectDocumentRetriever implements DocumentRetriever {
         RetrievalTraceCollector trace = context.trace();
         String retrievalQuery = query.text();
         trace.setEffectiveQuery(retrievalQuery);
-        if (!trace.tryBeginRetrieval(retrievalQuery)) {
+        boolean composite = Boolean.TRUE.equals(
+                query.context().get(CompositeChatDocumentRetriever
+                        .COMPOSITE_RETRIEVAL_CONTEXT_KEY));
+        if (!composite && !trace.tryBeginRetrieval(retrievalQuery)) {
             return List.of();
         }
         RetrievalScope scope = context.scope();

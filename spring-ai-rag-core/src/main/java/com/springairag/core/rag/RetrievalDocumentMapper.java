@@ -32,6 +32,9 @@ public class RetrievalDocumentMapper {
         if (result.getOriginalFilename() != null) {
             metadata.put("originalFilename", result.getOriginalFilename());
         }
+        if (result.getSource() != null) {
+            metadata.put("source", result.getSource());
+        }
         if (metadata.get("documentType") == null) {
             metadata.put("documentType", "TEXT");
         }
@@ -60,13 +63,25 @@ public class RetrievalDocumentMapper {
         source.setOriginalFilename(result.getOriginalFilename());
         source.setDocumentType(stringValue(result.getMetadata(), "documentType"));
         source.setCollectionKey(stringValue(result.getMetadata(), "collectionKey"));
-        source.setSourceType(result.getSource() != null && result.getSource().startsWith("pdf-import:")
+        String sourceType = stringValue(result.getMetadata(), "sourceType");
+        source.setSourceType(sourceType != null
+                ? sourceType
+                : result.getSource() != null
+                && result.getSource().startsWith("pdf-import:")
                 ? "PDF" : "DOCUMENT");
         source.setMetadata(allowedMetadata(result.getMetadata()));
         return source;
     }
 
     public ChatSource toChatSource(Document document, int position) {
+        return toChatSource(document, "S" + position);
+    }
+
+    public ChatSource toChatSource(Document document, String citationId) {
+        return toChatSource(toRetrievalResult(document), citationId);
+    }
+
+    public RetrievalResult toRetrievalResult(Document document) {
         Map<String, Object> metadata = document.getMetadata();
         RetrievalResult result = new RetrievalResult();
         result.setDocumentId(stringValue(metadata, "documentId", document.getId()));
@@ -77,8 +92,9 @@ public class RetrievalDocumentMapper {
         result.setVectorScore(numberValue(metadata, "vectorScore"));
         result.setFulltextScore(numberValue(metadata, "fulltextScore"));
         result.setOriginalFilename(stringValue(metadata, "originalFilename", null));
+        result.setSource(stringValue(metadata, "source", null));
         result.setMetadata(metadata);
-        return toChatSource(result, position);
+        return result;
     }
 
     private Map<String, Object> allowedMetadata(Map<String, Object> input) {
@@ -96,7 +112,9 @@ public class RetrievalDocumentMapper {
     private boolean isAllowedMetadata(String key) {
         return key != null && switch (key) {
             case "documentType", "collectionKey", "collectionId", "sourceType",
-                    "language", "title", "originalFilename" -> true;
+                    "language", "title", "originalFilename", "source",
+                    "rootKey", "sourceLabel", "relativePath", "contentDigest",
+                    "titlePath", "chunkIndex", "documentId", "score" -> true;
             default -> false;
         };
     }
