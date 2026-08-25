@@ -34,7 +34,8 @@
 
 当前
 [业务服务接入就绪 P0 实施规划](BUSINESS_CLIENT_INTEGRATION_READINESS_PLAN.md)
-已在 `main` 上连续通过三轮检查，等待在专用特性 worktree 中实施；实施期间将按规划维护
-配套 progress 恢复账本。
+已在 `main` 上连续通过三轮检查，正在专用特性 worktree 中实施；恢复上下文、验证证据和
+下一步记录在
+[配套实施进度](BUSINESS_CLIENT_INTEGRATION_READINESS_PROGRESS.md)。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

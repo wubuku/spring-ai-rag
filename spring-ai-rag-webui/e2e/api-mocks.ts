@@ -26,6 +26,9 @@ export async function mockAllApiCalls(page: Page) {
           principalId: 'environment-root',
           rootMode: true,
           capabilities: ['RAG_READ', 'RAG_WRITE', 'API_KEY_MANAGE'],
+          principalRole: null,
+          collectionAccessMode: 'UNRESTRICTED',
+          allowedCollectionKeys: null,
         }),
       });
       return;
@@ -39,6 +42,12 @@ export async function mockAllApiCalls(page: Page) {
           principalId: 'rag_k_business',
           rootMode: true,
           capabilities: ['RAG_READ', 'RAG_WRITE'],
+          credentialId: 'rag_k_business_v1',
+          credentialVersion: 1,
+          policyVersion: 1,
+          principalRole: 'NORMAL',
+          collectionAccessMode: 'UNRESTRICTED',
+          allowedCollectionKeys: null,
         }),
       });
       return;

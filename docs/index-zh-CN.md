@@ -19,6 +19,7 @@
 | 理解 Chat 记忆、上下文预算、RAG 与工具调用 | [Chat 记忆、RAG 与工具调用](chat-memory-rag-tool-calling-zh-CN.md) | [架构文档](architecture-zh-CN.md)、[配置参考](configuration-zh-CN.md) |
 | 改配置项 | [configuration-zh-CN.md](configuration-zh-CN.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | 对接 / 调试 HTTP API | [rest-api-zh-CN.md](rest-api-zh-CN.md) | Swagger：`/swagger-ui.html` |
+| 让后端业务服务安全接入 RAG 数据面 | [业务服务接入指南](business-client-integration-zh-CN.md) | [REST API：认证](rest-api-zh-CN.md#认证)、[一键验收](developer-reference-zh-CN.md#业务服务接入就绪一键验证) |
 | 理解文件管理、PDF 导入和添加到 RAG | [文件管理与 PDF-to-RAG 流程](file-management-and-pdf-rag-zh-CN.md) | [REST API：PDF 与文件产物](rest-api-zh-CN.md#pdf-与文件产物-api) |
 | 为外部 client 选择 Collection 检索范围 | [REST API：外部客户端最佳实践](rest-api-zh-CN.md#外部客户端最佳实践) | [后续覆盖模式 TODO](TODO-zh-CN.md#each_collection-召回覆盖模式) |
 | 同步外部文档 / 内容源 | [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md) | [REST API 契约](rest-api-zh-CN.md#external-documents-idempotent-synchronization)、[一键生命周期验收](developer-reference-zh-CN.md#document-lifecycle-verification) |
@@ -62,6 +63,7 @@
 | [file-management-and-pdf-rag-zh-CN.md](file-management-and-pdf-rag-zh-CN.md) | 文件管理与文档管理的区别、PDF 转换产物、添加到 RAG 和当前生命周期边界 |
 | [rest-api-zh-CN.md](rest-api-zh-CN.md#external-documents-idempotent-synchronization) § 外部文档：幂等同步 | 外部客户的 upsert、CAS、删除恢复和同步最佳实践 |
 | [external-document-sync-client-guide-zh-CN.md](external-document-sync-client-guide-zh-CN.md) | 外部 client 的三元身份、增量 CRUD、重试/checkpoint 与可检索就绪指引 |
+| [business-client-integration-zh-CN.md](business-client-integration-zh-CN.md) / [English](business-client-integration.md) | 后端业务服务的 credential、binding、JSON Record、轮换、升级与接入合同 |
 | [TODO-zh-CN.md](TODO-zh-CN.md) / [TODO.md](TODO.md) | 当前未纳入 API 的后续改进与触发条件 |
 | [extension-guide-zh-CN.md](extension-guide-zh-CN.md) | `DomainRagExtension` 扩展开发 |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | 与参考项目对比、Phase 完成状态 |

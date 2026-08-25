@@ -121,6 +121,9 @@ test('manages a real stable principal without persisting shown-once credentials'
       credentialId: currentCredentialId,
       credentialVersion: 2,
       policyVersion: 2,
+      principalRole: 'NORMAL',
+      collectionAccessMode: 'UNRESTRICTED',
+      allowedCollectionKeys: null,
     });
 
     const rotatedRow = page.getByText(`${principalName} Updated`, { exact: true }).locator('..');

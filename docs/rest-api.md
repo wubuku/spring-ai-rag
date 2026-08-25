@@ -47,13 +47,45 @@ confirm that the submitted credential is the environment root:
   "principalType": "ENVIRONMENT_ROOT",
   "principalId": "environment-root",
   "rootMode": true,
-  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"]
+  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"],
+  "principalRole": null,
+  "collectionAccessMode": "UNRESTRICTED",
+  "allowedCollectionKeys": null
 }
 ```
 
-A database business key returns `DATABASE_API_KEY` with
-`["RAG_READ", "RAG_WRITE"]`; the WebUI refuses to unlock the management
-console with it. Responses include `Cache-Control: no-store`.
+Example for a restricted database business key:
+
+```json
+{
+  "principalType": "DATABASE_API_KEY",
+  "principalId": "rag_p_service",
+  "rootMode": true,
+  "capabilities": ["RAG_READ", "RAG_WRITE"],
+  "credentialId": "rag_k_current",
+  "credentialVersion": 2,
+  "policyVersion": 3,
+  "principalRole": "NORMAL",
+  "collectionAccessMode": "RESTRICTED",
+  "allowedCollectionKeys": ["customer-42:records:v1"]
+}
+```
+
+`principalRole` applies only to database principals; environment root and
+legacy static principals return `null`. `collectionAccessMode` reflects the
+current request principal's effective authorization: `RESTRICTED` returns its
+complete stable-key allow-list, while `UNRESTRICTED` returns
+`allowedCollectionKeys=null`. A legacy `ADMIN` is reported as unrestricted
+even if its row retains allowed IDs.
+
+`rootMode=true` only says the server has an environment root configured; it
+does not mean the current credential is root. Callers must inspect
+`principalType` first. If ACL references cannot be mapped completely, the
+endpoint returns `503` instead of a partial allow-list. A database business
+key cannot inspect another principal, and the WebUI refuses to unlock the
+management console with one. Responses include `Cache-Control: no-store`.
+See the [Business Service Integration Guide](business-client-integration.md)
+for production binding and rotation.
 
 Database business keys expose `allowedCollectionKeys`; deprecated
 `allowedCollectionIds` remains in compatibility responses:

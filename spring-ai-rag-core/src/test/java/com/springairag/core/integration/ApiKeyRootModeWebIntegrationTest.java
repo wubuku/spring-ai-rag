@@ -10,6 +10,7 @@ import com.springairag.core.controller.GlobalExceptionHandler;
 import com.springairag.core.entity.ApiKeyRole;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.service.ApiKeyManagementService;
+import com.springairag.core.service.CollectionIdentityResolver;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -24,6 +25,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
@@ -57,6 +59,9 @@ class ApiKeyRootModeWebIntegrationTest {
     @MockitoBean
     private ApiKeyManagementService apiKeyManagementService;
 
+    @MockitoBean
+    private CollectionIdentityResolver collectionIdentityResolver;
+
     @Test
     void rootUnlockAndManagementFlowUsesRealFilterAndController() throws Exception {
         when(apiKeyManagementService.listKeys()).thenReturn(List.of());
@@ -73,7 +78,10 @@ class ApiKeyRootModeWebIntegrationTest {
                 .andExpect(jsonPath("$.principalType")
                         .value("ENVIRONMENT_ROOT"))
                 .andExpect(jsonPath("$.capabilities[2]")
-                        .value("API_KEY_MANAGE"));
+                        .value("API_KEY_MANAGE"))
+                .andExpect(jsonPath("$.principalRole").value(nullValue()))
+                .andExpect(jsonPath("$.collectionAccessMode")
+                        .value("UNRESTRICTED"));
 
         mockMvc.perform(post("/api/v1/rag/api-keys")
                         .header("X-API-Key", ROOT_KEY)
@@ -154,7 +162,10 @@ class ApiKeyRootModeWebIntegrationTest {
                         .header("X-API-Key", "rag_sk_business"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.principalType")
-                        .value("DATABASE_API_KEY"));
+                        .value("DATABASE_API_KEY"))
+                .andExpect(jsonPath("$.principalRole").value("NORMAL"))
+                .andExpect(jsonPath("$.collectionAccessMode")
+                        .value("UNRESTRICTED"));
 
         mockMvc.perform(get("/api/v1/rag/api-keys")
                         .header("X-API-Key", "rag_sk_business"))

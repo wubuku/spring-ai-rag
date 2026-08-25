@@ -1,0 +1,555 @@
+#!/usr/bin/env bash
+# One-click acceptance for business-client authentication and JSON Record contracts.
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+RUN_ID="${BUSINESS_CLIENT_VERIFY_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
+LOG_DIR="${BUSINESS_CLIENT_VERIFY_LOG_DIR:-.verification/business-client-readiness/${RUN_ID}}"
+PRIVATE_DIR="${LOG_DIR}/private"
+POSTGRES_IMAGE="${BUSINESS_CLIENT_POSTGRES_IMAGE:-${TESTCONTAINERS_PG_IMAGE:-pgvector/pgvector:pg16}}"
+POSTGRES_DATABASE="${BUSINESS_CLIENT_POSTGRES_DATABASE:-business_client_readiness}"
+MANAGED_DATABASE="${POSTGRES_DATABASE}_managed"
+LIFECYCLE_DATABASE="${POSTGRES_DATABASE}_lifecycle"
+JSONB_DATABASE="${POSTGRES_DATABASE}_jsonb"
+POSTGRES_USERNAME="${BUSINESS_CLIENT_POSTGRES_USERNAME:-postgres}"
+POSTGRES_PASSWORD="${BUSINESS_CLIENT_POSTGRES_PASSWORD:-postgres}"
+BACKEND_PORT="${BUSINESS_CLIENT_BACKEND_PORT:-18084}"
+EMBEDDING_PORT="${BUSINESS_CLIENT_EMBEDDING_PORT:-18085}"
+MOCK_FRONTEND_PORT="${BUSINESS_CLIENT_MOCK_FRONTEND_PORT:-15184}"
+REAL_FRONTEND_PORT="${BUSINESS_CLIENT_REAL_FRONTEND_PORT:-15185}"
+VERIFY_PHASE="${BUSINESS_CLIENT_VERIFY_PHASE:-all}"
+
+POSTGRES_CONTAINER=""
+POSTGRES_PORT=""
+EMBEDDING_PID=""
+BACKEND_PID=""
+MOCK_FRONTEND_PID=""
+REAL_FRONTEND_PID=""
+RUNTIME_CLASSPATH=""
+PASS_COUNT=0
+STEP_INDEX=0
+
+mkdir -p "$PRIVATE_DIR"
+chmod 700 "$PRIVATE_DIR"
+: > "$LOG_DIR/summary.tsv"
+
+slugify() {
+  printf '%s' "$1" \
+    | tr '[:upper:] ' '[:lower:]-' \
+    | tr -cd 'a-z0-9._-'
+}
+
+run_step() {
+  local name="$1"
+  shift
+  STEP_INDEX=$((STEP_INDEX + 1))
+  local log_path="${LOG_DIR}/${STEP_INDEX}-$(slugify "$name").log"
+
+  echo
+  echo "=== ${name} ==="
+  echo "log: ${log_path}"
+  set +e
+  "$@" > >(tee "$log_path") 2>&1
+  local rc=$?
+  set -e
+  if [[ "$rc" -ne 0 ]]; then
+    printf '%s\tFAIL\t%s\t%s\n' "$name" "$rc" "$log_path" \
+      >> "$LOG_DIR/summary.tsv"
+    echo "FAIL: ${name} (exit ${rc})" >&2
+    return "$rc"
+  fi
+  PASS_COUNT=$((PASS_COUNT + 1))
+  printf '%s\tPASS\t0\t%s\n' "$name" "$log_path" \
+    >> "$LOG_DIR/summary.tsv"
+  echo "PASS: ${name}"
+}
+
+collect_process_tree() {
+  local root_pid="$1"
+  local child_pid
+  for child_pid in $(pgrep -P "$root_pid" 2>/dev/null || true); do
+    collect_process_tree "$child_pid"
+  done
+  printf '%s\n' "$root_pid"
+}
+
+stop_pid() {
+  local root_pid="$1"
+  [[ -n "$root_pid" ]] || return 0
+  kill -0 "$root_pid" >/dev/null 2>&1 || return 0
+
+  local process_tree pid attempt alive
+  process_tree="$(collect_process_tree "$root_pid")"
+  kill $process_tree >/dev/null 2>&1 || true
+  for attempt in $(seq 1 50); do
+    alive=false
+    for pid in $process_tree; do
+      if kill -0 "$pid" >/dev/null 2>&1; then
+        alive=true
+        break
+      fi
+    done
+    [[ "$alive" == "false" ]] && break
+    sleep 0.2
+  done
+  for pid in $process_tree; do
+    kill -9 "$pid" >/dev/null 2>&1 || true
+  done
+}
+
+write_summary() {
+  local exit_code="$1"
+  local result="PASS"
+  [[ "$exit_code" -eq 0 ]] || result="FAIL"
+  {
+    echo "# Business client readiness verification"
+    echo
+    echo "- Run: \`${RUN_ID}\`"
+    echo "- Generated: \`$(date '+%Y-%m-%d %H:%M:%S %z')\`"
+    echo "- Branch: \`$(git branch --show-current)\`"
+    echo "- Commit: \`$(git rev-parse --short HEAD)\`"
+    echo "- Result: **${result}**"
+    echo "- Passed steps: **${PASS_COUNT}**"
+    echo "- PostgreSQL image: \`${POSTGRES_IMAGE}\`"
+    echo
+    echo "| Step | Status | Exit | Evidence |"
+    echo "|------|--------|------|----------|"
+    while IFS=$'\t' read -r name status code evidence; do
+      echo "| ${name} | ${status} | ${code} | \`${evidence}\` |"
+    done < "$LOG_DIR/summary.tsv"
+  } > "$LOG_DIR/summary.md"
+}
+
+cleanup() {
+  local exit_code="$1"
+  set +e
+  stop_pid "$REAL_FRONTEND_PID"
+  stop_pid "$MOCK_FRONTEND_PID"
+  stop_pid "$BACKEND_PID"
+  stop_pid "$EMBEDDING_PID"
+  if [[ -n "$POSTGRES_CONTAINER" ]]; then
+    docker rm -f "$POSTGRES_CONTAINER" >/dev/null 2>&1 || true
+  fi
+  unset RAG_ROOT_API_KEY
+  rm -rf "$PRIVATE_DIR"
+  write_summary "$exit_code"
+  echo
+  echo "Summary: ${LOG_DIR}/summary.md"
+}
+
+on_exit() {
+  local exit_code=$?
+  trap - EXIT
+  cleanup "$exit_code"
+  exit "$exit_code"
+}
+
+trap on_exit EXIT
+trap 'exit 130' INT TERM
+
+require_commands_and_ports() {
+  local command_name port
+  [[ "$VERIFY_PHASE" == "all" || "$VERIFY_PHASE" == "real" ]] || {
+    echo "BUSINESS_CLIENT_VERIFY_PHASE must be all or real" >&2
+    return 1
+  }
+  for command_name in \
+      bash curl docker git java jq lsof mvn node npm npx openssl \
+      pgrep python3 rg; do
+    command -v "$command_name" >/dev/null || {
+      echo "Missing required command: ${command_name}" >&2
+      return 1
+    }
+  done
+  docker version >/dev/null || return 1
+
+  for port in \
+      "$BACKEND_PORT" "$EMBEDDING_PORT" \
+      "$MOCK_FRONTEND_PORT" "$REAL_FRONTEND_PORT"; do
+    [[ "$port" =~ ^[0-9]+$ ]] && (( port >= 1 && port <= 65535 )) || {
+      echo "Invalid verification port: ${port}" >&2
+      return 1
+    }
+    if lsof -nP -iTCP:"$port" -sTCP:LISTEN >/dev/null 2>&1; then
+      echo "Verification port is already in use: ${port}" >&2
+      return 1
+    fi
+  done
+
+  [[ "$(printf '%s\n' \
+      "$BACKEND_PORT" "$EMBEDDING_PORT" \
+      "$MOCK_FRONTEND_PORT" "$REAL_FRONTEND_PORT" | sort -u | wc -l | tr -d ' ')" \
+      == "4" ]] || {
+    echo "Verification ports must be distinct" >&2
+    return 1
+  }
+}
+
+frontend_dependencies() {
+  if [[ ! -x spring-ai-rag-webui/node_modules/.bin/vite \
+      || ! -x spring-ai-rag-webui/node_modules/.bin/playwright ]]; then
+    (cd spring-ai-rag-webui && npm ci)
+  fi
+}
+
+focused_backend_tests() {
+  mvn -pl spring-ai-rag-core -am \
+    -Dtest=ApiKeyIdentityControllerTest,ApiKeyRootModeWebIntegrationTest,\
+OpenApiContractTest,ApiKeyAuthFilterTest,ApiKeyCollectionAccessTest,\
+RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest \
+    -Dsurefire.failIfNoSpecifiedTests=false test
+}
+
+start_postgres() {
+  POSTGRES_CONTAINER="spring-ai-rag-business-client-${RUN_ID}"
+  docker run -d --rm \
+    --name "$POSTGRES_CONTAINER" \
+    -e POSTGRES_DB="$POSTGRES_DATABASE" \
+    -e POSTGRES_USER="$POSTGRES_USERNAME" \
+    -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+    -p 127.0.0.1::5432 \
+    "$POSTGRES_IMAGE" >/dev/null || return 1
+
+  local attempt state
+  for attempt in $(seq 1 120); do
+    if docker exec "$POSTGRES_CONTAINER" \
+        pg_isready -U "$POSTGRES_USERNAME" \
+        -d "$POSTGRES_DATABASE" >/dev/null 2>&1; then
+      break
+    fi
+    state="$(docker inspect --format '{{.State.Status}}' \
+      "$POSTGRES_CONTAINER" 2>/dev/null || true)"
+    if [[ "$state" != "running" ]]; then
+      echo "Disposable PostgreSQL stopped before readiness" >&2
+      docker logs "$POSTGRES_CONTAINER" 2>&1 || true
+      return 1
+    fi
+    sleep 1
+  done
+  docker exec "$POSTGRES_CONTAINER" \
+    pg_isready -U "$POSTGRES_USERNAME" \
+    -d "$POSTGRES_DATABASE" >/dev/null || return 1
+  POSTGRES_PORT="$(docker port "$POSTGRES_CONTAINER" 5432/tcp \
+    | awk -F: 'NR == 1 {print $NF}')" || return 1
+  [[ -n "$POSTGRES_PORT" ]] || {
+    echo "Could not determine disposable PostgreSQL port" >&2
+    return 1
+  }
+
+  local database_name
+  for database_name in \
+      "$MANAGED_DATABASE" "$LIFECYCLE_DATABASE" "$JSONB_DATABASE"; do
+    docker exec "$POSTGRES_CONTAINER" createdb \
+      -U "$POSTGRES_USERNAME" "$database_name" || return 1
+  done
+}
+
+assert_surefire_report() {
+  local test_name="$1"
+  local report="spring-ai-rag-core/target/surefire-reports/TEST-com.springairag.core.integration.${test_name}.xml"
+  [[ -f "$report" ]] || {
+    echo "Missing Surefire report: ${report}" >&2
+    return 1
+  }
+  rg -q 'failures="0"' "$report" || return 1
+  rg -q 'errors="0"' "$report" || return 1
+  rg -q 'skipped="0"' "$report" || return 1
+}
+
+postgres_integration_matrix() {
+  local managed_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${MANAGED_DATABASE}"
+  local lifecycle_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${LIFECYCLE_DATABASE}"
+  local jsonb_url="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${JSONB_DATABASE}"
+
+  MANAGED_API_PRINCIPAL_IT_JDBC_URL="$managed_url" \
+  MANAGED_API_PRINCIPAL_IT_USERNAME="$POSTGRES_USERNAME" \
+  MANAGED_API_PRINCIPAL_IT_PASSWORD="$POSTGRES_PASSWORD" \
+  MANAGED_API_PRINCIPAL_IT_CLEAN_CONFIRM=YES \
+    mvn -pl spring-ai-rag-core -am \
+      -Dmanaged-api-principal.it.enabled=true \
+      -Dtest=ManagedApiPrincipalPostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false test || return 1
+  assert_surefire_report ManagedApiPrincipalPostgresIntegrationTest || return 1
+
+  DOCUMENT_LIFECYCLE_IT_JDBC_URL="$lifecycle_url" \
+  DOCUMENT_LIFECYCLE_IT_USERNAME="$POSTGRES_USERNAME" \
+  DOCUMENT_LIFECYCLE_IT_PASSWORD="$POSTGRES_PASSWORD" \
+  DOCUMENT_LIFECYCLE_IT_CLEAN_CONFIRM=YES \
+    mvn -pl spring-ai-rag-core -am \
+      -Ddocument-lifecycle.it.enabled=true \
+      -Dtest=DocumentLifecyclePostgresIntegrationTest \
+      -Dsurefire.failIfNoSpecifiedTests=false test || return 1
+  assert_surefire_report DocumentLifecyclePostgresIntegrationTest || return 1
+
+  mvn -pl spring-ai-rag-core -am \
+    -Djsonb.it.enabled=true \
+    "-Djsonb.it.jdbc-url=${jsonb_url}" \
+    "-Djsonb.it.username=${POSTGRES_USERNAME}" \
+    "-Djsonb.it.password=${POSTGRES_PASSWORD}" \
+    -Dtest=JsonbStructuredRecordsPostgresIntegrationTest \
+    -Dsurefire.failIfNoSpecifiedTests=false test || return 1
+  assert_surefire_report JsonbStructuredRecordsPostgresIntegrationTest
+}
+
+backend_compile() {
+  mvn clean compile test-compile
+}
+
+frontend_typecheck() {
+  (cd spring-ai-rag-webui && npm run typecheck)
+}
+
+frontend_vitest() {
+  (cd spring-ai-rag-webui && npm run test:run)
+}
+
+frontend_build() {
+  (cd spring-ai-rag-webui && npm run build)
+}
+
+wait_for_http() {
+  local url="$1" pid="$2" log_path="$3"
+  local attempt
+  for attempt in $(seq 1 120); do
+    if curl -fsS --connect-timeout 1 --max-time 2 "$url" >/dev/null 2>&1; then
+      return 0
+    fi
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "Process exited before becoming ready: ${url}" >&2
+      tail -100 "$log_path" >&2 || true
+      return 1
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for: ${url}" >&2
+  tail -100 "$log_path" >&2 || true
+  return 1
+}
+
+mock_playwright() {
+  local preview_log="$LOG_DIR/mock-preview.log"
+  (
+    cd spring-ai-rag-webui
+    exec ./node_modules/.bin/vite preview \
+      --host 127.0.0.1 \
+      --port "$MOCK_FRONTEND_PORT" \
+      --strictPort
+  ) > "$preview_log" 2>&1 &
+  MOCK_FRONTEND_PID=$!
+  wait_for_http \
+    "http://127.0.0.1:${MOCK_FRONTEND_PORT}/webui/" \
+    "$MOCK_FRONTEND_PID" "$preview_log" || return 1
+  local rc=0
+  (
+    cd spring-ai-rag-webui
+    BASE_URL="http://127.0.0.1:${MOCK_FRONTEND_PORT}" \
+      npx playwright test e2e/api-key-mvp.spec.ts --project=chromium
+  ) || rc=$?
+  stop_pid "$MOCK_FRONTEND_PID"
+  MOCK_FRONTEND_PID=""
+  return "$rc"
+}
+
+prepare_runtime_classpath() {
+  local classpath_file="${LOG_DIR}/runtime-classpath.txt"
+  mvn -q -pl spring-ai-rag-core -am dependency:build-classpath \
+    "-Dmdep.outputFile=${PWD}/${classpath_file}" \
+    -DincludeScope=runtime || return 1
+  RUNTIME_CLASSPATH="spring-ai-rag-core/target/classes:"
+  RUNTIME_CLASSPATH+="spring-ai-rag-api/target/classes:"
+  RUNTIME_CLASSPATH+="spring-ai-rag-documents/target/classes:"
+  RUNTIME_CLASSPATH+="spring-ai-rag-starter/target/classes:"
+  RUNTIME_CLASSPATH+="$(<"$classpath_file")"
+}
+
+prepare_root_credential() {
+  local root_file="${PRIVATE_DIR}/root.key"
+  printf 'readiness-root-%s' "$(openssl rand -hex 32)" > "$root_file"
+  chmod 600 "$root_file"
+  RAG_ROOT_API_KEY="$(tr -d '\r\n' < "$root_file")"
+  export RAG_ROOT_API_KEY
+}
+
+start_embedding_stub() {
+  local counter_file="${PRIVATE_DIR}/embedding-counter.json"
+  local log_path="${LOG_DIR}/embedding-stub.log"
+  python3 scripts/test-support/openai-embedding-stub.py \
+    --port "$EMBEDDING_PORT" \
+    --dimensions 1024 \
+    --counter-file "$counter_file" \
+    > "$log_path" 2>&1 &
+  EMBEDDING_PID=$!
+  wait_for_http \
+    "http://127.0.0.1:${EMBEDDING_PORT}/health" \
+    "$EMBEDDING_PID" "$log_path"
+}
+
+start_backend() {
+  local log_path="${LOG_DIR}/backend.log"
+  (
+    export SPRING_PROFILES_ACTIVE=postgresql
+    export SERVER_PORT="$BACKEND_PORT"
+    export SPRING_DATASOURCE_URL="jdbc:postgresql://127.0.0.1:${POSTGRES_PORT}/${POSTGRES_DATABASE}"
+    export SPRING_DATASOURCE_USERNAME="$POSTGRES_USERNAME"
+    export SPRING_DATASOURCE_PASSWORD="$POSTGRES_PASSWORD"
+    export RAG_SECURITY_ENABLED=true
+    export RAG_ROOT_API_KEY
+    export RAG_RATE_LIMIT_ENABLED=true
+    export RAG_RATE_LIMIT_BACKEND=postgresql
+    export RAG_RATE_LIMIT_STRATEGY=principal
+    export RAG_RATE_LIMIT_REQUESTS_PER_MINUTE=5000
+    export RAG_CORS_ENABLED=true
+    export RAG_CORS_ALLOWED_ORIGINS_0="http://127.0.0.1:${REAL_FRONTEND_PORT}"
+    export APP_LLM_PROVIDER=openai
+    export SPRING_AI_OPENAI_API_KEY=dummy-chat-key
+    export SPRING_AI_OPENAI_BASE_URL=http://127.0.0.1:9
+    export SPRING_AI_OPENAI_CHAT_OPTIONS_MODEL=dummy-chat
+    export RAG_EMBEDDING_API_KEY=dummy-embedding-key
+    export RAG_EMBEDDING_BASE_URL="http://127.0.0.1:${EMBEDDING_PORT}"
+    export RAG_EMBEDDING_MODEL=contract-embedding
+    export RAG_EMBEDDING_DIMENSIONS=1024
+    export RAG_EMBEDDING_PROFILE_KEY=business-client-contract-1024-v1
+    export RAG_EMBEDDING_PROVIDER=contract-stub
+    export RAG_EMBEDDING_MODEL_REVISION=v1
+    export RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS=100
+    export RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS=1
+    exec java -cp "$RUNTIME_CLASSPATH" \
+      com.springairag.core.SpringAiRagApplication
+  ) > "$log_path" 2>&1 &
+  BACKEND_PID=$!
+  wait_for_http \
+    "http://127.0.0.1:${BACKEND_PORT}/actuator/health" \
+    "$BACKEND_PID" "$log_path" || return 1
+
+  local health_file="${LOG_DIR}/backend-health.json"
+  curl -fsS "http://127.0.0.1:${BACKEND_PORT}/actuator/health" \
+    > "$health_file" || return 1
+  jq -e '.status == "UP"' "$health_file" >/dev/null || return 1
+}
+
+http_contract() {
+  BASE_URL="http://127.0.0.1:${BACKEND_PORT}" \
+  ROOT_CREDENTIAL_FILE="${PRIVATE_DIR}/root.key" \
+  BUSINESS_CLIENT_PRIVATE_DIR="$PRIVATE_DIR" \
+  BUSINESS_CLIENT_EVIDENCE_DIR="${LOG_DIR}/http-contract" \
+  BUSINESS_CLIENT_EMBEDDING_COUNTER_FILE="${PRIVATE_DIR}/embedding-counter.json" \
+  BUSINESS_CLIENT_RUN_ID="$RUN_ID" \
+    bash scripts/business-client-contract-e2e.sh
+}
+
+runtime_database_facts() {
+  local facts
+  facts="$(docker exec "$POSTGRES_CONTAINER" psql \
+    -U "$POSTGRES_USERNAME" \
+    -d "$POSTGRES_DATABASE" \
+    -At -F, -c \
+    "SELECT
+       (SELECT version FROM flyway_schema_history
+        WHERE success ORDER BY installed_rank DESC LIMIT 1),
+       (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL),
+       (SELECT count(*) FROM rag_embedding_jobs WHERE status = 'SUCCEEDED');")" \
+    || return 1
+  [[ "$facts" =~ ^48,0,[1-9][0-9]*$ ]] || {
+    echo "Unexpected runtime database facts: ${facts}" >&2
+    return 1
+  }
+  jq -e '.requests >= 1 and .inputs >= 1' \
+    "${PRIVATE_DIR}/embedding-counter.json" >/dev/null || return 1
+  rg -qx 'result=PASS' \
+    "${LOG_DIR}/http-contract/summary.txt" || return 1
+  echo "migration=48 plaintext_credentials=0 succeeded_embedding_jobs>=1"
+}
+
+start_real_frontend() {
+  local log_path="${LOG_DIR}/real-frontend.log"
+  (
+    cd spring-ai-rag-webui
+    export VITE_DEV_PORT="$REAL_FRONTEND_PORT"
+    export VITE_DEV_PROXY_TARGET="http://127.0.0.1:${BACKEND_PORT}"
+    export VITE_DEV_ORIGIN="http://127.0.0.1:${REAL_FRONTEND_PORT}/webui"
+    exec npm run dev -- --host 127.0.0.1 --strictPort
+  ) > "$log_path" 2>&1 &
+  REAL_FRONTEND_PID=$!
+  wait_for_http \
+    "http://127.0.0.1:${REAL_FRONTEND_PORT}/webui/unlock" \
+    "$REAL_FRONTEND_PID" "$log_path"
+}
+
+real_api_key_playwright() {
+  start_real_frontend || return 1
+  local rc=0
+  (
+    cd spring-ai-rag-webui
+    BASE_URL="http://127.0.0.1:${REAL_FRONTEND_PORT}" \
+    RAG_ROOT_API_KEY="$RAG_ROOT_API_KEY" \
+      npx playwright test e2e/api-key-real.spec.ts --project=chromium
+  ) || rc=$?
+  stop_pid "$REAL_FRONTEND_PID"
+  REAL_FRONTEND_PID=""
+  return "$rc"
+}
+
+real_fullstack_acceptance() {
+  prepare_runtime_classpath || return 1
+  prepare_root_credential || return 1
+  start_embedding_stub || return 1
+  start_backend || return 1
+  http_contract || return 1
+  runtime_database_facts || return 1
+  real_api_key_playwright
+}
+
+script_static_checks() {
+  bash -n scripts/business-client-contract-e2e.sh || return 1
+  bash -n scripts/verify-business-client-readiness.sh || return 1
+  python3 -c '
+from pathlib import Path
+
+path = Path("scripts/test-support/openai-embedding-stub.py")
+compile(path.read_text(encoding="utf-8"), str(path), "exec")
+'
+}
+
+added_line_secret_scan() {
+  local matches
+  matches="$(
+    git diff --unified=0 --no-color -- . \
+      | sed -n 's/^+//p' \
+      | rg -n \
+        '(sk-[A-Za-z0-9_-]{20,}|gh[oprsu]_[A-Za-z0-9]{30,}|AIza[0-9A-Za-z_-]{30,}|Bearer[[:space:]]+[A-Za-z0-9._-]{32,})' \
+      || true
+  )"
+  [[ -z "$matches" ]] || {
+    echo "Potential secret found in added lines:" >&2
+    printf '%s\n' "$matches" >&2
+    return 1
+  }
+}
+
+run_step "Prerequisites and isolated ports" require_commands_and_ports
+run_step "Frontend dependency readiness" frontend_dependencies
+
+if [[ "$VERIFY_PHASE" == "real" ]]; then
+  run_step "Maven clean compile test-compile" backend_compile
+  run_step "Disposable PostgreSQL startup" start_postgres
+  run_step "Real service HTTP and WebUI acceptance" real_fullstack_acceptance
+else
+  run_step "Focused backend and contract tests" focused_backend_tests
+  run_step "Disposable PostgreSQL startup" start_postgres
+  run_step "PostgreSQL integration matrix" postgres_integration_matrix
+  run_step "Maven clean compile test-compile" backend_compile
+  run_step "WebUI TypeScript" frontend_typecheck
+  run_step "WebUI Vitest" frontend_vitest
+  run_step "WebUI production build" frontend_build
+  run_step "Core Mock Playwright" mock_playwright
+  run_step "Script syntax and embedding stub compile" script_static_checks
+  run_step "No pessimistic locks" ./scripts/verify-no-pessimistic-locks.sh
+  run_step "Project documentation" ./scripts/verify-project-docs.sh
+  run_step "Added-line secret scan" added_line_secret_scan
+  run_step "Git whitespace" git diff --check
+  run_step "Real service HTTP and WebUI acceptance" real_fullstack_acceptance
+fi
+
+echo
+echo "Business client readiness verification (${VERIFY_PHASE}) passed: ${PASS_COUNT} steps"

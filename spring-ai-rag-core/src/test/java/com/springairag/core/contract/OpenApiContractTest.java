@@ -75,12 +75,14 @@ class OpenApiContractTest {
             "ChatResponse",
             "SearchRequest",
             "CollectionScopeMode",
+            "CollectionAccessMode",
             "RetrievalResult",
             "DocumentRequest",
             "CollectionRequest",
             "CollectionCloneRequest",
             "CollectionUpdateRequest",
             "ApiKeyCreateRequest",
+            "ApiKeyIdentityResponse",
             "ErrorResponse",
             "HealthResponse",
             "BatchDocumentRequest",
@@ -125,6 +127,7 @@ class OpenApiContractTest {
             "/rag/documents/batch-upsert",
             "/rag/documents/by-external-id",
             "/rag/documents/relocate",
+            "/rag/auth/me",
             "/rag/health",
             "/rag/models",
             "/rag/retrieval-traces",
@@ -376,6 +379,26 @@ class OpenApiContractTest {
                             "CALLER_VISIBLE",
                             "ANY_COLLECTION",
                             "SELECTED_COLLECTIONS");
+        }
+
+        @Test
+        @DisplayName("API identity schema exposes role and Collection access contract")
+        void apiKeyIdentitySchema_hasAccessContract() throws Exception {
+            JsonNode schemas = loadSpec().path("components").path("schemas");
+            JsonNode identity = schemas.path("ApiKeyIdentityResponse");
+            JsonNode properties = identity.path("properties");
+
+            assertThat(identity.isMissingNode()).isFalse();
+            assertThat(properties.has("principalRole")).isTrue();
+            assertThat(properties.has("collectionAccessMode")).isTrue();
+            assertThat(properties.has("allowedCollectionKeys")).isTrue();
+
+            JsonNode accessValues = schemas.path("CollectionAccessMode").path("enum");
+            assertThat(java.util.stream.StreamSupport
+                    .stream(accessValues.spliterator(), false)
+                    .map(JsonNode::asText)
+                    .toList())
+                    .containsExactly("RESTRICTED", "UNRESTRICTED");
         }
 
         @Test
