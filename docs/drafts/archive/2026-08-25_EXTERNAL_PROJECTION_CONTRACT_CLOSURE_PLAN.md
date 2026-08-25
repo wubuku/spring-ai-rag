@@ -72,8 +72,8 @@ Validation 注解，controller 也没有显式 `@Validated`。tombstone 最终�
 
 近距离事实入口：
 
-- [REST API：JSON 结构化记录](../rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索)
-- [业务服务接入指南](../business-client-integration-zh-CN.md)
+- [REST API：JSON 结构化记录](../../rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索)
+- [业务服务接入指南](../../business-client-integration-zh-CN.md)
 - `spring-ai-rag-api/.../dto/JsonRecordUpsertRequest.java`
 - `spring-ai-rag-core/.../controller/RagJsonRecordController.java`
 - `spring-ai-rag-core/.../service/JsonRecordService.java`
@@ -562,7 +562,7 @@ git diff --check
 进度记录：
 
 ```text
-docs/drafts/EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PROGRESS.md
+docs/drafts/archive/2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PROGRESS.md
 ```
 
 关键进展先更新 progress，再执行下一阶段；不记录 raw credential、完整业务 payload 或外部

@@ -232,13 +232,28 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 - root、restricted/unrestricted 数据库 principal，Header/Bearer 认证和有效 query
   credential 拒绝；
 - `/auth/me` 的 role、access mode、完整 key allow-list、no-store 与无 secret；
-- Collection key 128 成功/129 拒绝、跨 Collection ACL 和防枚举；
+- Collection key 1/128 成功、129/空白/控制字符/非 ASCII 拒绝，外部身份与 revision
+  长度边界、双向跨 Collection ACL 和全数据面防枚举；
 - JSON Record 精确重放、CAS、payload containment、tombstone/恢复和 payload-only
   不重嵌入；
 - `ASYNC` 持久化 job 经真实 Spring AI embedding HTTP 路径收敛为 fresh；
+- 确定性 provider `503` 使 job 收敛为 `FAILED`，但保留已提交的 Record identity、
+  revision、payload、enabled 状态和 document revision；
 - credential 一次性展示、轮换、旧 key 失效和吊销；
 - Flyway V48、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
+
+真实 HTTP 阶段当前固定为 109 项断言。最终候选 commit 应开启 clean-tree gate：
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
+每次运行都会在证据目录生成 `release-manifest.json`，记录 PASS/FAIL、验证阶段、完整 Git
+SHA、初始 tree state、项目/OpenAPI 版本、API base path、最新 Flyway migration、passed
+steps、PostgreSQL image 和 HTTP 检查数。未执行到的运行时事实为 JSON `null`；manifest
+不保存 credential、URL、payload、external ID 或 private path。
 
 聚焦复跑真实阶段：
 

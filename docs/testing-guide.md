@@ -244,17 +244,36 @@ covers:
   authentication, and rejection of a valid query credential;
 - `/auth/me` role, access mode, complete key allow-list, no-store, and
   secret absence;
-- Collection-key 128 success/129 rejection, cross-Collection ACLs, and
-  anti-enumeration;
+- Collection-key 1/128 success and 129/blank/control/non-ASCII rejection,
+  external-identity and revision bounds, bidirectional cross-Collection ACLs,
+  and full-data-plane anti-enumeration;
 - JSON Record exact replay, CAS, payload containment, tombstone/restore, and
   no re-embedding for payload-only changes;
 - `ASYNC` durable-job convergence through the real Spring AI embedding HTTP
   path;
+- deterministic provider `503` convergence to a `FAILED` job while preserving
+  the committed Record identity, revision, payload, enabled state, and
+  document revision;
 - shown-once credentials, rotation, old-key invalidation, and revocation;
 - PostgreSQL facts for Flyway V48, zero plaintext credentials, and a succeeded
   embedding job;
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
+
+The real HTTP phase currently fixes 109 assertions. Enable the clean-tree gate
+for a final candidate commit:
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
+Every run writes `release-manifest.json` in the evidence directory. It records
+PASS/FAIL, verification phase, full Git SHA, initial tree state,
+project/OpenAPI versions, API base path, latest Flyway migration, passed
+steps, PostgreSQL image, and HTTP-check count. Runtime facts not reached are
+JSON `null`; the manifest stores no credential, URL, payload, external ID, or
+private path.
 
 Focused real-phase rerun:
 

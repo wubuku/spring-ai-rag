@@ -283,6 +283,7 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}

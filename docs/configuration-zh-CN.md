@@ -161,6 +161,7 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -177,6 +178,7 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API 端点 |
 | `rag.embedding.model` | `BAAI/bge-m3` | 嵌入模型名称 |
 | `rag.embedding.dimensions` | `1024` | 向量维度（必须与模型输出一致） |
+| `rag.embedding.retry-max-attempts` | `10` | 单次 provider 调用的最大尝试次数，范围 1–10；独立于持久化 job 的尝试预算 |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | 写入和检索使用的不可变模型空间身份 |
 | `rag.embedding.provider` | `siliconflow` | Profile 中保存的提供商身份 |
 | `rag.embedding.model-revision` | `unspecified` | 显式模型版本身份；模型语义变化必须创建新 Profile |
@@ -191,6 +193,12 @@ rag:
 内新向量还会双写旧 `embedding` 列。更换模型必须创建新 Profile 并完整重嵌入，不能只改
 `dimensions`、把旧向量 cast 成新向量，或在一次检索中混用多个 Profile。Legacy 向量只能
 通过显式认领并提供正确确认值接入。
+
+`rag.embedding.retry-max-attempts` 控制一次 worker/provider 调用内部的 Spring Retry
+预算；只重试 Spring AI transient 异常和网络访问异常，并保留默认指数退避。它与下方
+`rag.embedding-jobs.default-max-attempts` /
+`rag.embedding-jobs.max-attempts` 的持久化任务预算相互独立；生产环境应同时为两层设置
+有限值，避免一个失败任务产生无界外部调用。
 
 ### 持久化 Embedding Jobs
 

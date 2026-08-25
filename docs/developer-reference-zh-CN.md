@@ -390,12 +390,23 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 ./scripts/verify-business-client-readiness.sh
 ```
 
+最终候选 commit 要求 Git tree 干净：
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
 默认端口为后端 `18084`、embedding stub `18085`、Mock 前端 `15184`、真实前端 `15185`；
 可分别用 `BUSINESS_CLIENT_BACKEND_PORT`、`BUSINESS_CLIENT_EMBEDDING_PORT`、
 `BUSINESS_CLIENT_MOCK_FRONTEND_PORT`、`BUSINESS_CLIENT_REAL_FRONTEND_PORT` 覆盖。
 PostgreSQL 镜像可用 `BUSINESS_CLIENT_POSTGRES_IMAGE` 覆盖。证据写入
 `.verification/business-client-readiness/<run-id>/`，private credential 文件、容器、
-端口和进程由退出 trap 清理。
+端口和进程由退出 trap 清理。真实 HTTP 合同当前为 109 项，并包含 provider `503` 后
+Record 保留语义。目录中的 `release-manifest.json` 锁定完整 Git SHA、初始 tree state、
+项目/OpenAPI 版本、API base path、V48、passed steps、PostgreSQL image 和 HTTP 检查数；
+未到达的运行时事实为 JSON `null`，不记录 credential、URL、payload、external ID 或
+private path。
 
 本门禁验证真实 Spring AI embedding HTTP 路径，但本能力不改变 Chat，因此不调用 Chat
 LLM。接入契约和部署 binding 见

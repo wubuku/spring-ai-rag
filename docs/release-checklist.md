@@ -90,8 +90,14 @@ Release date: `2026-07-21`
   Collection-key allow-list, failing closed when policy resolution is
   incomplete.
 - [x] `verify-business-client-readiness.sh` covers PostgreSQL integration
-  matrices, Maven/WebUI gates, real Spring Boot, 64 business-credential HTTP
+  matrices, Maven/WebUI gates, real Spring Boot, 109 business-credential HTTP
   assertions, and real API-key Playwright.
+- [x] The contract covers external identity/revision bounds, bidirectional
+  full-data-plane generic-`403` anti-enumeration, and preservation of Record
+  identity/revision/payload/enabled/documentRevision after a provider `503`.
+- [x] The clean-tree final gate writes `release-manifest.json`, pinning the
+  full Git SHA, project/OpenAPI `1.0.0`, API base path, Flyway V48, PostgreSQL
+  image, and 109-check count without storing secrets or business payloads.
 - [x] The bilingual Business Service Integration Guide records root/business
   credentials, binding, CAS/tombstone/ASYNC, rotation, upgrade, and rollback
   boundaries.

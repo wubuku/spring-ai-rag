@@ -49,5 +49,7 @@
   `2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_*`
 - Chat 静态资源知识、运行时 Skill、allowlisted HTTP Tool 与工具感知记忆：
   `2026-08-25_CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_*`
+- 外部投影身份边界、全数据面 ACL 合同、provider 失败保留语义与可复现发布 manifest：
+  `2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

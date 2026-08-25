@@ -17,8 +17,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.mockito.ArgumentCaptor;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -114,5 +117,77 @@ class RagJsonRecordControllerWebTest {
                 "active",
                 request.getValue().getPayloadContains()
                         .path("status").asText());
+    }
+
+    @Test
+    void lookupAcceptsMaximumIdentityLengths() throws Exception {
+        String namespace = "n".repeat(128);
+        String externalId = "e".repeat(255);
+
+        mockMvc.perform(get("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("sourceNamespace", namespace)
+                        .param("externalId", externalId))
+                .andExpect(status().isOk());
+
+        verify(jsonRecordService).getByExternalIdentity(
+                "records:v1", namespace, externalId);
+    }
+
+    @Test
+    void lookupRejectsInvalidIdentityBeforeServiceCall() throws Exception {
+        mockMvc.perform(get("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("sourceNamespace", "n".repeat(129))
+                        .param("externalId", "record-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("sourceNamespace", "namespace\tvalue")
+                        .param("externalId", "record-1"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("sourceNamespace", "default")
+                        .param("externalId", "e".repeat(256)))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(jsonRecordService);
+    }
+
+    @Test
+    void tombstoneAcceptsValidParameters() throws Exception {
+        mockMvc.perform(delete("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("sourceNamespace", "business-client.v1")
+                        .param("externalId", "record-1")
+                        .param("sourceRevision", "rev-2")
+                        .param("expectedSourceRevision", "rev-1"))
+                .andExpect(status().isOk());
+
+        verify(jsonRecordService).sourceDelete(
+                "records:v1",
+                "business-client.v1",
+                "record-1",
+                "rev-2",
+                "rev-1");
+    }
+
+    @Test
+    void tombstoneRejectsOverlongRevisionsBeforeServiceCall() throws Exception {
+        mockMvc.perform(delete("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("externalId", "record-1")
+                        .param("sourceRevision", "r".repeat(256)))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(delete("/api/v1/rag/json-records/by-external-id")
+                        .param("collectionKey", "records:v1")
+                        .param("externalId", "record-1")
+                        .param("sourceRevision", "rev-2")
+                        .param("expectedSourceRevision", "r".repeat(256)))
+                .andExpect(status().isBadRequest());
+
+        verify(jsonRecordService, never()).sourceDelete(
+                any(), any(), any(), any(), any());
     }
 }

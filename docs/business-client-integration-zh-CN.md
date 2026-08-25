@@ -90,11 +90,11 @@ restricted principal 的核心响应：
 
 | 字段 | 规则 |
 |---|---|
-| `collectionKey` | 1-128 个可见 ASCII 字符，区分大小写，全局唯一，创建后不可变，软删除后仍保留占用 |
-| `sourceNamespace` | 最多 128 字符；省略或空白规范化为 `default` |
-| `externalId` | 最多 255 字符；必须来自来源系统的稳定不可变 ID |
-| `sourceRevision` | 调用方提供的非空 opaque 完整状态版本，不按字符串或数字比较大小 |
-| `expectedSourceRevision` | 更新或 tombstone 的 CAS 前置版本 |
+| `collectionKey` | 1-128 个 `0x21..0x7e` 可见 ASCII 字符；区分大小写、全局唯一、创建后不可变，软删除后仍保留占用 |
+| `sourceNamespace` | 省略或空白规范化为 `default`；显式值 trim 后最多 128 字符，只允许 `0x20..0x7e` |
+| `externalId` | trim 后非空、最多 255 字符；保持 opaque/Unicode，必须来自来源系统的稳定不可变 ID |
+| `sourceRevision` | 调用方提供的非空 opaque 完整状态版本，trim 后最多 255 字符，不按字符串或数字比较大小 |
+| `expectedSourceRevision` | 可选 CAS 前置版本；非空时 trim 后最多 255 字符 |
 
 JSON Record 分开保存：
 
@@ -130,6 +130,8 @@ credential，而不是再创建一个无主 principal。
 - 同 revision、同完整受管内容是精确幂等重放；
 - 同 revision、不同内容或错误 CAS 返回 `409`；
 - mutation 成功先保证主记录和持久化 job 已提交，不保证 embedding 已 fresh；
+- provider 最终失败时，主记录、revision、payload 和 enabled 状态仍保留；lifecycle 会报告
+  `embeddingStatus=FAILED`，不会通过第二次业务 mutation 删除或覆盖记录；
 - 来源删除使用 `DELETE /json-records/by-external-id` 创建 tombstone；
 - 之后使用新的 revision upsert 会恢复同一个 `documentId`。
 
@@ -154,6 +156,15 @@ credential，而不是再创建一个无主 principal。
 | `401` | credential 无效、过期、已轮换或已吊销；停止数据投递 |
 | `403` | ACL/binding 错误；不要根据响应猜测 Collection 是否存在 |
 
+restricted principal 对未授权或未知 Collection 的 search、lookup、upsert 和 tombstone
+统一先返回通用 `403`；错误信封不回显目标 key、Collection 是否存在或内部 ID。
+
+embedding provider 的单次模型调用重试预算由
+`rag.embedding.retry-max-attempts` / `RAG_EMBEDDING_RETRY_MAX_ATTEMPTS` 控制，范围
+1-10，默认 10 以保持现有行为；仅 transient/network 错误会按指数退避重试。它与
+durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立预算；
+生产配置必须同时有界。
+
 轮换由 operator 使用 root 发起。新响应中的 credential 仍只展示一次；旧 credential
 立即失效，新 credential 保持同一 `principalId` 和 policy。推荐先安全分发新 secret，
 滚动更新所有实例并通过 `/auth/me` 验证，再结束旧版本部署。吊销和到期都应视为终止错误，
@@ -161,7 +172,12 @@ credential，而不是再创建一个无主 principal。
 
 ## 7. 部署、升级与回滚
 
-- readiness 使用 `/actuator/health`；业务 binding 另用 `/auth/me` 和 Collection by-key。
+- liveness 使用 `/actuator/health/liveness`；readiness 使用
+  `/actuator/health/readiness`。readiness group 表示进程、Spring readiness 与数据库可用，
+  不承诺外部 embedding provider 或某个 Collection 已检索就绪。
+- embedding 可用性读取文档 lifecycle 或
+  `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
+  Collection by-key。
 - 空库或升级环境必须按顺序执行 Flyway V1-V48。本能力没有新增 migration，不能因此跳过
   既有迁移。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
@@ -179,6 +195,13 @@ credential，而不是再创建一个无主 principal。
 ./scripts/verify-business-client-readiness.sh
 ```
 
+最终候选 commit 的可复现门禁：
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
 仅复跑真实服务、HTTP 和真实前端阶段：
 
 ```bash
@@ -188,21 +211,24 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 
 完整门禁串行执行 focused 后端测试、三个隔离 PostgreSQL 集成矩阵、
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
-Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、64 项 HTTP 合同和真实
+Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、109 项 HTTP 合同和真实
 API Key Playwright。
 
 脚本默认使用隔离端口 `18084`、`18085`、`15184`、`15185` 和一次性
 `pgvector/pgvector:pg16`。证据写入
 `.verification/business-client-readiness/<run-id>/`；private credential 文件由退出 trap
-删除。确定性 embedding stub 验证真实 Spring AI embedding HTTP 路径，但本能力不改变
-Chat，因此该门禁不调用 Chat LLM。
+删除。`release-manifest.json` 记录运行结果、验证阶段、完整 Git SHA、初始 tree state、
+项目/OpenAPI 版本、API base path、最新 Flyway migration、passed steps、PostgreSQL image
+和 HTTP contract check 数；未到达的运行时事实使用 JSON `null`，不保存 credential、URL、
+payload、external ID 或 private path。确定性 embedding stub 验证真实 Spring AI
+embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，因此该门禁不调用 Chat LLM。
 
 ## 9. 当前限制
 
 - `RAG_READ`/`RAG_WRITE` 当前是产品级描述，尚未作为 operation-scoped 权限独立强制。
 - principal provisioning 尚无幂等键。
-- 尚无独立的 machine-readable 集成协议版本/能力发现端点；当前以 OpenAPI、Git commit 和
-  本合同门禁锁定兼容性。
+- 尚无独立的运行时 capability discovery 端点；当前以 OpenAPI、Git commit 和离线
+  `release-manifest.json` 锁定兼容性。
 - 当前身份体系是 environment root + 数据库业务 principal，不提供 OAuth/OIDC federation
   或独立 tenant 层级。
 

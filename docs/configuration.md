@@ -167,6 +167,7 @@ rag:
     base-url: ${SILICONFLOW_URL:https://api.siliconflow.cn}
     model: ${SILICONFLOW_MODEL:BAAI/bge-m3}
     dimensions: ${SILICONFLOW_DIMENSIONS:1024}
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
     profile-key: ${RAG_EMBEDDING_PROFILE_KEY:siliconflow-bge-m3-1024-v1}
     provider: ${RAG_EMBEDDING_PROVIDER:siliconflow}
     model-revision: ${RAG_EMBEDDING_MODEL_REVISION:unspecified}
@@ -183,6 +184,7 @@ rag:
 | `rag.embedding.base-url` | `https://api.siliconflow.cn` | API endpoint |
 | `rag.embedding.model` | `BAAI/bge-m3` | Embedding model name |
 | `rag.embedding.dimensions` | `1024` | Vector dimensions (must match model output) |
+| `rag.embedding.retry-max-attempts` | `10` | Maximum attempts inside one provider call, range 1–10; independent from durable-job attempts |
 | `rag.embedding.profile-key` | `siliconflow-bge-m3-1024-v1` | Immutable model-space identity used by writes and retrieval |
 | `rag.embedding.provider` | `siliconflow` | Provider identity stored in the Profile |
 | `rag.embedding.model-revision` | `unspecified` | Explicit revision identity; changing model semantics requires a new Profile |
@@ -199,6 +201,14 @@ legacy `embedding` column during the compatibility window. Changing models requi
 Profile and a complete re-embedding; do not change only `dimensions`, cast old vectors, or
 mix Profiles in one retrieval query. Legacy vector adoption is explicit and requires the
 configured confirmation value.
+
+`rag.embedding.retry-max-attempts` bounds Spring Retry inside one
+worker/provider call. It retries only Spring AI transient exceptions and
+network-access failures while preserving the default exponential backoff. It
+is independent from the durable-task budget in
+`rag.embedding-jobs.default-max-attempts` /
+`rag.embedding-jobs.max-attempts`; production deployments should bound both
+layers so one failed task cannot cause unbounded external calls.
 
 ### Persistent Embedding Jobs
 
