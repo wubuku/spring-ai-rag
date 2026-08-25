@@ -411,6 +411,13 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 ./scripts/verify-business-client-readiness.sh
 ```
 
+Require a clean Git tree for a final candidate commit:
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
 Default ports are backend `18084`, embedding stub `18085`, Mock frontend
 `15184`, and real frontend `15185`. Override them with
 `BUSINESS_CLIENT_BACKEND_PORT`, `BUSINESS_CLIENT_EMBEDDING_PORT`,
@@ -418,7 +425,12 @@ Default ports are backend `18084`, embedding stub `18085`, Mock frontend
 `BUSINESS_CLIENT_REAL_FRONTEND_PORT`. Override the PostgreSQL image with
 `BUSINESS_CLIENT_POSTGRES_IMAGE`. Evidence is written under
 `.verification/business-client-readiness/<run-id>/`; exit traps clean private
-credential files, containers, ports, and processes.
+credential files, containers, ports, and processes. The real HTTP contract
+currently contains 109 assertions, including Record preservation after a
+provider `503`. `release-manifest.json` pins the full Git SHA, initial tree
+state, project/OpenAPI versions, API base path, V48, passed steps, PostgreSQL
+image, and HTTP-check count. Runtime facts not reached are JSON `null`; it
+stores no credential, URL, payload, external ID, or private path.
 
 This gate verifies the real Spring AI embedding HTTP path. The capability does
 not change Chat, so it does not call a Chat LLM. See the

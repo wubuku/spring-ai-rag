@@ -32,10 +32,6 @@
 
 ## 当前活跃规划
 
-当前
-[外部投影生产合同闭环 P0 实施规划](EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PLAN.md)
-已在 `main` 上通过固定范围规划 `3/3` 审查，等待进入隔离特性 worktree 实施；恢复上下文、
-检查计数和下一步记录在
-[配套实施进度](EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PROGRESS.md)。
+当前没有活跃规划。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

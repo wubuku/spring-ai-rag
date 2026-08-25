@@ -21,16 +21,23 @@ class Counter:
         self.lock = threading.Lock()
         self.requests = 0
         self.inputs = 0
+        self.failed_requests = 0
         self._write()
 
-    def add(self, input_count: int) -> None:
+    def add(self, input_count: int, *, failed: bool = False) -> None:
         with self.lock:
             self.requests += 1
             self.inputs += input_count
+            if failed:
+                self.failed_requests += 1
             self._write()
 
     def _write(self) -> None:
-        payload = {"requests": self.requests, "inputs": self.inputs}
+        payload = {
+            "requests": self.requests,
+            "inputs": self.inputs,
+            "failedRequests": self.failed_requests,
+        }
         fd, temporary = tempfile.mkstemp(
             prefix=f"{self.path.name}.", dir=self.path.parent
         )
@@ -80,6 +87,20 @@ class Handler(BaseHTTPRequestHandler):
                     f"dimensions must equal {self.server.dimensions}"
                 )
             model = str(request.get("model") or "contract-embedding")
+            if self.server.fail_marker and any(
+                self.server.fail_marker in value for value in inputs
+            ):
+                self.server.counter.add(len(inputs), failed=True)
+                self._json(
+                    503,
+                    {
+                        "error": {
+                            "type": "provider_unavailable",
+                            "message": "deterministic contract failure",
+                        }
+                    },
+                )
+                return
             data = [
                 {
                     "object": "embedding",
@@ -172,10 +193,12 @@ class Server(ThreadingHTTPServer):
         handler: type[BaseHTTPRequestHandler],
         dimensions: int,
         counter: Counter,
+        fail_marker: str | None,
     ) -> None:
         super().__init__(address, handler)
         self.dimensions = dimensions
         self.counter = counter
+        self.fail_marker = fail_marker
 
 
 def main() -> None:
@@ -184,6 +207,7 @@ def main() -> None:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--dimensions", type=int, default=1024)
     parser.add_argument("--counter-file", type=Path, required=True)
+    parser.add_argument("--fail-marker")
     args = parser.parse_args()
 
     args.counter_file.parent.mkdir(parents=True, exist_ok=True)
@@ -193,6 +217,7 @@ def main() -> None:
         Handler,
         dimensions=args.dimensions,
         counter=counter,
+        fail_marker=args.fail_marker,
     )
     server.serve_forever()
 

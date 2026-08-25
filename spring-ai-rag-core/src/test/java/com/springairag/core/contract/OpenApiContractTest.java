@@ -297,7 +297,7 @@ class OpenApiContractTest {
             assertThat(info.has("title")).isTrue();
             assertThat(info.has("version")).isTrue();
             assertThat(info.get("title").asText()).isNotBlank();
-            assertThat(info.get("version").asText()).isNotBlank();
+            assertThat(info.get("version").asText()).isEqualTo("1.0.0");
         }
     }
 
@@ -945,6 +945,30 @@ class OpenApiContractTest {
                                 .isTrue();
                     });
         }
+
+        @Test
+        void jsonRecordExternalIdentityParametersExposeProductionLimits()
+                throws Exception {
+            JsonNode path = findPath(
+                    loadSpec().path("paths"),
+                    "/rag/json-records/by-external-id");
+
+            JsonNode lookup = path.path("get");
+            assertParameter(lookup, "collectionKey", true, 1, 128);
+            assertParameter(lookup, "sourceNamespace", false, 0, 128);
+            assertThat(findParameter(lookup, "sourceNamespace")
+                    .path("description").asText())
+                    .contains("default");
+            assertParameter(lookup, "externalId", true, 1, 255);
+
+            JsonNode tombstone = path.path("delete");
+            assertParameter(tombstone, "collectionKey", true, 1, 128);
+            assertParameter(tombstone, "sourceNamespace", false, 0, 128);
+            assertParameter(tombstone, "externalId", true, 1, 255);
+            assertParameter(tombstone, "sourceRevision", true, 1, 255);
+            assertParameter(
+                    tombstone, "expectedSourceRevision", false, 0, 255);
+        }
     }
 
     @Nested
@@ -1027,5 +1051,36 @@ class OpenApiContractTest {
             }
         }
         return paths.path("__missing__");
+    }
+
+    private JsonNode findParameter(JsonNode operation, String name) {
+        for (JsonNode parameter : operation.path("parameters")) {
+            if (name.equals(parameter.path("name").asText())) {
+                return parameter;
+            }
+        }
+        return operation.path("__missing_parameter__");
+    }
+
+    private void assertParameter(
+            JsonNode operation,
+            String name,
+            boolean required,
+            int minLength,
+            int maxLength) {
+        JsonNode parameter = findParameter(operation, name);
+        assertThat(parameter.isMissingNode())
+                .as("Parameter '%s' must be documented", name)
+                .isFalse();
+        assertThat(parameter.path("required").asBoolean())
+                .as("Parameter '%s' required flag", name)
+                .isEqualTo(required);
+        JsonNode schema = parameter.path("schema");
+        assertThat(schema.path("minLength").asInt())
+                .as("Parameter '%s' minLength", name)
+                .isEqualTo(minLength);
+        assertThat(schema.path("maxLength").asInt())
+                .as("Parameter '%s' maxLength", name)
+                .isEqualTo(maxLength);
     }
 }

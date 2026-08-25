@@ -19,6 +19,7 @@ EMBEDDING_PORT="${BUSINESS_CLIENT_EMBEDDING_PORT:-18085}"
 MOCK_FRONTEND_PORT="${BUSINESS_CLIENT_MOCK_FRONTEND_PORT:-15184}"
 REAL_FRONTEND_PORT="${BUSINESS_CLIENT_REAL_FRONTEND_PORT:-15185}"
 VERIFY_PHASE="${BUSINESS_CLIENT_VERIFY_PHASE:-all}"
+REQUIRE_CLEAN_GIT="${BUSINESS_CLIENT_REQUIRE_CLEAN_GIT:-false}"
 
 POSTGRES_CONTAINER=""
 POSTGRES_PORT=""
@@ -29,10 +30,50 @@ REAL_FRONTEND_PID=""
 RUNTIME_CLASSPATH=""
 PASS_COUNT=0
 STEP_INDEX=0
+API_VERSION=""
+HTTP_CONTRACT_CHECKS=""
+RUNTIME_FLYWAY_MIGRATION=""
+EMBEDDING_FAIL_MARKER="${BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER:-contract-failure-${RUN_ID}}"
 
 mkdir -p "$PRIVATE_DIR"
 chmod 700 "$PRIVATE_DIR"
 : > "$LOG_DIR/summary.tsv"
+
+INITIAL_BRANCH="$(git branch --show-current)"
+[[ -n "$INITIAL_BRANCH" ]] || INITIAL_BRANCH="DETACHED"
+INITIAL_COMMIT="$(git rev-parse HEAD)"
+if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
+  INITIAL_TREE_STATE="DIRTY"
+else
+  INITIAL_TREE_STATE="CLEAN"
+fi
+PROJECT_VERSION="$(python3 <<'PY'
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+root = ET.parse(Path("pom.xml")).getroot()
+namespace = root.tag.partition("}")[0].lstrip("{")
+tag = f"{{{namespace}}}version" if namespace else "version"
+version = root.findtext(tag)
+if not version or not version.strip():
+    raise SystemExit("root pom.xml does not declare a project version")
+print(version.strip())
+PY
+)"
+LATEST_FLYWAY_MIGRATION="$(python3 <<'PY'
+from pathlib import Path
+import re
+
+versions = []
+for path in Path("spring-ai-rag-core/src/main/resources/db/migration").glob("V*__*.sql"):
+    match = re.fullmatch(r"V([0-9]+)__.+[.]sql", path.name)
+    if match:
+        versions.append(int(match.group(1)))
+if not versions:
+    raise SystemExit("no Flyway migrations found")
+print(max(versions))
+PY
+)"
 
 slugify() {
   printf '%s' "$1" \
@@ -107,8 +148,9 @@ write_summary() {
     echo
     echo "- Run: \`${RUN_ID}\`"
     echo "- Generated: \`$(date '+%Y-%m-%d %H:%M:%S %z')\`"
-    echo "- Branch: \`$(git branch --show-current)\`"
-    echo "- Commit: \`$(git rev-parse --short HEAD)\`"
+    echo "- Branch: \`${INITIAL_BRANCH}\`"
+    echo "- Commit: \`${INITIAL_COMMIT}\`"
+    echo "- Initial tree: \`${INITIAL_TREE_STATE}\`"
     echo "- Result: **${result}**"
     echo "- Passed steps: **${PASS_COUNT}**"
     echo "- PostgreSQL image: \`${POSTGRES_IMAGE}\`"
@@ -119,6 +161,133 @@ write_summary() {
       echo "| ${name} | ${status} | ${code} | \`${evidence}\` |"
     done < "$LOG_DIR/summary.tsv"
   } > "$LOG_DIR/summary.md"
+}
+
+write_release_manifest() {
+  local exit_code="$1"
+  local result="PASS"
+  [[ "$exit_code" -eq 0 ]] || result="FAIL"
+  MANIFEST_RESULT="$result" \
+  MANIFEST_RUN_ID="$RUN_ID" \
+  MANIFEST_PHASE="$VERIFY_PHASE" \
+  MANIFEST_BRANCH="$INITIAL_BRANCH" \
+  MANIFEST_COMMIT="$INITIAL_COMMIT" \
+  MANIFEST_TREE_STATE="$INITIAL_TREE_STATE" \
+  MANIFEST_PROJECT_VERSION="$PROJECT_VERSION" \
+  MANIFEST_API_VERSION="$API_VERSION" \
+  MANIFEST_LATEST_FLYWAY="$LATEST_FLYWAY_MIGRATION" \
+  MANIFEST_PASSED_STEPS="$PASS_COUNT" \
+  MANIFEST_POSTGRES_IMAGE="$POSTGRES_IMAGE" \
+  MANIFEST_HTTP_CHECKS="$HTTP_CONTRACT_CHECKS" \
+    python3 - "$LOG_DIR/release-manifest.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import sys
+
+def nullable_string(name: str):
+    value = os.environ.get(name, "").strip()
+    return value or None
+
+def nullable_int(name: str):
+    value = os.environ.get(name, "").strip()
+    return int(value) if value else None
+
+manifest = {
+    "schemaVersion": 1,
+    "runId": os.environ["MANIFEST_RUN_ID"],
+    "result": os.environ["MANIFEST_RESULT"],
+    "verificationPhase": os.environ["MANIFEST_PHASE"],
+    "git": {
+        "branch": os.environ["MANIFEST_BRANCH"],
+        "commit": os.environ["MANIFEST_COMMIT"],
+        "treeState": os.environ["MANIFEST_TREE_STATE"],
+    },
+    "artifact": {
+        "projectVersion": os.environ["MANIFEST_PROJECT_VERSION"],
+        "apiVersion": nullable_string("MANIFEST_API_VERSION"),
+        "apiBasePath": "/api/v1/rag",
+        "latestFlywayMigration": int(os.environ["MANIFEST_LATEST_FLYWAY"]),
+    },
+    "verification": {
+        "passedSteps": int(os.environ["MANIFEST_PASSED_STEPS"]),
+        "postgresImage": os.environ["MANIFEST_POSTGRES_IMAGE"],
+        "httpContractChecks": nullable_int("MANIFEST_HTTP_CHECKS"),
+    },
+}
+path = Path(sys.argv[1])
+temporary = path.with_suffix(".json.tmp")
+temporary.write_text(
+    json.dumps(manifest, ensure_ascii=True, indent=2) + "\n",
+    encoding="utf-8",
+)
+temporary.replace(path)
+PY
+}
+
+validate_release_manifest() {
+  local expected_result="$1"
+  EXPECTED_MANIFEST_RESULT="$expected_result" \
+  EXPECTED_REQUIRE_CLEAN="$REQUIRE_CLEAN_GIT" \
+  EXPECTED_RUNTIME_FLYWAY="$RUNTIME_FLYWAY_MIGRATION" \
+    python3 - "$LOG_DIR/release-manifest.json" <<'PY'
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+path = Path(sys.argv[1])
+manifest = json.loads(path.read_text(encoding="utf-8"))
+assert set(manifest) == {
+    "schemaVersion", "runId", "result", "verificationPhase",
+    "git", "artifact", "verification",
+}
+assert manifest["schemaVersion"] == 1
+assert manifest["result"] == os.environ["EXPECTED_MANIFEST_RESULT"]
+assert manifest["verificationPhase"] in {"all", "real"}
+assert isinstance(manifest["runId"], str) and manifest["runId"]
+
+git = manifest["git"]
+assert set(git) == {"branch", "commit", "treeState"}
+assert isinstance(git["branch"], str) and git["branch"]
+assert re.fullmatch(r"[0-9a-f]{40}", git["commit"])
+assert git["treeState"] in {"CLEAN", "DIRTY"}
+
+artifact = manifest["artifact"]
+assert set(artifact) == {
+    "projectVersion", "apiVersion", "apiBasePath", "latestFlywayMigration",
+}
+assert isinstance(artifact["projectVersion"], str) and artifact["projectVersion"]
+assert artifact["apiVersion"] is None or (
+    isinstance(artifact["apiVersion"], str) and artifact["apiVersion"]
+)
+assert artifact["apiBasePath"] == "/api/v1/rag"
+assert isinstance(artifact["latestFlywayMigration"], int)
+assert artifact["latestFlywayMigration"] > 0
+
+verification = manifest["verification"]
+assert set(verification) == {
+    "passedSteps", "postgresImage", "httpContractChecks",
+}
+assert isinstance(verification["passedSteps"], int)
+assert verification["passedSteps"] >= 0
+assert isinstance(verification["postgresImage"], str)
+assert verification["postgresImage"]
+assert verification["httpContractChecks"] is None or (
+    isinstance(verification["httpContractChecks"], int)
+    and verification["httpContractChecks"] > 0
+)
+
+if manifest["result"] == "PASS":
+    assert artifact["apiVersion"] == "1.0.0"
+    assert verification["httpContractChecks"] is not None
+    runtime_flyway = os.environ.get("EXPECTED_RUNTIME_FLYWAY", "").strip()
+    assert runtime_flyway
+    assert int(runtime_flyway) == artifact["latestFlywayMigration"]
+if manifest["result"] == "PASS" and os.environ["EXPECTED_REQUIRE_CLEAN"] == "true":
+    assert git["treeState"] == "CLEAN"
+PY
 }
 
 cleanup() {
@@ -134,14 +303,25 @@ cleanup() {
   unset RAG_ROOT_API_KEY
   rm -rf "$PRIVATE_DIR"
   write_summary "$exit_code"
+  write_release_manifest "$exit_code"
   echo
   echo "Summary: ${LOG_DIR}/summary.md"
+  echo "Release manifest: ${LOG_DIR}/release-manifest.json"
 }
 
 on_exit() {
   local exit_code=$?
   trap - EXIT
   cleanup "$exit_code"
+  local expected_result="PASS"
+  [[ "$exit_code" -eq 0 ]] || expected_result="FAIL"
+  if ! validate_release_manifest "$expected_result"; then
+    echo "Release manifest validation failed" >&2
+    exit_code=1
+    write_summary "$exit_code"
+    write_release_manifest "$exit_code"
+    validate_release_manifest "FAIL" || true
+  fi
   exit "$exit_code"
 }
 
@@ -154,6 +334,14 @@ require_commands_and_ports() {
     echo "BUSINESS_CLIENT_VERIFY_PHASE must be all or real" >&2
     return 1
   }
+  [[ "$REQUIRE_CLEAN_GIT" == "true" || "$REQUIRE_CLEAN_GIT" == "false" ]] || {
+    echo "BUSINESS_CLIENT_REQUIRE_CLEAN_GIT must be true or false" >&2
+    return 1
+  }
+  if [[ "$REQUIRE_CLEAN_GIT" == "true" && "$INITIAL_TREE_STATE" != "CLEAN" ]]; then
+    echo "Clean Git tree is required for this verification run" >&2
+    return 1
+  fi
   for command_name in \
       bash curl docker git java jq lsof mvn node npm npx openssl \
       pgrep python3 rg; do
@@ -197,7 +385,8 @@ focused_backend_tests() {
   mvn -pl spring-ai-rag-core -am \
     -Dtest=ApiKeyIdentityControllerTest,ApiKeyRootModeWebIntegrationTest,\
 OpenApiContractTest,ApiKeyAuthFilterTest,ApiKeyCollectionAccessTest,\
-RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest \
+RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest,\
+SourceNamespaceValidatorTest,EmbeddingModelConfigTest \
     -Dsurefire.failIfNoSpecifiedTests=false test
 }
 
@@ -378,6 +567,7 @@ start_embedding_stub() {
     --port "$EMBEDDING_PORT" \
     --dimensions 1024 \
     --counter-file "$counter_file" \
+    --fail-marker "$EMBEDDING_FAIL_MARKER" \
     > "$log_path" 2>&1 &
   EMBEDDING_PID=$!
   wait_for_http \
@@ -412,20 +602,33 @@ start_backend() {
     export RAG_EMBEDDING_PROFILE_KEY=business-client-contract-1024-v1
     export RAG_EMBEDDING_PROVIDER=contract-stub
     export RAG_EMBEDDING_MODEL_REVISION=v1
+    export RAG_EMBEDDING_RETRY_MAX_ATTEMPTS=1
     export RAG_EMBEDDING_JOBS_POLL_INTERVAL_MS=100
     export RAG_EMBEDDING_JOBS_RETRY_BACKOFF_SECONDS=1
+    export RAG_EMBEDDING_JOBS_DEFAULT_MAX_ATTEMPTS=1
+    export RAG_EMBEDDING_JOBS_MAX_ATTEMPTS=1
     exec java -cp "$RUNTIME_CLASSPATH" \
       com.springairag.core.SpringAiRagApplication
   ) > "$log_path" 2>&1 &
   BACKEND_PID=$!
   wait_for_http \
-    "http://127.0.0.1:${BACKEND_PORT}/actuator/health" \
+    "http://127.0.0.1:${BACKEND_PORT}/actuator/health/readiness" \
     "$BACKEND_PID" "$log_path" || return 1
 
-  local health_file="${LOG_DIR}/backend-health.json"
-  curl -fsS "http://127.0.0.1:${BACKEND_PORT}/actuator/health" \
+  local health_file="${LOG_DIR}/backend-readiness.json"
+  curl -fsS "http://127.0.0.1:${BACKEND_PORT}/actuator/health/readiness" \
     > "$health_file" || return 1
   jq -e '.status == "UP"' "$health_file" >/dev/null || return 1
+
+  local api_docs_file="${LOG_DIR}/openapi.json"
+  curl -fsS "http://127.0.0.1:${BACKEND_PORT}/v3/api-docs" \
+    > "$api_docs_file" || return 1
+  API_VERSION="$(jq -er '.info.version | select(type == "string" and length > 0)' \
+    "$api_docs_file")" || return 1
+  [[ "$API_VERSION" == "1.0.0" ]] || {
+    echo "Unexpected runtime OpenAPI version: ${API_VERSION}" >&2
+    return 1
+  }
 }
 
 http_contract() {
@@ -434,8 +637,15 @@ http_contract() {
   BUSINESS_CLIENT_PRIVATE_DIR="$PRIVATE_DIR" \
   BUSINESS_CLIENT_EVIDENCE_DIR="${LOG_DIR}/http-contract" \
   BUSINESS_CLIENT_EMBEDDING_COUNTER_FILE="${PRIVATE_DIR}/embedding-counter.json" \
+  BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER="$EMBEDDING_FAIL_MARKER" \
   BUSINESS_CLIENT_RUN_ID="$RUN_ID" \
-    bash scripts/business-client-contract-e2e.sh
+    bash scripts/business-client-contract-e2e.sh || return 1
+  HTTP_CONTRACT_CHECKS="$(sed -n 's/^checks=//p' \
+    "${LOG_DIR}/http-contract/summary.txt")"
+  [[ "$HTTP_CONTRACT_CHECKS" =~ ^[1-9][0-9]*$ ]] || {
+    echo "HTTP contract summary did not provide a positive check count" >&2
+    return 1
+  }
 }
 
 runtime_database_facts() {
@@ -454,10 +664,19 @@ runtime_database_facts() {
     echo "Unexpected runtime database facts: ${facts}" >&2
     return 1
   }
-  jq -e '.requests >= 1 and .inputs >= 1' \
+  RUNTIME_FLYWAY_MIGRATION="${facts%%,*}"
+  [[ "$RUNTIME_FLYWAY_MIGRATION" == "$LATEST_FLYWAY_MIGRATION" ]] || {
+    echo "Runtime Flyway version does not match repository migration inventory" >&2
+    return 1
+  }
+  jq -e \
+    '.requests >= 2 and .inputs >= 2 and .failedRequests >= 1
+      and .requests > .failedRequests' \
     "${PRIVATE_DIR}/embedding-counter.json" >/dev/null || return 1
   rg -qx 'result=PASS' \
     "${LOG_DIR}/http-contract/summary.txt" || return 1
+  [[ "$API_VERSION" == "1.0.0" ]] || return 1
+  [[ "$HTTP_CONTRACT_CHECKS" =~ ^[1-9][0-9]*$ ]] || return 1
   echo "migration=48 plaintext_credentials=0 succeeded_embedding_jobs>=1"
 }
 
@@ -509,6 +728,11 @@ from pathlib import Path
 path = Path("scripts/test-support/openai-embedding-stub.py")
 compile(path.read_text(encoding="utf-8"), str(path), "exec")
 '
+  [[ "$INITIAL_COMMIT" =~ ^[0-9a-f]{40}$ ]] || return 1
+  [[ "$INITIAL_TREE_STATE" == "CLEAN" || "$INITIAL_TREE_STATE" == "DIRTY" ]] \
+    || return 1
+  [[ "$PROJECT_VERSION" == "1.0.0" ]] || return 1
+  [[ "$LATEST_FLYWAY_MIGRATION" == "48" ]] || return 1
 }
 
 added_line_secret_scan() {

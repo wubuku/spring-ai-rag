@@ -890,6 +890,19 @@ DELETE /api/v1/rag/json-records/by-external-id
 删除创建 tombstone，不删除 JSONB 历史或稳定身份。之后使用新的 source revision upsert
 会恢复同一内部文档。
 
+lookup 与 tombstone query parameter 使用与 upsert 相同的外部身份边界：
+
+- `collectionKey` 必须为 1–128 个可见 ASCII 字符；
+- `sourceNamespace` 最多 128 个字符，省略或空白会规范化为 `default`；非空值只能包含
+  可打印 ASCII；
+- `externalId` 最多 255 个字符；
+- tombstone 的 `sourceRevision` 与可选 `expectedSourceRevision` 最多 255 个字符。
+
+受限 principal 对 search、lookup、upsert 和 tombstone 的未知或未授权 Collection 都会在
+查询记录存在性前返回相同的通用 `403`，响应不泄漏 Collection、record 或内部 ID。
+embedding provider 失败不会回滚已经提交的外部 Record：identity、source revision、
+payload、enabled 状态和 document revision 保持已接受值，派生 job 独立进入 `FAILED`。
+
 <a id="external-documents-idempotent-synchronization"></a>
 
 ## 外部文档：幂等同步

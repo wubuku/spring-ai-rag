@@ -31,7 +31,7 @@ CREATE DATABASE spring_ai_rag
 ### 2.3 迁移
 
 项目使用 Flyway 自动迁移。首次启动时按顺序执行
-`db/migration/V1__*.sql` 至当前最新迁移（目前为 `V47__*.sql`）。
+`db/migration/V1__*.sql` 至当前最新迁移（目前为 `V48__*.sql`）。
 
 如需手动迁移：
 
@@ -83,6 +83,7 @@ rag:
     base-url: https://api.siliconflow.cn
     model: BAAI/bge-m3
     dimensions: 1024
+    retry-max-attempts: ${RAG_EMBEDDING_RETRY_MAX_ATTEMPTS:10}
   memory:
     max-messages: 20
 
@@ -190,9 +191,14 @@ MIRROR_BASE_URL=your.registry.example \
 
 ```bash
 curl http://localhost:8081/api/v1/rag/health
-# 自定义端点
-curl http://localhost:8081/actuator/health
+# Kubernetes/编排器探针
+curl http://localhost:8081/actuator/health/liveness
+curl http://localhost:8081/actuator/health/readiness
 ```
+
+Actuator readiness 表示进程、Spring readiness 与数据库可用，不承诺外部 embedding
+provider 可用或任一 Collection 已完成派生索引。Collection 级状态应查询
+`/api/v1/rag/collections/embedding-readiness` 或 derivation readiness API。
 
 ### 5.2 监控指标
 

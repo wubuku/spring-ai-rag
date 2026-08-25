@@ -38,12 +38,7 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The [external-projection production-contract closure P0
-plan](EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PLAN.md) has passed its fixed-scope
-planning reviews (`3/3`) on `main` and is ready for implementation in an
-isolated feature worktree. Resume context, review count, and the next action are
-tracked in the
-[matching progress ledger](EXTERNAL_PROJECTION_CONTRACT_CLOSURE_PROGRESS.md).
+There are no active plans.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

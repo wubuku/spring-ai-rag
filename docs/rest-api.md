@@ -1013,6 +1013,24 @@ Deletion creates a tombstone without deleting JSONB history or stable
 identity. A later upsert with a new source revision restores the same internal
 document.
 
+Lookup and tombstone query parameters use the same external-identity bounds as
+upsert:
+
+- `collectionKey` contains 1–128 visible ASCII characters;
+- `sourceNamespace` is at most 128 characters; omitted or blank values
+  normalize to `default`, while nonblank values contain printable ASCII only;
+- `externalId` is at most 255 characters;
+- tombstone `sourceRevision` and optional `expectedSourceRevision` are at most
+  255 characters.
+
+For a restricted principal, search, lookup, upsert, and tombstone return the
+same generic `403` for unknown and unauthorized Collections before record
+existence is checked. The response does not expose Collection, record, or
+internal IDs. An embedding-provider failure does not roll back the accepted
+external Record: identity, source revision, payload, enabled state, and
+document revision remain committed while the derived job independently enters
+`FAILED`.
+
 <a id="external-documents-idempotent-synchronization"></a>
 
 ## External Documents — Idempotent Synchronization

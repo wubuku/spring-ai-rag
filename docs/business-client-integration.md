@@ -107,11 +107,11 @@ accepting a partial allow-list. Responses always include
 
 | Field | Rule |
 |---|---|
-| `collectionKey` | 1-128 visible ASCII characters, case-sensitive, globally unique, immutable after creation, and reserved after soft deletion |
-| `sourceNamespace` | At most 128 characters; omitted or blank becomes `default` |
-| `externalId` | At most 255 characters and derived from a stable immutable source ID |
-| `sourceRevision` | Caller-supplied non-empty opaque complete-state version; never compare it numerically or lexically |
-| `expectedSourceRevision` | CAS precondition for updates and tombstones |
+| `collectionKey` | 1-128 visible ASCII `0x21..0x7e` characters; case-sensitive, globally unique, immutable after creation, and reserved after soft deletion |
+| `sourceNamespace` | Omitted or blank becomes `default`; an explicit value is trimmed, limited to 128 characters, and restricted to `0x20..0x7e` |
+| `externalId` | Non-blank after trimming and at most 255 characters; remains opaque/Unicode and comes from a stable immutable source ID |
+| `sourceRevision` | Caller-supplied non-empty opaque complete-state version, at most 255 characters after trimming; never compare it numerically or lexically |
+| `expectedSourceRevision` | Optional CAS precondition; when non-blank it is at most 255 characters after trimming |
 
 JSON Records separate:
 
@@ -157,6 +157,9 @@ Use `embeddingPolicy=ASYNC` by default with
   `409`;
 - mutation success guarantees the main record and durable job are committed,
   not that the embedding is fresh;
+- a terminal provider failure preserves the main record, revision, payload,
+  and enabled state; lifecycle reports `embeddingStatus=FAILED` without a
+  second business mutation deleting or overwriting the record;
 - source deletion uses `DELETE /json-records/by-external-id` and creates a
   tombstone;
 - a later upsert with a new revision restores the same `documentId`.
@@ -183,6 +186,18 @@ readiness:
 | `401` | Invalid, expired, rotated, or revoked credential; stop delivery |
 | `403` | ACL/binding error; do not infer whether a Collection exists |
 
+A restricted principal receives the same generic `403` before record lookup
+for search, lookup, upsert, and tombstone against an unauthorized or unknown
+Collection. The error envelope does not echo the target key, Collection
+existence, or internal IDs.
+
+The per-model embedding-provider retry budget is controlled by
+`rag.embedding.retry-max-attempts` /
+`RAG_EMBEDDING_RETRY_MAX_ATTEMPTS`, range 1-10 and default 10 for compatibility.
+Only transient/network failures are retried with exponential backoff. This
+budget is independent from the durable embedding-job
+`default-max-attempts`/`max-attempts` budget; bound both in production.
+
 Rotation is initiated by an operator using root. The new raw credential is
 again shown once; the old credential becomes invalid immediately, while the
 new credential preserves `principalId` and policy. Distribute the new secret
@@ -192,8 +207,13 @@ conditions.
 
 ## 7. Deployment, Upgrade, And Rollback
 
-- Use `/actuator/health` for process readiness and `/auth/me` plus Collection
-  by-key probes for business binding.
+- Use `/actuator/health/liveness` for liveness and
+  `/actuator/health/readiness` for readiness. The readiness group represents
+  process/Spring readiness and database availability; it does not promise that
+  the external embedding provider or a Collection is retrieval-ready.
+- Read document lifecycle or
+  `/api/v1/rag/collections/embedding-readiness` for embedding availability.
+  Use `/auth/me` plus Collection by-key probes for business binding.
 - Empty and upgraded databases must run Flyway V1-V48 in order. This capability
   adds no migration, but existing migrations are still mandatory.
 - Pin production callers to an accepted Git commit or an immutable image built
@@ -212,6 +232,13 @@ Full gate:
 ./scripts/verify-business-client-readiness.sh
 ```
 
+Reproducible gate for a final candidate commit:
+
+```bash
+BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
+./scripts/verify-business-client-readiness.sh
+```
+
 Rerun only the real service, HTTP, and real-frontend phase:
 
 ```bash
@@ -222,24 +249,29 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 The full gate runs focused backend tests, three isolated PostgreSQL integration
 matrices, `mvn clean compile test-compile`, WebUI typecheck/Vitest/production
 build, core Mock Playwright, documentation/lock/secret/diff gates, and then a
-real Spring Boot service, 64 HTTP contract assertions, and real API-key
+real Spring Boot service, 109 HTTP contract assertions, and real API-key
 Playwright.
 
 Defaults use isolated ports `18084`, `18085`, `15184`, and `15185` with a
 disposable `pgvector/pgvector:pg16`. Evidence is written under
 `.verification/business-client-readiness/<run-id>/`; exit traps delete private
-credential files. The deterministic embedding stub verifies the real Spring AI
-embedding HTTP path. This capability does not change Chat, so the gate does not
-call a Chat LLM.
+credential files. `release-manifest.json` records the result, verification
+phase, full Git SHA, initial tree state, project/OpenAPI versions, API base
+path, latest Flyway migration, passed steps, PostgreSQL image, and HTTP
+contract-check count. Runtime facts that were not reached are JSON `null`; the
+manifest stores no credential, URL, payload, external ID, or private path. The
+deterministic embedding stub verifies the real Spring AI embedding HTTP path
+and the 503 failure-preservation contract. This capability does not change
+Chat, so the gate does not call a Chat LLM.
 
 ## 9. Current Limitations
 
 - `RAG_READ`/`RAG_WRITE` are currently product-level descriptions, not
   independently enforced operation-scoped permissions.
 - Principal provisioning has no idempotency key.
-- There is no separate machine-readable integration protocol
-  version/capability-discovery endpoint. Compatibility is pinned through
-  OpenAPI, a Git commit, and this contract gate.
+- There is no separate runtime capability-discovery endpoint. Compatibility
+  is pinned through OpenAPI, a Git commit, and the offline
+  `release-manifest.json`.
 - The identity system is environment root plus database business principals;
   it does not provide OAuth/OIDC federation or an independent tenant hierarchy.
 

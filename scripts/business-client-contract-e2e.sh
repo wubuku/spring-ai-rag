@@ -10,6 +10,7 @@ ROOT_CREDENTIAL_FILE="${ROOT_CREDENTIAL_FILE:-}"
 PRIVATE_ROOT="${BUSINESS_CLIENT_PRIVATE_DIR:-}"
 EVIDENCE_DIR="${BUSINESS_CLIENT_EVIDENCE_DIR:-.verification/business-client-contract}"
 EMBEDDING_COUNTER_FILE="${BUSINESS_CLIENT_EMBEDDING_COUNTER_FILE:-}"
+EMBEDDING_FAIL_MARKER="${BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER:-}"
 RUN_ID="${BUSINESS_CLIENT_RUN_ID:-$(date +%Y%m%d-%H%M%S)-$$}"
 REQUEST_TIMEOUT_SECONDS="${BUSINESS_CLIENT_TIMEOUT_SECONDS:-30}"
 
@@ -19,6 +20,10 @@ REQUEST_TIMEOUT_SECONDS="${BUSINESS_CLIENT_TIMEOUT_SECONDS:-30}"
 }
 [[ -n "$PRIVATE_ROOT" && -d "$PRIVATE_ROOT" ]] || {
   echo "BUSINESS_CLIENT_PRIVATE_DIR must point to an existing private directory" >&2
+  exit 2
+}
+[[ -n "$EMBEDDING_FAIL_MARKER" ]] || {
+  echo "BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER must be set" >&2
   exit 2
 }
 
@@ -31,6 +36,7 @@ chmod 700 "$PRIVATE_ROOT" "$CONTRACT_PRIVATE"
 ROOT_CONFIG="${CONTRACT_PRIVATE}/root.curl"
 NO_AUTH_CONFIG="${CONTRACT_PRIVATE}/no-auth.curl"
 RESTRICTED_KEY_ID=""
+RESTRICTED_B_KEY_ID=""
 UNRESTRICTED_KEY_ID=""
 QUERY_KEY_ID=""
 RESTRICTED_CURRENT_KEY_ID=""
@@ -112,9 +118,18 @@ cleanup() {
   root_delete_key "$QUERY_KEY_ID"
   root_delete_key "$UNRESTRICTED_KEY_ID"
   root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
+  root_delete_key "$RESTRICTED_B_KEY_ID"
   rm -rf "$CONTRACT_PRIVATE"
 }
-trap cleanup EXIT
+
+on_exit() {
+  local exit_code=$?
+  trap - EXIT
+  cleanup
+  exit "$exit_code"
+}
+
+trap on_exit EXIT
 trap 'exit 130' INT TERM
 
 pass() {
@@ -168,6 +183,33 @@ assert_secret_absent() {
   pass "$description"
 }
 
+assert_anti_enumeration() {
+  local response="$1" target_key="$2" description="$3"
+  shift 3
+  local forbidden
+  for forbidden in "$target_key" "$@"; do
+    [[ -n "$forbidden" ]] || continue
+    if [[ "$forbidden" =~ ^[0-9]+$ ]]; then
+      if rg -qi \
+          "(document|record)([ _-]?id)?[^0-9]{0,16}${forbidden}([^0-9]|$)" \
+          "$response"; then
+        echo "${description}: denial leaked an internal record identity" >&2
+        return 1
+      fi
+    elif rg -F "$forbidden" "$response" >/dev/null; then
+      echo "${description}: denial leaked target identity" >&2
+      return 1
+    fi
+  done
+  if rg -qi \
+      '"(collectionId|documentId|principalId)"[[:space:]]*:|not found|does not exist|unknown collection' \
+      "$response"; then
+    echo "${description}: denial leaked existence or internal identity details" >&2
+    return 1
+  fi
+  pass "${description} is anti-enumeration safe"
+}
+
 extract_secret() {
   local response="$1" output="$2"
   jq -er '.rawKey | select(startswith("rag_sk_"))' "$response" > "$output"
@@ -216,6 +258,9 @@ write_search_request() {
 write_upsert_request() {
   local output="$1" collection_key="$2" revision="$3" expected="$4"
   local status="$5" retrieval_text="$6"
+  local source_namespace="${7:-business-client.contract.v1}"
+  local external_id="${8:-record-1}"
+  local embedding_policy="${9:-ASYNC}"
   if [[ -n "$expected" ]]; then
     jq -n \
       --arg key "$collection_key" \
@@ -223,16 +268,19 @@ write_upsert_request() {
       --arg expected "$expected" \
       --arg status "$status" \
       --arg text "$retrieval_text" \
+      --arg namespace "$source_namespace" \
+      --arg externalId "$external_id" \
+      --arg embeddingPolicy "$embedding_policy" \
       '{
         collectionKey:$key,
-        sourceNamespace:"business-client.contract.v1",
-        externalId:"record-1",
+        sourceNamespace:$namespace,
+        externalId:$externalId,
         sourceRevision:$revision,
         expectedSourceRevision:$expected,
         title:"Contract Record",
         retrievalText:$text,
         jsonbPayload:{schemaVersion:"contract.v1",status:$status,kind:"REFERENCE"},
-        embeddingPolicy:"ASYNC"
+        embeddingPolicy:$embeddingPolicy
       }' > "$output"
   else
     jq -n \
@@ -240,15 +288,18 @@ write_upsert_request() {
       --arg revision "$revision" \
       --arg status "$status" \
       --arg text "$retrieval_text" \
+      --arg namespace "$source_namespace" \
+      --arg externalId "$external_id" \
+      --arg embeddingPolicy "$embedding_policy" \
       '{
         collectionKey:$key,
-        sourceNamespace:"business-client.contract.v1",
-        externalId:"record-1",
+        sourceNamespace:$namespace,
+        externalId:$externalId,
         sourceRevision:$revision,
         title:"Contract Record",
         retrievalText:$text,
         jsonbPayload:{schemaVersion:"contract.v1",status:$status,kind:"REFERENCE"},
-        embeddingPolicy:"ASYNC"
+        embeddingPolicy:$embeddingPolicy
       }' > "$output"
   fi
 }
@@ -273,6 +324,90 @@ wait_for_fresh_embedding() {
   return 1
 }
 
+wait_for_failed_embedding() {
+  local auth_config="$1" collection_key="$2" source_namespace="$3"
+  local external_id="$4" document_id="$5" source_revision="$6"
+  local response="$7" headers="$8"
+  local attempt code
+  for attempt in $(seq 1 90); do
+    code="$(query_request GET "${API}/json-records/by-external-id" \
+      "$auth_config" "$response" "$headers" \
+      "collectionKey=${collection_key}" \
+      "sourceNamespace=${source_namespace}" \
+      "externalId=${external_id}")"
+    if [[ "$code" == "200" ]] \
+        && jq -e \
+          --argjson documentId "$document_id" \
+          --arg revision "$source_revision" \
+          '.documentId == $documentId
+            and .sourceRevision == $revision
+            and .documentRevision == 1
+            and .enabled == true
+            and .jsonbPayload.status == "provider-failure"
+            and .lifecycle.documentState == "ACTIVE"
+            and .lifecycle.embeddingStatus == "FAILED"' \
+          "$response" >/dev/null; then
+      pass "failed embedding preserves the persisted JSON Record"
+      return 0
+    fi
+    sleep 1
+  done
+  echo "ASYNC embedding did not reach FAILED while preserving the record" >&2
+  return 1
+}
+
+assert_denied_data_plane() {
+  local auth_config="$1" target_key="$2" source_namespace="$3"
+  local external_id="$4" label="$5"
+  shift 5
+  local slug request_file response headers code
+  slug="$(printf '%s' "$label" | tr '[:upper:] ' '[:lower:]-' | tr -cd 'a-z0-9._-')"
+
+  request_file="${CONTRACT_PRIVATE}/${slug}-search.request.json"
+  response="${CONTRACT_PRIVATE}/${slug}-search.json"
+  headers="${response}.headers"
+  write_search_request "$request_file" "$target_key"
+  code="$(request POST "${API}/json-records/search" "$auth_config" \
+    "$response" "$headers" "$request_file")"
+  assert_status "$code" 403 "${label} search"
+  assert_anti_enumeration "$response" "$target_key" "${label} search denial" \
+    "$@"
+
+  response="${CONTRACT_PRIVATE}/${slug}-lookup.json"
+  headers="${response}.headers"
+  code="$(query_request GET "${API}/json-records/by-external-id" \
+    "$auth_config" "$response" "$headers" \
+    "collectionKey=${target_key}" \
+    "sourceNamespace=${source_namespace}" \
+    "externalId=${external_id}")"
+  assert_status "$code" 403 "${label} lookup"
+  assert_anti_enumeration "$response" "$target_key" "${label} lookup denial" \
+    "$@"
+
+  request_file="${CONTRACT_PRIVATE}/${slug}-upsert.request.json"
+  response="${CONTRACT_PRIVATE}/${slug}-upsert.json"
+  headers="${response}.headers"
+  write_upsert_request "$request_file" "$target_key" "denied-revision" "" \
+    "denied" "denied contract mutation" "$source_namespace" "$external_id" "SKIP"
+  code="$(request POST "${API}/json-records/upsert" "$auth_config" \
+    "$response" "$headers" "$request_file")"
+  assert_status "$code" 403 "${label} upsert"
+  assert_anti_enumeration "$response" "$target_key" "${label} upsert denial" \
+    "$@"
+
+  response="${CONTRACT_PRIVATE}/${slug}-tombstone.json"
+  headers="${response}.headers"
+  code="$(query_request DELETE "${API}/json-records/by-external-id" \
+    "$auth_config" "$response" "$headers" \
+    "collectionKey=${target_key}" \
+    "sourceNamespace=${source_namespace}" \
+    "externalId=${external_id}" \
+    "sourceRevision=denied-tombstone")"
+  assert_status "$code" 403 "${label} tombstone"
+  assert_anti_enumeration "$response" "$target_key" "${label} tombstone denial" \
+    "$@"
+}
+
 stub_request_count() {
   [[ -n "$EMBEDDING_COUNTER_FILE" && -f "$EMBEDDING_COUNTER_FILE" ]] || {
     printf '%s\n' "-1"
@@ -288,6 +423,7 @@ RUN_TOKEN="$(printf '%s' "$RUN_ID" | tr -cd 'a-zA-Z0-9' | tail -c 20)"
 COLLECTION_A="bc.${RUN_TOKEN}.a"
 COLLECTION_B="bc.${RUN_TOKEN}.b"
 UNKNOWN_COLLECTION="bc.${RUN_TOKEN}.missing"
+MINIMUM_COLLECTION="z"
 BOUNDARY_KEY="$(python3 - "$RUN_TOKEN" <<'PY'
 import sys
 prefix = "b." + sys.argv[1] + "."
@@ -312,6 +448,7 @@ assert_json "$ROOT_IDENTITY" \
 pass "environment root response contains no secret material"
 
 for collection_spec in \
+    "${MINIMUM_COLLECTION}|One character Collection key" \
     "${COLLECTION_A}|Contract Collection A" \
     "${COLLECTION_B}|Contract Collection B" \
     "${BOUNDARY_KEY}|128 character Collection key"; do
@@ -331,6 +468,21 @@ code="$(create_collection "$INVALID_BOUNDARY_KEY" "Invalid 129 character Collect
   "$INVALID_COLLECTION_RESPONSE" "$INVALID_COLLECTION_HEADERS")"
 assert_status "$code" 400 "reject 129 character Collection key"
 
+INVALID_COLLECTION_SPACE="${CONTRACT_PRIVATE}/collection-invalid-space.json"
+code="$(create_collection "invalid key" "Invalid Collection key with space" \
+  "$INVALID_COLLECTION_SPACE" "${INVALID_COLLECTION_SPACE}.headers")"
+assert_status "$code" 400 "reject Collection key containing space"
+
+INVALID_COLLECTION_CONTROL="${CONTRACT_PRIVATE}/collection-invalid-control.json"
+code="$(create_collection $'invalid\tkey' "Invalid Collection key with control character" \
+  "$INVALID_COLLECTION_CONTROL" "${INVALID_COLLECTION_CONTROL}.headers")"
+assert_status "$code" 400 "reject Collection key containing control character"
+
+INVALID_COLLECTION_NON_ASCII="${CONTRACT_PRIVATE}/collection-invalid-non-ascii.json"
+code="$(create_collection "invalid-集合" "Invalid non-ASCII Collection key" \
+  "$INVALID_COLLECTION_NON_ASCII" "${INVALID_COLLECTION_NON_ASCII}.headers")"
+assert_status "$code" 400 "reject non-ASCII Collection key"
+
 RESTRICTED_CREATE="${CONTRACT_PRIVATE}/restricted-create.json"
 RESTRICTED_CREATE_HEADERS="${RESTRICTED_CREATE}.headers"
 code="$(create_principal "Restricted Contract Principal" "$COLLECTION_A" \
@@ -346,6 +498,19 @@ RESTRICTED_X_CONFIG="${CONTRACT_PRIVATE}/restricted-x.curl"
 RESTRICTED_BEARER_CONFIG="${CONTRACT_PRIVATE}/restricted-bearer.curl"
 write_auth_config "$RESTRICTED_X_CONFIG" x-api-key "$RESTRICTED_SECRET_FILE"
 write_auth_config "$RESTRICTED_BEARER_CONFIG" bearer "$RESTRICTED_SECRET_FILE"
+
+RESTRICTED_B_CREATE="${CONTRACT_PRIVATE}/restricted-b-create.json"
+RESTRICTED_B_CREATE_HEADERS="${RESTRICTED_B_CREATE}.headers"
+code="$(create_principal "Restricted Contract Principal B" "$COLLECTION_B" \
+  "$RESTRICTED_B_CREATE" "$RESTRICTED_B_CREATE_HEADERS")"
+assert_status "$code" 201 "create second restricted principal"
+assert_no_store "$RESTRICTED_B_CREATE_HEADERS" "second restricted principal creation"
+RESTRICTED_B_KEY_ID="$(jq -er '.keyId' "$RESTRICTED_B_CREATE")"
+RESTRICTED_B_PRINCIPAL_ID="$(jq -er '.principalId' "$RESTRICTED_B_CREATE")"
+RESTRICTED_B_SECRET_FILE="${CONTRACT_PRIVATE}/restricted-b.key"
+extract_secret "$RESTRICTED_B_CREATE" "$RESTRICTED_B_SECRET_FILE"
+RESTRICTED_B_CONFIG="${CONTRACT_PRIVATE}/restricted-b.curl"
+write_auth_config "$RESTRICTED_B_CONFIG" x-api-key "$RESTRICTED_B_SECRET_FILE"
 
 UNRESTRICTED_CREATE="${CONTRACT_PRIVATE}/unrestricted-create.json"
 UNRESTRICTED_CREATE_HEADERS="${UNRESTRICTED_CREATE}.headers"
@@ -384,7 +549,9 @@ PRINCIPAL_LIST_HEADERS="${PRINCIPAL_LIST}.headers"
 code="$(request GET "${API}/api-keys/principals" "$ROOT_CONFIG" \
   "$PRINCIPAL_LIST" "$PRINCIPAL_LIST_HEADERS")"
 assert_status "$code" 200 "list principal metadata"
-for secret_file in "$RESTRICTED_SECRET_FILE" "$UNRESTRICTED_SECRET_FILE"; do
+for secret_file in \
+    "$RESTRICTED_SECRET_FILE" "$RESTRICTED_B_SECRET_FILE" \
+    "$UNRESTRICTED_SECRET_FILE"; do
   assert_secret_absent "$secret_file" "$KEY_LIST" "credential list hides raw secrets"
   assert_secret_absent "$secret_file" "$PRINCIPAL_LIST" "principal list hides raw secrets"
 done
@@ -435,21 +602,6 @@ code="$(query_request GET "${API}/collections/by-key" "$RESTRICTED_X_CONFIG" \
   "$COLLECTION_PROBE" "$COLLECTION_PROBE_HEADERS" "collectionKey=${COLLECTION_A}")"
 assert_status "$code" 200 "restricted binding active Collection probe"
 
-for denied_key in "$COLLECTION_B" "$UNKNOWN_COLLECTION"; do
-  denied_request="${CONTRACT_PRIVATE}/denied-$(printf '%s' "$denied_key" | tr '.' '-').request.json"
-  denied_response="${denied_request%.request.json}.json"
-  denied_headers="${denied_response}.headers"
-  write_search_request "$denied_request" "$denied_key"
-  code="$(request POST "${API}/json-records/search" "$RESTRICTED_X_CONFIG" \
-    "$denied_response" "$denied_headers" "$denied_request")"
-  assert_status "$code" 403 "restricted principal denies inaccessible or unknown Collection"
-  if rg -F "$denied_key" "$denied_response" >/dev/null; then
-    echo "ACL denial leaked requested Collection key" >&2
-    exit 1
-  fi
-  pass "ACL denial is anti-enumeration safe"
-done
-
 RETRIEVAL_TEXT="The contract searchable record is active and ready for retrieval."
 UPSERT_V1_REQUEST="${CONTRACT_PRIVATE}/upsert-v1.request.json"
 write_upsert_request "$UPSERT_V1_REQUEST" "$COLLECTION_A" "rev-1" "" \
@@ -470,6 +622,73 @@ DOCUMENT_ID="$(jq -er '.documentId' "$UPSERT_V1_RESPONSE")"
 READINESS_RESPONSE="${CONTRACT_PRIVATE}/embedding-readiness.json"
 READINESS_HEADERS="${READINESS_RESPONSE}.headers"
 wait_for_fresh_embedding "$COLLECTION_A" "$READINESS_RESPONSE" "$READINESS_HEADERS"
+
+RESTRICTED_B_IDENTITY="${CONTRACT_PRIVATE}/restricted-b-identity.json"
+RESTRICTED_B_IDENTITY_HEADERS="${RESTRICTED_B_IDENTITY}.headers"
+code="$(request GET "${API}/auth/me" "$RESTRICTED_B_CONFIG" \
+  "$RESTRICTED_B_IDENTITY" "$RESTRICTED_B_IDENTITY_HEADERS")"
+assert_status "$code" 200 "second restricted principal authentication"
+assert_json_with_args "$RESTRICTED_B_IDENTITY" \
+  "second restricted principal returns its own exact allow-list" \
+  --arg principal "$RESTRICTED_B_PRINCIPAL_ID" --arg key "$COLLECTION_B" \
+  '.principalId == $principal
+    and .collectionAccessMode == "RESTRICTED"
+    and .allowedCollectionKeys == [$key]'
+
+FAILED_NAMESPACE="business-client.failure.v1"
+FAILED_EXTERNAL_ID="provider-failure-record"
+FAILED_REVISION="failure-rev-1"
+FAILED_UPSERT_REQUEST="${CONTRACT_PRIVATE}/failed-upsert.request.json"
+write_upsert_request "$FAILED_UPSERT_REQUEST" "$COLLECTION_B" "$FAILED_REVISION" "" \
+  "provider-failure" \
+  "Embedding provider failure contract ${EMBEDDING_FAIL_MARKER}" \
+  "$FAILED_NAMESPACE" "$FAILED_EXTERNAL_ID" "ASYNC"
+FAILED_UPSERT_RESPONSE="${CONTRACT_PRIVATE}/failed-upsert.json"
+FAILED_UPSERT_HEADERS="${FAILED_UPSERT_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_B_CONFIG" \
+  "$FAILED_UPSERT_RESPONSE" "$FAILED_UPSERT_HEADERS" "$FAILED_UPSERT_REQUEST")"
+assert_status "$code" 200 "persist JSON Record before deterministic embedding failure"
+assert_json "$FAILED_UPSERT_RESPONSE" \
+  '.action == "CREATED"
+    and (.embeddingAction == "ASYNC_QUEUED" or .embeddingAction == "ASYNC_COALESCED")
+    and .embeddingJobId != null
+    and .documentRevision == 1
+    and .sourceRevision == "failure-rev-1"' \
+  "provider failure fixture persists one durable business mutation"
+FAILED_DOCUMENT_ID="$(jq -er '.documentId' "$FAILED_UPSERT_RESPONSE")"
+
+FAILED_LOOKUP_RESPONSE="${CONTRACT_PRIVATE}/failed-lookup.json"
+FAILED_LOOKUP_HEADERS="${FAILED_LOOKUP_RESPONSE}.headers"
+wait_for_failed_embedding \
+  "$RESTRICTED_B_CONFIG" "$COLLECTION_B" "$FAILED_NAMESPACE" \
+  "$FAILED_EXTERNAL_ID" "$FAILED_DOCUMENT_ID" "$FAILED_REVISION" \
+  "$FAILED_LOOKUP_RESPONSE" "$FAILED_LOOKUP_HEADERS"
+assert_json_with_args "$FAILED_LOOKUP_RESPONSE" \
+  "embedding failure keeps identity, revision, payload, and one mutation" \
+  --argjson documentId "$FAILED_DOCUMENT_ID" --arg revision "$FAILED_REVISION" \
+  '.documentId == $documentId
+    and .sourceRevision == $revision
+    and .documentRevision == 1
+    and .enabled == true
+    and .jsonbPayload.status == "provider-failure"
+    and .lifecycle.embeddingStatus == "FAILED"'
+if [[ -n "$EMBEDDING_COUNTER_FILE" && -f "$EMBEDDING_COUNTER_FILE" ]]; then
+  jq -e '.failedRequests >= 1' "$EMBEDDING_COUNTER_FILE" >/dev/null || {
+    echo "embedding stub did not record the deterministic failed request" >&2
+    exit 1
+  }
+  pass "embedding stub records failed provider requests"
+fi
+
+assert_denied_data_plane \
+  "$RESTRICTED_X_CONFIG" "$COLLECTION_B" "$FAILED_NAMESPACE" \
+  "$FAILED_EXTERNAL_ID" "principal A denies Collection B" "$FAILED_DOCUMENT_ID"
+assert_denied_data_plane \
+  "$RESTRICTED_X_CONFIG" "$UNKNOWN_COLLECTION" "business-client.unknown.v1" \
+  "unknown-record" "principal A denies unknown Collection"
+assert_denied_data_plane \
+  "$RESTRICTED_B_CONFIG" "$COLLECTION_A" "business-client.contract.v1" \
+  "record-1" "principal B denies Collection A" "$DOCUMENT_ID"
 
 REPLAY_RESPONSE="${CONTRACT_PRIVATE}/replay-v1.json"
 REPLAY_HEADERS="${REPLAY_RESPONSE}.headers"
@@ -613,6 +832,109 @@ assert_json_with_args "$RESTORE_RESPONSE" \
     and .lifecycle.searchability != "DISABLED"'
 wait_for_fresh_embedding "$COLLECTION_A" "$READINESS_RESPONSE" "$READINESS_HEADERS"
 
+BOUNDARY_VALUES_FILE="${CONTRACT_PRIVATE}/boundary-values.txt"
+python3 > "$BOUNDARY_VALUES_FILE" <<'PY'
+print("n" * 128)
+print("e" * 255)
+print("r" * 255)
+print("n" * 129)
+print("e" * 256)
+print("r" * 256)
+PY
+MAX_NAMESPACE="$(sed -n '1p' "$BOUNDARY_VALUES_FILE")"
+MAX_EXTERNAL_ID="$(sed -n '2p' "$BOUNDARY_VALUES_FILE")"
+MAX_REVISION="$(sed -n '3p' "$BOUNDARY_VALUES_FILE")"
+OVERLONG_NAMESPACE="$(sed -n '4p' "$BOUNDARY_VALUES_FILE")"
+OVERLONG_EXTERNAL_ID="$(sed -n '5p' "$BOUNDARY_VALUES_FILE")"
+OVERLONG_REVISION="$(sed -n '6p' "$BOUNDARY_VALUES_FILE")"
+
+BOUNDARY_REQUEST="${CONTRACT_PRIVATE}/boundary-max.request.json"
+write_upsert_request "$BOUNDARY_REQUEST" "$COLLECTION_A" "$MAX_REVISION" "" \
+  "boundary-max" "Boundary contract record" \
+  "$MAX_NAMESPACE" "$MAX_EXTERNAL_ID" "SKIP"
+BOUNDARY_RESPONSE="${CONTRACT_PRIVATE}/boundary-max.json"
+BOUNDARY_HEADERS="${BOUNDARY_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
+  "$BOUNDARY_RESPONSE" "$BOUNDARY_HEADERS" "$BOUNDARY_REQUEST")"
+assert_status "$code" 200 "accept maximum namespace, externalId, and sourceRevision"
+assert_json_with_args "$BOUNDARY_RESPONSE" \
+  "maximum identity and revision persist without embedding" \
+  --arg revision "$MAX_REVISION" \
+  '.action == "CREATED"
+    and .sourceRevision == $revision
+    and .embeddingAction == "SKIPPED"'
+BOUNDARY_DOCUMENT_ID="$(jq -er '.documentId' "$BOUNDARY_RESPONSE")"
+
+BOUNDARY_LOOKUP="${CONTRACT_PRIVATE}/boundary-max-lookup.json"
+BOUNDARY_LOOKUP_HEADERS="${BOUNDARY_LOOKUP}.headers"
+code="$(query_request GET "${API}/json-records/by-external-id" \
+  "$RESTRICTED_X_CONFIG" "$BOUNDARY_LOOKUP" "$BOUNDARY_LOOKUP_HEADERS" \
+  "collectionKey=${COLLECTION_A}" \
+  "sourceNamespace=${MAX_NAMESPACE}" \
+  "externalId=${MAX_EXTERNAL_ID}")"
+assert_status "$code" 200 "lookup maximum external identity"
+assert_json_with_args "$BOUNDARY_LOOKUP" \
+  "maximum external identity resolves the same record" \
+  --argjson documentId "$BOUNDARY_DOCUMENT_ID" \
+  --arg namespace "$MAX_NAMESPACE" \
+  --arg externalId "$MAX_EXTERNAL_ID" \
+  --arg revision "$MAX_REVISION" \
+  '.documentId == $documentId
+    and .sourceNamespace == $namespace
+    and .externalId == $externalId
+    and .sourceRevision == $revision'
+
+OVERLONG_NAMESPACE_REQUEST="${CONTRACT_PRIVATE}/boundary-namespace-129.request.json"
+write_upsert_request "$OVERLONG_NAMESPACE_REQUEST" "$COLLECTION_A" "boundary-rev" "" \
+  "invalid" "Boundary rejection" \
+  "$OVERLONG_NAMESPACE" "boundary-namespace-129" "SKIP"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
+  "${CONTRACT_PRIVATE}/boundary-namespace-129.json" \
+  "${CONTRACT_PRIVATE}/boundary-namespace-129.headers" \
+  "$OVERLONG_NAMESPACE_REQUEST")"
+assert_status "$code" 400 "reject 129 character sourceNamespace"
+
+CONTROL_NAMESPACE_REQUEST="${CONTRACT_PRIVATE}/boundary-namespace-control.request.json"
+write_upsert_request "$CONTROL_NAMESPACE_REQUEST" "$COLLECTION_A" "boundary-rev" "" \
+  "invalid" "Boundary rejection" \
+  $'invalid\tnamespace' "boundary-namespace-control" "SKIP"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
+  "${CONTRACT_PRIVATE}/boundary-namespace-control.json" \
+  "${CONTRACT_PRIVATE}/boundary-namespace-control.headers" \
+  "$CONTROL_NAMESPACE_REQUEST")"
+assert_status "$code" 400 "reject sourceNamespace containing control character"
+
+OVERLONG_EXTERNAL_REQUEST="${CONTRACT_PRIVATE}/boundary-external-256.request.json"
+write_upsert_request "$OVERLONG_EXTERNAL_REQUEST" "$COLLECTION_A" "boundary-rev" "" \
+  "invalid" "Boundary rejection" \
+  "business-client.boundary.v1" "$OVERLONG_EXTERNAL_ID" "SKIP"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
+  "${CONTRACT_PRIVATE}/boundary-external-256.json" \
+  "${CONTRACT_PRIVATE}/boundary-external-256.headers" \
+  "$OVERLONG_EXTERNAL_REQUEST")"
+assert_status "$code" 400 "reject 256 character externalId"
+
+OVERLONG_REVISION_REQUEST="${CONTRACT_PRIVATE}/boundary-revision-256.request.json"
+write_upsert_request "$OVERLONG_REVISION_REQUEST" "$COLLECTION_A" \
+  "$OVERLONG_REVISION" "" "invalid" "Boundary rejection" \
+  "business-client.boundary.v1" "boundary-revision-256" "SKIP"
+code="$(request POST "${API}/json-records/upsert" "$RESTRICTED_X_CONFIG" \
+  "${CONTRACT_PRIVATE}/boundary-revision-256.json" \
+  "${CONTRACT_PRIVATE}/boundary-revision-256.headers" \
+  "$OVERLONG_REVISION_REQUEST")"
+assert_status "$code" 400 "reject 256 character sourceRevision"
+
+code="$(query_request DELETE "${API}/json-records/by-external-id" \
+  "$RESTRICTED_X_CONFIG" \
+  "${CONTRACT_PRIVATE}/boundary-expected-revision-256.json" \
+  "${CONTRACT_PRIVATE}/boundary-expected-revision-256.headers" \
+  "collectionKey=${COLLECTION_A}" \
+  "sourceNamespace=${MAX_NAMESPACE}" \
+  "externalId=${MAX_EXTERNAL_ID}" \
+  "sourceRevision=boundary-delete" \
+  "expectedSourceRevision=${OVERLONG_REVISION}")"
+assert_status "$code" 400 "reject 256 character expectedSourceRevision"
+
 ROTATE_RESPONSE="${CONTRACT_PRIVATE}/restricted-rotate.json"
 ROTATE_HEADERS="${ROTATE_RESPONSE}.headers"
 code="$(request POST "${API}/api-keys/${RESTRICTED_KEY_ID}/rotate" \
@@ -661,9 +983,11 @@ UNRESTRICTED_KEY_ID=""
   printf 'run_id=%s\n' "$RUN_ID"
   printf 'result=PASS\n'
   printf 'checks=%s\n' "$PASS_COUNT"
-  printf 'collection_key_boundary=128_pass_129_reject\n'
-  printf 'principal_contract=root_restricted_unrestricted\n'
-  printf 'json_record_contract=replay_cas_payload_filter_tombstone_restore_async\n'
+  printf 'collection_key_boundary=1_and_128_pass_invalid_and_129_reject\n'
+  printf 'identity_boundary=namespace_128_external_255_revision_255\n'
+  printf 'principal_contract=root_two_restricted_unrestricted\n'
+  printf 'acl_contract=bidirectional_full_data_plane_anti_enumeration\n'
+  printf 'json_record_contract=replay_cas_payload_filter_tombstone_restore_async_failure_preserves_record\n'
   printf 'credential_contract=headers_query_reject_rotation_revocation\n'
 } > "${EVIDENCE_DIR}/summary.txt"
 

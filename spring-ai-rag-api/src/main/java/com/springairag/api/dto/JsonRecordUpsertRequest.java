@@ -2,6 +2,7 @@ package com.springairag.api.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.springairag.api.validation.ValidCollectionKey;
+import com.springairag.api.validation.ValidSourceNamespace;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -34,6 +35,7 @@ public class JsonRecordUpsertRequest {
     private String externalId;
 
     @Size(max = 128)
+    @ValidSourceNamespace
     @Schema(description = "External connector identity namespace", defaultValue = "default")
     private String sourceNamespace = "default";
 

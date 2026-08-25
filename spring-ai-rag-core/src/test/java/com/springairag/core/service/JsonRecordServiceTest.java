@@ -152,6 +152,49 @@ class JsonRecordServiceTest {
     }
 
     @Test
+    void externalIdentityLookupAcceptsMaximumIdentityLengths() throws Exception {
+        String namespace = "n".repeat(128);
+        String externalId = "e".repeat(255);
+        RagDocument document = document(
+                41L, 1L, externalId, "Boundary record.", "{\"value\":1}");
+        document.setSourceNamespace(namespace);
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("records:v1"))).thenReturn(List.of(10L));
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
+                        10L, namespace, RagDocument.JSON_RECORD, externalId))
+                .thenReturn(Optional.of(document));
+        when(documentRepository.findById(41L)).thenReturn(Optional.of(document));
+
+        var response = service.getByExternalIdentity(
+                "records:v1", namespace, externalId);
+
+        assertEquals(41L, response.documentId());
+        assertEquals(namespace, response.sourceNamespace());
+        assertEquals(externalId, response.externalId());
+    }
+
+    @Test
+    void externalIdentityLookupRejectsInvalidIdentityBeforeRepositoryLookup() {
+        when(collectionIdentityResolver.resolveActiveIds(
+                null, List.of("records:v1"))).thenReturn(List.of(10L));
+
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getByExternalIdentity(
+                        "records:v1", "n".repeat(129), "record-1"));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getByExternalIdentity(
+                        "records:v1", "namespace\tvalue", "record-1"));
+        assertThrows(IllegalArgumentException.class, () ->
+                service.getByExternalIdentity(
+                        "records:v1", "default", "e".repeat(256)));
+
+        verify(documentRepository, never())
+                .findByCollectionIdAndSourceNamespaceAndDocumentTypeAndExternalId(
+                        any(), any(), any(), any());
+    }
+
+    @Test
     void keyOnlyUpsertResolvesToInternalIdAndReturnsStableKey() throws Exception {
         when(collectionIdentityResolver.resolveActiveIds(
                 null, List.of("customer-42:records:v1")))

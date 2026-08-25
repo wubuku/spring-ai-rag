@@ -67,6 +67,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_*`
 - Chat static resource knowledge, runtime Skills, allowlisted HTTP tools, and
   tool-aware memory: `2026-08-25_CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_*`
+- External-projection identity bounds, full-data-plane ACL contracts,
+  provider-failure preservation, and reproducible release manifests:
+  `2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

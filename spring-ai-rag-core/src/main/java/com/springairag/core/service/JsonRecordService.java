@@ -15,6 +15,7 @@ import com.springairag.api.dto.CollectionImportRequest;
 import com.springairag.api.dto.RetrievalConfig;
 import com.springairag.api.dto.RetrievalResult;
 import com.springairag.api.enums.CollectionScopeMode;
+import com.springairag.api.validation.SourceNamespaceValidator;
 import com.springairag.core.config.EmbeddingProfile;
 import com.springairag.core.config.EmbeddingProfileProvider;
 import com.springairag.core.config.RagStructuredRecordProperties;
@@ -949,7 +950,17 @@ public class JsonRecordService {
     }
 
     private String normalizeNamespace(String value) {
-        return value == null || value.isBlank() ? "default" : value.trim();
+        String normalized = value == null || value.isBlank()
+                ? "default" : value.trim();
+        if (normalized.length() > 128) {
+            throw new IllegalArgumentException(
+                    "sourceNamespace must not exceed 128 characters");
+        }
+        if (!SourceNamespaceValidator.isValid(normalized)) {
+            throw new IllegalArgumentException(
+                    "sourceNamespace must contain visible ASCII only");
+        }
+        return normalized;
     }
 
     private String requireExternalId(String value) {
@@ -957,7 +968,12 @@ public class JsonRecordService {
             throw new IllegalArgumentException(
                     "externalId must not be blank");
         }
-        return value.trim();
+        String normalized = value.trim();
+        if (normalized.length() > 255) {
+            throw new IllegalArgumentException(
+                    "externalId must not exceed 255 characters");
+        }
+        return normalized;
     }
 
     private JsonRecordUpsertResponse failedResponse(
