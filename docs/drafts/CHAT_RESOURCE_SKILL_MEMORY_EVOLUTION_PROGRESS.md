@@ -384,6 +384,20 @@
 - 2026-08-25：按最新交付指示取消后续三轮代码审查，不再以 review 作为正确性证明；
   最终信心继续由合并后重新执行的自动化集成、编译、前端、运行时和静态门禁提供。下一步
   保存当前修复提交，获取并合并最新 `origin/main`，然后从合并后基线重新执行完整验收。
+- 2026-08-25：缓存隔离修复与当前验证证据已保存为本地提交 `1efb9f36`。执行
+  `git fetch origin --prune` 后确认 `origin/main` 仍为 `72f57a94`，显式 merge 返回
+  `Already up to date`；当前合并后验收基线为 `1efb9f36` + `origin/main@72f57a94`。
+  现在不沿用 merge 前结果，从该基线重新执行完整后端、前端、静态与必要运行时验收。
+- 2026-08-25：最终合并后验收完成。缓存隔离修复后的 focused 后端集合 `87/87`、
+  一次性 PostgreSQL 16 集成 `16/16`、五模块 `mvn clean compile test-compile`、
+  WebUI typecheck、Vitest `218/218`、生产 build 和 Chat Mock Playwright `10/10`
+  全部通过；隔离 `dev.sh` 真实栈上的 API-key、Chat、JSON/SSE、Memory、静态知识、
+  Skill/HTTP、预算与项目标准真实 LLM E2E 均通过。最终 executable JAR 又在独立端口
+  `18183` 和一次性数据库上启动，健康为 `UP`、Flyway 为 `V48`，包内静态知识
+  `entries=1/chunks=1`、Runtime Skill `entries=1/skills=1`，归档中的 verification
+  knowledge/Skill 与 nested core/starter JAR 均存在。退出后端口释放，数据库和临时运行
+  目录已删除。项目文档 `10/10`、禁悲观锁、`git diff --check` 和新增行密钥扫描通过。
+  按最新交付指示不再执行额外三轮代码审查，下一步提交并推送特性分支，合并到 `main`。
 
 ## 6. 恢复顺序
 
