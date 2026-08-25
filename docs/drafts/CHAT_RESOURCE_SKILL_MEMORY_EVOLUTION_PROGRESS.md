@@ -1,6 +1,6 @@
 # Chat 资源知识、运行时 Skill 与记忆演进实施进度
 
-> **状态**：合并前实现收敛完成，待合并最新主线并完整复验
+> **状态**：缓存隔离修复后的硬门槛已通过，待同步最新主线并完整复验
 >
 > **对应规划**：[CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_PLAN.md](CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_PLAN.md)
 >
@@ -298,6 +298,92 @@
   安全、兼容性或数据一致性的实质问题。第 3 轮同时确认依赖解析成功、双语标题结构一致、
   文档门禁 `10/10`、禁悲观锁、密钥扫描和 `git diff --check` 通过。下一步获取并合并
   最新 `origin/main`，记录合并后基线并按固定顺序重新执行完整验收。
+- 2026-08-25：合并前实现与文档已保存为本地提交 `fa315230`。随后执行
+  `git fetch origin --prune`，确认最新 `origin/main` 仍为实施起点 `72f57a94`；
+  显式执行 `git merge origin/main` 返回 `Already up to date`，没有主线冲突或新增
+  merge commit。合并后验证基线为特性提交 `fa315230` + `origin/main@72f57a94`。
+  现在开始按固定顺序执行 PostgreSQL 集成矩阵、Maven 门槛、前端门槛、packaged JAR、
+  隔离真实全栈、真实 LLM 和合并后三轮只读审查；不沿用合并前结果作为最终结论。
+- 2026-08-25：合并后后端硬门槛通过。一次性 PostgreSQL 16 数据库执行
+  `ChatSessionPostgresIntegrationTest` 为 `16/16`，0 失败、0 错误、0 跳过，
+  每个测试 schema 均从空库迁移至 Flyway `V48`；本任务 focused 后端集合为
+  `87/87`，其中主命令 `85/85`，另行执行 `ProjectDocumentRetrieverTest` 为 `2/2`。
+  五模块 `mvn clean compile test-compile` 为 `BUILD SUCCESS`。所有测试和服务进程均
+  已退出。下一步执行前端 typecheck、Vitest、生产 build 和隔离端口 Chat Mock
+  Playwright，不沿用合并前的前端结果。
+- 2026-08-25：合并后前端硬门槛通过。`npm run typecheck` 无错误，Vitest
+  `218/218`，`npm run build` 成功；在严格隔离的 Vite preview 端口运行
+  `e2e/chat.spec.ts`，Mock Playwright `10/10`。测试仅使用 DOM、可访问状态、URL、
+  请求体、SSE 和自动化断言，Playwright 配置保持 `screenshot: off`。preview 进程已
+  停止。下一步执行项目文档、禁悲观锁和 diff 静态门禁，再验证 packaged JAR。
+- 2026-08-25：合并后静态门禁通过：`verify-project-docs.sh` 为 `10/10`，
+  `verify-no-pessimistic-locks.sh` 未发现显式悲观锁或 advisory lock，
+  `git diff --check` 无输出。当前仍只有本进度文档存在未提交修改。下一步重装 feature
+  artifacts、打包并在隔离 PostgreSQL/端口上验证 executable demo JAR。
+- 2026-08-25：合并后 packaged JAR 验收通过。重新安装五模块 feature artifacts，
+  standalone `demo-basic-rag` 从干净 `target` 成功打包；归档中的 verification 静态知识、
+  Skill、nested core 和 starter 条目 `4/4` 存在。可执行 JAR 在独立端口 `18183` 和空白
+  一次性 PostgreSQL 数据库上启动，Flyway 执行 `48` 个迁移至 `V48`，健康为 `UP`；
+  日志确认包内静态知识 `entries=1/chunks=1`、Runtime Skill `entries=1/skills=1`。
+  进程停止后端口已释放，一次性数据库已删除。下一步启动隔离 `dev.sh` 真实全栈并执行
+  真实 API-key、Playwright、JSON/SSE、Memory、静态知识、Skill/HTTP 和预算验证。
+- 2026-08-25：合并后隔离真实全栈已在后端 `18184`、WebUI `15176` 和空白一次性
+  PostgreSQL 上启动。`dev.sh` 的健康、Vite 代理 root identity 与管理写探针通过；日志
+  确认 Flyway `V48`、filesystem 静态知识 `entries=2/chunks=3`、Runtime Skill
+  `entries=3/skills=2`，真实 provider 为 OpenAI-compatible `grok-4.5`。无截图真实
+  API-key Playwright `1/1`、Chat Playwright `1/1` 通过，覆盖真实 embedding、AGENT
+  SSE、来源 DOM、持久 history 恢复、KNOWLEDGE JSON 和执行预算。原生真实 LLM
+  幂等 smoke 也通过 JSON/SSE 首次执行、重放、冲突、turn status 和 provider counter
+  断言，重放未增加 provider 调用。下一步一次性执行本特性专项真实 LLM 矩阵。
+- 2026-08-25：合并后真实 LLM 专项矩阵全部通过。PLAIN 同会话两轮恢复一次性验证码，
+  数据库只读断言为 history `2`、JDBC Memory `4`、summary `0`；KNOWLEDGE 的 X-200
+  查询返回一个 `STATIC_KNOWLEDGE` source，火星航班问题返回零 source。AGENT 未加载
+  Skill 直接调用 `getWeather` 返回 `skill_not_loaded`；正常路径 transcript 为
+  `loadSkill -> getWeather`，预算精确为 `toolCalls=2/toolRounds=2/modelCalls=3`；
+  超大响应为 `response_too_large`，延迟响应为 `tool_timeout`；同一单次上限 endpoint
+  的两次调用依次为 `response_too_large`、`tool_call_policy_exhausted`，预算精确为
+  `3/2/3`。AGENT SSE 无 error 事件，done metadata 与持久 history 均保留
+  `loadSkill -> getWeather`，预算 `2/2/3`。随后项目标准真实 E2E 独立交叉验证
+  `10 PASS / 0 FAIL`，覆盖真实 embedding、隔离 search、KNOWLEDGE JSON 和 SSE，
+  两条响应均包含唯一探针且引用唯一来源。真实调用期间持续检查后端日志，除幂等冲突
+  用例预期 WARN 外没有未预期异常。下一步停止隔离栈、删除一次性数据库并重跑审查前
+  后端、前端、文档和并发硬门槛。
+- 2026-08-25：隔离真实全栈、辅助 HTTP 服务和 disposable PostgreSQL 数据库已停止并
+  清理，相关端口已释放。随后使用新的空白一次性 PostgreSQL 数据库执行最终
+  `ChatSessionPostgresIntegrationTest`，结果为 `16/16`，0 失败、0 错误、0 跳过；
+  每个 schema 均完整迁移至 Flyway `V48`，Maven `BUILD SUCCESS`，退出钩子已删除测试
+  数据库。下一步执行最终五模块 `mvn clean compile test-compile`，然后顺序重跑前端和
+  静态门禁，全部通过后才进入合并后连续三轮限定范围只读审查。
+- 2026-08-25：最终编译和前端硬门槛通过。五模块
+  `mvn clean compile test-compile` reactor 全部 `SUCCESS`；WebUI `npm run typecheck`
+  无错误、Vitest `218/218`、`npm run build` 成功。在严格隔离的 preview 端口执行
+  `e2e/chat.spec.ts`，Chat Mock Playwright `10/10`，只使用 DOM、可访问状态、请求体、
+  URL、SSE 和自动化断言，配置保持 `screenshot: off`；preview 已停止。下一步执行文档、
+  禁悲观锁、diff 和密钥静态门禁，通过后开始连续三轮限定范围只读审查。
+- 2026-08-25：最终静态门禁通过：项目文档验证 `10/10`，生产源码未发现显式悲观锁或
+  PostgreSQL advisory lock，`git diff --check`、新增行密钥扫描均无问题，隔离 preview
+  端口确认已释放。基本集成硬门槛至此全部满足。现在从 `0/3` 开始合并后连续三轮限定
+  范围只读审查；任一轮发现需要实质修改的问题都会重置计数并重跑受影响门槛。
+- 2026-08-25：合并后收敛审查第 1 轮未发现问题，计数曾达到 `1/3`；第 2 轮发现静态
+  知识与项目文档共用了 query-result cache key：`searchStaticKnowledge` 或组合 Retriever
+  记录同 query 后，后续 `searchKnowledge` 可能错误复用静态结果。该问题影响工具语义和
+  检索正确性，因此审查计数重置为 `0/3`。修复策略是静态结果继续进入同一 citation/source
+  trace，但不写入仅供项目检索复用的 query cache；同时补齐 Tool 和组合 Retriever 回归，
+  然后重跑受影响测试与全部基本硬门槛。
+- 2026-08-25：静态知识缓存隔离缺陷已修复。`StaticKnowledgeSearchTool` 和
+  `StaticKnowledgeDocumentRetriever` 继续把结果记录到 citation/source trace，但不再写入
+  项目文档 query-result cache；Tool 和组合 Retriever 的回归断言同时确认
+  `STATIC_KNOWLEDGE` 结果正常返回且同 query 的项目缓存保持为空。修复后的定向测试
+  `17/17`、固定后端特性集合 `87/87` 均通过；一次性空白 PostgreSQL 16 数据库执行
+  `ChatSessionPostgresIntegrationTest` 为 `16/16`，每个用例迁移至 Flyway `V48`，
+  数据库已删除；五模块 `mvn clean compile test-compile` 为 `BUILD SUCCESS`。
+  WebUI typecheck、Vitest `218/218`、生产 build 和严格隔离 preview 端口的 Chat Mock
+  Playwright `10/10` 全部通过，Playwright 保持截图关闭。项目文档门禁 `10/10`、禁悲观
+  锁检查、`git diff --check`、新增行密钥扫描和隔离端口清理均通过。基本集成硬门槛重新
+  满足。
+- 2026-08-25：按最新交付指示取消后续三轮代码审查，不再以 review 作为正确性证明；
+  最终信心继续由合并后重新执行的自动化集成、编译、前端、运行时和静态门禁提供。下一步
+  保存当前修复提交，获取并合并最新 `origin/main`，然后从合并后基线重新执行完整验收。
 
 ## 6. 恢复顺序
 

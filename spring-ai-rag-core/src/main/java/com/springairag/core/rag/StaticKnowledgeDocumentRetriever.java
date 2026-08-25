@@ -43,10 +43,7 @@ public final class StaticKnowledgeDocumentRetriever
         List<RetrievalResult> results = documents.stream()
                 .map(mapper::toRetrievalResult)
                 .toList();
-        context.trace().record(
-                query,
-                results,
-                context.options().maxResults());
+        context.trace().record(results);
         return documents;
     }
 

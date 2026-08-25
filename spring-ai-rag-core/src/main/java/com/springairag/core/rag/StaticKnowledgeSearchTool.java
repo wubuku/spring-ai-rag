@@ -98,7 +98,7 @@ public final class StaticKnowledgeSearchTool implements ToolCallback {
         List<RetrievalResult> results = documents.stream()
                 .map(this::toResult)
                 .toList();
-        trace.record(query, results, limit);
+        trace.record(results);
         List<Map<String, Object>> sources = new ArrayList<>();
         List<RetrievalResult> exposed = new ArrayList<>();
         for (RetrievalResult result : results) {

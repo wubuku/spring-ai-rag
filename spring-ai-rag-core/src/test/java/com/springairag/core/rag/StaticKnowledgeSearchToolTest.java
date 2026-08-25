@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class StaticKnowledgeSearchToolTest {
@@ -63,5 +64,41 @@ class StaticKnowledgeSearchToolTest {
         assertEquals(1, trace.sources().size());
         assertEquals("STATIC_KNOWLEDGE",
                 trace.sources().getFirst().getMetadata().get("sourceType"));
+        assertNull(trace.cachedResults("X-200 电池保修期", 1));
+    }
+
+    @Test
+    void documentRetrieverDoesNotPopulateTheProjectQueryCache() {
+        RagChatProperties properties = new RagChatProperties();
+        RagChatProperties.StaticKnowledgeProperties config =
+                properties.getStaticKnowledge();
+        config.setEnabled(true);
+        config.setLocations(List.of("classpath:static-fixture/"));
+
+        StaticKnowledgeCatalog catalog = new StaticKnowledgeCatalog(
+                new ResourceCatalog(), properties);
+        ReflectionTestUtils.invokeMethod(catalog, "initialize");
+        StaticKnowledgeDocumentRetriever retriever =
+                new StaticKnowledgeDocumentRetriever(
+                        catalog,
+                        new RetrievalDocumentMapper());
+        RetrievalTraceCollector trace = new RetrievalTraceCollector(2, 2, 5);
+        AuthorizedRetrievalContext authorized =
+                new AuthorizedRetrievalContext(
+                        RetrievalScope.unscoped(),
+                        new RetrievalOptions(5, 0, true, false, 0.5, 0.5),
+                        trace,
+                        "static-retriever",
+                        ChatPrincipal.local(),
+                        1_000);
+
+        var documents = retriever.retrieve(
+                "X-200 电池保修期",
+                authorized);
+        assertTrue(!documents.isEmpty());
+        assertEquals(
+                "STATIC_KNOWLEDGE",
+                documents.getFirst().getMetadata().get("sourceType"));
+        assertNull(trace.cachedResults("X-200 电池保修期", 1));
     }
 }
