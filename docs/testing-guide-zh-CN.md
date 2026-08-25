@@ -220,6 +220,40 @@ Docker 不可用时，可通过 `EXTERNAL_DOCUMENT_IT_JDBC_URL`、
 PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`。该测试会反复
 调用 `Flyway.clean()`，绝不能指向开发库或生产库。
 
+### 业务服务接入就绪验收门禁
+
+```bash
+./scripts/verify-business-client-readiness.sh
+```
+
+该门禁把业务 credential provisioning、当前 principal 自省和 JSON Record 数据面串成一条
+真实合同，覆盖：
+
+- root、restricted/unrestricted 数据库 principal，Header/Bearer 认证和有效 query
+  credential 拒绝；
+- `/auth/me` 的 role、access mode、完整 key allow-list、no-store 与无 secret；
+- Collection key 128 成功/129 拒绝、跨 Collection ACL 和防枚举；
+- JSON Record 精确重放、CAS、payload containment、tombstone/恢复和 payload-only
+  不重嵌入；
+- `ASYNC` 持久化 job 经真实 Spring AI embedding HTTP 路径收敛为 fresh；
+- credential 一次性展示、轮换、旧 key 失效和吊销；
+- Flyway V48、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
+- WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
+
+聚焦复跑真实阶段：
+
+```bash
+BUSINESS_CLIENT_VERIFY_PHASE=real \
+./scripts/verify-business-client-readiness.sh
+```
+
+脚本所有 PostgreSQL 数据库、端口和 credential 都是隔离且一次性的。private 文件权限为
+`0600`，退出 trap 清理资源；证据不保存 raw secret 或完整业务 payload。前端断言只使用
+DOM、网络请求/响应和 JSON，不以截图作为正确性证据。该脚本包含 `mvn clean`，必须与其他
+使用同一 worktree `target/` 的 Maven 进程串行运行。
+
+接入语义见[业务服务接入指南](business-client-integration-zh-CN.md)。
+
 <a id="document-lifecycle-verification"></a>
 
 ### 文档 CRUD 与派生索引生命周期门禁

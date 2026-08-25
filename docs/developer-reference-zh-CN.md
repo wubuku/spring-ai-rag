@@ -369,6 +369,38 @@ MANAGED_API_REAL_ENV_FILE=.env \
 `MANAGED_API_FRONTEND_PORT`；证据位于
 `.verification/managed-api-principals/<run-id>/`。
 
+<a id="业务服务接入就绪一键验证"></a>
+
+### 业务服务接入就绪一键验证
+
+```bash
+./scripts/verify-business-client-readiness.sh
+```
+
+该门槛从 focused API/core 测试开始，串行创建三个 PostgreSQL 集成测试数据库，执行
+`mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
+Playwright、文档/禁锁/密钥/diff 检查，最后启动一次性 PostgreSQL、确定性 embedding
+stub、真实 Spring Boot 和真实 Vite 前端，运行通用业务 credential HTTP 合同与真实 API
+Key Playwright。
+
+只复跑真实服务阶段：
+
+```bash
+BUSINESS_CLIENT_VERIFY_PHASE=real \
+./scripts/verify-business-client-readiness.sh
+```
+
+默认端口为后端 `18084`、embedding stub `18085`、Mock 前端 `15184`、真实前端 `15185`；
+可分别用 `BUSINESS_CLIENT_BACKEND_PORT`、`BUSINESS_CLIENT_EMBEDDING_PORT`、
+`BUSINESS_CLIENT_MOCK_FRONTEND_PORT`、`BUSINESS_CLIENT_REAL_FRONTEND_PORT` 覆盖。
+PostgreSQL 镜像可用 `BUSINESS_CLIENT_POSTGRES_IMAGE` 覆盖。证据写入
+`.verification/business-client-readiness/<run-id>/`，private credential 文件、容器、
+端口和进程由退出 trap 清理。
+
+本门禁验证真实 Spring AI embedding HTTP 路径，但本能力不改变 Chat，因此不调用 Chat
+LLM。接入契约和部署 binding 见
+[业务服务接入指南](business-client-integration-zh-CN.md)。
+
 ### 检索诊断 / metadata 过滤 / 嵌入运营 / 受管质量
 
 ```bash

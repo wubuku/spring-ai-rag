@@ -78,6 +78,15 @@
   不会再次调用 provider。
 - [x] Chat 能力门禁已记录 V47 PostgreSQL 矩阵以及 Mock Playwright 的重试、重放和 stop 证据。
 
+### 2026-08-25 业务服务接入就绪门禁
+
+- [x] `/api/v1/rag/auth/me` 显式返回 principal role、restricted/unrestricted 模式和当前
+  credential 自身的稳定 Collection key allow-list，无法完整解析时 fail closed。
+- [x] `verify-business-client-readiness.sh` 覆盖 PostgreSQL 集成矩阵、Maven/WebUI 门槛、
+  真实 Spring Boot、64 项业务 credential HTTP 合同和真实 API Key Playwright。
+- [x] 双语业务服务接入指南固化 root/业务 credential、binding、CAS/tombstone/ASYNC、
+  轮换、升级与回滚边界。
+
 ### 最终证据（2026-07-21）
 
 - 一键命令：`VERIFY_RUN_ID=20260721-release-complete ./scripts/verify-release.sh --with-local-runtime`

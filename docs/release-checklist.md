@@ -83,6 +83,19 @@ Release date: `2026-07-21`
 - [x] The Chat capability gate records the V47 PostgreSQL matrix and Mock
   Playwright retry/replay/stop evidence.
 
+### 2026-08-25 Business Service Integration Readiness Gates
+
+- [x] `/api/v1/rag/auth/me` explicitly returns principal role,
+  restricted/unrestricted mode, and the current credential's own stable
+  Collection-key allow-list, failing closed when policy resolution is
+  incomplete.
+- [x] `verify-business-client-readiness.sh` covers PostgreSQL integration
+  matrices, Maven/WebUI gates, real Spring Boot, 64 business-credential HTTP
+  assertions, and real API-key Playwright.
+- [x] The bilingual Business Service Integration Guide records root/business
+  credentials, binding, CAS/tombstone/ASYNC, rotation, upgrade, and rollback
+  boundaries.
+
 ### Final Evidence (2026-07-21)
 
 - One command: `VERIFY_RUN_ID=20260721-release-complete ./scripts/verify-release.sh --with-local-runtime`

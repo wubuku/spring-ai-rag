@@ -1,5 +1,7 @@
 package com.springairag.api.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.springairag.api.enums.CollectionAccessMode;
 import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
@@ -17,6 +19,27 @@ public class ApiKeyIdentityResponse {
     private String credentialId;
     private Integer credentialVersion;
     private Long policyVersion;
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(
+            description = "Database principal role. Null for environment-root and legacy-static principals.",
+            allowableValues = {"NORMAL", "ADMIN"},
+            nullable = true,
+            example = "NORMAL")
+    private String principalRole;
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(
+            description = "Effective Collection access mode for the current principal.",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    private CollectionAccessMode collectionAccessMode;
+
+    @JsonInclude(JsonInclude.Include.ALWAYS)
+    @Schema(
+            description = "Stable Collection keys allowed for a restricted principal. Null means unrestricted.",
+            nullable = true,
+            example = "[\"customer-42:records:v1\"]")
+    private List<String> allowedCollectionKeys;
 
     public ApiKeyIdentityResponse() {
     }
@@ -67,4 +90,14 @@ public class ApiKeyIdentityResponse {
     public void setCredentialVersion(Integer credentialVersion) { this.credentialVersion = credentialVersion; }
     public Long getPolicyVersion() { return policyVersion; }
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
+    public String getPrincipalRole() { return principalRole; }
+    public void setPrincipalRole(String principalRole) { this.principalRole = principalRole; }
+    public CollectionAccessMode getCollectionAccessMode() { return collectionAccessMode; }
+    public void setCollectionAccessMode(CollectionAccessMode collectionAccessMode) {
+        this.collectionAccessMode = collectionAccessMode;
+    }
+    public List<String> getAllowedCollectionKeys() { return allowedCollectionKeys; }
+    public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) {
+        this.allowedCollectionKeys = allowedCollectionKeys;
+    }
 }

@@ -19,6 +19,7 @@
 | Understand Chat memory, context budgets, RAG, and tool calling | [Chat Memory, RAG, And Tool Calling](chat-memory-rag-tool-calling.md) | [Architecture](architecture.md), [Configuration](configuration.md) |
 | Change configuration | [configuration.md](configuration.md) | `spring-ai-rag-core/src/main/resources/application.yml` |
 | Integrate / debug HTTP APIs | [rest-api.md](rest-api.md) | Swagger: `/swagger-ui.html` |
+| Connect a backend business service to the RAG data plane | [Business Service Integration Guide](business-client-integration.md) | [REST API: Authentication](rest-api.md#authentication), [one-command acceptance](developer-reference.md#business-service-integration-readiness-verification) |
 | Understand Files, PDF import, and Add to RAG | [File management and PDF-to-RAG workflow](file-management-and-pdf-rag.md) | [REST API: PDF and file artifacts](rest-api.md#pdf-and-file-artifact-apis) |
 | Choose Collection retrieval scope for an external client | [REST API: External-client best practices](rest-api.md#external-client-best-practices) | [Deferred coverage-mode TODO](TODO.md#each_collection-retrieval-coverage-mode) |
 | Synchronize external documents / content sources | [External Document Sync Client Guide](external-document-sync-client-guide.md) | [REST API contract](rest-api.md#external-documents-idempotent-synchronization), [one-command lifecycle verification](developer-reference.md#document-lifecycle-verification) |
@@ -62,6 +63,7 @@ Chinese counterparts use the same basename with a `-zh-CN` suffix where availabl
 | [file-management-and-pdf-rag.md](file-management-and-pdf-rag.md) | Files versus Documents, PDF conversion artifacts, Add to RAG, and current lifecycle boundaries |
 | [rest-api.md](rest-api.md#external-documents-idempotent-synchronization) § External Documents — Idempotent Synchronization | External-client upsert, CAS, deletion/recovery, and synchronization best practices |
 | [external-document-sync-client-guide.md](external-document-sync-client-guide.md) | External-client triple identity, incremental CRUD, retry/checkpoint, and search-readiness guidance |
+| [business-client-integration.md](business-client-integration.md) / [中文](business-client-integration-zh-CN.md) | Credentials, binding, JSON Records, rotation, upgrades, and the contract gate for backend business services |
 | [TODO.md](TODO.md) / [TODO-zh-CN.md](TODO-zh-CN.md) | Current follow-up work outside the public API and its revisit criteria |
 | [extension-guide.md](extension-guide.md) | `DomainRagExtension` development |
 | [IMPLEMENTATION_COMPARISON.md](IMPLEMENTATION_COMPARISON.md) | Comparison with reference projects; phase status |

@@ -5,6 +5,12 @@ export interface ApiKeyIdentity {
   principalId: string;
   rootMode: boolean;
   capabilities: string[];
+  credentialId?: string;
+  credentialVersion?: number;
+  policyVersion?: number;
+  principalRole: 'NORMAL' | 'ADMIN' | null;
+  collectionAccessMode: 'RESTRICTED' | 'UNRESTRICTED';
+  allowedCollectionKeys: string[] | null;
 }
 
 export const authApi = {

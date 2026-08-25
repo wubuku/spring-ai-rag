@@ -76,9 +76,9 @@ ApiKeyAuthFilter
 
 近距离事实入口：
 
-- [REST API：认证与 API Key](../rest-api-zh-CN.md#认证)
-- [架构：受管 API principal](../architecture-zh-CN.md)
-- [测试指南：受管 API Principal PostgreSQL 矩阵](../testing-guide-zh-CN.md#受管-api-principal-postgresql-矩阵)
+- [REST API：认证与 API Key](../../rest-api-zh-CN.md#认证)
+- [架构：受管 API principal](../../architecture-zh-CN.md)
+- [测试指南：受管 API Principal PostgreSQL 矩阵](../../testing-guide-zh-CN.md#受管-api-principal-postgresql-矩阵)
 - `spring-ai-rag-core/.../filter/ApiKeyAuthFilter.java`
 - `spring-ai-rag-core/.../security/ApiKeyCollectionAccess.java`
 - `spring-ai-rag-core/.../service/ApiKeyManagementService.java`

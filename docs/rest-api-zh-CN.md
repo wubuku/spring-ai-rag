@@ -45,13 +45,41 @@ X-API-Key: your-api-key
   "principalType": "ENVIRONMENT_ROOT",
   "principalId": "environment-root",
   "rootMode": true,
-  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"]
+  "capabilities": ["RAG_READ", "RAG_WRITE", "API_KEY_MANAGE"],
+  "principalRole": null,
+  "collectionAccessMode": "UNRESTRICTED",
+  "allowedCollectionKeys": null
 }
 ```
 
-数据库业务 Key返回 `DATABASE_API_KEY` 和
-`["RAG_READ", "RAG_WRITE"]`；WebUI 不允许其解锁管理台。响应带
-`Cache-Control: no-store`。
+restricted 数据库业务 Key 的响应示例：
+
+```json
+{
+  "principalType": "DATABASE_API_KEY",
+  "principalId": "rag_p_service",
+  "rootMode": true,
+  "capabilities": ["RAG_READ", "RAG_WRITE"],
+  "credentialId": "rag_k_current",
+  "credentialVersion": 2,
+  "policyVersion": 3,
+  "principalRole": "NORMAL",
+  "collectionAccessMode": "RESTRICTED",
+  "allowedCollectionKeys": ["customer-42:records:v1"]
+}
+```
+
+`principalRole` 只适用于数据库 principal；environment root 和 legacy static 返回
+`null`。`collectionAccessMode` 是当前请求 principal 的实际授权语义：
+`RESTRICTED` 返回自身完整稳定 key allow-list，`UNRESTRICTED` 返回
+`allowedCollectionKeys=null`。legacy `ADMIN` 即使存在残留 allowed IDs，也按实际权限返回
+unrestricted。
+
+`rootMode=true` 只表示服务配置了 environment root，不表示当前 credential 就是 root。
+调用方必须先判断 `principalType`。ACL 引用无法完整映射时端点返回 `503`，不会返回部分
+allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebUI 也不允许其解锁管理台。
+响应带 `Cache-Control: no-store`。完整生产 binding 和轮换流程见
+[业务服务接入指南](business-client-integration-zh-CN.md)。
 
 数据库业务 Key 对外使用 `allowedCollectionKeys`；响应中继续保留 deprecated 的
 `allowedCollectionIds` 兼容字段：

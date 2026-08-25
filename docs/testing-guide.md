@@ -230,6 +230,49 @@ through `EXTERNAL_DOCUMENT_IT_JDBC_URL`, `EXTERNAL_DOCUMENT_IT_USERNAME`, and
 repeatedly; never point these variables at a development or production
 database.
 
+### Business Service Integration Readiness Gate
+
+```bash
+./scripts/verify-business-client-readiness.sh
+```
+
+This gate joins business-credential provisioning, current-principal
+introspection, and the JSON Record data plane into one real contract. It
+covers:
+
+- root plus restricted/unrestricted database principals, header/Bearer
+  authentication, and rejection of a valid query credential;
+- `/auth/me` role, access mode, complete key allow-list, no-store, and
+  secret absence;
+- Collection-key 128 success/129 rejection, cross-Collection ACLs, and
+  anti-enumeration;
+- JSON Record exact replay, CAS, payload containment, tombstone/restore, and
+  no re-embedding for payload-only changes;
+- `ASYNC` durable-job convergence through the real Spring AI embedding HTTP
+  path;
+- shown-once credentials, rotation, old-key invalidation, and revocation;
+- PostgreSQL facts for Flyway V48, zero plaintext credentials, and a succeeded
+  embedding job;
+- WebUI typecheck, Vitest, production build, core Mock Playwright, and real
+  API-key Playwright.
+
+Focused real-phase rerun:
+
+```bash
+BUSINESS_CLIENT_VERIFY_PHASE=real \
+./scripts/verify-business-client-readiness.sh
+```
+
+All PostgreSQL databases, ports, and credentials are isolated and disposable.
+Private files use mode `0600`, exit traps clean resources, and evidence stores
+neither raw secrets nor complete business payloads. Frontend assertions use
+DOM state, network requests/responses, and JSON, never screenshots as
+correctness evidence. The script includes `mvn clean`, so run it serially with
+other Maven processes that share the worktree's `target/` directories.
+
+See the [Business Service Integration Guide](business-client-integration.md)
+for integration semantics.
+
 <a id="document-lifecycle-verification"></a>
 
 ### Document CRUD And Derived-Index Lifecycle Gate

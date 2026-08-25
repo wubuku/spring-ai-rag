@@ -389,6 +389,42 @@ conflicts with `MANAGED_API_BACKEND_A_PORT`, `MANAGED_API_BACKEND_B_PORT`, and
 `MANAGED_API_FRONTEND_PORT`. Evidence is written under
 `.verification/managed-api-principals/<run-id>/`.
 
+<a id="business-service-integration-readiness-verification"></a>
+
+### Business Service Integration Readiness Verification
+
+```bash
+./scripts/verify-business-client-readiness.sh
+```
+
+The gate starts with focused API/core tests, creates three PostgreSQL
+integration databases serially, runs `mvn clean compile test-compile`, WebUI
+typecheck/Vitest/production build, core Mock Playwright, and the
+documentation/lock/secret/diff gates. It then starts disposable PostgreSQL, a
+deterministic embedding stub, real Spring Boot, and a real Vite frontend for
+the generic business-credential HTTP contract and real API-key Playwright.
+
+Rerun only the real-service phase:
+
+```bash
+BUSINESS_CLIENT_VERIFY_PHASE=real \
+./scripts/verify-business-client-readiness.sh
+```
+
+Default ports are backend `18084`, embedding stub `18085`, Mock frontend
+`15184`, and real frontend `15185`. Override them with
+`BUSINESS_CLIENT_BACKEND_PORT`, `BUSINESS_CLIENT_EMBEDDING_PORT`,
+`BUSINESS_CLIENT_MOCK_FRONTEND_PORT`, and
+`BUSINESS_CLIENT_REAL_FRONTEND_PORT`. Override the PostgreSQL image with
+`BUSINESS_CLIENT_POSTGRES_IMAGE`. Evidence is written under
+`.verification/business-client-readiness/<run-id>/`; exit traps clean private
+credential files, containers, ports, and processes.
+
+This gate verifies the real Spring AI embedding HTTP path. The capability does
+not change Chat, so it does not call a Chat LLM. See the
+[Business Service Integration Guide](business-client-integration.md) for the
+integration contract and deployment binding.
+
 ### Retrieval diagnostics / metadata filters / embedding operations / managed quality
 
 ```bash

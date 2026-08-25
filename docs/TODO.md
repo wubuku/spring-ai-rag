@@ -12,6 +12,9 @@
 | Stable principals, versioned credentials, and immediate revocation | Shipped in V48 | Ownership/policy is separate from credentials; every authentication performs an authoritative join without a positive decision cache |
 | PostgreSQL shared principal quota | Shipped in V48 | Replicas share fixed-minute buckets by stable principal; rotation does not reset quota and database failure fails closed |
 | Schema-level plaintext-secret prohibition | Shipped in V48 | Migration clears plaintext, removes its index, and enforces `api_key IS NULL` |
+| Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Separate future plan | Capabilities are currently product-level descriptions; a database business principal still has the full RAG read/write data plane |
+| Principal-provisioning idempotency key | Separate future plan | After a create timeout, an operator must reconcile by stable name/binding; create cannot yet be retried blindly |
+| Machine-readable integration protocol version / capability discovery | Separate future plan | Compatibility is currently pinned through OpenAPI, a Git commit, `/auth/me`, and the business-service contract gate |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
 | Persistent token/cost observability per model invocation | Future implementation candidate | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; the candidate has not completed planning `3/3` |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
@@ -23,9 +26,11 @@ among older rotation rows. Per-invocation usage and configured-cost
 observability is preserved in the
 [historical archive](drafts/archive/README.md) as a future implementation
 candidate, but it is not the current active plan and is not presented as a
-provider invoice or hard-limit settlement source. OAuth/OIDC, tenant hierarchy,
-Redis, token/cost hard limits and billing, per-Collection embedding-profile
-routing, and `EACH_COLLECTION` remain independent planning subjects.
+provider invoice or hard-limit settlement source. Operation-scoped
+authorization, provisioning idempotency, protocol capability discovery,
+OAuth/OIDC, tenant hierarchy, Redis, token/cost hard limits and billing,
+per-Collection embedding-profile routing, and `EACH_COLLECTION` remain
+independent planning subjects.
 
 ## Document Lifecycle And Derived-Index Follow-Ups
 
