@@ -1,6 +1,6 @@
 # 业务服务接入就绪 P0 实施进度
 
-> **状态**：实现与合并后验证完成，待 Git 交付
+> **状态**：已完成
 >
 > **日期**：2026-08-25
 >
@@ -36,7 +36,7 @@
 - [x] 前端 typecheck、Vitest、生产 build、核心 Mock 与真实 Playwright 通过。
 - [x] 真实全栈合同、文档、锁策略、密钥和 diff 门禁通过。
 - [x] 合并最新 `origin/main` 后按合并基线完整复验。
-- [ ] 特性分支和 `main` 均已提交推送，主工作区干净，隔离 worktree 已安全移除。
+- [x] 特性分支和 `main` 均已提交推送，主工作区干净，隔离 worktree 已安全移除。
 
 ## 3. 验证账本
 
@@ -61,8 +61,8 @@
 | 2026-08-25 | 合并前完整 readiness 基线 | PASS | 一键脚本 16/16：focused 后端 109、PostgreSQL 23、Maven compile/test-compile、WebUI typecheck + Vitest 218 + build、Mock Playwright 1/1、文档 10/10、禁锁/密钥/diff、真实 HTTP 64 + 数据库事实 + 真实 Playwright 1/1 |
 | 2026-08-25 | 主线同步基线 | PASS | 本地提交 `d2de2c06` 后 fetch；`origin/main` 仍为规划基线 `7e701e30`，显式 merge 返回 already up to date，无冲突 |
 | 2026-08-25 | 合并后完整 readiness 基线 | PASS | `20260825-postmerge1` 一键脚本 16/16：focused 后端 109、PostgreSQL 23、`mvn clean compile test-compile`、WebUI typecheck + Vitest 218 + production build、Mock Playwright 1/1、文档 10/10、禁锁/密钥/diff、真实 HTTP 合同 64 项、Flyway V48/明文 credential 0/成功 embedding job、真实 API Key Playwright 1/1 |
+| 2026-08-25 | Git 交付与清理 | PASS | 特性提交 `d2de2c06`、归档提交 `84055bee` 和合并提交 `488da8df` 已推送；`main == origin/main`；隔离特性 worktree 在确认干净后安全移除 |
 
 ## 4. 下一步
 
-归档本轮 plan/progress，重跑文档与安全门禁，然后提交并推送特性分支；将特性分支合并到
-`main` 并推送，确认工作区干净后安全移除隔离 worktree。
+本轮已完成，无遗留实施项。
