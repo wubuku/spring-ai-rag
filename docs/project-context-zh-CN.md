@@ -46,15 +46,18 @@ RagChatController
   -> ChatCommandMapper
   -> ChatExecutionService
      -> KNOWLEDGE: Spring AI RetrievalAugmentationAdvisor
-        + ProjectDocumentRetriever
+        + CompositeChatDocumentRetriever
+          + ProjectDocumentRetriever
+          + 可选 StaticKnowledgeDocumentRetriever
         + ProjectRerankPostProcessor
         + CitationQueryAugmenter
      -> AGENT: Spring AI ToolCallAdvisor
         + KnowledgeSearchTool
+        + 可选静态知识 / Runtime Skill / allowlisted HTTP Tools
         + 服务端 ToolContext
      -> PLAIN: 仅 ChatClient + Memory
   -> 按 principal 隔离的 session lease
-  -> 原子提交 history + source snapshot + JDBC Memory
+  -> 原子提交 history + source snapshot + JDBC-compatible Memory 投影
 ```
 
 关键规则：
@@ -65,6 +68,12 @@ RagChatController
 - `PLAIN` 不执行检索，并拒绝检索专用的请求覆盖项。
 - Chat 与 Search 共享项目混合检索器，支持 Collection / Document 范围；非空范围解析后
   无文档时必须 fail closed，不能退化为全库检索。
+- 可选静态知识在启动时从 classpath/filesystem/JAR 构建 `GLOBAL`、非 embedding 的
+  immutable lexical snapshot；KNOWLEDGE 固定组合检索，AGENT 可按需调用
+  `searchStaticKnowledge`，PLAIN 不读取。private/tenant 内容仍必须使用带 ACL 的项目文档库。
+- Runtime Skill 仅为 AGENT 提供有界、不可信操作说明；`loadSkill` /
+  `readSkillReference` 和配置生成的只读 HTTPS 工具共享 request-local budget，真正授权仍由
+  server-owned Tool policy、Skill capability gate 和 endpoint allowlist 决定。
 - 旧 `QueryRewriteAdvisor`、`HybridSearchAdvisor` 与 `RerankAdvisor` 仍是组件级/
   兼容 API，不是生产 Chat 路径。
 - `RagAdvisorProvider` 默认只支持 `KNOWLEDGE + ATTEMPT`。框架把 ATTEMPT provider
@@ -74,7 +83,9 @@ RagChatController
 - `DomainRagExtension` 只在请求显式选择 `domainId` 时生效；省略 domain 不使用“第一个
   Bean”。领域模板只提供 instruction，检索上下文由 RAG/工具注入。旧 `{context}` 模板
   不能直接用于 `AGENT/PLAIN`；`postProcessAnswer/isApplicable` 不参与新 Chat 主链。
-- Spring AI Memory 与业务 history 分开存储，但完成 turn 会原子提交。
+- Spring AI Memory 与业务 history 分开存储，但完成 turn 会原子提交。Spring AI `1.1.8`
+  JDBC 只保存可恢复的 user/plain assistant 消息；完整工具交换以有界 `toolTranscript`
+  写入业务 history metadata，供后续摘要使用。
 
 ### Chat 会话与流式协议
 

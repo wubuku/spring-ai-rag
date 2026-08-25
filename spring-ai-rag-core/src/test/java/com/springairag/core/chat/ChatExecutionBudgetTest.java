@@ -2,12 +2,14 @@ package com.springairag.core.chat;
 
 import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.http.HttpToolExecutionState;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -95,5 +97,28 @@ class ChatExecutionBudgetTest {
 
         assertEquals(200, budget.toolResultCharacters());
         assertEquals(150, budget.toolResultTokens());
+    }
+
+    @Test
+    void sharesHttpResponseBytesAcrossLogicalRequestAttempts() {
+        ChatExecutionBudget budget = new ChatExecutionBudget(
+                Instant.now().plusSeconds(30),
+                3,
+                8,
+                3,
+                6,
+                3,
+                4_000);
+
+        HttpToolExecutionState first = budget.httpToolExecutionState(100);
+        HttpToolExecutionState.ResponseReservation reservation =
+                first.reserveUpTo(80);
+        first.commit(reservation, 60);
+        HttpToolExecutionState fallback = budget.httpToolExecutionState(100);
+
+        assertSame(first, fallback);
+        assertEquals(60, fallback.responseBytes());
+        assertEquals(40, fallback.remainingBytes());
+        assertEquals(60L, budget.snapshot().get("httpResponseBytes"));
     }
 }

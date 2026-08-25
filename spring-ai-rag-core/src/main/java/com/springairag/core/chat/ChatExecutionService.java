@@ -19,12 +19,15 @@ import com.springairag.core.exception.RagException;
 import com.springairag.core.extension.DomainExtensionRegistry;
 import com.springairag.core.extension.PromptCustomizerChain;
 import com.springairag.core.filter.RequestTraceFilter;
+import com.springairag.core.http.HttpToolExecutionState;
 import com.springairag.core.metrics.RagMetricsService;
 import com.springairag.core.rag.JsonRecordSearchTool;
 import com.springairag.core.rag.KnowledgeSearchTool;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.RetrievalDocumentMapper;
 import com.springairag.core.repository.RagChatHistoryRepository;
+import com.springairag.core.skill.RuntimeSkillCatalog;
+import com.springairag.core.skill.RuntimeSkillLoadSession;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -32,7 +35,6 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.ChatClientMessageAggregator;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.messages.AbstractMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -87,6 +89,7 @@ public class ChatExecutionService {
     private RetrievalDiagnosticsService diagnosticsService;
     private CitationValidator citationValidator;
     private ChatObservabilityService chatObservability;
+    private RuntimeSkillCatalog runtimeSkillCatalog;
 
     public ChatExecutionService(
             ChatModelRouter modelRouter,
@@ -189,6 +192,11 @@ public class ChatExecutionService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     void setSummaryService(ConversationSummaryService summaryService) {
         this.summaryService = summaryService;
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    void setRuntimeSkillCatalog(RuntimeSkillCatalog runtimeSkillCatalog) {
+        this.runtimeSkillCatalog = runtimeSkillCatalog;
     }
 
     public ChatExecutionResult execute(ChatCommand command) {
@@ -826,6 +834,26 @@ public class ChatExecutionService {
         }
         Map<String, Object> context = new LinkedHashMap<>();
         context.put(KnowledgeSearchTool.CONTEXT_KEY, retrievalContext);
+        if (runtimeSkillCatalog != null && runtimeSkillCatalog.enabled()) {
+            RagChatProperties.SkillProperties skills =
+                    ragProperties.getChat().getSkills();
+            context.put(
+                    RuntimeSkillLoadSession.CONTEXT_KEY,
+                    new RuntimeSkillLoadSession(
+                            skills.getMaxLoadsPerRequest(),
+                            skills.getMaxReferenceReadsPerRequest(),
+                            skills.getMaxReferenceBytes()));
+        }
+        if (ragProperties.getChat().getHttpTools().isEnabled()) {
+            long maxResponseBytes = ragProperties.getChat().getHttpTools()
+                    .getMaxTotalResponseBytes();
+            context.put(
+                    HttpToolExecutionState.CONTEXT_KEY,
+                    command.executionBudget() != null
+                            ? command.executionBudget()
+                                    .httpToolExecutionState(maxResponseBytes)
+                            : new HttpToolExecutionState(maxResponseBytes));
+        }
         if (retrievalContext.executionBudget() != null) {
             context.put(
                     ChatExecutionBudget.CONTEXT_KEY,
@@ -872,16 +900,7 @@ public class ChatExecutionService {
     }
 
     private List<Message> committedMemoryMessages(List<Message> messages) {
-        if (messages == null || messages.isEmpty()) {
-            return List.of();
-        }
-        return messages.stream()
-                .filter(message -> !(message instanceof AbstractMessage abstractMessage)
-                        || !Boolean.TRUE.equals(
-                                abstractMessage.getMetadata().get(
-                                        ConversationSummaryService
-                                                .SYNTHETIC_SUMMARY_MESSAGE_METADATA_KEY)))
-                .toList();
+        return ChatMemoryMessageProjector.forPersistence(messages);
     }
 
     private String summaryText(ChatCommand command) {
@@ -989,6 +1008,22 @@ public class ChatExecutionService {
         metadata.put("retrieval", attempt.retrievalContext().trace().summary());
         metadata.put("retrievalExecuted",
                 attempt.retrievalContext().trace().retrievalCalls() > 0);
+        List<Map<String, Object>> toolTranscript =
+                ToolTranscriptCollector.transcript(
+                        response,
+                        16,
+                        8_000);
+        if (toolTranscript.isEmpty() && attempt.memory() != null) {
+            toolTranscript = ChatMemoryMessageProjector.toolTranscript(
+                    attempt.memory().get(command.memoryConversationId()),
+                    16,
+                    8_000);
+        }
+        if (!toolTranscript.isEmpty()) {
+            metadata.put(
+                    ChatMemoryMessageProjector.TOOL_TRANSCRIPT_METADATA_KEY,
+                    toolTranscript);
+        }
         if (command.retrievalTraceSession() != null) {
             metadata.put(
                     "retrievalTraceId",
@@ -1305,6 +1340,13 @@ public class ChatExecutionService {
         String prompt = domainPrompt == null || domainPrompt.isBlank()
                 ? modePrompt
                 : domainPrompt + "\n\n" + modePrompt;
+        if (command.mode() == ChatMode.AGENT
+                && runtimeSkillCatalog != null
+                && runtimeSkillCatalog.enabled()) {
+            prompt += runtimeSkillCatalog.levelOnePrompt(
+                    ragProperties.getChat().getSkills()
+                            .getMaxCatalogCharacters());
+        }
         if (promptCustomizers.hasCustomizers()) {
             prompt = promptCustomizers.customizeSystemPrompt(
                     prompt,

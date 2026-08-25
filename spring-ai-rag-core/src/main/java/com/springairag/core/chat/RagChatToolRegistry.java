@@ -9,6 +9,7 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.core.rag.JsonRecordSearchTool;
 import com.springairag.core.rag.KnowledgeSearchTool;
+import com.springairag.core.rag.StaticKnowledgeSearchTool;
 import jakarta.annotation.PreDestroy;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -47,6 +48,20 @@ public final class RagChatToolRegistry {
             JsonRecordSearchTool jsonRecordSearchTool,
             @org.springframework.beans.factory.annotation.Autowired(required = false)
             List<RagChatToolProvider> externalProviders) {
+        this(properties, knowledgeSearchTool, jsonRecordSearchTool, null,
+                externalProviders);
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public RagChatToolRegistry(
+            RagChatProperties properties,
+            KnowledgeSearchTool knowledgeSearchTool,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            JsonRecordSearchTool jsonRecordSearchTool,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            StaticKnowledgeSearchTool staticKnowledgeSearchTool,
+            @org.springframework.beans.factory.annotation.Autowired(required = false)
+            List<RagChatToolProvider> externalProviders) {
         this.properties = properties;
         RagChatProperties.AgentProperties agent = properties.getAgent();
         this.executor = new ThreadPoolExecutor(
@@ -69,6 +84,14 @@ public final class RagChatToolRegistry {
                             "builtin-structured-record",
                             List.of(jsonRecordSearchTool)),
                     1));
+        }
+        if (staticKnowledgeSearchTool != null
+                && staticKnowledgeSearchTool.isEnabled()) {
+            providers.add(new ProviderEntry(
+                    new BuiltinProvider(
+                            "builtin-static-knowledge",
+                            List.of(staticKnowledgeSearchTool)),
+                    2));
         }
         if (externalProviders != null) {
             externalProviders.stream()

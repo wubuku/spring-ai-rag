@@ -29,6 +29,7 @@ import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryReposito
 import org.springframework.ai.chat.memory.repository.jdbc.PostgresChatMemoryRepositoryDialect;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.data.jpa.repository.support.JpaRepositoryFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -498,6 +499,47 @@ class ChatSessionPostgresIntegrationTest {
                         + "WHERE owner_principal_id = ? AND session_id = ?",
                 String.class,
                 command.principal().id(), command.sessionId()));
+    }
+
+    @Test
+    void committedToolMessagesUseJdbcCompatibleDurableProjection() {
+        ChatCommand command = command(principal("tool-memory"), "tool-round-trip");
+        ChatSessionCoordinator.LeaseHandle handle =
+                coordinator.acquire(command, false);
+        AssistantMessage toolCall = AssistantMessage.builder()
+                .content("")
+                .toolCalls(List.of(new AssistantMessage.ToolCall(
+                        "call-1",
+                        "function",
+                        "lookupWeather",
+                        "{\"city\":\"Shanghai\"}")))
+                .build();
+        ToolResponseMessage toolResult = ToolResponseMessage.builder()
+                .responses(List.of(new ToolResponseMessage.ToolResponse(
+                        "call-1",
+                        "lookupWeather",
+                        "{\"temperature\":21}")))
+                .build();
+
+        coordinator.commit(
+                handle,
+                command,
+                result(command),
+                com.springairag.core.chat.ChatMemoryMessageProjector
+                        .forPersistence(List.of(
+                        new UserMessage("question"),
+                        toolCall,
+                        toolResult,
+                        new AssistantMessage("answer"))),
+                "[]");
+
+        List<Message> persisted = memoryRepository.findByConversationId(
+                command.memoryConversationId());
+        assertEquals(2, persisted.size());
+        assertEquals(UserMessage.class, persisted.get(0).getClass());
+        assertEquals(AssistantMessage.class, persisted.get(1).getClass());
+        assertEquals("answer", persisted.get(1).getText());
+        assertEquals(2L, memoryCount(command));
     }
 
     @Test

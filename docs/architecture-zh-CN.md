@@ -107,7 +107,9 @@ RagChatController
        -> request-local MessageChatMemoryAdvisor
        -> KNOWLEDGE:
             RetrievalAugmentationAdvisor
-              -> ProjectDocumentRetriever
+              -> CompositeChatDocumentRetriever
+                   -> ProjectDocumentRetriever
+                   -> 可选 StaticKnowledgeDocumentRetriever
               -> 有界候选池 -> 加权 RRF
               -> ProjectDocumentJoiner
               -> ProjectRerankPostProcessor
@@ -115,18 +117,25 @@ RagChatController
        -> AGENT:
             BudgetedToolCallAdvisor
               -> KnowledgeSearchTool
+              -> 可选 searchStaticKnowledge / Runtime Skill / allowlisted HTTP Tools
               -> 有界候选池 -> rerank -> 最终 top N
               -> 服务端 ToolContext
        -> PLAIN:
             仅 ChatClient
   -> ChatSessionCoordinator
-       -> 原子提交 history + source snapshot + JDBC Memory
+       -> 原子提交 history + source snapshot + JDBC-compatible Memory 投影
 ```
 
 `ProjectDocumentRetriever` 将项目更强的检索栈适配到 Spring AI Modular RAG
 契约。向量检索、中英文全文检索、RRF 融合、有界 rerank 候选池、rerank、Embedding Profile 过滤、
 Collection/API Key ACL、document type 和 document ID 范围因此由 Search、
 KNOWLEDGE 与 AGENT 工具共享。
+
+启用静态知识后，`CompositeChatDocumentRetriever` 还会组合启动期构建的
+`StaticKnowledgeDocumentRetriever`。该分支仅执行有界 lexical retrieval，不调用
+embedding、不写数据库，使用 `STATIC_KNOWLEDGE` 来源并跳过外部 reranker。Runtime Skill
+只在 AGENT 暴露有界 catalog/load/reference；配置生成的 HTTP Tool 还要求当前请求已加载
+匹配 Skill/capability，并受 HTTPS allowlist、SSRF 防护和共享工具预算约束。
 
 在 `KNOWLEDGE` 的 `spring-ai` 查询策略中，`BoundedMultiQueryExpander` 位于
 Spring AI advisor 的扩展与检索之间。它按服务端 `max-retrieval-queries` 限制原始 query
@@ -155,13 +164,14 @@ attempt。该摘要不包含 query 文本、Document ID、正文、metadata 值�
 
 | 表 | 用途 | 管理方 |
 |---|------|--------|
-| `spring_ai_chat_memory` | LLM 上下文窗口 | Spring AI 自动管理 |
+| `spring_ai_chat_memory` | LLM 的近期、可恢复上下文窗口 | Spring AI JDBC + 项目投影 |
 | `rag_chat_history` | 按 principal 归属的业务历史、来源与审计 | 应用事务 |
 
 ```
 已完成 turn
   -> rag_chat_history（owner、user/assistant、sources、mode/model/status）
-  -> spring_ai_chat_memory（有界模型上下文）
+  -> spring_ai_chat_memory（仅可恢复 user/plain assistant 消息）
+  -> rag_chat_history.metadata.toolTranscript（有界、完整配对工具交换）
   -> 由 rag_chat_session_lease 保护的同一事务
 ```
 
@@ -735,8 +745,8 @@ rag:
 
 **选择**：`spring_ai_chat_memory` + `rag_chat_history` 共存
 **理由**：
-- Spring AI 自动管理的表只保留最近 N 条，给 LLM 上下文用
-- 业务审计表保留完整历史，支持查询和分析
+- JDBC Memory 只保留最近 N 条可恢复的 user/plain assistant 消息，给 LLM 上下文用
+- 业务审计表保留完整历史、来源和有界工具交换投影，支持查询、摘要和分析
 - 两个表职责分离，互不干扰
 
 ### 为什么嵌入模型与 Chat Model 配置分离？

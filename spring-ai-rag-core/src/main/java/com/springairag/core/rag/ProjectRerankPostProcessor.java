@@ -9,6 +9,7 @@ import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.postretrieval.document.DocumentPostProcessor;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -34,7 +35,16 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
         if (!context.options().useRerank() || documents == null || documents.isEmpty()) {
             return documents;
         }
-        List<RetrievalResult> results = documents.stream()
+        List<Document> staticDocuments = documents.stream()
+                .filter(this::isStaticKnowledge)
+                .toList();
+        List<Document> projectDocuments = documents.stream()
+                .filter(document -> !isStaticKnowledge(document))
+                .toList();
+        if (projectDocuments.isEmpty()) {
+            return documents;
+        }
+        List<RetrievalResult> results = projectDocuments.stream()
                 .map(this::toRetrievalResult)
                 .toList();
         String effectiveQuery = context.trace().effectiveQuery(query.text());
@@ -66,7 +76,16 @@ public class ProjectRerankPostProcessor implements DocumentPostProcessor {
                 degraded,
                 effectiveQuery,
                 context.options().maxResults());
-        return reranked.stream().map(mapper::toDocument).toList();
+        List<Document> output = new ArrayList<>(reranked.stream()
+                .map(mapper::toDocument)
+                .toList());
+        output.addAll(staticDocuments);
+        return output;
+    }
+
+    private boolean isStaticKnowledge(Document document) {
+        return "STATIC_KNOWLEDGE".equals(
+                document.getMetadata().get("sourceType"));
     }
 
     private RetrievalResult toRetrievalResult(Document document) {

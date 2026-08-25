@@ -46,15 +46,18 @@ RagChatController
   -> ChatCommandMapper
   -> ChatExecutionService
      -> KNOWLEDGE: Spring AI RetrievalAugmentationAdvisor
-        + ProjectDocumentRetriever
+        + CompositeChatDocumentRetriever
+          + ProjectDocumentRetriever
+          + optional StaticKnowledgeDocumentRetriever
         + ProjectRerankPostProcessor
         + CitationQueryAugmenter
      -> AGENT: Spring AI ToolCallAdvisor
         + KnowledgeSearchTool
+        + optional static-knowledge / Runtime Skill / allowlisted HTTP tools
         + server-owned ToolContext
      -> PLAIN: ChatClient + Memory only
   -> principal-scoped session lease
-  -> atomic history + source snapshot + JDBC Memory commit
+  -> atomic history + source snapshot + JDBC-compatible Memory projection
 ```
 
 Key rules:
@@ -68,6 +71,14 @@ Key rules:
 - Chat and Search share the project hybrid retriever and support Collection /
   Document scope. A non-empty scope that resolves to no documents fails closed
   instead of becoming a full-corpus query.
+- Optional static knowledge builds a `GLOBAL`, non-embedding, immutable lexical
+  snapshot from classpath/filesystem/JAR resources at startup. KNOWLEDGE always
+  combines it, AGENT may call `searchStaticKnowledge`, and PLAIN does not read
+  it. Private or tenant data still belongs in the ACL-protected project store.
+- Runtime Skills provide bounded, untrusted operational instructions only to
+  AGENT. `loadSkill`, `readSkillReference`, and configured read-only HTTPS tools
+  share request-local budgets; authorization remains server-owned through Tool
+  policy, the Skill capability gate, and endpoint allowlists.
 - The old `QueryRewriteAdvisor`, `HybridSearchAdvisor`, and `RerankAdvisor`
   remain component-level/compatibility APIs, not the production Chat path.
 - `RagAdvisorProvider` defaults to `KNOWLEDGE + ATTEMPT`. ATTEMPT providers
@@ -81,7 +92,10 @@ Key rules:
   cannot be used directly in `AGENT/PLAIN`, and
   `postProcessAnswer/isApplicable` are not part of the new Chat path.
 - Spring AI Memory and business history are stored separately but completed
-  turns are committed atomically.
+  turns are committed atomically. Spring AI `1.1.8` JDBC stores only
+  recoverable user/plain-assistant messages; complete tool exchanges are saved
+  as a bounded `toolTranscript` in business-history metadata for later summary
+  input.
 
 ### Chat Sessions And Streaming
 

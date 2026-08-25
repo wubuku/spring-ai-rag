@@ -1,0 +1,12 @@
+# Neutral packaged-resource verification profile.
+# It is opt-in and does not change the demo's normal defaults.
+rag:
+  chat:
+    static-knowledge:
+      enabled: true
+      locations:
+        - classpath:verification/chat-resources/knowledge/
+    skills:
+      enabled: true
+      locations:
+        - classpath:verification/chat-resources/skills/

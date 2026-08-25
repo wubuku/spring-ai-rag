@@ -20,7 +20,7 @@
 
     <!-- ====== Development / local profiles: Human-readable console output ====== -->
     <!-- Include postgresql/local so local runs always have a root appender (not only default/dev). -->
-    <springProfile name="default,dev,local,postgresql">
+    <springProfile name="default,dev,local,postgresql,verification">
         <property name="LOG_PATTERN"
                   value="%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-no-trace}] %-5level %logger{36} - %maskedMsg%n"/>
 

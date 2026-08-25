@@ -81,8 +81,9 @@ principal/session 隔离。Spring AI 的 `ToolCallAdvisor` 仍会持续循环直
 ```text
 history-aware query transformation
   -> optional multi-query expansion
-  -> ProjectDocumentRetriever
-  -> project hybrid vector/full-text retrieval
+  -> CompositeChatDocumentRetriever
+     -> project hybrid vector/full-text retrieval
+     -> optional static lexical knowledge retrieval
   -> ProjectDocumentJoiner
   -> project rerank
   -> CitationQueryAugmenter
@@ -100,6 +101,12 @@ history-aware query transformation
 - 引用来源与诊断。
 
 这条路径适合“必须查知识库”的请求，因为检索一定执行，延迟、来源和失败语义更可预测。
+
+可选静态知识从 `classpath:`、`classpath*:`、`file:` 或受限 JAR 目录在启动时构建
+immutable lexical snapshot，不调用 embedding，也不写项目文档表。它以
+`STATIC_KNOWLEDGE` 来源加入 KNOWLEDGE 结果，跳过外部 reranker，并继续接受统一的
+join、prompt budget 与 citation 处理。当前静态知识可见性只有 `GLOBAL`，不能替代项目
+文档库的 principal/Collection ACL。
 
 多查询扩展是有界的：`rag.chat.knowledge.max-retrieval-queries` 默认限制每个 attempt
 最多计划三条检索 query（原始 query 加两个变体）。`BoundedMultiQueryExpander` 会在
@@ -124,7 +131,10 @@ Advisor 不使用该 joiner。
 `AGENT` 通过 Spring AI `ToolCallAdvisor` 把模型 tool call 交给服务端工具。当前工具为：
 
 - `searchKnowledge`：授权范围内的项目混合文档检索；
-- `searchJsonRecords`：可选的 JSON 结构化记录检索，默认关闭。
+- `searchJsonRecords`：可选的 JSON 结构化记录检索，默认关闭；
+- `searchStaticKnowledge`：启用且健康时检索部署提供的非 embedding 静态知识；
+- `loadSkill` / `readSkillReference`：按需加载 Runtime Skill 正文和 reference；
+- 配置生成的 allowlisted HTTP 工具：仅在对应 Skill 已加载且 capability 匹配时可调用。
 
 模型参数只包含查询词、可选结果数和工具允许的收窄条件。Collection、Document、ACL、
 principal 和请求过滤由服务端通过 `ToolContext` 注入，模型不能通过参数扩大权限。
@@ -145,7 +155,7 @@ AGENT     -> 模型按需调用 searchKnowledge
 | 存储 | 用途 | 当前管理方式 |
 |---|---|---|
 | `rag_chat_history` | 业务历史、owner、来源快照、模式、模型、usage、审计 | 应用事务 |
-| `spring_ai_chat_memory` | 提供给模型的近期消息窗口 | Spring AI JDBC Chat Memory |
+| `spring_ai_chat_memory` | 提供给模型的近期、可恢复消息窗口 | Spring AI JDBC Chat Memory + 项目投影 |
 
 当前每个生产请求：
 
@@ -154,13 +164,20 @@ AGENT     -> 模型按需调用 searchKnowledge
 3. 创建 request-local `MessageWindowChatMemory`；
 4. 由 `MessageChatMemoryAdvisor` 把历史加入 prompt；
 5. 模型候选、重试或工具调用失败时不写正式记忆；
-6. 最终成功 turn 的业务历史与 JDBC Memory 在同一事务提交。
+6. 最终成功 turn 的业务历史与 JDBC-compatible Memory 投影在同一事务提交。
 
 这一设计优于让每个 fallback attempt 直接写共享 Memory，因为失败候选不会污染后续对话。
 应用层 retry 和 fallback candidate 都从同一个 committed baseline 创建新的 request-local
 ChatClient、Memory、advisor、检索和工具状态。失败 attempt 的局部状态整体丢弃；模型、工具
 和检索已发生的消耗仍计入共享的逻辑请求预算。这样可以避免失败的 advisor 调用把重复 user
 message 带入成功 attempt 的 JDBC Memory。
+
+Spring AI `1.1.8` 的 JDBC repository 只持久化 message text/type，不能完整 round-trip
+assistant tool calls 或 tool-response payload。项目因此只把能够无损恢复的 user/plain
+assistant 消息写入 JDBC Memory；完整配对的工具调用与结果以有界 `toolTranscript`
+投影写入成功 turn 的 `rag_chat_history.metadata`。摘要服务把该投影视为明确标记的
+untrusted historical data，而不是指令或 citation evidence。失败/不完整的工具交换不会
+进入该投影。
 
 ### 5.1 当前窗口的真实语义
 
@@ -214,6 +231,8 @@ principal/session 下的过期 history、summary 和 JDBC Memory。提交时 mai
 - `ConversationSummaryService` 只压缩受保护近期 turns 之前的 COMPLETE turns，保存前进式
   history cursor，并通过 V46 的 optimistic version CAS 更新摘要行。带 key 的请求还会
   持久化 V47 durable turn operation 和 replay 快照。
+- 对含工具调用的 COMPLETE turn，摘要输入读取业务 history 中有界的
+  `toolTranscript`，而不是依赖 JDBC repository 恢复 Spring AI 原生工具消息。
 - 摘要默认关闭，受共享 model-call budget 和 deadline 约束；超时、provider 失败、输出超限
   或 CAS 冲突时降级，不阻断主 Chat。摘要是会话记忆，不是 citation evidence。
 
@@ -256,10 +275,11 @@ Spring AI `ToolCallAdvisor` 负责 call 和 stream 的标准工具循环：
 
 ## 8. 外部 Function Call 与 SQL 检索
 
-core registry 负责内置 `searchKnowledge` 和可选 `searchJsonRecords`，同时发现额外的
-服务端 `RagChatToolProvider` Bean。Provider 声明支持的 mode/domain、callback 定义和可选
-收紧 policy；启动期校验会拒绝重复名、非法 schema/metadata、`returnDirect=true` 和未知
-policy key。Registry 通过 Spring AI `ToolContext` 注入 principal/session/deadline 和 budget。
+core registry 负责内置 `searchKnowledge`、可选 `searchJsonRecords`、
+`searchStaticKnowledge`、Runtime Skill 工具和配置生成的 HTTP 工具，同时发现额外的服务端
+`RagChatToolProvider` Bean。Provider 声明支持的 mode/domain、callback 定义和可选收紧
+policy；启动期校验会拒绝重复名、非法 schema/metadata、`returnDirect=true` 和未知 policy
+key。Registry 通过 Spring AI `ToolContext` 注入 principal/session/deadline 和 budget。
 
 OpenAI 兼容端点仍明确拒绝客户端提交：
 
@@ -272,7 +292,33 @@ OpenAI 兼容端点仍明确拒绝客户端提交：
 这是有意的信任边界。客户端自定义工具透传意味着服务端要管理外部工具生命周期、回调协议、
 身份传播、超时和结果可信度，与“服务端拥有并执行工具”是不同产品，不应顺带开放。
 
-### 8.1 推荐的 SQL 方式
+### 8.1 Runtime Skill
+
+Runtime Skill 是服务端部署的操作知识，不是授权本身。启动时仅把名称、描述和 capability
+catalog 加入 AGENT system prompt；模型通过 `loadSkill` 获取有界正文，通过
+`readSkillReference` 获取已加载 Skill 的 `references/` 文件。Skill 名称、frontmatter、
+链接、reference path、正文/文件大小和每请求读取次数均校验并受限，加载状态不会跨请求共享。
+
+Skill 正文和 reference 都作为不可信操作数据进入模型上下文。它们不能修改 principal、
+Collection ACL、Tool policy、网络 allowlist 或逻辑请求预算。配置变化通过重启加载新的
+immutable catalog，当前版本不做热更新。
+
+### 8.2 Allowlisted HTTP 工具
+
+HTTP Tool 不是任意 `httpRequest(url, headers)`。每个 tool name、HTTPS origin、固定 path、
+GET/HEAD method、query parameter schema、允许的 response content type、credential
+环境变量名和所有预算都由服务端配置。模型只能填写声明过的 query parameter。
+
+执行前要求对应 Skill 已在本请求加载且声明匹配 capability；解析后的全部目标地址必须是
+公网地址，校验通过的地址集合会钉扎到实际连接，同时保留原始 hostname 做 TLS 校验，
+避免校验后再次进行未受控 DNS 解析；redirect、自动 retry、cookie 和压缩均被禁用。
+NAT64、6to4、Teredo、discard-only、文档和其他特殊用途 IPv6 前缀不会被视为普通公网
+单播地址，避免通过地址转换或隧道封装绕过私网/metadata 地址限制。
+固定 path 不允许百分号编码。单 endpoint 调用数、timeout、响应字节、累计响应字节、
+JSON 深度/节点/数组项和序列化字符均有上限；累计响应容量在网络读取前预留，成功按实际
+字节结算，失败释放预留。凭据不进入 Tool schema、结果、history 或文档。
+
+### 8.3 推荐的 SQL 方式
 
 不要向模型提供：
 

@@ -516,6 +516,33 @@ rag:
       cleanup-batch-size: 500
       cleanup-interval-ms: 600000
       cleanup-initial-delay-ms: 60000
+    static-knowledge:
+      enabled: false
+      locations: []
+      file-extensions: [md, markdown, txt]
+      max-files-per-root: 200
+      max-file-bytes: 262144
+      max-total-bytes: 10485760
+      chunk-max-characters: 4000
+      chunk-overlap-characters: 200
+      retrieval-max-results: 5
+      retrieval-max-result-characters: 24000
+      fail-fast: true
+      visibility: GLOBAL
+    skills:
+      enabled: false
+      locations: []
+      max-skills: 50
+      max-skill-body-bytes: 131072
+      max-reference-bytes: 262144
+      max-catalog-characters: 24000
+      max-loads-per-request: 4
+      max-reference-reads-per-request: 8
+      fail-fast: true
+    http-tools:
+      enabled: false
+      max-total-response-bytes: 262144
+      endpoints: []
 ```
 
 | Property | Default | Description |
@@ -544,6 +571,30 @@ rag:
 | `rag.chat.idempotency.cleanup-batch-size` | `500` | Maximum terminal/stale orphan rows deleted per maintenance batch; range 1–5000 |
 | `rag.chat.idempotency.cleanup-interval-ms` | `600000` | Cleanup fixed-delay interval; range 10000–86400000 |
 | `rag.chat.idempotency.cleanup-initial-delay-ms` | `60000` | Initial cleanup delay after startup; range 1–86400000 |
+| `rag.chat.static-knowledge.enabled` | `false` | Enable the startup-built, non-embedding static-knowledge snapshot |
+| `rag.chat.static-knowledge.locations` | `[]` | `classpath:`, `classpath*:`, `file:`, or bounded `jar:file:...!/prefix/` resource roots |
+| `rag.chat.static-knowledge.file-extensions` | `[md, markdown, txt]` | Allowed UTF-8 file extensions |
+| `rag.chat.static-knowledge.max-files-per-root` | `200` | File limit for each configured root |
+| `rag.chat.static-knowledge.max-file-bytes` | `262144` | Per-file byte limit |
+| `rag.chat.static-knowledge.max-total-bytes` | `10485760` | Cumulative byte limit across static-knowledge roots |
+| `rag.chat.static-knowledge.chunk-max-characters` | `4000` | Target chunk character limit when splitting by Markdown heading and paragraph |
+| `rag.chat.static-knowledge.chunk-overlap-characters` | `200` | Character overlap between adjacent chunks; must be smaller than the chunk limit |
+| `rag.chat.static-knowledge.retrieval-max-results` | `5` | Result cap for one static lexical retrieval |
+| `rag.chat.static-knowledge.retrieval-max-result-characters` | `24000` | Total returned text-character cap for one static retrieval |
+| `rag.chat.static-knowledge.fail-fast` | `true` | Fail startup on load error; false degrades the entire snapshot and publishes no partial result |
+| `rag.chat.static-knowledge.visibility` | `GLOBAL` | The only supported visibility; content is shared across authorized Chat principals |
+| `rag.chat.skills.enabled` | `false` | Enable the AGENT runtime-Skill catalog and loading tools |
+| `rag.chat.skills.locations` | `[]` | Classpath/filesystem/JAR roots containing `<skill-name>/SKILL.md` |
+| `rag.chat.skills.max-skills` | `50` | Skill count limit |
+| `rag.chat.skills.max-skill-body-bytes` | `131072` | Byte limit for one `SKILL.md` body |
+| `rag.chat.skills.max-reference-bytes` | `262144` | Limit for one `references/` file and one reference read |
+| `rag.chat.skills.max-catalog-characters` | `24000` | Character limit for the Level 1 catalog and one `loadSkill` result |
+| `rag.chat.skills.max-loads-per-request` | `4` | Skill-load limit per request |
+| `rag.chat.skills.max-reference-reads-per-request` | `8` | Skill-reference read limit per request |
+| `rag.chat.skills.fail-fast` | `true` | Fail startup on Skill load error; false degrades the catalog and registers no Skill tools |
+| `rag.chat.http-tools.enabled` | `false` | Enable server-configured, Skill-gated, read-only HTTPS tools |
+| `rag.chat.http-tools.max-total-response-bytes` | `262144` | Cumulative HTTP response-byte budget for one logical request |
+| `rag.chat.http-tools.endpoints` | `[]` | Fixed endpoint list; the model cannot provide a URL, method, header, or credential |
 
 Mode behavior:
 
@@ -557,8 +608,8 @@ Mode behavior:
   `Query` history/context. The expander keeps the original request and generates
   two additional variants by default. Its project-supplied prompt requires exact
   lexical variants to preserve product names, quoted phrases, identifiers, and
-  other unusual terms. Spring AI's built-in `ConcatenationDocumentJoiner` merges
-  and de-duplicates all results. This prevents a semantic rewrite from discarding
+  other unusual terms. The project-owned `ProjectDocumentJoiner` merges results
+  by stable chunk identity before reranking. This prevents a semantic rewrite from discarding
   an exact term such as `破皮沙发` and prevents an over-configured variant count
   from creating retrieval work beyond the server budget.
 - `query-expander-variants` is the requested number of LLM-generated variants;
@@ -575,6 +626,107 @@ Mode behavior:
   server-owned.
 - `PLAIN` does not retrieve and rejects retrieval-specific request overrides.
 - Client-cancelled partial turns are not persisted.
+
+### Non-Embedding Static Knowledge
+
+Static knowledge is read at startup into an immutable, bounded lexical snapshot.
+It neither calls an embedding model nor writes `rag_documents` or
+`rag_embeddings`. `KNOWLEDGE` combines it with project-document retrieval,
+`AGENT` registers `searchStaticKnowledge` while the snapshot is healthy, and
+`PLAIN` does not read it. Static sources use the `STATIC_KNOWLEDGE` type and
+bypass the external reranker. Resource changes require an application restart.
+
+```yaml
+rag:
+  chat:
+    static-knowledge:
+      enabled: true
+      locations:
+        - classpath*:knowledge/company-terms/
+        - file:/opt/spring-ai-rag/knowledge/
+```
+
+`classpath:` reads one matching root, while `classpath*:` searches all matching
+classpath/JAR roots. An explicit JAR directory may use
+`jar:file:/opt/lib/policies.jar!/knowledge/`. Filesystem paths must be `file:`
+URIs. The current `GLOBAL` visibility is not suitable for tenant-private
+content; use the ACL-protected project document store for that data.
+
+### Runtime Skills And Allowlisted HTTP Tools
+
+Runtime Skills are available only in `AGENT`. Startup adds only a bounded
+catalog of names, descriptions, and capabilities to the system prompt. The
+model must call `loadSkill` before it receives the Skill body, then may call
+`readSkillReference` or an HTTP tool gated by that Skill. Load state and read
+budgets are request-local.
+
+```text
+skills/
+  weather/
+    SKILL.md
+    references/
+      response-schema.md
+```
+
+`SKILL.md` uses YAML frontmatter:
+
+```markdown
+---
+name: weather
+description: Query the configured weather service
+version: "1.0"
+capabilities:
+  - weather.read
+---
+
+Load this Skill, then call the weather endpoint with a city name.
+```
+
+The server fixes each HTTP endpoint, and the Skill must declare its capability:
+
+```yaml
+rag:
+  chat:
+    skills:
+      enabled: true
+      locations:
+        - classpath*:skills/
+    http-tools:
+      enabled: true
+      max-total-response-bytes: 262144
+      endpoints:
+        - tool-name: getWeather
+          skill-name: weather
+          capability: weather.read
+          base-url: https://weather.example.com
+          path: /v1/current
+          method: GET
+          query-parameters:
+            - name: city
+              required: true
+              max-length: 128
+          response-content-types: [application/json]
+          max-calls-per-request: 2
+          timeout-ms: 5000
+          max-response-bytes: 65536
+          max-result-characters: 24000
+          max-json-depth: 12
+          max-json-nodes: 1000
+          max-json-array-items: 100
+          credential-env: WEATHER_API_TOKEN
+          credential-header: Authorization
+```
+
+Endpoints allow only HTTPS `GET`/`HEAD`. Redirects,
+private/loopback/link-local/metadata addresses, arbitrary headers, and
+model-supplied URLs are rejected; fixed `path` values cannot contain percent
+encoding. Every DNS result is checked for public reachability and the validated
+address set is pinned to the actual connection while TLS still verifies the
+configured hostname. Credentials come only from the process environment
+variable named by `credential-env`. Each endpoint also has per-request call,
+timeout, response-byte, JSON depth/node/array, and tool-result character limits.
+Cumulative response-byte capacity is reserved before download so concurrent or
+repeated calls cannot read first and exceed the logical-request budget later.
 
 ## Conversation Memory Configuration
 
@@ -602,10 +754,11 @@ rag:
 | `rag.memory.cleanup-cron` | `0 0 3 * * *` | History cleanup cron expression (3 AM daily) |
 
 System maintains dual tables:
-- `spring_ai_chat_memory`: Spring AI auto-management, for LLM context
+- `spring_ai_chat_memory`: Spring AI JDBC storage; the project commits only
+  recoverable user/plain-assistant messages for recent LLM context
 - `rag_chat_history`: Principal-owned business history with complete
-  `user_message`, `ai_response`, source snapshots, mode/model metadata, and TTL
-  cleanup
+  `user_message`, `ai_response`, source snapshots, mode/model metadata, bounded
+  `toolTranscript`, and TTL cleanup
 
 Completed turns update both stores atomically under a
 `rag_chat_session_lease`. Keyed turns additionally write V47's

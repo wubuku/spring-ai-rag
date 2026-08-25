@@ -6,6 +6,10 @@ import com.springairag.api.service.RagChatToolProvider;
 import com.springairag.api.service.RagChatToolRequestContext;
 import com.springairag.core.config.RagChatProperties;
 import com.springairag.core.rag.KnowledgeSearchTool;
+import com.springairag.core.rag.StaticKnowledgeSearchTool;
+import com.springairag.core.resource.ResourceCatalog;
+import com.springairag.core.resource.StaticKnowledgeCatalog;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
@@ -18,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -149,11 +154,42 @@ class RagChatToolRegistryTest {
                         properties,
                         knowledge,
                         null,
-                        List.of(provider(
+                List.of(provider(
                                 "invalid-provider",
                                 Set.of(),
                                 Map.of(),
                                 List.of(invalid)))));
+    }
+
+    @Test
+    void staticKnowledgeToolIsRegisteredOnlyForAgentModeWhenSnapshotIsHealthy() {
+        RagChatProperties properties = new RagChatProperties();
+        properties.getStaticKnowledge().setEnabled(true);
+        properties.getStaticKnowledge().setLocations(
+                List.of("classpath:static-fixture/"));
+
+        StaticKnowledgeCatalog catalog = new StaticKnowledgeCatalog(
+                new ResourceCatalog(), properties);
+        ReflectionTestUtils.invokeMethod(catalog, "initialize");
+        StaticKnowledgeSearchTool staticTool = new StaticKnowledgeSearchTool(
+                new ObjectMapper(), catalog, mock(
+                        com.springairag.core.rag.RetrievalDocumentMapper.class));
+
+        RagChatToolRegistry registry = new RagChatToolRegistry(
+                properties,
+                knowledgeTool(),
+                null,
+                staticTool,
+                List.of());
+
+        assertEquals(1, registry.callbacks(ChatMode.AGENT, null).stream()
+                .filter(tool -> StaticKnowledgeSearchTool.NAME.equals(
+                        tool.getToolDefinition().name()))
+                .count());
+        assertEquals(0, registry.callbacks(ChatMode.PLAIN, null).stream()
+                .filter(tool -> StaticKnowledgeSearchTool.NAME.equals(
+                        tool.getToolDefinition().name()))
+                .count());
     }
 
     private RagChatToolProvider provider(

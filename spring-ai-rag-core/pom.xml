@@ -36,6 +36,12 @@
             <artifactId>spring-boot-starter-web</artifactId>
         </dependency>
 
+        <!-- Pinned DNS resolution for server-owned allowlisted HTTP tools -->
+        <dependency>
+            <groupId>org.apache.httpcomponents.client5</groupId>
+            <artifactId>httpclient5</artifactId>
+        </dependency>
+
         <!-- Bean Validation（@NotBlank / @NotNull / @Valid） -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -208,6 +214,12 @@
             <groupId>org.commonmark</groupId>
             <artifactId>commonmark</artifactId>
             <version>0.22.0</version>
+        </dependency>
+
+        <!-- YAML frontmatter for server-owned runtime Skills -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.dataformat</groupId>
+            <artifactId>jackson-dataformat-yaml</artifactId>
         </dependency>
 
         <!-- PDF text extraction (pure Java, replaces external marker CLI) -->

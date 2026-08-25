@@ -90,8 +90,9 @@ Keeping all three is deliberate:
 ```text
 history-aware query transformation
   -> optional multi-query expansion
-  -> ProjectDocumentRetriever
-  -> project hybrid vector/full-text retrieval
+  -> CompositeChatDocumentRetriever
+     -> project hybrid vector/full-text retrieval
+     -> optional static lexical knowledge retrieval
   -> ProjectDocumentJoiner
   -> project rerank
   -> CitationQueryAugmenter
@@ -111,6 +112,14 @@ retriever. The production path retains:
 
 This path is appropriate when retrieval must happen, because latency, source,
 and failure semantics are more predictable.
+
+Optional static knowledge is loaded from `classpath:`, `classpath*:`, `file:`,
+or bounded JAR roots into an immutable lexical snapshot at startup. It neither
+calls an embedding model nor writes project-document tables. It joins the
+KNOWLEDGE result as `STATIC_KNOWLEDGE`, bypasses the external reranker, and
+still participates in common join, prompt-budget, and citation handling. Its
+current visibility is only `GLOBAL`; it does not replace principal/Collection
+ACLs in the project document store.
 
 Multi-query expansion is bounded. `rag.chat.knowledge.max-retrieval-queries`
 defaults to three planned retrieval queries per attempt: the original query plus
@@ -140,7 +149,10 @@ PLAIN, direct Search, Evaluation, and legacy advisors do not use this joiner.
 `AGENT` uses Spring AI `ToolCallAdvisor` and server-owned tools:
 
 - `searchKnowledge`: authorized project hybrid document retrieval;
-- `searchJsonRecords`: optional structured JSON-record retrieval, disabled by default.
+- `searchJsonRecords`: optional structured JSON-record retrieval, disabled by default;
+- `searchStaticKnowledge`: deployment-provided non-embedding knowledge while its snapshot is healthy;
+- `loadSkill` / `readSkillReference`: on-demand Runtime Skill body and reference loading;
+- configured allowlisted HTTP tools, callable only after the matching Skill is loaded and its capability matches.
 
 Model-visible arguments contain only query terms, bounded result counts, and
 permitted narrowing filters. Collection, Document, ACL, principal, and
@@ -161,7 +173,7 @@ The project has two persistence layers with different responsibilities:
 | Store | Purpose | Current ownership |
 |---|---|---|
 | `rag_chat_history` | Business history, owner, source snapshots, mode, model, usage, audit | Application transaction |
-| `spring_ai_chat_memory` | Recent model-context message window | Spring AI JDBC Chat Memory |
+| `spring_ai_chat_memory` | Recent, recoverable model-context message window | Spring AI JDBC Chat Memory plus project projection |
 
 For each production request:
 
@@ -170,7 +182,7 @@ For each production request:
 3. create request-local `MessageWindowChatMemory`;
 4. use `MessageChatMemoryAdvisor` to add history to the prompt;
 5. keep failed candidates, retries, and tools out of durable memory;
-6. commit the successful business turn and JDBC Memory atomically.
+6. commit the successful business turn and JDBC-compatible Memory projection atomically.
 
 This is safer than allowing each fallback attempt to mutate shared Chat Memory.
 Application-level retries and fallback candidates create fresh request-local
@@ -179,6 +191,15 @@ baseline. Failed attempt state is discarded; model, tool, and retrieval costs
 remain charged to the shared logical-request budget. This prevents a failed
 advisor invocation from adding a duplicate user message to the successful
 attempt's durable JDBC Memory.
+
+Spring AI `1.1.8`'s JDBC repository persists only message text/type and cannot
+round-trip assistant tool calls or tool-response payloads. The project
+therefore writes only losslessly recoverable user/plain-assistant messages to
+JDBC Memory. Complete paired tool calls and results are written as a bounded
+`toolTranscript` projection in the successful turn's
+`rag_chat_history.metadata`. The summary service treats that projection as
+explicitly untrusted historical data, never as instructions or citation
+evidence. Failed or incomplete tool exchanges are excluded.
 
 ### 5.1 Actual Window Semantics
 
@@ -245,6 +266,9 @@ summary compaction path. The two mechanisms remain separate:
   the protected recent-turn window, stores a forward-only history cursor, and
   updates the V46 summary row with optimistic version CAS. Keyed requests
   additionally persist their V47 durable turn operation and replay snapshot.
+- For COMPLETE turns with tools, summary input reads the bounded
+  `toolTranscript` from business history rather than relying on the JDBC
+  repository to restore native Spring AI tool messages.
 - Summary generation is disabled by default, bounded by the shared model-call
   budget and deadline, and degrades to the main Chat path on timeout, provider
   failure, output overflow, or CAS conflict. A summary is memory, not citation
@@ -294,13 +318,14 @@ verification before the WebUI or API uses `AGENT`.
 
 ## 8. External Function Calls And SQL Retrieval
 
-The core registry owns built-in `searchKnowledge` and optional
-`searchJsonRecords` tools and discovers additional server-owned
-`RagChatToolProvider` beans. Providers declare supported modes/domains, callback
-definitions, and optional restrictive policies; startup validation rejects
-duplicate names, invalid schemas/metadata, `returnDirect=true`, and unknown
-policy keys. The registry injects principal/session/deadline and budget through
-Spring AI `ToolContext`.
+The core registry owns built-in `searchKnowledge`, optional
+`searchJsonRecords`, `searchStaticKnowledge`, Runtime Skill tools, and
+configured HTTP tools, and it discovers additional server-owned
+`RagChatToolProvider` beans. Providers declare supported modes/domains,
+callback definitions, and optional restrictive policies; startup validation
+rejects duplicate names, invalid schemas/metadata, `returnDirect=true`, and
+unknown policy keys. The registry injects principal/session/deadline and budget
+through Spring AI `ToolContext`.
 
 The OpenAI compatibility endpoint still rejects
 client-supplied `tools`, `tool_choice`, `functions`, `function_call`, and
@@ -311,7 +336,44 @@ the server to manage external callback lifecycle, identity propagation,
 timeouts, and result trust. It is a different product from server-owned tools
 and should not be enabled incidentally.
 
-### 8.1 Recommended SQL Shape
+### 8.1 Runtime Skills
+
+A Runtime Skill is server-deployed operational knowledge, not authorization.
+Startup adds only its bounded name, description, and capability catalog to the
+AGENT system prompt. The model uses `loadSkill` for a bounded body and
+`readSkillReference` for files under an already loaded Skill's `references/`
+directory. Names, frontmatter, links, reference paths, body/file sizes, and
+per-request read counts are validated and bounded. Load state never crosses a
+request boundary.
+
+Skill bodies and references are untrusted operational data in model context.
+They cannot change the principal, Collection ACL, Tool policy, network
+allowlist, or logical-request budget. Configuration changes produce a new
+immutable catalog after restart; this version does not hot reload.
+
+### 8.2 Allowlisted HTTP Tools
+
+An HTTP tool is not a general `httpRequest(url, headers)`. The server fixes
+each tool name, HTTPS origin, path, GET/HEAD method, query-parameter schema,
+allowed response content types, credential environment-variable name, and all
+budgets. The model can fill only declared query parameters.
+
+Execution requires the matching Skill to be loaded in the current request and
+to declare the configured capability. Every resolved target address must be
+public. The validated address set is pinned to the actual connection while the
+original hostname remains available for TLS verification, so the transport
+does not perform a second uncontrolled DNS lookup after validation. Redirects,
+automatic retries, cookies, and compression are disabled. NAT64, 6to4, Teredo,
+discard-only, documentation, and other special-use IPv6 prefixes are not
+treated as ordinary public unicast, preventing translation or tunneling from
+bypassing private/metadata address restrictions. Fixed paths cannot contain
+percent encoding. Per-endpoint calls, timeout, response bytes, cumulative
+response bytes, JSON depth/nodes/array items, and serialized characters are
+bounded. Cumulative response capacity is reserved before network reads,
+committed using actual bytes on success, and released on failure. Credentials
+never enter Tool schemas, results, history, or documentation.
+
+### 8.3 Recommended SQL Shape
 
 Do not expose:
 

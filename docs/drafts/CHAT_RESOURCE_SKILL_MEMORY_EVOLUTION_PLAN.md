@@ -171,7 +171,8 @@ principal 隔离、上下文 token planner、失败 candidate 隔离和摘要 CA
 - durable `rag_chat_history` 只保存用户可见问答和 citation snapshot，工具调用/工具结果
   在 Spring AI request-local memory 中出现，但摘要输入仍主要从业务 history 重新投影；
 - 工具调用产生的 `AssistantMessage` tool calls、`ToolResponseMessage` 配对、异常和
-  截断结果需要更明确的持久/摘要/清理契约；
+  截断结果需要更明确的持久/摘要/清理契约；Spring AI `1.1.8` JDBC Memory
+  不能恢复原生工具消息，因此必须把可恢复的普通消息与有界工具交换投影分开；
 - summary enabled 仍是 opt-in，缺少足够的运行时指标和管理可见性来判断延迟、质量和
   degraded 比例；
 - `rag_chat_history`、`spring_ai_chat_memory` 和 summary 的删除/恢复语义虽然已经有
@@ -788,27 +789,27 @@ AssistantMessage(final answer)
 - 每一个 tool call 必须能按 tool call id 与对应 tool result 配对；
 - 工具结果被 `BudgetedToolCallingManager` 截断后，后续 prompt、trace、summary 和诊断
   必须看到同一 bounded representation；
-- memory window 和 durable commit 的消息投影必须把
-  `AssistantMessage(tool calls) + ToolResponseMessage(tool results) + final answer`
-  视为不可拆分的 canonical tool turn；不能因 `maxMessages` 或摘要裁剪只保留其中一半；
+- request-local memory window 在一次模型执行中保留完整工具交换；durable JDBC commit
+  只保存其 codec 能恢复的用户/助手消息，不能持久化会失去 call/result 内容的原生工具
+  消息；
 - 中途失败 candidate 的未提交 tool messages 不得写入成功 candidate 的 Memory；
 - durable `rag_chat_history` 继续保存用户可见问答、sources、mode/model/usage 等业务
   审计字段；本轮不为每个 tool message 增加新的永久明文 transcript 表；
-- 需要在 metadata/trace 中保留 bounded tool outcome summary，不能把完整敏感 tool
+- 需要在 metadata/trace 中保留 bounded tool transcript，不能把未受限的敏感 tool
   result 复制到 history；
-- 成功 turn 的 `rag_chat_history.metadata` 只增加有界的 `toolOutcomeSummary` 投影
-  （工具名、状态、调用数、截断/错误类别和必要的用户可见结论摘要），
+- 成功 turn 的 `rag_chat_history.metadata` 只增加有界的 `toolTranscript` 投影
+  （工具名、截断参数和截断结果），
   `ConversationSummaryService` 只能消费该投影，不能从数据库或日志回读完整工具 payload；
 - summary 输入应以 committed business history 为主，并明确说明工具调用对用户可见
  结论的影响；未经明确需要，不把 credentials、内部错误堆栈和整个工具 payload 写入
   summary。
 
-实施时先通过测试确认 Spring AI JDBC repository 对 `AssistantMessage` tool calls 和
-`ToolResponseMessage` 的序列化/反序列化在当前版本可恢复。默认契约是不把原始工具消息
-新增为永久明文 transcript；只有 round-trip 探针和敏感信息检查都通过，才允许在现有
-Spring AI Memory 中保留 bounded raw tool messages。若探针失败，立即采用已经冻结的
-fallback：仅保存 bounded textual projection 和 tool outcome summary，不强行写入不兼容
-消息。该选择是当前框架版本的兼容决策，不得用未来 Spring AI API 猜测代替探针。
+实施时必须通过测试确认 Spring AI JDBC repository 的真实序列化边界。当前 `1.1.8`
+探针已证明它只保存 message text/type，不能恢复 tool call id、函数名、参数或工具结果。
+因此本轮冻结 fallback：JDBC Memory 只保存可恢复的用户/助手消息；只有完整且配对的
+工具交换才以 bounded `toolTranscript` 写入业务 history metadata，并以明确的
+`untrusted historical tool data` 形式参与摘要输入。不得把原生工具消息伪装成可恢复的
+JDBC Memory。
 
 ### 8.3 Summary/compaction 运行契约
 
@@ -1033,8 +1034,9 @@ message round-trip 的结论已记录在进度文档，不以猜测实施。
 
 ### Slice D：Memory/Compaction 收敛 P0/P1
 
-1. 建立 tool call/result round-trip 的确定性测试，确认成功/失败 candidate 的 Memory
-   隔离。
+1. 建立 Spring AI JDBC codec probe，确认当前版本不能恢复原生 tool call/result；
+   随后验证成功/失败 candidate 使用 JDBC-compatible projection，且只有完整配对工具
+   交换进入 bounded history metadata。
 2. 建立 summary 对工具结果、异常、截断结果和 user-visible answer 的投影规则。
 3. 增加 summary enabled/disabled/degraded/CAS/timeout/budget metrics 和低基数 metadata。
 4. 增加 summary/history/JDBC Memory/TTL cleanup 的 PostgreSQL integration matrix。

@@ -7,8 +7,10 @@ import com.springairag.core.config.ChatModelRouter;
 import com.springairag.core.config.MultiModelProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.rag.CitationQueryAugmenter;
+import com.springairag.core.rag.CompositeChatDocumentRetriever;
 import com.springairag.core.rag.ProjectDocumentRetriever;
 import com.springairag.core.rag.ProjectRerankPostProcessor;
+import com.springairag.core.rag.StaticKnowledgeDocumentRetriever;
 import com.springairag.core.retrieval.RetrievalScope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +44,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -110,6 +115,62 @@ class ModeAwareChatClientFactoryTest {
                                 .DOCUMENT_CONTEXT));
         verify(documentRetriever).retrieve(any(Query.class));
         verify(rerankPostProcessor).process(any(Query.class), anyList());
+    }
+
+    @Test
+    void knowledgeModeUsesCompositeRetrieverForProjectAndStaticKnowledge() {
+        RagProperties properties = new RagProperties();
+        properties.getChat().getKnowledge().setQueryTransformer("none");
+        ProjectDocumentRetriever project = mock(ProjectDocumentRetriever.class);
+        StaticKnowledgeDocumentRetriever staticKnowledge =
+                mock(StaticKnowledgeDocumentRetriever.class);
+        ProjectRerankPostProcessor postProcessor =
+                mock(ProjectRerankPostProcessor.class);
+        when(postProcessor.process(any(Query.class), anyList()))
+                .thenAnswer(invocation -> invocation.getArgument(1));
+        when(project.retrieve(any(Query.class))).thenReturn(List.of(
+                Document.builder()
+                        .id("project:1")
+                        .text("project evidence")
+                        .metadata(Map.of("documentId", "project"))
+                        .build()));
+        when(staticKnowledge.retrieve(anyString(), any()))
+                .thenReturn(List.of(
+                        Document.builder()
+                                .id("static:1")
+                                .text("static evidence")
+                                .metadata(Map.of(
+                                        "documentId", "static",
+                                        "sourceType", "STATIC_KNOWLEDGE"))
+                                .build()));
+
+        ModeAwareChatClientFactory configuredFactory =
+                new ModeAwareChatClientFactory(
+                        project,
+                        new CompositeChatDocumentRetriever(project, staticKnowledge),
+                        postProcessor,
+                        new CitationQueryAugmenter(properties),
+                        properties,
+                        List.of(),
+                        mock(ToolCallingManager.class));
+
+        ChatCommand command = command(ChatMode.KNOWLEDGE);
+        ModeAwareChatClientFactory.Attempt attempt =
+                configuredFactory.create(
+                        command,
+                        candidate("knowledge", model("answer")),
+                        List.of());
+        attempt.client().prompt()
+                .user(command.message())
+                .advisors(advisor -> advisor.param(
+                        ProjectDocumentRetriever.CONTEXT_KEY,
+                        attempt.retrievalContext()))
+                .call()
+                .chatClientResponse();
+
+        verify(project).retrieve(any(Query.class));
+        verify(staticKnowledge).retrieve(
+                eq(command.message()), same(attempt.retrievalContext()));
     }
 
     @Test
@@ -446,6 +507,13 @@ class ModeAwareChatClientFactoryTest {
         assertEquals(1, attemptAfter.get());
         assertEquals(2, modelBefore.get());
         assertEquals(2, modelAfter.get());
+        List<Map<String, Object>> transcript =
+                ToolTranscriptCollector.transcript(response, 16, 8_000);
+        assertEquals(1, transcript.size());
+        assertEquals("searchKnowledge",
+                transcript.getFirst().get("name"));
+        assertEquals("{\"resultCount\":0}",
+                transcript.getFirst().get("result"));
     }
 
     private RagAdvisorProvider provider(
