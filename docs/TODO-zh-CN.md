@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-23。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-25。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
 
 ## 受管 API Principal 后续边界
@@ -13,12 +13,16 @@
 | PostgreSQL 共享 principal quota | V48 已交付 | 多实例按 stable principal 共用固定分钟 bucket，rotation 不重置 quota，DB 故障 fail closed |
 | 明文 secret schema 禁写 | V48 已交付 | 迁移清空明文、移除索引并约束 `api_key IS NULL` |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
-| token/cost billing 与分布式用量账本 | 后续独立规划 | 当前 quota 只限制请求数，不计算模型 token 或金额 |
+| 模型 invocation 级 token/cost 持久用量账本 | 未来实施候选 | 最终 Chat response usage 只代表最后响应，不能覆盖 query transform/expand、AGENT 多轮、summary、fallback 和应用 retry；候选尚未完成规划 `3/3` |
+| token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |
 | 管理面 recovery 与彻底关闭 legacy 兼容 | 公网启用前评估 | legacy static/query 行为仍为兼容边界；operator recovery 依赖 environment root |
 
 V48 只对迁移时存在的每个历史 credential 做一对一 deterministic principal 回填；它不会
-猜测旧 rotation rows 之间无法证明的 family 关系。OAuth/OIDC、租户层级、Redis、
-token/cost billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立规划。
+猜测旧 rotation rows 之间无法证明的 family 关系。模型 invocation 用量与配置成本可观测性
+已保留在[历史归档](drafts/archive/README-zh-CN.md)作为未来实施候选，但它不是当前活跃
+规划，也不会被宣称为供应商账单或 hard-limit 结算源。OAuth/OIDC、租户层级、Redis、
+token/cost hard limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立
+规划。
 
 ## 文档生命周期与派生索引后续项
 

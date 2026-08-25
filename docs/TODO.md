@@ -2,7 +2,7 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> Last reviewed: 2026-08-23. This file records follow-up work outside the
+> Last reviewed: 2026-08-25. This file records follow-up work outside the
 > current code and public API; it does not describe shipped capabilities.
 
 ## Managed API Principal Follow-Ups
@@ -13,14 +13,19 @@
 | PostgreSQL shared principal quota | Shipped in V48 | Replicas share fixed-minute buckets by stable principal; rotation does not reset quota and database failure fails closed |
 | Schema-level plaintext-secret prohibition | Shipped in V48 | Migration clears plaintext, removes its index, and enforces `api_key IS NULL` |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
-| Token/cost billing and a distributed usage ledger | Separate future plan | Current quotas count requests, not model tokens or currency |
+| Persistent token/cost observability per model invocation | Future implementation candidate | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; the candidate has not completed planning `3/3` |
+| Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
 | Management recovery and removal of legacy compatibility | Evaluate before public enablement | Legacy static/query behavior remains a compatibility boundary; operator recovery relies on the environment root |
 
 V48 performs a deterministic one-principal-per-credential backfill for rows
 present during migration; it does not guess unprovable family relationships
-among older rotation rows. OAuth/OIDC, tenant hierarchy, Redis, token/cost
-billing, per-Collection embedding-profile routing, and `EACH_COLLECTION`
-remain independent planning subjects.
+among older rotation rows. Per-invocation usage and configured-cost
+observability is preserved in the
+[historical archive](drafts/archive/README.md) as a future implementation
+candidate, but it is not the current active plan and is not presented as a
+provider invoice or hard-limit settlement source. OAuth/OIDC, tenant hierarchy,
+Redis, token/cost hard limits and billing, per-Collection embedding-profile
+routing, and `EACH_COLLECTION` remain independent planning subjects.
 
 ## Document Lifecycle And Derived-Index Follow-Ups
 

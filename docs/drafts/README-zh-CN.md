@@ -35,4 +35,4 @@
 当前没有活动 plan/progress。新一轮规划建立后会在这里列出；在此之前以代码、迁移和双语
 长青文档为准。
 
-已完成的 plan/progress 可从[历史归档](archive/README-zh-CN.md)追溯。
+已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

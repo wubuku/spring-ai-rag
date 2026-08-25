@@ -36,6 +36,8 @@
   `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*`（因超出当前仓库文档边界而被替代）
 - 稳定受管 API Principal 与共享配额：`2026-08-23_MANAGED_API_PRINCIPAL_HARDENING_*`
 - 已被替代的 Token 用量账本规划：`2026-08-23_TOKEN_USAGE_LEDGER_*`
+- 已停止、供未来重新评估的 LLM invocation 用量与配置成本可观测性实施候选：
+  `2026-08-25_LLM_INVOCATION_USAGE_LEDGER_IMPLEMENTATION_CANDIDATE.md`
 - 加权 RRF 检索融合与有界 rerank 候选池：`2026-08-23_WEIGHTED_RRF_RETRIEVAL_*`、
   `2026-08-23_NEXT_HIGH_VALUE_FEATURES_*`
 - KNOWLEDGE 多查询扩展预算与有界 fan-out：

@@ -42,5 +42,5 @@ There is currently no active plan/progress pair. A new planning round will be
 listed here when it starts; until then, use the code, migrations, and bilingual
 evergreen documentation as the source of truth.
 
-Completed plan/progress records remain available in the
+Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
