@@ -38,11 +38,7 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The [business-service integration readiness P0
-plan](BUSINESS_CLIENT_INTEGRATION_READINESS_PLAN.md) passed three consecutive
-reviews on `main` and is being implemented in a dedicated feature worktree.
-Resume context, verification evidence, and the next action are tracked in the
-[matching progress ledger](BUSINESS_CLIENT_INTEGRATION_READINESS_PROGRESS.md).
+There are no active plans.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
