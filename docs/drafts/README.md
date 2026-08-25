@@ -38,10 +38,10 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The active [Chat resource knowledge, runtime Skill, and memory evolution
-plan](CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_PLAN.md) is now being implemented.
-Production code changes will happen in a dedicated feature worktree, with the
-matching progress ledger maintained according to the plan.
+The [business-service integration readiness P0
+plan](BUSINESS_CLIENT_INTEGRATION_READINESS_PLAN.md) passed three consecutive
+reviews on `main` and awaits implementation in a dedicated feature worktree
+with a matching progress ledger.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

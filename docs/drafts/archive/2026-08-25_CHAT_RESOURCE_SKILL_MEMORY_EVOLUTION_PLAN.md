@@ -127,12 +127,12 @@ RagChatController
 
 稳定事实的近距离入口：
 
-- [Chat、RAG 与工具调用](../chat-memory-rag-tool-calling-zh-CN.md)
-- [项目上下文](../project-context-zh-CN.md)
-- [架构说明](../architecture-zh-CN.md)
-- [配置参考](../configuration-zh-CN.md)
-- [REST API](../rest-api-zh-CN.md)
-- [测试指南](../testing-guide-zh-CN.md)
+- [Chat、RAG 与工具调用](../../chat-memory-rag-tool-calling-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [架构说明](../../architecture-zh-CN.md)
+- [配置参考](../../configuration-zh-CN.md)
+- [REST API](../../rest-api-zh-CN.md)
+- [测试指南](../../testing-guide-zh-CN.md)
 
 ### 2.2 当前仍存在的能力缺口
 

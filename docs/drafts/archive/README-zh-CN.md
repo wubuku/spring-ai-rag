@@ -47,5 +47,7 @@
   `2026-08-24_HEURISTIC_CJK_RERANK_*`、
   `2026-08-24_TITLE_AWARE_HEURISTIC_RERANK_*`、
   `2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_*`
+- Chat 静态资源知识、运行时 Skill、allowlisted HTTP Tool 与工具感知记忆：
+  `2026-08-25_CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

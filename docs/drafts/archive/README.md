@@ -65,6 +65,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-24_HEURISTIC_CJK_RERANK_*`,
   `2026-08-24_TITLE_AWARE_HEURISTIC_RERANK_*`,
   `2026-08-24_BOUNDARY_AWARE_HEURISTIC_RERANK_*`
+- Chat static resource knowledge, runtime Skills, allowlisted HTTP tools, and
+  tool-aware memory: `2026-08-25_CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.
