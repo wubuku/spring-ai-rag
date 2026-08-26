@@ -17,6 +17,7 @@ interface MockPrincipal {
   currentCredentialId?: string;
   currentCredentialVersion?: number;
   requestsPerMinute?: number;
+  capabilities: string[];
   allowedCollectionKeys?: string[];
 }
 
@@ -30,6 +31,7 @@ test('root unlock manages shown-once business keys without browser persistence',
   const createRequests: Array<{
     name: string;
     expiresAt: string;
+    capabilities: string[];
     allowedCollectionKeys?: string[];
     requestsPerMinute?: number;
   }> = [];
@@ -87,6 +89,7 @@ test('root unlock manages shown-once business keys without browser persistence',
           name: principal?.name ?? 'Service Key',
           expiresAt: principal?.expiresAt ?? '2026-11-12T12:00:00',
           requestsPerMinute: principal?.requestsPerMinute,
+          capabilities: principal?.capabilities ?? ['RAG_READ', 'RAG_WRITE'],
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });
@@ -100,6 +103,7 @@ test('root unlock manages shown-once business keys without browser persistence',
       const principal = principals.find(item => item.principalId === principalId)!;
       principal.name = body.name as string;
       principal.expiresAt = body.expiresAt as string;
+      principal.capabilities = body.capabilities as string[];
       principal.allowedCollectionKeys = body.allowedCollectionKeys as string[] | undefined;
       principal.requestsPerMinute = body.requestsPerMinute as number | undefined;
       principal.policyVersion += 1;
@@ -118,6 +122,7 @@ test('root unlock manages shown-once business keys without browser persistence',
         expiresAt: string;
         allowedCollectionKeys?: string[];
         requestsPerMinute?: number;
+        capabilities: string[];
       };
       createRequests.push(body);
       principals.push({
@@ -132,6 +137,7 @@ test('root unlock manages shown-once business keys without browser persistence',
         currentCredentialId: 'rag_k_created',
         currentCredentialVersion: 1,
         requestsPerMinute: body.requestsPerMinute,
+        capabilities: body.capabilities,
         allowedCollectionKeys: body.allowedCollectionKeys,
       });
       await route.fulfill({
@@ -147,6 +153,7 @@ test('root unlock manages shown-once business keys without browser persistence',
           expiresAt: body.expiresAt,
           allowedCollectionKeys: body.allowedCollectionKeys,
           requestsPerMinute: body.requestsPerMinute,
+          capabilities: body.capabilities,
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });
@@ -204,13 +211,16 @@ test('root unlock manages shown-once business keys without browser persistence',
   await page.getByText('Selected collections', { exact: true }).click();
   await page.getByRole('checkbox', { name: /Sample Collection/ }).check();
   await page.locator('#create-key-quota').fill('75');
+  await page.getByRole('radio', { name: 'RAG_READ', exact: true }).check();
   await page.getByRole('button', { name: 'Create', exact: true }).click();
 
   await expect(page.getByText(createdRawKey)).toBeVisible();
   expect(principals[0]?.expiresAt).toBe(`${longExpiry}:00`);
   expect(principals[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
   expect(principals[0]?.requestsPerMinute).toBe(75);
+  expect(principals[0]?.capabilities).toEqual(['RAG_READ']);
   expect(createRequests).toHaveLength(1);
+  expect(createRequests[0]?.capabilities).toEqual(['RAG_READ']);
   expect(createRequests[0]?.allowedCollectionKeys).toEqual(['sample-collection']);
   expect(createRequests[0]).not.toHaveProperty('allowedCollectionIds');
   await expect(
@@ -232,6 +242,7 @@ test('root unlock manages shown-once business keys without browser persistence',
       expectedPolicyVersion: 1,
       name: 'Indexer Agent',
       requestsPerMinute: 120,
+      capabilities: ['RAG_READ'],
       allowedCollectionKeys: ['sample-collection'],
     }),
   ]);

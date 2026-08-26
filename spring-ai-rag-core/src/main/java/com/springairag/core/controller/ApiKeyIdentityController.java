@@ -7,6 +7,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.CollectionIdentityResolver;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,8 +34,6 @@ import java.util.Map;
 @RequestMapping("/api/v1/rag/auth")
 public class ApiKeyIdentityController {
 
-    private static final List<String> DATA_PLANE_CAPABILITIES =
-            List.of("RAG_READ", "RAG_WRITE");
     private static final List<String> ROOT_CAPABILITIES =
             List.of("RAG_READ", "RAG_WRITE", "API_KEY_MANAGE");
 
@@ -89,7 +88,9 @@ public class ApiKeyIdentityController {
                 type,
                 id,
                 rootCredentialResolver.isConfigured(),
-                environmentRoot ? ROOT_CAPABILITIES : DATA_PLANE_CAPABILITIES);
+                environmentRoot
+                        ? ROOT_CAPABILITIES
+                        : ApiCapabilitySupport.fullCapabilities());
         Object authenticated = request.getAttribute(
                 ApiKeyAuthFilter.AUTHENTICATED_API_PRINCIPAL_ATTRIBUTE);
         if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)) {
@@ -123,6 +124,8 @@ public class ApiKeyIdentityController {
         response.setCredentialVersion(principal.getCredentialVersion());
         response.setPolicyVersion(principal.getPolicyVersion());
         response.setPrincipalRole(principal.getRole().name());
+        response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
+                principal.getRole(), principal.getCapabilities()));
         if (ApiKeyCollectionAccess.isUnrestricted(principal)) {
             response.setCollectionAccessMode(CollectionAccessMode.UNRESTRICTED);
             response.setAllowedCollectionKeys(null);

@@ -224,14 +224,16 @@ durable embedding job 的 `default-max-attempts`/`max-attempts` 是两层独立�
 - embedding 可用性读取文档 lifecycle 或
   `/api/v1/rag/collections/embedding-readiness`；业务 binding 另用 `/auth/me` 和
   Collection by-key。
-- 空库或升级环境必须按顺序执行 Flyway V1-V48。本能力没有新增 migration，不能因此跳过
-  既有迁移。
+- 空库或升级环境必须按顺序执行 Flyway V1-V49。V49 为 stable principal 增加
+  operation capabilities；既有 principal 默认完整读写，升级后可通过 policy CAS
+  收敛为只读。
 - 生产调用方应锁定已验收的 Git commit 或由该 commit 构建的不可变镜像。当前 Maven/API
   版本仍为 `1.0.0`。
-- `/auth/me` 本次只增加字段。旧 client 会忽略新增字段；依赖新增字段的 client 必须先运行
-  合同门禁，再升级业务实例。
-- 回滚本功能不需要 schema 回退。若回滚到不含新增自省字段的服务版本，依赖 binding 自检的
-  新 client 必须停止发布或回滚，不能降级为“允许启动”。
+- `/auth/me` 的新增字段保持向后兼容；旧 client 会忽略，依赖 capability/ACL 自检的
+  client 必须先运行合同门禁，再升级业务实例。
+- V49 是向前兼容加列迁移，不执行破坏性 schema 回退。若应用回滚到不识别 operation
+  capabilities 的版本，应继续保留 V49 schema，并停止依赖只读能力边界的新 client，
+  不能降级为“允许启动”。
 
 ## 8. 一键接入验收
 

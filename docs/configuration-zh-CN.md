@@ -789,8 +789,9 @@ rag:
 - 只有 environment root 能创建、列出、轮换和吊销业务 Key。
 - root 不入库、不写日志；WebUI 只在当前页面内存中持有，刷新后需重新解锁。
 - root 模式禁用空表 ADMIN 自动生成和 raw secret 日志分发。
-- root 签发的业务 Key固定为 `FULL_RAG` 数据面能力，不能管理 Key；expiry 必填、
-  必须在未来且不设固定的最长有效期。
+- root 签发的业务 Key 可选择只读 `RAG_READ` 或完整
+  `RAG_READ + RAG_WRITE` 数据面能力，不能管理 Key；省略能力字段时兼容为完整读写。
+  expiry 必填、必须在未来且不设固定的最长有效期。
 
 未配置 `RAG_ROOT_API_KEY` 时保持 legacy 行为：`rag.security.enabled` 控制认证开关，
 `rag.security.api-key` 和数据库 ADMIN/NORMAL 语义继续生效，query credential 仍兼容。
@@ -799,6 +800,11 @@ rag:
 范围；deprecated 的 `allowedCollectionIds` 继续兼容。V48 将 stable
 `rag_api_principal` policy 与版本化 `rag_api_key` credential 分离，因此轮换会保留
 `db:{principalId}` owner、role、Collection ACL、expiry、policy version 与 quota。
+V49 在 principal policy 中增加规范化 `capabilities`：只允许 `RAG_READ` 或
+`RAG_READ,RAG_WRITE`；创建省略时默认完整读写，策略更新省略时保留现值，轮换继承现值。
+NORMAL principal 的读取和明确的只读 POST 需要 `RAG_READ`，其他写请求需要
+`RAG_WRITE`；能力拒绝发生在共享 quota 计数之前。ADMIN、environment root、legacy
+static 和关闭认证的兼容路径保持完整权限。
 每次请求都联查权威 credential/principal；仅近似审计字段 `last_used_at` 的写入在五分钟内
 抑制。legacy `api_key` 列为迁移兼容继续存在，但被约束为只能是 `NULL`。详见
 [rest-api-zh-CN.md](rest-api-zh-CN.md)。

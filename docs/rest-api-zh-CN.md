@@ -30,7 +30,8 @@ X-API-Key: your-api-key
 - 所有 `/api/**` 自动要求 environment root 或有效数据库业务 Key。
 - query credential（`?apiKey=`）返回 `401`；SSE 使用 `fetch` + Header。
 - environment root 可访问 RAG 数据面并管理 API Key。
-- 数据库业务 Key具有 `FULL_RAG` 读写能力，但调用 `/api-keys` 管理端点返回 `403`。
+- 数据库 NORMAL 业务 Key 按 principal policy 具有只读 `RAG_READ` 或完整
+  `RAG_READ + RAG_WRITE` 能力；调用 `/api-keys` 管理端点仍返回 `403`。
 - legacy `rag.security.api-key` 在 root 模式下不参与认证。
 
 未配置 root 时保持 legacy 模式：`rag.security.enabled=true` 后接受上述 Header，并继续
@@ -80,6 +81,14 @@ unrestricted。
 allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebUI 也不允许其解锁管理台。
 响应带 `Cache-Control: no-store`。完整生产 binding 和轮换流程见
 [业务服务接入指南](business-client-integration-zh-CN.md)。
+
+对数据库 NORMAL principal，`GET`/`HEAD`/`OPTIONS` 和明确的只读 POST
+（Search、Chat、JSON Record search、model compare、非持久化 evaluation、
+`/v1/chat/completions`）需要 `RAG_READ`；其他 `POST`/`PUT`/`PATCH`/`DELETE`
+默认需要 `RAG_WRITE`。缺少能力时在进入 controller 和共享限流计数前返回 `403`。
+原生 `/api/**` 返回 `FORBIDDEN`，OpenAI 兼容 `/v1/**` 返回
+`insufficient_permissions`。environment root、legacy static、数据库 ADMIN 与关闭
+认证的兼容路径不受该 NORMAL 数据面门禁限制。
 
 数据库业务 Key 对外使用 `allowedCollectionKeys`；响应中继续保留 deprecated 的
 `allowedCollectionIds` 兼容字段：
@@ -161,7 +170,7 @@ Chat 和 Search 接受 `collectionScopeMode`：
 ### API 密钥管理
 
 root 模式下，本节所有管理端点只允许 environment root。通过 root 创建的 Key固定为
-数据库 `NORMAL` 角色和产品语义 `FULL_RAG`：可读写 RAG 数据面，但不能管理 Key。
+数据库 `NORMAL` 角色，可配置为只读或读写 RAG 数据面，但不能管理 Key。
 未配置 root 时保留 legacy ADMIN/NORMAL 管理语义。
 
 #### `GET /api/v1/rag/api-keys`
@@ -177,6 +186,7 @@ root 模式下，本节所有管理端点只允许 environment root。通过 roo
   "currentCredential": true,
   "name": "Production Server",
   "role": "NORMAL",
+  "capabilities": ["RAG_READ", "RAG_WRITE"],
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "enabled": true,
@@ -196,6 +206,7 @@ secret、hash 或完整 history：
   "principalId": "rag_p_service",
   "name": "Production Server",
   "role": "NORMAL",
+  "capabilities": ["RAG_READ"],
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "requestsPerMinute": 120,
   "policyVersion": 3,
@@ -211,14 +222,16 @@ secret、hash 或完整 history：
 
 root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有效期。
 `allowedCollectionKeys` 可省略；省略表示可访问全部 Collection。
-`allowedCollectionIds` 已 deprecated。
+`allowedCollectionIds` 已 deprecated。`capabilities` 只接受 `["RAG_READ"]` 或
+`["RAG_READ", "RAG_WRITE"]`；省略时默认完整读写。
 
 ```json
 {
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 120
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"]
 }
 ```
 
@@ -236,16 +249,17 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00",
-  "requestsPerMinute": 120
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"]
 }
 ```
 
 #### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
 
-原子更新 name、expiry、Collection ACL 与可选 principal quota。
+原子更新 name、expiry、Collection ACL、可选 principal quota 与操作能力。
 `expectedPolicyVersion` 必填，版本过期返回 `409 POLICY_VERSION_CONFLICT`。
 省略 `allowedCollectionKeys` 表示不限制 Collection；省略 `requestsPerMinute` 表示使用
-全局配额。
+全局配额；省略 `capabilities` 保留当前能力。数据库 ADMIN 不能降级为只读。
 
 ```json
 {
@@ -253,14 +267,15 @@ root 模式下 `expiresAt` 必填且必须在未来，不设固定的最长有�
   "name": "My API Key",
   "expiresAt": "2027-10-01T00:00:00",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 240
+  "requestsPerMinute": 240,
+  "capabilities": ["RAG_READ", "RAG_WRITE"]
 }
 ```
 
 #### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
 禁用当前 credential，并为同一 stable principal 创建下一个 credential version。
-owner、role、policy version、ACL、expiry 与 quota 均保持不变。使用旧 credential ID
+owner、role、policy version、ACL、expiry、quota 与 capabilities 均保持不变。使用旧 credential ID
 返回 `409 CREDENTIAL_NOT_CURRENT`；raw secret 仅在本次 `201 Created` 响应中返回。
 
 #### `DELETE /api/v1/rag/api-keys/{keyId}`

@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V48
+- [x] Flyway inventory is V1-V49
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -104,6 +104,17 @@ Release date: `2026-07-21`
 - [x] The bilingual Business Service Integration Guide records root/business
   credentials, binding, CAS/tombstone/ASYNC, rotation, upgrade, and rollback
   boundaries.
+
+### 2026-08-26 Operation-Scoped API Capability Gates
+
+- [x] V49 adds database-constrained `RAG_READ` / `RAG_WRITE` policy to stable
+  principals, with V48 data defaulting compatibly to full read/write.
+- [x] A central capability filter runs after authentication and before shared
+  rate limiting. Read-only principals may Search/Chat, while writes return
+  `403`; OpenAI-compatible errors use `insufficient_permissions`.
+- [x] Create, policy CAS, rotation, `/auth/me`, WebUI, and PostgreSQL/live-HTTP
+  acceptance share the authoritative capability value. Invalid sets are not
+  persisted, and ADMIN cannot be downgraded to read-only.
 
 ### Final Evidence (2026-07-21)
 

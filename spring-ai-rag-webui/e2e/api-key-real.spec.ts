@@ -42,12 +42,23 @@ test('manages a real stable principal without persisting shown-once credentials'
     await page.getByRole('button', { name: 'Create Key' }).first().click();
     await page.getByPlaceholder('e.g. Production Server').fill(principalName);
     await page.locator('#create-key-quota').fill('12');
+    await page.getByRole('radio', { name: 'RAG_READ', exact: true }).check();
+    const createRequestPromise = page.waitForRequest(outbound =>
+      outbound.url().endsWith(`${API_PREFIX}/api-keys`)
+      && outbound.method() === 'POST',
+    );
     const createResponsePromise = page.waitForResponse(response =>
       response.url().endsWith(`${API_PREFIX}/api-keys`)
       && response.request().method() === 'POST',
     );
     await page.getByRole('button', { name: 'Create', exact: true }).click();
+    const createRequest = await createRequestPromise;
     const createResponse = await createResponsePromise;
+    expect(createRequest.postDataJSON()).toMatchObject({
+      name: principalName,
+      requestsPerMinute: 12,
+      capabilities: ['RAG_READ'],
+    });
     expect(createResponse.status()).toBe(201);
     expect(createResponse.headers()['cache-control']).toContain('no-store');
     const created = await createResponse.json();
@@ -59,12 +70,18 @@ test('manages a real stable principal without persisting shown-once credentials'
     expect(firstRawKey).toMatch(/^rag_sk_/);
     expect(created.credentialVersion).toBe(1);
     expect(created.requestsPerMinute).toBe(12);
+    expect(created.capabilities).toEqual(['RAG_READ']);
     await expect(page.getByText(firstRawKey!, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close' }).click();
     await expect(page.getByText(firstRawKey!, { exact: true })).toHaveCount(0);
 
-    const principalRow = page.getByText(principalName, { exact: true }).locator('..');
-    await expect(principalRow.getByRole('code')).toHaveText(currentCredentialId!);
+    const principalRow = page.locator('[class*="tableRow"]').filter({
+      hasText: principalName,
+    });
+    await expect(
+      principalRow.locator('code').filter({ hasText: currentCredentialId! }),
+    ).toBeVisible();
+    await expect(principalRow.getByText('RAG_READ', { exact: true })).toBeVisible();
     await expect(principalRow.getByText('v1', { exact: true })).toBeVisible();
     await principalRow.getByRole('button', { name: 'Edit' }).click();
     await page.locator('#policy-name').fill(`${principalName} Updated`);
@@ -84,12 +101,15 @@ test('manages a real stable principal without persisting shown-once credentials'
       expectedPolicyVersion: 1,
       name: `${principalName} Updated`,
       requestsPerMinute: 18,
+      capabilities: ['RAG_READ'],
     });
     expect(policyResponse.status()).toBe(200);
     expect((await policyResponse.json()).policyVersion).toBe(2);
     await expect(page.getByText(`${principalName} Updated`, { exact: true })).toBeVisible();
 
-    const editedRow = page.getByText(`${principalName} Updated`, { exact: true }).locator('..');
+    const editedRow = page.locator('[class*="tableRow"]').filter({
+      hasText: `${principalName} Updated`,
+    });
     await editedRow.getByRole('button', { name: 'Rotate' }).click();
     const rotateResponsePromise = page.waitForResponse(response =>
       response.url().endsWith(`/api-keys/${currentCredentialId}/rotate`)
@@ -105,6 +125,7 @@ test('manages a real stable principal without persisting shown-once credentials'
     expect(rotated.principalId).toBe(principalId);
     expect(rotated.credentialVersion).toBe(2);
     expect(rotated.policyVersion).toBe(2);
+    expect(rotated.capabilities).toEqual(['RAG_READ']);
     await expect(page.getByText(rotatedRawKey, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Close' }).click();
 
@@ -122,12 +143,18 @@ test('manages a real stable principal without persisting shown-once credentials'
       credentialVersion: 2,
       policyVersion: 2,
       principalRole: 'NORMAL',
+      capabilities: ['RAG_READ'],
       collectionAccessMode: 'UNRESTRICTED',
       allowedCollectionKeys: null,
     });
 
-    const rotatedRow = page.getByText(`${principalName} Updated`, { exact: true }).locator('..');
-    await expect(rotatedRow.getByRole('code')).toHaveText(currentCredentialId!);
+    const rotatedRow = page.locator('[class*="tableRow"]').filter({
+      hasText: `${principalName} Updated`,
+    });
+    await expect(
+      rotatedRow.locator('code').filter({ hasText: currentCredentialId! }),
+    ).toBeVisible();
+    await expect(rotatedRow.getByText('RAG_READ', { exact: true })).toBeVisible();
     await expect(rotatedRow.getByText('v2', { exact: true })).toBeVisible();
     await rotatedRow.getByRole('button', { name: 'Revoke' }).click();
     await expect(rotatedRow.getByText('Revoked', { exact: true })).toBeVisible();

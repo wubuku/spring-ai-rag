@@ -266,15 +266,18 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V48 in order. This capability
-  adds no migration, but existing migrations are still mandatory.
+- Empty and upgraded databases must run Flyway V1-V49 in order. V49 adds
+  operation capabilities to stable principals; existing principals default to
+  full read/write and may later be narrowed through policy CAS.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
-- This change only adds `/auth/me` fields. Older clients ignore them; clients
-  that depend on them must run the contract gate before rollout.
-- No schema rollback is required. If the server is rolled back to a version
-  without the new fields, a new client that requires binding verification must
-  stop or roll back rather than starting permissively.
+- The added `/auth/me` fields remain backward-compatible. Older clients ignore
+  them; clients that depend on capability/ACL verification must run the
+  contract gate before rollout.
+- V49 is a forward-compatible additive migration; do not destructively roll
+  back its schema. If the application is rolled back to a version that does not
+  understand operation capabilities, retain the V49 schema and stop clients
+  that require a read-only boundary rather than starting permissively.
 
 ## 8. One-Command Integration Acceptance
 

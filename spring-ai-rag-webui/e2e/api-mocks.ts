@@ -74,6 +74,7 @@ export async function mockAllApiCalls(page: Page) {
           rawKey: MOCK_BUSINESS_API_KEY,
           name: 'Mock Key',
           expiresAt: '2026-11-12T12:00:00',
+          capabilities: ['RAG_READ', 'RAG_WRITE'],
           warning: 'Store this key securely. It will not be shown again.',
         }),
       });

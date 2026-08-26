@@ -6,6 +6,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -28,6 +29,12 @@ public class ApiPrincipalPolicyUpdateRequest {
     @Max(1_000_000)
     private Integer requestsPerMinute;
 
+    @Schema(description = "Operation capabilities. Null keeps the current principal capabilities.",
+            example = "[\"RAG_READ\"]",
+            allowableValues = {"RAG_READ", "RAG_WRITE"})
+    @Size(max = 2)
+    private List<String> capabilities;
+
     public Long getExpectedPolicyVersion() { return expectedPolicyVersion; }
     public void setExpectedPolicyVersion(Long expectedPolicyVersion) { this.expectedPolicyVersion = expectedPolicyVersion; }
     public String getName() { return name; }
@@ -38,4 +45,6 @@ public class ApiPrincipalPolicyUpdateRequest {
     public void setAllowedCollectionKeys(List<String> allowedCollectionKeys) { this.allowedCollectionKeys = allowedCollectionKeys; }
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+    public List<String> getCapabilities() { return capabilities; }
+    public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
 }

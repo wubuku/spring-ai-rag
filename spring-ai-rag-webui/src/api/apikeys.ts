@@ -4,6 +4,7 @@ export interface ApiPrincipalResponse {
   principalId: string;
   name: string;
   role: string;
+  capabilities?: string[];
   allowedCollectionKeys?: string[];
   expiresAt?: string;
   requestsPerMinute?: number;
@@ -23,6 +24,7 @@ export interface ApiKeyCreatedResponse {
   policyVersion: number;
   rawKey: string;
   name: string;
+  capabilities?: string[];
   expiresAt?: string;
   allowedCollectionKeys?: string[];
   requestsPerMinute?: number;
@@ -32,6 +34,7 @@ export interface ApiKeyCreatedResponse {
 export interface ApiKeyCreateRequest {
   name: string;
   expiresAt: string;
+  capabilities?: string[];
   allowedCollectionKeys?: string[];
   requestsPerMinute?: number;
 }
@@ -40,6 +43,7 @@ export interface ApiPrincipalPolicyUpdateRequest {
   expectedPolicyVersion: number;
   name: string;
   expiresAt: string;
+  capabilities?: string[];
   allowedCollectionKeys?: string[];
   requestsPerMinute?: number;
 }

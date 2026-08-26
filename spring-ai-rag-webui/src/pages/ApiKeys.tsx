@@ -13,6 +13,12 @@ import { useToast } from '../components/Toast';
 import styles from './ApiKeys.module.css';
 
 const DEFAULT_EXPIRY_DAYS = 365;
+const READ_ONLY_CAPABILITIES = ['RAG_READ'];
+const FULL_CAPABILITIES = ['RAG_READ', 'RAG_WRITE'];
+
+function normalizedCapabilities(capabilities?: string[]): string[] {
+  return capabilities?.length ? capabilities : FULL_CAPABILITIES;
+}
 
 function toLocalDateTimeInput(date: Date): string {
   const pad = (value: number) => String(value).padStart(2, '0');
@@ -96,6 +102,7 @@ function KeyList() {
             <span>{t('apiKeys.principalId')}</span>
             <span>{t('apiKeys.credential')}</span>
             <span>{t('apiKeys.profile')}</span>
+            <span>{t('apiKeys.capabilities')}</span>
             <span>{t('apiKeys.collectionAccess')}</span>
             <span>{t('apiKeys.quota')}</span>
             <span>{t('apiKeys.lastUsed')}</span>
@@ -181,6 +188,11 @@ function PrincipalRow({
         ) : '—'}
       </span>
       <span>{getRoleBadge(principal.role, t)}</span>
+      <span className={styles.capabilities}>
+        {normalizedCapabilities(principal.capabilities).map(capability => (
+          <code key={capability}>{capability}</code>
+        ))}
+      </span>
       <span className={styles.scope}>
         {principal.allowedCollectionKeys?.length
           ? principal.allowedCollectionKeys.join(', ')
@@ -228,7 +240,7 @@ function getRoleBadge(role: string | undefined, t: (key: string) => string) {
     return <span className={`${styles.badge} ${styles.badgeAdmin}`}>{t('apiKeys.admin')}</span>;
   }
   if (role === 'NORMAL') {
-    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.fullRag')}</span>;
+    return <span className={`${styles.badge} ${styles.badgeNormal}`}>{t('apiKeys.normal')}</span>;
   }
   return <span className={`${styles.badge} ${styles.badgeNormal}`}>—</span>;
 }
@@ -249,6 +261,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const [name, setName] = useState('');
   const [expiryDefaults] = useState(createExpiryDefaults);
+  const [capabilities, setCapabilities] = useState<string[]>(FULL_CAPABILITIES);
   const [restrictCollections, setRestrictCollections] = useState(false);
   const [selectedCollectionKeys, setSelectedCollectionKeys] = useState<string[]>([]);
   const [createdKey, setCreatedKey] = useState<ApiKeyCreatedResponse | null>(null);
@@ -284,6 +297,7 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
       expiresAt: expiresAtValue.length === 16
         ? `${expiresAtValue}:00`
         : expiresAtValue,
+      capabilities,
     };
     if (restrictCollections) {
       data.allowedCollectionKeys = selectedCollectionKeys;
@@ -350,10 +364,14 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
             <div className={styles.formGroup}>
               <span className={styles.label}>{t('apiKeys.profile')}</span>
               <span className={`${styles.badge} ${styles.badgeNormal}`}>
-                {t('apiKeys.fullRag')}
+                {t('apiKeys.normal')}
               </span>
-              <div className={styles.hint}>{t('apiKeys.fullRagHint')}</div>
+              <div className={styles.hint}>{t('apiKeys.normalHint')}</div>
             </div>
+            <CapabilitySelector
+              capabilities={capabilities}
+              onChange={setCapabilities}
+            />
             <div className={styles.formGroup}>
               <label className={styles.label} htmlFor="create-key-quota">
                 {t('apiKeys.quota')}
@@ -454,6 +472,14 @@ function CreateKeyModal({ onClose }: { onClose: () => void }) {
                 </button>
               </div>
               <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                {t('apiKeys.capabilities')}
+              </div>
+              <div className={styles.capabilities}>
+                {normalizedCapabilities(createdKey.capabilities).map(capability => (
+                  <code key={capability}>{capability}</code>
+                ))}
+              </div>
+              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
                 {t('apiKeys.collectionAccess')}
               </div>
               <div className={styles.scope}>
@@ -501,6 +527,9 @@ function EditPolicyModal({
   const [requestsPerMinute, setRequestsPerMinute] = useState(
     principal.requestsPerMinute?.toString() ?? '',
   );
+  const [capabilities, setCapabilities] = useState<string[]>(
+    normalizedCapabilities(principal.capabilities),
+  );
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const collectionsQuery = useQuery({
@@ -539,6 +568,7 @@ function EditPolicyModal({
       expectedPolicyVersion: principal.policyVersion,
       name: name.trim(),
       expiresAt: expiresAt.length === 16 ? `${expiresAt}:00` : expiresAt,
+      capabilities,
     };
     if (restrictCollections) {
       policy.allowedCollectionKeys = selectedCollectionKeys;
@@ -596,6 +626,11 @@ function EditPolicyModal({
             />
             <div className={styles.hint}>{t('apiKeys.quotaHint')}</div>
           </div>
+          <CapabilitySelector
+            capabilities={capabilities}
+            onChange={setCapabilities}
+            disabled={principal.role === 'ADMIN'}
+          />
           <fieldset className={styles.scopeFieldset}>
             <legend className={styles.label}>{t('apiKeys.collectionAccess')}</legend>
             <label className={styles.scopeOption}>
@@ -754,6 +789,14 @@ function RotateKeyModal({
                   {t('apiKeys.copy')}
                 </button>
               </div>
+              <div className={styles.rawKeyLabel} style={{ marginTop: '0.75rem' }}>
+                {t('apiKeys.capabilities')}
+              </div>
+              <div className={styles.capabilities}>
+                {normalizedCapabilities(rotatedKey.capabilities).map(capability => (
+                  <code key={capability}>{capability}</code>
+                ))}
+              </div>
               <div className={styles.warning}>{rotatedKey.warning}</div>
             </div>
             <div className={styles.modalActions}>
@@ -765,5 +808,51 @@ function RotateKeyModal({
         )}
       </div>
     </div>
+  );
+}
+
+function CapabilitySelector({
+  capabilities,
+  onChange,
+  disabled = false,
+}: {
+  capabilities: string[];
+  onChange: (capabilities: string[]) => void;
+  disabled?: boolean;
+}) {
+  const { t } = useTranslation();
+  const readOnly = capabilities.length === 1 && capabilities[0] === 'RAG_READ';
+  return (
+    <fieldset className={styles.scopeFieldset}>
+      <legend className={styles.label}>{t('apiKeys.capabilities')}</legend>
+      <label className={styles.scopeOption}>
+        <input
+          type="radio"
+          name="apiCapability"
+          aria-label="RAG_READ"
+          checked={readOnly}
+          disabled={disabled}
+          onChange={() => onChange(READ_ONLY_CAPABILITIES)}
+        />
+        <span>
+          <strong>RAG_READ</strong>
+          <small>{t('apiKeys.readOnlyHint')}</small>
+        </span>
+      </label>
+      <label className={styles.scopeOption}>
+        <input
+          type="radio"
+          name="apiCapability"
+          aria-label="RAG_READ, RAG_WRITE"
+          checked={!readOnly}
+          disabled={disabled}
+          onChange={() => onChange(FULL_CAPABILITIES)}
+        />
+        <span>
+          <strong>RAG_READ, RAG_WRITE</strong>
+          <small>{disabled ? t('apiKeys.adminCapabilitiesHint') : t('apiKeys.readWriteHint')}</small>
+        </span>
+      </label>
+    </fieldset>
   );
 }

@@ -28,6 +28,7 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
         LocalDateTime getExpiresAt();
         Long getPolicyVersion();
         Integer getRequestsPerMinute();
+        String getCapabilities();
     }
 
     /**
@@ -67,7 +68,8 @@ public interface RagApiKeyRepository extends JpaRepository<RagApiKey, Long> {
     @Query("SELECT p.principalId AS principalId, k.keyId AS credentialId, "
             + "k.credentialVersion AS credentialVersion, p.role AS role, "
             + "p.allowedCollectionIds AS allowedCollectionIds, p.expiresAt AS expiresAt, "
-            + "p.policyVersion AS policyVersion, p.requestsPerMinute AS requestsPerMinute "
+            + "p.policyVersion AS policyVersion, p.requestsPerMinute AS requestsPerMinute, "
+            + "p.capabilities AS capabilities "
             + "FROM RagApiKey k, RagApiPrincipal p "
             + "WHERE k.keyHash = :keyHash AND k.principalId = p.principalId "
             + "AND k.enabled = true AND k.revokedAt IS NULL "

@@ -146,6 +146,7 @@ postgres_matrix() {
       -Dchat.idempotency.it.enabled=true \
       -Dnext-high-value.it.enabled=true \
       -Dmanaged-api-principal.it.enabled=true \
+      -Djacoco.skip=true \
       -Dtest=ChatSessionPostgresIntegrationTest,ChatTurnOperationPostgresIntegrationTest,NextHighValueFeaturesPostgresIntegrationTest,ManagedApiPrincipalPostgresIntegrationTest \
       -Dsurefire.failIfNoSpecifiedTests=false test
 
@@ -217,32 +218,37 @@ start_database() {
     }
   local attempt
   local container_state
-  for attempt in $(seq 1 120); do
-    docker exec "$PG_CONTAINER" pg_isready -U postgres \
-      -d managed_api_principal_gate >/dev/null 2>&1 && break
+  local ready_streak=0
+  for attempt in $(seq 1 20); do
+    DB_PORT="$(docker port "$PG_CONTAINER" 5432/tcp \
+      | awk -F: 'NR == 1 {print $NF}')"
+    [[ -n "$DB_PORT" ]] && break
+    sleep 1
+  done
+  [[ -n "$DB_PORT" ]] || {
+    echo "Disposable PostgreSQL published port was not discoverable" >&2
+    return 1
+  }
+  for attempt in $(seq 1 180); do
     container_state="$(docker inspect --format '{{.State.Status}}' "$PG_CONTAINER" 2>/dev/null || true)"
     if [[ "$container_state" != "running" ]]; then
       echo "Disposable PostgreSQL stopped before becoming ready (state=${container_state:-missing})" >&2
       docker logs "$PG_CONTAINER" 2>&1 || true
       return 1
     fi
+    if docker exec "$PG_CONTAINER" pg_isready -U postgres \
+      -d managed_api_principal_gate >/dev/null 2>&1; then
+      ready_streak=$((ready_streak + 1))
+      [[ "$ready_streak" -ge 3 ]] && return 0
+    else
+      ready_streak=0
+    fi
     sleep 1
   done
-  docker exec "$PG_CONTAINER" pg_isready -U postgres \
-      -d managed_api_principal_gate >/dev/null 2>&1 || {
-      echo "Disposable PostgreSQL did not become ready" >&2
-      docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' \
-        "$PG_CONTAINER" 2>&1 || true
-      docker logs "$PG_CONTAINER" 2>&1 || true
-      return 1
-    }
-  for attempt in $(seq 1 10); do
-    DB_PORT="$(docker port "$PG_CONTAINER" 5432/tcp \
-      | awk -F: 'NR == 1 {print $NF}')"
-    [[ -n "$DB_PORT" ]] && return 0
-    sleep 1
-  done
-  echo "Disposable PostgreSQL published port was not discoverable" >&2
+  echo "Disposable PostgreSQL did not become stably ready" >&2
+  docker inspect --format 'state={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}' \
+    "$PG_CONTAINER" 2>&1 || true
+  docker logs "$PG_CONTAINER" 2>&1 || true
   return 1
 }
 
@@ -330,9 +336,10 @@ root_curl() {
 
 create_principal() {
   local base="$1" name="$2" quota="$3" output="$4"
+  local capabilities="${5:-[\"RAG_READ\",\"RAG_WRITE\"]}"
   root_curl -X POST "${base}/api/v1/rag/api-keys" \
     -H 'Content-Type: application/json' \
-    -d "{\"name\":\"${name}\",\"expiresAt\":\"2099-12-31T23:59:00\",\"requestsPerMinute\":${quota}}" \
+    -d "{\"name\":\"${name}\",\"expiresAt\":\"2099-12-31T23:59:00\",\"requestsPerMinute\":${quota},\"capabilities\":${capabilities}}" \
     -o "$output" -w '%{http_code}'
 }
 
@@ -402,6 +409,62 @@ run_two_instance_contract() {
   }
   echo "shared_quota accepted=${accepted} rejected=${rejected}"
 
+  code="$(create_principal "$a" "Read only ${RUN_ID}" 100 \
+    "$private/read-only-v1.json" '["RAG_READ"]')"
+  assert_code "$code" 201 "create read-only principal" || return 1
+  local read_only_key read_only_key_id read_only_v2
+  read_only_key="$(jq -r '.rawKey' "$private/read-only-v1.json")"
+  read_only_key_id="$(jq -r '.keyId' "$private/read-only-v1.json")"
+  jq -e '.capabilities == ["RAG_READ"]' \
+    "$private/read-only-v1.json" >/dev/null || return 1
+
+  code="$(curl -sS -o "$private/read-only-identity.json" -w '%{http_code}' \
+    -H "X-API-Key: ${read_only_key}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "read-only identity" || return 1
+  jq -e '.capabilities == ["RAG_READ"]' \
+    "$private/read-only-identity.json" >/dev/null || return 1
+
+  code="$(curl -sS -o "$private/read-only-get.json" -w '%{http_code}' \
+    -H "X-API-Key: ${read_only_key}" \
+    "${b}/api/v1/rag/documents?page=0&size=1")"
+  assert_code "$code" 200 "read-only data-plane GET" || return 1
+
+  code="$(curl -sS -o "$private/read-only-post.json" -w '%{http_code}' \
+    -X POST -H "X-API-Key: ${read_only_key}" \
+    -H 'Content-Type: application/json' -d '{}' \
+    "${b}/api/v1/rag/documents")"
+  assert_code "$code" 403 "read-only data-plane POST" || return 1
+  jq -e '.error == "FORBIDDEN" and (.message | contains("RAG_WRITE"))' \
+    "$private/read-only-post.json" >/dev/null || return 1
+
+  code="$(root_curl -X POST \
+    "${a}/api/v1/rag/api-keys/${read_only_key_id}/rotate" \
+    -o "$private/read-only-v2.json" -w '%{http_code}')"
+  assert_code "$code" 201 "rotate read-only principal" || return 1
+  jq -e '.capabilities == ["RAG_READ"]' \
+    "$private/read-only-v2.json" >/dev/null || return 1
+  read_only_v2="$(jq -r '.rawKey' "$private/read-only-v2.json")"
+  code="$(curl -sS -o "$private/read-only-v2-identity.json" -w '%{http_code}' \
+    -H "X-API-Key: ${read_only_v2}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "rotated read-only identity" || return 1
+  jq -e '.capabilities == ["RAG_READ"]' \
+    "$private/read-only-v2-identity.json" >/dev/null || return 1
+  echo "operation_capabilities read=200 write=403 rotation=preserved"
+
+  code="$(root_curl -X POST "${a}/api/v1/rag/api-keys" \
+    -H 'Content-Type: application/json' \
+    -d "{\"name\":\"Invalid capability ${RUN_ID}\",\"expiresAt\":\"2099-12-31T23:59:00\",\"capabilities\":[\"RAG_WRITE\"]}" \
+    -o "$private/invalid-capability.json" -w '%{http_code}')"
+  assert_code "$code" 400 "invalid capability request" || return 1
+  local invalid_capability_count
+  invalid_capability_count="$(docker exec "$PG_CONTAINER" psql -U postgres \
+    -d managed_api_principal_gate -At -c \
+    "SELECT count(*) FROM rag_api_principal WHERE name='Invalid capability ${RUN_ID}'")"
+  [[ "$invalid_capability_count" == "0" ]] || {
+    echo "Invalid capability principal was persisted" >&2
+    return 1
+  }
+
   code="$(create_principal "$a" "Lifecycle ${RUN_ID}" 100 "$private/lifecycle-v1.json")"
   assert_code "$code" 201 "create lifecycle principal" || return 1
   local principal key_id v1 v2 new_key_id
@@ -465,11 +528,11 @@ run_two_instance_contract() {
   db_facts="$(docker exec "$PG_CONTAINER" psql -U postgres \
     -d managed_api_principal_gate -At -F, -c \
     "SELECT (SELECT version FROM flyway_schema_history WHERE success ORDER BY installed_rank DESC LIMIT 1), (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL), (SELECT count(*) FROM (SELECT principal_id FROM rag_api_key WHERE enabled GROUP BY principal_id HAVING count(*) > 1) duplicate_active)")"
-  [[ "$db_facts" == "48,0,0" ]] || {
+  [[ "$db_facts" == "49,0,0" ]] || {
     echo "Unexpected database facts: ${db_facts}" >&2
     return 1
   }
-  echo "database_facts migration=48 raw_credentials=0 duplicate_active=0"
+  echo "database_facts migration=49 raw_credentials=0 duplicate_active=0"
 }
 
 start_frontend() {

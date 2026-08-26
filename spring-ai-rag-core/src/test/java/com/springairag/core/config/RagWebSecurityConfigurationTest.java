@@ -1,6 +1,7 @@
 package com.springairag.core.config;
 
 import com.springairag.core.filter.ApiKeyAuthFilter;
+import com.springairag.core.filter.ApiCapabilityFilter;
 import com.springairag.core.ratelimit.PostgresRateLimitStore;
 import com.springairag.core.ratelimit.RateLimitObservability;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
@@ -71,6 +72,17 @@ class RagWebSecurityConfigurationTest {
         assertTrue(registration.getUrlPatterns().contains("/api/*"));
         assertTrue(registration.getUrlPatterns().contains("/v1/*"));
         assertEquals(-10, registration.getOrder());
+        assertNotNull(registration.getFilter());
+    }
+
+    @Test
+    void capabilityRegistrationRunsAfterAuthenticationAndBeforeRateLimit() {
+        FilterRegistrationBean<ApiCapabilityFilter> registration =
+                configuration.apiCapabilityFilterRegistration();
+
+        assertTrue(registration.getUrlPatterns().contains("/api/*"));
+        assertTrue(registration.getUrlPatterns().contains("/v1/*"));
+        assertEquals(-5, registration.getOrder());
         assertNotNull(registration.getFilter());
     }
 

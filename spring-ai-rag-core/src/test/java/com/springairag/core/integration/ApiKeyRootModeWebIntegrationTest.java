@@ -18,12 +18,16 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
@@ -38,7 +42,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({
         RagWebSecurityConfiguration.class,
         CorsConfig.class,
-        GlobalExceptionHandler.class
+        GlobalExceptionHandler.class,
+        ApiKeyRootModeWebIntegrationTest.CapabilityProbeController.class
 })
 @EnableConfigurationProperties(RagProperties.class)
 @TestPropertySource(properties = {
@@ -174,6 +179,39 @@ class ApiKeyRootModeWebIntegrationTest {
     }
 
     @Test
+    void capabilityFilterAllowsReadAndRejectsWriteForReadOnlyBusinessKey()
+            throws Exception {
+        AuthenticatedApiPrincipal readOnlyPrincipal =
+                new AuthenticatedApiPrincipal(
+                        "rag_p_read_only",
+                        "rag_k_read_only",
+                        1,
+                        "DATABASE_API_KEY",
+                        ApiKeyRole.NORMAL,
+                        null,
+                        null,
+                        1,
+                        null,
+                        List.of("RAG_READ"));
+        when(apiKeyManagementService.authenticate("rag_sk_read_only"))
+                .thenReturn(readOnlyPrincipal);
+
+        mockMvc.perform(get("/api/v1/rag/capability-probe")
+                        .header("X-API-Key", "rag_sk_read_only"))
+                .andExpect(status().isOk())
+                .andExpect(content().json("""
+                        {"operation":"read"}
+                        """));
+
+        mockMvc.perform(post("/api/v1/rag/capability-probe")
+                        .header("X-API-Key", "rag_sk_read_only"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"))
+                .andExpect(jsonPath("$.message")
+                        .value("API principal requires capability RAG_WRITE"));
+    }
+
+    @Test
     void rootModeRejectsLegacyStaticAndQueryCredentials() throws Exception {
         mockMvc.perform(get("/api/v1/rag/auth/me")
                         .header("X-API-Key", "legacy-static-key"))
@@ -184,5 +222,19 @@ class ApiKeyRootModeWebIntegrationTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.message").value(
                         "Query-string API credentials are not accepted. Use Authorization: Bearer or X-API-Key."));
+    }
+
+    @RestController
+    static class CapabilityProbeController {
+
+        @GetMapping("/api/v1/rag/capability-probe")
+        Map<String, String> read() {
+            return Map.of("operation", "read");
+        }
+
+        @PostMapping("/api/v1/rag/capability-probe")
+        Map<String, String> write() {
+            return Map.of("operation", "write");
+        }
     }
 }

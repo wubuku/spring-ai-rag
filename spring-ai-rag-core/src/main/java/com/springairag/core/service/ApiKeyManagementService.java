@@ -16,6 +16,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.repository.RagApiPrincipalRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.security.ApiCapabilitySupport;
 import com.springairag.core.security.AuthenticatedApiPrincipal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,6 +87,8 @@ public class ApiKeyManagementService {
         LocalDateTime now = LocalDateTime.now();
         String rawKey = generateRawKey();
         String keyId = generateKeyId();
+        List<String> capabilities = ApiCapabilitySupport.normalizeRequested(
+                request.getCapabilities());
         String allowedIds = ApiKeyCollectionAccess.serializeAllowedIds(
                 request.getAllowedCollectionIds());
 
@@ -96,6 +99,7 @@ public class ApiKeyManagementService {
         principal.setAllowedCollectionIds(allowedIds);
         principal.setExpiresAt(request.getExpiresAt());
         principal.setRequestsPerMinute(request.getRequestsPerMinute());
+        principal.setCapabilities(ApiCapabilitySupport.serialize(capabilities));
         principal.setPolicyVersion(1L);
         principal.setNextCredentialVersion(2);
         principal.setCreatedAt(now);
@@ -284,6 +288,15 @@ public class ApiKeyManagementService {
         if (environmentRoot) {
             validateManagedExpiry(request.getExpiresAt());
         }
+        List<String> capabilities = request.getCapabilities() == null
+                ? ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())
+                : ApiCapabilitySupport.normalizeRequested(request.getCapabilities());
+        if (principal.getRole() == ApiKeyRole.ADMIN
+                && !ApiCapabilitySupport.fullCapabilities().equals(capabilities)) {
+            throw new RagException(
+                    ErrorCode.BAD_REQUEST,
+                    "ADMIN principals must retain full RAG capabilities");
+        }
 
         LocalDateTime now = LocalDateTime.now();
         String serialized = ApiKeyCollectionAccess.serializeAllowedIds(allowedCollectionIds);
@@ -291,6 +304,8 @@ public class ApiKeyManagementService {
         principal.setExpiresAt(request.getExpiresAt());
         principal.setAllowedCollectionIds(serialized);
         principal.setRequestsPerMinute(request.getRequestsPerMinute());
+        principal.setCapabilities(ApiCapabilitySupport.serialize(
+                ApiCapabilitySupport.effectiveForRole(principal.getRole(), capabilities)));
         principal.setPolicyVersion(principal.getPolicyVersion() + 1);
         principal.setUpdatedAt(now);
         principalRepository.saveAndFlush(principal);
@@ -324,7 +339,11 @@ public class ApiKeyManagementService {
                         p.getAllowedCollectionIds(),
                         p.getExpiresAt(),
                         p.getPolicyVersion(),
-                        p.getRequestsPerMinute()))
+                        p.getRequestsPerMinute(),
+                        ApiCapabilitySupport.effectiveForRole(
+                                p.getRole(),
+                                ApiCapabilitySupport.normalizePersisted(
+                                        p.getCapabilities()))))
                 .orElse(null);
         if (principal != null) {
             touchLastUsed(principal.getPrincipalId(), now);
@@ -369,7 +388,11 @@ public class ApiKeyManagementService {
                 principal.getAllowedCollectionIds(),
                 principal.getExpiresAt(),
                 principal.getPolicyVersion(),
-                principal.getRequestsPerMinute());
+                principal.getRequestsPerMinute(),
+                ApiCapabilitySupport.effectiveForRole(
+                        principal.getRole(),
+                        ApiCapabilitySupport.normalizePersisted(
+                                principal.getCapabilities())));
     }
 
     private void touchLastUsed(String principalId, LocalDateTime now) {
@@ -423,6 +446,9 @@ public class ApiKeyManagementService {
         response.setCredentialVersion(credential.getCredentialVersion());
         response.setPolicyVersion(principal.getPolicyVersion());
         response.setRequestsPerMinute(principal.getRequestsPerMinute());
+        response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
+                principal.getRole(),
+                ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())));
         response.setAllowedCollectionKeys(collectionKeys(allowedIds));
         return response;
     }
@@ -446,6 +472,9 @@ public class ApiKeyManagementService {
         response.setPolicyVersion(principal.getPolicyVersion());
         response.setRequestsPerMinute(principal.getRequestsPerMinute());
         response.setRole(principal.getRole().name());
+        response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
+                principal.getRole(),
+                ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())));
         List<Long> allowedIds = ApiKeyCollectionAccess.parseAllowedIds(
                 principal.getAllowedCollectionIds());
         response.setAllowedCollectionIds(allowedIds.isEmpty() ? null : allowedIds);
@@ -464,6 +493,9 @@ public class ApiKeyManagementService {
         response.setExpiresAt(principal.getExpiresAt());
         response.setRequestsPerMinute(principal.getRequestsPerMinute());
         response.setPolicyVersion(principal.getPolicyVersion());
+        response.setCapabilities(ApiCapabilitySupport.effectiveForRole(
+                principal.getRole(),
+                ApiCapabilitySupport.normalizePersisted(principal.getCapabilities())));
         response.setLastUsedAt(principal.getLastUsedAt());
         response.setCreatedAt(principal.getCreatedAt());
         response.setUpdatedAt(principal.getUpdatedAt());

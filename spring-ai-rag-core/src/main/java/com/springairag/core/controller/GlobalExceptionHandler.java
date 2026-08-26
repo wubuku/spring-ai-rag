@@ -5,6 +5,7 @@ import com.springairag.api.enums.ErrorCode;
 import com.springairag.core.exception.RagException;
 import com.springairag.core.exception.ChatTurnInProgressException;
 import com.springairag.core.logging.SensitiveDataMaskingConverter;
+import com.springairag.core.security.ApiCapabilitySupport;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
@@ -182,6 +183,18 @@ public class GlobalExceptionHandler {
         log.error("Database error: {}", e.getMessage(), e);
         return buildResponse(HttpStatus.INTERNAL_SERVER_ERROR, "DATABASE_ERROR",
                 "Database operation failed", request);
+    }
+
+    @ExceptionHandler(ApiCapabilitySupport.InvalidPersistedCapabilitiesException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidPersistedCapabilities(
+            ApiCapabilitySupport.InvalidPersistedCapabilitiesException e,
+            HttpServletRequest request) {
+        log.error("Invalid persisted API capability policy: {}", e.getMessage());
+        return buildResponse(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "POLICY_SERVICE_UNAVAILABLE",
+                "API principal policy is unavailable",
+                request);
     }
 
     @ExceptionHandler(RagException.class)

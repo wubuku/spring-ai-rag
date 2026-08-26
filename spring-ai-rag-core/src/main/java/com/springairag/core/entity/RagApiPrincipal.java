@@ -34,6 +34,9 @@ public class RagApiPrincipal {
     @Column(name = "requests_per_minute")
     private Integer requestsPerMinute;
 
+    @Column(name = "capabilities", nullable = false, length = 64)
+    private String capabilities = "RAG_READ,RAG_WRITE";
+
     @Column(name = "policy_version", nullable = false)
     private Long policyVersion;
 
@@ -64,6 +67,8 @@ public class RagApiPrincipal {
     public void setExpiresAt(LocalDateTime expiresAt) { this.expiresAt = expiresAt; }
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
     public void setRequestsPerMinute(Integer requestsPerMinute) { this.requestsPerMinute = requestsPerMinute; }
+    public String getCapabilities() { return capabilities; }
+    public void setCapabilities(String capabilities) { this.capabilities = capabilities; }
     public Long getPolicyVersion() { return policyVersion; }
     public void setPolicyVersion(Long policyVersion) { this.policyVersion = policyVersion; }
     public Integer getNextCredentialVersion() { return nextCredentialVersion; }

@@ -3,6 +3,7 @@ package com.springairag.core.security;
 import com.springairag.core.entity.ApiKeyRole;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -17,7 +18,8 @@ public record AuthenticatedApiPrincipal(
         String allowedCollectionIds,
         LocalDateTime expiresAt,
         long policyVersion,
-        Integer requestsPerMinute) implements ApiAccessPolicy {
+        Integer requestsPerMinute,
+        List<String> capabilities) implements ApiAccessPolicy {
 
     public AuthenticatedApiPrincipal {
         Objects.requireNonNull(principalId, "principalId must not be null");
@@ -27,6 +29,24 @@ public record AuthenticatedApiPrincipal(
         if (credentialVersion <= 0 || policyVersion <= 0) {
             throw new IllegalArgumentException("Credential and policy versions must be positive");
         }
+        capabilities = List.copyOf(Objects.requireNonNull(
+                capabilities, "capabilities must not be null"));
+    }
+
+    /** Backward-compatible constructor for legacy extensions and tests. */
+    public AuthenticatedApiPrincipal(
+            String principalId,
+            String credentialId,
+            int credentialVersion,
+            String principalType,
+            ApiKeyRole role,
+            String allowedCollectionIds,
+            LocalDateTime expiresAt,
+            long policyVersion,
+            Integer requestsPerMinute) {
+        this(principalId, credentialId, credentialVersion, principalType, role,
+                allowedCollectionIds, expiresAt, policyVersion, requestsPerMinute,
+                ApiCapabilitySupport.fullCapabilities());
     }
 
     @Override
@@ -52,4 +72,7 @@ public record AuthenticatedApiPrincipal(
 
     @Override
     public Integer getRequestsPerMinute() { return requestsPerMinute; }
+
+    @Override
+    public List<String> getCapabilities() { return capabilities; }
 }

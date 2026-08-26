@@ -42,6 +42,12 @@ public class ApiKeyCreateRequest {
     @Max(value = 1_000_000, message = "requestsPerMinute must be at most 1000000")
     private Integer requestsPerMinute;
 
+    @Schema(description = "Operation capabilities. Null defaults to full RAG read/write access.",
+            example = "[\"RAG_READ\"]",
+            allowableValues = {"RAG_READ", "RAG_WRITE"})
+    @Size(max = 2, message = "At most two API capabilities may be assigned")
+    private List<String> capabilities;
+
     public ApiKeyCreateRequest() {
     }
 
@@ -71,6 +77,9 @@ public class ApiKeyCreateRequest {
         this.requestsPerMinute = requestsPerMinute;
     }
 
+    public List<String> getCapabilities() { return capabilities; }
+    public void setCapabilities(List<String> capabilities) { this.capabilities = capabilities; }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -80,13 +89,14 @@ public class ApiKeyCreateRequest {
                 Objects.equals(expiresAt, that.expiresAt) &&
                 Objects.equals(allowedCollectionIds, that.allowedCollectionIds) &&
                 Objects.equals(allowedCollectionKeys, that.allowedCollectionKeys) &&
-                Objects.equals(requestsPerMinute, that.requestsPerMinute);
+                Objects.equals(requestsPerMinute, that.requestsPerMinute) &&
+                Objects.equals(capabilities, that.capabilities);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(name, expiresAt, allowedCollectionIds, allowedCollectionKeys,
-                requestsPerMinute);
+                requestsPerMinute, capabilities);
     }
 
     @Override
@@ -97,6 +107,7 @@ public class ApiKeyCreateRequest {
                 ", allowedCollectionIds=" + allowedCollectionIds +
                 ", allowedCollectionKeys=" + allowedCollectionKeys +
                 ", requestsPerMinute=" + requestsPerMinute +
+                ", capabilities=" + capabilities +
                 '}';
     }
 }

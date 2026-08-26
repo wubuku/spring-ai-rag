@@ -28,8 +28,9 @@ Setting `RAG_ROOT_API_KEY` enables standalone-service root mode:
   valid database business key.
 - Query credentials (`?apiKey=`) return `401`; SSE uses `fetch` with a header.
 - The environment root can use the RAG data plane and manage API keys.
-- Database business keys have `FULL_RAG` read/write access but receive `403`
-  from `/api-keys` management endpoints.
+- Database NORMAL business keys have either read-only `RAG_READ` or full
+  `RAG_READ + RAG_WRITE` principal capabilities, but still receive `403` from
+  `/api-keys` management endpoints.
 - Legacy `rag.security.api-key` does not participate in root-mode
   authentication.
 
@@ -86,6 +87,15 @@ key cannot inspect another principal, and the WebUI refuses to unlock the
 management console with one. Responses include `Cache-Control: no-store`.
 See the [Business Service Integration Guide](business-client-integration.md)
 for production binding and rotation.
+
+For database NORMAL principals, `GET`/`HEAD`/`OPTIONS` and explicit read-only
+POST routes (Search, Chat, JSON-record search, model comparison,
+non-persisting evaluation, and `/v1/chat/completions`) require `RAG_READ`.
+Other `POST`/`PUT`/`PATCH`/`DELETE` requests require `RAG_WRITE` by default.
+Missing capabilities return `403` before controller execution and shared-quota
+accounting. Native `/api/**` uses `FORBIDDEN`; OpenAI-compatible `/v1/**` uses
+`insufficient_permissions`. Environment root, legacy static, database ADMIN,
+and auth-disabled compatibility paths are unrestricted.
 
 Database business keys expose `allowedCollectionKeys`; deprecated
 `allowedCollectionIds` remains in compatibility responses:
@@ -642,9 +652,9 @@ Hi!
 ## API Keys — Key Management
 
 In root mode, every endpoint in this section requires the environment root.
-Root-created keys have database role `NORMAL` and product profile `FULL_RAG`:
-they can read and write the RAG data plane but cannot manage keys. Without a
-root credential, legacy ADMIN/NORMAL management semantics remain.
+Root-created keys have database role `NORMAL` and configurable read-only or
+read/write RAG data-plane capabilities, but cannot manage keys. Without a root
+credential, legacy ADMIN/NORMAL management semantics remain.
 
 ### `GET /api/v1/rag/api-keys`
 
@@ -660,6 +670,7 @@ never returned. New management UIs should use the principal endpoint below.
   "currentCredential": true,
   "name": "Production Server",
   "role": "NORMAL",
+  "capabilities": ["RAG_READ", "RAG_WRITE"],
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "enabled": true,
@@ -679,6 +690,7 @@ metadata but no raw secret, hash, or complete credential history:
   "principalId": "rag_p_service",
   "name": "Production Server",
   "role": "NORMAL",
+  "capabilities": ["RAG_READ"],
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "requestsPerMinute": 120,
   "policyVersion": 3,
@@ -694,7 +706,9 @@ metadata but no raw secret, hash, or complete credential history:
 
 In root mode, `expiresAt` is required and must be in the future. There is no
 fixed maximum lifetime. `allowedCollectionKeys` is optional; omit it for all
-collections. `allowedCollectionIds` is deprecated.
+collections. `allowedCollectionIds` is deprecated. `capabilities` accepts only
+`["RAG_READ"]` or `["RAG_READ", "RAG_WRITE"]`; omission defaults to full
+read/write.
 
 **Request body**:
 ```json
@@ -702,7 +716,8 @@ collections. `allowedCollectionIds` is deprecated.
   "name": "My API Key",
   "expiresAt": "2026-10-01T00:00:00",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 120
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"]
 }
 ```
 
@@ -720,16 +735,20 @@ The raw secret appears only in the `201 Created` response, which includes
   "allowedCollectionKeys": ["customer-42:manual:v3"],
   "allowedCollectionIds": [1, 2],
   "expiresAt": "2026-10-01T00:00:00",
-  "requestsPerMinute": 120
+  "requestsPerMinute": 120,
+  "capabilities": ["RAG_READ"]
 }
 ```
 
 ### `PUT /api/v1/rag/api-keys/principals/{principalId}/policy`
 
-Atomically update name, expiry, Collection ACL, and optional principal quota.
+Atomically update name, expiry, Collection ACL, optional principal quota, and
+operation capabilities.
 `expectedPolicyVersion` is required; a stale value returns
 `409 POLICY_VERSION_CONFLICT`. Omit `allowedCollectionKeys` for unrestricted
-Collection access and omit `requestsPerMinute` to use the global quota.
+Collection access, omit `requestsPerMinute` to use the global quota, and omit
+`capabilities` to preserve the current value. Database ADMIN principals cannot
+be downgraded to read-only.
 
 ```json
 {
@@ -737,14 +756,15 @@ Collection access and omit `requestsPerMinute` to use the global quota.
   "name": "My API Key",
   "expiresAt": "2027-10-01T00:00:00",
   "allowedCollectionKeys": ["customer-42:manual:v3"],
-  "requestsPerMinute": 240
+  "requestsPerMinute": 240,
+  "capabilities": ["RAG_READ", "RAG_WRITE"]
 }
 ```
 
 ### `POST /api/v1/rag/api-keys/{keyId}/rotate`
 
 Disable the current credential and create the next credential version for the
-same stable principal. Owner, role, policy version, ACL, expiry, and quota stay
+same stable principal. Owner, role, policy version, ACL, expiry, quota, and capabilities stay
 unchanged. A stale credential ID returns `409 CREDENTIAL_NOT_CURRENT`; the new
 raw secret appears only in this `201 Created` response.
 
