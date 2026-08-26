@@ -35,54 +35,54 @@ Chat 记忆、工具调用、Embedding、检索算法或数据库锁策略。
   `feat/boundary-aware-heuristic-rerank-20260824` 工作区继续开发。
 - 当前 Flyway 迁移为 V1–V48；本轮新增 V49。
 - 默认 API 端口、profile、向量维度和构建命令遵循
-  [AGENTS.md](../../AGENTS.md) 与
-  [开发者参考](../developer-reference-zh-CN.md)。
+  [AGENTS.md](../../../AGENTS.md) 与
+  [开发者参考](../../developer-reference-zh-CN.md)。
 
 ### 2.2 已存在的认证与授权链
 
 以下代码事实已在 main 上逐一核对：
 
-- [`ApiKeyAuthFilter`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
+- [`ApiKeyAuthFilter`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiKeyAuthFilter.java)
   先解析 root、数据库 credential 和 legacy static key，并把数据库认证结果作为
-  不可变 [`AuthenticatedApiPrincipal`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/AuthenticatedApiPrincipal.java)
+  不可变 [`AuthenticatedApiPrincipal`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/AuthenticatedApiPrincipal.java)
   放入 request attribute。
-- [`ApiAccessPolicy`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiAccessPolicy.java)
-  和 [`ApiKeyCollectionAccess`](../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
+- [`ApiAccessPolicy`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiAccessPolicy.java)
+  和 [`ApiKeyCollectionAccess`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/security/ApiKeyCollectionAccess.java)
   已统一 Collection 范围与文档访问检查，但尚无操作能力检查。
-- [`ApiKeyManagementService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
-  以 [`RagApiPrincipal`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
+- [`ApiKeyManagementService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
+  以 [`RagApiPrincipal`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
   作为稳定策略权威，credential rotation 继承 principal 的名称、过期时间、角色、
   Collection ACL 和配额。
-- [`RagApiKeyRepository`](../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java)
+- [`RagApiKeyRepository`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/repository/RagApiKeyRepository.java)
   的认证投影从 principal 读取当前策略，符合本轮“能力存储在 principal 而非
   credential”的设计。
-- [`RagWebSecurityConfiguration`](../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagWebSecurityConfiguration.java)
+- [`RagWebSecurityConfiguration`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/config/RagWebSecurityConfiguration.java)
   已将认证过滤器置于限流过滤器之前；本轮能力过滤器必须位于认证之后、限流之前。
-- [`ApiKeyIdentityController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyIdentityController.java)
+- [`ApiKeyIdentityController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyIdentityController.java)
   当前把数据库 principal 的能力静态写成 `RAG_READ`、`RAG_WRITE`，正是本轮需要
   改为读取权威策略的地方。
 
 ### 2.3 已存在的 API 和 WebUI 表面
 
 - 创建和管理 API principal 的接口位于
-  [`ApiKeyController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)：
+  [`ApiKeyController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyController.java)：
   `POST /api/v1/rag/api-keys`、`GET /principals` 和
   `PUT /principals/{principalId}/policy`。
 - 创建、轮换和列表响应分别是
-  [`ApiKeyCreatedResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreatedResponse.java)、
-  [`ApiKeyResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyResponse.java)、
-  [`ApiPrincipalResponse`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalResponse.java)。
+  [`ApiKeyCreatedResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreatedResponse.java)、
+  [`ApiKeyResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyResponse.java)、
+  [`ApiPrincipalResponse`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalResponse.java)。
 - 创建和策略更新请求分别是
-  [`ApiKeyCreateRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java)
-  与 [`ApiPrincipalPolicyUpdateRequest`](../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalPolicyUpdateRequest.java)。
+  [`ApiKeyCreateRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiKeyCreateRequest.java)
+  与 [`ApiPrincipalPolicyUpdateRequest`](../../../spring-ai-rag-api/src/main/java/com/springairag/api/dto/ApiPrincipalPolicyUpdateRequest.java)。
 - WebUI API、类型和页面位于
-  [`src/api/apikeys.ts`](../../spring-ai-rag-webui/src/api/apikeys.ts)、
-  [`src/api/auth.ts`](../../spring-ai-rag-webui/src/api/auth.ts) 和
-  [`src/pages/ApiKeys.tsx`](../../spring-ai-rag-webui/src/pages/ApiKeys.tsx)；
+  [`src/api/apikeys.ts`](../../../spring-ai-rag-webui/src/api/apikeys.ts)、
+  [`src/api/auth.ts`](../../../spring-ai-rag-webui/src/api/auth.ts) 和
+  [`src/pages/ApiKeys.tsx`](../../../spring-ai-rag-webui/src/pages/ApiKeys.tsx)；
   现有页面已经有创建、策略编辑、轮换和端到端 Mock/real 流程，可在相同工作流
   中增加能力选择和断言。
 - 数据面 controller 覆盖 `/api/v1/rag/**` 及 OpenAI 兼容的 `/v1/**`。当前统一
-  异常格式由 [`GlobalExceptionHandler`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java)
+  异常格式由 [`GlobalExceptionHandler`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/GlobalExceptionHandler.java)
   提供，但过滤器拒绝必须自行返回 JSON，因为请求尚未进入 controller。
 
 ## 3. 问题定义、目标与非目标
@@ -233,7 +233,7 @@ ALTER TABLE rag_api_principal
   migration 作为运行时能力；
 - `rag_api_key` 不新增能力列，避免 credential 与 stable policy 再次分叉。
 
-实体 [`RagApiPrincipal`](../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
+实体 [`RagApiPrincipal`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/entity/RagApiPrincipal.java)
 增加持久化字段并与 V49 名称一致。服务层统一负责字符串与规范 `List<String>`
 之间的转换和校验；数据库检查约束是最后一道防线，不取代 Java 校验。
 
@@ -447,7 +447,7 @@ Chat，只做已有 Mock 断言，不把模型调用结果当作 capability 正�
 8. 安全移除隔离 worktree，不使用 `stash`、`reset --hard` 或破坏性 checkout。
 
 合并 main 后的最终验证顺序遵循
-[delivery-workflow-zh-CN.md §8](../delivery-workflow-zh-CN.md)，合并前结果只能作为
+[delivery-workflow-zh-CN.md §8](../../delivery-workflow-zh-CN.md)，合并前结果只能作为
 历史证据。
 
 ## 9. 风险、回滚与可逆边界

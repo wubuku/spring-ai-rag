@@ -51,5 +51,7 @@
   `2026-08-25_CHAT_RESOURCE_SKILL_MEMORY_EVOLUTION_*`
 - 外部投影身份边界、全数据面 ACL 合同、provider 失败保留语义与可复现发布 manifest：
   `2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_*`
+- principal 级 `RAG_READ` / `RAG_WRITE` 策略与中央数据面强制授权：
+  `2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

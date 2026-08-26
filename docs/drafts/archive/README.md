@@ -70,6 +70,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - External-projection identity bounds, full-data-plane ACL contracts,
   provider-failure preservation, and reproducible release manifests:
   `2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_*`
+- Operation-scoped `RAG_READ` / `RAG_WRITE` principal policy and central
+  data-plane enforcement:
+  `2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

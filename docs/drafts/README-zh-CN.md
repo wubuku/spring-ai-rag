@@ -32,7 +32,7 @@
 
 ## 当前活跃规划
 
-当前正在准备[操作级 API 能力控制规划](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PLAN.md)，
-[配套进度账本](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PROGRESS.md)记录恢复任务所需的上下文。
+当前正在准备[业务绑定能力画像与 P0 发布验收闭环规划](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PLAN.md)，
+[配套进度账本](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PROGRESS.md)记录恢复任务所需的上下文。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

@@ -38,9 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The active [operation-scoped API capabilities plan](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PLAN.md)
+The active [business binding capability profiles and P0 release acceptance plan](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PLAN.md)
 is tracked by its accompanying
-[progress ledger](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PROGRESS.md). These working
+[progress ledger](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PROGRESS.md). These working
 documents are intentionally maintained in Chinese only.
 
 Completed, stopped, and superseded materials remain available in the
