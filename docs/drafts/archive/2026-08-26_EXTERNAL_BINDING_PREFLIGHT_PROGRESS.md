@@ -137,3 +137,8 @@
 - 2026-08-26：特性分支修复提交 `fbe09292` 已推送；fetch 后确认
   `origin/main=5d4145c3`，合并结果为 Already up to date。现在按该合并后组合重新执行
   完整 `16/16` 验收，不能沿用合并前证据作为最终结论。
+- 2026-08-26：合并后完整验收 `preflight-post-merge-20260826` 通过 `16/16`：
+  focused 后端 `119` 项、PostgreSQL 集成矩阵、Maven、WebUI、Mock Playwright、文档/
+  禁锁/密钥/whitespace 门禁、真实服务 HTTP 合同 `129` 项和真实 API-key Playwright
+  `1/1` 均通过。随后发现负向自测输出仍写着 `8`，已修正为实际的 `9` 个场景；修正后
+  自测已通过，待以最终工作树重新运行交付门禁。

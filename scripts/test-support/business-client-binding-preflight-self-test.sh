@@ -111,4 +111,4 @@ run_negative \
   "https://rag.example.invalid" \
   "READ_ONLY" "X_API_KEY" "YES" "sample-a"
 
-printf 'Binding preflight self-test passed: 8 negative cases\n'
+printf 'Binding preflight self-test passed: 9 negative cases\n'
