@@ -141,3 +141,7 @@
   - native JSON/SSE、OpenAI-compatible JSON/SSE、跨实例幂等重放、credential
     rotation、session/principal continuity 全部通过；
   - 真实 provider 调用总数精确为 `5`，未输出或提交任何 `.env` 密钥。
+- 2026-08-26 12:35 CST：实现与 dirty-tree 验收账本提交为 `b0dcbb3a`；随后
+  `git fetch origin --prune` 并合并 `origin/main`。远端 main 仍为 `afb78dd0`，
+  合并结果为 `Already up to date`，合并后候选基线为 `b0dcbb3a`。接下来只采用该
+  合并后基线的 clean-tree readiness 与真实 LLM 结果作为最终结论。
