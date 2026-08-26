@@ -13,7 +13,7 @@
 - 计划实施 worktree：`/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-operation-scoped-api-capabilities`
 - Flyway 基线：V1–V48；目标 V49。
 - 当前阶段：后端、WebUI 与双语长青文档完成；特性分支已推送并合并到 `main`，
-  main 合并后完整验收与真实 LLM 阶段已通过，待推送 main 并清理隔离 worktree。
+  main 合并后完整验收与真实 LLM 阶段已通过，隔离特性 worktree 已安全移除。
 
 ## 2. 已完成探索
 
@@ -124,7 +124,7 @@
 - [x] 统一完整门禁、真实双实例 HTTP/Playwright 与真实 LLM JSON/SSE 验收。
 - [x] 禁锁与最终密钥检查。
 - [x] merge 最新 `origin/main` 后完整复验。
-- [ ] 特性分支和 main push，最终状态干净。
+- [x] 特性分支和 main push，最终状态干净。
 
 ## 7. 已知限制
 
@@ -190,3 +190,6 @@
   使用真实 `grok-4.5` provider 完成原生 JSON/SSE、OpenAI 兼容 JSON/SSE、幂等
   replay、凭据轮换后的会话连续性和严格 5 次调用预算验证。证据目录：
   `.verification/managed-api-principals/20260826-operation-capabilities-main-final9/`。
+- 2026-08-26 11:52 CST：main 已推送到 `8607e75c`，远端特性分支为
+  `daa0d787`；两处 worktree 均干净，已使用不带 `--force` 的
+  `git worktree remove` 安全移除隔离特性 worktree。
