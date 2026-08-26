@@ -323,7 +323,7 @@ DOM、网络请求/响应和 JSON，不以截图作为正确性证据。该脚�
 ./scripts/verify-document-sync-runs.sh
 ```
 
-它会把一次性数据库从空库迁移到 V51，启用认证后创建受限读写/只读 principal，并验证
+它会把一次性数据库从空库迁移到 V52，启用认证后创建受限读写/只读 principal，并验证
 Sync Run begin、批量幂等、失败精确重放、preview/complete tombstone、namespace 与
 Collection ACL、防枚举、持久化 item receipt、状态过滤、`limit=1` cursor 分页、
 active/terminal 遍历语义、`Cache-Control: no-store`、敏感错误脱敏和禁悲观锁门禁。
@@ -413,7 +413,7 @@ mvn jacoco:report-aggregate
 ## 测试数据库
 
 单元测试使用 Mock 或 H2 兼容路径。Embedding Profile 迁移使用显式 PostgreSQL 集成测试，
-因为它需要 pgvector，并验证 Flyway V1-V51、固定向量列、Profile 专属索引、原子替换、
+因为它需要 pgvector，并验证 Flyway V1-V52、固定向量列、Profile 专属索引、原子替换、
 Legacy 认领、检索新鲜度和 Spring Data Repository 查询。
 
 启动 PostgreSQL 16 + pgvector 数据库后执行：
@@ -462,12 +462,35 @@ WebUI 验收要求 `npm run test:run`、`npm run build` 和 Mock API Playwright 
 运行时 smoke 使用唯一 key 覆盖创建、by-key 获取/更新、使用新目标 key 克隆、使用新 key
 导出/导入、软删除、恢复、重复冲突，以及文档/Search/Chat 的 key 输入。
 
+### Collection Provisioning 幂等验收门禁
+
+```bash
+./scripts/verify-collection-provisioning.sh
+```
+
+七阶段门禁先执行 owner、fingerprint、配置、service、controller、capability、OpenAPI 和
+WebUI retry 聚焦测试；随后把一次性 PostgreSQL 迁移到 V52，并要求 9 个集成测试全部执行、
+`skipped=0`。最终 HTTP 阶段让两个真实后端实例共用一个数据库，验证首次创建、跨实例和
+重启后 replay、规范化请求等价、语义冲突、owner 隔离、restricted ACL 拒绝、软删除当前
+状态 replay、恰好一次创建审计，以及账本不可用时 `503` fail closed。数据库断言确认
+V52、预期 ledger/Collection 数量和明文 credential 为零。
+
+只复跑一次性双实例 HTTP 阶段：
+
+```bash
+COLLECTION_PROVISIONING_VERIFY_PHASE=http \
+./scripts/verify-collection-provisioning.sh
+```
+
+WebUI 通过请求拦截断言同一次用户提交在 Axios retry 中复用一个 UUID，后续新提交使用
+另一个 UUID；验收证据不使用截图。
+
 ### 多 Collection 检索范围验收门禁
 
 范围实现具备 DTO、Resolver、ACL、SQL fragment、Vector/Full-text provider、
 Chat/Search/JSON、MockMvc、OpenAPI、WebUI 和 PostgreSQL 覆盖。真实
 PostgreSQL/Testcontainers 测试会启动 `pgvector/pgvector:pg16`，从空 schema 执行
-Flyway V1-V51，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
+Flyway V1-V52，并用实际 PostgreSQL `bigint[]` 绑定执行 Vector 查询：
 
 ```bash
 TESTCONTAINERS_RYUK_DISABLED=true \
@@ -493,7 +516,7 @@ WebUI 验收覆盖三种模式、多选、服务端 Collection 搜索和分页�
 ### JSONB 结构化记录验收门禁
 
 JSONB 实现同时具备 Mock HTTP/Service 覆盖和真实 PostgreSQL/Testcontainers 测试。后者会
-启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V51，并验证 JSONB round-trip、
+启动 `pgvector/pgvector:pg16`，从空库执行 Flyway V1-V52，并验证 JSONB round-trip、
 嵌套 `payloadContains`、V34 GIN planner、仅更新 payload 的版本记录、相同描述下不同
 记录共存以及级联清理：
 
@@ -537,7 +560,7 @@ text-only messages、未知 alias 错误、非流式 JSON、SSE role/content/fin
 ```
 
 脚本串行执行 service/worker/Controller focused tests，自动启动隔离 PostgreSQL 并从空库
-执行 V1–V51，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
+执行 V1–V52，验证 V33 active-job coalesce、force 原子升级和并发 worker 原子条件
 claim，再执行 `test-compile`、Shell 语法和空白检查。已有隔离数据库时可用
 `EMBEDDING_JOBS_IT_JDBC_URL` 覆盖。
 

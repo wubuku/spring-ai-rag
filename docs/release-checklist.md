@@ -16,7 +16,7 @@ Release date: `2026-07-21`
 - [x] Helm `version` and `appVersion` are `1.0.0`
 - [x] Docker/Helm default image tag is `1.0.0`
 - [x] Local, Docker, and Helm default port is `8081`
-- [x] Flyway inventory is V1-V51
+- [x] Flyway inventory is V1-V52
 - [x] JSONB structured-record API, payload snapshots, and collection lifecycle are covered
 - [x] `scripts/verify-jsonb-records.sh` records focused backend/database/frontend verification
 - [x] Document PATCH/disable/restore/permanent-delete and external triple identity are covered
@@ -159,10 +159,32 @@ Release date: `2026-07-21`
 - [x] Capability discovery reports runtime availability through
   `features.optional.documentSyncRunItemReceipts` as an additive protocol
   `1.0` field.
-- [x] PostgreSQL service and authenticated HTTP acceptance cover V1-V51,
+- [x] PostgreSQL service and authenticated HTTP acceptance cover V1-V52,
   restricted read/write and read-only principals, ACL anti-enumeration, cursor
   binding, active/terminal paging, exact failed replay, missing reconciliation,
   and secret-safe evidence.
+
+### 2026-08-26 Collection Provisioning Idempotency Gates
+
+- [x] V52 adds a separate owner-scoped Collection-create operation ledger with
+  key/fingerprint hashes and a restricted Collection foreign key; raw keys and
+  request bodies are never persisted.
+- [x] Unkeyed create remains `200`; keyed first create is `201`; exact
+  cross-instance or post-restart replay is `200` with
+  `X-RAG-Idempotent-Replay: true`; semantic reuse returns
+  `409 IDEMPOTENCY_KEY_REUSED`.
+- [x] Replay returns the Collection's current state and document count,
+  including soft-deleted state, without restoring the resource or writing a
+  second create audit.
+- [x] Configuration-disabled and ledger-unavailable keyed requests fail closed
+  with `503`; same-owner races use unique constraints and bounded rereads
+  without explicit pessimistic locks.
+- [x] `verify-collection-provisioning.sh` covers focused contracts, nine
+  PostgreSQL tests, two real backend instances, restart recovery, owner/ACL
+  isolation, database facts, and secret-safe evidence. WebUI tests prove one
+  generated UUID is reused across Axios retries.
+- [x] Capability discovery reports the additive protocol `1.0` field
+  `features.provisioning.collectionCreateIdempotencyKey`.
 
 ### Final Evidence (2026-07-21)
 

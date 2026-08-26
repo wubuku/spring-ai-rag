@@ -14,15 +14,21 @@ import com.springairag.api.dto.CollectionRestoreResponse;
 import com.springairag.api.dto.DocumentAddedResponse;
 import com.springairag.api.dto.DocumentSummary;
 import com.springairag.api.dto.DocumentUpdateRequest;
+import com.springairag.api.dto.ErrorResponse;
+import com.springairag.api.enums.ErrorCode;
+import com.springairag.core.chat.IdempotencyKeyValidator;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.entity.RagDocument;
 import com.springairag.core.exception.DocumentRevisionConflictException;
+import com.springairag.core.exception.RagException;
 import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.util.CollectionMapper;
 import org.springframework.data.domain.Page;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import com.springairag.core.service.JsonRecordService;
@@ -31,9 +37,14 @@ import com.springairag.core.util.DigestUtils;
 import com.springairag.core.versioning.ApiVersion;
 import io.micrometer.core.annotation.Timed;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.enums.ParameterIn;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,10 +52,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,6 +86,9 @@ public class RagCollectionController {
     private JsonRecordService jsonRecordService;
     private DocumentMutationService documentMutationService;
     private AuditLogService auditLogService;  // optional: null when RagAuditLogRepository unavailable
+    private CollectionProvisioningService collectionProvisioningService;
+    private ProvisioningOwnerResolver provisioningOwnerResolver =
+            new ProvisioningOwnerResolver();
 
     @Autowired(required = false)
     public void setJsonRecordService(JsonRecordService jsonRecordService) {
@@ -81,6 +99,14 @@ public class RagCollectionController {
     public void setDocumentMutationService(
             DocumentMutationService documentMutationService) {
         this.documentMutationService = documentMutationService;
+    }
+
+    @Autowired(required = false)
+    public void setCollectionProvisioningService(
+            CollectionProvisioningService collectionProvisioningService,
+            ProvisioningOwnerResolver provisioningOwnerResolver) {
+        this.collectionProvisioningService = collectionProvisioningService;
+        this.provisioningOwnerResolver = provisioningOwnerResolver;
     }
 
     @Autowired
@@ -107,28 +133,97 @@ public class RagCollectionController {
     /**
      * Create a collection.
      */
-    @Operation(summary = "Create collection", description = "Create a new document collection (knowledge base).")
+    @Operation(
+            summary = "Create collection",
+            description = "Create a new document collection. Supplying Idempotency-Key "
+                    + "enables caller-scoped durable replay.",
+            parameters = @Parameter(
+                    name = "Idempotency-Key",
+                    in = ParameterIn.HEADER,
+                    required = false,
+                    description = "Optional Collection provisioning idempotency key. "
+                            + "Reuse it only with the same effective request.",
+                    schema = @Schema(type = "string", minLength = 1, maxLength = 255)))
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Collection created, returns collection info"),
-            @ApiResponse(responseCode = "400", description = "Invalid or missing collectionKey"),
-            @ApiResponse(responseCode = "409", description = "collectionKey already exists")
+            @ApiResponse(responseCode = "200",
+                    description = "Unkeyed create succeeded or keyed result replayed"),
+            @ApiResponse(responseCode = "201",
+                    description = "Keyed Collection create succeeded"),
+            @ApiResponse(responseCode = "400",
+                    description = "Invalid request or Idempotency-Key",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409",
+                    description = "Collection key already exists or idempotency key was reused",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "503",
+                    description = "Collection provisioning idempotency is disabled or unavailable",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
     @PostMapping
     @Timed(value = "rag.collection.create", description = "Create collection", percentiles = {0.5, 0.95, 0.99})
-    public ResponseEntity<Map<String, Object>> create(@Valid @RequestBody CollectionRequest request) {
+    public ResponseEntity<Map<String, Object>> create(
+            @Valid @RequestBody CollectionRequest request,
+            HttpServletRequest httpRequest) {
         ApiKeyCollectionAccess.requireCollectionCreationAllowed(
-                ApiKeyCollectionAccess.currentPolicy());
+                ApiKeyCollectionAccess.currentPolicy(httpRequest));
         log.info("Creating collection: key={}, name={}",
                 request.getCollectionKey(), request.getName());
+
+        String idempotencyKey = IdempotencyKeyValidator.normalize(
+                httpRequest == null
+                        ? List.of()
+                        : Collections.list(
+                                httpRequest.getHeaders("Idempotency-Key")));
+        if (idempotencyKey != null) {
+            if (collectionProvisioningService == null) {
+                throw new RagException(
+                        ErrorCode.SERVICE_UNAVAILABLE,
+                        "Collection provisioning ledger is unavailable");
+            }
+            CollectionProvisioningService.ProvisioningResult result =
+                    collectionProvisioningService.createOrReplay(
+                            request,
+                            provisioningOwnerResolver.resolve(httpRequest),
+                            IdempotencyKeyValidator.hash(idempotencyKey));
+            RagCollection collection = result.collection();
+            if (!result.replay()) {
+                log.info("Collection created: id={}, name={}",
+                        collection.getId(), collection.getName());
+                auditCollectionCreated(collection);
+            }
+            ResponseEntity.BodyBuilder builder = ResponseEntity.status(
+                    result.replay() ? HttpStatus.OK : HttpStatus.CREATED);
+            if (result.replay()) {
+                builder.header("X-RAG-Idempotent-Replay", "true");
+            }
+            return builder.body(CollectionMapper.toMap(
+                    collection, result.documentCount()));
+        }
 
         RagCollection collection = collectionService.createCollection(request);
 
         log.info("Collection created: id={}, name={}", collection.getId(), collection.getName());
+        auditCollectionCreated(collection);
+
+        return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
+    }
+
+    /**
+     * 兼容隔离 Java 调用方；HTTP 路径使用带 servlet request 的 overload。
+     */
+    public ResponseEntity<Map<String, Object>> create(CollectionRequest request) {
+        HttpServletRequest currentRequest =
+                RequestContextHolder.getRequestAttributes()
+                        instanceof ServletRequestAttributes attributes
+                        ? attributes.getRequest()
+                        : null;
+        return create(request, currentRequest);
+    }
+
+    private void auditCollectionCreated(RagCollection collection) {
         audit(AuditLogService.AuditAction.CREATE, AuditLogService.ENTITY_COLLECTION,
                 String.valueOf(collection.getId()),
                 "Collection created: " + collection.getName());
-
-        return ResponseEntity.ok(CollectionMapper.toMap(collection, 0));
     }
 
     @Operation(summary = "Get collection by stable key",

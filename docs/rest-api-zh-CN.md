@@ -106,7 +106,8 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
     "provisioning": {
       "idempotencyKey": true,
       "replayReturnsSecret": false,
-      "rawCredentialShownOnce": true
+      "rawCredentialShownOnce": true,
+      "collectionCreateIdempotencyKey": true
     },
     "dataPlane": {
       "collectionKey": true,
@@ -1747,6 +1748,29 @@ Get a specific version of a document (includes content snapshot).
 ```
 
 响应同时包含内部 `id` 和外部 `collectionKey`。
+
+自动化 provisioning 应为一个逻辑创建命令生成一个 `Idempotency-Key`，并在超时、响应
+丢失、进程重启或切换到另一服务实例重试时复用同一个 key：
+
+```http
+POST /api/v1/rag/collections
+Idempotency-Key: collection-create-20260826-0001
+```
+
+- 不带 header 的请求保持旧合同，成功返回 `200`。
+- keyed 首次创建返回 `201`。
+- 同一认证 owner 的精确 replay 返回 `200` 和
+  `X-RAG-Idempotent-Replay: true`。
+- 同 owner/key 携带不同有效创建语义时返回
+  `409 IDEMPOTENCY_KEY_REUSED`。
+- 非法 header 返回 `400 IDEMPOTENCY_KEY_INVALID`。
+- keyed provisioning 被关闭或账本不可置信时 fail closed 返回 `503`，绝不退化为
+  无幂等创建。
+
+replay 返回 operation 绑定 Collection 的当前状态和当前文档数，因此会反映后续 update；
+软删除后返回 `deleted=true`，但不会恢复或重建 Collection。replay 也不会重复写
+Collection 创建审计。key 按服务端派生的 provisioning owner 隔离；数据库只保存 key
+hash 和规范化请求 fingerprint，不保存原始 key 或请求体。
 
 ---
 

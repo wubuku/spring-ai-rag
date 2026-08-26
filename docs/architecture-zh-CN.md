@@ -302,6 +302,10 @@ key 按原值、区分大小写地一次批量解析。不受限调用方的未�
   `documentIds` 的检索中。数据库外键和检索 SQL 继续使用数字 ID。
 - Collection 创建、导入和克隆必须由调用方提供 key。by-key CRUD、恢复、文档关联和导出
   使用 query parameter，不使用 path segment，因为合法 key 可以包含 URL 保留标点。
+- V52 为 Collection 创建增加可选、按调用方隔离的持久化幂等。成功 Collection 与
+  operation ledger 在同一事务中提交，身份为服务端派生 owner 加 key hash；精确 replay
+  返回 Collection 当前状态且不重复写创建审计，语义复用冲突，账本关闭或不可用时
+  fail closed。
 - API Key 管理对外使用 `allowedCollectionKeys`；V48 在
   `rag_api_principal.allowed_collection_ids` 保存权威内部 ID ACL。活动 credential 保留
   兼容 snapshot，请求授权使用 indexed join 加载的不可变 principal policy。V49 在同一
@@ -589,6 +593,7 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | 版本化 credential；每个 principal 最多一个 active version |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
+| `rag_collection_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, collection_id, completed_at | 不保存 raw key 或请求体的 Collection 创建成功 replay 账本（V52） |
 | `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, 累计计数 | 权威来源快照 run 控制面；lease 只保存 hash |
 | `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | 幂等 item ledger 与持久化低敏 receipt 来源；不保存正文、payload 或 metadata |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
@@ -607,6 +612,8 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
 - `rag_api_provisioning_operation`：owner/key-hash 唯一身份与 completed-at 清理索引
+- `rag_collection_provisioning_operation`：owner/key-hash 唯一身份、受约束的 Collection
+  外键、hash 形状检查与 completed-at 清理索引
 - `rag_document_sync_run_items`：V51 提供 `(run_id, seen_at, external_id)` 与
   `(run_id, status, seen_at, external_id)` B-Tree，分别支持未过滤和按状态过滤的有界
   keyset receipt 查询

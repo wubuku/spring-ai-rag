@@ -42,7 +42,8 @@ public class IntegrationCapabilityCatalog {
                         new IntegrationCapabilitiesResponse.Provisioning(
                                 properties.getApiKeyProvisioning().isEnabled(),
                                 false,
-                                true),
+                                true,
+                                properties.getCollectionProvisioning().isEnabled()),
                         new IntegrationCapabilitiesResponse.DataPlane(
                                 true,
                                 new IntegrationCapabilitiesResponse.JsonRecords(

@@ -124,6 +124,8 @@ public enum ErrorCode {
     DERIVATION_REPAIR_DISABLED(503, "Derivation Repair Disabled"),
     RATE_LIMIT_STORE_UNAVAILABLE(503, "Rate Limit Store Unavailable"),
     API_KEY_PROVISIONING_IDEMPOTENCY_DISABLED(503, "API Key Provisioning Idempotency Disabled"),
+    COLLECTION_PROVISIONING_IDEMPOTENCY_DISABLED(
+            503, "Collection Provisioning Idempotency Disabled"),
 
     // ==================== 504 Gateway Timeout ====================
 

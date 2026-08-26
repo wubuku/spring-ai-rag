@@ -16,7 +16,9 @@ import com.springairag.core.repository.RagCollectionRepository;
 import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.service.AuditLogService;
+import com.springairag.core.service.CollectionProvisioningService;
 import com.springairag.core.service.RagCollectionService;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +43,7 @@ class RagCollectionControllerTest {
     private RagCollectionRepository collectionRepository;
     private RagDocumentRepository documentRepository;
     private RagCollectionService collectionService;
+    private CollectionProvisioningService collectionProvisioningService;
     private AuditLogService auditLogService;
     private RagCollectionController controller;
 
@@ -54,8 +57,11 @@ class RagCollectionControllerTest {
         collectionRepository = mock(RagCollectionRepository.class);
         documentRepository = mock(RagDocumentRepository.class);
         collectionService = mock(RagCollectionService.class);
+        collectionProvisioningService = mock(CollectionProvisioningService.class);
         auditLogService = mock(AuditLogService.class);
         controller = new RagCollectionController(collectionRepository, documentRepository, collectionService, auditLogService);
+        controller.setCollectionProvisioningService(
+                collectionProvisioningService, new ProvisioningOwnerResolver());
     }
 
     private RagCollection createCollection(Long id, String name) {
@@ -85,6 +91,84 @@ class RagCollectionControllerTest {
         assertEquals(1L, response.getBody().get("id"));
         assertEquals("测试知识库", response.getBody().get("name"));
         assertEquals(1024, response.getBody().get("dimensions"));
+    }
+
+    @Test
+    void keyedCreateReturns201AndAuditsOnlyTheCreator() {
+        CollectionRequest request = new CollectionRequest();
+        request.setCollectionKey("create-keyed");
+        request.setName("Keyed");
+        RagCollection saved = createCollection(1L, "Keyed");
+        saved.setCollectionKey("create-keyed");
+        when(collectionProvisioningService.createOrReplay(
+                eq(request), eq("root:environment-root"), anyString()))
+                .thenReturn(new CollectionProvisioningService.ProvisioningResult(
+                        saved, 0L, false));
+        MockHttpServletRequest httpRequest = rootRequest("create-command");
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.create(request, httpRequest);
+
+        assertEquals(201, response.getStatusCode().value());
+        assertNull(response.getHeaders().getFirst("X-RAG-Idempotent-Replay"));
+        verify(auditLogService).logCreate(
+                eq(AuditLogService.ENTITY_COLLECTION),
+                eq("1"),
+                contains("Keyed"),
+                isNull());
+        verifyNoInteractions(collectionService);
+    }
+
+    @Test
+    void keyedReplayReturnsCurrentStateAndDoesNotAuditAgain() {
+        CollectionRequest request = new CollectionRequest();
+        request.setCollectionKey("create-keyed");
+        request.setName("Original");
+        RagCollection current = createCollection(1L, "Renamed");
+        current.setCollectionKey("create-keyed");
+        current.setDeleted(true);
+        when(collectionProvisioningService.createOrReplay(
+                eq(request), eq("root:environment-root"), anyString()))
+                .thenReturn(new CollectionProvisioningService.ProvisioningResult(
+                        current, 4L, true));
+
+        ResponseEntity<Map<String, Object>> response =
+                controller.create(request, rootRequest("create-command"));
+
+        assertEquals(200, response.getStatusCode().value());
+        assertEquals("true",
+                response.getHeaders().getFirst("X-RAG-Idempotent-Replay"));
+        assertEquals("Renamed", response.getBody().get("name"));
+        assertEquals(true, response.getBody().get("deleted"));
+        assertEquals(4L, response.getBody().get("documentCount"));
+        verifyNoInteractions(auditLogService, collectionService);
+    }
+
+    @Test
+    void keyedCreateRejectsRestrictedCallerBeforeReadingLedger() {
+        RagApiKey key = new RagApiKey();
+        key.setRole(ApiKeyRole.NORMAL);
+        key.setAllowedCollectionIds("2");
+        MockHttpServletRequest httpRequest = new MockHttpServletRequest();
+        httpRequest.addHeader("Idempotency-Key", "restricted-command");
+        httpRequest.setAttribute(
+                ApiKeyAuthFilter.AUTHENTICATED_API_KEY_ENTITY, key);
+        CollectionRequest request = new CollectionRequest();
+        request.setCollectionKey("denied");
+        request.setName("Denied");
+
+        assertThrows(SecurityException.class,
+                () -> controller.create(request, httpRequest));
+
+        verifyNoInteractions(collectionProvisioningService, collectionService);
+    }
+
+    private MockHttpServletRequest rootRequest(String idempotencyKey) {
+        MockHttpServletRequest request = new MockHttpServletRequest();
+        request.addHeader("Idempotency-Key", idempotencyKey);
+        request.setAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE,
+                ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT);
+        return request;
     }
 
     @Test

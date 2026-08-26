@@ -41,7 +41,12 @@ export const collectionsApi = {
     description?: string;
     dimensions?: number;
     embeddingModel?: string;
-  }) => apiClient.post<Collection>('/collections', data),
+  }) => {
+    const idempotencyKey = crypto.randomUUID();
+    return apiClient.post<Collection>('/collections', data, {
+      headers: { 'Idempotency-Key': idempotencyKey },
+    });
+  },
 
   update: (id: number, data: { name?: string; description?: string; enabled?: boolean }) =>
     apiClient.put(`/collections/${id}`, data),

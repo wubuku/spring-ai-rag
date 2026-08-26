@@ -11,6 +11,7 @@ import com.springairag.core.filter.ApiKeyAuthFilter;
 import com.springairag.core.security.ApiAccessPolicy;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.security.ApiKeyCollectionAccess;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
 import io.swagger.v3.oas.annotations.Operation;
@@ -49,14 +50,25 @@ public class ApiKeyController {
     private final ApiKeyManagementService apiKeyService;
     private final EnvironmentRootCredentialResolver rootCredentialResolver;
     private final CollectionIdentityResolver collectionIdentityResolver;
+    private final ProvisioningOwnerResolver provisioningOwnerResolver;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public ApiKeyController(ApiKeyManagementService apiKeyService,
                             EnvironmentRootCredentialResolver rootCredentialResolver,
                             @org.springframework.beans.factory.annotation.Autowired(required = false)
-                            CollectionIdentityResolver collectionIdentityResolver) {
+                            CollectionIdentityResolver collectionIdentityResolver,
+                            ProvisioningOwnerResolver provisioningOwnerResolver) {
         this.apiKeyService = apiKeyService;
         this.rootCredentialResolver = rootCredentialResolver;
         this.collectionIdentityResolver = collectionIdentityResolver;
+        this.provisioningOwnerResolver = provisioningOwnerResolver;
+    }
+
+    public ApiKeyController(ApiKeyManagementService apiKeyService,
+                            EnvironmentRootCredentialResolver rootCredentialResolver,
+                            CollectionIdentityResolver collectionIdentityResolver) {
+        this(apiKeyService, rootCredentialResolver, collectionIdentityResolver,
+                new ProvisioningOwnerResolver());
     }
 
     @Operation(
@@ -128,7 +140,7 @@ public class ApiKeyController {
                     apiKeyService.generateIdempotentKey(
                             request,
                             ApiKeyRole.NORMAL,
-                            provisioningOwner(httpRequest),
+                            provisioningOwnerResolver.resolve(httpRequest),
                             IdempotencyKeyValidator.hash(idempotencyKey),
                             rootCredentialResolver.isConfigured());
             ResponseEntity.BodyBuilder builder = ResponseEntity.status(
@@ -296,23 +308,6 @@ public class ApiKeyController {
 
     private ApiAccessPolicy getCaller(HttpServletRequest request) {
         return ApiKeyCollectionAccess.currentPolicy(request);
-    }
-
-    private String provisioningOwner(HttpServletRequest request) {
-        Object type = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_PRINCIPAL_TYPE);
-        Object id = request.getAttribute(ApiKeyAuthFilter.AUTHENTICATED_KEY_ATTRIBUTE);
-        if (ApiKeyAuthFilter.PRINCIPAL_ENVIRONMENT_ROOT.equals(type)) {
-            return "root:environment-root";
-        }
-        if (ApiKeyAuthFilter.PRINCIPAL_DATABASE_API_KEY.equals(type)
-                && id instanceof String principalId && !principalId.isBlank()) {
-            return "db:" + principalId;
-        }
-        if (ApiKeyAuthFilter.PRINCIPAL_LEGACY_STATIC.equals(type)
-                || getCaller(request) != null) {
-            return "legacy:static";
-        }
-        return "local:auth-disabled";
     }
 
     private ResponseEntity<ErrorResponse> requireEnvironmentRoot(

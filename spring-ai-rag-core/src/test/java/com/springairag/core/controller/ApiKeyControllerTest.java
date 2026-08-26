@@ -12,6 +12,7 @@ import com.springairag.core.repository.RagApiKeyRepository;
 import com.springairag.core.security.EnvironmentRootCredentialResolver;
 import com.springairag.core.service.ApiKeyManagementService;
 import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.security.ProvisioningOwnerResolver;
 import com.springairag.core.versioning.ApiVersionConfig;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
@@ -38,7 +39,11 @@ import com.springairag.core.entity.RagApiKey;
 import com.springairag.core.filter.ApiKeyAuthFilter;
 
 @WebMvcTest(ApiKeyController.class)
-@Import({ApiVersionConfig.class, ApiKeyControllerTest.RagPropertiesTestConfig.class})
+@Import({
+        ApiVersionConfig.class,
+        ProvisioningOwnerResolver.class,
+        ApiKeyControllerTest.RagPropertiesTestConfig.class
+})
 class ApiKeyControllerTest {
 
     @Autowired

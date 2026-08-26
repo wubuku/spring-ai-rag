@@ -138,6 +138,11 @@ boundary across ingestion, retrieval, and authorization:
 - Collection CRUD, restore, clone, document association, import/export,
   document ingestion, upload, PDF-to-RAG, WebUI, and API-key management expose
   the stable key. Database relationships and retrieval remain numeric.
+- Collection create accepts an optional `Idempotency-Key`. The first keyed
+  create returns `201`; exact same-owner replay returns `200`, a replay header,
+  and the Collection's current state without another create audit. Semantic
+  reuse conflicts and an unavailable ledger fails closed. The WebUI generates
+  one UUID per submit so Axios retries reuse the same command identity.
 - WebUI Chat and Search expose all three modes. Selected mode supports
   server-side Collection search, 50-item pages, cross-page multi-selection,
   and up to 100 keys. Collections, Documents, Files, and API Keys also use keys
@@ -392,7 +397,7 @@ See [multi-model-external-config.md](multi-model-external-config.md).
 ### Database
 
 - PostgreSQL with pgvector.
-- Flyway is currently V1–V51.
+- Flyway is currently V1–V52.
 - V27/V28 add, backfill, validate, uniquely constrain, and make immutable the
   Collection business key; V29 adds JSONB structured records; V30 adds the
   external-document synchronization schema; V31 normalizes stored external
@@ -421,7 +426,9 @@ See [multi-model-external-config.md](multi-model-external-config.md).
   `RAG_READ` / `RAG_WRITE` operation capabilities and a database constraint;
   V50 adds the requester-scoped provisioning idempotency ledger, storing only
   key/fingerprint hashes and result metadata, never raw credentials; V51 adds
-  bounded run/status cursor indexes for the Sync Run item ledger.
+  bounded run/status cursor indexes for the Sync Run item ledger; V52 adds the
+  owner-scoped Collection-create idempotency ledger with a restricted
+  Collection foreign key.
 - The data-access layer forbids explicit `SELECT ... FOR UPDATE`,
   `SKIP LOCKED`, JPA `PESSIMISTIC_*`, and PostgreSQL advisory locks.
   Concurrent writes use conditional `UPDATE/DELETE ... RETURNING`, `@Version`,
@@ -513,11 +520,18 @@ Managed database callers consist of a stable `rag_api_principal` and versioned
   returns `409`. Rotation or revocation changes the current credential
   projection returned by later replay without making the original secret
   recoverable.
+- Collection creation also accepts an optional `Idempotency-Key`, but uses a
+  separate V52 ledger and never stores a response snapshot. Replay returns the
+  bound Collection's current state and document count; soft deletion remains
+  visible and is never reversed. Disabled or unavailable keyed provisioning
+  returns `503` rather than falling back to an ordinary create.
 - `GET /api/v1/rag/integration-capabilities` is an authenticated, no-store,
   low-sensitivity contract for protocol version, the caller's effective
   capabilities and Collection scope, supported data-plane behaviors, optional
   features, and stable input limits. `documentSyncRunItemReceipts` explicitly
-  reports whether durable receipt lookup is available. Restricted ACL
+  reports whether durable receipt lookup is available, while
+  `features.provisioning.collectionCreateIdempotencyKey` reports the V52
+  control-plane capability. Restricted ACL
   projection fails closed with `503` when all Collection keys cannot be
   resolved.
 - Chat, Search, Collections, Documents, PDF-to-RAG, evaluation, and background

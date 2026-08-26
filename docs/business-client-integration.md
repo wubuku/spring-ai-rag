@@ -136,6 +136,8 @@ replace identity binding. A client using authoritative snapshots must require
 failed-item lookup, or terminal audit additionally requires
 `features.optional.documentSyncRunItemReceipts=true`. Older clients must
 ignore unknown optional fields and must not treat a missing field as enabled.
+Automated control-plane setup that retries Collection creation must require
+`features.provisioning.collectionCreateIdempotencyKey=true`.
 The durable receipt endpoint is
 `GET /api/v1/rag/document-sync-runs/{runId}/items`; see the
 [External Document Synchronization Client Guide](external-document-sync-client-guide.md#7-authoritative-snapshot-reconciliation)
@@ -203,7 +205,9 @@ A payload-only change does not call the embedding provider. A
 
 Recommended sequence:
 
-1. An operator uses environment root to create the target Collection.
+1. An operator uses environment root to create each target Collection with a
+   caller-generated `Idempotency-Key`, reusing it until the logical command
+   receives a definitive result.
 2. The operator creates a restricted business principal with a unique name,
    expiry, RPM, `allowedCollectionKeys`, explicit `capabilities`, and a
    caller-generated `Idempotency-Key`.
@@ -216,14 +220,22 @@ Recommended sequence:
 6. Probe the target Collections by key before consuming business events.
 7. Run the contract gate in section 8 after deployment.
 
-Reuse the same `Idempotency-Key` only with the exact same normalized request.
-The first success returns `201` and the raw credential once; an exact retry
-returns `200`, `X-RAG-Idempotent-Replay: true`, and `rawKey=null`. A different
-request with the same owner/key returns `409 IDEMPOTENCY_KEY_REUSED`. If the
-first response was lost, replay can confirm the principal but cannot recover
-the raw secret; rotate the current credential instead of creating an orphan
-principal. The default replay guarantee is the configured 400-day retention
-window, so callers must not reuse an old key after that window.
+For Collection creation, the first keyed success returns `201`; an exact
+same-owner replay returns `200` plus `X-RAG-Idempotent-Replay: true` and the
+Collection's current state. A different effective request with the same
+owner/key returns `409 IDEMPOTENCY_KEY_REUSED`. Replay after Collection update
+or soft deletion returns the current state and never restores the resource.
+Ledger failure returns `503` instead of falling back to an unsafe create.
+
+Principal creation uses the same header discipline but has a distinct ledger
+and shown-once-secret contract. Its first success returns `201` and the raw
+credential once; an exact retry returns `200`,
+`X-RAG-Idempotent-Replay: true`, and `rawKey=null`. If the first response was
+lost, replay can confirm the principal but cannot recover the raw secret;
+rotate the current credential instead of creating an orphan principal. For
+both endpoints, reuse a key only with the exact same normalized request. The
+default replay guarantee is the configured 400-day retention window, so
+callers must not reuse an old key after that window.
 
 ### 4.1 Deployed Binding Preflight
 
@@ -391,21 +403,22 @@ conditions.
 - Read document lifecycle or
   `/api/v1/rag/collections/embedding-readiness` for embedding availability.
   Use `/auth/me` plus Collection by-key probes for business binding.
-- Empty and upgraded databases must run Flyway V1-V51 in order. V49 adds
+- Empty and upgraded databases must run Flyway V1-V52 in order. V49 adds
   operation capabilities to stable principals; V50 adds the successful
   provisioning idempotency ledger without storing raw credentials; V51 adds
-  unfiltered and status-filtered keyset indexes for Sync Run item receipts.
+  unfiltered and status-filtered keyset indexes for Sync Run item receipts;
+  V52 adds a separate owner-scoped Collection-create idempotency ledger.
 - Pin production callers to an accepted Git commit or an immutable image built
   from it. Maven/API version remains `1.0.0`.
 - The added `/auth/me` fields remain backward-compatible. Older clients ignore
   them; clients that depend on capability/ACL verification must run the
   contract gate before rollout.
-- V49/V50/V51 are forward-compatible additive migrations; do not destructively
+- V49/V50/V51/V52 are forward-compatible additive migrations; do not destructively
   roll back their schema. If the application is rolled back to a version that
-  does not understand operation capabilities, keyed provisioning, or item
-  receipts, retain the schema and stop clients that require those contracts
-  rather than starting permissively, retrying creates without idempotency, or
-  assuming the receipt endpoint remains available.
+  does not understand operation capabilities, keyed principal/Collection
+  provisioning, or item receipts, retain the schema and stop clients that
+  require those contracts rather than starting permissively, retrying creates
+  without idempotency, or assuming the receipt endpoint remains available.
 
 ## 8. One-Command Integration Acceptance
 
@@ -413,6 +426,12 @@ Full gate:
 
 ```bash
 ./scripts/verify-business-client-readiness.sh
+```
+
+Focused Collection provisioning reliability gate:
+
+```bash
+./scripts/verify-collection-provisioning.sh
 ```
 
 Reproducible gate for a final candidate commit:

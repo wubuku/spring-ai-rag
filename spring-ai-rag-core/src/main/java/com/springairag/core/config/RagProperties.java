@@ -69,6 +69,8 @@ public class RagProperties {
             new RagDocumentLifecycleProperties();
     private final RagApiKeyProvisioningProperties apiKeyProvisioning =
             new RagApiKeyProvisioningProperties();
+    private final RagCollectionProvisioningProperties collectionProvisioning =
+            new RagCollectionProvisioningProperties();
 
     public RagEmbeddingProperties getEmbedding() {
         return embedding;
@@ -172,5 +174,9 @@ public class RagProperties {
 
     public RagApiKeyProvisioningProperties getApiKeyProvisioning() {
         return apiKeyProvisioning;
+    }
+
+    public RagCollectionProvisioningProperties getCollectionProvisioning() {
+        return collectionProvisioning;
     }
 }

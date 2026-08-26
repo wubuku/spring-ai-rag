@@ -29,6 +29,7 @@
 | Schema-level plaintext-secret prohibition | Shipped in V48 | Migration clears plaintext, removes its index, and enforces `api_key IS NULL` |
 | Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Shipped in V49 | A central filter enforces capabilities after authentication and before rate limiting; read-only principals may Search/Chat and writes return `403` |
 | Principal-provisioning idempotency key | Shipped in V50 | Optional keyed creation supports exact replay without returning the shown-once secret; semantic reuse conflicts and ledger failure fail closed |
+| Collection-create idempotency key | Shipped in V52 | Optional owner-scoped keyed creation supports cross-instance/restart replay of current Collection state; semantic reuse and ledger failure fail closed |
 | Machine-readable integration protocol version / capability discovery | Shipped in V50 | An authenticated, no-store endpoint projects protocol, caller policy, supported data-plane behaviors, optional features, and stable limits |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
 | Persistent token/cost observability per model invocation | Future implementation candidate | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; the candidate has not completed planning `3/3` |

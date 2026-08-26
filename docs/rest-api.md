@@ -114,7 +114,8 @@ credential, but a database NORMAL principal does not need an additional
     "provisioning": {
       "idempotencyKey": true,
       "replayReturnsSecret": false,
-      "rawCredentialShownOnce": true
+      "rawCredentialShownOnce": true,
+      "collectionCreateIdempotencyKey": true
     },
     "dataPlane": {
       "collectionKey": true,
@@ -2011,6 +2012,33 @@ Collections, return `409`.
 ```
 
 The response contains both internal `id` and external `collectionKey`.
+
+Automated provisioning should send one caller-generated `Idempotency-Key` for
+the logical create command and reuse that same key after timeout, response
+loss, process restart, or retry through another service instance:
+
+```http
+POST /api/v1/rag/collections
+Idempotency-Key: collection-create-20260826-0001
+```
+
+- A request without the header preserves the legacy `200` response.
+- The first keyed create returns `201`.
+- An exact replay by the same authenticated owner returns `200` and
+  `X-RAG-Idempotent-Replay: true`.
+- Reusing the same owner/key with different effective create semantics returns
+  `409 IDEMPOTENCY_KEY_REUSED`.
+- An invalid header returns `400 IDEMPOTENCY_KEY_INVALID`.
+- If keyed provisioning is disabled or its ledger cannot be trusted, the
+  request fails closed with `503`; it never falls back to an unkeyed create.
+
+Replay returns the operation's Collection in its current state and with its
+current document count. A later update is therefore visible, and a
+soft-deleted Collection is returned with `deleted=true`; replay never restores
+or recreates it. Replay also does not emit another Collection-create audit.
+Keys are isolated by server-derived provisioning owner. Only hashes and the
+canonical request fingerprint are stored; the raw key and request body are
+not persisted.
 
 ---
 

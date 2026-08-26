@@ -118,6 +118,10 @@ Collection 不是仅用于展示的分类字段，而是已经进入写入、检
   受限调用方的未知/未授权 key 返回 `403`；不受限调用方的未知 key 返回 `404`。
 - Collection CRUD、恢复、克隆、文档关联、导入导出、文档写入、上传、PDF-to-RAG、
   WebUI 和 API Key 管理均在外部边界使用稳定 key；数据库关系和检索仍使用数字 ID。
+- Collection 创建接受可选 `Idempotency-Key`。keyed 首次创建返回 `201`；同 owner
+  精确 replay 返回 `200`、replay header 和 Collection 当前状态，不重复写创建审计。
+  语义复用冲突，账本不可用时 fail closed。WebUI 每次提交生成一个 UUID，使 Axios
+  自动重试复用同一个命令身份。
 - WebUI Chat 与 Search 均提供三种模式。selected 模式支持服务端 Collection 搜索、
   每页 50 项、跨页多选和最多 100 个 key；Collections、Documents、Files 和 API Keys
   页面也在外部边界使用 key。
@@ -313,7 +317,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V51。
+- Flyway 当前为 V1–V52。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -333,7 +337,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   credential、明文 secret 禁写约束、共享 quota bucket 与 legacy ADMIN guard；V49
   增加 principal 级 `RAG_READ` / `RAG_WRITE` 操作能力及数据库约束；V50 增加按
   requester 隔离的 provisioning 幂等账本，只保存 key/fingerprint hash 与结果 metadata，
-  从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引。
+  从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引；
+  V52 增加按 owner 隔离、具有受约束 Collection 外键的 Collection 创建幂等账本。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -411,9 +416,13 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   一次 raw credential；精确重放返回 `200`、当前 credential metadata 与显式
   `rawKey: null`。同一 owner/key 被用于不同有效语义时返回 `409`。后续 rotation 或
   revoke 会改变 replay 返回的当前 credential 投影，但不会使原 secret 可恢复。
+- Collection 创建也支持可选 `Idempotency-Key`，但使用独立 V52 账本且不保存响应
+  snapshot。replay 返回绑定 Collection 的当前状态和当前文档数；软删除保持可见且绝不
+  被逆转。keyed provisioning 关闭或不可用时返回 `503`，不会退化为普通创建。
 - `GET /api/v1/rag/integration-capabilities` 提供认证、`no-store`、低敏的运行时合同，
   返回协议版本、当前调用方有效能力与 Collection 范围、数据面行为、可选特性和稳定输入
-  上限，其中 `documentSyncRunItemReceipts` 明确表示持久化回执查询是否可用。restricted
+  上限，其中 `documentSyncRunItemReceipts` 明确表示持久化回执查询是否可用，
+  `features.provisioning.collectionCreateIdempotencyKey` 表示 V52 控制面能力。restricted
   ACL 无法完整解析为 Collection key 时以 `503` fail closed。
 - Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
   snapshot 或按 stable owner 重载当前 policy。
