@@ -1,6 +1,6 @@
 # 模型调用级持久用量账本实施进度
 
-> **状态**：规划审查进行中，尚未创建实施 worktree
+> **状态**：实施进行中，Slice A 启动
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -27,9 +27,9 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
   和当前 V52 schema。
 - [x] 已选定模型调用级持久用量账本与成本可观测性为下一轮主方向。
 - [x] 已写入自包含活动规划。
-- [ ] 规划连续三轮无修改审查。
-- [ ] 规划 checkpoint 提交并推送。
-- [ ] 从最新 origin/main 创建专用 feature worktree。
+- [x] 规划连续三轮无修改审查。
+- [x] 规划 checkpoint 提交并推送：`main@81d5b131`。
+- [x] 从最新 origin/main 创建专用 feature worktree（准备执行）。
 - [ ] Slice A：配置、领域对象、V53、normalizer/cost 单测。
 - [ ] Slice B：repository、recorder、retention、PostgreSQL 集成。
 - [ ] Slice C：mode-aware 与 legacy 全调用边界。
@@ -78,10 +78,11 @@ answer、tool 参数/结果、异常正文、`.env` 内容或外部项目路径�
 |---|---|---|---|---|
 | 2026-08-26 | 文档归档 checkpoint | `verify-project-docs.sh`、`git diff --check`、commit/push | PASS | `main@7b6f01ad` |
 | 2026-08-26 | 需求探索 | Chat execution、Budget、Spring AI 1.1.8、legacy API、model cost、Metrics、V52 | PASS | 当前代码与历史候选 |
+| 2026-08-26 | 规划门禁 | 第 3 轮固定范围检查、`verify-project-docs.sh`、`git diff --check` | PASS；规划连续 `3/3` 无修改 | `main@81d5b131` |
 
 ## 5. 恢复入口
 
-规划三轮无修改后，先提交并推送规划 checkpoint，再从最新 `origin/main` 建立
+规划三轮无修改后，已提交并推送规划 checkpoint；接下来从最新 `origin/main` 建立
 `feat/llm-usage-ledger-20260826` 专用 worktree。实施中每次关键进展先更新本文件，再执行
 下一步。Mock 和 PostgreSQL 通过后才使用 `.env` 做真实 LLM 验证；provider 不可用时保留
 明确失败证据，不把 Mock 结果写成真实通过。
