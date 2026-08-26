@@ -497,6 +497,15 @@ gate does not call a Chat LLM.
 - Capability discovery describes supported protocol behavior and current
   principal projection; `/auth/me`, Collection probes, and deployment-specific
   binding checks remain required.
+- Capability discovery currently publishes only the core identity and address
+  bounds. JSON Record batch, payload, filter, search, and Sync Run pagination
+  limits still come from configuration and contract documentation rather than
+  a complete runtime response.
+- Endpoint timers, SLOs, rate-limit meters, and Collection readiness are
+  currently separate runtime facts. The service does not yet expose a durable,
+  self-scoped data-plane operation aggregate by stable principal and authorized
+  Collection. Do not work around this boundary by adding principal IDs or
+  Collection keys as high-cardinality Micrometer tags.
 
 See the [TODO](TODO.md#managed-api-principal-follow-ups) for these follow-up
 boundaries.
