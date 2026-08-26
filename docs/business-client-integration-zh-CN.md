@@ -6,6 +6,33 @@
 credential、Collection、JSON Record、重试、升级和验收边界。外部文档的完整同步算法另见
 [外部文档同步 Client 指南](external-document-sync-client-guide-zh-CN.md)。
 
+## 生产接入最短路径
+
+如果你正在为独立后端服务接入 RAG 数据面，按以下顺序即可覆盖生产启用阻断项：
+
+1. 锁定已验证的源码或镜像基线。当前通用业务接入 checkpoint 是
+   `business-client-p0-clean-baseline-2026-08-26`（commit `9f219a94`）。
+2. 按[配置参考](configuration-zh-CN.md)和[部署文档](DEPLOYMENT.md)启动服务并执行
+   Flyway；environment root 只用于运维面。
+3. 由 operator 创建稳定 `collectionKey`，再按
+   [API 密钥管理](rest-api-zh-CN.md#api-密钥管理)为查询和投递职责创建 restricted
+   business principal，精确配置 `capabilities` 与 `allowedCollectionKeys`。
+4. 每个业务实例启动时执行 `/auth/me` 和 Collection by-key 探针，或运行
+   [已部署实例 Binding 预检](#41-已部署实例-binding-预检)；任何不匹配都失败关闭，
+   不能回退到 root、legacy key 或 unrestricted principal。
+5. 调用方把权威业务对象编译为 allow-list JSON 投影，使用稳定三元身份和 opaque revision，
+   通过 [JSON Record](rest-api-zh-CN.md#json-结构化记录jsonb-payload-检索)
+   upsert/tombstone 表达完整期望状态。
+6. 投递默认使用 `embeddingPolicy=ASYNC`；需要语义检索前检查 lifecycle/readiness，
+   不把 mutation 成功误判为 embedding 已完成。
+7. 查询时显式指定 Collection 范围和业务 `payloadContains`；RAG 命中只作为候选，
+   必须回源校验实体、可见性和权限，再构造客户端安全 DTO。
+8. 上线前运行[一键接入验收](#8-一键接入验收)；部署或 credential 轮换后重新运行
+   binding preflight。
+
+完整 API 请求体和响应见 [REST API 参考](rest-api-zh-CN.md#认证)；可复制命令见
+[开发者参考](developer-reference-zh-CN.md#业务服务接入就绪一键验证)。
+
 ## 1. 权威边界
 
 RAG 服务负责：
@@ -21,9 +48,13 @@ RAG 服务负责：
 - credential 的安全存储与部署 binding；
 - 网络重试、checkpoint、dead letter 和对 `409` 的重新读取/人工修复；
 - 决定何时等待 embedding readiness，不能把 mutation 成功等同于已经 `READY`。
+- 只投影明确允许的检索字段和稳定 locator；检索命中后回源读取权威实体、重新校验权限，
+  并构造面向最终客户端的安全 DTO。
 
 Collection 是当前授权边界。`sourceNamespace` 只隔离外部身份，不限制一个 credential 在
-Collection 内可读写的记录。浏览器、移动端和不可信客户端不得持有业务 credential。
+Collection 内可读写的记录。RAG 返回的 payload、URL、内部 document ID 和
+`retrievalText` 都不是可直接下发的权威业务响应。浏览器、移动端和不可信客户端不得持有
+业务 credential。
 
 ## 2. Credential 与当前身份
 
@@ -212,6 +243,21 @@ JSON 报告分别记录调用方期望的 `expectedCapabilityProfile` 和成功�
 | `FAILED` | 当前派生失败，结合 `retryable` 和错误码处理 |
 | `NOT_REQUESTED` | 使用了 `SKIP` |
 | `DISABLED` | 文档已禁用或 tombstone |
+
+### 查询、归并与权威回源
+
+结构化记录使用 `POST /api/v1/rag/json-records/search` 检索。新调用方应显式传入
+`collectionKeys`，并用 `payloadContains` 下推可由投影安全表达的 scope/状态过滤。
+API Key allow-list 仍是独立的权限上限，不能用请求范围替代。
+
+多个 Collection 在单次请求中共享 global top-k，不保证每个 Collection 都有候选。如果
+不同范围需要各自召回机会或使用不同过滤条件，应分别执行有界查询，再按稳定规则去重、归并
+和截断；不要把结果顺序当作业务授权或最终展示顺序。
+
+每个命中只用于取得调用方预先写入的稳定 locator。调用方必须批量回源读取当前权威实体，
+重新验证存在性、状态、租户/项目范围和用户权限，然后只返回允许字段组成的业务 DTO。
+失效、越权或无法解析的候选应静默丢弃；不得把 RAG payload、URL、内部 ID、credential
+材料或私有 transport 字段直接透传给浏览器或其他不可信客户端。
 
 ## 6. 重试与 credential 生命周期
 

@@ -194,14 +194,15 @@ spring-ai-rag/
 | **PDF** | `GET /api/v1/rag/files/tree` | 查看文件目录树 |
 | 健康 | `/actuator/health` | Actuator 健康检查 |
 
-## 两种集成方式
+## 三种集成方式
 
-参考 `demos/README.md`：
+进程内集成参考 `demos/README.md`；独立后端服务通过 HTTP 接入时从业务服务指南开始：
 
-| 方式 | Demo | 适用场景 |
+| 方式 | 入口 | 适用场景 |
 |------|------|---------|
 | 完整 Starter | `demo-basic-rag` | 快速集成，引入一个依赖即可 |
 | 组件级 | `demo-component-level` | 已有 Spring AI 项目，选择性引入 Advisor |
+| 后端 HTTP API | [业务服务接入指南](docs/business-client-integration-zh-CN.md) | 独立业务服务使用受限 API Key、Collection ACL 和 JSON Record 数据面 |
 
 ## 构建与测试
 
@@ -225,6 +226,7 @@ cd demos/demo-basic-rag && mvn test
 **从这里开始**：[文档索引](docs/index-zh-CN.md)（全库渐进式导航）
 
 - [开发者上手](docs/getting-started-zh-CN.md)
+- [业务服务接入指南](docs/business-client-integration-zh-CN.md)
 - [架构设计](docs/architecture-zh-CN.md)
 - [配置参考](docs/configuration-zh-CN.md)
 - [REST API 参考](docs/rest-api-zh-CN.md)

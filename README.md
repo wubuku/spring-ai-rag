@@ -194,14 +194,16 @@ spring-ai-rag/
 | **PDF** | `GET /api/v1/rag/files/tree` | List file directory tree |
 | Health | `/actuator/health` | Actuator health check |
 
-## Two Integration Modes
+## Three Integration Modes
 
-See `demos/README.md`:
+See `demos/README.md` for in-process integration. Start with the business
+service guide when integrating an independent backend over HTTP:
 
-| Mode | Demo | Use Case |
+| Mode | Entry Point | Use Case |
 |------|------|----------|
 | Full Starter | `demo-basic-rag` | Quick integration, one dependency |
 | Component-level | `demo-component-level` | Existing Spring AI project, selective Advisor use |
+| Backend HTTP API | [Business Service Integration Guide](docs/business-client-integration.md) | Independent service using restricted API keys, Collection ACLs, and the JSON Record data plane |
 
 ## Build & Test
 
@@ -225,6 +227,7 @@ cd demos/demo-basic-rag && mvn test
 **Start here**: [Documentation Index](docs/index.md) (progressive map of all docs)
 
 - [Getting Started](docs/getting-started.md)
+- [Business Service Integration Guide](docs/business-client-integration.md)
 - [Architecture](docs/architecture.md)
 - [Configuration Reference](docs/configuration.md)
 - [REST API Reference](docs/rest-api.md)

@@ -8,6 +8,47 @@ acceptance. See the
 [External Document Sync Client Guide](external-document-sync-client-guide.md)
 for the full source-synchronization algorithm.
 
+## Production Integration Fast Path
+
+For an independent backend service integrating with the RAG data plane, the
+following sequence covers the production launch blockers:
+
+1. Pin a validated source or image baseline. The current generic
+   business-integration checkpoint is
+   `business-client-p0-clean-baseline-2026-08-26` (commit `9f219a94`).
+2. Start the service and run Flyway using the
+   [Configuration Reference](configuration.md) and
+   [Deployment Guide](DEPLOYMENT.md). Use the environment root only for
+   operator actions.
+3. Have an operator create stable `collectionKey` values, then use
+   [API key management](rest-api.md#api-keys--key-management) to create
+   restricted business principals for query and dispatch responsibilities
+   with exact `capabilities` and `allowedCollectionKeys`.
+4. At startup, every business-service instance must run `/auth/me` and the
+   Collection by-key probes, or run the
+   [deployed binding preflight](#41-deployed-binding-preflight). Fail closed on
+   any mismatch; never fall back to root, a legacy key, or an unrestricted
+   principal.
+5. Compile authoritative business objects into allow-listed JSON projections.
+   Use a stable identity triple and opaque revisions, and express complete
+   desired state through
+   [JSON Record](rest-api.md#json-structured-records--jsonb-payload-retrieval)
+   upserts and tombstones.
+6. Use `embeddingPolicy=ASYNC` for delivery by default. Check
+   lifecycle/readiness before semantic retrieval is required; mutation success
+   does not mean embedding is complete.
+7. Query with explicit Collection scope and business `payloadContains`
+   filters. Treat RAG hits as candidates, reread authoritative entities and
+   permissions, then build a client-safe DTO.
+8. Run [one-command integration acceptance](#8-one-command-integration-acceptance)
+   before launch, and rerun binding preflight after deployment or credential
+   rotation.
+
+See the [REST API Reference](rest-api.md#authentication) for complete request
+and response contracts and the
+[Developer Reference](developer-reference.md#business-service-integration-readiness-verification)
+for copyable commands.
+
 ## 1. Authority Boundaries
 
 The RAG service owns:
@@ -29,11 +70,16 @@ The caller owns:
   `409`;
 - deciding when embedding readiness is required. Mutation success does not
   imply `READY`.
+- projecting only explicitly allowed retrieval fields and stable locators,
+  then rereading authoritative entities, rechecking permissions, and building
+  a safe DTO for the final client after retrieval.
 
 Collection is the current authorization boundary. `sourceNamespace` isolates
 external identity but does not restrict which records a credential may access
-inside a Collection. Browsers, mobile apps, and untrusted clients must not hold
-business credentials.
+inside a Collection. Returned payloads, URLs, internal document IDs, and
+`retrievalText` are not authoritative business responses that can be sent
+directly to a client. Browsers, mobile apps, and untrusted clients must not
+hold business credentials.
 
 ## 2. Credentials And Current Identity
 
@@ -261,6 +307,28 @@ readiness:
 | `FAILED` | Current derivation failed; use `retryable` and error codes |
 | `NOT_REQUESTED` | The caller used `SKIP` |
 | `DISABLED` | The document is disabled or tombstoned |
+
+### Query, Merge, And Authoritative Reread
+
+Retrieve structured records with
+`POST /api/v1/rag/json-records/search`. New callers should send explicit
+`collectionKeys` and use `payloadContains` for scope and state filters that are
+safe to express in the projection. The API-key allow-list remains an
+independent authorization ceiling and cannot be replaced by request scope.
+
+Collections in one request share a global top-k, so each Collection is not
+guaranteed a candidate. If distinct scopes require their own recall
+opportunity or filters, issue separate bounded queries, then deduplicate,
+merge, and truncate by a stable rule. Do not treat result order as business
+authorization or final display order.
+
+Use each hit only to obtain a stable locator that the caller previously
+projected. The caller must batch-reread current authoritative entities,
+revalidate existence, state, tenant/project scope, and user permission, then
+return only an allow-listed business DTO. Silently discard stale,
+unauthorized, or unresolved candidates. Never pass RAG payloads, URLs,
+internal IDs, credential material, or private transport fields directly to a
+browser or another untrusted client.
 
 ## 6. Retries And Credential Lifecycle
 

@@ -232,6 +232,7 @@ const pairs = [
   ['docs/developer-reference.md', 'docs/developer-reference-zh-CN.md'],
   ['docs/project-context.md', 'docs/project-context-zh-CN.md'],
   ['docs/delivery-workflow.md', 'docs/delivery-workflow-zh-CN.md'],
+  ['docs/business-client-integration.md', 'docs/business-client-integration-zh-CN.md'],
   ['docs/openai-compatibility-readiness.md', 'docs/openai-compatibility-readiness-zh-CN.md'],
   ['docs/testing-guide.md', 'docs/testing-guide-zh-CN.md']
 ];
@@ -268,6 +269,33 @@ for (const [english, chinese] of pairs) {
 
 console.log(`BILINGUAL_STRUCTURE_OK pairs=${pairs.length}`);
 NODE
+}
+
+check_business_client_discoverability() {
+  rg -q 'docs/business-client-integration.md' README.md
+  rg -q 'docs/business-client-integration-zh-CN.md' README-zh-CN.md AGENTS.md
+  rg -q 'business-client-integration.md' docs/index.md
+  rg -q 'business-client-integration-zh-CN.md' docs/index-zh-CN.md
+
+  local guide contract
+  for guide in \
+      docs/business-client-integration.md \
+      docs/business-client-integration-zh-CN.md; do
+    for contract in \
+        'business-client-p0-clean-baseline-2026-08-26' \
+        '/api/v1/rag/auth/me' \
+        '/api/v1/rag/collections/by-key' \
+        '/api/v1/rag/json-records/upsert' \
+        '/api/v1/rag/json-records/search' \
+        '/api/v1/rag/collections/embedding-readiness' \
+        'business-client-binding-preflight.sh' \
+        'verify-business-client-readiness.sh'; do
+      rg -F -q "$contract" "$guide" || {
+        echo "$guide is missing critical business-client contract: $contract" >&2
+        return 1
+      }
+    done
+  done
 }
 
 check_project_invariants() {
@@ -322,6 +350,8 @@ check_scripts_and_commands() {
       scripts/verify-document-lifecycle.sh \
       scripts/verify-document-sync-runs.sh \
       scripts/verify-keyword-vector-decoupling.sh \
+      scripts/business-client-binding-preflight.sh \
+      scripts/verify-business-client-readiness.sh \
       scripts/verify-no-pessimistic-locks.sh \
       scripts/run-claude-grok.sh; do
     [[ -x "$script" ]] || {
@@ -367,6 +397,7 @@ run_check "OpenClaw/project Skill boundary" check_local_state_boundary
 run_check "Agent entry size limits" check_entry_sizes
 run_check "Markdown links and local-state dependencies" check_markdown_links_and_boundaries
 run_check "Bilingual heading structure" check_bilingual_heading_structure
+run_check "Business-client integration discoverability" check_business_client_discoverability
 run_check "Project invariants" check_project_invariants
 run_check "Documented scripts and commands" check_scripts_and_commands
 run_check "Shell syntax" check_shell_syntax

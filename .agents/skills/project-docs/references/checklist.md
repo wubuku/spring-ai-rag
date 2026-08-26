@@ -13,12 +13,13 @@
 - [ ] `CLAUDE.md` is no more than 60 lines
 - [ ] Both link to `docs/index*`, `docs/project-context*`, and `docs/developer-reference*`
 - [ ] `AGENTS.md` and both indexes link to `docs/delivery-workflow*`
+- [ ] README, `AGENTS.md`, and both indexes link directly to `business-client-integration*`
 - [ ] `docs/index.md` and `docs/index-zh-CN.md` have matching structure
 - [ ] README documentation sections start from the appropriate `docs/index*`
 
 ## Evergreen Content
 
-- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V43, and release state
+- [ ] `project-context*` matches current modules, API boundaries, Flyway V1–V49, and release state
 - [ ] `delivery-workflow*` remains the single evergreen source for planning, progress, acceptance, convergence-review, and Agent Git-delivery standards
 - [ ] `docs/drafts/` contains only active plans plus its README pair
 - [ ] completed/cancelled/superseded plans live under `docs/drafts/archive/`
