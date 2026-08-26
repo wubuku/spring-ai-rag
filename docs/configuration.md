@@ -270,7 +270,7 @@ rag:
 | `rag.document-lifecycle.strict-external-cas` | `true` | A new revision for an existing external identity requires `expectedSourceRevision`; exact replay remains valid |
 | `rag.document-lifecycle.allow-non-default-namespace` | `true` | Accept explicit external `sourceNamespace`; when disabled only the compatibility value `default` is accepted |
 | `rag.document-lifecycle.idempotency-ttl-hours` | `24` | Retention for local create/upload `Idempotency-Key` records, clamped to 1–168 hours |
-| `rag.document-lifecycle.sync-runs-enabled` | `false` | Enables the authoritative external snapshot Sync Run API; keep disabled until the disposable PostgreSQL/E2E acceptance passes |
+| `rag.document-lifecycle.sync-runs-enabled` | `false` | Enables the authoritative external snapshot Sync Run API and its durable item-receipt query; keep disabled until the disposable PostgreSQL/E2E acceptance passes |
 | `rag.document-lifecycle.version-restore-enabled` | `false` | Enables local `FULL` historical-version restore; externally managed documents remain source-owned |
 | `rag.document-lifecycle.relocation-enabled` | `false` | Enables atomic cross-Collection relocation for externally managed documents; run the relocation gate before enabling |
 | `rag.document-lifecycle.derivation-repair-enabled` | `false` | Enables side-effecting derivation repair preview/apply; read-only derivation readiness remains available |

@@ -268,11 +268,17 @@ protocol instead of inferring deletion from an incomplete batch:
 2. Send bounded `batch-upsert` requests. Items inherit the Collection and
    `sourceNamespace` from the run and must include `externalId` and
    `sourceRevision`.
-3. Call `preview-missing`, retain its opaque preview token, then call
+3. After a lost batch response or during recovery, use an equally scoped
+   `RAG_READ` credential to call
+   `GET /api/v1/rag/document-sync-runs/{runId}/items`. Deduplicate active-run
+   pages by `externalId`, retry only items whose current state is `FAILED` with
+   the same fingerprint, and never treat the cursor as authorization or a
+   durable checkpoint.
+4. Call `preview-missing`, retain its opaque preview token, then call
    `complete`.
-4. Use `TOMBSTONE` only for a source-consistent `ONLINE_CUT`. The safe static
+5. Use `TOMBSTONE` only for a source-consistent `ONLINE_CUT`. The safe static
    manifest default is `OFFLINE_MANIFEST + NONE`.
-5. `EXCLUSIVE_OFFLINE + TOMBSTONE` requires
+6. `EXCLUSIVE_OFFLINE + TOMBSTONE` requires
    `confirmExclusiveOffline=true` and means the connector guarantees exclusive
    source writes for the whole run. Treat it as a deliberate destructive
    operation, not a default.
@@ -281,9 +287,11 @@ Failed items must be retried with the same fingerprint before a tombstone run
 can complete. The service protects documents changed after the snapshot
 boundary, applies deletion thresholds, and never stores bodies or JSONB
 payloads in the run ledger. Every run mutation rechecks the current API-key
-Collection ACL; the lease token is not an ACL bypass. See the [REST API
-contract](rest-api.md#external-snapshot-synchronization-runs) for exact fields,
-responses, and error codes.
+Collection ACL; the lease token is not an ACL bypass. After the run becomes
+terminal, rescan all receipts from an empty cursor. Only terminal traversal is
+stable, and `currentSummary` describes current ledger state rather than the
+run's cumulative processing counters. See the [REST API contract](rest-api.md#external-snapshot-synchronization-runs)
+for exact fields, responses, and error codes.
 
 ## 8. Reference Client
 
@@ -324,6 +332,10 @@ for the next delivery batch.
   reaches a definite success or conflict.
 - Use `ASYNC` for normal bulk/CDC delivery.
 - Persist checkpoint and source revision only after HTTP success.
+- After a batch-response timeout, query the durable receipt before retrying;
+  do not blindly change item content or revision.
+- After terminal completion, rescan receipts from the beginning and require
+  `currentSummary.failed=0` or an explicit operator disposition.
 - Keep request logs free of API keys, full content, and sensitive payloads.
 - Dead-letter permanent 4xx errors with identity and error code, not full body.
 - Alert on lifecycle `FAILED`, queue age, and non-ready Collection counts.

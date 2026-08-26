@@ -15,7 +15,7 @@
 - [x] Helm `version` 与 `appVersion` 均为 `1.0.0`
 - [x] Docker/Helm 默认镜像 tag 为 `1.0.0`
 - [x] 本地、Docker 与 Helm 默认端口均为 `8081`
-- [x] Flyway 迁移范围为 V1-V50
+- [x] Flyway 迁移范围为 V1-V51
 - [x] JSONB 结构化记录 API、payload 快照和 Collection 生命周期已覆盖
 - [x] `scripts/verify-jsonb-records.sh` 固化后端/数据库/前端聚焦验证
 - [x] 文档 PATCH/禁用/恢复/永久删除与外部三元身份已覆盖
@@ -124,6 +124,22 @@
 - [x] 统一 managed-principal 门禁覆盖 PostgreSQL、Maven、WebUI
   typecheck/Vitest/build/alignment、Mock Playwright、双实例 HTTP、真实浏览器 DOM/网络
   断言和可选真实 provider Chat。
+
+### 2026-08-26 Sync Run Item Receipt 门禁
+
+- [x] V51 为既有 Sync Run item ledger 增加未过滤与按状态过滤的 keyset 索引，不复制
+  mutation 数据，也不保存正文、payload、metadata、credential 或 provider 信息。
+- [x] `GET /api/v1/rag/document-sync-runs/{runId}/items` 要求 `RAG_READ` 与
+  Collection/run/namespace binding，支持状态过滤、1–200 有界分页、绑定 run/status 的
+  opaque cursor，并返回独立的当前 ledger 摘要。
+- [x] 终态遍历稳定；active run 明确为最终一致观察，Client 必须按 `externalId` 去重并在
+  终态后从头复扫。错误在写入和读取时脱敏并限制为 500 字符，响应使用 `no-store`。
+- [x] capability discovery 通过
+  `features.optional.documentSyncRunItemReceipts` 公布运行时可用性，protocol 保持 `1.0`
+  的 additive 兼容。
+- [x] PostgreSQL service 与认证 HTTP 验收覆盖 V1-V51、受限读写/只读 principal、
+  ACL 防枚举、cursor binding、active/terminal 分页、FAILED 精确重放、missing
+  reconciliation 和证据脱敏。
 
 ### 最终证据（2026-07-21）
 

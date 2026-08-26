@@ -85,6 +85,9 @@ class OpenApiContractTest {
             "ApiKeyCreatedResponse",
             "ApiKeyIdentityResponse",
             "IntegrationCapabilitiesResponse",
+            "DocumentSyncRunItemPageResponse",
+            "DocumentSyncRunItemReceiptResponse",
+            "DocumentSyncRunItemCurrentSummary",
             "ErrorResponse",
             "HealthResponse",
             "BatchDocumentRequest",
@@ -132,6 +135,7 @@ class OpenApiContractTest {
             "/rag/auth/me",
             "/rag/api-keys",
             "/rag/integration-capabilities",
+            "/rag/document-sync-runs/{runId}/items",
             "/rag/health",
             "/rag/models",
             "/rag/retrieval-traces",
@@ -1004,6 +1008,32 @@ class OpenApiContractTest {
             for (String responseCode : java.util.List.of("200", "401", "503")) {
                 assertThat(capabilities.path("responses").has(responseCode))
                         .as("GET /integration-capabilities must document %s",
+                                responseCode)
+                        .isTrue();
+            }
+        }
+
+        @Test
+        @DisplayName("Sync Run item receipt contract exposes bounded read semantics")
+        void syncRunItemReceiptContractIsComplete() throws Exception {
+            JsonNode receipt = findPath(
+                    loadSpec().path("paths"),
+                    "/rag/document-sync-runs/{runId}/items").path("get");
+
+            assertThat(receipt.isMissingNode()).isFalse();
+            assertParameter(receipt, "collectionKey", true, 1, 128);
+            assertParameter(receipt, "sourceNamespace", false, 0, 128);
+            assertParameter(receipt, "cursor", false, 0, 1024);
+            assertThat(findParameter(receipt, "status").isMissingNode()).isFalse();
+            JsonNode limit = findParameter(receipt, "limit");
+            assertThat(limit.isMissingNode()).isFalse();
+            assertThat(limit.path("required").asBoolean()).isFalse();
+            assertThat(limit.path("schema").path("minimum").asInt()).isEqualTo(1);
+            assertThat(limit.path("schema").path("maximum").asInt()).isEqualTo(200);
+            for (String responseCode : java.util.List.of(
+                    "200", "400", "401", "403", "404", "503")) {
+                assertThat(receipt.path("responses").has(responseCode))
+                        .as("GET /document-sync-runs/{runId}/items must document %s",
                                 responseCode)
                         .isTrue();
             }

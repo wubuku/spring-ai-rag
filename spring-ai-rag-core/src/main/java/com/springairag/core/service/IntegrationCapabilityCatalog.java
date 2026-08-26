@@ -53,6 +53,7 @@ public class IntegrationCapabilityCatalog {
                                 true),
                         new IntegrationCapabilitiesResponse.OptionalFeatures(
                                 properties.getDocumentLifecycle().isSyncRunsEnabled(),
+                                properties.getDocumentLifecycle().isSyncRunsEnabled(),
                                 properties.getOpenAiCompatibility().isEnabled()));
         return new IntegrationCapabilitiesResponse(
                 new IntegrationCapabilitiesResponse.Protocol(

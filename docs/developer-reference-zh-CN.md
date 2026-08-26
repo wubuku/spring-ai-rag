@@ -19,7 +19,7 @@
 | 真实 LLM E2E 端口 | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | 向量维度 | `1024` |
-| Flyway | V1–V50 |
+| Flyway | V1–V51 |
 
 OpenAI / Embedding 的 `base-url` **不要带 `/v1`**。Spring AI 会自行追加 `/v1/chat/completions` 或 `/v1/embeddings`。
 
@@ -62,11 +62,16 @@ open spring-ai-rag-core/target/site/jacoco/index.html
 ./scripts/verify-document-lifecycle.sh
 ```
 
-针对 V42 Sync Run、一次性 PostgreSQL 和完整 HTTP 合同的专项验收：
+针对 V42/V51 Sync Run、一次性 PostgreSQL、认证权限与持久化 item receipt 完整 HTTP
+合同的专项验收：
 
 ```bash
 ./scripts/verify-document-sync-runs.sh
 ```
+
+该门禁会创建临时受限读写/只读 principal，并验证 ACL、游标分页、终态复扫语义、
+失败回执恢复、`no-store` 与敏感信息保护；证据不保存 credential、cursor、external ID
+或业务 payload。
 
 针对 V43 本地关键词/向量派生解耦边界：
 

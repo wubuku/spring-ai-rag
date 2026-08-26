@@ -1,6 +1,6 @@
 # Sync Run 持久化 item receipt 与游标状态查询实施进度
 
-> **状态**：规划审查 `3/3` 通过，等待隔离 worktree 实施
+> **状态**：隔离特性分支最终验收完成，待 Git 交付
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -8,6 +8,10 @@
 >
 > **规划工作区**：
 > `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-main-delivery`
+>
+> **实施分支 / worktree**：
+> `feat/sync-run-item-receipts-20260826` /
+> `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-sync-run-item-receipts`
 
 本文是跨会话恢复账本，不是稳定架构事实。不得记录 raw credential、cursor、externalId、
 完整错误、业务 payload、Authorization、API Key、`.env` 内容或外部项目路径。
@@ -21,13 +25,15 @@
 - [x] 已选定 durable Sync Run item receipt/status 查询作为下一轮高价值功能。
 - [x] 已编写自包含实施规划。
 - [x] 规划连续 `3/3` 无修改审查。
-- [ ] 提交并推送规划 checkpoint。
-- [ ] 创建最新 `main` 基础的隔离特性 worktree。
-- [ ] Slice A：DTO、cursor 和 capability contract。
-- [ ] Slice B：V51、repository、service/controller。
-- [ ] Slice C：PostgreSQL/HTTP/权限/真实全栈验收。
-- [ ] Slice D：双语长青文档。
-- [ ] 基本硬门槛、实现 `3/3`、同步 `origin/main` 后最终完整复验。
+- [x] 提交并推送规划 checkpoint。
+- [x] 创建最新 `main` 基础的隔离特性 worktree。
+- [x] Slice A：DTO、cursor 和 capability contract。
+- [x] Slice B：V51、repository、service/controller。
+- [x] Slice C1：PostgreSQL service、认证 HTTP 与权限验收。
+- [x] Slice C2：真实全栈与 provider 回归。
+- [x] Slice D：双语长青文档。
+- [x] 基本硬门槛与交付前完整验收。
+- [x] 同步 `origin/main` 后最终完整复验。
 - [ ] 推送特性分支、合入并推送 `main`、清理 worktree。
 
 ## 2. 已冻结的关键决策
@@ -52,6 +58,9 @@
 13. Sync Run HTTP acceptance 改为认证模式，用临时 root 创建 restricted read-write/read-only
     principal 验证权限矩阵；真实全栈固定运行 business-client readiness 与
     managed-principal `--with-real-llm`。
+14. 按用户后续明确指示，本轮跳过实现代码的连续三轮 review；正确性信心来自一次性规划的
+    PostgreSQL、HTTP、Mock、真实双实例和真实 provider 自动化验收。交付前仍执行一次限定
+    范围只读检查，只处理正确性、安全、兼容性或数据一致性缺陷。
 
 ## 3. 规划审查账本
 
@@ -75,8 +84,29 @@
 |---|---|---|---|---|
 | 2026-08-26 22:00 CST | 下一轮探索 | main/远端状态、V42/V50、Sync Run service/schema/script、JSON Record batch、embedding jobs、capability endpoint、P1/P2 通用缺口 | PASS | 本地代码、迁移、测试与长青文档 |
 | 2026-08-26 22:28 CST | 规划最终审查 | 需求闭环 → schema/SQL/cursor/ACL/兼容 → 测试/发布/回滚/Git；最终 plan/progress SHA-256 分别为 `8a6b973e...` / `bf7ba555...` | PASS（连续 `3/3` 无修改） | 三轮会话审查输出与固定文件哈希 |
+| 2026-08-26 22:33 CST | 实施基线 | 规划 checkpoint 已提交并推送，最新 `main` 创建专用特性分支与隔离 worktree | READY | `main == origin/main == 82cf3db5`；feature 起点 `82cf3db5` |
+| 2026-08-26 22:43 CST | Slice A/B 生产代码骨架 | 三个 DTO、Jackson cursor、V51、receipt repository、Service/Controller、capability 字段及专项测试代码 | COMPILE PASS | `mvn -pl spring-ai-rag-core -am -DskipTests compile` |
+| 2026-08-26 22:52 CST | 恢复与固定范围核查 | 核对 feature 基线、完整 diff、新增 DTO/cursor/repository、授权顺序、错误脱敏、V51 索引与认证 HTTP 验收矩阵 | READY | `feature/main/origin-main` 基线一致；无后台进程；下一步执行语法检查和定向测试 |
+| 2026-08-26 22:55 CST | 脚本语法与后端定向测试 | Bash 语法通过；53 项定向测试中 52 项通过，OpenAPI 契约发现 `collectionKey` 未投影 `minLength: 1` | FIX REQUIRED | 为 query 参数补充显式 `@Size(min = 1, max = 128)` 后重跑完整定向集合 |
+| 2026-08-26 22:57 CST | OpenAPI 契约修复复验 | Springdoc 未把方法参数 Bean Validation 长度约束投影到 query parameter schema；第二次整组仍为 52/53 | FIX REQUIRED | 保留运行时 Bean Validation，并按项目既有模式为全部新增 query 参数增加显式 `@Parameter/@Schema` |
+| 2026-08-26 22:59 CST | 后端定向测试最终复验 | Controller、capability、filter、cursor 与 OpenAPI 合同完整集合 | PASS | 53 tests，0 failures，0 errors |
+| 2026-08-26 23:01 CST | 首次认证 HTTP/PostgreSQL 验收 | V1-V51 迁移和认证后端启动成功；验收在 FAILED exact replay 累计计数假设处失败 | FIX REQUIRED | 持续失败重试事务会回滚 reopening 标记，既有 FAILED receipt 原样返回且不重复累计；改用 transient embedding 故障恢复场景证明累计计数与当前摘要分离 |
+| 2026-08-26 23:07 CST | transient provider 场景核查 | Sync Run item mutation 在同一事务内只创建 embedding job，不执行真实 provider；关闭 job 时固定失败，开启后直接 APPLIED | FIX REQUIRED | 删除不符合架构的 provider stub；HTTP 验证 FAILED exact replay 去重，PostgreSQL service 集成验证累计 run counter 与当前 ledger summary 独立 |
+| 2026-08-26 23:12 CST | 认证 HTTP/PostgreSQL 验收 | 临时 PostgreSQL、V1-V51 Flyway、认证后端、restricted writer/reader、ACL/binding/cursor、active/terminal receipt、FAILED replay、missing reconciliation、no-store、锁策略 | PASS | `.verification/document-sync-runs/20260826-231149/summary.md`；证据 JSON 不含 credential、cursor、externalId 或业务 payload |
+| 2026-08-26 23:19 CST | PostgreSQL service 专项 | 本机隔离数据库、V1-V51 Flyway、`DocumentSyncRunsPostgresIntegrationTest`；首次测试 4/4 通过但旧 `jacoco.exec` 损坏导致 report 失败，随后以 `clean test` 从干净覆盖率基线完整重跑 | PASS | 4 tests，0 failures，0 errors；Maven reactor `BUILD SUCCESS`；隔离数据库已自动删除 |
+| 2026-08-26 23:30 CST | 双语长青文档与可发现性 | REST、外部同步 Client、业务接入、配置、架构、项目上下文、测试、开发者参考、发布/TODO、索引、AGENTS 和 project-docs Skill；文档门禁增加 receipt capability/endpoint 可发现性断言 | PASS | `verify-project-docs.sh` 11 checks；双语结构 8 pairs；1182 个相对链接；`git diff --check` 与 added-line secret scan 通过 |
+| 2026-08-26 23:53 CST | V51 既有 PostgreSQL 控制面回归 | 完整 business-client readiness 首次运行发现 6 个测试断言及 managed-principal 脚本仍把“最新迁移”硬编码为 V50；只更新最新版本基线和测试名，保留描述 V50 功能来源的历史事实，随后重跑受影响的五套 PostgreSQL 集成测试 | PASS（58/58，skipped=0） | `ManagedApiPrincipalPostgresIntegrationTest`、`ChatSessionPostgresIntegrationTest`、`ChatTurnOperationPostgresIntegrationTest`、`NextHighValueFeaturesPostgresIntegrationTest`、`DocumentLifecyclePostgresIntegrationTest`；Maven reactor `BUILD SUCCESS` |
+| 2026-08-26 深夜 | 业务 Client 生命周期验收 | 聚焦后端/合同 137 tests、PostgreSQL 矩阵、Maven 编译门槛、WebUI typecheck/Vitest 218/build、无截图 Mock Playwright、文档/锁/密钥/diff、双实例真实 HTTP/WebUI 251 条断言、服务故障恢复与受限读取 | PASS（16/16） | `.verification/business-client-readiness/20260826-sync-run-receipts-client-rerun/summary.md`；release manifest 标记 migration=51、READ_ONLY/READ_WRITE |
+| 2026-08-26 深夜 | 真实 LLM 与完整回归 | PostgreSQL 矩阵、`mvn clean compile test-compile`、全量 Maven（API 541、documents 74、core 3049、starter 44）、WebUI Vitest 218/typecheck/build/alignment、无截图 Mock Playwright、文档/锁/diff、双实例真实全栈和真实 provider | PASS（13/13） | `.verification/managed-api-principals/20260827-000052/summary.md`；真实原生/OpenAI-compatible JSON/SSE 共 5 次 provider 调用，read-only 与 replay 均为 0 额外调用，轮换后 principal continuity=true |
+| 2026-08-26 深夜 | 限定范围交付检查 | V51/SQL/cursor/summary、HTTP/OpenAPI/ACL/低敏 response、验收脚本、双语文档、外部名称、锁策略、密钥和 diff | PASS（无实质问题、无代码修改） | `verify-project-docs.sh` 11/11；1182 links；8 bilingual pairs；`verify-no-pessimistic-locks.sh`、Bash syntax、`git diff --check` 通过 |
+| 2026-08-26 深夜 | 最终远端基线 | 当前实现已提交为 `ff45de00`；fetch 后 `origin/main` 仍为 `82cf3db5`，且是特性分支祖先；显式 merge 返回 `Already up to date` | READY | 最终复验基线 `ff45de00` + 本行进度记录；无远端冲突或额外代码变化 |
+| 2026-08-26 深夜 | 最终业务 Client 生命周期复验 | 聚焦后端/合同 137 tests、PostgreSQL V1-V51、Maven 编译门槛、WebUI typecheck/Vitest 218/build、无截图 Mock Playwright、文档/锁/密钥/diff、251 条真实 HTTP/WebUI 断言、服务故障恢复 | PASS（16/16） | `.verification/business-client-readiness/20260826-sync-run-receipts-final/summary.md` |
+| 2026-08-26 深夜 | 最终真实 LLM/full-stack 复验 | PostgreSQL V1-V51、Maven 编译与全量测试、WebUI 全门槛、无截图 Mock Playwright、双实例真实全栈、真实原生/OpenAI-compatible JSON/SSE | PASS（13/13） | `.verification/managed-api-principals/20260827-001913/summary.md`；5 次 provider 调用，read-only 与幂等 replay 均为 0 额外调用，轮换后 principal continuity=true |
 
 ## 5. 恢复入口
 
-规划已达到连续 `3/3`。下一步运行文档门禁，commit/push main 规划 checkpoint，再从该
-最新 main 创建隔离特性 worktree，按 Slice A→D 实施。
+规划 checkpoint 与实现提交均已完成。Slice A/B/C/D、定向与全量测试、认证 Sync Run
+HTTP acceptance、业务 Client 生命周期、双实例真实全栈、真实 LLM/provider 以及双语
+长青文档门禁均已通过；最终复验基线为 `ff45de00`，`origin/main` 仍为 `82cf3db5`。
+下一步只需提交本进度账本、推送特性分支、合入并推送 `main`，随后确认工作区干净并安全
+移除隔离 worktree。

@@ -1,5 +1,14 @@
 package com.springairag.core.integration;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.springairag.api.dto.DocumentSyncRunItemPageResponse;
+import com.springairag.api.enums.DocumentSyncItemStatus;
+import com.springairag.core.config.RagProperties;
+import com.springairag.core.entity.RagCollection;
+import com.springairag.core.service.CollectionIdentityResolver;
+import com.springairag.core.service.DocumentMutationService;
+import com.springairag.core.service.DocumentSyncRunItemReceiptRepository;
+import com.springairag.core.service.DocumentSyncRunService;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.AfterAll;
@@ -9,20 +18,27 @@ import org.junit.jupiter.api.Test;
 import org.postgresql.ds.PGSimpleDataSource;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 import javax.sql.DataSource;
+import java.time.OffsetDateTime;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 /**
- * Real PostgreSQL acceptance tests for V42 sync-run ledger semantics.
+ * Real PostgreSQL acceptance tests for V42/V51 sync-run ledger semantics.
  *
  * <p>Run with {@code -Ddocument-sync-runs.it.enabled=true}.
  */
@@ -158,7 +174,77 @@ class DocumentSyncRunsPostgresIntegrationTest {
         assertThrows(DataIntegrityViolationException.class, () ->
                 jdbcTemplate.update(
                         "UPDATE rag_documents SET deletion_origin = 'CLIENT' WHERE id = ?",
-                        documentId));
+                documentId));
+    }
+
+    @Test
+    void v51SupportsStableTerminalReceiptTraversalAndCurrentSummary() {
+        String collectionKey = "sync-receipts-" + UUID.randomUUID();
+        long collectionId = insertCollectionWithKey(collectionKey, "receipts");
+        UUID runId = insertRun(collectionId, "default", "run-receipts");
+        OffsetDateTime firstSeen = OffsetDateTime.parse("2026-08-26T10:00:00Z");
+        OffsetDateTime secondSeen = OffsetDateTime.parse("2026-08-26T10:01:00Z");
+
+        insertItem(runId, "record-a", "APPLIED", firstSeen, null);
+        insertItem(runId, "record-b", "FAILED", firstSeen,
+                "provider rejected apiKey=sk-historical-secret");
+        insertItem(runId, "record-c", "UNCHANGED", secondSeen, null);
+        insertItem(runId, "record-d", "FAILED", secondSeen, "validation failed");
+        jdbcTemplate.update("""
+                UPDATE rag_document_sync_runs
+                SET status = 'COMPLETED', failed_count = 7,
+                    completed_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """, runId);
+
+        DocumentSyncRunService service = receiptService(collectionId, collectionKey);
+        DocumentSyncRunItemPageResponse first = service.listItems(
+                runId, collectionKey, "default", null, 2, null);
+        DocumentSyncRunItemPageResponse second = service.listItems(
+                runId, collectionKey, "default", null, 2, first.nextCursor());
+
+        assertEquals(4, first.currentSummary().total());
+        assertEquals(1, first.currentSummary().applied());
+        assertEquals(1, first.currentSummary().unchanged());
+        assertEquals(2, first.currentSummary().failed());
+        assertTrue(first.hasMore());
+        assertFalse(second.hasMore());
+        List<String> identities = new ArrayList<>();
+        first.items().forEach(item -> identities.add(item.externalId()));
+        second.items().forEach(item -> identities.add(item.externalId()));
+        assertEquals(List.of("record-a", "record-b", "record-c", "record-d"),
+                identities);
+
+        DocumentSyncRunItemPageResponse failed = service.listItems(
+                runId,
+                collectionKey,
+                "default",
+                DocumentSyncItemStatus.FAILED,
+                100,
+                null);
+        assertEquals(List.of("record-b", "record-d"),
+                failed.items().stream().map(item -> item.externalId()).toList());
+        assertTrue(failed.items().get(0).error().contains("***REDACTED***"));
+        assertFalse(failed.items().get(0).error().contains("sk-historical-secret"));
+
+        UUID otherRun = insertRun(collectionId, "default", "run-other");
+        assertThrows(IllegalArgumentException.class, () ->
+                service.listItems(
+                        otherRun,
+                        collectionKey,
+                        "default",
+                        null,
+                        2,
+                        first.nextCursor()));
+
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes "
+                        + "WHERE indexname = 'idx_rag_sync_run_item_cursor'",
+                Long.class));
+        assertEquals(1L, jdbcTemplate.queryForObject(
+                "SELECT COUNT(*) FROM pg_indexes "
+                        + "WHERE indexname = 'idx_rag_sync_run_item_status_cursor'",
+                Long.class));
     }
 
     private UUID insertRun(long collectionId, String namespace, String clientRunId) {
@@ -176,12 +262,17 @@ class DocumentSyncRunsPostgresIntegrationTest {
     }
 
     private long insertCollection(String suffix) {
+        return insertCollectionWithKey(
+                "sync-" + suffix + "-" + UUID.randomUUID(), suffix);
+    }
+
+    private long insertCollectionWithKey(String key, String name) {
         return jdbcTemplate.queryForObject(
                 "INSERT INTO rag_collection (collection_key, name, dimensions) "
                         + "VALUES (?, ?, 1024) RETURNING id",
                 Long.class,
-                "sync-" + suffix + "-" + UUID.randomUUID(),
-                suffix);
+                key,
+                name);
     }
 
     private long insertDocument(
@@ -199,6 +290,50 @@ class DocumentSyncRunsPostgresIntegrationTest {
                 collectionId,
                 externalId,
                 namespace);
+    }
+
+    private void insertItem(
+            UUID runId,
+            String externalId,
+            String status,
+            OffsetDateTime seenAt,
+            String errorMessage) {
+        jdbcTemplate.update("""
+                INSERT INTO rag_document_sync_run_items (
+                    run_id, external_id, document_kind, item_fingerprint,
+                    source_revision, status, error_code, error_message, seen_at
+                ) VALUES (?, ?, 'JSON_RECORD', ?, 'r1', ?, ?, ?, ?)
+                """,
+                runId,
+                externalId,
+                "fingerprint-" + externalId,
+                status,
+                "FAILED".equals(status) ? "BAD_REQUEST" : null,
+                errorMessage,
+                seenAt);
+    }
+
+    private DocumentSyncRunService receiptService(
+            long collectionId,
+            String collectionKey) {
+        RagCollection collection = new RagCollection();
+        collection.setId(collectionId);
+        collection.setCollectionKey(collectionKey);
+        collection.setEnabled(true);
+        collection.setDeleted(false);
+        CollectionIdentityResolver resolver = mock(CollectionIdentityResolver.class);
+        when(resolver.requireActive(null, collectionKey)).thenReturn(collection);
+        RagProperties properties = new RagProperties();
+        properties.getDocumentLifecycle().setSyncRunsEnabled(true);
+        JdbcTemplate template = new JdbcTemplate(dataSource);
+        return new DocumentSyncRunService(
+                template,
+                new ObjectMapper().findAndRegisterModules(),
+                resolver,
+                mock(DocumentMutationService.class),
+                new DocumentSyncRunItemReceiptRepository(template),
+                properties,
+                new DataSourceTransactionManager(dataSource));
     }
 
     private Flyway flyway() {

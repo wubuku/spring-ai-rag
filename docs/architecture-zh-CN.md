@@ -589,6 +589,8 @@ rag_audit_log           # 审计日志（集合操作）
 | `rag_api_key` | key_id, principal_id, credential_version, key_hash, enabled | 版本化 credential；每个 principal 最多一个 active version |
 | `rag_api_rate_limit_bucket` | principal_id, window_start, request_count | 共享 UTC 固定分钟 quota bucket |
 | `rag_api_provisioning_operation` | owner_id, idempotency_key_hash, request_fingerprint_sha256, principal_id, completed_at | 不保存 raw credential 的成功 provisioning replay 账本（V50） |
+| `rag_document_sync_runs` | id, collection_id, source_namespace, status, lease_token_hash, 累计计数 | 权威来源快照 run 控制面；lease 只保存 hash |
+| `rag_document_sync_run_items` | run_id, external_id, document_kind, source_revision, status, error_message, seen_at | 幂等 item ledger 与持久化低敏 receipt 来源；不保存正文、payload 或 metadata |
 | `rag_chat_history` | session_id, user_message, ai_response | 业务审计 |
 | `rag_retrieval_logs` | query, strategy, result_count, latency_ms, outcome_code, empty_reason_code | 检索诊断（V35） |
 | `rag_evaluation_suites` | suite_key, owner_principal_id | 受管质量套件（V38） |
@@ -605,6 +607,9 @@ rag_audit_log           # 审计日志（集合操作）
 - `rag_documents.metadata`：V36 GIN（`metadataContains` `@>` 下推）
 - `rag_embedding_jobs`：活动任务 partial unique、claim、batch、document 与 status/created 索引
 - `rag_api_provisioning_operation`：owner/key-hash 唯一身份与 completed-at 清理索引
+- `rag_document_sync_run_items`：V51 提供 `(run_id, seen_at, external_id)` 与
+  `(run_id, status, seen_at, external_id)` B-Tree，分别支持未过滤和按状态过滤的有界
+  keyset receipt 查询
 
 ### 5.3 全文检索配置
 

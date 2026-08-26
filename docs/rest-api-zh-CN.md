@@ -126,6 +126,7 @@ allow-list。数据库业务 Key 不能用该端点查看其他 principal；WebU
     },
     "optional": {
       "documentSyncRuns": false,
+      "documentSyncRunItemReceipts": false,
       "openAiCompatibility": false
     }
   },
@@ -1249,6 +1250,65 @@ API Key 的 Collection ACL；lease token 不能绕过后续收紧的 ACL。
 `externalId` 和 opaque `sourceRevision`，并使用已有 TEXT 或 JSON_RECORD 表示。精确重放
 幂等；如果 item 在快照边界之后已被更新，返回 `SKIPPED_NEWER_MUTATION`，不会被旧快照覆盖。
 失败 item 可用相同 fingerprint 重试。
+
+### `GET /api/v1/rag/document-sync-runs/{runId}/items`
+
+返回当前 run 已持久化的低敏 item 回执，适用于 batch 响应丢失后的恢复、失败项重试和
+终态审计。该端点需要 `RAG_READ`，并重新验证 `collectionKey`、`sourceNamespace`、
+run binding 与 Collection ACL；不需要也不接受 lease token。
+
+```http
+GET /api/v1/rag/document-sync-runs/{runId}/items
+    ?collectionKey=customer-42:catalog:v1
+    &sourceNamespace=cms-main
+    &status=FAILED
+    &limit=100
+    &cursor=<opaque>
+```
+
+`status` 可选，取值为 `APPLIED`、`UNCHANGED`、`SKIPPED_NEWER_MUTATION` 或 `FAILED`。
+`limit` 默认为 100，范围为 1–200。`cursor` 是最多 1024 字符、与 run 和 status filter
+绑定的不透明 keyset cursor；它不是授权 token，Client 不应解析或记录它。响应始终带
+`Cache-Control: no-store`。
+
+```json
+{
+  "runId": "2e3be660-4c08-4d07-9607-7ccca4c0ae4e",
+  "runStatus": "ACTIVE",
+  "statusFilter": "FAILED",
+  "items": [
+    {
+      "externalId": "record-42",
+      "documentKind": "JSON_RECORD",
+      "status": "FAILED",
+      "documentId": null,
+      "sourceRevision": "opaque-r7",
+      "errorCode": "BAD_REQUEST",
+      "error": "jsonbPayload is required",
+      "seenAt": "2026-08-26T13:55:00Z"
+    }
+  ],
+  "currentSummary": {
+    "total": 101,
+    "applied": 96,
+    "unchanged": 2,
+    "skippedNewerMutation": 1,
+    "failed": 2
+  },
+  "limit": 100,
+  "hasMore": false,
+  "nextCursor": null
+}
+```
+
+`currentSummary` 是 ledger 中每个唯一 item 的当前状态分布，不受本页或 `status` 过滤影响；
+它与 run 响应中的累计处理计数语义不同。回执不返回 item fingerprint、正文、JSONB
+payload、metadata、lease/hash、credential 或 provider 信息。`error` 在写入和读取时都会
+脱敏并限制为 500 字符。
+
+终态 run 的 cursor 遍历稳定。active run 仍可接收新 item 或更新失败项的 `seenAt`，
+因此遍历只提供最终一致观察，可能重复或暂时遗漏；Client 应按 `externalId` 去重，并在
+run 进入 `COMPLETED`、`ABORTED` 或 `EXPIRED` 后从无 cursor 起点重新完整扫描。
 
 ### `POST /api/v1/rag/document-sync-runs/{runId}/preview-missing`
 

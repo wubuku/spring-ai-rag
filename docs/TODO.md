@@ -51,6 +51,7 @@ independent planning subjects.
 | Item | Priority | Current gap |
 |------|----------|-------------|
 | Authoritative source snapshot reconciliation | Shipped in this batch | V42 API and reference client support bounded authoritative runs, preview fingerprints, deletion protection, and reconciliation tombstones |
+| Durable Sync Run item receipts | Shipped in V51 | The `RAG_READ` query supports status filtering, bounded cursors, a current-ledger summary, and masked errors; terminal traversal is stable while active runs require eventual-consistency deduplication and a terminal rescan |
 | Atomic Collection relocation for external documents | Shipped in this batch | V44 provides dual ACL, exact idempotent replay, Sync Run fencing, and a permanent retired-address guard; the feature flag defaults off |
 | Collection derivation-integrity diagnostics and controlled repair | Shipped in this batch | V45 provides shared physical freshness, bounded Collection diagnostics, and durable preview/apply/status for at most 100 items; side-effecting repair defaults off |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |

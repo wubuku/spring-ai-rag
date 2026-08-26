@@ -112,7 +112,23 @@ class IntegrationCapabilityCatalogTest {
         assertFalse(features.provisioning().idempotencyKey());
         assertFalse(features.dataPlane().embedding().asyncPolicy());
         assertTrue(features.optional().documentSyncRuns());
+        assertTrue(features.optional().documentSyncRunItemReceipts());
         assertTrue(features.optional().openAiCompatibility());
+    }
+
+    @Test
+    void keepsLegacyOptionalFeatureConstructorAdditive() {
+        IntegrationCapabilitiesResponse.OptionalFeatures enabled =
+                new IntegrationCapabilitiesResponse.OptionalFeatures(true, false);
+        IntegrationCapabilitiesResponse.OptionalFeatures disabled =
+                new IntegrationCapabilitiesResponse.OptionalFeatures(false, true);
+
+        assertTrue(enabled.documentSyncRuns());
+        assertTrue(enabled.documentSyncRunItemReceipts());
+        assertFalse(enabled.openAiCompatibility());
+        assertFalse(disabled.documentSyncRuns());
+        assertFalse(disabled.documentSyncRunItemReceipts());
+        assertTrue(disabled.openAiCompatibility());
     }
 
     @Test

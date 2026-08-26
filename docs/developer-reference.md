@@ -19,7 +19,7 @@ Documentation hub: [index.md](index.md). Stable project context: [project-contex
 | Real-LLM E2E port | `18081` |
 | Embedding | SiliconFlow `BAAI/bge-m3` |
 | Vector dimension | `1024` |
-| Flyway | V1–V50 |
+| Flyway | V1–V51 |
 
 Do **not** append `/v1` to an OpenAI or Embedding `base-url`. Spring AI appends `/v1/chat/completions` or `/v1/embeddings`.
 
@@ -62,12 +62,17 @@ PostgreSQL, reference client, and WebUI acceptance flow:
 ./scripts/verify-document-lifecycle.sh
 ```
 
-For the focused V42 Sync Run HTTP acceptance against a disposable PostgreSQL
-database:
+For the focused V42/V51 Sync Run HTTP acceptance against disposable PostgreSQL,
+including authenticated authorization and durable item receipts:
 
 ```bash
 ./scripts/verify-document-sync-runs.sh
 ```
+
+The gate creates temporary restricted read/write and read-only principals and
+verifies ACLs, cursor pagination, terminal-rescan semantics, failed-receipt
+recovery, `no-store`, and sensitive-data protection. Evidence excludes
+credentials, cursors, external IDs, and business payloads.
 
 For the V43 local-keyword/vector derivation boundary:
 

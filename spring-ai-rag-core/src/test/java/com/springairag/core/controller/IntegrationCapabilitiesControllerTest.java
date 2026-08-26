@@ -56,6 +56,9 @@ class IntegrationCapabilitiesControllerTest {
                         .value("tenant:manual:v1"))
                 .andExpect(jsonPath("$.features.provisioning.replayReturnsSecret")
                         .value(false))
+                .andExpect(jsonPath(
+                        "$.features.optional.documentSyncRunItemReceipts")
+                        .value(false))
                 .andExpect(jsonPath("$.limits.collectionKeyMaxLength").value(128))
                 .andExpect(jsonPath("$.credentialId").doesNotExist())
                 .andExpect(jsonPath("$.provider").doesNotExist())

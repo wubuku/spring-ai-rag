@@ -1,8 +1,13 @@
 package com.springairag.core.controller;
 
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
+import com.springairag.api.dto.DocumentSyncRunItemCurrentSummary;
+import com.springairag.api.dto.DocumentSyncRunItemPageResponse;
+import com.springairag.api.dto.DocumentSyncRunItemReceiptResponse;
 import com.springairag.api.dto.DocumentSyncRunResponse;
 import com.springairag.api.dto.DocumentSyncRunStatusResponse;
+import com.springairag.api.enums.DocumentSyncDocumentKind;
+import com.springairag.api.enums.DocumentSyncItemStatus;
 import com.springairag.api.enums.DocumentSyncMissingPolicy;
 import com.springairag.api.enums.DocumentSyncRunStatus;
 import com.springairag.api.enums.DocumentSyncSnapshotMode;
@@ -27,6 +32,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(
@@ -134,6 +140,62 @@ class DocumentSyncRunControllerWebTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.total").value(1))
                 .andExpect(jsonPath("$.runs[0].status").value("COMPLETED"));
+    }
+
+    @Test
+    void itemReceiptsBindPageContractAndDisableCaching() throws Exception {
+        UUID runId = UUID.randomUUID();
+        when(service.listItems(
+                runId,
+                "catalog",
+                "cms-main",
+                DocumentSyncItemStatus.FAILED,
+                1,
+                "opaque-cursor"))
+                .thenReturn(new DocumentSyncRunItemPageResponse(
+                        runId,
+                        DocumentSyncRunStatus.COMPLETED,
+                        DocumentSyncItemStatus.FAILED,
+                        List.of(new DocumentSyncRunItemReceiptResponse(
+                                "record-42",
+                                DocumentSyncDocumentKind.JSON_RECORD,
+                                DocumentSyncItemStatus.FAILED,
+                                null,
+                                "r7",
+                                "BAD_REQUEST",
+                                "jsonbPayload is required",
+                                OffsetDateTime.parse("2026-08-26T13:55:00Z"))),
+                        new DocumentSyncRunItemCurrentSummary(
+                                3, 1, 0, 0, 2),
+                        1,
+                        true,
+                        "next-cursor"));
+
+        mockMvc.perform(get("/api/v1/rag/document-sync-runs/" + runId + "/items")
+                        .param("collectionKey", "catalog")
+                        .param("sourceNamespace", "cms-main")
+                        .param("status", "FAILED")
+                        .param("limit", "1")
+                        .param("cursor", "opaque-cursor"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", "no-store"))
+                .andExpect(jsonPath("$.runId").value(runId.toString()))
+                .andExpect(jsonPath("$.runStatus").value("COMPLETED"))
+                .andExpect(jsonPath("$.statusFilter").value("FAILED"))
+                .andExpect(jsonPath("$.items[0].externalId").value("record-42"))
+                .andExpect(jsonPath("$.items[0].status").value("FAILED"))
+                .andExpect(jsonPath("$.items[0].itemFingerprint").doesNotExist())
+                .andExpect(jsonPath("$.currentSummary.total").value(3))
+                .andExpect(jsonPath("$.hasMore").value(true))
+                .andExpect(jsonPath("$.nextCursor").value("next-cursor"));
+
+        verify(service).listItems(
+                runId,
+                "catalog",
+                "cms-main",
+                DocumentSyncItemStatus.FAILED,
+                1,
+                "opaque-cursor");
     }
 
     private static DocumentSyncRunResponse response(

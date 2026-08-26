@@ -6,7 +6,9 @@ import com.springairag.api.dto.DocumentSyncRunBatchUpsertRequest;
 import com.springairag.api.dto.DocumentSyncRunBatchUpsertResponse;
 import com.springairag.api.dto.DocumentSyncRunBeginRequest;
 import com.springairag.api.dto.DocumentSyncRunCompleteRequest;
+import com.springairag.api.dto.DocumentSyncRunItemPageResponse;
 import com.springairag.api.dto.DocumentSyncRunItemRequest;
+import com.springairag.api.dto.DocumentSyncRunItemReceiptResponse;
 import com.springairag.api.dto.DocumentSyncRunItemResponse;
 import com.springairag.api.dto.DocumentSyncRunPreviewResponse;
 import com.springairag.api.dto.DocumentSyncRunResponse;
@@ -21,6 +23,7 @@ import com.springairag.core.config.RagDocumentLifecycleProperties;
 import com.springairag.core.config.RagProperties;
 import com.springairag.core.entity.RagCollection;
 import com.springairag.core.exception.RagException;
+import com.springairag.core.logging.SensitiveDataMaskingConverter;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.DigestUtils;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -63,6 +66,8 @@ public class DocumentSyncRunService {
     private final ObjectMapper objectMapper;
     private final CollectionIdentityResolver collectionIdentityResolver;
     private final DocumentMutationService mutationService;
+    private final DocumentSyncRunItemReceiptRepository itemReceiptRepository;
+    private final DocumentSyncRunItemCursorCodec itemCursorCodec;
     private final RagDocumentLifecycleProperties properties;
     private final TransactionTemplate transactionTemplate;
 
@@ -71,12 +76,15 @@ public class DocumentSyncRunService {
             ObjectMapper objectMapper,
             CollectionIdentityResolver collectionIdentityResolver,
             DocumentMutationService mutationService,
+            DocumentSyncRunItemReceiptRepository itemReceiptRepository,
             RagProperties ragProperties,
             PlatformTransactionManager transactionManager) {
         this.jdbcTemplate = jdbcTemplate;
         this.objectMapper = objectMapper;
         this.collectionIdentityResolver = collectionIdentityResolver;
         this.mutationService = mutationService;
+        this.itemReceiptRepository = itemReceiptRepository;
+        this.itemCursorCodec = new DocumentSyncRunItemCursorCodec(objectMapper);
         this.properties = ragProperties.getDocumentLifecycle();
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -388,6 +396,56 @@ public class DocumentSyncRunService {
                 collection.getCollectionKey());
     }
 
+    public DocumentSyncRunItemPageResponse listItems(
+            UUID runId,
+            String collectionKey,
+            String sourceNamespace,
+            DocumentSyncItemStatus statusFilter,
+            int limit,
+            String cursor) {
+        requireEnabled();
+        if (limit < 1 || limit > 200) {
+            throw new IllegalArgumentException("limit must be 1..200");
+        }
+        RagCollection collection = requireReadableCollection(collectionKey);
+        RunRow run = requireRun(
+                runId,
+                collection.getId(),
+                normalizeNamespace(sourceNamespace));
+        DocumentSyncRunItemCursorCodec.CursorPosition position = null;
+        if (cursor != null) {
+            position = itemCursorCodec.decode(cursor, runId, statusFilter);
+        }
+        var currentSummary = itemReceiptRepository.currentSummary(runId);
+        List<DocumentSyncRunItemReceiptRepository.ReceiptRow> rows =
+                itemReceiptRepository.page(
+                        runId, statusFilter, position, limit + 1);
+        boolean hasMore = rows.size() > limit;
+        List<DocumentSyncRunItemReceiptRepository.ReceiptRow> returnedRows =
+                hasMore ? rows.subList(0, limit) : rows;
+        List<DocumentSyncRunItemReceiptResponse> items = returnedRows.stream()
+                .map(this::toReceiptResponse)
+                .toList();
+        String nextCursor = null;
+        if (hasMore) {
+            var last = returnedRows.get(returnedRows.size() - 1);
+            nextCursor = itemCursorCodec.encode(
+                    runId,
+                    statusFilter,
+                    last.seenAt(),
+                    last.externalId());
+        }
+        return new DocumentSyncRunItemPageResponse(
+                runId,
+                run.status(),
+                statusFilter,
+                items,
+                currentSummary,
+                limit,
+                hasMore,
+                nextCursor);
+    }
+
     public DocumentSyncRunStatusResponse list(
             String collectionKey,
             String sourceNamespace,
@@ -535,7 +593,7 @@ public class DocumentSyncRunService {
                 mutation.documentId(),
                 mutation.status().name(),
                 mutation.errorCode(),
-                truncate(mutation.error()),
+                sanitizeError(mutation.error()),
                 run.id(),
                 externalId);
         incrementRunCount(run, mutation.status());
@@ -546,7 +604,7 @@ public class DocumentSyncRunService {
                 mutation.documentId(),
                 mutation.sourceRevision(),
                 mutation.errorCode(),
-                truncate(mutation.error()),
+                sanitizeError(mutation.error()),
                 mutation.embeddingAction(),
                 mutation.embeddingJobId());
     }
@@ -561,7 +619,7 @@ public class DocumentSyncRunService {
             String externalId = requireVisible(
                     item.externalId(), "externalId", 255);
             String code = errorCode(error);
-            String message = truncate(error.getMessage());
+            String message = sanitizeError(error.getMessage());
             LedgerRow existing = findItem(runId, externalId);
             if (existing != null
                     && !"SYNC_RUN_ITEM_IN_PROGRESS".equals(existing.errorCode())) {
@@ -935,9 +993,22 @@ public class DocumentSyncRunService {
                 item.documentId(),
                 item.sourceRevision(),
                 item.errorCode(),
-                item.errorMessage(),
+                sanitizeError(item.errorMessage()),
                 "NONE",
                 null);
+    }
+
+    private DocumentSyncRunItemReceiptResponse toReceiptResponse(
+            DocumentSyncRunItemReceiptRepository.ReceiptRow item) {
+        return new DocumentSyncRunItemReceiptResponse(
+                item.externalId(),
+                item.documentKind(),
+                item.status(),
+                item.documentId(),
+                item.sourceRevision(),
+                item.errorCode(),
+                sanitizeError(item.errorMessage()),
+                item.seenAt());
     }
 
     private DocumentSyncRunItemResponse failedItem(
@@ -950,7 +1021,7 @@ public class DocumentSyncRunService {
                 null,
                 item.sourceRevision(),
                 errorCode(error),
-                truncate(error.getMessage()),
+                sanitizeError(error.getMessage()),
                 "NONE",
                 null);
     }
@@ -1097,12 +1168,13 @@ public class DocumentSyncRunService {
         return DigestUtils.sha256(value.toString());
     }
 
-    private static String truncate(String value) {
+    static String sanitizeError(String value) {
         if (value == null) {
             return null;
         }
-        return value.length() <= MAX_ERROR_LENGTH
-                ? value : value.substring(0, MAX_ERROR_LENGTH);
+        String masked = SensitiveDataMaskingConverter.maskSensitiveData(value);
+        return masked.length() <= MAX_ERROR_LENGTH
+                ? masked : masked.substring(0, MAX_ERROR_LENGTH);
     }
 
     private static String errorCode(Throwable error) {

@@ -256,6 +256,10 @@ Sync Run namespace fencing 下原子改变 placement，保留同一 `documentId`
 当前 reference client 同时覆盖 webhook/CDC 增量事件和权威全量快照协议。
 Sync Run 绑定一个 `collectionKey + sourceNamespace`，只保存 lease hash 与 item fingerprint，
 支持 `begin`、有界 `batch-upsert`、`preview-missing`、`complete` 和 `abort`。
+V51 为既有 item ledger 增加游标索引，并公开需要 `RAG_READ` 的持久化 receipt 查询；
+它返回当前状态摘要和脱敏错误，支持响应丢失恢复，但不返回正文、payload、metadata、
+fingerprint、lease/hash 或 provider 信息。终态遍历稳定；active run 只提供最终一致观察，
+Client 应在终态后从头复扫。
 `ONLINE_CUT + TOMBSTONE` 是安全的全量删除模式；除非 connector 能建立来源一致性 cut，
 否则 client 使用 `OFFLINE_MANIFEST + NONE`。只有 preview fingerprint 和删除保护确认通过后，
 服务才会对 missing 文档生成 tombstone。begin 之后发生的来源 mutation 由 namespace
@@ -309,7 +313,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 ### 数据库
 
 - PostgreSQL + pgvector。
-- Flyway 当前为 V1–V50。
+- Flyway 当前为 V1–V51。
 - V27/V28 负责新增、回填、校验、唯一约束及不可变 Collection 业务 key；V29 增加 JSONB
   结构化记录；V30 增加外部文档同步 schema；V31 在不改写已发布 V30 的前提下规范化
   已存储的外部文档身份；V32 增加按 principal 归属的 Chat history、来源快照、turn
@@ -329,7 +333,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   credential、明文 secret 禁写约束、共享 quota bucket 与 legacy ADMIN guard；V49
   增加 principal 级 `RAG_READ` / `RAG_WRITE` 操作能力及数据库约束；V50 增加按
   requester 隔离的 provisioning 幂等账本，只保存 key/fingerprint hash 与结果 metadata，
-  从不保存 raw credential。
+  从不保存 raw credential；V51 为 Sync Run item ledger 增加按 run/status 的有界游标索引。
 - 数据访问层禁止显式 `SELECT ... FOR UPDATE`、`SKIP LOCKED`、JPA
   `PESSIMISTIC_*` 与 PostgreSQL advisory lock。并发写使用条件
   `UPDATE/DELETE ... RETURNING`、`@Version`、唯一约束、lease 和有界重试；普通 DML
@@ -357,7 +361,7 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
 | `/files` | PDF / 文件导入 |
 | `/json-records` | JSONB 结构化记录 upsert、检索与详情 |
 | `/documents/upsert` | 普通外部文档三元身份、revision CAS 与 tombstone 同步 |
-| `/document-sync-runs` | 权威外部快照对账 |
+| `/document-sync-runs` | 权威外部快照对账与持久化 item receipt 查询 |
 | `/embedding-jobs` | 默认开启的持久化 embedding/reindex 任务 |
 | `/retrieval-traces` | 当前调用方可见的检索诊断 |
 | `/collections/embedding-readiness` | Collection 嵌入就绪分类 |
@@ -409,7 +413,8 @@ job enqueue 分开提交，HTTP 不同步循环调用 provider。只读诊断默
   revoke 会改变 replay 返回的当前 credential 投影，但不会使原 secret 可恢复。
 - `GET /api/v1/rag/integration-capabilities` 提供认证、`no-store`、低敏的运行时合同，
   返回协议版本、当前调用方有效能力与 Collection 范围、数据面行为、可选特性和稳定输入
-  上限。restricted ACL 无法完整解析为 Collection key 时以 `503` fail closed。
+  上限，其中 `documentSyncRunItemReceipts` 明确表示持久化回执查询是否可用。restricted
+  ACL 无法完整解析为 Collection key 时以 `503` fail closed。
 - Chat、Search、Collection、Document、PDF-to-RAG、评估与后台 worker 都使用统一 ACL
   snapshot 或按 stable owner 重载当前 policy。
 
