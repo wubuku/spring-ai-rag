@@ -13,8 +13,8 @@
 - 计划实施 worktree：
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`
 - Flyway：V1-V49；本轮无 migration。
-- 当前阶段：实现、双语长青文档、dirty-tree 完整 Mock/桩/真实 HTTP readiness 与真实
-  LLM 双实例验收均已通过；准备提交特性分支并合并最新 `origin/main`。
+- 当前阶段：实现、双语长青文档、合并后 clean-tree readiness、真实 LLM 双实例验收和
+  实现收敛审查 `3/3` 均已通过；准备最终同步 `origin/main` 并完成 Git 交付。
 
 ## 2. 已完成探索
 
@@ -145,3 +145,28 @@
   `git fetch origin --prune` 并合并 `origin/main`。远端 main 仍为 `afb78dd0`，
   合并结果为 `Already up to date`，合并后候选基线为 `b0dcbb3a`。接下来只采用该
   合并后基线的 clean-tree readiness 与真实 LLM 结果作为最终结论。
+- 2026-08-26 12:39 CST：clean-tree readiness
+  `20260826-capability-profiles-postmerge-clean-1` 通过 `16/16`，release manifest
+  记录 Git `465b0b6a`、Flyway V49、160 项 HTTP 合同和
+  `READ_ONLY` / `READ_WRITE` 两个已验证画像。
+- 2026-08-26 12:45 CST：clean-tree 真实 LLM 双实例验收
+  `20260826-capability-profiles-postmerge-real-llm-clean-1` 通过 `13/13`；完整 Maven、
+  WebUI、Mock Playwright 和真实服务门槛先通过，随后 5 次真实 provider 调用全部成功，
+  只读写拒绝与幂等 replay 的 provider 增量均为 0。
+
+## 8. 实现收敛审查
+
+计数器：`3`
+
+- 轮次 1：preflight、安全边界与 release manifest 范围未发现实质问题，连续无修改
+  计数 `1/3`。
+- 轮次 2：HTTP query/dispatcher 合同与真实 LLM 调用预算未发现实质问题，连续无修改
+  计数 `2/3`。
+- 轮次 3：发现中英文发布清单仍记录旧的 129 项 HTTP 合同，与 clean-tree manifest
+  的 160 项不一致；已同步修复两种语言，计数重置为 `0`。
+- 重审轮次 1（2026-08-26 12:47 CST）：限定检查 preflight、安全边界与 release
+  manifest；未发现实质问题，连续无修改计数 `1/3`。
+- 重审轮次 2（2026-08-26 12:48 CST）：限定检查 HTTP query/dispatcher 合同、拒绝后
+  数据不变与真实 LLM 五次调用预算；未发现实质问题，连续无修改计数 `2/3`。
+- 重审轮次 3（2026-08-26 12:49 CST）：限定检查双语文档、release manifest、证据引用、
+  shell 语法、Git diff 和新增行密钥；未发现实质问题，连续无修改计数达到 `3/3`。

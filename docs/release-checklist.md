@@ -90,7 +90,7 @@ Release date: `2026-07-21`
   Collection-key allow-list, failing closed when policy resolution is
   incomplete.
 - [x] `verify-business-client-readiness.sh` covers PostgreSQL integration
-  matrices, Maven/WebUI gates, real Spring Boot, 129 business-credential HTTP
+  matrices, Maven/WebUI gates, real Spring Boot, 160 business-credential HTTP
   assertions including deployed binding preflight, and real API-key
   Playwright.
 - [x] The contract covers external identity/revision bounds, bidirectional
