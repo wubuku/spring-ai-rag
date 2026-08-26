@@ -37,6 +37,7 @@ ROOT_CONFIG="${CONTRACT_PRIVATE}/root.curl"
 NO_AUTH_CONFIG="${CONTRACT_PRIVATE}/no-auth.curl"
 RESTRICTED_KEY_ID=""
 RESTRICTED_B_KEY_ID=""
+CANARY_KEY_ID=""
 UNRESTRICTED_KEY_ID=""
 QUERY_KEY_ID=""
 RESTRICTED_CURRENT_KEY_ID=""
@@ -115,9 +116,10 @@ root_delete_key() {
 }
 
 cleanup() {
-  root_delete_key "$QUERY_KEY_ID"
-  root_delete_key "$UNRESTRICTED_KEY_ID"
-  root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
+root_delete_key "$QUERY_KEY_ID"
+root_delete_key "$UNRESTRICTED_KEY_ID"
+root_delete_key "$CANARY_KEY_ID"
+root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
   root_delete_key "$RESTRICTED_B_KEY_ID"
   rm -rf "$CONTRACT_PRIVATE"
 }
@@ -214,6 +216,87 @@ extract_secret() {
   local response="$1" output="$2"
   jq -er '.rawKey | select(startswith("rag_sk_"))' "$response" > "$output"
   chmod 600 "$output"
+}
+
+assert_literal_absent() {
+  local target="$1" description="$2"
+  shift 2
+  local value
+  for value in "$@"; do
+    [[ -n "$value" ]] || continue
+    if rg -F -- "$value" "$target" >/dev/null; then
+      echo "${description}: report exposed forbidden value" >&2
+      return 1
+    fi
+  done
+  pass "$description"
+}
+
+run_binding_preflight() {
+  local label="$1" mode="$2" auth_scheme="$3" credential_file="$4"
+  local collections_file="$5" expected_exit="$6" marker="${7:-}"
+  local evidence="${EVIDENCE_DIR}/preflight-${label}"
+  local output="${CONTRACT_PRIVATE}/preflight-${label}.out"
+  local error="${CONTRACT_PRIVATE}/preflight-${label}.err"
+  local run_id="${RUN_ID}-preflight-${label}" code
+
+  set +e
+  RAG_BINDING_BASE_URL="$BASE_URL" \
+  RAG_BINDING_CREDENTIAL_FILE="$credential_file" \
+  RAG_BINDING_EXPECTED_COLLECTIONS_FILE="$collections_file" \
+  RAG_BINDING_TARGET_LABEL="$label" \
+  RAG_BINDING_PREFLIGHT_MODE="$mode" \
+  RAG_BINDING_AUTH_SCHEME="$auth_scheme" \
+  RAG_BINDING_CANARY_CONFIRM="$([[ "$mode" == "CANARY_MUTATION" ]] && printf 'YES' || true)" \
+  RAG_BINDING_CANARY_COLLECTION_KEY="$([[ "$mode" == "CANARY_MUTATION" ]] && jq -er '.[0]' "$collections_file" || true)" \
+  RAG_BINDING_CANARY_RETRIEVAL_MARKER="$marker" \
+  RAG_BINDING_PREFLIGHT_RUN_ID="$run_id" \
+  RAG_BINDING_PREFLIGHT_EVIDENCE_DIR="$evidence" \
+  RAG_BINDING_REQUEST_TIMEOUT_SECONDS="$REQUEST_TIMEOUT_SECONDS" \
+  RAG_BINDING_READY_TIMEOUT_SECONDS=90 \
+  RAG_BINDING_ALLOW_HTTP_LOOPBACK=true \
+    bash scripts/business-client-binding-preflight.sh > "$output" 2> "$error"
+  code=$?
+  set -e
+  [[ "$code" == "$expected_exit" ]] || {
+    echo "${label} binding preflight: expected exit ${expected_exit}, got ${code}" >&2
+    sed -n '1,80p' "$error" >&2 || true
+    return 1
+  }
+  pass "${label} binding preflight exits as expected"
+}
+
+assert_binding_report() {
+  local label="$1" expected_result="$2" expected_category="$3"
+  local expected_canary_state="$4" credential_file="$5"
+  shift 5
+  local report="${EVIDENCE_DIR}/preflight-${label}/preflight-report.json"
+  [[ -f "$report" ]] || {
+    echo "${label} binding preflight report is missing" >&2
+    return 1
+  }
+  jq -e \
+    --arg result "$expected_result" \
+    --arg category "$expected_category" \
+    --arg canaryState "$expected_canary_state" \
+    '
+      .schemaVersion == 1
+      and .result == $result
+      and .verification.requiredOperationCount == 6
+      and .failureCategory == (if $result == "PASS" then null else $category end)
+      and .verification.canaryFinalState
+        == (if $canaryState == "" then null else $canaryState end)
+      and (.runId | test("^[A-Za-z0-9._-]+$"))
+      and (.targetLabel | test("^[A-Za-z0-9._-]+$"))
+    ' "$report" >/dev/null || {
+    echo "${label} binding preflight report schema/assertion failed" >&2
+    return 1
+  }
+  assert_secret_absent "$credential_file" "$report" \
+    "${label} binding preflight report hides credential"
+  assert_literal_absent "$report" \
+    "${label} binding preflight report hides binding identities" "$@"
+  pass "${label} binding preflight report is safe"
 }
 
 create_collection() {
@@ -422,6 +505,7 @@ write_no_auth_config "$NO_AUTH_CONFIG"
 RUN_TOKEN="$(printf '%s' "$RUN_ID" | tr -cd 'a-zA-Z0-9' | tail -c 20)"
 COLLECTION_A="bc.${RUN_TOKEN}.a"
 COLLECTION_B="bc.${RUN_TOKEN}.b"
+COLLECTION_CANARY="bc.${RUN_TOKEN}.canary"
 UNKNOWN_COLLECTION="bc.${RUN_TOKEN}.missing"
 MINIMUM_COLLECTION="z"
 BOUNDARY_KEY="$(python3 - "$RUN_TOKEN" <<'PY'
@@ -451,6 +535,7 @@ for collection_spec in \
     "${MINIMUM_COLLECTION}|One character Collection key" \
     "${COLLECTION_A}|Contract Collection A" \
     "${COLLECTION_B}|Contract Collection B" \
+    "${COLLECTION_CANARY}|Binding preflight canary Collection" \
     "${BOUNDARY_KEY}|128 character Collection key"; do
   IFS='|' read -r collection_key collection_name <<<"$collection_spec"
   response="${CONTRACT_PRIVATE}/collection-$(printf '%s' "$collection_name" | tr ' ' '-').json"
@@ -511,6 +596,18 @@ RESTRICTED_B_SECRET_FILE="${CONTRACT_PRIVATE}/restricted-b.key"
 extract_secret "$RESTRICTED_B_CREATE" "$RESTRICTED_B_SECRET_FILE"
 RESTRICTED_B_CONFIG="${CONTRACT_PRIVATE}/restricted-b.curl"
 write_auth_config "$RESTRICTED_B_CONFIG" x-api-key "$RESTRICTED_B_SECRET_FILE"
+
+CANARY_CREATE="${CONTRACT_PRIVATE}/canary-create.json"
+CANARY_CREATE_HEADERS="${CANARY_CREATE}.headers"
+code="$(create_principal "Binding Preflight Canary Principal" "$COLLECTION_CANARY" \
+  "$CANARY_CREATE" "$CANARY_CREATE_HEADERS")"
+assert_status "$code" 201 "create binding preflight canary principal"
+assert_no_store "$CANARY_CREATE_HEADERS" "binding preflight canary principal creation"
+CANARY_KEY_ID="$(jq -er '.keyId' "$CANARY_CREATE")"
+CANARY_SECRET_FILE="${CONTRACT_PRIVATE}/canary.key"
+extract_secret "$CANARY_CREATE" "$CANARY_SECRET_FILE"
+CANARY_BEARER_CONFIG="${CONTRACT_PRIVATE}/canary-bearer.curl"
+write_auth_config "$CANARY_BEARER_CONFIG" bearer "$CANARY_SECRET_FILE"
 
 UNRESTRICTED_CREATE="${CONTRACT_PRIVATE}/unrestricted-create.json"
 UNRESTRICTED_CREATE_HEADERS="${UNRESTRICTED_CREATE}.headers"
@@ -601,6 +698,43 @@ COLLECTION_PROBE_HEADERS="${COLLECTION_PROBE}.headers"
 code="$(query_request GET "${API}/collections/by-key" "$RESTRICTED_X_CONFIG" \
   "$COLLECTION_PROBE" "$COLLECTION_PROBE_HEADERS" "collectionKey=${COLLECTION_A}")"
 assert_status "$code" 200 "restricted binding active Collection probe"
+
+PREFLIGHT_A_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-a-collections.json"
+jq -n --arg key "$COLLECTION_A" '[$key]' > "$PREFLIGHT_A_COLLECTIONS"
+PREFLIGHT_A_WRONG_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-a-wrong-collections.json"
+jq -n --arg keyA "$COLLECTION_A" --arg keyB "$COLLECTION_B" \
+  '[$keyA,$keyB]' > "$PREFLIGHT_A_WRONG_COLLECTIONS"
+PREFLIGHT_CANARY_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-canary-collections.json"
+jq -n --arg key "$COLLECTION_CANARY" '[$key]' > "$PREFLIGHT_CANARY_COLLECTIONS"
+
+run_binding_preflight \
+  "readonly-pass" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
+  "$PREFLIGHT_A_COLLECTIONS" 0
+assert_binding_report \
+  "readonly-pass" "PASS" "" "" "$RESTRICTED_SECRET_FILE" \
+  "$COLLECTION_A"
+
+run_binding_preflight \
+  "readonly-wrong-allow-list" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
+  "$PREFLIGHT_A_WRONG_COLLECTIONS" 1
+assert_binding_report \
+  "readonly-wrong-allow-list" "FAIL" "POLICY_MISMATCH" "" \
+  "$RESTRICTED_SECRET_FILE" "$COLLECTION_A" "$COLLECTION_B"
+
+run_binding_preflight \
+  "canary-success" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
+  "$PREFLIGHT_CANARY_COLLECTIONS" 0
+assert_binding_report \
+  "canary-success" "PASS" "" "TOMBSTONED" "$CANARY_SECRET_FILE" \
+  "$COLLECTION_CANARY"
+
+run_binding_preflight \
+  "canary-provider-failure" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
+  "$PREFLIGHT_CANARY_COLLECTIONS" 1 "$EMBEDDING_FAIL_MARKER"
+assert_binding_report \
+  "canary-provider-failure" "FAIL" "EMBEDDING_FAILED" "TOMBSTONED" \
+  "$CANARY_SECRET_FILE" "$COLLECTION_CANARY" "$EMBEDDING_FAIL_MARKER" \
+  "preflight-${RUN_ID}-preflight-canary-provider-failure"
 
 RETRIEVAL_TEXT="The contract searchable record is active and ready for retrieval."
 UPSERT_V1_REQUEST="${CONTRACT_PRIVATE}/upsert-v1.request.json"

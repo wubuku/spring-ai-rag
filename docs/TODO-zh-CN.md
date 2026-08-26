@@ -2,8 +2,18 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> 最后复核：2026-08-25。本文只记录当前代码和正式 API 之外的后续事项，不代表
+> 最后复核：2026-08-26。本文只记录当前代码和正式 API 之外的后续事项，不代表
 > 已发布的 API 能力。
+
+## 已交付的接入门禁
+
+- [x] `business-client-binding-preflight.sh` 提供无需 root、默认只读的已部署实例检查，
+  覆盖 readiness、OpenAPI、principal policy、Collection allow-list 精确相等和 Collection
+  active 状态。
+- [x] 显式启用的 canary 模式验证 ASYNC 持久化、精确重放、就绪、payload 检索、CAS 冲突、
+  tombstone、恢复和最终 tombstone，并在失败时执行有界清理。
+- [x] readiness 合同把 preflight 作为黑盒 client 执行，并验证只读成功、allow-list
+  不匹配、Bearer canary 成功和 provider 失败清理场景的 secret-safe 报告。
 
 ## 受管 API Principal 后续边界
 

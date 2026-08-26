@@ -400,12 +400,21 @@ start_postgres() {
     -p 127.0.0.1::5432 \
     "$POSTGRES_IMAGE" >/dev/null || return 1
 
-  local attempt state
+  local attempt state ready_streak=0
   for attempt in $(seq 1 120); do
     if docker exec "$POSTGRES_CONTAINER" \
         pg_isready -U "$POSTGRES_USERNAME" \
-        -d "$POSTGRES_DATABASE" >/dev/null 2>&1; then
-      break
+        -d "$POSTGRES_DATABASE" >/dev/null 2>&1 \
+        && docker exec "$POSTGRES_CONTAINER" \
+        psql -U "$POSTGRES_USERNAME" \
+        -d "$POSTGRES_DATABASE" \
+        -Atqc 'SELECT 1' >/dev/null 2>&1; then
+      ready_streak=$((ready_streak + 1))
+      if (( ready_streak >= 3 )); then
+        break
+      fi
+    else
+      ready_streak=0
     fi
     state="$(docker inspect --format '{{.State.Status}}' \
       "$POSTGRES_CONTAINER" 2>/dev/null || true)"
@@ -416,9 +425,10 @@ start_postgres() {
     fi
     sleep 1
   done
-  docker exec "$POSTGRES_CONTAINER" \
-    pg_isready -U "$POSTGRES_USERNAME" \
-    -d "$POSTGRES_DATABASE" >/dev/null || return 1
+  (( ready_streak >= 3 )) || {
+    echo "Disposable PostgreSQL did not reach stable readiness" >&2
+    return 1
+  }
   POSTGRES_PORT="$(docker port "$POSTGRES_CONTAINER" 5432/tcp \
     | awk -F: 'NR == 1 {print $NF}')" || return 1
   [[ -n "$POSTGRES_PORT" ]] || {
@@ -720,8 +730,11 @@ real_fullstack_acceptance() {
 }
 
 script_static_checks() {
+  bash -n scripts/business-client-binding-preflight.sh || return 1
+  bash -n scripts/test-support/business-client-binding-preflight-self-test.sh || return 1
   bash -n scripts/business-client-contract-e2e.sh || return 1
   bash -n scripts/verify-business-client-readiness.sh || return 1
+  scripts/test-support/business-client-binding-preflight-self-test.sh || return 1
   python3 -c '
 from pathlib import Path
 

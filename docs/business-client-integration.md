@@ -144,6 +144,58 @@ in the operator management plane. If the principal exists but the raw
 credential was not stored safely, rotate its current credential instead of
 creating an orphan principal.
 
+### 4.1 Deployed Binding Preflight
+
+For a deployed instance, use
+`scripts/business-client-binding-preflight.sh` as a caller-side binding gate.
+It does not require root and does not create Collections or principals.
+
+The default mode is read-only. It verifies readiness, OpenAPI `1.0.0`, the
+required P0 operations, `/auth/me`, exact restricted allow-list equality, and
+the active state of every expected Collection:
+
+```bash
+RAG_BINDING_BASE_URL=https://rag.example \
+RAG_BINDING_CREDENTIAL_FILE=/run/secrets/rag-credential \
+RAG_BINDING_EXPECTED_COLLECTIONS_FILE=/etc/rag/collections.json \
+RAG_BINDING_TARGET_LABEL=production-a \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+The credential file must be a regular file readable only by its owner and
+contain exactly one current `rag_sk_<64 lowercase hex characters>` credential.
+The Collection file is a JSON array of 1-100 unique visible-ASCII keys. The
+runner rejects query credentials, user-info, redirects, non-loopback HTTP, and
+insecure TLS bypasses. It accepts `X-API-Key` by default; set
+`RAG_BINDING_AUTH_SCHEME=BEARER` to use the equivalent Bearer header.
+
+An explicitly provisioned, non-business canary Collection may opt into a
+bounded mutation smoke. It requires both the mode and confirmation flag, and
+the canary key must be the only expected key in that binding:
+
+```bash
+RAG_BINDING_PREFLIGHT_MODE=CANARY_MUTATION \
+RAG_BINDING_CANARY_CONFIRM=YES \
+RAG_BINDING_CANARY_COLLECTION_KEY=preflight-canary \
+RAG_BINDING_AUTH_SCHEME=BEARER \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+The mutation flow uses one run-scoped external identity and validates ASYNC
+persistence, exact replay, readiness, `payloadContains` search, CAS `409`,
+tombstone, restore, and a final tombstone. It never physically deletes the
+record. If the provider fails or the process is interrupted after the initial
+upsert, the exit cleanup reconciles the same identity and attempts one bounded
+tombstone; it never creates a second identity.
+
+Every run writes `preflight-report.json`, `summary.md`, and `steps.tsv` under
+`RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` (or the default verification directory).
+The JSON report contains only low-sensitivity labels, counts, versions, status,
+and failure categories. It does not contain credentials, URLs, Collection
+keys, external IDs, payloads, or response bodies. Treat a failed preflight as
+a binding failure; do not continue delivery or weaken the checks to make a
+deployment pass.
+
 ## 5. JSON Record Mutation Contract
 
 Use `embeddingPolicy=ASYNC` by default with
@@ -249,7 +301,8 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 The full gate runs focused backend tests, three isolated PostgreSQL integration
 matrices, `mvn clean compile test-compile`, WebUI typecheck/Vitest/production
 build, core Mock Playwright, documentation/lock/secret/diff gates, and then a
-real Spring Boot service, 109 HTTP contract assertions, and real API-key
+real Spring Boot service, 129 HTTP contract assertions including deployed
+binding preflight, and real API-key
 Playwright.
 
 Defaults use isolated ports `18084`, `18085`, `15184`, and `15185` with a

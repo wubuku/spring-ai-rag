@@ -243,7 +243,12 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 - Flyway V48、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
 
-真实 HTTP 阶段当前固定为 109 项断言。最终候选 commit 应开启 clean-tree gate：
+真实 HTTP 阶段当前固定为 129 项断言。除业务客户端合同外，还会把已部署 binding
+preflight 作为黑盒 client 执行：只读成功、allow-list 精确不匹配失败、Bearer canary
+mutation 成功，以及 provider 失败后的清理和最终 tombstone。测试会校验 preflight 报告
+schema，并确认报告不包含 credential、URL、Collection key、external ID 或 payload。
+
+最终候选 commit 应开启 clean-tree gate：
 
 ```bash
 BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \

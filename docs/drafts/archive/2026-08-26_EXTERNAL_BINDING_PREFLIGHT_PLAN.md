@@ -94,9 +94,9 @@ DELETE /api/v1/rag/json-records/by-external-id
 
 近距离事实入口：
 
-- [业务服务接入指南](../business-client-integration-zh-CN.md)
-- [REST API：认证与 JSON Record](../rest-api-zh-CN.md)
-- [业务服务接入测试](../testing-guide-zh-CN.md#业务服务接入就绪验证)
+- [业务服务接入指南](../../business-client-integration-zh-CN.md)
+- [REST API：认证与 JSON Record](../../rest-api-zh-CN.md)
+- [业务服务接入测试](../../testing-guide-zh-CN.md#业务服务接入就绪验证)
 - `scripts/business-client-contract-e2e.sh`
 - `scripts/verify-business-client-readiness.sh`
 
@@ -183,7 +183,7 @@ runner。本轮新增独立脚本，并在该合同脚本中把新 runner 当作
   - `RAG_BINDING_PREFLIGHT_MODE=CANARY_MUTATION`
   - `RAG_BINDING_CANARY_CONFIRM=YES`
   - 非空 `RAG_BINDING_CANARY_COLLECTION_KEY`
-  - canary key 精确属于期望 allow-list
+  - 期望 allow-list 只能包含一个 Collection，且该 Collection 必须就是 canary key
 - runner 无法判断 Collection 是否承载真实业务，因此文档明确要求使用预创建的专用 canary
   Collection；双重确认用于阻止误操作，不伪装成服务端业务隔离。
 - credential 只允许通过可读普通文件传入；runner 拒绝符号链接、拒绝 group/other 可读权限，
@@ -318,7 +318,7 @@ mutation PASS 时 `canaryFinalState` 必须为 `TOMBSTONED`。FAIL 报告允许�
 
 先完整通过 read-only 流程，再执行：
 
-1. 确认 canary key 是期望 allow-list 的成员。
+1. 确认期望 allow-list 只包含一个 Collection，且该 Collection 就是 canary key。
 2. 生成一次性 external ID、run marker、固定请求快照和 revision token。
 3. `upsert(created, ASYNC)`：
    - HTTP 200；
@@ -428,7 +428,7 @@ cleanup 不使用 root、不永久删除、不生成第二个 external ID，也�
 
 ### Slice D：进度、归档和 Git 交付
 
-- 使用 `docs/drafts/EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md` 持续记录。
+- 使用 `docs/drafts/archive/2026-08-26_EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md` 持续记录。
 - 功能完成后把稳定事实提升到双语长青文档。
 - 用 `git mv` 将 plan/progress 归档为带 `2026-08-26_` 前缀的历史文档。
 - 更新 active draft README 为无活动规划。

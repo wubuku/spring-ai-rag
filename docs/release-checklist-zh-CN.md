@@ -83,12 +83,15 @@
 - [x] `/api/v1/rag/auth/me` 显式返回 principal role、restricted/unrestricted 模式和当前
   credential 自身的稳定 Collection key allow-list，无法完整解析时 fail closed。
 - [x] `verify-business-client-readiness.sh` 覆盖 PostgreSQL 集成矩阵、Maven/WebUI 门槛、
-  真实 Spring Boot、109 项业务 credential HTTP 合同和真实 API Key Playwright。
+  真实 Spring Boot、包含已部署 binding preflight 的 129 项业务 credential HTTP 合同和
+  真实 API Key Playwright。
 - [x] 合同覆盖外部身份/revision 边界、双向全数据面 `403` 防枚举，以及 provider
   `503` 后 Record identity/revision/payload/enabled/documentRevision 保留。
 - [x] clean-tree 最终门禁生成 `release-manifest.json`，锁定完整 Git SHA、项目/OpenAPI
-  `1.0.0`、API base path、Flyway V48、PostgreSQL image 和 109 项合同计数，且不保存密钥
+  `1.0.0`、API base path、Flyway V48、PostgreSQL image 和 129 项合同计数，且不保存密钥
   或业务 payload。
+- [x] `business-client-binding-preflight.sh` 默认只读，真实 canary/cleanup 报告通过
+  schema 与 secret-safety 验证。
 - [x] 双语业务服务接入指南固化 root/业务 credential、binding、CAS/tombstone/ASYNC、
   轮换、升级与回滚边界。
 

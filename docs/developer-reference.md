@@ -426,11 +426,25 @@ Default ports are backend `18084`, embedding stub `18085`, Mock frontend
 `BUSINESS_CLIENT_POSTGRES_IMAGE`. Evidence is written under
 `.verification/business-client-readiness/<run-id>/`; exit traps clean private
 credential files, containers, ports, and processes. The real HTTP contract
-currently contains 109 assertions, including Record preservation after a
-provider `503`. `release-manifest.json` pins the full Git SHA, initial tree
+currently contains 129 assertions, including read-only and canary binding
+preflight scenarios plus Record preservation after a provider `503`.
+`release-manifest.json` pins the full Git SHA, initial tree
 state, project/OpenAPI versions, API base path, V48, passed steps, PostgreSQL
 image, and HTTP-check count. Runtime facts not reached are JSON `null`; it
 stores no credential, URL, payload, external ID, or private path.
+
+The deployed binding runner can also be executed independently against an
+already running instance:
+
+```bash
+./scripts/business-client-binding-preflight.sh
+```
+
+It is read-only by default. Set the `RAG_BINDING_*` inputs documented in the
+[Business Service Integration Guide](business-client-integration.md). Mutation
+mode is opt-in and must use a dedicated canary Collection; its report is
+machine-readable and contains no credential, URL, Collection key, external
+ID, or payload.
 
 This gate verifies the real Spring AI embedding HTTP path. The capability does
 not change Chat, so it does not call a Chat LLM. See the

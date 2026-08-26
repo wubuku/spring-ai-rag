@@ -38,8 +38,7 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-- [Deployed business-binding preflight P0 implementation plan (Chinese)](EXTERNAL_BINDING_PREFLIGHT_PLAN.md)
-- [Deployed business-binding preflight P0 progress ledger (Chinese)](EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md)
+No active implementation plan is currently tracked in this directory.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
