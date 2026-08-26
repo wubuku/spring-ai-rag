@@ -122,10 +122,10 @@ RagCollectionController.create(...)
 
 近距离长青入口：
 
-- [REST API：Collection 管理](../rest-api-zh-CN.md#collections--knowledge-base-management)
-- [业务服务接入指南](../business-client-integration-zh-CN.md)
-- [项目上下文](../project-context-zh-CN.md)
-- [交付工作流](../delivery-workflow-zh-CN.md)
+- [REST API：Collection 管理](../../rest-api-zh-CN.md#collections--knowledge-base-management)
+- [业务服务接入指南](../../business-client-integration-zh-CN.md)
+- [项目上下文](../../project-context-zh-CN.md)
+- [交付工作流](../../delivery-workflow-zh-CN.md)
 
 ### 3.2 Collection 当前语义
 
@@ -767,7 +767,7 @@ rotation。真实调用期间持续观察日志，不设置人为调用次数预
 ## 14. 规划检查记录
 
 发现实质问题并修改本文时，记录到配套
-[进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md) 并将连续计数重置为 `0`。无问题轮次
+[进度账本](2026-08-27_COLLECTION_CREATE_IDEMPOTENCY_PROGRESS.md) 并将连续计数重置为 `0`。无问题轮次
 只在会话进展中总结；达到连续 `3/3` 后，再一次性把最终范围和结果写入本文，避免三轮检查
 本身破坏“无修改”条件。
 

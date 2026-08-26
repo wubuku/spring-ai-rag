@@ -2,7 +2,7 @@
 
 > **状态**：已完成（本地与 Mock 验收通过；真实 Chat provider 验收受外部服务阻塞）
 >
-> **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+> **对应规划**：[Collection 创建持久化幂等性规划](2026-08-27_COLLECTION_CREATE_IDEMPOTENCY_PLAN.md)
 >
 > **规划基线**：`main` / `origin/main` @ `61c728c2`（2026-08-26）
 >
