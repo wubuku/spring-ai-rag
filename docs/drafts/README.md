@@ -38,7 +38,10 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-No active implementation plan is currently tracked in this directory.
+The active [operation-scoped API capabilities plan](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PLAN.md)
+is tracked by its accompanying
+[progress ledger](2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_PROGRESS.md). These working
+documents are intentionally maintained in Chinese only.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).
