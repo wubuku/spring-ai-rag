@@ -1,6 +1,6 @@
 # Sync Run 持久化 item receipt 与游标状态查询实施进度
 
-> **状态**：隔离特性分支实施中
+> **状态**：隔离特性分支最终验收完成，待 Git 交付
 >
 > **对应规划**：[NEXT_HIGH_VALUE_FEATURES_PLAN.md](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
 >
@@ -33,7 +33,7 @@
 - [x] Slice C2：真实全栈与 provider 回归。
 - [x] Slice D：双语长青文档。
 - [x] 基本硬门槛与交付前完整验收。
-- [ ] 同步 `origin/main` 后最终完整复验。
+- [x] 同步 `origin/main` 后最终完整复验。
 - [ ] 推送特性分支、合入并推送 `main`、清理 worktree。
 
 ## 2. 已冻结的关键决策
@@ -99,10 +99,14 @@
 | 2026-08-26 深夜 | 业务 Client 生命周期验收 | 聚焦后端/合同 137 tests、PostgreSQL 矩阵、Maven 编译门槛、WebUI typecheck/Vitest 218/build、无截图 Mock Playwright、文档/锁/密钥/diff、双实例真实 HTTP/WebUI 251 条断言、服务故障恢复与受限读取 | PASS（16/16） | `.verification/business-client-readiness/20260826-sync-run-receipts-client-rerun/summary.md`；release manifest 标记 migration=51、READ_ONLY/READ_WRITE |
 | 2026-08-26 深夜 | 真实 LLM 与完整回归 | PostgreSQL 矩阵、`mvn clean compile test-compile`、全量 Maven（API 541、documents 74、core 3049、starter 44）、WebUI Vitest 218/typecheck/build/alignment、无截图 Mock Playwright、文档/锁/diff、双实例真实全栈和真实 provider | PASS（13/13） | `.verification/managed-api-principals/20260827-000052/summary.md`；真实原生/OpenAI-compatible JSON/SSE 共 5 次 provider 调用，read-only 与 replay 均为 0 额外调用，轮换后 principal continuity=true |
 | 2026-08-26 深夜 | 限定范围交付检查 | V51/SQL/cursor/summary、HTTP/OpenAPI/ACL/低敏 response、验收脚本、双语文档、外部名称、锁策略、密钥和 diff | PASS（无实质问题、无代码修改） | `verify-project-docs.sh` 11/11；1182 links；8 bilingual pairs；`verify-no-pessimistic-locks.sh`、Bash syntax、`git diff --check` 通过 |
+| 2026-08-26 深夜 | 最终远端基线 | 当前实现已提交为 `ff45de00`；fetch 后 `origin/main` 仍为 `82cf3db5`，且是特性分支祖先；显式 merge 返回 `Already up to date` | READY | 最终复验基线 `ff45de00` + 本行进度记录；无远端冲突或额外代码变化 |
+| 2026-08-26 深夜 | 最终业务 Client 生命周期复验 | 聚焦后端/合同 137 tests、PostgreSQL V1-V51、Maven 编译门槛、WebUI typecheck/Vitest 218/build、无截图 Mock Playwright、文档/锁/密钥/diff、251 条真实 HTTP/WebUI 断言、服务故障恢复 | PASS（16/16） | `.verification/business-client-readiness/20260826-sync-run-receipts-final/summary.md` |
+| 2026-08-26 深夜 | 最终真实 LLM/full-stack 复验 | PostgreSQL V1-V51、Maven 编译与全量测试、WebUI 全门槛、无截图 Mock Playwright、双实例真实全栈、真实原生/OpenAI-compatible JSON/SSE | PASS（13/13） | `.verification/managed-api-principals/20260827-001913/summary.md`；5 次 provider 调用，read-only 与幂等 replay 均为 0 额外调用，轮换后 principal continuity=true |
 
 ## 5. 恢复入口
 
-规划 checkpoint 已推送，隔离特性 worktree 已建立。Slice A/B/C/D、定向与全量测试、
-认证 Sync Run HTTP acceptance、业务 Client 生命周期、双实例真实全栈、真实 LLM/provider
-以及双语长青文档门禁均已通过。下一步执行限定范围交付检查，fetch/merge 最新
-`origin/main`，再按合并后基线从头完整复验并完成 Git 交付。
+规划 checkpoint 与实现提交均已完成。Slice A/B/C/D、定向与全量测试、认证 Sync Run
+HTTP acceptance、业务 Client 生命周期、双实例真实全栈、真实 LLM/provider 以及双语
+长青文档门禁均已通过；最终复验基线为 `ff45de00`，`origin/main` 仍为 `82cf3db5`。
+下一步只需提交本进度账本、推送特性分支、合入并推送 `main`，随后确认工作区干净并安全
+移除隔离 worktree。
