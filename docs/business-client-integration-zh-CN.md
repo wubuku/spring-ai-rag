@@ -34,9 +34,14 @@ principal，只应存在于受控运维环境，不应进入业务服务或 WebU
 
 ### 数据库业务 principal
 
-root 创建的业务 principal 当前固定为 `NORMAL`，拥有产品级
-`RAG_READ`、`RAG_WRITE`，但不能调用 API Key 管理端点。生产集成应给每个服务或
-connector 分配独立的 restricted principal，并只允许目标 Collection。
+root 创建的业务 principal 当前固定为 `NORMAL`，但可以按职责分配 operation capability：
+
+- `RAG_READ`：允许 GET/HEAD/OPTIONS 以及 Search、Chat 等只读 POST；
+- `RAG_READ + RAG_WRITE`：在上述能力之外允许 upsert、delete 和其他数据面 mutation。
+
+业务 principal 不能调用 API Key 管理端点。生产集成应给每个服务或 connector 分配独立的
+restricted principal，并只允许目标 Collection。读取与投递职责可以分离时，推荐分别使用
+只读 query principal 和读写 dispatcher principal，避免查询服务持有写权限。
 
 原始 credential 仅在创建或轮换响应中展示一次。调用方必须在该响应事务边界内把它写入
 secret manager；服务不会再次返回原值，列表和自省响应也不包含 raw secret 或 hash。
@@ -78,7 +83,8 @@ restricted principal 的核心响应：
 
 `rootMode` 表示服务是否配置了 environment root，不表示当前 credential 就是 root。
 调用方应先检查 `principalType`，再验证 `principalId`、credential/policy version、
-`collectionAccessMode` 和完整 allow-list。unrestricted principal 返回
+`capabilities`、`collectionAccessMode` 和完整 allow-list。能力集合必须与部署职责精确
+相等，不能只检查是否包含某个值。unrestricted principal 返回
 `collectionAccessMode=UNRESTRICTED`、`allowedCollectionKeys=null`。
 
 自省只描述 policy。随后应对每个期望 key 调用
@@ -109,10 +115,10 @@ JSON Record 分开保存：
 
 1. operator 使用 environment root 创建目标 Collection。
 2. operator 创建 restricted business principal，并设置唯一名称、到期时间、RPM 和
-   `allowedCollectionKeys`。
+   `allowedCollectionKeys`，同时显式指定 `capabilities`。
 3. 在创建响应中一次性接收 raw credential，立即写入 secret manager。
 4. 业务服务只从环境变量、挂载 secret 或等价 secret provider 读取 credential。
-5. 服务启动时执行 `/auth/me`，精确核对 principal 与 allow-list。
+5. 服务启动时执行 `/auth/me`，精确核对 principal、能力集合与 allow-list。
 6. 对目标 Collection 执行只读 by-key 探针，再开始消费业务事件。
 7. 发布后运行本指南第 8 节的合同门禁。
 
@@ -126,7 +132,9 @@ credential，而不是再创建一个无主 principal。
 `scripts/business-client-binding-preflight.sh` 作为 binding 门禁。它不需要 root，也不会
 创建 Collection 或 principal。
 
-默认模式是只读。它会检查 readiness、OpenAPI `1.0.0`、所需 P0 operation、`/auth/me`、
+默认执行模式是只读，但默认 credential 画像为兼容既有调用方的 `READ_WRITE`。执行模式
+描述预检是否会产生 mutation，credential 画像描述调用方应该持有什么权限，两者不能混为
+一谈。预检会检查 readiness、OpenAPI `1.0.0`、所需 operation、`/auth/me`、能力画像、
 restricted allow-list 的精确相等关系，以及每个期望 Collection 当前是否 active：
 
 ```bash
@@ -134,8 +142,14 @@ RAG_BINDING_BASE_URL=https://rag.example \
 RAG_BINDING_CREDENTIAL_FILE=/run/secrets/rag-credential \
 RAG_BINDING_EXPECTED_COLLECTIONS_FILE=/etc/rag/collections.json \
 RAG_BINDING_TARGET_LABEL=production-a \
+RAG_BINDING_EXPECTED_CAPABILITY_PROFILE=READ_ONLY \
   ./scripts/business-client-binding-preflight.sh
 ```
+
+`RAG_BINDING_EXPECTED_CAPABILITY_PROFILE` 只接受：
+
+- `READ_ONLY` → 精确要求 `["RAG_READ"]`；
+- `READ_WRITE` → 精确要求 `["RAG_READ","RAG_WRITE"]`，也是未设置时的兼容默认值。
 
 credential 文件必须是 owner-only 可读的普通文件，并且只包含一个当前的
 `rag_sk_<64 位小写十六进制字符>` credential。Collection 文件是包含 1-100 个唯一可见
@@ -152,6 +166,7 @@ RAG_BINDING_PREFLIGHT_MODE=CANARY_MUTATION \
 RAG_BINDING_CANARY_CONFIRM=YES \
 RAG_BINDING_CANARY_COLLECTION_KEY=preflight-canary \
 RAG_BINDING_AUTH_SCHEME=BEARER \
+RAG_BINDING_EXPECTED_CAPABILITY_PROFILE=READ_WRITE \
   ./scripts/business-client-binding-preflight.sh
 ```
 
@@ -159,12 +174,14 @@ mutation 流程使用本次运行唯一的外部身份，验证 ASYNC 持久化�
 `payloadContains` 检索、CAS `409`、tombstone、恢复和最终 tombstone；它不会物理删除
 记录。如果 provider 失败，或初次 upsert 到达服务端后进程中断，退出清理会对同一身份
 对账，并有界地尝试一次 tombstone；不会生成第二个身份。
+`CANARY_MUTATION` 只接受 `READ_WRITE` 画像，避免把只读 credential 误配到写验收。
 
 每次运行会在 `RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` 指定的目录（未指定时使用默认
 verification 目录）生成 `preflight-report.json`、`summary.md` 和 `steps.tsv`。
-JSON 报告只包含低敏标签、计数、版本、状态和失败类别，不包含 credential、URL、
-Collection key、external ID、payload 或响应正文。预检失败应视为 binding 失败，不能
-继续投递，也不能为了让部署通过而削弱检查。
+JSON 报告分别记录调用方期望的 `expectedCapabilityProfile` 和成功自省后确认的
+`principal.capabilityProfile`；后者在能力未验证时为 `null`。报告只包含低敏标签、计数、
+版本、状态和失败类别，不包含 credential、URL、Collection key、external ID、payload
+或响应正文。预检失败应视为 binding 失败，不能继续投递，也不能为了让部署通过而削弱检查。
 
 ## 5. JSON Record mutation 合同
 
@@ -260,20 +277,22 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 完整门禁串行执行 focused 后端测试、三个隔离 PostgreSQL 集成矩阵、
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
 Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、包含已部署 binding
-preflight 的 129 项 HTTP 合同和真实 API Key Playwright。
+preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证只读 query principal
+可以 lookup/search、不能 upsert/delete，且拒绝后 revision 和状态不变；读写 dispatcher
+继续负责 mutation，credential 轮换保持原能力。
 
 脚本默认使用隔离端口 `18084`、`18085`、`15184`、`15185` 和一次性
 `pgvector/pgvector:pg16`。证据写入
 `.verification/business-client-readiness/<run-id>/`；private credential 文件由退出 trap
 删除。`release-manifest.json` 记录运行结果、验证阶段、完整 Git SHA、初始 tree state、
 项目/OpenAPI 版本、API base path、最新 Flyway migration、passed steps、PostgreSQL image
-和 HTTP contract check 数；未到达的运行时事实使用 JSON `null`，不保存 credential、URL、
-payload、external ID 或 private path。确定性 embedding stub 验证真实 Spring AI
+、HTTP contract check 数和已验证的 `READ_ONLY`/`READ_WRITE` 画像；未到达的运行时事实
+使用 JSON `null`，不保存 credential、URL、payload、external ID 或 private path。确定性
+embedding stub 验证真实 Spring AI
 embedding HTTP 路径及 503 失败保留合同，但本能力不改变 Chat，因此该门禁不调用 Chat LLM。
 
 ## 9. 当前限制
 
-- `RAG_READ`/`RAG_WRITE` 当前是产品级描述，尚未作为 operation-scoped 权限独立强制。
 - principal provisioning 尚无幂等键。
 - 尚无独立的运行时 capability discovery 端点；当前以 OpenAPI、Git commit 和离线
   `release-manifest.json` 锁定兼容性。

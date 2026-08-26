@@ -45,10 +45,19 @@ environments; do not place it in business services or persistent WebUI storage.
 
 ### Database business principal
 
-Principals created by root are currently fixed to `NORMAL`. They have
-product-level `RAG_READ` and `RAG_WRITE` but cannot call API-key management
-endpoints. Give each production service or connector its own restricted
-principal limited to the target Collections.
+Principals created by root are fixed to `NORMAL`, but operation capabilities
+can be assigned by responsibility:
+
+- `RAG_READ` permits GET/HEAD/OPTIONS plus read-oriented POST operations such
+  as Search and Chat;
+- `RAG_READ + RAG_WRITE` additionally permits upsert, delete, and other
+  data-plane mutations.
+
+Business principals cannot call API-key management endpoints. Give each
+production service or connector its own restricted principal limited to the
+target Collections. When read and delivery responsibilities can be separated,
+use a read-only query principal and a read/write dispatcher principal so the
+query service does not hold write authority.
 
 The raw credential appears only in a create or rotate response. Store it in a
 secret manager within that response boundary. The service cannot return it
@@ -92,8 +101,10 @@ Core response for a restricted principal:
 
 `rootMode` says whether the server has an environment root configured; it does
 not say the current credential is root. Check `principalType` first, then the
-expected `principalId`, credential/policy versions, `collectionAccessMode`,
-and complete allow-list. An unrestricted principal returns
+expected `principalId`, credential/policy versions, `capabilities`,
+`collectionAccessMode`, and complete allow-list. Require the exact capability
+set for the deployment responsibility rather than checking only for one
+contained value. An unrestricted principal returns
 `collectionAccessMode=UNRESTRICTED` and `allowedCollectionKeys=null`.
 
 Introspection describes policy only. Probe each expected key with
@@ -129,12 +140,13 @@ Recommended sequence:
 
 1. An operator uses environment root to create the target Collection.
 2. The operator creates a restricted business principal with a unique name,
-   expiry, RPM, and `allowedCollectionKeys`.
+   expiry, RPM, `allowedCollectionKeys`, and explicit `capabilities`.
 3. Receive the raw credential once and immediately store it in a secret
    manager.
 4. The business service reads it only from an environment variable, mounted
    secret, or equivalent secret provider.
-5. At startup, call `/auth/me` and compare the principal and allow-list exactly.
+5. At startup, call `/auth/me` and compare the principal, capabilities, and
+   allow-list exactly.
 6. Probe the target Collections by key before consuming business events.
 7. Run the contract gate in section 8 after deployment.
 
@@ -150,17 +162,27 @@ For a deployed instance, use
 `scripts/business-client-binding-preflight.sh` as a caller-side binding gate.
 It does not require root and does not create Collections or principals.
 
-The default mode is read-only. It verifies readiness, OpenAPI `1.0.0`, the
-required P0 operations, `/auth/me`, exact restricted allow-list equality, and
-the active state of every expected Collection:
+The default execution mode is read-only, while the default credential profile
+remains `READ_WRITE` for compatibility. Execution mode says whether the
+preflight mutates data; credential profile says which authority the caller
+should hold. The preflight verifies readiness, OpenAPI `1.0.0`, required
+operations, `/auth/me`, the capability profile, exact restricted allow-list
+equality, and the active state of every expected Collection:
 
 ```bash
 RAG_BINDING_BASE_URL=https://rag.example \
 RAG_BINDING_CREDENTIAL_FILE=/run/secrets/rag-credential \
 RAG_BINDING_EXPECTED_COLLECTIONS_FILE=/etc/rag/collections.json \
 RAG_BINDING_TARGET_LABEL=production-a \
+RAG_BINDING_EXPECTED_CAPABILITY_PROFILE=READ_ONLY \
   ./scripts/business-client-binding-preflight.sh
 ```
+
+`RAG_BINDING_EXPECTED_CAPABILITY_PROFILE` accepts only:
+
+- `READ_ONLY` → exactly `["RAG_READ"]`;
+- `READ_WRITE` → exactly `["RAG_READ","RAG_WRITE"]`, also the compatibility
+  default when omitted.
 
 The credential file must be a regular file readable only by its owner and
 contain exactly one current `rag_sk_<64 lowercase hex characters>` credential.
@@ -178,6 +200,7 @@ RAG_BINDING_PREFLIGHT_MODE=CANARY_MUTATION \
 RAG_BINDING_CANARY_CONFIRM=YES \
 RAG_BINDING_CANARY_COLLECTION_KEY=preflight-canary \
 RAG_BINDING_AUTH_SCHEME=BEARER \
+RAG_BINDING_EXPECTED_CAPABILITY_PROFILE=READ_WRITE \
   ./scripts/business-client-binding-preflight.sh
 ```
 
@@ -187,14 +210,18 @@ tombstone, restore, and a final tombstone. It never physically deletes the
 record. If the provider fails or the process is interrupted after the initial
 upsert, the exit cleanup reconciles the same identity and attempts one bounded
 tombstone; it never creates a second identity.
+`CANARY_MUTATION` accepts only the `READ_WRITE` profile, preventing a
+read-only credential from being misconfigured for mutation acceptance.
 
 Every run writes `preflight-report.json`, `summary.md`, and `steps.tsv` under
 `RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` (or the default verification directory).
-The JSON report contains only low-sensitivity labels, counts, versions, status,
-and failure categories. It does not contain credentials, URLs, Collection
-keys, external IDs, payloads, or response bodies. Treat a failed preflight as
-a binding failure; do not continue delivery or weaken the checks to make a
-deployment pass.
+The JSON report records the caller's `expectedCapabilityProfile` separately
+from `principal.capabilityProfile`, which remains `null` until introspection
+has verified the profile. It otherwise contains only low-sensitivity labels,
+counts, versions, status, and failure categories. It does not contain
+credentials, URLs, Collection keys, external IDs, payloads, or response
+bodies. Treat a failed preflight as a binding failure; do not continue
+delivery or weaken the checks to make a deployment pass.
 
 ## 5. JSON Record Mutation Contract
 
@@ -304,9 +331,11 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 The full gate runs focused backend tests, three isolated PostgreSQL integration
 matrices, `mvn clean compile test-compile`, WebUI typecheck/Vitest/production
 build, core Mock Playwright, documentation/lock/secret/diff gates, and then a
-real Spring Boot service, 129 HTTP contract assertions including deployed
-binding preflight, and real API-key
-Playwright.
+real Spring Boot service, the HTTP contract including deployed binding
+preflight, and real API-key Playwright. The HTTP contract proves that a
+read-only query principal can lookup/search but cannot upsert/delete and that
+the rejected writes leave revision/state unchanged; a read/write dispatcher
+continues to own mutations, and rotation preserves capabilities.
 
 Defaults use isolated ports `18084`, `18085`, `15184`, and `15185` with a
 disposable `pgvector/pgvector:pg16`. Evidence is written under
@@ -314,16 +343,15 @@ disposable `pgvector/pgvector:pg16`. Evidence is written under
 credential files. `release-manifest.json` records the result, verification
 phase, full Git SHA, initial tree state, project/OpenAPI versions, API base
 path, latest Flyway migration, passed steps, PostgreSQL image, and HTTP
-contract-check count. Runtime facts that were not reached are JSON `null`; the
-manifest stores no credential, URL, payload, external ID, or private path. The
-deterministic embedding stub verifies the real Spring AI embedding HTTP path
-and the 503 failure-preservation contract. This capability does not change
-Chat, so the gate does not call a Chat LLM.
+contract-check count, plus the verified `READ_ONLY` and `READ_WRITE` profiles.
+Runtime facts that were not reached are JSON `null`; the manifest stores no
+credential, URL, payload, external ID, or private path. The deterministic
+embedding stub verifies the real Spring AI embedding HTTP path and the 503
+failure-preservation contract. This capability does not change Chat, so the
+gate does not call a Chat LLM.
 
 ## 9. Current Limitations
 
-- `RAG_READ`/`RAG_WRITE` are currently product-level descriptions, not
-  independently enforced operation-scoped permissions.
 - Principal provisioning has no idempotency key.
 - There is no separate runtime capability-discovery endpoint. Compatibility
   is pinned through OpenAPI, a Git commit, and the offline

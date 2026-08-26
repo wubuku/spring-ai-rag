@@ -213,6 +213,7 @@ manifest = {
         "passedSteps": int(os.environ["MANIFEST_PASSED_STEPS"]),
         "postgresImage": os.environ["MANIFEST_POSTGRES_IMAGE"],
         "httpContractChecks": nullable_int("MANIFEST_HTTP_CHECKS"),
+        "capabilityProfiles": ["READ_ONLY", "READ_WRITE"],
     },
 }
 path = Path(sys.argv[1])
@@ -268,7 +269,7 @@ assert artifact["latestFlywayMigration"] > 0
 
 verification = manifest["verification"]
 assert set(verification) == {
-    "passedSteps", "postgresImage", "httpContractChecks",
+    "passedSteps", "postgresImage", "httpContractChecks", "capabilityProfiles",
 }
 assert isinstance(verification["passedSteps"], int)
 assert verification["passedSteps"] >= 0
@@ -278,6 +279,7 @@ assert verification["httpContractChecks"] is None or (
     isinstance(verification["httpContractChecks"], int)
     and verification["httpContractChecks"] > 0
 )
+assert verification["capabilityProfiles"] == ["READ_ONLY", "READ_WRITE"]
 
 if manifest["result"] == "PASS":
     assert artifact["apiVersion"] == "1.0.0"
@@ -384,7 +386,8 @@ frontend_dependencies() {
 focused_backend_tests() {
   mvn -pl spring-ai-rag-core -am \
     -Dtest=ApiKeyIdentityControllerTest,ApiKeyRootModeWebIntegrationTest,\
-OpenApiContractTest,ApiKeyAuthFilterTest,ApiKeyCollectionAccessTest,\
+ApiCapabilityFilterTest,OpenApiContractTest,ApiKeyAuthFilterTest,\
+ApiKeyCollectionAccessTest,\
 RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest,\
 SourceNamespaceValidatorTest,EmbeddingModelConfigTest \
     -Dsurefire.failIfNoSpecifiedTests=false test
@@ -659,7 +662,7 @@ http_contract() {
 }
 
 runtime_database_facts() {
-  local facts
+  local facts runtime_migration plaintext_credentials succeeded_embedding_jobs
   facts="$(docker exec "$POSTGRES_CONTAINER" psql \
     -U "$POSTGRES_USERNAME" \
     -d "$POSTGRES_DATABASE" \
@@ -670,11 +673,15 @@ runtime_database_facts() {
        (SELECT count(*) FROM rag_api_key WHERE api_key IS NOT NULL),
        (SELECT count(*) FROM rag_embedding_jobs WHERE status = 'SUCCEEDED');")" \
     || return 1
-  [[ "$facts" =~ ^48,0,[1-9][0-9]*$ ]] || {
+  IFS=, read -r \
+    runtime_migration plaintext_credentials succeeded_embedding_jobs <<<"$facts"
+  [[ "$runtime_migration" =~ ^[1-9][0-9]*$ \
+      && "$plaintext_credentials" == "0" \
+      && "$succeeded_embedding_jobs" =~ ^[1-9][0-9]*$ ]] || {
     echo "Unexpected runtime database facts: ${facts}" >&2
     return 1
   }
-  RUNTIME_FLYWAY_MIGRATION="${facts%%,*}"
+  RUNTIME_FLYWAY_MIGRATION="$runtime_migration"
   [[ "$RUNTIME_FLYWAY_MIGRATION" == "$LATEST_FLYWAY_MIGRATION" ]] || {
     echo "Runtime Flyway version does not match repository migration inventory" >&2
     return 1
@@ -685,9 +692,12 @@ runtime_database_facts() {
     "${PRIVATE_DIR}/embedding-counter.json" >/dev/null || return 1
   rg -qx 'result=PASS' \
     "${LOG_DIR}/http-contract/summary.txt" || return 1
+  rg -qx \
+    'capability_contract=query_read_only_dispatcher_read_write_preflight_rotation' \
+    "${LOG_DIR}/http-contract/summary.txt" || return 1
   [[ "$API_VERSION" == "1.0.0" ]] || return 1
   [[ "$HTTP_CONTRACT_CHECKS" =~ ^[1-9][0-9]*$ ]] || return 1
-  echo "migration=48 plaintext_credentials=0 succeeded_embedding_jobs>=1"
+  echo "migration=${RUNTIME_FLYWAY_MIGRATION} plaintext_credentials=0 succeeded_embedding_jobs>=1"
 }
 
 start_real_frontend() {
@@ -745,7 +755,7 @@ compile(path.read_text(encoding="utf-8"), str(path), "exec")
   [[ "$INITIAL_TREE_STATE" == "CLEAN" || "$INITIAL_TREE_STATE" == "DIRTY" ]] \
     || return 1
   [[ "$PROJECT_VERSION" == "1.0.0" ]] || return 1
-  [[ "$LATEST_FLYWAY_MIGRATION" == "48" ]] || return 1
+  [[ "$LATEST_FLYWAY_MIGRATION" =~ ^[1-9][0-9]*$ ]] || return 1
 }
 
 added_line_secret_scan() {

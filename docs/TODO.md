@@ -16,6 +16,9 @@
 - [x] The readiness contract runs the preflight as a black-box client and
   checks secret-safe reports for read-only success, allow-list mismatch,
   Bearer canary success, and provider failure cleanup.
+- [x] The preflight verifies exact `READ_ONLY` / `READ_WRITE` credential
+  profiles. The real HTTP contract separates a read-only query principal from
+  a read/write dispatcher and proves rejected writes leave state unchanged.
 
 ## Managed API Principal Follow-Ups
 
@@ -24,7 +27,7 @@
 | Stable principals, versioned credentials, and immediate revocation | Shipped in V48 | Ownership/policy is separate from credentials; every authentication performs an authoritative join without a positive decision cache |
 | PostgreSQL shared principal quota | Shipped in V48 | Replicas share fixed-minute buckets by stable principal; rotation does not reset quota and database failure fails closed |
 | Schema-level plaintext-secret prohibition | Shipped in V48 | Migration clears plaintext, removes its index, and enforces `api_key IS NULL` |
-| Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Separate future plan | Capabilities are currently product-level descriptions; a database business principal still has the full RAG read/write data plane |
+| Operation-scoped `RAG_READ` / `RAG_WRITE` enforcement | Shipped in V49 | A central filter enforces capabilities after authentication and before rate limiting; read-only principals may Search/Chat and writes return `403` |
 | Principal-provisioning idempotency key | Separate future plan | After a create timeout, an operator must reconcile by stable name/binding; create cannot yet be retried blindly |
 | Machine-readable integration protocol version / capability discovery | Separate future plan | Compatibility is currently pinned through OpenAPI, a Git commit, `/auth/me`, and the business-service contract gate |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
@@ -38,9 +41,9 @@ among older rotation rows. Per-invocation usage and configured-cost
 observability is preserved in the
 [historical archive](drafts/archive/README.md) as a future implementation
 candidate, but it is not the current active plan and is not presented as a
-provider invoice or hard-limit settlement source. Operation-scoped
-authorization, provisioning idempotency, protocol capability discovery,
-OAuth/OIDC, tenant hierarchy, Redis, token/cost hard limits and billing,
+provider invoice or hard-limit settlement source. Provisioning idempotency,
+protocol capability discovery, OAuth/OIDC, tenant hierarchy, Redis,
+token/cost hard limits and billing,
 per-Collection embedding-profile routing, and `EACH_COLLECTION` remain
 independent planning subjects.
 

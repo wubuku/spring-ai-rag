@@ -574,15 +574,39 @@ real_llm_contract() {
   local b="http://127.0.0.1:${BACKEND_B_PORT}"
   local private="$LOG_DIR/private"
   local session="mpr-$(openssl rand -hex 12)"
-  local code before after_first after_replay after_all
+  local code before after_denial after_first after_replay after_all
 
-  code="$(create_principal "$a" "Real LLM ${RUN_ID}" 100 "$private/real-v1.json")"
+  code="$(create_principal "$a" "Real LLM ${RUN_ID}" 100 \
+    "$private/real-v1.json" '["RAG_READ"]')"
   assert_code "$code" 201 "create real LLM principal" || return 1
   local principal key_id v1 v2 new_key_id turn_id
   principal="$(jq -r '.principalId' "$private/real-v1.json")"
   key_id="$(jq -r '.keyId' "$private/real-v1.json")"
   v1="$(jq -r '.rawKey' "$private/real-v1.json")"
+  jq -e '.capabilities == ["RAG_READ"]' \
+    "$private/real-v1.json" >/dev/null || return 1
+
+  code="$(curl -sS -o "$private/real-identity-v1.json" -w '%{http_code}' \
+    -H "X-API-Key: ${v1}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "real LLM read-only identity" || return 1
+  jq -e --arg principal "$principal" \
+    '.principalId == $principal and .capabilities == ["RAG_READ"]' \
+    "$private/real-identity-v1.json" >/dev/null || return 1
+
   before="$(provider_counter)" || return 1
+  code="$(curl -sS -o "$private/real-write-rejected.json" -w '%{http_code}' \
+    -X POST -H "X-API-Key: ${v1}" \
+    -H 'Content-Type: application/json' -d '{}' \
+    "${a}/api/v1/rag/documents")"
+  assert_code "$code" 403 "real LLM read-only write rejection" || return 1
+  jq -e '.error == "FORBIDDEN" and (.message | contains("RAG_WRITE"))' \
+    "$private/real-write-rejected.json" >/dev/null || return 1
+  after_denial="$(provider_counter)" || return 1
+  [[ "$after_denial" == "$before" ]] || {
+    echo "Rejected write unexpectedly changed the provider counter" >&2
+    return 1
+  }
+  echo "real_read_only_contract=PASS write=403 provider_delta=0"
 
   code="$(curl -sS --max-time 180 -D "$private/real-first.headers" \
     -o "$private/real-first.json" -w '%{http_code}' \
@@ -622,7 +646,9 @@ real_llm_contract() {
   assert_code "$code" 201 "rotate real LLM principal" || return 1
   v2="$(jq -r '.rawKey' "$private/real-v2.json")"
   new_key_id="$(jq -r '.keyId' "$private/real-v2.json")"
-  [[ "$(jq -r '.principalId' "$private/real-v2.json")" == "$principal" ]] || return 1
+  jq -e --arg principal "$principal" \
+    '.principalId == $principal and .capabilities == ["RAG_READ"]' \
+    "$private/real-v2.json" >/dev/null || return 1
 
   code="$(curl -sS --max-time 15 -o "$private/real-old-rejected.json" -w '%{http_code}' \
     -H "X-API-Key: ${v1}" -H 'Content-Type: application/json' \
@@ -630,6 +656,15 @@ real_llm_contract() {
     "${b}/api/v1/rag/chat/ask")"
   assert_code "$code" 401 "old real credential rejected" || return 1
   [[ "$(provider_counter)" == "$after_first" ]] || return 1
+
+  code="$(curl -sS -o "$private/real-identity-v2.json" -w '%{http_code}' \
+    -H "X-API-Key: ${v2}" "${b}/api/v1/rag/auth/me")"
+  assert_code "$code" 200 "rotated real LLM read-only identity" || return 1
+  jq -e --arg principal "$principal" \
+    '.principalId == $principal
+      and .credentialVersion == 2
+      and .capabilities == ["RAG_READ"]' \
+    "$private/real-identity-v2.json" >/dev/null || return 1
 
   code="$(curl -sS -o "$private/real-history-after-rotate.json" -w '%{http_code}' \
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/chat/history/${session}")"
@@ -680,7 +715,7 @@ real_llm_contract() {
   code="$(curl -sS -o /dev/null -w '%{http_code}' \
     -H "X-API-Key: ${v2}" "${b}/api/v1/rag/auth/me")"
   assert_code "$code" 401 "real credential revoked across instances" || return 1
-  echo "real_llm_contract=PASS provider_calls=5 principal_continuity=true"
+  echo "real_llm_contract=PASS provider_calls=5 principal_continuity=true read_only=true"
   echo "backend_log_tail:"
   rg 'Chat execution|provider|credential|API principal' "$LOG_DIR/backend-a.log" \
     | tail -20 | sed -E 's/rag_sk_[A-Za-z0-9_-]+/***REDACTED***/g' || true

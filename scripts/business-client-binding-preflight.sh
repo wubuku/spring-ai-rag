@@ -10,6 +10,7 @@ RUN_ID="$RAW_RUN_ID"
 TARGET_LABEL="${RAG_BINDING_TARGET_LABEL:-}"
 MODE="${RAG_BINDING_PREFLIGHT_MODE:-READ_ONLY}"
 AUTH_SCHEME="${RAG_BINDING_AUTH_SCHEME:-X_API_KEY}"
+CAPABILITY_PROFILE="${RAG_BINDING_EXPECTED_CAPABILITY_PROFILE:-READ_WRITE}"
 EVIDENCE_DIR="${RAG_BINDING_PREFLIGHT_EVIDENCE_DIR:-}"
 REQUEST_TIMEOUT_SECONDS="${RAG_BINDING_REQUEST_TIMEOUT_SECONDS:-30}"
 READY_TIMEOUT_SECONDS="${RAG_BINDING_READY_TIMEOUT_SECONDS:-180}"
@@ -35,6 +36,7 @@ ACCESS_MODE=""
 CREDENTIAL_VERSION=""
 POLICY_VERSION=""
 EXPECTED_COLLECTION_COUNT=""
+VERIFIED_CAPABILITY_PROFILE=""
 CANARY_FINAL_STATE=""
 
 CANARY_MAY_EXIST=false
@@ -84,6 +86,12 @@ bootstrap_evidence() {
     FAILED_STEP="${FAILED_STEP:-input}"
     FAILURE_CATEGORY="${FAILURE_CATEGORY:-INVALID_AUTH_SCHEME}"
     AUTH_SCHEME=""
+  fi
+  if [[ "$CAPABILITY_PROFILE" != "READ_ONLY"
+      && "$CAPABILITY_PROFILE" != "READ_WRITE" ]]; then
+    FAILED_STEP="${FAILED_STEP:-input}"
+    FAILURE_CATEGORY="${FAILURE_CATEGORY:-INVALID_CAPABILITY_PROFILE}"
+    CAPABILITY_PROFILE=""
   fi
 
   if [[ -z "$EVIDENCE_DIR" ]]; then
@@ -137,6 +145,8 @@ write_report() {
   REPORT_TARGET_LABEL="$TARGET_LABEL" \
   REPORT_API_VERSION="$API_VERSION" \
   REPORT_AUTH_SCHEME="$AUTH_SCHEME" \
+  REPORT_EXPECTED_CAPABILITY_PROFILE="$CAPABILITY_PROFILE" \
+  REPORT_VERIFIED_CAPABILITY_PROFILE="$VERIFIED_CAPABILITY_PROFILE" \
   REPORT_PRINCIPAL_TYPE="$PRINCIPAL_TYPE" \
   REPORT_PRINCIPAL_ROLE="$PRINCIPAL_ROLE" \
   REPORT_ACCESS_MODE="$ACCESS_MODE" \
@@ -169,10 +179,14 @@ payload = {
     "targetLabel": nullable("REPORT_TARGET_LABEL"),
     "apiVersion": nullable("REPORT_API_VERSION"),
     "credentialTransport": nullable("REPORT_AUTH_SCHEME"),
+    "expectedCapabilityProfile": nullable(
+        "REPORT_EXPECTED_CAPABILITY_PROFILE"
+    ),
     "principal": {
         "type": nullable("REPORT_PRINCIPAL_TYPE"),
         "role": nullable("REPORT_PRINCIPAL_ROLE"),
         "accessMode": nullable("REPORT_ACCESS_MODE"),
+        "capabilityProfile": nullable("REPORT_VERIFIED_CAPABILITY_PROFILE"),
         "credentialVersion": nullable_int("REPORT_CREDENTIAL_VERSION"),
         "policyVersion": nullable_int("REPORT_POLICY_VERSION"),
         "expectedCollectionCount": nullable_int("REPORT_COLLECTION_COUNT"),
@@ -185,6 +199,11 @@ payload = {
     "failedStep": nullable("REPORT_FAILED_STEP"),
     "failureCategory": nullable("REPORT_FAILURE_CATEGORY"),
 }
+if payload["result"] == "PASS":
+    expected = payload["expectedCapabilityProfile"]
+    actual = payload["principal"]["capabilityProfile"]
+    if expected is None or actual != expected:
+        raise SystemExit("successful report requires a verified capability profile")
 path = Path(sys.argv[1])
 temporary = path.with_suffix(".json.tmp")
 temporary.write_text(
@@ -201,6 +220,8 @@ PY
     echo "- Target: \`${TARGET_LABEL:-unavailable}\`"
     echo "- Mode: \`${MODE:-unavailable}\`"
     echo "- Credential transport: \`${AUTH_SCHEME:-unavailable}\`"
+    echo "- Expected capability profile: \`${CAPABILITY_PROFILE:-unavailable}\`"
+    echo "- Verified capability profile: \`${VERIFIED_CAPABILITY_PROFILE:-unavailable}\`"
     echo "- Result: **${RESULT}**"
     echo "- API version: \`${API_VERSION:-unavailable}\`"
     echo "- Passed steps: **${PASSED_STEPS}**"
@@ -256,6 +277,7 @@ validate_inputs() {
     INPUT_TARGET_LABEL="$TARGET_LABEL" \
     INPUT_MODE="$MODE" \
     INPUT_AUTH_SCHEME="$AUTH_SCHEME" \
+    INPUT_CAPABILITY_PROFILE="$CAPABILITY_PROFILE" \
     INPUT_BASE_URL="${RAG_BINDING_BASE_URL:-}" \
     INPUT_CREDENTIAL_FILE="${RAG_BINDING_CREDENTIAL_FILE:-}" \
     INPUT_COLLECTIONS_FILE="${RAG_BINDING_EXPECTED_COLLECTIONS_FILE:-}" \
@@ -302,6 +324,7 @@ try:
     target_label = os.environ["INPUT_TARGET_LABEL"]
     mode = os.environ["INPUT_MODE"]
     auth_scheme = os.environ["INPUT_AUTH_SCHEME"]
+    capability_profile = os.environ["INPUT_CAPABILITY_PROFILE"]
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,96}", run_id):
         reject("INVALID_RUN_ID")
     if not re.fullmatch(r"[A-Za-z0-9._-]{1,64}", target_label):
@@ -310,6 +333,13 @@ try:
         reject("INVALID_MODE")
     if auth_scheme not in {"X_API_KEY", "BEARER"}:
         reject("INVALID_AUTH_SCHEME")
+    if capability_profile not in {"READ_ONLY", "READ_WRITE"}:
+        reject("INVALID_CAPABILITY_PROFILE")
+    expected_capabilities = (
+        ["RAG_READ"]
+        if capability_profile == "READ_ONLY"
+        else ["RAG_READ", "RAG_WRITE"]
+    )
 
     credential_path = regular_file(
         os.environ.get("INPUT_CREDENTIAL_FILE", ""),
@@ -406,6 +436,8 @@ try:
     ):
         reject("INVALID_CANARY_RETRIEVAL_MARKER")
     if mode == "CANARY_MUTATION":
+        if capability_profile != "READ_WRITE":
+            reject("CAPABILITY_PROFILE_INCOMPATIBLE_WITH_MODE")
         if canary_confirm != "YES":
             reject("CANARY_CONFIRMATION_REQUIRED")
         if canary_key not in collections:
@@ -419,6 +451,8 @@ try:
         "baseUrl": normalized_url,
         "expectedCollections": collections,
         "expectedCollectionCount": len(collections),
+        "capabilityProfile": capability_profile,
+        "expectedCapabilities": expected_capabilities,
         "canaryCollectionKey": canary_key or None,
         "canaryRetrievalMarker": canary_retrieval_marker or None,
         "caCertFile": str(ca_path) if ca_path is not None else None,
@@ -449,6 +483,9 @@ PY
     || return 1
   EXPECTED_COLLECTION_COUNT="$(
     jq -er '.expectedCollectionCount' "$VALIDATED_INPUT"
+  )" || return 1
+  CAPABILITY_PROFILE="$(
+    jq -er '.capabilityProfile' "$VALIDATED_INPUT"
   )" || return 1
   CANARY_COLLECTION_KEY="$(
     jq -r '.canaryCollectionKey // ""' "$VALIDATED_INPUT"
@@ -589,6 +626,7 @@ read_only_preflight() {
       and (.allowedCollectionKeys | type == "array")
       and ((.allowedCollectionKeys | sort)
         == ($validated[0].expectedCollections | sort))
+      and .capabilities == $validated[0].expectedCapabilities
       and (.credentialVersion | type == "number")
       and (.policyVersion | type == "number")
     ' "$response" >/dev/null; then
@@ -611,6 +649,7 @@ read_only_preflight() {
   ACCESS_MODE="$(jq -er '.collectionAccessMode' "$response")" || return 1
   CREDENTIAL_VERSION="$(jq -er '.credentialVersion' "$response")" || return 1
   POLICY_VERSION="$(jq -er '.policyVersion' "$response")" || return 1
+  VERIFIED_CAPABILITY_PROFILE="$CAPABILITY_PROFILE"
   pass_step "principal_identity" "$HTTP_CODE"
 
   index=0

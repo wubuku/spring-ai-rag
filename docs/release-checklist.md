@@ -97,8 +97,9 @@ Release date: `2026-07-21`
   full-data-plane generic-`403` anti-enumeration, and preservation of Record
   identity/revision/payload/enabled/documentRevision after a provider `503`.
 - [x] The clean-tree final gate writes `release-manifest.json`, pinning the
-  full Git SHA, project/OpenAPI `1.0.0`, API base path, Flyway V48, PostgreSQL
-  image, and 129-check count without storing secrets or business payloads.
+  full Git SHA, project/OpenAPI `1.0.0`, API base path, runtime Flyway equal to
+  the repository's latest migration, PostgreSQL image, and HTTP contract count
+  without storing secrets or business payloads.
 - [x] `business-client-binding-preflight.sh` is read-only by default and its
   real canary/cleanup reports are schema-valid and secret-safe.
 - [x] The bilingual Business Service Integration Guide records root/business
@@ -115,6 +116,14 @@ Release date: `2026-07-21`
 - [x] Create, policy CAS, rotation, `/auth/me`, WebUI, and PostgreSQL/live-HTTP
   acceptance share the authoritative capability value. Invalid sets are not
   persisted, and ADMIN cannot be downgraded to read-only.
+- [x] Deployed binding preflight distinguishes exact `READ_ONLY` and
+  `READ_WRITE` credential profiles. The release manifest records both verified
+  profiles, while the HTTP contract uses a read-only query principal and a
+  read/write dispatcher to prove successful reads, write `403`, unchanged
+  state, and capability inheritance across rotation.
+- [x] The real-LLM gate uses an explicit `RAG_READ` principal. Write rejection
+  and idempotent replay do not increase the provider counter, while native and
+  OpenAI-compatible JSON/SSE require exactly five real provider calls.
 
 ### Final Evidence (2026-07-21)
 

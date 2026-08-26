@@ -240,10 +240,11 @@ This gate joins business-credential provisioning, current-principal
 introspection, and the JSON Record data plane into one real contract. It
 covers:
 
-- root plus restricted/unrestricted database principals, header/Bearer
-  authentication, and rejection of a valid query credential;
-- `/auth/me` role, access mode, complete key allow-list, no-store, and
-  secret absence;
+- root plus restricted/unrestricted database principals, read-only query and
+  read/write dispatcher profiles, header/Bearer authentication, and rejection
+  of a valid query credential;
+- `/auth/me` role, exact capabilities, access mode, complete key allow-list,
+  no-store, and secret absence;
 - Collection-key 1/128 success and 129/blank/control/non-ASCII rejection,
   external-identity and revision bounds, bidirectional cross-Collection ACLs,
   and full-data-plane anti-enumeration;
@@ -255,17 +256,20 @@ covers:
   the committed Record identity, revision, payload, enabled state, and
   document revision;
 - shown-once credentials, rotation, old-key invalidation, and revocation;
+- a read-only query principal can lookup/search, while upsert/delete return
+  `403` and leave Record revision/state unchanged; the read/write dispatcher
+  and rotation preserve full capabilities;
 - PostgreSQL facts for Flyway V49, zero plaintext credentials, and a succeeded
   embedding job;
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
 
-The real HTTP phase currently fixes 129 assertions. In addition to the
-business-client contract, it runs the deployed binding preflight as a
-black-box client: read-only success, exact allow-list failure, Bearer canary
-mutation success, and provider-failure cleanup with a final tombstone. The
-preflight report is checked for schema validity and absence of credentials,
-URLs, Collection keys, external IDs, and payloads.
+In addition to the business-client contract, the real HTTP phase runs the
+deployed binding preflight as a black-box client: successful `READ_ONLY` and
+`READ_WRITE` profiles, capability-profile mismatch failure, exact allow-list
+failure, Bearer canary mutation success, and provider-failure cleanup with a
+final tombstone. The preflight report is checked for schema validity and
+absence of credentials, URLs, Collection keys, external IDs, and payloads.
 
 Enable the clean-tree gate
 for a final candidate commit:
@@ -278,8 +282,9 @@ BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
 Every run writes `release-manifest.json` in the evidence directory. It records
 PASS/FAIL, verification phase, full Git SHA, initial tree state,
 project/OpenAPI versions, API base path, latest Flyway migration, passed
-steps, PostgreSQL image, and HTTP-check count. Runtime facts not reached are
-JSON `null`; the manifest stores no credential, URL, payload, external ID, or
+steps, PostgreSQL image, HTTP-check count, and the verified
+`["READ_ONLY","READ_WRITE"]` profiles. Runtime facts not reached are JSON
+`null`; the manifest stores no credential, URL, payload, external ID, or
 private path.
 
 Focused real-phase rerun:
@@ -620,9 +625,11 @@ one Vite frontend to verify read-only identity/GET access, write `403`,
 capability inheritance across rotation, rejection without persistence for
 invalid capabilities, global quota, policy CAS, cross-instance rotation and
 revocation, quota-store failure closure, and no-screenshot real Playwright.
-Real-LLM mode also covers native JSON/SSE and OpenAI-compatible JSON/SSE, using
-the provider counter to prove that idempotent replay does not call the model
-again and that total provider calls remain bounded. Evidence is written to
+Real-LLM mode also covers native JSON/SSE and OpenAI-compatible JSON/SSE with a
+principal explicitly limited to `RAG_READ`. It first proves that a write
+returns `403` without changing the provider counter, then proves idempotent
+replay does not call the model again and requires exactly five real provider
+calls. Evidence is written to
 `.verification/managed-api-principals/<run-id>/summary.md`; sensitive responses
 remain only in the gitignored, permission-restricted `private/` directory.
 
