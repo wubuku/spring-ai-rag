@@ -13,8 +13,8 @@
 - 计划实施 worktree：
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`
 - Flyway：V1-V49；本轮无 migration。
-- 当前阶段：规划连续三轮无修改审查达到 `3/3`，准备提交并推送规划后创建隔离
-  特性 worktree。
+- 当前阶段：实现、双语长青文档、合并后 clean-tree readiness、真实 LLM 双实例验收和
+  实现收敛审查 `3/3` 均已通过；准备最终同步 `origin/main` 并完成 Git 交付。
 
 ## 2. 已完成探索
 
@@ -94,16 +94,79 @@
 | 上一轮 plan/progress 归档 | 已完成 | `docs/drafts/archive/2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*` |
 | 新规划与进度账本 | 已完成 | 当前两份活动文档 |
 | 规划连续三轮审查 | 已完成 | 本文 §4，连续 `3/3` |
-| preflight 能力画像与 self-test | 待开始 | |
-| HTTP query/dispatcher 合同 | 待开始 | |
-| V49 readiness/release manifest | 待开始 | |
-| 真实 LLM 只读 principal 合同 | 待开始 | |
-| 双语长青文档 | 待开始 | |
-| 完整 Mock/真实 HTTP/真实 LLM 验收 | 待开始 | |
+| preflight 能力画像与 self-test | 已完成 | 11 个负向场景通过；`bash -n` 与 `git diff --check` 通过 |
+| HTTP query/dispatcher 合同 | 已完成 | 只读 lookup/search、写 `403`、状态不变、读写 dispatcher 与 rotation |
+| V49 readiness/release manifest | 已完成 | 动态 latest migration；记录 `READ_ONLY` / `READ_WRITE` |
+| 真实 LLM 只读 principal 合同 | 已完成 | 显式 `RAG_READ`；写拒绝不计 provider；总预算 5 |
+| 双语长青文档 | 已完成 | integration/testing/release/TODO 中英文同步 |
+| 完整 Mock/真实 HTTP/真实 LLM 验收 | 已完成 | readiness 16/16；managed principal 13/13；真实 provider 调用精确为 5 |
 | merge main、tag、push、清理 worktree | 待开始 | |
 
 ## 6. 下一步
 
-1. 运行最终文档、链接、密钥和 whitespace 门禁。
-2. 在 main commit/push 规划与归档。
-3. 从最新 main 创建专用分支/worktree 实施。
+1. 提交当前实现与验收账本。
+2. 获取并合并最新 `origin/main`，记录合并后基线。
+3. 按合并后代码重跑完整 readiness、真实 LLM 双实例验收与限定范围三轮审查。
+4. 推送特性分支，合并并推送 `main`，创建发布 tag，确认引用一致且工作区干净。
+5. 安全移除隔离特性 worktree。
+
+## 7. 实施记录
+
+- 2026-08-26 12:10 CST：规划/归档提交 `afb78dd0` 已推送到 `origin/main`。
+- 2026-08-26 12:10 CST：从 `afb78dd0` 创建
+  `feat/business-binding-capability-profiles-20260826`，worktree 为
+  `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`。
+- 创建时 main、origin/main 与特性基线一致；目标 tag 尚不存在，计划端口均空闲。
+- 2026-08-26 12:16 CST：完成 binding preflight capability profile 实现和
+  11 个负向 self-test；非法画像不会进入报告，`READ_ONLY` 不能误用于 mutation canary。
+- 2026-08-26 12:17 CST：开始收敛 HTTP 合同、readiness release manifest 与真实 LLM
+  只读 principal 验收；固定先完成 Mock/桩门槛，再读取主工作区 `.env` 发起最多 5 次
+  provider 调用。
+- 2026-08-26 12:22 CST：脚本语法、11 个 preflight self-test、`git diff --check`、
+  项目文档门禁 10/10 和聚焦 Maven 125 tests 全部通过，无 failure/error/skipped。
+- 2026-08-26 12:26 CST：dirty-tree 完整业务 readiness
+  `20260826-capability-profiles-dirty-1` 通过 16/16：
+  - PostgreSQL managed principal 9 tests、document lifecycle 12 tests、JSONB records
+    3 tests；
+  - `mvn clean compile test-compile`；
+  - WebUI TypeScript、218 个 Vitest、生产构建；
+  - 核心 Mock Playwright、真实服务 HTTP/WebUI Playwright；
+  - business HTTP contract 160 checks、Flyway V49、明文凭据数 0。
+- 2026-08-26 12:32 CST：真实 LLM 双实例验收
+  `20260826-capability-profiles-real-llm-dirty-1` 通过 13/13：
+  - 前置 PostgreSQL matrix、`mvn clean compile test-compile`、完整 Maven test
+    3028 core tests + 44 starter tests、WebUI 218 tests/typecheck/build/Mock Playwright
+    全部通过；
+  - `READ_ONLY` principal 的写请求为 `403`，provider 调用增量为 `0`；
+  - native JSON/SSE、OpenAI-compatible JSON/SSE、跨实例幂等重放、credential
+    rotation、session/principal continuity 全部通过；
+  - 真实 provider 调用总数精确为 `5`，未输出或提交任何 `.env` 密钥。
+- 2026-08-26 12:35 CST：实现与 dirty-tree 验收账本提交为 `b0dcbb3a`；随后
+  `git fetch origin --prune` 并合并 `origin/main`。远端 main 仍为 `afb78dd0`，
+  合并结果为 `Already up to date`，合并后候选基线为 `b0dcbb3a`。接下来只采用该
+  合并后基线的 clean-tree readiness 与真实 LLM 结果作为最终结论。
+- 2026-08-26 12:39 CST：clean-tree readiness
+  `20260826-capability-profiles-postmerge-clean-1` 通过 `16/16`，release manifest
+  记录 Git `465b0b6a`、Flyway V49、160 项 HTTP 合同和
+  `READ_ONLY` / `READ_WRITE` 两个已验证画像。
+- 2026-08-26 12:45 CST：clean-tree 真实 LLM 双实例验收
+  `20260826-capability-profiles-postmerge-real-llm-clean-1` 通过 `13/13`；完整 Maven、
+  WebUI、Mock Playwright 和真实服务门槛先通过，随后 5 次真实 provider 调用全部成功，
+  只读写拒绝与幂等 replay 的 provider 增量均为 0。
+
+## 8. 实现收敛审查
+
+计数器：`3`
+
+- 轮次 1：preflight、安全边界与 release manifest 范围未发现实质问题，连续无修改
+  计数 `1/3`。
+- 轮次 2：HTTP query/dispatcher 合同与真实 LLM 调用预算未发现实质问题，连续无修改
+  计数 `2/3`。
+- 轮次 3：发现中英文发布清单仍记录旧的 129 项 HTTP 合同，与 clean-tree manifest
+  的 160 项不一致；已同步修复两种语言，计数重置为 `0`。
+- 重审轮次 1（2026-08-26 12:47 CST）：限定检查 preflight、安全边界与 release
+  manifest；未发现实质问题，连续无修改计数 `1/3`。
+- 重审轮次 2（2026-08-26 12:48 CST）：限定检查 HTTP query/dispatcher 合同、拒绝后
+  数据不变与真实 LLM 五次调用预算；未发现实质问题，连续无修改计数 `2/3`。
+- 重审轮次 3（2026-08-26 12:49 CST）：限定检查双语文档、release manifest、证据引用、
+  shell 语法、Git diff 和新增行密钥；未发现实质问题，连续无修改计数达到 `3/3`。

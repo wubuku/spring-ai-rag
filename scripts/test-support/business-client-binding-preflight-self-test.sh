@@ -19,6 +19,8 @@ printf '["sample-a","sample-b"]\n' > "$COLLECTIONS_FILE"
 run_negative() {
   local name="$1" expected_category="$2" base_url="$3"
   local mode="$4" auth_scheme="$5" confirm="$6" canary_key="$7"
+  local capability_profile="${8:-READ_WRITE}"
+  local expected_report_profile="${9-$capability_profile}"
   local evidence="${ROOT_DIR}/${name}" output="${ROOT_DIR}/${name}.out"
   local error="${ROOT_DIR}/${name}.err" rc report
 
@@ -29,6 +31,7 @@ run_negative() {
   RAG_BINDING_TARGET_LABEL="self-test-${name}" \
   RAG_BINDING_PREFLIGHT_MODE="$mode" \
   RAG_BINDING_AUTH_SCHEME="$auth_scheme" \
+  RAG_BINDING_EXPECTED_CAPABILITY_PROFILE="$capability_profile" \
   RAG_BINDING_CANARY_CONFIRM="$confirm" \
   RAG_BINDING_CANARY_COLLECTION_KEY="$canary_key" \
   RAG_BINDING_PREFLIGHT_EVIDENCE_DIR="$evidence" \
@@ -42,9 +45,13 @@ run_negative() {
   report="${evidence}/preflight-report.json"
   jq -e \
     --arg category "$expected_category" \
+    --arg expectedProfile "$expected_report_profile" \
     '.result == "FAIL"
       and .failureCategory == $category
-      and .verification.requiredOperationCount == 6' \
+      and .verification.requiredOperationCount == 6
+      and .expectedCapabilityProfile
+        == (if $expectedProfile == "" then null else $expectedProfile end)
+      and .principal.capabilityProfile == null' \
     "$report" >/dev/null || {
     echo "${name}: invalid or unsafe report" >&2
     return 1
@@ -58,6 +65,13 @@ run_negative() {
     echo "${name}: report contains Collection identity" >&2
     return 1
   }
+  if [[ -z "$expected_report_profile" && -n "$capability_profile" ]]; then
+    ! rg -F "$capability_profile" "$report" \
+      "${evidence}/summary.md" >/dev/null || {
+      echo "${name}: report contains an invalid raw capability profile" >&2
+      return 1
+    }
+  fi
   printf 'PASS: %s\n' "$name"
 }
 
@@ -111,4 +125,15 @@ run_negative \
   "https://rag.example.invalid" \
   "READ_ONLY" "X_API_KEY" "YES" "sample-a"
 
-printf 'Binding preflight self-test passed: 9 negative cases\n'
+run_negative \
+  "invalid-capability-profile" "INVALID_CAPABILITY_PROFILE" \
+  "https://rag.example.invalid" \
+  "READ_ONLY" "X_API_KEY" "" "" "DO_NOT_REPORT_THIS_VALUE" ""
+
+printf '["sample-a"]\n' > "$COLLECTIONS_FILE"
+run_negative \
+  "read-only-canary-profile" "CAPABILITY_PROFILE_INCOMPATIBLE_WITH_MODE" \
+  "https://rag.example.invalid" \
+  "CANARY_MUTATION" "BEARER" "YES" "sample-a" "READ_ONLY"
+
+printf 'Binding preflight self-test passed: 11 negative cases\n'

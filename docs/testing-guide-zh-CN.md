@@ -229,9 +229,10 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 该门禁把业务 credential provisioning、当前 principal 自省和 JSON Record 数据面串成一条
 真实合同，覆盖：
 
-- root、restricted/unrestricted 数据库 principal，Header/Bearer 认证和有效 query
-  credential 拒绝；
-- `/auth/me` 的 role、access mode、完整 key allow-list、no-store 与无 secret；
+- root、restricted/unrestricted 数据库 principal，只读 query 与读写 dispatcher 画像，
+  Header/Bearer 认证和有效 query credential 拒绝；
+- `/auth/me` 的 role、精确 capability、access mode、完整 key allow-list、no-store 与
+  无 secret；
 - Collection key 1/128 成功、129/空白/控制字符/非 ASCII 拒绝，外部身份与 revision
   长度边界、双向跨 Collection ACL 和全数据面防枚举；
 - JSON Record 精确重放、CAS、payload containment、tombstone/恢复和 payload-only
@@ -240,13 +241,16 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 - 确定性 provider `503` 使 job 收敛为 `FAILED`，但保留已提交的 Record identity、
   revision、payload、enabled 状态和 document revision；
 - credential 一次性展示、轮换、旧 key 失效和吊销；
+- 只读 query principal 可 lookup/search，但 upsert/delete 返回 `403`，且拒绝后 Record
+  revision/state 不变；读写 dispatcher 和 rotation 保持完整能力；
 - Flyway V49、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
 
-真实 HTTP 阶段当前固定为 129 项断言。除业务客户端合同外，还会把已部署 binding
-preflight 作为黑盒 client 执行：只读成功、allow-list 精确不匹配失败、Bearer canary
-mutation 成功，以及 provider 失败后的清理和最终 tombstone。测试会校验 preflight 报告
-schema，并确认报告不包含 credential、URL、Collection key、external ID 或 payload。
+真实 HTTP 阶段除业务客户端合同外，还会把已部署 binding preflight 作为黑盒 client
+执行：`READ_ONLY` 与 `READ_WRITE` 画像成功、能力画像不匹配失败、allow-list 精确不匹配
+失败、Bearer canary mutation 成功，以及 provider 失败后的清理和最终 tombstone。测试会
+校验 preflight 报告 schema，并确认报告不包含 credential、URL、Collection key、
+external ID 或 payload。
 
 最终候选 commit 应开启 clean-tree gate：
 
@@ -257,7 +261,8 @@ BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
 
 每次运行都会在证据目录生成 `release-manifest.json`，记录 PASS/FAIL、验证阶段、完整 Git
 SHA、初始 tree state、项目/OpenAPI 版本、API base path、最新 Flyway migration、passed
-steps、PostgreSQL image 和 HTTP 检查数。未执行到的运行时事实为 JSON `null`；manifest
+steps、PostgreSQL image、HTTP 检查数和
+`["READ_ONLY","READ_WRITE"]` 验证画像。未执行到的运行时事实为 JSON `null`；manifest
 不保存 credential、URL、payload、external ID 或 private path。
 
 聚焦复跑真实阶段：
@@ -562,8 +567,9 @@ WebUI Vitest/TypeScript/生产构建/alignment、核心 Mock Playwright、禁锁
 启动两个共享一次性 PostgreSQL 的真实后端和一个 Vite 前端，验证只读 identity/GET 与
 写入 `403`、轮换继承能力、非法能力不落库、全局 quota、policy CAS、跨实例轮换/撤销、
 quota store 故障关闭和无截图真实 Playwright。真实 LLM 模式还覆盖 native
-JSON/SSE 与 OpenAI-compatible JSON/SSE，并用 provider counter 证明幂等重放不产生重复模型
-调用且总调用数有界。证据写入
+JSON/SSE 与 OpenAI-compatible JSON/SSE。真实 Chat principal 显式只有 `RAG_READ`；
+脚本先验证写请求 `403` 且 provider counter 不变，再证明幂等重放不产生重复模型调用，
+并要求真实 provider 调用总数严格等于 5。证据写入
 `.verification/managed-api-principals/<run-id>/summary.md`，敏感响应只保存在 gitignored、
 权限受限的 `private/` 子目录。
 

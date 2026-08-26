@@ -83,13 +83,13 @@
 - [x] `/api/v1/rag/auth/me` 显式返回 principal role、restricted/unrestricted 模式和当前
   credential 自身的稳定 Collection key allow-list，无法完整解析时 fail closed。
 - [x] `verify-business-client-readiness.sh` 覆盖 PostgreSQL 集成矩阵、Maven/WebUI 门槛、
-  真实 Spring Boot、包含已部署 binding preflight 的 129 项业务 credential HTTP 合同和
+  真实 Spring Boot、包含已部署 binding preflight 的 160 项业务 credential HTTP 合同和
   真实 API Key Playwright。
 - [x] 合同覆盖外部身份/revision 边界、双向全数据面 `403` 防枚举，以及 provider
   `503` 后 Record identity/revision/payload/enabled/documentRevision 保留。
 - [x] clean-tree 最终门禁生成 `release-manifest.json`，锁定完整 Git SHA、项目/OpenAPI
-  `1.0.0`、API base path、Flyway V48、PostgreSQL image 和 129 项合同计数，且不保存密钥
-  或业务 payload。
+  `1.0.0`、API base path、与仓库最新 migration 一致的运行时 Flyway、PostgreSQL image
+  和 HTTP 合同计数，且不保存密钥或业务 payload。
 - [x] `business-client-binding-preflight.sh` 默认只读，真实 canary/cleanup 报告通过
   schema 与 secret-safety 验证。
 - [x] 双语业务服务接入指南固化 root/业务 credential、binding、CAS/tombstone/ASYNC、
@@ -103,6 +103,11 @@
   但写请求返回 `403`，OpenAI 兼容错误码为 `insufficient_permissions`。
 - [x] 创建、策略 CAS、轮换、`/auth/me`、WebUI 与 PostgreSQL/真实 HTTP 验收使用同一份
   权威能力，非法集合不持久化，ADMIN 不允许降级为只读。
+- [x] 部署 binding preflight 精确区分 `READ_ONLY` / `READ_WRITE` credential 画像；
+  release manifest 固定记录两个已验画像，HTTP 合同使用只读 query 与读写 dispatcher
+  验证读成功、写 `403`、状态不变和 rotation 能力继承。
+- [x] 真实 LLM 门禁使用显式 `RAG_READ` principal，写拒绝和幂等 replay 不增加 provider
+  counter，原生/OpenAI-compatible JSON/SSE 总 provider 调用严格等于 5。
 
 ### 最终证据（2026-07-21）
 

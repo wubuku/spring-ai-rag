@@ -116,10 +116,10 @@ root_delete_key() {
 }
 
 cleanup() {
-root_delete_key "$QUERY_KEY_ID"
-root_delete_key "$UNRESTRICTED_KEY_ID"
-root_delete_key "$CANARY_KEY_ID"
-root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
+  root_delete_key "$QUERY_KEY_ID"
+  root_delete_key "$UNRESTRICTED_KEY_ID"
+  root_delete_key "$CANARY_KEY_ID"
+  root_delete_key "$RESTRICTED_CURRENT_KEY_ID"
   root_delete_key "$RESTRICTED_B_KEY_ID"
   rm -rf "$CONTRACT_PRIVATE"
 }
@@ -234,7 +234,8 @@ assert_literal_absent() {
 
 run_binding_preflight() {
   local label="$1" mode="$2" auth_scheme="$3" credential_file="$4"
-  local collections_file="$5" expected_exit="$6" marker="${7:-}"
+  local collections_file="$5" capability_profile="$6" expected_exit="$7"
+  local marker="${8:-}"
   local evidence="${EVIDENCE_DIR}/preflight-${label}"
   local output="${CONTRACT_PRIVATE}/preflight-${label}.out"
   local error="${CONTRACT_PRIVATE}/preflight-${label}.err"
@@ -247,6 +248,7 @@ run_binding_preflight() {
   RAG_BINDING_TARGET_LABEL="$label" \
   RAG_BINDING_PREFLIGHT_MODE="$mode" \
   RAG_BINDING_AUTH_SCHEME="$auth_scheme" \
+  RAG_BINDING_EXPECTED_CAPABILITY_PROFILE="$capability_profile" \
   RAG_BINDING_CANARY_CONFIRM="$([[ "$mode" == "CANARY_MUTATION" ]] && printf 'YES' || true)" \
   RAG_BINDING_CANARY_COLLECTION_KEY="$([[ "$mode" == "CANARY_MUTATION" ]] && jq -er '.[0]' "$collections_file" || true)" \
   RAG_BINDING_CANARY_RETRIEVAL_MARKER="$marker" \
@@ -269,7 +271,8 @@ run_binding_preflight() {
 assert_binding_report() {
   local label="$1" expected_result="$2" expected_category="$3"
   local expected_canary_state="$4" credential_file="$5"
-  shift 5
+  local expected_profile="$6" verified_profile="$7"
+  shift 7
   local report="${EVIDENCE_DIR}/preflight-${label}/preflight-report.json"
   [[ -f "$report" ]] || {
     echo "${label} binding preflight report is missing" >&2
@@ -279,9 +282,14 @@ assert_binding_report() {
     --arg result "$expected_result" \
     --arg category "$expected_category" \
     --arg canaryState "$expected_canary_state" \
+    --arg expectedProfile "$expected_profile" \
+    --arg verifiedProfile "$verified_profile" \
     '
       .schemaVersion == 1
       and .result == $result
+      and .expectedCapabilityProfile == $expectedProfile
+      and .principal.capabilityProfile
+        == (if $verifiedProfile == "" then null else $verifiedProfile end)
       and .verification.requiredOperationCount == 6
       and .failureCategory == (if $result == "PASS" then null else $category end)
       and .verification.canaryFinalState
@@ -310,19 +318,49 @@ create_collection() {
 }
 
 create_principal() {
-  local name="$1" collection_key="$2" response="$3" headers="$4"
+  local name="$1" collection_key="$2" capability_profile="$3"
+  local response="$4" headers="$5"
   local request_file="${response}.request"
+  local capabilities
+  case "$capability_profile" in
+    READ_ONLY) capabilities='["RAG_READ"]' ;;
+    READ_WRITE) capabilities='["RAG_READ","RAG_WRITE"]' ;;
+    *)
+      echo "Unsupported capability profile: ${capability_profile}" >&2
+      return 2
+      ;;
+  esac
   if [[ -n "$collection_key" ]]; then
     jq -n --arg name "$name" --arg key "$collection_key" \
-      '{name:$name,expiresAt:"2099-12-31T23:59:00",allowedCollectionKeys:[$key],requestsPerMinute:1000}' \
+      --argjson capabilities "$capabilities" \
+      '{name:$name,expiresAt:"2099-12-31T23:59:00",allowedCollectionKeys:[$key],requestsPerMinute:1000,capabilities:$capabilities}' \
       > "$request_file"
   else
-    jq -n --arg name "$name" \
-      '{name:$name,expiresAt:"2099-12-31T23:59:00",requestsPerMinute:1000}' \
+    jq -n --arg name "$name" --argjson capabilities "$capabilities" \
+      '{name:$name,expiresAt:"2099-12-31T23:59:00",requestsPerMinute:1000,capabilities:$capabilities}' \
       > "$request_file"
   fi
   request POST "${API}/api-keys" "$ROOT_CONFIG" "$response" "$headers" \
     "$request_file"
+}
+
+assert_capability_profile() {
+  local response="$1" capability_profile="$2" description="$3"
+  local expected
+  case "$capability_profile" in
+    READ_ONLY) expected='["RAG_READ"]' ;;
+    READ_WRITE) expected='["RAG_READ","RAG_WRITE"]' ;;
+    *) return 2 ;;
+  esac
+  assert_json_with_args "$response" "$description" \
+    --argjson expected "$expected" '.capabilities == $expected'
+}
+
+assert_write_capability_denied() {
+  local response="$1" description="$2"
+  assert_json "$response" \
+    '.error == "FORBIDDEN" and (.message | contains("RAG_WRITE"))' \
+    "$description"
 }
 
 write_search_request() {
@@ -523,10 +561,11 @@ assert_status "$code" 200 "environment root introspection"
 assert_no_store "$ROOT_HEADERS" "environment root introspection"
 assert_json "$ROOT_IDENTITY" \
   '.principalType == "ENVIRONMENT_ROOT"
+    and .rootMode == true
     and .principalRole == null
     and .collectionAccessMode == "UNRESTRICTED"
     and .allowedCollectionKeys == null
-    and (.capabilities | index("API_KEY_MANAGE") != null)' \
+    and .capabilities == ["RAG_READ","RAG_WRITE","API_KEY_MANAGE"]' \
   "environment root contract is explicit"
 ! rg -qi '"(rawKey|apiKeyHash|credentialHash|secret)"' "$ROOT_IDENTITY"
 pass "environment root response contains no secret material"
@@ -571,9 +610,11 @@ assert_status "$code" 400 "reject non-ASCII Collection key"
 RESTRICTED_CREATE="${CONTRACT_PRIVATE}/restricted-create.json"
 RESTRICTED_CREATE_HEADERS="${RESTRICTED_CREATE}.headers"
 code="$(create_principal "Restricted Contract Principal" "$COLLECTION_A" \
-  "$RESTRICTED_CREATE" "$RESTRICTED_CREATE_HEADERS")"
+  "READ_WRITE" "$RESTRICTED_CREATE" "$RESTRICTED_CREATE_HEADERS")"
 assert_status "$code" 201 "create restricted principal"
 assert_no_store "$RESTRICTED_CREATE_HEADERS" "restricted principal creation"
+assert_capability_profile "$RESTRICTED_CREATE" "READ_WRITE" \
+  "restricted dispatcher creation returns exact capabilities"
 RESTRICTED_KEY_ID="$(jq -er '.keyId' "$RESTRICTED_CREATE")"
 RESTRICTED_CURRENT_KEY_ID="$RESTRICTED_KEY_ID"
 RESTRICTED_PRINCIPAL_ID="$(jq -er '.principalId' "$RESTRICTED_CREATE")"
@@ -587,9 +628,11 @@ write_auth_config "$RESTRICTED_BEARER_CONFIG" bearer "$RESTRICTED_SECRET_FILE"
 RESTRICTED_B_CREATE="${CONTRACT_PRIVATE}/restricted-b-create.json"
 RESTRICTED_B_CREATE_HEADERS="${RESTRICTED_B_CREATE}.headers"
 code="$(create_principal "Restricted Contract Principal B" "$COLLECTION_B" \
-  "$RESTRICTED_B_CREATE" "$RESTRICTED_B_CREATE_HEADERS")"
+  "READ_WRITE" "$RESTRICTED_B_CREATE" "$RESTRICTED_B_CREATE_HEADERS")"
 assert_status "$code" 201 "create second restricted principal"
 assert_no_store "$RESTRICTED_B_CREATE_HEADERS" "second restricted principal creation"
+assert_capability_profile "$RESTRICTED_B_CREATE" "READ_WRITE" \
+  "second dispatcher creation returns exact capabilities"
 RESTRICTED_B_KEY_ID="$(jq -er '.keyId' "$RESTRICTED_B_CREATE")"
 RESTRICTED_B_PRINCIPAL_ID="$(jq -er '.principalId' "$RESTRICTED_B_CREATE")"
 RESTRICTED_B_SECRET_FILE="${CONTRACT_PRIVATE}/restricted-b.key"
@@ -600,9 +643,11 @@ write_auth_config "$RESTRICTED_B_CONFIG" x-api-key "$RESTRICTED_B_SECRET_FILE"
 CANARY_CREATE="${CONTRACT_PRIVATE}/canary-create.json"
 CANARY_CREATE_HEADERS="${CANARY_CREATE}.headers"
 code="$(create_principal "Binding Preflight Canary Principal" "$COLLECTION_CANARY" \
-  "$CANARY_CREATE" "$CANARY_CREATE_HEADERS")"
+  "READ_WRITE" "$CANARY_CREATE" "$CANARY_CREATE_HEADERS")"
 assert_status "$code" 201 "create binding preflight canary principal"
 assert_no_store "$CANARY_CREATE_HEADERS" "binding preflight canary principal creation"
+assert_capability_profile "$CANARY_CREATE" "READ_WRITE" \
+  "canary principal creation returns exact capabilities"
 CANARY_KEY_ID="$(jq -er '.keyId' "$CANARY_CREATE")"
 CANARY_SECRET_FILE="${CONTRACT_PRIVATE}/canary.key"
 extract_secret "$CANARY_CREATE" "$CANARY_SECRET_FILE"
@@ -612,8 +657,10 @@ write_auth_config "$CANARY_BEARER_CONFIG" bearer "$CANARY_SECRET_FILE"
 UNRESTRICTED_CREATE="${CONTRACT_PRIVATE}/unrestricted-create.json"
 UNRESTRICTED_CREATE_HEADERS="${UNRESTRICTED_CREATE}.headers"
 code="$(create_principal "Unrestricted Contract Principal" "" \
-  "$UNRESTRICTED_CREATE" "$UNRESTRICTED_CREATE_HEADERS")"
+  "READ_WRITE" "$UNRESTRICTED_CREATE" "$UNRESTRICTED_CREATE_HEADERS")"
 assert_status "$code" 201 "create unrestricted principal"
+assert_capability_profile "$UNRESTRICTED_CREATE" "READ_WRITE" \
+  "unrestricted principal creation returns exact capabilities"
 UNRESTRICTED_KEY_ID="$(jq -er '.keyId' "$UNRESTRICTED_CREATE")"
 UNRESTRICTED_SECRET_FILE="${CONTRACT_PRIVATE}/unrestricted.key"
 extract_secret "$UNRESTRICTED_CREATE" "$UNRESTRICTED_SECRET_FILE"
@@ -622,20 +669,24 @@ write_auth_config "$UNRESTRICTED_CONFIG" x-api-key "$UNRESTRICTED_SECRET_FILE"
 
 QUERY_CREATE="${CONTRACT_PRIVATE}/query-create.json"
 QUERY_CREATE_HEADERS="${QUERY_CREATE}.headers"
-code="$(create_principal "Disposable Query Rejection Principal" "" \
-  "$QUERY_CREATE" "$QUERY_CREATE_HEADERS")"
-assert_status "$code" 201 "create disposable query-rejection principal"
+code="$(create_principal "Restricted Query Principal" "$COLLECTION_A" \
+  "READ_ONLY" "$QUERY_CREATE" "$QUERY_CREATE_HEADERS")"
+assert_status "$code" 201 "create restricted read-only query principal"
+assert_no_store "$QUERY_CREATE_HEADERS" "read-only query principal creation"
+assert_capability_profile "$QUERY_CREATE" "READ_ONLY" \
+  "query principal creation returns exact capabilities"
 QUERY_KEY_ID="$(jq -er '.keyId' "$QUERY_CREATE")"
+QUERY_PRINCIPAL_ID="$(jq -er '.principalId' "$QUERY_CREATE")"
 QUERY_SECRET_FILE="${CONTRACT_PRIVATE}/query.key"
 extract_secret "$QUERY_CREATE" "$QUERY_SECRET_FILE"
+QUERY_X_CONFIG="${CONTRACT_PRIVATE}/query-x.curl"
+write_auth_config "$QUERY_X_CONFIG" x-api-key "$QUERY_SECRET_FILE"
 QUERY_RESPONSE="${CONTRACT_PRIVATE}/query-rejected.json"
 QUERY_HEADERS="${QUERY_RESPONSE}.headers"
 code="$(curl --config "$NO_AUTH_CONFIG" --get --output "$QUERY_RESPONSE" \
   --dump-header "$QUERY_HEADERS" --write-out '%{http_code}' \
   --data-urlencode "apiKey@${QUERY_SECRET_FILE}" "${API}/auth/me")"
 assert_status "$code" 401 "reject valid credential in query string"
-root_delete_key "$QUERY_KEY_ID"
-QUERY_KEY_ID=""
 
 KEY_LIST="${CONTRACT_PRIVATE}/key-list.json"
 KEY_LIST_HEADERS="${KEY_LIST}.headers"
@@ -648,7 +699,7 @@ code="$(request GET "${API}/api-keys/principals" "$ROOT_CONFIG" \
 assert_status "$code" 200 "list principal metadata"
 for secret_file in \
     "$RESTRICTED_SECRET_FILE" "$RESTRICTED_B_SECRET_FILE" \
-    "$UNRESTRICTED_SECRET_FILE"; do
+    "$CANARY_SECRET_FILE" "$UNRESTRICTED_SECRET_FILE" "$QUERY_SECRET_FILE"; do
   assert_secret_absent "$secret_file" "$KEY_LIST" "credential list hides raw secrets"
   assert_secret_absent "$secret_file" "$PRINCIPAL_LIST" "principal list hides raw secrets"
 done
@@ -667,6 +718,7 @@ assert_json_with_args "$RESTRICTED_IDENTITY" \
     and .principalRole == "NORMAL"
     and .collectionAccessMode == "RESTRICTED"
     and .allowedCollectionKeys == [$key]
+    and .capabilities == ["RAG_READ","RAG_WRITE"]
     and .credentialVersion == 1
     and .policyVersion == 1'
 assert_secret_absent "$RESTRICTED_SECRET_FILE" "$RESTRICTED_IDENTITY" \
@@ -680,7 +732,27 @@ assert_status "$code" 200 "restricted principal Bearer authentication"
 assert_json_with_args "$BEARER_IDENTITY" \
   "Bearer and X-API-Key resolve the same principal" \
   --arg principal "$RESTRICTED_PRINCIPAL_ID" \
-  '.principalId == $principal and .collectionAccessMode == "RESTRICTED"'
+  '.principalId == $principal
+    and .collectionAccessMode == "RESTRICTED"
+    and .capabilities == ["RAG_READ","RAG_WRITE"]'
+
+QUERY_IDENTITY="${CONTRACT_PRIVATE}/query-identity.json"
+QUERY_IDENTITY_HEADERS="${QUERY_IDENTITY}.headers"
+code="$(request GET "${API}/auth/me" "$QUERY_X_CONFIG" \
+  "$QUERY_IDENTITY" "$QUERY_IDENTITY_HEADERS")"
+assert_status "$code" 200 "read-only query principal authentication"
+assert_no_store "$QUERY_IDENTITY_HEADERS" "read-only query introspection"
+assert_json_with_args "$QUERY_IDENTITY" \
+  "query introspection returns exact read-only binding" \
+  --arg principal "$QUERY_PRINCIPAL_ID" --arg key "$COLLECTION_A" \
+  '.principalType == "DATABASE_API_KEY"
+    and .principalId == $principal
+    and .principalRole == "NORMAL"
+    and .collectionAccessMode == "RESTRICTED"
+    and .allowedCollectionKeys == [$key]
+    and .capabilities == ["RAG_READ"]
+    and .credentialVersion == 1
+    and .policyVersion == 1'
 
 UNRESTRICTED_IDENTITY="${CONTRACT_PRIVATE}/unrestricted-identity.json"
 UNRESTRICTED_IDENTITY_HEADERS="${UNRESTRICTED_IDENTITY}.headers"
@@ -690,14 +762,15 @@ assert_status "$code" 200 "unrestricted database principal introspection"
 assert_json "$UNRESTRICTED_IDENTITY" \
   '.principalRole == "NORMAL"
     and .collectionAccessMode == "UNRESTRICTED"
-    and .allowedCollectionKeys == null' \
+    and .allowedCollectionKeys == null
+    and .capabilities == ["RAG_READ","RAG_WRITE"]' \
   "unrestricted database principal uses null allow-list"
 
 COLLECTION_PROBE="${CONTRACT_PRIVATE}/collection-probe.json"
 COLLECTION_PROBE_HEADERS="${COLLECTION_PROBE}.headers"
-code="$(query_request GET "${API}/collections/by-key" "$RESTRICTED_X_CONFIG" \
+code="$(query_request GET "${API}/collections/by-key" "$QUERY_X_CONFIG" \
   "$COLLECTION_PROBE" "$COLLECTION_PROBE_HEADERS" "collectionKey=${COLLECTION_A}")"
-assert_status "$code" 200 "restricted binding active Collection probe"
+assert_status "$code" 200 "read-only binding active Collection probe"
 
 PREFLIGHT_A_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-a-collections.json"
 jq -n --arg key "$COLLECTION_A" '[$key]' > "$PREFLIGHT_A_COLLECTIONS"
@@ -708,32 +781,49 @@ PREFLIGHT_CANARY_COLLECTIONS="${CONTRACT_PRIVATE}/preflight-canary-collections.j
 jq -n --arg key "$COLLECTION_CANARY" '[$key]' > "$PREFLIGHT_CANARY_COLLECTIONS"
 
 run_binding_preflight \
-  "readonly-pass" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
-  "$PREFLIGHT_A_COLLECTIONS" 0
+  "readonly-pass" "READ_ONLY" "X_API_KEY" "$QUERY_SECRET_FILE" \
+  "$PREFLIGHT_A_COLLECTIONS" "READ_ONLY" 0
 assert_binding_report \
-  "readonly-pass" "PASS" "" "" "$RESTRICTED_SECRET_FILE" \
+  "readonly-pass" "PASS" "" "" "$QUERY_SECRET_FILE" \
+  "READ_ONLY" "READ_ONLY" \
   "$COLLECTION_A"
 
 run_binding_preflight \
-  "readonly-wrong-allow-list" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
-  "$PREFLIGHT_A_WRONG_COLLECTIONS" 1
+  "readwrite-pass" "READ_ONLY" "X_API_KEY" "$RESTRICTED_SECRET_FILE" \
+  "$PREFLIGHT_A_COLLECTIONS" "READ_WRITE" 0
+assert_binding_report \
+  "readwrite-pass" "PASS" "" "" "$RESTRICTED_SECRET_FILE" \
+  "READ_WRITE" "READ_WRITE" "$COLLECTION_A"
+
+run_binding_preflight \
+  "readonly-wrong-allow-list" "READ_ONLY" "X_API_KEY" "$QUERY_SECRET_FILE" \
+  "$PREFLIGHT_A_WRONG_COLLECTIONS" "READ_ONLY" 1
 assert_binding_report \
   "readonly-wrong-allow-list" "FAIL" "POLICY_MISMATCH" "" \
-  "$RESTRICTED_SECRET_FILE" "$COLLECTION_A" "$COLLECTION_B"
+  "$QUERY_SECRET_FILE" "READ_ONLY" "" "$COLLECTION_A" "$COLLECTION_B"
+
+run_binding_preflight \
+  "capability-profile-mismatch" "READ_ONLY" "X_API_KEY" "$QUERY_SECRET_FILE" \
+  "$PREFLIGHT_A_COLLECTIONS" "READ_WRITE" 1
+assert_binding_report \
+  "capability-profile-mismatch" "FAIL" "POLICY_MISMATCH" "" \
+  "$QUERY_SECRET_FILE" "READ_WRITE" "" "$COLLECTION_A"
 
 run_binding_preflight \
   "canary-success" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
-  "$PREFLIGHT_CANARY_COLLECTIONS" 0
+  "$PREFLIGHT_CANARY_COLLECTIONS" "READ_WRITE" 0
 assert_binding_report \
   "canary-success" "PASS" "" "TOMBSTONED" "$CANARY_SECRET_FILE" \
+  "READ_WRITE" "READ_WRITE" \
   "$COLLECTION_CANARY"
 
 run_binding_preflight \
   "canary-provider-failure" "CANARY_MUTATION" "BEARER" "$CANARY_SECRET_FILE" \
-  "$PREFLIGHT_CANARY_COLLECTIONS" 1 "$EMBEDDING_FAIL_MARKER"
+  "$PREFLIGHT_CANARY_COLLECTIONS" "READ_WRITE" 1 "$EMBEDDING_FAIL_MARKER"
 assert_binding_report \
   "canary-provider-failure" "FAIL" "EMBEDDING_FAILED" "TOMBSTONED" \
-  "$CANARY_SECRET_FILE" "$COLLECTION_CANARY" "$EMBEDDING_FAIL_MARKER" \
+  "$CANARY_SECRET_FILE" "READ_WRITE" "READ_WRITE" \
+  "$COLLECTION_CANARY" "$EMBEDDING_FAIL_MARKER" \
   "preflight-${RUN_ID}-preflight-canary-provider-failure"
 
 RETRIEVAL_TEXT="The contract searchable record is active and ready for retrieval."
@@ -757,6 +847,78 @@ READINESS_RESPONSE="${CONTRACT_PRIVATE}/embedding-readiness.json"
 READINESS_HEADERS="${READINESS_RESPONSE}.headers"
 wait_for_fresh_embedding "$COLLECTION_A" "$READINESS_RESPONSE" "$READINESS_HEADERS"
 
+QUERY_LOOKUP_RESPONSE="${CONTRACT_PRIVATE}/query-lookup-v1.json"
+QUERY_LOOKUP_HEADERS="${QUERY_LOOKUP_RESPONSE}.headers"
+code="$(query_request GET "${API}/json-records/by-external-id" \
+  "$QUERY_X_CONFIG" "$QUERY_LOOKUP_RESPONSE" "$QUERY_LOOKUP_HEADERS" \
+  "collectionKey=${COLLECTION_A}" \
+  "sourceNamespace=business-client.contract.v1" \
+  "externalId=record-1")"
+assert_status "$code" 200 "read-only query principal lookup"
+assert_json_with_args "$QUERY_LOOKUP_RESPONSE" \
+  "read-only lookup returns dispatcher-created revision" \
+  --argjson documentId "$DOCUMENT_ID" \
+  '.documentId == $documentId
+    and .sourceRevision == "rev-1"
+    and .documentRevision == 1
+    and .jsonbPayload.status == "active"
+    and .enabled == true'
+
+QUERY_SEARCH_REQUEST="${CONTRACT_PRIVATE}/query-search.request.json"
+write_search_request "$QUERY_SEARCH_REQUEST" "$COLLECTION_A" "active"
+QUERY_SEARCH_RESPONSE="${CONTRACT_PRIVATE}/query-search.json"
+QUERY_SEARCH_HEADERS="${QUERY_SEARCH_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/search" "$QUERY_X_CONFIG" \
+  "$QUERY_SEARCH_RESPONSE" "$QUERY_SEARCH_HEADERS" "$QUERY_SEARCH_REQUEST")"
+assert_status "$code" 200 "read-only query principal search"
+assert_json_with_args "$QUERY_SEARCH_RESPONSE" \
+  "read-only search returns dispatcher-created record" \
+  --argjson documentId "$DOCUMENT_ID" \
+  '(.results | map(.documentId) | index($documentId)) != null'
+
+QUERY_DENIED_UPSERT_REQUEST="${CONTRACT_PRIVATE}/query-denied-upsert.request.json"
+write_upsert_request "$QUERY_DENIED_UPSERT_REQUEST" "$COLLECTION_A" \
+  "query-denied-rev-2" "rev-1" "forbidden" "forbidden query mutation"
+QUERY_DENIED_UPSERT_RESPONSE="${CONTRACT_PRIVATE}/query-denied-upsert.json"
+QUERY_DENIED_UPSERT_HEADERS="${QUERY_DENIED_UPSERT_RESPONSE}.headers"
+code="$(request POST "${API}/json-records/upsert" "$QUERY_X_CONFIG" \
+  "$QUERY_DENIED_UPSERT_RESPONSE" "$QUERY_DENIED_UPSERT_HEADERS" \
+  "$QUERY_DENIED_UPSERT_REQUEST")"
+assert_status "$code" 403 "read-only query principal upsert"
+assert_write_capability_denied "$QUERY_DENIED_UPSERT_RESPONSE" \
+  "read-only upsert reports missing write capability"
+
+QUERY_DENIED_DELETE_RESPONSE="${CONTRACT_PRIVATE}/query-denied-delete.json"
+QUERY_DENIED_DELETE_HEADERS="${QUERY_DENIED_DELETE_RESPONSE}.headers"
+code="$(query_request DELETE "${API}/json-records/by-external-id" \
+  "$QUERY_X_CONFIG" "$QUERY_DENIED_DELETE_RESPONSE" \
+  "$QUERY_DENIED_DELETE_HEADERS" \
+  "collectionKey=${COLLECTION_A}" \
+  "sourceNamespace=business-client.contract.v1" \
+  "externalId=record-1" \
+  "sourceRevision=query-denied-delete" \
+  "expectedSourceRevision=rev-1")"
+assert_status "$code" 403 "read-only query principal tombstone"
+assert_write_capability_denied "$QUERY_DENIED_DELETE_RESPONSE" \
+  "read-only tombstone reports missing write capability"
+
+QUERY_UNCHANGED_RESPONSE="${CONTRACT_PRIVATE}/query-unchanged-v1.json"
+QUERY_UNCHANGED_HEADERS="${QUERY_UNCHANGED_RESPONSE}.headers"
+code="$(query_request GET "${API}/json-records/by-external-id" \
+  "$QUERY_X_CONFIG" "$QUERY_UNCHANGED_RESPONSE" "$QUERY_UNCHANGED_HEADERS" \
+  "collectionKey=${COLLECTION_A}" \
+  "sourceNamespace=business-client.contract.v1" \
+  "externalId=record-1")"
+assert_status "$code" 200 "lookup after read-only write rejection"
+assert_json_with_args "$QUERY_UNCHANGED_RESPONSE" \
+  "read-only write rejection preserves record state" \
+  --argjson documentId "$DOCUMENT_ID" \
+  '.documentId == $documentId
+    and .sourceRevision == "rev-1"
+    and .documentRevision == 1
+    and .jsonbPayload.status == "active"
+    and .enabled == true'
+
 RESTRICTED_B_IDENTITY="${CONTRACT_PRIVATE}/restricted-b-identity.json"
 RESTRICTED_B_IDENTITY_HEADERS="${RESTRICTED_B_IDENTITY}.headers"
 code="$(request GET "${API}/auth/me" "$RESTRICTED_B_CONFIG" \
@@ -767,7 +929,8 @@ assert_json_with_args "$RESTRICTED_B_IDENTITY" \
   --arg principal "$RESTRICTED_B_PRINCIPAL_ID" --arg key "$COLLECTION_B" \
   '.principalId == $principal
     and .collectionAccessMode == "RESTRICTED"
-    and .allowedCollectionKeys == [$key]'
+    and .allowedCollectionKeys == [$key]
+    and .capabilities == ["RAG_READ","RAG_WRITE"]'
 
 FAILED_NAMESPACE="business-client.failure.v1"
 FAILED_EXTERNAL_ID="provider-failure-record"
@@ -1100,7 +1263,8 @@ assert_json_with_args "$NEW_AFTER_ROTATE" \
     and .credentialVersion == 2
     and .policyVersion == 1
     and .collectionAccessMode == "RESTRICTED"
-    and .allowedCollectionKeys == [$key]'
+    and .allowedCollectionKeys == [$key]
+    and .capabilities == ["RAG_READ","RAG_WRITE"]'
 
 root_delete_key "$ROTATED_KEY_ID"
 RESTRICTED_CURRENT_KEY_ID=""
@@ -1120,6 +1284,7 @@ UNRESTRICTED_KEY_ID=""
   printf 'collection_key_boundary=1_and_128_pass_invalid_and_129_reject\n'
   printf 'identity_boundary=namespace_128_external_255_revision_255\n'
   printf 'principal_contract=root_two_restricted_unrestricted\n'
+  printf 'capability_contract=query_read_only_dispatcher_read_write_preflight_rotation\n'
   printf 'acl_contract=bidirectional_full_data_plane_anti_enumeration\n'
   printf 'json_record_contract=replay_cas_payload_filter_tombstone_restore_async_failure_preserves_record\n'
   printf 'credential_contract=headers_query_reject_rotation_revocation\n'

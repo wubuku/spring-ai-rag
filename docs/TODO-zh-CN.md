@@ -14,6 +14,8 @@
   tombstone、恢复和最终 tombstone，并在失败时执行有界清理。
 - [x] readiness 合同把 preflight 作为黑盒 client 执行，并验证只读成功、allow-list
   不匹配、Bearer canary 成功和 provider 失败清理场景的 secret-safe 报告。
+- [x] preflight 精确验证 `READ_ONLY` / `READ_WRITE` credential 画像；真实 HTTP 合同拆分
+  只读 query 与读写 dispatcher，并验证写拒绝后状态不变。
 
 ## 受管 API Principal 后续边界
 
@@ -22,7 +24,7 @@
 | 稳定 principal、versioned credential、即时吊销 | V48 已交付 | owner/policy 与 credential 分离；每次认证权威联查，无正向 decision cache |
 | PostgreSQL 共享 principal quota | V48 已交付 | 多实例按 stable principal 共用固定分钟 bucket，rotation 不重置 quota，DB 故障 fail closed |
 | 明文 secret schema 禁写 | V48 已交付 | 迁移清空明文、移除索引并约束 `api_key IS NULL` |
-| operation-scoped `RAG_READ` / `RAG_WRITE` 强制授权 | 后续独立规划 | 当前 capability 是产品级描述；数据库业务 principal 仍同时具有完整 RAG 读写能力 |
+| operation-scoped `RAG_READ` / `RAG_WRITE` 强制授权 | V49 已交付 | 中央 filter 在认证后、限流前按 operation 强制能力；只读 principal 可 Search/Chat，写请求 `403` |
 | principal provisioning 幂等键 | 后续独立规划 | create 超时后需要 operator 按稳定名称/binding 对账；当前不能安全盲重试创建 |
 | machine-readable 集成协议版本 / 能力发现 | 后续独立规划 | 当前通过 OpenAPI、Git commit、`/auth/me` 和业务服务合同门禁锁定兼容性 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
@@ -33,8 +35,8 @@
 V48 只对迁移时存在的每个历史 credential 做一对一 deterministic principal 回填；它不会
 猜测旧 rotation rows 之间无法证明的 family 关系。模型 invocation 用量与配置成本可观测性
 已保留在[历史归档](drafts/archive/README-zh-CN.md)作为未来实施候选，但它不是当前活跃
-规划，也不会被宣称为供应商账单或 hard-limit 结算源。operation-scoped 授权、
-provisioning 幂等、协议能力发现、OAuth/OIDC、租户层级、Redis、token/cost hard
+规划，也不会被宣称为供应商账单或 hard-limit 结算源。provisioning 幂等、协议能力发现、
+OAuth/OIDC、租户层级、Redis、token/cost hard
 limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立规划。
 
 ## 文档生命周期与派生索引后续项
