@@ -75,8 +75,8 @@ upsert，不引入 Redis，不使用显式悲观锁、`SKIP LOCKED` 或 advisory
 
 ### 2.2 选择依据
 
-- 第一个外部 Client 只是需求信号，不是当前项目的文档或领域边界；本方案保持为通用 RAG
-  服务能力，不写入任何 Client 特定表、字段、Prompt 或业务语义。
+- 外部客户接入需求只是能力演进信号，不构成当前项目的文档或领域边界；本方案保持为
+  通用 RAG 服务能力，不写入任何客户特定表、字段、Prompt 或业务语义。
 - 当前缺口会在凭据轮换时直接造成 owner namespace 变化，不是可选的 UI 优化。
 - 当前 root-managed Key 已有创建、列出、轮换、撤销和 Collection ACL，下一步应补齐其
   identity lifecycle，而不是再叠加一种临时 key 类型。
