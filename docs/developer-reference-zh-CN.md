@@ -408,6 +408,17 @@ Record 保留语义。目录中的 `release-manifest.json` 锁定完整 Git SHA�
 未到达的运行时事实为 JSON `null`，不记录 credential、URL、payload、external ID 或
 private path。
 
+真实 HTTP 合同当前为 129 项，包含只读 binding preflight、canary 场景以及 provider
+`503` 后 Record 保留。也可以对已经运行的实例单独执行已部署 binding runner：
+
+```bash
+./scripts/business-client-binding-preflight.sh
+```
+
+它默认只读。`RAG_BINDING_*` 输入见[业务服务接入指南](business-client-integration-zh-CN.md)；
+Mutation 模式必须使用专用 canary Collection，并且机器报告不包含 credential、URL、
+Collection key、external ID 或 payload。
+
 本门禁验证真实 Spring AI embedding HTTP 路径，但本能力不改变 Chat，因此不调用 Chat
 LLM。接入契约和部署 binding 见
 [业务服务接入指南](business-client-integration-zh-CN.md)。

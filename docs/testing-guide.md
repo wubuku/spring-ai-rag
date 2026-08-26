@@ -260,7 +260,14 @@ covers:
 - WebUI typecheck, Vitest, production build, core Mock Playwright, and real
   API-key Playwright.
 
-The real HTTP phase currently fixes 109 assertions. Enable the clean-tree gate
+The real HTTP phase currently fixes 129 assertions. In addition to the
+business-client contract, it runs the deployed binding preflight as a
+black-box client: read-only success, exact allow-list failure, Bearer canary
+mutation success, and provider-failure cleanup with a final tombstone. The
+preflight report is checked for schema validity and absence of credentials,
+URLs, Collection keys, external IDs, and payloads.
+
+Enable the clean-tree gate
 for a final candidate commit:
 
 ```bash

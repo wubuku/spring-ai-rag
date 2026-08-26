@@ -94,9 +94,9 @@ DELETE /api/v1/rag/json-records/by-external-id
 
 近距离事实入口：
 
-- [业务服务接入指南](../business-client-integration-zh-CN.md)
-- [REST API：认证与 JSON Record](../rest-api-zh-CN.md)
-- [业务服务接入测试](../testing-guide-zh-CN.md#业务服务接入就绪验证)
+- [业务服务接入指南](../../business-client-integration-zh-CN.md)
+- [REST API：认证与 JSON Record](../../rest-api-zh-CN.md)
+- [业务服务接入测试](../../testing-guide-zh-CN.md#业务服务接入就绪验证)
 - `scripts/business-client-contract-e2e.sh`
 - `scripts/verify-business-client-readiness.sh`
 
@@ -428,7 +428,7 @@ cleanup 不使用 root、不永久删除、不生成第二个 external ID，也�
 
 ### Slice D：进度、归档和 Git 交付
 
-- 使用 `docs/drafts/EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md` 持续记录。
+- 使用 `docs/drafts/archive/2026-08-26_EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md` 持续记录。
 - 功能完成后把稳定事实提升到双语长青文档。
 - 用 `git mv` 将 plan/progress 归档为带 `2026-08-26_` 前缀的历史文档。
 - 更新 active draft README 为无活动规划。

@@ -120,6 +120,52 @@ JSON Record 分开保存：
 按稳定名称/目标 binding 对账。若 principal 已存在但 raw credential 未安全保存，轮换其当前
 credential，而不是再创建一个无主 principal。
 
+### 4.1 已部署实例 Binding 预检
+
+对于已经部署的实例，调用方可以使用
+`scripts/business-client-binding-preflight.sh` 作为 binding 门禁。它不需要 root，也不会
+创建 Collection 或 principal。
+
+默认模式是只读。它会检查 readiness、OpenAPI `1.0.0`、所需 P0 operation、`/auth/me`、
+restricted allow-list 的精确相等关系，以及每个期望 Collection 当前是否 active：
+
+```bash
+RAG_BINDING_BASE_URL=https://rag.example \
+RAG_BINDING_CREDENTIAL_FILE=/run/secrets/rag-credential \
+RAG_BINDING_EXPECTED_COLLECTIONS_FILE=/etc/rag/collections.json \
+RAG_BINDING_TARGET_LABEL=production-a \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+credential 文件必须是 owner-only 可读的普通文件，并且只包含一个当前的
+`rag_sk_<64 位小写十六进制字符>` credential。Collection 文件是包含 1-100 个唯一可见
+ASCII key 的 JSON 数组。runner 会拒绝 query credential、URL user-info、redirect、非
+loopback HTTP 和关闭 TLS 校验的选项。默认使用 `X-API-Key`；设置
+`RAG_BINDING_AUTH_SCHEME=BEARER` 可改用等价的 Bearer Header。
+
+只有在预先创建了、且不承载业务数据的专用 canary Collection 时，才可以显式启用有界
+mutation smoke。它要求同时设置 mode 和确认标志，并且该 canary key 必须是该 binding
+唯一的期望 key：
+
+```bash
+RAG_BINDING_PREFLIGHT_MODE=CANARY_MUTATION \
+RAG_BINDING_CANARY_CONFIRM=YES \
+RAG_BINDING_CANARY_COLLECTION_KEY=preflight-canary \
+RAG_BINDING_AUTH_SCHEME=BEARER \
+  ./scripts/business-client-binding-preflight.sh
+```
+
+mutation 流程使用本次运行唯一的外部身份，验证 ASYNC 持久化、精确重放、就绪、
+`payloadContains` 检索、CAS `409`、tombstone、恢复和最终 tombstone；它不会物理删除
+记录。如果 provider 失败，或初次 upsert 到达服务端后进程中断，退出清理会对同一身份
+对账，并有界地尝试一次 tombstone；不会生成第二个身份。
+
+每次运行会在 `RAG_BINDING_PREFLIGHT_EVIDENCE_DIR` 指定的目录（未指定时使用默认
+verification 目录）生成 `preflight-report.json`、`summary.md` 和 `steps.tsv`。
+JSON 报告只包含低敏标签、计数、版本、状态和失败类别，不包含 credential、URL、
+Collection key、external ID、payload 或响应正文。预检失败应视为 binding 失败，不能
+继续投递，也不能为了让部署通过而削弱检查。
+
 ## 5. JSON Record mutation 合同
 
 推荐用 `embeddingPolicy=ASYNC` 调用
@@ -211,8 +257,8 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 
 完整门禁串行执行 focused 后端测试、三个隔离 PostgreSQL 集成矩阵、
 `mvn clean compile test-compile`、WebUI typecheck/Vitest/生产构建、核心 Mock
-Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、109 项 HTTP 合同和真实
-API Key Playwright。
+Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、包含已部署 binding
+preflight 的 129 项 HTTP 合同和真实 API Key Playwright。
 
 脚本默认使用隔离端口 `18084`、`18085`、`15184`、`15185` 和一次性
 `pgvector/pgvector:pg16`。证据写入

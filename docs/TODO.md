@@ -2,8 +2,20 @@
 
 > 📖 [English](TODO.md) · [中文](TODO-zh-CN.md)
 >
-> Last reviewed: 2026-08-25. This file records follow-up work outside the
+> Last reviewed: 2026-08-26. This file records follow-up work outside the
 > current code and public API; it does not describe shipped capabilities.
+
+## Delivered Integration Gates
+
+- [x] `business-client-binding-preflight.sh` provides a non-root, read-only
+  default check for a deployed instance's readiness, OpenAPI, principal policy,
+  exact Collection allow-list, and active Collections.
+- [x] The opt-in canary mode validates ASYNC persistence, exact replay,
+  readiness, payload search, CAS conflict, tombstone, restore, and final
+  tombstone with bounded failure cleanup.
+- [x] The readiness contract runs the preflight as a black-box client and
+  checks secret-safe reports for read-only success, allow-list mismatch,
+  Bearer canary success, and provider failure cleanup.
 
 ## Managed API Principal Follow-Ups
 
