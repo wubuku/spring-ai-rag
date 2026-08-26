@@ -56,6 +56,7 @@ independent planning subjects.
 | Collection derivation-integrity diagnostics and controlled repair | Shipped in this batch | V45 provides shared physical freshness, bounded Collection diagnostics, and durable preview/apply/status for at most 100 items; side-effecting repair defaults off |
 | Controlled historical-version restore | Shipped in this batch | Local `FULL` snapshots can be restored as a new revision when the feature flag is enabled; external documents remain source-owned |
 | Decouple local chunks/full text from remote vectors | Shipped in this batch | V43 stores profile-neutral local chunks/state; provider failures leave current content available as `KEYWORD_ONLY` while stale generations remain excluded |
+| Guarded purge for external-managed documents and Collection retirement | Separate future plan | Collection deletion correctly rejects documents with stable external identities, while public permanent-delete also rejects external-managed documents. Operators can currently retain/restore the Collection or relocate records when enabled, but there is no audited, explicitly confirmed, bounded public purge |
 
 ### Current Boundaries
 

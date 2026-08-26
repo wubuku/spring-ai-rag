@@ -37,6 +37,8 @@ import com.springairag.core.repository.RagDocumentRepository;
 import com.springairag.core.repository.RagEmbeddingRepository;
 import com.springairag.core.security.ApiKeyCollectionAccess;
 import com.springairag.core.util.DigestUtils;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -51,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.TreeMap;
+import java.util.function.Supplier;
 
 /**
  * 文档业务 mutation 的唯一协调入口。
@@ -60,6 +63,8 @@ import java.util.TreeMap;
  */
 @Service
 public class DocumentMutationService {
+
+    private static final int MAX_EXTERNAL_TRANSACTION_ATTEMPTS = 3;
 
     private final RagDocumentRepository documentRepository;
     private final RagEmbeddingRepository embeddingRepository;
@@ -639,7 +644,7 @@ public class DocumentMutationService {
                 request.getSourceRevision(), "sourceRevision", 255);
         EmbeddingPolicy policy = EmbeddingPolicyResolver.resolve(
                 request.getEmbeddingPolicy(), request.isEmbed());
-        ExternalPrepared prepared = requireResult(transactionTemplate.execute(status ->
+        ExternalPrepared prepared = executeExternalInTransaction(false, () ->
                 upsertExternalInTransaction(
                         collection.getId(),
                         collectionKey,
@@ -656,7 +661,7 @@ public class DocumentMutationService {
                         null,
                         false,
                         policy,
-                        "EXTERNAL_UPSERT")));
+                        "EXTERNAL_UPSERT"));
         ExternalFinished finished = finishExternal(prepared);
         RagDocument document = finished.document();
         return new ExternalDocumentUpsertResponse(
@@ -705,7 +710,7 @@ public class DocumentMutationService {
             throw new IllegalArgumentException(
                     "jsonbPayload must not be JSON null");
         }
-        ExternalPrepared prepared = requireResult(transactionTemplate.execute(status ->
+        ExternalPrepared prepared = executeExternalInTransaction(true, () ->
                 upsertExternalInTransaction(
                         collectionId,
                         collectionKey,
@@ -729,7 +734,7 @@ public class DocumentMutationService {
                         enabledOverride,
                         null,
                         null,
-                        false)));
+                        false));
         ExternalFinished finished = finishExternal(prepared);
         return new JsonMutationResult(
                 finished.document(),
@@ -923,7 +928,7 @@ public class DocumentMutationService {
                 externalId, "externalId", 255);
         String revision = requireText(
                 sourceRevision, "sourceRevision", 255);
-        ExternalPrepared prepared = requireResult(transactionTemplate.execute(status -> {
+        ExternalPrepared prepared = executeExternalInTransaction(jsonRecord, () -> {
             long mutationSequence = allocateSourceSequence(
                     collection.getId(), namespace);
             requireAddressNotRetired(
@@ -972,7 +977,7 @@ public class DocumentMutationService {
                     document.getDocumentRevision(),
                     version.getVersionNumber(), false, false,
                     null, EmbeddingPolicy.SKIP);
-        }));
+        });
         RagDocument document = documentRepository.findById(prepared.documentId())
                 .orElseThrow(() -> new DocumentNotFoundException(
                         prepared.documentId()));
@@ -1352,6 +1357,43 @@ public class DocumentMutationService {
         return jsonRecord
                 ? new StructuredRecordConflictException(message)
                 : new DocumentRevisionConflictException(message);
+    }
+
+    private <T> T executeExternalInTransaction(
+            boolean jsonRecord,
+            Supplier<T> callback) {
+        RuntimeException lastFailure = null;
+        for (int attempt = 1;
+                attempt <= MAX_EXTERNAL_TRANSACTION_ATTEMPTS;
+                attempt++) {
+            try {
+                return requireResult(transactionTemplate.execute(
+                        status -> callback.get()));
+            } catch (RuntimeException failure) {
+                if (!isRetryableConcurrencyFailure(failure)) {
+                    throw failure;
+                }
+                lastFailure = failure;
+            }
+        }
+        String message = "Concurrent external document write did not converge after "
+                + MAX_EXTERNAL_TRANSACTION_ATTEMPTS + " attempts";
+        return throwExternalConflict(jsonRecord, message, lastFailure);
+    }
+
+    private boolean isRetryableConcurrencyFailure(RuntimeException failure) {
+        return failure instanceof DataIntegrityViolationException
+                || failure instanceof ConcurrencyFailureException;
+    }
+
+    private <T> T throwExternalConflict(
+            boolean jsonRecord,
+            String message,
+            RuntimeException cause) {
+        if (jsonRecord) {
+            throw new StructuredRecordConflictException(message, cause);
+        }
+        throw new DocumentRevisionConflictException(message, cause);
     }
 
     private void requireKind(

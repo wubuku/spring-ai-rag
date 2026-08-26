@@ -1631,8 +1631,10 @@ Paginated collection query.
 
 删除为软删除，并解除普通旧文档关联，但不会删除文档或 embedding。若 Collection 中
 存在非空 `externalId` 的外部托管文档，则返回 `409`，因为解绑会破坏
-`collectionKey + sourceNamespace + externalId` 稳定身份。删除 Collection 前必须先显式硬删除或迁移这些
-外部托管文档。key 仍保持占用；恢复沿用原 key，且不会自动恢复普通旧文档关联。
+`collectionKey + sourceNamespace + externalId` 稳定身份。当前公开 API 不提供外部托管文档
+的永久 purge；可在启用 relocation 功能时先把它们迁移到其他 Collection，否则应保留或恢复
+原 Collection。受保护的 purge/退役流程仍是后续项。key 仍保持占用；恢复沿用原 key，且
+不会自动恢复普通旧文档关联。
 
 ---
 

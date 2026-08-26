@@ -25,6 +25,7 @@ POSTGRES_CONTAINER=""
 POSTGRES_PORT=""
 EMBEDDING_PID=""
 BACKEND_PID=""
+BACKEND_START_COUNT=0
 MOCK_FRONTEND_PID=""
 REAL_FRONTEND_PID=""
 RUNTIME_CLASSPATH=""
@@ -389,7 +390,7 @@ focused_backend_tests() {
 ApiCapabilityFilterTest,OpenApiContractTest,ApiKeyAuthFilterTest,\
 ApiKeyCollectionAccessTest,\
 RagJsonRecordControllerWebTest,JsonRecordServiceTest,CollectionKeyValidatorTest,\
-SourceNamespaceValidatorTest,EmbeddingModelConfigTest \
+SourceNamespaceValidatorTest,EmbeddingModelConfigTest,DocumentMutationServiceTest \
     -Dsurefire.failIfNoSpecifiedTests=false test
 }
 
@@ -589,7 +590,11 @@ start_embedding_stub() {
 }
 
 start_backend() {
+  BACKEND_START_COUNT=$((BACKEND_START_COUNT + 1))
   local log_path="${LOG_DIR}/backend.log"
+  if (( BACKEND_START_COUNT > 1 )); then
+    log_path="${LOG_DIR}/backend-restart-${BACKEND_START_COUNT}.log"
+  fi
   (
     export SPRING_PROFILES_ACTIVE=postgresql
     export SERVER_PORT="$BACKEND_PORT"
@@ -651,6 +656,7 @@ http_contract() {
   BUSINESS_CLIENT_EVIDENCE_DIR="${LOG_DIR}/http-contract" \
   BUSINESS_CLIENT_EMBEDDING_COUNTER_FILE="${PRIVATE_DIR}/embedding-counter.json" \
   BUSINESS_CLIENT_EMBEDDING_FAIL_MARKER="$EMBEDDING_FAIL_MARKER" \
+  BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR="${BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR:-}" \
   BUSINESS_CLIENT_RUN_ID="$RUN_ID" \
     bash scripts/business-client-contract-e2e.sh || return 1
   HTTP_CONTRACT_CHECKS="$(sed -n 's/^checks=//p' \
@@ -659,6 +665,219 @@ http_contract() {
     echo "HTTP contract summary did not provide a positive check count" >&2
     return 1
   }
+}
+
+write_private_auth_config() {
+  local output="$1" credential_file="$2"
+  {
+    printf 'silent\n'
+    printf 'show-error\n'
+    printf 'connect-timeout = 5\n'
+    printf 'max-time = 30\n'
+    printf 'header = "Accept: application/json"\n'
+    printf 'header = "X-API-Key: '
+    tr -d '\r\n' < "$credential_file"
+    printf '"\n'
+  } > "$output"
+  chmod 600 "$output"
+}
+
+restart_recovery_acceptance() {
+  local api="http://127.0.0.1:${BACKEND_PORT}/api/v1/rag"
+  local root_file="${PRIVATE_DIR}/root.key"
+  local root_config="${PRIVATE_DIR}/restart-root.curl"
+  local business_file="${PRIVATE_DIR}/restart-business.key"
+  local business_config="${PRIVATE_DIR}/restart-business.curl"
+  local token collection_key namespace external_id
+  token="$(printf '%s' "$RUN_ID" | tr -cd 'A-Za-z0-9' | tail -c 20)"
+  collection_key="bc.${token}.restart"
+  namespace="business-client.restart.v1"
+  external_id="restart-record-${token}"
+  write_private_auth_config "$root_config" "$root_file"
+
+  local collection_request="${PRIVATE_DIR}/restart-collection.request.json"
+  local collection_response="${PRIVATE_DIR}/restart-collection.json"
+  jq -n --arg key "$collection_key" \
+    '{
+      collectionKey:$key,
+      name:"Business client restart recovery",
+      description:"Disposable restart recovery acceptance",
+      dimensions:1024
+    }' > "$collection_request"
+  local code
+  code="$(curl --config "$root_config" --request POST \
+    --header 'Content-Type: application/json' \
+    --data-binary "@${collection_request}" \
+    --output "$collection_response" --write-out '%{http_code}' \
+    "${api}/collections")"
+  [[ "$code" == "200" ]] || {
+    echo "Restart recovery Collection creation returned HTTP ${code}" >&2
+    return 1
+  }
+
+  local principal_request="${PRIVATE_DIR}/restart-principal.request.json"
+  local principal_response="${PRIVATE_DIR}/restart-principal.json"
+  jq -n --arg key "$collection_key" \
+    '{
+      name:"Business client restart dispatcher",
+      expiresAt:"2099-12-31T23:59:00",
+      allowedCollectionKeys:[$key],
+      requestsPerMinute:1000,
+      capabilities:["RAG_READ","RAG_WRITE"]
+    }' > "$principal_request"
+  code="$(curl --config "$root_config" --request POST \
+    --header 'Content-Type: application/json' \
+    --data-binary "@${principal_request}" \
+    --output "$principal_response" --write-out '%{http_code}' \
+    "${api}/api-keys")"
+  [[ "$code" == "201" ]] || {
+    echo "Restart recovery principal creation returned HTTP ${code}" >&2
+    return 1
+  }
+  jq -er '.rawKey' "$principal_response" > "$business_file"
+  chmod 600 "$business_file"
+  write_private_auth_config "$business_config" "$business_file"
+
+  local upsert_request="${PRIVATE_DIR}/restart-upsert.request.json"
+  local first_response="${PRIVATE_DIR}/restart-upsert-unknown-response.json"
+  jq -n \
+    --arg key "$collection_key" \
+    --arg namespace "$namespace" \
+    --arg externalId "$external_id" \
+    --arg token "$token" \
+    '{
+      collectionKey:$key,
+      sourceNamespace:$namespace,
+      externalId:$externalId,
+      sourceRevision:"restart-rev-1",
+      title:"Restart recovery record",
+      retrievalText:("durable restart recovery token " + $token),
+      jsonbPayload:{
+        schemaVersion:"business-client.restart.v1",
+        status:"ACTIVE",
+        recoveryToken:$token
+      },
+      embeddingPolicy:"ASYNC"
+    }' > "$upsert_request"
+  code="$(curl --config "$business_config" --request POST \
+    --header 'Content-Type: application/json' \
+    --data-binary "@${upsert_request}" \
+    --output "$first_response" --write-out '%{http_code}' \
+    "${api}/json-records/upsert")"
+  [[ "$code" == "200" ]] || {
+    echo "Restart recovery initial mutation returned HTTP ${code}" >&2
+    return 1
+  }
+
+  stop_pid "$BACKEND_PID"
+  BACKEND_PID=""
+  local attempt backend_unreachable=false
+  for attempt in $(seq 1 30); do
+    if ! curl -fsS --connect-timeout 1 --max-time 1 \
+        "http://127.0.0.1:${BACKEND_PORT}/actuator/health/readiness" \
+        >/dev/null 2>&1; then
+      backend_unreachable=true
+      break
+    fi
+    sleep 0.2
+  done
+  [[ "$backend_unreachable" == "true" ]] || {
+    echo "Backend did not become unreachable during restart acceptance" >&2
+    return 1
+  }
+  echo "PASS: business client observes a bounded service outage"
+
+  start_backend || return 1
+
+  local lookup_response="${PRIVATE_DIR}/restart-lookup.json"
+  code="$(curl --config "$business_config" --get \
+    --data-urlencode "collectionKey=${collection_key}" \
+    --data-urlencode "sourceNamespace=${namespace}" \
+    --data-urlencode "externalId=${external_id}" \
+    --output "$lookup_response" --write-out '%{http_code}' \
+    "${api}/json-records/by-external-id")"
+  [[ "$code" == "200" ]] || {
+    echo "Post-restart lookup returned HTTP ${code}" >&2
+    return 1
+  }
+  jq -e --arg token "$token" \
+    '.sourceRevision == "restart-rev-1"
+      and .enabled == true
+      and .jsonbPayload.recoveryToken == $token' \
+    "$lookup_response" >/dev/null || return 1
+  local document_id
+  document_id="$(jq -er '.documentId' "$lookup_response")" || return 1
+  echo "PASS: database principal and external identity survive service restart"
+
+  local replay_response="${PRIVATE_DIR}/restart-replay.json"
+  code="$(curl --config "$business_config" --request POST \
+    --header 'Content-Type: application/json' \
+    --data-binary "@${upsert_request}" \
+    --output "$replay_response" --write-out '%{http_code}' \
+    "${api}/json-records/upsert")"
+  [[ "$code" == "200" ]] || {
+    echo "Post-restart exact replay returned HTTP ${code}" >&2
+    return 1
+  }
+  jq -e --argjson documentId "$document_id" \
+    '.documentId == $documentId
+      and (.action == "REPLAYED" or .action == "UNCHANGED")' \
+    "$replay_response" >/dev/null || return 1
+  echo "PASS: unknown mutation outcome reconciles through exact replay"
+
+  local lifecycle_ready=false
+  for attempt in $(seq 1 120); do
+    code="$(curl --config "$business_config" --get \
+      --data-urlencode "collectionKey=${collection_key}" \
+      --data-urlencode "sourceNamespace=${namespace}" \
+      --data-urlencode "externalId=${external_id}" \
+      --output "$lookup_response" --write-out '%{http_code}' \
+      "${api}/json-records/by-external-id")"
+    if [[ "$code" == "200" ]] \
+        && jq -e '.lifecycle.embeddingStatus == "READY"
+          and .lifecycle.searchability == "READY"' \
+          "$lookup_response" >/dev/null; then
+      lifecycle_ready=true
+      break
+    fi
+    sleep 0.25
+  done
+  [[ "$lifecycle_ready" == "true" ]] || {
+    echo "Durable embedding job did not become ready after restart" >&2
+    return 1
+  }
+  echo "PASS: durable asynchronous embedding converges after restart"
+
+  local search_request="${PRIVATE_DIR}/restart-search.request.json"
+  local search_response="${PRIVATE_DIR}/restart-search.json"
+  jq -n --arg key "$collection_key" --arg token "$token" \
+    '{
+      query:("durable restart recovery token " + $token),
+      collectionKeys:[$key],
+      payloadContains:{recoveryToken:$token},
+      config:{maxResults:10,minScore:0,useRerank:false}
+    }' > "$search_request"
+  code="$(curl --config "$business_config" --request POST \
+    --header 'Content-Type: application/json' \
+    --data-binary "@${search_request}" \
+    --output "$search_response" --write-out '%{http_code}' \
+    "${api}/json-records/search")"
+  [[ "$code" == "200" ]] || {
+    echo "Post-restart search returned HTTP ${code}" >&2
+    return 1
+  }
+  jq -e --argjson documentId "$document_id" \
+    '.results | length == 1 and .[0].documentId == $documentId' \
+    "$search_response" >/dev/null || return 1
+  echo "PASS: restricted business client retrieves only the recovered record"
+
+  local key_id
+  key_id="$(jq -er '.keyId' "$principal_response")"
+  curl --config "$root_config" --request DELETE --output /dev/null \
+    "${api}/api-keys/${key_id}" >/dev/null || return 1
+  curl --config "$root_config" --request DELETE --get \
+    --data-urlencode "collectionKey=${collection_key}" \
+    --output /dev/null "${api}/collections/by-key" >/dev/null || return 1
 }
 
 runtime_database_facts() {
@@ -694,6 +913,12 @@ runtime_database_facts() {
     "${LOG_DIR}/http-contract/summary.txt" || return 1
   rg -qx \
     'capability_contract=query_read_only_dispatcher_read_write_preflight_rotation' \
+    "${LOG_DIR}/http-contract/summary.txt" || return 1
+  rg -qx \
+    'dual_collection_contract=tenant_and_shared_query_cross_dispatcher_acl_rotation' \
+    "${LOG_DIR}/http-contract/summary.txt" || return 1
+  rg -qx \
+    'client_envelope_contract=compiled_sanitized_cas_tombstone_restore_lifecycle' \
     "${LOG_DIR}/http-contract/summary.txt" || return 1
   [[ "$API_VERSION" == "1.0.0" ]] || return 1
   [[ "$HTTP_CONTRACT_CHECKS" =~ ^[1-9][0-9]*$ ]] || return 1
@@ -735,6 +960,7 @@ real_fullstack_acceptance() {
   start_embedding_stub || return 1
   start_backend || return 1
   http_contract || return 1
+  restart_recovery_acceptance || return 1
   runtime_database_facts || return 1
   real_api_key_playwright
 }

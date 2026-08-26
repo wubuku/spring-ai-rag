@@ -13,8 +13,9 @@
 - 计划实施 worktree：
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`
 - Flyway：V1-V49；本轮无 migration。
-- 当前阶段：实现、双语长青文档、合并后 clean-tree readiness、真实 LLM 双实例验收和
-  实现收敛审查 `3/3` 均已通过；准备最终同步 `origin/main` 并完成 Git 交付。
+- 当前阶段：原能力画像交付已经合入 `main`；后续通用客户生命周期验收、真实
+  Chat/Embedding 验证、并发补强和文档去客户化已完成 dirty-tree 基线验证，正在准备提交、
+  同步最新 `origin/main` 并在 clean candidate 上完整复验。
 
 ## 2. 已完成探索
 
@@ -39,7 +40,8 @@
 - dispatcher principal 推荐
   `NORMAL + RESTRICTED + RAG_READ,RAG_WRITE`。
 - release manifest 记录验证过的两个画像，运行时 migration 与仓库动态 latest 相等。
-- 真实 LLM 使用显式只读 principal，provider 总调用预算固定为 5。
+- 受管 principal 回归使用显式只读 principal，并把 5 次调用作为确定性预期值以验证拒绝和
+  replay 不增加调用；它不是完整客户生命周期验收的总调用上限。
 - 本轮不新增 API、schema、V50 或外部业务模型。
 
 ## 4. 规划审查账本
@@ -97,9 +99,9 @@
 | preflight 能力画像与 self-test | 已完成 | 11 个负向场景通过；`bash -n` 与 `git diff --check` 通过 |
 | HTTP query/dispatcher 合同 | 已完成 | 只读 lookup/search、写 `403`、状态不变、读写 dispatcher 与 rotation |
 | V49 readiness/release manifest | 已完成 | 动态 latest migration；记录 `READ_ONLY` / `READ_WRITE` |
-| 真实 LLM 只读 principal 合同 | 已完成 | 显式 `RAG_READ`；写拒绝不计 provider；总预算 5 |
+| 真实 LLM 只读 principal 合同 | 已完成 | 显式 `RAG_READ`；写拒绝不计 provider；确定性合同调用数为 5 |
 | 双语长青文档 | 已完成 | integration/testing/release/TODO 中英文同步 |
-| 完整 Mock/真实 HTTP/真实 LLM 验收 | 已完成 | readiness 16/16；managed principal 13/13；真实 provider 调用精确为 5 |
+| 完整 Mock/真实 HTTP/真实 LLM 验收 | 已完成 | readiness 16/16；managed principal 13/13；确定性合同 5 次真实调用，另有按场景驱动的客户生命周期验收 |
 | merge main、tag、push、清理 worktree | 待开始 | |
 
 ## 6. 下一步
@@ -120,8 +122,8 @@
 - 2026-08-26 12:16 CST：完成 binding preflight capability profile 实现和
   11 个负向 self-test；非法画像不会进入报告，`READ_ONLY` 不能误用于 mutation canary。
 - 2026-08-26 12:17 CST：开始收敛 HTTP 合同、readiness release manifest 与真实 LLM
-  只读 principal 验收；固定先完成 Mock/桩门槛，再读取主工作区 `.env` 发起最多 5 次
-  provider 调用。
+  只读 principal 验收；固定先完成 Mock/桩门槛，再读取主工作区 `.env` 执行预期为 5 次
+  provider 调用的确定性回归合同。
 - 2026-08-26 12:22 CST：脚本语法、11 个 preflight self-test、`git diff --check`、
   项目文档门禁 10/10 和聚焦 Maven 125 tests 全部通过，无 failure/error/skipped。
 - 2026-08-26 12:26 CST：dirty-tree 完整业务 readiness
@@ -154,19 +156,58 @@
   WebUI、Mock Playwright 和真实服务门槛先通过，随后 5 次真实 provider 调用全部成功，
   只读写拒绝与幂等 replay 的 provider 增量均为 0。
 
+## 9. 后续客户生命周期验收
+
+- 2026-08-26：接续真实客户生命周期验收时，发现重启恢复断言错误地把
+  `lifecycle.embeddingStatus` 断言为 `FRESH`。当前项目契约实际为
+  `embeddingStatus=READY` 且 `searchability=READY`；这是验收脚本错误，不是已证实的
+  后端行为失败。
+- 2026-08-26：已将重启恢复断言修正为上述双 READY 条件，并把客户合同 fixture 中的
+  外部项目专用标识改为通用外部客户端标识。
+- 2026-08-26：修正后的真实服务 readiness
+  `20260826-general-client-real-recovery-1` 通过：
+  - 真实 Spring Boot、一次性 PostgreSQL 和真实 WebUI Playwright 全部通过；
+  - HTTP 合同 `251` 项通过，覆盖双 Collection、只读 query、相互隔离的 dispatcher、
+    capability/ACL、凭据轮换、客户端 envelope 编译、投影清洗、CAS、tombstone、恢复和
+    scope 分路查询；
+  - 后端真实重启后，principal、外部身份、精确 replay、持久化异步 embedding 和受限检索
+    均恢复。
+- 2026-08-26：真实 provider smoke
+  `20260826-general-client-lifecycle-1` 通过 `10/10`：
+  - OpenAI-compatible Chat 服务和 SiliconFlow `BAAI/bge-m3` 1024 维 embedding 探测成功；
+  - 真实文档 embedding、隔离 Search、JSON Chat 和 SSE Chat 全部成功。
+- 2026-08-26：同一证据批次继续完成无总调用次数上限、按场景驱动的真实客户生命周期：
+  - 两个 Collection、读写 dispatcher、只读 query principal；
+  - 创建、两路真实 embedding、双 Collection vector/hybrid Search；
+  - 初始/更新/删除后/恢复后/轮换后真实 Chat，及轮换后的 SSE；
+  - stale CAS `409`、tombstone、恢复、query/dispatcher credential 轮换；
+  - 后端重启后的 lookup、exact replay、双 Collection Search、真实 Chat、再次 CAS 更新和
+    再次真实 embedding 收敛。
+- 2026-08-26：受管 API principal 最终真实 LLM 门槛
+  `20260826-general-client-real-llm-final-1` 通过 `13/13`。完整 Maven 测试为 Core
+  `3029` 项通过、`7` 项按设计跳过，Starter `44` 项通过；WebUI `218` 项 Vitest、
+  TypeScript、生产构建、alignment、核心 Mock Playwright、双实例真实服务和真实 WebUI
+  均通过。原生/兼容 JSON/SSE、跨实例 replay、只读拒绝和 principal continuity 全部成功。
+- 清理一次性数据时确认一个独立的公开 API 缺口：Collection 删除拒绝仍含稳定外部身份的
+  文档，而 permanent-delete 也拒绝外部托管文档。测试只对本次创建的 document ID 使用了
+  受控 SQL 清理；正式能力边界已同步到 REST API，并在双语 TODO 记录“受保护 purge 与
+  Collection 退役”后续项。
+- 下一步：提交当前实现和账本，合并最新 `origin/main` 后按 clean candidate 重新执行完整
+  readiness 与真实 Chat/Embedding 验收；只采用合并后结果作为最终交付结论。
+
 ## 8. 实现收敛审查
 
 计数器：`3`
 
 - 轮次 1：preflight、安全边界与 release manifest 范围未发现实质问题，连续无修改
   计数 `1/3`。
-- 轮次 2：HTTP query/dispatcher 合同与真实 LLM 调用预算未发现实质问题，连续无修改
+- 轮次 2：HTTP query/dispatcher 合同与确定性真实 LLM 调用计数未发现实质问题，连续无修改
   计数 `2/3`。
 - 轮次 3：发现中英文发布清单仍记录旧的 129 项 HTTP 合同，与 clean-tree manifest
   的 160 项不一致；已同步修复两种语言，计数重置为 `0`。
 - 重审轮次 1（2026-08-26 12:47 CST）：限定检查 preflight、安全边界与 release
   manifest；未发现实质问题，连续无修改计数 `1/3`。
 - 重审轮次 2（2026-08-26 12:48 CST）：限定检查 HTTP query/dispatcher 合同、拒绝后
-  数据不变与真实 LLM 五次调用预算；未发现实质问题，连续无修改计数 `2/3`。
+  数据不变与真实 LLM 五次确定性调用计数；未发现实质问题，连续无修改计数 `2/3`。
 - 重审轮次 3（2026-08-26 12:49 CST）：限定检查双语文档、release manifest、证据引用、
   shell 语法、Git diff 和新增行密钥；未发现实质问题，连续无修改计数达到 `3/3`。

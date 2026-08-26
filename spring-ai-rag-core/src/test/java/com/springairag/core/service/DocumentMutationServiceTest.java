@@ -22,6 +22,7 @@ import com.springairag.core.repository.RagEmbeddingRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionStatus;
 
@@ -37,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -281,6 +283,52 @@ class DocumentMutationServiceTest {
     }
 
     @Test
+    void externalJsonUpsertRetriesConcurrentEmbeddingOptimisticConflict() {
+        RagDocument firstAttempt = externalJsonDocument(2L);
+        RagDocument retryAttempt = externalJsonDocument(3L);
+        when(documentRepository
+                .findByCollectionIdAndSourceNamespaceAndExternalId(
+                        10L, "default", "product-1"))
+                .thenReturn(Optional.of(firstAttempt), Optional.of(retryAttempt));
+        when(jdbcTemplate.queryForObject(
+                org.mockito.ArgumentMatchers.contains(
+                        "RETURNING mutation_sequence"),
+                org.mockito.ArgumentMatchers.eq(Long.class),
+                org.mockito.ArgumentMatchers.eq(10L),
+                org.mockito.ArgumentMatchers.eq("default")))
+                .thenReturn(2L, 3L);
+        when(documentRepository.saveAndFlush(any(RagDocument.class)))
+                .thenThrow(new ObjectOptimisticLockingFailureException(
+                        RagDocument.class, 41L))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+        when(documentRepository.findById(41L))
+                .thenReturn(Optional.of(retryAttempt));
+
+        JsonRecordUpsertRequest request = new JsonRecordUpsertRequest();
+        request.setExternalId("product-1");
+        request.setSourceNamespace("default");
+        request.setSourceRevision("rev-2");
+        request.setExpectedSourceRevision("rev-1");
+        request.setTitle("Updated title");
+        request.setRetrievalText("Updated searchable body");
+        request.setMetadata(Map.of());
+        request.setJsonbPayload(new ObjectMapper().createObjectNode()
+                .put("sku", "product-1")
+                .put("status", "updated"));
+        request.setEmbeddingPolicy(EmbeddingPolicy.SKIP);
+
+        var result = service.upsertJsonRecord(
+                request, 10L, "catalog", null, null);
+
+        assertEquals("UPDATED", result.action());
+        assertEquals("rev-2", result.document().getSourceRevision());
+        assertEquals(5L, result.document().getDocumentRevision());
+        assertEquals("Updated searchable body", result.document().getContent());
+        verify(documentRepository, times(2))
+                .saveAndFlush(any(RagDocument.class));
+    }
+
+    @Test
     void syncRunUpsertFencesCollectionLifecycleWithVersionCas()
             throws Exception {
         CollectionIdentityResolver.ActiveCollectionToken token =
@@ -341,6 +389,21 @@ class DocumentMutationServiceTest {
         value.setMetadata(Map.of("locale", "en-US"));
         value.setEnabled(true);
         value.setProcessingStatus("COMPLETED");
+        return value;
+    }
+
+    private static RagDocument externalJsonDocument(long version) {
+        RagDocument value = localDocument();
+        value.setVersion(version);
+        value.setCollectionId(10L);
+        value.setExternalId("product-1");
+        value.setSourceNamespace("default");
+        value.setSourceRevision("rev-1");
+        value.setDocumentType(RagDocument.JSON_RECORD);
+        value.setMetadata(Map.of());
+        value.setJsonbPayload(new ObjectMapper().createObjectNode()
+                .put("sku", "product-1")
+                .put("status", "current"));
         return value;
     }
 

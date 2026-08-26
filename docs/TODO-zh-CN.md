@@ -48,6 +48,7 @@ limit/billing、多 embedding profile 路由与 `EACH_COLLECTION` 继续独立�
 | Collection 派生索引完整性诊断与受控修复 | 本批已交付 | V45 提供共享物理 freshness、集合级有界诊断和最多 100 项的 durable preview/apply/status；有副作用的 repair 默认关闭 |
 | 历史版本受控恢复 | 本批已交付 | 开启 feature flag 后，本地 `FULL` 快照可恢复为新 revision；外部文档仍由来源系统负责 |
 | 本地 chunk/full-text 与远程向量解耦 | 本批已交付 | V43 保存与 Profile 无关的本地 chunk/state；provider 故障时当前正文仍以 `KEYWORD_ONLY` 可用，旧 generation 继续被排除 |
+| 外部托管文档受保护 purge 与 Collection 退役 | 后续独立规划 | Collection 删除会正确拒绝仍含稳定外部身份的文档，但公开 permanent-delete 也拒绝外部托管文档；目前只能保留/恢复 Collection，或在 relocation 开启时先迁移，缺少带显式确认、审计和有界清理的公开 purge |
 
 ### 当前边界
 

@@ -195,6 +195,10 @@ JSON 报告分别记录调用方期望的 `expectedCapabilityProfile` 和成功�
 - mutation 成功先保证主记录和持久化 job 已提交，不保证 embedding 已 fresh；
 - provider 最终失败时，主记录、revision、payload 和 enabled 状态仍保留；lifecycle 会报告
   `embeddingStatus=FAILED`，不会通过第二次业务 mutation 删除或覆盖记录；
+- 异步 embedding 完成时可能与紧随其后的外部 upsert 或 tombstone 同时更新文档版本。服务对
+  这类数据库并发失败使用全新事务做最多三次内部重试；业务 revision CAS 冲突不参与重试。
+  调用方收到 `409` 时，仍应将其解释为真实 revision 冲突，或内部并发在三次尝试后仍未收敛，
+  并按下文 GET 对账流程处理；
 - 来源删除使用 `DELETE /json-records/by-external-id` 创建 tombstone；
 - 之后使用新的 revision upsert 会恢复同一个 `documentId`。
 
@@ -279,7 +283,18 @@ BUSINESS_CLIENT_VERIFY_PHASE=real \
 Playwright、文档/禁锁/密钥/diff 门禁，以及真实 Spring Boot、包含已部署 binding
 preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证只读 query principal
 可以 lookup/search、不能 upsert/delete，且拒绝后 revision 和状态不变；读写 dispatcher
-继续负责 mutation，credential 轮换保持原能力。
+继续负责 mutation，credential 轮换保持原能力。合同还运行代表性的租户/共享拓扑：同一个
+query principal 绑定两个 Collection，两个 dispatcher 不能交叉写入，另一租户仍不可访问；
+两路 scope 检索可确定性归并，清洗后的投影可以重建为浏览器安全 DTO，并且 query
+credential 轮换后保留两个 Collection binding，数据面不会回退到 root。客户端拥有的
+mutation envelope 会在测试客户端中编译为稳定哈希身份和 allow-list 投影；PROJECT 的
+更新、删除、恢复、轮换后删除，以及 PLATFORM_SHARED 的发布/撤销都通过真实 HTTP 执行，
+并证明 `mediaRef`、URL 与内部 event/candidate/fingerprint 材料不会进入 RAG。
+
+若要以某个外部客户端的真实 envelope 做验收，设置
+`BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR=<fixture-dir>`；文件名和生命周期要求见
+[测试指南](testing-guide-zh-CN.md#业务服务接入就绪验收门禁)。该输入只是测试客户端夹具，
+不意味着 RAG 服务依赖外部项目或负责外部 outbox 的编译逻辑。
 
 脚本默认使用隔离端口 `18084`、`18085`、`15184`、`15185` 和一次性
 `pgvector/pgvector:pg16`。证据写入

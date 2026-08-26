@@ -1883,10 +1883,12 @@ supported.
 Delete is a soft delete and unlinks legacy documents without deleting documents
 or embeddings. A Collection containing any document with a nonblank
 `externalId` returns `409`, because unlinking would destroy the
-`collectionKey + sourceNamespace + externalId` identity. Explicitly hard-delete or migrate those
-external-managed documents before deleting the Collection. The key remains
-reserved. Restore preserves the same key and does not re-link legacy documents
-automatically.
+`collectionKey + sourceNamespace + externalId` identity. The public API does
+not currently expose permanent purge for external-managed documents. Move them
+to another Collection when relocation is enabled; otherwise retain or restore
+the original Collection. A guarded purge/retirement workflow remains a
+follow-up. The key remains reserved. Restore preserves the same key and does
+not re-link legacy documents automatically.
 
 ---
 

@@ -243,6 +243,16 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
 - credential 一次性展示、轮换、旧 key 失效和吊销；
 - 只读 query principal 可 lookup/search，但 upsert/delete 返回 `403`，且拒绝后 Record
   revision/state 不变；读写 dispatcher 和 rotation 保持完整能力；
+- 代表性的租户/共享拓扑把一个只读 query principal 精确绑定到两个 Collection，租户与共享
+  dispatcher 相互隔离，第三租户被拒绝；两种 payload scope 分路检索后确定性归并，投影剔除
+  media/credential 材料并重建浏览器安全 DTO，query credential 轮换后仍保留两个 binding；
+- 客户端 mutation envelope 会先编译为稳定哈希 external ID、opaque revision、检索文本和
+  allow-list JSON payload，再执行 PROJECT 的 CAS 更新、tombstone、恢复、轮换后再次 tombstone，
+  以及 PLATFORM_SHARED 的发布和撤销；原始 `mediaRef`、URL、内部 candidate/event/fingerprint
+  字段不得进入 RAG 投影；
+- 确定性回归测试和真实 envelope 快速更新/删除路径共同覆盖异步 embedding 完成与外部
+  mutation 的乐观锁竞态，确认服务以全新事务有界重试，并且不把内部派生竞争误报成普通业务
+  CAS 冲突；
 - Flyway V49、明文 credential 为零、成功 embedding job 的 PostgreSQL 只读事实；
 - WebUI typecheck、Vitest、生产构建、核心 Mock Playwright 与真实 API Key Playwright。
 
@@ -258,6 +268,13 @@ external ID 或 payload。
 BUSINESS_CLIENT_REQUIRE_CLEAN_GIT=true \
 ./scripts/verify-business-client-readiness.sh
 ```
+
+若客户端仓库已经能导出真实 mutation envelope，可通过
+`BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR` 指定目录。目录必须包含
+`project-lifecycle-v1.json` 至 `project-lifecycle-v5.json`，以及
+`platform-lifecycle-v1.json`、`platform-lifecycle-v2.json`。脚本只把编译后的安全投影发送给
+RAG；不会把原始 envelope、私有媒体引用或该目录路径写入 release manifest。未指定时使用脚本
+内置的同协议夹具，保证本仓门禁自包含。
 
 每次运行都会在证据目录生成 `release-manifest.json`，记录 PASS/FAIL、验证阶段、完整 Git
 SHA、初始 tree state、项目/OpenAPI 版本、API base path、最新 Flyway migration、passed
@@ -572,6 +589,10 @@ JSON/SSE 与 OpenAI-compatible JSON/SSE。真实 Chat principal 显式只有 `RA
 并要求真实 provider 调用总数严格等于 5。证据写入
 `.verification/managed-api-principals/<run-id>/summary.md`，敏感响应只保存在 gitignored、
 权限受限的 `private/` 子目录。
+
+这里的 5 次是该受管 principal 回归合同的确定性预期值，用于证明拒绝与 replay 不会产生
+额外调用；它不是更广泛客户生命周期验收的调用上限。完整接入验收应按实际场景继续覆盖创建、
+更新、删除、恢复、凭据轮换和重启后的真实 Chat/Embedding 路径。
 
 ### Chat 对话能力重构验收门禁
 

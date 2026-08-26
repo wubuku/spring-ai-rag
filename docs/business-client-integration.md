@@ -239,6 +239,13 @@ Use `embeddingPolicy=ASYNC` by default with
 - a terminal provider failure preserves the main record, revision, payload,
   and enabled state; lifecycle reports `embeddingStatus=FAILED` without a
   second business mutation deleting or overwriting the record;
+- asynchronous embedding completion can race with a following external upsert
+  or tombstone while both update the document version. The service retries
+  database-concurrency failures in a fresh transaction, up to three attempts;
+  business revision-CAS conflicts are never retried. A caller-visible `409`
+  therefore still means a real revision conflict or failure to converge within
+  that bounded internal budget, and the caller should reconcile with GET as
+  described below;
 - source deletion uses `DELETE /json-records/by-external-id` and creates a
   tombstone;
 - a later upsert with a new revision restores the same `documentId`.
@@ -335,7 +342,23 @@ real Spring Boot service, the HTTP contract including deployed binding
 preflight, and real API-key Playwright. The HTTP contract proves that a
 read-only query principal can lookup/search but cannot upsert/delete and that
 the rejected writes leave revision/state unchanged; a read/write dispatcher
-continues to own mutations, and rotation preserves capabilities.
+continues to own mutations, and rotation preserves capabilities. It also runs
+a representative tenant/shared topology: one query principal is bound to both
+Collections, separate dispatchers cannot cross-write, another tenant remains
+inaccessible, scoped searches merge deterministically, sanitized projections
+can be rebuilt into a browser-safe DTO, and query rotation preserves both
+Collection bindings without any data-plane root fallback. Client-owned
+mutation envelopes are compiled by the test client into stable hashed
+identities and allow-listed projections; PROJECT update/delete/restore and
+post-rotation delete plus PLATFORM_SHARED publish/revoke all use real HTTP and
+prove that `mediaRef`, URLs, and internal event/candidate/fingerprint material
+do not enter RAG.
+
+To accept real envelopes exported by an external client, set
+`BUSINESS_CLIENT_CLIENT_ENVELOPE_DIR=<fixture-dir>`; see the lifecycle and file
+requirements in the [testing guide](testing-guide.md#business-service-readiness-gate).
+This is test-client input, not a dependency from RAG to the external project or
+an assertion that RAG owns compilation of the external outbox.
 
 Defaults use isolated ports `18084`, `18085`, `15184`, and `15185` with a
 disposable `pgvector/pgvector:pg16`. Evidence is written under
