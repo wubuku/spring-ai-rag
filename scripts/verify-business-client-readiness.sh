@@ -632,6 +632,10 @@ start_backend() {
   wait_for_http \
     "http://127.0.0.1:${BACKEND_PORT}/actuator/health/readiness" \
     "$BACKEND_PID" "$log_path" || return 1
+  if ! kill -0 "$BACKEND_PID" >/dev/null 2>&1; then
+    echo "Spring AI RAG backend exited while another process answered the readiness port" >&2
+    return 1
+  fi
 
   local health_file="${LOG_DIR}/backend-readiness.json"
   curl -fsS "http://127.0.0.1:${BACKEND_PORT}/actuator/health/readiness" \
@@ -641,6 +645,13 @@ start_backend() {
   local api_docs_file="${LOG_DIR}/openapi.json"
   curl -fsS "http://127.0.0.1:${BACKEND_PORT}/v3/api-docs" \
     > "$api_docs_file" || return 1
+  local api_title
+  api_title="$(jq -er '.info.title | select(type == "string" and length > 0)' \
+    "$api_docs_file")" || return 1
+  [[ "$api_title" == "Spring AI RAG Service API" ]] || {
+    echo "Unexpected runtime OpenAPI title: ${api_title}" >&2
+    return 1
+  }
   API_VERSION="$(jq -er '.info.version | select(type == "string" and length > 0)' \
     "$api_docs_file")" || return 1
   [[ "$API_VERSION" == "1.0.0" ]] || {

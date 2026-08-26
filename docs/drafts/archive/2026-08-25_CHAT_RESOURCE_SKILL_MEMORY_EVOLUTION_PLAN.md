@@ -704,7 +704,7 @@ rag:
 下一步如需要直接 SQL 检索，推荐只在具体领域模块中注册如下形状：
 
 ```java
-lookupAssetStatus(assetId, includeHistory)
+lookupInvoiceStatus(invoiceId, includeHistory)
 searchOrders(status, createdAfter, maxResults)
 lookupInventory(sku, warehouse, maxResults)
 ```

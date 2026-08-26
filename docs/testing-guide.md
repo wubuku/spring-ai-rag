@@ -263,7 +263,7 @@ covers:
   to exactly two Collections, keeps tenant and shared dispatchers mutually
   isolated, rejects a third tenant, searches the two payload scopes
   independently, merges results deterministically, strips private
-  transport/credential material from projections, rebuilds a browser-safe DTO,
+  transport/credential material from projections, rebuilds a client-safe DTO,
   and preserves both bindings through query-credential rotation;
 - generic client record-mutation envelopes are compiled into stable hashed
   external identities, opaque revisions, retrieval text, and allow-listed JSON

@@ -142,7 +142,7 @@ record 不存在而先返回 `404`，从而泄漏 Collection 存在性。
 
 ### 3.2 明确非目标
 
-- 不新增外部项目、租户、组织、素材、publication 或其他调用方领域模型。
+- 不新增外部项目、租户、组织或其他调用方领域模型。
 - 不新增调用方专用 endpoint、Webhook、inbox/outbox 或 payload schema。
 - 不实现 operation-scoped `RAG_READ` / `RAG_WRITE` 服务端强制；该项仍是 P1。
 - 不实现 API principal/credential provisioning 幂等键；该项仍是 P1。

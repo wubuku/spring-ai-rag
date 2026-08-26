@@ -1984,11 +1984,11 @@ assert_json_with_args "$SHARED_QUERY_RESPONSE" \
       and .jsonbPayload.recordId == $recordId
       and .jsonbPayload.visibility == "SHARED")'
 
-SAFE_BROWSER_RESPONSE="${CONTRACT_PRIVATE}/browser-safe-records.json"
+SAFE_CLIENT_RESPONSE="${CONTRACT_PRIVATE}/client-safe-records.json"
 python3 - \
   "$PRIVATE_QUERY_RESPONSE" "$SHARED_QUERY_RESPONSE" \
   "$PRIVATE_CLIENT_DOCUMENT_ID" "$SHARED_CLIENT_DOCUMENT_ID" \
-  "$SAFE_BROWSER_RESPONSE" "$PRIVATE_RECORD_ID" "$SHARED_RECORD_ID" <<'PY'
+  "$SAFE_CLIENT_RESPONSE" "$PRIVATE_RECORD_ID" "$SHARED_RECORD_ID" <<'PY'
 import json
 from pathlib import Path
 import sys
@@ -2017,8 +2017,8 @@ ids = sorted(item["documentId"] for item in first)
 if not all(document_id in ids for document_id in expected):
     raise SystemExit("two-route merge omitted an expected fixture")
 
-# Simulate the client's authoritative reload. The browser DTO is rebuilt from
-# trusted business records and deliberately excludes all RAG transport fields.
+# Simulate the client's authoritative reload. The client-facing DTO is rebuilt
+# from trusted business records and excludes all RAG transport fields.
 safe = {
     "items": [
         {
@@ -2039,7 +2039,7 @@ Path(sys.argv[5]).write_text(
 )
 PY
 pass "tenant and shared route results merge deterministically"
-assert_json "$SAFE_BROWSER_RESPONSE" \
+assert_json "$SAFE_CLIENT_RESPONSE" \
   '(.items | length) == 2
     and all(.items[];
       (has("documentId") | not)
@@ -2048,7 +2048,7 @@ assert_json "$SAFE_BROWSER_RESPONSE" \
       and (has("score") | not)
       and (has("jsonbPayload") | not)
       and (has("retrievalText") | not))' \
-  "authoritative browser DTO excludes RAG transport fields"
+  "authoritative client-facing DTO excludes RAG transport fields"
 
 BOUNDARY_VALUES_FILE="${CONTRACT_PRIVATE}/boundary-values.txt"
 python3 > "$BOUNDARY_VALUES_FILE" <<'PY'

@@ -38,10 +38,9 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-The active [business binding capability profiles and P0 release acceptance plan](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PLAN.md)
-is tracked by its accompanying
-[progress ledger](2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_PROGRESS.md). These working
-documents are intentionally maintained in Chinese only.
+There is no active plan. The business-binding capability profiles, generic
+Client lifecycle acceptance, and release closure work are complete, and the
+corresponding plan/progress ledger have moved to the historical archive.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

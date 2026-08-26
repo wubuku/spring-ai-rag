@@ -1,11 +1,11 @@
-# 首个外部客户端接入历史规划
+# 外部客户端接入边界历史规划
 
 > **状态：历史归档。**
 >
 > 本文记录早期外部客户端接入所验证的通用设计问题，不描述任何特定客户、业务仓库或产品
 > 工作流。当前事实以双语长青文档、公开 API 文档和代码为准。
 >
-> 历史进度：[2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_PROGRESS.md](2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_PROGRESS.md)
+> 历史进度：[2026-08-21_EXTERNAL_CLIENT_INTEGRATION_BOUNDARY_PROGRESS.md](2026-08-21_EXTERNAL_CLIENT_INTEGRATION_BOUNDARY_PROGRESS.md)
 
 ## 1. 当时要解决的问题
 
@@ -15,7 +15,7 @@
 - 业务事务成功不能依赖 RAG 服务或模型提供商实时可用；
 - 重试、超时和进程重启不能产生重复文档或乱序覆盖；
 - RAG Collection 必须是明确的投放和授权边界；
-- 私有媒体引用、凭据和内部事件字段不得进入可检索投影；
+- 私有附件引用、凭据和内部事件字段不得进入可检索投影；
 - RAG 命中不是业务权限或媒体事实，客户端必须回源校验；
 - embedding 可以最终一致，但关键词检索和业务写入不能被远程模型故障阻断。
 
@@ -46,11 +46,11 @@ Collection key，不能携带任意 URL 或 root credential。
 ## 4. 投影与安全边界
 
 RAG 只接收回答和检索所需的受控文本、稳定标量和 allow-list JSON payload。以下内容不得进入
-投影、日志或浏览器 DTO：
+投影、日志或客户端 DTO：
 
 - API key、token、secret、内部租户密钥；
 - 公共、私有或签名 URL；
-- 对象存储 key、内部媒体对象 ID；
+- 对象存储 key、内部附件或对象 ID；
 - 内部事件、候选、去重和 fingerprint 材料；
 - 提供商原始响应、隐藏提示词和未经筛选的请求载荷。
 
@@ -85,7 +85,7 @@ RAG 只接收回答和检索所需的受控文本、稳定标量和 allow-list J
 4. 查询/dispatcher credential 轮换以及旧 key 立即失效。
 5. 异步 embedding 收敛、关键词/向量检索和 payload scope 隔离。
 6. 服务重启后的 principal、外部身份、持久化 job 和精确重放连续性。
-7. 清洗投影和浏览器 DTO 不泄露私有媒体或内部协议字段。
+7. 清洗投影和客户端 DTO 不泄露私有附件或内部协议字段。
 8. Mock 门槛通过后，使用真实 Chat/Embedding provider 验证 JSON 与 SSE 路径。
 
 ## 8. 后续演进

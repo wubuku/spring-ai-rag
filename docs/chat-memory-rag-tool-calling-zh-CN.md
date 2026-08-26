@@ -331,7 +331,7 @@ executeSql(sql)
 ```text
 lookupInventory(sku, warehouse, maxResults)
 searchOrders(status, createdAfter, maxResults)
-queryAssetStatus(assetIds)
+queryInvoiceStatus(invoiceIds)
 ```
 
 实现原则：

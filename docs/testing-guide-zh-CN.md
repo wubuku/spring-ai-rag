@@ -245,7 +245,7 @@ PostgreSQL 数据库，并显式设置 `EXTERNAL_DOCUMENT_IT_CLEAN_CONFIRM=YES`�
   revision/state 不变；读写 dispatcher 和 rotation 保持完整能力；
 - 代表性的租户/共享拓扑把一个只读 query principal 精确绑定到两个 Collection，租户与共享
   dispatcher 相互隔离，第三租户被拒绝；两种 payload scope 分路检索后确定性归并，投影剔除
-  private transport/credential 材料并重建浏览器安全 DTO，query credential 轮换后仍保留
+  private transport/credential 材料并重建客户端安全 DTO，query credential 轮换后仍保留
   两个 binding；
 - 通用 Client 记录 mutation envelope 会先编译为稳定哈希 external ID、opaque revision、
   检索文本和 allow-list JSON payload，再执行 `TENANT_PRIVATE` 的 CAS 更新、tombstone、恢复、

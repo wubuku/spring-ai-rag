@@ -45,9 +45,8 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
   `2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - External-document relocation and derivation-integrity repair:
   `2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
-- Cross-project integration plan for the first external Client:
-  `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*` (superseded because it
-  exceeded this repository's documentation boundary)
+- Historical external Client integration-boundary plan:
+  `2026-08-21_EXTERNAL_CLIENT_INTEGRATION_BOUNDARY_*`
 - Managed API principal hardening and the superseded token-usage ledger:
   `2026-08-23_MANAGED_API_PRINCIPAL_HARDENING_*`,
   `2026-08-23_TOKEN_USAGE_LEDGER_*`
@@ -73,6 +72,9 @@ relevant evergreen guide/reference, `docs/TODO*`, and the
 - Operation-scoped `RAG_READ` / `RAG_WRITE` principal policy and central
   data-plane enforcement:
   `2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*`
+- Business-binding capability profiles, generic Client lifecycle acceptance,
+  and real-provider release closure:
+  `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
 
 This list is only an aid for historical discovery. It does not state current
 priority or capability status.

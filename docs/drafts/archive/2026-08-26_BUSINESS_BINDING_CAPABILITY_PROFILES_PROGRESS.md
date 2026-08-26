@@ -14,8 +14,9 @@
   `/Users/yangjiefeng/.hermes/workspace/spring-ai-rag-business-binding-capability-profiles`
 - Flyway：V1-V49；本轮无 migration。
 - 当前阶段：原能力画像交付已经合入 `main`；后续通用 Client 生命周期验收、真实
-  Chat/Embedding 验证、并发补强和文档去客户化已经完成。泛化后的 dirty-tree 完整
-  readiness 已通过，正在同步最新 `origin/main` 并准备最终 clean candidate 复验。
+  Chat/Embedding 验证、并发补强和文档去客户化已经完成。最终 clean candidate
+  readiness `16/16` 与真实 LLM 双实例门槛 `13/13` 均已通过，正在归档本轮文档并完成
+  `main` 的最终 Git 交付。
 
 ## 2. 已完成探索
 
@@ -108,13 +109,13 @@
 | 双语长青文档 | 已完成 | integration/testing/release/TODO 中英文同步 |
 | 完整 Mock/真实 HTTP/真实 LLM 验收 | 已完成 | readiness 16/16；managed principal 13/13；确定性合同 5 次真实调用，另有按场景驱动的客户生命周期验收 |
 | 原特性分支 merge main、tag、push、清理 worktree | 已完成 | `origin/main=2fb58078`；tag `business-client-p0-ready-2026-08-26` |
-| 后续生命周期补强、去客户化与最终交付 | 进行中 | 本文 §9；等待同步 `origin/main` 后最终复验与推送 |
+| 后续生命周期补强、去客户化与最终交付 | 已完成 | 本文 §9；最终 readiness `16/16`、真实 LLM `13/13` 与零命中痕迹扫描 |
 
 ## 6. 下一步
 
-1. 获取并合并最新 `origin/main`，记录合并后基线。
-2. 按合并后代码重跑完整 readiness 与必要的真实 LLM/Embedding 生命周期验收。
-3. 归档当前 plan/progress，执行文档、禁锁、diff 和新增行密钥检查。
+1. 归档当前 plan/progress 并修复移动后的相对链接。
+2. 重跑文档、禁锁、diff、新增行密钥与外部项目痕迹检查。
+3. 获取并合并最新 `origin/main`；如基线变化，则重新执行受影响的完整门槛。
 4. 提交并推送 `main`，确认本地与远端引用一致且工作区干净。
 
 ## 7. 实施记录
@@ -240,6 +241,49 @@
     核心 Mock Playwright、文档、禁锁、空白与新增行密钥检查全部通过；
   - 真实 Spring Boot/PostgreSQL/embedding stub HTTP 合同 `251` 项、真实 WebUI
     Playwright、服务重启、principal/外部身份/exact replay/持久异步 embedding 恢复通过。
+- 2026-08-26 17:56 CST：获取最新 `origin/main` 后确认远端仍为 `2fb58078`，本地
+  clean candidate `e1b88908` 无需合并。基于该基线的最终 readiness
+  `20260826-final-clean-generic-client` 通过 `16/16`：
+  - 聚焦后端/API 合同 `135/135`，PostgreSQL managed principal `9/9`、document
+    lifecycle `12/12`、JSONB record `3/3` 与并发矩阵全部通过；
+  - `mvn clean compile test-compile`、WebUI TypeScript、`218` 个 Vitest、生产构建、
+    核心 Mock Playwright、文档、禁锁、空白与新增行密钥检查全部通过；
+  - 真实服务 HTTP 合同 `251` 项、真实 WebUI DOM/网络验收、服务重启和持久化恢复全部通过。
+- 2026-08-26 18:02 CST：最终真实 LLM 双实例验收
+  `20260826-final-clean-real-llm` 通过 `13/13`：
+  - PostgreSQL 集成矩阵、`mvn clean compile test-compile`、完整 Maven test、WebUI
+    TypeScript、`218` 个 Vitest、生产构建、alignment 与核心 Mock Playwright 先通过；
+  - 双实例真实服务、真实 WebUI、native/OpenAI-compatible JSON/SSE、跨实例幂等 replay、
+    只读写拒绝、credential rotation/revocation 和 principal continuity 全部通过；
+  - 共观察到 `5` 次真实 provider 调用；只读拒绝与幂等 replay 的 provider 增量均为 `0`，
+    未输出或提交任何 `.env` 密钥。
+- 2026-08-26 18:03 CST：对全部 Git 跟踪文件名和内容执行外部客户项目痕迹扫描；项目名称、
+  常见分隔变体、中文名称和外部仓库名均为零命中。当前代码、脚本、活动文档与历史文档只保留
+  本仓库自包含的通用 Client 能力、协议与验收表述。
+- 2026-08-26 18:05 CST：扩大语义扫描后，进一步移除不必要的客户领域形状：
+  - SQL Tool 示例统一为中性的 invoice 术语；
+  - 领域化私有内容与展示层术语统一为“私有附件/客户端安全 DTO”；
+  - 带序号的外部 Client 历史材料改名为通用的接入边界文档；
+  - 测试脚本只调整证据文件名、注释和断言文案，不改变合同逻辑。
+  完成后复扫项目名称、旧历史文件名和上述残留术语均为零命中。
+- 2026-08-26 18:12 CST：泛化清理后的首次完整 readiness 在真实阶段开始时停止：
+  前 `15` 个门槛均通过，但另一个本机工作区的服务在端口预检后抢占 `18294`。它的健康端点
+  返回 `UP` 且 OpenAPI version 同为 `1.0.0`，旧脚本因此误判启动成功，随后根凭据请求返回
+  `401`。确认本次后端日志为空、实际 OpenAPI title 不匹配后，将其判定为隔离端口竞态而非
+  产品回归；未终止或修改该外部进程。
+- 2026-08-26 18:13 CST：补强 readiness 启动身份校验：健康端点就绪后必须确认本次
+  `BACKEND_PID` 仍存活，并要求运行时 OpenAPI title 精确为
+  `Spring AI RAG Service API`。即使预检后端口被其他服务抢占，也会以明确错误 fail closed，
+  不会继续用错误服务产生误导性验收结论。
+- 2026-08-26 18:20 CST：使用新的隔离端口完整重跑
+  `20260826-final-generic-doc-cleanup-r2`，readiness `16/16` 通过：
+  - 聚焦后端/API 合同 `135/135`、PostgreSQL 三组集成矩阵、`mvn clean compile
+    test-compile` 全部通过；
+  - WebUI TypeScript、`218` 个 Vitest、生产构建、核心 Mock Playwright 通过；
+  - 文档、禁锁、diff 与新增行密钥门槛通过；
+  - 真实 Spring Boot 身份校验、HTTP 合同 `251` 项、服务重启恢复、数据库只读事实与真实
+    WebUI DOM/网络验收全部通过；
+  - 泛化后的“客户端安全 DTO”断言已在真实 HTTP 合同中实际执行并通过。
 
 ## 8. 实现收敛审查
 

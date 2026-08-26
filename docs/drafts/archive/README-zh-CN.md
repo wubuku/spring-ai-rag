@@ -32,8 +32,8 @@
 - 文档生命周期实施账本：`2026-08-19_DOCUMENT_LIFECYCLE_IMPLEMENTATION_PROGRESS.md`
 - 本地关键词/向量派生解耦：`2026-08-19_KEYWORD_VECTOR_DECOUPLING_*`
 - 外部文档迁移与派生完整性修复：`2026-08-21_NEXT_HIGH_VALUE_FEATURES_*`
-- 首个外部 Client 的跨项目接入规划：
-  `2026-08-21_FIRST_EXTERNAL_CLIENT_INTEGRATION_*`（因超出当前仓库文档边界而被替代）
+- 外部 Client 接入边界历史规划：
+  `2026-08-21_EXTERNAL_CLIENT_INTEGRATION_BOUNDARY_*`
 - 稳定受管 API Principal 与共享配额：`2026-08-23_MANAGED_API_PRINCIPAL_HARDENING_*`
 - 已被替代的 Token 用量账本规划：`2026-08-23_TOKEN_USAGE_LEDGER_*`
 - 已停止、供未来重新评估的 LLM invocation 用量与配置成本可观测性实施候选：
@@ -53,5 +53,7 @@
   `2026-08-25_EXTERNAL_PROJECTION_CONTRACT_CLOSURE_*`
 - principal 级 `RAG_READ` / `RAG_WRITE` 策略与中央数据面强制授权：
   `2026-08-26_OPERATION_SCOPED_API_CAPABILITIES_*`
+- 业务 binding 能力画像、通用 Client 生命周期与真实模型发布验收闭环：
+  `2026-08-26_BUSINESS_BINDING_CAPABILITY_PROFILES_*`
 
 该列表只帮助历史定位，不代表优先级或当前能力状态。

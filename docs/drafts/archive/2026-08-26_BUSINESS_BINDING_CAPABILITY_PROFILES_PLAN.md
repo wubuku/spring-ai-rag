@@ -51,30 +51,30 @@ binding 预检和一键合同验收。上一轮还完成了数据库 principal �
 - Maven/API 版本为 `1.0.0`。
 - Flyway 当前范围为 V1-V49；本轮不新增 migration。
 - 默认服务端口、PostgreSQL profile、向量维度和真实 LLM 端口遵循
-  [AGENTS.md](../../AGENTS.md)、
-  [开发者参考](../developer-reference-zh-CN.md)和
-  [测试指南](../testing-guide-zh-CN.md)。
+  [AGENTS.md](../../../AGENTS.md)、
+  [开发者参考](../../developer-reference-zh-CN.md)和
+  [测试指南](../../testing-guide-zh-CN.md)。
 
 ### 2.3 已核对的稳定能力
 
-- [`ApiKeyIdentityController`](../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyIdentityController.java)
+- [`ApiKeyIdentityController`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/controller/ApiKeyIdentityController.java)
   已对数据库 principal 返回 role、credential/policy version、实际 capabilities、
   `RESTRICTED`/`UNRESTRICTED` 和完整 `allowedCollectionKeys`，失败时 fail closed。
-- [`ApiCapabilityFilter`](../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiCapabilityFilter.java)
+- [`ApiCapabilityFilter`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/filter/ApiCapabilityFilter.java)
   在认证后、共享限流前执行 `RAG_READ` / `RAG_WRITE`。
-- [`ApiKeyManagementService`](../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
+- [`ApiKeyManagementService`](../../../spring-ai-rag-core/src/main/java/com/springairag/core/service/ApiKeyManagementService.java)
   支持只读或读写 principal，策略 CAS 和 credential rotation 都保持 stable principal
   的能力策略。
-- [`business-client-contract-e2e.sh`](../../scripts/business-client-contract-e2e.sh)
+- [`business-client-contract-e2e.sh`](../../../scripts/business-client-contract-e2e.sh)
   已覆盖 root、restricted/unrestricted DB principal、Header 认证、query credential
   拒绝、跨 Collection 反枚举、JSON Record replay/CAS/payload/tombstone/恢复、
   ASYNC provider 失败保留和长度边界。
-- [`business-client-binding-preflight.sh`](../../scripts/business-client-binding-preflight.sh)
+- [`business-client-binding-preflight.sh`](../../../scripts/business-client-binding-preflight.sh)
   已具备无 root 的只读部署预检、可选专用 canary mutation、输入安全检查和低敏证据输出。
-- [`verify-business-client-readiness.sh`](../../scripts/verify-business-client-readiness.sh)
+- [`verify-business-client-readiness.sh`](../../../scripts/verify-business-client-readiness.sh)
   已串联 focused tests、PostgreSQL、Maven、WebUI、Mock Playwright、真实 HTTP、
   真实 WebUI 和发布 manifest，但其中 V48 常量已经落后于当前 V49。
-- [`verify-managed-api-principals.sh`](../../scripts/verify-managed-api-principals.sh)
+- [`verify-managed-api-principals.sh`](../../../scripts/verify-managed-api-principals.sh)
   已提供双实例、共享 PostgreSQL、Mock 门槛和有界真实 LLM 合同；真实 LLM principal
   当前仍省略 capabilities，因兼容默认而得到完整读写。
 
@@ -125,7 +125,7 @@ operation capability 尚未实施”的旧说法。调用方可能因此继续�
 
 ### 4.2 非目标
 
-- 不新增客户、租户、项目、素材或 publication 等外部业务模型。
+- 不新增客户、租户、项目或其他调用方领域模型。
 - 不新增客户专用 endpoint、webhook、outbox、receipt 或回源权限逻辑。
 - 不改变 `/auth/me`、JSON Record 或 Collection API 的后端响应 schema。
 - 不增加 V50，不修改 V1-V49 migration。

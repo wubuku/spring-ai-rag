@@ -285,7 +285,7 @@ preflight 的 HTTP 合同和真实 API Key Playwright。HTTP 合同明确验证�
 可以 lookup/search、不能 upsert/delete，且拒绝后 revision 和状态不变；读写 dispatcher
 继续负责 mutation，credential 轮换保持原能力。合同还运行代表性的租户/共享拓扑：同一个
 query principal 绑定两个 Collection，两个 dispatcher 不能交叉写入，另一租户仍不可访问；
-两路 scope 检索可确定性归并，清洗后的投影可以重建为浏览器安全 DTO，并且 query
+两路 scope 检索可确定性归并，清洗后的投影可以重建为客户端安全 DTO，并且 query
 credential 轮换后保留两个 Collection binding，数据面不会回退到 root。客户端拥有的
 通用记录 mutation envelope 会在测试客户端中编译为稳定哈希身份和 allow-list 投影；
 `TENANT_PRIVATE` 记录的更新、删除、恢复、轮换后删除，以及 `SHARED_CATALOG` 记录的

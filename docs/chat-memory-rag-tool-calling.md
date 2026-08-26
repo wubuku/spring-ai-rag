@@ -386,7 +386,7 @@ Expose typed, read-only, parameterized domain tools instead:
 ```text
 lookupInventory(sku, warehouse, maxResults)
 searchOrders(status, createdAfter, maxResults)
-queryAssetStatus(assetIds)
+queryInvoiceStatus(invoiceIds)
 ```
 
 Rules:

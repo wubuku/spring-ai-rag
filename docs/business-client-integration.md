@@ -346,7 +346,7 @@ continues to own mutations, and rotation preserves capabilities. It also runs
 a representative tenant/shared topology: one query principal is bound to both
 Collections, separate dispatchers cannot cross-write, another tenant remains
 inaccessible, scoped searches merge deterministically, sanitized projections
-can be rebuilt into a browser-safe DTO, and query rotation preserves both
+can be rebuilt into a client-safe DTO, and query rotation preserves both
 Collection bindings without any data-plane root fallback. Client-owned
 generic record-mutation envelopes are compiled by the test client into stable
 hashed identities and allow-listed projections. `TENANT_PRIVATE` record

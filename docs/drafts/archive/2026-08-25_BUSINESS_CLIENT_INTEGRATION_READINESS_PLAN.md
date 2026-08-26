@@ -163,7 +163,7 @@ collectionKey + sourceNamespace + externalId
 
 ### 3.2 明确非目标
 
-- 不新增外部业务项目、租户、组织、项目、素材或 publication 模型。
+- 不新增外部业务项目、租户、组织、项目或其他调用方领域实体模型。
 - 不让 RAG 服务消费外部 outbox、Webhook 或业务数据库。
 - 不新增客户专用 endpoint、payload schema 或 Collection 命名规则。
 - 不把 `sourceNamespace`、payload 或 metadata 当作 Collection ACL。
