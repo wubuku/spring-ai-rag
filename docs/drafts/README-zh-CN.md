@@ -32,6 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有列出的活跃实施规划。下一轮确定后，仍使用这两个稳定文件名，并在实施前更新本节入口。
+- [模型调用级持久用量账本与成本可观测性实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [配套实施进度账本](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。

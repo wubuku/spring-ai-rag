@@ -38,8 +38,8 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-No active implementation plan is currently listed. The next selected plan will
-reuse these stable filenames and will be linked here before implementation.
+- [Persistent model-invocation usage ledger and cost observability](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Implementation progress ledger](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

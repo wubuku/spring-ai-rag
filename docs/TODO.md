@@ -32,7 +32,7 @@
 | Collection-create idempotency key | Shipped in V52 | Optional owner-scoped keyed creation supports cross-instance/restart replay of current Collection state; semantic reuse and ledger failure fail closed |
 | Machine-readable integration protocol version / capability discovery | Shipped in V50 | An authenticated, no-store endpoint projects protocol, caller policy, supported data-plane behaviors, optional features, and stable limits |
 | OAuth/OIDC and an independent tenant hierarchy | Separate future plan | The current system remains environment root plus managed business principals and has no third-party identity federation |
-| Persistent token/cost observability per model invocation | Future implementation candidate | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; the candidate has not completed planning `3/3` |
+| Persistent token/cost observability per model invocation | Current active plan | Final Chat response usage covers only the last response and omits query transform/expand, AGENT rounds, summaries, fallbacks, and application retries; implementation is tracked in [the active plan](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md) |
 | Token/cost hard limits, billing, and settlement | Separate future plan | These require authorization, reservation, settlement, cross-instance overspend protection, and crash recovery; they cannot rely directly on a best-effort observability ledger |
 | Management recovery and removal of legacy compatibility | Evaluate before public enablement | Legacy static/query behavior remains a compatibility boundary; operator recovery relies on the environment root |
 

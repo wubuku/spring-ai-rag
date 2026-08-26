@@ -29,7 +29,7 @@
 | Collection 创建幂等键 | V52 已交付 | 可选、按 owner 隔离的 keyed 创建支持跨实例/重启 replay 当前 Collection 状态；语义复用和账本故障均 fail closed |
 | machine-readable 集成协议版本 / 能力发现 | V50 已交付 | 认证、no-store endpoint 投影协议、调用方 policy、数据面行为、可选特性和稳定上限 |
 | OAuth/OIDC 与独立租户层级 | 后续独立规划 | 当前仍是 environment root + 受管业务 principal，不提供第三方身份 federation |
-| 模型 invocation 级 token/cost 持久用量账本 | 未来实施候选 | 最终 Chat response usage 只代表最后响应，不能覆盖 query transform/expand、AGENT 多轮、summary、fallback 和应用 retry；候选尚未完成规划 `3/3` |
+| 模型 invocation 级 token/cost 持久用量账本 | 当前活跃规划 | 最终 Chat response usage 只代表最后响应，不能覆盖 query transform/expand、AGENT 多轮、summary、fallback 和应用 retry；实施记录见[当前规划](drafts/NEXT_HIGH_VALUE_FEATURES_PLAN.md) |
 | token/cost hard limit、billing 与结算 | 后续独立规划 | 需要预授权、预留、结算、跨实例超额保护和崩溃恢复，不能直接建立在 best-effort 观测账本上 |
 | 管理面 recovery 与彻底关闭 legacy 兼容 | 公网启用前评估 | legacy static/query 行为仍为兼容边界；operator recovery 依赖 environment root |
 
