@@ -32,6 +32,7 @@
 
 ## 当前活跃规划
 
-当前没有活跃规划。
+- [已部署业务绑定预检与可移交证据 P0 实施规划](EXTERNAL_BINDING_PREFLIGHT_PLAN.md)
+- [已部署业务绑定预检与可移交证据 P0 实施进度](EXTERNAL_BINDING_PREFLIGHT_PROGRESS.md)
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
