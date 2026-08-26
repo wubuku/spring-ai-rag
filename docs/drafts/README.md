@@ -38,9 +38,14 @@ Active plans are listed here and in `docs/index*`.
 
 ## Current Active Plans
 
-There is no active plan. The business-binding capability profiles, generic
-Client lifecycle acceptance, and release closure work are complete, and the
-corresponding plan/progress ledger have moved to the historical archive.
+Current active plans:
+
+- [Managed caller idempotent provisioning and runtime capability discovery](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [Implementation progress](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+
+This plan has passed its planning review and is awaiting implementation. It will
+move to the historical archive only after implementation, acceptance, and
+evergreen-document updates are complete.
 
 Completed, stopped, and superseded materials remain available in the
 [historical archive](archive/README.md).

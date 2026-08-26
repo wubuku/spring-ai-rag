@@ -32,7 +32,11 @@
 
 ## 当前活跃规划
 
-当前没有活动规划。本轮业务绑定能力画像、通用 Client 生命周期验收与发布闭环已经完成，
-对应 plan/progress 已移入历史归档。
+当前活动规划：
+
+- [托管调用方幂等 provisioning 与运行时能力发现实施规划](NEXT_HIGH_VALUE_FEATURES_PLAN.md)
+- [对应实施进度](NEXT_HIGH_VALUE_FEATURES_PROGRESS.md)
+
+本轮规划已通过规划审查，当前等待实施；完成实施、验收和长青文档同步后，才会按生命周期规则移入历史归档。
 
 已完成、已停止和被替代的材料可从[历史归档](archive/README-zh-CN.md)追溯。
