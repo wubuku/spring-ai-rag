@@ -316,6 +316,7 @@ class ManagedApiPrincipalPostgresIntegrationTest {
             throws Exception {
         ApiKeyCreatedResponse first = service.generateManagedKey(request("Quota", 20));
         String principalId = first.getPrincipalId();
+        awaitQuotaWindowWithAtLeast(20);
         ExecutorService executor = Executors.newFixedThreadPool(12);
         try {
             List<Future<Boolean>> futures = new ArrayList<>();
@@ -344,6 +345,18 @@ class ManagedApiPrincipalPostgresIntegrationTest {
         assertEquals(20, jdbc.queryForObject(
                 "SELECT request_count FROM rag_api_rate_limit_bucket WHERE principal_id=?",
                 Integer.class, principalId));
+    }
+
+    private void awaitQuotaWindowWithAtLeast(int minimumSeconds)
+            throws InterruptedException {
+        Integer remaining = jdbc.queryForObject("""
+                SELECT GREATEST(1, LEAST(60, CEIL(EXTRACT(EPOCH FROM
+                    (date_trunc('minute', clock_timestamp())
+                        + INTERVAL '1 minute' - clock_timestamp())))::INTEGER))
+                """, Integer.class);
+        if (remaining != null && remaining < minimumSeconds) {
+            Thread.sleep((remaining + 1L) * 1000L);
+        }
     }
 
     @Test

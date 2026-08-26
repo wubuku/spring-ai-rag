@@ -192,8 +192,12 @@
   文档，而 permanent-delete 也拒绝外部托管文档。测试只对本次创建的 document ID 使用了
   受控 SQL 清理；正式能力边界已同步到 REST API，并在双语 TODO 记录“受保护 purge 与
   Collection 退役”后续项。
-- 下一步：提交当前实现和账本，合并最新 `origin/main` 后按 clean candidate 重新执行完整
-  readiness 与真实 Chat/Embedding 验收；只采用合并后结果作为最终交付结论。
+- 2026-08-26 16:32 CST：clean candidate `2db8d57a` 首次完整 readiness 在 PostgreSQL
+  matrix 停止。共享 quota 并发测试从 `16:31:58` 跨到 `16:32:11`，固定分钟桶按契约重置，
+  因而 50 个请求在两个窗口中成功 `20 + 12` 次；这不是产品原子性失效，而是测试把跨窗口
+  总成功数错误地断言为单窗口上限。
+- 下一步：让该集成测试在数据库当前分钟至少剩余 20 秒时才发起并发请求，重新提交后从头
+  执行 clean readiness 与真实 Chat/Embedding 验收；只采用修复后的完整结果作为最终结论。
 
 ## 8. 实现收敛审查
 
